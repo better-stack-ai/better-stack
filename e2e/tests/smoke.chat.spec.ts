@@ -1,5 +1,21 @@
 import { test, expect } from "@playwright/test";
 
+const hasOpenAiKey =
+	typeof process.env.OPENAI_API_KEY === "string" &&
+	process.env.OPENAI_API_KEY.trim().length > 0;
+
+if (!hasOpenAiKey) {
+	// eslint-disable-next-line no-console -- surfaced only when tests are skipped
+	console.warn(
+		"Skipping AI chat smoke tests: OPENAI_API_KEY is not available in the environment.",
+	);
+}
+
+test.skip(
+	!hasOpenAiKey,
+	"OPENAI_API_KEY is required to run AI chat smoke tests.",
+);
+
 test.describe("AI Chat Plugin", () => {
 	test("should start a new conversation and send a message", async ({
 		page,

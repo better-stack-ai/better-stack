@@ -35,6 +35,7 @@ export default defineConfig({
 				HOST: "127.0.0.1",
 				BASE_URL: "http://localhost:3003",
 				NEXT_PUBLIC_BASE_URL: "http://localhost:3003",
+				OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
 			},
 		},
 		{
@@ -49,6 +50,7 @@ export default defineConfig({
 				PORT: "3004",
 				HOST: "127.0.0.1",
 				BASE_URL: "http://localhost:3004",
+				OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
 			},
 		},
 		{
@@ -63,6 +65,7 @@ export default defineConfig({
 				PORT: "3005",
 				HOST: "127.0.0.1",
 				BASE_URL: "http://localhost:3005",
+				OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
 			},
 		},
 	],
