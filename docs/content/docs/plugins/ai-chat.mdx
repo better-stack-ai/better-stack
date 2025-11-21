@@ -1,0 +1,201 @@
+---
+title: AI Chat Plugin
+description: Add AI-powered chat functionality with conversation history, streaming, and customizable models
+---
+
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "fumadocs-ui/components/callout";
+
+## Installation
+
+Follow these steps to add the AI Chat plugin to your Better Stack setup.
+
+### 1. Add Plugin to Backend API
+
+Import and register the AI Chat backend plugin in your `better-stack.ts` file:
+
+```ts title="lib/better-stack.ts"
+import { betterStack } from "@btst/stack"
+import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
+import { openai } from "@ai-sdk/openai"
+// ... your adapter imports
+
+const { handler, dbSchema } = betterStack({
+  basePath: "/api/data",
+  plugins: {
+    aiChat: aiChatBackendPlugin({
+      model: openai("gpt-4o"), // Or any LanguageModel from AI SDK
+      hooks: {
+        onBeforeChat: async (messages, context) => {
+          // Optional: Add authorization logic
+          return true
+        },
+      }
+    })
+  },
+  adapter: (db) => createMemoryAdapter(db)({})
+})
+
+export { handler, dbSchema }
+```
+
+The `aiChatBackendPlugin()` requires a `model` parameter (from AI SDK) and accepts optional hooks for customizing behavior (authorization, logging, etc.).
+
+<Callout type="info">
+**Model Configuration:** You can use any model from the AI SDK, including OpenAI, Anthropic, Google, and more. Make sure to install the corresponding provider package (e.g., `@ai-sdk/openai`) and set up your API keys in environment variables.
+</Callout>
+
+### 2. Add Plugin to Client
+
+Register the AI Chat client plugin in your `better-stack-client.tsx` file:
+
+```tsx title="lib/better-stack-client.tsx"
+import { createStackClient } from "@btst/stack/client"
+import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
+
+const getBaseURL = () => 
+  typeof window !== 'undefined' 
+    ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
+    : (process.env.BASE_URL || "http://localhost:3000")
+
+export const getStackClient = (queryClient: QueryClient) => {
+  const baseURL = getBaseURL()
+  return createStackClient({
+    plugins: {
+      aiChat: aiChatClientPlugin({
+        apiBaseURL: baseURL,
+        apiBasePath: "/api/data",
+      })
+    }
+  })
+}
+```
+
+**Required configuration:**
+- `apiBaseURL`: Base URL for API calls
+- `apiBasePath`: Path where your API is mounted (e.g., `/api/data`)
+
+### 3. Generate Database Schema
+
+After adding the plugin, generate your database schema using the CLI:
+
+```bash
+npx @btst/cli generate --orm prisma --config lib/better-stack.ts
+```
+
+This will create the necessary database tables for conversations and messages. Run migrations as needed for your ORM.
+
+For more details on the CLI and all available options, see the [CLI documentation](/cli).
+
+## Usage
+
+The AI Chat plugin provides two routes:
+
+- `/chat` - Start a new conversation
+- `/chat/:id` - Resume an existing conversation
+
+The plugin automatically handles:
+- Creating and managing conversations
+- Saving messages to the database
+- Streaming AI responses in real-time
+- Conversation history persistence
+
+## Customization
+
+### Backend Hooks
+
+Customize backend behavior with optional hooks:
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/ai-chat/api/plugin.ts" name="AiChatBackendHooks" />
+
+**Example usage:**
+
+```ts title="lib/better-stack.ts"
+import { aiChatBackendPlugin, type AiChatBackendHooks } from "@btst/stack/plugins/ai-chat/api"
+
+const chatHooks: AiChatBackendHooks = {
+  onBeforeChat: async (messages, context) => {
+    // Add authorization logic
+    const authHeader = context.headers?.get("authorization")
+    if (!authHeader) {
+      return false // Deny access
+    }
+    return true
+  },
+  onAfterChat: async (conversationId, messages, context) => {
+    // Log conversation or trigger webhooks
+    console.log("Chat completed:", conversationId)
+  },
+}
+
+const { handler, dbSchema } = betterStack({
+  plugins: {
+    aiChat: aiChatBackendPlugin({
+      model: openai("gpt-4o"),
+      hooks: chatHooks
+    })
+  },
+  // ...
+})
+```
+
+### Model Configuration
+
+You can configure different models and tools:
+
+```ts title="lib/better-stack.ts"
+import { openai } from "@ai-sdk/openai"
+import { anthropic } from "@ai-sdk/anthropic"
+
+// Use OpenAI
+aiChat: aiChatBackendPlugin({
+  model: openai("gpt-4o"),
+})
+
+// Or use Anthropic
+aiChat: aiChatBackendPlugin({
+  model: anthropic("claude-3-5-sonnet-20241022"),
+})
+
+// With tools (if your model supports it)
+aiChat: aiChatBackendPlugin({
+  model: openai("gpt-4o"),
+  // Tools configuration would go here if supported
+})
+```
+
+## API Endpoints
+
+The plugin provides the following endpoints:
+
+- `POST /api/data/chat` - Send a message and receive streaming response
+- `GET /api/data/conversations` - List all conversations
+- `GET /api/data/conversations/:id` - Get a conversation with messages
+- `POST /api/data/conversations` - Create a new conversation
+- `DELETE /api/data/conversations/:id` - Delete a conversation
+
+## Client Components
+
+The plugin exports a `ChatInterface` component that you can use directly:
+
+```tsx
+import { ChatInterface } from "@btst/stack/plugins/ai-chat/client"
+
+export default function ChatPage() {
+  return (
+    <ChatInterface
+      apiPath="/api/data/chat"
+      initialMessages={[]}
+    />
+  )
+}
+```
+
+## Features
+
+- **Streaming Responses**: Real-time streaming of AI responses using AI SDK v5
+- **Conversation History**: Automatic persistence of conversations and messages
+- **Customizable Models**: Use any LanguageModel from the AI SDK
+- **Authorization Hooks**: Add custom authentication and authorization logic
+- **Type-Safe**: Full TypeScript support with proper types from AI SDK
+

@@ -76,17 +76,18 @@ export default defineConfig({
 				"**/*.todos.spec.ts",
 				"**/*.auth-blog.spec.ts",
 				"**/*.blog.spec.ts",
+				"**/*.chat.spec.ts",
 			],
 		},
 		{
 			name: "tanstack:memory",
 			use: { baseURL: "http://localhost:3004" },
-			testMatch: ["**/*.blog.spec.ts"],
+			testMatch: ["**/*.blog.spec.ts", "**/*.chat.spec.ts"],
 		},
 		{
 			name: "react-router:memory",
 			use: { baseURL: "http://localhost:3005" },
-			testMatch: ["**/*.blog.spec.ts"],
+			testMatch: ["**/*.blog.spec.ts", "**/*.chat.spec.ts"],
 		},
 	],
 });

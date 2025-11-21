@@ -1,6 +1,8 @@
 import { createMemoryAdapter } from "@btst/adapter-memory"
 import { betterStack } from "@btst/stack"
 import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/blog/api"
+import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
+import { openai } from "@ai-sdk/openai"
 
 const blogHooks: BlogBackendHooks = {
     onBeforeCreatePost: async (data) => {
@@ -58,7 +60,10 @@ const blogHooks: BlogBackendHooks = {
 const { handler, dbSchema } = betterStack({
     basePath: "/api/data",
     plugins: {
-        blog: blogBackendPlugin(blogHooks)
+        blog: blogBackendPlugin(blogHooks),
+        aiChat: aiChatBackendPlugin({
+            model: openai("gpt-4o"),
+        })
     },
     adapter: (db) => createMemoryAdapter(db)({})
 })

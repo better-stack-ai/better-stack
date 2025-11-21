@@ -1,6 +1,7 @@
 import { createStackClient } from "@btst/stack/client"
 import { todosClientPlugin } from "@/lib/plugins/todo/client/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
 import { QueryClient } from "@tanstack/react-query"
 
 // Get base URL function - works on both server and client
@@ -86,6 +87,10 @@ export const getStackClient = (
                         );
                     },
                 }
+            }),
+            aiChat: aiChatClientPlugin({
+                apiBaseURL: baseURL,
+                apiBasePath: "/api/data",
             })
         }
     })

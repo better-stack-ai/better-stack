@@ -34,6 +34,9 @@ export default function Home() {
 					<Button className="text-destructive" variant="link" asChild>
 						<Link href="/pages/blog/new">New Post</Link>
 					</Button>
+					<Button className="text-destructive" variant="link" asChild>
+						<Link href="/pages/chat">Chat</Link>
+					</Button>
 				</div>
 			</main>
 		</div>

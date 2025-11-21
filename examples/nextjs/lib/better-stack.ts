@@ -3,6 +3,8 @@ import { createMemoryAdapter } from "./adapters-build-check"
 import { betterStack } from "@btst/stack"
 import { todosBackendPlugin } from "./plugins/todo/api/backend"
 import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/blog/api"
+import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
+import { openai } from "@ai-sdk/openai"
 
 // Define blog hooks with proper types
 // NOTE: This is the main API at /api/data - kept auth-free for regular tests
@@ -65,7 +67,10 @@ const { handler, dbSchema } = betterStack({
     basePath: "/api/data",
     plugins: {
         todos: todosBackendPlugin,
-        blog: blogBackendPlugin(blogHooks)
+        blog: blogBackendPlugin(blogHooks),
+        aiChat: aiChatBackendPlugin({
+            model: openai("gpt-4o"),
+        })
     },
     adapter: (db) => createMemoryAdapter(db)({})
 })
