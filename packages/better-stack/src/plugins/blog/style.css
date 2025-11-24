@@ -11,11 +11,8 @@
 /* Scan this package's source files for Tailwind classes */
 @source "../../../src/**/*.{ts,tsx}";
 
-/* Scan UI package components (if in monorepo) */
-@source "../../../../@workspace/ui/src/**/*.{ts,tsx}";
-
-/* Scan UI package components (if installed as npm package) */
-@source "../../../node_modules/@workspace/ui/src/**/*.{ts,tsx}";
+/* Scan UI package components (when installed as npm package the UI package will be in this dir) */
+@source "../../packages/ui/src";
 
 /*
 * alternatively consumer can use @source "../node_modules/@btst/stack/src/**\/*.{ts,tsx}";
