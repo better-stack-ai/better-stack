@@ -84,7 +84,7 @@ export function PostPage({ slug }: { slug: string }) {
 					/>
 
 					{post.image && (
-						<div className="flex flex-col gap-2 mt-6 aspect-video w-full relative">
+						<div className="flex flex-col gap-2 my-6 aspect-video w-full relative">
 							<Image
 								src={post.image}
 								alt={post.title}
