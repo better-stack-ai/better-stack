@@ -14,7 +14,7 @@ const getBaseURL = () =>
 // Create the client library with plugins
 export const getStackClient = (
     queryClient: QueryClient,
-    options?: { headers?: HeadersInit }
+    options?: { headers?: Headers }
 ) => {
     const baseURL = getBaseURL()
     return createStackClient({

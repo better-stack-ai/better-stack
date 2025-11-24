@@ -24,11 +24,15 @@ export default async function ExamplePage({
 
     // Get headers from the incoming request (includes cookies for auth)
     const headersList = await headers()
-    const headersObject = Object.fromEntries(headersList.entries())
+    // Convert Next.js ReadonlyHeaders to standard Headers object
+    const headersObj = new Headers()
+    headersList.forEach((value, key) => {
+        headersObj.set(key, value)
+    })
 
     // Pass headers to stack client - this enables authentication in SSR
     const stackClient = getStackClient(queryClient, {
-        headers: headersObject
+        headers: headersObj
     })
 
     const route = stackClient.router.getRoute(path)
@@ -65,10 +69,14 @@ export async function generateMetadata({ params }: { params: Promise<{ all: stri
     
     // Get headers for metadata generation as well
     const headersList = await headers()
-    const headersObject = Object.fromEntries(headersList.entries())
+    // Convert Next.js ReadonlyHeaders to standard Headers object
+    const headersObj = new Headers()
+    headersList.forEach((value, key) => {
+        headersObj.set(key, value)
+    })
     
     const stackClient = getStackClient(queryClient, {
-        headers: headersObject
+        headers: headersObj
     })
     const route = stackClient.router.getRoute(path)
     if (!route) {
