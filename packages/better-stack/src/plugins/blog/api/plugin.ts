@@ -702,6 +702,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 						});
 
 						// Find posts immediately before and after the target date
+						// In DESC sorted array: newer posts come before, older posts come after
 						let previousPost: Post | null = null;
 						let nextPost: Post | null = null;
 
@@ -711,22 +712,17 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 							const postTime = new Date(post.createdAt).getTime();
 
-							if (postTime < targetTime) {
-								// This is the first post older than target (previous post)
+							if (postTime > targetTime) {
+								// This post is newer than target - it's a next post candidate
+								// Keep the last one we find (closest to target date)
+								nextPost = post;
+							} else if (postTime < targetTime) {
+								// This is the first post older than target - this is the previous post
 								previousPost = post;
-								// The post before this one (if exists) is the next post
-								if (i > 0 && sortedPosts[i - 1]) {
-									nextPost = sortedPosts[i - 1] ?? null;
-								}
+								// We've found both neighbors, no need to continue
 								break;
 							}
-						}
-
-						// If we didn't find a previous post, check if we need to set next
-						if (!previousPost && sortedPosts.length > 0) {
-							// All posts are newer than target, so the oldest one is next
-							const lastPost = sortedPosts[sortedPosts.length - 1];
-							nextPost = lastPost ?? null;
+							// Skip posts with exactly the same timestamp (the current post itself)
 						}
 
 						const postIds = [
