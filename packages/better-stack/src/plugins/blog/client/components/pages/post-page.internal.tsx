@@ -84,7 +84,7 @@ export function PostPage({ slug }: { slug: string }) {
 					/>
 
 					{post.image && (
-						<div className="flex flex-col gap-2 mt-6 aspect-video w-full relative">
+						<div className="flex flex-col gap-2 my-6 aspect-video w-full relative">
 							<Image
 								src={post.image}
 								alt={post.title}
@@ -122,12 +122,12 @@ function PostHeaderTop({ post }: { post: SerializedPost }) {
 	});
 	const basePath = useBasePath();
 	return (
-		<div className="flex flex-row items-center gap-2 flex-wrap mt-8">
+		<div className="flex flex-row items-center justify-center gap-2 flex-wrap mt-8">
 			<span className="font-light text-muted-foreground text-sm">
 				{formatDate(post.createdAt, "MMMM d, yyyy")}
 			</span>
 			{post.tags && post.tags.length > 0 && (
-				<div className="flex flex-wrap gap-2">
+				<>
 					{post.tags.map((tag) => (
 						<Link key={tag.id} href={`${basePath}/blog/tag/${tag.slug}`}>
 							<Badge variant="secondary" className="text-xs">
@@ -135,7 +135,7 @@ function PostHeaderTop({ post }: { post: SerializedPost }) {
 							</Badge>
 						</Link>
 					))}
-				</div>
+				</>
 			)}
 		</div>
 	);

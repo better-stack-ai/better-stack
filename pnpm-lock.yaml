@@ -150,8 +150,8 @@ importers:
   examples/nextjs:
     dependencies:
       '@btst/adapter-memory':
-        specifier: ^1.0.2
-        version: 1.0.2(better-auth@1.3.26(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3)))(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+        specifier: ^1.0.3
+        version: 1.0.3(better-auth@1.3.26(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3)))(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       '@btst/stack':
         specifier: workspace:*
         version: link:../../packages/better-stack
@@ -247,11 +247,11 @@ importers:
   examples/react-router:
     dependencies:
       '@btst/adapter-memory':
-        specifier: ^1.0.2
-        version: 1.0.2(better-auth@1.3.26(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3)))(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+        specifier: ^1.0.3
+        version: 1.0.3(better-auth@1.3.26(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3)))(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       '@btst/db':
-        specifier: ^1.0.2
-        version: 1.0.2(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+        specifier: ^1.0.3
+        version: 1.0.3(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       '@btst/stack':
         specifier: workspace:*
         version: link:../../packages/better-stack
@@ -347,11 +347,11 @@ importers:
   examples/tanstack:
     dependencies:
       '@btst/adapter-memory':
-        specifier: ^1.0.2
-        version: 1.0.2(better-auth@1.3.26(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3)))(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+        specifier: ^1.0.3
+        version: 1.0.3(better-auth@1.3.26(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3)))(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       '@btst/db':
-        specifier: ^1.0.2
-        version: 1.0.2(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+        specifier: ^1.0.3
+        version: 1.0.3(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       '@btst/stack':
         specifier: workspace:*
         version: link:../../packages/better-stack
@@ -447,8 +447,8 @@ importers:
   packages/better-stack:
     dependencies:
       '@btst/db':
-        specifier: 1.0.2
-        version: 1.0.2(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+        specifier: 1.0.3
+        version: 1.0.3(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       '@hookform/resolvers':
         specifier: '>=5.0.0'
         version: 5.2.2(react-hook-form@7.65.0(react@19.2.0))
@@ -538,8 +538,8 @@ importers:
         version: 4.1.12
     devDependencies:
       '@btst/adapter-memory':
-        specifier: 1.0.2
-        version: 1.0.2(better-auth@1.3.26(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3)))(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+        specifier: 1.0.3
+        version: 1.0.3(better-auth@1.3.26(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3)))(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       '@btst/yar':
         specifier: 1.1.1
         version: 1.1.1(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)
@@ -892,13 +892,13 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@btst/adapter-memory@1.0.2':
-    resolution: {integrity: sha512-2bmcWh0CSEC5Fi1Izf/p37R9BcRolbtU7s/+VuUELC8n3yIhtUoxpyTOCNG8gl14hrR3GrNFdwgDUZXy+rLt1w==}
+  '@btst/adapter-memory@1.0.3':
+    resolution: {integrity: sha512-iu0D3TUR2b6KLt3Lykp4CfyYFyvpXF1Xs6uuPrgTPLcp5kL+zgAaPMZLHv2wOAYyAsaJaffrJkM/E0Ea39BwWA==}
     peerDependencies:
       better-auth: '>=1.0.0'
 
-  '@btst/db@1.0.2':
-    resolution: {integrity: sha512-fn39E0RwvNkKyjL9dogeVlXdsAbpMwrtPOxXTYroWIDUR2rqadZhkqa1M/kSaSexIi6JV91qBVpM1hL6meYg6Q==}
+  '@btst/db@1.0.3':
+    resolution: {integrity: sha512-NYZdnCv6hDM7/xvrq5zgVo/bCDrsjGwR/+6bHCuahYll8CdVHhO4m1lgQHm8Rsm8qoHBqIeAVv9tkF3EjTnSEA==}
 
   '@btst/yar@1.1.1':
     resolution: {integrity: sha512-KF5bg0WPS2385HD5cCYYqguoiSWMK9V0k1wn912QGVZ5Ih142d0S5bfW5n9kXltbLoFzDaK3d3PSGvSfbrd7Ag==}
@@ -8043,9 +8043,9 @@ snapshots:
   '@biomejs/cli-win32-x64@2.2.4':
     optional: true
 
-  '@btst/adapter-memory@1.0.2(better-auth@1.3.26(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3)))(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))':
+  '@btst/adapter-memory@1.0.3(better-auth@1.3.26(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3)))(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))':
     dependencies:
-      '@btst/db': 1.0.2(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+      '@btst/db': 1.0.3(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       better-auth: 1.3.26(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
     transitivePeerDependencies:
       - '@lynx-js/react'
@@ -8057,7 +8057,7 @@ snapshots:
       - svelte
       - vue
 
-  '@btst/db@1.0.2(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))':
+  '@btst/db@1.0.3(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))':
     dependencies:
       '@better-auth/core': 1.3.26
       better-auth: 1.3.26(next@16.0.1(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))

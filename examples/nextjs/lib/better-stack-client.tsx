@@ -62,6 +62,7 @@ export const getStackClient = (
                             posts?.length || 0,
                             'posts loaded'
                         );
+                        return true;
                     },
                     beforeLoadPost: async (slug, context) => {
                         console.log(
@@ -76,6 +77,7 @@ export const getStackClient = (
                             slug,
                             post?.title || 'not found'
                         );
+                        return true;
                     },
                     onLoadError: async (error, context) => {
                         console.log(
