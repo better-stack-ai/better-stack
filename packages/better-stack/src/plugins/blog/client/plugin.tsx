@@ -32,6 +32,7 @@ export interface LoaderContext {
 	isSSR: boolean;
 	apiBaseURL: string;
 	apiBasePath: string;
+	headers?: Headers;
 	[key: string]: any;
 }
 
@@ -60,7 +61,7 @@ export interface BlogClientConfig {
 	hooks?: BlogClientHooks;
 
 	// Optional headers for SSR (e.g., forwarding cookies)
-	headers?: HeadersInit;
+	headers?: Headers;
 }
 
 /**
@@ -103,6 +104,7 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 				isSSR: true,
 				apiBaseURL,
 				apiBasePath,
+				headers,
 			};
 
 			try {
@@ -190,6 +192,7 @@ function createPostLoader(slug: string, config: BlogClientConfig) {
 				isSSR: true,
 				apiBaseURL,
 				apiBasePath,
+				headers,
 			};
 
 			try {
@@ -250,13 +253,14 @@ function createPostLoader(slug: string, config: BlogClientConfig) {
 function createNewPostLoader(config: BlogClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const { apiBasePath, apiBaseURL, hooks } = config;
+			const { apiBasePath, apiBaseURL, hooks, headers } = config;
 
 			const context: LoaderContext = {
 				path: "/blog/new",
 				isSSR: true,
 				apiBaseURL,
 				apiBasePath,
+				headers,
 			};
 
 			try {
@@ -298,6 +302,7 @@ function createTagLoader(tagSlug: string, config: BlogClientConfig) {
 				isSSR: true,
 				apiBaseURL,
 				apiBasePath,
+				headers,
 			};
 
 			try {
