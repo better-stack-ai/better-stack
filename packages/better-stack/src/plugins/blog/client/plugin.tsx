@@ -68,7 +68,7 @@ export interface BlogClientConfig {
  * All hooks are optional and allow consumers to customize behavior
  */
 export interface BlogClientHooks {
-	// Loader Hooks - called during data loading (SSR or CSR)
+	// Loader Hooks - called during data loading (SSR)
 	beforeLoadPosts?: (
 		filter: { published: boolean },
 		context: LoaderContext,
@@ -77,7 +77,7 @@ export interface BlogClientHooks {
 		posts: Post[] | null,
 		filter: { published: boolean },
 		context: LoaderContext,
-	) => Promise<void> | void;
+	) => Promise<boolean> | boolean;
 	beforeLoadPost?: (
 		slug: string,
 		context: LoaderContext,
@@ -86,7 +86,9 @@ export interface BlogClientHooks {
 		post: Post | null,
 		slug: string,
 		context: LoaderContext,
-	) => Promise<void> | void;
+	) => Promise<boolean> | boolean;
+	beforeLoadNewPost?: (context: LoaderContext) => Promise<boolean> | boolean;
+	afterLoadNewPost?: (context: LoaderContext) => Promise<boolean> | boolean;
 	onLoadError?: (error: Error, context: LoaderContext) => Promise<void> | void;
 }
 
@@ -143,7 +145,14 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 				if (hooks?.afterLoadPosts) {
 					const posts =
 						queryClient.getQueryData<Post[]>(listQuery.queryKey) || null;
-					await hooks.afterLoadPosts(posts, { published }, context);
+					const canContinue = await hooks.afterLoadPosts(
+						posts,
+						{ published },
+						context,
+					);
+					if (canContinue === false) {
+						throw new Error("Load prevented by afterLoadPosts hook");
+					}
 				}
 
 				// Check if there was an error after afterLoadPosts hook
@@ -208,7 +217,10 @@ function createPostLoader(slug: string, config: BlogClientConfig) {
 				if (hooks?.afterLoadPost) {
 					const post =
 						queryClient.getQueryData<Post>(postQuery.queryKey) || null;
-					await hooks.afterLoadPost(post, slug, context);
+					const canContinue = await hooks.afterLoadPost(post, slug, context);
+					if (canContinue === false) {
+						throw new Error("Load prevented by afterLoadPost hook");
+					}
 				}
 
 				// Check if there was an error after afterLoadPost hook
@@ -221,6 +233,46 @@ function createPostLoader(slug: string, config: BlogClientConfig) {
 								? queryState.error
 								: new Error(String(queryState.error));
 						await hooks.onLoadError(error, context);
+					}
+				}
+			} catch (error) {
+				// Error hook - log the error but don't throw during SSR
+				// Let Error Boundaries handle errors when components render
+				if (hooks?.onLoadError) {
+					await hooks.onLoadError(error as Error, context);
+				}
+				// Don't re-throw - let Error Boundary catch it during render
+			}
+		}
+	};
+}
+
+function createNewPostLoader(config: BlogClientConfig) {
+	return async () => {
+		if (typeof window === "undefined") {
+			const { apiBasePath, apiBaseURL, hooks } = config;
+
+			const context: LoaderContext = {
+				path: "/blog/new",
+				isSSR: true,
+				apiBaseURL,
+				apiBasePath,
+			};
+
+			try {
+				// Before hook
+				if (hooks?.beforeLoadNewPost) {
+					const canLoad = await hooks.beforeLoadNewPost(context);
+					if (!canLoad) {
+						throw new Error("Load prevented by beforeLoadNewPost hook");
+					}
+				}
+
+				// After hook
+				if (hooks?.afterLoadNewPost) {
+					const canContinue = await hooks.afterLoadNewPost(context);
+					if (canContinue === false) {
+						throw new Error("Load prevented by afterLoadNewPost hook");
 					}
 				}
 			} catch (error) {
@@ -584,6 +636,7 @@ export const blogClientPlugin = (config: BlogClientConfig) =>
 			newPost: createRoute("/blog/new", () => {
 				return {
 					PageComponent: NewPostPageComponent,
+					loader: createNewPostLoader(config),
 					meta: createNewPostMeta(config),
 				};
 			}),
