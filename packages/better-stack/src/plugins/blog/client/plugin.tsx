@@ -181,13 +181,17 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 	};
 }
 
-function createPostLoader(slug: string, config: BlogClientConfig) {
+function createPostLoader(
+	slug: string,
+	config: BlogClientConfig,
+	path?: string,
+) {
 	return async () => {
 		if (typeof window === "undefined") {
 			const { queryClient, apiBasePath, apiBaseURL, hooks, headers } = config;
 
 			const context: LoaderContext = {
-				path: `/blog/${slug}`,
+				path: path ?? `/blog/${slug}`,
 				params: { slug },
 				isSSR: true,
 				apiBaseURL,
@@ -648,7 +652,7 @@ export const blogClientPlugin = (config: BlogClientConfig) =>
 			editPost: createRoute("/blog/:slug/edit", ({ params: { slug } }) => {
 				return {
 					PageComponent: () => <EditPostPageComponent slug={slug} />,
-					loader: createPostLoader(slug, config),
+					loader: createPostLoader(slug, config, `/blog/${slug}/edit`),
 					meta: createEditPostMeta(slug, config),
 				};
 			}),
