@@ -7,7 +7,15 @@ const config = {
   reactStrictMode: true,
   basePath: '/docs',
   assetPrefix: '/docs',
-  transpilePackages: ['better-stack']
+  transpilePackages: ['better-stack'],
+  async rewrites() {
+    return [
+      {
+        source: '/:path*.mdx',
+        destination: '/llms.mdx/:path*',
+      },
+    ];
+  },
 };
 
 export default withMDX(config);
