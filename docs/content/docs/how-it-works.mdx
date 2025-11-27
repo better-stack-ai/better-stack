@@ -1,0 +1,99 @@
+---
+title: How It Works
+description: Understand the architecture and key concepts behind Better Stack.
+---
+
+Here's a high-level overview of how Better Stack works:
+
+![Architecture Overview](../../assets/architecture.png)
+
+## Server Side
+
+The server handles database operations, API endpoints, data prefetching, routing, and server-side rendering.
+
+**`betterStack`** manages the backend layer:
+
+- **API Router**: Routes incoming requests to the appropriate plugin handlers. Returns a handler function that you mount at your API path.
+- **DB Adapter**: Translates Better Stack's database operations to your ORM (Prisma, Drizzle, Kysely, MongoDB). Plugins define schemas that get merged and passed to the adapter.
+
+**`stackClient`** manages the rendering layer:
+
+- **Data Fetching**: Plugins can prefetch data server-side into React Query cache before rendering, enabling instant page loads with hydrated state.
+- **Page Router**: Matches URLs to plugin routes and returns the appropriate page component, loader, and metadata.
+- **SSR**: Server-side renders pages with prefetched data, then hydrates on the client.
+
+## Client Side
+
+After server-side rendering, the client takes over for interactivity.
+
+**React Hydration**
+
+Server-rendered HTML is hydrated with client-side React. The React Query cache—prefetched during SSR—transfers seamlessly, so components render instantly without loading states or refetching.
+
+**SPA Navigation (If using in an SPA)**
+
+After the initial page load, `stackClient`'s router handles client-side navigation. Clicking links doesn't trigger full page reloads—React Query fetches data in the background while the UI updates immediately.
+
+**State Management**
+
+First party plugins use React Query under the hood for all data operations:
+
+- **Queries**: Hooks like `usePosts()`, `usePost(slug)`, and `useTags()` (examples from the blog plugin) fetch and cache data with automatic background refetching
+- **Mutations**: Hooks like `useCreatePost()`, `useUpdatePost()`, and `useDeletePost()` (examples from the blog plugin) handle writes with automatic cache invalidation
+- **Suspense**: Suspense variants (`useSuspensePosts`, `useSuspensePost`) integrate with React Suspense boundaries for streaming SSR and other advanced features
+
+Note: 3rd party plugins may use a different state management library.
+
+**Context & Overrides**
+
+The `BetterStackProvider` wraps your pages and injects framework-specific components via React Context. Plugin components access these overrides through `usePluginOverrides()`, allowing them to use your framework's `Link`, `Image`, and navigation without tight coupling and to avoid breaking the client/server boundary in frameworks like Next.js.
+
+## Plugins
+
+Plugins are the building blocks of Better Stack. Each feature (like Blog) ships as **two separate plugins**—one for the backend, one for the client—that you register independently:
+
+```ts
+// Backend: lib/better-stack.ts
+import { betterStack } from "@btst/stack"
+import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
+
+const { handler } = betterStack({
+  plugins: {
+    blog: blogBackendPlugin({ /* config */ })
+  },
+  // ...
+})
+
+// Client: lib/better-stack-client.tsx
+import { createStackClient } from "@btst/stack/client"
+import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+
+const stackClient = createStackClient({
+  plugins: {
+    blog: blogClientPlugin({ /* config */ })
+  }
+})
+```
+
+**Backend plugins** (registered in `betterStack`):
+- Define database schemas (tables, columns, relations)
+- Register API route handlers for CRUD operations
+- Provide hooks for authorization and custom logic
+
+**Client plugins** (registered in `stackClient`):
+- Define page routes and components
+- Provide loaders for server-side data prefetching
+- Export components, hooks, and utilities for state management
+- Generate SEO metadata and sitemaps
+
+This separation keeps server-only code (database schemas, API handlers) out of your client bundle, and allows each plugin to be configured independently for its context.
+
+## Overrides
+
+Framework-specific components injected into plugins at runtime:
+
+- **Link**: Use Next.js `Link`, React Router `Link`, or TanStack `Link` for optimized navigation
+- **Image**: Use Next.js `Image` for automatic optimization
+- **navigate**: Programmatic navigation function for your framework
+- **apiBaseURL/apiBasePath**: Configure where your API is mounted
+

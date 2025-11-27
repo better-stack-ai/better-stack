@@ -34,52 +34,99 @@ const SHARED_QUERY_CONFIG = {
 	gcTime: 1000 * 60 * 10, // 10 minutes
 } as const;
 
+/**
+ * Options for the usePosts hook
+ */
 export interface UsePostsOptions {
+	/** Filter posts by tag name */
 	tag?: string;
+	/** Filter posts by tag slug */
 	tagSlug?: string;
+	/** Number of posts to fetch per page (default: 10) */
 	limit?: number;
+	/** Whether to enable the query (default: true) */
 	enabled?: boolean;
+	/** Search query to filter posts by title, content, or excerpt */
 	query?: string;
+	/** Filter by published status */
 	published?: boolean;
+	/** Filter by specific post slug */
 	slug?: string;
 }
 
+/**
+ * Result from the usePosts hook
+ */
 export interface UsePostsResult {
+	/** Array of fetched posts */
 	posts: SerializedPost[];
+	/** Whether the initial load is in progress */
 	isLoading: boolean;
+	/** Error if the query failed */
 	error: Error | null;
+	/** Function to load the next page of posts */
 	loadMore: () => void;
+	/** Whether there are more posts to load */
 	hasMore: boolean;
+	/** Whether the next page is being loaded */
 	isLoadingMore: boolean;
+	/** Function to refetch the posts */
 	refetch: () => void;
 }
 
+/**
+ * Options for the usePostSearch hook
+ */
 export interface UsePostSearchOptions {
+	/** Search query string to filter posts */
 	query: string;
+	/** Whether to enable the search query (default: true) */
 	enabled?: boolean;
+	/** Debounce delay in milliseconds (default: 300) */
 	debounceMs?: number;
+	/** Number of results to return (default: 10) */
 	limit?: number;
+	/** Filter by published status (default: true) */
 	published?: boolean;
 }
 
+/**
+ * Result from the usePostSearch hook
+ */
 export interface UsePostSearchResult {
+	/** Array of posts matching the search query */
 	posts: SerializedPost[];
+	/** Alias for posts (React Query compatibility) */
 	data: SerializedPost[];
+	/** Whether the search is in progress */
 	isLoading: boolean;
+	/** Error if the search failed */
 	error: Error | null;
+	/** Function to refetch the search results */
 	refetch: () => void;
+	/** Whether a search is currently in progress (includes debounce time) */
 	isSearching: boolean;
+	/** The debounced search query being used */
 	searchQuery: string;
 }
 
+/**
+ * Result from the usePost hook
+ */
 export interface UsePostResult {
+	/** The fetched post, or null if not found */
 	post: SerializedPost | null;
+	/** Whether the post is being loaded */
 	isLoading: boolean;
+	/** Error if the query failed */
 	error: Error | null;
+	/** Function to refetch the post */
 	refetch: () => void;
 }
 
+/** Input type for creating a new post */
 export type PostCreateInput = z.infer<typeof createPostSchema>;
+/** Input type for updating an existing post */
 export type PostUpdateInput = z.infer<typeof updatePostSchema>;
 
 /**
@@ -532,15 +579,27 @@ export function usePostSearch({
 	};
 }
 
+/**
+ * Options for the useNextPreviousPosts hook
+ */
 export interface UseNextPreviousPostsOptions {
+	/** Whether to enable the query (default: true) */
 	enabled?: boolean;
 }
 
+/**
+ * Result from the useNextPreviousPosts hook
+ */
 export interface UseNextPreviousPostsResult {
+	/** The previous post (older), or null if none exists */
 	previousPost: SerializedPost | null;
+	/** The next post (newer), or null if none exists */
 	nextPost: SerializedPost | null;
+	/** Whether the query is loading */
 	isLoading: boolean;
+	/** Error if the query failed */
 	error: Error | null;
+	/** Function to refetch the posts */
 	refetch: () => void;
 }
 
@@ -596,16 +655,29 @@ export function useNextPreviousPosts(
 	};
 }
 
+/**
+ * Options for the useRecentPosts hook
+ */
 export interface UseRecentPostsOptions {
+	/** Maximum number of recent posts to fetch (default: 5) */
 	limit?: number;
+	/** Slug of a post to exclude from results */
 	excludeSlug?: string;
+	/** Whether to enable the query (default: true) */
 	enabled?: boolean;
 }
 
+/**
+ * Result from the useRecentPosts hook
+ */
 export interface UseRecentPostsResult {
+	/** Array of recent posts */
 	recentPosts: SerializedPost[];
+	/** Whether the query is loading */
 	isLoading: boolean;
+	/** Error if the query failed */
 	error: Error | null;
+	/** Function to refetch the posts */
 	refetch: () => void;
 }
 

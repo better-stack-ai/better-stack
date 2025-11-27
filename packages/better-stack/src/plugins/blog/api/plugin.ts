@@ -45,51 +45,110 @@ export interface BlogApiContext<TBody = any, TParams = any, TQuery = any> {
  * All hooks are optional and allow consumers to customize behavior
  */
 export interface BlogBackendHooks {
-	// Hooks - called before the operation
+	/**
+	 * Called before listing posts. Return false to deny access.
+	 * @param filter - Query parameters for filtering posts
+	 * @param context - Request context with headers, etc.
+	 */
 	onBeforeListPosts?: (
 		filter: z.infer<typeof PostListQuerySchema>,
 		context: BlogApiContext,
 	) => Promise<boolean> | boolean;
+	/**
+	 * Called before creating a post. Return false to deny access.
+	 * @param data - Post data being created
+	 * @param context - Request context with headers, etc.
+	 */
 	onBeforeCreatePost?: (
 		data: z.infer<typeof createPostSchema>,
 		context: BlogApiContext,
 	) => Promise<boolean> | boolean;
+	/**
+	 * Called before updating a post. Return false to deny access.
+	 * @param postId - ID of the post being updated
+	 * @param data - Updated post data
+	 * @param context - Request context with headers, etc.
+	 */
 	onBeforeUpdatePost?: (
 		postId: string,
 		data: z.infer<typeof updatePostSchema>,
 		context: BlogApiContext,
 	) => Promise<boolean> | boolean;
+	/**
+	 * Called before deleting a post. Return false to deny access.
+	 * @param postId - ID of the post being deleted
+	 * @param context - Request context with headers, etc.
+	 */
 	onBeforeDeletePost?: (
 		postId: string,
 		context: BlogApiContext,
 	) => Promise<boolean> | boolean;
 
-	// Lifecycle hooks - called after the operation
+	/**
+	 * Called after posts are read successfully
+	 * @param posts - Array of posts that were read
+	 * @param filter - Query parameters used for filtering
+	 * @param context - Request context
+	 */
 	onPostsRead?: (
 		posts: Post[],
 		filter: z.infer<typeof PostListQuerySchema>,
 		context: BlogApiContext,
 	) => Promise<void> | void;
+	/**
+	 * Called after a post is created successfully
+	 * @param post - The created post
+	 * @param context - Request context
+	 */
 	onPostCreated?: (post: Post, context: BlogApiContext) => Promise<void> | void;
+	/**
+	 * Called after a post is updated successfully
+	 * @param post - The updated post
+	 * @param context - Request context
+	 */
 	onPostUpdated?: (post: Post, context: BlogApiContext) => Promise<void> | void;
+	/**
+	 * Called after a post is deleted successfully
+	 * @param postId - ID of the deleted post
+	 * @param context - Request context
+	 */
 	onPostDeleted?: (
 		postId: string,
 		context: BlogApiContext,
 	) => Promise<void> | void;
 
-	// Error hooks - called when operations fail
+	/**
+	 * Called when listing posts fails
+	 * @param error - The error that occurred
+	 * @param context - Request context
+	 */
 	onListPostsError?: (
 		error: Error,
 		context: BlogApiContext,
 	) => Promise<void> | void;
+	/**
+	 * Called when creating a post fails
+	 * @param error - The error that occurred
+	 * @param context - Request context
+	 */
 	onCreatePostError?: (
 		error: Error,
 		context: BlogApiContext,
 	) => Promise<void> | void;
+	/**
+	 * Called when updating a post fails
+	 * @param error - The error that occurred
+	 * @param context - Request context
+	 */
 	onUpdatePostError?: (
 		error: Error,
 		context: BlogApiContext,
 	) => Promise<void> | void;
+	/**
+	 * Called when deleting a post fails
+	 * @param error - The error that occurred
+	 * @param context - Request context
+	 */
 	onDeletePostError?: (
 		error: Error,
 		context: BlogApiContext,

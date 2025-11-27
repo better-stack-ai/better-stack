@@ -6,9 +6,13 @@ import type { BlogLocalization } from "./localization";
  * Context passed to lifecycle hooks
  */
 export interface RouteContext {
+	/** Current route path */
 	path: string;
+	/** Route parameters (e.g., { slug: "my-post" }) */
 	params?: Record<string, string>;
+	/** Whether rendering on server (true) or client (false) */
 	isSSR: boolean;
+	/** Additional context properties */
 	[key: string]: any;
 }
 
@@ -19,7 +23,13 @@ export interface RouteContext {
  * to customize the behavior for their framework (Next.js, React Router, etc.)
  */
 export interface BlogPluginOverrides {
+	/**
+	 * Link component for navigation
+	 */
 	Link?: ComponentType<React.ComponentProps<"a"> & Record<string, any>>;
+	/**
+	 * Post card component for displaying a post
+	 */
 	PostCard?: ComponentType<{
 		post: SerializedPost;
 	}>;
