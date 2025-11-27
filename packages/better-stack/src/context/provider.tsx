@@ -75,8 +75,16 @@ export function BetterStackProvider<
 }
 
 /**
- * Hook to access the entire context
+ * Hook to access the entire BetterStack context
  * Useful if you need access to multiple plugins or the full context
+ *
+ * @returns The full context value including overrides and basePath
+ * @throws Error if used outside of BetterStackProvider
+ *
+ * @example
+ * ```tsx
+ * const { overrides, basePath } = useBetterStack<MyPluginOverrides>();
+ * ```
  */
 export function useBetterStack<
 	TPluginOverrides extends Record<string, any> = Record<string, any>,
@@ -145,6 +153,18 @@ export function usePluginOverrides<
 	return overrides as OverridesResult<TOverrides, TDefaults>;
 }
 
+/**
+ * Hook to access the base path where the client router is mounted
+ *
+ * @returns The base path string (e.g., "/pages")
+ * @throws Error if used outside of BetterStackProvider
+ *
+ * @example
+ * ```tsx
+ * const basePath = useBasePath();
+ * // basePath = "/pages"
+ * ```
+ */
 export function useBasePath() {
 	const context = useBetterStack();
 	if (!context) {

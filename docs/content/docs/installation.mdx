@@ -8,39 +8,6 @@ import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
 
 
-## Architecture Overview
-
-Before diving into installation, here's how Better Stack works:
-
-```
-┌────────────────────────────────────────────────────────────┐
-│  Your App                                                  │
-│                                                            │
-│  ┌──────────────────┐         ┌──────────────────┐         │
-│  │   Frontend       │         │   Backend        │         │
-│  │──────────────────│         │──────────────────│         │
-│  │  Plugin Routes   │────────▶│ API Route Handler│         │
-│  │  (Pages)         │  HTTP   │ (/api/*)         │         │
-│  │                  │         │                  │         │
-│  │  React Query ────┼────────▶│  DB Adapter ─────┼─────────┼───▶ Database
-│  │  (Data Fetch)    │         │  (ORM Bridge)    │         │
-│  │                  │         │                  │         │
-│  │  Overrides       │         │  DB Schemas      │         │
-│  │  (Framework)     │         │  (Merged)        │         │
-│  └──────────────────┘         └──────────────────┘         │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
-```
-
-**Key concepts:**
-
-- **Backend (`betterStack`)**: Collects plugin schemas, creates an API route handler, and exports a merged database schema
-- **Adapter**: Translates Better Stack's database operations to your ORM (Prisma, Drizzle, etc.)
-- **API Route Handler**: A `(request: Request) => Promise<Response>` function that processes all API calls
-- **Client (`createStackClient`)**: Registers client plugins and provides routes, page components, and prefetch loaders for SSR
-- **Overrides**: Framework-specific components (Next.js `Link` vs React Router `Link`) injected into plugins
-- **Loaders**: Functions that prefetch data server-side using React Query for optimal SSR
-
 ## Prerequisites
 
 In order to use Better Stack, your application must meet the following requirements:
@@ -214,12 +181,6 @@ In order to use Better Stack, your application must meet the following requireme
 
     Create a file named `better-stack.ts` in your `lib/` folder to configure the backend API:
 
-    **What happens here:**
-    - `betterStack()` collects all plugin database schemas and merges them into a unified `dbSchema`
-    - The `adapter` function receives this merged schema (`db`) and returns an adapter that translates Better Stack's database operations to your ORM
-    - The `handler` is a request handler function `(request: Request) => Promise<Response>` that processes all API calls
-    - The `basePath` determines where your API is mounted (e.g., `/api/data/*`)
-
     <Tabs groupId="adapter-type" items={["prisma", "drizzle", "kysely", "mongodb", "memory"]} persist>
       <Tab value="prisma">
         ```ts title="lib/better-stack.ts"
@@ -234,7 +195,6 @@ In order to use Better Stack, your application must meet the following requireme
           plugins: {
             // Add your backend plugins here
           },
-          // adapter receives the merged db schema and returns an Adapter interface
           adapter: (db) => createPrismaAdapter(prisma, db, { 
             provider: "postgresql" // or "mysql", "sqlite", "cockroachdb", "mongodb"
           })
@@ -333,14 +293,58 @@ In order to use Better Stack, your application must meet the following requireme
     </Tabs>
 
     <Callout type="info">
-      `betterStack()` returns both `handler` and `dbSchema`. The `dbSchema` contains all merged database schemas from your plugins. See the [CLI documentation](/cli) to learn how to generate database schemas and migrations.
+    **What happens here:**
+    - `betterStack()` collects all plugin database schemas and merges them into a unified `dbSchema`
+    - The `basePath` determines where your API is mounted (e.g., `/api/data/*`)
+    - The `adapter` function receives this merged schema (`db`) and returns an adapter that translates Better Stack's database operations to your ORM
+    - The `handler` is a request handler function `(request: Request) => Promise<Response>` that processes all API calls
+    </Callout>
+
+    **Now you can generate database schema** using the CLI (not needed for mongodb):
+      
+ <Tabs items={["prisma", "drizzle", "kysely"]}>
+  <Tab value="prisma">
+    ```bash
+    npx @btst/cli generate --config=lib/better-stack.ts --orm=prisma --output=schema.prisma
+    ```
+  </Tab>
+
+  <Tab value="drizzle">
+    ```bash
+    npx @btst/cli generate --config=lib/better-stack.ts --orm=drizzle --output=src/db/schema.ts
+    ```
+  </Tab>
+
+  <Tab value="kysely">
+    Kysely requires a database connection for introspection:
+
+    **Using DATABASE_URL environment variable:**
+
+    ```bash
+    DATABASE_URL=sqlite:./dev.db npx @btst/cli generate --config=lib/better-stack.ts --orm=kysely --output=migrations/schema.sql
+    ```
+
+    **Or using --database-url flag:**
+
+    ```bash
+    npx @btst/cli generate --config=lib/better-stack.ts --orm=kysely --output=migrations/schema.sql --database-url=sqlite:./dev.db
+    ```
+
+    ```bash
+    npx @btst/cli generate --config=lib/better-stack.ts --orm=kysely --output=migrations/schema.sql --database-url=postgres://user:pass@localhost:5432/db
+    ```
+  </Tab>
+</Tabs>
+
+    <Callout type="info">
+      See the [CLI documentation](/cli) to learn more about generating database schemas and migrations.
     </Callout>
   </Step>
 
   <Step>
     ### Create API Route
 
-    Create a catch-all API route to handle Better Stack requests. The route should handle requests for the path `/api/data/*` (or your configured `basePath`).
+    Create a catch-all API route to handle Better Stack requests. The route will handle requests for the path `/api/data/*`. If you use a different path make sure to update the `basePath` in the `betterStack` config to match your chosen path.
 
     <Tabs  groupId="frameworks" items={["next-js", "react-router", "tanstack", "nodejs"]} persist>
       <Tab value="next-js">
@@ -355,7 +359,7 @@ In order to use Better Stack, your application must meet the following requireme
       </Tab>
 
       <Tab value="react-router">
-        ```ts title="app/routes/api.data.$.ts"
+        ```ts title="app/routes/api/data/route.ts"
         import { handler } from "~/lib/better-stack"
         import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node"
 
@@ -437,16 +441,12 @@ In order to use Better Stack, your application must meet the following requireme
 
 
   <Step>
-    ### Import Plugin Styles (Optional)
+    ### Import Plugin Styles
 
-    Import plugin-specific CSS in your global stylesheet to ensure proper styling:
+    Plugins use [TailwindCSS v4](https://tailwindcss.com), so you should add the following `@import` to your global css file to ensure proper styling:
 
     ```css title="app/globals.css"
-    @import "tailwindcss";
-
-    /* Import plugin styles (tailwind classes, markdown, etc.) */
     @import "@btst/stack/plugins/blog/css";
-    /* Add other plugin CSS imports as needed */
     ```
 
     <Callout type="info">
@@ -457,7 +457,7 @@ In order to use Better Stack, your application must meet the following requireme
   <Step>
     ### Create Client Instance
 
-    Create a client instance to interact with Better Stack from your React components:
+    Create a client instance that routes requests to plugin pages, prefetches their data on the server, and renders them with instant hydration on the client:
 
     ```ts title="lib/better-stack-client.tsx"
     import { createStackClient } from "@btst/stack/client"
@@ -476,15 +476,16 @@ In order to use Better Stack, your application must meet the following requireme
       **Why a function?** `getStackClient` takes a `QueryClient` because different contexts use different instances:
       - **Server (SSR)**: Each request gets its own QueryClient (or cached per-request)
       - **Client**: A singleton QueryClient is shared across navigations
-      
-      This pattern allows you to pass the appropriate QueryClient for each context.
+      - **Additional options**: You can pass additional options to the `createStackClient` function, such as `headers` for SSR authentication if plugins expose lifecycle hooks.
+
+      This pattern allows you to pass the appropriate QueryClient and other options for each context. 
     </Callout>
   </Step>
 
   <Step>
     ### Set Up Query Client Provider
 
-    First, create a query client utility to ensure proper SSR hydration:
+    If you don't already have a query client utility, create one to ensure proper SSR hydration:
 
     ```ts title="lib/query-client.ts"
     import { QueryClient, isServer } from "@tanstack/react-query"
@@ -527,32 +528,97 @@ In order to use Better Stack, your application must meet the following requireme
     }
     ```
 
-    Then wrap your app with React Query's `QueryClientProvider`:
+    Then configure `QueryClientProvider` in your your app:
 
-    ```tsx title="app/layout.tsx"
-    import { QueryClientProvider } from "@tanstack/react-query"
-    import { getOrCreateQueryClient } from "@/lib/query-client"
+    <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
+      <Tab value="next-js">
+        ```tsx title="app/layout.tsx"
+        import { QueryClientProvider } from "@tanstack/react-query"
+        import { getOrCreateQueryClient } from "@/lib/query-client"
 
-    export default function RootLayout({ children }) {
-      const queryClient = getOrCreateQueryClient()
-      
-      return (
-        <html>
-          <body>
+        export default function RootLayout({ children }) {
+          const queryClient = getOrCreateQueryClient()
+          
+          return (
+            <html>
+              <body>
+                <QueryClientProvider client={queryClient}>
+                  {children}
+                </QueryClientProvider>
+              </body>
+            </html>
+          )
+        }
+        ```
+      </Tab>
+
+      <Tab value="react-router">
+        ```tsx title="app/root.tsx"
+        import { QueryClientProvider } from "@tanstack/react-query"
+        import { getOrCreateQueryClient } from "~/lib/query-client"
+        import { Outlet } from "react-router"
+
+        export default function App() {
+          const queryClient = getOrCreateQueryClient()
+          
+          return (
             <QueryClientProvider client={queryClient}>
-              {children}
+              <Outlet />
             </QueryClientProvider>
-          </body>
-        </html>
-      )
-    }
-    ```
+          )
+        }
+        ```
+      </Tab>
+
+      <Tab value="tanstack">
+        ```tsx title="src/router.tsx"
+        import { createRouter } from '@tanstack/react-router'
+        import { routeTree } from './routeTree.gen'
+        import { QueryClient } from '@tanstack/react-query'
+        import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query'
+        import { getOrCreateQueryClient } from '@/lib/query-client'
+
+        export interface MyRouterContext {
+          queryClient: QueryClient
+        }
+
+        export function getRouter() {
+          const queryClient = getOrCreateQueryClient()
+          
+          const router = createRouter({
+            routeTree,
+            scrollRestoration: true,
+            defaultPreload: false,
+            context: {
+              queryClient,
+            },
+            notFoundMode: "root",
+          })
+
+          setupRouterSsrQueryIntegration({
+            router,
+            queryClient,
+          })
+
+          return router
+        }
+
+        declare module '@tanstack/react-router' {
+          interface Register {
+            router: ReturnType<typeof getRouter>
+          }
+        }
+        ```
+      </Tab>
+    </Tabs>
 
     <Callout type="info">
       The `getOrCreateQueryClient()` utility ensures:
       - **Server**: Each request gets its own QueryClient
       - **Client**: A singleton QueryClient prevents recreation during React Suspense
       - **Hydration**: Server-prefetched data seamlessly transfers to the client
+
+      **Note**: QueryClient might have to be configured differently in your framework of choice. See [Example Projects](#example-projects) or [TanStack Query docs](https://tanstack.com/query/latest/docs/framework/react/overview) for more details.
     </Callout>
   </Step>
 
@@ -571,12 +637,6 @@ In order to use Better Stack, your application must meet the following requireme
         import Image from "next/image"
         import { useRouter } from "next/navigation"
 
-        // Get base URL - works on both server and client
-        const getBaseURL = () => 
-            typeof window !== 'undefined' 
-                ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
-                : (process.env.BASE_URL || "http://localhost:3000")
-
         // Define the shape of all plugin overrides for type safety
         type PluginOverrides = {
           example: ExamplePluginOverrides
@@ -594,8 +654,6 @@ In order to use Better Stack, your application must meet the following requireme
                   Link: (props) => <Link {...props} />,
                   Image: (props) => <Image {...props} />,
                   navigate: (path) => router.push(path),
-                  apiBaseURL: getBaseURL(),
-                  apiBasePath: '/api/data'
                   // Add other plugin overrides here
                 }
                 // Add other plugins here
@@ -614,12 +672,6 @@ In order to use Better Stack, your application must meet the following requireme
         import { BetterStackProvider } from "@btst/stack/context"
         import type { ExamplePluginOverrides } from "@btst/stack/plugins/example/client"
 
-        // Get base URL - works on both server and client
-        const getBaseURL = () => 
-          typeof window !== 'undefined' 
-            ? (import.meta.env.VITE_BASE_URL || window.location.origin)
-            : (process.env.BASE_URL || "http://localhost:5173")
-        
         // Define the shape of all plugin overrides
         type PluginOverrides = {
           example: ExamplePluginOverrides
@@ -634,8 +686,6 @@ In order to use Better Stack, your application must meet the following requireme
               basePath="/pages"
               overrides={{
                 example: {
-                  apiBaseURL: getBaseURL(),
-                  apiBasePath: "/api/data",
                   navigate: (href) => navigate(href),
                   Link: ({ href, children, className, ...props }) => (
                     <Link to={href || ""} className={className} {...props}>
@@ -661,12 +711,6 @@ In order to use Better Stack, your application must meet the following requireme
         import type { ExamplePluginOverrides } from "@btst/stack/plugins/example/client"
         import { Link, useRouter, Outlet, createFileRoute } from "@tanstack/react-router"
 
-        // Get base URL - works on both server and client
-        const getBaseURL = () => 
-          typeof window !== 'undefined' 
-            ? (import.meta.env.VITE_BASE_URL || window.location.origin)
-            : (process.env.BASE_URL || "http://localhost:3000")
-
         // Define the shape of all plugin overrides
         type PluginOverrides = {
           example: ExamplePluginOverrides
@@ -687,8 +731,6 @@ In order to use Better Stack, your application must meet the following requireme
                 basePath="/pages"
                 overrides={{
                   example: {
-                    apiBaseURL: getBaseURL(),
-                    apiBasePath: "/api/data",
                     navigate: (href) => router.navigate({ href }),
                     Link: ({ href, children, className, ...props }) => (
                       <Link to={href} className={className} {...props}>
@@ -711,27 +753,15 @@ In order to use Better Stack, your application must meet the following requireme
 
     <Callout type="info">
       **Understanding Overrides:**
-      - **Purpose**: Inject framework-specific components (Next.js `Link`/`Image` vs React Router `Link`)
+      - **Purpose**: Injects framework-specific components via React Context. Plugin components access these overrides through `usePluginOverrides()` hook, allowing them to use your framework's `Link`, `Image`, and navigation without tight coupling and to avoid breaking the client/server boundary in frameworks like Next.js. 
       - **Type Safety**: Each plugin exports its override type (e.g., `ExamplePluginOverrides`)
-      - **Two basePaths**: 
-        - `basePath="/pages"` on the provider = where your pages are mounted
-        - `apiBasePath="/api/data"` in overrides = where your API is mounted
-      - **Required vs Optional**: Some overrides like `navigate` are required, others like `Image` are optional
-      - **apiBaseURL**: Required for client-side API calls - use environment variables for flexibility across environments
     </Callout>
   </Step>
 
   <Step>
     ### Set Up Page Handler
 
-    Create a catch-all route to handle Better Stack pages. This enables server-side rendering and automatic route handling.
-
-    **What's happening:**
-    - `stackClient.router.getRoute(path)` matches the URL to a plugin route and returns a route object with `PageComponent`, `loader`, and `meta`
-    - `route.loader()` prefetches data server-side using React Query
-    - `dehydrate()` serializes the prefetched data to pass to the client
-    - `shouldDehydrateQuery` includes error states to prevent client-side refetching on errors
-    - `route.meta()` generates SEO metadata for the page
+    Create a catch-all route to handle Better Stack pages defined in your plugins. This enables server-side rendering, metadata generation and automatic route handling.
 
     <Tabs  groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist >
       <Tab value="next-js">
@@ -863,23 +893,29 @@ In order to use Better Stack, your application must meet the following requireme
       </Tab>
     </Tabs>
 
-    **Key implementation details:**
+    <Callout type="info">
+      
+    **How it works:**
     
-    - **Route object structure**: 
-      ```typescript
-      route = {
-        PageComponent: React.ComponentType,     // The page to render
-        loader?: () => Promise<void>,           // Prefetches React Query data
-        meta?: () => MetadataElements,          // Returns SEO metadata
-        ErrorComponent?: React.ComponentType,   // Standalone error components
-        LoadingComponent?: React.ComponentType  // Standalone loading components
-      }
-      ```
+    `stackClient.router.getRoute(path)` matches the URL to a plugin route and returns a route object:
+    
+    ```typescript
+    route = {
+      PageComponent: React.ComponentType,     // The page to render
+      loader?: () => Promise<void>,           // Prefetches React Query data
+      meta?: () => MetadataElements,          // Returns SEO metadata
+      ErrorComponent?: React.ComponentType,   // Standalone error components
+      LoadingComponent?: React.ComponentType  // Standalone loading components
+    }
+    ```
+    
+    **Key steps:**
     - **Server-side data loading**: Call `route.loader()` before rendering to prefetch data into React Query cache
-    - **Error handling**: Include failed queries in dehydration (`shouldDehydrateQuery`) to prevent client-side refetching on errors
-    - **Metadata generation**: Use framework-specific meta functions with `route.meta()` for SEO
+    - **Hydration**: Use `dehydrate()` to serialize prefetched data for the client (not required with TanStack Start)
+    - **Error handling**: Configure your query client with `shouldDehydrateQuery` to include failed queries in dehydration, preventing client-side refetching on errors
+    - **Metadata generation**: Use `route.meta()` with framework-specific meta functions for SEO
     - **404 handling**: Return `notFound()` or your framework's equivalent function when routes don't exist
-    - **Hydration**: The dehydrated state seamlessly transfers server-prefetched data to the client
+    </Callout>
 
   </Step>
 
@@ -902,14 +938,7 @@ In order to use Better Stack, your application must meet the following requireme
         export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           const queryClient = new QueryClient()
           const stackClient = getStackClient(queryClient)
-          const entries = await stackClient.generateSitemap()
-
-          return entries.map((e) => ({
-            url: e.url,
-            lastModified: e.lastModified,
-            changeFrequency: e.changeFrequency,
-            priority: e.priority,
-          }))
+          return stackClient.generateSitemap()
         }
         ```
       </Tab>
@@ -982,7 +1011,7 @@ In order to use Better Stack, your application must meet the following requireme
     - ✅ Database adapter that connects plugins to your database
     - ✅ Client-side router with SSR support
     - ✅ React Query integration for data fetching
-    - ✅ Framework-specific overrides for optimal DX
+    - ✅ Framework-specific overrides
 
     **Next steps:**
 
@@ -990,18 +1019,15 @@ In order to use Better Stack, your application must meet the following requireme
        - Backend: `plugins: { blog: blogBackendPlugin() }`
        - Client: `plugins: { blog: blogClientPlugin() }`
     
-    2. **Generate database schema** using the CLI:
-       ```bash
-       npx @btst/cli generate --orm prisma --config lib/better-stack.ts
-       ```
-    
-    3. **Visit your pages** at `/pages/*` to see plugin routes in action
+    2. **Visit your pages** at `/pages/*` to see plugin routes in action
 
     **Available plugins:**
-    - `@btst/stack/plugins/blog` - Full-featured blog with markdown editor, SEO, and RSS
+    - `@btst/stack/plugins/blog` - Full-featured blog with markdown editor, SEO, and RSS. Learn more about the blog plugin [here](/plugins/blog).
     - More plugins coming soon!
 
-    **Example projects:**
+    Each plugin provides everything you need: routes, API endpoints, database schemas, React components, and hooks - all working together seamlessly.
+
+    ## Example Projects
 
     See complete working examples for each framework:
     - **[Next.js Example](https://github.com/better-stack-ai/better-stack/tree/main/examples/nextjs)** - Full Next.js App Router setup with blog and todo plugins
@@ -1010,7 +1036,6 @@ In order to use Better Stack, your application must meet the following requireme
 
     Each example includes complete configuration, plugin setup, and demonstrates framework-specific patterns.
 
-    Each plugin provides everything you need: routes, API endpoints, database schemas, React components, and hooks - all working together seamlessly.
   </Step>
 </Steps>
 

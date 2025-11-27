@@ -11,6 +11,10 @@ import { Callout } from "fumadocs-ui/components/callout";
 
 ## Installation
 
+<Callout type="info">
+Ensure you followed the general [framework installation guide](/installation) first.
+</Callout>
+
 Follow these steps to add the Blog plugin to your Better Stack setup.
 
 
@@ -26,7 +30,7 @@ import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 const { handler, dbSchema } = betterStack({
   basePath: "/api/data",
   plugins: {
-    blog: blogBackendPlugin() // Hooks are optional
+    blog: blogBackendPlugin()
   },
   adapter: (db) => createPrismaAdapter(prisma, db, { 
     provider: "postgresql" 
@@ -36,7 +40,7 @@ const { handler, dbSchema } = betterStack({
 export { handler, dbSchema }
 ```
 
-The `blogBackendPlugin()` accepts optional hooks for customizing behavior (authorization, logging, etc.). You can pass an empty object or omit it entirely to use defaults.
+The `blogBackendPlugin()` accepts optional hooks for customizing behavior (authorization, logging, etc.).
 
 ### 2. Add Plugin to Client
 
@@ -48,9 +52,7 @@ import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { QueryClient } from "@tanstack/react-query"
 
 const getBaseURL = () => 
-  typeof window !== 'undefined' 
-    ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
-    : (process.env.BASE_URL || "http://localhost:3000")
+   (process.env.BASE_URL || "http://localhost:3000")
 
 export const getStackClient = (queryClient: QueryClient) => {
   const baseURL = getBaseURL()
@@ -93,9 +95,6 @@ export const getStackClient = (queryClient: QueryClient) => {
 Add the blog plugin CSS to your global stylesheet:
 
 ```css title="app/globals.css"
-@import "tailwindcss";
-
-/* Import blog plugin styles */
 @import "@btst/stack/plugins/blog/css";
 ```
 
@@ -268,18 +267,54 @@ Configure framework-specific overrides in your `BetterStackProvider`:
 After adding the plugin, generate your database schema using the CLI:
 
 ```bash
-npx @btst/cli generate --orm prisma --config lib/better-stack.ts
+npx @btst/cli generate --orm prisma --config lib/better-stack.ts  --output prisma/schema.prisma
 ```
 
 This will create the necessary database tables for posts and tags. Run migrations as needed for your ORM.
 
 For more details on the CLI and all available options, see the [CLI documentation](/cli).
 
-## Customization
+## Congratulations, You're Done! 🎉
 
-### Backend Hooks
+Your blog plugin is now fully configured and ready to use! Here's a quick reference of what's available:
 
-Customize backend behavior with optional hooks. All hooks are optional and allow you to add authorization, logging, and custom behavior:
+### API Endpoints
+
+The blog plugin provides the following API endpoints (mounted at your configured `apiBasePath`):
+
+- **GET** `/posts` - List posts with optional filtering (published status, tag, search query)
+- **POST** `/posts` - Create a new post
+- **PUT** `/posts/:id` - Update an existing post
+- **DELETE** `/posts/:id` - Delete a post
+- **GET** `/posts/next-previous` - Get previous and next posts relative to a date
+- **GET** `/tags` - List all tags
+
+### Page Routes
+
+The blog plugin automatically creates the following pages (mounted at your configured `siteBasePath`):
+
+- `/blog` - Blog homepage with published posts
+- `/blog/drafts` - Draft posts page
+- `/blog/new` - Create new post page
+- `/blog/:slug` - Individual post page
+- `/blog/:slug/edit` - Edit post page
+- `/blog/tag/:tagSlug` - Posts filtered by tag
+
+### Adding Authorization
+
+To add authorization rules and customize behavior, you can use the lifecycle hooks defined in the API Reference section below. These hooks allow you to control access to API endpoints, add logging, and customize the plugin's behavior to fit your application's needs.
+
+## API Reference
+
+### Backend (`@btst/stack/plugins/blog/api`)
+
+#### blogBackendPlugin
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/api/plugin.ts" name="blogBackendPlugin" />
+
+#### BlogBackendHooks
+
+Customize backend behavior with optional lifecycle hooks. All hooks are optional and allow you to add authorization, logging, and custom behavior:
 
 <AutoTypeTable path="../packages/better-stack/src/plugins/blog/api/plugin.ts" name="BlogBackendHooks" />
 
@@ -290,13 +325,20 @@ import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/bl
 
 const blogHooks: BlogBackendHooks = {
   // Authorization hooks - return false to deny access
-  onBeforeListPosts: async (filter, context) => {
-    // Control access to post lists (e.g., hide drafts from public)
-    if (filter.published === false) {
-      // Require authentication for drafts
-      return false // or check auth
+  onBeforeListPosts(filter, context) {
+    if(filter.published === false) {
+        return isBlogAdmin(context.headers as Headers)
     }
     return true
+  },
+  onBeforeCreatePost(data, context) {
+    return isBlogAdmin(context.headers as Headers)
+  },
+  onBeforeUpdatePost(postId, data, context) {
+    return isBlogAdmin(context.headers as Headers)
+  },
+  onBeforeDeletePost(postId, context) {
+    return isBlogAdmin(context.headers as Headers)
   },
   // ... other hooks
 }
@@ -309,57 +351,17 @@ const { handler, dbSchema } = betterStack({
 })
 ```
 
-### Client Hooks
+#### BlogApiContext
 
-Customize client-side behavior with hooks. These hooks are called during data fetching (both SSR and CSR):
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/api/plugin.ts" name="BlogApiContext" />
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/plugin.tsx" name="BlogClientHooks" />
+### Client (`@btst/stack/plugins/blog/client`)
 
-**Example usage:**
+#### blogClientPlugin
 
-```tsx title="lib/better-stack-client.tsx"
-blog: blogClientPlugin({
-  // ... required config
-  hooks: {
-    beforeLoadPosts: async (filter, context) => {
-      console.log("Loading posts:", filter)
-      return true // Return false to cancel loading
-    },
-    // ... other hooks
-  }
-})
-```
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/plugin.tsx" name="blogClientPlugin" />
 
-### Plugin Overrides
-
-Configure framework-specific overrides and route lifecycle hooks. All lifecycle hooks are optional:
-
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/overrides.ts" name="BlogPluginOverrides" />
-
-**Example usage:**
-
-```tsx
-overrides={{
-  blog: {
-    // Required overrides
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
-    navigate: (path) => router.push(path),
-    uploadImage: async (file) => {
-      // Implement your image upload logic
-      return "https://example.com/uploads/image.jpg"
-    },
-    // Optional lifecycle hooks
-    onBeforePostsPageRendered: (context) => {
-      // Check if user can view posts list
-      return true
-    },
-    // ... other hooks
-  }
-}}
-```
-
-### Client Configuration
+#### BlogClientConfig
 
 The client plugin accepts a configuration object with required fields and optional SEO settings:
 
@@ -386,28 +388,124 @@ blog: blogClientPlugin({
 })
 ```
 
-## Understanding the Architecture
+#### BlogClientHooks
 
-The Blog plugin uses a **two-phase configuration** pattern to handle both server-side data prefetching and client-side rendering:
+Customize client-side behavior with lifecycle hooks. These hooks are called during data fetching (both SSR and CSR):
 
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/plugin.tsx" name="BlogClientHooks" />
+
+**Example usage:**
+
+```tsx title="lib/better-stack-client.tsx"
+blog: blogClientPlugin({
+  // ... rest of the config
+  headers: options?.headers,
+  hooks: {
+    beforeLoadPosts: async (filter, context) => {
+      // only allow loading draft posts for admin
+      if (!filter.published) {
+        return isAdmin(context.headers)
+      }
+      return true
+    },
+    afterLoadPost: async (post, slug, context) => {
+      // only allow loading draft post for admin
+      const isEditRoute = context.path?.includes('/edit');
+      if (post?.published === false || isEditRoute) {
+        return isAdmin(context.headers)
+      }
+      return true
+    },
+    onLoadError(error, context) {
+      //handle error during prefetching
+      redirect("/auth/sign-in")
+    },
+    // ... other hooks
+  }
+})
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Phase 1: Server-Side Data Prefetching (SSR Loaders)         │
-│                                                             │
-│  Uses: BlogClientConfig (Section 2)                         │
-│  Purpose: Prefetch data into React Query cache              │
-│  Context: Runs before React components mount                │
-│  Access: Direct function parameters                         │
-└─────────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ Phase 2: Component Rendering (SSR + CSR)                    │
-│                                                             │
-│  Uses: BlogPluginOverrides (Section 4)                      │
-│  Purpose: Runtime component behavior and API calls          │
-│  Context: React components during render                    │
-│  Access: React Context via usePluginOverrides hook          │
-└─────────────────────────────────────────────────────────────┘
+
+#### RouteContext
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/plugin.tsx" name="RouteContext" />
+
+#### LoaderContext
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/plugin.tsx" name="LoaderContext" />
+
+#### BlogPluginOverrides
+
+Configure framework-specific overrides and route lifecycle hooks. All lifecycle hooks are optional:
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/overrides.ts" name="BlogPluginOverrides" />
+
+**Example usage:**
+
+```tsx
+overrides={{
+  blog: {
+    // Required overrides
+    apiBaseURL: baseURL,
+    apiBasePath: "/api/data",
+    navigate: (path) => router.push(path),
+    uploadImage: async (file) => {
+      // Implement your image upload logic
+      return "https://example.com/uploads/image.jpg"
+    },
+    // Optional lifecycle hooks
+    onBeforePostsPageRendered: (context) => {
+      // Check if user can view posts list. This is helpful for SPA. Dont need for SSR as you should check auth in the loader.
+      return true
+    },
+    // ... other hooks
+  }
+}}
 ```
 
-**Why two configs?** Loaders run **before** React Context is available, so they need direct configuration. Components run **during** render with React Context available, so they use Provider overrides. Both need `apiBaseURL`/`apiBasePath` but in different contexts.
+## React Data Hooks and Types
+You can import the hooks from `"@btst/stack/plugins/blog/client/hooks"` to use in your components.
+
+
+#### UsePostsOptions
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostsOptions" />
+
+#### UsePostsResult
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostsResult" />
+
+#### UsePostResult
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostResult" />
+
+#### UsePostSearchOptions
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostSearchOptions" />
+
+#### UsePostSearchResult
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostSearchResult" />
+
+#### UseNextPreviousPostsOptions
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseNextPreviousPostsOptions" />
+
+#### UseNextPreviousPostsResult
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseNextPreviousPostsResult" />
+
+#### UseRecentPostsOptions
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseRecentPostsOptions" />
+
+#### UseRecentPostsResult
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseRecentPostsResult" />
+
+#### PostCreateInput
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="PostCreateInput" />
+
+#### PostUpdateInput
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="PostUpdateInput" />

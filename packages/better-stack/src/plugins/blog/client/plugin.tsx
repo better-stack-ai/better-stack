@@ -17,9 +17,13 @@ import { PostPageComponent } from "./components/pages/post-page";
  * Context passed to route hooks
  */
 export interface RouteContext {
+	/** Current route path */
 	path: string;
+	/** Route parameters (e.g., { slug: "my-post" }) */
 	params?: Record<string, string>;
+	/** Whether rendering on server (true) or client (false) */
 	isSSR: boolean;
+	/** Additional context properties */
 	[key: string]: any;
 }
 
@@ -27,12 +31,19 @@ export interface RouteContext {
  * Context passed to loader hooks
  */
 export interface LoaderContext {
+	/** Current route path */
 	path: string;
+	/** Route parameters (e.g., { slug: "my-post" }) */
 	params?: Record<string, string>;
+	/** Whether rendering on server (true) or client (false) */
 	isSSR: boolean;
+	/** Base URL for API calls */
 	apiBaseURL: string;
+	/** Path where the API is mounted */
 	apiBasePath: string;
+	/** Optional headers for the request */
 	headers?: Headers;
+	/** Additional context properties */
 	[key: string]: any;
 }
 
@@ -41,26 +52,35 @@ export interface LoaderContext {
  * Note: queryClient is passed at runtime to both loader and meta (for SSR isolation)
  */
 export interface BlogClientConfig {
-	// Required configuration
+	/** Base URL for API calls (e.g., "http://localhost:3000") */
 	apiBaseURL: string;
+	/** Path where the API is mounted (e.g., "/api/data") */
 	apiBasePath: string;
+	/** Base URL of your site for SEO meta tags */
 	siteBaseURL: string;
+	/** Path where pages are mounted (e.g., "/pages") */
 	siteBasePath: string;
+	/** React Query client instance for caching */
 	queryClient: QueryClient;
 
-	// Optional SEO/meta configuration
+	/** Optional SEO configuration for meta tags */
 	seo?: {
+		/** Site name for Open Graph tags */
 		siteName?: string;
+		/** Default author name */
 		author?: string;
+		/** Twitter handle (e.g., "@yourhandle") */
 		twitterHandle?: string;
+		/** Locale for Open Graph (e.g., "en_US") */
 		locale?: string;
+		/** Default image URL for social sharing */
 		defaultImage?: string;
 	};
 
-	// Optional hooks
+	/** Optional hooks for customizing behavior */
 	hooks?: BlogClientHooks;
 
-	// Optional headers for SSR (e.g., forwarding cookies)
+	/** Optional headers for SSR (e.g., forwarding cookies) */
 	headers?: Headers;
 }
 
@@ -69,27 +89,61 @@ export interface BlogClientConfig {
  * All hooks are optional and allow consumers to customize behavior
  */
 export interface BlogClientHooks {
-	// Loader Hooks - called during data loading (SSR)
+	/**
+	 * Called before loading posts list. Return false to cancel loading.
+	 * @param filter - Filter parameters including published status
+	 * @param context - Loader context with path, params, etc.
+	 */
 	beforeLoadPosts?: (
 		filter: { published: boolean },
 		context: LoaderContext,
 	) => Promise<boolean> | boolean;
+	/**
+	 * Called after posts are loaded. Return false to cancel further processing.
+	 * @param posts - Array of loaded posts or null
+	 * @param filter - Filter parameters used
+	 * @param context - Loader context
+	 */
 	afterLoadPosts?: (
 		posts: Post[] | null,
 		filter: { published: boolean },
 		context: LoaderContext,
 	) => Promise<boolean> | boolean;
+	/**
+	 * Called before loading a single post. Return false to cancel loading.
+	 * @param slug - Post slug being loaded
+	 * @param context - Loader context
+	 */
 	beforeLoadPost?: (
 		slug: string,
 		context: LoaderContext,
 	) => Promise<boolean> | boolean;
+	/**
+	 * Called after a post is loaded. Return false to cancel further processing.
+	 * @param post - Loaded post or null if not found
+	 * @param slug - Post slug that was requested
+	 * @param context - Loader context
+	 */
 	afterLoadPost?: (
 		post: Post | null,
 		slug: string,
 		context: LoaderContext,
 	) => Promise<boolean> | boolean;
+	/**
+	 * Called before loading the new post page. Return false to cancel.
+	 * @param context - Loader context
+	 */
 	beforeLoadNewPost?: (context: LoaderContext) => Promise<boolean> | boolean;
+	/**
+	 * Called after the new post page is loaded. Return false to cancel.
+	 * @param context - Loader context
+	 */
 	afterLoadNewPost?: (context: LoaderContext) => Promise<boolean> | boolean;
+	/**
+	 * Called when a loading error occurs
+	 * @param error - The error that occurred
+	 * @param context - Loader context
+	 */
 	onLoadError?: (error: Error, context: LoaderContext) => Promise<void> | void;
 }
 

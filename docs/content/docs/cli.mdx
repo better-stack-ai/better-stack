@@ -45,7 +45,6 @@ Install the CLI as a dev dependency:
 | `--orm` | `generate` | Yes | `prisma`, `drizzle`, `kysely` | The ORM to generate schema for |
 | `--output` | `generate`, `migrate` | Yes (generate), Yes (migrate) | File path | Output file path for generated schema or migration SQL |
 | `--database-url` | `generate` (kysely only), `migrate` | Yes (kysely generate), Yes (migrate) | Database connection string | Database URL (can also use `DATABASE_URL` environment variable) |
-| `--filter-auth` | `generate`, `migrate` | No | Flag (no value) | Exclude Better Auth tables (User, Session, Account, Verification) |
 
 ## Generate
 
@@ -54,13 +53,13 @@ Generate database schemas for your ORM from your Better Stack `dbSchema`:
 <Tabs items={["prisma", "drizzle", "kysely"]}>
   <Tab value="prisma">
     ```bash
-    npx btst generate --config=db.ts --orm=prisma --output=schema.prisma
+    npx @btst/cli generate --config=lib/better-stack.ts --orm=prisma --output=schema.prisma
     ```
   </Tab>
 
   <Tab value="drizzle">
     ```bash
-    npx btst generate --config=db.ts --orm=drizzle --output=src/db/schema.ts
+    npx @btst/cli generate --config=lib/better-stack.ts --orm=drizzle --output=src/db/schema.ts
     ```
   </Tab>
 
@@ -70,35 +69,21 @@ Generate database schemas for your ORM from your Better Stack `dbSchema`:
     **Using DATABASE_URL environment variable:**
 
     ```bash
-    DATABASE_URL=sqlite:./dev.db npx btst generate --config=db.ts --orm=kysely --output=migrations/schema.sql
+    DATABASE_URL=sqlite:./dev.db npx @btst/cli generate --config=lib/better-stack.ts --orm=kysely --output=migrations/schema.sql
     ```
 
     **Or using --database-url flag:**
 
     ```bash
-    npx btst generate --config=db.ts --orm=kysely --output=migrations/schema.sql --database-url=sqlite:./dev.db
+    npx @btst/cli generate --config=lib/better-stack.ts --orm=kysely --output=migrations/schema.sql --database-url=sqlite:./dev.db
     ```
 
     ```bash
-    npx btst generate --config=db.ts --orm=kysely --output=migrations/schema.sql --database-url=postgres://user:pass@localhost:5432/db
+    npx @btst/cli generate --config=lib/better-stack.ts --orm=kysely --output=migrations/schema.sql --database-url=postgres://user:pass@localhost:5432/db
     ```
   </Tab>
 </Tabs>
 
-### Filter Auth Tables
-
-To exclude Better Auth tables (User, Session, Account, Verification) from the generated schema:
-
-```bash
-npx btst generate --config=db.ts --orm=prisma --output=schema.prisma --filter-auth
-```
-
-<Callout type="info">
-  **Why Better Auth tables?** Better DB is built on Better Auth, which includes authentication tables (User, Session, Account, Verification) by default. Use `--filter-auth` if you:
-  - Already have existing auth tables
-  - Use a different authentication system
-  - Want to manage auth tables separately
-</Callout>
 
 ## Migrate
 
@@ -107,17 +92,17 @@ Migrate your database schema directly (Kysely only). For Prisma and Drizzle, use
 **Using DATABASE_URL environment variable:**
 
 ```bash
-DATABASE_URL=sqlite:./dev.db npx btst migrate --config=db.ts
+DATABASE_URL=sqlite:./dev.db npx @btst/cli migrate --config=lib/better-stack.ts
 ```
 
 **Or using --database-url flag:**
 
 ```bash
-npx btst migrate --config=db.ts --database-url=sqlite:./dev.db
+npx @btst/cli migrate --config=lib/better-stack.ts --database-url=sqlite:./dev.db
 ```
 
 ```bash
-npx btst migrate --config=db.ts --database-url=postgres://user:pass@localhost:5432/db
+npx @btst/cli migrate --config=lib/better-stack.ts --database-url=postgres://user:pass@localhost:5432/db
 ```
 
 ### Generate SQL to File
@@ -125,24 +110,17 @@ npx btst migrate --config=db.ts --database-url=postgres://user:pass@localhost:54
 Instead of running migrations directly, generate SQL to a file:
 
 ```bash
-npx btst migrate --config=db.ts --output=migrations.sql --database-url=sqlite:./dev.db
+npx @btst/cli migrate --config=lib/better-stack.ts --output=migrations.sql --database-url=sqlite:./dev.db
 ```
 
-### Filter Auth Tables
+## Gotchas
 
-To exclude Better Auth tables from migrations:
+Because the CLI executes your config file to extract the `dbSchema`, there are a few limitations to be aware of:
+
+- **Path aliases don't work**: Path aliases (like `@/` or `~/`) configured in your TypeScript config won't work for any imports used in your `better-stack.ts` file or any files it imports. Use relative paths instead.
+
+- **Environment variables**: If your config file or its imports have conditional checks for available environment variables (e.g., checking if `process.env.SOME_VAR` exists), you should also pass those environment variables when running CLI commands:
 
 ```bash
-npx btst migrate --config=db.ts --output=migrations.sql --filter-auth --database-url=sqlite:./dev.db
+SOME_VAR=value npx @btst/cli generate --config=lib/better-stack.ts --orm=prisma --output=schema.prisma
 ```
-
-<Callout type="info">
-  The `--config` flag should point to your Better Stack configuration file (e.g., `lib/better-stack.ts`). This file must export `dbSchema` from the `betterStack()` call:
-  
-  ```ts
-  export const { handler, dbSchema } = betterStack({ ... })
-  ```
-  
-  The `dbSchema` contains all merged plugin schemas and is automatically generated by `betterStack()`. The CLI reads this export and generates the appropriate schema or migration files.
-</Callout>
-

@@ -55,6 +55,19 @@ export function RouteRenderer({
 	);
 }
 
+/**
+ * Renders a route with Suspense and ErrorBoundary wrappers.
+ * Handles loading states, error boundaries, and not-found scenarios for a single route.
+ *
+ * @param path - The current route path
+ * @param PageComponent - The page component to render
+ * @param ErrorComponent - Optional error fallback component
+ * @param LoadingComponent - Component to show during suspense
+ * @param onNotFound - Optional callback when route is not found
+ * @param NotFoundComponent - Optional component to show for 404s
+ * @param props - Additional props to pass to the page component
+ * @param onError - Error handler callback for the error boundary
+ */
 export function ComposedRoute({
 	path,
 	PageComponent,
