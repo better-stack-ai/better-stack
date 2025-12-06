@@ -3,31 +3,909 @@ title: Plugin Development
 description: Build your own plugins for Better Stack
 ---
 
-Extensive documentation for plugin development is coming soon!
-In the meantime, you can check out the source code of existing plugins to learn how to build your own:
+Learn how to create custom plugins for Better Stack. Plugins extend your application with new features, routes, and API endpoints while maintaining full type safety across backend and frontend.
 
-## Plugin Examples
+## Overview
 
-### Blog Plugin
+A Better Stack plugin consists of two parts:
 
-The blog plugin is a full-featured example located in the main package. It demonstrates:
+- **Backend Plugin** - Defines database schema and API endpoints
+- **Client Plugin** - Provides routes, React components, and hooks
 
-- Database schema definition
-- Backend API endpoints
-- Client-side routes and components
-- React Query hooks
-- SEO and sitemap generation
+You can create plugins **inside your project** (like the [Todo example](#in-project-plugin-example)) or as a **standalone package** to publish on npm using the [Plugin Starter repository](https://github.com/better-stack-ai/plugin-starter).
 
-**Source Code:** [Blog Plugin](https://github.com/better-stack-ai/better-stack/tree/main/packages/better-stack/src/plugins/blog)
+## Core Concepts
 
-### Todo Plugin
+### Plugin Architecture
 
-The todo plugin is a simpler example located in the Next.js examples folder. It demonstrates:
+```
+your-plugin/
+├── api/
+│   └── backend.ts      # Backend plugin with API endpoints
+├── client/
+│   ├── client.tsx      # Client plugin with routes
+│   ├── hooks.tsx       # React Query hooks
+│   ├── components.tsx  # Page components
+│   └── overrides.ts    # Framework adapter types
+├── schema.ts           # Database schema definition
+└── types.ts            # Shared TypeScript types
+```
 
+### Key Imports
+
+**Backend Plugin APIs:**
+
+```typescript
+import { 
+  defineBackendPlugin,  // Create a backend plugin
+  createEndpoint,       // Define an API endpoint
+  createDbPlugin,       // Define database schema
+  type Adapter          // Database adapter type
+} from "@btst/stack/plugins/api"
+```
+
+**Client Plugin APIs:**
+
+```typescript
+import { 
+  defineClientPlugin,   // Create a client plugin
+  createRoute,          // Define a route
+  createApiClient       // Type-safe API client
+} from "@btst/stack/plugins/client"
+```
+
+---
+
+## Database Schema
+
+Define your database models using `createDbPlugin`. Each model specifies fields with their types, constraints, and defaults.
+
+```typescript
+import { createDbPlugin } from "@btst/stack/plugins/api"
+
+export const todosSchema = createDbPlugin("todos", {
+  todo: {
+    modelName: "todo",
+    fields: {
+      title: {
+        type: "string",
+        required: true
+      },
+      completed: {
+        type: "boolean",
+        defaultValue: false
+      },
+      createdAt: {
+        type: "date",
+        defaultValue: () => new Date()
+      }
+    }
+  }
+})
+```
+
+**Field Types:**
+- `string` - Text values
+- `boolean` - True/false values
+- `number` - Numeric values
+- `date` - Date/time values
+
+**Field Options:**
+- `required` - Field must have a value
+- `defaultValue` - Default value (can be a function)
+- `unique` - Value must be unique across all records
+
+### Complex Schema Example (Blog Plugin)
+
+For plugins with relationships, define multiple models:
+
+```typescript
+export const blogSchema = createDbPlugin("blog", {
+  post: {
+    modelName: "post",
+    fields: {
+      title: { type: "string", required: true },
+      content: { type: "string", required: true },
+      slug: { type: "string", required: true, unique: true },
+      published: { type: "boolean", defaultValue: false },
+      publishedAt: { type: "date", required: false },
+      createdAt: { type: "date", defaultValue: () => new Date() },
+      updatedAt: { type: "date", defaultValue: () => new Date() },
+    }
+  },
+  tag: {
+    modelName: "tag",
+    fields: {
+      name: { type: "string", required: true, unique: true },
+      slug: { type: "string", required: true, unique: true },
+      createdAt: { type: "date", defaultValue: () => new Date() },
+    }
+  },
+  postTag: {
+    modelName: "postTag",
+    fields: {
+      postId: { type: "string", required: true },
+      tagId: { type: "string", required: true },
+    }
+  }
+})
+```
+
+---
+
+## Backend Plugin
+
+The backend plugin defines your API endpoints using the database adapter.
+
+### Basic Structure
+
+```typescript
+import { type Adapter, defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api"
+import { z } from "zod"
+import { todosSchema as dbSchema } from "../schema"
+import type { Todo } from "../types"
+
+// Request validation schemas
+const createTodoSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  completed: z.boolean().optional().default(false)
+})
+
+export const todosBackendPlugin = defineBackendPlugin({
+  name: "todos",
+  dbPlugin: dbSchema,
+  
+  routes: (adapter: Adapter) => {
+    // Define endpoints here
+    return { /* endpoints */ } as const
+  }
+})
+
+// Export the router type for client-side type safety
+export type TodosApiRouter = ReturnType<typeof todosBackendPlugin.routes>
+```
+
+### Creating Endpoints
+
+Use `createEndpoint` to define type-safe API routes:
+
+```typescript
+routes: (adapter: Adapter) => {
+  // GET /todos - List all todos
+  const listTodos = createEndpoint(
+    "/todos",
+    { method: "GET" },
+    async () => {
+      const todos = await adapter.findMany<Todo>({
+        model: "todo",
+        sortBy: { field: "createdAt", direction: "desc" }
+      })
+      return todos || []
+    }
+  )
+
+  // POST /todos - Create a todo
+  const createTodo = createEndpoint(
+    "/todos",
+    { method: "POST", body: createTodoSchema },
+    async (ctx) => {
+      const { title, completed } = ctx.body
+      return await adapter.create<Todo>({
+        model: "todo",
+        data: { title, completed: completed ?? false, createdAt: new Date() }
+      })
+    }
+  )
+
+  // PUT /todos/:id - Update a todo
+  const updateTodo = createEndpoint(
+    "/todos/:id",
+    { method: "PUT", body: updateTodoSchema },
+    async (ctx) => {
+      const updated = await adapter.update({
+        model: "todo",
+        where: [{ field: "id", value: ctx.params.id }],
+        update: ctx.body
+      })
+      if (!updated) throw new Error("Todo not found")
+      return updated
+    }
+  )
+
+  // DELETE /todos/:id - Delete a todo
+  const deleteTodo = createEndpoint(
+    "/todos/:id",
+    { method: "DELETE" },
+    async (ctx) => {
+      await adapter.delete({
+        model: "todo",
+        where: [{ field: "id", value: ctx.params.id }]
+      })
+      return { success: true }
+    }
+  )
+
+  return { listTodos, createTodo, updateTodo, deleteTodo } as const
+}
+```
+
+### Adapter Operations
+
+The adapter provides these database operations:
+
+| Method | Description |
+|--------|-------------|
+| `findMany<T>({ model, where?, sortBy?, limit?, offset? })` | Query multiple records |
+| `create<T>({ model, data })` | Create a new record |
+| `update<T>({ model, where, update })` | Update matching records |
+| `delete<T>({ model, where })` | Delete matching records |
+| `transaction(async (tx) => { ... })` | Run operations in a transaction |
+
+### Backend Hooks (Authorization & Lifecycle)
+
+For more control, plugins can accept hooks for authorization and lifecycle events:
+
+```typescript
+export interface BlogBackendHooks {
+  // Authorization hooks - return false to deny access
+  onBeforeCreatePost?: (data, context) => Promise<boolean> | boolean
+  onBeforeUpdatePost?: (postId, data, context) => Promise<boolean> | boolean
+  onBeforeDeletePost?: (postId, context) => Promise<boolean> | boolean
+  onBeforeListPosts?: (filter, context) => Promise<boolean> | boolean
+
+  // Lifecycle hooks - called after operations
+  onPostCreated?: (post, context) => Promise<void> | void
+  onPostUpdated?: (post, context) => Promise<void> | void
+  onPostDeleted?: (postId, context) => Promise<void> | void
+  onPostsRead?: (posts, filter, context) => Promise<void> | void
+
+  // Error hooks
+  onCreatePostError?: (error, context) => Promise<void> | void
+  onUpdatePostError?: (error, context) => Promise<void> | void
+  onDeletePostError?: (error, context) => Promise<void> | void
+  onListPostsError?: (error, context) => Promise<void> | void
+}
+
+export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
+  defineBackendPlugin({
+    name: "blog",
+    dbPlugin: dbSchema,
+    routes: (adapter: Adapter) => {
+      const createPost = createEndpoint("/posts", { method: "POST", body: createPostSchema },
+        async (ctx) => {
+          // Authorization check
+          if (hooks?.onBeforeCreatePost) {
+            const canCreate = await hooks.onBeforeCreatePost(ctx.body, { headers: ctx.headers })
+            if (!canCreate) {
+              throw ctx.error(403, { message: "Unauthorized" })
+            }
+          }
+          
+          const post = await adapter.create({ model: "post", data: ctx.body })
+          
+          // Lifecycle callback
+          if (hooks?.onPostCreated) {
+            await hooks.onPostCreated(post, { headers: ctx.headers })
+          }
+          
+          return post
+        }
+      )
+      // ... more endpoints
+    }
+  })
+```
+
+---
+
+## Client Plugin
+
+The client plugin defines routes with React components, SSR data loaders, and SEO meta generators.
+
+### Basic Structure
+
+```typescript
+import { createApiClient, defineClientPlugin, createRoute } from "@btst/stack/plugins/client"
+import type { QueryClient } from "@tanstack/react-query"
+import type { TodosApiRouter } from "../api/backend"
+import { lazy } from "react"
+
+export interface TodosClientConfig {
+  queryClient: QueryClient
+  apiBaseURL: string
+  apiBasePath: string
+  siteBaseURL: string
+  siteBasePath: string
+}
+
+export const todosClientPlugin = (config: TodosClientConfig) =>
+  defineClientPlugin({
+    name: "todos",
+    
+    routes: () => ({
+      todos: createRoute("/todos", () => {
+        const TodosListPage = lazy(() =>
+          import("./components").then((m) => ({ default: m.TodosListPage }))
+        )
+        
+        return {
+          PageComponent: TodosListPage,
+          loader: todosLoader(config),
+          meta: createTodosMeta(config, "/todos"),
+        }
+      }),
+    }),
+    
+    sitemap: async () => [
+      { 
+        url: `${config.siteBaseURL}${config.siteBasePath}/todos`, 
+        lastModified: new Date(), 
+        priority: 0.7 
+      },
+    ],
+  })
+```
+
+### SSR Data Loaders
+
+Loaders prefetch data during server-side rendering:
+
+```typescript
+function todosLoader(config: TodosClientConfig) {
+  return async () => {
+    // Only run on server
+    if (typeof window === "undefined") {
+      const { queryClient, apiBasePath, apiBaseURL } = config
+      
+      await queryClient.prefetchQuery({
+        queryKey: ["todos"],
+        queryFn: async () => {
+          const client = createApiClient<TodosApiRouter>({
+            baseURL: apiBaseURL,
+            basePath: apiBasePath,
+          })
+          const response = await client("/todos", { method: "GET" })
+          return response.data
+        },
+      })
+    }
+  }
+}
+```
+
+### SEO Meta Generators
+
+Meta generators create SEO tags based on loaded data:
+
+```typescript
+function createTodosMeta(config: TodosClientConfig, path: string) {
+  return () => {
+    const { queryClient, siteBaseURL, siteBasePath } = config
+    const todos = queryClient.getQueryData<Todo[]>(["todos"]) ?? []
+    const fullUrl = `${siteBaseURL}${siteBasePath}${path}`
+    
+    return [
+      { name: "title", content: `${todos.length} Todos` },
+      { name: "description", content: `Track ${todos.length} todos.` },
+      { property: "og:title", content: `${todos.length} Todos` },
+      { property: "og:url", content: fullUrl },
+      { name: "twitter:card", content: "summary" },
+    ]
+  }
+}
+```
+
+### Client Hooks
+
+Type-safe React Query hooks using `createApiClient`:
+
+```typescript
+"use client"
+import { createApiClient } from "@btst/stack/plugins/client"
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query"
+import type { TodosApiRouter } from "../api/backend"
+
+export function useTodos() {
+  const client = createApiClient<TodosApiRouter>({ baseURL: "/api/data" })
+
+  return useSuspenseQuery({
+    queryKey: ["todos"],
+    queryFn: async () => {
+      const response = await client("/todos", { method: "GET" })
+      return response.data
+    }
+  })
+}
+
+export function useCreateTodo() {
+  const client = createApiClient<TodosApiRouter>({ baseURL: "/api/data" })
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (data: { title: string }) => {
+      // Note: @post prefix for POST requests
+      const response = await client("@post/todos", {
+        method: "POST",
+        body: data
+      })
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["todos"] })
+    }
+  })
+}
+
+export function useToggleTodo() {
+  const client = createApiClient<TodosApiRouter>({ baseURL: "/api/data" })
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (data: { id: string; completed: boolean }) => {
+      // Note: @put prefix and params for route parameters
+      const response = await client("@put/todos/:id", {
+        method: "PUT",
+        params: { id: data.id },
+        body: { completed: data.completed }
+      })
+      return response.data
+    },
+    // Optimistic updates
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: ["todos"] })
+      const previousTodos = queryClient.getQueryData<Todo[]>(["todos"])
+      
+      queryClient.setQueryData<Todo[]>(["todos"], (old) =>
+        old?.map((todo) =>
+          todo.id === variables.id
+            ? { ...todo, completed: variables.completed }
+            : todo
+        )
+      )
+      
+      return { previousTodos }
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousTodos) {
+        queryClient.setQueryData(["todos"], context.previousTodos)
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["todos"] })
+    }
+  })
+}
+```
+
+### Framework Overrides
+
+Define types for framework-specific components (Link, navigation):
+
+```typescript
+import type { ComponentType, ReactNode } from "react"
+
+export interface TodosPluginOverrides {
+  Link: ComponentType<{
+    href: string
+    children: ReactNode
+    className?: string
+  }>
+  navigate?: (path: string) => void | Promise<void>
+}
+```
+
+Use them in components:
+
+```typescript
+import { usePluginOverrides, useBasePath } from "@btst/stack/context"
+import type { TodosPluginOverrides } from "./overrides"
+
+function TodosList() {
+  const { Link } = usePluginOverrides<TodosPluginOverrides>("todos")
+  const basePath = useBasePath()
+  
+  return (
+    <Link href={`${basePath}/todos/add`}>
+      Add Todo
+    </Link>
+  )
+}
+```
+
+### ComposedRoute
+
+For production-ready page components, use `ComposedRoute` to wrap your pages with Suspense boundaries, error boundaries, and 404 handling:
+
+```typescript
+import { ComposedRoute } from "@btst/stack/client/components"
+```
+
+**Props:**
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `path` | `string` | Current route path (used for error boundary reset) |
+| `PageComponent` | `React.ComponentType` | The page component to render |
+| `LoadingComponent` | `React.ComponentType` | Component shown during Suspense |
+| `ErrorComponent` | `React.ComponentType<FallbackProps>` | Error boundary fallback |
+| `NotFoundComponent` | `React.ComponentType<{ message: string }>` | 404 fallback |
+| `props` | `any` | Props passed to PageComponent |
+| `onError` | `(error: Error, info: ErrorInfo) => void` | Error callback |
+
+**Example from Blog Plugin:**
+
+```typescript
+"use client"
+import { lazy } from "react"
+import { ComposedRoute } from "@btst/stack/client/components"
+import { usePluginOverrides } from "@btst/stack/context"
+import type { BlogPluginOverrides } from "../../overrides"
+
+// Lazy load the page content
+const HomePage = lazy(() =>
+  import("./home-page.internal").then((m) => ({ default: m.HomePage }))
+)
+
+// Loading skeleton component
+function PostsLoading() {
+  return <div className="animate-pulse">Loading posts...</div>
+}
+
+// Error fallback component
+function DefaultError({ error, resetErrorBoundary }) {
+  return (
+    <div>
+      <p>Something went wrong: {error.message}</p>
+      <button onClick={resetErrorBoundary}>Try again</button>
+    </div>
+  )
+}
+
+// 404 component
+function NotFoundPage({ message }) {
+  return <div>Page not found: {message}</div>
+}
+
+// Exported page component with all boundaries
+export function HomePageComponent({ published = true }) {
+  const { onRouteError } = usePluginOverrides<BlogPluginOverrides>("blog")
+  
+  return (
+    <ComposedRoute
+      path={published ? "/blog" : "/blog/drafts"}
+      PageComponent={HomePage}
+      LoadingComponent={PostsLoading}
+      ErrorComponent={DefaultError}
+      NotFoundComponent={NotFoundPage}
+      props={{ published }}
+      onError={(error) => {
+        onRouteError?.("posts", error, {
+          path: published ? "/blog" : "/blog/drafts",
+          isSSR: typeof window === "undefined",
+        })
+      }}
+    />
+  )
+}
+```
+
+This pattern ensures:
+- **Loading states** - Shows a skeleton while lazy components load
+- **Error recovery** - Catches errors and provides reset functionality
+- **404 handling** - Graceful fallback for missing routes
+- **Error reporting** - Hooks into your error tracking via `onError`
+
+---
+
+## Plugin Registration
+
+### Backend Registration
+
+Register plugins in your Better Stack configuration:
+
+```typescript
+import { betterStack } from "@btst/stack"
+import { createMemoryAdapter } from "@btst/adapter-memory"
+import { todosBackendPlugin } from "./plugins/todo/api/backend"
+import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
+
+const { handler, dbSchema } = betterStack({
+  basePath: "/api/data",
+  plugins: {
+    todos: todosBackendPlugin,
+    blog: blogBackendPlugin({
+      // Backend hooks for authorization
+      onBeforeCreatePost: async (data, context) => {
+        // Check authentication
+        return true
+      },
+      onPostCreated: async (post) => {
+        console.log("Post created:", post.id)
+      }
+    })
+  },
+  adapter: (db) => createMemoryAdapter(db)({})
+})
+
+export { handler, dbSchema }
+```
+
+### Client Registration
+
+Register client plugins with your stack client:
+
+```typescript
+import { createStackClient } from "@btst/stack/client"
+import { todosClientPlugin } from "./plugins/todo/client/client"
+import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+import { QueryClient } from "@tanstack/react-query"
+
+export const getStackClient = (queryClient: QueryClient) => {
+  const baseURL = typeof window !== 'undefined' 
+    ? window.location.origin 
+    : "http://localhost:3000"
+    
+  return createStackClient({
+    plugins: {
+      todos: todosClientPlugin({
+        queryClient,
+        apiBaseURL: baseURL,
+        apiBasePath: "/api/data",
+        siteBaseURL: baseURL,
+        siteBasePath: "/pages",
+      }),
+      blog: blogClientPlugin({
+        queryClient,
+        apiBaseURL: baseURL,
+        apiBasePath: "/api/data",
+        siteBaseURL: baseURL,
+        siteBasePath: "/pages",
+        seo: {
+          siteName: "My Blog",
+          author: "Your Name",
+          twitterHandle: "@handle",
+        },
+        hooks: {
+          beforeLoadPosts: async (filter, context) => {
+            console.log(`Loading ${filter.published ? 'published' : 'drafts'}`)
+            return true
+          }
+        }
+      })
+    }
+  })
+}
+```
+
+---
+
+## In-Project Plugin Example
+
+Whether you're building a plugin inside your project or as a standalone npm package, the code and patterns are identical. The only difference is packaging—standalone plugins are built and published to npm, while in-project plugins are imported directly.
+
+Here's a complete example based on the [Todo Plugin](https://github.com/better-stack-ai/better-stack/tree/main/examples/nextjs/lib/plugins/todo):
+
+**File: `lib/plugins/todo/schema.ts`**
+```typescript
+import { createDbPlugin } from "@btst/stack/plugins/api"
+
+export const todosSchema = createDbPlugin("todos", {
+  todo: {
+    modelName: "todo",
+    fields: {
+      title: { type: "string", required: true },
+      completed: { type: "boolean", defaultValue: false },
+      createdAt: { type: "date", defaultValue: () => new Date() }
+    }
+  }
+})
+```
+
+**File: `lib/plugins/todo/types.ts`**
+```typescript
+export type Todo = {
+  id: string
+  title: string
+  completed: boolean
+  createdAt: Date
+}
+```
+
+**File: `lib/plugins/todo/api/backend.ts`**
+```typescript
+import { type Adapter, defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api"
+import { z } from "zod"
+import { todosSchema as dbSchema } from "../schema"
+import type { Todo } from "../types"
+
+const createTodoSchema = z.object({
+  title: z.string().min(1),
+  completed: z.boolean().optional().default(false)
+})
+
+export const todosBackendPlugin = defineBackendPlugin({
+  name: "todos",
+  dbPlugin: dbSchema,
+  routes: (adapter: Adapter) => {
+    const listTodos = createEndpoint("/todos", { method: "GET" },
+      async () => adapter.findMany<Todo>({ model: "todo" }) || []
+    )
+    
+    const createTodo = createEndpoint("/todos", { method: "POST", body: createTodoSchema },
+      async (ctx) => adapter.create<Todo>({
+        model: "todo",
+        data: { ...ctx.body, createdAt: new Date() }
+      })
+    )
+    
+    return { listTodos, createTodo } as const
+  }
+})
+
+export type TodosApiRouter = ReturnType<typeof todosBackendPlugin.routes>
+```
+
+**File: `lib/plugins/todo/client/client.tsx`**
+```typescript
+import { createApiClient, defineClientPlugin, createRoute } from "@btst/stack/plugins/client"
+import type { QueryClient } from "@tanstack/react-query"
+import type { TodosApiRouter } from "../api/backend"
+import { lazy } from "react"
+import type { Todo } from "../types"
+
+export interface TodosClientConfig {
+  queryClient: QueryClient
+  apiBaseURL: string
+  apiBasePath: string
+  siteBaseURL: string
+  siteBasePath: string
+  context?: Record<string, unknown>
+}
+
+// SSR loader - prefetch data on the server
+function todosLoader(config: TodosClientConfig) {
+  return async () => {
+    if (typeof window === "undefined") {
+      const { queryClient, apiBasePath, apiBaseURL } = config
+      
+      await queryClient.prefetchQuery({
+        queryKey: ["todos"],
+        queryFn: async () => {
+          const client = createApiClient<TodosApiRouter>({
+            baseURL: apiBaseURL,
+            basePath: apiBasePath,
+          })
+          const response = await client("/todos", { method: "GET" })
+          return response.data
+        },
+      })
+    }
+  }
+}
+
+// Meta generator - create SEO tags from loaded data
+function createTodosMeta(config: TodosClientConfig, path: string) {
+  return () => {
+    const { queryClient, siteBaseURL, siteBasePath } = config
+    const todos = queryClient.getQueryData<Todo[]>(["todos"]) ?? []
+    const fullUrl = `${siteBaseURL}${siteBasePath}${path}`
+    
+    return [
+      { name: "title", content: `${todos.length} Todos` },
+      { name: "description", content: `Track ${todos.length} todos.` },
+      { property: "og:title", content: `${todos.length} Todos` },
+      { property: "og:url", content: fullUrl },
+      { name: "twitter:card", content: "summary" },
+    ]
+  }
+}
+
+export const todosClientPlugin = (config: TodosClientConfig) =>
+  defineClientPlugin({
+    name: "todos",
+
+    routes: () => ({
+      todos: createRoute("/todos", () => {
+        const TodosListPage = lazy(() =>
+          import("./components").then((m) => ({ default: m.TodosListPage }))
+        )
+        
+        return {
+          PageComponent: TodosListPage,
+          loader: todosLoader(config),
+          meta: createTodosMeta(config, "/todos"),
+        }
+      }),
+      addTodo: createRoute("/todos/add", () => {
+        const AddTodoPage = lazy(() =>
+          import("./components").then((m) => ({ default: m.AddTodoPage }))
+        )
+        
+        return {
+          PageComponent: AddTodoPage,
+          meta: createTodosMeta(config, "/todos/add"),
+        }
+      }),
+    }),
+    
+    sitemap: async () => [
+      { url: `${config.siteBaseURL}${config.siteBasePath}/todos`, lastModified: new Date(), priority: 0.7 },
+      { url: `${config.siteBaseURL}${config.siteBasePath}/todos/add`, lastModified: new Date(), priority: 0.6 },
+    ],
+  })
+```
+
+**File: `lib/plugins/todo/client/hooks.tsx`**
+```typescript
+"use client"
+import { createApiClient } from "@btst/stack/plugins/client"
+import { useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import type { TodosApiRouter } from "../api/backend"
+
+export function useTodos() {
+  const client = createApiClient<TodosApiRouter>({ baseURL: "/api/data" })
+  return useSuspenseQuery({
+    queryKey: ["todos"],
+    queryFn: async () => (await client("/todos", { method: "GET" })).data
+  })
+}
+
+export function useCreateTodo() {
+  const client = createApiClient<TodosApiRouter>({ baseURL: "/api/data" })
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (title: string) => 
+      (await client("@post/todos", { method: "POST", body: { title } })).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["todos"] })
+  })
+}
+```
+
+---
+
+## Reference Implementations
+
+### Simple Plugin: Todo
+
+A basic CRUD plugin demonstrating core concepts:
+
+**Source Code:** [Todo Plugin](https://github.com/better-stack-ai/better-stack/tree/main/examples/nextjs/lib/plugins/todo)
+
+Features:
 - Basic CRUD operations
 - Database schema
 - API endpoints
 - Client components and hooks
 
-**Source Code:** [Todo Plugin](https://github.com/better-stack-ai/better-stack/tree/main/examples/nextjs/lib/plugins/todo)
+### Full-Featured Plugin: Blog
 
+A production-ready plugin with advanced features:
+
+**Source Code:** [Blog Plugin](https://github.com/better-stack-ai/better-stack/tree/main/packages/better-stack/src/plugins/blog)
+
+Features:
+- Multiple related models (posts, tags, postTags)
+- Complex queries with pagination, filtering, search
+- SSR data loading with React Query
+- SEO meta generation
+- Sitemap generation
+- Authorization and lifecycle hooks
+- Optimistic updates
+- Rich text editing
+
+---
+
+## Publishing Plugins
+
+To create a standalone plugin package for npm, use the **Plugin Starter** repository:
+
+**🚀 [Plugin Starter Repository](https://github.com/better-stack-ai/plugin-starter)**
+
+The starter provides:
+- Complete monorepo setup with build tooling
+- Example plugin you can modify
+- Next.js example app for testing
+- E2E testing with Playwright
+- GitHub Actions for automated publishing
+
+Clone it, modify the plugin package, and publish to npm under your own account.

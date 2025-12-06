@@ -284,7 +284,7 @@ In order to use Better Stack, your application must meet the following requireme
           plugins: {
             // Add your backend plugins here
           },
-          adapter: (db) => createMemoryAdapter(db, {})
+          adapter: (db) => createMemoryAdapter(db)({})
         })
 
         export { handler, dbSchema }
