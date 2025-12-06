@@ -150,7 +150,7 @@ When you configure Better Stack, the `betterStack()` function collects all plugi
       plugins: {
         // Your plugins here
       },
-      adapter: (db) => createMemoryAdapter(db, {})
+      adapter: (db) => createMemoryAdapter(db)({})
     })
 
     export { handler, dbSchema }
