@@ -512,6 +512,89 @@ function TodosList() {
 }
 ```
 
+### ComposedRoute
+
+For production-ready page components, use `ComposedRoute` to wrap your pages with Suspense boundaries, error boundaries, and 404 handling:
+
+```typescript
+import { ComposedRoute } from "@btst/stack/client/components"
+```
+
+**Props:**
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `path` | `string` | Current route path (used for error boundary reset) |
+| `PageComponent` | `React.ComponentType` | The page component to render |
+| `LoadingComponent` | `React.ComponentType` | Component shown during Suspense |
+| `ErrorComponent` | `React.ComponentType<FallbackProps>` | Error boundary fallback |
+| `NotFoundComponent` | `React.ComponentType<{ message: string }>` | 404 fallback |
+| `props` | `any` | Props passed to PageComponent |
+| `onError` | `(error: Error, info: ErrorInfo) => void` | Error callback |
+
+**Example from Blog Plugin:**
+
+```typescript
+"use client"
+import { lazy } from "react"
+import { ComposedRoute } from "@btst/stack/client/components"
+import { usePluginOverrides } from "@btst/stack/context"
+import type { BlogPluginOverrides } from "../../overrides"
+
+// Lazy load the page content
+const HomePage = lazy(() =>
+  import("./home-page.internal").then((m) => ({ default: m.HomePage }))
+)
+
+// Loading skeleton component
+function PostsLoading() {
+  return <div className="animate-pulse">Loading posts...</div>
+}
+
+// Error fallback component
+function DefaultError({ error, resetErrorBoundary }) {
+  return (
+    <div>
+      <p>Something went wrong: {error.message}</p>
+      <button onClick={resetErrorBoundary}>Try again</button>
+    </div>
+  )
+}
+
+// 404 component
+function NotFoundPage({ message }) {
+  return <div>Page not found: {message}</div>
+}
+
+// Exported page component with all boundaries
+export function HomePageComponent({ published = true }) {
+  const { onRouteError } = usePluginOverrides<BlogPluginOverrides>("blog")
+  
+  return (
+    <ComposedRoute
+      path={published ? "/blog" : "/blog/drafts"}
+      PageComponent={HomePage}
+      LoadingComponent={PostsLoading}
+      ErrorComponent={DefaultError}
+      NotFoundComponent={NotFoundPage}
+      props={{ published }}
+      onError={(error) => {
+        onRouteError?.("posts", error, {
+          path: published ? "/blog" : "/blog/drafts",
+          isSSR: typeof window === "undefined",
+        })
+      }}
+    />
+  )
+}
+```
+
+This pattern ensures:
+- **Loading states** - Shows a skeleton while lazy components load
+- **Error recovery** - Catches errors and provides reset functionality
+- **404 handling** - Graceful fallback for missing routes
+- **Error reporting** - Hooks into your error tracking via `onError`
+
 ---
 
 ## Plugin Registration
