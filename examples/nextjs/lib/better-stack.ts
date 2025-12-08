@@ -1,4 +1,5 @@
-import { createMemoryAdapter } from "@btst/adapter-memory"
+// Import from adapters-build-check to ensure all adapters are verified at build time
+import { createMemoryAdapter } from "./adapters-build-check"
 import { betterStack } from "@btst/stack"
 import { todosBackendPlugin } from "./plugins/todo/api/backend"
 import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/blog/api"

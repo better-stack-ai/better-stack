@@ -1,6 +1,6 @@
 {
   "name": "@btst/stack",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "A composable, plugin-based library for building full-stack applications.",
   "repository": {
     "type": "git",
@@ -157,7 +157,7 @@
     }
   },
   "dependencies": {
-    "@btst/db": "2.0.0",
+    "@btst/db": "2.0.1",
     "@lukemorales/query-key-factory": "^1.3.4",
     "@milkdown/crepe": "^7.17.1",
     "@milkdown/kit": "^7.17.1",
@@ -196,7 +196,7 @@
     "zod": ">=3.24.0"
   },
   "devDependencies": {
-    "@btst/adapter-memory": "2.0.0",
+    "@btst/adapter-memory": "2.0.1",
     "@btst/yar": "1.1.1",
     "@types/react": "^19.0.0",
     "@types/slug": "^5.0.9",
