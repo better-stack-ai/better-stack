@@ -14,8 +14,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@btst/adapter-memory": "^1.0.3",
-    "@btst/db": "^1.0.3",
+    "@btst/adapter-memory": "^2.0.0",
+    "@btst/db": "^2.0.0",
     "@btst/stack": "workspace:*",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-slot": "^1.2.3",
