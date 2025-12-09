@@ -11,11 +11,11 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@btst/adapter-drizzle": "^2.0.1",
-    "@btst/adapter-kysely": "^2.0.1",
-    "@btst/adapter-memory": "^2.0.1",
-    "@btst/adapter-mongodb": "^2.0.1",
-    "@btst/adapter-prisma": "^2.0.1",
+    "@btst/adapter-drizzle": "^2.0.2",
+    "@btst/adapter-kysely": "^2.0.2",
+    "@btst/adapter-memory": "^2.0.2",
+    "@btst/adapter-mongodb": "^2.0.2",
+    "@btst/adapter-prisma": "^2.0.2",
     "@btst/stack": "workspace:*",
     "@prisma/client": "^6.0.0",
     "drizzle-orm": "^0.41.0",

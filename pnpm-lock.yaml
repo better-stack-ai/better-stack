@@ -150,20 +150,20 @@ importers:
   examples/nextjs:
     dependencies:
       '@btst/adapter-drizzle':
-        specifier: ^2.0.1
-        version: 2.0.1(70e8c3c1e0820912de774ab6889ed582)
+        specifier: ^2.0.2
+        version: 2.0.2(70e8c3c1e0820912de774ab6889ed582)
       '@btst/adapter-kysely':
-        specifier: ^2.0.1
-        version: 2.0.1(cc8e9aef3a351b0a34eb50e9c732d2e7)
+        specifier: ^2.0.2
+        version: 2.0.2(cc8e9aef3a351b0a34eb50e9c732d2e7)
       '@btst/adapter-memory':
-        specifier: ^2.0.1
-        version: 2.0.1(cc8e9aef3a351b0a34eb50e9c732d2e7)
+        specifier: ^2.0.2
+        version: 2.0.2(cc8e9aef3a351b0a34eb50e9c732d2e7)
       '@btst/adapter-mongodb':
-        specifier: ^2.0.1
-        version: 2.0.1(22c99fc69feaa103014198e7f98acaa8)
+        specifier: ^2.0.2
+        version: 2.0.2(22c99fc69feaa103014198e7f98acaa8)
       '@btst/adapter-prisma':
-        specifier: ^2.0.1
-        version: 2.0.1(e1c37702a8bdf88d936f73b6012260ac)
+        specifier: ^2.0.2
+        version: 2.0.2(e1c37702a8bdf88d936f73b6012260ac)
       '@btst/stack':
         specifier: workspace:*
         version: link:../../packages/better-stack
@@ -271,11 +271,11 @@ importers:
   examples/react-router:
     dependencies:
       '@btst/adapter-memory':
-        specifier: ^2.0.1
-        version: 2.0.1(d7112e29945eda985ae61b55c7982c30)
+        specifier: ^2.0.2
+        version: 2.0.2(d7112e29945eda985ae61b55c7982c30)
       '@btst/db':
-        specifier: ^2.0.1
-        version: 2.0.1(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@22.18.13)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+        specifier: ^2.0.2
+        version: 2.0.2(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@22.18.13)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       '@btst/stack':
         specifier: workspace:*
         version: link:../../packages/better-stack
@@ -371,11 +371,11 @@ importers:
   examples/tanstack:
     dependencies:
       '@btst/adapter-memory':
-        specifier: ^2.0.1
-        version: 2.0.1(8e6e4deee22314fdd7ed157472351456)
+        specifier: ^2.0.2
+        version: 2.0.2(8e6e4deee22314fdd7ed157472351456)
       '@btst/db':
-        specifier: ^2.0.1
-        version: 2.0.1(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+        specifier: ^2.0.2
+        version: 2.0.2(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       '@btst/stack':
         specifier: workspace:*
         version: link:../../packages/better-stack
@@ -471,8 +471,8 @@ importers:
   packages/better-stack:
     dependencies:
       '@btst/db':
-        specifier: 2.0.1
-        version: 2.0.1(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.0.19)(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+        specifier: 2.0.2
+        version: 2.0.2(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.0.19)(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       '@hookform/resolvers':
         specifier: '>=5.0.0'
         version: 5.2.2(react-hook-form@7.65.0(react@19.2.0))
@@ -562,8 +562,8 @@ importers:
         version: 4.1.12
     devDependencies:
       '@btst/adapter-memory':
-        specifier: 2.0.1
-        version: 2.0.1(7237ab7d865af2fb04cbdba193a557f1)
+        specifier: 2.0.2
+        version: 2.0.2(7237ab7d865af2fb04cbdba193a557f1)
       '@btst/yar':
         specifier: 1.1.1
         version: 1.1.1(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)
@@ -928,42 +928,42 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@btst/adapter-drizzle@2.0.1':
-    resolution: {integrity: sha512-EJqMly4/8HVup5vDoBDfe3YvEeAWBx5olIP2rDqDM5bXYUk8vxC1xh1z5NMl+dXvXI+S+G3lfLSaG8xKn/dIeQ==}
+  '@btst/adapter-drizzle@2.0.2':
+    resolution: {integrity: sha512-oZVEkNiCK88OgbU9y0ZUjJJojG3xti7js9JgZTkUex0Hgz9Ix4Wu2UzuvfhiQ2Dmw3kPFk4xlUZVIPHT82BMjQ==}
     peerDependencies:
       '@better-auth/core': '>=1.4.0'
       better-auth: '>=1.4.0'
       drizzle-orm: ^0.30.0
 
-  '@btst/adapter-kysely@2.0.1':
-    resolution: {integrity: sha512-PAHg3sLgNrM56yQQZoQ9/ZCMsLV234bn1uIxCj7RP2f3m1Am58GKwqCiiQr2OGN5qV8r+jpPWRrAcSlZUiH/Xw==}
+  '@btst/adapter-kysely@2.0.2':
+    resolution: {integrity: sha512-b6iu5uVJuZrhxPCzzHGOvs+wVEQDCedW9lNS7Kw3zA7lYxtkYj4j2dQO6wJ5KckWph8jJof608eMM9by5zcuFA==}
     peerDependencies:
       '@better-auth/core': '>=1.4.0'
       better-auth: '>=1.4.0'
       kysely: ^0.28.0
 
-  '@btst/adapter-memory@2.0.1':
-    resolution: {integrity: sha512-5OV3DDxyb2TM141vPdFrrCKCZUUaEUPqpiRTIBcUYJLcQWzgH9te2HOKAIgMwMRFPLRsNk4RXLdbRXvj8E0tCg==}
+  '@btst/adapter-memory@2.0.2':
+    resolution: {integrity: sha512-4y6wRuwB9ohXdEaId/eD0Kj7cCFQf6GT+maNqDytJU3aspulPqfW2O6MSRJYVfNQGYr51YWI+Rgwg/ujnyLfYg==}
     peerDependencies:
       '@better-auth/core': '>=1.4.0'
       better-auth: '>=1.4.0'
 
-  '@btst/adapter-mongodb@2.0.1':
-    resolution: {integrity: sha512-MNAPEJhyi1Cbrj/cWOMb/z+IXJCA30renkecgzvPFbEjYDhn6aOojGGBapbl8Jmcygugxj69H4fb9UDR7mNWxw==}
+  '@btst/adapter-mongodb@2.0.2':
+    resolution: {integrity: sha512-En1gFZsgluPzHWaKxYgMfjBauqKk7xWM33Bvl4k5agA+nMgZyG06tw0M0JjXemUa+RtheZL89qqbKkoxMvYIDQ==}
     peerDependencies:
       '@better-auth/core': '>=1.4.0'
       better-auth: '>=1.4.0'
       mongodb: ^6.0.0
 
-  '@btst/adapter-prisma@2.0.1':
-    resolution: {integrity: sha512-gAvmVVGwTuuNdWltTJCtyZTaPRpe5s80DuNSn+fTsV9VaipaAHj8m2nx4O37H8xM8xgJr8p+yDiQ8zuePg6ysg==}
+  '@btst/adapter-prisma@2.0.2':
+    resolution: {integrity: sha512-Ka8zaJP8RwTenoXK6iAVo/Q1YkHaMUTJJhRyYuU+Xzkt2Pwx6MGFnG+dP7cpXlvb8gaC0BhhRAnDIXFnYamBPA==}
     peerDependencies:
       '@better-auth/core': '>=1.4.0'
       '@prisma/client': ^5.0.0
       better-auth: '>=1.4.0'
 
-  '@btst/db@2.0.1':
-    resolution: {integrity: sha512-4VYCRwqOOrLdlzPkN8Bn1/h/iOKamfRFE6AnpsdjnWq2Kb8MOuQLSQBZ1aqAnALuJTlhUghjUmT9RrKS1WK6eQ==}
+  '@btst/db@2.0.2':
+    resolution: {integrity: sha512-7Ih8vrWHcaUJPo97sKqtYz1VB9/MTFbk0VESvaO+baCUS6GoFCm71n3nfojcYLqefJ/0x80CzvDrHuKFeSm/LA==}
 
   '@btst/yar@1.1.1':
     resolution: {integrity: sha512-KF5bg0WPS2385HD5cCYYqguoiSWMK9V0k1wn912QGVZ5Ih142d0S5bfW5n9kXltbLoFzDaK3d3PSGvSfbrd7Ag==}
@@ -8250,10 +8250,10 @@ snapshots:
   '@biomejs/cli-win32-x64@2.2.4':
     optional: true
 
-  '@btst/adapter-drizzle@2.0.1(70e8c3c1e0820912de774ab6889ed582)':
+  '@btst/adapter-drizzle@2.0.2(70e8c3c1e0820912de774ab6889ed582)':
     dependencies:
       '@better-auth/core': 1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)
-      '@btst/db': 2.0.1(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+      '@btst/db': 2.0.2(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       better-auth: 1.4.5(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       drizzle-orm: 0.41.0(@prisma/client@6.19.0(typescript@5.9.3))(bun-types@1.3.1(@types/react@19.2.2))(kysely@0.28.8)
     transitivePeerDependencies:
@@ -8273,10 +8273,10 @@ snapshots:
       - svelte
       - vue
 
-  '@btst/adapter-kysely@2.0.1(cc8e9aef3a351b0a34eb50e9c732d2e7)':
+  '@btst/adapter-kysely@2.0.2(cc8e9aef3a351b0a34eb50e9c732d2e7)':
     dependencies:
       '@better-auth/core': 1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)
-      '@btst/db': 2.0.1(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+      '@btst/db': 2.0.2(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       better-auth: 1.4.5(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       kysely: 0.28.8
     transitivePeerDependencies:
@@ -8295,10 +8295,10 @@ snapshots:
       - svelte
       - vue
 
-  '@btst/adapter-memory@2.0.1(7237ab7d865af2fb04cbdba193a557f1)':
+  '@btst/adapter-memory@2.0.2(7237ab7d865af2fb04cbdba193a557f1)':
     dependencies:
       '@better-auth/core': 1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.0.19)(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)
-      '@btst/db': 2.0.1(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.0.19)(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+      '@btst/db': 2.0.2(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.0.19)(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       better-auth: 1.4.5(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
     transitivePeerDependencies:
       - '@better-auth/utils'
@@ -8317,10 +8317,10 @@ snapshots:
       - svelte
       - vue
 
-  '@btst/adapter-memory@2.0.1(8e6e4deee22314fdd7ed157472351456)':
+  '@btst/adapter-memory@2.0.2(8e6e4deee22314fdd7ed157472351456)':
     dependencies:
       '@better-auth/core': 1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)
-      '@btst/db': 2.0.1(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+      '@btst/db': 2.0.2(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       better-auth: 1.4.5(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
     transitivePeerDependencies:
       - '@better-auth/utils'
@@ -8339,10 +8339,10 @@ snapshots:
       - svelte
       - vue
 
-  '@btst/adapter-memory@2.0.1(cc8e9aef3a351b0a34eb50e9c732d2e7)':
+  '@btst/adapter-memory@2.0.2(cc8e9aef3a351b0a34eb50e9c732d2e7)':
     dependencies:
       '@better-auth/core': 1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)
-      '@btst/db': 2.0.1(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+      '@btst/db': 2.0.2(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       better-auth: 1.4.5(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
     transitivePeerDependencies:
       - '@better-auth/utils'
@@ -8361,10 +8361,10 @@ snapshots:
       - svelte
       - vue
 
-  '@btst/adapter-memory@2.0.1(d7112e29945eda985ae61b55c7982c30)':
+  '@btst/adapter-memory@2.0.2(d7112e29945eda985ae61b55c7982c30)':
     dependencies:
       '@better-auth/core': 1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)
-      '@btst/db': 2.0.1(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@22.18.13)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+      '@btst/db': 2.0.2(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@22.18.13)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       better-auth: 1.4.5(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@22.18.13)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
     transitivePeerDependencies:
       - '@better-auth/utils'
@@ -8383,10 +8383,10 @@ snapshots:
       - svelte
       - vue
 
-  '@btst/adapter-mongodb@2.0.1(22c99fc69feaa103014198e7f98acaa8)':
+  '@btst/adapter-mongodb@2.0.2(22c99fc69feaa103014198e7f98acaa8)':
     dependencies:
       '@better-auth/core': 1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)
-      '@btst/db': 2.0.1(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+      '@btst/db': 2.0.2(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       better-auth: 1.4.5(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       mongodb: 6.21.0(socks@2.8.7)
     transitivePeerDependencies:
@@ -8406,10 +8406,10 @@ snapshots:
       - svelte
       - vue
 
-  '@btst/adapter-prisma@2.0.1(e1c37702a8bdf88d936f73b6012260ac)':
+  '@btst/adapter-prisma@2.0.2(e1c37702a8bdf88d936f73b6012260ac)':
     dependencies:
       '@better-auth/core': 1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)
-      '@btst/db': 2.0.1(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+      '@btst/db': 2.0.2(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       '@prisma/client': 6.19.0(typescript@5.9.3)
       better-auth: 1.4.5(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
     transitivePeerDependencies:
@@ -8429,7 +8429,7 @@ snapshots:
       - svelte
       - vue
 
-  '@btst/db@2.0.1(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))':
+  '@btst/db@2.0.2(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))':
     dependencies:
       '@better-auth/core': 1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)
       better-auth: 1.4.5(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@20.19.24)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
@@ -8451,7 +8451,7 @@ snapshots:
       - svelte
       - vue
 
-  '@btst/db@2.0.1(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@22.18.13)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))':
+  '@btst/db@2.0.2(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@22.18.13)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))':
     dependencies:
       '@better-auth/core': 1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)
       better-auth: 1.4.5(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@22.18.13)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
@@ -8473,7 +8473,7 @@ snapshots:
       - svelte
       - vue
 
-  '@btst/db@2.0.1(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.0.19)(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))':
+  '@btst/db@2.0.2(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.0.19)(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))':
     dependencies:
       '@better-auth/core': 1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.0.19)(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)
       better-auth: 1.4.5(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(next@16.0.7(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
@@ -8495,7 +8495,7 @@ snapshots:
       - svelte
       - vue
 
-  '@btst/db@2.0.1(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))':
+  '@btst/db@2.0.2(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))':
     dependencies:
       '@better-auth/core': 1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@1.1.4(zod@4.1.12))(jose@6.1.0)(kysely@0.28.8)(nanostores@1.0.1)
       better-auth: 1.4.5(@tanstack/react-start@1.133.37(crossws@0.4.1(srvx@0.8.16))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vite@7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)(yaml@2.8.1)))(next@16.0.7(@babel/core@7.28.5)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
