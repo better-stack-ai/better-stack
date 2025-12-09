@@ -720,27 +720,17 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 						}
 
 						const date = query.date;
-						const targetTime = new Date(date).getTime();
 
-						// Window-based approach for finding next/previous posts
-						// This avoids relying on comparison operators (lt/gt) which may not be
-						// consistently implemented across all database adapters (e.g., Drizzle).
-						//
-						// Strategy:
-						// 1. Fetch a window of recent published posts (sorted by date DESC)
-						// 2. Filter in memory to find posts immediately before/after target date
-						//
-						// Trade-offs:
-						// - Works reliably across all adapters (only uses eq operator and sorting)
-						// - Efficient for typical blog sizes (100 most recent posts)
-						// - Limitation: If target post is outside the window, we may not find neighbors
-						//   (acceptable for typical blog navigation where users browse recent content)
-						const WINDOW_SIZE = 100;
-
-						const allPosts = await adapter.findMany<Post>({
+						// Get previous post (createdAt < date, newest first)
+						const previousPost = await adapter.findMany<Post>({
 							model: "post",
-							limit: WINDOW_SIZE,
+							limit: 1,
 							where: [
+								{
+									field: "createdAt",
+									value: date,
+									operator: "lt" as const,
+								},
 								{
 									field: "published",
 									value: true,
@@ -753,40 +743,30 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							},
 						});
 
-						// Sort posts by createdAt descending (newest first)
-						const sortedPosts = allPosts.sort((a, b) => {
-							const timeA = new Date(a.createdAt).getTime();
-							const timeB = new Date(b.createdAt).getTime();
-							return timeB - timeA;
+						const nextPost = await adapter.findMany<Post>({
+							model: "post",
+							limit: 1,
+							where: [
+								{
+									field: "createdAt",
+									value: date,
+									operator: "gt" as const,
+								},
+								{
+									field: "published",
+									value: true,
+									operator: "eq" as const,
+								},
+							],
+							sortBy: {
+								field: "createdAt",
+								direction: "asc",
+							},
 						});
 
-						// Find posts immediately before and after the target date
-						// In DESC sorted array: newer posts come before, older posts come after
-						let previousPost: Post | null = null;
-						let nextPost: Post | null = null;
-
-						for (let i = 0; i < sortedPosts.length; i++) {
-							const post = sortedPosts[i];
-							if (!post) continue;
-
-							const postTime = new Date(post.createdAt).getTime();
-
-							if (postTime > targetTime) {
-								// This post is newer than target - it's a next post candidate
-								// Keep the last one we find (closest to target date)
-								nextPost = post;
-							} else if (postTime < targetTime) {
-								// This is the first post older than target - this is the previous post
-								previousPost = post;
-								// We've found both neighbors, no need to continue
-								break;
-							}
-							// Skip posts with exactly the same timestamp (the current post itself)
-						}
-
 						const postIds = [
-							...(previousPost ? [previousPost.id] : []),
-							...(nextPost ? [nextPost.id] : []),
+							...(previousPost?.[0] ? [previousPost[0].id] : []),
+							...(nextPost?.[0] ? [nextPost[0].id] : []),
 						];
 						const postTagsMap = await loadTagsForPosts(
 							postIds,
@@ -795,16 +775,16 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 						);
 
 						return {
-							previous: previousPost
+							previous: previousPost?.[0]
 								? {
-										...previousPost,
-										tags: postTagsMap.get(previousPost.id) || [],
+										...previousPost[0],
+										tags: postTagsMap.get(previousPost[0].id) || [],
 									}
 								: null,
-							next: nextPost
+							next: nextPost?.[0]
 								? {
-										...nextPost,
-										tags: postTagsMap.get(nextPost.id) || [],
+										...nextPost[0],
+										tags: postTagsMap.get(nextPost[0].id) || [],
 									}
 								: null,
 						};

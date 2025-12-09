@@ -755,6 +755,12 @@ export const blogClientPlugin = (config: BlogClientConfig) =>
 				offset += limit;
 			}
 
+			// Fetch all tags
+			const tagsRes = await client("/tags", {
+				method: "GET",
+			});
+			const tags = (tagsRes.data ?? []) as unknown as SerializedTag[];
+
 			const getLastModified = (p: SerializedPost): Date | undefined => {
 				const dates = [p.updatedAt, p.publishedAt, p.createdAt].filter(
 					Boolean,
@@ -783,6 +789,12 @@ export const blogClientPlugin = (config: BlogClientConfig) =>
 					lastModified: getLastModified(p),
 					changeFrequency: "monthly" as const,
 					priority: 0.6,
+				})),
+				...tags.map((t) => ({
+					url: `${origin}/blog/tag/${t.slug}`,
+					lastModified: t.updatedAt ? new Date(t.updatedAt) : undefined,
+					changeFrequency: "weekly" as const,
+					priority: 0.5,
 				})),
 			];
 
