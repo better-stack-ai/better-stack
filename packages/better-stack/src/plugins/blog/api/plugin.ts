@@ -3,7 +3,7 @@ import { defineBackendPlugin } from "@btst/stack/plugins/api";
 import { createEndpoint } from "@btst/stack/plugins/api";
 import { z } from "zod";
 import { blogSchema as dbSchema } from "../db";
-import type { Post, Tag } from "../types";
+import type { Post, PostWithPostTag, Tag } from "../types";
 import { slugify } from "../utils";
 import { createPostSchema, updatePostSchema } from "../schemas";
 
@@ -320,9 +320,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							});
 						}
 
-						const posts = await adapter.findMany<
-							Post & { postTag?: Array<{ postId: string; tagId: string }> }
-						>({
+						const posts = await adapter.findMany<PostWithPostTag>({
 							model: "post",
 							limit:
 								query.query || query.tagSlug ? undefined : (query.limit ?? 10),
@@ -669,9 +667,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 						const date = query.date;
 
 						// Get previous post (createdAt < date, newest first)
-						const previousPosts = await adapter.findMany<
-							Post & { postTag?: Array<{ postId: string; tagId: string }> }
-						>({
+						const previousPosts = await adapter.findMany<PostWithPostTag>({
 							model: "post",
 							limit: 1,
 							where: [
@@ -695,9 +691,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							},
 						});
 
-						const nextPosts = await adapter.findMany<
-							Post & { postTag?: Array<{ postId: string; tagId: string }> }
-						>({
+						const nextPosts = await adapter.findMany<PostWithPostTag>({
 							model: "post",
 							limit: 1,
 							where: [
@@ -746,11 +740,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 						}
 
 						// Helper to map post with tags
-						const mapPostWithTags = (
-							post: Post & {
-								postTag?: Array<{ postId: string; tagId: string }>;
-							},
-						) => {
+						const mapPostWithTags = (post: PostWithPostTag) => {
 							const tags = (post.postTag || [])
 								.map((pt) => tagMap.get(pt.tagId))
 								.filter((tag): tag is Tag => tag !== undefined);
