@@ -80,10 +80,20 @@ export const blogSchema = createDbPlugin("blog", {
 			postId: {
 				type: "string",
 				required: true,
+				references: {
+					model: "post",
+					field: "id",
+					onDelete: "cascade",
+				},
 			},
 			tagId: {
 				type: "string",
 				required: true,
+				references: {
+					model: "tag",
+					field: "id",
+					onDelete: "cascade",
+				},
 			},
 		},
 	},

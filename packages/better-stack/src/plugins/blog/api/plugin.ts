@@ -169,68 +169,10 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 		dbPlugin: dbSchema,
 
 		routes: (adapter: Adapter) => {
-			const createTagCache = () => {
-				let cache: Tag[] | null = null;
-				return {
-					getAllTags: async (): Promise<Tag[]> => {
-						if (!cache) {
-							cache = await adapter.findMany<Tag>({
-								model: "tag",
-							});
-						}
-						return cache;
-					},
-					invalidate: () => {
-						cache = null;
-					},
-					addTag: (tag: Tag) => {
-						if (cache) {
-							cache.push(tag);
-						}
-					},
-				};
-			};
-
-			const createPostTagCache = () => {
-				let cache: Array<{ postId: string; tagId: string }> | null = null;
-				const getAllPostTags = async (): Promise<
-					Array<{ postId: string; tagId: string }>
-				> => {
-					if (!cache) {
-						cache = await adapter.findMany<{
-							postId: string;
-							tagId: string;
-						}>({
-							model: "postTag",
-						});
-					}
-					return cache;
-				};
-				return {
-					getAllPostTags,
-					invalidate: () => {
-						cache = null;
-					},
-					getByTagId: async (
-						tagId: string,
-					): Promise<Array<{ postId: string; tagId: string }>> => {
-						const allPostTags = await getAllPostTags();
-						return allPostTags.filter((pt) => pt.tagId === tagId);
-					},
-					getByPostId: async (
-						postId: string,
-					): Promise<Array<{ postId: string; tagId: string }>> => {
-						const allPostTags = await getAllPostTags();
-						return allPostTags.filter((pt) => pt.postId === postId);
-					},
-				};
-			};
-
 			const findOrCreateTags = async (
 				tagInputs: Array<
 					{ name: string } | { id: string; name: string; slug: string }
 				>,
-				tagCache: ReturnType<typeof createTagCache>,
 			): Promise<Tag[]> => {
 				if (tagInputs.length === 0) return [];
 
@@ -259,7 +201,9 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 					return tagsWithIds;
 				}
 
-				const allTags = await tagCache.getAllTags();
+				const allTags = await adapter.findMany<Tag>({
+					model: "tag",
+				});
 				const tagMapBySlug = new Map<string, Tag>();
 				for (const tag of allTags) {
 					tagMapBySlug.set(tag.slug, tag);
@@ -296,43 +240,9 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 						},
 					});
 					createdTags.push(newTag);
-					tagCache.addTag(newTag);
 				}
 
 				return [...tagsWithIds, ...foundTags, ...createdTags];
-			};
-
-			const loadTagsForPosts = async (
-				postIds: string[],
-				tagCache: ReturnType<typeof createTagCache>,
-				postTagCache: ReturnType<typeof createPostTagCache>,
-			): Promise<Map<string, Tag[]>> => {
-				if (postIds.length === 0) return new Map();
-
-				const allPostTags = await postTagCache.getAllPostTags();
-				const relevantPostTags = allPostTags.filter((pt) =>
-					postIds.includes(pt.postId),
-				);
-
-				const tagIds = [...new Set(relevantPostTags.map((pt) => pt.tagId))];
-				if (tagIds.length === 0) return new Map();
-
-				const allTags = await tagCache.getAllTags();
-				const tagMap = new Map<string, Tag>();
-				for (const tag of allTags) {
-					tagMap.set(tag.id, tag);
-				}
-
-				const postTagsMap = new Map<string, Tag[]>();
-				for (const postTag of relevantPostTags) {
-					const tag = tagMap.get(postTag.tagId);
-					if (tag) {
-						const existing = postTagsMap.get(postTag.postId) || [];
-						postTagsMap.set(postTag.postId, [...existing, { ...tag }]);
-					}
-				}
-
-				return postTagsMap;
 			};
 
 			const listPosts = createEndpoint(
@@ -344,8 +254,6 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 				async (ctx) => {
 					const { query, headers } = ctx;
 					const context: BlogApiContext = { query, headers };
-					const tagCache = createTagCache();
-					const postTagCache = createPostTagCache();
 
 					try {
 						if (hooks?.onBeforeListPosts) {
@@ -360,14 +268,34 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 						let tagFilterPostIds: Set<string> | null = null;
 
 						if (query.tagSlug) {
-							const allTags = await tagCache.getAllTags();
-							const tag = allTags.find((t) => t.slug === query.tagSlug);
+							const tag = await adapter.findOne<Tag>({
+								model: "tag",
+								where: [
+									{
+										field: "slug",
+										value: query.tagSlug,
+										operator: "eq" as const,
+									},
+								],
+							});
 
 							if (!tag) {
 								return [];
 							}
 
-							const postTags = await postTagCache.getByTagId(tag.id);
+							const postTags = await adapter.findMany<{
+								postId: string;
+								tagId: string;
+							}>({
+								model: "postTag",
+								where: [
+									{
+										field: "tagId",
+										value: tag.id,
+										operator: "eq" as const,
+									},
+								],
+							});
 							tagFilterPostIds = new Set(postTags.map((pt) => pt.postId));
 							if (tagFilterPostIds.size === 0) {
 								return [];
@@ -392,7 +320,9 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							});
 						}
 
-						const posts = await adapter.findMany<Post>({
+						const posts = await adapter.findMany<
+							Post & { postTag?: Array<{ postId: string; tagId: string }> }
+						>({
 							model: "post",
 							limit:
 								query.query || query.tagSlug ? undefined : (query.limit ?? 10),
@@ -403,18 +333,46 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 								field: "createdAt",
 								direction: "desc",
 							},
+							join: {
+								postTag: true,
+							},
 						});
 
-						const postTagsMap = await loadTagsForPosts(
-							posts.map((post) => post.id),
-							tagCache,
-							postTagCache,
-						);
+						// Collect unique tag IDs from joined postTag data
+						const tagIds = new Set<string>();
+						for (const post of posts) {
+							if (post.postTag) {
+								for (const pt of post.postTag) {
+									tagIds.add(pt.tagId);
+								}
+							}
+						}
 
-						let result = posts.map((post) => ({
-							...post,
-							tags: postTagsMap.get(post.id) || [],
-						}));
+						// Fetch all tags at once
+						const tags =
+							tagIds.size > 0
+								? await adapter.findMany<Tag>({
+										model: "tag",
+									})
+								: [];
+						const tagMap = new Map<string, Tag>();
+						for (const tag of tags) {
+							if (tagIds.has(tag.id)) {
+								tagMap.set(tag.id, tag);
+							}
+						}
+
+						// Map tags to posts
+						let result = posts.map((post) => {
+							const postTags = (post.postTag || [])
+								.map((pt) => tagMap.get(pt.tagId))
+								.filter((tag): tag is Tag => tag !== undefined);
+							const { postTag: _, ...postWithoutJoin } = post;
+							return {
+								...postWithoutJoin,
+								tags: postTags,
+							};
+						});
 
 						if (tagFilterPostIds) {
 							result = result.filter((post) => tagFilterPostIds!.has(post.id));
@@ -466,7 +424,6 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 						body: ctx.body,
 						headers: ctx.headers,
 					};
-					const tagCache = createTagCache();
 
 					try {
 						if (hooks?.onBeforeCreatePost) {
@@ -496,7 +453,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 						});
 
 						if (tagNames.length > 0) {
-							const createdTags = await findOrCreateTags(tagNames, tagCache);
+							const createdTags = await findOrCreateTags(tagNames);
 
 							await adapter.transaction(async (tx) => {
 								for (const tag of createdTags) {
@@ -540,7 +497,6 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 						params: ctx.params,
 						headers: ctx.headers,
 					};
-					const tagCache = createTagCache();
 
 					try {
 						if (hooks?.onBeforeUpdatePost) {
@@ -608,7 +564,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							}
 
 							if (tagNames.length > 0) {
-								const createdTags = await findOrCreateTags(tagNames, tagCache);
+								const createdTags = await findOrCreateTags(tagNames);
 
 								for (const tag of createdTags) {
 									await tx.create<{ postId: string; tagId: string }>({
@@ -666,16 +622,9 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							}
 						}
 
-						await adapter.transaction(async (tx) => {
-							await tx.delete({
-								model: "postTag",
-								where: [{ field: "postId", value: ctx.params.id }],
-							});
-
-							await tx.delete<Post>({
-								model: "post",
-								where: [{ field: "id", value: ctx.params.id }],
-							});
+						await adapter.delete<Post>({
+							model: "post",
+							where: [{ field: "id", value: ctx.params.id }],
 						});
 
 						// Lifecycle hook
@@ -703,8 +652,6 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 				async (ctx) => {
 					const { query, headers } = ctx;
 					const context: BlogApiContext = { query, headers };
-					const tagCache = createTagCache();
-					const postTagCache = createPostTagCache();
 
 					try {
 						if (hooks?.onBeforeListPosts) {
@@ -722,7 +669,9 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 						const date = query.date;
 
 						// Get previous post (createdAt < date, newest first)
-						const previousPost = await adapter.findMany<Post>({
+						const previousPosts = await adapter.findMany<
+							Post & { postTag?: Array<{ postId: string; tagId: string }> }
+						>({
 							model: "post",
 							limit: 1,
 							where: [
@@ -741,9 +690,14 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 								field: "createdAt",
 								direction: "desc",
 							},
+							join: {
+								postTag: true,
+							},
 						});
 
-						const nextPost = await adapter.findMany<Post>({
+						const nextPosts = await adapter.findMany<
+							Post & { postTag?: Array<{ postId: string; tagId: string }> }
+						>({
 							model: "post",
 							limit: 1,
 							where: [
@@ -762,31 +716,56 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 								field: "createdAt",
 								direction: "asc",
 							},
+							join: {
+								postTag: true,
+							},
 						});
 
-						const postIds = [
-							...(previousPost?.[0] ? [previousPost[0].id] : []),
-							...(nextPost?.[0] ? [nextPost[0].id] : []),
-						];
-						const postTagsMap = await loadTagsForPosts(
-							postIds,
-							tagCache,
-							postTagCache,
-						);
+						// Collect unique tag IDs from joined data
+						const tagIds = new Set<string>();
+						const allPosts = [...previousPosts, ...nextPosts];
+						for (const post of allPosts) {
+							if (post.postTag) {
+								for (const pt of post.postTag) {
+									tagIds.add(pt.tagId);
+								}
+							}
+						}
+
+						// Fetch tags if needed
+						const tagMap = new Map<string, Tag>();
+						if (tagIds.size > 0) {
+							const tags = await adapter.findMany<Tag>({
+								model: "tag",
+							});
+							for (const tag of tags) {
+								if (tagIds.has(tag.id)) {
+									tagMap.set(tag.id, tag);
+								}
+							}
+						}
+
+						// Helper to map post with tags
+						const mapPostWithTags = (
+							post: Post & {
+								postTag?: Array<{ postId: string; tagId: string }>;
+							},
+						) => {
+							const tags = (post.postTag || [])
+								.map((pt) => tagMap.get(pt.tagId))
+								.filter((tag): tag is Tag => tag !== undefined);
+							const { postTag: _, ...postWithoutJoin } = post;
+							return {
+								...postWithoutJoin,
+								tags,
+							};
+						};
 
 						return {
-							previous: previousPost?.[0]
-								? {
-										...previousPost[0],
-										tags: postTagsMap.get(previousPost[0].id) || [],
-									}
+							previous: previousPosts[0]
+								? mapPostWithTags(previousPosts[0])
 								: null,
-							next: nextPost?.[0]
-								? {
-										...nextPost[0],
-										tags: postTagsMap.get(nextPost[0].id) || [],
-									}
-								: null,
+							next: nextPosts[0] ? mapPostWithTags(nextPosts[0]) : null,
 						};
 					} catch (error) {
 						// Error hook
