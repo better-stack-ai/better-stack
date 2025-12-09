@@ -198,11 +198,125 @@ Adapters implement a common interface that provides methods for:
 - `updateMany` - Bulk update operations
 - `delete` - Delete records
 - `deleteMany` - Bulk delete operations
-- `findOne` - Find a single record
-- `findMany` - Query multiple records
+- `findOne` - Find a single record (supports `join` option)
+- `findMany` - Query multiple records (supports `join` option)
 - `count` - Count records matching criteria
 
 Each adapter translates these operations to the appropriate ORM calls (Prisma, Drizzle, Kysely, MongoDB, etc.).
+
+## Relational Queries with Join
+
+Adapters support a `join` option for `findOne` and `findMany` operations, allowing you to fetch related records in a single query.
+
+### Defining Foreign Key Relationships
+
+To use joins, you must define foreign key relationships in your schema using the `references` property:
+
+```ts title="db/schema.ts"
+import { createDbPlugin } from "@btst/db";
+
+export const mySchema = createDbPlugin("myPlugin", {
+  post: {
+    modelName: "post",
+    fields: {
+      title: { type: "string", required: true },
+      // ... other fields
+    },
+  },
+  tag: {
+    modelName: "tag",
+    fields: {
+      name: { type: "string", required: true },
+      // ... other fields
+    },
+  },
+  postTag: {
+    modelName: "postTag",
+    fields: {
+      postId: {
+        type: "string",
+        required: true,
+        references: {
+          model: "post",
+          field: "id",
+          onDelete: "cascade", // Optional: automatically delete when parent is deleted
+        },
+      },
+      tagId: {
+        type: "string",
+        required: true,
+        references: {
+          model: "tag",
+          field: "id",
+          onDelete: "cascade",
+        },
+      },
+    },
+  },
+});
+```
+
+### Using the Join Option
+
+Once relationships are defined, you can use the `join` option to fetch related records:
+
+```ts
+// Fetch posts with their related postTag records
+const posts = await adapter.findMany<Post & { postTag?: PostTag[] }>({
+  model: "post",
+  where: [{ field: "published", value: true }],
+  join: {
+    postTag: true, // Join the postTag model
+  },
+});
+
+// Each post will have a `postTag` array with related records
+posts.forEach(post => {
+  console.log(post.title, post.postTag);
+});
+```
+
+### Join Option Configuration
+
+The `join` option accepts an object where keys are model names and values configure the join:
+
+```ts
+type JoinOption = {
+  [model: string]: boolean | {
+    limit?: number; // Limit the number of joined records
+  };
+};
+```
+
+Examples:
+
+```ts
+// Simple join - fetch all related records
+join: { postTag: true }
+
+// Limited join - fetch only first 5 related records
+join: { postTag: { limit: 5 } }
+```
+
+### Cascade Delete
+
+When you define `onDelete: "cascade"` on a foreign key reference, deleting the parent record will automatically delete all related child records:
+
+```ts
+// With cascade delete defined, this single operation
+// also deletes all related postTag records automatically
+await adapter.delete({
+  model: "post",
+  where: [{ field: "id", value: postId }],
+});
+```
+
+Available `onDelete` options:
+- `"cascade"` - Delete child records when parent is deleted
+- `"set null"` - Set the foreign key to null when parent is deleted
+- `"restrict"` - Prevent deletion if child records exist
+- `"no action"` - No automatic action (database default)
+- `"set default"` - Set the foreign key to its default value
 
 ## Using Other Better Auth Compatible Adapters
 

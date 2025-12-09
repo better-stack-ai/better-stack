@@ -10,8 +10,8 @@
     "start:e2e": "rm -rf build && rm -rf .react-router && rm -rf node_modules && pnpm install && pnpm build && NODE_ENV=test react-router-serve ./build/server/index.js"
   },
   "dependencies": {
-    "@btst/adapter-memory": "^2.0.1",
-    "@btst/db": "^2.0.1",
+    "@btst/adapter-memory": "^2.0.2",
+    "@btst/db": "^2.0.2",
     "@btst/stack": "workspace:*",
     "@btst/yar": "^1.1.1",
     "@radix-ui/react-dropdown-menu": "^2.1.16",

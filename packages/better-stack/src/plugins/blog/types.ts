@@ -23,6 +23,13 @@ export type Tag = {
 	updatedAt: Date;
 };
 
+/**
+ * Post with joined postTag relationships from the database
+ */
+export type PostWithPostTag = Post & {
+	postTag?: Array<{ postId: string; tagId: string }>;
+};
+
 export interface SerializedPost
 	extends Omit<Post, "createdAt" | "updatedAt" | "publishedAt" | "tags"> {
 	tags: SerializedTag[];
