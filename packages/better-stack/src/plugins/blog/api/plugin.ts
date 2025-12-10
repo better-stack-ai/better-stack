@@ -360,10 +360,13 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							}
 						}
 
-						// Map tags to posts
+						// Map tags to posts (spread to avoid circular references)
 						let result = posts.map((post) => {
 							const postTags = (post.postTag || [])
-								.map((pt) => tagMap.get(pt.tagId))
+								.map((pt) => {
+									const tag = tagMap.get(pt.tagId);
+									return tag ? { ...tag } : undefined;
+								})
 								.filter((tag): tag is Tag => tag !== undefined);
 							const { postTag: _, ...postWithoutJoin } = post;
 							return {
@@ -739,10 +742,13 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							}
 						}
 
-						// Helper to map post with tags
+						// Helper to map post with tags (spread to avoid circular references)
 						const mapPostWithTags = (post: PostWithPostTag) => {
 							const tags = (post.postTag || [])
-								.map((pt) => tagMap.get(pt.tagId))
+								.map((pt) => {
+									const tag = tagMap.get(pt.tagId);
+									return tag ? { ...tag } : undefined;
+								})
 								.filter((tag): tag is Tag => tag !== undefined);
 							const { postTag: _, ...postWithoutJoin } = post;
 							return {
