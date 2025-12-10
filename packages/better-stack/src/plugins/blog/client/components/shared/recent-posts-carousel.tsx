@@ -68,8 +68,8 @@ export function RecentPostsCarousel({ posts, ref }: RecentPostsCarouselProps) {
 									</CarouselItem>
 								))}
 							</CarouselContent>
-							<CarouselPrevious className="-left-4 hover:cursor-pointer" />
-							<CarouselNext className="-right-4 hover:cursor-pointer" />
+							<CarouselPrevious className="-left-4 z-50 hover:cursor-pointer" />
+							<CarouselNext className="-right-4 z-50 hover:cursor-pointer" />
 						</Carousel>
 					</div>
 				</>
