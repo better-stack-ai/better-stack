@@ -71,7 +71,7 @@ export function PostPage({ slug }: { slug: string }) {
 	}
 
 	return (
-		<PageWrapper className="gap-0 px-4 lg:px-4 py-0 pb-18" testId="post-page">
+		<PageWrapper className="gap-0 px-4 lg:px-2 py-0 pb-18" testId="post-page">
 			<div className="flex items-start w-full">
 				<div className="w-44 shrink-0 hidden xl:flex mr-auto" />
 				<div className="flex flex-col items-center flex-1 mx-auto w-full max-w-4xl min-w-0">

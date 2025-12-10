@@ -63,7 +63,7 @@ export function OnThisPage({ markdown, className }: OnThisPageProps) {
 			aria-label="Table of contents"
 		>
 			<div className="overflow-y-auto px-2">
-				<div className="flex flex-col gap-1 p-4 pt-0 text-sm">
+				<div className="flex flex-col gap-1 p-2 pt-0 text-sm">
 					<p className="flex items-center gap-2 font-semibold text-muted-foreground sticky top-0 h-6 text-xs">
 						<TextAlignStart className="w-3 h-3" />{" "}
 						{localization.BLOG_POST_ON_THIS_PAGE}
