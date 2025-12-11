@@ -2,6 +2,7 @@
 import { Outlet, Link, useNavigate } from "react-router";
 import { BetterStackProvider } from "@btst/stack/context"
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
+import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
 
 // Get base URL function - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -14,6 +15,7 @@ const getBaseURL = () =>
   // Define the shape of all plugin overrides
   type PluginOverrides = {
       blog: BlogPluginOverrides,
+      "ai-chat": AiChatPluginOverrides,
   }
 
 export default function Layout() {
@@ -66,6 +68,16 @@ export default function Layout() {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforePostPageRendered: checking access for`, slug, context.path);
                             return true;
                         },
+                    },
+                    "ai-chat": {
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        navigate: (href) => navigate(href),
+                        Link: ({ href, children, className, ...props }) => (
+                            <Link to={href || ""} className={className} {...props}>
+                              {children}
+                            </Link>
+                        ),
                     }
                 }}
             >

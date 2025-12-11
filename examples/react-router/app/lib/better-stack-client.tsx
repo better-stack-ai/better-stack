@@ -78,6 +78,9 @@ export const getStackClient = (queryClient: QueryClient) => {
             aiChat: aiChatClientPlugin({
                 apiBaseURL: baseURL,
                 apiBasePath: "/api/data",
+                siteBaseURL: baseURL,
+                siteBasePath: "/pages",
+                queryClient: queryClient,
             })
         }
     })

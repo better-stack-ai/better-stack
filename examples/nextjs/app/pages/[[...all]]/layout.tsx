@@ -9,6 +9,7 @@ import { useState } from "react"
 import type { TodosPluginOverrides } from "@/lib/plugins/todo/client/overrides"
 import { getOrCreateQueryClient } from "@/lib/query-client"
 import { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
+import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
 
 // Get base URL - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -22,6 +23,7 @@ const getBaseURL = () =>
 type PluginOverrides = {
     todos: TodosPluginOverrides
     blog: BlogPluginOverrides,
+    "ai-chat": AiChatPluginOverrides,
 }
 
 export default function ExampleLayout({
@@ -109,6 +111,38 @@ export default function ExampleLayout({
                         onBeforePostPageRendered: (slug, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforePostPageRendered: checking access for`, slug, context.path);
                             return true;
+                        },
+                    },
+                    "ai-chat": {
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        navigate: (path) => router.push(path),
+                        refresh: () => router.refresh(),
+                        Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+                        Image: (props) => {
+                            const { alt = "", src = "", width, height, ...rest } = props
+                            if (!width || !height) {
+                                return (
+                                    <span className="block relative w-full h-full">
+                                        <Image
+                                            alt={alt}
+                                            src={typeof src === "string" ? src : ""}
+                                            fill
+                                            sizes="400px"
+                                            {...rest}
+                                        />
+                                    </span>
+                                )
+                            }
+                            return (
+                                <Image
+                                    alt={alt}
+                                    src={typeof src === "string" ? src : ""}
+                                    width={width as number}
+                                    height={height as number}
+                                    {...rest}
+                                />
+                            )
                         },
                     }
                 }}

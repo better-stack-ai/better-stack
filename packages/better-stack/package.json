@@ -143,6 +143,27 @@
         "default": "./dist/plugins/ai-chat/client/index.cjs"
       }
     },
+    "./plugins/ai-chat/client/components": {
+      "import": {
+        "types": "./dist/plugins/ai-chat/client/components/index.d.ts",
+        "default": "./dist/plugins/ai-chat/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ai-chat/client/components/index.d.cts",
+        "default": "./dist/plugins/ai-chat/client/components/index.cjs"
+      }
+    },
+    "./plugins/ai-chat/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/ai-chat/client/hooks/index.d.ts",
+        "default": "./dist/plugins/ai-chat/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ai-chat/client/hooks/index.d.cts",
+        "default": "./dist/plugins/ai-chat/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/ai-chat/css": "./dist/plugins/ai-chat/style.css",
     "./plugins/blog/css": "./dist/plugins/blog/style.css",
     "./dist/*": "./dist/*",
     "./ui/css": "./dist/ui/components.css",
@@ -179,6 +200,12 @@
       ],
       "plugins/ai-chat/client": [
         "./dist/plugins/ai-chat/client/index.d.ts"
+      ],
+      "plugins/ai-chat/client/components": [
+        "./dist/plugins/ai-chat/client/components/index.d.ts"
+      ],
+      "plugins/ai-chat/client/hooks": [
+        "./dist/plugins/ai-chat/client/hooks/index.d.ts"
       ]
     }
   },
@@ -187,9 +214,11 @@
     "@lukemorales/query-key-factory": "^1.3.4",
     "@milkdown/crepe": "^7.17.1",
     "@milkdown/kit": "^7.17.1",
+    "remend": "^1.0.1",
     "slug": "^11.0.1"
   },
   "peerDependencies": {
+    "@ai-sdk/react": ">=2.0.0",
     "@btst/yar": ">=1.1.0",
     "@hookform/resolvers": ">=5.0.0",
     "@radix-ui/react-dialog": ">=1.1.0",
@@ -198,7 +227,6 @@
     "@radix-ui/react-switch": ">=1.1.0",
     "@tanstack/react-query": "^5.0.0",
     "ai": ">=5.0.0",
-    "@ai-sdk/react": ">=2.0.0",
     "better-call": ">=1.0.0",
     "class-variance-authority": ">=0.7.0",
     "clsx": ">=2.1.0",
@@ -224,13 +252,13 @@
     "zod": ">=3.24.0"
   },
   "devDependencies": {
+    "@ai-sdk/react": "^2.0.94",
     "@btst/adapter-memory": "2.0.3",
     "@btst/yar": "1.1.1",
     "@types/react": "^19.0.0",
     "@types/slug": "^5.0.9",
     "@workspace/ui": "workspace:*",
     "ai": "^5.0.94",
-    "@ai-sdk/react": "^2.0.94",
     "better-call": "1.0.19",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

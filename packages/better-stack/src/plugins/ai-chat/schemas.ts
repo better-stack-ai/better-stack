@@ -5,6 +5,10 @@ export const createConversationSchema = z.object({
 	title: z.string().optional(),
 });
 
+export const updateConversationSchema = z.object({
+	title: z.string().optional(),
+});
+
 export const chatRequestSchema = z.object({
 	messages: z.array(
 		z.union([

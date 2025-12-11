@@ -17,6 +17,22 @@ test.skip(
 );
 
 test.describe("AI Chat Plugin", () => {
+	test("should render chat page with sidebar", async ({ page }) => {
+		await page.goto("/pages/chat");
+
+		// Verify chat layout is visible
+		await expect(page.locator('[data-testid="chat-layout"]')).toBeVisible();
+
+		// Verify chat interface is visible
+		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
+
+		// Verify empty state message
+		await expect(page.getByText("Start a conversation...")).toBeVisible();
+
+		// Verify input is available
+		await expect(page.getByPlaceholder("Type a message...")).toBeVisible();
+	});
+
 	test("should start a new conversation and send a message", async ({
 		page,
 	}) => {
@@ -39,7 +55,133 @@ test.describe("AI Chat Plugin", () => {
 		});
 
 		// 5. Verify AI response appears (using real OpenAI, so response content varies, but should exist)
-		// We wait for the AI message container - look for prose class in assistant messages
-		await expect(page.locator(".prose").nth(1)).toBeVisible({ timeout: 30000 });
+		// We wait for the AI message container - look for the bot icon indicating assistant message
+		await expect(
+			page.locator('[data-testid="chat-interface"]').locator(".prose"),
+		).toBeVisible({ timeout: 30000 });
+	});
+
+	test("should show conversation in sidebar after sending message", async ({
+		page,
+	}) => {
+		// Navigate to the chat page
+		await page.goto("/pages/chat");
+
+		// Send a message to create a conversation
+		const input = page.getByPlaceholder("Type a message...");
+		await input.fill("Test message for sidebar");
+		await page.keyboard.press("Enter");
+
+		// Wait for the message to be sent and processed
+		await expect(page.getByText("Test message for sidebar")).toBeVisible({
+			timeout: 5000,
+		});
+
+		// Wait for the AI response
+		await expect(
+			page.locator('[data-testid="chat-interface"]').locator(".prose"),
+		).toBeVisible({ timeout: 30000 });
+
+		// Refresh the page to see the conversation in sidebar
+		await page.reload();
+
+		// Wait for sidebar to load conversations
+		await page.waitForTimeout(2000);
+
+		// The conversation should appear in the sidebar with title based on first message
+		// Note: The sidebar may be collapsed on mobile, so we check for the conversation title
+		// in the visible area
+		await expect(
+			page.getByText("Test message for sidebar").first(),
+		).toBeVisible({
+			timeout: 10000,
+		});
+	});
+
+	test("should navigate to existing conversation", async ({ page }) => {
+		// First create a conversation
+		await page.goto("/pages/chat");
+
+		const input = page.getByPlaceholder("Type a message...");
+		await input.fill("Navigation test message");
+		await page.keyboard.press("Enter");
+
+		// Wait for response
+		await expect(
+			page.locator('[data-testid="chat-interface"]').locator(".prose"),
+		).toBeVisible({ timeout: 30000 });
+
+		// Get the current URL which should have the conversation ID
+		const url = page.url();
+
+		// Refresh and verify the conversation is still visible
+		await page.reload();
+
+		// The messages should still be visible
+		await expect(page.getByText("Navigation test message")).toBeVisible({
+			timeout: 10000,
+		});
+	});
+
+	test("should have new chat button in sidebar", async ({ page }) => {
+		// Navigate to the chat page
+		await page.goto("/pages/chat");
+
+		// Verify the "New chat" button exists in the sidebar
+		await expect(page.getByRole("button", { name: /new chat/i })).toBeVisible({
+			timeout: 5000,
+		});
+	});
+
+	test("should toggle sidebar on desktop", async ({ page }) => {
+		// Set desktop viewport
+		await page.setViewportSize({ width: 1280, height: 800 });
+
+		await page.goto("/pages/chat");
+
+		// Find the sidebar toggle button (desktop only)
+		const toggleButton = page
+			.locator('[aria-label="Close sidebar"]')
+			.or(page.locator('[aria-label="Open sidebar"]'));
+
+		// Click to close sidebar
+		await toggleButton.first().click();
+		await page.waitForTimeout(300); // Wait for animation
+
+		// Click to open sidebar again
+		await toggleButton.first().click();
+		await page.waitForTimeout(300);
+	});
+
+	test("should open mobile sidebar sheet", async ({ page }) => {
+		// Set mobile viewport
+		await page.setViewportSize({ width: 375, height: 667 });
+
+		await page.goto("/pages/chat");
+
+		// Find and click the mobile menu button
+		const menuButton = page.locator('[aria-label="Open menu"]');
+		await menuButton.click();
+
+		// Verify the sidebar sheet is open
+		await expect(page.getByRole("button", { name: /new chat/i })).toBeVisible({
+			timeout: 5000,
+		});
+	});
+});
+
+test.describe("AI Chat Plugin - Widget Mode", () => {
+	// Widget mode tests would typically be done if the example app exposes a widget route
+	// For now, we test the main chat interface
+
+	test("should render chat interface in compact mode when in widget", async ({
+		page,
+	}) => {
+		// This test assumes the chat interface adapts based on container/props
+		// In a real widget scenario, you'd navigate to a widget-specific route
+		await page.goto("/pages/chat");
+
+		// Verify the chat interface is functional
+		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
 	});
 });

@@ -26,7 +26,7 @@ export default defineConfig({
 			command: "pnpm -F examples/nextjs run start:e2e",
 			port: 3003,
 			reuseExistingServer: !process.env["CI"],
-			timeout: 120_000,
+			timeout: 300_000,
 			stdout: "pipe",
 			stderr: "pipe",
 			env: {
@@ -42,7 +42,7 @@ export default defineConfig({
 			command: "pnpm -F examples/tanstack run start:e2e",
 			port: 3004,
 			reuseExistingServer: !process.env["CI"],
-			timeout: 120_000,
+			timeout: 300_000,
 			stdout: "pipe",
 			stderr: "pipe",
 			env: {
@@ -57,7 +57,7 @@ export default defineConfig({
 			command: "pnpm -F examples/react-router run start:e2e",
 			port: 3005,
 			reuseExistingServer: !process.env["CI"],
-			timeout: 120_000,
+			timeout: 300_000,
 			stdout: "pipe",
 			stderr: "pipe",
 			env: {

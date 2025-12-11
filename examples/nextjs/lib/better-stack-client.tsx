@@ -91,6 +91,14 @@ export const getStackClient = (
             aiChat: aiChatClientPlugin({
                 apiBaseURL: baseURL,
                 apiBasePath: "/api/data",
+                siteBaseURL: baseURL,
+                siteBasePath: "/pages",
+                queryClient: queryClient,
+                headers: options?.headers,
+                seo: {
+                    siteName: "Better Stack Chat",
+                    description: "AI-powered chat assistant",
+                },
             })
         }
     })
