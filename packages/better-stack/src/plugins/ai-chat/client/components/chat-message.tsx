@@ -9,8 +9,18 @@ import { usePluginOverrides } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../overrides";
 import { AI_CHAT_LOCALIZATION } from "../localization";
 
+// Import shared markdown + syntax highlighting styles (same pattern as blog plugin)
+import "@workspace/ui/markdown-content.css";
+import "highlight.js/styles/panda-syntax-light.css";
+
 // Import remend for streaming markdown
 import completeMarkdown from "remend";
+
+// Fallback components (so consumers don't have to provide them)
+const DefaultLink = (props: React.ComponentProps<"a">) => <a {...props} />;
+const DefaultImage = (props: React.ImgHTMLAttributes<HTMLImageElement>) => (
+	<img {...props} />
+);
 
 interface ChatMessageProps {
 	message: UIMessage;
@@ -96,7 +106,7 @@ export function ChatMessage({
 					// User messages: simple text
 					<p
 						className={cn(
-							"whitespace-pre-wrap break-words",
+							"whitespace-pre-wrap wrap-break-word",
 							isCompact ? "text-sm" : "text-sm",
 						)}
 					>
@@ -104,20 +114,13 @@ export function ChatMessage({
 					</p>
 				) : (
 					// Assistant messages: rendered markdown
-					<div
-						className={cn(
-							"prose dark:prose-invert max-w-none break-words",
-							isCompact ? "prose-sm" : "prose-sm",
-							// Override prose styles for better chat appearance
-							"[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-						)}
-					>
+					<div className="wrap-break-word">
 						{displayContent ? (
 							<MarkdownContent
 								markdown={displayContent}
 								variant="chat"
-								LinkComponent={Link}
-								ImageComponent={Image}
+								LinkComponent={Link ?? DefaultLink}
+								ImageComponent={Image ?? DefaultImage}
 							/>
 						) : (
 							<span className="text-muted-foreground">...</span>

@@ -55,9 +55,11 @@ test.describe("AI Chat Plugin", () => {
 		});
 
 		// 5. Verify AI response appears (using real OpenAI, so response content varies, but should exist)
-		// We wait for the AI message container - look for the bot icon indicating assistant message
+		// We wait for the assistant message container. The plugin uses an aria-label for a11y.
 		await expect(
-			page.locator('[data-testid="chat-interface"]').locator(".prose"),
+			page
+				.locator('[data-testid="chat-interface"]')
+				.locator('[aria-label="AI response"]'),
 		).toBeVisible({ timeout: 30000 });
 	});
 
@@ -79,7 +81,9 @@ test.describe("AI Chat Plugin", () => {
 
 		// Wait for the AI response
 		await expect(
-			page.locator('[data-testid="chat-interface"]').locator(".prose"),
+			page
+				.locator('[data-testid="chat-interface"]')
+				.locator('[aria-label="AI response"]'),
 		).toBeVisible({ timeout: 30000 });
 
 		// Refresh the page to see the conversation in sidebar
@@ -108,7 +112,9 @@ test.describe("AI Chat Plugin", () => {
 
 		// Wait for response
 		await expect(
-			page.locator('[data-testid="chat-interface"]').locator(".prose"),
+			page
+				.locator('[data-testid="chat-interface"]')
+				.locator('[aria-label="AI response"]'),
 		).toBeVisible({ timeout: 30000 });
 
 		// Wait for the URL to change to include the conversation ID
@@ -148,7 +154,9 @@ test.describe("AI Chat Plugin", () => {
 
 		// Wait for first AI response
 		await expect(
-			page.locator('[data-testid="chat-interface"]').locator(".prose"),
+			page
+				.locator('[data-testid="chat-interface"]')
+				.locator('[aria-label="AI response"]'),
 		).toBeVisible({ timeout: 30000 });
 
 		// Wait for navigation to new conversation URL
@@ -160,7 +168,9 @@ test.describe("AI Chat Plugin", () => {
 
 		// Wait for second AI response (should be 2 prose elements now)
 		await expect(
-			page.locator('[data-testid="chat-interface"]').locator(".prose"),
+			page
+				.locator('[data-testid="chat-interface"]')
+				.locator('[aria-label="AI response"]'),
 		).toHaveCount(2, { timeout: 30000 });
 
 		// Refresh the page
@@ -191,9 +201,64 @@ test.describe("AI Chat Plugin", () => {
 		await page.goto("/pages/chat");
 
 		// Verify the "New chat" button exists in the sidebar
-		await expect(page.getByRole("button", { name: /new chat/i })).toBeVisible({
-			timeout: 5000,
+		await expect(
+			page.getByRole("button", { name: "New chat", exact: true }),
+		).toBeVisible({ timeout: 5000 });
+	});
+
+	test("should navigate back to /chat when clicking New chat from a conversation", async ({
+		page,
+	}) => {
+		// Ensure desktop layout so sidebar is visible
+		await page.setViewportSize({ width: 1280, height: 800 });
+
+		// Create a conversation
+		await page.goto("/pages/chat");
+		const input = page.getByPlaceholder("Type a message...");
+		await input.fill("New chat navigation test");
+		await page.keyboard.press("Enter");
+
+		// Wait for AI response + navigation to conversation URL
+		await expect(
+			page
+				.locator('[data-testid="chat-interface"]')
+				.locator('[aria-label="AI response"]'),
+		).toBeVisible({ timeout: 30000 });
+		await page.waitForURL(/\/pages\/chat\/[a-zA-Z0-9]+/, { timeout: 10000 });
+
+		// Click "New chat" and verify we navigate back to /pages/chat
+		await page.getByRole("button", { name: "New chat", exact: true }).click();
+		await page.waitForURL("/pages/chat", { timeout: 10000 });
+
+		// Chat interface should be reset to empty state
+		await expect(page.getByText("Start a conversation...")).toBeVisible({
+			timeout: 10000,
 		});
+		await expect(
+			page
+				.locator('[data-testid="chat-interface"]')
+				.getByText("New chat navigation test"),
+		).toHaveCount(0);
+	});
+
+	test("should reset draft input when clicking New chat on /chat", async ({
+		page,
+	}) => {
+		// Ensure desktop layout so sidebar is visible
+		await page.setViewportSize({ width: 1280, height: 800 });
+
+		await page.goto("/pages/chat");
+
+		// Type a draft message but do not send it
+		const input = page.getByPlaceholder("Type a message...");
+		await input.fill("Draft message that should be cleared");
+
+		// Click "New chat" to reset the chat interface in-place
+		await page.getByRole("button", { name: "New chat", exact: true }).click();
+
+		// Draft should be cleared after remount/reset
+		await expect(page.getByPlaceholder("Type a message...")).toHaveValue("");
+		await expect(page.getByText("Start a conversation...")).toBeVisible();
 	});
 
 	test("should toggle sidebar on desktop", async ({ page }) => {
@@ -227,9 +292,9 @@ test.describe("AI Chat Plugin", () => {
 		await menuButton.click();
 
 		// Verify the sidebar sheet is open
-		await expect(page.getByRole("button", { name: /new chat/i })).toBeVisible({
-			timeout: 5000,
-		});
+		await expect(
+			page.getByRole("button", { name: "New chat", exact: true }),
+		).toBeVisible({ timeout: 5000 });
 	});
 });
 

@@ -53,7 +53,10 @@ function createConversationsQueries(
 	return createQueryKeys("conversations", {
 		// List all conversations
 		list: () => ({
-			queryKey: ["list"],
+			// NOTE: query-key-factory already namespaces as:
+			// ["conversations", "list", ...queryKey]
+			// so we use a stable marker (not "list") to avoid ["...","list","list"].
+			queryKey: ["all"],
 			queryFn: async () => {
 				const response = await client("/conversations", {
 					method: "GET",

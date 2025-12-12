@@ -75,10 +75,13 @@ export function ChatSidebar({
 	const [newTitle, setNewTitle] = useState("");
 
 	const handleNewChat = () => {
+		// Always use overrides navigation when available, so consumers control routing.
+		// Also run onNewChat to support "reset chat" behavior when already on /chat.
+		if (navigate) {
+			navigate(`${basePath}/chat`);
+		}
 		if (onNewChat) {
 			onNewChat();
-		} else if (navigate) {
-			navigate(`${basePath}/chat`);
 		}
 	};
 

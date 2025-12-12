@@ -51,8 +51,12 @@ export function ChatLayout({
 
 	// Handler for "New chat" button - increments key to force remount
 	const handleNewChat = useCallback(() => {
-		setChatResetKey((prev) => prev + 1);
-	}, []);
+		// Only needed when we're already on the "new chat" route (/chat).
+		// If we're on /chat/:id, navigation to /chat will remount ChatLayout/ChatInterface anyway.
+		if (!conversationId) {
+			setChatResetKey((prev) => prev + 1);
+		}
+	}, [conversationId]);
 
 	if (layout === "widget") {
 		return (

@@ -143,6 +143,9 @@ importers:
       '@playwright/test':
         specifier: ^1.48.2
         version: 1.56.1
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.6.1
       tsx:
         specifier: ^4.20.3
         version: 4.20.6

@@ -1,4 +1,18 @@
 import { defineConfig } from "@playwright/test";
+import { config } from "dotenv";
+import { resolve } from "path";
+
+// Load each project's .env file to get their specific environment variables.
+// The first config() call also populates process.env for the test runner
+// (used by tests to check if OPENAI_API_KEY is available for skip logic).
+const nextjsEnv =
+	config({ path: resolve(__dirname, "../examples/nextjs/.env") }).parsed || {};
+const tanstackEnv =
+	config({ path: resolve(__dirname, "../examples/tanstack/.env") }).parsed ||
+	{};
+const reactRouterEnv =
+	config({ path: resolve(__dirname, "../examples/react-router/.env") })
+		.parsed || {};
 
 export default defineConfig({
 	testDir: "./tests",
@@ -31,11 +45,11 @@ export default defineConfig({
 			stderr: "pipe",
 			env: {
 				...process.env,
+				...nextjsEnv,
 				PORT: "3003",
 				HOST: "127.0.0.1",
 				BASE_URL: "http://localhost:3003",
 				NEXT_PUBLIC_BASE_URL: "http://localhost:3003",
-				OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
 			},
 		},
 		{
@@ -47,10 +61,10 @@ export default defineConfig({
 			stderr: "pipe",
 			env: {
 				...process.env,
+				...tanstackEnv,
 				PORT: "3004",
 				HOST: "127.0.0.1",
 				BASE_URL: "http://localhost:3004",
-				OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
 			},
 		},
 		{
@@ -62,10 +76,10 @@ export default defineConfig({
 			stderr: "pipe",
 			env: {
 				...process.env,
+				...reactRouterEnv,
 				PORT: "3005",
 				HOST: "127.0.0.1",
 				BASE_URL: "http://localhost:3005",
-				OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
 			},
 		},
 	],

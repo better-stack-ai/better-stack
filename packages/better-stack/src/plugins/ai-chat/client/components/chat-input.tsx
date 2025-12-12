@@ -72,10 +72,13 @@ export function ChatInput({
 			const reader = new FileReader();
 			reader.onload = (e) => {
 				const dataUrl = e.target?.result as string;
-				setAttachedImages((prev) => [...prev, dataUrl]);
-				if (onImagesAttached) {
-					onImagesAttached([...attachedImages, dataUrl]);
-				}
+				setAttachedImages((prev) => {
+					const newImages = [...prev, dataUrl];
+					if (onImagesAttached) {
+						onImagesAttached(newImages);
+					}
+					return newImages;
+				});
 			};
 			reader.readAsDataURL(file);
 			return;
@@ -84,10 +87,13 @@ export function ChatInput({
 		try {
 			setIsUploading(true);
 			const url = await uploadImage(file);
-			setAttachedImages((prev) => [...prev, url]);
-			if (onImagesAttached) {
-				onImagesAttached([...attachedImages, url]);
-			}
+			setAttachedImages((prev) => {
+				const newImages = [...prev, url];
+				if (onImagesAttached) {
+					onImagesAttached(newImages);
+				}
+				return newImages;
+			});
 			toast.success(localization.IMAGE_UPLOAD_SUCCESS);
 		} catch (error) {
 			console.error("Failed to upload image:", error);

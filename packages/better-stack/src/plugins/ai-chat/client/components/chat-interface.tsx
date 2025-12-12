@@ -11,6 +11,9 @@ import { cn } from "@workspace/ui/lib/utils";
 import { usePluginOverrides, useBasePath } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../overrides";
 import { AI_CHAT_LOCALIZATION } from "../localization";
+import { createApiClient } from "@btst/stack/plugins/client";
+import type { AiChatApiRouter } from "../../api/plugin";
+import { createAiChatQueryKeys } from "../../query-keys";
 import {
 	useConversation,
 	useConversations,
@@ -33,14 +36,29 @@ export function ChatInterface({
 	variant = "full",
 	className,
 }: ChatInterfaceProps) {
-	const { navigate, localization: customLocalization } = usePluginOverrides<
-		AiChatPluginOverrides,
-		Partial<AiChatPluginOverrides>
-	>("ai-chat", {});
+	const {
+		navigate,
+		localization: customLocalization,
+		apiBaseURL,
+		apiBasePath,
+		headers,
+	} = usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
+		"ai-chat",
+		{},
+	);
 	const basePath = useBasePath();
 
 	const localization = { ...AI_CHAT_LOCALIZATION, ...customLocalization };
 	const queryClient = useQueryClient();
+
+	const conversationsListQueryKey = useMemo(() => {
+		const client = createApiClient<AiChatApiRouter>({
+			baseURL: apiBaseURL,
+			basePath: apiBasePath,
+		});
+		const queries = createAiChatQueryKeys(client, headers);
+		return queries.conversations.list().queryKey;
+	}, [apiBaseURL, apiBasePath, headers]);
 
 	// Track the current conversation ID - initialized from prop, updated after first message
 	const [currentConversationId, setCurrentConversationId] = useState<
@@ -91,7 +109,7 @@ export function ChatInterface({
 		onFinish: async () => {
 			// Invalidate conversation list to show new/updated conversations
 			await queryClient.invalidateQueries({
-				queryKey: ["conversations", "list"],
+				queryKey: conversationsListQueryKey,
 			});
 
 			// If this was the first message on a new chat, navigate to the new conversation
@@ -104,12 +122,12 @@ export function ChatInterface({
 				hasNavigatedRef.current = true;
 				// Wait for the invalidation to complete and refetch conversations
 				await queryClient.refetchQueries({
-					queryKey: ["conversations", "list"],
+					queryKey: conversationsListQueryKey,
 				});
 				// Get the updated conversations from cache
 				const cachedConversations = queryClient.getQueryData<
 					SerializedConversation[]
-				>(["conversations", "list", "list"]);
+				>(conversationsListQueryKey);
 				if (cachedConversations && cachedConversations.length > 0) {
 					// The most recently updated conversation should be the one we just created
 					const newConversation = cachedConversations[0];
