@@ -86,20 +86,11 @@ test.describe("AI Chat Plugin", () => {
 				.locator('[aria-label="AI response"]'),
 		).toBeVisible({ timeout: 30000 });
 
-		// Refresh the page to see the conversation in sidebar
-		await page.reload();
-
-		// Wait for sidebar to load conversations
-		await page.waitForTimeout(2000);
-
-		// The conversation should appear in the sidebar with title based on first message
-		// Note: The sidebar may be collapsed on mobile, so we check for the conversation title
-		// in the visible area
+		// The conversation should appear in the sidebar after the assistant finishes responding
+		// (no refresh needed).
 		await expect(
-			page.getByText("Test message for sidebar").first(),
-		).toBeVisible({
-			timeout: 10000,
-		});
+			page.getByRole("button", { name: /Test message for sidebar/i }),
+		).toBeVisible({ timeout: 15000 });
 	});
 
 	test("should navigate to existing conversation", async ({ page }) => {

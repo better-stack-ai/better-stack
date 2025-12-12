@@ -221,6 +221,13 @@ export interface AiChatBackendHooks {
 }
 
 /**
+ * Plugin mode for AI Chat
+ * - 'authenticated': Conversations persisted with userId (default)
+ * - 'public': Stateless chat, no persistence (ideal for public chatbots)
+ */
+export type AiChatMode = "authenticated" | "public";
+
+/**
  * Configuration for AI Chat backend plugin
  */
 export interface AiChatBackendConfig {
@@ -229,6 +236,24 @@ export interface AiChatBackendConfig {
 	 * Supports any model from AI SDK providers (OpenAI, Anthropic, Google, etc.)
 	 */
 	model: LanguageModel;
+
+	/**
+	 * Plugin mode:
+	 * - 'authenticated': Conversations persisted with userId (requires getUserId)
+	 * - 'public': Stateless chat, no persistence (ideal for public chatbots)
+	 * @default 'authenticated'
+	 */
+	mode?: AiChatMode;
+
+	/**
+	 * Extract userId from request context (authenticated mode only).
+	 * Return null/undefined to deny access in authenticated mode.
+	 * This function is called for all conversation operations.
+	 * @example (ctx) => ctx.headers?.get('x-user-id')
+	 */
+	getUserId?: (
+		context: ChatApiContext,
+	) => string | null | undefined | Promise<string | null | undefined>;
 
 	/**
 	 * Optional system prompt to prepend to all conversations
@@ -258,8 +283,12 @@ export interface AiChatBackendConfig {
 export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 	defineBackendPlugin({
 		name: "ai-chat",
+		// Always include db schema - in public mode we just don't use it
 		dbPlugin: dbSchema,
 		routes: (adapter: Adapter) => {
+			const mode = config.mode ?? "authenticated";
+			const isPublicMode = mode === "public";
+
 			// Helper to extract text content from UIMessage
 			const getMessageContent = (msg: UIMessage): string => {
 				if (msg.parts && Array.isArray(msg.parts)) {
@@ -269,6 +298,27 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 						.join("");
 				}
 				return "";
+			};
+
+			// Helper to get userId in authenticated mode
+			// Returns null if no getUserId is configured, or the userId if available
+			// Throws if getUserId returns null/undefined (auth required but not provided)
+			const resolveUserId = async (
+				context: ChatApiContext,
+				throwOnMissing: () => never,
+			): Promise<string | null> => {
+				if (isPublicMode) {
+					return null;
+				}
+				if (!config.getUserId) {
+					// If no getUserId is provided, conversations are not user-scoped
+					return null;
+				}
+				const userId = await config.getUserId(context);
+				if (!userId) {
+					throwOnMissing();
+				}
+				return userId;
 			};
 
 			// ============== Chat Endpoint ==============
@@ -306,7 +356,6 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 							}
 						}
 
-						let convId = conversationId;
 						const firstMessage = uiMessages[0];
 						if (!firstMessage) {
 							throw ctx.error(400, {
@@ -315,11 +364,51 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 						}
 						const firstMessageContent = getMessageContent(firstMessage);
 
+						// Convert UIMessages to CoreMessages for streamText
+						const modelMessages = convertToModelMessages(uiMessages);
+
+						// Add system prompt if configured
+						const messagesWithSystem = config.systemPrompt
+							? [
+									{ role: "system" as const, content: config.systemPrompt },
+									...modelMessages,
+								]
+							: modelMessages;
+
+						// PUBLIC MODE: Stream without persistence
+						if (isPublicMode) {
+							const result = streamText({
+								model: config.model,
+								messages: messagesWithSystem,
+								tools: config.tools,
+							});
+
+							return result.toUIMessageStreamResponse({
+								originalMessages: uiMessages,
+							});
+						}
+
+						// AUTHENTICATED MODE: Persist conversations
+						// Get userId if getUserId is configured
+						let userId: string | null = null;
+						if (config.getUserId) {
+							const resolvedUserId = await config.getUserId(context);
+							if (!resolvedUserId) {
+								throw ctx.error(403, {
+									message: "Unauthorized: User authentication required",
+								});
+							}
+							userId = resolvedUserId;
+						}
+
+						let convId = conversationId;
+
 						// Create or verify conversation
 						if (!convId) {
 							const newConv = await adapter.create<Conversation>({
 								model: "conversation",
 								data: {
+									...(userId ? { userId } : {}),
 									title: firstMessageContent.slice(0, 50) || "New Conversation",
 									createdAt: new Date(),
 									updatedAt: new Date(),
@@ -337,6 +426,7 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 									model: "conversation",
 									data: {
 										id: convId,
+										...(userId ? { userId } : {}),
 										title:
 											firstMessageContent.slice(0, 50) || "New Conversation",
 										createdAt: new Date(),
@@ -344,6 +434,14 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 									} as Conversation,
 								});
 								convId = newConv.id;
+							} else {
+								// Verify ownership if userId is set
+								const conv = existing[0]!;
+								if (userId && conv.userId && conv.userId !== userId) {
+									throw ctx.error(403, {
+										message: "Unauthorized: Cannot access this conversation",
+									});
+								}
 							}
 						}
 
@@ -360,17 +458,6 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 								},
 							});
 						}
-
-						// Convert UIMessages to CoreMessages for streamText
-						const modelMessages = convertToModelMessages(uiMessages);
-
-						// Add system prompt if configured
-						const messagesWithSystem = config.systemPrompt
-							? [
-									{ role: "system" as const, content: config.systemPrompt },
-									...modelMessages,
-								]
-							: modelMessages;
 
 						const result = streamText({
 							model: config.model,
@@ -449,6 +536,13 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 					body: createConversationSchema,
 				},
 				async (ctx) => {
+					// Public mode: conversations are not persisted
+					if (isPublicMode) {
+						throw ctx.error(404, {
+							message: "Conversations not available in public mode",
+						});
+					}
+
 					const { id, title } = ctx.body;
 					const context: ChatApiContext = {
 						body: ctx.body,
@@ -456,6 +550,13 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 					};
 
 					try {
+						// Get userId if configured
+						const userId = await resolveUserId(context, () => {
+							throw ctx.error(403, {
+								message: "Unauthorized: User authentication required",
+							});
+						});
+
 						// Authorization hook
 						if (config.hooks?.onBeforeCreateConversation) {
 							const canCreate = await config.hooks.onBeforeCreateConversation(
@@ -473,6 +574,7 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 							model: "conversation",
 							data: {
 								...(id ? { id } : {}),
+								...(userId ? { userId } : {}),
 								title: title || "New Conversation",
 								createdAt: new Date(),
 								updatedAt: new Date(),
@@ -504,11 +606,23 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 					method: "GET",
 				},
 				async (ctx) => {
+					// Public mode: return empty list
+					if (isPublicMode) {
+						return [];
+					}
+
 					const context: ChatApiContext = {
 						headers: ctx.headers,
 					};
 
 					try {
+						// Get userId if configured
+						const userId = await resolveUserId(context, () => {
+							throw ctx.error(403, {
+								message: "Unauthorized: User authentication required",
+							});
+						});
+
 						// Authorization hook
 						if (config.hooks?.onBeforeListConversations) {
 							const canList =
@@ -520,8 +634,23 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 							}
 						}
 
+						// Build where conditions - filter by userId if set
+						const whereConditions: Array<{
+							field: string;
+							value: string;
+							operator: "eq";
+						}> = [];
+						if (userId) {
+							whereConditions.push({
+								field: "userId",
+								value: userId,
+								operator: "eq",
+							});
+						}
+
 						const conversations = await adapter.findMany<Conversation>({
 							model: "conversation",
+							where: whereConditions.length > 0 ? whereConditions : undefined,
 							sortBy: { field: "updatedAt", direction: "desc" },
 						});
 
@@ -550,6 +679,13 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 					method: "GET",
 				},
 				async (ctx) => {
+					// Public mode: conversations are not persisted
+					if (isPublicMode) {
+						throw ctx.error(404, {
+							message: "Conversations not available in public mode",
+						});
+					}
+
 					const { id } = ctx.params;
 					const context: ChatApiContext = {
 						params: ctx.params,
@@ -557,6 +693,13 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 					};
 
 					try {
+						// Get userId if configured
+						const userId = await resolveUserId(context, () => {
+							throw ctx.error(403, {
+								message: "Unauthorized: User authentication required",
+							});
+						});
+
 						// Authorization hook
 						if (config.hooks?.onBeforeGetConversation) {
 							const canGet = await config.hooks.onBeforeGetConversation(
@@ -580,6 +723,19 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 							throw ctx.error(404, { message: "Conversation not found" });
 						}
 
+						const conversation = conversations[0]!;
+
+						// Verify ownership if userId is set
+						if (
+							userId &&
+							conversation.userId &&
+							conversation.userId !== userId
+						) {
+							throw ctx.error(403, {
+								message: "Unauthorized: Cannot access this conversation",
+							});
+						}
+
 						const messages = await adapter.findMany<Message>({
 							model: "message",
 							where: [{ field: "conversationId", value: id, operator: "eq" }],
@@ -587,7 +743,7 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 						});
 
 						const result = {
-							...conversations[0]!,
+							...conversation,
 							messages,
 						} as Conversation & { messages: Message[] };
 
@@ -617,6 +773,13 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 					body: updateConversationSchema,
 				},
 				async (ctx) => {
+					// Public mode: conversations are not persisted
+					if (isPublicMode) {
+						throw ctx.error(404, {
+							message: "Conversations not available in public mode",
+						});
+					}
+
 					const { id } = ctx.params;
 					const { title } = ctx.body;
 					const context: ChatApiContext = {
@@ -626,6 +789,35 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 					};
 
 					try {
+						// Get userId if configured
+						const userId = await resolveUserId(context, () => {
+							throw ctx.error(403, {
+								message: "Unauthorized: User authentication required",
+							});
+						});
+
+						// Check ownership before update
+						const existing = await adapter.findMany<Conversation>({
+							model: "conversation",
+							where: [{ field: "id", value: id, operator: "eq" }],
+							limit: 1,
+						});
+
+						if (!existing.length) {
+							throw ctx.error(404, { message: "Conversation not found" });
+						}
+
+						const conversation = existing[0]!;
+						if (
+							userId &&
+							conversation.userId &&
+							conversation.userId !== userId
+						) {
+							throw ctx.error(403, {
+								message: "Unauthorized: Cannot update this conversation",
+							});
+						}
+
 						// Authorization hook
 						if (config.hooks?.onBeforeUpdateConversation) {
 							const canUpdate = await config.hooks.onBeforeUpdateConversation(
@@ -678,6 +870,13 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 					method: "DELETE",
 				},
 				async (ctx) => {
+					// Public mode: conversations are not persisted
+					if (isPublicMode) {
+						throw ctx.error(404, {
+							message: "Conversations not available in public mode",
+						});
+					}
+
 					const { id } = ctx.params;
 					const context: ChatApiContext = {
 						params: ctx.params,
@@ -685,6 +884,35 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 					};
 
 					try {
+						// Get userId if configured
+						const userId = await resolveUserId(context, () => {
+							throw ctx.error(403, {
+								message: "Unauthorized: User authentication required",
+							});
+						});
+
+						// Check ownership before delete
+						const existing = await adapter.findMany<Conversation>({
+							model: "conversation",
+							where: [{ field: "id", value: id, operator: "eq" }],
+							limit: 1,
+						});
+
+						if (!existing.length) {
+							throw ctx.error(404, { message: "Conversation not found" });
+						}
+
+						const conversation = existing[0]!;
+						if (
+							userId &&
+							conversation.userId &&
+							conversation.userId !== userId
+						) {
+							throw ctx.error(403, {
+								message: "Unauthorized: Cannot delete this conversation",
+							});
+						}
+
 						// Authorization hook
 						if (config.hooks?.onBeforeDeleteConversation) {
 							const canDelete = await config.hooks.onBeforeDeleteConversation(

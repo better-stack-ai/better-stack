@@ -75,12 +75,14 @@ export const getStackClient = (queryClient: QueryClient) => {
                     }
                 }
             }),
+            // AI Chat plugin with authenticated mode
             aiChat: aiChatClientPlugin({
                 apiBaseURL: baseURL,
                 apiBasePath: "/api/data",
                 siteBaseURL: baseURL,
                 siteBasePath: "/pages",
                 queryClient: queryClient,
+                mode: "authenticated",
             })
         }
     })

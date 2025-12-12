@@ -10,6 +10,12 @@ export interface AiChatLocalization {
 	CHAT_ERROR: string;
 	CHAT_RETRY: string;
 
+	// Page errors
+	CHAT_GENERIC_ERROR_TITLE: string;
+	CHAT_GENERIC_ERROR_MESSAGE: string;
+	CHAT_PAGE_NOT_FOUND_TITLE: string;
+	CHAT_PAGE_NOT_FOUND_DESCRIPTION: string;
+
 	// Sidebar
 	SIDEBAR_TITLE: string;
 	SIDEBAR_NEW_CHAT: string;
@@ -60,6 +66,14 @@ export const AI_CHAT_LOCALIZATION: AiChatLocalization = {
 	CHAT_LOADING: "Thinking...",
 	CHAT_ERROR: "Something went wrong. Please try again.",
 	CHAT_RETRY: "Retry",
+
+	// Page errors
+	CHAT_GENERIC_ERROR_TITLE: "Something went wrong",
+	CHAT_GENERIC_ERROR_MESSAGE:
+		"An error occurred while loading the chat. Please try again.",
+	CHAT_PAGE_NOT_FOUND_TITLE: "Chat not found",
+	CHAT_PAGE_NOT_FOUND_DESCRIPTION:
+		"The conversation you're looking for doesn't exist or has been deleted.",
 
 	// Sidebar
 	SIDEBAR_TITLE: "Conversations",

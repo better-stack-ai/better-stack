@@ -6,6 +6,27 @@ description: Add AI-powered chat functionality with conversation history, stream
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
 
+## Plugin Modes
+
+The AI Chat plugin supports two distinct modes to accommodate different use cases:
+
+### Authenticated Mode (Default)
+
+Best for logged-in users in your SaaS application:
+- **Conversation persistence**: All conversations are saved to the database
+- **User-scoped data**: Conversations can be assigned to users via `getUserId`
+- **Full UI**: Sidebar with conversation history, navigation between conversations
+- **Routes**: `/chat` (new/list) and `/chat/:id` (existing conversation)
+
+### Public Mode
+
+Best for public-facing chatbots:
+- **No persistence**: Conversations are not saved to the database
+- **Stateless**: Each page load starts fresh
+- **Simple UI**: No sidebar, just the chat interface
+- **Rate limiting ready**: Use `onBeforeChat` hook for rate limiting/captcha
+- **Single route**: Only `/chat` is available
+
 ## Installation
 
 Follow these steps to add the AI Chat plugin to your Better Stack setup.
@@ -33,6 +54,9 @@ const chatHooks: AiChatBackendHooks = {
   onAfterChat: async (conversationId, messages, context) => {
     console.log("Chat completed:", conversationId)
   },
+  onConversationCreated: async (conversation) => {
+    console.log("Conversation created:", conversation.id, "by user:", conversation.userId)
+  },
 }
 
 const { handler, dbSchema } = betterStack({
@@ -40,9 +64,16 @@ const { handler, dbSchema } = betterStack({
   plugins: {
     aiChat: aiChatBackendPlugin({
       model: openai("gpt-4o"), // Or any LanguageModel from AI SDK
+      mode: "authenticated", // "authenticated" (default) or "public"
+      // Extract userId from request headers to scope conversations per user
+      getUserId: async (ctx) => {
+        const token = ctx.headers?.get("authorization")
+        if (!token) return null // Deny access if no auth
+        const user = await verifyToken(token) // Your auth logic
+        return user?.id ?? null
+      },
       systemPrompt: "You are a helpful assistant.", // Optional
       tools: {}, // Optional: AI SDK v5 tools
-      maxSteps: 5, // Optional: Max tool execution steps
       hooks: chatHooks, // Optional
     })
   },
@@ -82,6 +113,8 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
         siteBasePath: "/pages",
         queryClient: queryClient,
         headers: options?.headers,
+        // Mode should match backend config
+        mode: "authenticated", // "authenticated" (default) or "public"
         // Optional: SEO configuration
         seo: {
           siteName: "My Chat App",
@@ -141,6 +174,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
           basePath="/pages"
           overrides={{
             "ai-chat": {
+              mode: "authenticated", // Should match backend config
               apiBaseURL: baseURL,
               apiBasePath: "/api/data",
               navigate: (path) => router.push(path),
@@ -395,9 +429,77 @@ aiChat: aiChatBackendPlugin({
   tools: {
     getWeather: weatherTool,
   },
-  maxSteps: 5, // Allow up to 5 tool calls per message
 })
 ```
+
+## Public Mode Configuration
+
+For public chatbots without user authentication:
+
+### Backend Setup
+
+```ts title="lib/better-stack.ts"
+import { betterStack } from "@btst/stack"
+import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
+import { openai } from "@ai-sdk/openai"
+
+// Example rate limiter (implement your own)
+const rateLimiter = new Map<string, number>()
+
+const { handler, dbSchema } = betterStack({
+  basePath: "/api/data",
+  plugins: {
+    aiChat: aiChatBackendPlugin({
+      model: openai("gpt-4o"),
+      mode: "public", // Stateless mode - no persistence
+      systemPrompt: "You are a helpful customer support bot.",
+      hooks: {
+        onBeforeChat: async (messages, ctx) => {
+          // Implement rate limiting
+          const ip = ctx.headers?.get("x-forwarded-for") || "unknown"
+          const requests = rateLimiter.get(ip) || 0
+          if (requests > 10) {
+            return false // Block request
+          }
+          rateLimiter.set(ip, requests + 1)
+          return true
+        },
+      },
+    })
+  },
+  adapter: (db) => createMemoryAdapter(db)({})
+})
+```
+
+### Client Setup
+
+```tsx title="lib/better-stack-client.tsx"
+aiChat: aiChatClientPlugin({
+  apiBaseURL: baseURL,
+  apiBasePath: "/api/data",
+  siteBaseURL: baseURL,
+  siteBasePath: "/pages",
+  queryClient: queryClient,
+  mode: "public", // Must match backend
+})
+```
+
+### Context Overrides
+
+```tsx
+overrides={{
+  "ai-chat": {
+    mode: "public",
+    apiBaseURL: baseURL,
+    apiBasePath: "/api/data",
+    // No navigate/refresh needed in public mode
+  }
+}}
+```
+
+<Callout type="info">
+In public mode, the sidebar is hidden, conversation history is not saved, and only the `/chat` route is available.
+</Callout>
 
 ## API Reference
 

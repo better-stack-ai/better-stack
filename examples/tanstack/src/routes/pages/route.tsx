@@ -80,6 +80,7 @@ function Layout() {
                         },
                     },
                     "ai-chat": {
+                        mode: "authenticated",
                         apiBaseURL: baseURL,
                         apiBasePath: "/api/data",
                         navigate: (href) => router.navigate({ href }),
@@ -92,6 +93,9 @@ function Layout() {
                               {children}
                             </Link>
                         ),
+                        onRouteRender: async (routeName, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] AI Chat route:`, routeName, context.path);
+                        },
                     }
                 }}
             >

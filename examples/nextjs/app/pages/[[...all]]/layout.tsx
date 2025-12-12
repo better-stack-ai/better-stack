@@ -114,6 +114,7 @@ export default function ExampleLayout({
                         },
                     },
                     "ai-chat": {
+                        mode: "authenticated", // Full chat with conversation history
                         apiBaseURL: baseURL,
                         apiBasePath: "/api/data",
                         navigate: (path) => router.push(path),
@@ -147,6 +148,13 @@ export default function ExampleLayout({
                                     {...rest}
                                 />
                             )
+                        },
+                        // Lifecycle hooks
+                        onRouteRender: async (routeName, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] AI Chat route:`, routeName, context.path);
+                        },
+                        onRouteError: async (routeName, error, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] AI Chat error:`, routeName, error.message);
                         },
                     }
                 }}

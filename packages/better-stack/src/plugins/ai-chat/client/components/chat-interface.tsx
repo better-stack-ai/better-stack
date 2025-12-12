@@ -42,63 +42,78 @@ export function ChatInterface({
 		apiBaseURL,
 		apiBasePath,
 		headers,
+		mode,
 	} = usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
 		"ai-chat",
 		{},
 	);
 	const basePath = useBasePath();
+	const isPublicMode = mode === "public";
 
 	const localization = { ...AI_CHAT_LOCALIZATION, ...customLocalization };
 	const queryClient = useQueryClient();
 
 	const conversationsListQueryKey = useMemo(() => {
+		// In public mode, we don't need conversation queries
+		if (isPublicMode) return ["ai-chat", "disabled"];
 		const client = createApiClient<AiChatApiRouter>({
 			baseURL: apiBaseURL,
 			basePath: apiBasePath,
 		});
 		const queries = createAiChatQueryKeys(client, headers);
 		return queries.conversations.list().queryKey;
-	}, [apiBaseURL, apiBasePath, headers]);
+	}, [apiBaseURL, apiBasePath, headers, isPublicMode]);
 
 	// Track the current conversation ID - initialized from prop, updated after first message
+	// In public mode, we don't track conversation IDs
 	const [currentConversationId, setCurrentConversationId] = useState<
 		string | undefined
-	>(id);
+	>(isPublicMode ? undefined : id);
 	// Track if we've sent the first message on a new chat (to trigger navigation)
 	const isFirstMessageSentRef = useRef(false);
 	const hasNavigatedRef = useRef(false);
 
 	// Update currentConversationId when id prop changes (e.g., navigating to different conversation)
 	useEffect(() => {
-		setCurrentConversationId(id);
-		isFirstMessageSentRef.current = false;
-		hasNavigatedRef.current = false;
-	}, [id]);
+		if (!isPublicMode) {
+			setCurrentConversationId(id);
+			isFirstMessageSentRef.current = false;
+			hasNavigatedRef.current = false;
+		}
+	}, [id, isPublicMode]);
 
-	// Fetch existing conversation messages when id is provided
+	// Fetch existing conversation messages when id is provided (authenticated mode only)
 	const { conversation, isLoading: isLoadingConversation } = useConversation(
 		id,
-		{ enabled: !!id },
+		{ enabled: !!id && !isPublicMode },
 	);
 
-	// Fetch conversations list for navigation after first message
-	const { conversations } = useConversations();
+	// Fetch conversations list for navigation after first message (authenticated mode only)
+	const { conversations } = useConversations({ enabled: !isPublicMode });
 
 	// Use a ref to track the conversation ID for the transport body
 	// This ensures the transport always uses the latest value
-	const conversationIdRef = useRef<string | undefined>(id);
+	// In public mode, always undefined
+	const conversationIdRef = useRef<string | undefined>(
+		isPublicMode ? undefined : id,
+	);
 	useEffect(() => {
-		conversationIdRef.current = currentConversationId;
-	}, [currentConversationId]);
+		if (!isPublicMode) {
+			conversationIdRef.current = currentConversationId;
+		}
+	}, [currentConversationId, isPublicMode]);
 
 	// Memoize the transport to prevent recreation on every render
 	const transport = useMemo(
 		() =>
 			new DefaultChatTransport({
 				api: apiPath,
-				body: () => ({ conversationId: conversationIdRef.current }),
+				// In public mode, don't send conversationId
+				body: isPublicMode
+					? undefined
+					: () => ({ conversationId: conversationIdRef.current }),
 			}),
-		[apiPath],
+		[apiPath, isPublicMode],
 	);
 
 	const { messages, sendMessage, status, error, setMessages } = useChat({
@@ -107,6 +122,9 @@ export function ChatInterface({
 			console.error("useChat onError:", err);
 		},
 		onFinish: async () => {
+			// In public mode, skip all persistence-related operations
+			if (isPublicMode) return;
+
 			// Invalidate conversation list to show new/updated conversations
 			await queryClient.invalidateQueries({
 				queryKey: conversationsListQueryKey,
@@ -197,8 +215,8 @@ export function ChatInterface({
 		const text = input.trim();
 		if (!text) return;
 
-		// Track if this is the first message on a new chat
-		if (!id && messages.length === 0) {
+		// Track if this is the first message on a new chat (authenticated mode only)
+		if (!isPublicMode && !id && messages.length === 0) {
 			isFirstMessageSentRef.current = true;
 		}
 

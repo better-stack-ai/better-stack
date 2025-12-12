@@ -68,8 +68,27 @@ const { handler, dbSchema } = betterStack({
     plugins: {
         todos: todosBackendPlugin,
         blog: blogBackendPlugin(blogHooks),
+        // AI Chat plugin with authenticated mode (default)
+        // Conversations are persisted but not user-scoped (no getUserId)
+        // For user-scoped conversations, add getUserId:
+        //   getUserId: async (ctx) => ctx.headers?.get('x-user-id'),
         aiChat: aiChatBackendPlugin({
             model: openai("gpt-4o"),
+            mode: "authenticated", // Default: persisted conversations
+            // Optional: Extract userId from headers to scope conversations per user
+            // getUserId: async (ctx) => {
+            //     const userId = ctx.headers?.get('x-user-id');
+            //     if (!userId) return null; // Deny access if no user
+            //     return userId;
+            // },
+            hooks: {
+                onConversationCreated: async (conversation) => {
+                    console.log("Conversation created:", conversation.id, conversation.title);
+                },
+                onAfterChat: async (conversationId, messages) => {
+                    console.log("Chat completed in conversation:", conversationId, "Messages:", messages.length);
+                },
+            },
         })
     },
     adapter: (db) => createMemoryAdapter(db)({})

@@ -2,6 +2,13 @@ import type { ComponentType } from "react";
 import type { AiChatLocalization } from "./localization";
 
 /**
+ * Plugin mode for AI Chat
+ * - 'authenticated': Conversations persisted with userId (default)
+ * - 'public': Stateless chat, no persistence (ideal for public chatbots)
+ */
+export type AiChatMode = "authenticated" | "public";
+
+/**
  * Context passed to lifecycle hooks
  */
 export interface RouteContext {
@@ -22,6 +29,12 @@ export interface RouteContext {
  * to customize the behavior for their framework (Next.js, React Router, etc.)
  */
 export interface AiChatPluginOverrides {
+	/**
+	 * Plugin mode - should match backend config
+	 * @default 'authenticated'
+	 */
+	mode?: AiChatMode;
+
 	/**
 	 * API base URL
 	 */

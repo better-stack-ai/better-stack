@@ -88,6 +88,8 @@ export const getStackClient = (
                     },
                 }
             }),
+            // AI Chat plugin with authenticated mode (default)
+            // For public chatbot without persistence, use mode: "public"
             aiChat: aiChatClientPlugin({
                 apiBaseURL: baseURL,
                 apiBasePath: "/api/data",
@@ -95,9 +97,20 @@ export const getStackClient = (
                 siteBasePath: "/pages",
                 queryClient: queryClient,
                 headers: options?.headers,
+                mode: "authenticated", // Default: full chat with conversation history
                 seo: {
                     siteName: "Better Stack Chat",
                     description: "AI-powered chat assistant",
+                },
+                hooks: {
+                    beforeLoadConversations: async (context) => {
+                        console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] beforeLoadConversations`);
+                        return true;
+                    },
+                    afterLoadConversations: async (conversations, context) => {
+                        console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] afterLoadConversations:`, conversations?.length || 0);
+                        return true;
+                    },
                 },
             })
         }

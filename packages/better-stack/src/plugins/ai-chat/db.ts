@@ -13,6 +13,10 @@ export const aiChatSchema = createDbPlugin("aiChat", {
 				required: true,
 				unique: true,
 			},
+			userId: {
+				type: "string",
+				required: false,
+			},
 			title: {
 				type: "string",
 				required: true,

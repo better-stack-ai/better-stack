@@ -8,6 +8,7 @@ import type { AiChatApiRouter } from "../api";
 import { createAiChatQueryKeys } from "../query-keys";
 import type { SerializedConversation, SerializedMessage } from "../types";
 import { ChatLayout } from "./components/chat-layout";
+import type { AiChatMode } from "./overrides";
 
 /**
  * Context passed to route hooks
@@ -57,6 +58,14 @@ export interface AiChatClientConfig {
 	siteBasePath: string;
 	/** React Query client instance for caching */
 	queryClient: QueryClient;
+
+	/**
+	 * Plugin mode - should match backend config
+	 * - 'authenticated': Full chat with conversation history (default)
+	 * - 'public': Simple widget mode, no persistence, no sidebar
+	 * @default 'authenticated'
+	 */
+	mode?: AiChatMode;
 
 	/** Optional SEO configuration for meta tags */
 	seo?: {
@@ -135,6 +144,11 @@ export interface AiChatClientHooks {
 // Loader for chat home page (list conversations)
 function createConversationsLoader(config: AiChatClientConfig) {
 	return async () => {
+		// Skip loading in public mode - no persistence
+		if (config.mode === "public") {
+			return;
+		}
+
 		if (typeof window === "undefined") {
 			const { queryClient, apiBasePath, apiBaseURL, hooks, headers } = config;
 
@@ -363,8 +377,37 @@ function createConversationMeta(id: string, config: AiChatClientConfig) {
  *
  * @param config - Configuration including queryClient, baseURL, and optional hooks
  */
-export const aiChatClientPlugin = (config: AiChatClientConfig) =>
-	defineClientPlugin({
+export const aiChatClientPlugin = (config: AiChatClientConfig) => {
+	const isPublicMode = config.mode === "public";
+
+	// Define routes based on mode
+	// In public mode, only the base chat route is available
+	// In authenticated mode, conversation routes are also available
+	if (isPublicMode) {
+		return defineClientPlugin({
+			name: "ai-chat",
+
+			routes: () => ({
+				// Chat home - simple chat interface without history
+				chat: createRoute("/chat", () => ({
+					PageComponent: () => (
+						<ChatLayout
+							apiBaseURL={config.apiBaseURL}
+							apiBasePath={config.apiBasePath}
+							showSidebar={false}
+						/>
+					),
+					loader: createConversationsLoader(config),
+					meta: createChatHomeMeta(config),
+				})),
+			}),
+
+			sitemap: async () => [],
+		});
+	}
+
+	// Authenticated mode - full chat with conversation history
+	return defineClientPlugin({
 		name: "ai-chat",
 
 		routes: () => ({
@@ -400,5 +443,7 @@ export const aiChatClientPlugin = (config: AiChatClientConfig) =>
 			return [];
 		},
 	});
+};
 
 export type { SerializedConversation, SerializedMessage } from "../types";
+export type { AiChatMode } from "./overrides";

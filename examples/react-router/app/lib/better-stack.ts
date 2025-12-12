@@ -62,8 +62,15 @@ const { handler, dbSchema } = betterStack({
     basePath: "/api/data",
     plugins: {
         blog: blogBackendPlugin(blogHooks),
+        // AI Chat plugin with authenticated mode (default)
         aiChat: aiChatBackendPlugin({
             model: openai("gpt-4o"),
+            mode: "authenticated",
+            hooks: {
+                onConversationCreated: async (conversation) => {
+                    console.log("Conversation created:", conversation.id);
+                },
+            },
         })
     },
     adapter: (db) => createMemoryAdapter(db)({})
