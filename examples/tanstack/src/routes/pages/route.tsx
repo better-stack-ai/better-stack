@@ -83,6 +83,10 @@ function Layout() {
                         apiBaseURL: baseURL,
                         apiBasePath: "/api/data",
                         navigate: (href) => router.navigate({ href }),
+                        uploadImage: async (file) => {
+                            console.log("uploadImage", file)
+                            return "https://placehold.co/400/png"
+                        },
                         Link: ({ href, children, className, ...props }) => (
                             <Link to={href} className={className} {...props}>
                               {children}

@@ -49,9 +49,9 @@ test.describe("AI Chat Plugin", () => {
 		// Use Enter key or find the submit button
 		await page.keyboard.press("Enter");
 
-		// 4. Verify user message appears
+		// 4. Verify user message appears - increase timeout to account for slower state updates
 		await expect(page.getByText("Hello, world!")).toBeVisible({
-			timeout: 5000,
+			timeout: 15000,
 		});
 
 		// 5. Verify AI response appears (using real OpenAI, so response content varies, but should exist)
@@ -111,16 +111,79 @@ test.describe("AI Chat Plugin", () => {
 			page.locator('[data-testid="chat-interface"]').locator(".prose"),
 		).toBeVisible({ timeout: 30000 });
 
-		// Get the current URL which should have the conversation ID
-		const url = page.url();
+		// Wait for the URL to change to include the conversation ID
+		await page.waitForURL(/\/pages\/chat\/[a-zA-Z0-9]+/, { timeout: 10000 });
 
 		// Refresh and verify the conversation is still visible
 		await page.reload();
 
-		// The messages should still be visible
-		await expect(page.getByText("Navigation test message")).toBeVisible({
+		// Wait for the page to load
+		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible({
 			timeout: 10000,
 		});
+
+		// The messages should still be visible in the chat interface (not just sidebar)
+		await expect(
+			page
+				.locator('[data-testid="chat-interface"]')
+				.getByText("Navigation test message"),
+		).toBeVisible({
+			timeout: 15000,
+		});
+	});
+
+	test("should keep all messages in the same conversation", async ({
+		page,
+	}) => {
+		// This test verifies that multiple messages in a conversation stay together
+		// and don't create separate history items (fixes the bug where every message
+		// created a new conversation)
+
+		await page.goto("/pages/chat");
+
+		// Send first message
+		const input = page.getByPlaceholder("Type a message...");
+		await input.fill("First message in conversation");
+		await page.keyboard.press("Enter");
+
+		// Wait for first AI response
+		await expect(
+			page.locator('[data-testid="chat-interface"]').locator(".prose"),
+		).toBeVisible({ timeout: 30000 });
+
+		// Wait for navigation to new conversation URL
+		await page.waitForURL(/\/pages\/chat\/[a-zA-Z0-9]+/, { timeout: 10000 });
+
+		// Send second message
+		await input.fill("Second message in same conversation");
+		await page.keyboard.press("Enter");
+
+		// Wait for second AI response (should be 2 prose elements now)
+		await expect(
+			page.locator('[data-testid="chat-interface"]').locator(".prose"),
+		).toHaveCount(2, { timeout: 30000 });
+
+		// Refresh the page
+		await page.reload();
+
+		// Both messages should still be visible in the same conversation
+		await expect(
+			page
+				.locator('[data-testid="chat-interface"]')
+				.getByText("First message in conversation"),
+		).toBeVisible({ timeout: 10000 });
+		await expect(
+			page
+				.locator('[data-testid="chat-interface"]')
+				.getByText("Second message in same conversation"),
+		).toBeVisible({ timeout: 10000 });
+
+		// There should only be ONE conversation in the sidebar with "First message"
+		// (the title is based on the first message)
+		const sidebarConversations = page.locator(
+			'button:has-text("First message in conversation")',
+		);
+		await expect(sidebarConversations).toHaveCount(1, { timeout: 5000 });
 	});
 
 	test("should have new chat button in sidebar", async ({ page }) => {

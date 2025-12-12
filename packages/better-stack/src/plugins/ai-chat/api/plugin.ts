@@ -417,8 +417,20 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 							},
 						});
 
-						return result.toUIMessageStreamResponse({
+						// Return the stream response with conversation ID header
+						// This allows the client to know which conversation was created/used
+						const response = result.toUIMessageStreamResponse({
 							originalMessages: uiMessages,
+						});
+
+						// Add the conversation ID header to the response
+						const headers = new Headers(response.headers);
+						headers.set("X-Conversation-Id", convId as string);
+
+						return new Response(response.body, {
+							status: response.status,
+							statusText: response.statusText,
+							headers,
 						});
 					} catch (error) {
 						if (config.hooks?.onChatError) {

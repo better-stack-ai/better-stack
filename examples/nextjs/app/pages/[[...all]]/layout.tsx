@@ -118,6 +118,10 @@ export default function ExampleLayout({
                         apiBasePath: "/api/data",
                         navigate: (path) => router.push(path),
                         refresh: () => router.refresh(),
+                        uploadImage: async (file) => {
+                            console.log("uploadImage", file)
+                            return "https://placehold.co/400/png"
+                        },
                         Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
                         Image: (props) => {
                             const { alt = "", src = "", width, height, ...rest } = props

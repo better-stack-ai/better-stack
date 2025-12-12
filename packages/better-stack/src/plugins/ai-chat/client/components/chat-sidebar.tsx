@@ -35,7 +35,7 @@ import {
 	MessageSquare,
 } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
-import { usePluginOverrides } from "@btst/stack/context";
+import { usePluginOverrides, useBasePath } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../overrides";
 import type { SerializedConversation } from "../../types";
 import {
@@ -60,6 +60,7 @@ export function ChatSidebar({
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
 	>("ai-chat", {});
+	const basePath = useBasePath();
 
 	const localization = { ...AI_CHAT_LOCALIZATION, ...customLocalization };
 
@@ -77,13 +78,13 @@ export function ChatSidebar({
 		if (onNewChat) {
 			onNewChat();
 		} else if (navigate) {
-			navigate("/chat");
+			navigate(`${basePath}/chat`);
 		}
 	};
 
 	const handleConversationClick = (conversation: SerializedConversation) => {
 		if (navigate) {
-			navigate(`/chat/${conversation.id}`);
+			navigate(`${basePath}/chat/${conversation.id}`);
 		}
 	};
 
@@ -117,7 +118,7 @@ export function ChatSidebar({
 			setSelectedConversation(null);
 			// Navigate away if deleted current conversation
 			if (selectedConversation.id === currentConversationId && navigate) {
-				navigate("/chat");
+				navigate(`${basePath}/chat`);
 			}
 		}
 	};
@@ -172,21 +173,21 @@ export function ChatSidebar({
 								<div
 									key={conversation.id}
 									className={cn(
-										"group flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-accent cursor-pointer transition-colors",
+										"group flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-accent cursor-pointer transition-colors overflow-hidden",
 										currentConversationId === conversation.id && "bg-accent",
 									)}
 								>
 									<button
 										type="button"
-										className="flex-1 flex items-center gap-2 text-left min-w-0"
+										className="flex-1 flex items-center gap-2 text-left min-w-0 overflow-hidden"
 										onClick={() => handleConversationClick(conversation)}
 									>
 										<MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
-										<div className="flex-1 min-w-0">
+										<div className="flex-1 min-w-0 overflow-hidden">
 											<p className="text-sm font-medium truncate">
 												{conversation.title}
 											</p>
-											<p className="text-xs text-muted-foreground">
+											<p className="text-xs text-muted-foreground truncate">
 												{formatDate(conversation.updatedAt)}
 											</p>
 										</div>

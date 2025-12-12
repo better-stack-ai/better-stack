@@ -1,2 +1,3 @@
 /* AI Chat Plugin Client Styles */
 @import "@workspace/ui/markdown-content.css";
+@import "highlight.js/styles/panda-syntax-light.css";

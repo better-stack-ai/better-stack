@@ -93,6 +93,158 @@ type PluginOverrides = {
 }
 ```
 
+### Lazy Loading Page Components
+
+Use React.lazy() to code-split page components and reduce initial bundle size:
+
+```typescript
+import { lazy } from "react";
+
+// Lazy load page components for code splitting
+// Use .then() to handle named exports
+const HomePageComponent = lazy(() => 
+  import("./components/pages/home-page").then(m => ({ default: m.HomePageComponent }))
+);
+const NewPostPageComponent = lazy(() => 
+  import("./components/pages/new-post-page").then(m => ({ default: m.NewPostPageComponent }))
+);
+const EditPostPageComponent = lazy(() => 
+  import("./components/pages/edit-post-page").then(m => ({ default: m.EditPostPageComponent }))
+);
+```
+
+For default exports, the simpler form works:
+```typescript
+const PostPage = lazy(() => import("./components/pages/post-page"));
+```
+
+### Client Plugin Route Structure
+
+Each route in `defineClientPlugin` should return three parts:
+
+```typescript
+routes: () => ({
+  routeName: createRoute("/path/:param", ({ params }) => ({
+    // 1. PageComponent - The React component to render
+    PageComponent: () => <MyPageComponent param={params.param} />,
+    
+    // 2. loader - SSR data prefetching (runs only on server)
+    loader: createMyLoader(params.param, config),
+    
+    // 3. meta - SEO meta tag generator
+    meta: createMyMeta(params.param, config),
+  })),
+}),
+```
+
+### SSR Loader Pattern
+
+Loaders should only run on the server and prefetch data into React Query:
+
+```typescript
+function createMyLoader(param: string, config: MyClientConfig) {
+  return async () => {
+    // Only run on server - skip on client
+    if (typeof window === "undefined") {
+      const { queryClient, apiBasePath, apiBaseURL, hooks, headers } = config;
+      
+      const context: LoaderContext = {
+        path: `/resource/${param}`,
+        params: { param },
+        isSSR: true,
+        apiBaseURL,
+        apiBasePath,
+        headers,
+      };
+
+      try {
+        // Before hook - allow consumers to cancel/modify loading
+        if (hooks?.beforeLoad) {
+          const canLoad = await hooks.beforeLoad(param, context);
+          if (!canLoad) {
+            throw new Error("Load prevented by beforeLoad hook");
+          }
+        }
+
+        // Create API client and query keys
+        const client = createApiClient<MyApiRouter>({
+          baseURL: apiBaseURL,
+          basePath: apiBasePath,
+        });
+        const queries = createMyQueryKeys(client, headers);
+        
+        // Prefetch data into queryClient
+        await queryClient.prefetchQuery(queries.resource.detail(param));
+
+        // After hook
+        if (hooks?.afterLoad) {
+          const data = queryClient.getQueryData(queries.resource.detail(param).queryKey);
+          await hooks.afterLoad(data, param, context);
+        }
+
+        // Check for errors - call hook but don't throw
+        const queryState = queryClient.getQueryState(queries.resource.detail(param).queryKey);
+        if (queryState?.error && hooks?.onLoadError) {
+          const error = queryState.error instanceof Error
+            ? queryState.error
+            : new Error(String(queryState.error));
+          await hooks.onLoadError(error, context);
+        }
+      } catch (error) {
+        // Log error but don't re-throw during SSR
+        // Let Error Boundaries handle errors when components render
+        if (hooks?.onLoadError) {
+          await hooks.onLoadError(error as Error, context);
+        }
+      }
+    }
+  };
+}
+```
+
+Key patterns:
+- **Server-only execution**: `if (typeof window === "undefined")`
+- **Don't throw errors during SSR**: Let React Query store errors and Error Boundaries catch them during render
+- **Hook integration**: Call before/after/error hooks for consumer customization
+- **Prefetch into queryClient**: Use `queryClient.prefetchQuery()` so data is available immediately on client
+
+### Meta Generator Pattern
+
+Meta generators read prefetched data from queryClient:
+
+```typescript
+function createMyMeta(param: string, config: MyClientConfig) {
+  return () => {
+    const { queryClient, apiBaseURL, apiBasePath, siteBaseURL, siteBasePath, seo } = config;
+    
+    // Get prefetched data from queryClient
+    const queries = createMyQueryKeys(
+      createApiClient<MyApiRouter>({ baseURL: apiBaseURL, basePath: apiBasePath })
+    );
+    const data = queryClient.getQueryData(queries.resource.detail(param).queryKey);
+
+    // Fallback if data not loaded
+    if (!data) {
+      return [
+        { title: "Unknown route" },
+        { name: "robots", content: "noindex" },
+      ];
+    }
+
+    const fullUrl = `${siteBaseURL}${siteBasePath}/resource/${param}`;
+    
+    return [
+      { title: data.title },
+      { name: "description", content: data.description },
+      { property: "og:type", content: "website" },
+      { property: "og:title", content: data.title },
+      { property: "og:url", content: fullUrl },
+      // ... more meta tags
+    ];
+  };
+}
+```
+
 ## Build Configuration
 
 ### Adding New Entry Points
@@ -152,18 +304,21 @@ When adding a new plugin or changing plugin configuration, update ALL three exam
 
 1. **Next.js** (`examples/nextjs/`)
    - `lib/better-stack.tsx` - Backend plugin registration
-   - `lib/better-stack-client.tsx` - Plugin registration
+   - `lib/better-stack-client.tsx` - Client plugin registration
    - `app/pages/[[...all]]/layout.tsx` - Override configuration
+   - `app/globals.css` - CSS import: `@import "@btst/stack/plugins/{name}/css";`
 
 2. **React Router** (`examples/react-router/`)
-   - `src/lib/better-stack.tsx` - Backend plugin registration
-   - `src/lib/better-stack-client.tsx` - Client plugin registration
+   - `app/lib/better-stack.tsx` - Backend plugin registration
+   - `app/lib/better-stack-client.tsx` - Client plugin registration
    - `app/routes/pages/_layout.tsx` - Override configuration
+   - `app/app.css` - CSS import: `@import "@btst/stack/plugins/{name}/css";`
 
 3. **TanStack** (`examples/tanstack/`)
    - `src/lib/better-stack.tsx` - Backend plugin registration
    - `src/lib/better-stack-client.tsx` - Client plugin registration
    - `src/routes/pages/route.tsx` - Override configuration
+   - `src/styles/app.css` - CSS import: `@import "@btst/stack/plugins/{name}/css";`
 
 ### Override Type Registration
 

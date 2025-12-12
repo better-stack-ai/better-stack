@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@workspace/ui/components/button";
 import {
 	Sheet,
@@ -44,8 +44,15 @@ export function ChatLayout({
 }: ChatLayoutProps) {
 	const [sidebarOpen, setSidebarOpen] = useState(true);
 	const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+	// Key to force ChatInterface remount when starting a new chat
+	const [chatResetKey, setChatResetKey] = useState(0);
 
 	const apiPath = `${apiBaseURL}${apiBasePath}/chat`;
+
+	// Handler for "New chat" button - increments key to force remount
+	const handleNewChat = useCallback(() => {
+		setChatResetKey((prev) => prev + 1);
+	}, []);
 
 	if (layout === "widget") {
 		return (
@@ -81,6 +88,7 @@ export function ChatLayout({
 					{sidebarOpen && (
 						<ChatSidebar
 							currentConversationId={conversationId}
+							onNewChat={handleNewChat}
 							className="w-72"
 						/>
 					)}
@@ -107,7 +115,10 @@ export function ChatLayout({
 							<SheetContent side="left" className="p-0 w-72">
 								<ChatSidebar
 									currentConversationId={conversationId}
-									onNewChat={() => setMobileSidebarOpen(false)}
+									onNewChat={() => {
+										handleNewChat();
+										setMobileSidebarOpen(false);
+									}}
 								/>
 							</SheetContent>
 						</Sheet>
@@ -133,10 +144,12 @@ export function ChatLayout({
 					<div className="flex-1" />
 				</div>
 
-				{/* Chat Interface */}
-				<div className="flex-1 overflow-hidden">
-					<ChatInterface apiPath={apiPath} id={conversationId} variant="full" />
-				</div>
+				<ChatInterface
+					key={`chat-${conversationId ?? "new"}-${chatResetKey}`}
+					apiPath={apiPath}
+					id={conversationId}
+					variant="full"
+				/>
 			</div>
 		</div>
 	);
