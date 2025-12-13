@@ -1,0 +1,582 @@
+---
+title: AI Chat Plugin
+description: Add AI-powered chat functionality with conversation history, streaming, sidebar navigation, and customizable models
+---
+
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "fumadocs-ui/components/callout";
+
+## Plugin Modes
+
+The AI Chat plugin supports two distinct modes to accommodate different use cases:
+
+### Authenticated Mode (Default)
+
+Best for logged-in users in your SaaS application:
+- **Conversation persistence**: All conversations are saved to the database
+- **User-scoped data**: Conversations can be assigned to users via `getUserId`
+- **Full UI**: Sidebar with conversation history, navigation between conversations
+- **Routes**: `/chat` (new/list) and `/chat/:id` (existing conversation)
+
+### Public Mode
+
+Best for public-facing chatbots:
+- **No persistence**: Conversations are not saved to the database
+- **Stateless**: Each page load starts fresh
+- **Simple UI**: No sidebar, just the chat interface
+- **Rate limiting ready**: Use `onBeforeChat` hook for rate limiting/captcha
+- **Single route**: Only `/chat` is available
+
+## Installation
+
+Follow these steps to add the AI Chat plugin to your Better Stack setup.
+
+### 1. Add Plugin to Backend API
+
+Import and register the AI Chat backend plugin in your `better-stack.ts` file:
+
+```ts title="lib/better-stack.ts"
+import { betterStack } from "@btst/stack"
+import { aiChatBackendPlugin, type AiChatBackendHooks } from "@btst/stack/plugins/ai-chat/api"
+import { openai } from "@ai-sdk/openai"
+// ... your adapter imports
+
+// Optional: Define hooks for authorization and logging
+const chatHooks: AiChatBackendHooks = {
+  onBeforeChat: async (messages, context) => {
+    // Add authorization logic
+    const authHeader = context.headers?.get("authorization")
+    if (!authHeader) {
+      return false // Deny access
+    }
+    return true
+  },
+  onAfterChat: async (conversationId, messages, context) => {
+    console.log("Chat completed:", conversationId)
+  },
+  onConversationCreated: async (conversation) => {
+    console.log("Conversation created:", conversation.id, "by user:", conversation.userId)
+  },
+}
+
+const { handler, dbSchema } = betterStack({
+  basePath: "/api/data",
+  plugins: {
+    aiChat: aiChatBackendPlugin({
+      model: openai("gpt-4o"), // Or any LanguageModel from AI SDK
+      mode: "authenticated", // "authenticated" (default) or "public"
+      // Extract userId from request headers to scope conversations per user
+      getUserId: async (ctx) => {
+        const token = ctx.headers?.get("authorization")
+        if (!token) return null // Deny access if no auth
+        const user = await verifyToken(token) // Your auth logic
+        return user?.id ?? null
+      },
+      systemPrompt: "You are a helpful assistant.", // Optional
+      tools: {}, // Optional: AI SDK v5 tools
+      hooks: chatHooks, // Optional
+    })
+  },
+  adapter: (db) => createMemoryAdapter(db)({})
+})
+
+export { handler, dbSchema }
+```
+
+<Callout type="info">
+**Model Configuration:** You can use any model from the AI SDK, including OpenAI, Anthropic, Google, and more. Make sure to install the corresponding provider package (e.g., `@ai-sdk/openai`) and set up your API keys in environment variables.
+</Callout>
+
+### 2. Add Plugin to Client
+
+Register the AI Chat client plugin in your `better-stack-client.tsx` file:
+
+```tsx title="lib/better-stack-client.tsx"
+import { createStackClient } from "@btst/stack/client"
+import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
+import { QueryClient } from "@tanstack/react-query"
+
+const getBaseURL = () => 
+  typeof window !== 'undefined' 
+    ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
+    : (process.env.BASE_URL || "http://localhost:3000")
+
+export const getStackClient = (queryClient: QueryClient, options?: { headers?: Headers }) => {
+  const baseURL = getBaseURL()
+  return createStackClient({
+    plugins: {
+      aiChat: aiChatClientPlugin({
+        // Required configuration
+        apiBaseURL: baseURL,
+        apiBasePath: "/api/data",
+        siteBaseURL: baseURL,
+        siteBasePath: "/pages",
+        queryClient: queryClient,
+        headers: options?.headers,
+        // Mode should match backend config
+        mode: "authenticated", // "authenticated" (default) or "public"
+        // Optional: SEO configuration
+        seo: {
+          siteName: "My Chat App",
+          description: "AI-powered chat assistant",
+        },
+        // Optional: Hooks
+        hooks: {
+          beforeLoadConversations: async (context) => {
+            console.log("Loading conversations...", context.isSSR ? "SSR" : "CSR")
+            return true
+          },
+        },
+      })
+    }
+  })
+}
+```
+
+### 3. Import Plugin CSS
+
+Add the AI Chat plugin CSS to your global stylesheet:
+
+```css title="app/globals.css"
+@import "@btst/stack/plugins/ai-chat/css";
+```
+
+This includes all necessary styles for the chat components and markdown rendering.
+
+### 4. Add Context Overrides
+
+Configure framework-specific overrides in your `BetterStackProvider`:
+
+<Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
+  <Tab value="next-js">
+    ```tsx title="app/pages/[[...all]]/layout.tsx"
+    import { BetterStackProvider } from "@btst/stack/context"
+    import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
+    import Link from "next/link"
+    import Image from "next/image"
+    import { useRouter } from "next/navigation"
+
+    const getBaseURL = () => 
+      typeof window !== 'undefined' 
+        ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
+        : (process.env.BASE_URL || "http://localhost:3000")
+
+    type PluginOverrides = {
+      "ai-chat": AiChatPluginOverrides
+    }
+
+    export default function Layout({ children }) {
+      const router = useRouter()
+      const baseURL = getBaseURL()
+      
+      return (
+        <BetterStackProvider<PluginOverrides>
+          basePath="/pages"
+          overrides={{
+            "ai-chat": {
+              mode: "authenticated", // Should match backend config
+              apiBaseURL: baseURL,
+              apiBasePath: "/api/data",
+              navigate: (path) => router.push(path),
+              refresh: () => router.refresh(),
+              uploadImage: async (file) => {
+                // Implement your image upload logic
+                return "https://example.com/uploads/image.jpg"
+              },
+              Link: (props) => <Link {...props} />,
+              Image: (props) => <Image {...props} />,
+            }
+          }}
+        >
+          {children}
+        </BetterStackProvider>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab value="react-router">
+    ```tsx title="app/routes/pages/_layout.tsx"
+    import { Outlet, Link, useNavigate } from "react-router"
+    import { BetterStackProvider } from "@btst/stack/context"
+    import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
+
+    const getBaseURL = () => 
+      typeof window !== 'undefined' 
+        ? (import.meta.env.VITE_BASE_URL || window.location.origin)
+        : (process.env.BASE_URL || "http://localhost:5173")
+
+    type PluginOverrides = {
+      "ai-chat": AiChatPluginOverrides
+    }
+
+    export default function Layout() {
+      const navigate = useNavigate()
+      const baseURL = getBaseURL()
+      
+      return (
+        <BetterStackProvider<PluginOverrides>
+          basePath="/pages"
+          overrides={{
+            "ai-chat": {
+              apiBaseURL: baseURL,
+              apiBasePath: "/api/data",
+              navigate: (href) => navigate(href),
+              uploadImage: async (file) => {
+                return "https://example.com/uploads/image.jpg"
+              },
+              Link: ({ href, children, className, ...props }) => (
+                <Link to={href || ""} className={className} {...props}>
+                  {children}
+                </Link>
+              ),
+            }
+          }}
+        >
+          <Outlet />
+        </BetterStackProvider>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab value="tanstack">
+    ```tsx title="src/routes/pages/route.tsx"
+    import { BetterStackProvider } from "@btst/stack/context"
+    import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
+    import { Link, useRouter, Outlet } from "@tanstack/react-router"
+
+    const getBaseURL = () => 
+      typeof window !== 'undefined' 
+        ? (import.meta.env.VITE_BASE_URL || window.location.origin)
+        : (process.env.BASE_URL || "http://localhost:3000")
+
+    type PluginOverrides = {
+      "ai-chat": AiChatPluginOverrides
+    }
+
+    function Layout() {
+      const router = useRouter()
+      const baseURL = getBaseURL()
+
+      return (
+        <BetterStackProvider<PluginOverrides>
+          basePath="/pages"
+          overrides={{
+            "ai-chat": {
+              apiBaseURL: baseURL,
+              apiBasePath: "/api/data",
+              navigate: (href) => router.navigate({ href }),
+              uploadImage: async (file) => {
+                return "https://example.com/uploads/image.jpg"
+              },
+              Link: ({ href, children, className, ...props }) => (
+                <Link to={href} className={className} {...props}>
+                  {children}
+                </Link>
+              ),
+            }
+          }}
+        >
+          <Outlet />
+        </BetterStackProvider>
+      )
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### 5. Generate Database Schema
+
+After adding the plugin, generate your database schema using the CLI:
+
+```bash
+npx @btst/cli generate --orm prisma --config lib/better-stack.ts
+```
+
+This will create the necessary database tables for conversations and messages. Run migrations as needed for your ORM.
+
+For more details on the CLI and all available options, see the [CLI documentation](/cli).
+
+## Usage
+
+The AI Chat plugin provides two routes:
+
+- `/chat` - Start a new conversation (with sidebar showing history)
+- `/chat/:id` - Resume an existing conversation
+
+The plugin automatically handles:
+- Creating and managing conversations
+- Saving messages to the database
+- Streaming AI responses in real-time
+- Conversation history persistence
+- Sidebar with conversation list
+- Rename and delete conversations
+
+## Features
+
+- **Full-page Layout**: Responsive chat interface with collapsible sidebar
+- **Widget Mode**: Compact embeddable chat widget
+- **Conversation Sidebar**: View, rename, and delete past conversations
+- **Streaming Responses**: Real-time streaming of AI responses using AI SDK v5
+- **Markdown Support**: Full markdown rendering with code highlighting
+- **Image Uploads**: Attach images to messages (when configured)
+- **Tools Support**: Use AI SDK v5 tools for function calling
+- **Customizable Models**: Use any LanguageModel from the AI SDK
+- **Authorization Hooks**: Add custom authentication and authorization logic
+- **Localization**: Customize all UI strings
+
+## Layout Options
+
+### Full Page Layout (Default)
+
+The default layout includes a sidebar with conversation history:
+
+```tsx
+import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
+
+export default function ChatPage() {
+  return (
+    <ChatLayout
+      apiBaseURL="http://localhost:3000"
+      apiBasePath="/api/data"
+      layout="full"
+      showSidebar={true}
+    />
+  )
+}
+```
+
+### Widget Mode
+
+For embedding a compact chat widget:
+
+```tsx
+import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
+
+export default function ChatWidget() {
+  return (
+    <ChatLayout
+      apiBaseURL="http://localhost:3000"
+      apiBasePath="/api/data"
+      layout="widget"
+      widgetHeight="500px"
+    />
+  )
+}
+```
+
+### Standalone Components
+
+You can also use individual components:
+
+```tsx
+import { ChatInterface, ChatSidebar } from "@btst/stack/plugins/ai-chat/client"
+
+// Just the chat interface
+<ChatInterface apiPath="/api/data/chat" variant="full" />
+
+// Just the sidebar
+<ChatSidebar currentConversationId={id} />
+```
+
+## Model & Tools Configuration
+
+### Using Different Models
+
+```ts title="lib/better-stack.ts"
+import { openai } from "@ai-sdk/openai"
+import { anthropic } from "@ai-sdk/anthropic"
+import { google } from "@ai-sdk/google"
+
+// Use OpenAI
+aiChat: aiChatBackendPlugin({
+  model: openai("gpt-4o"),
+})
+
+// Or use Anthropic
+aiChat: aiChatBackendPlugin({
+  model: anthropic("claude-3-5-sonnet-20241022"),
+})
+
+// Or use Google
+aiChat: aiChatBackendPlugin({
+  model: google("gemini-1.5-pro"),
+})
+```
+
+### Adding Tools
+
+Use AI SDK v5 tools for function calling:
+
+```ts title="lib/better-stack.ts"
+import { tool } from "ai"
+import { z } from "zod"
+
+const weatherTool = tool({
+  description: "Get the current weather in a location",
+  parameters: z.object({
+    location: z.string().describe("The city and state"),
+  }),
+  execute: async ({ location }) => {
+    // Your implementation
+    return { temperature: 72, condition: "sunny" }
+  },
+})
+
+aiChat: aiChatBackendPlugin({
+  model: openai("gpt-4o"),
+  tools: {
+    getWeather: weatherTool,
+  },
+})
+```
+
+## Public Mode Configuration
+
+For public chatbots without user authentication:
+
+### Backend Setup
+
+```ts title="lib/better-stack.ts"
+import { betterStack } from "@btst/stack"
+import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
+import { openai } from "@ai-sdk/openai"
+
+// Example rate limiter (implement your own)
+const rateLimiter = new Map<string, number>()
+
+const { handler, dbSchema } = betterStack({
+  basePath: "/api/data",
+  plugins: {
+    aiChat: aiChatBackendPlugin({
+      model: openai("gpt-4o"),
+      mode: "public", // Stateless mode - no persistence
+      systemPrompt: "You are a helpful customer support bot.",
+      hooks: {
+        onBeforeChat: async (messages, ctx) => {
+          // Implement rate limiting
+          const ip = ctx.headers?.get("x-forwarded-for") || "unknown"
+          const requests = rateLimiter.get(ip) || 0
+          if (requests > 10) {
+            return false // Block request
+          }
+          rateLimiter.set(ip, requests + 1)
+          return true
+        },
+      },
+    })
+  },
+  adapter: (db) => createMemoryAdapter(db)({})
+})
+```
+
+### Client Setup
+
+```tsx title="lib/better-stack-client.tsx"
+aiChat: aiChatClientPlugin({
+  apiBaseURL: baseURL,
+  apiBasePath: "/api/data",
+  siteBaseURL: baseURL,
+  siteBasePath: "/pages",
+  queryClient: queryClient,
+  mode: "public", // Must match backend
+})
+```
+
+### Context Overrides
+
+```tsx
+overrides={{
+  "ai-chat": {
+    mode: "public",
+    apiBaseURL: baseURL,
+    apiBasePath: "/api/data",
+    // No navigate/refresh needed in public mode
+  }
+}}
+```
+
+<Callout type="info">
+In public mode, the sidebar is hidden, conversation history is not saved, and only the `/chat` route is available.
+</Callout>
+
+## API Reference
+
+### Backend Configuration
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/ai-chat/api/plugin.ts" name="AiChatBackendConfig" />
+
+### Backend Hooks
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/ai-chat/api/plugin.ts" name="AiChatBackendHooks" />
+
+### Client Configuration
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/ai-chat/client/plugin.tsx" name="AiChatClientConfig" />
+
+### Client Hooks
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/ai-chat/client/plugin.tsx" name="AiChatClientHooks" />
+
+### Plugin Overrides
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/ai-chat/client/overrides.ts" name="AiChatPluginOverrides" />
+
+## API Endpoints
+
+The plugin provides the following endpoints:
+
+- `POST /api/data/chat` - Send a message and receive streaming response
+- `GET /api/data/conversations` - List all conversations
+- `GET /api/data/conversations/:id` - Get a conversation with messages
+- `POST /api/data/conversations` - Create a new conversation
+- `PUT /api/data/conversations/:id` - Update (rename) a conversation
+- `DELETE /api/data/conversations/:id` - Delete a conversation
+
+## React Data Hooks
+
+You can import hooks from `"@btst/stack/plugins/ai-chat/client/hooks"`:
+
+```tsx
+import {
+  useConversations,
+  useConversation,
+  useCreateConversation,
+  useRenameConversation,
+  useDeleteConversation,
+} from "@btst/stack/plugins/ai-chat/client/hooks"
+
+// List all conversations
+const { conversations, isLoading } = useConversations()
+
+// Get single conversation with messages
+const { conversation, isLoading } = useConversation(id)
+
+// Mutations
+const createMutation = useCreateConversation()
+const renameMutation = useRenameConversation()
+const deleteMutation = useDeleteConversation()
+
+await createMutation.mutateAsync({ title: "New Chat" })
+await renameMutation.mutateAsync({ id: "abc", title: "Updated Title" })
+await deleteMutation.mutateAsync({ id: "abc" })
+```
+
+## Localization
+
+Customize UI strings by providing a `localization` override:
+
+```tsx
+overrides={{
+  "ai-chat": {
+    // ... other overrides
+    localization: {
+      CHAT_PLACEHOLDER: "Ask me anything...",
+      CHAT_EMPTY_STATE: "How can I help you today?",
+      SIDEBAR_NEW_CHAT: "Start new conversation",
+      // See AiChatLocalization type for all available strings
+    }
+  }
+}}
+```

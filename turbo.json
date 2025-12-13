@@ -32,11 +32,13 @@
     "e2e:smoke": {
       "dependsOn": ["^build"],
       "outputs": [],
-      "cache": false
+      "cache": false,
+      "env": ["OPENAI_API_KEY"]
     },
     "e2e:integration": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      "env": ["OPENAI_API_KEY"]
     },
     "typecheck": {
       "outputs": [".tsbuildinfo", "dist/**"],

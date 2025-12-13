@@ -1,6 +1,8 @@
 import { createMemoryAdapter } from "@btst/adapter-memory"
 import { betterStack } from "@btst/stack"
 import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/blog/api"
+import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
+import { openai } from "@ai-sdk/openai"
 
 // Define blog hooks with proper types
 const blogHooks: BlogBackendHooks = {
@@ -59,7 +61,17 @@ const blogHooks: BlogBackendHooks = {
 const { handler, dbSchema } = betterStack({
     basePath: "/api/data",
     plugins: {
-        blog: blogBackendPlugin(blogHooks)
+        blog: blogBackendPlugin(blogHooks),
+        // AI Chat plugin with authenticated mode (default)
+        aiChat: aiChatBackendPlugin({
+            model: openai("gpt-4o"),
+            mode: "authenticated",
+            hooks: {
+                onConversationCreated: async (conversation) => {
+                    console.log("Conversation created:", conversation.id);
+                },
+            },
+        })
     },
     adapter: (db) => createMemoryAdapter(db)({})
 })

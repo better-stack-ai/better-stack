@@ -1,4 +1,18 @@
 import { defineConfig } from "@playwright/test";
+import { config } from "dotenv";
+import { resolve } from "path";
+
+// Load each project's .env file to get their specific environment variables.
+// The first config() call also populates process.env for the test runner
+// (used by tests to check if OPENAI_API_KEY is available for skip logic).
+const nextjsEnv =
+	config({ path: resolve(__dirname, "../examples/nextjs/.env") }).parsed || {};
+const tanstackEnv =
+	config({ path: resolve(__dirname, "../examples/tanstack/.env") }).parsed ||
+	{};
+const reactRouterEnv =
+	config({ path: resolve(__dirname, "../examples/react-router/.env") })
+		.parsed || {};
 
 export default defineConfig({
 	testDir: "./tests",
@@ -26,11 +40,12 @@ export default defineConfig({
 			command: "pnpm -F examples/nextjs run start:e2e",
 			port: 3003,
 			reuseExistingServer: !process.env["CI"],
-			timeout: 120_000,
+			timeout: 300_000,
 			stdout: "pipe",
 			stderr: "pipe",
 			env: {
 				...process.env,
+				...nextjsEnv,
 				PORT: "3003",
 				HOST: "127.0.0.1",
 				BASE_URL: "http://localhost:3003",
@@ -41,11 +56,12 @@ export default defineConfig({
 			command: "pnpm -F examples/tanstack run start:e2e",
 			port: 3004,
 			reuseExistingServer: !process.env["CI"],
-			timeout: 120_000,
+			timeout: 300_000,
 			stdout: "pipe",
 			stderr: "pipe",
 			env: {
 				...process.env,
+				...tanstackEnv,
 				PORT: "3004",
 				HOST: "127.0.0.1",
 				BASE_URL: "http://localhost:3004",
@@ -55,11 +71,12 @@ export default defineConfig({
 			command: "pnpm -F examples/react-router run start:e2e",
 			port: 3005,
 			reuseExistingServer: !process.env["CI"],
-			timeout: 120_000,
+			timeout: 300_000,
 			stdout: "pipe",
 			stderr: "pipe",
 			env: {
 				...process.env,
+				...reactRouterEnv,
 				PORT: "3005",
 				HOST: "127.0.0.1",
 				BASE_URL: "http://localhost:3005",
@@ -76,17 +93,18 @@ export default defineConfig({
 				"**/*.todos.spec.ts",
 				"**/*.auth-blog.spec.ts",
 				"**/*.blog.spec.ts",
+				"**/*.chat.spec.ts",
 			],
 		},
 		{
 			name: "tanstack:memory",
 			use: { baseURL: "http://localhost:3004" },
-			testMatch: ["**/*.blog.spec.ts"],
+			testMatch: ["**/*.blog.spec.ts", "**/*.chat.spec.ts"],
 		},
 		{
 			name: "react-router:memory",
 			use: { baseURL: "http://localhost:3005" },
-			testMatch: ["**/*.blog.spec.ts"],
+			testMatch: ["**/*.blog.spec.ts", "**/*.chat.spec.ts"],
 		},
 	],
 });

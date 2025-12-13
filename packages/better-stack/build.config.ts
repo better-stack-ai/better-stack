@@ -70,6 +70,12 @@ export default defineBuildConfig({
 		"./src/plugins/blog/client/components/index.tsx",
 		"./src/plugins/blog/client/hooks/index.tsx",
 		"./src/plugins/blog/query-keys.ts",
+		// ai-chat plugin entries
+		"./src/plugins/ai-chat/api/index.ts",
+		"./src/plugins/ai-chat/client/index.ts",
+		"./src/plugins/ai-chat/client/components/index.ts",
+		"./src/plugins/ai-chat/client/hooks/index.tsx",
+		"./src/plugins/ai-chat/query-keys.ts",
 	],
 	hooks: {
 		"rollup:options"(_ctx, options) {
