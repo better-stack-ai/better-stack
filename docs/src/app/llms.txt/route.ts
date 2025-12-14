@@ -11,7 +11,7 @@ export async function GET() {
 
 ## Available Documentation Pages
 
-${pages.map((page) => `- ${page.data.title}: /docs${page.url}.mdx`).join('\n')}
+${pages.map((page) => `- ${page.data.title}: /docs${page.url==="/" ? "index" : page.url}.mdx`).join('\n')}
 
 ## How to Access
 

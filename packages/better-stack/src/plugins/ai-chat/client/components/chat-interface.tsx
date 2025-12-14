@@ -4,7 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChatMessage } from "./chat-message";
-import { ChatInput } from "./chat-input";
+import { ChatInput, type AttachedFile } from "./chat-input";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { cn } from "@workspace/ui/lib/utils";
@@ -171,11 +171,27 @@ export function ChatInterface({
 			// Filter out "data" role messages as UIMessage only accepts "user" | "assistant" | "system"
 			const uiMessages: UIMessage[] = conversation.messages
 				.filter((m) => m.role !== "data")
-				.map((m) => ({
-					id: m.id,
-					role: m.role as "user" | "assistant" | "system",
-					parts: [{ type: "text" as const, text: m.content }],
-				}));
+				.map((m) => {
+					// Try to parse content as JSON parts (new format with images)
+					let parts: UIMessage["parts"];
+					try {
+						const parsed = JSON.parse(m.content);
+						if (Array.isArray(parsed)) {
+							parts = parsed;
+						} else {
+							// Fallback: wrap as text
+							parts = [{ type: "text" as const, text: m.content }];
+						}
+					} catch {
+						// Not JSON - legacy format, wrap as text
+						parts = [{ type: "text" as const, text: m.content }];
+					}
+					return {
+						id: m.id,
+						role: m.role as "user" | "assistant" | "system",
+						parts,
+					};
+				});
 			setMessages(uiMessages);
 		}
 	}, [conversation, messages.length, setMessages]);
@@ -192,6 +208,7 @@ export function ChatInterface({
 	}, [initialMessages, setMessages, messages.length]);
 
 	const [input, setInput] = useState("");
+	const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
 	const scrollRef = useRef<HTMLDivElement>(null);
 
 	// Auto-scroll to bottom when messages change
@@ -210,10 +227,14 @@ export function ChatInterface({
 		setInput(e.target.value);
 	};
 
-	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+	const handleSubmit = async (
+		e: React.FormEvent<HTMLFormElement>,
+		files?: AttachedFile[],
+	) => {
 		e.preventDefault();
 		const text = input.trim();
-		if (!text) return;
+		// Allow submit if there's text OR files
+		if (!text && (!files || files.length === 0)) return;
 
 		// Track if this is the first message on a new chat (authenticated mode only)
 		if (!isPublicMode && !id && messages.length === 0) {
@@ -221,8 +242,35 @@ export function ChatInterface({
 		}
 
 		setInput("");
+		setAttachedFiles([]);
+
 		try {
-			await sendMessage({ text });
+			// Build message with parts if files are attached
+			if (files && files.length > 0) {
+				const parts: Array<
+					| { type: "text"; text: string }
+					| { type: "file"; mediaType: string; url: string; filename?: string }
+				> = [];
+
+				// Add file parts first
+				for (const file of files) {
+					parts.push({
+						type: "file" as const,
+						mediaType: file.mediaType,
+						url: file.url,
+						filename: file.filename,
+					});
+				}
+
+				// Add text part if present
+				if (text) {
+					parts.push({ type: "text" as const, text });
+				}
+
+				await sendMessage({ role: "user", parts });
+			} else {
+				await sendMessage({ text });
+			}
 		} catch (error) {
 			console.error("Error sending message:", error);
 		}
@@ -296,6 +344,8 @@ export function ChatInterface({
 						isLoading={isLoading}
 						placeholder={localization.CHAT_PLACEHOLDER}
 						variant={isWidget ? "compact" : "default"}
+						onFilesAttached={setAttachedFiles}
+						attachedFiles={attachedFiles}
 					/>
 				</div>
 			</div>

@@ -9,6 +9,41 @@ import type { AiChatLocalization } from "./localization";
 export type AiChatMode = "authenticated" | "public";
 
 /**
+ * Allowed file type categories for uploads
+ */
+export type AllowedFileType =
+	| "image"
+	| "text"
+	| "pdf"
+	| "markdown"
+	| "csv"
+	| "json";
+
+/**
+ * Default allowed file types (all enabled)
+ */
+export const DEFAULT_ALLOWED_FILE_TYPES: AllowedFileType[] = [
+	"image",
+	"text",
+	"pdf",
+	"markdown",
+	"csv",
+	"json",
+];
+
+/**
+ * MIME type mappings for each file type category
+ */
+export const FILE_TYPE_MIME_MAP: Record<AllowedFileType, string[]> = {
+	image: ["image/*"],
+	text: ["text/plain"],
+	markdown: ["text/markdown"],
+	csv: ["text/csv"],
+	pdf: ["application/pdf"],
+	json: ["application/json"],
+};
+
+/**
  * Context passed to lifecycle hooks
  */
 export interface RouteContext {
@@ -68,9 +103,18 @@ export interface AiChatPluginOverrides {
 	>;
 
 	/**
-	 * Function used to upload an image and return its URL.
+	 * Function used to upload a file and return its URL.
+	 * Called for images, PDFs, text files, and other supported file types.
 	 */
-	uploadImage?: (file: File) => Promise<string>;
+	uploadFile?: (file: File) => Promise<string>;
+
+	/**
+	 * Allowed file types for upload.
+	 * By default, all types are enabled: image, text, pdf, markdown, csv, json
+	 * Set to empty array to disable file uploads entirely.
+	 * @default ['image', 'text', 'pdf', 'markdown', 'csv', 'json']
+	 */
+	allowedFileTypes?: AllowedFileType[];
 
 	/**
 	 * Localization object for the AI Chat plugin

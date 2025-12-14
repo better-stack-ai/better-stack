@@ -4,6 +4,7 @@ import { createEndpoint } from "@btst/stack/plugins/api";
 import {
 	streamText,
 	convertToModelMessages,
+	stepCountIs,
 	type LanguageModel,
 	type UIMessage,
 	type Tool,
@@ -289,8 +290,8 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 			const mode = config.mode ?? "authenticated";
 			const isPublicMode = mode === "public";
 
-			// Helper to extract text content from UIMessage
-			const getMessageContent = (msg: UIMessage): string => {
+			// Helper to extract text content from UIMessage (for conversation titles, etc.)
+			const getMessageTextContent = (msg: UIMessage): string => {
 				if (msg.parts && Array.isArray(msg.parts)) {
 					return msg.parts
 						.filter((part: any) => part.type === "text")
@@ -298,6 +299,18 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 						.join("");
 				}
 				return "";
+			};
+
+			// Helper to serialize message parts to JSON (preserves all files)
+			const serializeMessageParts = (msg: UIMessage): string => {
+				if (msg.parts && Array.isArray(msg.parts)) {
+					// Filter to only include text and file parts (images, PDFs, text files, etc.)
+					const serializableParts = msg.parts.filter(
+						(part: any) => part.type === "text" || part.type === "file",
+					);
+					return JSON.stringify(serializableParts);
+				}
+				return JSON.stringify([]);
 			};
 
 			// Helper to get userId in authenticated mode
@@ -343,7 +356,7 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 						if (config.hooks?.onBeforeChat) {
 							const messagesForHook = uiMessages.map((msg) => ({
 								role: msg.role,
-								content: getMessageContent(msg),
+								content: getMessageTextContent(msg),
 							}));
 							const canChat = await config.hooks.onBeforeChat(
 								messagesForHook,
@@ -362,7 +375,7 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 								message: "At least one message is required",
 							});
 						}
-						const firstMessageContent = getMessageContent(firstMessage);
+						const firstMessageContent = getMessageTextContent(firstMessage);
 
 						// Convert UIMessages to CoreMessages for streamText
 						const modelMessages = convertToModelMessages(uiMessages);
@@ -381,6 +394,8 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 								model: config.model,
 								messages: messagesWithSystem,
 								tools: config.tools,
+								// Enable multi-step tool calls if tools are configured
+								...(config.tools ? { stopWhen: stepCountIs(5) } : {}),
 							});
 
 							return result.toUIMessageStreamResponse({
@@ -445,7 +460,7 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 							}
 						}
 
-						// Save user message
+						// Save user message (serialize parts to preserve images)
 						const lastMessage = uiMessages[uiMessages.length - 1];
 						if (lastMessage && lastMessage.role === "user") {
 							await adapter.create<Message>({
@@ -453,7 +468,7 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 								data: {
 									conversationId: convId as string,
 									role: "user",
-									content: getMessageContent(lastMessage),
+									content: serializeMessageParts(lastMessage),
 									createdAt: new Date(),
 								},
 							});
@@ -463,14 +478,19 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 							model: config.model,
 							messages: messagesWithSystem,
 							tools: config.tools,
+							// Enable multi-step tool calls if tools are configured
+							...(config.tools ? { stopWhen: stepCountIs(5) } : {}),
 							onFinish: async (completion: { text: string }) => {
-								// Save assistant message
+								// Save assistant message (serialize as parts for consistency)
+								const assistantParts = completion.text
+									? [{ type: "text", text: completion.text }]
+									: [];
 								await adapter.create<Message>({
 									model: "message",
 									data: {
 										conversationId: convId as string,
 										role: "assistant",
-										content: completion.text,
+										content: JSON.stringify(assistantParts),
 										createdAt: new Date(),
 									},
 								});

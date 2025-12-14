@@ -304,3 +304,192 @@ test.describe("AI Chat Plugin - Widget Mode", () => {
 		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
 	});
 });
+
+test.describe("AI Chat Plugin - File Uploads", () => {
+	test("should show file upload button in authenticated mode", async ({
+		page,
+	}) => {
+		await page.goto("/pages/chat");
+
+		// Verify the file upload button is visible (paperclip icon)
+		await expect(
+			page.getByRole("button", { name: "Attach file" }),
+		).toBeVisible();
+	});
+
+	test("should upload and attach an image file", async ({ page }) => {
+		await page.goto("/pages/chat");
+
+		// Create a mock image file
+		const fileInput = page.locator('input[type="file"]');
+
+		// Upload a test image file
+		await fileInput.setInputFiles({
+			name: "test-image.png",
+			mimeType: "image/png",
+			buffer: Buffer.from(
+				"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+				"base64",
+			),
+		});
+
+		// Wait for the upload to complete and preview to appear
+		// Image files show an img preview
+		await expect(page.locator('img[alt="test-image.png"]')).toBeVisible({
+			timeout: 10000,
+		});
+
+		// Verify remove button is visible on hover
+		const preview = page.locator(".group").filter({ has: page.locator("img") });
+		await preview.hover();
+		await expect(preview.locator("button:has(svg)")).toBeVisible();
+	});
+
+	test("should upload and attach a text file", async ({ page }) => {
+		await page.goto("/pages/chat");
+
+		// Create a mock text file
+		const fileInput = page.locator('input[type="file"]');
+
+		// Upload a test text file
+		await fileInput.setInputFiles({
+			name: "example.txt",
+			mimeType: "text/plain",
+			buffer: Buffer.from("Hello, this is a test file content."),
+		});
+
+		// Wait for the upload to complete and preview to appear
+		// Non-image files show a file icon with filename
+		await expect(page.getByText("example.txt")).toBeVisible({
+			timeout: 10000,
+		});
+	});
+
+	test("should remove attached file when clicking remove button", async ({
+		page,
+	}) => {
+		await page.goto("/pages/chat");
+
+		// Upload a test file
+		const fileInput = page.locator('input[type="file"]');
+		await fileInput.setInputFiles({
+			name: "to-remove.txt",
+			mimeType: "text/plain",
+			buffer: Buffer.from("This file will be removed."),
+		});
+
+		// Wait for preview to appear
+		await expect(page.getByText("to-remove.txt")).toBeVisible({
+			timeout: 10000,
+		});
+
+		// Hover over the preview and click remove button
+		const preview = page
+			.locator(".group")
+			.filter({ has: page.getByText("to-remove.txt") });
+		await preview.hover();
+		await preview.locator("button").click();
+
+		// Verify file is removed
+		await expect(page.getByText("to-remove.txt")).not.toBeVisible();
+	});
+
+	test("should send message with attached file", async ({ page }) => {
+		await page.goto("/pages/chat");
+
+		// Upload a test file
+		const fileInput = page.locator('input[type="file"]');
+		await fileInput.setInputFiles({
+			name: "attachment.txt",
+			mimeType: "text/plain",
+			buffer: Buffer.from("File content for testing."),
+		});
+
+		// Wait for preview
+		await expect(page.getByText("attachment.txt")).toBeVisible({
+			timeout: 10000,
+		});
+
+		// Type a message and send
+		const input = page.getByPlaceholder("Type a message...");
+		await input.fill("Here is a file for you");
+		await page.keyboard.press("Enter");
+
+		// Verify user message appears
+		await expect(page.getByText("Here is a file for you")).toBeVisible({
+			timeout: 15000,
+		});
+
+		// Verify AI response appears
+		await expect(
+			page
+				.locator('[data-testid="chat-interface"]')
+				.locator('[aria-label="AI response"]'),
+		).toBeVisible({ timeout: 30000 });
+
+		// After sending, the attachment preview should be cleared from input area
+		// (the attachments are now part of the sent message)
+	});
+
+	test("should clear attachments after sending", async ({ page }) => {
+		await page.goto("/pages/chat");
+
+		// Upload a test file
+		const fileInput = page.locator('input[type="file"]');
+		await fileInput.setInputFiles({
+			name: "clear-test.txt",
+			mimeType: "text/plain",
+			buffer: Buffer.from("File to test clearing after send."),
+		});
+
+		// Wait for preview
+		await expect(page.getByText("clear-test.txt")).toBeVisible({
+			timeout: 10000,
+		});
+
+		// Type a message and send
+		const input = page.getByPlaceholder("Type a message...");
+		await input.fill("Please analyze this file");
+		await page.keyboard.press("Enter");
+
+		// Wait for the user message to appear (confirming send worked)
+		await expect(page.getByText("Please analyze this file")).toBeVisible({
+			timeout: 15000,
+		});
+
+		// Verify the attachment preview is cleared from input area after sending
+		// The file preview in the input area should be gone
+		const inputAreaFilePreview = page
+			.locator("form")
+			.getByText("clear-test.txt");
+		await expect(inputAreaFilePreview).not.toBeVisible({ timeout: 5000 });
+	});
+
+	test("should allow multiple file uploads", async ({ page }) => {
+		await page.goto("/pages/chat");
+
+		const fileInput = page.locator('input[type="file"]');
+
+		// Upload first file
+		await fileInput.setInputFiles({
+			name: "file1.txt",
+			mimeType: "text/plain",
+			buffer: Buffer.from("First file content."),
+		});
+
+		await expect(page.getByText("file1.txt")).toBeVisible({ timeout: 10000 });
+
+		// Upload second file
+		await fileInput.setInputFiles({
+			name: "file2.txt",
+			mimeType: "text/plain",
+			buffer: Buffer.from("Second file content."),
+		});
+
+		await expect(page.getByText("file2.txt")).toBeVisible({ timeout: 10000 });
+
+		// Both files should be visible
+		await expect(page.getByText("file1.txt")).toBeVisible();
+		await expect(page.getByText("file2.txt")).toBeVisible();
+	});
+});

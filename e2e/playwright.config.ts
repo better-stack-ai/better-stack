@@ -94,6 +94,7 @@ export default defineConfig({
 				"**/*.auth-blog.spec.ts",
 				"**/*.blog.spec.ts",
 				"**/*.chat.spec.ts",
+				"**/*.public-chat.spec.ts",
 			],
 		},
 		{

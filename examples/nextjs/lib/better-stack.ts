@@ -5,6 +5,32 @@ import { todosBackendPlugin } from "./plugins/todo/api/backend"
 import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/blog/api"
 import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
 import { openai } from "@ai-sdk/openai"
+import { tool } from "ai"
+import { z } from "zod"
+
+// Tool to fetch Better Stack documentation
+const betterStackDocsTool = tool({
+    description: "Fetch the latest Better Stack documentation. Use this tool when the user asks about Better Stack, @btst/stack, plugins, installation, configuration, database adapters, or any development-related questions about the Better Stack framework.",
+    inputSchema: z.object({
+        query: z.string().describe("The user's question or topic they want to know about"),
+    }),
+    execute: async ({ query }) => {
+        console.log("Fetching Better Stack docs for query:", query)
+        try {
+            const response = await fetch("https://www.better-stack.ai/docs/llms-full.txt")
+            if (!response.ok) {
+                return { error: `Failed to fetch docs: ${response.statusText}` }
+            }
+            const docs = await response.text()
+            return { 
+                docs,
+                note: "Use this documentation to answer the user's question accurately. The docs are in markdown format."
+            }
+        } catch (error) {
+            return { error: `Error fetching docs: ${error instanceof Error ? error.message : 'Unknown error'}` }
+        }
+    },
+})
 
 // Define blog hooks with proper types
 // NOTE: This is the main API at /api/data - kept auth-free for regular tests
@@ -74,7 +100,11 @@ const { handler, dbSchema } = betterStack({
         //   getUserId: async (ctx) => ctx.headers?.get('x-user-id'),
         aiChat: aiChatBackendPlugin({
             model: openai("gpt-4o"),
+            systemPrompt: "You are a helpful assistant that specializes in Better Stack framework. When asked about Better Stack, plugins, installation, or development topics, use the betterStackDocs tool to fetch the latest documentation. Be concise and friendly.",
             mode: "authenticated", // Default: persisted conversations
+            tools: {
+                betterStackDocs: betterStackDocsTool,
+            },
             // Optional: Extract userId from headers to scope conversations per user
             // getUserId: async (ctx) => {
             //     const userId = ctx.headers?.get('x-user-id');

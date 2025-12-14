@@ -33,13 +33,19 @@ export interface AiChatLocalization {
 	CONVERSATION_DELETE_CONFIRM_BUTTON: string;
 	CONVERSATION_DELETE_CANCEL: string;
 
-	// Image upload
+	// Image upload (legacy)
 	IMAGE_UPLOAD_BUTTON: string;
 	IMAGE_UPLOAD_UPLOADING: string;
 	IMAGE_UPLOAD_ERROR_NOT_IMAGE: string;
 	IMAGE_UPLOAD_ERROR_TOO_LARGE: string;
 	IMAGE_UPLOAD_SUCCESS: string;
 	IMAGE_UPLOAD_FAILURE: string;
+
+	// File upload
+	FILE_UPLOAD_BUTTON: string;
+	FILE_UPLOAD_ERROR_TOO_LARGE: string;
+	FILE_UPLOAD_SUCCESS: string;
+	FILE_UPLOAD_FAILURE: string;
 
 	// Timestamps
 	TIME_JUST_NOW: string;
@@ -93,13 +99,19 @@ export const AI_CHAT_LOCALIZATION: AiChatLocalization = {
 	CONVERSATION_DELETE_CONFIRM_BUTTON: "Delete",
 	CONVERSATION_DELETE_CANCEL: "Cancel",
 
-	// Image upload
+	// Image upload (legacy)
 	IMAGE_UPLOAD_BUTTON: "Attach image",
 	IMAGE_UPLOAD_UPLOADING: "Uploading...",
 	IMAGE_UPLOAD_ERROR_NOT_IMAGE: "Please select an image file",
 	IMAGE_UPLOAD_ERROR_TOO_LARGE: "Image must be less than 4MB",
 	IMAGE_UPLOAD_SUCCESS: "Image uploaded",
 	IMAGE_UPLOAD_FAILURE: "Failed to upload image",
+
+	// File upload
+	FILE_UPLOAD_BUTTON: "Attach file",
+	FILE_UPLOAD_ERROR_TOO_LARGE: "File must be less than 10MB",
+	FILE_UPLOAD_SUCCESS: "File attached",
+	FILE_UPLOAD_FAILURE: "Failed to attach file",
 
 	// Timestamps
 	TIME_JUST_NOW: "Just now",
