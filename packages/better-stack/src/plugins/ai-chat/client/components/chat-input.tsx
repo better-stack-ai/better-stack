@@ -66,7 +66,32 @@ export function ChatInput({
 
 	// Use controlled files if provided, otherwise use internal state
 	const attachedFiles = controlledFiles ?? internalFiles;
-	const setAttachedFiles = onFilesAttached ?? setInternalFiles;
+	const isControlled = controlledFiles !== undefined;
+
+	// Helper to add a file, using functional update for uncontrolled mode
+	const addFile = (file: AttachedFile) => {
+		if (isControlled && onFilesAttached) {
+			// In controlled mode, parent manages state - pass current + new
+			onFilesAttached([...attachedFiles, file]);
+		} else {
+			// In uncontrolled mode, use functional update to avoid stale closure
+			setInternalFiles((prev) => [...prev, file]);
+		}
+	};
+
+	// Helper to remove a file by index - uses functional update to avoid stale closure
+	const removeFileAtIndex = (index: number) => {
+		if (isControlled && onFilesAttached) {
+			// For controlled mode, we need to compute the new array based on current state
+			// The parent should ideally use functional updates too, but we pass the filtered array
+			// based on the latest controlledFiles prop. If rapid clicks occur before re-render,
+			// this could still be stale - parent component should handle batched updates appropriately.
+			onFilesAttached(attachedFiles.filter((_, i) => i !== index));
+		} else {
+			// Uncontrolled mode: use functional update to ensure we always filter from latest state
+			setInternalFiles((prev) => prev.filter((_, i) => i !== index));
+		}
+	};
 
 	const isCompact = variant === "compact";
 	const isPublicMode = mode === "public";
@@ -112,10 +137,7 @@ export function ChatInput({
 			try {
 				setIsUploading(true);
 				const url = await uploadFile(file);
-				setAttachedFiles([
-					...attachedFiles,
-					{ url, mediaType: file.type, filename: file.name },
-				]);
+				addFile({ url, mediaType: file.type, filename: file.name });
 				toast.success(localization.FILE_UPLOAD_SUCCESS);
 			} catch (error) {
 				console.error("Failed to upload file:", error);
@@ -125,13 +147,16 @@ export function ChatInput({
 			}
 		} else {
 			// Fallback: create data URL
+			setIsUploading(true);
 			const reader = new FileReader();
 			reader.onload = (e) => {
 				const dataUrl = e.target?.result as string;
-				setAttachedFiles([
-					...attachedFiles,
-					{ url: dataUrl, mediaType: file.type, filename: file.name },
-				]);
+				addFile({ url: dataUrl, mediaType: file.type, filename: file.name });
+				setIsUploading(false);
+			};
+			reader.onerror = () => {
+				toast.error(localization.FILE_UPLOAD_FAILURE);
+				setIsUploading(false);
 			};
 			reader.readAsDataURL(file);
 		}
@@ -143,7 +168,7 @@ export function ChatInput({
 	};
 
 	const removeFile = (index: number) => {
-		setAttachedFiles(attachedFiles.filter((_, i) => i !== index));
+		removeFileAtIndex(index);
 	};
 
 	const handleFormSubmit = (e: FormEvent<HTMLFormElement>) => {

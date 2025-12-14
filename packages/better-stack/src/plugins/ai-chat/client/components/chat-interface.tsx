@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChatMessage } from "./chat-message";
 import { ChatInput, type AttachedFile } from "./chat-input";
+import { BetterStackAttribution } from "@workspace/ui/components/better-stack-attribution";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { cn } from "@workspace/ui/lib/utils";
@@ -43,9 +44,10 @@ export function ChatInterface({
 		apiBasePath,
 		headers,
 		mode,
+		showAttribution,
 	} = usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
 		"ai-chat",
-		{},
+		{ showAttribution: true },
 	);
 	const basePath = useBasePath();
 	const isPublicMode = mode === "public";
@@ -347,6 +349,7 @@ export function ChatInterface({
 						onFilesAttached={setAttachedFiles}
 						attachedFiles={attachedFiles}
 					/>
+					{showAttribution && <BetterStackAttribution />}
 				</div>
 			</div>
 		</>

@@ -15,7 +15,7 @@ import {
 	createConversationSchema,
 	updateConversationSchema,
 } from "../schemas";
-import type { Conversation, Message } from "../types";
+import type { Conversation, ConversationWithMessages, Message } from "../types";
 
 /**
  * Context passed to AI Chat API hooks
@@ -481,45 +481,63 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 							// Enable multi-step tool calls if tools are configured
 							...(config.tools ? { stopWhen: stepCountIs(5) } : {}),
 							onFinish: async (completion: { text: string }) => {
-								// Save assistant message (serialize as parts for consistency)
-								const assistantParts = completion.text
-									? [{ type: "text", text: completion.text }]
-									: [];
-								await adapter.create<Message>({
-									model: "message",
-									data: {
-										conversationId: convId as string,
-										role: "assistant",
-										content: JSON.stringify(assistantParts),
-										createdAt: new Date(),
-									},
-								});
-
-								// Update conversation timestamp
-								await adapter.update({
-									model: "conversation",
-									where: [{ field: "id", value: convId as string }],
-									update: { updatedAt: new Date() },
-								});
-
-								// Lifecycle hook
-								if (config.hooks?.onAfterChat) {
-									const messages = await adapter.findMany<Message>({
+								// Wrap in try-catch since this runs after the response is sent
+								// and errors would otherwise become unhandled promise rejections
+								try {
+									// Save assistant message (serialize as parts for consistency)
+									const assistantParts = completion.text
+										? [{ type: "text", text: completion.text }]
+										: [];
+									await adapter.create<Message>({
 										model: "message",
-										where: [
-											{
-												field: "conversationId",
-												value: convId as string,
-												operator: "eq",
-											},
-										],
-										sortBy: { field: "createdAt", direction: "asc" },
+										data: {
+											conversationId: convId as string,
+											role: "assistant",
+											content: JSON.stringify(assistantParts),
+											createdAt: new Date(),
+										},
 									});
-									await config.hooks.onAfterChat(
-										convId as string,
-										messages,
-										context,
-									);
+
+									// Update conversation timestamp
+									await adapter.update({
+										model: "conversation",
+										where: [{ field: "id", value: convId as string }],
+										update: { updatedAt: new Date() },
+									});
+
+									// Lifecycle hook
+									if (config.hooks?.onAfterChat) {
+										const messages = await adapter.findMany<Message>({
+											model: "message",
+											where: [
+												{
+													field: "conversationId",
+													value: convId as string,
+													operator: "eq",
+												},
+											],
+											sortBy: { field: "createdAt", direction: "asc" },
+										});
+										await config.hooks.onAfterChat(
+											convId as string,
+											messages,
+											context,
+										);
+									}
+								} catch (error) {
+									// Log the error since the response is already sent
+									console.error("[ai-chat] Error in onFinish callback:", error);
+									// Call error hook if configured
+									if (config.hooks?.onChatError) {
+										try {
+											await config.hooks.onChatError(error as Error, context);
+										} catch (hookError) {
+											console.error(
+												"[ai-chat] Error in onChatError hook:",
+												hookError,
+											);
+										}
+									}
 								}
 							},
 						});
@@ -733,11 +751,16 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 							}
 						}
 
-						const conversations = await adapter.findMany<Conversation>({
-							model: "conversation",
-							where: [{ field: "id", value: id, operator: "eq" }],
-							limit: 1,
-						});
+						// Fetch conversation with messages in a single query using join
+						const conversations =
+							await adapter.findMany<ConversationWithMessages>({
+								model: "conversation",
+								where: [{ field: "id", value: id, operator: "eq" }],
+								limit: 1,
+								join: {
+									message: true,
+								},
+							});
 
 						if (!conversations.length) {
 							throw ctx.error(404, { message: "Conversation not found" });
@@ -756,14 +779,16 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 							});
 						}
 
-						const messages = await adapter.findMany<Message>({
-							model: "message",
-							where: [{ field: "conversationId", value: id, operator: "eq" }],
-							sortBy: { field: "createdAt", direction: "asc" },
-						});
+						// Sort messages by createdAt and map to result format
+						const messages = (conversation.message || []).sort(
+							(a, b) =>
+								new Date(a.createdAt).getTime() -
+								new Date(b.createdAt).getTime(),
+						);
 
+						const { message: _, ...conversationWithoutJoin } = conversation;
 						const result = {
-							...conversation,
+							...conversationWithoutJoin,
 							messages,
 						} as Conversation & { messages: Message[] };
 
@@ -946,15 +971,10 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 							}
 						}
 
-						await adapter.transaction(async (tx) => {
-							await tx.delete({
-								model: "message",
-								where: [{ field: "conversationId", value: id }],
-							});
-							await tx.delete({
-								model: "conversation",
-								where: [{ field: "id", value: id }],
-							});
+						// Messages are automatically deleted via cascade (onDelete: "cascade")
+						await adapter.delete({
+							model: "conversation",
+							where: [{ field: "id", value: id }],
 						});
 
 						// Lifecycle hook

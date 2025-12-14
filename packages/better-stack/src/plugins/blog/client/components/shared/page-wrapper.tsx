@@ -1,7 +1,7 @@
 "use client";
 
 import { usePluginOverrides } from "@btst/stack/context";
-import { BetterBlogAttribution } from "./better-blog-attribution";
+import { BetterStackAttribution } from "@workspace/ui/components/better-stack-attribution";
 import { PageLayout } from "./page-layout";
 import type { BlogPluginOverrides } from "../../overrides";
 
@@ -26,7 +26,7 @@ export function PageWrapper({
 				{children}
 			</PageLayout>
 
-			{showAttribution && <BetterBlogAttribution />}
+			{showAttribution && <BetterStackAttribution />}
 		</>
 	);
 }

@@ -42,6 +42,11 @@ export const aiChatSchema = createDbPlugin("aiChat", {
 			conversationId: {
 				type: "string",
 				required: true,
+				references: {
+					model: "conversation",
+					field: "id",
+					onDelete: "cascade",
+				},
 			},
 			role: {
 				type: "string",

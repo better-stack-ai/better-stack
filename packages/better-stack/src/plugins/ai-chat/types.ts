@@ -6,6 +6,10 @@ export type Conversation = {
 	updatedAt: Date;
 };
 
+export type ConversationWithMessages = Conversation & {
+	message?: Message[];
+};
+
 export type Message = {
 	id: string;
 	conversationId: string;

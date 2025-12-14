@@ -126,6 +126,12 @@ export interface AiChatPluginOverrides {
 	 */
 	headers?: HeadersInit;
 
+	/**
+	 * Whether to show the attribution
+	 * @default true
+	 */
+	showAttribution?: boolean;
+
 	// ============== Lifecycle Hooks (optional) ==============
 
 	/**
