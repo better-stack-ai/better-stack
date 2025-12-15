@@ -19,9 +19,10 @@ export default defineConfig({
 	timeout: 90_000,
 	forbidOnly: !!process.env.CI,
 	outputDir: "../test-results",
-	reporter: process.env.CI
-		? [["list"], ["html", { open: "never" }]]
-		: [["list"]],
+	reporter: [
+		["list"],
+		["html", { open: process.env.CI ? "never" : "on-failure" }],
+	],
 	expect: {
 		timeout: 10_000,
 	},

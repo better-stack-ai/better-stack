@@ -514,29 +514,37 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 
 						// If DB has more messages than expected, delete the excess
 						// This handles both edit (truncated history) and retry (regenerating last response)
+						// Use a transaction to ensure atomicity - if create fails, deletions are rolled back
 						const actualDbCount = existingMessages.length;
-						if (actualDbCount > expectedDbCount) {
-							const messagesToDelete = existingMessages.slice(expectedDbCount);
+						const messagesToDelete =
+							actualDbCount > expectedDbCount
+								? existingMessages.slice(expectedDbCount)
+								: [];
+
+						// Wrap deletion and creation in a transaction for atomicity
+						// This prevents data loss if the create operation fails after deletions
+						await adapter.transaction(async (tx) => {
+							// Delete excess messages
 							for (const msg of messagesToDelete) {
-								await adapter.delete({
+								await tx.delete({
 									model: "message",
 									where: [{ field: "id", value: msg.id }],
 								});
 							}
-						}
 
-						// Save user message if it's new
-						if (shouldAddUserMessage && lastIncomingMessage) {
-							await adapter.create<Message>({
-								model: "message",
-								data: {
-									conversationId: convId as string,
-									role: "user",
-									content: serializeMessageParts(lastIncomingMessage),
-									createdAt: new Date(),
-								},
-							});
-						}
+							// Save user message if it's new
+							if (shouldAddUserMessage && lastIncomingMessage) {
+								await tx.create<Message>({
+									model: "message",
+									data: {
+										conversationId: convId as string,
+										role: "user",
+										content: serializeMessageParts(lastIncomingMessage),
+										createdAt: new Date(),
+									},
+								});
+							}
+						});
 
 						const result = streamText({
 							model: config.model,

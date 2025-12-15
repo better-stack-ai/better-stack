@@ -273,6 +273,12 @@ export function ChatInterface({
 			isFirstMessageSentRef.current = true;
 		}
 
+		// Save current values before clearing - we'll restore them if send fails
+		const savedInput = input;
+		const savedFiles = files ? [...files] : [];
+
+		// Clear input immediately (optimistically) - the AI SDK renders messages optimistically,
+		// so we need to clear the input before the message appears to avoid duplicate text
 		setInput("");
 		setAttachedFiles([]);
 
@@ -304,6 +310,9 @@ export function ChatInterface({
 				await sendMessage({ text });
 			}
 		} catch (error) {
+			// Restore input on failure so user can retry
+			setInput(savedInput);
+			setAttachedFiles(savedFiles);
 			console.error("Error sending message:", error);
 		}
 	};

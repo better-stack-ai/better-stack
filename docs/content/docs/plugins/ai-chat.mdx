@@ -5,6 +5,19 @@ description: AI-powered chat functionality with conversation history, streaming,
 
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
+import Image from "next/image";
+
+import chatDemo from "../../../assets/chat-demo.png";
+import chatDemo1 from "../../../assets/chat-demo-1.png";
+
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-2 my-2">
+  <a href={chatDemo.src} target="_blank" rel="noopener noreferrer">
+    <Image src={chatDemo} alt="AI Chat Plugin Demo" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+  <a href={chatDemo1.src} target="_blank" rel="noopener noreferrer">
+    <Image src={chatDemo1} alt="AI Chat Plugin Demo - Conversation" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+</div>
 
 ## Installation
 

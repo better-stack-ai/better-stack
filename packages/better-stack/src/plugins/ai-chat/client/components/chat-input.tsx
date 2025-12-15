@@ -202,7 +202,7 @@ export function ChatInput({
 								/>
 							) : (
 								// File preview with icon
-								<div className="h-16 w-32 flex items-center gap-2 px-2 bg-muted">
+								<div className="w-32 flex items-center gap-2 p-2 bg-muted">
 									<FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
 									<span className="text-xs truncate" title={file.filename}>
 										{file.filename}

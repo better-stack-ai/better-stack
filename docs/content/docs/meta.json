@@ -11,6 +11,7 @@
       "---[Layers]Plugins---",
       "plugins/index",
       "plugins/blog",
+      "plugins/ai-chat",
       "plugins/development",
       "---[Database]Databases---",
       "databases/adapters",
