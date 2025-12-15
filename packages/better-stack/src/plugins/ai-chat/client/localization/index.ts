@@ -54,6 +54,14 @@ export interface AiChatLocalization {
 	TIME_YESTERDAY: string;
 	TIME_DAYS_AGO: string;
 
+	// Message actions
+	MESSAGE_COPY: string;
+	MESSAGE_COPIED: string;
+	MESSAGE_RETRY: string;
+	MESSAGE_EDIT: string;
+	MESSAGE_SAVE: string;
+	MESSAGE_CANCEL: string;
+
 	// Accessibility
 	A11Y_USER_MESSAGE: string;
 	A11Y_ASSISTANT_MESSAGE: string;
@@ -119,6 +127,14 @@ export const AI_CHAT_LOCALIZATION: AiChatLocalization = {
 	TIME_HOURS_AGO: "{count} hours ago",
 	TIME_YESTERDAY: "Yesterday",
 	TIME_DAYS_AGO: "{count} days ago",
+
+	// Message actions
+	MESSAGE_COPY: "Copy message",
+	MESSAGE_COPIED: "Copied!",
+	MESSAGE_RETRY: "Retry",
+	MESSAGE_EDIT: "Edit message",
+	MESSAGE_SAVE: "Save",
+	MESSAGE_CANCEL: "Cancel",
 
 	// Accessibility
 	A11Y_USER_MESSAGE: "Your message",

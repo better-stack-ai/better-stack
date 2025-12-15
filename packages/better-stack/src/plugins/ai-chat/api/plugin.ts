@@ -460,15 +460,79 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 							}
 						}
 
-						// Save user message (serialize parts to preserve images)
-						const lastMessage = uiMessages[uiMessages.length - 1];
-						if (lastMessage && lastMessage.role === "user") {
+						// Sync database messages with client state
+						// The client sends all messages for the conversation
+						// We need to ensure the DB matches this state before adding the assistant response
+						const existingMessages = await adapter.findMany<Message>({
+							model: "message",
+							where: [
+								{
+									field: "conversationId",
+									value: convId as string,
+									operator: "eq",
+								},
+							],
+							sortBy: { field: "createdAt", direction: "asc" },
+						});
+
+						const lastIncomingMessage = uiMessages[uiMessages.length - 1];
+						const isNewUserMessage = lastIncomingMessage?.role === "user";
+
+						// Determine the expected DB count before we add new messages:
+						// - If last incoming is a user message: it might be new or existing
+						// - Compare with what's in DB to determine if it's a new message or regenerate
+						let expectedDbCount: number;
+						let shouldAddUserMessage = false;
+
+						if (isNewUserMessage) {
+							// Check if this user message already exists in DB
+							// by comparing the last user message in each
+							const lastDbUserMessage = [...existingMessages]
+								.reverse()
+								.find((m) => m.role === "user");
+							const incomingUserContent =
+								serializeMessageParts(lastIncomingMessage);
+
+							if (
+								lastDbUserMessage &&
+								lastDbUserMessage.content === incomingUserContent
+							) {
+								// The user message already exists - this is a regenerate
+								// DB should have all incoming messages (no new user message to add)
+								expectedDbCount = uiMessages.length;
+								shouldAddUserMessage = false;
+							} else {
+								// New user message - DB should have incoming count - 1
+								expectedDbCount = uiMessages.length - 1;
+								shouldAddUserMessage = true;
+							}
+						} else {
+							// Last message is not user (unusual case)
+							expectedDbCount = uiMessages.length;
+							shouldAddUserMessage = false;
+						}
+
+						// If DB has more messages than expected, delete the excess
+						// This handles both edit (truncated history) and retry (regenerating last response)
+						const actualDbCount = existingMessages.length;
+						if (actualDbCount > expectedDbCount) {
+							const messagesToDelete = existingMessages.slice(expectedDbCount);
+							for (const msg of messagesToDelete) {
+								await adapter.delete({
+									model: "message",
+									where: [{ field: "id", value: msg.id }],
+								});
+							}
+						}
+
+						// Save user message if it's new
+						if (shouldAddUserMessage && lastIncomingMessage) {
 							await adapter.create<Message>({
 								model: "message",
 								data: {
 									conversationId: convId as string,
 									role: "user",
-									content: serializeMessageParts(lastMessage),
+									content: serializeMessageParts(lastIncomingMessage),
 									createdAt: new Date(),
 								},
 							});
@@ -568,7 +632,7 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 
 			// ============== Create Conversation ==============
 			const createConversation = createEndpoint(
-				"/conversations",
+				"/chat/conversations",
 				{
 					method: "POST",
 					body: createConversationSchema,
@@ -639,7 +703,7 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 
 			// ============== List Conversations ==============
 			const listConversations = createEndpoint(
-				"/conversations",
+				"/chat/conversations",
 				{
 					method: "GET",
 				},
@@ -712,7 +776,7 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 
 			// ============== Get Conversation ==============
 			const getConversation = createEndpoint(
-				"/conversations/:id",
+				"/chat/conversations/:id",
 				{
 					method: "GET",
 				},
@@ -812,7 +876,7 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 
 			// ============== Update Conversation ==============
 			const updateConversation = createEndpoint(
-				"/conversations/:id",
+				"/chat/conversations/:id",
 				{
 					method: "PUT",
 					body: updateConversationSchema,
@@ -910,7 +974,7 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 
 			// ============== Delete Conversation ==============
 			const deleteConversation = createEndpoint(
-				"/conversations/:id",
+				"/chat/conversations/:id",
 				{
 					method: "DELETE",
 				},

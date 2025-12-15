@@ -147,6 +147,24 @@
 	overflow-x: auto;
 }
 
+/* Dark mode overrides for highlight.js tokens that have poor visibility */
+@media (prefers-color-scheme: dark) {
+	.markdown-content .markdown-inner .markdown-body .hljs-attr {
+		color: #ff9ac1;
+	}
+	.markdown-content .markdown-inner .markdown-body .hljs-params {
+		color: #ffb86c;
+	}
+}
+
+/* Also support Tailwind dark class for dark mode */
+.dark .markdown-content .markdown-inner .markdown-body .hljs-attr {
+	color: #ff9ac1;
+}
+.dark .markdown-content .markdown-inner .markdown-body .hljs-params {
+	color: #ffb86c;
+}
+
 .markdown-content .markdown-inner .markdown-code-block {
 	display: block;
 	position: relative;

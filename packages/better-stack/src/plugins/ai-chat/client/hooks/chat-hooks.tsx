@@ -238,7 +238,7 @@ export function useCreateConversation() {
 	>({
 		mutationKey: [...queries.conversations._def, "create"],
 		mutationFn: async (data) => {
-			const response = await client("@post/conversations", {
+			const response = await client("@post/chat/conversations", {
 				method: "POST",
 				body: data,
 			});
@@ -277,7 +277,7 @@ export function useRenameConversation() {
 	>({
 		mutationKey: [...queries.conversations._def, "rename"],
 		mutationFn: async ({ id, title }) => {
-			const response = await client("@put/conversations/:id", {
+			const response = await client("@put/chat/conversations/:id", {
 				method: "PUT",
 				params: { id },
 				body: { title },
@@ -320,7 +320,7 @@ export function useDeleteConversation() {
 	return useMutation<{ success: boolean }, Error, { id: string }>({
 		mutationKey: [...queries.conversations._def, "delete"],
 		mutationFn: async ({ id }) => {
-			const response = await client("@delete/conversations/:id", {
+			const response = await client("@delete/chat/conversations/:id", {
 				method: "DELETE",
 				params: { id },
 			});

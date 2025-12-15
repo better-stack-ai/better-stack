@@ -320,8 +320,12 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 	test("should upload and attach an image file", async ({ page }) => {
 		await page.goto("/pages/chat");
 
-		// Create a mock image file
+		// Wait for chat interface to be fully rendered
+		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
+
+		// Create a mock image file - wait for input to be attached first
 		const fileInput = page.locator('input[type="file"]');
+		await expect(fileInput).toBeAttached({ timeout: 5000 });
 
 		// Upload a test image file
 		await fileInput.setInputFiles({
@@ -348,8 +352,12 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 	test("should upload and attach a text file", async ({ page }) => {
 		await page.goto("/pages/chat");
 
-		// Create a mock text file
+		// Wait for chat interface to be fully rendered
+		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
+
+		// Create a mock text file - wait for input to be attached first
 		const fileInput = page.locator('input[type="file"]');
+		await expect(fileInput).toBeAttached({ timeout: 5000 });
 
 		// Upload a test text file
 		await fileInput.setInputFiles({
@@ -370,8 +378,12 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 	}) => {
 		await page.goto("/pages/chat");
 
-		// Upload a test file
+		// Wait for chat interface to be fully rendered
+		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
+
+		// Upload a test file - wait for input to be attached first
 		const fileInput = page.locator('input[type="file"]');
+		await expect(fileInput).toBeAttached({ timeout: 5000 });
 		await fileInput.setInputFiles({
 			name: "to-remove.txt",
 			mimeType: "text/plain",
@@ -397,8 +409,12 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 	test("should send message with attached file", async ({ page }) => {
 		await page.goto("/pages/chat");
 
-		// Upload a test file
+		// Wait for chat interface to be fully rendered
+		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
+
+		// Upload a test file - wait for input to be attached first
 		const fileInput = page.locator('input[type="file"]');
+		await expect(fileInput).toBeAttached({ timeout: 5000 });
 		await fileInput.setInputFiles({
 			name: "attachment.txt",
 			mimeType: "text/plain",
@@ -491,5 +507,260 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		// Both files should be visible
 		await expect(page.getByText("file1.txt")).toBeVisible();
 		await expect(page.getByText("file2.txt")).toBeVisible();
+	});
+
+	test("should retry AI response and maintain correct message order", async ({
+		page,
+	}) => {
+		await page.goto("/pages/chat");
+
+		const chatInterface = page.locator('[data-testid="chat-interface"]');
+
+		// Send a message
+		const input = page.getByPlaceholder("Type a message...");
+		await input.fill("Say exactly: FIRST RESPONSE");
+		await page.keyboard.press("Enter");
+
+		// Wait for user message and AI response within chat interface
+		await expect(
+			chatInterface.getByText("Say exactly: FIRST RESPONSE"),
+		).toBeVisible({
+			timeout: 15000,
+		});
+		await expect(
+			chatInterface.locator('[aria-label="AI response"]'),
+		).toBeVisible({ timeout: 30000 });
+
+		// Wait for the response to complete (status should be ready)
+		await page.waitForTimeout(2000);
+
+		// Hover over the AI message to reveal retry button
+		const aiMessage = chatInterface
+			.locator('[aria-label="AI response"]')
+			.first();
+		await aiMessage.hover();
+
+		// Click the retry button
+		const retryButton = chatInterface.getByTitle("Retry").first();
+		await expect(retryButton).toBeVisible({ timeout: 5000 });
+		await retryButton.click();
+
+		// Wait for the new response to complete
+		await page.waitForTimeout(3000);
+
+		// Verify there's still only one user message and one AI response
+		const userMessages = chatInterface.locator('[aria-label="Your message"]');
+		const aiMessages = chatInterface.locator('[aria-label="AI response"]');
+
+		await expect(userMessages).toHaveCount(1);
+		await expect(aiMessages).toHaveCount(1);
+
+		// Wait for URL to update with conversation ID
+		await page.waitForURL(/\/pages\/chat\/[a-zA-Z0-9-]+/, { timeout: 10000 });
+		const conversationUrl = page.url();
+
+		// Reload the page and verify message order is preserved
+		await page.goto(conversationUrl);
+
+		// Wait for messages to load
+		await expect(
+			chatInterface.getByText("Say exactly: FIRST RESPONSE"),
+		).toBeVisible({
+			timeout: 15000,
+		});
+
+		// Verify still only one of each message type after reload
+		await expect(
+			chatInterface.locator('[aria-label="Your message"]'),
+		).toHaveCount(1);
+		await expect(
+			chatInterface.locator('[aria-label="AI response"]'),
+		).toHaveCount(1);
+	});
+
+	test("should edit user message and persist correctly", async ({ page }) => {
+		await page.goto("/pages/chat");
+
+		const chatInterface = page.locator('[data-testid="chat-interface"]');
+
+		// Send first message
+		const input = page.getByPlaceholder("Type a message...");
+		await input.fill("Original message content");
+		await page.keyboard.press("Enter");
+
+		// Wait for user message and AI response within chat interface
+		await expect(
+			chatInterface.getByText("Original message content"),
+		).toBeVisible({
+			timeout: 15000,
+		});
+		await expect(
+			chatInterface.locator('[aria-label="AI response"]'),
+		).toBeVisible({ timeout: 30000 });
+
+		// Wait for the response to complete
+		await page.waitForTimeout(2000);
+
+		// Wait for URL to update with conversation ID
+		await page.waitForURL(/\/pages\/chat\/[a-zA-Z0-9-]+/, { timeout: 10000 });
+		const conversationUrl = page.url();
+
+		// Hover over the user message to reveal edit button
+		const userMessage = chatInterface
+			.locator('[aria-label="Your message"]')
+			.first();
+		await userMessage.hover();
+
+		// Click the edit button
+		const editButton = chatInterface.getByTitle("Edit message").first();
+		await expect(editButton).toBeVisible({ timeout: 5000 });
+		await editButton.click();
+
+		// Find the edit textarea and modify the message
+		const editTextarea = chatInterface.locator("textarea").first();
+		await expect(editTextarea).toBeVisible({ timeout: 5000 });
+		await editTextarea.clear();
+		await editTextarea.fill("Edited message content");
+
+		// Click the save/send button
+		const saveButton = chatInterface.getByTitle("Save").first();
+		await saveButton.click();
+
+		// Wait for the edited message to appear
+		await expect(
+			chatInterface.getByText("Edited message content").first(),
+		).toBeVisible({
+			timeout: 15000,
+		});
+
+		// Wait for new AI response to complete
+		await page.waitForTimeout(5000);
+
+		// Reload the page to verify persistence
+		await page.goto(conversationUrl);
+
+		// Wait for messages to load
+		await expect(chatInterface.getByText("Edited message content")).toBeVisible(
+			{
+				timeout: 15000,
+			},
+		);
+
+		// Verify original message is gone after reload (database was synced correctly)
+		await expect(
+			chatInterface.getByText("Original message content"),
+		).not.toBeVisible();
+
+		// Verify only one user message after reload
+		await expect(
+			chatInterface.locator('[aria-label="Your message"]'),
+		).toHaveCount(1);
+
+		// Verify one AI response after reload
+		await expect(
+			chatInterface.locator('[aria-label="AI response"]'),
+		).toHaveCount(1);
+	});
+
+	test("should handle edit in middle of conversation and persist correctly", async ({
+		page,
+	}) => {
+		await page.goto("/pages/chat");
+
+		const chatInterface = page.locator('[data-testid="chat-interface"]');
+		const input = page.getByPlaceholder("Type a message...");
+
+		// Send first message
+		await input.fill("First question");
+		await page.keyboard.press("Enter");
+		await expect(chatInterface.getByText("First question")).toBeVisible({
+			timeout: 15000,
+		});
+		await expect(
+			chatInterface.locator('[aria-label="AI response"]'),
+		).toBeVisible({ timeout: 30000 });
+		await page.waitForTimeout(2000);
+
+		// Send second message
+		await input.fill("Second question");
+		await page.keyboard.press("Enter");
+		await expect(chatInterface.getByText("Second question")).toBeVisible({
+			timeout: 15000,
+		});
+
+		// Wait for second AI response
+		await page.waitForTimeout(3000);
+
+		// Wait for URL to update with conversation ID
+		await page.waitForURL(/\/pages\/chat\/[a-zA-Z0-9-]+/, { timeout: 10000 });
+		const conversationUrl = page.url();
+
+		// Verify we have 2 user messages and 2 AI responses before edit
+		await expect(
+			chatInterface.locator('[aria-label="Your message"]'),
+		).toHaveCount(2);
+		await expect(
+			chatInterface.locator('[aria-label="AI response"]'),
+		).toHaveCount(2);
+
+		// Hover over the FIRST user message to edit it
+		const firstUserMessage = chatInterface
+			.locator('[aria-label="Your message"]')
+			.first();
+		await firstUserMessage.hover();
+
+		// Click the edit button (first one visible)
+		const editButton = chatInterface.getByTitle("Edit message").first();
+		await expect(editButton).toBeVisible({ timeout: 5000 });
+		await editButton.click();
+
+		// Edit the first message
+		const editTextarea = chatInterface.locator("textarea").first();
+		await expect(editTextarea).toBeVisible({ timeout: 5000 });
+		await editTextarea.clear();
+		await editTextarea.fill("Edited first question");
+
+		// Save the edit
+		const saveButton = chatInterface.getByTitle("Save").first();
+		await saveButton.click();
+
+		// Wait for the edited message to appear
+		await expect(
+			chatInterface.getByText("Edited first question").first(),
+		).toBeVisible({
+			timeout: 15000,
+		});
+
+		// Wait for new AI response to complete
+		await page.waitForTimeout(5000);
+
+		// Reload and verify persistence - the edit should have truncated the conversation
+		await page.goto(conversationUrl);
+
+		// Verify only the edited message and its response exist after reload
+		// Use locator scoped to user messages to avoid matching AI response text
+		await expect(
+			chatInterface
+				.locator('[aria-label="Your message"]')
+				.getByText("Edited first question"),
+		).toBeVisible({
+			timeout: 15000,
+		});
+
+		// Second question should be gone after reload (it was after the edit point)
+		await expect(chatInterface.getByText("Second question")).not.toBeVisible();
+
+		// First question (unedited) should be gone after reload
+		await expect(
+			chatInterface.getByText("First question", { exact: true }),
+		).not.toBeVisible();
+
+		// Verify only one of each after reload
+		await expect(
+			chatInterface.locator('[aria-label="Your message"]'),
+		).toHaveCount(1);
+		await expect(
+			chatInterface.locator('[aria-label="AI response"]'),
+		).toHaveCount(1);
 	});
 });

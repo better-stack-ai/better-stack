@@ -194,24 +194,29 @@ test.describe("AI Chat Plugin - Public Mode API", () => {
 		request,
 	}) => {
 		// List conversations should return empty array or 404
-		const listResponse = await request.get(`${API_BASE}/conversations`);
+		const listResponse = await request.get(`${API_BASE}/chat/conversations`);
 		expect(listResponse.status()).toBe(200);
 		const conversations = await listResponse.json();
 		expect(conversations).toEqual([]);
 
 		// Create conversation should return 404 (not available in public mode)
-		const createResponse = await request.post(`${API_BASE}/conversations`, {
-			data: { title: "Test" },
-		});
+		const createResponse = await request.post(
+			`${API_BASE}/chat/conversations`,
+			{
+				data: { title: "Test" },
+			},
+		);
 		expect(createResponse.status()).toBe(404);
 
 		// Get conversation should return 404
-		const getResponse = await request.get(`${API_BASE}/conversations/abc123`);
+		const getResponse = await request.get(
+			`${API_BASE}/chat/conversations/abc123`,
+		);
 		expect(getResponse.status()).toBe(404);
 
 		// Update conversation should return 404
 		const updateResponse = await request.put(
-			`${API_BASE}/conversations/abc123`,
+			`${API_BASE}/chat/conversations/abc123`,
 			{
 				data: { title: "Updated" },
 			},
@@ -220,7 +225,7 @@ test.describe("AI Chat Plugin - Public Mode API", () => {
 
 		// Delete conversation should return 404
 		const deleteResponse = await request.delete(
-			`${API_BASE}/conversations/abc123`,
+			`${API_BASE}/chat/conversations/abc123`,
 		);
 		expect(deleteResponse.status()).toBe(404);
 	});

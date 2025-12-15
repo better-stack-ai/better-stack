@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChatMessage } from "./chat-message";
 import { ChatInput, type AttachedFile } from "./chat-input";
@@ -105,6 +105,9 @@ export function ChatInterface({
 		}
 	}, [currentConversationId, isPublicMode]);
 
+	// Ref to track edit operation with messages to use
+	const editMessagesRef = useRef<UIMessage[] | null>(null);
+
 	// Memoize the transport to prevent recreation on every render
 	const transport = useMemo(
 		() =>
@@ -114,54 +117,81 @@ export function ChatInterface({
 				body: isPublicMode
 					? undefined
 					: () => ({ conversationId: conversationIdRef.current }),
+				// Handle edit operations by using truncated messages from the ref
+				prepareSendMessagesRequest: ({ messages: hookMessages }) => {
+					// If we're in an edit operation, use the truncated messages + new user message
+					if (editMessagesRef.current !== null) {
+						const newUserMessage = hookMessages[hookMessages.length - 1];
+						const messagesToSend = [...editMessagesRef.current];
+						if (newUserMessage) {
+							messagesToSend.push(newUserMessage);
+						}
+						// Clear the ref after use
+						editMessagesRef.current = null;
+						return {
+							body: {
+								messages: messagesToSend,
+								conversationId: conversationIdRef.current,
+							},
+						};
+					}
+					// Normal case - use the messages as-is
+					return {
+						body: {
+							messages: hookMessages,
+							conversationId: conversationIdRef.current,
+						},
+					};
+				},
 			}),
 		[apiPath, isPublicMode],
 	);
 
-	const { messages, sendMessage, status, error, setMessages } = useChat({
-		transport,
-		onError: (err) => {
-			console.error("useChat onError:", err);
-		},
-		onFinish: async () => {
-			// In public mode, skip all persistence-related operations
-			if (isPublicMode) return;
+	const { messages, sendMessage, status, error, setMessages, regenerate } =
+		useChat({
+			transport,
+			onError: (err) => {
+				console.error("useChat onError:", err);
+			},
+			onFinish: async () => {
+				// In public mode, skip all persistence-related operations
+				if (isPublicMode) return;
 
-			// Invalidate conversation list to show new/updated conversations
-			await queryClient.invalidateQueries({
-				queryKey: conversationsListQueryKey,
-			});
-
-			// If this was the first message on a new chat, navigate to the new conversation
-			if (
-				isFirstMessageSentRef.current &&
-				!id &&
-				!hasNavigatedRef.current &&
-				navigate
-			) {
-				hasNavigatedRef.current = true;
-				// Wait for the invalidation to complete and refetch conversations
-				await queryClient.refetchQueries({
+				// Invalidate conversation list to show new/updated conversations
+				await queryClient.invalidateQueries({
 					queryKey: conversationsListQueryKey,
 				});
-				// Get the updated conversations from cache
-				const cachedConversations = queryClient.getQueryData<
-					SerializedConversation[]
-				>(conversationsListQueryKey);
-				if (cachedConversations && cachedConversations.length > 0) {
-					// The most recently updated conversation should be the one we just created
-					const newConversation = cachedConversations[0];
-					if (newConversation) {
-						// Update our local state
-						setCurrentConversationId(newConversation.id);
-						conversationIdRef.current = newConversation.id;
-						// Navigate to the new conversation URL
-						navigate(`${basePath}/chat/${newConversation.id}`);
+
+				// If this was the first message on a new chat, navigate to the new conversation
+				if (
+					isFirstMessageSentRef.current &&
+					!id &&
+					!hasNavigatedRef.current &&
+					navigate
+				) {
+					hasNavigatedRef.current = true;
+					// Wait for the invalidation to complete and refetch conversations
+					await queryClient.refetchQueries({
+						queryKey: conversationsListQueryKey,
+					});
+					// Get the updated conversations from cache
+					const cachedConversations = queryClient.getQueryData<
+						SerializedConversation[]
+					>(conversationsListQueryKey);
+					if (cachedConversations && cachedConversations.length > 0) {
+						// The most recently updated conversation should be the one we just created
+						const newConversation = cachedConversations[0];
+						if (newConversation) {
+							// Update our local state
+							setCurrentConversationId(newConversation.id);
+							conversationIdRef.current = newConversation.id;
+							// Navigate to the new conversation URL
+							navigate(`${basePath}/chat/${newConversation.id}`);
+						}
 					}
 				}
-			}
-		},
-	});
+			},
+		});
 
 	// Load existing conversation messages when navigating to a conversation
 	useEffect(() => {
@@ -280,6 +310,51 @@ export function ChatInterface({
 
 	const isLoading = status === "streaming" || status === "submitted";
 
+	// Handler for retrying/regenerating the last AI response
+	const handleRetry = useCallback(() => {
+		regenerate();
+	}, [regenerate]);
+
+	// Pending edit state - stores the text to send after messages are truncated
+	const [pendingEdit, setPendingEdit] = useState<{
+		text: string;
+		expectedLength: number;
+	} | null>(null);
+
+	// Effect to send the edited message after React has processed the truncation
+	useEffect(() => {
+		if (pendingEdit && messages.length === pendingEdit.expectedLength) {
+			const textToSend = pendingEdit.text;
+			setPendingEdit(null);
+			sendMessage({ text: textToSend });
+		}
+	}, [messages.length, pendingEdit, sendMessage]);
+
+	// Handler for editing a user message - replaces the message and all subsequent messages
+	const handleEditMessage = useCallback(
+		(messageId: string, newText: string) => {
+			const messageIndex = messages.findIndex((m) => m.id === messageId);
+			if (messageIndex === -1) return;
+
+			// Get the message to edit
+			const messageToEdit = messages[messageIndex];
+			if (!messageToEdit || messageToEdit.role !== "user") return;
+
+			// Truncate to BEFORE the edited message (remove it and all subsequent)
+			const truncatedMessages = messages.slice(0, messageIndex);
+
+			// Store the truncated messages in the ref for the transport to use
+			editMessagesRef.current = truncatedMessages;
+
+			// Set the pending edit - the useEffect will send after truncation is processed
+			setPendingEdit({ text: newText, expectedLength: messageIndex });
+
+			// Truncate the messages - React will batch this and the useEffect will fire after
+			setMessages(truncatedMessages);
+		},
+		[messages, setMessages],
+	);
+
 	const isWidget = variant === "widget";
 
 	return (
@@ -306,7 +381,7 @@ export function ChatInterface({
 									<p>{localization.CHAT_EMPTY_STATE}</p>
 								</div>
 							) : (
-								messages.map((m) => (
+								messages.map((m, index) => (
 									<ChatMessage
 										key={m.id || `msg-${Math.random()}`}
 										message={m}
@@ -316,6 +391,19 @@ export function ChatInterface({
 											m.role === "assistant"
 										}
 										variant={isWidget ? "compact" : "default"}
+										onRetry={
+											// Only show retry on the last assistant message
+											m.role === "assistant" && index === messages.length - 1
+												? handleRetry
+												: undefined
+										}
+										onEdit={
+											// Allow editing user messages
+											m.role === "user"
+												? (newText) => handleEditMessage(m.id, newText)
+												: undefined
+										}
+										isRetrying={isLoading && m.role === "assistant"}
 									/>
 								))
 							)}

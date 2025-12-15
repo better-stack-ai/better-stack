@@ -58,7 +58,7 @@ function createConversationsQueries(
 			// so we use a stable marker (not "list") to avoid ["...","list","list"].
 			queryKey: ["all"],
 			queryFn: async () => {
-				const response = await client("/conversations", {
+				const response = await client("/chat/conversations", {
 					method: "GET",
 					headers,
 				});
@@ -74,7 +74,7 @@ function createConversationsQueries(
 			queryFn: async () => {
 				if (!id) return null;
 
-				const response = await client("/conversations/:id", {
+				const response = await client("/chat/conversations/:id", {
 					method: "GET",
 					params: { id },
 					headers,

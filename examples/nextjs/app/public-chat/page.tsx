@@ -44,12 +44,6 @@ export default function PublicChatPage() {
 				}}
 			>
 				<div className="min-h-screen bg-background">
-					<header className="border-b p-4">
-						<h1 className="text-xl font-semibold">Public Chat Demo</h1>
-						<p className="text-sm text-muted-foreground">
-							This chat is stateless - no history is saved
-						</p>
-					</header>
 					<main className="h-[calc(100vh-80px)]">
 						<ChatLayout
 							apiBaseURL={baseURL}
