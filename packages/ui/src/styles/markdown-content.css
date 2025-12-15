@@ -1,0 +1,385 @@
+.markdown-content .markdown-inner .markdown-body {
+	font-family: var(--crepe-font-default);
+	color: var(--crepe-color-on-background);
+	background: var(--crepe-color-background);
+	padding: 0px;
+}
+
+.markdown-content .markdown-inner .markdown-body img {
+	vertical-align: bottom;
+	max-width: 100%;
+}
+
+.markdown-content .markdown-inner .markdown-body .markdown-image-wrapper {
+	display: block;
+	position: relative;
+	width: 100%;
+	aspect-ratio: 16 / 9;
+	min-height: 200px;
+}
+
+.markdown-content .markdown-inner .markdown-body .markdown-image-wrapper > div {
+	width: 100%;
+	height: 100%;
+}
+
+.markdown-content .markdown-inner .markdown-body .markdown-image-wrapper img {
+	object-fit: contain;
+}
+
+.markdown-content .markdown-inner .markdown-body h1,
+.markdown-content .markdown-inner .markdown-body h2,
+.markdown-content .markdown-inner .markdown-body h3,
+.markdown-content .markdown-inner .markdown-body h4,
+.markdown-content .markdown-inner .markdown-body h5,
+.markdown-content .markdown-inner .markdown-body h6 {
+	font-family: var(--crepe-font-title);
+	font-weight: 400;
+	padding: 2px 0;
+	scroll-margin-top: 56px;
+}
+
+.markdown-content .markdown-inner .markdown-body h1 .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h2 .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h3 .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h4 .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h5 .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h6 .heading-anchor {
+	opacity: 0;
+	margin-left: 8px;
+	color: var(--crepe-color-on-surface-variant);
+	text-decoration: none;
+	transition: opacity 0.15s ease-in-out;
+}
+
+.markdown-content .markdown-inner .markdown-body h1:hover .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h2:hover .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h3:hover .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h4:hover .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h5:hover .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h6:hover .heading-anchor {
+	opacity: 1;
+}
+
+.markdown-content .markdown-inner .markdown-body h1 {
+	font-size: 42px;
+	line-height: 50px;
+	margin-top: 32px;
+}
+
+.markdown-content .markdown-inner .markdown-body h2 {
+	font-size: 36px;
+	line-height: 44px;
+	margin-top: 28px;
+}
+
+.markdown-content .markdown-inner .markdown-body h3 {
+	font-size: 32px;
+	line-height: 40px;
+	margin-top: 24px;
+}
+
+.markdown-content .markdown-inner .markdown-body h4 {
+	font-size: 28px;
+	line-height: 36px;
+	margin-top: 20px;
+}
+
+.markdown-content .markdown-inner .markdown-body h5 {
+	font-size: 24px;
+	line-height: 32px;
+	margin-top: 16px;
+}
+
+.markdown-content .markdown-inner .markdown-body h6 {
+	font-size: 18px;
+	font-weight: 700;
+	line-height: 28px;
+	margin-top: 16px;
+}
+
+.markdown-content .markdown-inner .markdown-body p {
+	font-size: 16px;
+	line-height: 24px;
+	padding: 4px 0;
+}
+
+.markdown-content .markdown-inner .markdown-body a {
+	color: var(--crepe-color-primary);
+	text-decoration: underline;
+}
+
+.markdown-content .markdown-inner .markdown-body code {
+	color: var(--crepe-color-inline-code);
+	background: color-mix(
+		in srgb,
+		var(--crepe-color-inline-area),
+		transparent 40%
+	);
+	font-family: var(--crepe-font-code);
+	padding: 0 2px;
+	border-radius: 4px;
+	font-size: 87.5%;
+	display: inline-block;
+	line-height: 1.4286;
+}
+
+.markdown-content .markdown-inner .markdown-body pre {
+	background: color-mix(
+		in srgb,
+		var(--crepe-color-inline-area),
+		transparent 40%
+	);
+	padding: 10px;
+	border-radius: 4px;
+	overflow-x: auto;
+}
+
+.markdown-content .markdown-inner .markdown-body pre code {
+	padding: 0;
+	background: transparent;
+}
+
+/* Ensure highlight.js themes color tokens inside our containers */
+.markdown-content .markdown-inner .markdown-body pre code.hljs,
+.markdown-content .markdown-inner .markdown-body code.hljs {
+	display: block;
+	overflow-x: auto;
+}
+
+/* Dark mode overrides for highlight.js tokens that have poor visibility */
+@media (prefers-color-scheme: dark) {
+	.markdown-content .markdown-inner .markdown-body .hljs-attr {
+		color: #ff9ac1;
+	}
+	.markdown-content .markdown-inner .markdown-body .hljs-params {
+		color: #ffb86c;
+	}
+}
+
+/* Also support Tailwind dark class for dark mode */
+.dark .markdown-content .markdown-inner .markdown-body .hljs-attr {
+	color: #ff9ac1;
+}
+.dark .markdown-content .markdown-inner .markdown-body .hljs-params {
+	color: #ffb86c;
+}
+
+.markdown-content .markdown-inner .markdown-code-block {
+	display: block;
+	position: relative;
+	padding: 40px 8px 20px 20px;
+	margin: 4px 0;
+}
+
+.markdown-content .markdown-inner .markdown-code-block pre {
+	background: transparent;
+	padding: 0;
+	border-radius: 0;
+}
+
+/* Layout wrapper to host gutter and code content side-by-side */
+.markdown-content .markdown-inner .markdown-code-block .code-content {
+	display: grid;
+	grid-template-columns: var(--code-gutter-width, 3ch) 1fr;
+	gap: 0.35rem;
+	align-items: stretch;
+}
+
+/* Gutter line numbers */
+.markdown-content .markdown-inner .markdown-code-block .line-numbers {
+	list-style: none;
+	margin: 0;
+	user-select: none;
+	color: var(--crepe-color-on-surface-variant);
+	text-align: end;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	align-items: center;
+	height: 100%;
+}
+
+.markdown-content .markdown-inner .markdown-code-block .line-numbers li {
+	font-family: var(--crepe-font-code);
+	font-size: 12px;
+}
+
+.markdown-content .markdown-inner .markdown-code-block .code-toolbar {
+	position: absolute;
+	top: 8px;
+	left: 18px;
+	right: 18px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 0.15s ease-in-out;
+}
+
+.markdown-content .markdown-inner .markdown-code-block:hover .code-toolbar {
+	opacity: 1;
+}
+
+/* Also reveal toolbar when focused via keyboard for accessibility */
+.markdown-content .markdown-inner .markdown-code-block:focus-within .code-toolbar {
+	opacity: 1;
+}
+
+.markdown-content .markdown-inner .markdown-code-block .language-label {
+	pointer-events: auto;
+	font-family: var(--crepe-font-default);
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 16px;
+	color: var(--crepe-color-on-surface-variant);
+	background: var(--crepe-color-surface-low);
+	padding: 2px 8px;
+	border-radius: 4px;
+}
+
+.markdown-content .markdown-inner .markdown-code-block .copy-button {
+	pointer-events: auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--crepe-color-surface-low);
+	color: var(--crepe-color-on-surface-variant);
+	border-radius: 4px;
+	padding: 4px 8px;
+	height: 26px;
+	width: 32px;
+	cursor: pointer;
+	transition: background-color 0.2s ease-in-out;
+}
+
+.markdown-content .markdown-inner .markdown-code-block .copy-button:hover {
+	background: var(--crepe-color-hover);
+}
+
+.markdown-content .markdown-inner .markdown-body blockquote {
+	position: relative;
+	padding-left: 40px;
+	padding-top: 0;
+	padding-bottom: 0;
+	box-sizing: content-box;
+	margin: 4px 0;
+}
+
+.markdown-content .markdown-inner .markdown-body blockquote::before {
+	content: "";
+	width: 4px;
+	left: 0;
+	top: 4px;
+	bottom: 4px;
+	position: absolute;
+	background: var(--crepe-color-selected);
+	border-radius: 100px;
+}
+
+.markdown-content .markdown-inner .markdown-body hr {
+	border: none;
+	background-color: color-mix(
+		in srgb,
+		var(--crepe-color-outline),
+		transparent 80%
+	);
+	background-clip: content-box;
+	padding: 6px 0;
+	height: 13px;
+	position: relative;
+}
+
+.markdown-content .markdown-inner .markdown-body ul:not(.contains-task-list) {
+	padding: 0;
+	list-style-type: disc;
+	margin-left: 26px;
+}
+
+.markdown-content
+	.markdown-inner
+	.markdown-body
+	ul:not(.contains-task-list)
+	li::marker {
+	color: var(--crepe-color-outline);
+	font-size: 1.2em;
+}
+
+.markdown-content .markdown-inner .markdown-body ol {
+	padding: 0;
+	list-style-type: decimal;
+	margin-left: 20px;
+}
+
+.markdown-content .markdown-inner .markdown-body li.task-list-item {
+	position: relative;
+	list-style: none;
+	padding-left: 28px;
+}
+
+.markdown-content
+	.markdown-inner
+	.markdown-body
+	li.task-list-item
+	input[type="checkbox"] {
+	width: 20px;
+	height: 20px;
+	position: absolute;
+	left: 0;
+	margin: 0;
+}
+
+.markdown-content .markdown-inner .markdown-body table {
+	border-collapse: collapse;
+	table-layout: fixed;
+	width: 100%;
+	margin: 4px 0;
+}
+
+.markdown-content .markdown-inner .markdown-body th,
+.markdown-content .markdown-inner .markdown-body td {
+	border: 1px solid
+		color-mix(in srgb, var(--crepe-color-outline), transparent 80%);
+	padding: 4px 16px;
+	overflow-wrap: anywhere;
+}
+
+/* Simplified chat variant - more compact for chat messages */
+.markdown-content-chat .markdown-inner .markdown-body {
+	padding: 0;
+}
+
+.markdown-content-chat .markdown-inner .markdown-body h1,
+.markdown-content-chat .markdown-inner .markdown-body h2,
+.markdown-content-chat .markdown-inner .markdown-body h3,
+.markdown-content-chat .markdown-inner .markdown-body h4,
+.markdown-content-chat .markdown-inner .markdown-body h5,
+.markdown-content-chat .markdown-inner .markdown-body h6 {
+	margin-top: 12px;
+}
+
+.markdown-content-chat .markdown-inner .markdown-body h1 {
+	font-size: 24px;
+	line-height: 32px;
+}
+
+.markdown-content-chat .markdown-inner .markdown-body h2 {
+	font-size: 20px;
+	line-height: 28px;
+}
+
+.markdown-content-chat .markdown-inner .markdown-body h3 {
+	font-size: 18px;
+	line-height: 26px;
+}
+
+.markdown-content-chat .markdown-inner .markdown-body p {
+	font-size: 14px;
+	line-height: 22px;
+	padding: 2px 0;
+}
+
+.markdown-content-chat .markdown-inner .markdown-code-block {
+	padding: 32px 8px 12px 12px;
+}

@@ -5,9 +5,27 @@ description: Content management, editor, drafts, publishing, SEO and more
 
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
+import Image from "next/image";
 
+import blogDemo from "../../../assets/blog-demo.png";
+import blogDemo1 from "../../../assets/blog-demo-1.png";
+import blogDemo2 from "../../../assets/blog-demo-2.png";
+import blogDemo3 from "../../../assets/blog-demo-3.png";
 
-![Blog Plugin Demo](../../../assets/blog-demo.png)
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-2 my-2">
+  <a href={blogDemo.src} target="_blank" rel="noopener noreferrer">
+    <Image src={blogDemo} alt="Blog Plugin Demo - Home" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+  <a href={blogDemo1.src} target="_blank" rel="noopener noreferrer">
+    <Image src={blogDemo1} alt="Blog Plugin Demo - Post" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+  <a href={blogDemo2.src} target="_blank" rel="noopener noreferrer">
+    <Image src={blogDemo2} alt="Blog Plugin Demo - Editor" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+  <a href={blogDemo3.src} target="_blank" rel="noopener noreferrer">
+    <Image src={blogDemo3} alt="Blog Plugin Demo - Drafts" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+</div>
 
 ## Installation
 

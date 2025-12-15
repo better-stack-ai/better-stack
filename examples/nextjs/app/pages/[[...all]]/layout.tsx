@@ -9,6 +9,7 @@ import { useState } from "react"
 import type { TodosPluginOverrides } from "@/lib/plugins/todo/client/overrides"
 import { getOrCreateQueryClient } from "@/lib/query-client"
 import { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
+import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
 
 // Get base URL - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -18,10 +19,56 @@ const getBaseURL = () =>
     ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
     : (process.env.BASE_URL || "http://localhost:3000")
 
+// Mock file upload URLs
+const MOCK_IMAGE_URL = "https://placehold.co/400/png"
+const MOCK_FILE_URL = "https://example-files.online-convert.com/document/txt/example.txt"
+
+// Mock file upload function that returns appropriate URL based on file type
+async function mockUploadFile(file: File): Promise<string> {
+    console.log("uploadFile", file.name, file.type)
+    // Return image placeholder for images, txt file URL for other file types
+    if (file.type.startsWith("image/")) {
+        return MOCK_IMAGE_URL
+    }
+    return MOCK_FILE_URL
+}
+
+// Shared Next.js Image wrapper for plugins
+// Handles both cases: with explicit dimensions or using fill mode
+function NextImageWrapper(props: React.ImgHTMLAttributes<HTMLImageElement>) {
+    const { alt = "", src = "", width, height, ...rest } = props
+    
+    // Use fill mode if width or height are not provided
+    if (!width || !height) {
+        return (
+            <span className="block relative w-full h-full">
+                <Image
+                    alt={alt}
+                    src={typeof src === "string" ? src : ""}
+                    fill
+                    sizes="400px"
+                    {...rest}
+                />
+            </span>
+        )
+    }
+    
+    return (
+        <Image
+            alt={alt}
+            src={typeof src === "string" ? src : ""}
+            width={width as number}
+            height={height as number}
+            {...rest}
+        />
+    )
+}
+
 // Define the shape of all plugin overrides
 type PluginOverrides = {
     todos: TodosPluginOverrides
     blog: BlogPluginOverrides,
+    "ai-chat": AiChatPluginOverrides,
 }
 
 export default function ExampleLayout({
@@ -51,38 +98,8 @@ export default function ExampleLayout({
                         apiBasePath: "/api/data",
                         navigate: (path) => router.push(path),
                         refresh: () => router.refresh(),
-                        uploadImage: async (file) => {
-                            console.log("uploadImage", file)
-                            return "https://placehold.co/400/png"
-                        },
-                        Image: (props) => {
-                            const { alt = "", src = "", width, height, ...rest } = props
-                            
-                            // Use fill mode if width or height are not provided
-                            if (!width || !height) {
-                                return (
-                                    <span className="block relative w-full h-full">
-                                        <Image
-                                            alt={alt}
-                                            src={typeof src === "string" ? src : ""}
-                                            fill
-                                            sizes="400px"
-                                            {...rest}
-                                        />
-                                    </span>
-                                )
-                            }
-                            
-                            return (
-                                <Image
-                                    alt={alt}
-                                    src={typeof src === "string" ? src : ""}
-                                    width={width as number}
-                                    height={height as number}
-                                    {...rest}
-                                />
-                            )
-                        },
+                        uploadImage: mockUploadFile,
+                        Image: NextImageWrapper,
                         // Lifecycle Hooks - called during route rendering
                         onRouteRender: async (routeName, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onRouteRender: Route rendered:`, routeName, context.path);
@@ -109,6 +126,23 @@ export default function ExampleLayout({
                         onBeforePostPageRendered: (slug, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforePostPageRendered: checking access for`, slug, context.path);
                             return true;
+                        },
+                    },
+                    "ai-chat": {
+                        mode: "authenticated", // Full chat with conversation history
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        navigate: (path) => router.push(path),
+                        refresh: () => router.refresh(),
+                        uploadFile: mockUploadFile,
+                        Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+                        Image: NextImageWrapper,
+                        // Lifecycle hooks
+                        onRouteRender: async (routeName, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] AI Chat route:`, routeName, context.path);
+                        },
+                        onRouteError: async (routeName, error, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] AI Chat error:`, routeName, error.message);
                         },
                     }
                 }}

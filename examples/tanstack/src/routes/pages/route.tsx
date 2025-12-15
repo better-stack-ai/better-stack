@@ -3,6 +3,7 @@ import { BetterStackProvider } from "@btst/stack/context"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
+import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
 import { Link, useRouter, Outlet, createFileRoute } from "@tanstack/react-router"
 
 // Get base URL function - works on both server and client
@@ -13,9 +14,24 @@ const getBaseURL = () =>
     ? (import.meta.env.VITE_BASE_URL || window.location.origin)
     : (process.env.BASE_URL || "http://localhost:3000")
 
+// Mock file upload URLs
+const MOCK_IMAGE_URL = "https://placehold.co/400/png"
+const MOCK_FILE_URL = "https://example-files.online-convert.com/document/txt/example.txt"
+
+// Mock file upload function that returns appropriate URL based on file type
+async function mockUploadFile(file: File): Promise<string> {
+    console.log("uploadFile", file.name, file.type)
+    // Return image placeholder for images, txt file URL for other file types
+    if (file.type.startsWith("image/")) {
+        return MOCK_IMAGE_URL
+    }
+    return MOCK_FILE_URL
+}
+
 // Define the shape of all plugin overrides
 type PluginOverrides = {
     blog: BlogPluginOverrides,
+    "ai-chat": AiChatPluginOverrides,
 }
 
 export const Route = createFileRoute('/pages')({
@@ -40,10 +56,7 @@ function Layout() {
                         apiBaseURL: baseURL,
                         apiBasePath: "/api/data",
                         navigate: (href) => router.navigate({ href }),
-                        uploadImage: async (file) => {
-                            console.log("uploadImage", file)
-                            return "https://placehold.co/400/png"
-                        },
+                        uploadImage: mockUploadFile,
                         Link: ({ href, children, className, ...props }) => (
                             <Link to={href} className={className} {...props}>
                               {children}
@@ -75,6 +88,21 @@ function Layout() {
                         onBeforePostPageRendered: (slug, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforePostPageRendered: checking access for`, slug, context.path);
                             return true;
+                        },
+                    },
+                    "ai-chat": {
+                        mode: "authenticated",
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        navigate: (href) => router.navigate({ href }),
+                        uploadFile: mockUploadFile,
+                        Link: ({ href, children, className, ...props }) => (
+                            <Link to={href} className={className} {...props}>
+                              {children}
+                            </Link>
+                        ),
+                        onRouteRender: async (routeName, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] AI Chat route:`, routeName, context.path);
                         },
                     }
                 }}

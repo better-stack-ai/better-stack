@@ -1,16 +1,19 @@
-.milkdown-custom .milkdown .milkdown-content {
+/* Blog-specific overrides for the shared markdown-content component */
+/* These styles extend/override the base styles from @workspace/ui/markdown-content.css */
+
+.markdown-content .markdown-inner .markdown-body {
 	font-family: var(--crepe-font-default);
 	color: var(--crepe-color-on-background);
 	background: var(--crepe-color-background);
 	padding: 0px;
 }
 
-.milkdown-custom .milkdown .milkdown-content img {
+.markdown-content .markdown-inner .markdown-body img {
 	vertical-align: bottom;
 	max-width: 100%;
 }
 
-.milkdown-custom .milkdown .milkdown-content .markdown-image-wrapper {
+.markdown-content .markdown-inner .markdown-body .markdown-image-wrapper {
 	display: block;
 	position: relative;
 	width: 100%;
@@ -18,33 +21,33 @@
 	min-height: 200px;
 }
 
-.milkdown-custom .milkdown .milkdown-content .markdown-image-wrapper > div {
+.markdown-content .markdown-inner .markdown-body .markdown-image-wrapper > div {
 	width: 100%;
 	height: 100%;
 }
 
-.milkdown-custom .milkdown .milkdown-content .markdown-image-wrapper img {
+.markdown-content .markdown-inner .markdown-body .markdown-image-wrapper img {
 	object-fit: contain;
 }
 
-.milkdown-custom .milkdown .milkdown-content h1,
-.milkdown-custom .milkdown .milkdown-content h2,
-.milkdown-custom .milkdown .milkdown-content h3,
-.milkdown-custom .milkdown .milkdown-content h4,
-.milkdown-custom .milkdown .milkdown-content h5,
-.milkdown-custom .milkdown .milkdown-content h6 {
+.markdown-content .markdown-inner .markdown-body h1,
+.markdown-content .markdown-inner .markdown-body h2,
+.markdown-content .markdown-inner .markdown-body h3,
+.markdown-content .markdown-inner .markdown-body h4,
+.markdown-content .markdown-inner .markdown-body h5,
+.markdown-content .markdown-inner .markdown-body h6 {
 	font-family: var(--crepe-font-title);
 	font-weight: 400;
 	padding: 2px 0;
 	scroll-margin-top: 56px;
 }
 
-.milkdown-custom .milkdown .milkdown-content h1 .heading-anchor,
-.milkdown-custom .milkdown .milkdown-content h2 .heading-anchor,
-.milkdown-custom .milkdown .milkdown-content h3 .heading-anchor,
-.milkdown-custom .milkdown .milkdown-content h4 .heading-anchor,
-.milkdown-custom .milkdown .milkdown-content h5 .heading-anchor,
-.milkdown-custom .milkdown .milkdown-content h6 .heading-anchor {
+.markdown-content .markdown-inner .markdown-body h1 .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h2 .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h3 .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h4 .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h5 .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h6 .heading-anchor {
 	opacity: 0;
 	margin-left: 8px;
 	color: var(--crepe-color-on-surface-variant);
@@ -52,64 +55,64 @@
 	transition: opacity 0.15s ease-in-out;
 }
 
-.milkdown-custom .milkdown .milkdown-content h1:hover .heading-anchor,
-.milkdown-custom .milkdown .milkdown-content h2:hover .heading-anchor,
-.milkdown-custom .milkdown .milkdown-content h3:hover .heading-anchor,
-.milkdown-custom .milkdown .milkdown-content h4:hover .heading-anchor,
-.milkdown-custom .milkdown .milkdown-content h5:hover .heading-anchor,
-.milkdown-custom .milkdown .milkdown-content h6:hover .heading-anchor {
+.markdown-content .markdown-inner .markdown-body h1:hover .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h2:hover .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h3:hover .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h4:hover .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h5:hover .heading-anchor,
+.markdown-content .markdown-inner .markdown-body h6:hover .heading-anchor {
 	opacity: 1;
 }
 
-.milkdown-custom .milkdown .milkdown-content h1 {
+.markdown-content .markdown-inner .markdown-body h1 {
 	font-size: 42px;
 	line-height: 50px;
 	margin-top: 32px;
 }
 
-.milkdown-custom .milkdown .milkdown-content h2 {
+.markdown-content .markdown-inner .markdown-body h2 {
 	font-size: 36px;
 	line-height: 44px;
 	margin-top: 28px;
 }
 
-.milkdown-custom .milkdown .milkdown-content h3 {
+.markdown-content .markdown-inner .markdown-body h3 {
 	font-size: 32px;
 	line-height: 40px;
 	margin-top: 24px;
 }
 
-.milkdown-custom .milkdown .milkdown-content h4 {
+.markdown-content .markdown-inner .markdown-body h4 {
 	font-size: 28px;
 	line-height: 36px;
 	margin-top: 20px;
 }
 
-.milkdown-custom .milkdown .milkdown-content h5 {
+.markdown-content .markdown-inner .markdown-body h5 {
 	font-size: 24px;
 	line-height: 32px;
 	margin-top: 16px;
 }
 
-.milkdown-custom .milkdown .milkdown-content h6 {
+.markdown-content .markdown-inner .markdown-body h6 {
 	font-size: 18px;
 	font-weight: 700;
 	line-height: 28px;
 	margin-top: 16px;
 }
 
-.milkdown-custom .milkdown .milkdown-content p {
+.markdown-content .markdown-inner .markdown-body p {
 	font-size: 16px;
 	line-height: 24px;
 	padding: 4px 0;
 }
 
-.milkdown-custom .milkdown .milkdown-content a {
+.markdown-content .markdown-inner .markdown-body a {
 	color: var(--crepe-color-primary);
 	text-decoration: underline;
 }
 
-.milkdown-custom .milkdown .milkdown-content code {
+.markdown-content .markdown-inner .markdown-body code {
 	color: var(--crepe-color-inline-code);
 	background: color-mix(
 		in srgb,
@@ -124,7 +127,7 @@
 	line-height: 1.4286;
 }
 
-.milkdown-custom .milkdown .milkdown-content pre {
+.markdown-content .markdown-inner .markdown-body pre {
 	background: color-mix(
 		in srgb,
 		var(--crepe-color-inline-area),
@@ -135,33 +138,51 @@
 	overflow-x: auto;
 }
 
-.milkdown-custom .milkdown .milkdown-content pre code {
+.markdown-content .markdown-inner .markdown-body pre code {
 	padding: 0;
 	background: transparent;
 }
 
 /* Ensure highlight.js themes color tokens inside our containers */
-.milkdown-custom .milkdown .milkdown-content pre code.hljs,
-.milkdown-custom .milkdown .milkdown-content code.hljs {
+.markdown-content .markdown-inner .markdown-body pre code.hljs,
+.markdown-content .markdown-inner .markdown-body code.hljs {
 	display: block;
 	overflow-x: auto;
 }
 
-.milkdown-custom .milkdown .milkdown-code-block {
+/* Dark mode overrides for highlight.js tokens that have poor visibility */
+@media (prefers-color-scheme: dark) {
+	.markdown-content .markdown-inner .markdown-body .hljs-attr {
+		color: #ff9ac1;
+	}
+	.markdown-content .markdown-inner .markdown-body .hljs-params {
+		color: #ffb86c;
+	}
+}
+
+/* Also support Tailwind dark class for dark mode */
+.dark .markdown-content .markdown-inner .markdown-body .hljs-attr {
+	color: #ff9ac1;
+}
+.dark .markdown-content .markdown-inner .markdown-body .hljs-params {
+	color: #ffb86c;
+}
+
+.markdown-content .markdown-inner .markdown-code-block {
 	display: block;
 	position: relative;
 	padding: 40px 8px 20px 20px;
 	margin: 4px 0;
 }
 
-.milkdown-custom .milkdown .milkdown-code-block pre {
+.markdown-content .markdown-inner .markdown-code-block pre {
 	background: transparent;
 	padding: 0;
 	border-radius: 0;
 }
 
 /* Layout wrapper to host gutter and code content side-by-side */
-.milkdown-custom .milkdown .milkdown-code-block .code-content {
+.markdown-content .markdown-inner .markdown-code-block .code-content {
 	display: grid;
 	grid-template-columns: var(--code-gutter-width, 3ch) 1fr;
 	gap: 0.35rem;
@@ -169,7 +190,7 @@
 }
 
 /* Gutter line numbers */
-.milkdown-custom .milkdown .milkdown-code-block .line-numbers {
+.markdown-content .markdown-inner .markdown-code-block .line-numbers {
 	list-style: none;
 	margin: 0;
 	user-select: none;
@@ -182,12 +203,12 @@
 	height: 100%;
 }
 
-.milkdown-custom .milkdown .milkdown-code-block .line-numbers li {
+.markdown-content .markdown-inner .markdown-code-block .line-numbers li {
 	font-family: var(--crepe-font-code);
 	font-size: 12px;
 }
 
-.milkdown-custom .milkdown .milkdown-code-block .code-toolbar {
+.markdown-content .markdown-inner .markdown-code-block .code-toolbar {
 	position: absolute;
 	top: 8px;
 	left: 18px;
@@ -200,16 +221,18 @@
 	transition: opacity 0.15s ease-in-out;
 }
 
-.milkdown-custom .milkdown .milkdown-code-block:hover .code-toolbar {
+.markdown-content .markdown-inner .markdown-code-block:hover .code-toolbar {
 	opacity: 1;
 }
 
 /* Also reveal toolbar when focused via keyboard for accessibility */
-.milkdown-custom .milkdown .milkdown-code-block:focus-within .code-toolbar {
+.markdown-content .markdown-inner
+	.markdown-code-block:focus-within
+	.code-toolbar {
 	opacity: 1;
 }
 
-.milkdown-custom .milkdown .milkdown-code-block .language-label {
+.markdown-content .markdown-inner .markdown-code-block .language-label {
 	pointer-events: auto;
 	font-family: var(--crepe-font-default);
 	font-size: 12px;
@@ -221,7 +244,7 @@
 	border-radius: 4px;
 }
 
-.milkdown-custom .milkdown .milkdown-code-block .copy-button {
+.markdown-content .markdown-inner .markdown-code-block .copy-button {
 	pointer-events: auto;
 	display: inline-flex;
 	align-items: center;
@@ -236,11 +259,11 @@
 	transition: background-color 0.2s ease-in-out;
 }
 
-.milkdown-custom .milkdown .milkdown-code-block .copy-button:hover {
+.markdown-content .markdown-inner .markdown-code-block .copy-button:hover {
 	background: var(--crepe-color-hover);
 }
 
-.milkdown-custom .milkdown .milkdown-content blockquote {
+.markdown-content .markdown-inner .markdown-body blockquote {
 	position: relative;
 	padding-left: 40px;
 	padding-top: 0;
@@ -249,7 +272,7 @@
 	margin: 4px 0;
 }
 
-.milkdown-custom .milkdown .milkdown-content blockquote::before {
+.markdown-content .markdown-inner .markdown-body blockquote::before {
 	content: "";
 	width: 4px;
 	left: 0;
@@ -260,7 +283,7 @@
 	border-radius: 100px;
 }
 
-.milkdown-custom .milkdown .milkdown-content hr {
+.markdown-content .markdown-inner .markdown-body hr {
 	border: none;
 	background-color: color-mix(
 		in srgb,
@@ -273,36 +296,36 @@
 	position: relative;
 }
 
-.milkdown-custom .milkdown .milkdown-content ul:not(.contains-task-list) {
+.markdown-content .markdown-inner .markdown-body ul:not(.contains-task-list) {
 	padding: 0;
 	list-style-type: disc;
 	margin-left: 26px;
 }
 
-.milkdown-custom
-	.milkdown
-	.milkdown-content
+.markdown-content
+	.markdown-inner
+	.markdown-body
 	ul:not(.contains-task-list)
 	li::marker {
 	color: var(--crepe-color-outline);
 	font-size: 1.2em;
 }
 
-.milkdown-custom .milkdown .milkdown-content ol {
+.markdown-content .markdown-inner .markdown-body ol {
 	padding: 0;
 	list-style-type: decimal;
 	margin-left: 20px;
 }
 
-.milkdown-custom .milkdown .milkdown-content li.task-list-item {
+.markdown-content .markdown-inner .markdown-body li.task-list-item {
 	position: relative;
 	list-style: none;
 	padding-left: 28px;
 }
 
-.milkdown-custom
-	.milkdown
-	.milkdown-content
+.markdown-content
+	.markdown-inner
+	.markdown-body
 	li.task-list-item
 	input[type="checkbox"] {
 	width: 20px;
@@ -312,15 +335,15 @@
 	margin: 0;
 }
 
-.milkdown-custom .milkdown .milkdown-content table {
+.markdown-content .markdown-inner .markdown-body table {
 	border-collapse: collapse;
 	table-layout: fixed;
 	width: 100%;
 	margin: 4px 0;
 }
 
-.milkdown-custom .milkdown .milkdown-content th,
-.milkdown-custom .milkdown .milkdown-content td {
+.markdown-content .markdown-inner .markdown-body th,
+.markdown-content .markdown-inner .markdown-body td {
 	border: 1px solid
 		color-mix(in srgb, var(--crepe-color-outline), transparent 80%);
 	padding: 4px 16px;
