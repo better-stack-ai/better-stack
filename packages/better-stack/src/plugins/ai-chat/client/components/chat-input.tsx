@@ -117,7 +117,15 @@ export function ChatInput({
 	const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
-			handleSubmit(e as any);
+			// Pass files to parent and let parent clear them after processing
+			handleSubmit(
+				e as unknown as FormEvent<HTMLFormElement>,
+				attachedFiles.length > 0 ? attachedFiles : undefined,
+			);
+			// Clear internal files if not controlled
+			if (!controlledFiles) {
+				setInternalFiles([]);
+			}
 		}
 	};
 

@@ -20,16 +20,10 @@ export type AllowedFileType =
 	| "json";
 
 /**
- * Default allowed file types (all enabled)
+ * Default allowed file types (images only for best AI model compatibility)
+ * Consumers can expand this by passing allowedFileTypes in overrides
  */
-export const DEFAULT_ALLOWED_FILE_TYPES: AllowedFileType[] = [
-	"image",
-	"text",
-	"pdf",
-	"markdown",
-	"csv",
-	"json",
-];
+export const DEFAULT_ALLOWED_FILE_TYPES: AllowedFileType[] = ["image"];
 
 /**
  * MIME type mappings for each file type category

@@ -162,13 +162,9 @@ export function ChatInterface({
 					queryKey: conversationsListQueryKey,
 				});
 
-				// If this was the first message on a new chat, navigate to the new conversation
-				if (
-					isFirstMessageSentRef.current &&
-					!id &&
-					!hasNavigatedRef.current &&
-					navigate
-				) {
+				// If this was the first message on a new chat, update the URL without full navigation
+				// This avoids losing the in-memory messages during component remount
+				if (isFirstMessageSentRef.current && !id && !hasNavigatedRef.current) {
 					hasNavigatedRef.current = true;
 					// Wait for the invalidation to complete and refetch conversations
 					await queryClient.refetchQueries({
@@ -185,8 +181,16 @@ export function ChatInterface({
 							// Update our local state
 							setCurrentConversationId(newConversation.id);
 							conversationIdRef.current = newConversation.id;
-							// Navigate to the new conversation URL
-							navigate(`${basePath}/chat/${newConversation.id}`);
+							// Update URL without navigation to preserve in-memory messages
+							// Use replaceState to avoid adding to history stack
+							const newUrl = `${basePath}/chat/${newConversation.id}`;
+							if (typeof window !== "undefined") {
+								window.history.replaceState(
+									{ ...window.history.state },
+									"",
+									newUrl,
+								);
+							}
 						}
 					}
 				}
@@ -283,29 +287,21 @@ export function ChatInterface({
 		setAttachedFiles([]);
 
 		try {
-			// Build message with parts if files are attached
+			// Use AI SDK's file attachment format
+			// The SDK automatically converts supported file types (images, text) to the correct format
 			if (files && files.length > 0) {
-				const parts: Array<
-					| { type: "text"; text: string }
-					| { type: "file"; mediaType: string; url: string; filename?: string }
-				> = [];
+				// Convert AttachedFile[] to FileUIPart[] format expected by AI SDK
+				const fileUIParts = files.map((file) => ({
+					type: "file" as const,
+					mediaType: file.mediaType,
+					url: file.url,
+					filename: file.filename,
+				}));
 
-				// Add file parts first
-				for (const file of files) {
-					parts.push({
-						type: "file" as const,
-						mediaType: file.mediaType,
-						url: file.url,
-						filename: file.filename,
-					});
-				}
-
-				// Add text part if present
-				if (text) {
-					parts.push({ type: "text" as const, text });
-				}
-
-				await sendMessage({ role: "user", parts });
+				await sendMessage({
+					text: text || "", // AI SDK requires text, even if empty
+					files: fileUIParts,
+				});
 			} else {
 				await sendMessage({ text });
 			}
@@ -424,6 +420,11 @@ export function ChatInterface({
 										</div>
 									</div>
 								)}
+							{error && (
+								<div className="flex items-center gap-2 text-destructive text-sm py-4 px-3 bg-destructive/10 rounded-md">
+									<span>{localization.CHAT_ERROR}</span>
+								</div>
+							)}
 						</div>
 					</ScrollArea>
 				</div>

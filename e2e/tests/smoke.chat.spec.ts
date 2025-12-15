@@ -123,7 +123,7 @@ test.describe("AI Chat Plugin", () => {
 		await expect(
 			page
 				.locator('[data-testid="chat-interface"]')
-				.getByText("Navigation test message"),
+				.getByText("Navigation test message", { exact: true }),
 		).toBeVisible({
 			timeout: 15000,
 		});
@@ -355,20 +355,22 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		// Wait for chat interface to be fully rendered
 		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
 
-		// Create a mock text file - wait for input to be attached first
+		// Create a mock image file - wait for input to be attached first
 		const fileInput = page.locator('input[type="file"]');
 		await expect(fileInput).toBeAttached({ timeout: 5000 });
 
-		// Upload a test text file
+		// Upload a test image file (1x1 red PNG)
+		const testImageBase64 =
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 		await fileInput.setInputFiles({
-			name: "example.txt",
-			mimeType: "text/plain",
-			buffer: Buffer.from("Hello, this is a test file content."),
+			name: "example.png",
+			mimeType: "image/png",
+			buffer: Buffer.from(testImageBase64, "base64"),
 		});
 
 		// Wait for the upload to complete and preview to appear
-		// Non-image files show a file icon with filename
-		await expect(page.getByText("example.txt")).toBeVisible({
+		// Image files show a thumbnail preview
+		await expect(page.locator('img[alt="example.png"]')).toBeVisible({
 			timeout: 10000,
 		});
 	});
@@ -381,29 +383,31 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		// Wait for chat interface to be fully rendered
 		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
 
-		// Upload a test file - wait for input to be attached first
+		// Upload a test image file - wait for input to be attached first
 		const fileInput = page.locator('input[type="file"]');
 		await expect(fileInput).toBeAttached({ timeout: 5000 });
+		const testImageBase64 =
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 		await fileInput.setInputFiles({
-			name: "to-remove.txt",
-			mimeType: "text/plain",
-			buffer: Buffer.from("This file will be removed."),
+			name: "to-remove.png",
+			mimeType: "image/png",
+			buffer: Buffer.from(testImageBase64, "base64"),
 		});
 
-		// Wait for preview to appear
-		await expect(page.getByText("to-remove.txt")).toBeVisible({
+		// Wait for preview to appear (image shows as thumbnail)
+		await expect(page.locator('img[alt="to-remove.png"]')).toBeVisible({
 			timeout: 10000,
 		});
 
 		// Hover over the preview and click remove button
 		const preview = page
 			.locator(".group")
-			.filter({ has: page.getByText("to-remove.txt") });
+			.filter({ has: page.locator('img[alt="to-remove.png"]') });
 		await preview.hover();
 		await preview.locator("button").click();
 
 		// Verify file is removed
-		await expect(page.getByText("to-remove.txt")).not.toBeVisible();
+		await expect(page.locator('img[alt="to-remove.png"]')).not.toBeVisible();
 	});
 
 	test("should send message with attached file", async ({ page }) => {
@@ -412,17 +416,19 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		// Wait for chat interface to be fully rendered
 		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
 
-		// Upload a test file - wait for input to be attached first
+		// Upload a test image file - wait for input to be attached first
 		const fileInput = page.locator('input[type="file"]');
 		await expect(fileInput).toBeAttached({ timeout: 5000 });
+		const testImageBase64 =
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 		await fileInput.setInputFiles({
-			name: "attachment.txt",
-			mimeType: "text/plain",
-			buffer: Buffer.from("File content for testing."),
+			name: "attachment.png",
+			mimeType: "image/png",
+			buffer: Buffer.from(testImageBase64, "base64"),
 		});
 
-		// Wait for preview
-		await expect(page.getByText("attachment.txt")).toBeVisible({
+		// Wait for preview (image shows as thumbnail)
+		await expect(page.locator('img[alt="attachment.png"]')).toBeVisible({
 			timeout: 10000,
 		});
 
@@ -450,63 +456,71 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 	test("should clear attachments after sending", async ({ page }) => {
 		await page.goto("/pages/chat");
 
-		// Upload a test file
+		// Upload a test image file
 		const fileInput = page.locator('input[type="file"]');
+		const testImageBase64 =
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 		await fileInput.setInputFiles({
-			name: "clear-test.txt",
-			mimeType: "text/plain",
-			buffer: Buffer.from("File to test clearing after send."),
+			name: "clear-test.png",
+			mimeType: "image/png",
+			buffer: Buffer.from(testImageBase64, "base64"),
 		});
 
-		// Wait for preview
-		await expect(page.getByText("clear-test.txt")).toBeVisible({
+		// Wait for preview (image shows as thumbnail)
+		await expect(page.locator('img[alt="clear-test.png"]')).toBeVisible({
 			timeout: 10000,
 		});
 
 		// Type a message and send
 		const input = page.getByPlaceholder("Type a message...");
-		await input.fill("Please analyze this file");
+		await input.fill("Please analyze this image");
 		await page.keyboard.press("Enter");
 
 		// Wait for the user message to appear (confirming send worked)
-		await expect(page.getByText("Please analyze this file")).toBeVisible({
+		await expect(page.getByText("Please analyze this image")).toBeVisible({
 			timeout: 15000,
 		});
 
 		// Verify the attachment preview is cleared from input area after sending
-		// The file preview in the input area should be gone
-		const inputAreaFilePreview = page
+		// The image preview in the input area should be gone
+		const inputAreaImagePreview = page
 			.locator("form")
-			.getByText("clear-test.txt");
-		await expect(inputAreaFilePreview).not.toBeVisible({ timeout: 5000 });
+			.locator('img[alt="clear-test.png"]');
+		await expect(inputAreaImagePreview).not.toBeVisible({ timeout: 5000 });
 	});
 
-	test("should allow multiple file uploads", async ({ page }) => {
+	test("should allow multiple image uploads", async ({ page }) => {
 		await page.goto("/pages/chat");
 
 		const fileInput = page.locator('input[type="file"]');
+		const testImageBase64 =
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
-		// Upload first file
+		// Upload first image
 		await fileInput.setInputFiles({
-			name: "file1.txt",
-			mimeType: "text/plain",
-			buffer: Buffer.from("First file content."),
+			name: "image1.png",
+			mimeType: "image/png",
+			buffer: Buffer.from(testImageBase64, "base64"),
 		});
 
-		await expect(page.getByText("file1.txt")).toBeVisible({ timeout: 10000 });
-
-		// Upload second file
-		await fileInput.setInputFiles({
-			name: "file2.txt",
-			mimeType: "text/plain",
-			buffer: Buffer.from("Second file content."),
+		await expect(page.locator('img[alt="image1.png"]')).toBeVisible({
+			timeout: 10000,
 		});
 
-		await expect(page.getByText("file2.txt")).toBeVisible({ timeout: 10000 });
+		// Upload second image
+		await fileInput.setInputFiles({
+			name: "image2.png",
+			mimeType: "image/png",
+			buffer: Buffer.from(testImageBase64, "base64"),
+		});
 
-		// Both files should be visible
-		await expect(page.getByText("file1.txt")).toBeVisible();
-		await expect(page.getByText("file2.txt")).toBeVisible();
+		await expect(page.locator('img[alt="image2.png"]')).toBeVisible({
+			timeout: 10000,
+		});
+
+		// Both images should be visible
+		await expect(page.locator('img[alt="image1.png"]')).toBeVisible();
+		await expect(page.locator('img[alt="image2.png"]')).toBeVisible();
 	});
 
 	test("should retry AI response and maintain correct message order", async ({
@@ -546,7 +560,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		await retryButton.click();
 
 		// Wait for the new response to complete
-		await page.waitForTimeout(3000);
+		await page.waitForTimeout(7000);
 
 		// Verify there's still only one user message and one AI response
 		const userMessages = chatInterface.locator('[aria-label="Your message"]');
@@ -639,12 +653,14 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		// Reload the page to verify persistence
 		await page.goto(conversationUrl);
 
-		// Wait for messages to load
-		await expect(chatInterface.getByText("Edited message content")).toBeVisible(
-			{
-				timeout: 15000,
-			},
-		);
+		// Wait for messages to load - target user message specifically to avoid matching AI response text
+		await expect(
+			chatInterface
+				.locator('[aria-label="Your message"]')
+				.getByText("Edited message content"),
+		).toBeVisible({
+			timeout: 15000,
+		});
 
 		// Verify original message is gone after reload (database was synced correctly)
 		await expect(
