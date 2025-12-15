@@ -392,7 +392,7 @@ export function ChatInterface({
 							) : (
 								messages.map((m, index) => (
 									<ChatMessage
-										key={m.id || `msg-${Math.random()}`}
+										key={m.id || `msg-${index}`}
 										message={m}
 										isStreaming={
 											status === "streaming" &&
