@@ -28,6 +28,8 @@ interface ChatInterfaceProps {
 	/** Variant: 'full' for full-page layout, 'widget' for embedded widget */
 	variant?: "full" | "widget";
 	className?: string;
+	/** Called whenever messages change (for persistence). Only fires in public mode. */
+	onMessagesChange?: (messages: UIMessage[]) => void;
 }
 
 export function ChatInterface({
@@ -36,6 +38,7 @@ export function ChatInterface({
 	id,
 	variant = "full",
 	className,
+	onMessagesChange,
 }: ChatInterfaceProps) {
 	const {
 		navigate,
@@ -258,6 +261,13 @@ export function ChatInterface({
 			}
 		}
 	}, [messages]);
+
+	// Notify parent when messages change (for persistence in public mode)
+	useEffect(() => {
+		if (isPublicMode && onMessagesChange) {
+			onMessagesChange(messages);
+		}
+	}, [messages, isPublicMode, onMessagesChange]);
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
 		setInput(e.target.value);

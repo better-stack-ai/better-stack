@@ -20,6 +20,7 @@ import {
 	X,
 } from "lucide-react";
 import type { UIMessage } from "ai";
+import { isToolUIPart, getToolName } from "ai";
 import {
 	useMemo,
 	useState,
@@ -28,8 +29,13 @@ import {
 	type ComponentType,
 } from "react";
 import { usePluginOverrides } from "@btst/stack/context";
-import type { AiChatPluginOverrides } from "../overrides";
+import type {
+	AiChatPluginOverrides,
+	ToolCallProps,
+	ToolCallState,
+} from "../overrides";
 import { AI_CHAT_LOCALIZATION } from "../localization";
+import { ToolCallDisplay } from "./tool-call-display";
 
 // Import shared markdown + syntax highlighting styles (same pattern as blog plugin)
 import "@workspace/ui/markdown-content.css";
@@ -131,6 +137,7 @@ export function ChatMessage({
 		Link,
 		Image,
 		localization: customLocalization,
+		toolRenderers,
 	} = usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
 		"ai-chat",
 		{},
@@ -229,6 +236,14 @@ export function ChatMessage({
 				(part: any) =>
 					part.type === "file" && !part.mediaType?.startsWith("image/"),
 			);
+		}
+		return [];
+	}, [message.parts]);
+
+	// Extract tool call parts from message (AI SDK v5 format: type is "tool-{toolName}")
+	const toolParts = useMemo(() => {
+		if (message.parts && Array.isArray(message.parts)) {
+			return message.parts.filter((part: any) => isToolUIPart(part));
 		}
 		return [];
 	}, [message.parts]);
@@ -370,7 +385,7 @@ export function ChatMessage({
 							)}
 						</div>
 					) : (
-						// Assistant messages: rendered markdown + files + images
+						// Assistant messages: rendered markdown + files + images + tool calls
 						<div className="wrap-break-word space-y-2">
 							{/* Any attached files (non-images) */}
 							{fileParts.length > 0 && (
@@ -407,6 +422,45 @@ export function ChatMessage({
 									))}
 								</div>
 							)}
+							{/* Tool calls */}
+							{toolParts.length > 0 && (
+								<div className="space-y-2">
+									{toolParts.map((part: any) => {
+										const toolName = getToolName(part);
+										const toolCallId = part.toolCallId;
+										const state = part.state as ToolCallState;
+										const input = part.input;
+										const output = part.output;
+										const errorText = part.errorText;
+										const isLoading =
+											state === "input-streaming" ||
+											state === "input-available";
+
+										const toolCallProps: ToolCallProps = {
+											toolCallId,
+											toolName,
+											state,
+											input,
+											output,
+											errorText,
+											isLoading,
+										};
+
+										// Check if there's a custom renderer for this tool
+										const CustomRenderer = toolRenderers?.[toolName];
+										if (CustomRenderer) {
+											return (
+												<CustomRenderer key={toolCallId} {...toolCallProps} />
+											);
+										}
+
+										// Use default tool call display
+										return (
+											<ToolCallDisplay key={toolCallId} {...toolCallProps} />
+										);
+									})}
+								</div>
+							)}
 							{/* Text content */}
 							{displayContent ? (
 								<MarkdownContent
@@ -415,7 +469,9 @@ export function ChatMessage({
 									LinkComponent={Link ?? DefaultLink}
 									ImageComponent={ImageComponent}
 								/>
-							) : imageParts.length === 0 && fileParts.length === 0 ? (
+							) : imageParts.length === 0 &&
+								fileParts.length === 0 &&
+								toolParts.length === 0 ? (
 								<span className="text-muted-foreground">...</span>
 							) : null}
 						</div>

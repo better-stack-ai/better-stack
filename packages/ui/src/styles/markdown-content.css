@@ -155,6 +155,9 @@
 	.markdown-content .markdown-inner .markdown-body .hljs-params {
 		color: #ffb86c;
 	}
+	.markdown-content .markdown-inner .markdown-body .hljs-punctuation {
+		color: #c9d1d9;
+	}
 }
 
 /* Also support Tailwind dark class for dark mode */
@@ -163,6 +166,9 @@
 }
 .dark .markdown-content .markdown-inner .markdown-body .hljs-params {
 	color: #ffb86c;
+}
+.dark .markdown-content .markdown-inner .markdown-body .hljs-punctuation {
+	color: #c9d1d9;
 }
 
 .markdown-content .markdown-inner .markdown-code-block {

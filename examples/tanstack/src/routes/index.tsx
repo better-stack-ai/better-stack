@@ -44,6 +44,13 @@ function Home() {
                     }}
                     >New Post</Link>
                 </Button>
+                <Button className="text-destructive" variant="link" asChild>
+                    <Link to="/pages/$"
+                    params={{
+                        _splat: "chat",
+                    }}
+                    >Chat</Link>
+                </Button>
             </div>
         </main>
     </div>

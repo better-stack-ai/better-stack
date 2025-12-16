@@ -33,6 +33,9 @@ export function Welcome() {
 					<Button className="text-destructive" variant="link" asChild>
 						<Link to="/pages/blog/new">New Post</Link>
 					</Button>
+					<Button className="text-destructive" variant="link" asChild>
+						<Link to="/pages/chat">Chat</Link>
+					</Button>
 				</div>
 			</main>
 		</div>
