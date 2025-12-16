@@ -165,6 +165,21 @@ export interface AiChatPluginOverrides {
 	showAttribution?: boolean;
 
 	/**
+	 * Suggested prompts to display in the empty chat state.
+	 * When provided, these appear as clickable buttons that populate the input field.
+	 *
+	 * @example
+	 * ```tsx
+	 * chatSuggestions: [
+	 *   "What can you help me with?",
+	 *   "Tell me about your features",
+	 *   "How do I get started?",
+	 * ]
+	 * ```
+	 */
+	chatSuggestions?: string[];
+
+	/**
 	 * Custom renderers for tool calls. Keys should match tool names.
 	 * Each renderer receives ToolCallProps and can return custom UI.
 	 *

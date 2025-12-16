@@ -126,7 +126,7 @@ export function ToolCallDisplay({
 			<AccordionItem
 				value={toolCallId}
 				className={cn(
-					"border! rounded-lg overflow-hidden transition-colors",
+					"!border rounded-lg overflow-hidden transition-colors",
 					hasError && "border-destructive/50",
 					!hasError && isComplete && "border-green-500/30",
 					!isComplete && "border-border/50",
@@ -142,9 +142,7 @@ export function ToolCallDisplay({
 						</span>
 						<span className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
 							{statusIcon}
-							<span aria-hidden="true" className="sr-only">
-								{statusLabel}
-							</span>
+							<span className="sr-only">{statusLabel}</span>
 						</span>
 					</div>
 				</AccordionTrigger>

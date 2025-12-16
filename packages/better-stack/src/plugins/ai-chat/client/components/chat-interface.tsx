@@ -48,6 +48,7 @@ export function ChatInterface({
 		headers,
 		mode,
 		showAttribution,
+		chatSuggestions,
 	} = usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
 		"ai-chat",
 		{ showAttribution: true },
@@ -110,6 +111,15 @@ export function ChatInterface({
 
 	// Ref to track edit operation with messages to use
 	const editMessagesRef = useRef<UIMessage[] | null>(null);
+
+	// Track if we've finished initializing messages
+	// This prevents onMessagesChange from firing with an empty array before initialMessages are loaded
+	// Without this guard, the effect would fire on mount with [], overwriting any saved messages
+	const [isMessagesInitialized, setIsMessagesInitialized] = useState(
+		() =>
+			// Start as initialized if there are no initialMessages to load
+			!initialMessages || initialMessages.length === 0,
+	);
 
 	// Memoize the transport to prevent recreation on every render
 	const transport = useMemo(
@@ -243,6 +253,8 @@ export function ChatInterface({
 			messages.length === 0
 		) {
 			setMessages(initialMessages);
+			// Mark as initialized - this is batched with setMessages so both take effect in the same render
+			setIsMessagesInitialized(true);
 		}
 	}, [initialMessages, setMessages, messages.length]);
 
@@ -263,11 +275,12 @@ export function ChatInterface({
 	}, [messages]);
 
 	// Notify parent when messages change (for persistence in public mode)
+	// Only fire after initialization to prevent overwriting saved messages with an empty array
 	useEffect(() => {
-		if (isPublicMode && onMessagesChange) {
+		if (isPublicMode && onMessagesChange && isMessagesInitialized) {
 			onMessagesChange(messages);
 		}
-	}, [messages, isPublicMode, onMessagesChange]);
+	}, [messages, isPublicMode, onMessagesChange, isMessagesInitialized]);
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
 		setInput(e.target.value);
@@ -392,8 +405,24 @@ export function ChatInterface({
 							)}
 						>
 							{messages.length === 0 ? (
-								<div className="flex flex-col items-center justify-center h-full min-h-[300px] text-muted-foreground">
-									<p>{localization.CHAT_EMPTY_STATE}</p>
+								<div className="flex flex-col h-full min-h-[300px]">
+									<div className="flex-1 flex items-center justify-center text-muted-foreground">
+										<p>{localization.CHAT_EMPTY_STATE}</p>
+									</div>
+									{chatSuggestions && chatSuggestions.length > 0 && (
+										<div className="flex flex-wrap justify-center gap-2 pb-4 max-w-md mx-auto">
+											{chatSuggestions.map((suggestion, index) => (
+												<button
+													key={index}
+													type="button"
+													onClick={() => setInput(suggestion)}
+													className="px-3 py-2 text-sm rounded-lg border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors text-foreground"
+												>
+													{suggestion}
+												</button>
+											))}
+										</div>
+									)}
 								</div>
 							) : (
 								messages.map((m, index) => (

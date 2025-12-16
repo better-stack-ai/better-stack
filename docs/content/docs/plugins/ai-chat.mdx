@@ -280,6 +280,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
 - `mode`: Plugin mode (`"authenticated"` or `"public"`)
 - `uploadFile`: Function to upload files and return their URL
 - `allowedFileTypes`: Array of allowed file type categories (default: all types)
+- `chatSuggestions`: Array of suggested prompts shown in empty chat state
 - `Link`: Custom Link component (defaults to `<a>` tag)
 - `Image`: Custom Image component (useful for Next.js Image optimization)
 - `refresh`: Function to refresh server-side cache (useful for Next.js)
@@ -527,6 +528,12 @@ overrides={{
       return url
     },
     allowedFileTypes: ["image", "pdf", "text"], // Restrict allowed types
+    // Suggested prompts shown in empty chat state
+    chatSuggestions: [
+      "What can you help me with?",
+      "Tell me about your features",
+      "How do I get started?",
+    ],
     // Custom tool UI renderers (see "Custom Tool UI Renderers" section)
     toolRenderers: {
       getWeather: WeatherCard,
