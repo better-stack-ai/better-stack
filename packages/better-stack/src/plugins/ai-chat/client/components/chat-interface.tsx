@@ -85,6 +85,8 @@ export function ChatInterface({
 			setCurrentConversationId(id);
 			isFirstMessageSentRef.current = false;
 			hasNavigatedRef.current = false;
+			// Reset edit flag on navigation
+			isEditInProgressRef.current = false;
 		}
 	}, [id, isPublicMode]);
 
@@ -111,6 +113,9 @@ export function ChatInterface({
 
 	// Ref to track edit operation with messages to use
 	const editMessagesRef = useRef<UIMessage[] | null>(null);
+
+	// Flag to prevent load conversation effect from overwriting messages during edit
+	const isEditInProgressRef = useRef(false);
 
 	// Track if we've finished initializing messages
 	// This prevents onMessagesChange from firing with an empty array before initialMessages are loaded
@@ -212,6 +217,10 @@ export function ChatInterface({
 
 	// Load existing conversation messages when navigating to a conversation
 	useEffect(() => {
+		// Don't overwrite messages if an edit is in progress
+		if (isEditInProgressRef.current) {
+			return;
+		}
 		if (
 			conversation?.messages &&
 			conversation.messages.length > 0 &&
@@ -354,6 +363,9 @@ export function ChatInterface({
 		if (pendingEdit && messages.length === pendingEdit.expectedLength) {
 			const textToSend = pendingEdit.text;
 			setPendingEdit(null);
+			// Clear edit in progress flag - the new message will now be sent
+			// and we want subsequent effects to work normally
+			isEditInProgressRef.current = false;
 			sendMessage({ text: textToSend });
 		}
 	}, [messages.length, pendingEdit, sendMessage]);
@@ -370,6 +382,9 @@ export function ChatInterface({
 
 			// Truncate to BEFORE the edited message (remove it and all subsequent)
 			const truncatedMessages = messages.slice(0, messageIndex);
+
+			// Mark edit in progress to prevent load conversation effect from overwriting
+			isEditInProgressRef.current = true;
 
 			// Store the truncated messages in the ref for the transport to use
 			editMessagesRef.current = truncatedMessages;

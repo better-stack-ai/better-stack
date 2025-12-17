@@ -6,12 +6,13 @@ import { usePluginOverrides, useBasePath } from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
 import {
 	useSuspenseContentTypes,
-	useSuspenseContentItem,
+	useContentItem,
 	useCreateContent,
 	useUpdateContent,
 } from "../../hooks";
 import { ContentForm } from "../forms/content-form";
 import { EmptyState } from "../shared/empty-state";
+import { EditorSkeleton } from "../loading/editor-skeleton";
 import { CMS_LOCALIZATION } from "../../localization";
 
 interface ContentEditorPageProps {
@@ -30,8 +31,9 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 
 	const isEditing = !!id;
 
-	// Only fetch item if editing
-	const { item } = id ? useSuspenseContentItem(typeSlug, id) : { item: null };
+	// useContentItem has enabled: !!id built-in, so it won't fetch when creating new items
+	// This avoids conditional hook calls which violate React's Rules of Hooks
+	const { item, isLoading: isLoadingItem } = useContentItem(typeSlug, id ?? "");
 
 	const createContent = useCreateContent(typeSlug);
 	const updateContent = useUpdateContent(typeSlug);
@@ -43,6 +45,11 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 				description="Content type not found"
 			/>
 		);
+	}
+
+	// Show loading skeleton while fetching item in edit mode
+	if (isEditing && isLoadingItem) {
+		return <EditorSkeleton />;
 	}
 
 	if (isEditing && !item) {

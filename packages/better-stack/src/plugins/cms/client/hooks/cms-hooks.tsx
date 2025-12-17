@@ -459,14 +459,14 @@ export function useContentItemBySlug<
 export function useCreateContent<TData = Record<string, unknown>>(
 	typeSlug: string,
 ) {
-	const { refresh, apiBaseURL, apiBasePath } =
+	const { refresh, apiBaseURL, apiBasePath, headers } =
 		usePluginOverrides<CMSPluginOverrides>("cms");
 	const client = createApiClient<CMSApiRouter>({
 		baseURL: apiBaseURL,
 		basePath: apiBasePath,
 	});
 	const queryClient = useQueryClient();
-	const queries = createCMSQueryKeys(client);
+	const queries = createCMSQueryKeys(client, headers);
 
 	return useMutation<
 		SerializedContentItemWithType<TData>,
@@ -479,6 +479,7 @@ export function useCreateContent<TData = Record<string, unknown>>(
 				method: "POST",
 				params: { typeSlug },
 				body: data as { slug: string; data: Record<string, unknown> },
+				headers,
 			});
 			if (isErrorResponse(response)) {
 				throw toError(response.error);
@@ -519,14 +520,14 @@ export function useCreateContent<TData = Record<string, unknown>>(
 export function useUpdateContent<TData = Record<string, unknown>>(
 	typeSlug: string,
 ) {
-	const { refresh, apiBaseURL, apiBasePath } =
+	const { refresh, apiBaseURL, apiBasePath, headers } =
 		usePluginOverrides<CMSPluginOverrides>("cms");
 	const client = createApiClient<CMSApiRouter>({
 		baseURL: apiBaseURL,
 		basePath: apiBasePath,
 	});
 	const queryClient = useQueryClient();
-	const queries = createCMSQueryKeys(client);
+	const queries = createCMSQueryKeys(client, headers);
 
 	return useMutation<
 		SerializedContentItemWithType<TData>,
@@ -539,6 +540,7 @@ export function useUpdateContent<TData = Record<string, unknown>>(
 				method: "PUT",
 				params: { typeSlug, id },
 				body: data as { slug?: string; data?: Record<string, unknown> },
+				headers,
 			});
 			if (isErrorResponse(response)) {
 				throw toError(response.error);
@@ -567,14 +569,14 @@ export function useUpdateContent<TData = Record<string, unknown>>(
  * Hook for deleting a content item
  */
 export function useDeleteContent(typeSlug: string) {
-	const { refresh, apiBaseURL, apiBasePath } =
+	const { refresh, apiBaseURL, apiBasePath, headers } =
 		usePluginOverrides<CMSPluginOverrides>("cms");
 	const client = createApiClient<CMSApiRouter>({
 		baseURL: apiBaseURL,
 		basePath: apiBasePath,
 	});
 	const queryClient = useQueryClient();
-	const queries = createCMSQueryKeys(client);
+	const queries = createCMSQueryKeys(client, headers);
 
 	return useMutation<{ success: boolean }, Error, string>({
 		mutationKey: [...queries.cmsContent._def, typeSlug, "delete"],
@@ -582,6 +584,7 @@ export function useDeleteContent(typeSlug: string) {
 			const response: unknown = await client("@delete/content/:typeSlug/:id", {
 				method: "DELETE",
 				params: { typeSlug, id },
+				headers,
 			});
 			if (isErrorResponse(response)) {
 				throw toError(response.error);
