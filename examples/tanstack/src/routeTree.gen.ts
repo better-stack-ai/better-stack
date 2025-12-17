@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as CmsExampleRouteImport } from './routes/cms-example'
 import { Route as PagesRouteRouteImport } from './routes/pages/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PagesSplatRouteImport } from './routes/pages/$'
@@ -18,6 +19,11 @@ import { Route as ApiDataSplatRouteImport } from './routes/api/data/$'
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CmsExampleRoute = CmsExampleRouteImport.update({
+  id: '/cms-example',
+  path: '/cms-example',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PagesRouteRoute = PagesRouteRouteImport.update({
@@ -44,6 +50,7 @@ const ApiDataSplatRoute = ApiDataSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/pages': typeof PagesRouteRouteWithChildren
+  '/cms-example': typeof CmsExampleRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/pages/$': typeof PagesSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/pages': typeof PagesRouteRouteWithChildren
+  '/cms-example': typeof CmsExampleRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/pages/$': typeof PagesSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
@@ -59,21 +67,42 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/pages': typeof PagesRouteRouteWithChildren
+  '/cms-example': typeof CmsExampleRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/pages/$': typeof PagesSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/pages' | '/sitemap.xml' | '/pages/$' | '/api/data/$'
+  fullPaths:
+    | '/'
+    | '/pages'
+    | '/cms-example'
+    | '/sitemap.xml'
+    | '/pages/$'
+    | '/api/data/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/pages' | '/sitemap.xml' | '/pages/$' | '/api/data/$'
-  id: '__root__' | '/' | '/pages' | '/sitemap.xml' | '/pages/$' | '/api/data/$'
+  to:
+    | '/'
+    | '/pages'
+    | '/cms-example'
+    | '/sitemap.xml'
+    | '/pages/$'
+    | '/api/data/$'
+  id:
+    | '__root__'
+    | '/'
+    | '/pages'
+    | '/cms-example'
+    | '/sitemap.xml'
+    | '/pages/$'
+    | '/api/data/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   PagesRouteRoute: typeof PagesRouteRouteWithChildren
+  CmsExampleRoute: typeof CmsExampleRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiDataSplatRoute: typeof ApiDataSplatRoute
 }
@@ -85,6 +114,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cms-example': {
+      id: '/cms-example'
+      path: '/cms-example'
+      fullPath: '/cms-example'
+      preLoaderRoute: typeof CmsExampleRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pages': {
@@ -133,6 +169,7 @@ const PagesRouteRouteWithChildren = PagesRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PagesRouteRoute: PagesRouteRouteWithChildren,
+  CmsExampleRoute: CmsExampleRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiDataSplatRoute: ApiDataSplatRoute,
 }

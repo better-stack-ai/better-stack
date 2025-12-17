@@ -3,6 +3,7 @@ import { Outlet, Link, useNavigate } from "react-router";
 import { BetterStackProvider } from "@btst/stack/context"
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
+import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 
 // Get base URL function - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -30,6 +31,7 @@ async function mockUploadFile(file: File): Promise<string> {
   type PluginOverrides = {
       blog: BlogPluginOverrides,
       "ai-chat": AiChatPluginOverrides,
+      cms: CMSPluginOverrides,
   }
 
 export default function Layout() {
@@ -93,6 +95,20 @@ export default function Layout() {
                         ),
                         onRouteRender: async (routeName, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] AI Chat route:`, routeName, context.path);
+                        },
+                    },
+                    cms: {
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        navigate: (href) => navigate(href),
+                        uploadImage: mockUploadFile,
+                        Link: ({ href, children, className, ...props }) => (
+                            <Link to={href || ""} className={className} {...props}>
+                              {children}
+                            </Link>
+                        ),
+                        onRouteRender: async (routeName, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] CMS route:`, routeName, context.path);
                         },
                     }
                 }}

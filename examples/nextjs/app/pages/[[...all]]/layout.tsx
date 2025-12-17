@@ -10,6 +10,7 @@ import type { TodosPluginOverrides } from "@/lib/plugins/todo/client/overrides"
 import { getOrCreateQueryClient } from "@/lib/query-client"
 import { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
+import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 
 // Get base URL - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -69,6 +70,7 @@ type PluginOverrides = {
     todos: TodosPluginOverrides
     blog: BlogPluginOverrides,
     "ai-chat": AiChatPluginOverrides,
+    cms: CMSPluginOverrides,
 }
 
 export default function ExampleLayout({
@@ -143,6 +145,22 @@ export default function ExampleLayout({
                         },
                         onRouteError: async (routeName, error, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] AI Chat error:`, routeName, error.message);
+                        },
+                    },
+                    cms: {
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        navigate: (path) => router.push(path),
+                        refresh: () => router.refresh(),
+                        uploadImage: mockUploadFile,
+                        Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+                        Image: NextImageWrapper,
+                        // Lifecycle hooks
+                        onRouteRender: async (routeName, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] CMS route:`, routeName, context.path);
+                        },
+                        onRouteError: async (routeName, error, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] CMS error:`, routeName, error.message);
                         },
                     }
                 }}

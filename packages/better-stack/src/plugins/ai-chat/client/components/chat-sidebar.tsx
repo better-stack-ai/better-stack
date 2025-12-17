@@ -146,7 +146,10 @@ export function ChatSidebar({
 	};
 
 	return (
-		<div className={cn("flex flex-col h-full bg-muted/30 border-r", className)}>
+		<div
+			data-testid="chat-sidebar"
+			className={cn("flex flex-col h-full bg-muted/30 border-r", className)}
+		>
 			{/* Header */}
 			<div className="p-4 border-b">
 				<Button

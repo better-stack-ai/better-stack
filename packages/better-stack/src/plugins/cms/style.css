@@ -1,0 +1,19 @@
+@import "./client.css";
+
+/*
+ * CMS Plugin CSS - Includes Tailwind class scanning
+ * 
+ * When consumed from npm, Tailwind v4 will automatically scan this package's
+ * source files for Tailwind classes. Consumers only need:
+ *   @import "@btst/stack/plugins/cms/css";
+ */
+
+/* Scan this package's source files for Tailwind classes */
+@source "../../../src/**/*.{ts,tsx}";
+
+/* Scan UI package components (when installed as npm package the UI package will be in this dir) */
+@source "../../packages/ui/src";
+
+/*
+* alternatively consumer can use @source "../node_modules/@btst/stack/src/**\/*.{ts,tsx}";
+*/
