@@ -9,12 +9,6 @@ catalogs:
     typescript:
       specifier: ^5.6.3
       version: 5.9.3
-    unbuild:
-      specifier: 3.6.1
-      version: 3.6.1
-    vitest:
-      specifier: ^3.2.4
-      version: 3.2.4
 
 overrides:
   zod: ^4.1.5
@@ -657,6 +651,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.66.1(react@19.2.0))
+      '@radix-ui/react-accordion':
+        specifier: ^1.2.12
+        version: 1.2.12(@types/react-dom@19.2.3(@types/react@19.2.6))(@types/react@19.2.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@radix-ui/react-alert-dialog':
         specifier: ^1.1.15
         version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.6))(@types/react@19.2.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)

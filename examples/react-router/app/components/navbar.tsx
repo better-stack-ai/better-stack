@@ -15,6 +15,7 @@ const navLinks = [
   { href: "/pages/blog", label: "Blog" },
   { href: "/pages/blog/drafts", label: "Drafts" },
   { href: "/pages/blog/new", label: "New Post" },
+  { href: "/pages/chat", label: "Chat" },
 ];
 
 export function Navbar() {
@@ -28,7 +29,7 @@ export function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-2">
             {navLinks.map((link) => (
               <Button
                 key={link.href}

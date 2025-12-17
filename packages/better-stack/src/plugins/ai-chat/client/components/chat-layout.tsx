@@ -11,6 +11,7 @@ import { Menu, PanelLeftClose, PanelLeft } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import { ChatSidebar } from "./chat-sidebar";
 import { ChatInterface } from "./chat-interface";
+import type { UIMessage } from "ai";
 
 export interface ChatLayoutProps {
 	/** API base URL */
@@ -27,6 +28,10 @@ export interface ChatLayoutProps {
 	showSidebar?: boolean;
 	/** Height of the widget (only applies to widget layout) */
 	widgetHeight?: string | number;
+	/** Initial messages to populate the chat (useful for localStorage persistence in public mode) */
+	initialMessages?: UIMessage[];
+	/** Called whenever messages change (for persistence). Only fires in public mode. */
+	onMessagesChange?: (messages: UIMessage[]) => void;
 }
 
 /**
@@ -41,6 +46,8 @@ export function ChatLayout({
 	className,
 	showSidebar = true,
 	widgetHeight = "600px",
+	initialMessages,
+	onMessagesChange,
 }: ChatLayoutProps) {
 	const [sidebarOpen, setSidebarOpen] = useState(true);
 	const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -67,7 +74,13 @@ export function ChatLayout({
 				)}
 				style={{ height: widgetHeight }}
 			>
-				<ChatInterface apiPath={apiPath} id={conversationId} variant="widget" />
+				<ChatInterface
+					apiPath={apiPath}
+					id={conversationId}
+					variant="widget"
+					initialMessages={initialMessages}
+					onMessagesChange={onMessagesChange}
+				/>
 			</div>
 		);
 	}
@@ -153,6 +166,8 @@ export function ChatLayout({
 					apiPath={apiPath}
 					id={conversationId}
 					variant="full"
+					initialMessages={initialMessages}
+					onMessagesChange={onMessagesChange}
 				/>
 			</div>
 		</div>

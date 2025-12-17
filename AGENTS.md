@@ -410,6 +410,38 @@ Documentation is in `docs/content/docs/`. Update when adding/changing plugins:
 3. Include code examples with proper syntax highlighting
 4. Document all configuration options, hooks, and overrides
 
+### IMPORTANT: Update Docs for Consumer-Facing Changes
+
+**When modifying any consumer-facing interfaces, you MUST update documentation:**
+
+1. **Props/Types changes** - Update the corresponding plugin MDX file when:
+   - Adding new props to exported components (e.g., `ChatLayout`, `BlogLayout`)
+   - Adding new exported types or interfaces
+   - Changing behavior of existing props
+   - Adding new hooks or exported functions
+
+2. **API changes** - Document new or modified:
+   - API endpoints
+   - Request/response shapes
+   - Backend plugin configuration options
+   - Client plugin configuration options
+
+3. **Breaking changes** - Always document migration paths
+
+**Example workflow:**
+```bash
+# 1. Make changes to component
+# packages/better-stack/src/plugins/ai-chat/client/components/chat-layout.tsx
+
+# 2. Update corresponding docs
+# docs/content/docs/plugins/ai-chat.mdx
+
+# 3. Verify docs build
+cd docs && pnpm build
+```
+
+The `AutoTypeTable` component automatically pulls from TypeScript files, so ensure your types have JSDoc comments for good documentation.
+
 ## Common Pitfalls
 
 1. **Missing overrides** - Client components using `usePluginOverrides()` will crash if overrides aren't configured in the layout or default values are not provided to the hook.
@@ -425,3 +457,5 @@ Documentation is in `docs/content/docs/`. Update when adding/changing plugins:
 6. **Link component href** - Next.js Link requires non-undefined href. Use `href={href || "#"}` pattern
 
 7. **AI SDK versions** - Use AI SDK v5 patterns. Check https://ai-sdk.dev/docs for current API
+
+8. **Forgetting to update docs** - When adding/changing consumer-facing props, types, or interfaces, ALWAYS update the corresponding documentation in `docs/content/docs/plugins/`. Use `AutoTypeTable` to auto-generate type documentation from source files.

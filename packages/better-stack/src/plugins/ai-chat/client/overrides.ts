@@ -9,6 +9,44 @@ import type { AiChatLocalization } from "./localization";
 export type AiChatMode = "authenticated" | "public";
 
 /**
+ * State of a tool call execution
+ */
+export type ToolCallState =
+	| "input-streaming"
+	| "input-available"
+	| "output-available"
+	| "output-error";
+
+/**
+ * Props passed to custom tool call renderer components
+ */
+export interface ToolCallProps<TInput = unknown, TOutput = unknown> {
+	/** Unique identifier for this tool call */
+	toolCallId: string;
+	/** Name of the tool being called */
+	toolName: string;
+	/** Current state of the tool call execution */
+	state: ToolCallState;
+	/** Input arguments passed to the tool (may be partial during streaming) */
+	input: TInput | undefined;
+	/** Output from the tool (only available when state is 'output-available') */
+	output: TOutput | undefined;
+	/** Error message (only available when state is 'output-error') */
+	errorText?: string;
+	/** Whether the tool call is currently in progress */
+	isLoading: boolean;
+}
+
+/**
+ * A component that renders a custom UI for a specific tool call.
+ * Return `null` to fall back to the default tool call accordion.
+ */
+export type ToolCallRenderer<
+	TInput = unknown,
+	TOutput = unknown,
+> = ComponentType<ToolCallProps<TInput, TOutput>>;
+
+/**
  * Allowed file type categories for uploads
  */
 export type AllowedFileType =
@@ -125,6 +163,39 @@ export interface AiChatPluginOverrides {
 	 * @default true
 	 */
 	showAttribution?: boolean;
+
+	/**
+	 * Suggested prompts to display in the empty chat state.
+	 * When provided, these appear as clickable buttons that populate the input field.
+	 *
+	 * @example
+	 * ```tsx
+	 * chatSuggestions: [
+	 *   "What can you help me with?",
+	 *   "Tell me about your features",
+	 *   "How do I get started?",
+	 * ]
+	 * ```
+	 */
+	chatSuggestions?: string[];
+
+	/**
+	 * Custom renderers for tool calls. Keys should match tool names.
+	 * Each renderer receives ToolCallProps and can return custom UI.
+	 *
+	 * @example
+	 * ```tsx
+	 * toolRenderers: {
+	 *   getWeather: ({ toolName, input, output, state, isLoading }) => (
+	 *     <WeatherCard location={input?.location} weather={output} loading={isLoading} />
+	 *   ),
+	 *   searchDocs: ({ input, output, isLoading }) => (
+	 *     <SearchResults query={input?.query} results={output} loading={isLoading} />
+	 *   ),
+	 * }
+	 * ```
+	 */
+	toolRenderers?: Record<string, ToolCallRenderer>;
 
 	// ============== Lifecycle Hooks (optional) ==============
 

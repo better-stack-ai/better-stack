@@ -280,6 +280,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
 - `mode`: Plugin mode (`"authenticated"` or `"public"`)
 - `uploadFile`: Function to upload files and return their URL
 - `allowedFileTypes`: Array of allowed file type categories (default: all types)
+- `chatSuggestions`: Array of suggested prompts shown in empty chat state
 - `Link`: Custom Link component (defaults to `<a>` tag)
 - `Image`: Custom Image component (useful for Next.js Image optimization)
 - `refresh`: Function to refresh server-side cache (useful for Next.js)
@@ -527,6 +528,17 @@ overrides={{
       return url
     },
     allowedFileTypes: ["image", "pdf", "text"], // Restrict allowed types
+    // Suggested prompts shown in empty chat state
+    chatSuggestions: [
+      "What can you help me with?",
+      "Tell me about your features",
+      "How do I get started?",
+    ],
+    // Custom tool UI renderers (see "Custom Tool UI Renderers" section)
+    toolRenderers: {
+      getWeather: WeatherCard,
+      searchDocs: SearchResultsRenderer,
+    },
     // Optional lifecycle hooks
     onBeforeChatPageRendered: (context) => {
       // Check if user can view chat. Useful for SPA.
@@ -538,6 +550,31 @@ overrides={{
     },
   }
 }}
+```
+
+### ChatLayout Component
+
+The `ChatLayout` component provides a ready-to-use chat interface. It can be used directly for custom integrations or public mode with persistence:
+
+```tsx
+import { ChatLayout, type ChatLayoutProps, type UIMessage } from "@btst/stack/plugins/ai-chat/client"
+```
+
+#### ChatLayoutProps
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/ai-chat/client/components/chat-layout.tsx" name="ChatLayoutProps" />
+
+**Example usage with localStorage persistence:**
+
+```tsx
+<ChatLayout
+  apiBaseURL=""
+  apiBasePath="/api/data"
+  layout="widget"
+  widgetHeight="500px"
+  initialMessages={savedMessages}
+  onMessagesChange={(messages) => localStorage.setItem("chat", JSON.stringify(messages))}
+/>
 ```
 
 ## React Data Hooks and Types
@@ -664,6 +701,99 @@ aiChat: aiChatBackendPlugin({
 })
 ```
 
+### Custom Tool UI Renderers
+
+By default, tool calls are displayed using a collapsible accordion that shows the tool name, status, input, and output. You can customize this UI by providing custom renderers for specific tools via the `toolRenderers` override.
+
+#### Default Tool UI
+
+The default `ToolCallDisplay` component shows:
+- Tool name with status indicator (loading spinner, checkmark, or error icon)
+- Collapsible accordion to inspect tool call details
+- Input arguments passed to the tool
+- Output returned by the tool (when complete)
+- Error message (if tool execution failed)
+
+#### Custom Tool Renderers
+
+Provide custom UI components for specific tools using the `toolRenderers` override. Each key should match the tool name from your backend configuration:
+
+```tsx title="app/pages/[[...all]]/layout.tsx"
+import type { AiChatPluginOverrides, ToolCallProps } from "@btst/stack/plugins/ai-chat/client"
+
+// Custom weather card component
+function WeatherCard({ input, output, isLoading }: ToolCallProps<{ location: string }, { temperature: number; condition: string }>) {
+  if (isLoading) {
+    return (
+      <div className="p-4 border rounded-lg animate-pulse">
+        <div className="h-4 w-24 bg-muted rounded" />
+      </div>
+    )
+  }
+  
+  if (!output) return null
+  
+  return (
+    <div className="p-4 border rounded-lg bg-gradient-to-r from-blue-50 to-blue-100">
+      <h4 className="font-medium">{input?.location}</h4>
+      <p className="text-2xl font-bold">{output.temperature}°F</p>
+      <p className="text-muted-foreground">{output.condition}</p>
+    </div>
+  )
+}
+
+// In your layout
+<BetterStackProvider<PluginOverrides>
+  basePath="/pages"
+  overrides={{
+    "ai-chat": {
+      apiBaseURL: baseURL,
+      apiBasePath: "/api/data",
+      navigate: (path) => router.push(path),
+      // Custom tool renderers
+      toolRenderers: {
+        getWeather: WeatherCard,
+        searchDocs: ({ input, output, isLoading }) => (
+          <SearchResultsCard query={input?.query} results={output} loading={isLoading} />
+        ),
+      },
+    }
+  }}
+>
+  {children}
+</BetterStackProvider>
+```
+
+#### ToolCallProps
+
+Each custom renderer receives these props:
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/ai-chat/client/overrides.ts" name="ToolCallProps" />
+
+#### ToolCallState
+
+The possible states of a tool call:
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/ai-chat/client/overrides.ts" name="ToolCallState" />
+
+#### Using the Default ToolCallDisplay
+
+You can also import and use the default `ToolCallDisplay` component in your custom renderers as a fallback:
+
+```tsx
+import { ToolCallDisplay, type ToolCallProps } from "@btst/stack/plugins/ai-chat/client"
+
+function MyCustomToolRenderer(props: ToolCallProps) {
+  // Custom rendering for specific states
+  if (props.state === "output-available" && props.output) {
+    return <MyCustomOutput data={props.output} />
+  }
+  
+  // Fall back to default display for other states
+  return <ToolCallDisplay {...props} />
+}
+```
+
 ## Public Mode Configuration
 
 For public chatbots without user authentication:
@@ -731,8 +861,51 @@ overrides={{
 ```
 
 <Callout type="info">
-In public mode, the sidebar is hidden, conversation history is not saved, and only the `/chat` route is available.
+In public mode, the sidebar is hidden, conversation history is not saved to the database, and only the `/chat` route is available.
 </Callout>
+
+### Local Storage Persistence
+
+By default, public mode is completely stateless - messages are lost on page refresh. However, you can persist conversations to localStorage (or any storage mechanism) using the `initialMessages` and `onMessagesChange` props on `ChatLayout`:
+
+```tsx title="components/public-chat.tsx"
+"use client";
+
+import { ChatLayout, type UIMessage } from "@btst/stack/plugins/ai-chat/client";
+import { useLocalStorage } from "@/hooks/useLocalStorage"; // Your hook
+
+export default function PublicChat() {
+  const [messages, setMessages] = useLocalStorage<UIMessage[]>(
+    "public-chat-messages",
+    []
+  );
+
+  return (
+    <ChatLayout
+      apiBaseURL=""
+      apiBasePath="/api/data"
+      layout="widget"
+      initialMessages={messages}
+      onMessagesChange={setMessages}
+    />
+  );
+}
+```
+
+<Callout type="warn">
+**SSR Hydration:** When using localStorage with SSR frameworks, ensure you handle hydration correctly to avoid mismatches. The `initialMessages` prop is applied on mount, so it works well with client-side storage hooks that return an empty array during SSR.
+</Callout>
+
+**Key points:**
+- `initialMessages` - Pre-populates the chat with saved messages on mount
+- `onMessagesChange` - Called whenever messages change (only fires in public mode)
+- `UIMessage` type is re-exported from `@btst/stack/plugins/ai-chat/client` for convenience
+
+This pattern enables:
+- **localStorage** - Simple browser-based persistence
+- **sessionStorage** - Per-tab conversation history  
+- **IndexedDB** - Larger storage for long conversations
+- **External state management** - Redux, Zustand, etc.
 
 ## Localization
 
