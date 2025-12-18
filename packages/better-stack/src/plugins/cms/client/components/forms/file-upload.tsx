@@ -68,11 +68,10 @@ export function CMSFileUpload({
 		field.value || null,
 	);
 
-	// Sync previewUrl with field.value when it changes (e.g., when editing an existing item)
-	// This is necessary because useState only uses the initial value once on mount
 	useEffect(() => {
-		if (field.value && field.value !== previewUrl) {
-			setPreviewUrl(field.value);
+		const normalizedValue = field.value || null;
+		if (normalizedValue !== previewUrl) {
+			setPreviewUrl(normalizedValue);
 		}
 	}, [field.value, previewUrl]);
 
