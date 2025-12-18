@@ -6,11 +6,29 @@ description: Headless CMS with code-defined content types, dynamic forms, and ag
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
 
+import Image from "next/image";
+
 The CMS plugin provides a headless content management system where developers define content types as Zod schemas in code. This "agency workflow" approach means:
 
 - **Developers** define the content model (schemas, validation rules, field descriptions)
 - **Clients** manage content items through a friendly admin UI
 - **TypeScript** provides end-to-end type safety when schema shapes change
+
+import cmsDemo from "../../../assets/cms-demo.png";
+import cmsDemo1 from "../../../assets/cms-demo-1.png";
+import cmsDemo2 from "../../../assets/cms-demo-2.png";
+
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-2 my-2">
+  <a href={cmsDemo.src} target="_blank" rel="noopener noreferrer">
+    <Image src={cmsDemo} alt="CMS Plugin Demo" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+  <a href={cmsDemo1.src} target="_blank" rel="noopener noreferrer">
+    <Image src={cmsDemo1} alt="CMS Plugin Demo" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+  <a href={cmsDemo2.src} target="_blank" rel="noopener noreferrer">
+    <Image src={cmsDemo2} alt="CMS Plugin Demo" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+</div>
 
 ## Installation
 

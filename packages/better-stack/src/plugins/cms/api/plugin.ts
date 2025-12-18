@@ -14,6 +14,7 @@ import type {
 	SerializedContentItemWithType,
 } from "../types";
 import { listContentQuerySchema } from "../schemas";
+import { slugify } from "../utils";
 
 /**
  * Serialize a ContentType for API response (convert dates to strings)
@@ -305,8 +306,11 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 				},
 				async (ctx) => {
 					const { typeSlug } = ctx.params;
-					const { slug, data } = ctx.body;
+					const { slug: rawSlug, data } = ctx.body;
 					const context = createContext(typeSlug, ctx.headers);
+
+					// Sanitize slug to ensure it's URL-safe
+					const slug = slugify(rawSlug);
 
 					const contentType = await getContentType(typeSlug);
 					if (!contentType) {
@@ -395,8 +399,11 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 				},
 				async (ctx) => {
 					const { typeSlug, id } = ctx.params;
-					const { slug, data } = ctx.body;
+					const { slug: rawSlug, data } = ctx.body;
 					const context = createContext(typeSlug, ctx.headers);
+
+					// Sanitize slug if provided to ensure it's URL-safe
+					const slug = rawSlug ? slugify(rawSlug) : undefined;
 
 					const contentType = await getContentType(typeSlug);
 					if (!contentType) {

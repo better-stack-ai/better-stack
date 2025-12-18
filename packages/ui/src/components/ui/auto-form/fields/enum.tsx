@@ -59,6 +59,15 @@ export default function AutoFormEnum({
     return values.find((item) => item[0] === value);
   }
 
+  // Guard: Ignore empty value changes when a valid value is already set.
+  // This prevents Radix Select from resetting the value during controlled value transitions.
+  const handleValueChange = (val: string) => {
+    if (val === "" && field.value && field.value !== "") {
+      return; // Ignore spurious empty value callback
+    }
+    field.onChange(val);
+  };
+
   return (
     <FormItem>
       <AutoFormLabel
@@ -67,7 +76,7 @@ export default function AutoFormEnum({
       />
       <FormControl>
         <Select
-          onValueChange={field.onChange}
+          onValueChange={handleValueChange}
           value={field.value ?? ""}
           {...fieldProps}
         >

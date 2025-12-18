@@ -107,6 +107,7 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 				</div>
 
 				<ContentForm
+					key={isEditing ? `edit-${id}` : "create"}
 					contentType={contentType}
 					initialData={item?.parsedData}
 					initialSlug={item?.slug}

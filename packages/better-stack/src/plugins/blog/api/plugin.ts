@@ -446,7 +446,8 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							model: "post",
 							data: {
 								...postData,
-								slug: postData.slug ? postData.slug : slugify(postData.title),
+								// Always slugify to ensure URL-safe slug, whether provided or generated from title
+								slug: slugify(postData.slug || postData.title),
 								tags: [],
 								createdAt: new Date(),
 								updatedAt: new Date(),
@@ -513,8 +514,14 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							}
 						}
 
-						const { tags, ...postData } = ctx.body;
+						const { tags, slug, ...restPostData } = ctx.body;
 						const tagNames = tags || [];
+
+						// Sanitize slug if provided to ensure it's URL-safe
+						const postData = {
+							...restPostData,
+							...(slug ? { slug: slugify(slug) } : {}),
+						};
 
 						const updated = await adapter.transaction(async (tx) => {
 							const existingPostTags = await tx.findMany<{
