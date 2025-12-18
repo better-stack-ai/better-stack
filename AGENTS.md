@@ -245,6 +245,65 @@ function createMyMeta(param: string, config: MyClientConfig) {
 }
 ```
 
+### ComposedRoute & Error Handling
+
+Page components use `ComposedRoute` to wrap content with Suspense + ErrorBoundary:
+
+```typescript
+// my-page.tsx - wrapper with boundaries
+const MyPage = lazy(() => import("./my-page.internal").then(m => ({ default: m.MyPage })));
+
+export function MyPageComponent({ id }: { id: string }) {
+  return (
+    <ComposedRoute
+      path={`/plugin/${id}`}
+      PageComponent={MyPage}
+      ErrorComponent={DefaultError}    // Catches thrown errors
+      LoadingComponent={PageSkeleton}  // Shows during lazy load / suspense
+      NotFoundComponent={NotFoundPage}
+      props={{ id }}
+      onError={(error) => console.error(error)}
+    />
+  );
+}
+```
+
+**How it works:**
+- `ComposedRoute` renders nested `<Suspense>` + `<ErrorBoundary>` around `PageComponent`
+- Loading fallbacks only render on client (`typeof window !== "undefined"`) to avoid hydration mismatch
+- `resetKeys={[path]}` resets the error boundary on navigation
+
+### Suspense Hooks & Error Throwing
+
+Use `useSuspenseQuery` in `.internal.tsx` files. Manually throw errors so ErrorBoundary catches them:
+
+```typescript
+export function useSuspenseMyData(id: string) {
+  const { data, refetch, error, isFetching } = useSuspenseQuery({
+    ...queries.items.detail(id),
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  // IMPORTANT: useSuspenseQuery only throws on initial fetch, not refetch failures
+  if (error && !isFetching) {
+    throw error;
+  }
+
+  return { data, refetch };
+}
+```
+
+### Error Flow
+
+| Scenario | What Happens |
+|----------|--------------|
+| **API returns error** | SSR loader stores error in cache → client hydrates → hook throws → ErrorBoundary catches |
+| **Component crashes** | ErrorBoundary catches → renders DefaultError → `onError` callback fires |
+| **Network fails on refetch** | Error stored in query state → hook throws → ErrorBoundary catches |
+
+SSR loaders **don't throw** - they let React Query store errors so ErrorBoundary handles them during render.
+
 ## Build Configuration
 
 ### Adding New Entry Points
@@ -459,3 +518,7 @@ The `AutoTypeTable` component automatically pulls from TypeScript files, so ensu
 7. **AI SDK versions** - Use AI SDK v5 patterns. Check https://ai-sdk.dev/docs for current API
 
 8. **Forgetting to update docs** - When adding/changing consumer-facing props, types, or interfaces, ALWAYS update the corresponding documentation in `docs/content/docs/plugins/`. Use `AutoTypeTable` to auto-generate type documentation from source files.
+
+9. **Suspense errors not caught** - If errors from `useSuspenseQuery` aren't caught by ErrorBoundary, add the manual throw pattern: `if (error && !isFetching) { throw error; }`
+
+10. **Missing ComposedRoute wrapper** - Page components must be wrapped with `ComposedRoute` to get proper Suspense + ErrorBoundary handling. Without it, errors crash the entire app.
