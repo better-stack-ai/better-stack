@@ -442,12 +442,22 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 						const { tags, ...postData } = ctx.body;
 						const tagNames = tags || [];
 
+						// Always slugify to ensure URL-safe slug, whether provided or generated from title
+						const slug = slugify(postData.slug || postData.title);
+
+						// Validate that slugification produced a non-empty result
+						if (!slug) {
+							throw ctx.error(400, {
+								message:
+									"Invalid slug: must contain at least one alphanumeric character",
+							});
+						}
+
 						const newPost = await adapter.create<Post>({
 							model: "post",
 							data: {
 								...postData,
-								// Always slugify to ensure URL-safe slug, whether provided or generated from title
-								slug: slugify(postData.slug || postData.title),
+								slug,
 								tags: [],
 								createdAt: new Date(),
 								updatedAt: new Date(),
@@ -514,13 +524,23 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							}
 						}
 
-						const { tags, slug, ...restPostData } = ctx.body;
+						const { tags, slug: rawSlug, ...restPostData } = ctx.body;
 						const tagNames = tags || [];
 
 						// Sanitize slug if provided to ensure it's URL-safe
+						const slugified = rawSlug ? slugify(rawSlug) : undefined;
+
+						// Validate that slugification produced a non-empty result (if slug was provided)
+						if (rawSlug && !slugified) {
+							throw ctx.error(400, {
+								message:
+									"Invalid slug: must contain at least one alphanumeric character",
+							});
+						}
+
 						const postData = {
 							...restPostData,
-							...(slug ? { slug: slugify(slug) } : {}),
+							...(slugified ? { slug: slugified } : {}),
 						};
 
 						const updated = await adapter.transaction(async (tx) => {

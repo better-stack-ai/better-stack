@@ -312,6 +312,14 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 					// Sanitize slug to ensure it's URL-safe
 					const slug = slugify(rawSlug);
 
+					// Validate that slugification produced a non-empty result
+					if (!slug) {
+						throw ctx.error(400, {
+							message:
+								"Invalid slug: must contain at least one alphanumeric character",
+						});
+					}
+
 					const contentType = await getContentType(typeSlug);
 					if (!contentType) {
 						throw ctx.error(404, { message: "Content type not found" });
@@ -404,6 +412,14 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 
 					// Sanitize slug if provided to ensure it's URL-safe
 					const slug = rawSlug ? slugify(rawSlug) : undefined;
+
+					// Validate that slugification produced a non-empty result (if slug was provided)
+					if (rawSlug && !slug) {
+						throw ctx.error(400, {
+							message:
+								"Invalid slug: must contain at least one alphanumeric character",
+						});
+					}
 
 					const contentType = await getContentType(typeSlug);
 					if (!contentType) {
