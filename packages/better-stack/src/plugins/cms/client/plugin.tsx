@@ -259,13 +259,17 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 					await hooks.afterLoadContentList(typeSlug, context);
 				}
 
-				// Check if there was an error
-				const queryState = queryClient.getQueryState(listQuery.queryKey);
-				if (queryState?.error && hooks?.onLoadError) {
+				// Check if there was an error in either query
+				const typesState = queryClient.getQueryState(
+					queries.cmsTypes.list().queryKey,
+				);
+				const listState = queryClient.getQueryState(listQuery.queryKey);
+				const queryError = typesState?.error || listState?.error;
+				if (queryError && hooks?.onLoadError) {
 					const error =
-						queryState.error instanceof Error
-							? queryState.error
-							: new Error(String(queryState.error));
+						queryError instanceof Error
+							? queryError
+							: new Error(String(queryError));
 					await hooks.onLoadError(error, context);
 				}
 			} catch (error) {
