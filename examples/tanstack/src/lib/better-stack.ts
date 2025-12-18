@@ -2,7 +2,11 @@ import { createMemoryAdapter } from "@btst/adapter-memory"
 import { betterStack } from "@btst/stack"
 import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/blog/api"
 import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
+import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 import { openai } from "@ai-sdk/openai"
+
+// Import shared CMS schemas - these are used for both backend validation and client type inference
+import { ProductSchema, TestimonialSchema } from "./cms-schemas"
 
 const blogHooks: BlogBackendHooks = {
     onBeforeCreatePost: async (data) => {
@@ -70,6 +74,28 @@ const { handler, dbSchema } = betterStack({
                     console.log("Conversation created:", conversation.id);
                 },
             },
+        }),
+        // CMS plugin with content types
+        cms: cmsBackendPlugin({
+            contentTypes: [
+                { 
+                    name: "Product", 
+                    slug: "product", 
+                    schema: ProductSchema,
+                    fieldConfig: {
+                        description: { fieldType: "textarea" },
+                        image: { fieldType: "file" },
+                    },
+                },
+                { 
+                    name: "Testimonial", 
+                    slug: "testimonial", 
+                    schema: TestimonialSchema,
+                    fieldConfig: {
+                        quote: { fieldType: "textarea" },
+                    },
+                },
+            ],
         })
     },
     adapter: (db) => createMemoryAdapter(db)({})

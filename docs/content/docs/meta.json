@@ -12,6 +12,7 @@
       "plugins/index",
       "plugins/blog",
       "plugins/ai-chat",
+      "plugins/cms",
       "plugins/development",
       "---[Database]Databases---",
       "databases/adapters",

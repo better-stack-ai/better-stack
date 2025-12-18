@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 
 @import "@btst/stack/plugins/blog/css";
+@import "@btst/stack/plugins/cms/css";
 
 @custom-variant dark (&:is(.dark *));
 

@@ -42,8 +42,8 @@ export default defineConfig({
 			port: 3003,
 			reuseExistingServer: !process.env["CI"],
 			timeout: 300_000,
-			stdout: "pipe",
-			stderr: "pipe",
+			stdout: !process.env["CI"] ? "pipe" : "ignore",
+			stderr: !process.env.CI ? "pipe" : "ignore",
 			env: {
 				...process.env,
 				...nextjsEnv,
@@ -96,17 +96,18 @@ export default defineConfig({
 				"**/*.blog.spec.ts",
 				"**/*.chat.spec.ts",
 				"**/*.public-chat.spec.ts",
+				"**/*.cms.spec.ts",
 			],
 		},
 		{
 			name: "tanstack:memory",
 			use: { baseURL: "http://localhost:3004" },
-			testMatch: ["**/*.blog.spec.ts", "**/*.chat.spec.ts"],
+			testMatch: ["**/*.blog.spec.ts", "**/*.chat.spec.ts", "**/*.cms.spec.ts"],
 		},
 		{
 			name: "react-router:memory",
 			use: { baseURL: "http://localhost:3005" },
-			testMatch: ["**/*.blog.spec.ts", "**/*.chat.spec.ts"],
+			testMatch: ["**/*.blog.spec.ts", "**/*.chat.spec.ts", "**/*.cms.spec.ts"],
 		},
 	],
 });

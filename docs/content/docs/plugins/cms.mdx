@@ -1,0 +1,702 @@
+---
+title: CMS Plugin
+description: Headless CMS with code-defined content types, dynamic forms, and agency-friendly workflows
+---
+
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "fumadocs-ui/components/callout";
+
+import Image from "next/image";
+
+The CMS plugin provides a headless content management system where developers define content types as Zod schemas in code. This "agency workflow" approach means:
+
+- **Developers** define the content model (schemas, validation rules, field descriptions)
+- **Clients** manage content items through a friendly admin UI
+- **TypeScript** provides end-to-end type safety when schema shapes change
+
+import cmsDemo from "../../../assets/cms-demo.png";
+import cmsDemo1 from "../../../assets/cms-demo-1.png";
+import cmsDemo2 from "../../../assets/cms-demo-2.png";
+
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-2 my-2">
+  <a href={cmsDemo.src} target="_blank" rel="noopener noreferrer">
+    <Image src={cmsDemo} alt="CMS Plugin Demo" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+  <a href={cmsDemo1.src} target="_blank" rel="noopener noreferrer">
+    <Image src={cmsDemo1} alt="CMS Plugin Demo" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+  <a href={cmsDemo2.src} target="_blank" rel="noopener noreferrer">
+    <Image src={cmsDemo2} alt="CMS Plugin Demo" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+</div>
+
+## Installation
+
+<Callout type="info">
+Ensure you followed the general [framework installation guide](/installation) first.
+</Callout>
+
+### 1. Define Content Types
+
+Create your content types as Zod schemas in a shared file. This allows you to use the schemas on both server (for validation) and client (for type-safe hooks). Use `.meta()` to add descriptions and placeholders that appear in the admin UI:
+
+```ts title="lib/cms-schemas.ts"
+import { z } from "zod";
+
+// ========== Product Schema ==========
+export const ProductSchema = z.object({
+  name: z.string().min(1).meta({ 
+    description: "Product display name",
+    placeholder: "Enter product name..." 
+  }),
+  description: z.string().meta({ 
+    description: "Full product description",
+    placeholder: "Describe this product..." 
+  }),
+  price: z.coerce.number().min(0).meta({ placeholder: "0.00" }),
+  featured: z.boolean().default(false).meta({ 
+    description: "Show on homepage featured section" 
+  }),
+  category: z.enum(["Electronics", "Clothing", "Home", "Sports"]),
+});
+
+// ========== Testimonial Schema ==========
+export const TestimonialSchema = z.object({
+  author: z.string().min(1).meta({ placeholder: "Customer name" }),
+  company: z.string().optional().meta({ placeholder: "Company (optional)" }),
+  quote: z.string().meta({ 
+    description: "Customer testimonial text",
+    placeholder: "What did they say?" 
+  }),
+  rating: z.coerce.number().min(1).max(5).meta({ 
+    description: "Rating out of 5 stars" 
+  }),
+});
+
+// ========== Type Exports for Client Hooks ==========
+
+/** Inferred type for Product data */
+export type ProductData = z.infer<typeof ProductSchema>;
+
+/** Inferred type for Testimonial data */
+export type TestimonialData = z.infer<typeof TestimonialSchema>;
+
+/**
+ * Type map for all CMS content types.
+ * Use this with CMS hooks for type-safe parsedData.
+ */
+export type CMSTypes = {
+  product: ProductData;
+  testimonial: TestimonialData;
+};
+```
+
+### 2. Add Plugin to Backend API
+
+Register the CMS backend plugin with your content types:
+
+```ts title="lib/better-stack.ts"
+import { betterStack } from "@btst/stack"
+import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
+import { ProductSchema, TestimonialSchema } from "./cms-schemas"
+
+const { handler, dbSchema } = betterStack({
+  basePath: "/api/data",
+  plugins: {
+    cms: cmsBackendPlugin({
+      contentTypes: [
+        { 
+          name: "Product", 
+          slug: "product", 
+          description: "Products for the store",
+          schema: ProductSchema,
+          fieldConfig: {
+            description: { fieldType: "textarea" },
+          },
+        },
+        { 
+          name: "Testimonial", 
+          slug: "testimonial", 
+          description: "Customer testimonials",
+          schema: TestimonialSchema,
+          fieldConfig: {
+            quote: { fieldType: "textarea" },
+          },
+        },
+      ],
+    })
+  },
+  adapter: (db) => createMemoryAdapter(db)({})
+})
+
+export { handler, dbSchema }
+```
+
+### 3. Add Plugin to Client
+
+Register the CMS client plugin:
+
+```tsx title="lib/better-stack-client.tsx"
+import { createStackClient } from "@btst/stack/client"
+import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
+import { QueryClient } from "@tanstack/react-query"
+
+const getBaseURL = () => 
+  process.env.BASE_URL || "http://localhost:3000"
+
+export const getStackClient = (queryClient: QueryClient) => {
+  const baseURL = getBaseURL()
+  return createStackClient({
+    plugins: {
+      cms: cmsClientPlugin({
+        apiBaseURL: baseURL,
+        apiBasePath: "/api/data",
+        siteBaseURL: baseURL,
+        siteBasePath: "/pages",
+        queryClient: queryClient,
+      })
+    }
+  })
+}
+```
+
+### 4. Configure Provider Overrides
+
+Add CMS overrides to your layout:
+
+```tsx title="app/pages/layout.tsx"
+import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
+
+type PluginOverrides = {
+  cms: CMSPluginOverrides,
+}
+
+<BetterStackProvider<PluginOverrides>
+  basePath="/pages"
+  overrides={{
+    cms: {
+      apiBaseURL: baseURL,
+      apiBasePath: "/api/data",
+      navigate: (path) => router.push(path),
+      refresh: () => router.refresh(),
+      uploadImage: async (file) => {
+        // Your image upload logic
+        return "https://example.com/image.png"
+      },
+      Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+    }
+  }}
+>
+  {children}
+</BetterStackProvider>
+```
+
+### 5. Import CSS
+
+Add the CMS styles to your global CSS:
+
+```css title="app/globals.css"
+@import "@btst/stack/plugins/cms/css";
+```
+
+## Supported Field Types
+
+The CMS uses [AutoForm](https://github.com/vantezzen/autoform) to automatically render forms from Zod schemas. Supported field types:
+
+| Zod Type | AutoForm Handler | fieldConfig Override |
+|----------|------------------|---------------------|
+| `z.string()` | Input (text) | - |
+| `z.string()` | Textarea | `fieldType: "textarea"` |
+| `z.string()` | File upload | `fieldType: "file"` |
+| `z.coerce.number()` | Number input | - |
+| `z.boolean()` | Checkbox | - |
+| `z.boolean()` | Switch | `fieldType: "switch"` |
+| `z.coerce.date()` | Date picker | - |
+| `z.enum([...])` | Select dropdown | - |
+| `z.enum([...])` | Radio group | `fieldType: "radio"` |
+
+### Adding UI Customization
+
+Use `.meta()` to customize how fields appear:
+
+```ts
+const ProductSchema = z.object({
+  name: z.string().min(1).meta({ 
+    description: "Product display name",  // Shows as help text
+    placeholder: "Enter name..."          // Input placeholder
+  }),
+});
+```
+
+Use `fieldConfig` in the content type definition to change field types:
+
+```ts
+{
+  name: "Product",
+  slug: "product",
+  schema: ProductSchema,
+  fieldConfig: {
+    description: { fieldType: "textarea" },  // Render as textarea
+    featured: { fieldType: "switch" },       // Render as switch
+    image: { fieldType: "file" },            // Render as file upload
+  },
+}
+```
+
+### Image Upload Fields
+
+To add an image upload field to your content type:
+
+1. Add an optional string field to your schema:
+
+```ts
+const ProductSchema = z.object({
+  name: z.string().min(1),
+  image: z.string().optional().meta({ 
+    description: "Product image URL" 
+  }),
+  // ...other fields
+});
+```
+
+2. Configure it as a file field and provide `uploadImage` in overrides:
+
+```ts
+// In your content type config
+fieldConfig: {
+  image: { fieldType: "file" },
+}
+
+// In your BetterStackProvider overrides
+cms: {
+  uploadImage: async (file: File) => {
+    // Upload to S3, Cloudinary, etc. and return the URL
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    const { url } = await res.json();
+    return url;
+  },
+  // ...other overrides
+}
+```
+
+The built-in file component will use your `uploadImage` function to upload files and store the returned URL.
+
+## Admin Routes
+
+The CMS plugin provides these admin routes:
+
+| Route | Description |
+|-------|-------------|
+| `/cms` | Dashboard - Grid of content types with item counts |
+| `/cms/:typeSlug` | Content list - Paginated table of items |
+| `/cms/:typeSlug/new` | Create new item |
+| `/cms/:typeSlug/:id` | Edit existing item |
+
+<Callout type="warn">
+Admin routes are automatically set to `noindex` for SEO. Don't include them in your public sitemap.
+</Callout>
+
+## Client Hooks
+
+Fetch content data in your frontend pages using the provided hooks. All hooks support **optional type generics** for full type safety on `parsedData`.
+
+### Available Hooks
+
+| Hook | Description | Returns |
+|------|-------------|---------|
+| `useContentTypes()` | List all content types | `{ contentTypes, isLoading, error, refetch }` |
+| `useContent(typeSlug, options?)` | List paginated items | `{ items, total, hasMore, isLoading, error, refetch }` |
+| `useContentItem(typeSlug, id)` | Get item by ID | `{ item, isLoading, error, refetch }` |
+| `useContentItemBySlug(typeSlug, slug)` | Get item by slug | `{ item, isLoading, error, refetch }` |
+| `useCreateContent(typeSlug)` | Create mutation | React Query mutation |
+| `useUpdateContent(typeSlug)` | Update mutation | React Query mutation |
+| `useDeleteContent(typeSlug)` | Delete mutation | React Query mutation |
+
+### Basic Usage (Without Type Safety)
+
+```tsx
+import { 
+  useContentTypes,
+  useContent,
+  useContentItem,
+  useContentItemBySlug 
+} from "@btst/stack/plugins/cms/client/hooks"
+
+// List all content types
+function ContentTypesGrid() {
+  const { contentTypes, isLoading } = useContentTypes()
+  // ...
+}
+
+// List paginated content items
+function ProductList() {
+  const { items, total, hasMore } = useContent("product", { limit: 20 })
+  // items[0].parsedData is Record<string, unknown>
+}
+```
+
+### Type-Safe Usage (Recommended)
+
+Import your `CMSTypes` type map and pass it to the hooks for full type inference on `parsedData`:
+
+```tsx
+import { useContent, useContentItem, useContentItemBySlug } from "@btst/stack/plugins/cms/client/hooks"
+import type { CMSTypes } from "@/lib/cms-schemas"
+
+// List products with type-safe parsedData
+function ProductList() {
+  const { items, total, hasMore } = useContent<CMSTypes, "product">("product", { 
+    limit: 20 
+  })
+  
+  return (
+    <ul>
+      {items.map((item) => (
+        <li key={item.id}>
+          {/* All fields are fully typed! */}
+          <h3>{item.parsedData.name}</h3>
+          <p>${item.parsedData.price}</p>
+          <span>{item.parsedData.category}</span>
+          {item.parsedData.featured && <Badge>Featured</Badge>}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+// Get single item by ID with type safety
+function ProductDetail({ id }: { id: string }) {
+  const { item, isLoading } = useContentItem<CMSTypes, "product">("product", id)
+  
+  if (isLoading || !item) return <Skeleton />
+  
+  return (
+    <div>
+      <h1>{item.parsedData.name}</h1>
+      <p>{item.parsedData.description}</p>
+    </div>
+  )
+}
+
+// Get single item by slug with type safety
+function ProductPage({ slug }: { slug: string }) {
+  const { item } = useContentItemBySlug<CMSTypes, "product">("product", slug)
+  // item.parsedData.price is typed as number
+}
+```
+
+<Callout type="info">
+The type generics are optional for backward compatibility. Without them, `parsedData` defaults to `Record<string, unknown>`.
+</Callout>
+
+### Mutations
+
+Mutation hooks also support type generics for type-safe input data:
+
+```tsx
+import { 
+  useCreateContent,
+  useUpdateContent,
+  useDeleteContent 
+} from "@btst/stack/plugins/cms/client/hooks"
+import type { ProductData } from "@/lib/cms-schemas"
+
+function CreateProductForm() {
+  // Type-safe mutation - TypeScript enforces correct data shape
+  const createProduct = useCreateContent<ProductData>("product")
+  
+  const handleSubmit = async () => {
+    await createProduct.mutateAsync({
+      slug: "my-product",
+      data: { 
+        name: "New Product", 
+        description: "A great product",
+        price: 29.99,
+        featured: false,
+        category: "Electronics", // TypeScript autocompletes enum values!
+      }
+    })
+  }
+}
+
+function UpdateProductForm({ id }: { id: string }) {
+  const updateProduct = useUpdateContent<ProductData>("product")
+  
+  const handleUpdate = async () => {
+    await updateProduct.mutateAsync({
+      id,
+      data: { data: { name: "Updated Name", price: 39.99 } }
+    })
+  }
+}
+```
+
+## Backend Hooks
+
+Customize CMS behavior with backend hooks:
+
+```ts
+cmsBackendPlugin({
+  contentTypes: [...],
+  hooks: {
+    onBeforeCreate: async (data, context) => {
+      console.log("Creating item in", context.typeSlug)
+      // Return false to deny, or modified data
+      return data
+    },
+    onAfterCreate: async (item, context) => {
+      console.log("Created:", item.slug)
+      // Trigger webhooks, notifications, etc.
+    },
+    onBeforeUpdate: async (id, data, context) => {
+      return data // or false to deny
+    },
+    onAfterUpdate: async (item, context) => {
+      // ...
+    },
+    onBeforeDelete: async (id, context) => {
+      return true // or false to deny
+    },
+    onAfterDelete: async (id, context) => {
+      // ...
+    },
+    onError: async (error, operation, context) => {
+      console.error(`CMS ${operation} error:`, error.message)
+    },
+  },
+})
+```
+
+## Type Safety
+
+The CMS plugin provides **end-to-end type safety** from schema definition to frontend rendering:
+
+### 1. Schema Definition → Backend Validation
+
+Zod schemas defined in `cms-schemas.ts` are used by the backend to validate all content operations:
+
+```ts
+// lib/cms-schemas.ts
+export const ProductSchema = z.object({
+  name: z.string().min(1),
+  price: z.coerce.number().min(0),
+});
+```
+
+### 2. Type Map → Client Hooks
+
+Export inferred types and a type map for client-side type safety:
+
+```ts
+// lib/cms-schemas.ts
+export type ProductData = z.infer<typeof ProductSchema>;
+export type CMSTypes = { product: ProductData };
+```
+
+### 3. Type-Safe Data Access
+
+Use the type map with hooks to get fully typed `parsedData`:
+
+```tsx
+import { useContent } from "@btst/stack/plugins/cms/client/hooks"
+import type { CMSTypes } from "@/lib/cms-schemas"
+
+function ProductList() {
+  const { items } = useContent<CMSTypes, "product">("product")
+  
+  // ✅ TypeScript knows all field types
+  items[0].parsedData.name   // string
+  items[0].parsedData.price  // number
+  
+  // ❌ TypeScript error: Property 'invalid' does not exist
+  items[0].parsedData.invalid
+}
+```
+
+### 4. Schema Changes Trigger Compile Errors
+
+When you update a schema, TypeScript shows errors everywhere the types are used:
+
+```ts
+// Adding a new required field to ProductSchema...
+const ProductSchema = z.object({
+  name: z.string(),
+  price: z.number(),
+  sku: z.string(), // New field
+});
+
+// ...triggers TypeScript errors in components
+<span>{item.parsedData.sku}</span> // ✅ Now works
+createProduct.mutate({ 
+  slug: "x", 
+  data: { name: "X", price: 10 } // ❌ Error: missing 'sku'
+})
+```
+
+This ensures developers catch schema changes at compile time rather than in production.
+
+## API Endpoints
+
+The CMS plugin exposes these REST endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/content-types` | GET | List all content types with item counts |
+| `/content-types/:slug` | GET | Get single content type by slug |
+| `/content/:typeSlug` | GET | List items (query: `slug`, `limit`, `offset`) |
+| `/content/:typeSlug` | POST | Create item |
+| `/content/:typeSlug/:id` | GET | Get single item |
+| `/content/:typeSlug/:id` | PUT | Update item |
+| `/content/:typeSlug/:id` | DELETE | Delete item |
+
+## Lifecycle Hooks
+
+The client plugin supports lifecycle hooks for authorization and tracking:
+
+```tsx
+cms: cmsClientPlugin({
+  // ...config
+}),
+
+// In your BetterStackProvider overrides:
+cms: {
+  // ...overrides
+  onBeforeDashboardRendered: (context) => {
+    // Return false to block access
+    if (!user.isAdmin) return false
+    return true
+  },
+  onBeforeListRendered: (typeSlug, context) => {
+    // Check per-content-type permissions
+    return true
+  },
+  onBeforeEditorRendered: (typeSlug, id, context) => {
+    // id is null for new items
+    return true
+  },
+  onRouteRender: (routeName, context) => {
+    // Track page views
+  },
+  onRouteError: (routeName, error, context) => {
+    // Log errors
+  },
+}
+```
+
+## Custom Field Components
+
+You can provide custom field components via the `fieldComponents` override. This allows you to:
+
+- **Override built-in types** (like "file") with custom implementations
+- **Add custom field types** for specialized inputs (rich text editors, color pickers, etc.)
+
+### Using fieldComponents Override
+
+The `fieldComponents` property maps field type names to React components:
+
+```tsx
+import type { CMSPluginOverrides, AutoFormInputComponentProps } from "@btst/stack/plugins/cms/client"
+
+// Define a custom component
+function MyColorPicker({ field, label, isRequired, fieldConfigItem }: AutoFormInputComponentProps) {
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium">
+        {label}
+        {isRequired && <span className="text-destructive"> *</span>}
+      </label>
+      <input
+        type="color"
+        value={field.value || "#000000"}
+        onChange={(e) => field.onChange(e.target.value)}
+        className="h-10 w-full cursor-pointer"
+      />
+      {fieldConfigItem?.description && (
+        <p className="text-sm text-muted-foreground">{String(fieldConfigItem.description)}</p>
+      )}
+    </div>
+  )
+}
+
+// In your BetterStackProvider overrides:
+cms: {
+  fieldComponents: {
+    // Override the built-in "file" type
+    file: ({ field, label, isRequired }) => (
+      <MyCustomFileUpload
+        value={field.value}
+        onChange={field.onChange}
+        label={label}
+        required={isRequired}
+      />
+    ),
+    // Add a custom "color" type
+    color: MyColorPicker,
+    // Add a custom "richText" type
+    richText: ({ field, label }) => (
+      <MyRichTextEditor value={field.value} onChange={field.onChange} label={label} />
+    ),
+  },
+  // ...other overrides
+}
+```
+
+### Registering Custom Field Types
+
+To use a custom field type, register it in your content type's `fieldConfig`:
+
+```ts
+// In your backend plugin config
+{
+  name: "Product",
+  slug: "product",
+  schema: ProductSchema,
+  fieldConfig: {
+    primaryColor: { fieldType: "color" },     // Uses custom "color" component
+    longDescription: { fieldType: "richText" }, // Uses custom "richText" component
+  },
+}
+```
+
+### AutoFormInputComponentProps
+
+Custom components receive these props:
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `field` | `ControllerRenderProps` | React Hook Form field controller with `value` and `onChange` |
+| `label` | `string` | The field label (derived from schema key) |
+| `isRequired` | `boolean` | Whether the field is required |
+| `fieldConfigItem` | `FieldConfigItem` | Field config including `description`, `inputProps`, etc. |
+| `fieldProps` | `object` | Additional props from `inputProps` in fieldConfig |
+| `zodItem` | `ZodAny` | The Zod schema for this field |
+
+### Using the Built-in CMSFileUpload
+
+The plugin exports `CMSFileUpload` for consumers who want to use or extend the default file upload:
+
+```tsx
+import { CMSFileUpload } from "@btst/stack/plugins/cms/client"
+
+// In your fieldComponents override
+cms: {
+  fieldComponents: {
+    // Use the built-in component with your upload function
+    file: (props) => (
+      <CMSFileUpload {...props} uploadImage={myUploadFn} />
+    ),
+    // Or create a wrapper with custom styling
+    customImage: (props) => (
+      <div className="my-custom-wrapper">
+        <CMSFileUpload {...props} uploadImage={myUploadFn} />
+      </div>
+    ),
+  },
+}
+```
+
+<Callout type="info">
+When a custom component is provided for a field type via `fieldComponents`, it takes precedence over the built-in component. This allows you to completely customize how any field type is rendered.
+</Callout>

@@ -4,9 +4,13 @@ import { betterStack } from "@btst/stack"
 import { todosBackendPlugin } from "./plugins/todo/api/backend"
 import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/blog/api"
 import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
+import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 import { openai } from "@ai-sdk/openai"
 import { tool } from "ai"
 import { z } from "zod"
+
+// Import shared CMS schemas - these are used for both backend validation and client type inference
+import { ProductSchema, TestimonialSchema } from "./cms-schemas"
 
 // Tool to fetch Better Stack documentation
 const betterStackDocsTool = tool({
@@ -117,6 +121,41 @@ const { handler, dbSchema } = betterStack({
                 },
                 onAfterChat: async (conversationId, messages) => {
                     console.log("Chat completed in conversation:", conversationId, "Messages:", messages.length);
+                },
+            },
+        }),
+        // CMS plugin with content types defined as Zod schemas
+        cms: cmsBackendPlugin({
+            contentTypes: [
+                { 
+                    name: "Product", 
+                    slug: "product", 
+                    description: "Products for the store",
+                    schema: ProductSchema,
+                    fieldConfig: {
+                        description: { fieldType: "textarea" },
+                        image: { fieldType: "file" },
+                    },
+                },
+                { 
+                    name: "Testimonial", 
+                    slug: "testimonial", 
+                    description: "Customer testimonials",
+                    schema: TestimonialSchema,
+                    fieldConfig: {
+                        quote: { fieldType: "textarea" },
+                    },
+                },
+            ],
+            hooks: {
+                onAfterCreate: async (item, context) => {
+                    console.log("CMS item created:", context.typeSlug, item.slug);
+                },
+                onAfterUpdate: async (item, context) => {
+                    console.log("CMS item updated:", context.typeSlug, item.slug);
+                },
+                onAfterDelete: async (id, context) => {
+                    console.log("CMS item deleted:", context.typeSlug, id);
                 },
             },
         })

@@ -6,6 +6,9 @@
 /* Import blog plugin styles (tailwind classes,markdown, milkdown, etc.) */
 @import "@btst/stack/plugins/blog/css";
 
+/* Import CMS plugin styles */
+@import "@btst/stack/plugins/cms/css";
+
 
 @custom-variant dark (&:is(.dark *));
 

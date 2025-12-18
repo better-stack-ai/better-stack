@@ -1,5 +1,5 @@
 import { PageHeaderSkeleton } from "./page-header-skeleton";
-import { PageLayout } from "../shared/page-layout";
+import { PageLayout } from "@workspace/ui/components/page-layout";
 import { Skeleton } from "@workspace/ui/components/skeleton";
 
 export function FormPageSkeleton() {

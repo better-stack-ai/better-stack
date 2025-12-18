@@ -1,6 +1,6 @@
 {
   "name": "@btst/stack",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "A composable, plugin-based library for building full-stack applications.",
   "repository": {
     "type": "git",
@@ -165,6 +165,47 @@
     },
     "./plugins/ai-chat/css": "./dist/plugins/ai-chat/style.css",
     "./plugins/blog/css": "./dist/plugins/blog/style.css",
+    "./plugins/cms/api": {
+      "import": {
+        "types": "./dist/plugins/cms/api/index.d.ts",
+        "default": "./dist/plugins/cms/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/cms/api/index.d.cts",
+        "default": "./dist/plugins/cms/api/index.cjs"
+      }
+    },
+    "./plugins/cms/client": {
+      "import": {
+        "types": "./dist/plugins/cms/client/index.d.ts",
+        "default": "./dist/plugins/cms/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/cms/client/index.d.cts",
+        "default": "./dist/plugins/cms/client/index.cjs"
+      }
+    },
+    "./plugins/cms/client/components": {
+      "import": {
+        "types": "./dist/plugins/cms/client/components/index.d.ts",
+        "default": "./dist/plugins/cms/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/cms/client/components/index.d.cts",
+        "default": "./dist/plugins/cms/client/components/index.cjs"
+      }
+    },
+    "./plugins/cms/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/cms/client/hooks/index.d.ts",
+        "default": "./dist/plugins/cms/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/cms/client/hooks/index.d.cts",
+        "default": "./dist/plugins/cms/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/cms/css": "./dist/plugins/cms/style.css",
     "./dist/*": "./dist/*",
     "./ui/css": "./dist/ui/components.css",
     "./package.json": "./package.json"
@@ -206,6 +247,18 @@
       ],
       "plugins/ai-chat/client/hooks": [
         "./dist/plugins/ai-chat/client/hooks/index.d.ts"
+      ],
+      "plugins/cms/api": [
+        "./dist/plugins/cms/api/index.d.ts"
+      ],
+      "plugins/cms/client": [
+        "./dist/plugins/cms/client/index.d.ts"
+      ],
+      "plugins/cms/client/components": [
+        "./dist/plugins/cms/client/components/index.d.ts"
+      ],
+      "plugins/cms/client/hooks": [
+        "./dist/plugins/cms/client/hooks/index.d.ts"
       ]
     }
   },
@@ -227,7 +280,7 @@
     "@radix-ui/react-switch": ">=1.1.0",
     "@tanstack/react-query": "^5.0.0",
     "ai": ">=5.0.0",
-    "better-call": ">=1.0.0",
+    "better-call": ">=1.1.5",
     "class-variance-authority": ">=0.7.0",
     "clsx": ">=2.1.0",
     "cmdk": ">=1.1.0",
@@ -249,7 +302,7 @@
     "sonner": ">=2.0.0",
     "tailwind-merge": ">=2.6.0",
     "tailwindcss": ">=3.0.0",
-    "zod": ">=3.24.0"
+    "zod": ">=4.2.0"
   },
   "devDependencies": {
     "@ai-sdk/react": "^2.0.94",
@@ -259,7 +312,7 @@
     "@types/slug": "^5.0.9",
     "@workspace/ui": "workspace:*",
     "ai": "^5.0.94",
-    "better-call": "1.0.19",
+    "better-call": "catalog:",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-error-boundary": "^4.1.2",
@@ -268,7 +321,7 @@
     "typescript": "catalog:",
     "unbuild": "catalog:",
     "vitest": "catalog:",
-    "vue": "^3.5.18"
+    "zod": "^4.2.0"
   },
   "files": [
     "dist",

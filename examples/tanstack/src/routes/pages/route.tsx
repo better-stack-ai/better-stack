@@ -1,9 +1,10 @@
-
+import { useState, useEffect } from "react"
 import { BetterStackProvider } from "@btst/stack/context"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
+import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 import { Link, useRouter, Outlet, createFileRoute } from "@tanstack/react-router"
 
 // Get base URL function - works on both server and client
@@ -32,6 +33,7 @@ async function mockUploadFile(file: File): Promise<string> {
 type PluginOverrides = {
     blog: BlogPluginOverrides,
     "ai-chat": AiChatPluginOverrides,
+    cms: CMSPluginOverrides,
 }
 
 export const Route = createFileRoute('/pages')({
@@ -103,6 +105,76 @@ function Layout() {
                         ),
                         onRouteRender: async (routeName, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] AI Chat route:`, routeName, context.path);
+                        },
+                    },
+                    cms: {
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        navigate: (href) => router.navigate({ href }),
+                        uploadImage: mockUploadFile,
+                        Link: ({ href, children, className, ...props }) => (
+                            <Link to={href} className={className} {...props}>
+                              {children}
+                            </Link>
+                        ),
+                        // Custom field components for CMS forms
+                        // These override the default auto-form field types
+                        fieldComponents: {
+                            // Override "file" to use uploadImage from context
+                            file: ({ field, label, isRequired, fieldConfigItem }) => {
+                                const [preview, setPreview] = useState<string | null>(field.value || null);
+                                const [uploading, setUploading] = useState(false);
+                                // Sync preview with field.value when it changes (e.g., when editing an existing item)
+                                useEffect(() => {
+                                    const normalizedValue = field.value || null;
+                                    if (normalizedValue !== preview) {
+                                        setPreview(normalizedValue);
+                                    }
+                                }, [field.value, preview]);
+                                return (
+                                    <div className="space-y-2" data-testid="custom-file-field">
+                                        <label className="text-sm font-medium">
+                                            {label}
+                                            {isRequired && <span className="text-destructive"> *</span>}
+                                        </label>
+                                        {!preview ? (
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                data-testid="image-upload-input"
+                                                disabled={uploading}
+                                                onChange={async (e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) {
+                                                        setUploading(true);
+                                                        try {
+                                                            const url = await mockUploadFile(file);
+                                                            setPreview(url);
+                                                            field.onChange(url);
+                                                        } finally {
+                                                            setUploading(false);
+                                                        }
+                                                    }
+                                                }}
+                                                className="block w-full text-sm"
+                                            />
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <img src={preview} alt="Preview" className="h-16 w-16 object-cover rounded" data-testid="image-preview" />
+                                                <button type="button" onClick={() => { setPreview(null); field.onChange(""); }} className="text-sm text-destructive" data-testid="remove-image-button">
+                                                    Remove
+                                                </button>
+                                            </div>
+                                        )}
+                                        {fieldConfigItem?.description && (
+                                            <p className="text-sm text-muted-foreground">{String(fieldConfigItem.description)}</p>
+                                        )}
+                                    </div>
+                                );
+                            },
+                        },
+                        onRouteRender: async (routeName, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] CMS route:`, routeName, context.path);
                         },
                     }
                 }}
