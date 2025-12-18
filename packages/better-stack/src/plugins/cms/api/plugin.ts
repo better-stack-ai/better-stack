@@ -56,6 +56,9 @@ function serializeContentItemWithType(
 /**
  * Sync content types from config to database
  * Creates or updates content types based on the developer's Zod schemas
+ *
+ * Handles race conditions from multiple instances by catching unique constraint
+ * errors and verifying the record exists (another instance created it first).
  */
 async function syncContentTypes(
 	adapter: Adapter,
@@ -83,18 +86,37 @@ async function syncContentTypes(
 				},
 			});
 		} else {
-			await adapter.create({
-				model: "contentType",
-				data: {
-					name: ct.name,
-					slug: ct.slug,
-					description: ct.description ?? null,
-					jsonSchema,
-					fieldConfig,
-					createdAt: new Date(),
-					updatedAt: new Date(),
-				},
-			});
+			try {
+				await adapter.create({
+					model: "contentType",
+					data: {
+						name: ct.name,
+						slug: ct.slug,
+						description: ct.description ?? null,
+						jsonSchema,
+						fieldConfig,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+				});
+			} catch (err) {
+				// Handle race condition: another instance may have created this content type
+				// Check if the record now exists - if so, another instance beat us to it
+				const nowExists = await adapter.findOne<ContentType>({
+					model: "contentType",
+					where: [{ field: "slug", value: ct.slug, operator: "eq" as const }],
+				});
+				if (nowExists) {
+					// Record exists now (created by another instance), continue to next content type
+					continue;
+				}
+				// Record still doesn't exist - this is a genuine database error, re-throw with context
+				const message =
+					err instanceof Error ? err.message : "Unknown database error";
+				throw new Error(
+					`Failed to create content type "${ct.slug}": ${message}`,
+				);
+			}
 		}
 	}
 }
@@ -121,13 +143,20 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 		dbPlugin: dbSchema,
 
 		routes: (adapter: Adapter) => {
-			// Sync content types on first request
-			let synced = false;
+			// Sync content types on first request using promise-based lock
+			// This prevents race conditions when multiple concurrent requests arrive
+			// on cold start within the same instance
+			let syncPromise: Promise<void> | null = null;
+
 			const ensureSynced = async () => {
-				if (!synced) {
-					await syncContentTypes(adapter, config);
-					synced = true;
+				if (!syncPromise) {
+					syncPromise = syncContentTypes(adapter, config).catch((err) => {
+						// If sync fails, allow retry on next request
+						syncPromise = null;
+						throw err;
+					});
 				}
+				await syncPromise;
 			};
 
 			// Helper to get content type by slug
