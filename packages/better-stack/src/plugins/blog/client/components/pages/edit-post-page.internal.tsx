@@ -6,18 +6,18 @@ import { PageHeader } from "../shared/page-header";
 import { PageWrapper } from "../shared/page-wrapper";
 import { BLOG_LOCALIZATION } from "../../localization";
 import type { BlogPluginOverrides } from "../../overrides";
-import { useRouteLifecycle } from "../shared/use-route-lifecycle";
+import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 
 // Internal component with actual page content
 export function EditPostPage({ slug }: { slug: string }) {
-	const { localization } = usePluginOverrides<
+	const overrides = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
 	>("blog", {
 		localization: BLOG_LOCALIZATION,
 	});
+	const { localization, navigate } = overrides;
 	const basePath = useBasePath();
-	const { navigate } = usePluginOverrides<BlogPluginOverrides>("blog");
 
 	// Call lifecycle hooks
 	useRouteLifecycle({
@@ -27,6 +27,7 @@ export function EditPostPage({ slug }: { slug: string }) {
 			params: { slug },
 			isSSR: typeof window === "undefined",
 		},
+		overrides,
 		beforeRenderHook: (overrides, context) => {
 			if (overrides.onBeforeEditPostPageRendered) {
 				return overrides.onBeforeEditPostPageRendered(slug, context);

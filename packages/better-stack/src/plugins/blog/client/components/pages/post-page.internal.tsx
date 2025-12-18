@@ -17,19 +17,20 @@ import { BLOG_LOCALIZATION } from "../../localization";
 import { PostNavigation } from "../shared/post-navigation";
 import { RecentPostsCarousel } from "../shared/recent-posts-carousel";
 import { Badge } from "@workspace/ui/components/badge";
-import { useRouteLifecycle } from "../shared/use-route-lifecycle";
+import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { OnThisPage, OnThisPageSelect } from "../shared/on-this-page";
 import type { SerializedPost } from "../../../types";
 
 // Internal component with actual page content
 export function PostPage({ slug }: { slug: string }) {
-	const { Image, localization } = usePluginOverrides<
+	const overrides = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
 	>("blog", {
 		Image: DefaultImage,
 		localization: BLOG_LOCALIZATION,
 	});
+	const { Image, localization } = overrides;
 
 	// Call lifecycle hooks
 	useRouteLifecycle({
@@ -39,6 +40,7 @@ export function PostPage({ slug }: { slug: string }) {
 			params: { slug },
 			isSSR: typeof window === "undefined",
 		},
+		overrides,
 		beforeRenderHook: (overrides, context) => {
 			if (overrides.onBeforePostPageRendered) {
 				return overrides.onBeforePostPageRendered(slug, context);

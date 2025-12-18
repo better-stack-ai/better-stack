@@ -6,17 +6,17 @@ import { PageHeader } from "../shared/page-header";
 import { PageWrapper } from "../shared/page-wrapper";
 import type { BlogPluginOverrides } from "../../overrides";
 import { BLOG_LOCALIZATION } from "../../localization";
-import { useRouteLifecycle } from "../shared/use-route-lifecycle";
+import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 
 // Internal component with actual page content
 export function NewPostPage() {
-	const { localization } = usePluginOverrides<
+	const overrides = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
 	>("blog", {
 		localization: BLOG_LOCALIZATION,
 	});
-	const { navigate } = usePluginOverrides<BlogPluginOverrides>("blog");
+	const { localization, navigate } = overrides;
 	const basePath = useBasePath();
 
 	// Call lifecycle hooks
@@ -26,6 +26,7 @@ export function NewPostPage() {
 			path: "/blog/new",
 			isSSR: typeof window === "undefined",
 		},
+		overrides,
 		beforeRenderHook: (overrides, context) => {
 			if (overrides.onBeforeNewPostPageRendered) {
 				return overrides.onBeforeNewPostPageRendered(context);

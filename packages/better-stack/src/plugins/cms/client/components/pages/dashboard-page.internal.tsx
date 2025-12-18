@@ -13,12 +13,29 @@ import { useSuspenseContentTypes } from "../../hooks";
 import { EmptyState } from "../shared/empty-state";
 import { PageWrapper } from "../shared/page-wrapper";
 import { CMS_LOCALIZATION } from "../../localization";
+import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 
 export function DashboardPage() {
-	const { navigate, localization: customLocalization } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const localization = { ...CMS_LOCALIZATION, ...customLocalization };
+	const overrides = usePluginOverrides<CMSPluginOverrides>("cms");
+	const { navigate } = overrides;
+	const localization = { ...CMS_LOCALIZATION, ...overrides.localization };
 	const basePath = useBasePath();
+
+	// Call lifecycle hooks for authorization
+	useRouteLifecycle({
+		routeName: "dashboard",
+		context: {
+			path: "/cms",
+			isSSR: typeof window === "undefined",
+		},
+		overrides,
+		beforeRenderHook: (overrides, context) => {
+			if (overrides.onBeforeDashboardRendered) {
+				return overrides.onBeforeDashboardRendered(context);
+			}
+			return true;
+		},
+	});
 	const { contentTypes } = useSuspenseContentTypes();
 
 	if (contentTypes.length === 0) {
