@@ -280,7 +280,7 @@
     "@radix-ui/react-switch": ">=1.1.0",
     "@tanstack/react-query": "^5.0.0",
     "ai": ">=5.0.0",
-    "better-call": ">=1.1.0",
+    "better-call": ">=1.1.5",
     "class-variance-authority": ">=0.7.0",
     "clsx": ">=2.1.0",
     "cmdk": ">=1.1.0",
@@ -302,7 +302,7 @@
     "sonner": ">=2.0.0",
     "tailwind-merge": ">=2.6.0",
     "tailwindcss": ">=3.0.0",
-    "zod": ">=4.0.0"
+    "zod": ">=4.2.0"
   },
   "devDependencies": {
     "@ai-sdk/react": "^2.0.94",
@@ -312,7 +312,7 @@
     "@types/slug": "^5.0.9",
     "@workspace/ui": "workspace:*",
     "ai": "^5.0.94",
-    "better-call": "1.1.5",
+    "better-call": "catalog:",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-error-boundary": "^4.1.2",
@@ -321,8 +321,7 @@
     "typescript": "catalog:",
     "unbuild": "catalog:",
     "vitest": "catalog:",
-    "vue": "^3.5.18",
-    "zod": "^4.2.1"
+    "zod": "^4.2.0"
   },
   "files": [
     "dist",

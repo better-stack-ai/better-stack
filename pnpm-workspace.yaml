@@ -6,7 +6,7 @@ packages:
 
 catalog:
   '@better-fetch/fetch': ^1.1.18
-  better-call: 1.0.19
+  better-call: 1.1.5
   typescript: ^5.6.3
   unbuild: 3.6.1
   vitest: ^3.2.4
@@ -23,4 +23,4 @@ neverBuiltDependencies: []
 overrides:
   esbuild@<=0.24.2: '>=0.25.0'
   miniflare>zod: ^3.25.1
-  zod: ^4.1.5
+  zod: ^4.2.0
