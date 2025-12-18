@@ -20,9 +20,9 @@ import AutoFormTooltip from "@workspace/ui/components/ui/auto-form/common/toolti
 export interface CMSFileUploadProps extends AutoFormInputComponentProps {
 	/**
 	 * Function to upload an image file and return the URL.
-	 * If not provided, falls back to reading as data URL.
+	 * This is required - consumers must provide an upload implementation.
 	 */
-	uploadImage?: (file: File) => Promise<string>;
+	uploadImage: (file: File) => Promise<string>;
 }
 
 /**
@@ -30,7 +30,7 @@ export interface CMSFileUploadProps extends AutoFormInputComponentProps {
  *
  * This component:
  * - Accepts image files via file input
- * - Uses the uploadImage prop to upload and get a URL
+ * - Uses the required uploadImage prop to upload and get a URL
  * - Shows a preview of the uploaded image
  * - Allows removing the uploaded image
  *
@@ -89,21 +89,9 @@ export function CMSFileUpload({
 
 			setIsUploading(true);
 			try {
-				if (uploadImage) {
-					// Use the uploadImage function to upload and get URL
-					const url = await uploadImage(file);
-					setPreviewUrl(url);
-					field.onChange(url);
-				} else {
-					// Fallback: read as data URL if no upload function
-					const reader = new FileReader();
-					reader.onloadend = () => {
-						const dataUrl = reader.result as string;
-						setPreviewUrl(dataUrl);
-						field.onChange(dataUrl);
-					};
-					reader.readAsDataURL(file);
-				}
+				const url = await uploadImage(file);
+				setPreviewUrl(url);
+				field.onChange(url);
 			} catch (error) {
 				console.error("Image upload failed:", error);
 				toast.error("Failed to upload image");

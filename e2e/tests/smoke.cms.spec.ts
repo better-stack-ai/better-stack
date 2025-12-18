@@ -101,51 +101,68 @@ test.describe("CMS Hooks Example", () => {
 		);
 	});
 
-	// Skip this test - it requires deleting all products which is flaky due to pagination
-	// and test isolation issues. The core functionality is covered by other tests.
-	test.skip("cms-example page shows empty state for products when none exist", async ({
-		page,
-	}) => {
-		// This test is skipped because it requires complex setup (deleting all products)
-		// that is prone to race conditions and pagination issues.
-		// The empty state UI is verified manually and through component tests.
-	});
-});
+	test("cms-example page load more button works", async ({ page, request }) => {
+		const errors: string[] = [];
+		page.on("console", (msg) => {
+			if (msg.type() === "error") errors.push(msg.text());
+		});
 
-// Skip pagination tests - they require clean state which is hard to achieve
-// with shared in-memory database across tests. The pagination functionality
-// is verified through component tests and manual testing.
-test.describe.skip("CMS Pagination - Load More", () => {
-	// These tests are skipped because:
-	// 1. They require deleting all products first, which is slow and flaky
-	// 2. The tests run sequentially and share state through the in-memory database
-	// 3. The deleteAllProducts function times out waiting for page elements
-	//
-	// The pagination/load-more functionality should be tested through:
-	// - Unit tests for the useContent hook
-	// - Integration tests with isolated database per test
-	// - Manual testing in development
+		// Create 5 products via API to ensure we have more than PAGE_SIZE (3)
+		for (let i = 1; i <= 5; i++) {
+			await request.post("/api/data/content/product", {
+				headers: { "content-type": "application/json" },
+				data: {
+					slug: `load-more-test-${testRunId}-${i}`,
+					data: {
+						name: `Load More Product ${i}`,
+						description: `Product ${i} for load more test`,
+						price: i * 10,
+						featured: false,
+						category: "Electronics",
+					},
+				},
+			});
+		}
 
-	test("Load More button appears when there are more items than page size", async ({
-		page,
-	}) => {
-		// Placeholder - test skipped
-	});
+		await page.goto("/cms-example", { waitUntil: "networkidle" });
 
-	test("Load More button loads next page of items", async ({ page }) => {
-		// Placeholder - test skipped
-	});
+		// Should show the products list
+		await expect(page.locator('[data-testid="products-list"]')).toBeVisible();
 
-	test("Load More button is not visible when all items fit on one page", async ({
-		page,
-	}) => {
-		// Placeholder - test skipped
-	});
+		// Should show the Load More button since we have more than PAGE_SIZE items
+		const loadMoreButton = page.locator('[data-testid="load-more-button"]');
+		await expect(loadMoreButton).toBeVisible({ timeout: 10000 });
 
-	test("Multiple Load More clicks load all pages correctly", async ({
-		page,
-	}) => {
-		// Placeholder - test skipped
+		// Get initial count
+		const initialShowingText = await page
+			.locator('[data-testid="products-showing"]')
+			.textContent();
+		const initialCount = parseInt(initialShowingText || "0", 10);
+
+		// Click load more
+		await loadMoreButton.click();
+
+		// Wait for more items to load
+		await page.waitForFunction(
+			(prevCount) => {
+				const el = document.querySelector('[data-testid="products-showing"]');
+				const currentCount = parseInt(el?.textContent || "0", 10);
+				return currentCount > prevCount;
+			},
+			initialCount,
+			{ timeout: 10000 },
+		);
+
+		// Verify more items are now shown
+		const newShowingText = await page
+			.locator('[data-testid="products-showing"]')
+			.textContent();
+		const newCount = parseInt(newShowingText || "0", 10);
+		expect(newCount).toBeGreaterThan(initialCount);
+
+		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
+			[],
+		);
 	});
 });
 
@@ -650,15 +667,9 @@ test.describe("CMS Image Upload", () => {
 });
 
 test.describe("CMS Custom Field Components", () => {
-	// This test only runs on nextjs since that's where we configured the custom fieldComponents
-	test("uses custom file field component from fieldComponents override @nextjs", async ({
+	test("uses custom file field component from fieldComponents override", async ({
 		page,
-	}, testInfo) => {
-		// Skip if not running nextjs project
-		if (!testInfo.project.name.includes("nextjs")) {
-			test.skip();
-		}
-
+	}) => {
 		const errors: string[] = [];
 		page.on("console", (msg) => {
 			if (msg.type() === "error") errors.push(msg.text());
@@ -666,7 +677,7 @@ test.describe("CMS Custom Field Components", () => {
 
 		await page.goto("/pages/cms/product/new", { waitUntil: "networkidle" });
 
-		// The nextjs example has a custom file field component with data-testid="custom-file-field"
+		// All examples have a custom file field component with data-testid="custom-file-field"
 		const customFileField = page.locator('[data-testid="custom-file-field"]');
 		await expect(customFileField).toBeVisible({ timeout: 5000 });
 
@@ -681,14 +692,9 @@ test.describe("CMS Custom Field Components", () => {
 		);
 	});
 
-	test("custom file component can upload and preview image @nextjs", async ({
+	test("custom file component can upload and preview image", async ({
 		page,
-	}, testInfo) => {
-		// Skip if not running nextjs project
-		if (!testInfo.project.name.includes("nextjs")) {
-			test.skip();
-		}
-
+	}) => {
 		const errors: string[] = [];
 		page.on("console", (msg) => {
 			if (msg.type() === "error") errors.push(msg.text());
@@ -728,14 +734,7 @@ test.describe("CMS Custom Field Components", () => {
 		);
 	});
 
-	test("custom file component can remove uploaded image @nextjs", async ({
-		page,
-	}, testInfo) => {
-		// Skip if not running nextjs project
-		if (!testInfo.project.name.includes("nextjs")) {
-			test.skip();
-		}
-
+	test("custom file component can remove uploaded image", async ({ page }) => {
 		const errors: string[] = [];
 		page.on("console", (msg) => {
 			if (msg.type() === "error") errors.push(msg.text());

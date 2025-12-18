@@ -221,9 +221,19 @@ function buildFieldConfigFromJsonSchema(
 				}
 				// 2. Special handling for built-in "file" type - use CMSFileUpload with uploadImage
 				else if (fieldType === "file") {
-					config.fieldType = (props: AutoFormInputComponentProps) => (
-						<CMSFileUpload {...props} uploadImage={uploadImage} />
-					);
+					if (!uploadImage) {
+						// Show a clear error message if uploadImage is not provided
+						config.fieldType = () => (
+							<div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
+								File upload requires an <code>uploadImage</code> function in CMS
+								overrides.
+							</div>
+						);
+					} else {
+						config.fieldType = (props: AutoFormInputComponentProps) => (
+							<CMSFileUpload {...props} uploadImage={uploadImage} />
+						);
+					}
 				}
 				// 3. For other built-in types, pass through to auto-form
 				else if (
