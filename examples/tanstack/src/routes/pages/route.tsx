@@ -126,8 +126,9 @@ function Layout() {
                                 const [uploading, setUploading] = useState(false);
                                 // Sync preview with field.value when it changes (e.g., when editing an existing item)
                                 useEffect(() => {
-                                    if (field.value && field.value !== preview) {
-                                        setPreview(field.value);
+                                    const normalizedValue = field.value || null;
+                                    if (normalizedValue !== preview) {
+                                        setPreview(normalizedValue);
                                     }
                                 }, [field.value, preview]);
                                 return (
