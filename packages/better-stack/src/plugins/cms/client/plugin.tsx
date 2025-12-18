@@ -83,14 +83,39 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 				basePath: apiBasePath,
 			});
 			const queries = createCMSQueryKeys(client, headers);
+			const limit = 20;
 
 			try {
-				await Promise.all([
-					queryClient.prefetchQuery(queries.cmsTypes.list()),
-					queryClient.prefetchQuery(
-						queries.cmsContent.list({ typeSlug, limit: 20, offset: 0 }),
-					),
-				]);
+				// Prefetch content types
+				await queryClient.prefetchQuery(queries.cmsTypes.list());
+
+				// Prefetch content list using infinite query (matches useSuspenseInfiniteQuery in hooks)
+				const listQuery = queries.cmsContent.list({
+					typeSlug,
+					limit,
+					offset: 0,
+				});
+				await queryClient.prefetchInfiniteQuery({
+					queryKey: listQuery.queryKey,
+					queryFn: async ({ pageParam = 0 }) => {
+						const response: unknown = await client("/content/:typeSlug", {
+							method: "GET",
+							params: { typeSlug },
+							query: { limit, offset: pageParam },
+							headers,
+						});
+						if (
+							typeof response === "object" &&
+							response !== null &&
+							"error" in response &&
+							response.error
+						) {
+							throw new Error(String(response.error));
+						}
+						return (response as { data?: unknown }).data;
+					},
+					initialPageParam: 0,
+				});
 			} catch {
 				// Let Error Boundaries handle errors during render
 			}
@@ -134,10 +159,14 @@ function createContentEditorLoader(
  * Create dashboard meta generator
  */
 function createDashboardMeta() {
-	return () => [
-		{ title: "CMS Dashboard" },
-		{ name: "robots", content: "noindex" },
-	];
+	return () => {
+		const title = "CMS Dashboard";
+		return [
+			{ title },
+			{ name: "title", content: title },
+			{ name: "robots", content: "noindex" },
+		];
+	};
 }
 
 /**
@@ -158,12 +187,13 @@ function createContentListMeta(typeSlug: string, config: CMSClientConfig) {
 			contentTypes as Array<{ slug: string; name: string }> | undefined
 		)?.find((ct) => ct.slug === typeSlug);
 
+		const title = contentType?.name
+			? `${contentType.name} | CMS`
+			: "Content | CMS";
+
 		return [
-			{
-				title: contentType?.name
-					? `${contentType.name} | CMS`
-					: "Content | CMS",
-			},
+			{ title },
+			{ name: "title", content: title },
 			{ name: "robots", content: "noindex" },
 		];
 	};
@@ -195,7 +225,11 @@ function createContentEditorMeta(
 			? `Edit ${contentType?.name || "Content"} | CMS`
 			: `New ${contentType?.name || "Content"} | CMS`;
 
-		return [{ title }, { name: "robots", content: "noindex" }];
+		return [
+			{ title },
+			{ name: "title", content: title },
+			{ name: "robots", content: "noindex" },
+		];
 	};
 }
 

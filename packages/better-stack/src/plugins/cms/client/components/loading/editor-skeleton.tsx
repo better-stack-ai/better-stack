@@ -2,9 +2,12 @@
 
 import { Skeleton } from "@workspace/ui/components/skeleton";
 
+/**
+ * Editor skeleton without wrapper - used when already inside a PageWrapper
+ */
 export function EditorSkeleton() {
 	return (
-		<div className="space-y-6 max-w-2xl">
+		<div className="space-y-6">
 			<div className="space-y-2">
 				<Skeleton className="h-8 w-48" />
 			</div>

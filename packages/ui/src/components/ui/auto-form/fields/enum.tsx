@@ -68,7 +68,7 @@ export default function AutoFormEnum({
       <FormControl>
         <Select
           onValueChange={field.onChange}
-          defaultValue={field.value}
+          value={field.value ?? ""}
           {...fieldProps}
         >
           <SelectTrigger className={fieldProps.className}>

@@ -85,6 +85,7 @@ const { handler, dbSchema } = betterStack({
                     schema: ProductSchema,
                     fieldConfig: {
                         description: { fieldType: "textarea" },
+                        image: { fieldType: "file" },
                     },
                 },
                 { 

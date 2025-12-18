@@ -341,11 +341,19 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 						});
 					}
 
-					// Call before hook
+					// Call before hook - may modify data or deny operation
+					let finalData = validation.data;
 					if (config.hooks?.onBeforeCreate) {
-						const result = await config.hooks.onBeforeCreate(data, context);
+						const result = await config.hooks.onBeforeCreate(
+							validation.data as Record<string, unknown>,
+							context,
+						);
 						if (result === false) {
 							throw ctx.error(403, { message: "Create operation denied" });
+						}
+						// Use returned data if provided (hook can modify data)
+						if (result && typeof result === "object") {
+							finalData = result;
 						}
 					}
 
@@ -354,7 +362,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 						data: {
 							contentTypeId: contentType.id,
 							slug,
-							data: JSON.stringify(validation.data),
+							data: JSON.stringify(finalData),
 							createdAt: new Date(),
 							updatedAt: new Date(),
 						},
@@ -369,7 +377,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 
 					return {
 						...serialized,
-						parsedData: validation.data,
+						parsedData: finalData,
 					};
 				},
 			);
@@ -438,11 +446,20 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 						validatedData = validation.data as Record<string, unknown>;
 					}
 
-					// Call before hook
-					if (config.hooks?.onBeforeUpdate && data) {
-						const result = await config.hooks.onBeforeUpdate(id, data, context);
+					// Call before hook - may modify data or deny operation
+					let finalData = validatedData;
+					if (config.hooks?.onBeforeUpdate && validatedData) {
+						const result = await config.hooks.onBeforeUpdate(
+							id,
+							validatedData,
+							context,
+						);
 						if (result === false) {
 							throw ctx.error(403, { message: "Update operation denied" });
+						}
+						// Use returned data if provided (hook can modify data)
+						if (result && typeof result === "object") {
+							finalData = result;
 						}
 					}
 
@@ -450,7 +467,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 						updatedAt: new Date(),
 					};
 					if (slug) updateData.slug = slug;
-					if (validatedData) updateData.data = JSON.stringify(validatedData);
+					if (finalData) updateData.data = JSON.stringify(finalData);
 
 					await adapter.update({
 						model: "contentItem",

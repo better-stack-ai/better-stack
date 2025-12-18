@@ -238,6 +238,15 @@ export function zodToHtmlInputProps(
     };
   }
 
+  // Check for default - fields with defaults should not be required
+  // since the default value will be used if not provided
+  if (defType === "default") {
+    return {
+      ...zodToHtmlInputProps(def.innerType),
+      required: false,
+    };
+  }
+
   const inputProps: React.InputHTMLAttributes<HTMLInputElement> = {
     required: true,
   };

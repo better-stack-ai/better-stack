@@ -5,6 +5,9 @@ import {
 	useMutation,
 	useQueryClient,
 	useSuspenseQuery,
+	useInfiniteQuery,
+	useSuspenseInfiniteQuery,
+	type InfiniteData,
 } from "@tanstack/react-query";
 import { createApiClient } from "@btst/stack/plugins/client";
 import { usePluginOverrides } from "@btst/stack/context";
@@ -163,25 +166,38 @@ export function useContentType(slug: string): {
 // ========== Content Items Hooks ==========
 
 export interface UseContentOptions {
+	/** Number of items per page (default: 10) */
 	limit?: number;
-	offset?: number;
+	/** Whether to enable the query (default: true) */
+	enabled?: boolean;
 }
 
 /**
- * Result type for useContent hook
+ * Result type for useContent hook with load more functionality
  * @template TData - The type of parsedData (defaults to Record<string, unknown>)
  */
 export interface UseContentResult<TData = Record<string, unknown>> {
+	/** Array of all loaded content items */
 	items: SerializedContentItemWithType<TData>[];
+	/** Total number of items available */
 	total: number;
+	/** Whether the initial load is in progress */
 	isLoading: boolean;
+	/** Error if the query failed */
 	error: Error | null;
-	refetch: () => void;
+	/** Function to load the next page of items */
+	loadMore: () => void;
+	/** Whether there are more items to load */
 	hasMore: boolean;
+	/** Whether the next page is being loaded */
+	isLoadingMore: boolean;
+	/** Function to refetch all items */
+	refetch: () => void;
 }
 
 /**
- * Hook for fetching paginated content items with optional type safety.
+ * Hook for fetching paginated content items with load more functionality.
+ * Uses React Query's infinite query for efficient pagination.
  *
  * @template TMap - A type map of content type slugs to their data types
  * @template TSlug - The content type slug (inferred from typeSlug parameter)
@@ -189,15 +205,14 @@ export interface UseContentResult<TData = Record<string, unknown>> {
  * @example
  * ```typescript
  * // Without type safety (backward compatible)
- * const { items } = useContent("product")
- * // items[0].parsedData is Record<string, unknown>
+ * const { items, loadMore, hasMore, isLoadingMore } = useContent("product")
  *
  * // With type safety using a type map
  * type MyCMSTypes = {
  *   product: { name: string; price: number }
  *   testimonial: { author: string; quote: string }
  * }
- * const { items } = useContent<MyCMSTypes, "product">("product")
+ * const { items, loadMore, hasMore } = useContent<MyCMSTypes, "product">("product")
  * // items[0].parsedData.name is string
  * // items[0].parsedData.price is number
  * ```
@@ -219,30 +234,81 @@ export function useContent<
 		basePath: apiBasePath,
 	});
 	const queries = createCMSQueryKeys(client, headers);
-	const limit = options.limit ?? 20;
-	const offset = options.offset ?? 0;
-	const baseQuery = queries.cmsContent.list({ typeSlug, limit, offset });
+	const { limit = 10, enabled = true } = options;
 
-	const { data, isLoading, error, refetch } = useQuery({
-		...baseQuery,
-		...SHARED_QUERY_CONFIG,
-		enabled: !!typeSlug,
-	});
+	const baseQuery = queries.cmsContent.list({ typeSlug, limit, offset: 0 });
 
-	const result = data as PaginatedContentItems<TMap[TSlug]> | undefined;
-
-	return {
-		items: result?.items ?? [],
-		total: result?.total ?? 0,
+	const {
+		data,
 		isLoading,
 		error,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
 		refetch,
-		hasMore: result ? offset + limit < result.total : false,
+	} = useInfiniteQuery({
+		queryKey: baseQuery.queryKey,
+		queryFn: async ({ pageParam = 0 }) => {
+			const response: unknown = await client("/content/:typeSlug", {
+				method: "GET",
+				params: { typeSlug },
+				query: { limit, offset: pageParam },
+				headers,
+			});
+			if (isErrorResponse(response)) {
+				throw toError(response.error);
+			}
+			return (response as { data?: unknown }).data as PaginatedContentItems<
+				TMap[TSlug]
+			>;
+		},
+		...SHARED_QUERY_CONFIG,
+		initialPageParam: 0,
+		getNextPageParam: (lastPage, allPages) => {
+			// Defensive check: ensure lastPage exists and has expected structure
+			if (!lastPage || typeof lastPage !== "object") return undefined;
+			const items = (lastPage as PaginatedContentItems)?.items;
+			// If no items or fewer items than limit, we've reached the end
+			if (!Array.isArray(items) || items.length < limit) return undefined;
+			// Calculate total items loaded so far
+			const loadedCount = (allPages || []).reduce(
+				(sum, page) =>
+					sum +
+					(Array.isArray((page as PaginatedContentItems)?.items)
+						? (page as PaginatedContentItems).items.length
+						: 0),
+				0,
+			);
+			const total = (lastPage as PaginatedContentItems)?.total ?? 0;
+			// Check if we've loaded all items
+			if (loadedCount >= total) return undefined;
+			return loadedCount;
+		},
+		enabled: enabled && !!typeSlug,
+	});
+
+	const pages = (
+		data as InfiniteData<PaginatedContentItems<TMap[TSlug]>, number> | undefined
+	)?.pages;
+	const items = (pages?.flatMap((page) =>
+		Array.isArray(page?.items) ? page.items : [],
+	) ?? []) as SerializedContentItemWithType<TMap[TSlug]>[];
+	const total = pages?.[0]?.total ?? 0;
+
+	return {
+		items,
+		total,
+		isLoading,
+		error,
+		loadMore: fetchNextPage,
+		hasMore: !!hasNextPage,
+		isLoadingMore: isFetchingNextPage,
+		refetch,
 	};
 }
 
 /**
- * Suspense variant of useContent with optional type safety.
+ * Suspense variant of useContent with load more functionality.
  *
  * @template TMap - A type map of content type slugs to their data types
  * @template TSlug - The content type slug (inferred from typeSlug parameter)
@@ -259,8 +325,10 @@ export function useSuspenseContent<
 ): {
 	items: SerializedContentItemWithType<TMap[TSlug]>[];
 	total: number;
-	refetch: () => Promise<unknown>;
+	loadMore: () => Promise<unknown>;
 	hasMore: boolean;
+	isLoadingMore: boolean;
+	refetch: () => Promise<unknown>;
 } {
 	const { apiBaseURL, apiBasePath, headers } =
 		usePluginOverrides<CMSPluginOverrides>("cms");
@@ -269,26 +337,76 @@ export function useSuspenseContent<
 		basePath: apiBasePath,
 	});
 	const queries = createCMSQueryKeys(client, headers);
-	const limit = options.limit ?? 20;
-	const offset = options.offset ?? 0;
-	const baseQuery = queries.cmsContent.list({ typeSlug, limit, offset });
+	const { limit = 10 } = options;
 
-	const { data, refetch, error, isFetching } = useSuspenseQuery({
-		...baseQuery,
+	const baseQuery = queries.cmsContent.list({ typeSlug, limit, offset: 0 });
+
+	const {
+		data,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+		refetch,
+		error,
+		isFetching,
+	} = useSuspenseInfiniteQuery({
+		queryKey: baseQuery.queryKey,
+		queryFn: async ({ pageParam = 0 }) => {
+			const response: unknown = await client("/content/:typeSlug", {
+				method: "GET",
+				params: { typeSlug },
+				query: { limit, offset: pageParam },
+				headers,
+			});
+			if (isErrorResponse(response)) {
+				throw toError(response.error);
+			}
+			return (response as { data?: unknown }).data as PaginatedContentItems<
+				TMap[TSlug]
+			>;
+		},
 		...SHARED_QUERY_CONFIG,
+		initialPageParam: 0,
+		getNextPageParam: (lastPage, allPages) => {
+			// Defensive check: ensure lastPage exists and has expected structure
+			if (!lastPage || typeof lastPage !== "object") return undefined;
+			const items = (lastPage as PaginatedContentItems)?.items;
+			// If no items or fewer items than limit, we've reached the end
+			if (!Array.isArray(items) || items.length < limit) return undefined;
+			// Calculate total items loaded so far
+			const loadedCount = (allPages || []).reduce(
+				(sum, page) =>
+					sum +
+					(Array.isArray((page as PaginatedContentItems)?.items)
+						? (page as PaginatedContentItems).items.length
+						: 0),
+				0,
+			);
+			const total = (lastPage as PaginatedContentItems)?.total ?? 0;
+			// Check if we've loaded all items
+			if (loadedCount >= total) return undefined;
+			return loadedCount;
+		},
 	});
 
+	// Manually throw errors for Error Boundaries (per React Query Suspense docs)
 	if (error && !isFetching) {
 		throw error;
 	}
 
-	const result = data as PaginatedContentItems<TMap[TSlug]> | undefined;
+	const pages = data.pages as PaginatedContentItems<TMap[TSlug]>[];
+	const items = (pages?.flatMap((page) =>
+		Array.isArray(page?.items) ? page.items : [],
+	) ?? []) as SerializedContentItemWithType<TMap[TSlug]>[];
+	const total = pages?.[0]?.total ?? 0;
 
 	return {
-		items: result?.items ?? [],
-		total: result?.total ?? 0,
+		items,
+		total,
+		loadMore: fetchNextPage,
+		hasMore: !!hasNextPage,
+		isLoadingMore: isFetchingNextPage,
 		refetch,
-		hasMore: result ? offset + limit < result.total : false,
 	};
 }
 

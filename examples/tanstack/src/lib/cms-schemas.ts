@@ -16,6 +16,9 @@ export const ProductSchema = z.object({
     }),
     description: z.string().meta({ placeholder: "Describe this product..." }),
     price: z.coerce.number().min(0).meta({ placeholder: "0.00" }),
+    image: z.string().optional().meta({
+        description: "Product image URL"
+    }),
     featured: z.boolean().default(false),
     category: z.enum(["Electronics", "Clothing", "Home", "Sports"]),
 })

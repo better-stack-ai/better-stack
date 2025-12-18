@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
 import AutoForm, {
 	AutoFormSubmit,
 } from "@workspace/ui/components/ui/auto-form";
-import type { FieldConfig } from "@workspace/ui/components/ui/auto-form/types";
+import type {
+	FieldConfig,
+	AutoFormInputComponentProps,
+} from "@workspace/ui/components/ui/auto-form/types";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
@@ -15,6 +18,7 @@ import type { CMSPluginOverrides } from "../../overrides";
 import type { SerializedContentType } from "../../../types";
 import { slugify } from "../../../utils";
 import { CMS_LOCALIZATION } from "../../localization";
+import { CMSFileUpload } from "./file-upload";
 
 /**
  * JSON Schema property type definition
@@ -57,6 +61,9 @@ function jsonSchemaToZodWithCoercion(
 	for (const [key, prop] of Object.entries(properties)) {
 		let fieldSchema: z.ZodTypeAny;
 
+		// Determine the type (handle arrays like ["string", "null"] for nullable)
+		const typeValue = Array.isArray(prop.type) ? prop.type[0] : prop.type;
+
 		// Handle enum first - works for string enums
 		if (prop.enum && Array.isArray(prop.enum) && prop.enum.length > 0) {
 			// Filter to only string values for z.enum
@@ -70,9 +77,6 @@ function jsonSchemaToZodWithCoercion(
 				fieldSchema = z.string();
 			}
 		} else {
-			// Determine the type (handle arrays like ["string", "null"] for nullable)
-			const typeValue = Array.isArray(prop.type) ? prop.type[0] : prop.type;
-
 			switch (typeValue) {
 				case "number":
 				case "integer": {
@@ -120,7 +124,8 @@ function jsonSchemaToZodWithCoercion(
 		}
 
 		// Apply default if present and not already applied (skip for booleans which handle it above)
-		if (prop.default !== undefined && prop.type !== "boolean") {
+		// Use typeValue to correctly handle nullable types where prop.type is an array like ["boolean", "null"]
+		if (prop.default !== undefined && typeValue !== "boolean") {
 			fieldSchema = fieldSchema.default(prop.default);
 		}
 
@@ -148,12 +153,37 @@ interface ContentFormProps {
 }
 
 /**
+ * Built-in AutoForm field types
+ */
+const BUILTIN_FIELD_TYPES = [
+	"checkbox",
+	"date",
+	"select",
+	"radio",
+	"switch",
+	"textarea",
+	"number",
+	"file",
+	"fallback",
+] as const;
+
+/**
  * Extract field configuration from JSON Schema properties
  * Maps description and placeholder to AutoForm's fieldConfig format
+ *
+ * @param jsonSchema - The JSON Schema from the content type
+ * @param storedFieldConfig - The stored field config from the content type
+ * @param uploadImage - The uploadImage function from overrides (for default file component)
+ * @param fieldComponents - Custom field components from overrides
  */
 function buildFieldConfigFromJsonSchema(
 	jsonSchema: Record<string, unknown>,
 	storedFieldConfig?: Record<string, { fieldType?: string }>,
+	uploadImage?: (file: File) => Promise<string>,
+	fieldComponents?: Record<
+		string,
+		React.ComponentType<AutoFormInputComponentProps>
+	>,
 ): FieldConfig<Record<string, unknown>> {
 	const fieldConfig: FieldConfig<Record<string, unknown>> = {};
 	const properties = jsonSchema.properties as Record<
@@ -176,9 +206,41 @@ function buildFieldConfigFromJsonSchema(
 			};
 		}
 
-		// Apply stored fieldConfig overrides (e.g., fieldType: "textarea")
+		// Apply stored fieldConfig overrides (e.g., fieldType: "textarea", "file", or custom types)
 		if (storedFieldConfig?.[key]) {
-			Object.assign(config, storedFieldConfig[key]);
+			const storedConfig = storedFieldConfig[key];
+			const fieldType = storedConfig.fieldType;
+
+			if (fieldType) {
+				// 1. Check if there's a custom component in fieldComponents
+				if (fieldComponents?.[fieldType]) {
+					const CustomComponent = fieldComponents[fieldType];
+					config.fieldType = (props: AutoFormInputComponentProps) => (
+						<CustomComponent {...props} />
+					);
+				}
+				// 2. Special handling for built-in "file" type - use CMSFileUpload with uploadImage
+				else if (fieldType === "file") {
+					config.fieldType = (props: AutoFormInputComponentProps) => (
+						<CMSFileUpload {...props} uploadImage={uploadImage} />
+					);
+				}
+				// 3. For other built-in types, pass through to auto-form
+				else if (
+					BUILTIN_FIELD_TYPES.includes(
+						fieldType as (typeof BUILTIN_FIELD_TYPES)[number],
+					)
+				) {
+					config.fieldType = fieldType;
+				}
+				// 4. Unknown custom type without a component - log warning and skip
+				else {
+					console.warn(
+						`CMS: Unknown fieldType "${fieldType}" for field "${key}". ` +
+							`Provide a component via fieldComponents override or use a built-in type.`,
+					);
+				}
+			}
 		}
 
 		if (Object.keys(config).length > 0) {
@@ -224,8 +286,11 @@ export function ContentForm({
 	onSubmit,
 	onCancel,
 }: ContentFormProps) {
-	const { localization: customLocalization } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
+	const {
+		localization: customLocalization,
+		uploadImage,
+		fieldComponents,
+	} = usePluginOverrides<CMSPluginOverrides>("cms");
 	const localization = { ...CMS_LOCALIZATION, ...customLocalization };
 
 	const [slug, setSlug] = useState(initialSlug);
@@ -233,6 +298,23 @@ export function ContentForm({
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [formData, setFormData] =
 		useState<Record<string, unknown>>(initialData);
+
+	// Sync formData with initialData when it changes (e.g., when editing an existing item)
+	// This is necessary because useState only uses the initial value once on mount
+	useEffect(() => {
+		// Only sync when we're in editing mode and initialData has content
+		// This ensures we properly load existing item data into the form
+		if (isEditing && Object.keys(initialData).length > 0) {
+			setFormData(initialData);
+		}
+	}, [initialData, isEditing]);
+
+	// Also sync slug when initialSlug changes
+	useEffect(() => {
+		if (isEditing && initialSlug) {
+			setSlug(initialSlug);
+		}
+	}, [initialSlug, isEditing]);
 
 	// Parse JSON Schema
 	const jsonSchema = useMemo(() => {
@@ -267,8 +349,14 @@ export function ContentForm({
 
 	// Build field config for AutoForm
 	const fieldConfig = useMemo(
-		() => buildFieldConfigFromJsonSchema(jsonSchema, storedFieldConfig),
-		[jsonSchema, storedFieldConfig],
+		() =>
+			buildFieldConfigFromJsonSchema(
+				jsonSchema,
+				storedFieldConfig,
+				uploadImage,
+				fieldComponents,
+			),
+		[jsonSchema, storedFieldConfig, uploadImage, fieldComponents],
 	);
 
 	// Find the field to use for slug auto-generation

@@ -12,6 +12,7 @@ import {
 } from "../../hooks";
 import { ContentForm } from "../forms/content-form";
 import { EmptyState } from "../shared/empty-state";
+import { PageWrapper } from "../shared/page-wrapper";
 import { EditorSkeleton } from "../loading/editor-skeleton";
 import { CMS_LOCALIZATION } from "../../localization";
 
@@ -40,24 +41,38 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 
 	if (!contentType) {
 		return (
-			<EmptyState
-				title={localization.CMS_ERROR_NOT_FOUND}
-				description="Content type not found"
-			/>
+			<PageWrapper testId="cms-editor-page">
+				<div className="w-full max-w-2xl">
+					<EmptyState
+						title={localization.CMS_ERROR_NOT_FOUND}
+						description="Content type not found"
+					/>
+				</div>
+			</PageWrapper>
 		);
 	}
 
 	// Show loading skeleton while fetching item in edit mode
 	if (isEditing && isLoadingItem) {
-		return <EditorSkeleton />;
+		return (
+			<PageWrapper testId="cms-editor-page">
+				<div className="w-full max-w-2xl">
+					<EditorSkeleton />
+				</div>
+			</PageWrapper>
+		);
 	}
 
 	if (isEditing && !item) {
 		return (
-			<EmptyState
-				title={localization.CMS_ERROR_NOT_FOUND}
-				description="Content item not found"
-			/>
+			<PageWrapper testId="cms-editor-page">
+				<div className="w-full max-w-2xl">
+					<EmptyState
+						title={localization.CMS_ERROR_NOT_FOUND}
+						description="Content item not found"
+					/>
+				</div>
+			</PageWrapper>
 		);
 	}
 
@@ -78,26 +93,28 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 		: localization.CMS_EDITOR_TITLE_NEW.replace("{typeName}", contentType.name);
 
 	return (
-		<div className="space-y-6 max-w-2xl">
-			<div className="flex items-center gap-4">
-				<Button
-					variant="ghost"
-					size="icon"
-					onClick={() => navigate(`${basePath}/cms/${typeSlug}`)}
-				>
-					<ArrowLeft className="h-4 w-4" />
-				</Button>
-				<h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-			</div>
+		<PageWrapper testId="cms-editor-page">
+			<div className="w-full max-w-2xl space-y-6">
+				<div className="flex items-center gap-4">
+					<Button
+						variant="ghost"
+						size="icon"
+						onClick={() => navigate(`${basePath}/cms/${typeSlug}`)}
+					>
+						<ArrowLeft className="h-4 w-4" />
+					</Button>
+					<h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+				</div>
 
-			<ContentForm
-				contentType={contentType}
-				initialData={item?.parsedData}
-				initialSlug={item?.slug}
-				isEditing={isEditing}
-				onSubmit={handleSubmit}
-				onCancel={() => navigate(`${basePath}/cms/${typeSlug}`)}
-			/>
-		</div>
+				<ContentForm
+					contentType={contentType}
+					initialData={item?.parsedData}
+					initialSlug={item?.slug}
+					isEditing={isEditing}
+					onSubmit={handleSubmit}
+					onCancel={() => navigate(`${basePath}/cms/${typeSlug}`)}
+				/>
+			</div>
+		</PageWrapper>
 	);
 }

@@ -189,6 +189,7 @@ The CMS uses [AutoForm](https://github.com/vantezzen/autoform) to automatically 
 |----------|------------------|---------------------|
 | `z.string()` | Input (text) | - |
 | `z.string()` | Textarea | `fieldType: "textarea"` |
+| `z.string()` | File upload | `fieldType: "file"` |
 | `z.coerce.number()` | Number input | - |
 | `z.boolean()` | Checkbox | - |
 | `z.boolean()` | Switch | `fieldType: "switch"` |
@@ -219,9 +220,50 @@ Use `fieldConfig` in the content type definition to change field types:
   fieldConfig: {
     description: { fieldType: "textarea" },  // Render as textarea
     featured: { fieldType: "switch" },       // Render as switch
+    image: { fieldType: "file" },            // Render as file upload
   },
 }
 ```
+
+### Image Upload Fields
+
+To add an image upload field to your content type:
+
+1. Add an optional string field to your schema:
+
+```ts
+const ProductSchema = z.object({
+  name: z.string().min(1),
+  image: z.string().optional().meta({ 
+    description: "Product image URL" 
+  }),
+  // ...other fields
+});
+```
+
+2. Configure it as a file field and provide `uploadImage` in overrides:
+
+```ts
+// In your content type config
+fieldConfig: {
+  image: { fieldType: "file" },
+}
+
+// In your BetterStackProvider overrides
+cms: {
+  uploadImage: async (file: File) => {
+    // Upload to S3, Cloudinary, etc. and return the URL
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    const { url } = await res.json();
+    return url;
+  },
+  // ...other overrides
+}
+```
+
+The built-in file component will use your `uploadImage` function to upload files and store the returned URL.
 
 ## Admin Routes
 
@@ -524,3 +566,119 @@ cms: {
   },
 }
 ```
+
+## Custom Field Components
+
+You can provide custom field components via the `fieldComponents` override. This allows you to:
+
+- **Override built-in types** (like "file") with custom implementations
+- **Add custom field types** for specialized inputs (rich text editors, color pickers, etc.)
+
+### Using fieldComponents Override
+
+The `fieldComponents` property maps field type names to React components:
+
+```tsx
+import type { CMSPluginOverrides, AutoFormInputComponentProps } from "@btst/stack/plugins/cms/client"
+
+// Define a custom component
+function MyColorPicker({ field, label, isRequired, fieldConfigItem }: AutoFormInputComponentProps) {
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium">
+        {label}
+        {isRequired && <span className="text-destructive"> *</span>}
+      </label>
+      <input
+        type="color"
+        value={field.value || "#000000"}
+        onChange={(e) => field.onChange(e.target.value)}
+        className="h-10 w-full cursor-pointer"
+      />
+      {fieldConfigItem?.description && (
+        <p className="text-sm text-muted-foreground">{String(fieldConfigItem.description)}</p>
+      )}
+    </div>
+  )
+}
+
+// In your BetterStackProvider overrides:
+cms: {
+  fieldComponents: {
+    // Override the built-in "file" type
+    file: ({ field, label, isRequired }) => (
+      <MyCustomFileUpload
+        value={field.value}
+        onChange={field.onChange}
+        label={label}
+        required={isRequired}
+      />
+    ),
+    // Add a custom "color" type
+    color: MyColorPicker,
+    // Add a custom "richText" type
+    richText: ({ field, label }) => (
+      <MyRichTextEditor value={field.value} onChange={field.onChange} label={label} />
+    ),
+  },
+  // ...other overrides
+}
+```
+
+### Registering Custom Field Types
+
+To use a custom field type, register it in your content type's `fieldConfig`:
+
+```ts
+// In your backend plugin config
+{
+  name: "Product",
+  slug: "product",
+  schema: ProductSchema,
+  fieldConfig: {
+    primaryColor: { fieldType: "color" },     // Uses custom "color" component
+    longDescription: { fieldType: "richText" }, // Uses custom "richText" component
+  },
+}
+```
+
+### AutoFormInputComponentProps
+
+Custom components receive these props:
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `field` | `ControllerRenderProps` | React Hook Form field controller with `value` and `onChange` |
+| `label` | `string` | The field label (derived from schema key) |
+| `isRequired` | `boolean` | Whether the field is required |
+| `fieldConfigItem` | `FieldConfigItem` | Field config including `description`, `inputProps`, etc. |
+| `fieldProps` | `object` | Additional props from `inputProps` in fieldConfig |
+| `zodItem` | `ZodAny` | The Zod schema for this field |
+
+### Using the Built-in CMSFileUpload
+
+The plugin exports `CMSFileUpload` for consumers who want to use or extend the default file upload:
+
+```tsx
+import { CMSFileUpload } from "@btst/stack/plugins/cms/client"
+
+// In your fieldComponents override
+cms: {
+  fieldComponents: {
+    // Use the built-in component with your upload function
+    file: (props) => (
+      <CMSFileUpload {...props} uploadImage={myUploadFn} />
+    ),
+    // Or create a wrapper with custom styling
+    customImage: (props) => (
+      <div className="my-custom-wrapper">
+        <CMSFileUpload {...props} uploadImage={myUploadFn} />
+      </div>
+    ),
+  },
+}
+```
+
+<Callout type="info">
+When a custom component is provided for a field type via `fieldComponents`, it takes precedence over the built-in component. This allows you to completely customize how any field type is rendered.
+</Callout>

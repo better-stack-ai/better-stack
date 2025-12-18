@@ -59,11 +59,21 @@ type PluginOverrides = {
     cms: CMSPluginOverrides,
 }
 
+const PAGE_SIZE = 3 // Small page size to test pagination
+
 function CMSExampleContent() {
     const { contentTypes, isLoading: typesLoading, error: typesError } = useContentTypes()
-    // Type-safe hook: items[0].parsedData is now typed as ProductData
-    // Try hovering over 'items' or 'parsedData' to see the inferred types!
-    const { items, total, isLoading: itemsLoading, error: itemsError } = useContent<CMSTypes, "product">("product", { limit: 10 })
+    // Type-safe hook with load more functionality
+    // The hook handles all pagination state internally
+    const { 
+        items, 
+        total, 
+        isLoading: itemsLoading, 
+        error: itemsError,
+        loadMore,
+        hasMore,
+        isLoadingMore 
+    } = useContent<CMSTypes, "product">("product", { limit: PAGE_SIZE })
 
     if (typesLoading || itemsLoading) {
         return (
@@ -117,51 +127,67 @@ function CMSExampleContent() {
 
             {/* Product Items Section */}
             <section>
-                <h2 className="text-xl font-semibold mb-4">Product Items (Total: <span data-testid="products-total">{total}</span>)</h2>
+                <h2 className="text-xl font-semibold mb-4">
+                    Product Items (Showing: <span data-testid="products-showing">{items.length}</span> / Total: <span data-testid="products-total">{total}</span>)
+                </h2>
                 {!hasItems ? (
                     <div data-testid="products-empty" className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg text-center">
                         No products found. Create product items in the CMS to see them here.
                     </div>
                 ) : (
-                    <div data-testid="products-list" className="space-y-3">
-                        {items.map((item) => (
-                            <div 
-                                key={item.id} 
-                                data-testid={`product-item-${item.slug}`}
-                                className="p-4 border rounded-lg"
-                            >
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        {/* No more type guards needed - parsedData is fully typed! */}
-                                        <h3 className="font-medium" data-testid="product-name">
-                                            {item.parsedData.name}
-                                        </h3>
-                                        <p className="text-sm text-gray-500" data-testid="product-slug">
-                                            Slug: {item.slug}
-                                        </p>
-                                        {item.parsedData.description && (
-                                            <p className="text-sm mt-1" data-testid="product-description">
-                                                {item.parsedData.description}
+                    <>
+                        <div data-testid="products-list" className="space-y-3">
+                            {items.map((item) => (
+                                <div 
+                                    key={item.id} 
+                                    data-testid={`product-item-${item.slug}`}
+                                    className="p-4 border rounded-lg"
+                                >
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            {/* No more type guards needed - parsedData is fully typed! */}
+                                            <h3 className="font-medium" data-testid="product-name">
+                                                {item.parsedData.name}
+                                            </h3>
+                                            <p className="text-sm text-gray-500" data-testid="product-slug">
+                                                Slug: {item.slug}
                                             </p>
-                                        )}
-                                        {item.parsedData.featured && (
-                                            <span className="inline-block mt-1 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
-                                                Featured
+                                            {item.parsedData.description && (
+                                                <p className="text-sm mt-1" data-testid="product-description">
+                                                    {item.parsedData.description}
+                                                </p>
+                                            )}
+                                            {item.parsedData.featured && (
+                                                <span className="inline-block mt-1 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
+                                                    Featured
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="text-lg font-semibold" data-testid="product-price">
+                                                ${item.parsedData.price}
                                             </span>
-                                        )}
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="text-lg font-semibold" data-testid="product-price">
-                                            ${item.parsedData.price}
-                                        </span>
-                                        <p className="text-xs text-gray-500">
-                                            {item.parsedData.category}
-                                        </p>
+                                            <p className="text-xs text-gray-500">
+                                                {item.parsedData.category}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
+                            ))}
+                        </div>
+                        {hasMore && (
+                            <div className="mt-4 text-center">
+                                <button
+                                    data-testid="load-more-button"
+                                    onClick={() => loadMore()}
+                                    disabled={isLoadingMore}
+                                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isLoadingMore ? "Loading..." : "Load More"}
+                                </button>
                             </div>
-                        ))}
-                    </div>
+                        )}
+                    </>
                 )}
             </section>
         </div>

@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { AutoFormFieldType } from "@workspace/ui/components/ui/auto-form/types";
 
 /**
  * Configuration for a content type defined by the developer
@@ -12,11 +13,17 @@ export interface ContentTypeConfig {
 	description?: string;
 	/** Zod schema defining the content type's fields */
 	schema: z.ZodObject<z.ZodRawShape>;
-	/** Optional field configuration for AutoForm customization */
+	/**
+	 * Optional field configuration for AutoForm customization.
+	 *
+	 * fieldType can be:
+	 * - A built-in AutoForm type: "checkbox", "date", "select", "radio", "switch", "textarea", "number", "file", "fallback"
+	 * - A custom type name that maps to a component provided via `fieldComponents` in overrides
+	 */
 	fieldConfig?: Record<
 		string,
 		{
-			fieldType?: "textarea" | "switch" | "radio";
+			fieldType?: AutoFormFieldType | (string & {});
 		}
 	>;
 }

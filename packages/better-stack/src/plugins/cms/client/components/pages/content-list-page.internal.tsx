@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { Plus, ArrowLeft, Pencil, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import {
 	Table,
@@ -19,7 +18,7 @@ import {
 	useDeleteContent,
 } from "../../hooks";
 import { EmptyState } from "../shared/empty-state";
-import { Pagination } from "../shared/pagination";
+import { PageWrapper } from "../shared/page-wrapper";
 import { CMS_LOCALIZATION } from "../../localization";
 import { toast } from "sonner";
 
@@ -36,21 +35,17 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 	const localization = { ...CMS_LOCALIZATION, ...customLocalization };
 	const basePath = useBasePath();
 
-	const [page, setPage] = useState(1);
 	const limit = 20;
-	const offset = (page - 1) * limit;
 
 	const { contentTypes } = useSuspenseContentTypes();
 	const contentType = contentTypes.find((ct) => ct.slug === typeSlug);
 
-	const { items, total, refetch } = useSuspenseContent(typeSlug, {
-		limit,
-		offset,
-	});
+	const { items, total, refetch, loadMore, hasMore, isLoadingMore } =
+		useSuspenseContent(typeSlug, {
+			limit,
+		});
 
 	const deleteContent = useDeleteContent(typeSlug);
-
-	const totalPages = Math.ceil(total / limit);
 
 	const LinkComponent = Link || "a";
 
@@ -70,111 +65,134 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 
 	if (!contentType) {
 		return (
-			<EmptyState
-				title={localization.CMS_ERROR_NOT_FOUND}
-				description="Content type not found"
-			/>
+			<PageWrapper testId="cms-list-page">
+				<div className="w-full max-w-5xl">
+					<EmptyState
+						title={localization.CMS_ERROR_NOT_FOUND}
+						description="Content type not found"
+					/>
+				</div>
+			</PageWrapper>
 		);
 	}
 
 	return (
-		<div className="space-y-6">
-			<div className="flex items-center justify-between">
-				<div className="flex items-center gap-4">
-					<Button
-						variant="ghost"
-						size="icon"
-						onClick={() => navigate(`${basePath}/cms`)}
-					>
-						<ArrowLeft className="h-4 w-4" />
-					</Button>
-					<div>
-						<h1 className="text-2xl font-bold tracking-tight">
-							{contentType.name}
-						</h1>
-						{contentType.description && (
-							<p className="text-muted-foreground">{contentType.description}</p>
-						)}
-					</div>
-				</div>
-				<Button onClick={() => navigate(`${basePath}/cms/${typeSlug}/new`)}>
-					<Plus className="h-4 w-4 mr-2" />
-					{localization.CMS_BUTTON_NEW_ITEM}
-				</Button>
-			</div>
-
-			{items.length === 0 ? (
-				<EmptyState
-					title={localization.CMS_LIST_EMPTY}
-					description={localization.CMS_LIST_EMPTY_DESCRIPTION}
-					action={
-						<Button onClick={() => navigate(`${basePath}/cms/${typeSlug}/new`)}>
-							<Plus className="h-4 w-4 mr-2" />
-							{localization.CMS_BUTTON_CREATE}
+		<PageWrapper testId="cms-list-page">
+			<div className="w-full max-w-5xl space-y-6">
+				<div className="flex items-center justify-between">
+					<div className="flex items-center gap-4">
+						<Button
+							variant="ghost"
+							size="icon"
+							onClick={() => navigate(`${basePath}/cms`)}
+						>
+							<ArrowLeft className="h-4 w-4" />
 						</Button>
-					}
-				/>
-			) : (
-				<div className="border rounded-lg">
-					<Table>
-						<TableHeader>
-							<TableRow>
-								<TableHead>{localization.CMS_LIST_COLUMN_SLUG}</TableHead>
-								<TableHead>{localization.CMS_LIST_COLUMN_CREATED}</TableHead>
-								<TableHead>{localization.CMS_LIST_COLUMN_UPDATED}</TableHead>
-								<TableHead className="w-[100px]">
-									{localization.CMS_LIST_COLUMN_ACTIONS}
-								</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{items.map((item) => (
-								<TableRow key={item.id}>
-									<TableCell className="font-medium">
-										<LinkComponent
-											href={`${basePath}/cms/${typeSlug}/${item.id}`}
-											className="hover:underline"
-										>
-											{item.slug}
-										</LinkComponent>
-									</TableCell>
-									<TableCell>{formatDate(item.createdAt)}</TableCell>
-									<TableCell>{formatDate(item.updatedAt)}</TableCell>
-									<TableCell>
-										<div className="flex items-center gap-1">
-											<Button
-												variant="ghost"
-												size="icon"
-												onClick={() =>
-													navigate(`${basePath}/cms/${typeSlug}/${item.id}`)
-												}
-											>
-												<Pencil className="h-4 w-4" />
-											</Button>
-											<Button
-												variant="ghost"
-												size="icon"
-												onClick={() => handleDelete(item.id)}
-												disabled={deleteContent.isPending}
-											>
-												<Trash2 className="h-4 w-4 text-destructive" />
-											</Button>
-										</div>
-									</TableCell>
-								</TableRow>
-							))}
-						</TableBody>
-					</Table>
-					<Pagination
-						currentPage={page}
-						totalPages={totalPages}
-						onPageChange={setPage}
-						total={total}
-						limit={limit}
-						offset={offset}
-					/>
+						<div>
+							<h1 className="text-2xl font-bold tracking-tight">
+								{contentType.name}
+							</h1>
+							{contentType.description && (
+								<p className="text-muted-foreground">
+									{contentType.description}
+								</p>
+							)}
+						</div>
+					</div>
+					<Button onClick={() => navigate(`${basePath}/cms/${typeSlug}/new`)}>
+						<Plus className="h-4 w-4 mr-2" />
+						{localization.CMS_BUTTON_NEW_ITEM}
+					</Button>
 				</div>
-			)}
-		</div>
+
+				{items.length === 0 ? (
+					<EmptyState
+						title={localization.CMS_LIST_EMPTY}
+						description={localization.CMS_LIST_EMPTY_DESCRIPTION}
+						action={
+							<Button
+								onClick={() => navigate(`${basePath}/cms/${typeSlug}/new`)}
+							>
+								<Plus className="h-4 w-4 mr-2" />
+								{localization.CMS_BUTTON_CREATE}
+							</Button>
+						}
+					/>
+				) : (
+					<div className="border rounded-lg">
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead>{localization.CMS_LIST_COLUMN_SLUG}</TableHead>
+									<TableHead>{localization.CMS_LIST_COLUMN_CREATED}</TableHead>
+									<TableHead>{localization.CMS_LIST_COLUMN_UPDATED}</TableHead>
+									<TableHead className="w-[100px]">
+										{localization.CMS_LIST_COLUMN_ACTIONS}
+									</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{items.map((item) => (
+									<TableRow key={item.id}>
+										<TableCell className="font-medium">
+											<LinkComponent
+												href={`${basePath}/cms/${typeSlug}/${item.id}`}
+												className="hover:underline"
+											>
+												{item.slug}
+											</LinkComponent>
+										</TableCell>
+										<TableCell>{formatDate(item.createdAt)}</TableCell>
+										<TableCell>{formatDate(item.updatedAt)}</TableCell>
+										<TableCell>
+											<div className="flex items-center gap-1">
+												<Button
+													variant="ghost"
+													size="icon"
+													onClick={() =>
+														navigate(`${basePath}/cms/${typeSlug}/${item.id}`)
+													}
+												>
+													<Pencil className="h-4 w-4" />
+												</Button>
+												<Button
+													variant="ghost"
+													size="icon"
+													onClick={() => handleDelete(item.id)}
+													disabled={deleteContent.isPending}
+												>
+													<Trash2 className="h-4 w-4 text-destructive" />
+												</Button>
+											</div>
+										</TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
+						{/* Load More and pagination info */}
+						<div className="flex items-center justify-between px-4 py-3 border-t">
+							<p className="text-sm text-muted-foreground">
+								{localization.CMS_LIST_PAGINATION_SHOWING.replace("{from}", "1")
+									.replace("{to}", String(items.length))
+									.replace("{total}", String(total))}
+							</p>
+							{hasMore && (
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => loadMore()}
+									disabled={isLoadingMore}
+								>
+									{isLoadingMore && (
+										<Loader2 className="h-4 w-4 mr-2 animate-spin" />
+									)}
+									{localization.CMS_LIST_PAGINATION_NEXT}
+								</Button>
+							)}
+						</div>
+					</div>
+				)}
+			</div>
+		</PageWrapper>
 	);
 }

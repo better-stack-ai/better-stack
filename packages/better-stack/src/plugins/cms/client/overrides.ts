@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import type { CMSLocalization } from "./localization";
+import type { AutoFormInputComponentProps } from "@workspace/ui/components/ui/auto-form/types";
 
 /**
  * Context passed to lifecycle hooks
@@ -46,8 +47,45 @@ export interface CMSPluginOverrides {
 
 	/**
 	 * Function used to upload an image and return its URL.
+	 * Used by the default "file" field component.
 	 */
 	uploadImage?: (file: File) => Promise<string>;
+
+	/**
+	 * Custom field components for AutoForm fields.
+	 *
+	 * These map field type names to React components. Use these to:
+	 * - Override built-in field types (checkbox, date, select, radio, switch, textarea, file, number, fallback)
+	 * - Add custom field types for your content types
+	 *
+	 * The component receives AutoFormInputComponentProps which includes:
+	 * - field: react-hook-form field controller
+	 * - label: the field label
+	 * - isRequired: whether the field is required
+	 * - fieldConfigItem: the field config (description, inputProps, etc.)
+	 * - fieldProps: additional props from fieldConfig.inputProps
+	 * - zodItem: the Zod schema for this field
+	 *
+	 * @example
+	 * ```tsx
+	 * fieldComponents: {
+	 *   // Override the file type with custom S3 upload
+	 *   file: ({ field, label, isRequired }) => (
+	 *     <MyS3Upload
+	 *       value={field.value}
+	 *       onChange={field.onChange}
+	 *       label={label}
+	 *       required={isRequired}
+	 *     />
+	 *   ),
+	 *   // Add a custom rich text editor
+	 *   richText: ({ field, label }) => (
+	 *     <MyRichTextEditor value={field.value} onChange={field.onChange} />
+	 *   ),
+	 * }
+	 * ```
+	 */
+	fieldComponents?: Record<string, ComponentType<AutoFormInputComponentProps>>;
 
 	/**
 	 * Localization object for the CMS plugin
