@@ -144,7 +144,7 @@ import { QueryClient } from "@tanstack/react-query"
 const getBaseURL = () => 
   process.env.BASE_URL || "http://localhost:3000"
 
-export const getStackClient = (queryClient: QueryClient) => {
+export const getStackClient = (queryClient: QueryClient, options?: { headers?: Headers }) => {
   const baseURL = getBaseURL()
   return createStackClient({
     plugins: {
@@ -154,6 +154,7 @@ export const getStackClient = (queryClient: QueryClient) => {
         siteBaseURL: baseURL,
         siteBasePath: "/pages",
         queryClient: queryClient,
+        headers: options?.headers,
       })
     }
   })
@@ -551,25 +552,61 @@ The CMS plugin exposes these REST endpoints:
 | `/content/:typeSlug/:id` | PUT | Update item |
 | `/content/:typeSlug/:id` | DELETE | Delete item |
 
-## Lifecycle Hooks
+## Authorization & Lifecycle Hooks
 
-The client plugin supports lifecycle hooks for authorization and tracking:
+The CMS plugin provides two levels of hooks for authorization:
 
-```tsx
+### Client Hooks (SSR Authorization)
+
+Use `hooks` in the client plugin config for **async authorization** during SSR. These run in loaders before pages render, supporting async session checks and redirects:
+
+```tsx title="lib/better-stack-client.tsx"
+import { redirect } from "next/navigation" // or your framework's redirect
+
 cms: cmsClientPlugin({
-  // ...config
-}),
+  apiBaseURL: baseURL,
+  apiBasePath: "/api/data",
+  siteBaseURL: baseURL,
+  siteBasePath: "/pages",
+  queryClient: queryClient,
+  headers: options?.headers,
+  hooks: {
+    beforeLoadDashboard: async (context) => {
+      const session = await getSession(context.headers)
+      return session?.user?.isAdmin === true
+    },
+    beforeLoadContentList: async (typeSlug, context) => {
+      const session = await getSession(context.headers)
+      return session?.user?.isAdmin === true
+    },
+    beforeLoadContentEditor: async (typeSlug, id, context) => {
+      const session = await getSession(context.headers)
+      return session?.user?.isAdmin === true
+    },
+    onLoadError: (error, context) => {
+      // Redirect to login on authorization failure
+      redirect("/auth/sign-in")
+    },
+  },
+})
+```
 
-// In your BetterStackProvider overrides:
+<Callout type="info">
+**Use client hooks for SSR.** These hooks run during server-side data loading and support async operations like session checks. The `onLoadError` hook is called when any `beforeLoad*` hook returns `false`, allowing you to redirect unauthorized users.
+</Callout>
+
+### Override Hooks (Client-Side)
+
+Use lifecycle hooks in `BetterStackProvider` overrides for **synchronous** client-side checks (SPA navigation):
+
+```tsx title="app/pages/layout.tsx"
 cms: {
-  // ...overrides
+  // ...required overrides
   onBeforeDashboardRendered: (context) => {
-    // Return false to block access
-    if (!user.isAdmin) return false
-    return true
+    // Sync check - runs during component render
+    return user?.isAdmin === true
   },
   onBeforeListRendered: (typeSlug, context) => {
-    // Check per-content-type permissions
     return true
   },
   onBeforeEditorRendered: (typeSlug, id, context) => {
@@ -584,6 +621,10 @@ cms: {
   },
 }
 ```
+
+<Callout type="warn">
+**Override hooks are synchronous.** They run during component render and cannot await async operations. For SSR authorization with session checks, use the client hooks above.
+</Callout>
 
 ## Custom Field Components
 
@@ -700,3 +741,71 @@ cms: {
 <Callout type="info">
 When a custom component is provided for a field type via `fieldComponents`, it takes precedence over the built-in component. This allows you to completely customize how any field type is rendered.
 </Callout>
+
+## API Reference
+
+### Backend (`@btst/stack/plugins/cms/api`)
+
+#### CMSBackendConfig
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/cms/types.ts" name="CMSBackendConfig" />
+
+#### CMSBackendHooks
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/cms/types.ts" name="CMSBackendHooks" />
+
+#### CMSHookContext
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/cms/types.ts" name="CMSHookContext" />
+
+### Client (`@btst/stack/plugins/cms/client`)
+
+#### cmsClientPlugin
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/cms/client/plugin.tsx" name="cmsClientPlugin" />
+
+#### CMSClientConfig
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/cms/client/plugin.tsx" name="CMSClientConfig" />
+
+#### CMSClientHooks
+
+Customize client-side behavior with lifecycle hooks. These hooks run during SSR data loading and support async authorization:
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/cms/client/plugin.tsx" name="CMSClientHooks" />
+
+**Example usage:**
+
+```tsx title="lib/better-stack-client.tsx"
+cms: cmsClientPlugin({
+  // ... rest of the config
+  headers: options?.headers,
+  hooks: {
+    beforeLoadDashboard: async (context) => {
+      const session = await getSession(context.headers)
+      return session?.user?.isAdmin === true
+    },
+    beforeLoadContentList: async (typeSlug, context) => {
+      // Check per-content-type permissions
+      return isAdmin(context.headers)
+    },
+    beforeLoadContentEditor: async (typeSlug, id, context) => {
+      return isAdmin(context.headers)
+    },
+    onLoadError(error, context) {
+      // Redirect on auth failure
+      redirect("/auth/sign-in")
+    },
+  }
+})
+```
+
+#### LoaderContext
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/cms/client/plugin.tsx" name="LoaderContext" />
+
+#### CMSPluginOverrides
+
+Configure framework-specific overrides and route lifecycle hooks:
+
+<AutoTypeTable path="../packages/better-stack/src/plugins/cms/client/overrides.ts" name="CMSPluginOverrides" />

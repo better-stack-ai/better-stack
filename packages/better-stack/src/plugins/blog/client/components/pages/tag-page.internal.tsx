@@ -10,16 +10,17 @@ import { BLOG_LOCALIZATION } from "../../localization";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
 import { useTags } from "../../hooks/blog-hooks";
-import { useRouteLifecycle } from "../shared/use-route-lifecycle";
+import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 
 // Internal component with actual page content
 export function TagPage({ tagSlug }: { tagSlug: string }) {
-	const { localization } = usePluginOverrides<
+	const overrides = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
 	>("blog", {
 		localization: BLOG_LOCALIZATION,
 	});
+	const { localization } = overrides;
 
 	// Call lifecycle hooks
 	useRouteLifecycle({
@@ -29,6 +30,7 @@ export function TagPage({ tagSlug }: { tagSlug: string }) {
 			params: { tagSlug },
 			isSSR: typeof window === "undefined",
 		},
+		overrides,
 	});
 
 	const { tags } = useTags();

@@ -29,24 +29,104 @@ const ContentEditorPageComponent = lazy(() =>
  * Context passed to loader hooks
  */
 export interface LoaderContext {
+	/** Current route path */
 	path: string;
+	/** Route parameters (e.g., { typeSlug: "product", id: "123" }) */
 	params?: Record<string, string>;
+	/** Whether rendering on server (true) or client (false) */
 	isSSR: boolean;
+	/** Base URL for API calls */
 	apiBaseURL: string;
+	/** Path where the API is mounted */
 	apiBasePath: string;
+	/** Optional headers for the request */
 	headers?: Headers;
+	/** Additional context properties */
+	[key: string]: unknown;
+}
+
+/**
+ * Hooks for CMS client plugin
+ * All hooks are optional and allow consumers to customize behavior
+ */
+export interface CMSClientHooks {
+	/**
+	 * Called before loading the dashboard page. Return false to cancel loading.
+	 * @param context - Loader context with path, params, etc.
+	 */
+	beforeLoadDashboard?: (context: LoaderContext) => Promise<boolean> | boolean;
+	/**
+	 * Called after the dashboard is loaded.
+	 * @param context - Loader context
+	 */
+	afterLoadDashboard?: (context: LoaderContext) => Promise<void> | void;
+	/**
+	 * Called before loading a content list page. Return false to cancel loading.
+	 * @param typeSlug - The content type slug
+	 * @param context - Loader context
+	 */
+	beforeLoadContentList?: (
+		typeSlug: string,
+		context: LoaderContext,
+	) => Promise<boolean> | boolean;
+	/**
+	 * Called after a content list is loaded.
+	 * @param typeSlug - The content type slug
+	 * @param context - Loader context
+	 */
+	afterLoadContentList?: (
+		typeSlug: string,
+		context: LoaderContext,
+	) => Promise<void> | void;
+	/**
+	 * Called before loading the content editor page. Return false to cancel loading.
+	 * @param typeSlug - The content type slug
+	 * @param id - The content item ID (undefined for new items)
+	 * @param context - Loader context
+	 */
+	beforeLoadContentEditor?: (
+		typeSlug: string,
+		id: string | undefined,
+		context: LoaderContext,
+	) => Promise<boolean> | boolean;
+	/**
+	 * Called after the content editor is loaded.
+	 * @param typeSlug - The content type slug
+	 * @param id - The content item ID (undefined for new items)
+	 * @param context - Loader context
+	 */
+	afterLoadContentEditor?: (
+		typeSlug: string,
+		id: string | undefined,
+		context: LoaderContext,
+	) => Promise<void> | void;
+	/**
+	 * Called when a loading error occurs.
+	 * Use this for redirects on authorization failures.
+	 * @param error - The error that occurred
+	 * @param context - Loader context
+	 */
+	onLoadError?: (error: Error, context: LoaderContext) => Promise<void> | void;
 }
 
 /**
  * Configuration for CMS client plugin
  */
 export interface CMSClientConfig {
+	/** Base URL for API calls (e.g., "http://localhost:3000") */
 	apiBaseURL: string;
+	/** Path where the API is mounted (e.g., "/api/data") */
 	apiBasePath: string;
+	/** Base URL of your site */
 	siteBaseURL: string;
+	/** Path where pages are mounted (e.g., "/pages") */
 	siteBasePath: string;
+	/** React Query client instance for caching */
 	queryClient: QueryClient;
+	/** Optional headers for SSR (e.g., forwarding cookies) */
 	headers?: Headers;
+	/** Optional hooks for customizing behavior (authorization, redirects, etc.) */
+	hooks?: CMSClientHooks;
 }
 
 /**
@@ -55,17 +135,56 @@ export interface CMSClientConfig {
 function createDashboardLoader(config: CMSClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const { queryClient, apiBasePath, apiBaseURL, headers } = config;
-			const client = createApiClient<CMSApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
-			const queries = createCMSQueryKeys(client, headers);
+			const { queryClient, apiBasePath, apiBaseURL, headers, hooks } = config;
+
+			const context: LoaderContext = {
+				path: "/cms",
+				isSSR: true,
+				apiBaseURL,
+				apiBasePath,
+				headers,
+			};
 
 			try {
+				// Before hook - authorization check
+				if (hooks?.beforeLoadDashboard) {
+					const canLoad = await hooks.beforeLoadDashboard(context);
+					if (!canLoad) {
+						throw new Error("Load prevented by beforeLoadDashboard hook");
+					}
+				}
+
+				const client = createApiClient<CMSApiRouter>({
+					baseURL: apiBaseURL,
+					basePath: apiBasePath,
+				});
+				const queries = createCMSQueryKeys(client, headers);
+
 				await queryClient.prefetchQuery(queries.cmsTypes.list());
-			} catch {
-				// Let Error Boundaries handle errors during render
+
+				// After hook
+				if (hooks?.afterLoadDashboard) {
+					await hooks.afterLoadDashboard(context);
+				}
+
+				// Check if there was an error
+				const queryState = queryClient.getQueryState(
+					queries.cmsTypes.list().queryKey,
+				);
+				if (queryState?.error && hooks?.onLoadError) {
+					const error =
+						queryState.error instanceof Error
+							? queryState.error
+							: new Error(String(queryState.error));
+					await hooks.onLoadError(error, context);
+				}
+			} catch (error) {
+				// Error hook - log the error but don't throw during SSR
+				// Let Error Boundaries handle errors when components render
+				if (hooks?.onLoadError) {
+					await hooks.onLoadError(error as Error, context);
+				}
+				// Don't re-throw - let Error Boundary catch it during render
 			}
 		}
 	};
@@ -77,15 +196,33 @@ function createDashboardLoader(config: CMSClientConfig) {
 function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const { queryClient, apiBasePath, apiBaseURL, headers } = config;
-			const client = createApiClient<CMSApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
-			const queries = createCMSQueryKeys(client, headers);
-			const limit = 20;
+			const { queryClient, apiBasePath, apiBaseURL, headers, hooks } = config;
+
+			const context: LoaderContext = {
+				path: `/cms/${typeSlug}`,
+				params: { typeSlug },
+				isSSR: true,
+				apiBaseURL,
+				apiBasePath,
+				headers,
+			};
 
 			try {
+				// Before hook - authorization check
+				if (hooks?.beforeLoadContentList) {
+					const canLoad = await hooks.beforeLoadContentList(typeSlug, context);
+					if (!canLoad) {
+						throw new Error("Load prevented by beforeLoadContentList hook");
+					}
+				}
+
+				const client = createApiClient<CMSApiRouter>({
+					baseURL: apiBaseURL,
+					basePath: apiBasePath,
+				});
+				const queries = createCMSQueryKeys(client, headers);
+				const limit = 20;
+
 				// Prefetch content types
 				await queryClient.prefetchQuery(queries.cmsTypes.list());
 
@@ -116,8 +253,32 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 					},
 					initialPageParam: 0,
 				});
-			} catch {
-				// Let Error Boundaries handle errors during render
+
+				// After hook
+				if (hooks?.afterLoadContentList) {
+					await hooks.afterLoadContentList(typeSlug, context);
+				}
+
+				// Check if there was an error in either query
+				const typesState = queryClient.getQueryState(
+					queries.cmsTypes.list().queryKey,
+				);
+				const listState = queryClient.getQueryState(listQuery.queryKey);
+				const queryError = typesState?.error || listState?.error;
+				if (queryError && hooks?.onLoadError) {
+					const error =
+						queryError instanceof Error
+							? queryError
+							: new Error(String(queryError));
+					await hooks.onLoadError(error, context);
+				}
+			} catch (error) {
+				// Error hook - log the error but don't throw during SSR
+				// Let Error Boundaries handle errors when components render
+				if (hooks?.onLoadError) {
+					await hooks.onLoadError(error as Error, context);
+				}
+				// Don't re-throw - let Error Boundary catch it during render
 			}
 		}
 	};
@@ -133,14 +294,36 @@ function createContentEditorLoader(
 ) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const { queryClient, apiBasePath, apiBaseURL, headers } = config;
-			const client = createApiClient<CMSApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
-			const queries = createCMSQueryKeys(client, headers);
+			const { queryClient, apiBasePath, apiBaseURL, headers, hooks } = config;
+
+			const context: LoaderContext = {
+				path: id ? `/cms/${typeSlug}/${id}` : `/cms/${typeSlug}/new`,
+				params: id ? { typeSlug, id } : { typeSlug },
+				isSSR: true,
+				apiBaseURL,
+				apiBasePath,
+				headers,
+			};
 
 			try {
+				// Before hook - authorization check
+				if (hooks?.beforeLoadContentEditor) {
+					const canLoad = await hooks.beforeLoadContentEditor(
+						typeSlug,
+						id,
+						context,
+					);
+					if (!canLoad) {
+						throw new Error("Load prevented by beforeLoadContentEditor hook");
+					}
+				}
+
+				const client = createApiClient<CMSApiRouter>({
+					baseURL: apiBaseURL,
+					basePath: apiBasePath,
+				});
+				const queries = createCMSQueryKeys(client, headers);
+
 				const promises = [queryClient.prefetchQuery(queries.cmsTypes.list())];
 				if (id) {
 					promises.push(
@@ -148,8 +331,36 @@ function createContentEditorLoader(
 					);
 				}
 				await Promise.all(promises);
-			} catch {
-				// Let Error Boundaries handle errors during render
+
+				// After hook
+				if (hooks?.afterLoadContentEditor) {
+					await hooks.afterLoadContentEditor(typeSlug, id, context);
+				}
+
+				// Check if there was an error
+				const typesState = queryClient.getQueryState(
+					queries.cmsTypes.list().queryKey,
+				);
+				const itemState = id
+					? queryClient.getQueryState(
+							queries.cmsContent.detail(typeSlug, id).queryKey,
+						)
+					: null;
+				const queryError = typesState?.error || itemState?.error;
+				if (queryError && hooks?.onLoadError) {
+					const error =
+						queryError instanceof Error
+							? queryError
+							: new Error(String(queryError));
+					await hooks.onLoadError(error, context);
+				}
+			} catch (error) {
+				// Error hook - log the error but don't throw during SSR
+				// Let Error Boundaries handle errors when components render
+				if (hooks?.onLoadError) {
+					await hooks.onLoadError(error as Error, context);
+				}
+				// Don't re-throw - let Error Boundary catch it during render
 			}
 		}
 	};

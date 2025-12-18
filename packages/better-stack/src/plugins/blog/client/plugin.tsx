@@ -386,15 +386,16 @@ function createTagLoader(tagSlug: string, config: BlogClientConfig) {
 				const tagsQuery = queries.tags.list();
 				await queryClient.prefetchQuery(tagsQuery);
 
-				if (hooks?.onLoadError) {
-					const queryState = queryClient.getQueryState(listQuery.queryKey);
-					if (queryState?.error) {
-						const error =
-							queryState.error instanceof Error
-								? queryState.error
-								: new Error(String(queryState.error));
-						await hooks.onLoadError(error, context);
-					}
+				// Check if there was an error in either query
+				const listState = queryClient.getQueryState(listQuery.queryKey);
+				const tagsState = queryClient.getQueryState(tagsQuery.queryKey);
+				const queryError = listState?.error || tagsState?.error;
+				if (queryError && hooks?.onLoadError) {
+					const error =
+						queryError instanceof Error
+							? queryError
+							: new Error(String(queryError));
+					await hooks.onLoadError(error, context);
 				}
 			} catch (error) {
 				if (hooks?.onLoadError) {

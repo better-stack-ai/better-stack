@@ -15,6 +15,7 @@ import { EmptyState } from "../shared/empty-state";
 import { PageWrapper } from "../shared/page-wrapper";
 import { EditorSkeleton } from "../loading/editor-skeleton";
 import { CMS_LOCALIZATION } from "../../localization";
+import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 
 interface ContentEditorPageProps {
 	typeSlug: string;
@@ -22,10 +23,27 @@ interface ContentEditorPageProps {
 }
 
 export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
-	const { navigate, localization: customLocalization } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const localization = { ...CMS_LOCALIZATION, ...customLocalization };
+	const overrides = usePluginOverrides<CMSPluginOverrides>("cms");
+	const { navigate } = overrides;
+	const localization = { ...CMS_LOCALIZATION, ...overrides.localization };
 	const basePath = useBasePath();
+
+	// Call lifecycle hooks for authorization
+	useRouteLifecycle({
+		routeName: "contentEditor",
+		context: {
+			path: id ? `/cms/${typeSlug}/${id}` : `/cms/${typeSlug}/new`,
+			params: id ? { typeSlug, id } : { typeSlug },
+			isSSR: typeof window === "undefined",
+		},
+		overrides,
+		beforeRenderHook: (overrides, context) => {
+			if (overrides.onBeforeEditorRendered) {
+				return overrides.onBeforeEditorRendered(typeSlug, id ?? null, context);
+			}
+			return true;
+		},
+	});
 
 	const { contentTypes } = useSuspenseContentTypes();
 	const contentType = contentTypes.find((ct) => ct.slug === typeSlug);

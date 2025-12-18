@@ -9,16 +9,17 @@ import { useSuspensePosts } from "../../hooks/blog-hooks";
 import { BLOG_LOCALIZATION } from "../../localization";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
-import { useRouteLifecycle } from "../shared/use-route-lifecycle";
+import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 
 // Internal component with actual page content
 export function HomePage({ published }: { published: boolean }) {
-	const { localization } = usePluginOverrides<
+	const overrides = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
 	>("blog", {
 		localization: BLOG_LOCALIZATION,
 	});
+	const { localization } = overrides;
 
 	// Call lifecycle hooks
 	useRouteLifecycle({
@@ -28,6 +29,7 @@ export function HomePage({ published }: { published: boolean }) {
 			isSSR: typeof window === "undefined",
 			published,
 		},
+		overrides,
 		beforeRenderHook: (overrides, context) => {
 			if (published && overrides.onBeforePostsPageRendered) {
 				return overrides.onBeforePostsPageRendered(context);

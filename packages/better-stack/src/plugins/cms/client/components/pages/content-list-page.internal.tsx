@@ -20,6 +20,7 @@ import {
 import { EmptyState } from "../shared/empty-state";
 import { PageWrapper } from "../shared/page-wrapper";
 import { CMS_LOCALIZATION } from "../../localization";
+import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { toast } from "sonner";
 
 interface ContentListPageProps {
@@ -27,13 +28,27 @@ interface ContentListPageProps {
 }
 
 export function ContentListPage({ typeSlug }: ContentListPageProps) {
-	const {
-		navigate,
-		Link,
-		localization: customLocalization,
-	} = usePluginOverrides<CMSPluginOverrides>("cms");
-	const localization = { ...CMS_LOCALIZATION, ...customLocalization };
+	const overrides = usePluginOverrides<CMSPluginOverrides>("cms");
+	const { navigate, Link } = overrides;
+	const localization = { ...CMS_LOCALIZATION, ...overrides.localization };
 	const basePath = useBasePath();
+
+	// Call lifecycle hooks for authorization
+	useRouteLifecycle({
+		routeName: "contentList",
+		context: {
+			path: `/cms/${typeSlug}`,
+			params: { typeSlug },
+			isSSR: typeof window === "undefined",
+		},
+		overrides,
+		beforeRenderHook: (overrides, context) => {
+			if (overrides.onBeforeListRendered) {
+				return overrides.onBeforeListRendered(typeSlug, context);
+			}
+			return true;
+		},
+	});
 
 	const limit = 20;
 
