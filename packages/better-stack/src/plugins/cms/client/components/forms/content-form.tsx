@@ -377,28 +377,6 @@ export function ContentForm({
 
 	// Handle form value changes for slug auto-generation
 	const handleValuesChange = (values: Record<string, unknown>) => {
-		// When editing, react-hook-form's watch() may fire with stale values before the
-		// controlled `values` prop is fully synchronized. Skip updates where the incoming
-		// values have empty strings for fields that initialData had populated.
-		// This prevents overwriting valid data with stale empty values.
-		if (isEditing && Object.keys(initialData).length > 0) {
-			for (const key of Object.keys(initialData)) {
-				const initialValue = initialData[key];
-				const incomingValue = values[key];
-				// If initialData had a non-empty value but incoming is empty, skip this update
-				if (
-					initialValue !== undefined &&
-					initialValue !== null &&
-					initialValue !== "" &&
-					(incomingValue === undefined ||
-						incomingValue === null ||
-						incomingValue === "")
-				) {
-					return; // Skip stale update
-				}
-			}
-		}
-
 		setFormData(values);
 
 		// Auto-generate slug from source field if not manually edited

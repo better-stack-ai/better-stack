@@ -4,7 +4,7 @@ description: Available plugins and features for Better Stack
 ---
 
 import { Card, Cards } from "fumadocs-ui/components/card";
-import { BookOpen, Hammer } from "lucide-react";
+import { BookOpen, Database, Hammer, Bot } from "lucide-react";
 
 
 Better Stack provides a collection of full-stack plugins that you can easily integrate into your React application. Each plugin includes routes, APIs, database schemas, components, and hooks—everything you need to add complete features to your app. 
@@ -21,8 +21,14 @@ With more plugins coming soon, you can add complete features to your app in minu
   <Card
     title="AI Chat Plugin"
     href="/plugins/ai-chat"
-    icon={<BookOpen size={20} />}
+    icon={<Bot size={20} />}
     description="AI-powered chat with conversation history, streaming, and customizable models."
+  />
+  <Card
+    title="CMS Plugin"
+    href="/plugins/cms"
+    icon={<Database size={20} />}
+    description="Headless CMS with custom content types, Zod schemas, and auto-generated forms."
   />
   <Card
     title="Building Plugins"
