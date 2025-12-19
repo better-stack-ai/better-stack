@@ -13,6 +13,7 @@
       "plugins/blog",
       "plugins/ai-chat",
       "plugins/cms",
+      "plugins/better-auth-ui",
       "plugins/development",
       "---[Database]Databases---",
       "databases/adapters",
