@@ -16,11 +16,13 @@ export const ProductSchema = z.object({
     }),
     description: z.string().meta({ 
         description: "Full product description",
-        placeholder: "Describe this product..." 
+        placeholder: "Describe this product...",
+        fieldType: "textarea",
     }),
     price: z.coerce.number().min(0).meta({ placeholder: "0.00" }),
     image: z.string().optional().meta({
-        description: "Product image URL"
+        description: "Product image URL",
+        fieldType: "file",
     }),
     featured: z.boolean().default(false).meta({ 
         description: "Show on homepage featured section" 
@@ -34,7 +36,8 @@ export const TestimonialSchema = z.object({
     company: z.string().optional().meta({ placeholder: "Company name (optional)" }),
     quote: z.string().meta({ 
         description: "Customer testimonial text",
-        placeholder: "What did they say about us?" 
+        placeholder: "What did they say about us?",
+        fieldType: "textarea",
     }),
     rating: z.coerce.number().min(1).max(5).meta({ 
         description: "Rating out of 5 stars" 

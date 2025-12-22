@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, type ChangeEvent } from "react";
 import { toast } from "sonner";
-import type { AutoFormInputComponentProps } from "@workspace/ui/components/ui/auto-form/types";
+import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -11,8 +11,8 @@ import {
 	FormMessage,
 } from "@workspace/ui/components/form";
 import { Trash2, Loader2 } from "lucide-react";
-import AutoFormLabel from "@workspace/ui/components/ui/auto-form/common/label";
-import AutoFormTooltip from "@workspace/ui/components/ui/auto-form/common/tooltip";
+import AutoFormLabel from "@workspace/ui/components/auto-form/common/label";
+import AutoFormTooltip from "@workspace/ui/components/auto-form/common/tooltip";
 
 /**
  * Props for the CMSFileUpload component

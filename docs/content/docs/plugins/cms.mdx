@@ -44,6 +44,7 @@ Create your content types as Zod schemas in a shared file. This allows you to us
 import { z } from "zod";
 
 // ========== Product Schema ==========
+// Use .meta({ fieldType: "..." }) to customize how fields render in the admin UI
 export const ProductSchema = z.object({
   name: z.string().min(1).meta({ 
     description: "Product display name",
@@ -51,13 +52,19 @@ export const ProductSchema = z.object({
   }),
   description: z.string().meta({ 
     description: "Full product description",
-    placeholder: "Describe this product..." 
+    placeholder: "Describe this product...",
+    fieldType: "textarea", // Renders as a textarea
   }),
   price: z.coerce.number().min(0).meta({ placeholder: "0.00" }),
   featured: z.boolean().default(false).meta({ 
-    description: "Show on homepage featured section" 
+    description: "Show on homepage featured section",
+    fieldType: "switch", // Renders as a toggle switch
   }),
   category: z.enum(["Electronics", "Clothing", "Home", "Sports"]),
+  image: z.string().optional().meta({
+    description: "Product image",
+    fieldType: "file", // Renders as file upload (uses uploadImage override)
+  }),
 });
 
 // ========== Testimonial Schema ==========
@@ -66,7 +73,8 @@ export const TestimonialSchema = z.object({
   company: z.string().optional().meta({ placeholder: "Company (optional)" }),
   quote: z.string().meta({ 
     description: "Customer testimonial text",
-    placeholder: "What did they say?" 
+    placeholder: "What did they say?",
+    fieldType: "textarea",
   }),
   rating: z.coerce.number().min(1).max(5).meta({ 
     description: "Rating out of 5 stars" 
@@ -110,18 +118,13 @@ const { handler, dbSchema } = betterStack({
           slug: "product", 
           description: "Products for the store",
           schema: ProductSchema,
-          fieldConfig: {
-            description: { fieldType: "textarea" },
-          },
+          // Field types are defined in the schema via .meta({ fieldType: "..." })
         },
         { 
           name: "Testimonial", 
           slug: "testimonial", 
           description: "Customer testimonials",
           schema: TestimonialSchema,
-          fieldConfig: {
-            quote: { fieldType: "textarea" },
-          },
         },
       ],
     })
@@ -202,23 +205,19 @@ Add the CMS styles to your global CSS:
 
 ## Supported Field Types
 
-The CMS uses [AutoForm](https://github.com/vantezzen/autoform) to automatically render forms from Zod schemas. Supported field types:
+The CMS uses [AutoForm](https://github.com/vantezzen/autoform) to automatically render forms from Zod schemas. Use `.meta({ fieldType: "..." })` on any field to customize its rendering:
 
-| Zod Type | AutoForm Handler | fieldConfig Override |
-|----------|------------------|---------------------|
-| `z.string()` | Input (text) | - |
-| `z.string()` | Textarea | `fieldType: "textarea"` |
-| `z.string()` | File upload | `fieldType: "file"` |
+| Zod Type | Default Handler | With `fieldType` Override |
+|----------|-----------------|---------------------------|
+| `z.string()` | Input (text) | `"textarea"`, `"file"` |
 | `z.coerce.number()` | Number input | - |
-| `z.boolean()` | Checkbox | - |
-| `z.boolean()` | Switch | `fieldType: "switch"` |
+| `z.boolean()` | Checkbox | `"switch"` |
 | `z.coerce.date()` | Date picker | - |
-| `z.enum([...])` | Select dropdown | - |
-| `z.enum([...])` | Radio group | `fieldType: "radio"` |
+| `z.enum([...])` | Select dropdown | `"radio"` |
 
 ### Adding UI Customization
 
-Use `.meta()` to customize how fields appear:
+Use `.meta()` to customize how fields appear and render. All field configuration is done directly in the Zod schema:
 
 ```ts
 const ProductSchema = z.object({
@@ -226,48 +225,39 @@ const ProductSchema = z.object({
     description: "Product display name",  // Shows as help text
     placeholder: "Enter name..."          // Input placeholder
   }),
+  bio: z.string().meta({
+    description: "About this product",
+    fieldType: "textarea",  // Renders as a multi-line textarea
+  }),
+  featured: z.boolean().default(false).meta({
+    fieldType: "switch",  // Renders as a toggle switch instead of checkbox
+  }),
+  category: z.enum(["A", "B", "C"]).meta({
+    fieldType: "radio",  // Renders as radio buttons instead of select
+  }),
 });
-```
-
-Use `fieldConfig` in the content type definition to change field types:
-
-```ts
-{
-  name: "Product",
-  slug: "product",
-  schema: ProductSchema,
-  fieldConfig: {
-    description: { fieldType: "textarea" },  // Render as textarea
-    featured: { fieldType: "switch" },       // Render as switch
-    image: { fieldType: "file" },            // Render as file upload
-  },
-}
 ```
 
 ### Image Upload Fields
 
 To add an image upload field to your content type:
 
-1. Add an optional string field to your schema:
+1. Add an optional string field with `fieldType: "file"` in your schema:
 
 ```ts
 const ProductSchema = z.object({
   name: z.string().min(1),
   image: z.string().optional().meta({ 
-    description: "Product image URL" 
+    description: "Product image URL",
+    fieldType: "file",  // Renders as file upload
   }),
   // ...other fields
 });
 ```
 
-2. Configure it as a file field and provide `uploadImage` in overrides:
+2. Provide `uploadImage` in your BetterStackProvider overrides:
 
 ```ts
-// In your content type config
-fieldConfig: {
-  image: { fieldType: "file" },
-}
-
 // In your BetterStackProvider overrides
 cms: {
   uploadImage: async (file: File) => {
@@ -686,19 +676,21 @@ cms: {
 
 ### Registering Custom Field Types
 
-To use a custom field type, register it in your content type's `fieldConfig`:
+To use a custom field type, add it to your Zod schema with `.meta({ fieldType: "..." })`:
 
 ```ts
-// In your backend plugin config
-{
-  name: "Product",
-  slug: "product",
-  schema: ProductSchema,
-  fieldConfig: {
-    primaryColor: { fieldType: "color" },     // Uses custom "color" component
-    longDescription: { fieldType: "richText" }, // Uses custom "richText" component
-  },
-}
+// In your schema definition
+const ProductSchema = z.object({
+  name: z.string().min(1),
+  primaryColor: z.string().optional().meta({
+    description: "Brand color",
+    fieldType: "color",     // Uses custom "color" component from fieldComponents
+  }),
+  longDescription: z.string().optional().meta({
+    description: "Rich text content",
+    fieldType: "richText",  // Uses custom "richText" component from fieldComponents
+  }),
+});
 ```
 
 ### AutoFormInputComponentProps

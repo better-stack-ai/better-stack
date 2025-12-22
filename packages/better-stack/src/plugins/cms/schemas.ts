@@ -31,6 +31,7 @@ export const updateContentSchema = z.object({
 
 /**
  * Schema for content type response
+ * Note: fieldConfig is no longer included - it's merged into jsonSchema during read
  */
 export const contentTypeResponseSchema = z.object({
 	id: z.string(),
@@ -38,7 +39,6 @@ export const contentTypeResponseSchema = z.object({
 	slug: z.string(),
 	description: z.string().nullable().optional(),
 	jsonSchema: z.string(),
-	fieldConfig: z.string().nullable().optional(),
 	createdAt: z.string(),
 	updatedAt: z.string(),
 });

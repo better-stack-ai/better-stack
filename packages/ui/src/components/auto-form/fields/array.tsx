@@ -8,39 +8,38 @@ import { Separator } from "@workspace/ui/components/separator";
 import { Plus, Trash } from "lucide-react";
 import { useFieldArray, useForm } from "react-hook-form";
 import * as z from "zod";
-import { beautifyObjectName, getSchemaDescription } from "../utils";
+import { beautifyObjectName } from "../utils";
 import AutoFormObject from "./object";
 
-function isZodArray(
-  item: z.ZodArray<any> | z.ZodDefault<any>
-): item is z.ZodArray<any> {
-  return item instanceof z.ZodArray;
-}
-
-function isZodDefault(
-  item: z.ZodArray<any> | z.ZodDefault<any>
-): item is z.ZodDefault<any> {
-  return item instanceof z.ZodDefault;
+/**
+ * Get the def type from a Zod schema (Zod v4 compatible).
+ */
+function getDefType(schema: z.ZodType): string {
+  return (schema as any)._zod?.def?.type || "";
 }
 
 /**
- * Get the element type from an array or default-wrapped array schema.
+ * Get the element type from an array or wrapped array schema.
+ * Handles: array, optional array, default array, nullable array
  * In Zod v4, array element type is at _zod.def.element
  */
-function getArrayElementType(item: z.ZodArray<any> | z.ZodDefault<any>): z.ZodType | null {
+function getArrayElementType(item: z.ZodType): z.ZodType | null {
   const def = (item as any)._zod?.def;
-  
-  if (isZodArray(item)) {
-    // Zod v4: _zod.def.element contains the element type
+  const defType = getDefType(item);
+
+  // Direct array
+  if (defType === "array") {
     return def?.element || null;
   }
-  
-  if (isZodDefault(item)) {
-    // For default-wrapped arrays, get the inner array's element type
-    const innerDef = def?.innerType?._zod?.def;
-    return innerDef?.element || null;
+
+  // Wrapped types (default, optional, nullable) - unwrap and recurse
+  if (["default", "optional", "nullable"].includes(defType)) {
+    const innerType = def?.innerType;
+    if (innerType) {
+      return getArrayElementType(innerType);
+    }
   }
-  
+
   return null;
 }
 
@@ -57,11 +56,14 @@ export default function AutoFormArray({
   path?: string[];
   fieldConfig?: any;
 }) {
+  // The full path for useFieldArray - path already includes the array name
+  const fieldPath = path.join(".");
+  
   const { fields, append, remove } = useFieldArray({
     control: form.control,
-    name,
+    name: fieldPath,
   });
-  const title = getSchemaDescription(item) ?? beautifyObjectName(name);
+  const title = fieldConfig?.label ?? beautifyObjectName(name);
 
   const itemDefType = getArrayElementType(item);
 

@@ -77,24 +77,18 @@ const { handler, dbSchema } = betterStack({
             },
         }),
         // CMS plugin with content types
+        // Field types are now specified via .meta({ fieldType: "..." }) in the schema itself
         cms: cmsBackendPlugin({
             contentTypes: [
                 { 
                     name: "Product", 
                     slug: "product", 
                     schema: ProductSchema,
-                    fieldConfig: {
-                        description: { fieldType: "textarea" },
-                        image: { fieldType: "file" },
-                    },
                 },
                 { 
                     name: "Testimonial", 
                     slug: "testimonial", 
                     schema: TestimonialSchema,
-                    fieldConfig: {
-                        quote: { fieldType: "textarea" },
-                    },
                 },
             ],
         })
