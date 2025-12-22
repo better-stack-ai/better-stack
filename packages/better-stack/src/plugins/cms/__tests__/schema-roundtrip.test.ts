@@ -338,6 +338,201 @@ describe("Zod to JSON Schema roundtrip", () => {
 		});
 	});
 
+	describe("Unified schema format with fieldType in .meta()", () => {
+		it("preserves fieldType in JSON Schema properties", () => {
+			const schema = z.object({
+				description: z.string().meta({
+					description: "Full description",
+					fieldType: "textarea",
+				}),
+				image: z.string().optional().meta({
+					description: "Image URL",
+					fieldType: "file",
+				}),
+			});
+
+			const jsonSchema = z.toJSONSchema(schema) as {
+				properties?: Record<
+					string,
+					{ description?: string; fieldType?: string }
+				>;
+			};
+
+			// fieldType should be preserved in JSON Schema properties
+			expect(jsonSchema.properties?.description?.fieldType).toBe("textarea");
+			expect(jsonSchema.properties?.image?.fieldType).toBe("file");
+		});
+
+		it("preserves placeholder in JSON Schema properties", () => {
+			const schema = z.object({
+				name: z.string().meta({
+					placeholder: "Enter product name...",
+				}),
+			});
+
+			const jsonSchema = z.toJSONSchema(schema) as {
+				properties?: Record<string, { placeholder?: string }>;
+			};
+
+			expect(jsonSchema.properties?.name?.placeholder).toBe(
+				"Enter product name...",
+			);
+		});
+
+		it("simulates unified schema storage and retrieval", () => {
+			// This test simulates the new CMS flow with unified schema:
+			// 1. Developer defines schema with fieldType in .meta()
+			// 2. Backend converts to JSON Schema and stores (fieldType embedded)
+			// 3. Client reads JSON Schema and extracts fieldType for AutoForm
+
+			// Step 1: Developer defines schema with fieldType in .meta()
+			const ProductSchema = z.object({
+				name: z.string().min(1).meta({
+					description: "Product name",
+					placeholder: "Enter name...",
+				}),
+				description: z.string().meta({
+					description: "Full description",
+					fieldType: "textarea",
+				}),
+				image: z.string().optional().meta({
+					description: "Product image",
+					fieldType: "file",
+				}),
+				price: z.number().min(0).meta({
+					placeholder: "0.00",
+				}),
+			});
+
+			// Step 2: Convert to JSON Schema (stored in DB as version 2)
+			const jsonSchema = z.toJSONSchema(ProductSchema);
+			const dbStoredString = JSON.stringify(jsonSchema);
+
+			// Step 3: Client fetches and extracts fieldTypes
+			const fetchedSchema = JSON.parse(dbStoredString) as {
+				properties?: Record<
+					string,
+					{ description?: string; placeholder?: string; fieldType?: string }
+				>;
+			};
+
+			// Verify fieldTypes are preserved
+			expect(fetchedSchema.properties?.description?.fieldType).toBe("textarea");
+			expect(fetchedSchema.properties?.image?.fieldType).toBe("file");
+
+			// Verify other meta properties are preserved
+			expect(fetchedSchema.properties?.name?.description).toBe("Product name");
+			expect(fetchedSchema.properties?.name?.placeholder).toBe("Enter name...");
+			expect(fetchedSchema.properties?.price?.placeholder).toBe("0.00");
+		});
+	});
+
+	describe("Legacy schema migration", () => {
+		/**
+		 * Simulates the migrateToUnifiedSchema function from api/plugin.ts
+		 */
+		function migrateToUnifiedSchema(
+			jsonSchemaStr: string,
+			fieldConfigStr: string | null | undefined,
+		): string {
+			if (!fieldConfigStr) {
+				return jsonSchemaStr;
+			}
+
+			try {
+				const jsonSchema = JSON.parse(jsonSchemaStr);
+				const fieldConfig = JSON.parse(fieldConfigStr);
+
+				if (!jsonSchema.properties || typeof fieldConfig !== "object") {
+					return jsonSchemaStr;
+				}
+
+				// Merge fieldType from fieldConfig into each property
+				for (const [key, config] of Object.entries(fieldConfig)) {
+					if (
+						jsonSchema.properties[key] &&
+						typeof config === "object" &&
+						config !== null &&
+						"fieldType" in config
+					) {
+						jsonSchema.properties[key].fieldType = (
+							config as { fieldType: string }
+						).fieldType;
+					}
+				}
+
+				return JSON.stringify(jsonSchema);
+			} catch {
+				return jsonSchemaStr;
+			}
+		}
+
+		it("merges legacy fieldConfig into JSON Schema", () => {
+			// Legacy format: separate jsonSchema and fieldConfig
+			const legacyJsonSchema = JSON.stringify({
+				type: "object",
+				properties: {
+					name: { type: "string", description: "Product name" },
+					description: { type: "string" },
+					image: { type: "string" },
+				},
+				required: ["name", "description"],
+			});
+
+			const legacyFieldConfig = JSON.stringify({
+				description: { fieldType: "textarea" },
+				image: { fieldType: "file" },
+			});
+
+			// Migrate
+			const migratedStr = migrateToUnifiedSchema(
+				legacyJsonSchema,
+				legacyFieldConfig,
+			);
+			const migrated = JSON.parse(migratedStr);
+
+			// Verify fieldTypes are now embedded
+			expect(migrated.properties.description.fieldType).toBe("textarea");
+			expect(migrated.properties.image.fieldType).toBe("file");
+
+			// Verify other properties are preserved
+			expect(migrated.properties.name.description).toBe("Product name");
+			expect(migrated.required).toEqual(["name", "description"]);
+		});
+
+		it("handles null fieldConfig", () => {
+			const jsonSchema = JSON.stringify({
+				type: "object",
+				properties: {
+					name: { type: "string" },
+				},
+			});
+
+			const result = migrateToUnifiedSchema(jsonSchema, null);
+			expect(result).toBe(jsonSchema);
+		});
+
+		it("handles undefined fieldConfig", () => {
+			const jsonSchema = JSON.stringify({
+				type: "object",
+				properties: {
+					name: { type: "string" },
+				},
+			});
+
+			const result = migrateToUnifiedSchema(jsonSchema, undefined);
+			expect(result).toBe(jsonSchema);
+		});
+
+		it("handles invalid JSON gracefully", () => {
+			const jsonSchema = "invalid json";
+			const fieldConfig = "also invalid";
+
+			const result = migrateToUnifiedSchema(jsonSchema, fieldConfig);
+			expect(result).toBe(jsonSchema); // Returns original on error
+		});
+	});
+
 	describe("AutoForm schema generation and data shape", () => {
 		/**
 		 * Helper function to convert JSON Schema to Zod with coercion for AutoForm

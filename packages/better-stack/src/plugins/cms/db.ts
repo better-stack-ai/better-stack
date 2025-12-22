@@ -29,6 +29,10 @@ export const cmsSchema = createDbPlugin("cms", {
 				type: "string",
 				required: false,
 			},
+			autoFormVersion: {
+				type: "number",
+				required: false,
+			},
 			createdAt: {
 				type: "date",
 				defaultValue: () => new Date(),

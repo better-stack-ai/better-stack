@@ -3,13 +3,15 @@
 import { useState, useMemo, useEffect } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
-import AutoForm, {
-	AutoFormSubmit,
-} from "@workspace/ui/components/auto-form";
+import AutoForm, { AutoFormSubmit } from "@workspace/ui/components/auto-form";
 import type {
 	FieldConfig,
 	AutoFormInputComponentProps,
 } from "@workspace/ui/components/auto-form/types";
+import {
+	buildFieldConfigFromJsonSchema as buildFieldConfigBase,
+	fromJSONSchemaWithDates,
+} from "@workspace/ui/components/auto-form/utils";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
@@ -19,126 +21,6 @@ import type { SerializedContentType } from "../../../types";
 import { slugify } from "../../../utils";
 import { CMS_LOCALIZATION } from "../../localization";
 import { CMSFileUpload } from "./file-upload";
-
-/**
- * JSON Schema property type definition
- */
-interface JsonSchemaProperty {
-	type?: string | string[];
-	format?: string;
-	enum?: (string | number | boolean)[];
-	minimum?: number;
-	maximum?: number;
-	minLength?: number;
-	maxLength?: number;
-	default?: unknown;
-	description?: string;
-}
-
-interface JsonSchema {
-	type?: string;
-	properties?: Record<string, JsonSchemaProperty>;
-	required?: string[];
-}
-
-/**
- * Convert JSON Schema to Zod schema with proper coercion for AutoForm
- *
- * Uses Zod v4's native z.fromJSONSchema() as a base and applies coercion
- * where needed. AutoForm requires z.coerce.number() and z.coerce.date()
- * for proper form handling because HTML inputs return strings.
- *
- * Note: We build the schema manually to ensure proper coercion support,
- * as z.fromJSONSchema() doesn't add coercion automatically.
- */
-function jsonSchemaToZodWithCoercion(
-	jsonSchema: JsonSchema,
-): z.ZodObject<Record<string, z.ZodTypeAny>> {
-	const shape: Record<string, z.ZodTypeAny> = {};
-	const properties = jsonSchema.properties || {};
-	const required = jsonSchema.required || [];
-
-	for (const [key, prop] of Object.entries(properties)) {
-		let fieldSchema: z.ZodTypeAny;
-
-		// Determine the type (handle arrays like ["string", "null"] for nullable)
-		const typeValue = Array.isArray(prop.type) ? prop.type[0] : prop.type;
-
-		// Handle enum first - works for string enums
-		if (prop.enum && Array.isArray(prop.enum) && prop.enum.length > 0) {
-			// Filter to only string values for z.enum
-			const stringValues = prop.enum.filter(
-				(v): v is string => typeof v === "string",
-			);
-			if (stringValues.length > 0) {
-				fieldSchema = z.enum(stringValues as [string, ...string[]]);
-			} else {
-				// Fallback for non-string enums
-				fieldSchema = z.string();
-			}
-		} else {
-			switch (typeValue) {
-				case "number":
-				case "integer": {
-					// Use z.coerce.number() for proper form handling (HTML inputs return strings)
-					let numSchema = z.coerce.number();
-					if (prop.minimum !== undefined) {
-						numSchema = numSchema.min(prop.minimum);
-					}
-					if (prop.maximum !== undefined) {
-						numSchema = numSchema.max(prop.maximum);
-					}
-					fieldSchema = numSchema;
-					break;
-				}
-				case "boolean": {
-					fieldSchema = z.boolean();
-					if (prop.default !== undefined) {
-						fieldSchema = (fieldSchema as z.ZodBoolean).default(
-							prop.default as boolean,
-						);
-					}
-					break;
-				}
-				case "string": {
-					// Check for date format
-					if (prop.format === "date" || prop.format === "date-time") {
-						fieldSchema = z.coerce.date();
-					} else {
-						let strSchema = z.string();
-						if (prop.minLength !== undefined) {
-							strSchema = strSchema.min(prop.minLength);
-						}
-						if (prop.maxLength !== undefined) {
-							strSchema = strSchema.max(prop.maxLength);
-						}
-						fieldSchema = strSchema;
-					}
-					break;
-				}
-				default: {
-					// Fallback to string for unknown types
-					fieldSchema = z.string();
-				}
-			}
-		}
-
-		// Apply default if present and not already applied (skip for booleans which handle it above)
-		// Use typeValue to correctly handle nullable types where prop.type is an array like ["boolean", "null"]
-		if (prop.default !== undefined && typeValue !== "boolean") {
-			fieldSchema = fieldSchema.default(prop.default);
-		}
-
-		// Make optional if not in required array
-		if (!required.includes(key)) {
-			fieldSchema = fieldSchema.optional();
-		}
-
-		shape[key] = fieldSchema;
-	}
-
-	return z.object(shape);
-}
 
 interface ContentFormProps {
 	contentType: SerializedContentType;
@@ -153,112 +35,63 @@ interface ContentFormProps {
 }
 
 /**
- * Built-in AutoForm field types
- */
-const BUILTIN_FIELD_TYPES = [
-	"checkbox",
-	"date",
-	"select",
-	"radio",
-	"switch",
-	"textarea",
-	"number",
-	"file",
-	"fallback",
-] as const;
-
-/**
- * Extract field configuration from JSON Schema properties
- * Maps description and placeholder to AutoForm's fieldConfig format
+ * Build field configuration for AutoForm with CMS-specific file upload handling.
  *
- * @param jsonSchema - The JSON Schema from the content type
- * @param storedFieldConfig - The stored field config from the content type
- * @param uploadImage - The uploadImage function from overrides (for default file component)
+ * Uses the shared buildFieldConfigFromJsonSchema from auto-form/utils as a base,
+ * then adds special handling for "file" fieldType to inject CMSFileUpload component
+ * ONLY if no custom component is provided via fieldComponents.
+ *
+ * @param jsonSchema - The JSON Schema from the content type (with fieldType embedded in properties)
+ * @param uploadImage - The uploadImage function from overrides (for file fields)
  * @param fieldComponents - Custom field components from overrides
  */
 function buildFieldConfigFromJsonSchema(
 	jsonSchema: Record<string, unknown>,
-	storedFieldConfig?: Record<string, { fieldType?: string }>,
 	uploadImage?: (file: File) => Promise<string>,
 	fieldComponents?: Record<
 		string,
 		React.ComponentType<AutoFormInputComponentProps>
 	>,
 ): FieldConfig<Record<string, unknown>> {
-	const fieldConfig: FieldConfig<Record<string, unknown>> = {};
+	// Get base config from shared utility (handles fieldType from JSON Schema)
+	const baseConfig = buildFieldConfigBase(jsonSchema, fieldComponents);
+
+	// Apply CMS-specific handling for "file" fieldType ONLY if no custom component exists
+	// Custom fieldComponents take priority - don't override if user provided one
 	const properties = jsonSchema.properties as Record<
 		string,
-		{ description?: string; placeholder?: string }
+		{ fieldType?: string }
 	>;
 
-	if (!properties) return fieldConfig;
+	if (!properties) return baseConfig;
 
-	for (const [key, value] of Object.entries(properties)) {
-		const config: Record<string, unknown> = {};
-
-		if (value.description) {
-			config.description = value.description;
-		}
-
-		if (value.placeholder) {
-			config.inputProps = {
-				placeholder: value.placeholder,
-			};
-		}
-
-		// Apply stored fieldConfig overrides (e.g., fieldType: "textarea", "file", or custom types)
-		if (storedFieldConfig?.[key]) {
-			const storedConfig = storedFieldConfig[key];
-			const fieldType = storedConfig.fieldType;
-
-			if (fieldType) {
-				// 1. Check if there's a custom component in fieldComponents
-				if (fieldComponents?.[fieldType]) {
-					const CustomComponent = fieldComponents[fieldType];
-					config.fieldType = (props: AutoFormInputComponentProps) => (
-						<CustomComponent {...props} />
-					);
-				}
-				// 2. Special handling for built-in "file" type - use CMSFileUpload with uploadImage
-				else if (fieldType === "file") {
-					if (!uploadImage) {
-						// Show a clear error message if uploadImage is not provided
-						config.fieldType = () => (
-							<div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
-								File upload requires an <code>uploadImage</code> function in CMS
-								overrides.
-							</div>
-						);
-					} else {
-						config.fieldType = (props: AutoFormInputComponentProps) => (
-							<CMSFileUpload {...props} uploadImage={uploadImage} />
-						);
-					}
-				}
-				// 3. For other built-in types, pass through to auto-form
-				else if (
-					BUILTIN_FIELD_TYPES.includes(
-						fieldType as (typeof BUILTIN_FIELD_TYPES)[number],
-					)
-				) {
-					config.fieldType = fieldType;
-				}
-				// 4. Unknown custom type without a component - log warning and skip
-				else {
-					console.warn(
-						`CMS: Unknown fieldType "${fieldType}" for field "${key}". ` +
-							`Provide a component via fieldComponents override or use a built-in type.`,
-					);
-				}
+	for (const [key, prop] of Object.entries(properties)) {
+		// Only handle "file" fieldType when there's NO custom component for "file"
+		if (prop.fieldType === "file" && !fieldComponents?.["file"]) {
+			// Use CMSFileUpload as the default file component
+			if (!uploadImage) {
+				// Show a clear error message if uploadImage is not provided
+				baseConfig[key] = {
+					...baseConfig[key],
+					fieldType: () => (
+						<div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
+							File upload requires an <code>uploadImage</code> function in CMS
+							overrides.
+						</div>
+					),
+				};
+			} else {
+				baseConfig[key] = {
+					...baseConfig[key],
+					fieldType: (props: AutoFormInputComponentProps) => (
+						<CMSFileUpload {...props} uploadImage={uploadImage} />
+					),
+				};
 			}
-		}
-
-		if (Object.keys(config).length > 0) {
-			fieldConfig[key] = config;
 		}
 	}
 
-	return fieldConfig;
+	return baseConfig;
 }
 
 /**
@@ -326,7 +159,7 @@ export function ContentForm({
 		}
 	}, [initialSlug, isEditing]);
 
-	// Parse JSON Schema
+	// Parse JSON Schema (now includes fieldType embedded in properties)
 	const jsonSchema = useMemo(() => {
 		try {
 			return JSON.parse(contentType.jsonSchema) as Record<string, unknown>;
@@ -335,38 +168,21 @@ export function ContentForm({
 		}
 	}, [contentType.jsonSchema]);
 
-	// Parse stored field config
-	const storedFieldConfig = useMemo(() => {
-		if (!contentType.fieldConfig) return undefined;
-		try {
-			return JSON.parse(contentType.fieldConfig) as Record<
-				string,
-				{ fieldType?: string }
-			>;
-		} catch {
-			return undefined;
-		}
-	}, [contentType.fieldConfig]);
-
-	// Convert to Zod schema with coercion for proper AutoForm handling
+	// Convert JSON Schema to Zod schema using fromJSONSchemaWithDates utility
+	// This properly handles date fields (format: "date-time") and min/max date constraints
 	const zodSchema = useMemo(() => {
 		try {
-			return jsonSchemaToZodWithCoercion(jsonSchema as JsonSchema);
+			return fromJSONSchemaWithDates(jsonSchema);
 		} catch {
 			return z.object({});
 		}
 	}, [jsonSchema]);
 
-	// Build field config for AutoForm
+	// Build field config for AutoForm (fieldType is now embedded in jsonSchema)
 	const fieldConfig = useMemo(
 		() =>
-			buildFieldConfigFromJsonSchema(
-				jsonSchema,
-				storedFieldConfig,
-				uploadImage,
-				fieldComponents,
-			),
-		[jsonSchema, storedFieldConfig, uploadImage, fieldComponents],
+			buildFieldConfigFromJsonSchema(jsonSchema, uploadImage, fieldComponents),
+		[jsonSchema, uploadImage, fieldComponents],
 	);
 
 	// Find the field to use for slug auto-generation

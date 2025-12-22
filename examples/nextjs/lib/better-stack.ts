@@ -125,6 +125,7 @@ const { handler, dbSchema } = betterStack({
             },
         }),
         // CMS plugin with content types defined as Zod schemas
+        // Field types are now specified via .meta({ fieldType: "..." }) in the schema itself
         cms: cmsBackendPlugin({
             contentTypes: [
                 { 
@@ -132,19 +133,12 @@ const { handler, dbSchema } = betterStack({
                     slug: "product", 
                     description: "Products for the store",
                     schema: ProductSchema,
-                    fieldConfig: {
-                        description: { fieldType: "textarea" },
-                        image: { fieldType: "file" },
-                    },
                 },
                 { 
                     name: "Testimonial", 
                     slug: "testimonial", 
                     description: "Customer testimonials",
                     schema: TestimonialSchema,
-                    fieldConfig: {
-                        quote: { fieldType: "textarea" },
-                    },
                 },
             ],
             hooks: {

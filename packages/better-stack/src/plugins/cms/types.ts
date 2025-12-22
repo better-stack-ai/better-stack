@@ -1,8 +1,16 @@
 import type { z } from "zod";
-import type { AutoFormFieldType } from "@workspace/ui/components/auto-form/types";
 
 /**
- * Configuration for a content type defined by the developer
+ * Configuration for a content type defined by the developer.
+ *
+ * Field types are now specified directly in the Zod schema via .meta():
+ * @example
+ * ```typescript
+ * const ProductSchema = z.object({
+ *   description: z.string().meta({ fieldType: "textarea" }),
+ *   image: z.string().optional().meta({ fieldType: "file" }),
+ * });
+ * ```
  */
 export interface ContentTypeConfig {
 	/** Display name for the content type (e.g., "Product", "Testimonial") */
@@ -11,21 +19,8 @@ export interface ContentTypeConfig {
 	slug: string;
 	/** Optional description shown in the admin UI */
 	description?: string;
-	/** Zod schema defining the content type's fields */
+	/** Zod schema defining the content type's fields. Use .meta({ fieldType: "..." }) for field type overrides. */
 	schema: z.ZodObject<z.ZodRawShape>;
-	/**
-	 * Optional field configuration for AutoForm customization.
-	 *
-	 * fieldType can be:
-	 * - A built-in AutoForm type: "checkbox", "date", "select", "radio", "switch", "textarea", "number", "file", "fallback"
-	 * - A custom type name that maps to a component provided via `fieldComponents` in overrides
-	 */
-	fieldConfig?: Record<
-		string,
-		{
-			fieldType?: AutoFormFieldType | (string & {});
-		}
-	>;
 }
 
 /**
@@ -41,8 +36,10 @@ export type ContentType = {
 	description?: string;
 	/** JSON Schema representation of the Zod schema (stringified) */
 	jsonSchema: string;
-	/** Optional field configuration JSON (stringified) */
+	/** @deprecated Legacy field config - now embedded in jsonSchema. Kept for backwards compat. */
 	fieldConfig?: string;
+	/** AutoForm schema version. 1 = legacy (separate fieldConfig), 2 = unified (fieldType in jsonSchema) */
+	autoFormVersion?: number;
 	createdAt: Date;
 	updatedAt: Date;
 };

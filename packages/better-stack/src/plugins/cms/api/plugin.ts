@@ -17,11 +17,65 @@ import { listContentQuerySchema } from "../schemas";
 import { slugify } from "../utils";
 
 /**
+ * Migrate a legacy JSON Schema (version 1) to unified format (version 2)
+ * by merging fieldConfig values into the JSON Schema properties
+ */
+function migrateToUnifiedSchema(
+	jsonSchemaStr: string,
+	fieldConfigStr: string | null | undefined,
+): string {
+	if (!fieldConfigStr) {
+		return jsonSchemaStr;
+	}
+
+	try {
+		const jsonSchema = JSON.parse(jsonSchemaStr);
+		const fieldConfig = JSON.parse(fieldConfigStr);
+
+		if (!jsonSchema.properties || typeof fieldConfig !== "object") {
+			return jsonSchemaStr;
+		}
+
+		// Merge fieldType from fieldConfig into each property
+		for (const [key, config] of Object.entries(fieldConfig)) {
+			if (
+				jsonSchema.properties[key] &&
+				typeof config === "object" &&
+				config !== null &&
+				"fieldType" in config
+			) {
+				jsonSchema.properties[key].fieldType = (
+					config as { fieldType: string }
+				).fieldType;
+			}
+		}
+
+		return JSON.stringify(jsonSchema);
+	} catch {
+		// If parsing fails, return original
+		return jsonSchemaStr;
+	}
+}
+
+/**
  * Serialize a ContentType for API response (convert dates to strings)
+ * Also applies lazy migration for legacy schemas (version 1 → 2)
  */
 function serializeContentType(ct: ContentType): SerializedContentType {
+	// Check if this is a legacy schema that needs migration
+	const needsMigration = !ct.autoFormVersion || ct.autoFormVersion < 2;
+
+	// Apply lazy migration: merge fieldConfig into jsonSchema on read
+	const migratedJsonSchema = needsMigration
+		? migrateToUnifiedSchema(ct.jsonSchema, ct.fieldConfig)
+		: ct.jsonSchema;
+
 	return {
-		...ct,
+		id: ct.id,
+		name: ct.name,
+		slug: ct.slug,
+		description: ct.description,
+		jsonSchema: migratedJsonSchema,
 		createdAt: ct.createdAt.toISOString(),
 		updatedAt: ct.updatedAt.toISOString(),
 	};
@@ -60,13 +114,25 @@ function serializeContentItemWithType(
  * Handles race conditions from multiple instances by catching unique constraint
  * errors and verifying the record exists (another instance created it first).
  */
+/**
+ * Sync content types from config to database
+ * Creates or updates content types based on the developer's Zod schemas
+ *
+ * Always writes version 2 format:
+ * - fieldType is embedded in jsonSchema via .meta()
+ * - fieldConfig is set to null (no longer used)
+ * - autoFormVersion is set to 2
+ *
+ * Handles race conditions from multiple instances by catching unique constraint
+ * errors and verifying the record exists (another instance created it first).
+ */
 async function syncContentTypes(
 	adapter: Adapter,
 	config: CMSBackendConfig,
 ): Promise<void> {
 	for (const ct of config.contentTypes) {
+		// Convert Zod schema to JSON Schema - fieldType is now embedded via .meta()
 		const jsonSchema = JSON.stringify(z.toJSONSchema(ct.schema));
-		const fieldConfig = ct.fieldConfig ? JSON.stringify(ct.fieldConfig) : null;
 
 		const existing = await adapter.findOne<ContentType>({
 			model: "contentType",
@@ -81,7 +147,8 @@ async function syncContentTypes(
 					name: ct.name,
 					description: ct.description ?? null,
 					jsonSchema,
-					fieldConfig,
+					fieldConfig: null, // No longer used in version 2
+					autoFormVersion: 2,
 					updatedAt: new Date(),
 				},
 			});
@@ -94,7 +161,8 @@ async function syncContentTypes(
 						slug: ct.slug,
 						description: ct.description ?? null,
 						jsonSchema,
-						fieldConfig,
+						fieldConfig: null, // No longer used in version 2
+						autoFormVersion: 2,
 						createdAt: new Date(),
 						updatedAt: new Date(),
 					},
