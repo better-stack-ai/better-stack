@@ -111,13 +111,6 @@ function serializeContentItemWithType(
  * Sync content types from config to database
  * Creates or updates content types based on the developer's Zod schemas
  *
- * Handles race conditions from multiple instances by catching unique constraint
- * errors and verifying the record exists (another instance created it first).
- */
-/**
- * Sync content types from config to database
- * Creates or updates content types based on the developer's Zod schemas
- *
  * Always writes version 2 format:
  * - fieldType is embedded in jsonSchema via .meta()
  * - fieldConfig is set to null (no longer used)
