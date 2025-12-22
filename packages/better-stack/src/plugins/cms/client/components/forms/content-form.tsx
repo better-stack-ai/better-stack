@@ -5,11 +5,11 @@ import { z } from "zod";
 import { toast } from "sonner";
 import AutoForm, {
 	AutoFormSubmit,
-} from "@workspace/ui/components/ui/auto-form";
+} from "@workspace/ui/components/auto-form";
 import type {
 	FieldConfig,
 	AutoFormInputComponentProps,
-} from "@workspace/ui/components/ui/auto-form/types";
+} from "@workspace/ui/components/auto-form/types";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";

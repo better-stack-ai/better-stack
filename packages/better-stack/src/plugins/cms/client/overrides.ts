@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 import type { CMSLocalization } from "./localization";
-import type { AutoFormInputComponentProps } from "@workspace/ui/components/ui/auto-form/types";
+import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
 
 /**
  * Context passed to lifecycle hooks

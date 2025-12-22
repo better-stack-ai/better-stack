@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { AutoFormFieldType } from "@workspace/ui/components/ui/auto-form/types";
+import type { AutoFormFieldType } from "@workspace/ui/components/auto-form/types";
 
 /**
  * Configuration for a content type defined by the developer

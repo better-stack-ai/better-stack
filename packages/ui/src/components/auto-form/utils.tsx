@@ -1,7 +1,59 @@
 import React from "react";
 import type { DefaultValues } from "react-hook-form";
 import { z } from "zod";
-import type { FieldConfig } from "./types";
+import type { AutoFormInputComponentProps, FieldConfig } from "./types";
+
+/**
+ * Convert a Zod schema to JSON Schema with proper date handling.
+ * 
+ * z.date() is not representable in JSON Schema by default.
+ * This helper uses the `override` option to convert z.date() fields
+ * to { type: "string", format: "date-time" } which is the standard
+ * JSON Schema representation for dates.
+ * 
+ * This approach is simpler than codecs for form use cases because:
+ * - Forms work directly with JavaScript Date objects
+ * - z.date() validates Date objects correctly
+ * - JSON Schema just needs a string representation for storage/transport
+ * 
+ * Min/max date constraints are preserved as formatMinimum/formatMaximum
+ * in the JSON Schema output (JSON Schema draft 7+ format validation).
+ */
+export function toJSONSchemaWithDates<T extends z.ZodType>(schema: T) {
+  return z.toJSONSchema(schema, {
+    unrepresentable: "any",
+    override: (ctx) => {
+      const def = (ctx.zodSchema as any)?._zod?.def;
+      if (def?.type === "date") {
+        ctx.jsonSchema.type = "string";
+        ctx.jsonSchema.format = "date-time";
+        
+        // Preserve min/max date constraints
+        // In Zod v4, these are available as minDate/maxDate on the schema object
+        const zodSchema = ctx.zodSchema as any;
+        if (zodSchema.minDate) {
+          // Store as ISO string for JSON Schema format validation
+          ctx.jsonSchema.formatMinimum = zodSchema.minDate;
+        }
+        if (zodSchema.maxDate) {
+          ctx.jsonSchema.formatMaximum = zodSchema.maxDate;
+        }
+      }
+    },
+  });
+}
+
+export const BUILTIN_FIELD_TYPES = [
+	"checkbox",
+	"date",
+	"select",
+	"radio",
+	"switch",
+	"textarea",
+	"number",
+	"file",
+	"fallback",
+] as const;
 
 /**
  * Get the type name from a Zod v4 schema's _zod.def.
@@ -11,15 +63,6 @@ function getDefTypeName(schema: z.ZodType): string {
   // Access through _zod.def.type for Zod v4
   const def = (schema as any)._zod?.def;
   return def?.type || "";
-}
-
-/**
- * Check if a schema definition matches a type name (Zod v4 only).
- * @param schema - The Zod schema
- * @param typeName - Zod v4 style name (e.g., "default", "optional", "object")
- */
-function isDefType(schema: z.ZodType, typeName: string): boolean {
-  return getDefTypeName(schema) === typeName;
 }
 
 /**
@@ -160,8 +203,9 @@ export function getDefaultValues<Schema extends z.ZodObject<any, any>>(
       }
     } else {
       let defaultValue = getDefaultValueInZodStack(item);
+      // Also check fieldConfig for default values (important for JSON schema derived forms)
       if (
-        (defaultValue === null || defaultValue === "") &&
+        (defaultValue === undefined || defaultValue === null || defaultValue === "") &&
         fieldConfig?.[key]?.inputProps
       ) {
         defaultValue = (fieldConfig?.[key]?.inputProps as unknown as any)
@@ -297,4 +341,194 @@ export function sortFieldsByOrder<SchemaType extends z.ZodObject<any, any>>(
   });
 
   return sortedFields;
+}
+
+// Import shared JSON Schema property type for consistency with form-builder
+import type { JSONSchemaPropertyBase } from "../shared-form-types";
+
+/**
+ * JSON schema property shape that includes FieldConfigItem-compatible metadata.
+ * Uses the shared type for consistency between form-builder and auto-form.
+ */
+type JsonSchemaProperty = JSONSchemaPropertyBase;
+
+/**
+ * Create a Zod schema from JSON Schema with proper date handling.
+ * 
+ * This is the counterpart to toJSONSchemaWithDates. It:
+ * 1. Uses z.fromJSONSchema to create the base schema
+ * 2. Wraps date fields with validation for formatMinimum/formatMaximum
+ * 3. Keeps dates as strings (ISO format) for JSON compatibility
+ * 
+ * The date field component handles converting strings to Date objects for display.
+ */
+export function fromJSONSchemaWithDates(jsonSchema: Record<string, unknown>): z.ZodType {
+	const baseSchema = z.fromJSONSchema(jsonSchema);
+	const properties = jsonSchema.properties as Record<string, JsonSchemaProperty> | undefined;
+	
+	if (!properties) return baseSchema;
+	
+	// Find date fields that need validation
+	const dateFieldsWithConstraints: Record<string, { min?: string; max?: string }> = {};
+	
+	for (const [key, prop] of Object.entries(properties)) {
+		if (prop.type === "string" && prop.format === "date-time") {
+			if (prop.formatMinimum || prop.formatMaximum) {
+				dateFieldsWithConstraints[key] = {
+					min: prop.formatMinimum,
+					max: prop.formatMaximum,
+				};
+			}
+		}
+	}
+	
+	// If no date constraints, return base schema
+	if (Object.keys(dateFieldsWithConstraints).length === 0) {
+		return baseSchema;
+	}
+	
+	// Add refinements for date validation
+	return baseSchema.superRefine((data: any, ctx) => {
+		for (const [key, constraints] of Object.entries(dateFieldsWithConstraints)) {
+			const value = data[key];
+			if (value === undefined || value === null || value === "") continue;
+			
+			const dateValue = new Date(value);
+			if (isNaN(dateValue.getTime())) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Invalid date",
+					path: [key],
+				});
+				continue;
+			}
+			
+			if (constraints.min) {
+				const minDate = new Date(constraints.min);
+				if (dateValue < minDate) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: `Date must be after ${minDate.toLocaleDateString()}`,
+						path: [key],
+					});
+				}
+			}
+			
+			if (constraints.max) {
+				const maxDate = new Date(constraints.max);
+				if (dateValue > maxDate) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: `Date must be before ${maxDate.toLocaleDateString()}`,
+						path: [key],
+					});
+				}
+			}
+		}
+	});
+}
+
+export function buildFieldConfigFromJsonSchema(
+	jsonSchema: Record<string, unknown>,
+	fieldComponents?: Record<
+		string,
+		React.ComponentType<AutoFormInputComponentProps>
+	>,
+): FieldConfig<Record<string, unknown>> {
+	const fieldConfig: FieldConfig<Record<string, unknown>> = {};
+	const properties = jsonSchema.properties as Record<string, JsonSchemaProperty>;
+
+	if (!properties) return fieldConfig;
+
+	for (const [key, value] of Object.entries(properties)) {
+		const config: Record<string, unknown> = {};
+
+		// Extract label from meta (support both 'label' and JSON Schema 'title')
+		if (value.label) {
+			config.label = value.label;
+		} else if (value.title) {
+			config.label = value.title;
+		}
+
+		// Extract description from meta
+		if (value.description) {
+			config.description = value.description;
+		}
+
+		// Extract inputProps from meta (includes placeholder, type, etc.)
+		// Also merge in default value if present
+		const inputProps: Record<string, unknown> = value.inputProps ? { ...value.inputProps } : {};
+		
+		// Extract placeholder from JSON Schema
+		if (value.placeholder) {
+			inputProps.placeholder = value.placeholder;
+		}
+		
+		// Extract default value from JSON schema and pass it via inputProps
+		// Also mark field as not required if it has a default value
+		if (value.default !== undefined) {
+			inputProps.defaultValue = value.default;
+			inputProps.required = false;
+		}
+		
+		if (Object.keys(inputProps).length > 0) {
+			config.inputProps = inputProps;
+		}
+
+		// Extract order from meta
+		if (value.order !== undefined) {
+			config.order = value.order;
+		}
+
+		// Extract fieldType from JSON Schema meta
+		// Also detect date-time format from JSON Schema (from z.date() -> toJSONSchema with override)
+		let fieldType = value.fieldType;
+		
+		// Auto-detect date fields from JSON Schema format: "date-time"
+		// This handles the roundtrip: z.date() -> toJSONSchema (with override) -> { type: "string", format: "date-time" }
+		if (!fieldType && value.type === "string" && value.format === "date-time") {
+			fieldType = "date";
+		}
+
+		if (fieldType) {
+			// 1. Check if there's a custom component in fieldComponents
+			const CustomComponent = fieldComponents?.[fieldType];
+			if (CustomComponent) {
+				config.fieldType = (props: AutoFormInputComponentProps) => (
+					<CustomComponent {...props} />
+				);
+			}
+			// 2. For built-in types, pass through to auto-form
+			else if (
+				BUILTIN_FIELD_TYPES.includes(
+					fieldType as (typeof BUILTIN_FIELD_TYPES)[number],
+				)
+			) {
+				config.fieldType = fieldType;
+			}
+			// 3. Unknown custom type without a component - log warning and skip
+			else {
+				console.warn(
+					`CMS: Unknown fieldType "${fieldType}" for field "${key}". ` +
+						`Provide a component via fieldComponents override or use a built-in type.`,
+				);
+			}
+		}
+
+		// Handle nested object properties recursively
+		if (value.properties) {
+			const nestedConfig = buildFieldConfigFromJsonSchema(
+				{ properties: value.properties } as Record<string, unknown>,
+				fieldComponents,
+			);
+			// Merge nested config into this config
+			Object.assign(config, nestedConfig);
+		}
+
+		if (Object.keys(config).length > 0) {
+			fieldConfig[key] = config;
+		}
+	}
+
+	return fieldConfig;
 }

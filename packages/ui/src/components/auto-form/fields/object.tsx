@@ -13,7 +13,6 @@ import {
   beautifyObjectName,
   getBaseSchema,
   getBaseType,
-  getSchemaDescription,
   sortFieldsByOrder,
   zodToHtmlInputProps,
 } from "../utils";
@@ -80,7 +79,7 @@ export default function AutoFormObject<
         let item = shape[name] as z.ZodType;
         item = handleIfZodNumber(item);
         const zodBaseType = getBaseType(item);
-        const itemName = getSchemaDescription(item) ?? beautifyObjectName(name);
+        const itemName = beautifyObjectName(name);
         const key = [...path, name].join(".");
 
         const {
@@ -123,11 +122,15 @@ export default function AutoFormObject<
 
         const fieldConfigItem: FieldConfigItem = fieldConfig?.[name] ?? {};
         const zodInputProps = zodToHtmlInputProps(item);
-        const isRequired =
-          isRequiredByDependency ||
-          zodInputProps.required ||
-          fieldConfigItem.inputProps?.required ||
-          false;
+        
+        // Determine required status:
+        // 1. If dependency sets required, use that
+        // 2. If fieldConfig explicitly sets required (true/false), use that
+        // 3. Otherwise, use zodInputProps.required
+        let isRequired = isRequiredByDependency || zodInputProps.required || false;
+        if (fieldConfigItem.inputProps?.required !== undefined) {
+          isRequired = fieldConfigItem.inputProps.required;
+        }
 
         if (overrideOptions) {
           item = z.enum(overrideOptions) as unknown as z.ZodType;

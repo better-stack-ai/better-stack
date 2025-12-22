@@ -5,7 +5,8 @@
     "paths": {
       "@workspace/ui/*": ["./src/*"]
     },
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "noEmit": true
   },
   "include": ["."],
   "exclude": ["node_modules", "dist"]

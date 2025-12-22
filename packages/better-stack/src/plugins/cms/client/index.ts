@@ -4,7 +4,7 @@ export type { CMSPluginOverrides, RouteContext } from "./overrides";
 export type { CMSLocalization } from "./localization";
 
 // Re-export AutoFormInputComponentProps for custom field components
-export type { AutoFormInputComponentProps } from "@workspace/ui/components/ui/auto-form/types";
+export type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
 
 // Export CMSFileUpload for consumers to use or extend
 export {
