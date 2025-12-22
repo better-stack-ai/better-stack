@@ -147,7 +147,7 @@ export type AutoFormBuiltinFieldType = keyof typeof INPUT_COMPONENTS;
 export type FieldType = 
   | AutoFormBuiltinFieldType
   | "color"  // custom field types used by form-builder
-  | string;  // allow any string for extensibility
+  | (string & {})  // allow any string for extensibility
 
 /**
  * JSON Schema property with form-builder and auto-form metadata.

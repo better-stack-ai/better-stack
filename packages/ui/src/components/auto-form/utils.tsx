@@ -51,7 +51,6 @@ export const BUILTIN_FIELD_TYPES = [
 	"switch",
 	"textarea",
 	"number",
-	"file",
 	"fallback",
 ] as const;
 
