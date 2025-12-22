@@ -520,8 +520,22 @@ export function buildFieldConfigFromJsonSchema(
 				{ properties: value.properties } as Record<string, unknown>,
 				fieldComponents,
 			);
-			// Merge nested config into this config
-			Object.assign(config, nestedConfig);
+			// Reserved FieldConfigItem property names that should not be overwritten by nested field configs.
+			// If a nested field has the same name as a reserved property (e.g., a field named "description"),
+			// we skip it to prevent overwriting the parent's config (like its help text).
+			const reservedProps = new Set(['description', 'label', 'inputProps', 'fieldType', 'renderParent', 'order']);
+			
+			// Merge nested config, but skip keys that match reserved property names
+			for (const [nestedKey, nestedValue] of Object.entries(nestedConfig)) {
+				if (!reservedProps.has(nestedKey)) {
+					config[nestedKey] = nestedValue;
+				} else {
+          console.warn(
+            `Field "${key}" has a nested field named "${nestedKey}" which conflicts with a reserved FieldConfigItem property. ` +
+            `The nested field's config will not be accessible at the parent level.`
+          );
+        }
+			}
 		}
 
 		if (Object.keys(config).length > 0) {
