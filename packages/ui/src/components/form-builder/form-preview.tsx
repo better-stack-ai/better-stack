@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { z } from "zod";
 import { SteppedAutoForm } from "@workspace/ui/components/auto-form/stepped-auto-form";
 import { buildFieldConfigFromJsonSchema } from "@workspace/ui/components/auto-form/utils";
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
+import { formSchemaToZod } from "@workspace/ui/lib/schema-converter";
 import type { JSONSchema } from "./types";
 import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
 
@@ -27,33 +27,14 @@ interface FormPreviewProps {
 export function FormPreview({ schema, className, fieldComponents, defaultValues }: FormPreviewProps) {
   const [submittedValues, setSubmittedValues] = useState<Record<string, unknown> | null>(null);
 
-  // Create Zod schema from JSON Schema, preserving steps metadata
+  // Create Zod schema from JSON Schema using the unified converter
+  // This handles: steps metadata, stepGroup mapping, date constraints
   const zodSchema = useMemo(() => {
     try {
       if (!schema.properties || Object.keys(schema.properties).length === 0) {
         return null;
       }
-      let baseSchema = z.fromJSONSchema(schema as unknown as z.core.JSONSchema.JSONSchema);
-      
-      // Re-attach steps metadata to the Zod schema so it survives toJSONSchema() roundtrip
-      // z.fromJSONSchema() doesn't preserve custom properties like 'steps'
-      if (schema.steps && schema.steps.length > 0) {
-        // Build stepGroup map from the original JSON Schema properties
-        const stepGroupMap: Record<string, number> = {};
-        for (const [fieldName, fieldSchema] of Object.entries(schema.properties)) {
-          if (typeof fieldSchema.stepGroup === "number") {
-            stepGroupMap[fieldName] = fieldSchema.stepGroup;
-          }
-        }
-        
-        // Add steps and stepGroup metadata to the schema
-        baseSchema = baseSchema.meta({ 
-          steps: schema.steps,
-          stepGroupMap 
-        });
-      }
-      
-      return baseSchema;
+      return formSchemaToZod(schema as unknown as Record<string, unknown>);
     } catch (error) {
       console.error("Failed to parse JSON Schema:", error);
       return null;

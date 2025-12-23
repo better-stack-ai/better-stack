@@ -383,18 +383,17 @@ export function FormBuilder({
         setActiveStepIndex(0);
         notifyChange(updatedFields, []);
       } else {
-        // Remove the step and reassign orphaned fields to step 0
+        // Remove the step and delete fields that belonged to it
         const newSteps = steps.filter((_, i) => i !== index);
-        const updatedFields = fields.map((f) => {
-          if (f.stepGroup === index) {
-            // Reassign to first step
-            return { ...f, stepGroup: 0 };
-          } else if (f.stepGroup !== undefined && f.stepGroup > index) {
-            // Decrement stepGroup for fields after the deleted step
-            return { ...f, stepGroup: f.stepGroup - 1 };
-          }
-          return f;
-        });
+        const updatedFields = fields
+          .filter((f) => f.stepGroup !== index) // Remove fields from deleted step
+          .map((f) => {
+            if (f.stepGroup !== undefined && f.stepGroup > index) {
+              // Decrement stepGroup for fields after the deleted step
+              return { ...f, stepGroup: f.stepGroup - 1 };
+            }
+            return f;
+          });
         setFields(updatedFields);
         setSteps(newSteps);
         // Adjust active step if needed
