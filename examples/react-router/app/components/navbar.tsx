@@ -15,6 +15,7 @@ const navLinks = [
   { href: "/pages/blog", label: "Blog" },
   { href: "/pages/blog/drafts", label: "Drafts" },
   { href: "/pages/blog/new", label: "New Post" },
+  { href: "/pages/forms", label: "Forms" },
   { href: "/pages/chat", label: "Chat" },
 ];
 

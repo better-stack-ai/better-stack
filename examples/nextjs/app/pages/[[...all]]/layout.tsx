@@ -11,6 +11,7 @@ import { getOrCreateQueryClient } from "@/lib/query-client"
 import { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
+import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
 
 // Get base URL - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -71,6 +72,7 @@ type PluginOverrides = {
     blog: BlogPluginOverrides,
     "ai-chat": AiChatPluginOverrides,
     cms: CMSPluginOverrides,
+    "form-builder": FormBuilderPluginOverrides,
 }
 
 export default function ExampleLayout({
@@ -217,6 +219,20 @@ export default function ExampleLayout({
                         },
                         onRouteError: async (routeName, error, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] CMS error:`, routeName, error.message);
+                        },
+                    },
+                    "form-builder": {
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        navigate: (path) => router.push(path),
+                        refresh: () => router.refresh(),
+                        Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+                        // Lifecycle hooks
+                        onRouteRender: async (routeName, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Form Builder route:`, routeName, context.path);
+                        },
+                        onRouteError: async (routeName, error, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Form Builder error:`, routeName, error.message);
                         },
                     }
                 }}

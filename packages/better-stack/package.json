@@ -206,6 +206,47 @@
       }
     },
     "./plugins/cms/css": "./dist/plugins/cms/style.css",
+    "./plugins/form-builder/api": {
+      "import": {
+        "types": "./dist/plugins/form-builder/api/index.d.ts",
+        "default": "./dist/plugins/form-builder/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/form-builder/api/index.d.cts",
+        "default": "./dist/plugins/form-builder/api/index.cjs"
+      }
+    },
+    "./plugins/form-builder/client": {
+      "import": {
+        "types": "./dist/plugins/form-builder/client/index.d.ts",
+        "default": "./dist/plugins/form-builder/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/form-builder/client/index.d.cts",
+        "default": "./dist/plugins/form-builder/client/index.cjs"
+      }
+    },
+    "./plugins/form-builder/client/components": {
+      "import": {
+        "types": "./dist/plugins/form-builder/client/components/index.d.ts",
+        "default": "./dist/plugins/form-builder/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/form-builder/client/components/index.d.cts",
+        "default": "./dist/plugins/form-builder/client/components/index.cjs"
+      }
+    },
+    "./plugins/form-builder/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/form-builder/client/hooks/index.d.ts",
+        "default": "./dist/plugins/form-builder/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/form-builder/client/hooks/index.d.cts",
+        "default": "./dist/plugins/form-builder/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/form-builder/css": "./dist/plugins/form-builder/style.css",
     "./dist/*": "./dist/*",
     "./ui/css": "./dist/ui/components.css",
     "./package.json": "./package.json"
@@ -259,6 +300,18 @@
       ],
       "plugins/cms/client/hooks": [
         "./dist/plugins/cms/client/hooks/index.d.ts"
+      ],
+      "plugins/form-builder/api": [
+        "./dist/plugins/form-builder/api/index.d.ts"
+      ],
+      "plugins/form-builder/client": [
+        "./dist/plugins/form-builder/client/index.d.ts"
+      ],
+      "plugins/form-builder/client/components": [
+        "./dist/plugins/form-builder/client/components/index.d.ts"
+      ],
+      "plugins/form-builder/client/hooks": [
+        "./dist/plugins/form-builder/client/hooks/index.d.ts"
       ]
     }
   },

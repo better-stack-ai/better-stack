@@ -9,6 +9,11 @@
 /* Import CMS plugin styles */
 @import "@btst/stack/plugins/cms/css";
 
+/* Import Form Builder plugin styles */
+@import "@btst/stack/plugins/form-builder/css";
+
+/* Import AI Chat plugin styles */
+@import "@btst/stack/plugins/ai-chat/css";
 
 @custom-variant dark (&:is(.dark *));
 

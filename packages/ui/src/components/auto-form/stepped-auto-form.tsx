@@ -50,6 +50,9 @@ interface SteppedAutoFormProps<SchemaType extends ZodObjectOrWrapped> {
   backButtonText?: string;
   submitButtonText?: string;
   StepperComponent?: React.ComponentType<StepperComponentProps>;
+  
+  /** Whether the form is currently submitting. Disables submit/next buttons to prevent duplicate submissions. */
+  isSubmitting?: boolean;
 }
 
 // ============================================================================
@@ -226,6 +229,7 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
   backButtonText = "Back",
   submitButtonText = "Submit",
   StepperComponent = DefaultStepper,
+  isSubmitting = false,
 }: SteppedAutoFormProps<SchemaType>) {
   // Extract steps from schema
   const steps = useMemo(() => extractStepsFromSchema(formSchema), [formSchema]);
@@ -438,7 +442,7 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
         fieldConfig={fieldConfig}
         className={className}
       >
-        <Button type="submit" className="w-full mt-4">
+        <Button type="submit" disabled={isSubmitting} className="w-full mt-4">
           {submitButtonText}
         </Button>
         {children}
@@ -537,11 +541,11 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
             type="button"
             variant="outline"
             onClick={handleBack}
-            disabled={isFirst}
+            disabled={isFirst || isSubmitting}
           >
             {backButtonText}
           </Button>
-          <Button type="submit">
+          <Button type="submit" disabled={isSubmitting}>
             {isLast ? submitButtonText : nextButtonText}
           </Button>
         </div>

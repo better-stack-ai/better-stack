@@ -5,6 +5,7 @@ export default [
     layout("routes/pages/_layout.tsx", [
         route("pages/*", "routes/pages/index.tsx"),
     ]),
+    route("form-demo/:slug", "routes/form-demo.$slug.tsx"),
     route("cms-example", "routes/cms-example.tsx"),
     route("api/data/*", "routes/api/data/route.ts"),
     route("sitemap.xml", "routes/sitemap.xml.ts"),

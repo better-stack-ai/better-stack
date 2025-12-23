@@ -269,6 +269,7 @@ export function ContentForm({
 				onValuesChange={handleValuesChange as any}
 				onSubmit={handleSubmit as any}
 				fieldConfig={fieldConfig as any}
+				isSubmitting={isSubmitting}
 				submitButtonText={
 					isSubmitting
 						? localization.CMS_STATUS_SAVING
