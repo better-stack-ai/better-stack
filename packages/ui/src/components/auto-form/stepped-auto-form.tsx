@@ -232,6 +232,8 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
   const [accumulatedValues, setAccumulatedValues] = useState<Record<string, unknown>>(
     (initialValues as Record<string, unknown>) ?? {}
   );
+  // Track which steps have been validated/completed (by step index)
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
 
   // Get the object schema
   const objectSchema = useMemo(() => getObjectSchema(formSchema), [formSchema]);
@@ -282,32 +284,67 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
     return values;
   }, [fieldAssignments, currentStepIndex, accumulatedValues]);
 
-  // Handle step navigation
+  // Handle step navigation - only allow navigation to completed steps or the current step
   const handleStepClick = useCallback(
     (stepId: string) => {
       const stepIndex = steps.findIndex((s) => s.id === stepId);
-      if (stepIndex !== -1) {
+      if (stepIndex === -1) return;
+      
+      // Allow navigation only to:
+      // - The current step
+      // - Previously completed steps
+      // - The next step after current (if current step is completed)
+      const canNavigate =
+        stepIndex === currentStepIndex ||
+        completedSteps.has(stepIndex) ||
+        (stepIndex === currentStepIndex + 1 && completedSteps.has(currentStepIndex));
+      
+      if (canNavigate) {
         setCurrentStepIndex(stepIndex);
       }
     },
-    [steps]
+    [steps, currentStepIndex, completedSteps]
   );
 
-  // Handle step submission
+  // Handle step submission - AutoForm validates per-step, we just accumulate and track completion
   const handleStepSubmit = useCallback(
     (stepValues: Record<string, unknown>) => {
+      // AutoForm has already validated the current step's fields via zodResolver
       const newAccumulated = { ...accumulatedValues, ...stepValues };
       setAccumulatedValues(newAccumulated);
+      
+      // Mark current step as completed (validation passed via AutoForm)
+      setCompletedSteps((prev) => new Set([...prev, currentStepIndex]));
 
       if (isLast) {
-        // Final submit - validate full schema and call onSubmit
-        onSubmit?.(newAccumulated as z.infer<SchemaType>);
+        // Final submit - check all steps completed and validate full schema
+        const allStepsCompleted = steps.every(
+          (_, index) => index === currentStepIndex || completedSteps.has(index)
+        );
+        
+        if (!allStepsCompleted) {
+          // Navigate to first incomplete step
+          const firstIncompleteStep = steps.findIndex(
+            (_, index) => index !== currentStepIndex && !completedSteps.has(index)
+          );
+          if (firstIncompleteStep !== -1) {
+            setCurrentStepIndex(firstIncompleteStep);
+            return;
+          }
+        }
+        
+        // Validate against full schema (handles cross-field validations)
+        const parseResult = formSchema.safeParse(newAccumulated);
+        if (parseResult.success) {
+          onSubmit?.(parseResult.data as z.infer<SchemaType>);
+        }
+        // If validation fails, don't submit - user needs to fix issues
       } else {
         // Move to next step
         setCurrentStepIndex((prev) => prev + 1);
       }
     },
-    [accumulatedValues, isLast, onSubmit]
+    [accumulatedValues, isLast, onSubmit, currentStepIndex, steps, completedSteps, formSchema]
   );
 
   // Handle back button
