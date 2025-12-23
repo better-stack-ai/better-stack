@@ -270,6 +270,16 @@ export function FormBuilder({
   // Update field props (with optional ID change)
   const handleUpdateField = useCallback(
     (id: string, props: Partial<FormBuilderFieldProps>, newId?: string) => {
+      // Validate that the new ID doesn't already exist on another field
+      if (newId && newId !== id) {
+        const idExists = fields.some((f) => f.id === newId && f.id !== id);
+        if (idExists) {
+          // Reject the update - duplicate ID would cause data loss
+          console.warn(`Cannot rename field "${id}" to "${newId}": a field with that ID already exists`);
+          return;
+        }
+      }
+      
       const newFields = fields.map((f) =>
         f.id === id
           ? { ...f, id: newId || f.id, props: { ...f.props, ...props } }
@@ -506,6 +516,7 @@ export function FormBuilder({
         onUpdate={handleUpdateField}
         steps={steps}
         onUpdateStepGroup={handleUpdateFieldStepGroup}
+        allFieldIds={fields.map((f) => f.id)}
       />
 
       {/* Nested Field Editor Dialog */}
