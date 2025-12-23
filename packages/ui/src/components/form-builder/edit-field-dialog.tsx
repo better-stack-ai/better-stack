@@ -33,11 +33,9 @@ interface EditFieldDialogProps {
   onOpenChange: (open: boolean) => void;
   field: FormBuilderField | null;
   component: FormBuilderComponentDefinition | null;
-  onUpdate: (id: string, props: Partial<FormBuilderFieldProps>, newId?: string) => void;
+  onUpdate: (id: string, props: Partial<FormBuilderFieldProps>, newId?: string, stepGroup?: number) => void;
   /** Steps for multi-step forms */
   steps?: FormStep[];
-  /** Callback to update field's step group */
-  onUpdateStepGroup?: (fieldId: string, stepGroup: number) => void;
   /** All existing field IDs for duplicate validation */
   allFieldIds?: string[];
 }
@@ -49,7 +47,6 @@ export function EditFieldDialog({
   component,
   onUpdate,
   steps = [],
-  onUpdateStepGroup,
   allFieldIds = [],
 }: EditFieldDialogProps) {
   // Compute initial values when field or dialog state changes
@@ -114,15 +111,18 @@ export function EditFieldDialog({
 
     // Determine if we need to update the ID
     const newId = fieldName !== field.id ? fieldName : undefined;
-    onUpdate(field.id, props, newId);
     
-    // Update step group if changed (only apply on save)
-    if (onUpdateStepGroup && stepGroupOverride !== null && stepGroupOverride !== field.stepGroup) {
-      onUpdateStepGroup(newId ?? field.id, stepGroupOverride);
-    }
+    // Determine if we need to update the step group
+    // Only pass stepGroup if it was explicitly changed from the field's current value
+    const stepGroup = stepGroupOverride !== null && stepGroupOverride !== field.stepGroup 
+      ? stepGroupOverride 
+      : undefined;
+    
+    // Single atomic update for props, ID, and step group
+    onUpdate(field.id, props, newId, stepGroup);
     
     onOpenChange(false);
-  }, [field, localProps, fieldName, onUpdate, onOpenChange, onUpdateStepGroup, stepGroupOverride]);
+  }, [field, localProps, fieldName, onUpdate, onOpenChange, stepGroupOverride]);
 
   if (!field || !component) {
     return null;
@@ -171,7 +171,7 @@ export function EditFieldDialog({
           </div>
 
           {/* Step Selector (only shown when multiple steps exist) */}
-          {steps.length > 1 && onUpdateStepGroup && field && (
+          {steps.length > 1 && field && (
             <div className="space-y-2">
               <Label htmlFor="field-step">Step</Label>
               <Select
