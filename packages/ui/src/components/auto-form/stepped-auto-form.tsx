@@ -234,6 +234,8 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
   );
   // Track which steps have been validated/completed (by step index)
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  // Track schema validation errors (for cross-field validations)
+  const [schemaErrors, setSchemaErrors] = useState<z.ZodError | null>(null);
 
   // Get the object schema
   const objectSchema = useMemo(() => getObjectSchema(formSchema), [formSchema]);
@@ -301,6 +303,8 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
       
       if (canNavigate) {
         setCurrentStepIndex(stepIndex);
+        // Clear schema errors when navigating to allow user to retry
+        setSchemaErrors(null);
       }
     },
     [steps, currentStepIndex, completedSteps]
@@ -336,21 +340,35 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
         // Validate against full schema (handles cross-field validations)
         const parseResult = formSchema.safeParse(newAccumulated);
         if (parseResult.success) {
+          setSchemaErrors(null);
           onSubmit?.(parseResult.data as z.infer<SchemaType>);
+        } else {
+          // Store errors to display to the user
+          setSchemaErrors(parseResult.error);
+          
+          // Try to navigate to the step containing the first error
+          const firstErrorPath = parseResult.error.issues[0]?.path[0];
+          if (typeof firstErrorPath === "string") {
+            const errorFieldStep = fieldAssignments.get(firstErrorPath);
+            if (errorFieldStep !== undefined && errorFieldStep !== currentStepIndex) {
+              setCurrentStepIndex(errorFieldStep);
+            }
+          }
         }
-        // If validation fails, don't submit - user needs to fix issues
       } else {
         // Move to next step
         setCurrentStepIndex((prev) => prev + 1);
       }
     },
-    [accumulatedValues, isLast, onSubmit, currentStepIndex, steps, completedSteps, formSchema]
+    [accumulatedValues, isLast, onSubmit, currentStepIndex, steps, completedSteps, formSchema, fieldAssignments]
   );
 
   // Handle back button
   const handleBack = useCallback(() => {
     if (!isFirst) {
       setCurrentStepIndex((prev) => prev - 1);
+      // Clear schema errors when navigating to allow user to retry
+      setSchemaErrors(null);
     }
   }, [isFirst]);
 
@@ -397,6 +415,56 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
           Step {currentStepIndex + 1} of {steps.length}
         </p>
       </div>
+
+      {/* Schema Validation Errors */}
+      {schemaErrors && schemaErrors.issues.length > 0 && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="rounded-md border border-destructive/50 bg-destructive/10 p-4 mb-4"
+        >
+          <div className="flex items-start gap-3">
+            <svg
+              className="h-5 w-5 text-destructive shrink-0 mt-0.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+            <div className="flex-1">
+              <h4 className="text-sm font-medium text-destructive">
+                Validation Failed
+              </h4>
+              <ul className="mt-2 text-sm text-destructive/90 list-disc list-inside space-y-1">
+                {schemaErrors.issues.map((issue, index) => (
+                  <li key={index}>
+                    {issue.path.length > 0 && (
+                      <span className="font-medium">{issue.path.join(".")}: </span>
+                    )}
+                    {issue.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSchemaErrors(null)}
+              className="text-destructive/70 hover:text-destructive shrink-0"
+              aria-label="Dismiss errors"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Current Step Form */}
       <AutoForm

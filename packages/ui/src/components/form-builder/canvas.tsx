@@ -111,6 +111,7 @@ export function Canvas({
       {/* Canvas Drop Area */}
       <div
         ref={setNodeRef}
+        data-testid="form-builder-canvas"
         className={cn(
           "flex-1 p-4 rounded-lg border-2 border-dashed min-h-[400px] transition-colors",
           isOver && isDraggingFromPalette

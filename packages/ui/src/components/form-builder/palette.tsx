@@ -44,7 +44,7 @@ interface PaletteProps {
 
 export function Palette({ components, className }: PaletteProps) {
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
+    <div className={cn("flex flex-col gap-2", className)} data-testid="form-builder-palette">
       <h3 className="text-sm font-semibold text-muted-foreground mb-2">
         Components
       </h3>
