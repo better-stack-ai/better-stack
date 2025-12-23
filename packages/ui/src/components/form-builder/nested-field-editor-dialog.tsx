@@ -32,12 +32,14 @@ import {
 } from "@workspace/ui/components/dialog";
 import { Palette, PaletteDragOverlay } from "./palette";
 import { Canvas } from "./canvas";
+import { EditFieldDialog } from "./edit-field-dialog";
 import { FieldDragOverlay } from "./sortable-field";
 import { getComponentByType } from "./components";
 import { generateFieldId } from "./schema-utils";
 import type {
   FormBuilderComponentDefinition,
   FormBuilderField,
+  FormBuilderFieldProps,
   DragData,
   PaletteDragData,
 } from "./types";
@@ -74,6 +76,7 @@ export function NestedFieldEditorDialog({
   // Local state for editing
   const [nestedFields, setNestedFields] = useState<FormBuilderField[]>(initialFields);
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
+  const [editDialogFieldId, setEditDialogFieldId] = useState<string | null>(null);
 
   // Reset local state when field changes or dialog opens
   const [prevField, setPrevField] = useState(field);
@@ -82,6 +85,7 @@ export function NestedFieldEditorDialog({
     setPrevField(field);
     setPrevOpen(open);
     setNestedFields(initialFields);
+    setEditDialogFieldId(null);
   }
   if (prevOpen !== open) {
     setPrevOpen(open);
@@ -200,11 +204,36 @@ export function NestedFieldEditorDialog({
     setNestedFields((fields) => fields.filter((f) => f.id !== id));
   }, []);
 
-  // Handle edit field (for now just a placeholder - nested editing would need more work)
-  const handleEditField = useCallback((_id: string) => {
-    // TODO: Could open another dialog for editing nested field properties
-    // For now, the fields can be edited through the main form builder after saving
+  // Handle edit field - open the edit dialog
+  const handleEditField = useCallback((id: string) => {
+    setEditDialogFieldId(id);
   }, []);
+
+  // Handle update field from edit dialog
+  const handleUpdateField = useCallback(
+    (id: string, props: Partial<FormBuilderFieldProps>, newId?: string) => {
+      // Validate that the new ID doesn't already exist on another field
+      if (newId && newId !== id) {
+        const idExists = nestedFields.some((f) => f.id === newId && f.id !== id);
+        if (idExists) {
+          console.warn(`Cannot rename field "${id}" to "${newId}": a field with that ID already exists`);
+          return;
+        }
+      }
+
+      setNestedFields((fields) =>
+        fields.map((f) => {
+          if (f.id !== id) return f;
+          return {
+            ...f,
+            id: newId || f.id,
+            props: { ...f.props, ...props },
+          };
+        })
+      );
+    },
+    [nestedFields]
+  );
 
   // Handle save
   const handleSave = useCallback(() => {
@@ -220,9 +249,15 @@ export function NestedFieldEditorDialog({
   const fieldTypeLabel = isObjectField ? "Field Group" : "Repeating Group";
   const nestedLabel = isObjectField ? "nested fields" : "item fields";
 
+  // Get edit dialog field and its component
+  const editDialogField = nestedFields.find((f) => f.id === editDialogFieldId) || null;
+  const editDialogComponent = editDialogField
+    ? getComponentByType(editDialogField.type, components) || null
+    : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-6xl! max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon className="h-5 w-5 text-muted-foreground" />
@@ -258,13 +293,14 @@ export function NestedFieldEditorDialog({
                   onEditField={handleEditField}
                   onDeleteField={handleDeleteField}
                   isDraggingFromPalette={activeDragData?.type === "palette"}
-                  // Nested fields don't support steps - pass empty/no-op handlers
+                  // Nested fields don't support steps - hide step controls entirely
                   steps={[]}
                   activeStepIndex={0}
                   onActiveStepChange={() => {}}
                   onAddStep={() => {}}
                   onDeleteStep={() => {}}
                   onRenameStep={() => {}}
+                  hideStepControls
                 />
               </div>
             </div>
@@ -298,6 +334,17 @@ export function NestedFieldEditorDialog({
           <Button onClick={handleSave}>Save Fields</Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Edit Field Dialog for nested fields */}
+      <EditFieldDialog
+        open={editDialogFieldId !== null}
+        onOpenChange={(open) => !open && setEditDialogFieldId(null)}
+        field={editDialogField}
+        component={editDialogComponent}
+        onUpdate={handleUpdateField}
+        steps={[]}
+        allFieldIds={nestedFields.map((f) => f.id)}
+      />
     </Dialog>
   );
 }

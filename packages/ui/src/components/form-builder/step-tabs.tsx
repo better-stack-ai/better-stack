@@ -15,6 +15,8 @@ interface StepTabsProps {
   onDeleteStep: (index: number) => void;
   onRenameStep: (index: number, newTitle: string) => void;
   className?: string;
+  /** Hide all step controls (used in nested field editor) */
+  hideStepControls?: boolean;
 }
 
 export function StepTabs({
@@ -25,6 +27,7 @@ export function StepTabs({
   onDeleteStep,
   onRenameStep,
   className,
+  hideStepControls,
 }: StepTabsProps) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -54,6 +57,11 @@ export function StepTabs({
       handleCancelEdit();
     }
   };
+
+  // Hide step controls entirely (used in nested field editor)
+  if (hideStepControls) {
+    return null;
+  }
 
   // If there's only one step, don't show the step tabs UI
   if (steps.length <= 1) {
@@ -181,4 +189,3 @@ export function StepTabs({
     </div>
   );
 }
-
