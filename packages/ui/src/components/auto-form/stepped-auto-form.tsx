@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { z } from "zod";
+import type { UseFormReturn } from "react-hook-form";
 import AutoForm from "./index";
 import { Button } from "@workspace/ui/components/button";
 import { Separator } from "@workspace/ui/components/separator";
@@ -31,6 +32,10 @@ interface SteppedAutoFormProps<SchemaType extends ZodObjectOrWrapped> {
   // Same props as AutoForm
   formSchema: SchemaType;
   values?: Partial<z.infer<SchemaType>>;
+  onValuesChange?: (
+    values: Partial<z.infer<SchemaType>>,
+    form?: UseFormReturn<z.infer<SchemaType>>
+  ) => void;
   onSubmit?: (values: z.infer<SchemaType>) => void;
   fieldConfig?: FieldConfig<z.infer<SchemaType>>;
   children?: React.ReactNode;
@@ -208,6 +213,7 @@ function DefaultStepper({
 function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
   formSchema,
   values: initialValues,
+  onValuesChange,
   onSubmit,
   fieldConfig,
   children,
@@ -236,6 +242,19 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   // Track schema validation errors (for cross-field validations)
   const [schemaErrors, setSchemaErrors] = useState<z.ZodError | null>(null);
+
+  // Refs to avoid stale closures in callbacks - ensures we always have latest values
+  const accumulatedValuesRef = useRef(accumulatedValues);
+  const onValuesChangeRef = useRef(onValuesChange);
+  
+  // Keep refs in sync with current values
+  useEffect(() => {
+    accumulatedValuesRef.current = accumulatedValues;
+  }, [accumulatedValues]);
+  
+  useEffect(() => {
+    onValuesChangeRef.current = onValuesChange;
+  }, [onValuesChange]);
 
   // Get the object schema
   const objectSchema = useMemo(() => getObjectSchema(formSchema), [formSchema]);
@@ -310,12 +329,31 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
     [steps, currentStepIndex, completedSteps]
   );
 
+  // Handle step value changes - accumulate and notify parent
+  // Uses refs to avoid stale closures, ensuring values from other steps are preserved
+  const handleStepValuesChange = useCallback(
+    (stepValues: Record<string, unknown>, form?: UseFormReturn<Record<string, unknown>>) => {
+      // stepValues contains only the current step's fields, merge with latest accumulated values
+      const newAccumulated = { ...accumulatedValuesRef.current, ...stepValues };
+      accumulatedValuesRef.current = newAccumulated;
+      setAccumulatedValues(newAccumulated);
+      // Notify parent of accumulated values (form is undefined for multi-step as we don't have a single form instance)
+      onValuesChangeRef.current?.(newAccumulated as Partial<z.infer<SchemaType>>, form as UseFormReturn<z.infer<SchemaType>> | undefined);
+    },
+    []
+  );
+
   // Handle step submission - AutoForm validates per-step, we just accumulate and track completion
+  // Uses refs to avoid stale closures, ensuring values from other steps are preserved
   const handleStepSubmit = useCallback(
     (stepValues: Record<string, unknown>) => {
       // AutoForm has already validated the current step's fields via zodResolver
-      const newAccumulated = { ...accumulatedValues, ...stepValues };
+      const newAccumulated = { ...accumulatedValuesRef.current, ...stepValues };
+      accumulatedValuesRef.current = newAccumulated;
       setAccumulatedValues(newAccumulated);
+      
+      // Notify parent of accumulated values (form is undefined for multi-step as we don't have a single form instance)
+      onValuesChangeRef.current?.(newAccumulated as Partial<z.infer<SchemaType>>, undefined);
       
       // Mark current step as completed (validation passed via AutoForm)
       setCompletedSteps((prev) => new Set([...prev, currentStepIndex]));
@@ -358,9 +396,9 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
       } else {
         // Move to next step
         setCurrentStepIndex((prev) => prev + 1);
-      }
-    },
-    [accumulatedValues, isLast, onSubmit, currentStepIndex, steps, completedSteps, formSchema, fieldAssignments]
+        }
+      },
+    [isLast, onSubmit, currentStepIndex, steps, completedSteps, formSchema, fieldAssignments]
   );
 
   // Handle back button
@@ -378,6 +416,7 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
       <AutoForm
         formSchema={formSchema}
         values={initialValues}
+        onValuesChange={onValuesChange}
         onSubmit={onSubmit}
         fieldConfig={fieldConfig}
         className={className}
@@ -471,6 +510,7 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
         key={currentStep.id}
         formSchema={currentStepSchema as z.ZodObject<z.ZodRawShape>}
         values={currentStepValues}
+        onValuesChange={handleStepValuesChange}
         onSubmit={handleStepSubmit}
         fieldConfig={currentStepFieldConfig}
         className="space-y-4"

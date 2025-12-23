@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
-import AutoForm, { AutoFormSubmit } from "@workspace/ui/components/auto-form";
+import { SteppedAutoForm } from "@workspace/ui/components/auto-form/stepped-auto-form";
 import type {
 	FieldConfig,
 	AutoFormInputComponentProps,
@@ -262,30 +262,29 @@ export function ContentForm({
 			</div>
 
 			{/* Dynamic form from Zod schema */}
-			<AutoForm
+			{/* Uses SteppedAutoForm which automatically handles both single-step and multi-step content types */}
+			<SteppedAutoForm
 				formSchema={zodSchema as z.ZodObject<any, any>}
 				values={formData as any}
 				onValuesChange={handleValuesChange as any}
 				onSubmit={handleSubmit as any}
 				fieldConfig={fieldConfig as any}
+				submitButtonText={
+					isSubmitting
+						? localization.CMS_STATUS_SAVING
+						: localization.CMS_BUTTON_SAVE
+				}
 			>
-				<div className="flex items-center gap-2 pt-4">
-					<AutoFormSubmit disabled={isSubmitting}>
-						{isSubmitting
-							? localization.CMS_STATUS_SAVING
-							: localization.CMS_BUTTON_SAVE}
-					</AutoFormSubmit>
-					{onCancel && (
-						<button
-							type="button"
-							onClick={onCancel}
-							className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
-						>
-							{localization.CMS_BUTTON_CANCEL}
-						</button>
-					)}
-				</div>
-			</AutoForm>
+				{onCancel && (
+					<button
+						type="button"
+						onClick={onCancel}
+						className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+					>
+						{localization.CMS_BUTTON_CANCEL}
+					</button>
+				)}
+			</SteppedAutoForm>
 		</div>
 	);
 }

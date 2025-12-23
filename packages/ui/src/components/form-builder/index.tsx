@@ -373,7 +373,7 @@ export function FormBuilder({
     (index: number) => {
       if (steps.length <= 2) {
         // Going from 2 steps to single-step mode
-        // Remove stepGroup from all fields
+        // Remove stepGroup from all fields (preserves all fields)
         const updatedFields = fields.map((f) => {
           const { stepGroup: _, ...rest } = f;
           return rest;
@@ -383,10 +383,12 @@ export function FormBuilder({
         setActiveStepIndex(0);
         notifyChange(updatedFields, []);
       } else {
-        // Remove the step and delete fields that belonged to it
+        // Remove the step and delete its fields
         const newSteps = steps.filter((_, i) => i !== index);
+        
+        // Filter out fields from the deleted step, then decrement stepGroup for remaining fields
         const updatedFields = fields
-          .filter((f) => f.stepGroup !== index) // Remove fields from deleted step
+          .filter((f) => f.stepGroup !== index)
           .map((f) => {
             if (f.stepGroup !== undefined && f.stepGroup > index) {
               // Decrement stepGroup for fields after the deleted step
@@ -394,6 +396,7 @@ export function FormBuilder({
             }
             return f;
           });
+        
         setFields(updatedFields);
         setSteps(newSteps);
         // Adjust active step if needed
