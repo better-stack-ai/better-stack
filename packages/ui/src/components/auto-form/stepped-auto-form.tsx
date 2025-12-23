@@ -10,6 +10,10 @@ import { cn } from "@workspace/ui/lib/utils";
 import type { FieldConfig } from "./types";
 import type { ZodObjectOrWrapped } from "./utils";
 
+export default SteppedAutoForm;
+export { SteppedAutoForm };
+export type { SteppedAutoFormProps, StepperComponentProps };
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -256,6 +260,19 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
     onValuesChangeRef.current = onValuesChange;
   }, [onValuesChange]);
 
+  // Sync accumulated values when the values prop changes externally
+  // This handles async loading scenarios where data arrives after mount
+  useEffect(() => {
+    if (initialValues) {
+      const newValues = {
+        ...accumulatedValuesRef.current,
+        ...(initialValues as Record<string, unknown>),
+      };
+      accumulatedValuesRef.current = newValues;
+      setAccumulatedValues(newValues);
+    }
+  }, [initialValues]);
+
   // Get the object schema
   const objectSchema = useMemo(() => getObjectSchema(formSchema), [formSchema]);
 
@@ -421,11 +438,10 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
         fieldConfig={fieldConfig}
         className={className}
       >
-        {children ?? (
-          <Button type="submit" className="w-full mt-4">
-            {submitButtonText}
-          </Button>
-        )}
+        <Button type="submit" className="w-full mt-4">
+          {submitButtonText}
+        </Button>
+        {children}
       </AutoForm>
     );
   }
@@ -534,8 +550,3 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
     </div>
   );
 }
-
-export default SteppedAutoForm;
-export { SteppedAutoForm };
-export type { SteppedAutoFormProps, StepperComponentProps };
-
