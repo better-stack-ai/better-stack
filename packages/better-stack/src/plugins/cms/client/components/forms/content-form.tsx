@@ -8,10 +8,8 @@ import type {
 	FieldConfig,
 	AutoFormInputComponentProps,
 } from "@workspace/ui/components/auto-form/types";
-import {
-	buildFieldConfigFromJsonSchema as buildFieldConfigBase,
-	fromJSONSchemaWithDates,
-} from "@workspace/ui/components/auto-form/utils";
+import { buildFieldConfigFromJsonSchema as buildFieldConfigBase } from "@workspace/ui/components/auto-form/utils";
+import { formSchemaToZod } from "@workspace/ui/lib/schema-converter";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
@@ -168,11 +166,11 @@ export function ContentForm({
 		}
 	}, [contentType.jsonSchema]);
 
-	// Convert JSON Schema to Zod schema using fromJSONSchemaWithDates utility
+	// Convert JSON Schema to Zod schema using formSchemaToZod utility
 	// This properly handles date fields (format: "date-time") and min/max date constraints
 	const zodSchema = useMemo(() => {
 		try {
-			return fromJSONSchemaWithDates(jsonSchema);
+			return formSchemaToZod(jsonSchema);
 		} catch {
 			return z.object({});
 		}

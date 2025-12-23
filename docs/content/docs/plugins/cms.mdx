@@ -801,3 +801,61 @@ cms: cmsClientPlugin({
 Configure framework-specific overrides and route lifecycle hooks:
 
 <AutoTypeTable path="../packages/better-stack/src/plugins/cms/client/overrides.ts" name="CMSPluginOverrides" />
+
+### Schema Converter Utilities (`@btst/stack/plugins/cms/client`)
+
+The CMS plugin re-exports schema converter utilities for converting between Zod schemas and JSON Schema. These are useful when working with content types programmatically:
+
+#### zodToFormSchema
+
+Convert a Zod schema to JSON Schema with proper handling for dates, steps metadata, and date constraints:
+
+<AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="zodToFormSchema" />
+
+**Example:**
+
+```ts
+import { zodToFormSchema } from "@btst/stack/plugins/cms/client"
+
+const jsonSchema = zodToFormSchema(ProductSchema, {
+  steps: [
+    { id: "basic", title: "Basic Info" },
+    { id: "details", title: "Details" }
+  ],
+  stepGroupMap: {
+    name: 0,
+    price: 0,
+    description: 1
+  }
+})
+```
+
+#### formSchemaToZod
+
+Convert JSON Schema back to a Zod schema with proper handling for date fields, constraints, and steps metadata:
+
+<AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="formSchemaToZod" />
+
+**Example:**
+
+```ts
+import { formSchemaToZod } from "@btst/stack/plugins/cms/client"
+
+// Convert JSON Schema from database to Zod for validation
+const zodSchema = formSchemaToZod(jsonSchema)
+const result = zodSchema.safeParse(data)
+```
+
+#### Utility Functions
+
+<AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="hasSteps" />
+
+<AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="getSteps" />
+
+<AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="getStepGroupMap" />
+
+#### Types
+
+<AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="FormStep" />
+
+<AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="FormSchemaMetadata" />
