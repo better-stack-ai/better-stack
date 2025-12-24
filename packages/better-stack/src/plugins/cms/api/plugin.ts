@@ -2,6 +2,10 @@ import type { Adapter } from "@btst/db";
 import { defineBackendPlugin } from "@btst/stack/plugins/api";
 import { createEndpoint } from "@btst/stack/plugins/api";
 import { z } from "zod";
+import {
+	zodToFormSchema,
+	formSchemaToZod,
+} from "@workspace/ui/lib/schema-converter";
 import { cmsSchema as dbSchema } from "../db";
 import type {
 	ContentType,
@@ -124,8 +128,9 @@ async function syncContentTypes(
 	config: CMSBackendConfig,
 ): Promise<void> {
 	for (const ct of config.contentTypes) {
-		// Convert Zod schema to JSON Schema - fieldType is now embedded via .meta()
-		const jsonSchema = JSON.stringify(z.toJSONSchema(ct.schema));
+		// Convert Zod schema to JSON Schema using zodToFormSchema
+		// This properly handles dates, date constraints, and steps metadata
+		const jsonSchema = JSON.stringify(zodToFormSchema(ct.schema));
 
 		const existing = await adapter.findOne<ContentType>({
 			model: "contentType",
@@ -184,11 +189,11 @@ async function syncContentTypes(
 
 /**
  * Get Zod schema for a content type from its JSON Schema
- * Uses Zod v4's native z.fromJSONSchema() for conversion
+ * Uses formSchemaToZod to properly handle dates, date constraints, and steps metadata
  */
 function getContentTypeZodSchema(contentType: ContentType): z.ZodTypeAny {
 	const jsonSchema = JSON.parse(contentType.jsonSchema);
-	return z.fromJSONSchema(jsonSchema);
+	return formSchemaToZod(jsonSchema);
 }
 
 /**

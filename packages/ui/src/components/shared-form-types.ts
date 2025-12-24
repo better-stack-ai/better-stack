@@ -1,3 +1,12 @@
+/**
+ * Shared types between form-builder and auto-form.
+ * 
+ * These types ensure consistency when:
+ * - form-builder creates JSON Schema properties
+ * - auto-form consumes JSON Schema properties
+ * - inputProps flow from form-builder → JSON Schema → auto-form
+ */
+
 import type { INPUT_COMPONENTS } from "./auto-form/config";
 
 // ============================================================================
@@ -146,8 +155,7 @@ export type AutoFormBuiltinFieldType = keyof typeof INPUT_COMPONENTS;
  */
 export type FieldType = 
   | AutoFormBuiltinFieldType
-  | "color"  // custom field types used by form-builder
-  | (string & {})  // allow any string for extensibility
+  | (string & {});  // allow any string for extensibility
 
 /**
  * JSON Schema property with form-builder and auto-form metadata.
@@ -218,7 +226,7 @@ export interface JSONSchemaPropertyBase {
   order?: number;
   
   // ========================
-  // Date constraints (from toJSONSchemaWithDates)
+  // Date constraints (from zodToFormSchema)
   // ========================
   /** Minimum date as ISO string */
   formatMinimum?: string;

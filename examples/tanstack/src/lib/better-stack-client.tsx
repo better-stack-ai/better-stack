@@ -2,6 +2,7 @@ import { createStackClient } from "@btst/stack/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
+import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
 import { QueryClient } from "@tanstack/react-query"
 
 // Get base URL function - works on both server and client
@@ -87,6 +88,14 @@ export const getStackClient = (queryClient: QueryClient) => {
             }),
             // CMS plugin for content management
             cms: cmsClientPlugin({
+                apiBaseURL: baseURL,
+                apiBasePath: "/api/data",
+                siteBaseURL: baseURL,
+                siteBasePath: "/pages",
+                queryClient: queryClient,
+            }),
+            // Form Builder plugin for dynamic forms
+            "form-builder": formBuilderClientPlugin({
                 apiBaseURL: baseURL,
                 apiBasePath: "/api/data",
                 siteBaseURL: baseURL,

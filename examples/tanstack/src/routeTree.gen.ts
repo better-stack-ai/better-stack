@@ -14,6 +14,7 @@ import { Route as CmsExampleRouteImport } from './routes/cms-example'
 import { Route as PagesRouteRouteImport } from './routes/pages/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PagesSplatRouteImport } from './routes/pages/$'
+import { Route as FormDemoSlugRouteImport } from './routes/form-demo.$slug'
 import { Route as ApiDataSplatRouteImport } from './routes/api/data/$'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -41,6 +42,11 @@ const PagesSplatRoute = PagesSplatRouteImport.update({
   path: '/$',
   getParentRoute: () => PagesRouteRoute,
 } as any)
+const FormDemoSlugRoute = FormDemoSlugRouteImport.update({
+  id: '/form-demo/$slug',
+  path: '/form-demo/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiDataSplatRoute = ApiDataSplatRouteImport.update({
   id: '/api/data/$',
   path: '/api/data/$',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/pages': typeof PagesRouteRouteWithChildren
   '/cms-example': typeof CmsExampleRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/form-demo/$slug': typeof FormDemoSlugRoute
   '/pages/$': typeof PagesSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/pages': typeof PagesRouteRouteWithChildren
   '/cms-example': typeof CmsExampleRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/form-demo/$slug': typeof FormDemoSlugRoute
   '/pages/$': typeof PagesSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
 }
@@ -69,6 +77,7 @@ export interface FileRoutesById {
   '/pages': typeof PagesRouteRouteWithChildren
   '/cms-example': typeof CmsExampleRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/form-demo/$slug': typeof FormDemoSlugRoute
   '/pages/$': typeof PagesSplatRoute
   '/api/data/$': typeof ApiDataSplatRoute
 }
@@ -79,6 +88,7 @@ export interface FileRouteTypes {
     | '/pages'
     | '/cms-example'
     | '/sitemap.xml'
+    | '/form-demo/$slug'
     | '/pages/$'
     | '/api/data/$'
   fileRoutesByTo: FileRoutesByTo
@@ -87,6 +97,7 @@ export interface FileRouteTypes {
     | '/pages'
     | '/cms-example'
     | '/sitemap.xml'
+    | '/form-demo/$slug'
     | '/pages/$'
     | '/api/data/$'
   id:
@@ -95,6 +106,7 @@ export interface FileRouteTypes {
     | '/pages'
     | '/cms-example'
     | '/sitemap.xml'
+    | '/form-demo/$slug'
     | '/pages/$'
     | '/api/data/$'
   fileRoutesById: FileRoutesById
@@ -104,6 +116,7 @@ export interface RootRouteChildren {
   PagesRouteRoute: typeof PagesRouteRouteWithChildren
   CmsExampleRoute: typeof CmsExampleRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  FormDemoSlugRoute: typeof FormDemoSlugRoute
   ApiDataSplatRoute: typeof ApiDataSplatRoute
 }
 
@@ -144,6 +157,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PagesSplatRouteImport
       parentRoute: typeof PagesRouteRoute
     }
+    '/form-demo/$slug': {
+      id: '/form-demo/$slug'
+      path: '/form-demo/$slug'
+      fullPath: '/form-demo/$slug'
+      preLoaderRoute: typeof FormDemoSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/data/$': {
       id: '/api/data/$'
       path: '/api/data/$'
@@ -171,6 +191,7 @@ const rootRouteChildren: RootRouteChildren = {
   PagesRouteRoute: PagesRouteRouteWithChildren,
   CmsExampleRoute: CmsExampleRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  FormDemoSlugRoute: FormDemoSlugRoute,
   ApiDataSplatRoute: ApiDataSplatRoute,
 }
 export const routeTree = rootRouteImport

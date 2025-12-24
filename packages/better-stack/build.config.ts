@@ -82,6 +82,12 @@ export default defineBuildConfig({
 		"./src/plugins/cms/client/components/index.tsx",
 		"./src/plugins/cms/client/hooks/index.tsx",
 		"./src/plugins/cms/query-keys.ts",
+		// form-builder plugin entries
+		"./src/plugins/form-builder/api/index.ts",
+		"./src/plugins/form-builder/client/index.ts",
+		"./src/plugins/form-builder/client/components/index.tsx",
+		"./src/plugins/form-builder/client/hooks/index.tsx",
+		"./src/plugins/form-builder/query-keys.ts",
 	],
 	hooks: {
 		"rollup:options"(_ctx, options) {

@@ -97,17 +97,28 @@ export default defineConfig({
 				"**/*.chat.spec.ts",
 				"**/*.public-chat.spec.ts",
 				"**/*.cms.spec.ts",
+				"**/*.form-builder.spec.ts",
 			],
 		},
 		{
 			name: "tanstack:memory",
 			use: { baseURL: "http://localhost:3004" },
-			testMatch: ["**/*.blog.spec.ts", "**/*.chat.spec.ts", "**/*.cms.spec.ts"],
+			testMatch: [
+				"**/*.blog.spec.ts",
+				"**/*.chat.spec.ts",
+				"**/*.cms.spec.ts",
+				"**/*.form-builder.spec.ts",
+			],
 		},
 		{
 			name: "react-router:memory",
 			use: { baseURL: "http://localhost:3005" },
-			testMatch: ["**/*.blog.spec.ts", "**/*.chat.spec.ts", "**/*.cms.spec.ts"],
+			testMatch: [
+				"**/*.blog.spec.ts",
+				"**/*.chat.spec.ts",
+				"**/*.cms.spec.ts",
+				"**/*.form-builder.spec.ts",
+			],
 		},
 	],
 });

@@ -3,6 +3,7 @@ import { betterStack } from "@btst/stack"
 import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/blog/api"
 import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
+import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
 import { openai } from "@ai-sdk/openai"
 
 // Import shared CMS schemas - these are used for both backend validation and client type inference
@@ -91,6 +92,22 @@ const { handler, dbSchema } = betterStack({
                     schema: TestimonialSchema,
                 },
             ],
+        }),
+        // Form Builder plugin for dynamic forms
+        formBuilder: formBuilderBackendPlugin({
+            hooks: {
+                onAfterFormCreated: async (form, context) => {
+                    console.log("Form created:", form.name, form.slug);
+                },
+                onAfterFormUpdated: async (form, context) => {
+                    console.log("Form updated:", form.name);
+                },
+                onAfterSubmission: async (submission, form, context) => {
+                    console.log("Form submission received:", form.name, submission.id);
+                    console.log("Submission data:", JSON.parse(submission.data));
+                    console.log("IP Address:", context.ipAddress);
+                },
+            },
         })
     },
     adapter: (db) => createMemoryAdapter(db)({})

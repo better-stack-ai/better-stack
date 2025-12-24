@@ -1,0 +1,706 @@
+---
+title: Form Builder Plugin
+description: Visual drag-and-drop form builder with JSON Schema storage and public form rendering
+---
+
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "fumadocs-ui/components/callout";
+import Image from "next/image";
+
+import formBuilderDemo from "../../../assets/form-builder-demo.png";
+import formBuilderDemo1 from "../../../assets/form-builder-demo-1.png";
+import formBuilderDemo2 from "../../../assets/form-builder-demo-2.png";
+import formBuilderDemo3 from "../../../assets/form-builder-demo-3.png";
+
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-2 my-2">
+  <a href={formBuilderDemo.src} target="_blank" rel="noopener noreferrer">
+    <Image src={formBuilderDemo} alt="Form Builder Plugin Demo - Forms List" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+  <a href={formBuilderDemo1.src} target="_blank" rel="noopener noreferrer">
+    <Image src={formBuilderDemo1} alt="Form Builder Plugin Demo - Builder" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+  <a href={formBuilderDemo2.src} target="_blank" rel="noopener noreferrer">
+    <Image src={formBuilderDemo2} alt="Form Builder Plugin Demo - Preview" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+  <a href={formBuilderDemo3.src} target="_blank" rel="noopener noreferrer">
+    <Image src={formBuilderDemo3} alt="Form Builder Plugin Demo - Submissions" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+</div>
+
+The Form Builder plugin provides a visual drag-and-drop form creation interface where administrators can create forms that are serialized and stored as JSON Schema. This is distinct from the CMS plugin - while CMS uses developer-defined Zod schemas, Form Builder allows non-technical administrators to create forms dynamically.
+
+**Key Features:**
+- **Visual Form Builder** - Drag-and-drop interface for creating forms with various field types
+- **JSON Schema Storage** - Forms are serialized to JSON Schema for database persistence
+- **Public Form Rendering** - Render forms by slug on the frontend with automatic validation
+- **Submission Tracking** - Store and view form submissions with IP address and user agent logging
+- **Backend Hooks** - Lifecycle hooks for authentication, rate limiting, and integrations
+
+## Installation
+
+<Callout type="info">
+Ensure you followed the general [framework installation guide](/installation) first.
+</Callout>
+
+### 1. Add Plugin to Backend API
+
+Register the Form Builder backend plugin:
+
+```ts title="lib/better-stack.ts"
+import { betterStack } from "@btst/stack"
+import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
+
+const { handler, dbSchema } = betterStack({
+  basePath: "/api/data",
+  plugins: {
+    formBuilder: formBuilderBackendPlugin({
+      hooks: {
+        // Authentication - check if user can access admin pages
+        onBeforeListForms: async (ctx) => {
+          const session = await getSession(ctx.headers)
+          return session?.user?.isAdmin === true
+        },
+        onBeforeFormCreated: async (data, ctx) => {
+          const session = await getSession(ctx.headers)
+          if (!session?.user?.isAdmin) return false
+          return data
+        },
+        // Rate limiting for public submissions
+        onBeforeSubmission: async (formSlug, data, ctx) => {
+          // Check rate limit by IP
+          const isAllowed = await checkRateLimit(ctx.ipAddress, formSlug)
+          if (!isAllowed) return false
+          return data
+        },
+        // Post-submission actions
+        onAfterSubmission: async (submission, form, ctx) => {
+          // Send notification email
+          await sendEmail({
+            to: "admin@example.com",
+            subject: `New submission: ${form.name}`,
+            body: JSON.stringify(JSON.parse(submission.data), null, 2),
+          })
+          // CRM integration
+          await updateCRM(submission.data)
+        },
+      },
+    })
+  },
+  adapter: (db) => createMemoryAdapter(db)({})
+})
+
+export { handler, dbSchema }
+```
+
+### 2. Add Plugin to Client
+
+Register the Form Builder client plugin:
+
+```tsx title="lib/better-stack-client.tsx"
+import { createStackClient } from "@btst/stack/client"
+import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
+import { QueryClient } from "@tanstack/react-query"
+
+const getBaseURL = () => 
+  process.env.BASE_URL || "http://localhost:3000"
+
+export const getStackClient = (queryClient: QueryClient, options?: { headers?: Headers }) => {
+  const baseURL = getBaseURL()
+  return createStackClient({
+    plugins: {
+      "form-builder": formBuilderClientPlugin({
+        apiBaseURL: baseURL,
+        apiBasePath: "/api/data",
+        siteBaseURL: baseURL,
+        siteBasePath: "/pages",
+        queryClient: queryClient,
+        headers: options?.headers,
+        hooks: {
+          beforeLoadFormList: async (context) => {
+            const session = await getSession(context.headers)
+            return session?.user?.isAdmin === true
+          },
+          beforeLoadFormBuilder: async (formId, context) => {
+            const session = await getSession(context.headers)
+            return session?.user?.isAdmin === true
+          },
+          beforeLoadSubmissions: async (formId, context) => {
+            const session = await getSession(context.headers)
+            return session?.user?.isAdmin === true
+          },
+          onLoadError: (error, context) => {
+            redirect("/auth/sign-in")
+          },
+        },
+      })
+    }
+  })
+}
+```
+
+### 3. Configure Provider Overrides
+
+Add Form Builder overrides to your layout:
+
+```tsx title="app/pages/layout.tsx"
+import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
+
+type PluginOverrides = {
+  "form-builder": FormBuilderPluginOverrides,
+}
+
+<BetterStackProvider<PluginOverrides>
+  basePath="/pages"
+  overrides={{
+    "form-builder": {
+      apiBaseURL: baseURL,
+      apiBasePath: "/api/data",
+      navigate: (path) => router.push(path),
+      refresh: () => router.refresh(),
+      Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+      // Optional file upload for file fields
+      uploadFile: async (file) => {
+        // Your file upload logic
+        return "https://example.com/file.pdf"
+      },
+      // Lifecycle hooks
+      onRouteRender: async (routeName, context) => {
+        console.log(`Form Builder route:`, routeName)
+      },
+      onRouteError: async (routeName, error, context) => {
+        console.error(`Form Builder error:`, routeName, error.message)
+      },
+    }
+  }}
+>
+  {children}
+</BetterStackProvider>
+```
+
+### 4. Import CSS
+
+Add the Form Builder styles to your global CSS:
+
+```css title="app/globals.css"
+@import "@btst/stack/plugins/form-builder/css";
+```
+
+## Admin Routes
+
+The Form Builder plugin provides these admin routes:
+
+| Route | Description |
+|-------|-------------|
+| `/forms` | List all forms with create, edit, delete actions |
+| `/forms/new` | Create a new form with the visual form builder |
+| `/forms/:id/edit` | Edit an existing form |
+| `/forms/:id/submissions` | View submissions for a form |
+
+<Callout type="warn">
+Admin routes are automatically set to `noindex` for SEO. Don't include them in your public sitemap.
+</Callout>
+
+## Form Builder UI
+
+The form builder provides a drag-and-drop interface with:
+
+- **Component Palette** - Available field types to drag onto the canvas
+- **Canvas** - Where you build your form by arranging fields
+- **Preview Tab** - Live preview of how the form will look
+- **JSON Schema Tab** - View the generated JSON Schema
+
+### Available Field Types
+
+| Field Type | Description | JSON Schema Properties |
+|------------|-------------|------------------------|
+| Text Input | Single-line text field | `type: "string"` |
+| Email | Email input with validation | `type: "string", format: "email"` |
+| Password | Password input | `type: "string", fieldType: "password"` |
+| Number | Numeric input | `type: "number"` with `minimum`/`maximum` |
+| Text Area | Multi-line text field | `type: "string", fieldType: "textarea"` |
+| Select | Dropdown selection | `type: "string", enum: [...]` |
+| Checkbox | Boolean checkbox | `type: "boolean"` |
+| Switch | Toggle switch | `type: "boolean", fieldType: "switch"` |
+| Radio Group | Radio button group | `type: "string", enum: [...], fieldType: "radio"` |
+| Date Picker | Date selection | `type: "string", format: "date-time"` |
+| Phone | Phone number input | `type: "string", fieldType: "phone"` |
+| URL | Website URL input | `type: "string", format: "uri"` |
+
+### Field Properties
+
+Each field can be configured with:
+
+| Property | Description |
+|----------|-------------|
+| Label | Display label for the field |
+| Field Name | The property key in the JSON Schema |
+| Description | Help text shown below the field |
+| Placeholder | Placeholder text in the input |
+| Required | Whether the field is required |
+| Min/Max | Minimum and maximum values (numbers) or length (strings) |
+| Options | For select, radio, and checkbox groups |
+| Default Value | Pre-filled value for the field |
+
+## Public Form Rendering
+
+The `FormRenderer` component allows you to render forms on public pages by their slug:
+
+```tsx title="app/form-demo/[slug]/page.tsx"
+"use client"
+
+import { FormRenderer } from "@btst/stack/plugins/form-builder/client/components"
+
+export default function FormDemoPage({ params }: { params: { slug: string } }) {
+  return (
+    <div className="max-w-2xl mx-auto p-6">
+      <FormRenderer
+        slug={params.slug}
+        onSuccess={(submission) => {
+          console.log("Form submitted:", submission)
+          // submission.form contains successMessage and redirectUrl
+        }}
+        onError={(error) => {
+          console.error("Submission error:", error)
+        }}
+        // Optional: Custom loading/error states
+        LoadingComponent={() => <div>Loading form...</div>}
+        ErrorComponent={({ error }) => (
+          <div>Form not found: {error.message}</div>
+        )}
+        // Optional: Custom submit button text
+        submitButtonText="Send Message"
+        // Optional: Custom success message (overrides form's successMessage)
+        successMessage="Thanks for your submission!"
+        className="space-y-6"
+      />
+    </div>
+  )
+}
+```
+
+### FormRenderer Props
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `slug` | `string` | Form slug to fetch and render |
+| `onSuccess` | `(submission) => void` | Callback after successful submission (submission.form has success info) |
+| `onError` | `(error) => void` | Callback when submission fails |
+| `LoadingComponent` | `ComponentType` | Custom loading state |
+| `ErrorComponent` | `ComponentType<{ error: Error }>` | Custom error state |
+| `submitButtonText` | `string` | Custom submit button text |
+| `successMessage` | `string` | Override the form's success message |
+| `fieldComponents` | `Record<string, ComponentType>` | Custom field components |
+| `className` | `string` | Additional CSS classes |
+
+<Callout type="info">
+The `FormRenderer` uses `SteppedAutoForm` internally, which automatically handles both single-step and multi-step forms based on the JSON Schema structure.
+</Callout>
+
+## Client Hooks
+
+Access form data in your frontend using the provided hooks:
+
+### Available Hooks
+
+| Hook | Description | Returns |
+|------|-------------|---------|
+| `useFormsAdmin()` | List all forms (admin) | `{ forms, total, isLoading, error, refetch }` |
+| `useFormBySlug(slug)` | Get form by slug (public) | `{ form, isLoading, error }` |
+| `useSuspenseFormById(id)` | Get form by ID with Suspense | `{ form, refetch }` |
+| `useCreateForm()` | Create mutation | React Query mutation |
+| `useUpdateForm()` | Update mutation | React Query mutation |
+| `useDeleteForm()` | Delete mutation | React Query mutation |
+| `useSubmitForm(slug)` | Submit form data | React Query mutation |
+| `useSubmissions(formId)` | List submissions for a form | `{ submissions, total, isLoading }` |
+| `useDeleteSubmission(formId)` | Delete submission | React Query mutation |
+
+### Usage Examples
+
+```tsx
+import { 
+  useFormBySlug,
+  useSubmitForm,
+  useFormsAdmin 
+} from "@btst/stack/plugins/form-builder/client/hooks"
+
+// Public: Fetch form by slug
+function ContactPage() {
+  const { form, isLoading } = useFormBySlug("contact-form")
+  const submitForm = useSubmitForm("contact-form")
+
+  if (isLoading || !form) return <Loading />
+
+  return (
+    <AutoForm
+      schema={JSON.parse(form.schema)}
+      onSubmit={async (data) => {
+        await submitForm.mutateAsync({ data })
+      }}
+    />
+  )
+}
+
+// Admin: List all forms
+function FormsAdmin() {
+  const { forms, total, isLoading } = useFormsAdmin()
+  
+  return (
+    <ul>
+      {forms.map(form => (
+        <li key={form.id}>{form.name} - {form.status}</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+## Backend Hooks
+
+Customize Form Builder behavior with backend lifecycle hooks:
+
+### FormBuilderBackendHooks
+
+```ts
+formBuilderBackendPlugin({
+  hooks: {
+    // Form CRUD authorization
+    onBeforeListForms: async (ctx) => {
+      // Return true to allow, false to deny
+      return isAdmin(ctx.headers)
+    },
+    onBeforeFormCreated: async (data, ctx) => {
+      // Return false to deny, or modified data to allow
+      return data
+    },
+    onBeforeFormUpdated: async (formId, data, ctx) => {
+      return data
+    },
+    onBeforeFormDeleted: async (formId, ctx) => {
+      return true
+    },
+    
+    // Form lifecycle
+    onAfterFormCreated: async (form, ctx) => {
+      console.log("Form created:", form.name)
+    },
+    onAfterFormUpdated: async (form, ctx) => {
+      console.log("Form updated:", form.name)
+    },
+    onAfterFormDeleted: async (formId, ctx) => {
+      console.log("Form deleted:", formId)
+    },
+    
+    // Submission authorization and processing
+    onBeforeSubmission: async (formSlug, data, ctx) => {
+      // Access IP and user agent for rate limiting
+      console.log("Submission from:", ctx.ipAddress, ctx.userAgent)
+      
+      // Rate limiting example
+      const allowed = await checkRateLimit(ctx.ipAddress, formSlug)
+      if (!allowed) return false
+      
+      // Spam filtering
+      if (containsSpam(data)) return false
+      
+      return data
+    },
+    onAfterSubmission: async (submission, form, ctx) => {
+      // Send email notifications
+      await sendEmail({
+        to: "admin@example.com",
+        subject: `New ${form.name} submission`,
+        body: formatSubmission(submission.data),
+      })
+      
+      // CRM integration
+      await pushToCRM(submission, form)
+      
+      // Webhook
+      await triggerWebhook(form.webhookUrl, submission)
+    },
+    
+    // Submissions list authorization
+    onBeforeListSubmissions: async (formId, ctx) => {
+      return isAdmin(ctx.headers)
+    },
+    onBeforeDeleteSubmission: async (submissionId, ctx) => {
+      return isAdmin(ctx.headers)
+    },
+    
+    // Error handling
+    onFormError: async (error, operation, ctx) => {
+      console.error(`Form ${operation} error:`, error.message)
+    },
+    onSubmissionError: async (error, formSlug, ctx) => {
+      console.error(`Submission to ${formSlug} error:`, error.message)
+    },
+  },
+})
+```
+
+### Hook Context
+
+All hooks receive a context object with:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `headers` | `Headers` | Request headers for auth |
+| `userId` | `string \| undefined` | Authenticated user ID if available |
+| `ipAddress` | `string \| undefined` | Client IP address |
+| `userAgent` | `string \| undefined` | Client user agent |
+
+## Client Hooks (SSR Authorization)
+
+Use `hooks` in the client plugin config for **async authorization** during SSR:
+
+```tsx title="lib/better-stack-client.tsx"
+import { redirect } from "next/navigation"
+
+"form-builder": formBuilderClientPlugin({
+  // ... config
+  hooks: {
+    beforeLoadFormList: async (context) => {
+      const session = await getSession(context.headers)
+      return session?.user?.isAdmin === true
+    },
+    beforeLoadFormBuilder: async (formId, context) => {
+      // formId is undefined for new forms
+      const session = await getSession(context.headers)
+      return session?.user?.isAdmin === true
+    },
+    beforeLoadSubmissions: async (formId, context) => {
+      const session = await getSession(context.headers)
+      return session?.user?.isAdmin === true
+    },
+    afterLoadFormList: async (forms, context) => {
+      console.log("Loaded", forms?.length, "forms")
+      return true
+    },
+    onLoadError: (error, context) => {
+      // Redirect on authorization failure
+      redirect("/auth/sign-in")
+    },
+  },
+})
+```
+
+<Callout type="info">
+**Use client hooks for SSR.** These hooks run during server-side data loading and support async operations like session checks. The `onLoadError` hook is called when any `beforeLoad*` hook returns `false`, allowing you to redirect unauthorized users.
+</Callout>
+
+## API Endpoints
+
+The Form Builder plugin exposes these REST endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/form-builder/forms` | GET | List all forms (query: `limit`, `offset`, `status`) |
+| `/form-builder/forms` | POST | Create a new form |
+| `/form-builder/forms/:slug` | GET | Get form by slug |
+| `/form-builder/forms/:id` | PUT | Update a form |
+| `/form-builder/forms/:id` | DELETE | Delete a form |
+| `/form-builder/forms/:slug/submit` | POST | Submit form data |
+| `/form-builder/forms/:id/submissions` | GET | List submissions for a form |
+| `/form-builder/submissions/:id` | DELETE | Delete a submission |
+
+## Form Schema Structure
+
+Forms are stored with this schema:
+
+```ts
+interface Form {
+  id: string
+  name: string          // Display name
+  slug: string          // URL-friendly identifier
+  schema: string        // JSON Schema as string
+  successMessage?: string  // Message shown after submission
+  redirectUrl?: string     // URL to redirect after submission
+  status: "draft" | "published"
+  createdAt: Date
+  updatedAt: Date
+}
+
+interface FormSubmission {
+  id: string
+  formId: string        // Reference to form
+  data: string          // Submitted data as JSON string
+  ipAddress?: string    // Client IP
+  userAgent?: string    // Client user agent
+  createdAt: Date
+}
+```
+
+## Multi-Step Forms
+
+The Form Builder supports multi-step forms through JSON Schema's `allOf` structure:
+
+```json
+{
+  "type": "object",
+  "allOf": [
+    {
+      "title": "Step 1: Personal Info",
+      "properties": {
+        "name": { "type": "string", "label": "Full Name" },
+        "email": { "type": "string", "format": "email" }
+      }
+    },
+    {
+      "title": "Step 2: Details",
+      "properties": {
+        "company": { "type": "string" },
+        "message": { "type": "string", "fieldType": "textarea" }
+      }
+    }
+  ]
+}
+```
+
+The `SteppedAutoForm` component automatically renders this as a multi-step wizard with navigation.
+
+## Custom Field Components
+
+Provide custom field components via the `fieldComponents` prop on `FormRenderer`:
+
+```tsx
+import type { AutoFormInputComponentProps } from "@btst/stack/plugins/form-builder/client"
+
+function CustomRating({ field, label }: AutoFormInputComponentProps) {
+  return (
+    <div>
+      <label>{label}</label>
+      <StarRating 
+        value={field.value} 
+        onChange={field.onChange} 
+      />
+    </div>
+  )
+}
+
+<FormRenderer
+  slug="feedback"
+  fieldComponents={{
+    rating: CustomRating,
+    richText: MyRichTextEditor,
+  }}
+/>
+```
+
+## API Reference
+
+### Backend (`@btst/stack/plugins/form-builder/api`)
+
+#### formBuilderBackendPlugin
+
+Creates the backend plugin with optional hooks configuration.
+
+#### FormBuilderBackendHooks
+
+| Hook | Parameters | Return | Description |
+|------|------------|--------|-------------|
+| `onBeforeListForms` | `ctx` | `boolean` | Authorization for listing forms |
+| `onBeforeFormCreated` | `data, ctx` | `data \| false` | Validate/transform before create |
+| `onAfterFormCreated` | `form, ctx` | `void` | Post-create lifecycle |
+| `onBeforeFormUpdated` | `id, data, ctx` | `data \| false` | Validate/transform before update |
+| `onAfterFormUpdated` | `form, ctx` | `void` | Post-update lifecycle |
+| `onBeforeFormDeleted` | `id, ctx` | `boolean` | Authorization for delete |
+| `onAfterFormDeleted` | `id, ctx` | `void` | Post-delete lifecycle |
+| `onBeforeSubmission` | `slug, data, ctx` | `data \| false` | Validate/rate limit submissions |
+| `onAfterSubmission` | `submission, form, ctx` | `void` | Post-submission actions |
+| `onBeforeListSubmissions` | `formId, ctx` | `boolean` | Authorization for listing |
+| `onBeforeDeleteSubmission` | `id, ctx` | `boolean` | Authorization for delete |
+| `onFormError` | `error, operation, ctx` | `void` | Handle form operation errors |
+| `onSubmissionError` | `error, slug, ctx` | `void` | Handle submission errors |
+
+### Client (`@btst/stack/plugins/form-builder/client`)
+
+#### formBuilderClientPlugin
+
+Creates the client plugin with routes and SSR loaders.
+
+#### FormBuilderPluginOverrides
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `apiBaseURL` | `string` | Yes | Base URL for API requests |
+| `apiBasePath` | `string` | Yes | API path prefix |
+| `navigate` | `(path: string) => void` | Yes | Navigation function |
+| `Link` | `ComponentType` | No | Link component |
+| `refresh` | `() => void` | No | Refresh function |
+| `uploadFile` | `(file: File) => Promise<string>` | No | File upload handler |
+| `fieldComponents` | `Record<string, ComponentType>` | No | Custom field components |
+| `localization` | `FormBuilderLocalization` | No | Custom labels |
+| `showAttribution` | `boolean` | No | Show Better Stack attribution |
+| `onRouteRender` | `(route, context) => void` | No | Lifecycle hook |
+| `onRouteError` | `(route, error, context) => void` | No | Error hook |
+
+#### FormBuilderClientHooks
+
+| Hook | Parameters | Return | Description |
+|------|------------|--------|-------------|
+| `beforeLoadFormList` | `context` | `boolean \| Promise<boolean>` | SSR auth for forms list |
+| `afterLoadFormList` | `forms, context` | `boolean` | Post-load hook |
+| `beforeLoadFormBuilder` | `formId, context` | `boolean \| Promise<boolean>` | SSR auth for builder |
+| `afterLoadFormBuilder` | `form, context` | `boolean` | Post-load hook |
+| `beforeLoadSubmissions` | `formId, context` | `boolean \| Promise<boolean>` | SSR auth for submissions |
+| `afterLoadSubmissions` | `submissions, context` | `boolean` | Post-load hook |
+| `onLoadError` | `error, context` | `void` | Handle auth failures |
+
+### Schema Converter Utilities (`@btst/stack/plugins/form-builder/client`)
+
+The Form Builder plugin re-exports schema converter utilities for converting between Zod schemas and JSON Schema. These are useful when working with form schemas programmatically:
+
+#### zodToFormSchema
+
+Convert a Zod schema to JSON Schema with proper handling for dates, steps metadata, and date constraints:
+
+<AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="zodToFormSchema" />
+
+**Example:**
+
+```ts
+import { zodToFormSchema } from "@btst/stack/plugins/form-builder/client"
+
+const jsonSchema = zodToFormSchema(ContactFormSchema, {
+  steps: [
+    { id: "personal", title: "Personal Information" },
+    { id: "message", title: "Your Message" }
+  ],
+  stepGroupMap: {
+    name: 0,
+    email: 0,
+    message: 1
+  }
+})
+```
+
+#### formSchemaToZod
+
+Convert JSON Schema back to a Zod schema with proper handling for date fields, constraints, and steps metadata. This is used internally by `FormRenderer` to validate form submissions:
+
+<AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="formSchemaToZod" />
+
+**Example:**
+
+```ts
+import { formSchemaToZod } from "@btst/stack/plugins/form-builder/client"
+
+// Convert JSON Schema from database to Zod for validation
+const zodSchema = formSchemaToZod(jsonSchema)
+const result = zodSchema.safeParse(submissionData)
+```
+
+#### Utility Functions
+
+<AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="hasSteps" />
+
+<AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="getSteps" />
+
+<AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="getStepGroupMap" />
+
+#### Types
+
+<AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="FormStep" />
+
+<AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="FormSchemaMetadata" />
+
