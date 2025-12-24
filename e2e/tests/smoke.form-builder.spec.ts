@@ -238,7 +238,7 @@ test.describe("Form Builder Plugin - Admin Pages", () => {
 		await page.getByRole("button", { name: "Delete" }).click();
 
 		// Should show success toast
-		await expect(page.locator("text=/deleted/i")).toBeVisible({
+		await expect(page.getByText("Form deleted successfully")).toBeVisible({
 			timeout: 10000,
 		});
 

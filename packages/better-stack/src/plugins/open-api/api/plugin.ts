@@ -71,6 +71,27 @@ export interface OpenAPIOptions {
 }
 
 /**
+ * Escape HTML entities to prevent XSS and ensure proper rendering
+ */
+function escapeHtml(str: string): string {
+	return str
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
+}
+
+/**
+ * Escape JSON for safe embedding in HTML script tags.
+ * Replaces < with \u003c to prevent </script> from closing the tag prematurely.
+ * This is valid JSON and will be parsed correctly.
+ */
+function escapeJsonForHtml(json: string): string {
+	return json.replace(/</g, "\\u003c");
+}
+
+/**
  * Generate the HTML page for Scalar API Reference
  */
 function getScalarHTML(
@@ -81,10 +102,13 @@ function getScalarHTML(
 	const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
 	const encodedLogo = encodeURIComponent(logo);
 
+	const title = schema.info?.title || "API Reference";
+	const description = schema.info?.description || "API Reference";
+
 	return `<!doctype html>
 <html>
   <head>
-    <title>${schema.info?.title || "API Reference"}</title>
+    <title>${escapeHtml(title)}</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
   </head>
@@ -92,15 +116,15 @@ function getScalarHTML(
     <script
       id="api-reference"
       type="application/json"${nonceAttr}>
-    ${JSON.stringify(schema)}
+    ${escapeJsonForHtml(JSON.stringify(schema))}
     </script>
     <script${nonceAttr}>
       var configuration = {
         favicon: "data:image/svg+xml;utf8,${encodedLogo}",
         theme: "${theme}",
         metaData: {
-          title: "${schema.info?.title || "API Reference"}",
-          description: "${schema.info?.description || "API Reference"}",
+          title: ${JSON.stringify(title)},
+          description: ${JSON.stringify(description)},
         }
       }
 

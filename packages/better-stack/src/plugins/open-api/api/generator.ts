@@ -140,8 +140,19 @@ function processZodType(zodType: z.ZodType<any>): Record<string, any> {
 	// Handle literal
 	if (zodType instanceof z.ZodLiteral) {
 		const value = (zodType as any)._def?.value || (zodType as any).value;
+		// Map JavaScript typeof to OpenAPI 3.1 types correctly
+		// Note: typeof null === "object" in JS, but OpenAPI 3.1 has "null" type
+		let type: string;
+		if (value === null) {
+			type = "null";
+		} else if (value === undefined) {
+			// undefined is not a valid JSON/OpenAPI value, treat as nullable
+			return { nullable: true };
+		} else {
+			type = typeof value;
+		}
 		return {
-			type: typeof value,
+			type,
 			const: value,
 		};
 	}
