@@ -3,6 +3,7 @@ import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
 import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
+import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
 import { QueryClient } from "@tanstack/react-query"
 
 // Get base URL function - works on both server and client
@@ -101,7 +102,14 @@ export const getStackClient = (queryClient: QueryClient) => {
                 siteBaseURL: baseURL,
                 siteBasePath: "/pages",
                 queryClient: queryClient,
-            })
+            }),
+            // Route Docs plugin for client route documentation
+            routeDocs: routeDocsClientPlugin({
+                queryClient: queryClient,
+                title: "Client Route Documentation",
+                description: "Documentation for all client routes in this application",
+                siteBasePath: "/pages",
+            }),
         }
     })
 }

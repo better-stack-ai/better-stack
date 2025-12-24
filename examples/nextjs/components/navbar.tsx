@@ -12,14 +12,7 @@ import {
 } from "./ui/dropdown-menu";
 
 const navLinks = [
-  { href: "/pages/todos", label: "Todos" },
-  { href: "/pages/todos/add", label: "Add Todo" },
-  { href: "/pages/blog", label: "Blog" },
-  { href: "/pages/blog/drafts", label: "Drafts" },
-  { href: "/pages/blog/new", label: "New Post" },
-  { href: "/pages/forms", label: "Forms" },
-  { href: "/pages/chat", label: "Chat" },
-  { href: "/public-chat", label: "Public Chat" },
+  { href: "/pages/route-docs", label: "Available Routes" },
 ];
 
 export function Navbar() {

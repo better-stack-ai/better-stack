@@ -20,25 +20,7 @@ export default function Home() {
 				<div className="flex flex-col gap-2 items-center m-8 border-2 border-destructive rounded-md pb-2">
 					<b className="border-b-2 border-destructive w-full text-center p-2">Pages:</b>
 					<Button className="text-destructive" variant="link" asChild>
-						<Link href="/pages/todos">Todos</Link>
-					</Button>
-					<Button className="text-destructive" variant="link" asChild>
-						<Link href="/pages/todos/add">Add Todo</Link>
-					</Button>
-					<Button className="text-destructive" variant="link" asChild>
-						<Link href="/pages/blog">Blog</Link>
-					</Button>
-					<Button className="text-destructive" variant="link" asChild>
-						<Link href="/pages/blog/drafts">Drafts</Link>
-					</Button>
-					<Button className="text-destructive" variant="link" asChild>
-						<Link href="/pages/blog/new">New Post</Link>
-					</Button>
-					<Button className="text-destructive" variant="link" asChild>
-						<Link href="/pages/chat">Chat</Link>
-					</Button>
-					<Button className="text-destructive" variant="link" asChild>
-						<Link href="/public-chat">Public Chat</Link>
+						<Link href="/pages/route-docs">Available Routes</Link>
 					</Button>
 				</div>
 			</main>

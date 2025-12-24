@@ -16,6 +16,22 @@ export interface BetterStackContext {
 }
 
 /**
+ * Context passed to client plugins during route creation
+ * Provides access to all registered plugins for introspection (used by routeDocs plugin)
+ */
+export interface ClientStackContext<
+	TPlugins extends Record<string, ClientPlugin<any, any>> = Record<
+		string,
+		ClientPlugin<any, any>
+	>,
+> {
+	/** All registered client plugins */
+	plugins: TPlugins;
+	/** The base path for the client (e.g., "/app") */
+	basePath?: string;
+}
+
+/**
  * Backend plugin definition
  * Defines API routes and data access for a feature
  *
@@ -59,8 +75,10 @@ export interface ClientPlugin<
 	/**
 	 * Define routes (pages) for this plugin
 	 * Returns yar routes that will be composed into the router
+	 *
+	 * @param context - Optional context with access to all plugins (for introspection)
 	 */
-	routes: () => TRoutes;
+	routes: (context?: ClientStackContext) => TRoutes;
 
 	/**
 	 * Optional sitemap generator for this plugin. Should return absolute URLs.
