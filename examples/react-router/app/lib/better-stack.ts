@@ -4,6 +4,7 @@ import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/bl
 import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
+import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
 import { openai } from "@ai-sdk/openai"
 
 // Import shared CMS schemas - these are used for both backend validation and client type inference
@@ -108,7 +109,12 @@ const { handler, dbSchema } = betterStack({
                     console.log("IP Address:", context.ipAddress);
                 },
             },
-        })
+        }),
+        // OpenAPI plugin - generates API documentation for all plugins
+        openApi: openApiBackendPlugin({
+            title: "Better Stack React Router API",
+            theme: "kepler",
+        }),
     },
     adapter: (db) => createMemoryAdapter(db)({})
 })

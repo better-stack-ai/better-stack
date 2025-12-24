@@ -247,6 +247,16 @@
       }
     },
     "./plugins/form-builder/css": "./dist/plugins/form-builder/style.css",
+    "./plugins/open-api/api": {
+      "import": {
+        "types": "./dist/plugins/open-api/api/index.d.ts",
+        "default": "./dist/plugins/open-api/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/open-api/api/index.d.cts",
+        "default": "./dist/plugins/open-api/api/index.cjs"
+      }
+    },
     "./dist/*": "./dist/*",
     "./ui/css": "./dist/ui/components.css",
     "./package.json": "./package.json"
@@ -312,6 +322,9 @@
       ],
       "plugins/form-builder/client/hooks": [
         "./dist/plugins/form-builder/client/hooks/index.d.ts"
+      ],
+      "plugins/open-api/api": [
+        "./dist/plugins/open-api/api/index.d.ts"
       ]
     }
   },

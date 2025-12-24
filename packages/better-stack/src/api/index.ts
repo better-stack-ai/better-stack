@@ -3,6 +3,7 @@ import type {
 	BackendLibConfig,
 	BackendLib,
 	PrefixedPluginRoutes,
+	BetterStackContext,
 } from "../types";
 import { defineDb } from "@btst/db";
 
@@ -45,9 +46,19 @@ export function betterStack<
 		betterDbSchema = betterDbSchema.use(plugin.dbPlugin);
 	}
 
+	// Create the adapter instance once
+	const adapterInstance = adapter(betterDbSchema);
+
+	// Create context for plugins that need access to all plugins (e.g., openAPI)
+	const context: BetterStackContext = {
+		plugins,
+		basePath,
+		adapter: adapterInstance,
+	};
+
 	for (const [pluginKey, plugin] of Object.entries(plugins)) {
-		// Pass the adapter directly to plugin routes
-		const pluginRoutes = plugin.routes(adapter(betterDbSchema));
+		// Pass both adapter and context to plugin routes
+		const pluginRoutes = plugin.routes(adapterInstance, context);
 
 		// Prefix route keys with plugin name to avoid collisions
 		for (const [routeKey, endpoint] of Object.entries(pluginRoutes)) {
@@ -72,4 +83,5 @@ export type {
 	BackendPlugin,
 	BackendLibConfig,
 	BackendLib,
+	BetterStackContext,
 } from "../types";

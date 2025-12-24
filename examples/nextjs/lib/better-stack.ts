@@ -6,6 +6,7 @@ import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/bl
 import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
+import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
 import { openai } from "@ai-sdk/openai"
 import { tool } from "ai"
 import { z } from "zod"
@@ -169,7 +170,14 @@ const { handler, dbSchema } = betterStack({
                     console.log("IP Address:", context.ipAddress);
                 },
             },
-        })
+        }),
+        // OpenAPI plugin - generates API documentation for all plugins
+        // Access at /api/data/reference for Scalar UI or /api/data/open-api/schema for JSON
+        openApi: openApiBackendPlugin({
+            title: "Better Stack Example API",
+            description: "API documentation for the Next.js example application",
+            theme: "kepler",
+        }),
     },
     adapter: (db) => createMemoryAdapter(db)({})
 })

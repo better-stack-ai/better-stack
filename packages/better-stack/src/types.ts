@@ -3,6 +3,19 @@ import type { Adapter, DatabaseDefinition, DbPlugin } from "@btst/db";
 import type { Endpoint, Router } from "better-call";
 
 /**
+ * Context passed to backend plugins during route creation
+ * Provides access to all registered plugins for introspection (used by openAPI plugin)
+ */
+export interface BetterStackContext {
+	/** All registered backend plugins */
+	plugins: Record<string, BackendPlugin<any>>;
+	/** The API base path (e.g., "/api/data") */
+	basePath: string;
+	/** The database adapter */
+	adapter: Adapter;
+}
+
+/**
  * Backend plugin definition
  * Defines API routes and data access for a feature
  *
@@ -23,8 +36,9 @@ export interface BackendPlugin<
 	 *
 	 * @param adapter - Better DB adapter instance with methods:
 	 *   create, update, updateMany, delete, deleteMany, findOne, findMany, count
+	 * @param context - Optional context with access to all plugins (for introspection)
 	 */
-	routes: (adapter: Adapter) => TRoutes;
+	routes: (adapter: Adapter, context?: BetterStackContext) => TRoutes;
 	dbPlugin: DbPlugin;
 }
 
