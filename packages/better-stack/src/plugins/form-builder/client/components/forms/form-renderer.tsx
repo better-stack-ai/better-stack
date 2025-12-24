@@ -168,13 +168,14 @@ export function FormRenderer({
 			setFinalSuccessMessage(message as string);
 			setSubmitted(true);
 
+			// Call onSuccess callback before any redirect
+			onSuccess?.(result);
+
 			// Handle redirect
 			if (result.form.redirectUrl) {
 				window.location.href = result.form.redirectUrl;
 				return;
 			}
-
-			onSuccess?.(result);
 		} catch (err) {
 			onError?.(err as Error);
 		}

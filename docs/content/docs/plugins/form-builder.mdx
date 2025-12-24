@@ -5,6 +5,27 @@ description: Visual drag-and-drop form builder with JSON Schema storage and publ
 
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
+import Image from "next/image";
+
+import formBuilderDemo from "../../../assets/form-builder-demo.png";
+import formBuilderDemo1 from "../../../assets/form-builder-demo-1.png";
+import formBuilderDemo2 from "../../../assets/form-builder-demo-2.png";
+import formBuilderDemo3 from "../../../assets/form-builder-demo-3.png";
+
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-2 my-2">
+  <a href={formBuilderDemo.src} target="_blank" rel="noopener noreferrer">
+    <Image src={formBuilderDemo} alt="Form Builder Plugin Demo - Forms List" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+  <a href={formBuilderDemo1.src} target="_blank" rel="noopener noreferrer">
+    <Image src={formBuilderDemo1} alt="Form Builder Plugin Demo - Builder" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+  <a href={formBuilderDemo2.src} target="_blank" rel="noopener noreferrer">
+    <Image src={formBuilderDemo2} alt="Form Builder Plugin Demo - Preview" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+  <a href={formBuilderDemo3.src} target="_blank" rel="noopener noreferrer">
+    <Image src={formBuilderDemo3} alt="Form Builder Plugin Demo - Submissions" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+</div>
 
 The Form Builder plugin provides a visual drag-and-drop form creation interface where administrators can create forms that are serialized and stored as JSON Schema. This is distinct from the CMS plugin - while CMS uses developer-defined Zod schemas, Form Builder allows non-technical administrators to create forms dynamically.
 

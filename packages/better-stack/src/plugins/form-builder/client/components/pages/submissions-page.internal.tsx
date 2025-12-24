@@ -207,15 +207,19 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 							<div className="grid grid-cols-2 gap-4 text-sm">
 								<div>
 									<span className="text-muted-foreground">ID:</span>
-									<p className="font-mono">{viewSubmission.id}</p>
+									<p className="font-mono truncate">{viewSubmission.id}</p>
 								</div>
 								<div>
 									<span className="text-muted-foreground">Submitted:</span>
-									<p>{new Date(viewSubmission.submittedAt).toLocaleString()}</p>
+									<p className="truncate">
+										{new Date(viewSubmission.submittedAt).toLocaleString()}
+									</p>
 								</div>
 								<div>
 									<span className="text-muted-foreground">IP Address:</span>
-									<p className="font-mono">{viewSubmission.ipAddress || "-"}</p>
+									<p className="font-mono truncate">
+										{viewSubmission.ipAddress || "-"}
+									</p>
 								</div>
 								<div>
 									<span className="text-muted-foreground">User Agent:</span>
