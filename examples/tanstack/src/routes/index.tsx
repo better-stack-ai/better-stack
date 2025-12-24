@@ -1,6 +1,6 @@
 // src/routes/index.tsx
 
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
+import { createFileRoute, Link } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 
 export const Route = createFileRoute('/')({
@@ -24,32 +24,10 @@ function Home() {
                 <b className="border-b-2 border-destructive w-full text-center p-2">Pages:</b>
                 <Button className="text-destructive" variant="link" asChild>
                     <Link to="/pages/$"
-                    data-testid="blog-link"
                     params={{
-                        _splat: "blog",
+                        _splat: "route-docs",
                     }}
-                    >Blog</Link>
-                </Button>
-                <Button className="text-destructive" variant="link" asChild>
-                    <Link to="/pages/$"
-                    params={{
-                        _splat: "blog/drafts",
-                    }}
-                    >Drafts</Link>
-                </Button>
-                <Button className="text-destructive" variant="link" asChild>
-                    <Link to="/pages/$"
-                    params={{
-                        _splat: "blog/new",
-                    }}
-                    >New Post</Link>
-                </Button>
-                <Button className="text-destructive" variant="link" asChild>
-                    <Link to="/pages/$"
-                    params={{
-                        _splat: "chat",
-                    }}
-                    >Chat</Link>
+                    >Available Routes</Link>
                 </Button>
             </div>
         </main>

@@ -1,6 +1,6 @@
 {
   "name": "@btst/stack",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "A composable, plugin-based library for building full-stack applications.",
   "repository": {
     "type": "git",
@@ -257,6 +257,17 @@
         "default": "./dist/plugins/open-api/api/index.cjs"
       }
     },
+    "./plugins/route-docs/client": {
+      "import": {
+        "types": "./dist/plugins/route-docs/client/index.d.ts",
+        "default": "./dist/plugins/route-docs/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/route-docs/client/index.d.cts",
+        "default": "./dist/plugins/route-docs/client/index.cjs"
+      }
+    },
+    "./plugins/route-docs/css": "./dist/plugins/route-docs/style.css",
     "./dist/*": "./dist/*",
     "./ui/css": "./dist/ui/components.css",
     "./package.json": "./package.json"
@@ -325,6 +336,9 @@
       ],
       "plugins/open-api/api": [
         "./dist/plugins/open-api/api/index.d.ts"
+      ],
+      "plugins/route-docs/client": [
+        "./dist/plugins/route-docs/client/index.d.ts"
       ]
     }
   },

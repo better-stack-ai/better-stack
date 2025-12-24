@@ -15,6 +15,9 @@
 /* Import AI Chat plugin styles */
 @import "@btst/stack/plugins/ai-chat/css";
 
+/* Import Route Docs plugin styles */
+@import "@btst/stack/plugins/route-docs/css";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

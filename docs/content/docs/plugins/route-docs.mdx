@@ -1,0 +1,150 @@
+---
+title: Route Docs Plugin
+description: Auto-generated client route documentation with interactive navigation
+---
+
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "fumadocs-ui/components/callout";
+import Image from "next/image";
+
+import routeDocsDemo from "../../../assets/route-docs-demo.png";
+
+<div className="my-2">
+  <a href={routeDocsDemo.src} target="_blank" rel="noopener noreferrer">
+    <Image src={routeDocsDemo} alt="Route Docs Plugin Demo - Interactive route documentation" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+</div>
+
+The Route Docs plugin automatically generates documentation for all your client-side routes. It provides an interactive reference page that displays route paths, parameters, sitemap entries, and navigation tools.
+
+## Features
+
+- **Automatic Route Discovery** - Traverses all registered client plugins and extracts route metadata
+- **Interactive Navigation** - Click any route to scroll to its details, or use the sidebar
+- **Parameter Documentation** - Shows path and query parameters with types and descriptions
+- **Sitemap Integration** - Displays sitemap entries for each route
+- **Live Route Testing** - Fill in parameters and navigate directly to routes
+- **Responsive Design** - Mobile-friendly with collapsible sidebar
+
+## Installation
+
+<Callout type="info">
+Ensure you followed the general [framework installation guide](/installation) first.
+</Callout>
+
+### Add Plugin to Client
+
+Import and register the Route Docs client plugin in your client configuration:
+
+```tsx title="lib/better-stack-client.tsx"
+import { betterStackClient } from "@btst/stack/client"
+import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
+
+const { ClientProvider, routes, ...client } = betterStackClient({
+  basePath: "/pages",
+  apiBasePath: "/api/data",
+  queryClient: queryClient,
+  plugins: {
+    blog: blogClientPlugin({ queryClient }),
+    // Add Route Docs plugin - it will document all other client plugins
+    routeDocs: routeDocsClientPlugin({
+      queryClient: queryClient,
+      siteBasePath: "/pages",
+      title: "Client Route Documentation",
+      description: "Documentation for all client routes in this application",
+    }),
+  },
+})
+
+export { ClientProvider, routes, client }
+```
+
+<Callout type="warn">
+The Route Docs plugin is client-only. There is no backend plugin required.
+</Callout>
+
+## Accessing the Documentation
+
+Once configured, navigate to your route docs page:
+
+| Route | Description |
+|-------|-------------|
+| `/pages/route-docs` | Interactive route documentation page |
+
+Replace `/pages` with your configured `siteBasePath`.
+
+## Configuration Options
+
+```tsx
+routeDocsClientPlugin({
+  // React Query client for data fetching
+  queryClient: queryClient,
+  
+  // Custom title for the documentation page
+  title: "Client Route Documentation",
+  
+  // Description shown on the page
+  description: "Documentation for all client routes",
+  
+  // Base path for generating URLs (default: "/pages")
+  siteBasePath: "/pages",
+  
+  // Custom route path (default: "/route-docs")
+  basePath: "/docs/routes",
+})
+```
+
+## Page Layout
+
+The documentation page includes several sections:
+
+### All Routes Table
+
+An overview table showing all routes at a glance with:
+- Route path with highlighted parameters
+- Plugin name
+- Parameter count
+- Sitemap entry count
+- Quick actions (visit or scroll to details)
+
+### Route Details
+
+For each route, detailed documentation includes:
+
+1. **Route Path** - The route pattern with parameters highlighted
+2. **Navigate to Route** - Interactive form to fill in parameters and visit the route
+3. **Path Parameters** - Table of path parameters with name, type, required status
+4. **Query Parameters** - Table of query parameters with defaults and descriptions
+5. **Sitemap Entries** - URLs that match this route pattern
+
+
+## How It Works
+
+The Route Docs plugin introspects all registered client plugins:
+
+1. **Context Access** - Better Stack passes a context object containing all plugins
+2. **Route Traversal** - The plugin iterates over all client plugins and their routes
+3. **Metadata Extraction** - Route metadata including path, parameters, and meta tags are collected
+4. **Sitemap Collection** - Each plugin's sitemap entries are gathered and matched to routes
+5. **Schema Generation** - A complete documentation schema is generated and cached
+
+## Security Considerations
+
+<Callout type="warn">
+The Route Docs page exposes your application's route structure. Consider these measures:
+</Callout>
+
+1. **Development Only** - Consider only enabling in development environments
+2. **Access Control** - Add authentication middleware to protect the route
+3. **Sensitive Routes** - Be aware that all registered routes will be documented
+
+```tsx
+// Example: Only enable in development
+const plugins = {
+  blog: blogClientPlugin({ queryClient }),
+  ...(process.env.NODE_ENV === "development" && {
+    routeDocs: routeDocsClientPlugin({ queryClient }),
+  }),
+}
+```

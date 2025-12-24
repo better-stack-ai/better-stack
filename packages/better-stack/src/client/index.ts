@@ -4,10 +4,11 @@ import type {
 	ClientLibConfig,
 	ClientLib,
 	ClientPlugin,
+	ClientStackContext,
 	PluginRoutes,
 	Sitemap,
 } from "../types";
-export type { ClientPlugin } from "../types";
+export type { ClientPlugin, ClientStackContext } from "../types";
 
 /**
  * Creates the client library with plugin support
@@ -60,15 +61,21 @@ export function createStackClient<
 	TPlugins extends Record<string, ClientPlugin<any, any>>,
 	TRoutes extends PluginRoutes<TPlugins> = PluginRoutes<TPlugins>,
 >(config: ClientLibConfig<TPlugins>): ClientLib<TRoutes> {
-	const { plugins } = config;
+	const { plugins, basePath } = config;
 
 	// Collect all routes from all plugins
 	// We build this with type assertions to preserve literal keys
 	const allRoutes = {} as TRoutes;
 
+	// Create the context object to pass to plugin routes
+	const clientStackContext: ClientStackContext<TPlugins> = {
+		plugins,
+		basePath,
+	};
+
 	for (const [pluginKey, plugin] of Object.entries(plugins)) {
-		// Add routes
-		const pluginRoutes = plugin.routes();
+		// Add routes - pass the context for plugins that need introspection (e.g., routeDocs)
+		const pluginRoutes = plugin.routes(clientStackContext);
 		Object.assign(allRoutes, pluginRoutes);
 	}
 

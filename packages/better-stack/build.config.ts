@@ -90,6 +90,8 @@ export default defineBuildConfig({
 		"./src/plugins/form-builder/query-keys.ts",
 		// open-api plugin entries
 		"./src/plugins/open-api/api/index.ts",
+		// route-docs plugin entries
+		"./src/plugins/route-docs/client/index.ts",
 	],
 	hooks: {
 		"rollup:options"(_ctx, options) {
