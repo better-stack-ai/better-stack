@@ -8,7 +8,6 @@ import { BetterStackProvider } from "@btst/stack/context";
 import { FormRenderer } from "@btst/stack/plugins/form-builder/client/components";
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client";
 import { getOrCreateQueryClient } from "@/lib/query-client";
-import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, AlertCircle } from "lucide-react";
 
@@ -42,7 +41,6 @@ export default function FormDemoPage() {
           },
         }}
       >
-        <Navbar />
         <main className="container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto">
             <div className="mb-6">

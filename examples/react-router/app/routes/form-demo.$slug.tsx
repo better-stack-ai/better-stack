@@ -4,7 +4,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { BetterStackProvider } from "@btst/stack/context";
 import { FormRenderer } from "@btst/stack/plugins/form-builder/client/components";
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client";
-import { Navbar } from "~/components/navbar";
 import { Button } from "~/components/ui/button";
 import { ArrowLeft, Loader2, AlertCircle } from "lucide-react";
 import { getOrCreateQueryClient } from "~/lib/query-client";
@@ -33,12 +32,9 @@ export default function FormDemoPage() {
 
   if (!slug) {
     return (
-      <>
-        <Navbar />
-        <main className="container mx-auto px-4 py-8">
-          <p>No form slug provided</p>
-        </main>
-      </>
+      <main className="container mx-auto px-4 py-8">
+        <p>No form slug provided</p>
+      </main>
     );
   }
 
@@ -59,7 +55,6 @@ export default function FormDemoPage() {
           },
         }}
       >
-        <Navbar />
         <main className="container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto">
             <div className="mb-6">

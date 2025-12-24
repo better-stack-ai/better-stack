@@ -1,0 +1,235 @@
+---
+title: OpenAPI Plugin
+description: Auto-generated API documentation with interactive Scalar UI
+---
+
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "fumadocs-ui/components/callout";
+import Image from "next/image";
+
+import openApiDemo from "../../../assets/openapi-demo.png";
+
+<div className="my-2">
+  <a href={openApiDemo.src} target="_blank" rel="noopener noreferrer">
+    <Image src={openApiDemo} alt="OpenAPI Plugin Demo - Interactive Scalar UI" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+</div>
+
+The OpenAPI plugin automatically generates OpenAPI 3.1 documentation for all your Better Stack plugins. It provides both a JSON schema endpoint and an interactive API reference UI powered by [Scalar](https://scalar.com/).
+
+## Features
+
+- **Automatic Schema Generation** - Traverses all registered plugins and extracts endpoint metadata
+- **OpenAPI 3.1 Compliant** - Generates valid OpenAPI 3.1 schemas from Zod definitions
+- **Interactive UI** - Beautiful API reference page powered by Scalar
+- **Multiple Themes** - Choose from 10+ Scalar themes to match your brand
+- **Zero Configuration** - Works out of the box with sensible defaults
+
+## Installation
+
+<Callout type="info">
+Ensure you followed the general [framework installation guide](/installation) first.
+</Callout>
+
+### Add Plugin to Backend API
+
+Import and register the OpenAPI backend plugin in your `better-stack.ts` file:
+
+```ts title="lib/better-stack.ts"
+import { betterStack } from "@btst/stack"
+import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
+import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
+// ... your adapter imports
+
+const { handler, dbSchema } = betterStack({
+  basePath: "/api/data",
+  plugins: {
+    blog: blogBackendPlugin(),
+    // Add OpenAPI plugin - it will document all other plugins
+    openApi: openApiBackendPlugin({
+      title: "My API",
+      description: "API documentation for my application",
+      theme: "kepler",
+    }),
+  },
+  adapter: (db) => createMemoryAdapter(db)({})
+})
+
+export { handler, dbSchema }
+```
+
+<Callout type="warn">
+The OpenAPI plugin is backend-only. There is no client plugin required.
+</Callout>
+
+## Endpoints
+
+Once configured, the plugin exposes two endpoints:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/data/open-api/schema` | Returns the OpenAPI 3.1 JSON schema |
+| `GET /api/data/reference` | Interactive Scalar API reference UI |
+
+Replace `/api/data` with your configured `basePath`.
+
+## Configuration Options
+
+```ts
+openApiBackendPlugin({
+  // Custom title for the API documentation
+  title: "My API",
+  
+  // Description shown in the API reference
+  description: "API documentation for my application",
+  
+  // API version string
+  version: "1.0.0",
+  
+  // Scalar theme (see themes section below)
+  theme: "kepler",
+  
+  // Custom path for the reference page (default: "/reference")
+  path: "/docs",
+  
+  // Disable the HTML reference page (only serve JSON schema)
+  disableDefaultReference: false,
+  
+  // CSP nonce for inline scripts (for strict Content Security Policy)
+  nonce: "your-nonce-value",
+})
+```
+
+## Available Themes
+
+The plugin supports all Scalar themes:
+
+| Theme | Description |
+|-------|-------------|
+| `default` | Clean, minimal design |
+| `alternate` | Alternative styling |
+| `moon` | Dark mode optimized |
+| `purple` | Purple accent colors |
+| `solarized` | Solarized color scheme |
+| `bluePlanet` | Blue-focused theme |
+| `saturn` | Saturn-inspired colors |
+| `kepler` | Modern space theme |
+| `mars` | Red/orange accent theme |
+| `deepSpace` | Deep dark theme |
+| `laserwave` | Synthwave-inspired |
+| `none` | No styling (bring your own) |
+
+## How It Works
+
+The OpenAPI plugin introspects all registered plugins at startup:
+
+1. **Context Injection** - Better Stack passes a context object containing all plugins to each plugin's `routes()` function
+2. **Endpoint Traversal** - The OpenAPI plugin iterates over all other plugins and their endpoints
+3. **Schema Extraction** - Zod schemas from `query`, `body`, and `params` are converted to OpenAPI schema objects
+4. **Path Transformation** - Express-style paths (`:param`) are converted to OpenAPI format (`{param}`)
+5. **Tag Generation** - Each plugin becomes a tag in the OpenAPI spec for easy navigation
+
+## Generated Schema Structure
+
+The plugin generates a complete OpenAPI 3.1 schema including:
+
+```json
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "My API",
+    "description": "API documentation",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "/api/data", "description": "API Server" }
+  ],
+  "tags": [
+    { "name": "Blog", "description": "Blog plugin endpoints" },
+    { "name": "Cms", "description": "Cms plugin endpoints" }
+  ],
+  "paths": {
+    "/posts": {
+      "get": {
+        "tags": ["Blog"],
+        "operationId": "blog_listPosts",
+        "parameters": [...],
+        "responses": {...}
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer" },
+      "cookieAuth": { "type": "apiKey", "in": "cookie", "name": "session" }
+    }
+  }
+}
+```
+
+## Using the JSON Schema
+
+You can fetch the raw OpenAPI schema for use with other tools:
+
+```bash
+# Fetch the OpenAPI schema
+curl http://localhost:3000/api/data/open-api/schema
+
+# Save to a file
+curl http://localhost:3000/api/data/open-api/schema > openapi.json
+```
+
+The schema can be used with:
+- **Code generators** (OpenAPI Generator, openapi-typescript)
+- **API testing tools** (Postman, Insomnia)
+- **Documentation platforms** (Redoc, Swagger UI)
+- **Mock servers** (Prism, Mock Service Worker)
+
+## Programmatic Access
+
+You can also use the schema generator directly:
+
+```ts
+import { generateOpenAPISchema } from "@btst/stack/plugins/open-api/api"
+
+// Generate schema from context
+const schema = generateOpenAPISchema(context, {
+  title: "My API",
+  description: "Custom description",
+  version: "2.0.0",
+})
+```
+
+## Security Considerations
+
+<Callout type="warn">
+The OpenAPI documentation exposes your API structure. Consider these security measures:
+</Callout>
+
+1. **Restrict Access** - Use middleware to restrict access to the reference page in production
+2. **Disable in Production** - Set `disableDefaultReference: true` and only serve the JSON to authorized users
+3. **Use CSP Nonces** - If you have strict Content Security Policy, provide a `nonce` option
+
+```ts
+// Example: Disable reference UI in production
+openApiBackendPlugin({
+  disableDefaultReference: process.env.NODE_ENV === "production",
+})
+```
+
+## Troubleshooting
+
+### Schema shows empty or incomplete endpoints
+
+Ensure plugins are registered **before** the OpenAPI plugin in your plugins object. The OpenAPI plugin introspects all other plugins at initialization time.
+
+### Reference page shows blank
+
+Check your browser console for CSP (Content Security Policy) errors. If you have strict CSP, you may need to:
+1. Provide a `nonce` option
+2. Allow `cdn.jsdelivr.net` in your script-src directive
+
+### Types not showing correctly
+
+The plugin converts Zod schemas to OpenAPI schemas. Complex nested types, unions, and intersections should work, but some edge cases may show as `{ type: "object" }`. Consider adding explicit `metadata.openapi` to your endpoints for better documentation.
+
