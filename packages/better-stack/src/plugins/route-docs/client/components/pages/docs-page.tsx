@@ -39,7 +39,7 @@ import {
 	Menu,
 	Navigation,
 } from "lucide-react";
-import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import type {
 	RouteDocsSchema,
 	DocumentedPlugin,
@@ -47,7 +47,32 @@ import type {
 	RouteParameter,
 	PluginSitemapEntry,
 } from "../../../generator";
-import { ROUTE_DOCS_QUERY_KEY } from "../../plugin";
+import { ROUTE_DOCS_QUERY_KEY, generateSchema } from "../../plugin";
+
+/**
+ * Escapes regex special characters in a string, except for placeholders
+ * that will be replaced with actual regex patterns.
+ */
+function escapeRegexForRoutePath(path: string): string {
+	// Use unique placeholders that won't appear in URLs
+	const PARAM_PLACEHOLDER = "\x00PARAM\x00";
+	const WILDCARD_PLACEHOLDER = "\x00WILDCARD\x00";
+
+	// Replace dynamic segments with placeholders before escaping
+	let result = path
+		.replace(/:[^/]+/g, PARAM_PLACEHOLDER)
+		.replace(/\*/g, WILDCARD_PLACEHOLDER);
+
+	// Escape all regex metacharacters
+	result = result.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+
+	// Replace placeholders with actual regex patterns
+	result = result
+		.replace(new RegExp(PARAM_PLACEHOLDER, "g"), "[^/]+")
+		.replace(new RegExp(WILDCARD_PLACEHOLDER, "g"), ".*");
+
+	return result;
+}
 
 /**
  * Render a route path with highlighted parameters
@@ -305,9 +330,7 @@ function getMatchingSitemapEntries(
 		});
 	} else {
 		// Dynamic route - pattern matches
-		const routePattern = route.path
-			.replace(/:[^/]+/g, "[^/]+")
-			.replace(/\*/g, ".*");
+		const routePattern = escapeRegexForRoutePath(route.path);
 		const regex = new RegExp(`${routePattern}$`);
 		return sitemapEntries.filter((e) => {
 			try {
@@ -887,9 +910,7 @@ function AllRoutesSection({
 					}).length;
 				} else {
 					// Dynamic route - count entries that could match the pattern
-					const routePattern = route.path
-						.replace(/:[^/]+/g, "[^/]+")
-						.replace(/\*/g, ".*");
+					const routePattern = escapeRegexForRoutePath(route.path);
 					const regex = new RegExp(`${routePattern}$`);
 					sitemapCount = plugin.sitemapEntries.filter((e) => {
 						try {
@@ -1055,25 +1076,10 @@ export function DocsPageComponent({
 	description = "Documentation for all client routes in your application",
 	siteBasePath = "/pages",
 }: DocsPageProps) {
-	// Get query client from context
-	const queryClient = useQueryClient();
-
-	// Read schema from React Query (prefetched by loader on server)
+	// Read schema from React Query (prefetched by loader on server, or generated on client)
 	const { data: schema } = useSuspenseQuery<RouteDocsSchema>({
 		queryKey: ROUTE_DOCS_QUERY_KEY,
-		queryFn: () => {
-			// On client, return cached data or empty schema
-			// The loader should have populated this on the server
-			const cached =
-				queryClient.getQueryData<RouteDocsSchema>(ROUTE_DOCS_QUERY_KEY);
-			return (
-				cached ?? {
-					plugins: [],
-					generatedAt: new Date().toISOString(),
-					allSitemapEntries: [],
-				}
-			);
-		},
+		queryFn: generateSchema,
 		staleTime: Infinity, // Don't refetch - schema is static for this session
 	});
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

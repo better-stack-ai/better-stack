@@ -29,6 +29,43 @@ const DocsPageSkeleton = lazy(() =>
 export const ROUTE_DOCS_QUERY_KEY = ["route-docs", "schema"] as const;
 
 /**
+ * Module-level storage for the client stack context
+ * This allows the schema to be generated on both server and client
+ */
+let moduleStoredContext: ClientStackContext | null = null;
+
+/**
+ * Get the stored client stack context
+ * Used by the docs page component to generate schema on client-side navigation
+ */
+export function getStoredContext(): ClientStackContext | null {
+	return moduleStoredContext;
+}
+
+/**
+ * Generate the route docs schema from the stored context
+ * This can be called from both server and client
+ */
+export async function generateSchema(): Promise<RouteDocsSchema> {
+	if (!moduleStoredContext) {
+		return {
+			plugins: [],
+			generatedAt: new Date().toISOString(),
+			allSitemapEntries: [],
+		};
+	}
+
+	try {
+		const sitemapEntries = await fetchAllSitemapEntries(moduleStoredContext);
+		return generateRouteDocsSchema(moduleStoredContext, sitemapEntries);
+	} catch (error) {
+		console.warn("Failed to generate route docs schema:", error);
+		// Return schema without sitemap entries on error
+		return generateRouteDocsSchema(moduleStoredContext, []);
+	}
+}
+
+/**
  * Configuration for Route Docs client plugin
  */
 export interface RouteDocsClientConfig {
@@ -78,21 +115,23 @@ function DocsErrorComponent() {
  * Create loader for SSR prefetching of route docs schema
  * This properly awaits all sitemap data before storing in React Query
  */
-function createRouteDocsLoader(
-	config: RouteDocsClientConfig,
-	context: ClientStackContext | null,
-) {
+function createRouteDocsLoader(config: RouteDocsClientConfig) {
 	return async () => {
-		// Only run on server
-		if (typeof window === "undefined" && context) {
+		// Only run on server for SSR prefetching
+		// Client-side navigation uses the queryFn in the component
+		if (typeof window === "undefined" && moduleStoredContext) {
 			const { queryClient } = config;
 
 			try {
 				// Await all sitemap entries from all plugins
-				const sitemapEntries = await fetchAllSitemapEntries(context);
+				const sitemapEntries =
+					await fetchAllSitemapEntries(moduleStoredContext);
 
 				// Generate the complete schema with sitemap data
-				const schema = generateRouteDocsSchema(context, sitemapEntries);
+				const schema = generateRouteDocsSchema(
+					moduleStoredContext,
+					sitemapEntries,
+				);
 
 				// Store in React Query for the component to read
 				queryClient.setQueryData<RouteDocsSchema>(ROUTE_DOCS_QUERY_KEY, schema);
@@ -114,15 +153,12 @@ function createRouteDocsLoader(
  * Provides a route that displays documentation for all client routes
  */
 export const routeDocsClientPlugin = (config: RouteDocsClientConfig) => {
-	// Store the context for use in loader and schema generation
-	let storedContext: ClientStackContext | null = null;
-
 	return defineClientPlugin({
 		name: "route-docs",
 
 		routes: (context?: ClientStackContext) => {
-			// Store context for generating schema
-			storedContext = context || null;
+			// Store context at module level for client-side schema generation
+			moduleStoredContext = context || null;
 
 			return {
 				docs: createRoute("/route-docs", () => {
@@ -136,7 +172,7 @@ export const routeDocsClientPlugin = (config: RouteDocsClientConfig) => {
 						),
 						LoadingComponent: () => <DocsPageSkeleton />,
 						ErrorComponent: () => <DocsErrorComponent />,
-						loader: createRouteDocsLoader(config, storedContext),
+						loader: createRouteDocsLoader(config),
 						meta: createDocsMeta(config),
 					};
 				}),
