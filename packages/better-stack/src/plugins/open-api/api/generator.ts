@@ -69,16 +69,14 @@ function getTypeFromZodType(
  * Process a Zod type into an OpenAPI schema
  */
 function processZodType(zodType: z.ZodType<any>): Record<string, any> {
-	// Handle optional
+	// Handle optional - unwrap and process inner type
+	// Optionality is handled by the `required` array in parent object schemas,
+	// NOT by adding `nullable: true` (which would incorrectly allow null values)
 	if (zodType instanceof z.ZodOptional) {
 		const innerType =
 			(zodType as any)._def?.innerType || (zodType as any).unwrap?.();
 		if (innerType) {
-			const innerSchema = processZodType(innerType);
-			return {
-				...innerSchema,
-				nullable: true,
-			};
+			return processZodType(innerType);
 		}
 	}
 
@@ -228,19 +226,31 @@ function getParameters(options: any): OpenAPIParameter[] {
 
 /**
  * Extract request body schema from endpoint options
+ *
+ * Handles any Zod type as request body including:
+ * - ZodObject (most common)
+ * - ZodArray (batch/bulk operations)
+ * - ZodUnion (multiple accepted formats)
+ * - ZodOptional (optional body)
+ * - ZodNullable, ZodEnum, ZodLiteral, etc.
  */
 function getRequestBody(
 	options: any,
 ): PathOperation["requestBody"] | undefined {
 	if (!options.body) return undefined;
 
-	if (
-		options.body instanceof z.ZodObject ||
-		options.body instanceof z.ZodOptional
-	) {
+	// Handle any Zod type - processZodType already handles all Zod types
+	if (options.body instanceof z.ZodType) {
 		const schema = processZodType(options.body);
+
+		// Determine if body is required:
+		// - ZodOptional: not required
+		// - ZodNullable: required but can be null (nullable is set in schema)
+		// - Everything else: required
+		const isOptional = options.body instanceof z.ZodOptional;
+
 		return {
-			required: !(options.body instanceof z.ZodOptional),
+			required: !isOptional,
 			content: {
 				"application/json": {
 					schema,
