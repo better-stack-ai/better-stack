@@ -2,6 +2,7 @@ import type { Adapter } from "@btst/db";
 import { defineBackendPlugin } from "@btst/stack/plugins/api";
 import { createEndpoint } from "@btst/stack/plugins/api";
 import { z } from "zod";
+import { formSchemaToZod } from "@workspace/ui/lib/schema-converter";
 import { formBuilderSchema as dbSchema } from "../db";
 import type {
 	Form,
@@ -530,9 +531,11 @@ export const formBuilderBackendPlugin = (
 					);
 
 					// Validate data against form schema
+					// Use formSchemaToZod for consistent validation with the client-side,
+					// which properly handles date constraints and step metadata
 					try {
 						const jsonSchema = JSON.parse(form.schema);
-						const zodSchema = z.fromJSONSchema(jsonSchema);
+						const zodSchema = formSchemaToZod(jsonSchema);
 						const validation = zodSchema.safeParse(data);
 						if (!validation.success) {
 							throw ctx.error(400, {

@@ -25,12 +25,50 @@ import {
 import type { FormBuilderPluginOverrides } from "../../overrides";
 import { FORM_BUILDER_LOCALIZATION } from "../../localization";
 import { slugify } from "../../../utils";
+import type { SerializedForm } from "../../../types";
 
 export interface FormBuilderPageProps {
 	id?: string;
 }
 
+/**
+ * Entry point component that conditionally renders the appropriate
+ * sub-component based on whether we're creating or editing a form.
+ * This avoids conditional hook calls which violate React's Rules of Hooks.
+ */
 export function FormBuilderPage({ id }: FormBuilderPageProps) {
+	if (id) {
+		return <EditFormBuilderPage id={id} />;
+	}
+	return <CreateFormBuilderPage />;
+}
+
+/**
+ * Component for editing an existing form.
+ * Uses useSuspenseFormById unconditionally since id is always defined.
+ */
+function EditFormBuilderPage({ id }: { id: string }) {
+	const { form: existingForm } = useSuspenseFormById(id);
+	return <FormBuilderPageContent id={id} existingForm={existingForm} />;
+}
+
+/**
+ * Component for creating a new form.
+ * No data fetching needed.
+ */
+function CreateFormBuilderPage() {
+	return <FormBuilderPageContent />;
+}
+
+interface FormBuilderPageContentProps {
+	id?: string;
+	existingForm?: SerializedForm | null;
+}
+
+function FormBuilderPageContent({
+	id,
+	existingForm,
+}: FormBuilderPageContentProps) {
 	const { navigate, Link, localization } = usePluginOverrides<
 		FormBuilderPluginOverrides,
 		Partial<FormBuilderPluginOverrides>
@@ -38,9 +76,6 @@ export function FormBuilderPage({ id }: FormBuilderPageProps) {
 		localization: FORM_BUILDER_LOCALIZATION,
 	});
 	const basePath = useBasePath();
-
-	// Fetch existing form if editing
-	const { form: existingForm } = id ? useSuspenseFormById(id) : { form: null };
 
 	const createMutation = useCreateForm();
 	const updateMutation = useUpdateForm();
