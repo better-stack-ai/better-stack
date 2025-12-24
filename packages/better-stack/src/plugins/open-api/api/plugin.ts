@@ -99,7 +99,7 @@ function getScalarHTML(
 	theme: ScalarTheme = "default",
 	nonce?: string,
 ): string {
-	const nonceAttr = nonce ? ` nonce="${nonce}"` : "";
+	const nonceAttr = nonce ? ` nonce="${escapeHtml(nonce)}"` : "";
 	const encodedLogo = encodeURIComponent(logo);
 
 	const title = schema.info?.title || "API Reference";

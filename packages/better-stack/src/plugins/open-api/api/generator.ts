@@ -93,6 +93,23 @@ function processZodType(zodType: z.ZodType<any>): Record<string, any> {
 		}
 	}
 
+	// Handle default - unwrap and process inner type, including default value
+	if (zodType instanceof z.ZodDefault) {
+		const innerType = (zodType as any)._def?.innerType;
+		const defaultValue = (zodType as any)._def?.defaultValue?.();
+		if (innerType) {
+			const innerSchema = processZodType(innerType);
+			// Include the default value in the OpenAPI schema if it's JSON-serializable
+			if (defaultValue !== undefined) {
+				return {
+					...innerSchema,
+					default: defaultValue,
+				};
+			}
+			return innerSchema;
+		}
+	}
+
 	// Handle object
 	if (zodType instanceof z.ZodObject) {
 		const shape = (zodType as any).shape || (zodType as any)._def?.shape?.();
