@@ -226,7 +226,17 @@ function NavigationForm({
 		let url = route.path;
 		for (const param of route.pathParams) {
 			const value = paramValues[param.name] || `{${param.name}}`;
-			url = url.replace(`:${param.name}`, value);
+			// Handle different parameter patterns:
+			// - *:name (named wildcard) - must check before :name
+			// - * (anonymous wildcard, extracted as "_")
+			// - :name (standard path param)
+			if (param.name === "_") {
+				url = url.replace("*", value);
+			} else if (url.includes(`*:${param.name}`)) {
+				url = url.replace(`*:${param.name}`, value);
+			} else {
+				url = url.replace(`:${param.name}`, value);
+			}
 		}
 		return `${siteBasePath}${url}`;
 	};
