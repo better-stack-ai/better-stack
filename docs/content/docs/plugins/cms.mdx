@@ -301,6 +301,8 @@ Fetch content data in your frontend pages using the provided hooks. All hooks su
 | `useContent(typeSlug, options?)` | List paginated items | `{ items, total, hasMore, isLoading, error, refetch }` |
 | `useContentItem(typeSlug, id)` | Get item by ID | `{ item, isLoading, error, refetch }` |
 | `useContentItemBySlug(typeSlug, slug)` | Get item by slug | `{ item, isLoading, error, refetch }` |
+| `useContentItemPopulated(typeSlug, id)` | Get item with relations populated | `{ item, isLoading, error, refetch }` |
+| `useContentByRelation(typeSlug, field, targetId)` | Filter items by relation | `{ items, total, isLoading, error, refetch }` |
 | `useCreateContent(typeSlug)` | Create mutation | React Query mutation |
 | `useUpdateContent(typeSlug)` | Update mutation | React Query mutation |
 | `useDeleteContent(typeSlug)` | Delete mutation | React Query mutation |
@@ -541,6 +543,9 @@ The CMS plugin exposes these REST endpoints:
 | `/content/:typeSlug/:id` | GET | Get single item |
 | `/content/:typeSlug/:id` | PUT | Update item |
 | `/content/:typeSlug/:id` | DELETE | Delete item |
+| `/content/:typeSlug/:id/populated` | GET | Get item with relations populated |
+| `/content/:typeSlug/populated` | GET | List items with relations populated |
+| `/content/:typeSlug/by-relation` | GET | Filter by relation (query: `field`, `targetId`) |
 
 ## Authorization & Lifecycle Hooks
 
@@ -733,6 +738,370 @@ cms: {
 <Callout type="info">
 When a custom component is provided for a field type via `fieldComponents`, it takes precedence over the built-in component. This allows you to completely customize how any field type is rendered.
 </Callout>
+
+## Data Relationships
+
+The CMS plugin supports relationships between content types, enabling you to build directories, blogs with tags, or any relational data structure. Relationships are defined in your Zod schemas using `.meta({ fieldType: "relation", relation: {...} })`.
+
+### Defining Relationships
+
+Add a relation field to your schema:
+
+```ts title="lib/cms-schemas.ts"
+import { z } from "zod";
+
+// Category schema (the target of the relation)
+export const CategorySchema = z.object({
+  name: z.string().min(1).meta({
+    description: "Category name",
+    placeholder: "Enter category name...",
+  }),
+  description: z.string().optional().meta({
+    description: "Optional category description",
+    fieldType: "textarea",
+  }),
+  color: z.string().optional().meta({
+    description: "Category color (hex code)",
+    placeholder: "#3b82f6",
+  }),
+});
+
+// Resource schema with a manyToMany relation to categories
+export const ResourceSchema = z.object({
+  name: z.string().min(1).meta({
+    description: "Resource name",
+    placeholder: "Enter resource name...",
+  }),
+  description: z.string().meta({
+    description: "Full resource description",
+    fieldType: "textarea",
+  }),
+  website: z.string().url().optional().meta({
+    description: "Website URL",
+    placeholder: "https://example.com",
+  }),
+  // Relation field - manyToMany with categories
+  categoryIds: z
+    .array(z.object({ id: z.string() }))
+    .default([])
+    .meta({
+      fieldType: "relation",
+      relation: {
+        type: "manyToMany",
+        targetType: "category",    // Slug of the target content type
+        displayField: "name",      // Field to display in the selector
+        creatable: true,           // Allow creating new categories inline
+      },
+    }),
+});
+
+export type CategoryData = z.infer<typeof CategorySchema>;
+export type ResourceData = z.infer<typeof ResourceSchema>;
+
+export type CMSTypes = {
+  category: CategoryData;
+  resource: ResourceData;
+};
+```
+
+### Relationship Types
+
+| Type | Description | Schema Format | Use Case |
+|------|-------------|---------------|----------|
+| `belongsTo` | Single reference to another item | `z.object({ id: z.string() }).optional()` | Comment → Resource (one-to-many inverse) |
+| `hasMany` | Multiple references | `z.array(z.object({ id: z.string() }))` | Author → Posts |
+| `manyToMany` | Many-to-many via junction table | `z.array(z.object({ id: z.string() }))` | Resource ↔ Categories |
+
+<Callout type="info">
+**belongsTo vs manyToMany**: Use `belongsTo` when an item references a single parent (e.g., a Comment belongs to one Resource). Use `manyToMany` when items can have multiple relationships (e.g., a Resource can have many Categories).
+</Callout>
+
+#### belongsTo Example (One-to-Many)
+
+For one-to-many relationships, the "many" side uses `belongsTo` to reference the "one" side:
+
+```ts title="lib/cms-schemas.ts"
+// Resource Schema - the "one" side
+export const ResourceSchema = z.object({
+  name: z.string().min(1),
+  description: z.string(),
+  // ... other fields
+});
+
+// Comment Schema - the "many" side (belongs to Resource)
+export const CommentSchema = z.object({
+  author: z.string().min(1).meta({
+    description: "Comment author name",
+    placeholder: "Your name...",
+  }),
+  content: z.string().min(1).meta({
+    description: "Comment content",
+    placeholder: "Write your comment...",
+    fieldType: "textarea",
+  }),
+  // belongsTo relation - links to a single Resource
+  // Unlike manyToMany (array), belongsTo stores a single { id: string }
+  resourceId: z.object({ id: z.string() }).optional().meta({
+    fieldType: "relation",
+    relation: {
+      type: "belongsTo",
+      targetType: "resource",
+      displayField: "name",
+    },
+  }),
+});
+```
+
+The admin UI renders `belongsTo` fields as a single-select dropdown instead of a multi-select.
+
+### RelationConfig Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `type` | `"belongsTo" \| "hasMany" \| "manyToMany"` | The relationship type |
+| `targetType` | `string` | Slug of the target content type |
+| `displayField` | `string` | Field to show in the selector (e.g., "name", "title") |
+| `creatable` | `boolean` | Allow creating new related items inline (optional, default: false) |
+
+### Relation Hooks
+
+Use these hooks to fetch content with populated relations:
+
+```tsx
+import { 
+  useContentItemPopulated,
+  useContentByRelation 
+} from "@btst/stack/plugins/cms/client/hooks"
+import type { CMSTypes } from "@/lib/cms-schemas"
+
+// Get a single resource with its related categories populated
+function ResourceDetail({ id }: { id: string }) {
+  const { item, isLoading } = useContentItemPopulated<CMSTypes, "resource">(
+    "resource", 
+    id
+  )
+
+  if (isLoading || !item) return <Skeleton />
+
+  return (
+    <div>
+      <h1>{item.parsedData.name}</h1>
+      <p>{item.parsedData.description}</p>
+      
+      {/* Related categories are populated in _relations */}
+      <div className="flex gap-2">
+        {item._relations?.categoryIds?.map((category) => (
+          <span key={category.id} className="badge">
+            {category.parsedData.name}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Get resources filtered by a specific category
+function CategoryResources({ categoryId }: { categoryId: string }) {
+  const { items, isLoading } = useContentByRelation<CMSTypes, "resource">(
+    "resource",
+    "categoryIds",  // Field name containing the relation
+    categoryId      // ID of the related category
+  )
+
+  return (
+    <ul>
+      {items.map((resource) => (
+        <li key={resource.id}>{resource.parsedData.name}</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+### Inline Creation
+
+When `creatable: true` is set in the relation config, users can create new related items directly from the relation selector. A modal form will appear allowing them to create a new item (e.g., a new category) without leaving the current form.
+
+```ts
+categoryIds: z
+  .array(z.object({ id: z.string() }))
+  .default([])
+  .meta({
+    fieldType: "relation",
+    relation: {
+      type: "manyToMany",
+      targetType: "category",
+      displayField: "name",
+      creatable: true,  // Shows "Create new..." option in selector
+    },
+  }),
+```
+
+### Inverse Relations Panel
+
+When editing content in the CMS admin, an **Inverse Relations Panel** automatically appears below the form. This panel shows all items that reference the current item via `belongsTo` relations.
+
+For example, when editing a Resource, the panel displays all Comments that belong to that Resource:
+
+```
+┌─────────────────────────────────────────────┐
+│ 📝 Comments (3)                         [▼] │
+├─────────────────────────────────────────────┤
+│ • "Great resource!" by John     [Edit] [🗑] │
+│ • "Very helpful" by Jane        [Edit] [🗑] │
+│ • "Thanks!" by Bob              [Edit] [🗑] │
+│                                             │
+│ [+ Add Comment]                             │
+└─────────────────────────────────────────────┘
+```
+
+The panel:
+- Auto-discovers content types with `belongsTo` relations pointing to the current type
+- Shows a count and list of related items with edit/delete links
+- Provides an "Add" button to create new related items with the relation pre-filled
+
+### Relation API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/content/:typeSlug/:id/populated` | GET | Get item with relations populated |
+| `/content/:typeSlug/populated` | GET | List items with relations populated |
+| `/content/:typeSlug/by-relation` | GET | Filter by relation (query: `field`, `targetId`) |
+| `/content-types/:slug/inverse-relations` | GET | Get content types that reference this type (query: `itemId` optional) |
+| `/content-types/:slug/inverse-relations/:sourceType` | GET | Get items referencing this item (query: `itemId`, `fieldName`) |
+
+**Example API calls:**
+
+```bash
+# Get resource with populated categories
+curl /api/data/content/resource/abc123/populated
+
+# Get all resources linked to a specific category
+curl /api/data/content/resource/by-relation?field=categoryIds&targetId=cat456
+
+# Get inverse relations for a resource (what types reference it)
+curl /api/data/content-types/resource/inverse-relations?itemId=abc123
+
+# Get all comments for a specific resource
+curl /api/data/content-types/resource/inverse-relations/comment?itemId=abc123&fieldName=resourceId
+```
+
+### Creating Items with Relations via API
+
+When creating content items via API, pass relation values based on the relation type:
+
+#### manyToMany / hasMany Relations (Array)
+
+```ts
+// Link to existing categories (array format)
+await fetch("/api/data/content/resource", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    slug: "my-resource",
+    data: {
+      name: "My Resource",
+      description: "A great resource",
+      categoryIds: [
+        { id: "existing-category-id-1" },
+        { id: "existing-category-id-2" },
+      ],
+    },
+  }),
+});
+
+// Create new categories inline using _new flag
+await fetch("/api/data/content/resource", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    slug: "my-resource",
+    data: {
+      name: "My Resource",
+      description: "A great resource",
+      categoryIds: [
+        { id: "existing-category-id" },
+        { _new: true, data: { name: "New Category", color: "#10b981" } },
+      ],
+    },
+  }),
+});
+```
+
+#### belongsTo Relations (Single Object)
+
+```ts
+// Create comment linked to a resource (single object format)
+await fetch("/api/data/content/comment", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    slug: "my-comment",
+    data: {
+      author: "John Doe",
+      content: "Great resource!",
+      resourceId: { id: "existing-resource-id" },  // Single object, not array
+    },
+  }),
+});
+```
+
+### Building a Directory
+
+Here's a complete example of building a resource directory with categories:
+
+```tsx title="app/directory/page.tsx"
+"use client"
+import { useContent } from "@btst/stack/plugins/cms/client/hooks"
+import type { CMSTypes } from "@/lib/cms-schemas"
+
+export default function DirectoryPage() {
+  const { items: resources } = useContent<CMSTypes, "resource">("resource")
+  const { items: categories } = useContent<CMSTypes, "category">("category")
+  const [search, setSearch] = useState("")
+
+  const filteredResources = resources.filter((r) =>
+    r.parsedData.name.toLowerCase().includes(search.toLowerCase())
+  )
+
+  return (
+    <div className="flex gap-8">
+      {/* Sidebar with categories */}
+      <aside className="w-64">
+        <h3>Categories</h3>
+        <ul>
+          {categories.map((cat) => (
+            <li key={cat.id}>
+              <Link href={`/directory/category/${cat.id}`}>
+                {cat.parsedData.name}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1">
+        <input
+          type="text"
+          placeholder="Search resources..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        
+        <div className="grid grid-cols-3 gap-4">
+          {filteredResources.map((resource) => (
+            <Link key={resource.id} href={`/directory/${resource.id}`}>
+              <h3>{resource.parsedData.name}</h3>
+              <p>{resource.parsedData.description}</p>
+            </Link>
+          ))}
+        </div>
+      </main>
+    </div>
+  )
+}
+```
 
 ## API Reference
 

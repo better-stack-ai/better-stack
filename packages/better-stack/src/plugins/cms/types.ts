@@ -69,6 +69,92 @@ export type ContentItemWithType = ContentItem & {
 };
 
 /**
+ * Content relation stored in the database (junction table)
+ * Links source content items to target content items for relationship fields
+ */
+export type ContentRelation = {
+	id: string;
+	/** The content item that has the relation field */
+	sourceId: string;
+	/** The content item being referenced */
+	targetId: string;
+	/** The field name in the source content type schema (e.g., "categoryIds") */
+	fieldName: string;
+	createdAt: Date;
+};
+
+// ========== Relation Field Types ==========
+
+/**
+ * Configuration for a relation field in schema metadata.
+ * Use with .meta({ fieldType: "relation", relation: {...} })
+ *
+ * The schema stores relation values as simple `{ id: string }` references.
+ * When `creatable: true`, the frontend sends `{ _new: true, data: {...} }`
+ * which the API processes before validation - creating new items and
+ * converting them to ID references.
+ *
+ * @example
+ * ```typescript
+ * const ResourceSchema = z.object({
+ *   // Simple array of ID references - API handles _new items before validation
+ *   categoryIds: z.array(z.object({ id: z.string() })).default([]).meta({
+ *     fieldType: "relation",
+ *     relation: {
+ *       type: "manyToMany",
+ *       targetType: "category",
+ *       displayField: "name",
+ *       creatable: true,
+ *     },
+ *   }),
+ * });
+ * ```
+ */
+export interface RelationConfig {
+	/** Relation type */
+	type: "belongsTo" | "hasMany" | "manyToMany";
+	/** Target content type slug */
+	targetType: string;
+	/** Field to display in the dropdown (e.g., "name", "title") */
+	displayField: string;
+	/** Allow creating new items inline via modal (default: false) */
+	creatable?: boolean;
+}
+
+/**
+ * Value for a relation field - either a reference to existing item or a new item to create.
+ *
+ * @example
+ * ```typescript
+ * // Reference to existing item
+ * const existing: RelationValue = { id: "abc123" };
+ *
+ * // New item to create on save
+ * const newItem: RelationValue = {
+ *   _new: true,
+ *   data: { name: "New Category", description: "..." }
+ * };
+ * ```
+ */
+export type RelationValue =
+	| { id: string }
+	| { _new: true; data: Record<string, unknown> };
+
+/**
+ * Represents an inverse relation (content types that reference this type via belongsTo)
+ */
+export interface InverseRelation {
+	/** The content type slug that has the belongsTo relation */
+	sourceType: string;
+	/** Display name of the source content type */
+	sourceTypeName: string;
+	/** The field name that contains the belongsTo relation */
+	fieldName: string;
+	/** Count of items with this relation (when itemId is provided) */
+	count: number;
+}
+
+/**
  * Serialized content type for API responses (dates as strings)
  */
 export interface SerializedContentType
@@ -96,6 +182,11 @@ export interface SerializedContentItemWithType<TData = Record<string, unknown>>
 	parsedData: TData;
 	/** Joined content type */
 	contentType?: SerializedContentType;
+	/**
+	 * Populated relation data (only present when using populated endpoints/hooks).
+	 * Keys are field names, values are arrays of related content items.
+	 */
+	_relations?: Record<string, SerializedContentItemWithType[]>;
 }
 
 /**

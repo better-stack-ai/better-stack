@@ -8,7 +8,7 @@ import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
 import { openai } from "@ai-sdk/openai"
 
 // Import shared CMS schemas - these are used for both backend validation and client type inference
-import { ProductSchema, TestimonialSchema } from "./cms-schemas"
+import { ProductSchema, TestimonialSchema, CategorySchema, ResourceSchema, CommentSchema } from "./cms-schemas"
 
 // Define blog hooks with proper types
 const blogHooks: BlogBackendHooks = {
@@ -91,6 +91,24 @@ const { handler, dbSchema } = betterStack({
                     name: "Testimonial", 
                     slug: "testimonial", 
                     schema: TestimonialSchema,
+                },
+                { 
+                    name: "Category", 
+                    slug: "category", 
+                    description: "Categories for organizing resources",
+                    schema: CategorySchema,
+                },
+                { 
+                    name: "Resource", 
+                    slug: "resource", 
+                    description: "Directory of resources with category relationships",
+                    schema: ResourceSchema,
+                },
+                { 
+                    name: "Comment", 
+                    slug: "comment", 
+                    description: "Comments on resources (one-to-many relationship)",
+                    schema: CommentSchema,
                 },
             ],
         }),

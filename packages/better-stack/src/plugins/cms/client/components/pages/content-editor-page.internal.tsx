@@ -11,6 +11,7 @@ import {
 	useUpdateContent,
 } from "../../hooks";
 import { ContentForm } from "../forms/content-form";
+import { InverseRelationsPanel } from "../inverse-relations-panel";
 import { EmptyState } from "../shared/empty-state";
 import { PageWrapper } from "../shared/page-wrapper";
 import { EditorSkeleton } from "../loading/editor-skeleton";
@@ -133,6 +134,11 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 					onSubmit={handleSubmit}
 					onCancel={() => navigate(`${basePath}/cms/${typeSlug}`)}
 				/>
+
+				{/* Show inverse relations panel when editing (not creating) */}
+				{isEditing && id && (
+					<InverseRelationsPanel contentTypeSlug={typeSlug} itemId={id} />
+				)}
 			</div>
 		</PageWrapper>
 	);
