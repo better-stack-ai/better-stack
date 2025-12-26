@@ -26,6 +26,7 @@ import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
  *
  * Uses useState + useEffect pattern to work correctly with SSR/hydration.
  * During SSR, returns empty object. After hydration, parses URL params.
+ * Also listens for popstate events to handle browser back/forward navigation.
  *
  * @example
  * URL: /cms/comment/new?prefill_resourceId=123&prefill_author=John
@@ -39,22 +40,33 @@ function usePrefillParams(): Record<string, string> {
 			return;
 		}
 
-		const params = new URLSearchParams(window.location.search);
-		const data: Record<string, string> = {};
+		const parseAndSetPrefillData = () => {
+			const params = new URLSearchParams(window.location.search);
+			const data: Record<string, string> = {};
 
-		for (const [key, value] of params.entries()) {
-			if (key.startsWith("prefill_")) {
-				const fieldName = key.slice("prefill_".length);
-				if (fieldName) {
-					data[fieldName] = value;
+			for (const [key, value] of params.entries()) {
+				if (key.startsWith("prefill_")) {
+					const fieldName = key.slice("prefill_".length);
+					if (fieldName) {
+						data[fieldName] = value;
+					}
 				}
 			}
-		}
 
-		// Only update state if we have prefill data to avoid unnecessary re-renders
-		if (Object.keys(data).length > 0) {
+			// Always update state to ensure stale data is cleared when navigating
+			// to a URL without prefill params (e.g., via browser back/forward)
 			setPrefillData(data);
-		}
+		};
+
+		// Parse on mount
+		parseAndSetPrefillData();
+
+		// Listen for popstate events (browser back/forward navigation)
+		window.addEventListener("popstate", parseAndSetPrefillData);
+
+		return () => {
+			window.removeEventListener("popstate", parseAndSetPrefillData);
+		};
 	}, []);
 
 	return prefillData;

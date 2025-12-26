@@ -884,10 +884,23 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 					}
 
 					// Validate data if provided (now with resolved relations)
+					// IMPORTANT: Merge with existing data BEFORE Zod validation to prevent
+					// schema defaults (like .default([])) from overwriting existing values
+					// for fields not included in the partial update.
 					let validatedData = dataWithResolvedRelations;
 					if (dataWithResolvedRelations) {
+						// Parse existing data and merge with update data
+						// Update data takes precedence, but existing fields are preserved
+						const existingData = existing.data
+							? (JSON.parse(existing.data) as Record<string, unknown>)
+							: {};
+						const mergedData = {
+							...existingData,
+							...dataWithResolvedRelations,
+						};
+
 						const zodSchema = getContentTypeZodSchema(contentType);
-						const validation = zodSchema.safeParse(dataWithResolvedRelations);
+						const validation = zodSchema.safeParse(mergedData);
 						if (!validation.success) {
 							throw ctx.error(400, {
 								message: "Validation failed",
