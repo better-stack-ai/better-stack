@@ -11,11 +11,15 @@ import type {
 	ContentType,
 	ContentItem,
 	ContentItemWithType,
+	ContentRelation,
 	CMSBackendConfig,
 	CMSHookContext,
 	SerializedContentType,
 	SerializedContentItem,
 	SerializedContentItemWithType,
+	RelationConfig,
+	RelationValue,
+	InverseRelation,
 } from "../types";
 import { listContentQuerySchema } from "../schemas";
 import { slugify } from "../utils";
@@ -194,6 +198,311 @@ async function syncContentTypes(
 function getContentTypeZodSchema(contentType: ContentType): z.ZodTypeAny {
 	const jsonSchema = JSON.parse(contentType.jsonSchema);
 	return formSchemaToZod(jsonSchema);
+}
+
+// ========== Relation Helpers ==========
+
+interface JsonSchemaProperty {
+	fieldType?: string;
+	relation?: RelationConfig;
+	type?: string;
+	items?: JsonSchemaProperty;
+	[key: string]: unknown;
+}
+
+interface JsonSchemaWithProperties {
+	properties?: Record<string, JsonSchemaProperty>;
+	[key: string]: unknown;
+}
+
+/**
+ * Extract relation field configurations from a content type's JSON Schema
+ */
+function extractRelationFields(
+	contentType: ContentType,
+): Record<string, RelationConfig> {
+	const jsonSchema = JSON.parse(
+		contentType.jsonSchema,
+	) as JsonSchemaWithProperties;
+	const properties = jsonSchema.properties || {};
+	const relationFields: Record<string, RelationConfig> = {};
+
+	for (const [fieldName, fieldSchema] of Object.entries(properties)) {
+		if (fieldSchema.fieldType === "relation" && fieldSchema.relation) {
+			relationFields[fieldName] = fieldSchema.relation;
+		}
+	}
+
+	return relationFields;
+}
+
+/**
+ * Check if a value is a "new" relation item (to be created)
+ */
+function isNewRelationValue(
+	value: unknown,
+): value is { _new: true; data: Record<string, unknown> } {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"_new" in value &&
+		(value as { _new: unknown })._new === true &&
+		"data" in value
+	);
+}
+
+/**
+ * Check if a value is an existing relation reference
+ */
+function isExistingRelationValue(value: unknown): value is { id: string } {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"id" in value &&
+		typeof (value as { id: unknown }).id === "string"
+	);
+}
+
+/**
+ * Process relation fields in content data:
+ * 1. Create new items from _new values
+ * 2. Extract IDs for junction table
+ * 3. Return cleaned data with only IDs stored
+ *
+ * Only processes relation fields that are explicitly present in the data.
+ * Fields not present in data are skipped entirely - this preserves existing
+ * relations during partial updates.
+ *
+ * @returns Object with processedData (for storing) and relationIds (for junction table sync)
+ */
+async function processRelationsInData(
+	adapter: Adapter,
+	contentType: ContentType,
+	data: Record<string, unknown>,
+	getContentTypeFn: (slug: string) => Promise<ContentType | null>,
+): Promise<{
+	processedData: Record<string, unknown>;
+	relationIds: Record<string, string[]>;
+}> {
+	const relationFields = extractRelationFields(contentType);
+	const processedData = { ...data };
+	const relationIds: Record<string, string[]> = {};
+
+	for (const [fieldName, relationConfig] of Object.entries(relationFields)) {
+		// Skip fields not present in the data - this preserves existing relations
+		// during partial updates. Only process fields explicitly included.
+		if (!(fieldName in data)) {
+			continue;
+		}
+
+		const fieldValue = data[fieldName];
+		// Field is present but null/undefined/empty - clear relations for this field
+		if (!fieldValue) {
+			relationIds[fieldName] = [];
+			continue;
+		}
+
+		// Get target content type
+		const targetContentType = await getContentTypeFn(relationConfig.targetType);
+		if (!targetContentType) {
+			throw new Error(
+				`Target content type "${relationConfig.targetType}" not found for relation field "${fieldName}"`,
+			);
+		}
+
+		const ids: string[] = [];
+
+		if (relationConfig.type === "belongsTo") {
+			// Single relation
+			const value = fieldValue as RelationValue;
+			if (isNewRelationValue(value)) {
+				// Create the new item
+				const newItem = await createRelatedItem(
+					adapter,
+					targetContentType,
+					value.data,
+				);
+				ids.push(newItem.id);
+				// Store only the ID in processedData
+				processedData[fieldName] = { id: newItem.id };
+			} else if (isExistingRelationValue(value)) {
+				ids.push(value.id);
+				// Keep as-is (already an ID reference)
+			}
+		} else {
+			// Array relation (hasMany / manyToMany)
+			const values = (
+				Array.isArray(fieldValue) ? fieldValue : []
+			) as RelationValue[];
+			const processedValues: Array<{ id: string }> = [];
+
+			for (const value of values) {
+				if (isNewRelationValue(value)) {
+					// Create the new item
+					const newItem = await createRelatedItem(
+						adapter,
+						targetContentType,
+						value.data,
+					);
+					ids.push(newItem.id);
+					processedValues.push({ id: newItem.id });
+				} else if (isExistingRelationValue(value)) {
+					ids.push(value.id);
+					processedValues.push({ id: value.id });
+				}
+			}
+
+			processedData[fieldName] = processedValues;
+		}
+
+		relationIds[fieldName] = ids;
+	}
+
+	return { processedData, relationIds };
+}
+
+/**
+ * Create a related content item
+ */
+async function createRelatedItem(
+	adapter: Adapter,
+	targetContentType: ContentType,
+	data: Record<string, unknown>,
+): Promise<ContentItem> {
+	// Generate slug from common name fields or use timestamp
+	const slug = slugify(
+		(data.slug as string) ||
+			(data.name as string) ||
+			(data.title as string) ||
+			`item-${Date.now()}`,
+	);
+
+	// Validate against target content type schema
+	const zodSchema = getContentTypeZodSchema(targetContentType);
+	const validation = zodSchema.safeParse(data);
+	if (!validation.success) {
+		throw new Error(
+			`Validation failed for new ${targetContentType.slug}: ${JSON.stringify(validation.error.issues)}`,
+		);
+	}
+
+	// Check for duplicate slug
+	const existing = await adapter.findOne<ContentItem>({
+		model: "contentItem",
+		where: [
+			{
+				field: "contentTypeId",
+				value: targetContentType.id,
+				operator: "eq" as const,
+			},
+			{ field: "slug", value: slug, operator: "eq" as const },
+		],
+	});
+
+	if (existing) {
+		// If item with same slug exists, return it instead of creating duplicate
+		return existing;
+	}
+
+	// Create the item
+	const item = await adapter.create<ContentItem>({
+		model: "contentItem",
+		data: {
+			contentTypeId: targetContentType.id,
+			slug,
+			data: JSON.stringify(validation.data),
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		},
+	});
+
+	return item;
+}
+
+/**
+ * Sync relations in the junction table for a content item.
+ *
+ * Only updates relations for fields explicitly present in relationIds.
+ * Fields not in relationIds are left unchanged - this preserves existing
+ * relations during partial updates.
+ */
+async function syncRelations(
+	adapter: Adapter,
+	sourceId: string,
+	relationIds: Record<string, string[]>,
+): Promise<void> {
+	// Only sync fields that are explicitly included in relationIds
+	for (const [fieldName, targetIds] of Object.entries(relationIds)) {
+		// Delete existing relations for this specific field only
+		await adapter.delete({
+			model: "contentRelation",
+			where: [
+				{ field: "sourceId", value: sourceId, operator: "eq" as const },
+				{ field: "fieldName", value: fieldName, operator: "eq" as const },
+			],
+		});
+
+		// Create new relations for this field
+		for (const targetId of targetIds) {
+			await adapter.create<ContentRelation>({
+				model: "contentRelation",
+				data: {
+					sourceId,
+					targetId,
+					fieldName,
+					createdAt: new Date(),
+				},
+			});
+		}
+	}
+}
+
+/**
+ * Populate relations for a content item by fetching related items
+ */
+async function populateRelations(
+	adapter: Adapter,
+	item: ContentItemWithType,
+): Promise<Record<string, SerializedContentItemWithType[]>> {
+	const relations: Record<string, SerializedContentItemWithType[]> = {};
+
+	// Get all relations for this item
+	const contentRelations = await adapter.findMany<ContentRelation>({
+		model: "contentRelation",
+		where: [{ field: "sourceId", value: item.id, operator: "eq" as const }],
+	});
+
+	// Group by field name
+	const relationsByField: Record<string, string[]> = {};
+	for (const rel of contentRelations) {
+		if (!relationsByField[rel.fieldName]) {
+			relationsByField[rel.fieldName] = [];
+		}
+		relationsByField[rel.fieldName]!.push(rel.targetId);
+	}
+
+	// Fetch related items for each field
+	for (const [fieldName, targetIds] of Object.entries(relationsByField)) {
+		if (targetIds.length === 0) {
+			relations[fieldName] = [];
+			continue;
+		}
+
+		const relatedItems: SerializedContentItemWithType[] = [];
+		for (const targetId of targetIds) {
+			const relatedItem = await adapter.findOne<ContentItemWithType>({
+				model: "contentItem",
+				where: [{ field: "id", value: targetId, operator: "eq" as const }],
+				join: { contentType: true },
+			});
+			if (relatedItem) {
+				relatedItems.push(serializeContentItemWithType(relatedItem));
+			}
+		}
+		relations[fieldName] = relatedItems;
+	}
+
+	return relations;
 }
 
 /**
@@ -420,9 +729,19 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 						throw ctx.error(404, { message: "Content type not found" });
 					}
 
-					// Validate data against content type schema
+					// Process relation fields FIRST - this creates new items from _new values
+					// and converts them to ID references before Zod validation
+					const { processedData: dataWithResolvedRelations, relationIds } =
+						await processRelationsInData(
+							adapter,
+							contentType,
+							data as Record<string, unknown>,
+							getContentType,
+						);
+
+					// Validate data against content type schema (now with resolved relations)
 					const zodSchema = getContentTypeZodSchema(contentType);
-					const validation = zodSchema.safeParse(data);
+					const validation = zodSchema.safeParse(dataWithResolvedRelations);
 					if (!validation.success) {
 						throw ctx.error(400, {
 							message: "Validation failed",
@@ -448,19 +767,15 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 						});
 					}
 
-					// Call before hook - may modify data or deny operation
-					let finalData = validation.data;
+					// Call before hook - may deny operation
+					const processedData = validation.data as Record<string, unknown>;
 					if (config.hooks?.onBeforeCreate) {
 						const result = await config.hooks.onBeforeCreate(
-							validation.data as Record<string, unknown>,
+							processedData,
 							context,
 						);
 						if (result === false) {
 							throw ctx.error(403, { message: "Create operation denied" });
-						}
-						// Use returned data if provided (hook can modify data)
-						if (result && typeof result === "object") {
-							finalData = result;
 						}
 					}
 
@@ -469,11 +784,14 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 						data: {
 							contentTypeId: contentType.id,
 							slug,
-							data: JSON.stringify(finalData),
+							data: JSON.stringify(processedData),
 							createdAt: new Date(),
 							updatedAt: new Date(),
 						},
 					});
+
+					// Sync relations to junction table
+					await syncRelations(adapter, item.id, relationIds);
 
 					const serialized = serializeContentItem(item);
 
@@ -484,7 +802,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 
 					return {
 						...serialized,
-						parsedData: finalData,
+						parsedData: processedData,
 					};
 				},
 			);
@@ -550,11 +868,39 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 						}
 					}
 
-					// Validate data if provided
-					let validatedData = data;
+					// Process relation fields FIRST if data is being updated
+					// This creates new items from _new values before Zod validation
+					let dataWithResolvedRelations: Record<string, unknown> | undefined;
+					let relationIds: Record<string, string[]> | undefined;
 					if (data) {
+						const result = await processRelationsInData(
+							adapter,
+							contentType,
+							data as Record<string, unknown>,
+							getContentType,
+						);
+						dataWithResolvedRelations = result.processedData;
+						relationIds = result.relationIds;
+					}
+
+					// Validate data if provided (now with resolved relations)
+					// IMPORTANT: Merge with existing data BEFORE Zod validation to prevent
+					// schema defaults (like .default([])) from overwriting existing values
+					// for fields not included in the partial update.
+					let validatedData = dataWithResolvedRelations;
+					if (dataWithResolvedRelations) {
+						// Parse existing data and merge with update data
+						// Update data takes precedence, but existing fields are preserved
+						const existingData = existing.data
+							? (JSON.parse(existing.data) as Record<string, unknown>)
+							: {};
+						const mergedData = {
+							...existingData,
+							...dataWithResolvedRelations,
+						};
+
 						const zodSchema = getContentTypeZodSchema(contentType);
-						const validation = zodSchema.safeParse(data);
+						const validation = zodSchema.safeParse(mergedData);
 						if (!validation.success) {
 							throw ctx.error(400, {
 								message: "Validation failed",
@@ -564,8 +910,8 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 						validatedData = validation.data as Record<string, unknown>;
 					}
 
-					// Call before hook - may modify data or deny operation
-					let finalData = validatedData;
+					// Call before hook - may deny operation
+					const processedData = validatedData;
 					if (config.hooks?.onBeforeUpdate && validatedData) {
 						const result = await config.hooks.onBeforeUpdate(
 							id,
@@ -575,17 +921,18 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 						if (result === false) {
 							throw ctx.error(403, { message: "Update operation denied" });
 						}
-						// Use returned data if provided (hook can modify data)
-						if (result && typeof result === "object") {
-							finalData = result;
-						}
+					}
+
+					// Sync relations to junction table if data was updated
+					if (relationIds) {
+						await syncRelations(adapter, id, relationIds);
 					}
 
 					const updateData: Partial<ContentItem> = {
 						updatedAt: new Date(),
 					};
 					if (slug) updateData.slug = slug;
-					if (finalData) updateData.data = JSON.stringify(finalData);
+					if (processedData) updateData.data = JSON.stringify(processedData);
 
 					await adapter.update({
 						model: "contentItem",
@@ -660,6 +1007,301 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 				},
 			);
 
+			// ========== Relation Endpoints ==========
+
+			const getContentItemPopulated = createEndpoint(
+				"/content/:typeSlug/:id/populated",
+				{
+					method: "GET",
+					params: z.object({ typeSlug: z.string(), id: z.string() }),
+				},
+				async (ctx) => {
+					const { typeSlug, id } = ctx.params;
+
+					const contentType = await getContentType(typeSlug);
+					if (!contentType) {
+						throw ctx.error(404, { message: "Content type not found" });
+					}
+
+					const item = await adapter.findOne<ContentItemWithType>({
+						model: "contentItem",
+						where: [{ field: "id", value: id, operator: "eq" as const }],
+						join: { contentType: true },
+					});
+
+					if (!item || item.contentTypeId !== contentType.id) {
+						throw ctx.error(404, { message: "Content item not found" });
+					}
+
+					// Populate relations
+					const _relations = await populateRelations(adapter, item);
+
+					return {
+						...serializeContentItemWithType(item),
+						_relations,
+					};
+				},
+			);
+
+			const listContentByRelation = createEndpoint(
+				"/content/:typeSlug/by-relation",
+				{
+					method: "GET",
+					params: z.object({ typeSlug: z.string() }),
+					query: z.object({
+						field: z.string(),
+						targetId: z.string(),
+						limit: z.coerce.number().min(1).max(100).optional().default(20),
+						offset: z.coerce.number().min(0).optional().default(0),
+					}),
+				},
+				async (ctx) => {
+					const { typeSlug } = ctx.params;
+					const { field, targetId, limit, offset } = ctx.query;
+
+					const contentType = await getContentType(typeSlug);
+					if (!contentType) {
+						throw ctx.error(404, { message: "Content type not found" });
+					}
+
+					// Find all content relations where the target matches
+					const contentRelations = await adapter.findMany<ContentRelation>({
+						model: "contentRelation",
+						where: [
+							{ field: "targetId", value: targetId, operator: "eq" as const },
+							{ field: "fieldName", value: field, operator: "eq" as const },
+						],
+					});
+
+					// Get unique source IDs that belong to this content type
+					const sourceIds = [
+						...new Set(contentRelations.map((r) => r.sourceId)),
+					];
+
+					if (sourceIds.length === 0) {
+						return {
+							items: [],
+							total: 0,
+							limit,
+							offset,
+						};
+					}
+
+					// Fetch all matching items (filtering by content type)
+					const allItems: ContentItemWithType[] = [];
+					for (const sourceId of sourceIds) {
+						const item = await adapter.findOne<ContentItemWithType>({
+							model: "contentItem",
+							where: [
+								{ field: "id", value: sourceId, operator: "eq" as const },
+								{
+									field: "contentTypeId",
+									value: contentType.id,
+									operator: "eq" as const,
+								},
+							],
+							join: { contentType: true },
+						});
+						if (item) {
+							allItems.push(item);
+						}
+					}
+
+					// Sort by createdAt desc
+					allItems.sort(
+						(a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+					);
+
+					const total = allItems.length;
+					const paginatedItems = allItems.slice(offset, offset + limit);
+
+					return {
+						items: paginatedItems.map(serializeContentItemWithType),
+						total,
+						limit,
+						offset,
+					};
+				},
+			);
+
+			// ========== Inverse Relation Endpoints ==========
+
+			const getInverseRelations = createEndpoint(
+				"/content-types/:slug/inverse-relations",
+				{
+					method: "GET",
+					params: z.object({ slug: z.string() }),
+					query: z.object({
+						itemId: z.string().optional(),
+					}),
+				},
+				async (ctx) => {
+					const { slug } = ctx.params;
+					const { itemId } = ctx.query;
+
+					await ensureSynced();
+
+					// Get the target content type
+					const targetContentType = await getContentType(slug);
+					if (!targetContentType) {
+						throw ctx.error(404, { message: "Content type not found" });
+					}
+
+					// Find all content types that have belongsTo relations pointing to this type
+					const allContentTypes = await adapter.findMany<ContentType>({
+						model: "contentType",
+					});
+
+					const inverseRelations: InverseRelation[] = [];
+
+					for (const contentType of allContentTypes) {
+						const relationFields = extractRelationFields(contentType);
+
+						for (const [fieldName, relationConfig] of Object.entries(
+							relationFields,
+						)) {
+							// Only include belongsTo relations that point to the target type
+							if (
+								relationConfig.type === "belongsTo" &&
+								relationConfig.targetType === slug
+							) {
+								let count = 0;
+
+								// If itemId is provided, count items that reference this specific item
+								if (itemId) {
+									const relations = await adapter.findMany<ContentRelation>({
+										model: "contentRelation",
+										where: [
+											{
+												field: "targetId",
+												value: itemId,
+												operator: "eq" as const,
+											},
+											{
+												field: "fieldName",
+												value: fieldName,
+												operator: "eq" as const,
+											},
+										],
+									});
+									// Filter to only include relations from this content type
+									const itemIds = relations.map((r) => r.sourceId);
+									for (const sourceId of itemIds) {
+										const item = await adapter.findOne<ContentItem>({
+											model: "contentItem",
+											where: [
+												{
+													field: "id",
+													value: sourceId,
+													operator: "eq" as const,
+												},
+												{
+													field: "contentTypeId",
+													value: contentType.id,
+													operator: "eq" as const,
+												},
+											],
+										});
+										if (item) count++;
+									}
+								}
+
+								inverseRelations.push({
+									sourceType: contentType.slug,
+									sourceTypeName: contentType.name,
+									fieldName,
+									count,
+								});
+							}
+						}
+					}
+
+					return { inverseRelations };
+				},
+			);
+
+			const listInverseRelationItems = createEndpoint(
+				"/content-types/:slug/inverse-relations/:sourceType",
+				{
+					method: "GET",
+					params: z.object({
+						slug: z.string(),
+						sourceType: z.string(),
+					}),
+					query: z.object({
+						itemId: z.string(),
+						fieldName: z.string(),
+						limit: z.coerce.number().min(1).max(100).optional().default(20),
+						offset: z.coerce.number().min(0).optional().default(0),
+					}),
+				},
+				async (ctx) => {
+					const { slug, sourceType } = ctx.params;
+					const { itemId, fieldName, limit, offset } = ctx.query;
+
+					await ensureSynced();
+
+					// Verify target content type exists
+					const targetContentType = await getContentType(slug);
+					if (!targetContentType) {
+						throw ctx.error(404, { message: "Target content type not found" });
+					}
+
+					// Verify source content type exists
+					const sourceContentType = await getContentType(sourceType);
+					if (!sourceContentType) {
+						throw ctx.error(404, { message: "Source content type not found" });
+					}
+
+					// Find all relations pointing to this item
+					const relations = await adapter.findMany<ContentRelation>({
+						model: "contentRelation",
+						where: [
+							{ field: "targetId", value: itemId, operator: "eq" as const },
+							{ field: "fieldName", value: fieldName, operator: "eq" as const },
+						],
+					});
+
+					// Get unique source IDs
+					const sourceIds = [...new Set(relations.map((r) => r.sourceId))];
+
+					// Fetch all matching items from the source content type
+					const allItems: ContentItemWithType[] = [];
+					for (const sourceId of sourceIds) {
+						const item = await adapter.findOne<ContentItemWithType>({
+							model: "contentItem",
+							where: [
+								{ field: "id", value: sourceId, operator: "eq" as const },
+								{
+									field: "contentTypeId",
+									value: sourceContentType.id,
+									operator: "eq" as const,
+								},
+							],
+							join: { contentType: true },
+						});
+						if (item) {
+							allItems.push(item);
+						}
+					}
+
+					// Sort by createdAt desc
+					allItems.sort(
+						(a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+					);
+
+					const total = allItems.length;
+					const paginatedItems = allItems.slice(offset, offset + limit);
+
+					return {
+						items: paginatedItems.map(serializeContentItemWithType),
+						total,
+						limit,
+						offset,
+					};
+				},
+			);
+
 			return {
 				listContentTypes,
 				getContentTypeBySlug,
@@ -668,6 +1310,10 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 				createContentItem,
 				updateContentItem,
 				deleteContentItem,
+				getContentItemPopulated,
+				listContentByRelation,
+				getInverseRelations,
+				listInverseRelationItems,
 			};
 		},
 	});

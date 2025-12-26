@@ -7,6 +7,9 @@ export default [
     ]),
     route("form-demo/:slug", "routes/form-demo.$slug.tsx"),
     route("cms-example", "routes/cms-example.tsx"),
+    route("directory", "routes/directory/index.tsx"),
+    route("directory/category/:categoryId", "routes/directory/category.$categoryId.tsx"),
+    route("directory/:id", "routes/directory/resource.$id.tsx"),
     route("api/data/*", "routes/api/data/route.ts"),
     route("sitemap.xml", "routes/sitemap.xml.ts"),
 ] satisfies RouteConfig;

@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { z } from "zod";
-import { toast } from "sonner";
 import { SteppedAutoForm } from "@workspace/ui/components/auto-form/stepped-auto-form";
 import type {
 	FieldConfig,
@@ -15,10 +14,11 @@ import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
-import type { SerializedContentType } from "../../../types";
+import type { SerializedContentType, RelationConfig } from "../../../types";
 import { slugify } from "../../../utils";
 import { CMS_LOCALIZATION } from "../../localization";
 import { CMSFileUpload } from "./file-upload";
+import { RelationField } from "./relation-field";
 
 interface ContentFormProps {
 	contentType: SerializedContentType;
@@ -43,6 +43,12 @@ interface ContentFormProps {
  * @param uploadImage - The uploadImage function from overrides (for file fields)
  * @param fieldComponents - Custom field components from overrides
  */
+interface JsonSchemaProperty {
+	fieldType?: string;
+	relation?: RelationConfig;
+	[key: string]: unknown;
+}
+
 function buildFieldConfigFromJsonSchema(
 	jsonSchema: Record<string, unknown>,
 	uploadImage?: (file: File) => Promise<string>,
@@ -54,17 +60,17 @@ function buildFieldConfigFromJsonSchema(
 	// Get base config from shared utility (handles fieldType from JSON Schema)
 	const baseConfig = buildFieldConfigBase(jsonSchema, fieldComponents);
 
-	// Apply CMS-specific handling for "file" fieldType ONLY if no custom component exists
+	// Apply CMS-specific handling for special fieldTypes ONLY if no custom component exists
 	// Custom fieldComponents take priority - don't override if user provided one
 	const properties = jsonSchema.properties as Record<
 		string,
-		{ fieldType?: string }
+		JsonSchemaProperty
 	>;
 
 	if (!properties) return baseConfig;
 
 	for (const [key, prop] of Object.entries(properties)) {
-		// Only handle "file" fieldType when there's NO custom component for "file"
+		// Handle "file" fieldType when there's NO custom component for "file"
 		if (prop.fieldType === "file" && !fieldComponents?.["file"]) {
 			// Use CMSFileUpload as the default file component
 			if (!uploadImage) {
@@ -86,6 +92,21 @@ function buildFieldConfigFromJsonSchema(
 					),
 				};
 			}
+		}
+
+		// Handle "relation" fieldType when there's NO custom component for "relation"
+		if (
+			prop.fieldType === "relation" &&
+			prop.relation &&
+			!fieldComponents?.["relation"]
+		) {
+			const relationConfig = prop.relation;
+			baseConfig[key] = {
+				...baseConfig[key],
+				fieldType: (props: AutoFormInputComponentProps) => (
+					<RelationField {...props} relation={relationConfig} />
+				),
+			};
 		}
 	}
 
@@ -139,14 +160,28 @@ export function ContentForm({
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [formData, setFormData] =
 		useState<Record<string, unknown>>(initialData);
+	const [slugError, setSlugError] = useState<string | null>(null);
+	const [submitError, setSubmitError] = useState<string | null>(null);
 
-	// Sync formData with initialData when it changes (e.g., when editing an existing item)
-	// This is necessary because useState only uses the initial value once on mount
+	// Track if we've already synced prefill data to avoid overwriting user input
+	const hasSyncedPrefillRef = useRef(false);
+
+	// Sync formData with initialData when it changes
+	// This handles both:
+	// 1. Editing mode: always sync when item data is loaded (isEditing=true)
+	// 2. Create mode: only sync prefill data ONCE to avoid overwriting user input
+	// useState only uses the initial value on mount, so we need this effect for updates
 	useEffect(() => {
-		// Only sync when we're in editing mode and initialData has content
-		// This ensures we properly load existing item data into the form
-		if (isEditing && Object.keys(initialData).length > 0) {
+		const hasData = Object.keys(initialData).length > 0;
+		// In edit mode, always sync (user is loading existing data)
+		// In create mode, only sync prefill data once
+		const shouldSync = hasData && (isEditing || !hasSyncedPrefillRef.current);
+
+		if (shouldSync) {
 			setFormData(initialData);
+			if (!isEditing) {
+				hasSyncedPrefillRef.current = true;
+			}
 		}
 	}, [initialData, isEditing]);
 
@@ -204,23 +239,21 @@ export function ContentForm({
 
 	// Handle form submission
 	const handleSubmit = async (data: Record<string, unknown>) => {
+		setSlugError(null);
+		setSubmitError(null);
+
 		if (!slug.trim()) {
-			toast.error("Slug is required");
+			setSlugError("Slug is required");
 			return;
 		}
 
 		setIsSubmitting(true);
 		try {
 			await onSubmit({ slug, data });
-			toast.success(
-				isEditing
-					? localization.CMS_TOAST_UPDATE_SUCCESS
-					: localization.CMS_TOAST_CREATE_SUCCESS,
-			);
 		} catch (error) {
 			const message =
 				error instanceof Error ? error.message : localization.CMS_TOAST_ERROR;
-			toast.error(message);
+			setSubmitError(message);
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -245,6 +278,7 @@ export function ContentForm({
 					value={slug}
 					onChange={(e) => {
 						setSlug(e.target.value);
+						setSlugError(null);
 						if (!isEditing) {
 							setSlugManuallyEdited(true);
 						}
@@ -256,10 +290,18 @@ export function ContentForm({
 							: "Enter slug..."
 					}
 				/>
+				{slugError && <p className="text-sm text-destructive">{slugError}</p>}
 				<p className="text-sm text-muted-foreground">
 					{localization.CMS_LABEL_SLUG_DESCRIPTION}
 				</p>
 			</div>
+
+			{/* Submit error message */}
+			{submitError && (
+				<div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
+					<p className="text-sm text-destructive">{submitError}</p>
+				</div>
+			)}
 
 			{/* Dynamic form from Zod schema */}
 			{/* Uses SteppedAutoForm which automatically handles both single-step and multi-step content types */}

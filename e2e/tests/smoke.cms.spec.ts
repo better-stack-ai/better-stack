@@ -66,9 +66,9 @@ test.describe("CMS Hooks Example", () => {
 		await page.locator('[role="option"]').first().click();
 
 		await page.locator('button[type="submit"]').click();
-		await expect(page.locator("text=created successfully")).toBeVisible({
-			timeout: 10000,
-		});
+
+		// Wait for redirect to list page (indicates success)
+		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 10000 });
 
 		// Now navigate to the cms-example page
 		await page.goto("/cms-example", { waitUntil: "networkidle" });
@@ -258,13 +258,8 @@ test.describe("CMS Plugin", () => {
 		await expect(submitButton).toBeVisible();
 		await submitButton.click();
 
-		// Should show success toast
-		await expect(page.locator("text=created successfully")).toBeVisible({
-			timeout: 10000,
-		});
-
-		// Should redirect to list page
-		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 5000 });
+		// Should redirect to list page on success
+		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 10000 });
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
 			[],
@@ -293,12 +288,9 @@ test.describe("CMS Plugin", () => {
 		await page.locator('[role="option"]').first().click();
 
 		await page.locator('button[type="submit"]').click();
-		await expect(page.locator("text=created successfully")).toBeVisible({
-			timeout: 10000,
-		});
 
-		// Wait for redirect to list page
-		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 5000 });
+		// Wait for redirect to list page on success
+		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 10000 });
 		await expect(page.locator('[data-testid="cms-list-page"]')).toBeVisible();
 
 		// Click edit button on our item (find row with our slug)
@@ -338,12 +330,9 @@ test.describe("CMS Plugin", () => {
 		await page.locator('[role="option"]').first().click();
 
 		await page.locator('button[type="submit"]').click();
-		await expect(page.locator("text=created successfully")).toBeVisible({
-			timeout: 10000,
-		});
 
-		// Wait for redirect to list page
-		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 5000 });
+		// Wait for redirect to list page on success
+		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 10000 });
 		await expect(page.locator('[data-testid="cms-list-page"]')).toBeVisible();
 
 		// Click delete button on our item
@@ -351,13 +340,8 @@ test.describe("CMS Plugin", () => {
 		const row = page.locator(`tr:has-text("${expectedSlug}")`);
 		await row.locator("button:has(svg.lucide-trash-2)").click();
 
-		// Should show success toast
-		await expect(page.locator("text=deleted successfully")).toBeVisible({
-			timeout: 10000,
-		});
-
-		// Item should no longer be visible
-		await expect(row).not.toBeVisible();
+		// Item should no longer be visible after deletion
+		await expect(row).not.toBeVisible({ timeout: 10000 });
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
 			[],
@@ -591,13 +575,8 @@ test.describe("CMS Image Upload", () => {
 		// Submit the form
 		await page.locator('button[type="submit"]').click();
 
-		// Should show success toast
-		await expect(page.locator("text=created successfully")).toBeVisible({
-			timeout: 10000,
-		});
-
-		// Should redirect to list page
-		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 5000 });
+		// Should redirect to list page on success
+		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 10000 });
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
 			[],
@@ -643,12 +622,9 @@ test.describe("CMS Image Upload", () => {
 
 		// Submit to create
 		await page.locator('button[type="submit"]').click();
-		await expect(page.locator("text=created successfully")).toBeVisible({
-			timeout: 10000,
-		});
 
-		// Wait for redirect to list page
-		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 5000 });
+		// Wait for redirect to list page on success
+		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 10000 });
 		await expect(page.locator('[data-testid="cms-list-page"]')).toBeVisible();
 
 		// Click edit button on our item

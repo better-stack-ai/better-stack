@@ -722,3 +722,347 @@ export function useDeleteContent(typeSlug: string) {
 		},
 	});
 }
+
+// ========== Relation Hooks ==========
+
+/**
+ * Content item with populated relations
+ */
+export interface ContentItemWithRelations<TData = Record<string, unknown>>
+	extends SerializedContentItemWithType<TData> {
+	_relations?: Record<string, SerializedContentItemWithType[]>;
+}
+
+/**
+ * Hook for fetching a content item with its relations populated.
+ * Use this when you need to display related items alongside the main item.
+ *
+ * @template TMap - A type map of content type slugs to their data types
+ * @template TSlug - The content type slug (inferred from typeSlug parameter)
+ *
+ * @example
+ * ```typescript
+ * type MyCMSTypes = {
+ *   resource: { name: string; categoryIds: Array<{ id: string }> }
+ *   category: { name: string }
+ * }
+ * const { item } = useContentItemPopulated<MyCMSTypes, "resource">("resource", "some-id")
+ * // item?._relations?.categoryIds contains populated category items
+ * ```
+ */
+export function useContentItemPopulated<
+	TMap extends Record<string, Record<string, unknown>> = Record<
+		string,
+		Record<string, unknown>
+	>,
+	TSlug extends keyof TMap = keyof TMap,
+>(
+	typeSlug: TSlug & string,
+	id: string,
+): {
+	item: ContentItemWithRelations<TMap[TSlug]> | null;
+	isLoading: boolean;
+	error: Error | null;
+	refetch: () => void;
+} {
+	const { apiBaseURL, apiBasePath, headers } =
+		usePluginOverrides<CMSPluginOverrides>("cms");
+	const client = createApiClient<CMSApiRouter>({
+		baseURL: apiBaseURL,
+		basePath: apiBasePath,
+	});
+
+	const { data, isLoading, error, refetch } = useQuery({
+		queryKey: ["cmsContent", typeSlug, id, "populated"],
+		queryFn: async () => {
+			const response: unknown = await client(
+				"/content/:typeSlug/:id/populated",
+				{
+					method: "GET",
+					params: { typeSlug, id },
+					headers,
+				},
+			);
+			if (isErrorResponse(response)) {
+				throw toError(response.error);
+			}
+			return (response as { data?: unknown }).data as ContentItemWithRelations<
+				TMap[TSlug]
+			>;
+		},
+		...SHARED_QUERY_CONFIG,
+		enabled: !!typeSlug && !!id,
+	});
+
+	return {
+		item: data ?? null,
+		isLoading,
+		error,
+		refetch,
+	};
+}
+
+/**
+ * Suspense variant of useContentItemPopulated
+ */
+export function useSuspenseContentItemPopulated<
+	TMap extends Record<string, Record<string, unknown>> = Record<
+		string,
+		Record<string, unknown>
+	>,
+	TSlug extends keyof TMap = keyof TMap,
+>(
+	typeSlug: TSlug & string,
+	id: string,
+): {
+	item: ContentItemWithRelations<TMap[TSlug]> | null;
+	refetch: () => Promise<unknown>;
+} {
+	const { apiBaseURL, apiBasePath, headers } =
+		usePluginOverrides<CMSPluginOverrides>("cms");
+	const client = createApiClient<CMSApiRouter>({
+		baseURL: apiBaseURL,
+		basePath: apiBasePath,
+	});
+
+	const { data, refetch, error, isFetching } = useSuspenseQuery({
+		queryKey: ["cmsContent", typeSlug, id, "populated"],
+		queryFn: async () => {
+			const response: unknown = await client(
+				"/content/:typeSlug/:id/populated",
+				{
+					method: "GET",
+					params: { typeSlug, id },
+					headers,
+				},
+			);
+			if (isErrorResponse(response)) {
+				throw toError(response.error);
+			}
+			return (response as { data?: unknown }).data as ContentItemWithRelations<
+				TMap[TSlug]
+			>;
+		},
+		...SHARED_QUERY_CONFIG,
+	});
+
+	if (error && !isFetching) {
+		throw error;
+	}
+
+	return {
+		item: data ?? null,
+		refetch,
+	};
+}
+
+/**
+ * Options for useContentByRelation hook
+ */
+export interface UseContentByRelationOptions {
+	/** Number of items per page (default: 20) */
+	limit?: number;
+	/** Whether to enable the query (default: true) */
+	enabled?: boolean;
+}
+
+/**
+ * Hook for fetching content items that have a specific relation.
+ * Useful for "filter by category" functionality.
+ *
+ * @template TMap - A type map of content type slugs to their data types
+ * @template TSlug - The content type slug (inferred from typeSlug parameter)
+ *
+ * @example
+ * ```typescript
+ * // Get all resources in a specific category
+ * const { items } = useContentByRelation("resource", "categoryIds", categoryId)
+ * ```
+ */
+export function useContentByRelation<
+	TMap extends Record<string, Record<string, unknown>> = Record<
+		string,
+		Record<string, unknown>
+	>,
+	TSlug extends keyof TMap = keyof TMap,
+>(
+	typeSlug: TSlug & string,
+	fieldName: string,
+	targetId: string,
+	options: UseContentByRelationOptions = {},
+): {
+	items: SerializedContentItemWithType<TMap[TSlug]>[];
+	total: number;
+	isLoading: boolean;
+	error: Error | null;
+	loadMore: () => void;
+	hasMore: boolean;
+	isLoadingMore: boolean;
+	refetch: () => void;
+} {
+	const { apiBaseURL, apiBasePath, headers } =
+		usePluginOverrides<CMSPluginOverrides>("cms");
+	const client = createApiClient<CMSApiRouter>({
+		baseURL: apiBaseURL,
+		basePath: apiBasePath,
+	});
+	const { limit = 20, enabled = true } = options;
+
+	const {
+		data,
+		isLoading,
+		error,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+		refetch,
+	} = useInfiniteQuery({
+		queryKey: ["cmsContent", typeSlug, "by-relation", fieldName, targetId],
+		queryFn: async ({ pageParam = 0 }) => {
+			const response: unknown = await client("/content/:typeSlug/by-relation", {
+				method: "GET",
+				params: { typeSlug },
+				query: { field: fieldName, targetId, limit, offset: pageParam },
+				headers,
+			});
+			if (isErrorResponse(response)) {
+				throw toError(response.error);
+			}
+			return (response as { data?: unknown }).data as PaginatedContentItems<
+				TMap[TSlug]
+			>;
+		},
+		...SHARED_QUERY_CONFIG,
+		initialPageParam: 0,
+		getNextPageParam: (lastPage, allPages) => {
+			if (!lastPage || typeof lastPage !== "object") return undefined;
+			const items = (lastPage as PaginatedContentItems)?.items;
+			if (!Array.isArray(items) || items.length < limit) return undefined;
+			const loadedCount = (allPages || []).reduce(
+				(sum, page) =>
+					sum +
+					(Array.isArray((page as PaginatedContentItems)?.items)
+						? (page as PaginatedContentItems).items.length
+						: 0),
+				0,
+			);
+			const total = (lastPage as PaginatedContentItems)?.total ?? 0;
+			if (loadedCount >= total) return undefined;
+			return loadedCount;
+		},
+		enabled: enabled && !!typeSlug && !!fieldName && !!targetId,
+	});
+
+	const pages = (
+		data as InfiniteData<PaginatedContentItems<TMap[TSlug]>, number> | undefined
+	)?.pages;
+	const items = (pages?.flatMap((page) =>
+		Array.isArray(page?.items) ? page.items : [],
+	) ?? []) as SerializedContentItemWithType<TMap[TSlug]>[];
+	const total = pages?.[0]?.total ?? 0;
+
+	return {
+		items,
+		total,
+		isLoading,
+		error,
+		loadMore: fetchNextPage,
+		hasMore: !!hasNextPage,
+		isLoadingMore: isFetchingNextPage,
+		refetch,
+	};
+}
+
+/**
+ * Suspense variant of useContentByRelation
+ */
+export function useSuspenseContentByRelation<
+	TMap extends Record<string, Record<string, unknown>> = Record<
+		string,
+		Record<string, unknown>
+	>,
+	TSlug extends keyof TMap = keyof TMap,
+>(
+	typeSlug: TSlug & string,
+	fieldName: string,
+	targetId: string,
+	options: UseContentByRelationOptions = {},
+): {
+	items: SerializedContentItemWithType<TMap[TSlug]>[];
+	total: number;
+	loadMore: () => Promise<unknown>;
+	hasMore: boolean;
+	isLoadingMore: boolean;
+	refetch: () => Promise<unknown>;
+} {
+	const { apiBaseURL, apiBasePath, headers } =
+		usePluginOverrides<CMSPluginOverrides>("cms");
+	const client = createApiClient<CMSApiRouter>({
+		baseURL: apiBaseURL,
+		basePath: apiBasePath,
+	});
+	const { limit = 20 } = options;
+
+	const {
+		data,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+		refetch,
+		error,
+		isFetching,
+	} = useSuspenseInfiniteQuery({
+		queryKey: ["cmsContent", typeSlug, "by-relation", fieldName, targetId],
+		queryFn: async ({ pageParam = 0 }) => {
+			const response: unknown = await client("/content/:typeSlug/by-relation", {
+				method: "GET",
+				params: { typeSlug },
+				query: { field: fieldName, targetId, limit, offset: pageParam },
+				headers,
+			});
+			if (isErrorResponse(response)) {
+				throw toError(response.error);
+			}
+			return (response as { data?: unknown }).data as PaginatedContentItems<
+				TMap[TSlug]
+			>;
+		},
+		...SHARED_QUERY_CONFIG,
+		initialPageParam: 0,
+		getNextPageParam: (lastPage, allPages) => {
+			if (!lastPage || typeof lastPage !== "object") return undefined;
+			const items = (lastPage as PaginatedContentItems)?.items;
+			if (!Array.isArray(items) || items.length < limit) return undefined;
+			const loadedCount = (allPages || []).reduce(
+				(sum, page) =>
+					sum +
+					(Array.isArray((page as PaginatedContentItems)?.items)
+						? (page as PaginatedContentItems).items.length
+						: 0),
+				0,
+			);
+			const total = (lastPage as PaginatedContentItems)?.total ?? 0;
+			if (loadedCount >= total) return undefined;
+			return loadedCount;
+		},
+	});
+
+	if (error && !isFetching) {
+		throw error;
+	}
+
+	const pages = data.pages as PaginatedContentItems<TMap[TSlug]>[];
+	const items = (pages?.flatMap((page) =>
+		Array.isArray(page?.items) ? page.items : [],
+	) ?? []) as SerializedContentItemWithType<TMap[TSlug]>[];
+	const total = pages?.[0]?.total ?? 0;
+
+	return {
+		items,
+		total,
+		loadMore: fetchNextPage,
+		hasMore: !!hasNextPage,
+		isLoadingMore: isFetchingNextPage,
+		refetch,
+	};
+}

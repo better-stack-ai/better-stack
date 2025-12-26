@@ -93,6 +93,54 @@ export default function AutoFormObject<
         }
 
         if (zodBaseType === "ZodObject") {
+          // Check if there's a custom fieldType for this object field
+          // This allows relation fields (belongsTo) and other custom handlers to override default object behavior
+          const objectFieldConfig: FieldConfigItem = fieldConfig?.[name] ?? {};
+          if (typeof objectFieldConfig.fieldType === "function") {
+            // Custom component for this object field - render it like a regular field
+            const zodInputProps = zodToHtmlInputProps(item);
+            // Determine required status (same logic as regular fields)
+            let isRequired =
+              isRequiredByDependency || zodInputProps.required || false;
+            if (objectFieldConfig.inputProps?.required !== undefined) {
+              isRequired = objectFieldConfig.inputProps.required;
+            }
+            const CustomComponent = objectFieldConfig.fieldType;
+            const ParentElement =
+              objectFieldConfig.renderParent ?? DefaultParent;
+            return (
+              <FormField
+                control={form.control as any}
+                name={key}
+                key={key}
+                render={({ field }) => {
+                  const fieldProps = {
+                    ...zodInputProps,
+                    ...field,
+                    ...objectFieldConfig.inputProps,
+                    disabled:
+                      objectFieldConfig.inputProps?.disabled || isDisabled,
+                    ref: undefined,
+                    value: field.value,
+                  };
+                  return (
+                    <ParentElement key={`${key}.parent`}>
+                      <CustomComponent
+                        zodInputProps={zodInputProps}
+                        field={field}
+                        fieldConfigItem={objectFieldConfig}
+                        label={objectFieldConfig.label || itemName}
+                        isRequired={isRequired}
+                        zodItem={item}
+                        fieldProps={fieldProps}
+                      />
+                    </ParentElement>
+                  );
+                }}
+              />
+            );
+          }
+
           return (
             <AccordionItem value={name} key={key} className="border-none">
               <AccordionTrigger>{itemName}</AccordionTrigger>
@@ -108,13 +156,60 @@ export default function AutoFormObject<
           );
         }
         if (zodBaseType === "ZodArray") {
+          // Check if there's a custom fieldType for this array field
+          // This allows relation fields and other custom array handlers to override default array behavior
+          const arrayFieldConfig: FieldConfigItem = fieldConfig?.[name] ?? {};
+          if (typeof arrayFieldConfig.fieldType === "function") {
+            // Custom component for this array field - render it like a regular field
+            const zodInputProps = zodToHtmlInputProps(item);
+            // Determine required status (same logic as regular fields)
+            let isRequired =
+              isRequiredByDependency || zodInputProps.required || false;
+            if (arrayFieldConfig.inputProps?.required !== undefined) {
+              isRequired = arrayFieldConfig.inputProps.required;
+            }
+            const CustomComponent = arrayFieldConfig.fieldType;
+            const ParentElement = arrayFieldConfig.renderParent ?? DefaultParent;
+            return (
+              <FormField
+                control={form.control as any}
+                name={key}
+                key={key}
+                render={({ field }) => {
+                  const fieldProps = {
+                    ...zodInputProps,
+                    ...field,
+                    ...arrayFieldConfig.inputProps,
+                    disabled:
+                      arrayFieldConfig.inputProps?.disabled || isDisabled,
+                    ref: undefined,
+                    value: field.value,
+                  };
+                  return (
+                    <ParentElement key={`${key}.parent`}>
+                      <CustomComponent
+                        zodInputProps={zodInputProps}
+                        field={field}
+                        fieldConfigItem={arrayFieldConfig}
+                        label={arrayFieldConfig.label || itemName}
+                        isRequired={isRequired}
+                        zodItem={item}
+                        fieldProps={fieldProps}
+                      />
+                    </ParentElement>
+                  );
+                }}
+              />
+            );
+          }
+
           return (
             <AutoFormArray
               key={key}
               name={name}
               item={item as unknown as z.ZodArray<any>}
               form={form}
-              fieldConfig={fieldConfig?.[name] ?? {}}
+              fieldConfig={arrayFieldConfig}
               path={[...path, name]}
             />
           );

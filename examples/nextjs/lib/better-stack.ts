@@ -12,7 +12,7 @@ import { tool } from "ai"
 import { z } from "zod"
 
 // Import shared CMS schemas - these are used for both backend validation and client type inference
-import { ProductSchema, TestimonialSchema } from "./cms-schemas"
+import { ProductSchema, TestimonialSchema, CategorySchema, ResourceSchema, CommentSchema } from "./cms-schemas"
 
 // Tool to fetch Better Stack documentation
 const betterStackDocsTool = tool({
@@ -141,6 +141,24 @@ const { handler, dbSchema } = betterStack({
                     slug: "testimonial", 
                     description: "Customer testimonials",
                     schema: TestimonialSchema,
+                },
+                { 
+                    name: "Category", 
+                    slug: "category", 
+                    description: "Categories for organizing resources",
+                    schema: CategorySchema,
+                },
+                { 
+                    name: "Resource", 
+                    slug: "resource", 
+                    description: "Directory of resources with category relationships",
+                    schema: ResourceSchema,
+                },
+                { 
+                    name: "Comment", 
+                    slug: "comment", 
+                    description: "Comments on resources (one-to-many relationship)",
+                    schema: CommentSchema,
                 },
             ],
             hooks: {
