@@ -13,8 +13,11 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as CmsExampleRouteImport } from './routes/cms-example'
 import { Route as PagesRouteRouteImport } from './routes/pages/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DirectoryIndexRouteImport } from './routes/directory/index'
 import { Route as PagesSplatRouteImport } from './routes/pages/$'
 import { Route as FormDemoSlugRouteImport } from './routes/form-demo.$slug'
+import { Route as DirectoryIdRouteImport } from './routes/directory/$id'
+import { Route as DirectoryCategoryCategoryIdRouteImport } from './routes/directory/category/$categoryId'
 import { Route as ApiDataSplatRouteImport } from './routes/api/data/$'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -37,6 +40,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DirectoryIndexRoute = DirectoryIndexRouteImport.update({
+  id: '/directory/',
+  path: '/directory/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PagesSplatRoute = PagesSplatRouteImport.update({
   id: '/$',
   path: '/$',
@@ -47,6 +55,17 @@ const FormDemoSlugRoute = FormDemoSlugRouteImport.update({
   path: '/form-demo/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DirectoryIdRoute = DirectoryIdRouteImport.update({
+  id: '/directory/$id',
+  path: '/directory/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DirectoryCategoryCategoryIdRoute =
+  DirectoryCategoryCategoryIdRouteImport.update({
+    id: '/directory/category/$categoryId',
+    path: '/directory/category/$categoryId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiDataSplatRoute = ApiDataSplatRouteImport.update({
   id: '/api/data/$',
   path: '/api/data/$',
@@ -58,18 +77,24 @@ export interface FileRoutesByFullPath {
   '/pages': typeof PagesRouteRouteWithChildren
   '/cms-example': typeof CmsExampleRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/directory/$id': typeof DirectoryIdRoute
   '/form-demo/$slug': typeof FormDemoSlugRoute
   '/pages/$': typeof PagesSplatRoute
+  '/directory': typeof DirectoryIndexRoute
   '/api/data/$': typeof ApiDataSplatRoute
+  '/directory/category/$categoryId': typeof DirectoryCategoryCategoryIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/pages': typeof PagesRouteRouteWithChildren
   '/cms-example': typeof CmsExampleRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/directory/$id': typeof DirectoryIdRoute
   '/form-demo/$slug': typeof FormDemoSlugRoute
   '/pages/$': typeof PagesSplatRoute
+  '/directory': typeof DirectoryIndexRoute
   '/api/data/$': typeof ApiDataSplatRoute
+  '/directory/category/$categoryId': typeof DirectoryCategoryCategoryIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -77,9 +102,12 @@ export interface FileRoutesById {
   '/pages': typeof PagesRouteRouteWithChildren
   '/cms-example': typeof CmsExampleRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/directory/$id': typeof DirectoryIdRoute
   '/form-demo/$slug': typeof FormDemoSlugRoute
   '/pages/$': typeof PagesSplatRoute
+  '/directory/': typeof DirectoryIndexRoute
   '/api/data/$': typeof ApiDataSplatRoute
+  '/directory/category/$categoryId': typeof DirectoryCategoryCategoryIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -88,27 +116,36 @@ export interface FileRouteTypes {
     | '/pages'
     | '/cms-example'
     | '/sitemap.xml'
+    | '/directory/$id'
     | '/form-demo/$slug'
     | '/pages/$'
+    | '/directory'
     | '/api/data/$'
+    | '/directory/category/$categoryId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/pages'
     | '/cms-example'
     | '/sitemap.xml'
+    | '/directory/$id'
     | '/form-demo/$slug'
     | '/pages/$'
+    | '/directory'
     | '/api/data/$'
+    | '/directory/category/$categoryId'
   id:
     | '__root__'
     | '/'
     | '/pages'
     | '/cms-example'
     | '/sitemap.xml'
+    | '/directory/$id'
     | '/form-demo/$slug'
     | '/pages/$'
+    | '/directory/'
     | '/api/data/$'
+    | '/directory/category/$categoryId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -116,8 +153,11 @@ export interface RootRouteChildren {
   PagesRouteRoute: typeof PagesRouteRouteWithChildren
   CmsExampleRoute: typeof CmsExampleRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  DirectoryIdRoute: typeof DirectoryIdRoute
   FormDemoSlugRoute: typeof FormDemoSlugRoute
+  DirectoryIndexRoute: typeof DirectoryIndexRoute
   ApiDataSplatRoute: typeof ApiDataSplatRoute
+  DirectoryCategoryCategoryIdRoute: typeof DirectoryCategoryCategoryIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -150,6 +190,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/directory/': {
+      id: '/directory/'
+      path: '/directory'
+      fullPath: '/directory'
+      preLoaderRoute: typeof DirectoryIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pages/$': {
       id: '/pages/$'
       path: '/$'
@@ -162,6 +209,20 @@ declare module '@tanstack/react-router' {
       path: '/form-demo/$slug'
       fullPath: '/form-demo/$slug'
       preLoaderRoute: typeof FormDemoSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/directory/$id': {
+      id: '/directory/$id'
+      path: '/directory/$id'
+      fullPath: '/directory/$id'
+      preLoaderRoute: typeof DirectoryIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/directory/category/$categoryId': {
+      id: '/directory/category/$categoryId'
+      path: '/directory/category/$categoryId'
+      fullPath: '/directory/category/$categoryId'
+      preLoaderRoute: typeof DirectoryCategoryCategoryIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/data/$': {
@@ -191,8 +252,11 @@ const rootRouteChildren: RootRouteChildren = {
   PagesRouteRoute: PagesRouteRouteWithChildren,
   CmsExampleRoute: CmsExampleRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  DirectoryIdRoute: DirectoryIdRoute,
   FormDemoSlugRoute: FormDemoSlugRoute,
+  DirectoryIndexRoute: DirectoryIndexRoute,
   ApiDataSplatRoute: ApiDataSplatRoute,
+  DirectoryCategoryCategoryIdRoute: DirectoryCategoryCategoryIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

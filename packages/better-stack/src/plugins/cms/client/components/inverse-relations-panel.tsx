@@ -188,8 +188,8 @@ function InverseRelationSection({
 
 	// Create new item with pre-filled belongsTo field
 	const handleAddNew = () => {
-		// Navigate to create page with query param to pre-fill the relation
-		// The relation field will be pre-populated via initialData
+		// Navigate to create page with query param to pre-fill the relation.
+		// ContentEditorPage reads prefill_* query params and passes them to ContentForm as initialData.
 		const createUrl = `${basePath}/cms/${relation.sourceType}/new?prefill_${relation.fieldName}=${itemId}`;
 		navigate(createUrl);
 	};

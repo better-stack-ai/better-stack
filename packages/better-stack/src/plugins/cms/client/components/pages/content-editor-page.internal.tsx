@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { usePluginOverrides, useBasePath } from "@btst/stack/context";
@@ -18,6 +19,90 @@ import { EditorSkeleton } from "../loading/editor-skeleton";
 import { CMS_LOCALIZATION } from "../../localization";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 
+/**
+ * Parse prefill query parameters from the URL.
+ * Looks for query params with the format `prefill_<fieldName>=<value>`
+ * and returns a record of field names to values.
+ *
+ * @example
+ * URL: /cms/comment/new?prefill_resourceId=123&prefill_author=John
+ * Returns: { resourceId: "123", author: "John" }
+ */
+function usePrefillParams(): Record<string, string> {
+	return useMemo(() => {
+		if (typeof window === "undefined") {
+			return {};
+		}
+
+		const params = new URLSearchParams(window.location.search);
+		const prefillData: Record<string, string> = {};
+
+		for (const [key, value] of params.entries()) {
+			if (key.startsWith("prefill_")) {
+				const fieldName = key.slice("prefill_".length);
+				if (fieldName) {
+					prefillData[fieldName] = value;
+				}
+			}
+		}
+
+		return prefillData;
+	}, []);
+}
+
+interface JsonSchemaProperty {
+	fieldType?: string;
+	relation?: {
+		type: "belongsTo" | "hasMany" | "manyToMany";
+		targetType: string;
+	};
+}
+
+/**
+ * Convert prefill params to the correct format for the form.
+ * Relation fields need special handling:
+ * - belongsTo: value should be { id: "uuid" }
+ * - hasMany/manyToMany: value should be [{ id: "uuid" }]
+ *
+ * @param prefillParams - Raw prefill params from URL
+ * @param jsonSchema - The content type's JSON schema
+ * @returns Converted data suitable for initialData
+ */
+function convertPrefillToFormData(
+	prefillParams: Record<string, string>,
+	jsonSchema: Record<string, unknown>,
+): Record<string, unknown> {
+	const properties = jsonSchema.properties as
+		| Record<string, JsonSchemaProperty>
+		| undefined;
+
+	if (!properties) {
+		return prefillParams;
+	}
+
+	const result: Record<string, unknown> = {};
+
+	for (const [fieldName, value] of Object.entries(prefillParams)) {
+		const fieldSchema = properties[fieldName];
+
+		if (fieldSchema?.fieldType === "relation" && fieldSchema.relation) {
+			// Convert relation field value to the correct format
+			if (fieldSchema.relation.type === "belongsTo") {
+				// belongsTo expects { id: "uuid" }
+				result[fieldName] = { id: value };
+			} else {
+				// hasMany/manyToMany expect [{ id: "uuid" }]
+				result[fieldName] = [{ id: value }];
+			}
+		} else {
+			// Non-relation fields: pass through as-is
+			result[fieldName] = value;
+		}
+	}
+
+	return result;
+}
+
 interface ContentEditorPageProps {
 	typeSlug: string;
 	id?: string;
@@ -28,6 +113,10 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 	const { navigate } = overrides;
 	const localization = { ...CMS_LOCALIZATION, ...overrides.localization };
 	const basePath = useBasePath();
+
+	// Parse prefill query parameters for pre-populating fields when creating new items
+	// This is used by the inverse relations panel to pre-fill the parent relation
+	const prefillParams = usePrefillParams();
 
 	// Call lifecycle hooks for authorization
 	useRouteLifecycle({
@@ -128,7 +217,16 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 				<ContentForm
 					key={isEditing ? `edit-${id}` : "create"}
 					contentType={contentType}
-					initialData={item?.parsedData}
+					initialData={
+						isEditing
+							? item?.parsedData
+							: Object.keys(prefillParams).length > 0
+								? convertPrefillToFormData(
+										prefillParams,
+										JSON.parse(contentType.jsonSchema),
+									)
+								: undefined
+					}
 					initialSlug={item?.slug}
 					isEditing={isEditing}
 					onSubmit={handleSubmit}
