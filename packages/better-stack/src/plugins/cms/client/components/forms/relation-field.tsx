@@ -41,6 +41,7 @@ export function RelationField({
 	const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 	const [newItemName, setNewItemName] = useState("");
 	const [newItemDescription, setNewItemDescription] = useState("");
+	const [createError, setCreateError] = useState<string | null>(null);
 
 	// For belongsTo (single relation), we only allow one selection
 	const isSingleSelect = relation.type === "belongsTo";
@@ -124,6 +125,7 @@ export function RelationField({
 	const handleCreateItem = async () => {
 		if (!newItemName.trim()) return;
 
+		setCreateError(null);
 		try {
 			const result = await createMutation.mutateAsync({
 				slug: newItemName.toLowerCase().replace(/\s+/g, "-"),
@@ -148,7 +150,11 @@ export function RelationField({
 			setNewItemDescription("");
 			setIsCreateDialogOpen(false);
 		} catch (error) {
-			console.error("Failed to create item:", error);
+			const message =
+				error instanceof Error
+					? error.message
+					: "Failed to create item. Please try again.";
+			setCreateError(message);
 		}
 	};
 
@@ -213,6 +219,9 @@ export function RelationField({
 								<DialogTitle>Create New {relation.targetType}</DialogTitle>
 							</DialogHeader>
 							<div className="space-y-4 py-4">
+								{createError && (
+									<p className="text-sm text-destructive">{createError}</p>
+								)}
 								<div className="space-y-2">
 									<Label htmlFor="newItemName">
 										{relation.displayField.charAt(0).toUpperCase() +

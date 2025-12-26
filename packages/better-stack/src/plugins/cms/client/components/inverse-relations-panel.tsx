@@ -142,6 +142,7 @@ function InverseRelationSection({
 }: InverseRelationSectionProps) {
 	const [isExpanded, setIsExpanded] = useState(true);
 	const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
+	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const deleteContent = useDeleteContent(relation.sourceType);
 
 	// Fetch items for this inverse relation
@@ -180,9 +181,18 @@ function InverseRelationSection({
 
 	const handleDelete = async () => {
 		if (deleteItemId) {
-			await deleteContent.mutateAsync(deleteItemId);
-			setDeleteItemId(null);
-			refetch();
+			setDeleteError(null);
+			try {
+				await deleteContent.mutateAsync(deleteItemId);
+				setDeleteItemId(null);
+				refetch();
+			} catch (error) {
+				const message =
+					error instanceof Error
+						? error.message
+						: "Failed to delete item. Please try again.";
+				setDeleteError(message);
+			}
 		}
 	};
 
@@ -267,7 +277,12 @@ function InverseRelationSection({
 			{/* Delete confirmation dialog */}
 			<AlertDialog
 				open={!!deleteItemId}
-				onOpenChange={(open) => !open && setDeleteItemId(null)}
+				onOpenChange={(open) => {
+					if (!open) {
+						setDeleteItemId(null);
+						setDeleteError(null);
+					}
+				}}
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
@@ -279,6 +294,9 @@ function InverseRelationSection({
 							{relation.sourceTypeName.toLowerCase()}.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
+					{deleteError && (
+						<p className="text-sm text-destructive">{deleteError}</p>
+					)}
 					<AlertDialogFooter>
 						<AlertDialogCancel>Cancel</AlertDialogCancel>
 						<AlertDialogAction

@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { z } from "zod";
-import { toast } from "sonner";
 import { SteppedAutoForm } from "@workspace/ui/components/auto-form/stepped-auto-form";
 import type {
 	FieldConfig,
@@ -161,6 +160,8 @@ export function ContentForm({
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [formData, setFormData] =
 		useState<Record<string, unknown>>(initialData);
+	const [slugError, setSlugError] = useState<string | null>(null);
+	const [submitError, setSubmitError] = useState<string | null>(null);
 
 	// Track if we've already synced prefill data to avoid overwriting user input
 	const hasSyncedPrefillRef = useRef(false);
@@ -238,23 +239,21 @@ export function ContentForm({
 
 	// Handle form submission
 	const handleSubmit = async (data: Record<string, unknown>) => {
+		setSlugError(null);
+		setSubmitError(null);
+
 		if (!slug.trim()) {
-			toast.error("Slug is required");
+			setSlugError("Slug is required");
 			return;
 		}
 
 		setIsSubmitting(true);
 		try {
 			await onSubmit({ slug, data });
-			toast.success(
-				isEditing
-					? localization.CMS_TOAST_UPDATE_SUCCESS
-					: localization.CMS_TOAST_CREATE_SUCCESS,
-			);
 		} catch (error) {
 			const message =
 				error instanceof Error ? error.message : localization.CMS_TOAST_ERROR;
-			toast.error(message);
+			setSubmitError(message);
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -279,6 +278,7 @@ export function ContentForm({
 					value={slug}
 					onChange={(e) => {
 						setSlug(e.target.value);
+						setSlugError(null);
 						if (!isEditing) {
 							setSlugManuallyEdited(true);
 						}
@@ -290,10 +290,18 @@ export function ContentForm({
 							: "Enter slug..."
 					}
 				/>
+				{slugError && <p className="text-sm text-destructive">{slugError}</p>}
 				<p className="text-sm text-muted-foreground">
 					{localization.CMS_LABEL_SLUG_DESCRIPTION}
 				</p>
 			</div>
+
+			{/* Submit error message */}
+			{submitError && (
+				<div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
+					<p className="text-sm text-destructive">{submitError}</p>
+				</div>
+			)}
 
 			{/* Dynamic form from Zod schema */}
 			{/* Uses SteppedAutoForm which automatically handles both single-step and multi-step content types */}
