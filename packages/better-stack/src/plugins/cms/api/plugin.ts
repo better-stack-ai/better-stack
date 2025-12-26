@@ -269,7 +269,11 @@ function isExistingRelationValue(value: unknown): value is { id: string } {
  * 2. Extract IDs for junction table
  * 3. Return cleaned data with only IDs stored
  *
- * @returns Object with processedData (for storing) and relationIds (for junction table)
+ * Only processes relation fields that are explicitly present in the data.
+ * Fields not present in data are skipped entirely - this preserves existing
+ * relations during partial updates.
+ *
+ * @returns Object with processedData (for storing) and relationIds (for junction table sync)
  */
 async function processRelationsInData(
 	adapter: Adapter,
@@ -285,7 +289,14 @@ async function processRelationsInData(
 	const relationIds: Record<string, string[]> = {};
 
 	for (const [fieldName, relationConfig] of Object.entries(relationFields)) {
+		// Skip fields not present in the data - this preserves existing relations
+		// during partial updates. Only process fields explicitly included.
+		if (!(fieldName in data)) {
+			continue;
+		}
+
 		const fieldValue = data[fieldName];
+		// Field is present but null/undefined/empty - clear relations for this field
 		if (!fieldValue) {
 			relationIds[fieldName] = [];
 			continue;
@@ -409,21 +420,29 @@ async function createRelatedItem(
 }
 
 /**
- * Sync relations in the junction table for a content item
+ * Sync relations in the junction table for a content item.
+ *
+ * Only updates relations for fields explicitly present in relationIds.
+ * Fields not in relationIds are left unchanged - this preserves existing
+ * relations during partial updates.
  */
 async function syncRelations(
 	adapter: Adapter,
 	sourceId: string,
 	relationIds: Record<string, string[]>,
 ): Promise<void> {
-	// Delete all existing relations for this source
-	await adapter.delete({
-		model: "contentRelation",
-		where: [{ field: "sourceId", value: sourceId, operator: "eq" as const }],
-	});
-
-	// Create new relations
+	// Only sync fields that are explicitly included in relationIds
 	for (const [fieldName, targetIds] of Object.entries(relationIds)) {
+		// Delete existing relations for this specific field only
+		await adapter.delete({
+			model: "contentRelation",
+			where: [
+				{ field: "sourceId", value: sourceId, operator: "eq" as const },
+				{ field: "fieldName", value: fieldName, operator: "eq" as const },
+			],
+		});
+
+		// Create new relations for this field
 		for (const targetId of targetIds) {
 			await adapter.create<ContentRelation>({
 				model: "contentRelation",

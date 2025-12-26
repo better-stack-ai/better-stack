@@ -139,6 +139,75 @@ test.describe("CMS Relations API", () => {
 		expect(byRelation.items.length).toBe(2);
 	});
 
+	test("partial update preserves existing relations for omitted fields", async ({
+		request,
+	}) => {
+		// Create two categories
+		const cat1Response = await request.post("/api/data/content/category", {
+			headers: { "content-type": "application/json" },
+			data: {
+				slug: `partial-cat1-${testRunId}`,
+				data: { name: "Partial Update Category 1" },
+			},
+		});
+		const cat1Id = (await cat1Response.json()).id;
+
+		const cat2Response = await request.post("/api/data/content/category", {
+			headers: { "content-type": "application/json" },
+			data: {
+				slug: `partial-cat2-${testRunId}`,
+				data: { name: "Partial Update Category 2" },
+			},
+		});
+		const cat2Id = (await cat2Response.json()).id;
+
+		// Create resource with both categories
+		const resourceResponse = await request.post("/api/data/content/resource", {
+			headers: { "content-type": "application/json" },
+			data: {
+				slug: `partial-resource-${testRunId}`,
+				data: {
+					name: "Partial Update Resource",
+					description: "Initial description",
+					categoryIds: [{ id: cat1Id }, { id: cat2Id }],
+				},
+			},
+		});
+		expect(resourceResponse.ok()).toBe(true);
+		const resourceJson = await resourceResponse.json();
+		const resourceId = resourceJson.id;
+
+		// Partial update: only update description, omit categoryIds field entirely
+		const updateResponse = await request.put(
+			`/api/data/content/resource/${resourceId}`,
+			{
+				headers: { "content-type": "application/json" },
+				data: {
+					data: {
+						name: "Partial Update Resource",
+						description: "Updated description",
+						// categoryIds intentionally omitted
+					},
+				},
+			},
+		);
+		expect(updateResponse.ok()).toBe(true);
+
+		// Verify relations are preserved via populated endpoint
+		const populatedResponse = await request.get(
+			`/api/data/content/resource/${resourceId}/populated`,
+		);
+		expect(populatedResponse.ok()).toBe(true);
+		const populated = await populatedResponse.json();
+
+		// Should still have both categories
+		expect(populated._relations).toBeDefined();
+		expect(populated._relations.categoryIds).toHaveLength(2);
+
+		// Verify description was updated
+		expect(populated.parsedData.description).toBe("Updated description");
+	});
+
 	test("inline creation of new category during resource creation", async ({
 		request,
 	}) => {
@@ -505,8 +574,17 @@ test.describe("CMS Admin belongsTo Relation Field", () => {
 	});
 });
 
+// Directory pages only exist in the Next.js example
+// Skip these tests on non-Next.js projects
 test.describe("CMS Directory Pages", () => {
 	const testRunId = Date.now().toString(36);
+
+	test.beforeEach(async ({ page }, testInfo) => {
+		// Skip on non-Next.js projects (they don't have the /directory pages)
+		if (!testInfo.project.name.includes("nextjs")) {
+			test.skip();
+		}
+	});
 
 	test("directory page renders", async ({ page }) => {
 		const errors: string[] = [];
