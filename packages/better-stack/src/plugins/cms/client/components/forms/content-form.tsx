@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
 import { SteppedAutoForm } from "@workspace/ui/components/auto-form/stepped-auto-form";
@@ -162,13 +162,25 @@ export function ContentForm({
 	const [formData, setFormData] =
 		useState<Record<string, unknown>>(initialData);
 
-	// Sync formData with initialData when it changes (e.g., when editing an existing item)
-	// This is necessary because useState only uses the initial value once on mount
+	// Track if we've already synced prefill data to avoid overwriting user input
+	const hasSyncedPrefillRef = useRef(false);
+
+	// Sync formData with initialData when it changes
+	// This handles both:
+	// 1. Editing mode: always sync when item data is loaded (isEditing=true)
+	// 2. Create mode: only sync prefill data ONCE to avoid overwriting user input
+	// useState only uses the initial value on mount, so we need this effect for updates
 	useEffect(() => {
-		// Only sync when we're in editing mode and initialData has content
-		// This ensures we properly load existing item data into the form
-		if (isEditing && Object.keys(initialData).length > 0) {
+		const hasData = Object.keys(initialData).length > 0;
+		// In edit mode, always sync (user is loading existing data)
+		// In create mode, only sync prefill data once
+		const shouldSync = hasData && (isEditing || !hasSyncedPrefillRef.current);
+
+		if (shouldSync) {
 			setFormData(initialData);
+			if (!isEditing) {
+				hasSyncedPrefillRef.current = true;
+			}
 		}
 	}, [initialData, isEditing]);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { usePluginOverrides, useBasePath } from "@btst/stack/context";
@@ -24,30 +24,40 @@ import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
  * Looks for query params with the format `prefill_<fieldName>=<value>`
  * and returns a record of field names to values.
  *
+ * Uses useState + useEffect pattern to work correctly with SSR/hydration.
+ * During SSR, returns empty object. After hydration, parses URL params.
+ *
  * @example
  * URL: /cms/comment/new?prefill_resourceId=123&prefill_author=John
  * Returns: { resourceId: "123", author: "John" }
  */
 function usePrefillParams(): Record<string, string> {
-	return useMemo(() => {
+	const [prefillData, setPrefillData] = useState<Record<string, string>>({});
+
+	useEffect(() => {
 		if (typeof window === "undefined") {
-			return {};
+			return;
 		}
 
 		const params = new URLSearchParams(window.location.search);
-		const prefillData: Record<string, string> = {};
+		const data: Record<string, string> = {};
 
 		for (const [key, value] of params.entries()) {
 			if (key.startsWith("prefill_")) {
 				const fieldName = key.slice("prefill_".length);
 				if (fieldName) {
-					prefillData[fieldName] = value;
+					data[fieldName] = value;
 				}
 			}
 		}
 
-		return prefillData;
+		// Only update state if we have prefill data to avoid unnecessary re-renders
+		if (Object.keys(data).length > 0) {
+			setPrefillData(data);
+		}
 	}, []);
+
+	return prefillData;
 }
 
 interface JsonSchemaProperty {

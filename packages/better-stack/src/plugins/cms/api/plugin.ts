@@ -767,19 +767,15 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 						});
 					}
 
-					// Call before hook - may modify data or deny operation
-					let processedData = validation.data as Record<string, unknown>;
+					// Call before hook - may deny operation
+					const processedData = validation.data as Record<string, unknown>;
 					if (config.hooks?.onBeforeCreate) {
 						const result = await config.hooks.onBeforeCreate(
-							validation.data as Record<string, unknown>,
+							processedData,
 							context,
 						);
 						if (result === false) {
 							throw ctx.error(403, { message: "Create operation denied" });
-						}
-						// Use returned data if provided (hook can modify data)
-						if (result && typeof result === "object") {
-							processedData = result;
 						}
 					}
 
@@ -901,8 +897,8 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 						validatedData = validation.data as Record<string, unknown>;
 					}
 
-					// Call before hook - may modify data or deny operation
-					let processedData = validatedData;
+					// Call before hook - may deny operation
+					const processedData = validatedData;
 					if (config.hooks?.onBeforeUpdate && validatedData) {
 						const result = await config.hooks.onBeforeUpdate(
 							id,
@@ -911,10 +907,6 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 						);
 						if (result === false) {
 							throw ctx.error(403, { message: "Update operation denied" });
-						}
-						// Use returned data if provided (hook can modify data)
-						if (result && typeof result === "object") {
-							processedData = result;
 						}
 					}
 
