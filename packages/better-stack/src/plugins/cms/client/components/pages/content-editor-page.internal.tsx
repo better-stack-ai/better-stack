@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { usePluginOverrides, useBasePath } from "@btst/stack/context";
@@ -11,11 +12,118 @@ import {
 	useUpdateContent,
 } from "../../hooks";
 import { ContentForm } from "../forms/content-form";
+import { InverseRelationsPanel } from "../inverse-relations-panel";
 import { EmptyState } from "../shared/empty-state";
 import { PageWrapper } from "../shared/page-wrapper";
 import { EditorSkeleton } from "../loading/editor-skeleton";
 import { CMS_LOCALIZATION } from "../../localization";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
+
+/**
+ * Parse prefill query parameters from the URL.
+ * Looks for query params with the format `prefill_<fieldName>=<value>`
+ * and returns a record of field names to values.
+ *
+ * Uses useState + useEffect pattern to work correctly with SSR/hydration.
+ * During SSR, returns empty object. After hydration, parses URL params.
+ * Also listens for popstate events to handle browser back/forward navigation.
+ *
+ * @example
+ * URL: /cms/comment/new?prefill_resourceId=123&prefill_author=John
+ * Returns: { resourceId: "123", author: "John" }
+ */
+function usePrefillParams(): Record<string, string> {
+	const [prefillData, setPrefillData] = useState<Record<string, string>>({});
+
+	useEffect(() => {
+		if (typeof window === "undefined") {
+			return;
+		}
+
+		const parseAndSetPrefillData = () => {
+			const params = new URLSearchParams(window.location.search);
+			const data: Record<string, string> = {};
+
+			for (const [key, value] of params.entries()) {
+				if (key.startsWith("prefill_")) {
+					const fieldName = key.slice("prefill_".length);
+					if (fieldName) {
+						data[fieldName] = value;
+					}
+				}
+			}
+
+			// Always update state to ensure stale data is cleared when navigating
+			// to a URL without prefill params (e.g., via browser back/forward)
+			setPrefillData(data);
+		};
+
+		// Parse on mount
+		parseAndSetPrefillData();
+
+		// Listen for popstate events (browser back/forward navigation)
+		window.addEventListener("popstate", parseAndSetPrefillData);
+
+		return () => {
+			window.removeEventListener("popstate", parseAndSetPrefillData);
+		};
+	}, []);
+
+	return prefillData;
+}
+
+interface JsonSchemaProperty {
+	fieldType?: string;
+	relation?: {
+		type: "belongsTo" | "hasMany" | "manyToMany";
+		targetType: string;
+	};
+}
+
+/**
+ * Convert prefill params to the correct format for the form.
+ * Relation fields need special handling:
+ * - belongsTo: value should be { id: "uuid" }
+ * - hasMany/manyToMany: value should be [{ id: "uuid" }]
+ *
+ * @param prefillParams - Raw prefill params from URL
+ * @param jsonSchema - The content type's JSON schema
+ * @returns Converted data suitable for initialData
+ */
+function convertPrefillToFormData(
+	prefillParams: Record<string, string>,
+	jsonSchema: Record<string, unknown>,
+): Record<string, unknown> {
+	const properties = jsonSchema.properties as
+		| Record<string, JsonSchemaProperty>
+		| undefined;
+
+	if (!properties) {
+		return prefillParams;
+	}
+
+	const result: Record<string, unknown> = {};
+
+	for (const [fieldName, value] of Object.entries(prefillParams)) {
+		const fieldSchema = properties[fieldName];
+
+		if (fieldSchema?.fieldType === "relation" && fieldSchema.relation) {
+			// Convert relation field value to the correct format
+			if (fieldSchema.relation.type === "belongsTo") {
+				// belongsTo expects { id: "uuid" }
+				result[fieldName] = { id: value };
+			} else {
+				// hasMany/manyToMany expect [{ id: "uuid" }]
+				result[fieldName] = [{ id: value }];
+			}
+		} else {
+			// Non-relation fields: pass through as-is
+			result[fieldName] = value;
+		}
+	}
+
+	return result;
+}
 
 interface ContentEditorPageProps {
 	typeSlug: string;
@@ -27,6 +135,10 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 	const { navigate } = overrides;
 	const localization = { ...CMS_LOCALIZATION, ...overrides.localization };
 	const basePath = useBasePath();
+
+	// Parse prefill query parameters for pre-populating fields when creating new items
+	// This is used by the inverse relations panel to pre-fill the parent relation
+	const prefillParams = usePrefillParams();
 
 	// Call lifecycle hooks for authorization
 	useRouteLifecycle({
@@ -127,12 +239,26 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 				<ContentForm
 					key={isEditing ? `edit-${id}` : "create"}
 					contentType={contentType}
-					initialData={item?.parsedData}
+					initialData={
+						isEditing
+							? item?.parsedData
+							: Object.keys(prefillParams).length > 0
+								? convertPrefillToFormData(
+										prefillParams,
+										JSON.parse(contentType.jsonSchema),
+									)
+								: undefined
+					}
 					initialSlug={item?.slug}
 					isEditing={isEditing}
 					onSubmit={handleSubmit}
 					onCancel={() => navigate(`${basePath}/cms/${typeSlug}`)}
 				/>
+
+				{/* Show inverse relations panel when editing (not creating) */}
+				{isEditing && id && (
+					<InverseRelationsPanel contentTypeSlug={typeSlug} itemId={id} />
+				)}
 			</div>
 		</PageWrapper>
 	);
