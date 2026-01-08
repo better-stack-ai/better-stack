@@ -295,14 +295,34 @@ Fetch content data in your frontend pages using the provided hooks. All hooks su
 
 ### Available Hooks
 
+#### Query Hooks
+
 | Hook | Description | Returns |
 |------|-------------|---------|
 | `useContentTypes()` | List all content types | `{ contentTypes, isLoading, error, refetch }` |
-| `useContent(typeSlug, options?)` | List paginated items | `{ items, total, hasMore, isLoading, error, refetch }` |
+| `useContentType(slug)` | Get single content type by slug | `{ contentType, isLoading, error, refetch }` |
+| `useContent(typeSlug, options?)` | List paginated items with infinite loading | `{ items, total, hasMore, loadMore, isLoadingMore, isLoading, error, refetch }` |
 | `useContentItem(typeSlug, id)` | Get item by ID | `{ item, isLoading, error, refetch }` |
 | `useContentItemBySlug(typeSlug, slug)` | Get item by slug | `{ item, isLoading, error, refetch }` |
 | `useContentItemPopulated(typeSlug, id)` | Get item with relations populated | `{ item, isLoading, error, refetch }` |
-| `useContentByRelation(typeSlug, field, targetId)` | Filter items by relation | `{ items, total, isLoading, error, refetch }` |
+| `useContentByRelation(typeSlug, field, targetId)` | Filter items by relation | `{ items, total, hasMore, loadMore, isLoadingMore, isLoading, error, refetch }` |
+
+#### Suspense Hooks
+
+All query hooks have suspense variants for use with React Suspense:
+
+| Hook | Description | Returns |
+|------|-------------|---------|
+| `useSuspenseContentTypes()` | List all content types (suspense) | `{ contentTypes, refetch }` |
+| `useSuspenseContent(typeSlug, options?)` | List paginated items (suspense) | `{ items, total, hasMore, loadMore, isLoadingMore, refetch }` |
+| `useSuspenseContentItem(typeSlug, id)` | Get item by ID (suspense) | `{ item, refetch }` |
+| `useSuspenseContentItemPopulated(typeSlug, id)` | Get item with relations (suspense) | `{ item, refetch }` |
+| `useSuspenseContentByRelation(typeSlug, field, targetId)` | Filter by relation (suspense) | `{ items, total, hasMore, loadMore, isLoadingMore, refetch }` |
+
+#### Mutation Hooks
+
+| Hook | Description | Returns |
+|------|-------------|---------|
 | `useCreateContent(typeSlug)` | Create mutation | React Query mutation |
 | `useUpdateContent(typeSlug)` | Update mutation | React Query mutation |
 | `useDeleteContent(typeSlug)` | Delete mutation | React Query mutation |

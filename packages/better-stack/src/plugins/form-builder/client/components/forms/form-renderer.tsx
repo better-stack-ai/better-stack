@@ -3,7 +3,7 @@
 import { useState, useMemo, type ComponentType } from "react";
 import { usePluginOverrides } from "@btst/stack/context";
 import { SteppedAutoForm } from "@workspace/ui/components/auto-form/stepped-auto-form";
-import { buildFieldConfigFromJsonSchema } from "@workspace/ui/components/auto-form/utils";
+import { buildFieldConfigFromJsonSchema } from "@workspace/ui/components/auto-form/helpers";
 import { formSchemaToZod } from "@workspace/ui/lib/schema-converter";
 import { Skeleton } from "@workspace/ui/components/skeleton";
 import { AlertCircle, CheckCircle } from "lucide-react";

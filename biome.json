@@ -70,7 +70,8 @@
       "!**/.tmp",
       "!**/examples/**",
       "!**/packages/ui/**",
-      "!**/docs/**"
+      "!**/docs/**",
+      "!**/test-results/**"
     ]
   }
 }

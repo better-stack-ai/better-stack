@@ -81,9 +81,10 @@
     "./postcss.config": "./postcss.config.mjs",
     "./lib/*": "./src/lib/*.ts",
     "./components/*": "./src/components/*.tsx",
-    "./components/shared-form-types": "./src/components/shared-form-types.ts",
+    "./components/auto-form/shared-form-types": "./src/components/auto-form/shared-form-types.ts",
     "./components/auto-form": "./src/components/auto-form/index.tsx",
     "./components/auto-form/types": "./src/components/auto-form/types.ts",
+    "./components/auto-form/helpers": "./src/components/auto-form/helpers.tsx",
     "./components/form-builder": "./src/components/form-builder/index.tsx",
     "./components/form-builder/types": "./src/components/form-builder/types.ts",
     "./hooks/*": "./src/hooks/*.ts"

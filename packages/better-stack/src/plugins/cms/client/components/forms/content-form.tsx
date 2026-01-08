@@ -7,7 +7,7 @@ import type {
 	FieldConfig,
 	AutoFormInputComponentProps,
 } from "@workspace/ui/components/auto-form/types";
-import { buildFieldConfigFromJsonSchema as buildFieldConfigBase } from "@workspace/ui/components/auto-form/utils";
+import { buildFieldConfigFromJsonSchema as buildFieldConfigBase } from "@workspace/ui/components/auto-form/helpers";
 import { formSchemaToZod } from "@workspace/ui/lib/schema-converter";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -35,7 +35,7 @@ interface ContentFormProps {
 /**
  * Build field configuration for AutoForm with CMS-specific file upload handling.
  *
- * Uses the shared buildFieldConfigFromJsonSchema from auto-form/utils as a base,
+ * Uses the shared buildFieldConfigFromJsonSchema from auto-form/helpers as a base,
  * then adds special handling for "file" fieldType to inject CMSFileUpload component
  * ONLY if no custom component is provided via fieldComponents.
  *

@@ -1,25 +1,3 @@
-/**
- * Unified Schema Converter Module
- * 
- * Provides consistent bidirectional conversion between Zod schemas and JSON Schema,
- * handling all edge cases in one place:
- * 
- * 1. Date handling: z.date() ↔ { type: "string", format: "date-time" }
- * 2. Steps metadata: Preserves multi-step form configuration
- * 3. Step group mapping: Tracks which fields belong to which step
- * 4. Date constraints: Preserves min/max date validations
- * 
- * Usage:
- * ```ts
- * // Zod → JSON Schema (for storage/transport)
- * const jsonSchema = zodToFormSchema(myZodSchema);
- * 
- * // JSON Schema → Zod (for validation)
- * const zodSchema = formSchemaToZod(jsonSchema);
- * ```
- */
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from "zod";
 
 // ============================================================================

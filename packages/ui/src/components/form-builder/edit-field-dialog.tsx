@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import AutoForm from "@workspace/ui/components/auto-form";
-import { buildFieldConfigFromJsonSchema } from "@workspace/ui/components/auto-form/utils";
+import { buildFieldConfigFromJsonSchema } from "@workspace/ui/components/auto-form/helpers";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
