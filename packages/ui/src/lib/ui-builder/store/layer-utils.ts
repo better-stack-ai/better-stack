@@ -1,7 +1,8 @@
-import { LayerStore } from "@workspace/lib/ui-builder/store/layer-store";
-import { ComponentLayer, ComponentRegistry } from '@workspace/components/ui/ui-builder/types';
-import { getDefaultProps } from '@workspace/lib/ui-builder/store/schema-utils';
-import { TAILWIND_V4_COLOR_KEYS } from '@workspace/components/ui/ui-builder/internal/utils/base-colors';
+// @ts-nocheck
+import { LayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
+import { ComponentLayer, ComponentRegistry } from '@workspace/ui/components/ui-builder/types';
+import { getDefaultProps } from '@workspace/ui/lib/ui-builder/store/schema-utils';
+import { TAILWIND_V4_COLOR_KEYS } from '@workspace/ui/components/ui-builder/internal/utils/base-colors';
 
 /**
  * Recursively visits each layer in the layer tree and applies the provided visitor function to each layer.

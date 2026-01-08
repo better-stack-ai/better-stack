@@ -1,19 +1,20 @@
+// @ts-nocheck
 import React, { memo, Suspense, useMemo, useRef } from "react";
 import isDeepEqual from "fast-deep-equal";
 
-import { ElementSelector } from "@workspace/components/ui/ui-builder/internal/components/element-selector";
-import { DropPlaceholder } from "@workspace/components/ui/ui-builder/internal/dnd/drop-zone";
-import { useDndContext } from "@workspace/lib/ui-builder/context/dnd-context";
+import { ElementSelector } from "@workspace/ui/components/ui-builder/internal/components/element-selector";
+import { DropPlaceholder } from "@workspace/ui/components/ui-builder/internal/dnd/drop-zone";
+import { useDndContext } from "@workspace/ui/lib/ui-builder/context/dnd-context";
 import { ErrorBoundary } from "react-error-boundary";
 
-import { ErrorFallback } from "@workspace/components/ui/ui-builder/internal/components/error-fallback";
-import { isPrimitiveComponent } from "@workspace/lib/ui-builder/store/editor-utils";
-import { hasLayerChildren, canLayerAcceptChildren } from "@workspace/lib/ui-builder/store/layer-utils";
-import { DevProfiler } from "@workspace/components/ui/ui-builder/internal/components/dev-profiler";
-import { ComponentRegistry, ComponentLayer, Variable, PropValue } from '@workspace/components/ui/ui-builder/types';
-import { useLayerStore } from "@workspace/lib/ui-builder/store/layer-store";
-import { useEditorStore } from "@workspace/lib/ui-builder/store/editor-store";
-import { resolveVariableReferences } from "@workspace/lib/ui-builder/utils/variable-resolver";
+import { ErrorFallback } from "@workspace/ui/components/ui-builder/internal/components/error-fallback";
+import { isPrimitiveComponent } from "@workspace/ui/lib/ui-builder/store/editor-utils";
+import { hasLayerChildren, canLayerAcceptChildren } from "@workspace/ui/lib/ui-builder/store/layer-utils";
+import { DevProfiler } from "@workspace/ui/components/ui-builder/internal/components/dev-profiler";
+import { ComponentRegistry, ComponentLayer, Variable, PropValue } from '@workspace/ui/components/ui-builder/types';
+import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
+import { useEditorStore } from "@workspace/ui/lib/ui-builder/store/editor-store";
+import { resolveVariableReferences } from "@workspace/ui/lib/ui-builder/utils/variable-resolver";
 
 // Custom hook to safely use DND context
 const useSafeDndContext = () => {

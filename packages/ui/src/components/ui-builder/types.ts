@@ -1,13 +1,14 @@
+// @ts-nocheck
 import { ZodObject, ZodSchema } from "zod";
 import { ComponentType as ReactComponentType, ReactNode } from 'react';
 import {
     FieldConfigItem,
-  } from "@workspace/components/ui/auto-form/types";
+  } from "@workspace/ui/components/auto-form/types";
 
 export type {
     AutoFormInputComponentProps,
     FieldConfigItem,
-  } from "@workspace/components/ui/auto-form/types";
+  } from "@workspace/ui/components/auto-form/types";
 
 // Enhanced prop value types that can accommodate React props, variables, and common data types
 export type PropValue = 

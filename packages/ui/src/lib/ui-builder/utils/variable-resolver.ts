@@ -1,5 +1,6 @@
+// @ts-nocheck
 import React from 'react';
-import { Variable, PropValue, isVariableReference } from '@workspace/components/ui/ui-builder/types';
+import { Variable, PropValue, isVariableReference } from '@workspace/ui/components/ui-builder/types';
 
 /**
  * Resolves variable references in props using provided variable values

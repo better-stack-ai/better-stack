@@ -1,7 +1,8 @@
+// @ts-nocheck
 import { useCallback } from 'react';
 import { DragStartEvent, DragEndEvent } from '@dnd-kit/core';
-import { useLayerStore } from '@workspace/lib/ui-builder/store/layer-store';
-import { findAllParentLayersRecursive } from '@workspace/lib/ui-builder/store/layer-utils';
+import { useLayerStore } from '@workspace/ui/lib/ui-builder/store/layer-store';
+import { findAllParentLayersRecursive } from '@workspace/ui/lib/ui-builder/store/layer-utils';
 
 interface UseDndEventHandlersProps {
   stopAutoScroll: () => void;

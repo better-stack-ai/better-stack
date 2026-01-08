@@ -5,6 +5,7 @@ import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
+import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
 import { openai } from "@ai-sdk/openai"
 
 // Import shared CMS schemas - these are used for both backend validation and client type inference
@@ -109,6 +110,8 @@ const { handler, dbSchema } = betterStack({
                     description: "Comments on resources (one-to-many relationship)",
                     schema: CommentSchema,
                 },
+                // UI Builder pages
+                UI_BUILDER_CONTENT_TYPE,
             ],
         }),
         // Form Builder plugin for dynamic forms

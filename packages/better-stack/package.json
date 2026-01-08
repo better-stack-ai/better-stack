@@ -247,6 +247,47 @@
       }
     },
     "./plugins/form-builder/css": "./dist/plugins/form-builder/style.css",
+    "./plugins/ui-builder": {
+      "import": {
+        "types": "./dist/plugins/ui-builder/index.d.ts",
+        "default": "./dist/plugins/ui-builder/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ui-builder/index.d.cts",
+        "default": "./dist/plugins/ui-builder/index.cjs"
+      }
+    },
+    "./plugins/ui-builder/client": {
+      "import": {
+        "types": "./dist/plugins/ui-builder/client/index.d.ts",
+        "default": "./dist/plugins/ui-builder/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ui-builder/client/index.d.cts",
+        "default": "./dist/plugins/ui-builder/client/index.cjs"
+      }
+    },
+    "./plugins/ui-builder/client/components": {
+      "import": {
+        "types": "./dist/plugins/ui-builder/client/components/index.d.ts",
+        "default": "./dist/plugins/ui-builder/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ui-builder/client/components/index.d.cts",
+        "default": "./dist/plugins/ui-builder/client/components/index.cjs"
+      }
+    },
+    "./plugins/ui-builder/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/ui-builder/client/hooks/index.d.ts",
+        "default": "./dist/plugins/ui-builder/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ui-builder/client/hooks/index.d.cts",
+        "default": "./dist/plugins/ui-builder/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/ui-builder/css": "./dist/plugins/ui-builder/style.css",
     "./plugins/open-api/api": {
       "import": {
         "types": "./dist/plugins/open-api/api/index.d.ts",
@@ -333,6 +374,18 @@
       ],
       "plugins/form-builder/client/hooks": [
         "./dist/plugins/form-builder/client/hooks/index.d.ts"
+      ],
+      "plugins/ui-builder": [
+        "./dist/plugins/ui-builder/index.d.ts"
+      ],
+      "plugins/ui-builder/client": [
+        "./dist/plugins/ui-builder/client/index.d.ts"
+      ],
+      "plugins/ui-builder/client/components": [
+        "./dist/plugins/ui-builder/client/components/index.d.ts"
+      ],
+      "plugins/ui-builder/client/hooks": [
+        "./dist/plugins/ui-builder/client/hooks/index.d.ts"
       ],
       "plugins/open-api/api": [
         "./dist/plugins/open-api/api/index.d.ts"

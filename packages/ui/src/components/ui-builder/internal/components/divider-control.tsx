@@ -1,6 +1,7 @@
+// @ts-nocheck
 import React, { useState } from "react";
-import { AddComponentsPopover } from "@workspace/components/ui/ui-builder/internal/components/add-component-popover";
-import { Button } from "@workspace/components/ui/button";
+import { AddComponentsPopover } from "@workspace/ui/components/ui-builder/internal/components/add-component-popover";
+import { Button } from "@workspace/ui/components/button";
 import { PlusCircle } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 

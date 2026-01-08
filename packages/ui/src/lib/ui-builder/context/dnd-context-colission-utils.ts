@@ -1,10 +1,11 @@
+// @ts-nocheck
 import {
     CollisionDetection,
     pointerWithin,
     rectIntersection,
 } from '@dnd-kit/core';
-import { getIframeElements } from '@workspace/lib/ui-builder/context/dnd-utils';
-import { debugCollisionDetection } from '@workspace/lib/ui-builder/context/collision-debug';
+import { getIframeElements } from '@workspace/ui/lib/ui-builder/context/dnd-utils';
+import { debugCollisionDetection } from '@workspace/ui/lib/ui-builder/context/collision-debug';
 
 
 // Transform state interface

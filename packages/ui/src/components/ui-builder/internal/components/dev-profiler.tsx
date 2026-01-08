@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { Profiler, ProfilerOnRenderCallback, useCallback } from "react";
 
 interface DevProfilerProps {

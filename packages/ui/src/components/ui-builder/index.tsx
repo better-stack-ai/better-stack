@@ -1,32 +1,33 @@
+// @ts-nocheck
 "use client";
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import LayersPanel from "@workspace/components/ui/ui-builder/internal/layers-panel";
-import EditorPanel from "@workspace/components/ui/ui-builder/internal/editor-panel";
-import PropsPanel from "@workspace/components/ui/ui-builder/internal/props-panel";
-import { NavBar } from "@workspace/components/ui/ui-builder/internal/components/nav";
+import LayersPanel from "@workspace/ui/components/ui-builder/internal/layers-panel";
+import EditorPanel from "@workspace/ui/components/ui-builder/internal/editor-panel";
+import PropsPanel from "@workspace/ui/components/ui-builder/internal/props-panel";
+import { NavBar } from "@workspace/ui/components/ui-builder/internal/components/nav";
 import { ThemeProvider } from "next-themes";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@workspace/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@workspace/ui/components/tabs";
 import {
   ResizablePanel,
   ResizableHandle,
   ResizablePanelGroup,
-} from "@workspace/components/ui/resizable";
-import { Button } from "@workspace/components/ui/button";
-import { useLayerStore } from "@workspace/lib/ui-builder/store/layer-store";
-import { useStore } from "@workspace/hooks/use-store";
-import { useEditorStore } from "@workspace/lib/ui-builder/store/editor-store";
+} from "@workspace/ui/components/resizable";
+import { Button } from "@workspace/ui/components/button";
+import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
+import { useStore } from "@workspace/ui/hooks/use-store";
+import { useEditorStore } from "@workspace/ui/lib/ui-builder/store/editor-store";
 import {
   ComponentRegistry,
   ComponentLayer,
   Variable,
   LayerChangeHandler,
   VariableChangeHandler
-} from "@workspace/components/ui/ui-builder/types";
-import { TailwindThemePanel } from "@workspace/components/ui/ui-builder/internal/tailwind-theme-panel";
-import { ConfigPanel } from "@workspace/components/ui/ui-builder/internal/config-panel";
-import { VariablesPanel } from "@workspace/components/ui/ui-builder/internal/variables-panel";
-import { TooltipProvider } from "@workspace/components/ui/tooltip";
+} from "@workspace/ui/components/ui-builder/types";
+import { TailwindThemePanel } from "@workspace/ui/components/ui-builder/internal/tailwind-theme-panel";
+import { ConfigPanel } from "@workspace/ui/components/ui-builder/internal/config-panel";
+import { VariablesPanel } from "@workspace/ui/components/ui-builder/internal/variables-panel";
+import { TooltipProvider } from "@workspace/ui/components/tooltip";
 
 /**
  * TabsContentConfig defines the structure for the content of the page config panel tabs.

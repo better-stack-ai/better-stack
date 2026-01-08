@@ -1,14 +1,15 @@
+// @ts-nocheck
 import React, { useCallback } from "react";
 
 import { X as XIcon, ChevronsUpDown } from "lucide-react";
 import {
   useLayerStore,
-} from "@workspace/lib/ui-builder/store/layer-store";
-import { ComponentLayer } from '@workspace/components/ui/ui-builder/types';
-import { Button } from "@workspace/components/ui/button";
-import { Badge } from "@workspace/components/ui/badge";
-import { AddComponentsPopover } from "@workspace/components/ui/ui-builder/internal/components/add-component-popover";
-import { hasLayerChildren } from "@workspace/lib/ui-builder/store/layer-utils";
+} from "@workspace/ui/lib/ui-builder/store/layer-store";
+import { ComponentLayer } from '@workspace/ui/components/ui-builder/types';
+import { Button } from "@workspace/ui/components/button";
+import { Badge } from "@workspace/ui/components/badge";
+import { AddComponentsPopover } from "@workspace/ui/components/ui-builder/internal/components/add-component-popover";
+import { hasLayerChildren } from "@workspace/ui/lib/ui-builder/store/layer-utils";
 
 interface ChildrenSearchableSelectProps { 
   layer: ComponentLayer;

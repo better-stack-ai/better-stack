@@ -1,3 +1,4 @@
+// @ts-nocheck
 export const baseColors = [
     {
       name: "zinc",

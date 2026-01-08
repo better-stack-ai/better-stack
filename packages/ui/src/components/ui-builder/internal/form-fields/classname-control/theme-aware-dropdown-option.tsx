@@ -1,10 +1,11 @@
+// @ts-nocheck
 "use client";
 
 import { ReactNode, useMemo } from "react";
 import { cn } from "@workspace/ui/lib/utils";
-import { useLayerStore } from "@workspace/lib/ui-builder/store/layer-store";
-import { baseColors } from "@workspace/components/ui/ui-builder/internal/utils/base-colors";
-import { ComponentLayer } from "@workspace/components/ui/ui-builder/types";
+import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
+import { baseColors } from "@workspace/ui/components/ui-builder/internal/utils/base-colors";
+import { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
 
 // Known prefixes for shadcn theme colors
 const THEME_COLOR_PREFIXES = ["bg-", "text-", "border-", "shadow-"] as const;

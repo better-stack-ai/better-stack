@@ -7,6 +7,7 @@ import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
+import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
 import { openai } from "@ai-sdk/openai"
 import { tool } from "ai"
 import { z } from "zod"
@@ -160,6 +161,8 @@ const { handler, dbSchema } = betterStack({
                     description: "Comments on resources (one-to-many relationship)",
                     schema: CommentSchema,
                 },
+                // UI Builder pages - stored as CMS content items
+                UI_BUILDER_CONTENT_TYPE,
             ],
             hooks: {
                 onAfterCreate: async (item, context) => {

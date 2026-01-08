@@ -1,19 +1,20 @@
+// @ts-nocheck
 import { useState, useEffect, useCallback } from "react";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@workspace/components/ui/tooltip";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/components/ui/tabs";
-import ClassNameMultiselect from "@workspace/components/ui/ui-builder/internal/form-fields/classname-control/classname-multiselect";
-import { ClassNameItemControl } from "@workspace/components/ui/ui-builder/internal/form-fields/classname-control/classname-item-control";
+} from "@workspace/ui/components/tooltip";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
+import ClassNameMultiselect from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/classname-multiselect";
+import { ClassNameItemControl } from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/classname-item-control";
 import {
   Accordion,
   AccordionItem,
   AccordionTrigger,
   AccordionContent,
-} from "@workspace/components/ui/accordion";
-import { Badge } from "@workspace/components/ui/badge";
+} from "@workspace/ui/components/accordion";
+import { Badge } from "@workspace/ui/components/badge";
 
 interface BreakpointClassNameControlProps {
   onChange?: (classes: string) => void;

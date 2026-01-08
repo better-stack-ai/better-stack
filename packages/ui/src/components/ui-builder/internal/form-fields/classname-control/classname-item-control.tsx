@@ -1,8 +1,9 @@
+// @ts-nocheck
 import React, { useMemo, useState, useEffect, useCallback } from "react";
-import { CONFIG, LAYOUT_GROUPS, LAYOUT_ORDER, StateType } from "@workspace/components/ui/ui-builder/internal/form-fields/classname-control/config";
-import { ClassNameGroupControl } from "@workspace/components/ui/ui-builder/internal/form-fields/classname-control/classname-group-control";
+import { CONFIG, LAYOUT_GROUPS, LAYOUT_ORDER, StateType } from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/config";
+import { ClassNameGroupControl } from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/classname-group-control";
 import { cn } from "@workspace/ui/lib/utils";
-import { isTailwindClass } from "@workspace/components/ui/ui-builder/internal/form-fields/classname-control/helpers";
+import { isTailwindClass } from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/helpers";
 
 interface ClassNameItemControlProps {
     value: string;

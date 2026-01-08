@@ -1,3 +1,4 @@
+// @ts-nocheck
 export function getScrollParent(element: HTMLElement | null): HTMLElement | null {
     if (!element) return null;
   

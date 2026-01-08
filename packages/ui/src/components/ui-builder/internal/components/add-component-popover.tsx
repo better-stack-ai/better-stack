@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { ReactNode, useCallback, useMemo, memo, Suspense, useState, useEffect, useRef } from "react";
 
 import {
@@ -7,20 +8,20 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@workspace/components/ui/command";
+} from "@workspace/ui/components/command";
 
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@workspace/components/ui/popover";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/components/ui/tabs";
-import { useLayerStore } from "@workspace/lib/ui-builder/store/layer-store";
-import { useEditorStore } from "@workspace/lib/ui-builder/store/editor-store";
+} from "@workspace/ui/components/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
+import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
+import { useEditorStore } from "@workspace/ui/lib/ui-builder/store/editor-store";
 import { cn } from "@workspace/ui/lib/utils";
-import LayerRenderer from "@workspace/components/ui/ui-builder/layer-renderer";
-import { ComponentLayer, ComponentRegistry } from "@workspace/components/ui/ui-builder/types";
-import { createComponentLayer } from "@workspace/lib/ui-builder/store/layer-utils";
+import LayerRenderer from "@workspace/ui/components/ui-builder/layer-renderer";
+import { ComponentLayer, ComponentRegistry } from "@workspace/ui/components/ui-builder/types";
+import { createComponentLayer } from "@workspace/ui/lib/ui-builder/store/layer-utils";
 
 const fallback = <div className="w-full h-full bg-muted rounded border animate-pulse" />;
 

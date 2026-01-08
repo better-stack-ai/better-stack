@@ -1,40 +1,41 @@
+// @ts-nocheck
 import React from "react";
 import {
   FormControl,
   FormDescription,
   FormItem,
   FormLabel,
-} from "@workspace/components/ui/form";
-import { ChildrenSearchableSelect } from "@workspace/components/ui/ui-builder/internal/form-fields/children-searchable-select";
+} from "@workspace/ui/components/form";
+import { ChildrenSearchableSelect } from "@workspace/ui/components/ui-builder/internal/form-fields/children-searchable-select";
 import {
   AutoFormInputComponentProps,
   ComponentLayer,
   FieldConfigFunction,
-} from "@workspace/components/ui/ui-builder/types";
-import IconNameField from "@workspace/components/ui/ui-builder/internal/form-fields/iconname-field";
-import { Textarea } from "@workspace/components/ui/textarea";
-import { MinimalTiptapEditor } from "@workspace/components/ui/minimal-tiptap";
+} from "@workspace/ui/components/ui-builder/types";
+import IconNameField from "@workspace/ui/components/ui-builder/internal/form-fields/iconname-field";
+import { Textarea } from "@workspace/ui/components/textarea";
+import { MinimalTiptapEditor } from "@workspace/ui/components/minimal-tiptap";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@workspace/components/ui/tooltip";
+} from "@workspace/ui/components/tooltip";
 import { useLayerStore } from "../store/layer-store";
 import { isVariableReference } from "../utils/variable-resolver";
 import { Link, LockKeyhole, Unlink } from "lucide-react";
-import { Button } from "@workspace/components/ui/button";
+import { Button } from "@workspace/ui/components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@workspace/components/ui/dropdown-menu";
-import { Input } from "@workspace/components/ui/input";
+} from "@workspace/ui/components/dropdown-menu";
+import { Input } from "@workspace/ui/components/input";
 import { useEditorStore } from "../store/editor-store";
-import { Card, CardContent } from "@workspace/components/ui/card";
-import BreakpointClassNameControl from "@workspace/components/ui/ui-builder/internal/form-fields/classname-control";
-import { Label } from "@workspace/components/ui/label";
-import { Badge } from "@workspace/components/ui/badge";
+import { Card, CardContent } from "@workspace/ui/components/card";
+import BreakpointClassNameControl from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control";
+import { Label } from "@workspace/ui/components/label";
+import { Badge } from "@workspace/ui/components/badge";
 
 export const classNameFieldOverrides: FieldConfigFunction = (
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

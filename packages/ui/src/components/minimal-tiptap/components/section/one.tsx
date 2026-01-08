@@ -2,7 +2,7 @@ import * as React from "react"
 import type { Editor } from "@tiptap/react"
 import type { FormatAction } from "../../types"
 import type { VariantProps } from "class-variance-authority"
-import type { toggleVariants } from "@workspace/components/ui/toggle"
+import type { toggleVariants } from "@workspace/ui/components/toggle"
 import { cn } from "@workspace/ui/lib/utils"
 import { CaretDownIcon, LetterCaseCapitalizeIcon } from "@radix-ui/react-icons"
 import {
@@ -10,7 +10,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@workspace/components/ui/dropdown-menu"
+} from "@workspace/ui/components/dropdown-menu"
 import { ToolbarButton } from "../toolbar-button"
 import { ShortcutKey } from "../shortcut-key"
 

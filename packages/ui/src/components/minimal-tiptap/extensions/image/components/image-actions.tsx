@@ -3,15 +3,15 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@workspace/components/ui/tooltip"
+} from "@workspace/ui/components/tooltip"
 import { cn } from "@workspace/ui/lib/utils"
-import { Button } from "@workspace/components/ui/button"
+import { Button } from "@workspace/ui/components/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@workspace/components/ui/dropdown-menu"
+} from "@workspace/ui/components/dropdown-menu"
 import {
   ClipboardCopyIcon,
   DotsHorizontalIcon,

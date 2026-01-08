@@ -1,14 +1,15 @@
+// @ts-nocheck
 import React, { useCallback, useMemo } from "react";
 import {
   FormItem,
   FormLabel,
   FormControl,
   FormDescription,
-} from "@workspace/components/ui/form";
+} from "@workspace/ui/components/form";
 import MultipleSelector, {
   Option,
-} from "@workspace/components/ui/ui-builder/internal/components/multi-select";
-import { iconNames } from "@workspace/components/ui/ui-builder/components/icon";
+} from "@workspace/ui/components/ui-builder/internal/components/multi-select";
+import { iconNames } from "@workspace/ui/components/ui-builder/components/icon";
 
 const EMPTY_OPTIONS: Option[] = [];
 

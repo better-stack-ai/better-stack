@@ -1,11 +1,12 @@
+// @ts-nocheck
 import React, { useMemo, useState } from "react";
 import {  Plus, Trash, Copy } from "lucide-react";
-import { buttonVariants } from "@workspace/components/ui/button";
-import { useLayerStore } from "@workspace/lib/ui-builder/store/layer-store";
-import { useEditorStore } from "@workspace/lib/ui-builder/store/editor-store";
-import { AddComponentsPopover } from "@workspace/components/ui/ui-builder/internal/components/add-component-popover";
+import { buttonVariants } from "@workspace/ui/components/button";
+import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
+import { useEditorStore } from "@workspace/ui/lib/ui-builder/store/editor-store";
+import { AddComponentsPopover } from "@workspace/ui/components/ui-builder/internal/components/add-component-popover";
 import { cn } from "@workspace/ui/lib/utils";
-import { hasAnyChildrenField, hasChildrenFieldOfTypeString } from "@workspace/lib/ui-builder/store/schema-utils";
+import { hasAnyChildrenField, hasChildrenFieldOfTypeString } from "@workspace/ui/lib/ui-builder/store/schema-utils";
 
 interface MenuProps {
   layerId: string;

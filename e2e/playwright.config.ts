@@ -19,10 +19,7 @@ export default defineConfig({
 	timeout: 90_000,
 	forbidOnly: !!process.env.CI,
 	outputDir: "../test-results",
-	reporter: [
-		["list"],
-		["html", { open: process.env.CI ? "never" : "on-failure" }],
-	],
+	reporter: [["list"], ["html", { open: "never" }]],
 	expect: {
 		timeout: 10_000,
 	},
@@ -99,6 +96,7 @@ export default defineConfig({
 				"**/*.cms.spec.ts",
 				"**/*.relations-cms.spec.ts",
 				"**/*.form-builder.spec.ts",
+				"**/*.ui-builder.spec.ts",
 			],
 		},
 		{

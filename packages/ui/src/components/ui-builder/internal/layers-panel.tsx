@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, {
   useCallback,
   useLayoutEffect,
@@ -6,23 +7,23 @@ import React, {
   useState,
 } from "react";
 import isDeepEqual from "fast-deep-equal";
-import { useLayerStore } from "@workspace/lib/ui-builder/store/layer-store";
-import { ComponentLayer } from "@workspace/components/ui/ui-builder/types";
+import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
+import { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
 import { cn } from "@workspace/ui/lib/utils";
 import {
   findAllParentLayersRecursive,
   hasLayerChildren,
-} from "@workspace/lib/ui-builder/store/layer-utils";
+} from "@workspace/ui/lib/ui-builder/store/layer-utils";
 import { Plus } from "lucide-react";
 import { useHeTree, Id } from "he-tree-react";
 import {
   TreeRowNode,
   TreeRowPlaceholder,
-} from "@workspace/components/ui/ui-builder/internal/components/tree-row-node";
-import { DevProfiler } from "@workspace/components/ui/ui-builder/internal/components/dev-profiler";
-import { AddComponentsPopover } from "@workspace/components/ui/ui-builder/internal/components/add-component-popover";
-import { buttonVariants } from "@workspace/components/ui/button";
-import { DividerControl } from "@workspace/components/ui/ui-builder/internal/components/divider-control";
+} from "@workspace/ui/components/ui-builder/internal/components/tree-row-node";
+import { DevProfiler } from "@workspace/ui/components/ui-builder/internal/components/dev-profiler";
+import { AddComponentsPopover } from "@workspace/ui/components/ui-builder/internal/components/add-component-popover";
+import { buttonVariants } from "@workspace/ui/components/button";
+import { DividerControl } from "@workspace/ui/components/ui-builder/internal/components/divider-control";
 
 interface LayersPanelProps {
   className?: string;

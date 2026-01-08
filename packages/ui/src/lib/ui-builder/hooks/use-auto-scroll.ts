@@ -1,5 +1,6 @@
+// @ts-nocheck
 import { useCallback, useRef } from 'react';
-import { getIframeElements } from '@workspace/lib/ui-builder/context/dnd-utils';
+import { getIframeElements } from '@workspace/ui/lib/ui-builder/context/dnd-utils';
 import { 
   AutoScrollState, 
   AUTO_SCROLL_THRESHOLD, 

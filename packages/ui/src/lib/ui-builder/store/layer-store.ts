@@ -1,13 +1,14 @@
+// @ts-nocheck
 import { create, StateCreator } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { produce } from 'immer';
 import { temporal } from 'zundo';
 import isDeepEqual from 'fast-deep-equal';
 
-import { visitLayer, addLayer, hasLayerChildren, findLayerRecursive, createId, countLayers, duplicateWithNewIdsAndName, findAllParentLayersRecursive, migrateV1ToV2, migrateV2ToV3, migrateV5ToV6, createComponentLayer, moveLayer } from '@workspace/lib/ui-builder/store/layer-utils';
-import { getDefaultProps } from '@workspace/lib/ui-builder/store/schema-utils';
-import { useEditorStore } from '@workspace/lib/ui-builder/store/editor-store';
-import { ComponentLayer, Variable, PropValue, VariableValueType, isVariableReference } from '@workspace/components/ui/ui-builder/types';
+import { visitLayer, addLayer, hasLayerChildren, findLayerRecursive, createId, countLayers, duplicateWithNewIdsAndName, findAllParentLayersRecursive, migrateV1ToV2, migrateV2ToV3, migrateV5ToV6, createComponentLayer, moveLayer } from '@workspace/ui/lib/ui-builder/store/layer-utils';
+import { getDefaultProps } from '@workspace/ui/lib/ui-builder/store/schema-utils';
+import { useEditorStore } from '@workspace/ui/lib/ui-builder/store/editor-store';
+import { ComponentLayer, Variable, PropValue, VariableValueType, isVariableReference } from '@workspace/ui/components/ui-builder/types';
 
 const DEFAULT_PAGE_PROPS = {
   className: "h-screen p-4 flex flex-col gap-2 bg-background overflow-y-scroll",

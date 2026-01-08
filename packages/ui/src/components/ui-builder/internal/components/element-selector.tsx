@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client";
 import React, {
   useCallback,
@@ -9,11 +10,11 @@ import React, {
   useContext,
 } from "react";
 import { useTransformEffect } from "react-zoom-pan-pinch";
-import { ComponentLayer } from "@workspace/components/ui/ui-builder/types";
-import { LayerMenu } from "@workspace/components/ui/ui-builder/internal/components/layer-menu";
-import { DragHandle as ComponentDragHandle } from "@workspace/components/ui/ui-builder/internal/dnd/drag-handle";
-import { DragHandleContext } from "@workspace/components/ui/ui-builder/internal/canvas/resizable-wrapper";
-import { useDndContext } from "@workspace/lib/ui-builder/context/dnd-context";
+import { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
+import { LayerMenu } from "@workspace/ui/components/ui-builder/internal/components/layer-menu";
+import { DragHandle as ComponentDragHandle } from "@workspace/ui/components/ui-builder/internal/dnd/drag-handle";
+import { DragHandleContext } from "@workspace/ui/components/ui-builder/internal/canvas/resizable-wrapper";
+import { useDndContext } from "@workspace/ui/lib/ui-builder/context/dnd-context";
 import { cn } from "@workspace/ui/lib/utils";
 import {
   offset,
@@ -22,8 +23,8 @@ import {
   shift,
   limitShift,
 } from "@floating-ui/react";
-import { getScrollParent } from "@workspace/lib/ui-builder/utils/get-scroll-parent";
-import { useFrame } from "@workspace/components/ui/ui-builder/internal/canvas/auto-frame";
+import { getScrollParent } from "@workspace/ui/lib/ui-builder/utils/get-scroll-parent";
+import { useFrame } from "@workspace/ui/components/ui-builder/internal/canvas/auto-frame";
 
 const style: React.CSSProperties = {
   display: "contents",

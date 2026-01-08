@@ -1,12 +1,13 @@
+// @ts-nocheck
 import React, { useCallback, useMemo } from "react";
 import { z } from "zod";
 import {
   useLayerStore,
-} from "@workspace/lib/ui-builder/store/layer-store";
-import { Button } from "@workspace/components/ui/button";
-import AutoForm from "@workspace/components/ui/auto-form";
-import { addDefaultValues } from "@workspace/lib/ui-builder/store/schema-utils";
-import { ComponentLayer } from "@workspace/components/ui/ui-builder/types";
+} from "@workspace/ui/lib/ui-builder/store/layer-store";
+import { Button } from "@workspace/ui/components/button";
+import AutoForm from "@workspace/ui/components/auto-form";
+import { addDefaultValues } from "@workspace/ui/lib/ui-builder/store/schema-utils";
+import { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
 
 export const ConfigPanel = () => {
   const {

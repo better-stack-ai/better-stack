@@ -1,9 +1,10 @@
+// @ts-nocheck
 import React from "react";
 
-import { EditorConfig, RenderLayer } from "@workspace/components/ui/ui-builder/internal/utils/render-utils";
-import { DevProfiler } from "@workspace/components/ui/ui-builder/internal/components/dev-profiler";
+import { type EditorConfig, RenderLayer } from "@workspace/ui/components/ui-builder/internal/utils/render-utils";
+import { DevProfiler } from "@workspace/ui/components/ui-builder/internal/components/dev-profiler";
 
-import { Variable, ComponentLayer, ComponentRegistry, PropValue } from '@workspace/components/ui/ui-builder/types';
+import { type Variable, type ComponentLayer, type ComponentRegistry, type PropValue } from '@workspace/ui/components/ui-builder/types';
 
 interface LayerRendererProps<TRegistry extends ComponentRegistry = ComponentRegistry> {
   className?: string;

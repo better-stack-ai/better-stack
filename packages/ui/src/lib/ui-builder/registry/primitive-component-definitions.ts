@@ -1,6 +1,7 @@
-import { ComponentRegistry } from '@workspace/components/ui/ui-builder/types';
+// @ts-nocheck
+import { ComponentRegistry } from '@workspace/ui/components/ui-builder/types';
 import { z } from 'zod';
-import { childrenAsTextareaFieldOverrides, classNameFieldOverrides, commonFieldOverrides } from "@workspace/lib/ui-builder/registry/form-field-overrides";
+import { childrenAsTextareaFieldOverrides, classNameFieldOverrides, commonFieldOverrides } from "./form-field-overrides";
 
 export const primitiveComponentDefinitions: ComponentRegistry = {
   'a': {

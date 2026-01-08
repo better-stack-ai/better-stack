@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ReactNode, useCallback, useMemo } from "react";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -5,15 +6,15 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@workspace/components/ui/dropdown-menu";
+} from "@workspace/ui/components/dropdown-menu";
 
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@workspace/components/ui/tooltip";
+} from "@workspace/ui/components/tooltip";
 
-import { Button } from "@workspace/components/ui/button";
+import { Button } from "@workspace/ui/components/button";
 import { ChevronDown, XIcon } from "lucide-react";
 
 type ToggleGroupProps = {

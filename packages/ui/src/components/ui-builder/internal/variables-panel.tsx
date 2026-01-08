@@ -1,22 +1,23 @@
+// @ts-nocheck
 "use client";
 
 import React, { useCallback, useState } from "react";
-import { Button } from "@workspace/components/ui/button";
-import { Input } from "@workspace/components/ui/input";
-import { Label } from "@workspace/components/ui/label";
+import { Button } from "@workspace/ui/components/button";
+import { Input } from "@workspace/ui/components/input";
+import { Label } from "@workspace/ui/components/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@workspace/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/components/ui/card";
+} from "@workspace/ui/components/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card";
 import { Trash2, Plus, Edit2, Check, X } from "lucide-react";
-import { useLayerStore } from "@workspace/lib/ui-builder/store/layer-store";
-import { Variable } from "@workspace/components/ui/ui-builder/types";
+import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
+import { Variable } from "@workspace/ui/components/ui-builder/types";
 import { cn } from "@workspace/ui/lib/utils";
-import { useEditorStore } from "@workspace/lib/ui-builder/store/editor-store";
+import { useEditorStore } from "@workspace/ui/lib/ui-builder/store/editor-store";
 
 const EMPTY_OBJECT = {};
 

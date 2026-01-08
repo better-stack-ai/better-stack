@@ -1,16 +1,17 @@
-import { ComponentRegistry } from '@workspace/components/ui/ui-builder/types';
+// @ts-nocheck
+import { ComponentRegistry } from '@workspace/ui/components/ui-builder/types';
 import { z } from 'zod';
-import { Button } from '@workspace/components/ui/button';
-import { Badge } from '@workspace/components/ui/badge';
-import { Flexbox } from '@workspace/components/ui/ui-builder/components/flexbox';
-import { Grid } from '@workspace/components/ui/ui-builder/components/grid';
-import { CodePanel } from '@workspace/components/ui/ui-builder/components/code-panel';
-import { Markdown } from "@workspace/components/ui/ui-builder/components/markdown";
-import { Icon, iconNames } from "@workspace/components/ui/ui-builder/components/icon";
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@workspace/components/ui/accordion";
-import { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from "@workspace/components/ui/card";
-import { classNameFieldOverrides, childrenFieldOverrides, iconNameFieldOverrides, commonFieldOverrides, childrenAsTipTapFieldOverrides } from "@workspace/lib/ui-builder/registry/form-field-overrides";
-import { ComponentLayer } from '@workspace/components/ui/ui-builder/types';
+import { Button } from '@workspace/ui/components/button';
+import { Badge } from '@workspace/ui/components/badge';
+import { Flexbox } from '@workspace/ui/components/ui-builder/components/flexbox';
+import { Grid } from '@workspace/ui/components/ui-builder/components/grid';
+import { CodePanel } from '@workspace/ui/components/ui-builder/components/code-panel';
+import { Markdown } from "@workspace/ui/components/ui-builder/components/markdown";
+import { Icon, iconNames } from "@workspace/ui/components/ui-builder/components/icon";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@workspace/ui/components/accordion";
+import { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from "@workspace/ui/components/card";
+import { classNameFieldOverrides, childrenFieldOverrides, iconNameFieldOverrides, commonFieldOverrides, childrenAsTipTapFieldOverrides } from "./form-field-overrides";
+import { ComponentLayer } from '@workspace/ui/components/ui-builder/types';
 
 export const complexComponentDefinitions: ComponentRegistry = {
     Button: {

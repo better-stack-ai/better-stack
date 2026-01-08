@@ -4,6 +4,7 @@ import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
 import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
+import { uiBuilderClientPlugin, defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
 import { QueryClient } from "@tanstack/react-query"
 
@@ -133,6 +134,26 @@ export const getStackClient = (
                 siteBasePath: "/pages",
                 queryClient: queryClient,
                 headers: options?.headers,
+            }),
+            // UI Builder plugin for visual page building
+            "ui-builder": uiBuilderClientPlugin({
+                apiBaseURL: baseURL,
+                apiBasePath: "/api/data",
+                siteBaseURL: baseURL,
+                siteBasePath: "/pages",
+                queryClient: queryClient,
+                componentRegistry: defaultComponentRegistry,
+                headers: options?.headers,
+                hooks: {
+                    beforeLoadPageList: async (context) => {
+                        console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] beforeLoadPageList`);
+                        return true;
+                    },
+                    beforeLoadPageBuilder: async (pageId, context) => {
+                        console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] beforeLoadPageBuilder:`, pageId || 'new');
+                        return true;
+                    },
+                },
             }),
             // Route Docs plugin for client route documentation
             routeDocs: routeDocsClientPlugin({

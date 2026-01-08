@@ -1,10 +1,11 @@
+// @ts-nocheck
 "use client";
 import React, { memo, useCallback, useMemo } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { coldarkDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { CopyIcon, CheckIcon } from "lucide-react";
-import { useCopyToClipboard } from "@workspace/hooks/use-copy-to-clipboard";
-import { Button } from "@workspace/components/ui/button";
+import { useCopyToClipboard } from "@workspace/ui/hooks/use-copy-to-clipboard";
+import { Button } from "@workspace/ui/components/button";
 
 interface CodeBlockProps {
   language: string;

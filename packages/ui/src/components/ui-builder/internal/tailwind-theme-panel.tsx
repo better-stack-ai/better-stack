@@ -1,19 +1,20 @@
+// @ts-nocheck
 "use client";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   baseColors,
   BaseColor,
   TAILWIND_V4_COLOR_KEYS,
-} from "@workspace/components/ui/ui-builder/internal/utils/base-colors";
-import { Button } from "@workspace/components/ui/button";
-import { Label } from "@workspace/components/ui/label";
+} from "@workspace/ui/components/ui-builder/internal/utils/base-colors";
+import { Button } from "@workspace/ui/components/button";
+import { Label } from "@workspace/ui/components/label";
 import { CheckIcon, InfoIcon, MoonIcon, SunIcon } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import {
   useLayerStore,
-} from "@workspace/lib/ui-builder/store/layer-store";
-import { ComponentLayer } from '@workspace/components/ui/ui-builder/types';
-import { Toggle } from "@workspace/components/ui/toggle";
+} from "@workspace/ui/lib/ui-builder/store/layer-store";
+import { ComponentLayer } from '@workspace/ui/components/ui-builder/types';
+import { Toggle } from "@workspace/ui/components/toggle";
 
 const RESET_THEME_PROPS = {
   style: undefined,

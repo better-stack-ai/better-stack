@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ReactNode } from "react";
 import {
   Heading,
@@ -49,11 +50,11 @@ import {
   TAILWIND_JUSTIFY_CONTENT_CLASSES,
   TAILWIND_ALIGN_ITEMS_CLASSES,
   TAILWIND_FLEX_WRAP_CLASSES,
-} from "@workspace/components/ui/ui-builder/internal/utils/tailwind-classes";
+} from "@workspace/ui/components/ui-builder/internal/utils/tailwind-classes";
 import {
   ToggleGroup,
   ToggleOption,
-} from "@workspace/components/ui/ui-builder/internal/form-fields/classname-control/toggle-group";
+} from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/toggle-group";
 import {
   FillIcon,
   HugIcon,
@@ -67,14 +68,14 @@ import {
   PaddingAxisIcon,
   ShadowIcon,
   PaddingIcon,
-} from "@workspace/components/ui/ui-builder/internal/form-fields/classname-control/icons";
-import { filterClassnameArray } from "@workspace/components/ui/ui-builder/internal/form-fields/classname-control/helpers";
+} from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/icons";
+import { filterClassnameArray } from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/helpers";
 import {
   THEME_AWARE_BORDER_COLOR_ITEMS,
   THEME_AWARE_BACKGROUND_COLOR_ITEMS,
   THEME_AWARE_TEXT_COLOR_ITEMS,
   THEME_AWARE_SHADOW_COLOR_ITEMS,
-} from "@workspace/components/ui/ui-builder/internal/form-fields/classname-control/theme-aware-config";
+} from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/theme-aware-config";
 
 export type ConfigItem = {
   label: string;

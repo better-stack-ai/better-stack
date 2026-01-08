@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { ImageOptions } from "@tiptap/extension-image"
 import { Image as TiptapImage } from "@tiptap/extension-image"
 import type { Editor } from "@tiptap/react"

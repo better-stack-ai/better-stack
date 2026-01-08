@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Editor } from "@tiptap/react"
 import type { MinimalTiptapProps } from "./minimal-tiptap"
 

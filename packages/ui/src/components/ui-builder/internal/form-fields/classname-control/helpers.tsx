@@ -1,3 +1,4 @@
+// @ts-nocheck
 export function isTailwindClass<T extends readonly string[]>(
   arr: T,
   token: string

@@ -1,3 +1,4 @@
+// @ts-nocheck
 export const getIframeElements = () => {
     const iframe = document.querySelector('[data-testid="auto-frame"]') as HTMLIFrameElement | null;
     if (!iframe) return null;

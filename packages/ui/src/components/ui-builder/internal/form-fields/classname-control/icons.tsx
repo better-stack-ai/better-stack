@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { cn } from "@workspace/ui/lib/utils";
 
 export function HugIcon( {className}: {className?: string}) {

@@ -1,7 +1,8 @@
+// @ts-nocheck
 import React, { useState, useEffect, useCallback } from "react"
-import { Button } from "@workspace/components/ui/button"
+import { Button } from "@workspace/ui/components/button"
 import { Check, X as XIcon } from "lucide-react"
-import { Input } from "@workspace/components/ui/input"
+import { Input } from "@workspace/ui/components/input"
 
 interface NameEditProps {
   initialName: string

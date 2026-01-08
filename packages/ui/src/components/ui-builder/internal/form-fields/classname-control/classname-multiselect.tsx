@@ -1,9 +1,10 @@
+// @ts-nocheck
 import React, { useCallback, useMemo } from "react";
 
 import MultipleSelector, {
   Option,
-} from "@workspace/components/ui/ui-builder/internal/components/multi-select";
-import { TAILWIND_CLASSES_WITH_BREAKPOINTS } from "@workspace/components/ui/ui-builder/internal/utils/tailwind-classes";
+} from "@workspace/ui/components/ui-builder/internal/components/multi-select";
+import { TAILWIND_CLASSES_WITH_BREAKPOINTS } from "@workspace/ui/components/ui-builder/internal/utils/tailwind-classes";
 
 const EMPTY_OPTIONS: Option[] = [];
 

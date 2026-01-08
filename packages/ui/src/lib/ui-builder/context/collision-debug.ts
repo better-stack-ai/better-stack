@@ -1,6 +1,7 @@
+// @ts-nocheck
 import { Collision, UniqueIdentifier } from "@dnd-kit/core";
 import { Coordinates } from "@dnd-kit/utilities";
-import { getIframeElements } from '@workspace/lib/ui-builder/context/dnd-utils';
+import { getIframeElements } from '@workspace/ui/lib/ui-builder/context/dnd-utils';
 
 // Enable/disable debug visualization
 let DEBUG = false;

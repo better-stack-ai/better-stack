@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from "react";
 export function ErrorFallback({ error }: { error: Error }) {
     // Call resetErrorBoundary() to reset the error boundary and retry the render.

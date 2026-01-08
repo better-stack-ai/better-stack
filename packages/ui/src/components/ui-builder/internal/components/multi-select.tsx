@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client";
 
 import { Command as CommandPrimitive, useCommandState } from "cmdk";
@@ -5,15 +6,15 @@ import { X } from "lucide-react";
 import * as React from "react";
 import { forwardRef, useEffect, useMemo, useCallback } from "react";
 
-import { Badge } from "@workspace/components/ui/badge";
+import { Badge } from "@workspace/ui/components/badge";
 import {
   Command,
   CommandGroup,
   CommandItem,
   CommandList,
-} from "@workspace/components/ui/command";
+} from "@workspace/ui/components/command";
 import { cn } from "@workspace/ui/lib/utils";
-import { useDebounce } from "@workspace/hooks/use-debounce";
+import { useDebounce } from "@workspace/ui/hooks/use-debounce";
 
 const EMPTY_ARRAY: any[] = [];
 

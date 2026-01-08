@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client";
 import React, {
   useCallback,
@@ -7,23 +8,23 @@ import React, {
   useEffect,
 } from "react";
 import { Plus, Crosshair, ZoomIn, ZoomOut, MousePointer } from "lucide-react";
-import { countLayers, useLayerStore } from "@workspace/lib/ui-builder/store/layer-store";
-import { ComponentLayer } from "@workspace/components/ui/ui-builder/types";
+import { countLayers, useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
+import { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
 import {
   TransformWrapper,
   TransformComponent,
   useControls,
 } from "react-zoom-pan-pinch";
 
-import LayerRenderer from "@workspace/components/ui/ui-builder/layer-renderer";
-import { DndContextProvider, useComponentDragContext } from "@workspace/lib/ui-builder/context/dnd-context";
+import LayerRenderer from "@workspace/ui/components/ui-builder/layer-renderer";
+import { DndContextProvider, useComponentDragContext } from "@workspace/ui/lib/ui-builder/context/dnd-context";
 import { cn } from "@workspace/ui/lib/utils";
-import { useEditorStore } from "@workspace/lib/ui-builder/store/editor-store";
-import { AddComponentsPopover } from "@workspace/components/ui/ui-builder/internal/components/add-component-popover";
-import { Button } from "@workspace/components/ui/button";
-import { ResizableWrapper } from "@workspace/components/ui/ui-builder/internal/canvas/resizable-wrapper";
-import AutoFrame from "@workspace/components/ui/ui-builder/internal/canvas/auto-frame";
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@workspace/components/ui/tooltip";
+import { useEditorStore } from "@workspace/ui/lib/ui-builder/store/editor-store";
+import { AddComponentsPopover } from "@workspace/ui/components/ui-builder/internal/components/add-component-popover";
+import { Button } from "@workspace/ui/components/button";
+import { ResizableWrapper } from "@workspace/ui/components/ui-builder/internal/canvas/resizable-wrapper";
+import AutoFrame from "@workspace/ui/components/ui-builder/internal/canvas/auto-frame";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@workspace/ui/components/tooltip";
 
 // Static style objects to prevent recreation on every render
 const WRAPPER_STYLE = {

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Separator } from "@workspace/components/ui/separator"
+import { Separator } from "@workspace/ui/components/separator"
 import { ToolbarButton } from "../toolbar-button"
 import {
   CopyIcon,
