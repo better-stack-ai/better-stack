@@ -21,7 +21,6 @@ export const uiBuilderLocalization = {
 		actions: {
 			edit: "Edit",
 			delete: "Delete",
-			preview: "Preview",
 		},
 		deleteDialog: {
 			title: "Delete Page",

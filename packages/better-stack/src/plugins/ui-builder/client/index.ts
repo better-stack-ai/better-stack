@@ -12,6 +12,16 @@ export {
 	complexComponentDefinitions,
 } from "./registry";
 
+// Field override helpers for custom component registries
+export {
+	classNameFieldOverrides,
+	childrenFieldOverrides,
+	iconNameFieldOverrides,
+	commonFieldOverrides,
+	childrenAsTipTapFieldOverrides,
+	childrenAsTextareaFieldOverrides,
+} from "@workspace/ui/lib/ui-builder/registry/form-field-overrides";
+
 // Page rendering components
 export {
 	PageRenderer,

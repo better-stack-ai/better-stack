@@ -27,7 +27,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog";
-import { MoreHorizontal, Plus, Pencil, Trash2, Eye } from "lucide-react";
+import { MoreHorizontal, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -158,14 +158,6 @@ export function PageListPage() {
 														>
 															<Pencil className="mr-2 h-4 w-4" />
 															{loc.pageList.actions.edit}
-														</DropdownMenuItem>
-														<DropdownMenuItem
-															onClick={() =>
-																navigate?.(`${basePath}/preview/${page.slug}`)
-															}
-														>
-															<Eye className="mr-2 h-4 w-4" />
-															{loc.pageList.actions.preview}
 														</DropdownMenuItem>
 														<DropdownMenuItem
 															className="text-destructive"
