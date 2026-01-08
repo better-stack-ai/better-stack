@@ -378,6 +378,7 @@ export function FormBuilder({
         // Going from 2 steps to single-step mode
         // Remove stepGroup from remaining fields
         const updatedFields = fieldsWithoutDeleted.map((f) => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { stepGroup: _, ...rest } = f;
           return rest;
         });

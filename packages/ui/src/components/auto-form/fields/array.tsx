@@ -8,7 +8,7 @@ import { Separator } from "@workspace/ui/components/separator";
 import { Plus, Trash } from "lucide-react";
 import { useFieldArray, useForm } from "react-hook-form";
 import * as z from "zod";
-import { beautifyObjectName } from "../utils";
+import { beautifyObjectName } from "../helpers";
 import AutoFormObject from "./object";
 
 /**

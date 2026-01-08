@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { SteppedAutoForm } from "@workspace/ui/components/auto-form/stepped-auto-form";
-import { buildFieldConfigFromJsonSchema } from "@workspace/ui/components/auto-form/utils";
+import { buildFieldConfigFromJsonSchema } from "@workspace/ui/components/auto-form/helpers";
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
 import { formSchemaToZod } from "@workspace/ui/lib/schema-converter";
