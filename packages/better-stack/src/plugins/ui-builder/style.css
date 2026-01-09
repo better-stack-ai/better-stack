@@ -1,0 +1,26 @@
+@import "./client.css";
+
+/*
+ * UI Builder Plugin CSS - Includes Tailwind class scanning
+ * 
+ * CRITICAL: The UI Builder uses a large safelist of Tailwind utility classes
+ * for dynamic component styling (widths, heights, colors, spacing, etc.).
+ * Consumers MUST import this CSS for Tailwind v4 to scan and include all classes.
+ * 
+ * Usage in globals.css:
+ *   @import "@btst/stack/plugins/ui-builder/css";
+ */
+
+/* Scan this package's source files for Tailwind classes */
+@source "../../../src/**/*.{ts,tsx}";
+
+/* Scan UI package components - includes the massive tailwind-classes safelist */
+@source "../../packages/ui/src";
+
+/*
+ * The UI Builder's tailwind-classes.ts file contains 6000+ utility classes
+ * that are used for dynamic component configuration. The @source directive
+ * above ensures Tailwind v4 scans and includes all of these classes.
+ * 
+ * Alternatively consumer can use @source "../node_modules/@btst/stack/src/**\/*.{ts,tsx}";
+ */

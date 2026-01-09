@@ -13,6 +13,9 @@
 /* Import AI Chat plugin styles */
 @import "@btst/stack/plugins/ai-chat/css";
 
+/* Import UI Builder plugin styles */
+@import "@btst/stack/plugins/ui-builder/css";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme {

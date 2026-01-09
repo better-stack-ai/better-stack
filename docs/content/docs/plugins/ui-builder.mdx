@@ -1,0 +1,556 @@
+---
+title: UI Builder Plugin
+description: Visual drag-and-drop page builder with component registry, variables, and public page rendering
+---
+
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "fumadocs-ui/components/callout";
+
+The UI Builder plugin provides a visual drag-and-drop page creation interface where administrators can create pages using pre-defined components. Pages are stored as JSON layers in the CMS and can be rendered on public routes.
+
+**Key Features:**
+- **Visual Page Builder** - Drag-and-drop interface for creating pages with components
+- **Component Registry** - Pre-built shadcn/ui components + custom component support
+- **Variables** - Define page variables for dynamic content
+- **CMS Integration** - Leverages the CMS plugin for data persistence
+- **Public Page Rendering** - Render pages by slug with the `PageRenderer` component
+- **SSR Authorization** - Lifecycle hooks for protecting admin pages
+
+## Installation
+
+<Callout type="info">
+Ensure you followed the general [framework installation guide](/installation) first. The UI Builder requires the CMS plugin to be configured.
+</Callout>
+
+### 1. Add Content Type to CMS Backend
+
+The UI Builder stores pages as CMS content items. Add the pre-configured content type to your CMS:
+
+```ts title="lib/better-stack.ts"
+import { betterStack } from "@btst/stack"
+import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
+import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
+
+const { handler, dbSchema } = betterStack({
+  basePath: "/api/data",
+  plugins: {
+    cms: cmsBackendPlugin({
+      contentTypes: [
+        UI_BUILDER_CONTENT_TYPE,
+        // ... other content types
+      ],
+      hooks: {
+        // Optional: Add authorization for CMS operations
+        onBeforeListContent: async (typeSlug, ctx) => {
+          if (typeSlug === "ui-builder-page") {
+            const session = await getSession(ctx.headers)
+            return session?.user?.isAdmin === true
+          }
+          return true
+        },
+      },
+    })
+  },
+  adapter: (db) => createMemoryAdapter(db)({})
+})
+
+export { handler, dbSchema }
+```
+
+### 2. Add Plugin to Client
+
+Register the UI Builder client plugin:
+
+```tsx title="lib/better-stack-client.tsx"
+import { createStackClient } from "@btst/stack/client"
+import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
+import { uiBuilderClientPlugin, defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
+import { QueryClient } from "@tanstack/react-query"
+import { redirect } from "next/navigation"
+
+const getBaseURL = () => 
+  process.env.BASE_URL || "http://localhost:3000"
+
+export const getStackClient = (queryClient: QueryClient, options?: { headers?: Headers }) => {
+  const baseURL = getBaseURL()
+  return createStackClient({
+    plugins: {
+      // CMS plugin is required
+      "cms": cmsClientPlugin({
+        apiBaseURL: baseURL,
+        apiBasePath: "/api/data",
+        siteBaseURL: baseURL,
+        siteBasePath: "/pages",
+        queryClient,
+        headers: options?.headers,
+      }),
+      // UI Builder plugin
+      "ui-builder": uiBuilderClientPlugin({
+        apiBaseURL: baseURL,
+        apiBasePath: "/api/data",
+        siteBaseURL: baseURL,
+        siteBasePath: "/pages",
+        queryClient,
+        componentRegistry: defaultComponentRegistry,
+        headers: options?.headers,
+        hooks: {
+          // SSR authorization hooks
+          beforeLoadPageList: async (context) => {
+            const session = await getSession(context.headers)
+            return session?.user?.isAdmin === true
+          },
+          beforeLoadPageBuilder: async (pageId, context) => {
+            const session = await getSession(context.headers)
+            return session?.user?.isAdmin === true
+          },
+          onLoadError: (error, context) => {
+            redirect("/auth/sign-in")
+          },
+        },
+      })
+    }
+  })
+}
+```
+
+### 3. Configure Provider Overrides
+
+Add UI Builder overrides to your layout:
+
+```tsx title="app/pages/layout.tsx"
+import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client"
+import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
+
+type PluginOverrides = {
+  "cms": CMSPluginOverrides,
+  "ui-builder": UIBuilderPluginOverrides,
+}
+
+<BetterStackProvider<PluginOverrides>
+  basePath="/pages"
+  overrides={{
+    "cms": {
+      apiBaseURL: baseURL,
+      apiBasePath: "/api/data",
+      navigate: (path) => router.push(path),
+      refresh: () => router.refresh(),
+      Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+    },
+    "ui-builder": {
+      apiBaseURL: baseURL,
+      apiBasePath: "/api/data",
+      navigate: (path) => router.push(path),
+      refresh: () => router.refresh(),
+      Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+      componentRegistry: defaultComponentRegistry,
+    }
+  }}
+>
+  {children}
+</BetterStackProvider>
+```
+
+### 4. Import CSS
+
+**This step is critical for the UI Builder to work correctly.**
+
+The UI Builder uses a large number of Tailwind utility classes for dynamic component styling. Add the CSS import to ensure Tailwind v4 scans all required classes:
+
+```css title="app/globals.css"
+@import "@btst/stack/plugins/ui-builder/css";
+```
+
+<Callout type="warn">
+Without this CSS import, many styling options in the UI Builder will not work because Tailwind won't include the dynamic classes.
+</Callout>
+
+## Admin Routes
+
+The UI Builder plugin provides these admin routes:
+
+| Route | Description |
+|-------|-------------|
+| `/ui-builder` | List all pages with create, edit, delete actions |
+| `/ui-builder/new` | Create a new page with the visual builder |
+| `/ui-builder/:id/edit` | Edit an existing page |
+
+<Callout type="warn">
+Admin routes are automatically set to `noindex` for SEO. Don't include them in your public sitemap.
+</Callout>
+
+## Component Registry
+
+The UI Builder uses a component registry to define available components. A default registry is provided with common components:
+
+### Default Components
+
+**Primitives:**
+- `div`, `span`, `p`, `h1`-`h6` - HTML elements
+- `a` - Anchor links
+- `img` - Images
+- `iframe` - Embedded content
+
+**Layout Components:**
+- `Flexbox` - Flexible box layout
+- `Grid` - CSS Grid layout
+
+**Content Components:**
+- `Markdown` - Rich text with Markdown support
+- `Icon` - Lucide icons
+- `CodePanel` - Syntax-highlighted code blocks
+
+**shadcn/ui Components:**
+- `Button` - Interactive buttons
+- `Badge` - Status badges
+- `Card`, `CardHeader`, `CardTitle`, `CardContent`, `CardFooter` - Card layouts
+- `Accordion`, `AccordionItem`, `AccordionTrigger`, `AccordionContent` - Collapsible sections
+- `Separator` - Visual separators
+- `Carousel`, `CarouselItem` - Image/content carousels
+
+### Custom Component Registry
+
+Extend or replace the default registry with your own components:
+
+```tsx
+import { 
+  createComponentRegistry, 
+  defaultComponentRegistry,
+  primitiveComponentDefinitions,
+} from "@btst/stack/plugins/ui-builder/client"
+import { z } from "zod"
+
+// Extend the default registry
+const customRegistry = createComponentRegistry({
+  ...defaultComponentRegistry,
+  
+  // Add a custom component
+  HeroSection: {
+    component: HeroSection,
+    schema: z.object({
+      title: z.string().default("Welcome"),
+      subtitle: z.string().optional(),
+      backgroundImage: z.string().optional(),
+      ctaText: z.string().default("Get Started"),
+      ctaLink: z.string().default("#"),
+    }),
+    from: "@/components/hero-section",
+  },
+  
+  // Add a pricing card
+  PricingCard: {
+    component: PricingCard,
+    schema: z.object({
+      plan: z.string(),
+      price: z.string(),
+      features: z.array(z.string()).default([]),
+      highlighted: z.boolean().default(false),
+    }),
+    from: "@/components/pricing-card",
+  },
+})
+
+// Use in client plugin
+uiBuilderClientPlugin({
+  // ...
+  componentRegistry: customRegistry,
+})
+```
+
+### Minimal Registry
+
+Create a minimal registry with only the components you need:
+
+```tsx
+const minimalRegistry = createComponentRegistry({
+  div: primitiveComponentDefinitions.div,
+  span: primitiveComponentDefinitions.span,
+  Flexbox: complexComponentDefinitions.Flexbox,
+  Button: complexComponentDefinitions.Button,
+})
+```
+
+## Public Page Rendering
+
+The `PageRenderer` component renders UI Builder pages on public routes:
+
+```tsx title="app/preview/[slug]/page.tsx"
+"use client"
+
+import { PageRenderer } from "@btst/stack/plugins/ui-builder/client"
+
+export default function PreviewPage({ params }: { params: { slug: string } }) {
+  return (
+    <PageRenderer
+      slug={params.slug}
+      className="min-h-screen"
+    />
+  )
+}
+```
+
+### PageRenderer Props
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `slug` | `string` | Page slug to fetch and render |
+| `componentRegistry` | `ComponentRegistry` | Custom registry (defaults to default) |
+| `variableValues` | `Record<string, any>` | Runtime variable values |
+| `LoadingComponent` | `ComponentType` | Custom loading state |
+| `ErrorComponent` | `ComponentType<{ error }>` | Custom error state |
+| `NotFoundComponent` | `ComponentType` | Custom 404 state |
+| `className` | `string` | Additional CSS classes |
+
+### With Variable Values
+
+Pass runtime values to page variables:
+
+```tsx
+import { PageRenderer } from "@btst/stack/plugins/ui-builder/client"
+
+export default function UserPage({ params }: { params: { slug: string } }) {
+  const user = useCurrentUser()
+  
+  return (
+    <PageRenderer
+      slug={params.slug}
+      variableValues={{
+        userName: user?.name ?? "Guest",
+        userEmail: user?.email,
+        isLoggedIn: !!user,
+      }}
+    />
+  )
+}
+```
+
+### SSR with Suspense
+
+For server-side rendering with streaming:
+
+```tsx
+import { Suspense } from "react"
+import { SuspensePageRenderer } from "@btst/stack/plugins/ui-builder/client"
+
+export default function Page({ params }: { params: { slug: string } }) {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <SuspensePageRenderer slug={params.slug} />
+    </Suspense>
+  )
+}
+```
+
+## Client Hooks
+
+Access UI Builder data with React Query hooks:
+
+### Available Hooks
+
+| Hook | Description | Returns |
+|------|-------------|---------|
+| `useUIBuilderPages()` | List all pages | `{ pages, total, isLoading, loadMore, hasMore }` |
+| `useSuspenseUIBuilderPages()` | Suspense variant | `{ pages, total, loadMore, hasMore }` |
+| `useUIBuilderPage(id)` | Get page by ID | `{ page, isLoading, error }` |
+| `useUIBuilderPageBySlug(slug)` | Get page by slug | `{ page, layers, variables, isLoading }` |
+| `useCreateUIBuilderPage()` | Create mutation | React Query mutation |
+| `useUpdateUIBuilderPage()` | Update mutation | React Query mutation |
+| `useDeleteUIBuilderPage()` | Delete mutation | React Query mutation |
+
+### Usage Examples
+
+```tsx
+import { 
+  useUIBuilderPageBySlug,
+  useCreateUIBuilderPage,
+  useUIBuilderPages 
+} from "@btst/stack/plugins/ui-builder/client"
+
+// Public: Fetch page by slug
+function DynamicPage({ slug }: { slug: string }) {
+  const { page, layers, variables, isLoading } = useUIBuilderPageBySlug(slug)
+  
+  if (isLoading || !page) return <Loading />
+  
+  return (
+    <LayerRenderer
+      page={layers[0]}
+      componentRegistry={defaultComponentRegistry}
+      variables={variables}
+    />
+  )
+}
+
+// Admin: Create new page
+function CreatePage() {
+  const createPage = useCreateUIBuilderPage()
+  
+  const handleCreate = async () => {
+    await createPage.mutateAsync({
+      slug: "my-new-page",
+      layers: [
+        {
+          id: "root",
+          type: "div",
+          name: "Page Root",
+          props: { className: "min-h-screen p-8" },
+          children: [],
+        }
+      ],
+      status: "draft",
+    })
+  }
+  
+  return <Button onClick={handleCreate}>Create Page</Button>
+}
+```
+
+## SSR Authorization Hooks
+
+Use hooks in the client plugin config for async authorization during SSR:
+
+```tsx title="lib/better-stack-client.tsx"
+import { redirect } from "next/navigation"
+
+"ui-builder": uiBuilderClientPlugin({
+  // ... config
+  hooks: {
+    beforeLoadPageList: async (context) => {
+      // context.headers contains request headers
+      const session = await getSession(context.headers)
+      return session?.user?.isAdmin === true
+    },
+    beforeLoadPageBuilder: async (pageId, context) => {
+      // pageId is undefined for new pages
+      const session = await getSession(context.headers)
+      return session?.user?.isAdmin === true
+    },
+    afterLoadPageList: async (context) => {
+      console.log("Page list loaded")
+    },
+    afterLoadPageBuilder: async (pageId, context) => {
+      console.log("Page builder loaded for:", pageId)
+    },
+    onLoadError: (error, context) => {
+      // Redirect on authorization failure
+      redirect("/auth/sign-in")
+    },
+  },
+})
+```
+
+### UIBuilderClientHooks
+
+| Hook | Parameters | Return | Description |
+|------|------------|--------|-------------|
+| `beforeLoadPageList` | `context` | `boolean \| Promise<boolean>` | SSR auth for page list |
+| `afterLoadPageList` | `context` | `void` | Post-load lifecycle |
+| `beforeLoadPageBuilder` | `pageId, context` | `boolean \| Promise<boolean>` | SSR auth for builder |
+| `afterLoadPageBuilder` | `pageId, context` | `void` | Post-load lifecycle |
+| `onLoadError` | `error, context` | `void` | Handle auth failures |
+
+### LoaderContext
+
+All hooks receive a context object:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `path` | `string` | Current route path |
+| `params` | `Record<string, string>` | Route parameters |
+| `isSSR` | `boolean` | Whether running on server |
+| `apiBaseURL` | `string` | API base URL |
+| `apiBasePath` | `string` | API path prefix |
+| `headers` | `Headers \| undefined` | Request headers |
+
+## Page Data Structure
+
+UI Builder pages are stored with this structure:
+
+```ts
+interface UIBuilderPage {
+  id: string
+  slug: string              // URL-friendly identifier
+  parsedData: {
+    layers: string          // JSON-serialized ComponentLayer[]
+    variables: string       // JSON-serialized Variable[]
+    status: "published" | "draft" | "archived"
+  }
+  createdAt: string
+  updatedAt: string
+}
+
+interface ComponentLayer {
+  id: string
+  type: string              // Component type from registry
+  name?: string             // Display name in layers panel
+  props: Record<string, any>
+  children: ComponentLayer[] | string
+}
+
+interface Variable {
+  id: string
+  name: string
+  type: "string" | "number" | "boolean"
+  defaultValue: any
+}
+```
+
+## API Reference
+
+### Backend (`@btst/stack/plugins/ui-builder`)
+
+#### UI_BUILDER_CONTENT_TYPE
+
+Pre-configured content type for UI Builder pages. Add to your CMS config:
+
+```ts
+import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
+
+cms: cmsBackendPlugin({
+  contentTypes: [UI_BUILDER_CONTENT_TYPE]
+})
+```
+
+### Client (`@btst/stack/plugins/ui-builder/client`)
+
+#### uiBuilderClientPlugin
+
+Creates the client plugin with routes and SSR loaders.
+
+#### UIBuilderPluginOverrides
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `apiBaseURL` | `string` | Yes | Base URL for API requests |
+| `apiBasePath` | `string` | Yes | API path prefix |
+| `navigate` | `(path: string) => void` | Yes | Navigation function |
+| `Link` | `ComponentType` | No | Link component |
+| `refresh` | `() => void` | No | Refresh function |
+| `componentRegistry` | `ComponentRegistry` | No | Custom component registry |
+| `showAttribution` | `boolean` | No | Show Better Stack attribution |
+
+#### defaultComponentRegistry
+
+The default component registry with primitives and shadcn/ui components.
+
+#### createComponentRegistry
+
+Helper function to create a type-safe component registry:
+
+```ts
+const registry = createComponentRegistry({
+  ...defaultComponentRegistry,
+  CustomComponent: { component: CustomComponent, schema: customSchema },
+})
+```
+
+#### PageRenderer
+
+Component to render UI Builder pages on public routes:
+
+```tsx
+<PageRenderer
+  slug="homepage"
+  componentRegistry={customRegistry}
+  variableValues={{ userName: "John" }}
+/>
+```

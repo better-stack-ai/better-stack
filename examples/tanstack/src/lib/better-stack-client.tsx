@@ -3,6 +3,7 @@ import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
 import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
+import { uiBuilderClientPlugin, defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
 import { QueryClient } from "@tanstack/react-query"
 
@@ -102,6 +103,15 @@ export const getStackClient = (queryClient: QueryClient) => {
                 siteBaseURL: baseURL,
                 siteBasePath: "/pages",
                 queryClient: queryClient,
+            }),
+            // UI Builder plugin for visual page building
+            "ui-builder": uiBuilderClientPlugin({
+                apiBaseURL: baseURL,
+                apiBasePath: "/api/data",
+                siteBaseURL: baseURL,
+                siteBasePath: "/pages",
+                queryClient: queryClient,
+                componentRegistry: defaultComponentRegistry,
             }),
             // Route Docs plugin for client route documentation
             routeDocs: routeDocsClientPlugin({

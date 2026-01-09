@@ -12,6 +12,8 @@ import { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
+import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client"
+import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
 
 // Get base URL - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -73,6 +75,7 @@ type PluginOverrides = {
     "ai-chat": AiChatPluginOverrides,
     cms: CMSPluginOverrides,
     "form-builder": FormBuilderPluginOverrides,
+    "ui-builder": UIBuilderPluginOverrides,
 }
 
 export default function ExampleLayout({
@@ -234,6 +237,14 @@ export default function ExampleLayout({
                         onRouteError: async (routeName, error, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Form Builder error:`, routeName, error.message);
                         },
+                    },
+                    "ui-builder": {
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        navigate: (path) => router.push(path),
+                        refresh: () => router.refresh(),
+                        Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+                        componentRegistry: defaultComponentRegistry,
                     }
                 }}
             >
