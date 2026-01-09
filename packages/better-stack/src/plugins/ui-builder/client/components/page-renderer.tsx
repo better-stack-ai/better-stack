@@ -8,10 +8,7 @@ import type {
 	ComponentRegistry,
 	PropValue,
 } from "@workspace/ui/components/ui-builder/types";
-import {
-	useUIBuilderPageBySlug,
-	useSuspenseUIBuilderPageBySlug,
-} from "../hooks/ui-builder-hooks";
+import { useSuspenseUIBuilderPageBySlug } from "../hooks/ui-builder-hooks";
 import { defaultComponentRegistry } from "../registry";
 import { uiBuilderLocalization } from "../localization";
 
@@ -70,44 +67,6 @@ export interface PageRendererProps {
 	NotFoundComponent?: ComponentType;
 	/** Additional className for the container */
 	className?: string;
-}
-
-/**
- * Internal component that fetches and renders a UI Builder page
- */
-function PageRendererContent({
-	slug,
-	componentRegistry = defaultComponentRegistry,
-	variableValues,
-	NotFoundComponent = DefaultNotFoundComponent,
-	className,
-}: Omit<PageRendererProps, "LoadingComponent" | "ErrorComponent">) {
-	const { page, layers, variables, isLoading } = useUIBuilderPageBySlug(slug);
-
-	if (isLoading) {
-		return <DefaultLoadingComponent />;
-	}
-
-	if (!page || layers.length === 0) {
-		return <NotFoundComponent />;
-	}
-
-	// Get the first page layer (root)
-	const rootLayer = layers[0];
-
-	if (!rootLayer) {
-		return <NotFoundComponent />;
-	}
-
-	return (
-		<LayerRenderer
-			className={className}
-			page={rootLayer}
-			componentRegistry={componentRegistry}
-			variables={variables}
-			variableValues={variableValues}
-		/>
-	);
 }
 
 /**
@@ -181,7 +140,7 @@ export function PageRenderer({
 			FallbackComponent={({ error }) => <ErrorComponent error={error} />}
 		>
 			<Suspense fallback={<LoadingComponent />}>
-				<PageRendererContent
+				<SuspensePageRendererContent
 					slug={slug}
 					componentRegistry={componentRegistry}
 					variableValues={variableValues}
