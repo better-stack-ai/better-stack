@@ -17,6 +17,7 @@ jobs:
       contents: read
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      NODE_OPTIONS: --max-old-space-size=8192
 
     steps:
       - name: Checkout
