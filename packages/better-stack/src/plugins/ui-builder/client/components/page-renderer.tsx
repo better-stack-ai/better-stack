@@ -8,7 +8,10 @@ import type {
 	ComponentRegistry,
 	PropValue,
 } from "@workspace/ui/components/ui-builder/types";
-import { useUIBuilderPageBySlug } from "../hooks/ui-builder-hooks";
+import {
+	useUIBuilderPageBySlug,
+	useSuspenseUIBuilderPageBySlug,
+} from "../hooks/ui-builder-hooks";
 import { defaultComponentRegistry } from "../registry";
 import { uiBuilderLocalization } from "../localization";
 
@@ -191,10 +194,49 @@ export function PageRenderer({
 }
 
 /**
+ * Internal component that fetches and renders a UI Builder page using Suspense
+ * Uses useSuspenseQuery which throws promises for React Suspense to catch
+ */
+function SuspensePageRendererContent({
+	slug,
+	componentRegistry = defaultComponentRegistry,
+	variableValues,
+	NotFoundComponent = DefaultNotFoundComponent,
+	className,
+}: Omit<PageRendererProps, "LoadingComponent" | "ErrorComponent">) {
+	const { page, layers, variables } = useSuspenseUIBuilderPageBySlug(slug);
+
+	if (!page || layers.length === 0) {
+		return <NotFoundComponent />;
+	}
+
+	// Get the first page layer (root)
+	const rootLayer = layers[0];
+
+	if (!rootLayer) {
+		return <NotFoundComponent />;
+	}
+
+	return (
+		<LayerRenderer
+			className={className}
+			page={rootLayer}
+			componentRegistry={componentRegistry}
+			variables={variables}
+			variableValues={variableValues}
+		/>
+	);
+}
+
+/**
  * SuspensePageRenderer - Suspense-based PageRenderer for SSR
  *
  * Similar to PageRenderer but designed for use with React Suspense streaming.
  * Use this when you want the server to wait for the page data before sending HTML.
+ *
+ * This component uses `useSuspenseQuery` internally, which throws a promise
+ * while data is loading. This allows React Suspense boundaries to properly
+ * catch the loading state and enables SSR streaming.
  *
  * @example
  * ```tsx
@@ -218,7 +260,7 @@ export function SuspensePageRenderer({
 	className,
 }: Omit<PageRendererProps, "LoadingComponent" | "ErrorComponent">): ReactNode {
 	return (
-		<PageRendererContent
+		<SuspensePageRendererContent
 			slug={slug}
 			componentRegistry={componentRegistry}
 			variableValues={variableValues}
