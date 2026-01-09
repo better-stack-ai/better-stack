@@ -123,7 +123,13 @@ test.describe("UI Builder Plugin - Admin Pages", () => {
 
 		// Save the page
 		await page.getByRole("button", { name: "Save" }).click();
-		await expect(page.locator("text=/saved/i")).toBeVisible({
+		// Use .first() to avoid strict mode violation if multiple toasts appear
+		await expect(page.locator("text=/saved/i").first()).toBeVisible({
+			timeout: 10000,
+		});
+
+		// Wait for first toast to disappear before proceeding
+		await expect(page.locator("text=/saved/i")).not.toBeVisible({
 			timeout: 10000,
 		});
 
@@ -137,7 +143,7 @@ test.describe("UI Builder Plugin - Admin Pages", () => {
 
 		// Save changes
 		await page.getByRole("button", { name: "Save" }).click();
-		await expect(page.locator("text=/saved/i")).toBeVisible({
+		await expect(page.locator("text=/saved/i").first()).toBeVisible({
 			timeout: 10000,
 		});
 
