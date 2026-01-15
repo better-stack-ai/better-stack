@@ -230,7 +230,7 @@ function createPageBuilderMeta(
 	config: UIBuilderClientConfig,
 ) {
 	return () => {
-		const { queryClient, apiBasePath, apiBaseURL } = config;
+		const { queryClient, apiBasePath, apiBaseURL, headers } = config;
 		const typeSlug = UI_BUILDER_TYPE_SLUG;
 
 		let pageSlug = "";
@@ -239,7 +239,7 @@ function createPageBuilderMeta(
 				baseURL: apiBaseURL,
 				basePath: apiBasePath,
 			});
-			const queries = createCMSQueryKeys(client);
+			const queries = createCMSQueryKeys(client, headers);
 			const page = queryClient.getQueryData(
 				queries.cmsContent.detail(typeSlug, id).queryKey,
 			) as { slug: string } | undefined;

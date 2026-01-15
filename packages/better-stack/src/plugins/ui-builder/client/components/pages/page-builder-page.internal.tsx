@@ -4,7 +4,6 @@ import { useState, useCallback } from "react";
 import { usePluginOverrides, useBasePath } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
-import { Label } from "@workspace/ui/components/label";
 import {
 	Select,
 	SelectContent,
@@ -12,7 +11,13 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@workspace/ui/components/select";
-import { ArrowLeft, Save } from "lucide-react";
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@workspace/ui/components/popover";
+import { Label } from "@workspace/ui/components/label";
+import { ArrowLeft, Save, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import UIBuilder from "@workspace/ui/components/ui-builder";
 import type {
@@ -201,89 +206,139 @@ function PageBuilderPageContent({
 
 	const isSaving = createMutation.isPending || updateMutation.isPending;
 
-	return (
-		<div className="flex h-full flex-col" data-testid="page-builder-page">
-			{/* Header */}
-			<div className="flex items-center gap-4 border-b p-4">
-				<Button variant="ghost" size="icon" asChild>
-					<LinkComponent href={`${basePath}/ui-builder`}>
-						<ArrowLeft className="h-4 w-4" />
-					</LinkComponent>
-				</Button>
-
-				<div className="flex flex-col gap-1">
-					<Label htmlFor="page-slug" className="text-xs text-muted-foreground">
+	// Shared form fields - used in both mobile popover and desktop inline
+	const pageSettingsFields = (isMobile: boolean) => (
+		<div
+			className={isMobile ? "flex flex-col gap-4" : "flex items-center gap-4"}
+		>
+			<div className={isMobile ? "flex flex-col gap-2" : ""}>
+				{isMobile && (
+					<Label htmlFor="page-slug" className="text-sm font-medium">
 						{loc.pageBuilder.slugLabel}
 					</Label>
-					<Input
-						id="page-slug"
-						value={slug}
-						onChange={(e) => {
-							setSlug(e.target.value);
-							setAutoSlug(false);
-						}}
-						placeholder={loc.pageBuilder.slugPlaceholder}
-						className="h-8 w-48 font-mono text-sm"
-						disabled={!!id}
-					/>
-				</div>
-
-				<div className="flex flex-col gap-1">
-					<Label
-						htmlFor="page-status"
-						className="text-xs text-muted-foreground"
-					>
-						{loc.pageBuilder.statusLabel}
-					</Label>
-					<Select
-						value={status}
-						onValueChange={(v) => setStatus(v as typeof status)}
-					>
-						<SelectTrigger className="h-8 w-28">
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="draft">
-								{loc.pageBuilder.statusOptions.draft}
-							</SelectItem>
-							<SelectItem value="published">
-								{loc.pageBuilder.statusOptions.published}
-							</SelectItem>
-							<SelectItem value="archived">
-								{loc.pageBuilder.statusOptions.archived}
-							</SelectItem>
-						</SelectContent>
-					</Select>
-				</div>
-
-				<div className="ml-auto">
-					<Button onClick={handleSave} disabled={isSaving}>
-						<Save className="mr-2 h-4 w-4" />
-						{isSaving
-							? loc.pageBuilder.saving
-							: id
-								? loc.pageBuilder.save
-								: loc.pageBuilder.save}
-					</Button>
-				</div>
-			</div>
-
-			{/* UI Builder */}
-			<div className="flex-1 overflow-hidden">
-				<UIBuilder
-					initialLayers={existingLayers.length > 0 ? existingLayers : undefined}
-					onChange={handleLayersChange}
-					initialVariables={
-						existingVariables.length > 0 ? existingVariables : undefined
+				)}
+				<Input
+					id="page-slug"
+					value={slug}
+					onChange={(e) => {
+						setSlug(e.target.value);
+						setAutoSlug(false);
+					}}
+					placeholder={loc.pageBuilder.slugPlaceholder}
+					className={
+						isMobile ? "h-9 font-mono text-sm" : "h-8 w-48 font-mono text-sm"
 					}
-					onVariablesChange={handleVariablesChange}
-					componentRegistry={componentRegistry}
-					persistLayerStore={false}
-					allowVariableEditing={true}
-					allowPagesCreation={true}
-					allowPagesDeletion={true}
+					disabled={!!id}
 				/>
 			</div>
+
+			<div className={isMobile ? "flex flex-col gap-2" : ""}>
+				{isMobile && (
+					<Label htmlFor="page-status" className="text-sm font-medium">
+						{loc.pageBuilder.statusLabel}
+					</Label>
+				)}
+				<Select
+					value={status}
+					onValueChange={(v) => setStatus(v as typeof status)}
+				>
+					<SelectTrigger className={isMobile ? "h-9 w-full" : "h-8 w-28"}>
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="draft">
+							{loc.pageBuilder.statusOptions.draft}
+						</SelectItem>
+						<SelectItem value="published">
+							{loc.pageBuilder.statusOptions.published}
+						</SelectItem>
+						<SelectItem value="archived">
+							{loc.pageBuilder.statusOptions.archived}
+						</SelectItem>
+					</SelectContent>
+				</Select>
+			</div>
+		</div>
+	);
+
+	// NavBar left children - back button, mobile popover, desktop inline fields
+	const navLeftChildren = (
+		<div className="flex items-center gap-2 md:gap-4">
+			<Button variant="ghost" size="icon" asChild className="shrink-0">
+				<LinkComponent href={`${basePath}/ui-builder`}>
+					<ArrowLeft className="h-4 w-4" />
+				</LinkComponent>
+			</Button>
+
+			{/* Mobile: Popover with settings */}
+			<div className="md:hidden">
+				<Popover>
+					<PopoverTrigger asChild>
+						<Button variant="outline" size="sm" className="gap-2">
+							<Settings2 className="h-4 w-4" />
+							<span className="max-w-20 truncate font-mono text-xs">
+								{slug || loc.pageBuilder.slugPlaceholder}
+							</span>
+						</Button>
+					</PopoverTrigger>
+					<PopoverContent className="z-[9999] w-72" align="start">
+						<div className="grid gap-4">
+							<div className="space-y-2">
+								<h4 className="font-medium leading-none">Page Settings</h4>
+								<p className="text-sm text-muted-foreground">
+									Configure page slug and status
+								</p>
+							</div>
+							{pageSettingsFields(true)}
+						</div>
+					</PopoverContent>
+				</Popover>
+			</div>
+
+			{/* Desktop: Inline fields */}
+			<div className="hidden md:flex md:items-center md:gap-4">
+				{pageSettingsFields(false)}
+			</div>
+		</div>
+	);
+
+	// NavBar right children - save button (icon only on mobile, with text on desktop)
+	const navRightChildren = (
+		<Button
+			onClick={handleSave}
+			disabled={isSaving}
+			size="icon"
+			className="md:w-auto md:px-4"
+		>
+			<Save className="h-4 w-4 md:mr-2" />
+			<span className="hidden md:inline">
+				{isSaving
+					? loc.pageBuilder.saving
+					: id
+						? loc.pageBuilder.save
+						: loc.pageBuilder.save}
+			</span>
+		</Button>
+	);
+
+	return (
+		<div className="flex h-full flex-col" data-testid="page-builder-page">
+			<UIBuilder
+				initialLayers={existingLayers.length > 0 ? existingLayers : undefined}
+				onChange={handleLayersChange}
+				initialVariables={
+					existingVariables.length > 0 ? existingVariables : undefined
+				}
+				onVariablesChange={handleVariablesChange}
+				componentRegistry={componentRegistry}
+				persistLayerStore={false}
+				allowVariableEditing={true}
+				allowPagesCreation={false}
+				allowPagesDeletion={false}
+				showExport={false}
+				navLeftChildren={navLeftChildren}
+				navRightChildren={navRightChildren}
+			/>
 		</div>
 	);
 }
