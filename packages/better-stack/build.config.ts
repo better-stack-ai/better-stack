@@ -92,6 +92,11 @@ export default defineBuildConfig({
 		"./src/plugins/open-api/api/index.ts",
 		// route-docs plugin entries
 		"./src/plugins/route-docs/client/index.ts",
+		// ui-builder plugin entries
+		"./src/plugins/ui-builder/index.ts",
+		"./src/plugins/ui-builder/client/index.ts",
+		"./src/plugins/ui-builder/client/components/index.ts",
+		"./src/plugins/ui-builder/client/hooks/index.tsx",
 	],
 	hooks: {
 		"rollup:options"(_ctx, options) {

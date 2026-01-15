@@ -18,6 +18,9 @@
 /* Import Route Docs plugin styles */
 @import "@btst/stack/plugins/route-docs/css";
 
+/* Import UI Builder plugin styles - CRITICAL for dynamic component styling */
+@import "@btst/stack/plugins/ui-builder/css";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
