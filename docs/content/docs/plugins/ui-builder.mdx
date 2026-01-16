@@ -5,6 +5,15 @@ description: Visual drag-and-drop page builder with component registry, variable
 
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
+import Image from "next/image";
+
+import uiBuilderDemo from "../../../assets/ui-builder-demo-1.gif";
+
+<div className="my-4">
+  <a href={uiBuilderDemo.src} target="_blank" rel="noopener noreferrer">
+    <Image src={uiBuilderDemo} alt="UI Builder Plugin Demo" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" unoptimized />
+  </a>
+</div>
 
 The UI Builder plugin provides a visual drag-and-drop page creation interface where administrators can create pages using pre-defined components. Pages are stored as JSON layers in the CMS and can be rendered on public routes.
 
