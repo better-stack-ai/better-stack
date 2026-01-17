@@ -445,3 +445,8 @@ export const getDefaultPanelConfigValues = ( tabsContent: TabsContentConfig, nav
 };
 
 export default UIBuilder;
+
+// Re-export renderers for public use
+export { default as LayerRenderer } from "@workspace/ui/components/ui-builder/layer-renderer";
+export { ServerLayerRenderer } from "@workspace/ui/components/ui-builder/server-layer-renderer";
+export type { ServerLayerRendererProps } from "@workspace/ui/components/ui-builder/server-layer-renderer";
