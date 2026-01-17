@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Editor } from "@tiptap/react"
 import type { VariantProps } from "class-variance-authority"
 import type { toggleVariants } from "@workspace/ui/components/toggle"

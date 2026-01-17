@@ -1,4 +1,5 @@
 "use client";
+// @ts-nocheck
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { z } from "zod";

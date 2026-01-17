@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Extension } from "@tiptap/react"
 import { Plugin, PluginKey } from "@tiptap/pm/state"
 

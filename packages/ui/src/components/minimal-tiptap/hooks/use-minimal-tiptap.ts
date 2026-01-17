@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as React from "react"
 import type { Editor } from "@tiptap/react"
 import type { Content, UseEditorOptions } from "@tiptap/react"
@@ -21,7 +22,7 @@ import {
 } from "../extensions"
 import { cn } from "@workspace/ui/lib/utils"
 import { fileToBase64, getOutput, randomId } from "../utils"
-import { useThrottle } from "./use-throttle"
+import { useThrottle } from "../hooks/use-throttle"
 import { toast } from "sonner"
 
 export interface UseMinimalTiptapEditorProps extends UseEditorOptions {

@@ -1,5 +1,5 @@
-// @ts-nocheck
 "use client";
+// @ts-nocheck
 
 import React, { FC, memo, useMemo } from "react";
 import ReactMarkdown, { Components, Options } from "react-markdown";

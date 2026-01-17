@@ -1,5 +1,5 @@
-// @ts-nocheck
 "use client";
+// @ts-nocheck
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   baseColors,
@@ -13,7 +13,7 @@ import { cn } from "@workspace/ui/lib/utils";
 import {
   useLayerStore,
 } from "@workspace/ui/lib/ui-builder/store/layer-store";
-import { ComponentLayer } from '@workspace/ui/components/ui-builder/types';
+import { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
 import { Toggle } from "@workspace/ui/components/toggle";
 
 const RESET_THEME_PROPS = {

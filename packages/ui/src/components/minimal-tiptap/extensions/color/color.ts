@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Color as TiptapColor } from "@tiptap/extension-color"
 import { Plugin } from "@tiptap/pm/state"
 

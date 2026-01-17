@@ -1,5 +1,5 @@
-// @ts-nocheck
 "use client";
+// @ts-nocheck
 
 import { ReactNode, useMemo } from "react";
 import { cn } from "@workspace/ui/lib/utils";

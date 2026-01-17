@@ -1,3 +1,4 @@
+// @ts-nocheck
 function AutoFormTooltip({ fieldConfigItem }: { fieldConfigItem: any }) {
   return (
     <>

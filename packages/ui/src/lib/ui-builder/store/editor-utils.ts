@@ -1,6 +1,6 @@
 // @ts-nocheck
-import { ComponentRegistry } from '@workspace/ui/components/ui-builder/types';
-import { ComponentLayer, RegistryEntry } from '@workspace/ui/components/ui-builder/types';
+import { ComponentRegistry } from "@workspace/ui/components/ui-builder/types";
+import { ComponentLayer, RegistryEntry } from "@workspace/ui/components/ui-builder/types";
 import { FieldConfigItem } from "@workspace/ui/components/auto-form/types";
 import { ComponentType as ReactComponentType } from "react";
 

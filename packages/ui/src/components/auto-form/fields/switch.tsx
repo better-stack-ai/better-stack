@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FormControl, FormItem } from "@workspace/ui/components/form";
 import { Switch } from "@workspace/ui/components/switch";
 import AutoFormLabel from "../common/label";

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as React from "react"
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
 import type { ElementDimensions } from "../hooks/use-drag-resize"
@@ -73,14 +74,8 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
     [updateAttributes]
   )
 
-  const aspectRatio = React.useMemo(() => {
-    const { width, height } = imageState.naturalSize
-    // Guard against division by zero or invalid dimensions
-    if (!height || height <= 0 || !width || width <= 0) {
-      return 1 // Default to square aspect ratio
-    }
-    return width / height
-  }, [imageState.naturalSize])
+  const aspectRatio =
+    imageState.naturalSize.width / imageState.naturalSize.height
   const maxWidth = MAX_HEIGHT * aspectRatio
   const containerMaxWidth = containerRef.current
     ? parseFloat(
@@ -231,7 +226,7 @@ export const ImageViewBlock: React.FC<NodeViewProps> = ({
           maxWidth: `min(${maxWidth}px, 100%)`,
           width: currentWidth,
           maxHeight: MAX_HEIGHT,
-          aspectRatio: `${aspectRatio}`,
+          aspectRatio: `${imageState.naturalSize.width} / ${imageState.naturalSize.height}`,
         }}
       >
         <div

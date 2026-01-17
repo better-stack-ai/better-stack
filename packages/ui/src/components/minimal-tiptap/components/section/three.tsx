@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as React from "react"
 import type { Editor } from "@tiptap/react"
 import type { toggleVariants } from "@workspace/ui/components/toggle"

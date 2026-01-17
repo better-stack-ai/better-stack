@@ -265,6 +265,50 @@ uiBuilderClientPlugin({
 })
 ```
 
+### Registry Entry Properties
+
+Each component in the registry has these properties:
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `component` | `ComponentType` | No | The React component (optional for primitives) |
+| `schema` | `ZodSchema` | Yes | Zod schema defining props |
+| `from` | `string` | No | Import path for code generation |
+| `isFromDefaultExport` | `boolean` | No | Whether component is default export |
+| `defaultChildren` | `ComponentLayer[] \| string` | No | Default children when added |
+| `defaultVariableBindings` | `DefaultVariableBinding[]` | No | Auto-bind props to variables |
+| `fieldOverrides` | `Record<string, FieldConfigFunction>` | No | Custom form field renderers |
+| `childOf` | `string[]` | No | Restrict which parent types can contain this component |
+
+### Parent-Child Restrictions
+
+Use the `childOf` property to restrict where a component can be placed:
+
+```tsx
+const registry = createComponentRegistry({
+  ...defaultComponentRegistry,
+  
+  // TabsTrigger can only be added inside TabsList
+  TabsTrigger: {
+    component: TabsTrigger,
+    schema: z.object({
+      value: z.string(),
+      children: z.any(),
+    }),
+    childOf: ["TabsList"], // Can only be a child of TabsList
+  },
+  
+  // CarouselItem can only be inside Carousel
+  CarouselItem: {
+    component: CarouselItem,
+    schema: z.object({
+      children: z.any(),
+    }),
+    childOf: ["Carousel"],
+  },
+})
+```
+
 ### Minimal Registry
 
 Create a minimal registry with only the components you need:
@@ -278,9 +322,146 @@ const minimalRegistry = createComponentRegistry({
 })
 ```
 
+## Block Registry
+
+Blocks are pre-built component compositions that users can insert as templates. They appear in the "Blocks" tab of the add component popover.
+
+### Defining Blocks
+
+Create a block registry with reusable templates:
+
+```tsx
+import type { BlockRegistry, ComponentLayer } from "@workspace/ui/components/ui-builder/types"
+
+const myBlocks: BlockRegistry = {
+  "hero-01": {
+    name: "hero-01",
+    category: "hero",
+    description: "Hero section with title, subtitle, and CTA button",
+    thumbnail: "/blocks/hero-01.png", // Optional preview image
+    template: {
+      id: "hero-root",
+      type: "Flexbox",
+      name: "Hero Section",
+      props: {
+        className: "min-h-[60vh] items-center justify-center bg-gradient-to-b from-primary/10 to-background",
+        direction: "column",
+        gap: 4,
+      },
+      children: [
+        {
+          id: "hero-title",
+          type: "h1",
+          name: "Title",
+          props: { className: "text-5xl font-bold text-center" },
+          children: "Welcome to Our Platform",
+        },
+        {
+          id: "hero-subtitle",
+          type: "p",
+          name: "Subtitle",
+          props: { className: "text-xl text-muted-foreground text-center max-w-2xl" },
+          children: "Build amazing experiences with our powerful tools",
+        },
+        {
+          id: "hero-cta",
+          type: "Button",
+          name: "CTA Button",
+          props: { variant: "default", size: "lg" },
+          children: [
+            { id: "cta-text", type: "span", name: "Button Text", props: {}, children: "Get Started" }
+          ],
+        },
+      ],
+    },
+  },
+  "pricing-01": {
+    name: "pricing-01",
+    category: "pricing",
+    description: "Simple pricing card",
+    template: {
+      id: "pricing-root",
+      type: "Card",
+      name: "Pricing Card",
+      props: { className: "w-full max-w-sm" },
+      children: [
+        {
+          id: "pricing-header",
+          type: "CardHeader",
+          name: "Header",
+          props: {},
+          children: [
+            { id: "plan-name", type: "CardTitle", name: "Plan", props: {}, children: [
+              { id: "plan-text", type: "span", name: "Plan Text", props: {}, children: "Pro" }
+            ]},
+            { id: "plan-desc", type: "CardDescription", name: "Description", props: {}, children: [
+              { id: "desc-text", type: "span", name: "Description Text", props: {}, children: "For professionals" }
+            ]},
+          ],
+        },
+        {
+          id: "pricing-content",
+          type: "CardContent",
+          name: "Content",
+          props: {},
+          children: [
+            { id: "price", type: "p", name: "Price", props: { className: "text-4xl font-bold" }, children: "$29/mo" },
+          ],
+        },
+      ],
+    },
+  },
+}
+```
+
+### Using Blocks in UIBuilder
+
+Pass the block registry to the UIBuilder component:
+
+```tsx
+import UIBuilder from "@workspace/ui/components/ui-builder"
+import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
+
+function PageEditor() {
+  return (
+    <UIBuilder
+      componentRegistry={defaultComponentRegistry}
+      blocks={myBlocks}
+      initialLayers={[]}
+      onChange={(layers) => console.log("Layers changed:", layers)}
+    />
+  )
+}
+```
+
+### BlockDefinition Properties
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `name` | `string` | Yes | Unique block identifier, e.g., "hero-01" |
+| `category` | `string` | Yes | Category for grouping, e.g., "hero", "pricing", "footer" |
+| `description` | `string` | No | Human-readable description shown in UI |
+| `template` | `ComponentLayer` | Yes | The component tree to insert |
+| `thumbnail` | `string` | No | Preview image URL |
+| `requiredComponents` | `string[]` | No | List of required component types |
+
+<Callout type="info">
+Blocks appear in a separate "Blocks" tab in the add component popover, organized by category. Users can insert entire pre-built sections with a single click.
+</Callout>
+
 ## Public Page Rendering
 
-The `PageRenderer` component renders UI Builder pages on public routes:
+The UI Builder provides multiple ways to render pages on public routes, depending on your needs:
+
+| Component | Use Case | Server Component Compatible |
+|-----------|----------|---------------------------|
+| `PageRenderer` | Client-side rendering with built-in data fetching | No (requires "use client") |
+| `LayerRenderer` | Render pre-fetched layer data on the client | No (requires "use client") |
+| `ServerLayerRenderer` | SSR/RSC rendering of layer data | Yes |
+
+### PageRenderer (Client Component)
+
+The `PageRenderer` component fetches and renders UI Builder pages by slug:
 
 ```tsx title="app/preview/[slug]/page.tsx"
 "use client"
@@ -297,7 +478,7 @@ export default function PreviewPage({ params }: { params: { slug: string } }) {
 }
 ```
 
-### PageRenderer Props
+#### PageRenderer Props
 
 | Prop | Type | Description |
 |------|------|-------------|
@@ -308,6 +489,103 @@ export default function PreviewPage({ params }: { params: { slug: string } }) {
 | `ErrorComponent` | `ComponentType<{ error }>` | Custom error state |
 | `NotFoundComponent` | `ComponentType` | Custom 404 state |
 | `className` | `string` | Additional CSS classes |
+
+### LayerRenderer (Client Component)
+
+The `LayerRenderer` component renders pre-fetched ComponentLayer data. Use this when you've already fetched the page data and want more control:
+
+```tsx title="app/pages/[slug]/page.tsx"
+"use client"
+
+import { LayerRenderer } from "@workspace/ui/components/ui-builder"
+import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
+
+export default function DynamicPage({ page, variables }: { 
+  page: ComponentLayer, 
+  variables: Variable[] 
+}) {
+  return (
+    <LayerRenderer
+      page={page}
+      componentRegistry={defaultComponentRegistry}
+      variables={variables}
+      variableValues={{
+        userName: "John Doe",
+      }}
+      className="min-h-screen"
+    />
+  )
+}
+```
+
+#### LayerRenderer Props
+
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `page` | `ComponentLayer` | Yes | The root ComponentLayer to render |
+| `componentRegistry` | `ComponentRegistry` | Yes | Component definitions registry |
+| `variables` | `Variable[]` | No | Variable definitions from the page |
+| `variableValues` | `Record<string, PropValue>` | No | Runtime values for variables |
+| `editorConfig` | `EditorConfig` | No | Editor configuration (for admin use) |
+| `className` | `string` | No | Additional CSS classes |
+
+### ServerLayerRenderer (Server Component)
+
+The `ServerLayerRenderer` is an SSR-friendly renderer that works in React Server Components (RSC), Static Site Generation (SSG), and Server-Side Rendering (SSR):
+
+```tsx title="app/pages/[slug]/page.tsx"
+// No "use client" needed - this is a Server Component
+import { ServerLayerRenderer } from "@workspace/ui/components/ui-builder"
+import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
+
+export default async function StaticPage({ params }: { params: { slug: string } }) {
+  // Fetch page data on the server
+  const page = await fetchPageFromDatabase(params.slug)
+  
+  if (!page) {
+    return <NotFound />
+  }
+  
+  const layers = JSON.parse(page.parsedData.layers)
+  const variables = JSON.parse(page.parsedData.variables)
+  
+  return (
+    <ServerLayerRenderer
+      page={layers[0]}
+      componentRegistry={defaultComponentRegistry}
+      variables={variables}
+      variableValues={{
+        // Pass any runtime values
+        currentYear: new Date().getFullYear(),
+      }}
+      className="min-h-screen"
+    />
+  )
+}
+```
+
+#### ServerLayerRenderer Props
+
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `page` | `ComponentLayer` | Yes | The root ComponentLayer to render |
+| `componentRegistry` | `ComponentRegistry` | Yes | Component definitions registry |
+| `variables` | `Variable[]` | No | Variable definitions from the page |
+| `variableValues` | `Record<string, PropValue>` | No | Runtime values for variables |
+| `className` | `string` | No | Additional CSS classes |
+
+<Callout type="info">
+**When to use ServerLayerRenderer:**
+- Static pages that can be rendered at build time (SSG)
+- SEO-critical pages that need server-side rendering
+- Pages where you want to avoid client-side JavaScript for the initial render
+- When using React Server Components in Next.js App Router
+
+**When to use LayerRenderer:**
+- Pages with interactive editor features
+- When you need client-side state management
+- Pages that require client-side data fetching
+</Callout>
 
 ### With Variable Values
 
@@ -347,7 +625,6 @@ export default function Page({ params }: { params: { slug: string } }) {
     </Suspense>
   )
 }
-```
 
 ## Client Hooks
 
@@ -492,7 +769,7 @@ interface ComponentLayer {
   type: string              // Component type from registry
   name?: string             // Display name in layers panel
   props: Record<string, any>
-  children: ComponentLayer[] | string
+  children: ComponentLayer[] | string | VariableReference
 }
 
 interface Variable {
@@ -501,6 +778,39 @@ interface Variable {
   type: "string" | "number" | "boolean"
   defaultValue: any
 }
+
+// Variable reference for dynamic content
+interface VariableReference {
+  __variableRef: string     // Variable ID
+}
+```
+
+### Variable References
+
+You can bind component children to variables for dynamic content:
+
+```ts
+const layer: ComponentLayer = {
+  id: "greeting",
+  type: "h1",
+  name: "Greeting",
+  props: { className: "text-2xl font-bold" },
+  // Children bound to a variable
+  children: { __variableRef: "userName" }
+}
+
+const variables: Variable[] = [
+  { id: "userName", name: "User Name", type: "string", defaultValue: "Guest" }
+]
+```
+
+When rendering, pass runtime values to override defaults:
+
+```tsx
+<PageRenderer
+  slug="welcome"
+  variableValues={{ userName: "John Doe" }}
+/>
 ```
 
 ## API Reference
@@ -552,9 +862,52 @@ const registry = createComponentRegistry({
 })
 ```
 
+#### UIBuilder
+
+The main visual editor component. Import from `@workspace/ui/components/ui-builder`:
+
+```tsx
+import UIBuilder from "@workspace/ui/components/ui-builder"
+
+<UIBuilder
+  componentRegistry={myRegistry}
+  blocks={myBlocks}
+  initialLayers={initialLayers}
+  initialVariables={initialVariables}
+  onChange={(layers) => saveLayers(layers)}
+  onVariablesChange={(variables) => saveVariables(variables)}
+  allowPagesCreation={true}
+  allowPagesDeletion={true}
+  allowVariableEditing={true}
+  persistLayerStore={false}
+  showExport={true}
+  navLeftChildren={<Logo />}
+  navRightChildren={<SaveButton />}
+/>
+```
+
+##### UIBuilder Props
+
+| Prop | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `componentRegistry` | `ComponentRegistry` | Yes | - | Registry of available components |
+| `blocks` | `BlockRegistry` | No | - | Pre-built block templates for the Blocks tab |
+| `initialLayers` | `ComponentLayer[]` | No | - | Initial layer tree to load |
+| `initialVariables` | `Variable[]` | No | - | Initial variables to load |
+| `onChange` | `(layers: ComponentLayer[]) => void` | No | - | Callback when layers change |
+| `onVariablesChange` | `(variables: Variable[]) => void` | No | - | Callback when variables change |
+| `persistLayerStore` | `boolean` | No | `true` | Persist layers to localStorage |
+| `allowVariableEditing` | `boolean` | No | `true` | Show variables panel |
+| `allowPagesCreation` | `boolean` | No | `true` | Allow creating new pages |
+| `allowPagesDeletion` | `boolean` | No | `true` | Allow deleting pages |
+| `showExport` | `boolean` | No | `true` | Show export button in navbar |
+| `navLeftChildren` | `ReactNode` | No | - | Content for left side of navbar |
+| `navRightChildren` | `ReactNode` | No | - | Content for right side of navbar |
+| `panelConfig` | `PanelConfig` | No | - | Custom panel configuration |
+
 #### PageRenderer
 
-Component to render UI Builder pages on public routes:
+Component to render UI Builder pages on public routes (client component):
 
 ```tsx
 <PageRenderer
@@ -562,4 +915,97 @@ Component to render UI Builder pages on public routes:
   componentRegistry={customRegistry}
   variableValues={{ userName: "John" }}
 />
+```
+
+#### LayerRenderer
+
+Component to render pre-fetched ComponentLayer data (client component):
+
+```tsx
+import { LayerRenderer } from "@workspace/ui/components/ui-builder"
+
+<LayerRenderer
+  page={rootLayer}
+  componentRegistry={customRegistry}
+  variables={variables}
+  variableValues={{ userName: "John" }}
+/>
+```
+
+#### ServerLayerRenderer
+
+SSR-friendly renderer for React Server Components:
+
+```tsx
+import { ServerLayerRenderer } from "@workspace/ui/components/ui-builder"
+
+// In a Server Component (no "use client" needed)
+<ServerLayerRenderer
+  page={rootLayer}
+  componentRegistry={customRegistry}
+  variables={variables}
+  variableValues={{ currentYear: 2024 }}
+/>
+```
+
+### Types (`@workspace/ui/components/ui-builder/types`)
+
+#### BlockDefinition
+
+Pre-built component compositions for templates:
+
+```ts
+interface BlockDefinition {
+  name: string           // Unique block name, e.g., "login-01"
+  category: string       // Block category, e.g., "login", "sidebar"
+  description?: string   // Human-readable description
+  template: ComponentLayer  // ComponentLayer tree to insert
+  thumbnail?: string     // Optional preview image URL
+  requiredComponents?: string[]  // Required shadcn components
+}
+```
+
+#### BlockRegistry
+
+A record of block name to block definition:
+
+```ts
+type BlockRegistry = Record<string, BlockDefinition>
+```
+
+#### ComponentLayer
+
+The structure representing a component in the UI Builder tree:
+
+```ts
+interface ComponentLayer {
+  id: string
+  type: string                          // Component type from registry
+  name?: string                         // Display name in layers panel
+  props: Record<string, PropValue>
+  children: ComponentLayer[] | string | VariableReference
+}
+```
+
+#### Variable
+
+Variable definition for dynamic content:
+
+```ts
+interface Variable {
+  id: string
+  name: string
+  type: "string" | "number" | "boolean"
+  defaultValue: any
+}
+```
+
+#### VariableReference
+
+Reference to a variable for dynamic binding:
+
+```ts
+interface VariableReference {
+  __variableRef: string  // Variable ID
+}
 ```
