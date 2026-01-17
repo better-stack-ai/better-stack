@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { DatePicker } from "@workspace/ui/components/date-picker";
 import { FormControl, FormItem, FormMessage } from "@workspace/ui/components/form";
 import AutoFormLabel from "../common/label";

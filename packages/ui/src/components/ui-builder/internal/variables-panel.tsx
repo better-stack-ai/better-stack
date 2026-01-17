@@ -1,5 +1,5 @@
-// @ts-nocheck
 "use client";
+// @ts-nocheck
 
 import React, { useCallback, useState } from "react";
 import { Button } from "@workspace/ui/components/button";

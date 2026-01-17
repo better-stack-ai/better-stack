@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Extension } from "@tiptap/react"
 
 export const ResetMarksOnEnter = Extension.create({

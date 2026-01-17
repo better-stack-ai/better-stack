@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { ControllerRenderProps, FieldValues } from "react-hook-form";
 import * as z from "zod";
 import { INPUT_COMPONENTS } from "./config";

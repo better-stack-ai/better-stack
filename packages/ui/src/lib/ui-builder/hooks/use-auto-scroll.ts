@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useCallback, useRef } from 'react';
-import { getIframeElements } from '@workspace/ui/lib/ui-builder/context/dnd-utils';
+import { getIframeElements } from "@workspace/ui/lib/ui-builder/context/dnd-utils";
 import { 
   AutoScrollState, 
   AUTO_SCROLL_THRESHOLD, 
@@ -116,8 +116,9 @@ export const useAutoScroll = () => {
   }, []);
 
   // Mouse move handler for auto-scroll (parent document)
-  const handleParentMouseMove = useCallback((event: MouseEvent, activeLayerId: string | null) => {
-    if (!activeLayerId) return;
+  // Accepts isDragging boolean to support both existing layer drags and new component drags
+  const handleParentMouseMove = useCallback((event: MouseEvent, isDragging: boolean) => {
+    if (!isDragging) return;
     
     mousePositionRef.current = { x: event.clientX, y: event.clientY };
     
@@ -128,8 +129,9 @@ export const useAutoScroll = () => {
   }, [performAutoScroll]);
 
   // Mouse move handler for auto-scroll (iframe content)
-  const handleIframeMouseMove = useCallback((event: MouseEvent, activeLayerId: string | null) => {
-    if (!activeLayerId) return;
+  // Accepts isDragging boolean to support both existing layer drags and new component drags
+  const handleIframeMouseMove = useCallback((event: MouseEvent, isDragging: boolean) => {
+    if (!isDragging) return;
     
     const iframeElements = getIframeElements();
     if (!iframeElements) return;

@@ -4,8 +4,8 @@ import {
     pointerWithin,
     rectIntersection,
 } from '@dnd-kit/core';
-import { getIframeElements } from '@workspace/ui/lib/ui-builder/context/dnd-utils';
-import { debugCollisionDetection } from '@workspace/ui/lib/ui-builder/context/collision-debug';
+import { getIframeElements } from "@workspace/ui/lib/ui-builder/context/dnd-utils";
+import { debugCollisionDetection } from "@workspace/ui/lib/ui-builder/context/collision-debug";
 
 // Debug flag - only enable in development
 const DEBUG_COLLISION = process.env.NODE_ENV === 'development' && false;

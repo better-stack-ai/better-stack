@@ -1,8 +1,8 @@
 // @ts-nocheck
 import { LayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
-import { ComponentLayer, ComponentRegistry } from '@workspace/ui/components/ui-builder/types';
-import { getDefaultProps } from '@workspace/ui/lib/ui-builder/store/schema-utils';
-import { TAILWIND_V4_COLOR_KEYS } from '@workspace/ui/components/ui-builder/internal/utils/base-colors';
+import { ComponentLayer, ComponentRegistry } from "@workspace/ui/components/ui-builder/types";
+import { getDefaultProps } from "@workspace/ui/lib/ui-builder/store/schema-utils";
+import { TAILWIND_V4_COLOR_KEYS } from "@workspace/ui/components/ui-builder/internal/utils/base-colors";
 
 /**
  * Recursively visits each layer in the layer tree and applies the provided visitor function to each layer.
@@ -27,8 +27,9 @@ export const visitLayer = (layer: ComponentLayer, parentLayer: ComponentLayer | 
     return updatedLayer;
 };
 
-export const countLayers = (layers: ComponentLayer[] | string): number => {
-    if (typeof layers === 'string') {
+export const countLayers = (layers: ComponentLayer['children']): number => {
+    if (typeof layers === 'string' || !Array.isArray(layers)) {
+        // String or VariableReference
         return 0;
     }
     return layers.reduce((count, layer) => {
@@ -152,6 +153,10 @@ export function createId(): string {
     return result;
 }
 
+/**
+ * Checks if a layer has ComponentLayer[] children (not string or VariableReference)
+ * Note: VariableReference is an object (not an array), so Array.isArray returns false for it
+ */
 export const hasLayerChildren = (layer: ComponentLayer): layer is ComponentLayer & { children: ComponentLayer[] } => {
     return Array.isArray(layer.children) && typeof layer.children !== 'string';
 };
@@ -368,9 +373,11 @@ export const createComponentLayer = (
   // Safely check if schema has shape property (ZodObject)
   const defaultProps = 'shape' in schema && schema.shape ? getDefaultProps(schema as any) : {};
   const defaultChildrenRaw = componentDef.defaultChildren;
-  const defaultChildren = typeof defaultChildrenRaw === "string" 
+  const defaultChildren: ComponentLayer['children'] = typeof defaultChildrenRaw === "string" 
     ? defaultChildrenRaw 
-    : (defaultChildrenRaw?.map(child => duplicateWithNewIdsAndName(child, false)) || []);
+    : Array.isArray(defaultChildrenRaw)
+      ? defaultChildrenRaw.map(child => duplicateWithNewIdsAndName(child, false))
+      : defaultChildrenRaw ?? []; // handles VariableReference or undefined
 
   const initialProps = Object.entries(defaultProps).reduce((acc, [key, propDef]) => {
     if (key !== "children") {
