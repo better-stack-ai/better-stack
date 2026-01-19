@@ -1,11 +1,10 @@
-// @ts-nocheck
-import { ComponentRegistry, ComponentLayer } from "@workspace/ui/components/ui-builder/types";
+import type { ComponentRegistry, ComponentLayer } from '@workspace/ui/components/ui-builder/types';
 import { z } from 'zod';
 import { customComponentDefinitions } from './custom-component-definitions';
 
 // Essential shadcn components for core UI Builder functionality
-import { Button } from "@workspace/ui/components/button";
-import { Badge } from "@workspace/ui/components/badge";
+import { Button } from '@workspace/ui/components/button';
+import { Badge } from '@workspace/ui/components/badge';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@workspace/ui/components/accordion";
 import { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from "@workspace/ui/components/card";
 import { commonFieldOverrides, classNameFieldOverrides, childrenFieldOverrides } from "@workspace/ui/lib/ui-builder/registry/form-field-overrides";

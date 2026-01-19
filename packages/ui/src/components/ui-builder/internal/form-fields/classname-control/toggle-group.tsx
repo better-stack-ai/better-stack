@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { ReactNode, useCallback, useMemo } from "react";
+import { type ReactNode, useCallback, useMemo } from "react";
 import { cn } from "@workspace/ui/lib/utils";
 import {
   DropdownMenu,

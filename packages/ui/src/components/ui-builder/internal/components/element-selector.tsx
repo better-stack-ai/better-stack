@@ -1,5 +1,4 @@
 "use client";
-// @ts-nocheck
 import React, {
   useCallback,
   useEffect,
@@ -10,7 +9,7 @@ import React, {
   useContext,
 } from "react";
 import { useTransformEffect } from "react-zoom-pan-pinch";
-import { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
+import type { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
 import { LayerMenu } from "@workspace/ui/components/ui-builder/internal/components/layer-menu";
 import { DragHandle as ComponentDragHandle } from "@workspace/ui/components/ui-builder/internal/dnd/drag-handle";
 import { DragHandleContext } from "@workspace/ui/components/ui-builder/internal/canvas/resizable-wrapper";

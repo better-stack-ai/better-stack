@@ -1,4 +1,3 @@
-// @ts-nocheck
 export * from "./code-block-lowlight"
 export * from "./color"
 export * from "./horizontal-rule"

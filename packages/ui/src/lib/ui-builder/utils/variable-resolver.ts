@@ -1,6 +1,6 @@
-// @ts-nocheck
 import React from 'react';
-import { Variable, PropValue, isVariableReference, ComponentLayer } from "@workspace/ui/components/ui-builder/types";
+import type { Variable, PropValue, ComponentLayer } from '@workspace/ui/components/ui-builder/types';
+import { isVariableReference } from '@workspace/ui/components/ui-builder/types';
 
 /**
  * Resolves a variable reference in layer children to its actual value

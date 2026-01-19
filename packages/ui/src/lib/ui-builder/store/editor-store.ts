@@ -1,7 +1,6 @@
-// @ts-nocheck
-import { create, StateCreator } from 'zustand';
-import { ComponentType as ReactComponentType } from "react";
-import { RegistryEntry, ComponentRegistry, BlockRegistry } from "@workspace/ui/components/ui-builder/types";
+import { create, type StateCreator } from 'zustand';
+import { type ComponentType as ReactComponentType } from "react";
+import type { RegistryEntry, ComponentRegistry, BlockRegistry } from '@workspace/ui/components/ui-builder/types';
 
 
 

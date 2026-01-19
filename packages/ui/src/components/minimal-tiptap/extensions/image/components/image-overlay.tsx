@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as React from "react"
 import { Spinner } from "../../../components/spinner"
 import { cn } from "@workspace/ui/lib/utils"

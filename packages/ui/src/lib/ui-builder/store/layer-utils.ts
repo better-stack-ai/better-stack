@@ -1,8 +1,7 @@
-// @ts-nocheck
-import { LayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
-import { ComponentLayer, ComponentRegistry } from "@workspace/ui/components/ui-builder/types";
-import { getDefaultProps } from "@workspace/ui/lib/ui-builder/store/schema-utils";
-import { TAILWIND_V4_COLOR_KEYS } from "@workspace/ui/components/ui-builder/internal/utils/base-colors";
+import type { LayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
+import type { ComponentLayer, ComponentRegistry } from '@workspace/ui/components/ui-builder/types';
+import { getDefaultProps } from '@workspace/ui/lib/ui-builder/store/schema-utils';
+import { TAILWIND_V4_COLOR_KEYS } from '@workspace/ui/components/ui-builder/internal/utils/base-colors';
 
 /**
  * Recursively visits each layer in the layer tree and applies the provided visitor function to each layer.
@@ -436,13 +435,14 @@ export const moveLayer = (
   const findLayerAndParent = (layers: ComponentLayer[], parentId: string | null = null): boolean => {
     for (let i = 0; i < layers.length; i++) {
       const layer = layers[i];
+      if (!layer) continue;
       if (layer.id === sourceLayerId) {
         layerToMove = layer;
         sourceParentId = parentId;
         sourcePosition = i;
         return true;
       }
-      if (hasLayerChildren(layer)) {
+      if (hasLayerChildren(layer) && layer.children) {
         if (findLayerAndParent(layer.children, layer.id)) {
           return true;
         }

@@ -1,22 +1,21 @@
-// @ts-nocheck
-import React, { useState, ReactNode, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, type ReactNode, useMemo, useEffect, useCallback } from 'react';
 import { DndContext } from '@dnd-kit/core';
-import { createTransformAwareCollisionDetection } from "@workspace/ui/lib/ui-builder/context/dnd-context-colission-utils";
-import { getIframeElements } from "@workspace/ui/lib/ui-builder/context/dnd-utils";
+import { createTransformAwareCollisionDetection } from '@workspace/ui/lib/ui-builder/context/dnd-context-colission-utils';
+import { getIframeElements } from '@workspace/ui/lib/ui-builder/context/dnd-utils';
 import { 
   DndContextStateContext, 
   ComponentDragContext,
-  DndContextState,
-  ComponentDragContextState,
+  type DndContextState,
+  type ComponentDragContextState,
   useDndContext,
   useComponentDragContext
-} from "@workspace/ui/lib/ui-builder/context/dnd-contexts";
-import { TransformAwareDragOverlay, DragOverlayContent } from "@workspace/ui/lib/ui-builder/context/drag-overlay";
-import { useAutoScroll } from "@workspace/ui/lib/ui-builder/hooks/use-auto-scroll";
-import { useDndSensors } from "@workspace/ui/lib/ui-builder/hooks/use-dnd-sensors";
-import { useDndEventHandlers } from "@workspace/ui/lib/ui-builder/hooks/use-dnd-event-handlers";
-import { useDropValidation } from "@workspace/ui/lib/ui-builder/hooks/use-drop-validation";
-import { useKeyboardShortcutsDnd } from "@workspace/ui/lib/ui-builder/hooks/use-keyboard-shortcuts-dnd";
+} from '@workspace/ui/lib/ui-builder/context/dnd-contexts';
+import { TransformAwareDragOverlay, DragOverlayContent } from '@workspace/ui/lib/ui-builder/context/drag-overlay';
+import { useAutoScroll } from '@workspace/ui/lib/ui-builder/hooks/use-auto-scroll';
+import { useDndSensors } from '@workspace/ui/lib/ui-builder/hooks/use-dnd-sensors';
+import { useDndEventHandlers } from '@workspace/ui/lib/ui-builder/hooks/use-dnd-event-handlers';
+import { useDropValidation } from '@workspace/ui/lib/ui-builder/hooks/use-drop-validation';
+import { useKeyboardShortcutsDnd } from '@workspace/ui/lib/ui-builder/hooks/use-keyboard-shortcuts-dnd';
 
 // Re-export the contexts and hooks for backward compatibility
 export { useDndContext, useComponentDragContext };

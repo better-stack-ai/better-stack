@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useCallback, useEffect } from "react"
 
 type ResizeDirection = "left" | "right"

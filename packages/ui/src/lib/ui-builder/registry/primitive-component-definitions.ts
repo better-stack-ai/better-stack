@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { ComponentRegistry } from "@workspace/ui/components/ui-builder/types";
+import type { ComponentRegistry } from '@workspace/ui/components/ui-builder/types';
 import { z } from 'zod';
 import { childrenAsTextareaFieldOverrides, classNameFieldOverrides, commonFieldOverrides } from "@workspace/ui/lib/ui-builder/registry/form-field-overrides";
 

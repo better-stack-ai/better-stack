@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { FormControl, FormItem, FormMessage } from "@workspace/ui/components/form";
 import { Textarea } from "@workspace/ui/components/textarea";
 import AutoFormLabel from "../common/label";

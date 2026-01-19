@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as React from "react"
 import { Separator } from "@workspace/ui/components/separator"
 import { ToolbarButton } from "../toolbar-button"

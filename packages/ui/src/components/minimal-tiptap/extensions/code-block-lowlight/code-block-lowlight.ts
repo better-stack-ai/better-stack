@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { CodeBlockLowlight as TiptapCodeBlockLowlight } from "@tiptap/extension-code-block-lowlight"
 import { common, createLowlight } from "lowlight"
 

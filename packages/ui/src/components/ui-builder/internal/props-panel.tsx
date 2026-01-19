@@ -1,11 +1,10 @@
-// @ts-nocheck
 import React, { useCallback, useMemo } from "react";
 import { z } from "zod";
 import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
 import { useEditorStore } from "@workspace/ui/lib/ui-builder/store/editor-store";
 import {
-  ComponentRegistry,
-  ComponentLayer,
+  type ComponentRegistry,
+  type ComponentLayer,
 } from "@workspace/ui/components/ui-builder/types";
 import { Button } from "@workspace/ui/components/button";
 import AutoForm from "@workspace/ui/components/auto-form";
@@ -149,9 +148,12 @@ const ComponentPropsAutoForm: React.FC<ComponentPropsAutoFormProps> = ({
       selectedLayer &&
       componentRegistry[selectedLayer.type as keyof typeof componentRegistry]
     ) {
-      return componentRegistry[
+      const registryEntry = componentRegistry[
         selectedLayer.type as keyof typeof componentRegistry
       ];
+      if (registryEntry) {
+        return registryEntry;
+      }
     }
     return { schema: EMPTY_ZOD_SCHEMA }; // Fallback schema
   }, [selectedLayer, componentRegistry]);

@@ -1,11 +1,10 @@
-// @ts-nocheck
 import {
-    CollisionDetection,
+    type CollisionDetection,
     pointerWithin,
     rectIntersection,
 } from '@dnd-kit/core';
-import { getIframeElements } from "@workspace/ui/lib/ui-builder/context/dnd-utils";
-import { debugCollisionDetection } from "@workspace/ui/lib/ui-builder/context/collision-debug";
+import { getIframeElements } from '@workspace/ui/lib/ui-builder/context/dnd-utils';
+import { debugCollisionDetection } from '@workspace/ui/lib/ui-builder/context/collision-debug';
 
 // Debug flag - only enable in development
 const DEBUG_COLLISION = process.env.NODE_ENV === 'development' && false;
@@ -299,14 +298,19 @@ const getTransformState = (): TransformState => {
 
         if (transform && transform !== 'none') {
             const matrixMatch = transform.match(/matrix\(([^)]*)\)/);
-            if (matrixMatch) {
+            if (matrixMatch && matrixMatch[1]) {
                 const values = matrixMatch[1].split(',').map(v => parseFloat(v.trim()));
                 if (values.length >= 6) {
-                    transformState = {
-                        scale: values[0], // scaleX
-                        positionX: values[4], // translateX
-                        positionY: values[5], // translateY
-                    };
+                    const scale = values[0];
+                    const positionX = values[4];
+                    const positionY = values[5];
+                    if (scale !== undefined && positionX !== undefined && positionY !== undefined) {
+                        transformState = {
+                            scale, // scaleX
+                            positionX, // translateX
+                            positionY, // translateY
+                        };
+                    }
                 }
             }
         }

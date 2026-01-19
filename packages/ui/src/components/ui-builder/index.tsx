@@ -1,5 +1,4 @@
 "use client";
-// @ts-nocheck
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import LayersPanel from "@workspace/ui/components/ui-builder/internal/layers-panel";
@@ -17,12 +16,13 @@ import { Button } from "@workspace/ui/components/button";
 import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
 import { useStore } from "@workspace/ui/hooks/use-store";
 import { useEditorStore } from "@workspace/ui/lib/ui-builder/store/editor-store";
-import {
+import type {
   ComponentRegistry,
   ComponentLayer,
   Variable,
   LayerChangeHandler,
-  VariableChangeHandler
+  VariableChangeHandler,
+  BlockRegistry
 } from "@workspace/ui/components/ui-builder/types";
 import { TailwindThemePanel } from "@workspace/ui/components/ui-builder/internal/tailwind-theme-panel";
 import { ConfigPanel } from "@workspace/ui/components/ui-builder/internal/config-panel";
@@ -59,8 +59,6 @@ interface PanelConfigWithoutNavBar {
 }
 
 type PanelConfig = PanelConfigWithNavBar | PanelConfigWithoutNavBar;
-
-import type { BlockRegistry } from "@workspace/ui/components/ui-builder/types";
 
 /**
  * Base props shared by all UIBuilder configurations.
@@ -268,12 +266,12 @@ function MainLayout({ panelConfig }: { panelConfig: PanelConfig }) {
   // Update selected panel when panels change
   useEffect(() => {
     const editorPanel = mainPanels.find(panel => panel.title === "UI Editor");
-    const currentPanel = mainPanels.find(panel => panel.title === selectedPanel.title);
+    const currentPanel = mainPanels.find(panel => panel.title === selectedPanel?.title);
     
     if (!currentPanel) {
       setSelectedPanel(editorPanel || mainPanels[0]);
     }
-  }, [mainPanels, selectedPanel.title]);
+  }, [mainPanels, selectedPanel?.title]);
 
   const handlePanelClickById = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
     const panelIndex = parseInt(e.currentTarget.dataset.panelIndex || "0");
@@ -308,14 +306,14 @@ function MainLayout({ panelConfig }: { panelConfig: PanelConfig }) {
       </div>
       {/* Mobile Layout */}
       <div className="flex size-full flex-col md:hidden overflow-hidden ">
-        {selectedPanel.content}
+        {selectedPanel?.content}
         <div className="absolute bottom-4 left-4 right-4 z-50">
           <div className="flex justify-center rounded-full bg-primary p-2 shadow-lg">
             {mainPanels.map((panel, index) => (
               <Button
                 key={panel.title}
                 variant={
-                  selectedPanel.title !== panel.title ? "default" : "secondary"
+                  selectedPanel?.title !== panel.title ? "default" : "secondary"
                 }
                 size="sm"
                 className="flex-1"
@@ -445,8 +443,3 @@ export const getDefaultPanelConfigValues = ( tabsContent: TabsContentConfig, nav
 };
 
 export default UIBuilder;
-
-// Re-export renderers for public use
-export { default as LayerRenderer } from "@workspace/ui/components/ui-builder/layer-renderer";
-export { ServerLayerRenderer } from "@workspace/ui/components/ui-builder/server-layer-renderer";
-export type { ServerLayerRendererProps } from "@workspace/ui/components/ui-builder/server-layer-renderer";

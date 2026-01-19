@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useEffect } from 'react';
 
 export const useKeyboardShortcutsDnd = (activeLayerId: string | null, handleDragCancel: () => void) => {

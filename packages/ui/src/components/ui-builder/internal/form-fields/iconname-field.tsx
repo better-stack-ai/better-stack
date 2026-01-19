@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useCallback, useMemo } from "react";
 import {
   FormItem,
@@ -7,7 +6,7 @@ import {
   FormDescription,
 } from "@workspace/ui/components/form";
 import MultipleSelector, {
-  Option,
+  type Option,
 } from "@workspace/ui/components/ui-builder/internal/components/multi-select";
 import { iconNames } from "@workspace/ui/components/ui-builder/components/icon";
 
@@ -44,8 +43,9 @@ const IconNameField: React.FC<IconNameFieldProps> = ({
 
   const handleChange = useCallback(
     (values: Option[]) => {
-      if (values.length > 0) {
-        onChange(values[0].value);
+      const firstValue = values[0];
+      if (firstValue) {
+        onChange(firstValue.value);
       }
     },
     [onChange]

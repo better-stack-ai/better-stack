@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React from "react";
 import type { DefaultValues } from "react-hook-form";
 import { z } from "zod";

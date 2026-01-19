@@ -1,8 +1,7 @@
-// @ts-nocheck
 import { useCallback } from 'react';
-import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
-import { useEditorStore } from "@workspace/ui/lib/ui-builder/store/editor-store";
-import { canLayerAcceptChildren } from "@workspace/ui/lib/ui-builder/store/layer-utils";
+import { useLayerStore } from '@workspace/ui/lib/ui-builder/store/layer-store';
+import { useEditorStore } from '@workspace/ui/lib/ui-builder/store/editor-store';
+import { canLayerAcceptChildren } from '@workspace/ui/lib/ui-builder/store/layer-utils';
 
 export const useDropValidation = (
   activeLayerId: string | null, 

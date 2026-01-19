@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useMemo, useState } from "react";
 import {  Plus, Trash, Copy } from "lucide-react";
 import { buttonVariants } from "@workspace/ui/components/button";

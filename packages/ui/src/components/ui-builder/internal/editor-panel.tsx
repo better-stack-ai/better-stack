@@ -1,5 +1,4 @@
 "use client";
-// @ts-nocheck
 import React, {
   useCallback,
   useMemo,
@@ -9,7 +8,7 @@ import React, {
 } from "react";
 import { Plus, Crosshair, ZoomIn, ZoomOut, MousePointer } from "lucide-react";
 import { countLayers, useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
-import { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
+import type { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
 import {
   TransformWrapper,
   TransformComponent,

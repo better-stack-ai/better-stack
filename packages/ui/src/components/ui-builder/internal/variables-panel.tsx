@@ -1,5 +1,4 @@
 "use client";
-// @ts-nocheck
 
 import React, { useCallback, useState } from "react";
 import { Button } from "@workspace/ui/components/button";
@@ -15,7 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card";
 import { Trash2, Plus, Edit2, Check, X } from "lucide-react";
 import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
-import { Variable } from "@workspace/ui/components/ui-builder/types";
+import type { Variable } from "@workspace/ui/components/ui-builder/types";
 import { cn } from "@workspace/ui/lib/utils";
 import { useEditorStore } from "@workspace/ui/lib/ui-builder/store/editor-store";
 

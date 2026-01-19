@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { memo, Suspense, useMemo, useRef, Fragment } from "react";
 import isDeepEqual from "fast-deep-equal";
 
@@ -11,7 +10,8 @@ import { ErrorFallback } from "@workspace/ui/components/ui-builder/internal/comp
 import { isPrimitiveComponent } from "@workspace/ui/lib/ui-builder/store/editor-utils";
 import { hasLayerChildren, canLayerAcceptChildren, findLayerRecursive } from "@workspace/ui/lib/ui-builder/store/layer-utils";
 import { DevProfiler } from "@workspace/ui/components/ui-builder/internal/components/dev-profiler";
-import { ComponentRegistry, ComponentLayer, Variable, PropValue, isVariableReference } from "@workspace/ui/components/ui-builder/types";
+import type { ComponentRegistry, ComponentLayer, Variable, PropValue } from '@workspace/ui/components/ui-builder/types';
+import { isVariableReference } from '@workspace/ui/components/ui-builder/types';
 import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
 import { useEditorStore } from "@workspace/ui/lib/ui-builder/store/editor-store";
 import { resolveVariableReferences, resolveChildrenVariableReference } from "@workspace/ui/lib/ui-builder/utils/variable-resolver";

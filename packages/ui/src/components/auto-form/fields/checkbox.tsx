@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Checkbox } from "@workspace/ui/components/checkbox";
 import { FormControl, FormItem } from "@workspace/ui/components/form";
 import AutoFormTooltip from "../common/tooltip";

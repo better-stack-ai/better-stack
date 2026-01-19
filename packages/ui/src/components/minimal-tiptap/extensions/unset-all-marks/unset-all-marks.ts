@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Extension } from "@tiptap/react"
 
 export const UnsetAllMarks = Extension.create({

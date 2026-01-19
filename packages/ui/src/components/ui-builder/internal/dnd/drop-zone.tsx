@@ -1,8 +1,7 @@
-// @ts-nocheck
 import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { cn } from '@workspace/ui/lib/utils';
-import { useDndContext } from "@workspace/ui/lib/ui-builder/context/dnd-context";
+import { useDndContext } from '@workspace/ui/lib/ui-builder/context/dnd-context';
 
 // Constants for repeated class patterns
 const BEFORE_CENTER_TRANSFORM = "before:left-1/2 before:top-1/2 before:-translate-x-1/2 before:-translate-y-1/2";

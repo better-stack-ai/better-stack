@@ -1,0 +1,16 @@
+{
+  "extends": "../../../../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "../../../../..",
+    "paths": {
+      "@workspace/ui/*": ["packages/ui/src/*"]
+    },
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "strictFunctionTypes": false,
+    "noUncheckedIndexedAccess": false,
+    "verbatimModuleSyntax": false
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"],
+  "exclude": ["node_modules", "dist"]
+}

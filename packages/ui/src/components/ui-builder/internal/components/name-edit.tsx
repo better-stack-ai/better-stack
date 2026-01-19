@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useCallback } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { Check, X as XIcon } from "lucide-react"

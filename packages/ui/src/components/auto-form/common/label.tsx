@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { FormLabel } from "@workspace/ui/components/form";
 import { cn } from "@workspace/ui/lib/utils";
 

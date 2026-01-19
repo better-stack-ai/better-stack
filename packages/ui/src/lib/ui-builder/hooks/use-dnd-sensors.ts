@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useSensors, useSensor, MouseSensor, TouchSensor } from '@dnd-kit/core';
 
 export const useDndSensors = () => {

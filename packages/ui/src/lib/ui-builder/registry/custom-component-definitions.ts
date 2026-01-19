@@ -1,9 +1,8 @@
-// @ts-nocheck
-import { ComponentRegistry } from "@workspace/ui/components/ui-builder/types";
-import { z } from "zod";
-import { Flexbox } from "@workspace/ui/components/ui-builder/components/flexbox";
-import { Grid } from "@workspace/ui/components/ui-builder/components/grid";
-import { CodePanel } from "@workspace/ui/components/ui-builder/components/code-panel";
+import type { ComponentRegistry } from '@workspace/ui/components/ui-builder/types';
+import { z } from 'zod';
+import { Flexbox } from '@workspace/ui/components/ui-builder/components/flexbox';
+import { Grid } from '@workspace/ui/components/ui-builder/components/grid';
+import { CodePanel } from '@workspace/ui/components/ui-builder/components/code-panel';
 import { Markdown } from "@workspace/ui/components/ui-builder/components/markdown";
 import { Icon, iconNames } from "@workspace/ui/components/ui-builder/components/icon";
 import { classNameFieldOverrides, iconNameFieldOverrides, commonFieldOverrides, childrenAsTipTapFieldOverrides } from "@workspace/ui/lib/ui-builder/registry/form-field-overrides";

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import "./styles/index.css"
 
 import type { Content, Editor } from "@tiptap/react"

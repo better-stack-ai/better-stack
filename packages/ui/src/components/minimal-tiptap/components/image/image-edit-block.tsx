@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as React from "react"
 import type { Editor } from "@tiptap/react"
 import { Button } from "@workspace/ui/components/button"

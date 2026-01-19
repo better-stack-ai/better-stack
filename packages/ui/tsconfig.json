@@ -9,5 +9,8 @@
     "noEmit": true
   },
   "include": ["."],
-  "exclude": ["node_modules", "dist", "src/components/minimal-tiptap/**/*", "src/components/ui-builder/**/*", "src/lib/ui-builder/**/*"]
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

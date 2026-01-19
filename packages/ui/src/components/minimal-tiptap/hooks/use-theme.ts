@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as React from "react"
 
 export const useTheme = () => {

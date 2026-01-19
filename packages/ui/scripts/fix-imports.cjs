@@ -1,213 +1,88 @@
 #!/usr/bin/env node
 /**
- * Fix imports script for ui-builder and minimal-tiptap components
+ * Fix imports in ui-builder, minimal-tiptap, auto-form and lib/ui-builder files
+ * after shadcn CLI installation.
  * 
- * After shadcn CLI installs components, it may:
- * 1. Create files in src/components/ui/ subdirectory
- * 2. Use @/ or @workspace/components/ui/ or @workspace/lib/ import patterns
- * 
- * This script:
- * 1. Moves files from src/components/ui/* to src/components/* (flattening the ui subdirectory)
- * 2. Fixes all imports to use @workspace/ui/* pattern
- * 3. Ensures all files have // @ts-nocheck
+ * Transforms:
+ *   @workspace/components/ui/  → @workspace/ui/components/
+ *   @workspace/lib/            → @workspace/ui/lib/
+ *   @workspace/hooks/          → @workspace/ui/hooks/
+ *   @/                         → @workspace/ui/
  */
 
 const fs = require("fs");
 const path = require("path");
 
-const UI_DIR = path.resolve(__dirname, "../src");
-const COMPONENTS_UI_DIR = path.resolve(__dirname, "../src/components/ui");
-
-// Directories that should be processed for import fixes
-const DIRS_TO_FIX = [
-  path.resolve(__dirname, "../src/components"),
-  path.resolve(__dirname, "../src/lib/ui-builder"),
+const ROOT = path.resolve(__dirname, "..");
+const DIRS = [
+  path.join(ROOT, "src/components/ui-builder"),
+  path.join(ROOT, "src/components/minimal-tiptap"),
+  path.join(ROOT, "src/components/auto-form"),
+  path.join(ROOT, "src/lib/ui-builder"),
+  path.join(ROOT, "src/hooks"),
+  path.join(ROOT, "src/components"), // For date-picker.tsx etc
 ];
 
-// Import pattern replacements
-// Order matters - more specific patterns should come first
-// Each pattern captures the entire import path and quote style to ensure consistent quotes
-const IMPORT_REPLACEMENTS = [
-  // Fix previously broken mixed quotes (from previous buggy runs)
-  [/from\s+"@workspace\/ui\/([^"']+)'/g, 'from "@workspace/ui/$1"'],
-  
-  // @/ patterns (shadcn default) - with double quotes
-  [/from\s+"@\/components\/ui\/([^"]+)"/g, 'from "@workspace/ui/components/$1"'],
-  [/from\s+"@\/components\/([^"]+)"/g, 'from "@workspace/ui/components/$1"'],
-  [/from\s+"@\/lib\/([^"]+)"/g, 'from "@workspace/ui/lib/$1"'],
-  [/from\s+"@\/hooks\/([^"]+)"/g, 'from "@workspace/ui/hooks/$1"'],
-  // @/ patterns (shadcn default) - with single quotes
-  [/from\s+'@\/components\/ui\/([^']+)'/g, 'from "@workspace/ui/components/$1"'],
-  [/from\s+'@\/components\/([^']+)'/g, 'from "@workspace/ui/components/$1"'],
-  [/from\s+'@\/lib\/([^']+)'/g, 'from "@workspace/ui/lib/$1"'],
-  [/from\s+'@\/hooks\/([^']+)'/g, 'from "@workspace/ui/hooks/$1"'],
-  
-  // @workspace/components/ui/ pattern - with double quotes
-  [/from\s+"@workspace\/components\/ui\/([^"]+)"/g, 'from "@workspace/ui/components/$1"'],
-  [/from\s+"@workspace\/components\/([^"]+)"/g, 'from "@workspace/ui/components/$1"'],
-  [/from\s+"@workspace\/lib\/([^"]+)"/g, 'from "@workspace/ui/lib/$1"'],
-  [/from\s+"@workspace\/hooks\/([^"]+)"/g, 'from "@workspace/ui/hooks/$1"'],
-  // @workspace/components/ui/ pattern - with single quotes
-  [/from\s+'@workspace\/components\/ui\/([^']+)'/g, 'from "@workspace/ui/components/$1"'],
-  [/from\s+'@workspace\/components\/([^']+)'/g, 'from "@workspace/ui/components/$1"'],
-  [/from\s+'@workspace\/lib\/([^']+)'/g, 'from "@workspace/ui/lib/$1"'],
-  [/from\s+'@workspace\/hooks\/([^']+)'/g, 'from "@workspace/ui/hooks/$1"'],
+// Order matters - more specific patterns first
+const REPLACEMENTS = [
+  // @workspace/components/ui/ → @workspace/ui/components/
+  [/@workspace\/components\/ui\//g, "@workspace/ui/components/"],
+  // @workspace/lib/ → @workspace/ui/lib/
+  [/@workspace\/lib\//g, "@workspace/ui/lib/"],
+  // @workspace/hooks/ → @workspace/ui/hooks/
+  [/@workspace\/hooks\//g, "@workspace/ui/hooks/"],
+  // @/ → @workspace/ui/ (fallback for any remaining)
+  [/from\s+["']@\//g, 'from "@workspace/ui/'],
 ];
 
-function walk(dir) {
-  const files = [];
-  if (!fs.existsSync(dir)) return files;
+function* walk(dir, maxDepth = 10) {
+  if (maxDepth <= 0) return;
+  if (!fs.existsSync(dir)) return;
   
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      files.push(...walk(fullPath));
-    } else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
-      files.push(fullPath);
-    }
-  }
-  return files;
-}
-
-function ensureTsNoCheck(content, filePath) {
-  if (content.includes("// @ts-nocheck")) return content;
-  
-  // Check if file starts with "use client" or "use server"
-  const useClientMatch = content.match(/^(['"]use (client|server)['"];?\n?)/);
-  if (useClientMatch) {
-    return content.replace(useClientMatch[0], useClientMatch[0] + "// @ts-nocheck\n");
-  }
-  
-  return "// @ts-nocheck\n" + content;
-}
-
-function fixImportsInContent(content) {
-  let modified = false;
-  let result = content;
-  
-  for (const [pattern, replacement] of IMPORT_REPLACEMENTS) {
-    // Reset lastIndex for global regex
-    pattern.lastIndex = 0;
-    if (pattern.test(result)) {
-      pattern.lastIndex = 0;
-      result = result.replace(pattern, replacement);
-      modified = true;
-    }
-  }
-  
-  return { content: result, modified };
-}
-
-function copyDirRecursive(src, dest) {
-  if (!fs.existsSync(src)) return;
-  
-  if (!fs.existsSync(dest)) {
-    fs.mkdirSync(dest, { recursive: true });
-  }
-  
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
-    
-    if (entry.isDirectory()) {
-      copyDirRecursive(srcPath, destPath);
-    } else {
-      fs.copyFileSync(srcPath, destPath);
-    }
-  }
-}
-
-function rmDirRecursive(dir) {
-  if (!fs.existsSync(dir)) return;
-  fs.rmSync(dir, { recursive: true, force: true });
-}
-
-function moveUiSubdirectory() {
-  // Check if src/components/ui exists and has subdirectories we need to move
-  if (!fs.existsSync(COMPONENTS_UI_DIR)) {
-    console.log("No src/components/ui directory found, skipping move step.");
-    return;
-  }
-  
-  const subdirs = ["ui-builder", "minimal-tiptap", "auto-form"];
-  
-  for (const subdir of subdirs) {
-    const srcPath = path.join(COMPONENTS_UI_DIR, subdir);
-    const destPath = path.join(__dirname, "../src/components", subdir);
-    
-    if (fs.existsSync(srcPath)) {
-      console.log(`Moving ${srcPath} -> ${destPath}`);
-      
-      // Remove existing directory if it exists
-      if (fs.existsSync(destPath)) {
-        console.log(`  Removing existing ${destPath}`);
-        rmDirRecursive(destPath);
-      }
-      
-      // Copy new directory
-      copyDirRecursive(srcPath, destPath);
-      
-      // Remove source
-      rmDirRecursive(srcPath);
-    }
-  }
-  
-  // Also handle any loose files in src/components/ui/ like date-picker.tsx
-  if (fs.existsSync(COMPONENTS_UI_DIR)) {
-    for (const entry of fs.readdirSync(COMPONENTS_UI_DIR, { withFileTypes: true })) {
-      if (!entry.isDirectory() && /\.(tsx?|jsx?)$/.test(entry.name)) {
-        const srcPath = path.join(COMPONENTS_UI_DIR, entry.name);
-        const destPath = path.join(__dirname, "../src/components", entry.name);
-        
-        console.log(`Moving file ${srcPath} -> ${destPath}`);
-        fs.copyFileSync(srcPath, destPath);
-        fs.unlinkSync(srcPath);
-      }
-    }
-    
-    // Remove ui directory if empty
-    const remaining = fs.readdirSync(COMPONENTS_UI_DIR);
-    if (remaining.length === 0) {
-      fs.rmdirSync(COMPONENTS_UI_DIR);
-      console.log("Removed empty src/components/ui directory");
-    } else {
-      console.log(`Warning: src/components/ui still has files: ${remaining.join(", ")}`);
+      yield* walk(fullPath, maxDepth - 1);
+    } else if (/\.(tsx?|jsx?|css)$/.test(entry.name)) {
+      yield fullPath;
     }
   }
 }
 
 function fixImports() {
   let totalFixed = 0;
+  const processedDirs = new Set();
   
-  for (const dir of DIRS_TO_FIX) {
+  for (const dir of DIRS) {
     if (!fs.existsSync(dir)) {
-      console.log(`Skipping non-existent directory: ${dir}`);
+      console.log(`Skipping (not found): ${path.relative(ROOT, dir)}`);
       continue;
     }
     
-    console.log(`\nProcessing directory: ${path.relative(process.cwd(), dir)}`);
+    // Handle both directories and files
+    const stat = fs.statSync(dir);
+    const files = stat.isDirectory() ? [...walk(dir)] : [dir];
     
-    for (const file of walk(dir)) {
+    for (const file of files) {
+      // Skip if already processed (in case of overlapping dirs)
+      if (processedDirs.has(file)) continue;
+      processedDirs.add(file);
+      
       let content = fs.readFileSync(file, "utf8");
       let modified = false;
       
-      // Fix imports
-      const importResult = fixImportsInContent(content);
-      if (importResult.modified) {
-        content = importResult.content;
-        modified = true;
-      }
-      
-      // Ensure @ts-nocheck
-      const withNoCheck = ensureTsNoCheck(content, file);
-      if (withNoCheck !== content) {
-        content = withNoCheck;
-        modified = true;
+      for (const [pattern, replacement] of REPLACEMENTS) {
+        const newContent = content.replace(pattern, replacement);
+        if (newContent !== content) {
+          content = newContent;
+          modified = true;
+        }
       }
       
       if (modified) {
         fs.writeFileSync(file, content);
-        console.log(`  Fixed: ${path.relative(process.cwd(), file)}`);
+        console.log(`Fixed: ${path.relative(ROOT, file)}`);
         totalFixed++;
       }
     }
@@ -216,18 +91,4 @@ function fixImports() {
   console.log(`\nTotal files fixed: ${totalFixed}`);
 }
 
-function main() {
-  console.log("=== UI Builder Import Fix Script ===\n");
-  
-  // Step 1: Move files from src/components/ui/* to src/components/*
-  console.log("Step 1: Moving files from src/components/ui/ subdirectory...\n");
-  moveUiSubdirectory();
-  
-  // Step 2: Fix imports in all target directories
-  console.log("\nStep 2: Fixing imports...\n");
-  fixImports();
-  
-  console.log("\n=== Done ===");
-}
-
-main();
+fixImports();

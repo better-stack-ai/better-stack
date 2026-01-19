@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect, useCallback } from "react"
 
 const DEFAULT_RECT: DOMRect = {

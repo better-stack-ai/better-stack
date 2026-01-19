@@ -95,7 +95,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
     "@tailwindcss/typography": "^0.5.19",
-    "@turbo/gen": "^2.5.5",
+    "@turbo/gen": "^2.6.1",
     "@types/node": "^20.19.9",
     "@types/object-hash": "^3.0.6",
     "@types/react": "^19.1.9",

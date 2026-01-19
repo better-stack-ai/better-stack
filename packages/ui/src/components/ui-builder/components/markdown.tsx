@@ -1,8 +1,7 @@
 "use client";
-// @ts-nocheck
 
-import React, { FC, memo, useMemo } from "react";
-import ReactMarkdown, { Components, Options } from "react-markdown";
+import React, { type FC, memo, useMemo } from "react";
+import ReactMarkdown, { type Components, type Options } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { CodeBlock } from "@workspace/ui/components/ui-builder/components/codeblock";

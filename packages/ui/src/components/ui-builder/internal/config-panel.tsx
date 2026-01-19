@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useCallback, useMemo } from "react";
 import { z } from "zod";
 import {
@@ -7,7 +6,7 @@ import {
 import { Button } from "@workspace/ui/components/button";
 import AutoForm from "@workspace/ui/components/auto-form";
 import { addDefaultValues } from "@workspace/ui/lib/ui-builder/store/schema-utils";
-import { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
+import type { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
 
 export const ConfigPanel = () => {
   const {

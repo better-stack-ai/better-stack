@@ -1,5 +1,4 @@
 "use client";
-// @ts-nocheck
 
 import { forwardRef, useCallback, useMemo, useState } from "react";
 import {
@@ -60,10 +59,10 @@ import { Input } from "@workspace/ui/components/input";
 import { cn } from "@workspace/ui/lib/utils";
 import { CodePanel } from "@workspace/ui/components/ui-builder/components/code-panel";
 import {
-  EditorStore,
+  type EditorStore,
   useEditorStore,
 } from "@workspace/ui/lib/ui-builder/store/editor-store";
-import {
+import type {
   ComponentRegistry,
   ComponentLayer,
 } from "@workspace/ui/components/ui-builder/types";
@@ -73,7 +72,7 @@ import {
   TooltipTrigger,
 } from "@workspace/ui/components/tooltip";
 import {
-  KeyCombination,
+  type KeyCombination,
   useKeyboardShortcuts,
 } from "@workspace/ui/hooks/use-keyboard-shortcuts";
 import { useStore } from "zustand";

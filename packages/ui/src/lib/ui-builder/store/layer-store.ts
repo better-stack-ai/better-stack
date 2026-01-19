@@ -1,14 +1,14 @@
-// @ts-nocheck
-import { create, StateCreator } from 'zustand';
+import { create, type StateCreator } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { produce } from 'immer';
 import { temporal } from 'zundo';
 import isDeepEqual from 'fast-deep-equal';
 
-import { visitLayer, addLayer, hasLayerChildren, findLayerRecursive, createId, countLayers, duplicateWithNewIdsAndName, findAllParentLayersRecursive, migrateV1ToV2, migrateV2ToV3, migrateV5ToV6, createComponentLayer, moveLayer } from "@workspace/ui/lib/ui-builder/store/layer-utils";
-import { getDefaultProps } from "@workspace/ui/lib/ui-builder/store/schema-utils";
-import { useEditorStore } from "@workspace/ui/lib/ui-builder/store/editor-store";
-import { ComponentLayer, Variable, PropValue, VariableValueType, isVariableReference } from "@workspace/ui/components/ui-builder/types";
+import { visitLayer, addLayer, hasLayerChildren, findLayerRecursive, createId, countLayers, duplicateWithNewIdsAndName, findAllParentLayersRecursive, migrateV1ToV2, migrateV2ToV3, migrateV5ToV6, createComponentLayer, moveLayer } from '@workspace/ui/lib/ui-builder/store/layer-utils';
+import { getDefaultProps } from '@workspace/ui/lib/ui-builder/store/schema-utils';
+import { useEditorStore } from '@workspace/ui/lib/ui-builder/store/editor-store';
+import type { ComponentLayer, Variable, PropValue, VariableValueType } from '@workspace/ui/components/ui-builder/types';
+import { isVariableReference } from '@workspace/ui/components/ui-builder/types';
 
 const DEFAULT_PAGE_PROPS = {
   className: "h-screen p-4 flex flex-col gap-2 bg-background overflow-y-scroll",
@@ -69,7 +69,7 @@ const store: StateCreator<LayerStore, [], []> = (set, get) => (
       set(produce((state: LayerStore) => {
         // Set the basic state
         state.pages = pages;
-        state.selectedPageId = selectedPageId || (pages.length > 0 ? pages[0].id : '');
+        state.selectedPageId = selectedPageId || (pages.length > 0 && pages[0] ? pages[0].id : '');
         state.selectedLayerId = selectedLayerId || null;
         state.variables = variables || [];
         
@@ -92,7 +92,10 @@ const store: StateCreator<LayerStore, [], []> = (set, get) => (
                 if (!state.immutableBindings[layer.id]) {
                   state.immutableBindings[layer.id] = {};
                 }
-                state.immutableBindings[layer.id][binding.propName] = true;
+                const bindings = state.immutableBindings[layer.id];
+                if (bindings) {
+                  bindings[binding.propName] = true;
+                }
               }
             }
           }
@@ -140,14 +143,18 @@ const store: StateCreator<LayerStore, [], []> = (set, get) => (
       });
 
       // Track immutable bindings for variable bindings
-      const defaultVariableBindings = registry[layerType].defaultVariableBindings || [];
+      const registryEntry = registry[layerType];
+      const defaultVariableBindings = registryEntry?.defaultVariableBindings || [];
       for (const binding of defaultVariableBindings) {
         const variable = state.variables.find(v => v.id === binding.variableId);
         if (variable && binding.immutable) {
           if (!state.immutableBindings[newLayer.id]) {
             state.immutableBindings[newLayer.id] = {};
           }
-          state.immutableBindings[newLayer.id][binding.propName] = true;
+          const bindings = state.immutableBindings[newLayer.id];
+          if (bindings) {
+            bindings[binding.propName] = true;
+          }
         }
       }
 
@@ -234,10 +241,11 @@ const store: StateCreator<LayerStore, [], []> = (set, get) => (
       const isPage = state.pages.some(page => page.id === layerId);
       if (isPage && pages.length > 1) {
         const newPages = state.pages.filter(page => page.id !== layerId);
+        const firstPage = newPages[0];
         return {
           ...state,
           pages: newPages,
-          selectedPageId: newPages[0].id,
+          selectedPageId: firstPage ? firstPage.id : '',
         };
       }
 
@@ -489,7 +497,10 @@ const store: StateCreator<LayerStore, [], []> = (set, get) => (
         if (!state.immutableBindings[layerId]) {
           state.immutableBindings[layerId] = {};
         }
-        state.immutableBindings[layerId][propName] = isImmutable;
+        const bindings = state.immutableBindings[layerId];
+        if (bindings) {
+          bindings[propName] = isImmutable;
+        }
       }));
     },
 

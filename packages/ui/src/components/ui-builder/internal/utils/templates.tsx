@@ -1,12 +1,11 @@
-// @ts-nocheck
 const renderTemplate = (template: string, data: Record<string, any>): string => {
   return template.replace(/<%~\s*it\.(\w+)\s*%>/g, (_, key) => {
     return data[key] ?? '';
   });
 };
 import { hasLayerChildren } from "@workspace/ui/lib/ui-builder/store/layer-utils";
-import { ComponentRegistry, ComponentLayer, Variable } from "@workspace/ui/components/ui-builder/types";
-import { isVariableReference } from "@workspace/ui/lib/ui-builder/utils/variable-resolver";
+import type { ComponentRegistry, ComponentLayer, Variable } from '@workspace/ui/components/ui-builder/types';
+import { isVariableReference } from '@workspace/ui/lib/ui-builder/utils/variable-resolver';
 
 // Helper function to convert display name to valid JavaScript identifier
 const toValidIdentifier = (input: string): string => {

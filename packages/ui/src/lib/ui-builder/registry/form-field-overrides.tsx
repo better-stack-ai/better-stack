@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React from "react";
 import {
   FormControl,
@@ -7,7 +6,7 @@ import {
   FormLabel,
 } from "@workspace/ui/components/form";
 import { ChildrenSearchableSelect } from "@workspace/ui/components/ui-builder/internal/form-fields/children-searchable-select";
-import {
+import type {
   AutoFormInputComponentProps,
   ComponentLayer,
   FieldConfigFunction,

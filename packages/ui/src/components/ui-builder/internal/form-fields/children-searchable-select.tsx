@@ -1,11 +1,10 @@
-// @ts-nocheck
 import React, { useCallback } from "react";
 
 import { X as XIcon, ChevronsUpDown } from "lucide-react";
 import {
   useLayerStore,
 } from "@workspace/ui/lib/ui-builder/store/layer-store";
-import { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
+import type { ComponentLayer } from '@workspace/ui/components/ui-builder/types';
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import { AddComponentsPopover } from "@workspace/ui/components/ui-builder/internal/components/add-component-popover";

@@ -1,9 +1,9 @@
-// @ts-nocheck
 import React from "react";
 
 import { isPrimitiveComponent } from "@workspace/ui/lib/ui-builder/store/editor-utils";
 import { hasLayerChildren } from "@workspace/ui/lib/ui-builder/store/layer-utils";
-import { ComponentRegistry, ComponentLayer, Variable, PropValue, isVariableReference } from "@workspace/ui/components/ui-builder/types";
+import type { ComponentRegistry, ComponentLayer, Variable, PropValue } from '@workspace/ui/components/ui-builder/types';
+import { isVariableReference } from '@workspace/ui/components/ui-builder/types';
 import { resolveVariableReferences, resolveChildrenVariableReference } from "@workspace/ui/lib/ui-builder/utils/variable-resolver";
 
 export interface ServerLayerRendererProps<TRegistry extends ComponentRegistry = ComponentRegistry> {
@@ -35,7 +35,7 @@ export interface ServerLayerRendererProps<TRegistry extends ComponentRegistry = 
  * @example
  * ```tsx
  * // In a Next.js Server Component (no "use client" needed)
- * import { ServerLayerRenderer } from "@workspace/ui/components/ui-builder/server-layer-renderer";
+ * import { ServerLayerRenderer } from "@workspace/ui/components/ui/ui-builder/server-layer-renderer';
  * 
  * export default async function Page() {
  *   const page = await fetchPageFromDatabase();

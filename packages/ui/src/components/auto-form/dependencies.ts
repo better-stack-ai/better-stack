@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { FieldValues, UseFormWatch } from "react-hook-form";
 import type { Dependency, EnumValues } from "./types";
 import { DependencyType } from "./types";
