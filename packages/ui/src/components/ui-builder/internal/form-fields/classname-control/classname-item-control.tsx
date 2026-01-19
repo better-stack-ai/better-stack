@@ -1,6 +1,5 @@
-// @ts-nocheck
 import React, { useMemo, useState, useEffect, useCallback } from "react";
-import { CONFIG, LAYOUT_GROUPS, LAYOUT_ORDER, StateType } from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/config";
+import { CONFIG, LAYOUT_GROUPS, LAYOUT_ORDER, type StateType } from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/config";
 import { ClassNameGroupControl } from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/classname-group-control";
 import { cn } from "@workspace/ui/lib/utils";
 import { isTailwindClass } from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/helpers";
@@ -44,7 +43,9 @@ export function ClassNameItemControl({ value, onChange }: ClassNameItemControlPr
               }
             }
           });
-          if (!found) initialSelected[group.label] = group.keys[0];
+          if (!found && group.keys[0]) {
+            initialSelected[group.label] = group.keys[0];
+          }
         });
         // Find handled tokens
         const handledTokens = new Set(
@@ -64,7 +65,9 @@ export function ClassNameItemControl({ value, onChange }: ClassNameItemControlPr
         // Reset state if value is empty
         const initialSelected: { [groupLabel: string]: string } = {};
         LAYOUT_GROUPS.forEach((group) => {
-          initialSelected[group.label] = group.keys[0];
+          if (group.keys[0]) {
+            initialSelected[group.label] = group.keys[0];
+          }
         });
         return {
           parsedState: {} as StateType,
@@ -225,7 +228,9 @@ export function ClassNameItemControl({ value, onChange }: ClassNameItemControlPr
               const keys = group.keys.map(String);
               const selectedKey = selectedKeys[group.label] || keys[0];
               if (entry.isVisible && !entry.isVisible(state)) return null;
+              if (!selectedKey) return null;
               const groupConfig = CONFIG[selectedKey as keyof typeof CONFIG];
+              if (!groupConfig) return null;
   
               return (
                 <div key={group.label} className={cn("w-full", entry.className)} data-testid={`group-${group.label.toLowerCase().replace(/\s+/g, '-')}`}>
@@ -243,6 +248,7 @@ export function ClassNameItemControl({ value, onChange }: ClassNameItemControlPr
               if (entry.isVisible && !entry.isVisible(state)) return null;
               const configKey = entry.key;
               const ungroupedConfig = CONFIG[configKey];
+              if (!ungroupedConfig) return null;
               return (
                 <div key={configKey} className={cn("w-full", entry.className)} data-testid={`item-${configKey}`}>
                   <ungroupedConfig.component

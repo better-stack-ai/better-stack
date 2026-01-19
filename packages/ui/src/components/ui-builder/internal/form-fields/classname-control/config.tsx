@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   Heading,
   Palette,
@@ -53,7 +52,7 @@ import {
 } from "@workspace/ui/components/ui-builder/internal/utils/tailwind-classes";
 import {
   ToggleGroup,
-  ToggleOption,
+  type ToggleOption,
 } from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/toggle-group";
 import {
   FillIcon,

@@ -2,6 +2,7 @@
 import type { Editor } from "@tiptap/react"
 import type { MinimalTiptapProps } from "./minimal-tiptap"
 
+
 type ShortcutKeyResult = {
   symbol: string
   readable: string
@@ -166,7 +167,27 @@ const checkTypeAndSize = (
   { allowedMimeTypes, maxFileSize }: FileValidationOptions
 ): { isValidType: boolean; isValidSize: boolean } => {
   const mimeType = input instanceof File ? input.type : base64MimeType(input)
-  const size = input instanceof File ? input.size : getBase64Size(input)
+  
+  let size: number
+  if (input instanceof File) {
+    size = input.size
+  } else {
+    // Extract base64 data part
+    const base64Data = input.split(",")[1]
+    
+    // Validate that base64 data exists and is not empty
+    if (!base64Data || base64Data.trim() === "") {
+      // Malformed base64 string - fail size validation
+      return { isValidType: true, isValidSize: false }
+    }
+    
+    try {
+      size = atob(base64Data).length
+    } catch {
+      // Invalid base64 encoding - fail size validation
+      return { isValidType: true, isValidSize: false }
+    }
+  }
 
   const isValidType =
     allowedMimeTypes.length === 0 ||
@@ -178,21 +199,9 @@ const checkTypeAndSize = (
   return { isValidType, isValidSize }
 }
 
-const getBase64Size = (input: string): number => {
-  // Handle data URL format: "data:image/png;base64,iVBORw0..."
-  if (input.includes(",")) {
-    const base64Part = input.split(",")[1]
-    if (base64Part) {
-      return atob(base64Part).length
-    }
-  }
-  // Handle pure base64 string without data URL prefix
-  return atob(input).length
-}
-
 const base64MimeType = (encoded: string): string => {
   const result = encoded.match(/data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+).*,.*/)
-  return result && result.length > 1 ? result[1] : "unknown"
+  return result && result.length > 1 ? result[1] ?? "unknown" : "unknown"
 }
 
 const isBase64 = (str: string): boolean => {

@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 import React, {
   useCallback,
@@ -9,7 +8,7 @@ import React, {
 } from "react";
 import { Plus, Crosshair, ZoomIn, ZoomOut, MousePointer } from "lucide-react";
 import { countLayers, useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
-import { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
+import type { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
 import {
   TransformWrapper,
   TransformComponent,
@@ -408,7 +407,7 @@ const EditorPanelContent: React.FC<EditorPanelContentProps> = ({
           </div>
         </TransformComponent>
       </TransformWrapper>
-      <AddComponentsPopover parentLayerId={selectedPageId}>
+      <AddComponentsPopover parentLayerId={selectedPageId} enableDragToCanvas>
         <Button
           variant="secondary"
           size="icon"

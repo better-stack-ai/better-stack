@@ -1,8 +1,6 @@
-// @ts-nocheck
-import { ComponentRegistry } from '@workspace/ui/components/ui-builder/types';
-import { ComponentLayer, RegistryEntry } from '@workspace/ui/components/ui-builder/types';
-import { FieldConfigItem } from "@workspace/ui/components/auto-form/types";
-import { ComponentType as ReactComponentType } from "react";
+import type { ComponentType as ReactComponentType } from "react";
+import type { ComponentRegistry, ComponentLayer, RegistryEntry } from '@workspace/ui/components/ui-builder/types';
+import type { FieldConfigItem } from "@workspace/ui/components/auto-form/types";
 
 // Cache for field overrides to avoid regenerating them
 const fieldOverrideCache = new Map<string, Record<string, FieldConfigItem>>();

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, {
     useCallback,
     useMemo,
@@ -10,7 +9,7 @@ import React, {
 import { cn } from "@workspace/ui/lib/utils";
 import { GripVertical } from "lucide-react";
 import { useDrag } from "@use-gesture/react";
-import { DragConfig } from "@use-gesture/react";
+import type { DragConfig } from "@use-gesture/react";
 
 const RESPONSIVE_DEFAULT_SIZE = 800;
 

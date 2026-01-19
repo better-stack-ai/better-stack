@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 import React, {
   useCallback,
@@ -10,7 +9,7 @@ import React, {
   useContext,
 } from "react";
 import { useTransformEffect } from "react-zoom-pan-pinch";
-import { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
+import type { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
 import { LayerMenu } from "@workspace/ui/components/ui-builder/internal/components/layer-menu";
 import { DragHandle as ComponentDragHandle } from "@workspace/ui/components/ui-builder/internal/dnd/drag-handle";
 import { DragHandleContext } from "@workspace/ui/components/ui-builder/internal/canvas/resizable-wrapper";
@@ -146,7 +145,7 @@ export const ElementSelector: React.FC<ElementSelectorProps> = ({
           className={cn(
             "fixed box-border hover:border-blue-300 hover:border-2 hover:bg-blue-300/20 hover:shadow-md hover:shadow-blue-500/20 cursor-default",
             isBeingDragged
-              ? "border-2 border-orange-500 border-dashed shadow-lg shadow-orange-500/30 opacity-70 bg-orange-50/20"
+              ? "border-2 border-green-500 border-dashed shadow-lg opacity-70 bg-orange-50/20"
               : isSelected
               ? "border-2 border-blue-500 hover:border-blue-500 hover:bg-transparent  hover:shadow-none"
               : ""

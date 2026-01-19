@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState } from "react";
 import { AddComponentsPopover } from "@workspace/ui/components/ui-builder/internal/components/add-component-popover";
 import { Button } from "@workspace/ui/components/button";

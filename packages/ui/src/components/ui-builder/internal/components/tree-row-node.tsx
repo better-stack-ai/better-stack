@@ -1,6 +1,5 @@
-// @ts-nocheck
 import React, { useCallback, useState, memo, useMemo } from "react";
-import { NodeAttrs } from "he-tree-react";
+import type { NodeAttrs } from "he-tree-react";
 import isDeepEqual from "fast-deep-equal";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -12,7 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import { hasLayerChildren } from "@workspace/ui/lib/ui-builder/store/layer-utils";
-import { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
+import type { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
 import {
   DropdownMenu,
   DropdownMenuContent,

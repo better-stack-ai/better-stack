@@ -1,10 +1,11 @@
-// @ts-nocheck
 import { createContext, useContext } from 'react';
 
 // Main DND context state interface
 export interface DndContextState {
   isDragging: boolean;
   activeLayerId: string | null;
+  /** Component type being dragged from the popover (for new component drags) */
+  newComponentType: string | null;
   canDropOnLayer: (layerId: string) => boolean;
 }
 
@@ -18,6 +19,7 @@ export interface ComponentDragContextState {
 export const DndContextStateContext = createContext<DndContextState>({
   isDragging: false,
   activeLayerId: null,
+  newComponentType: null,
   canDropOnLayer: () => false,
 });
 

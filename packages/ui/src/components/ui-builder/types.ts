@@ -1,8 +1,7 @@
-// @ts-nocheck
-import { ZodObject, ZodSchema } from "zod";
-import { ComponentType as ReactComponentType, ReactNode } from 'react';
+import { type ZodObject, type ZodSchema } from "zod";
+import { type ComponentType as ReactComponentType, type ReactNode } from 'react';
 import {
-    FieldConfigItem,
+    type FieldConfigItem,
   } from "@workspace/ui/components/auto-form/types";
 
 export type {
@@ -26,12 +25,16 @@ export type PropValue =
 export type ComponentProps<TProps extends Record<string, PropValue> = Record<string, PropValue>> = TProps;
 
 // Enhanced ComponentLayer with generic prop typing
+// Children can be:
+// - ComponentLayer[] for nested components
+// - string for text content
+// - VariableReference for dynamic text content bound to a variable
 export interface ComponentLayer<TProps extends Record<string, PropValue> = Record<string, PropValue>> {
     id: string;
     name?: string;
     type: string;
     props: ComponentProps<TProps>;
-    children: ComponentLayer[] | string;
+    children: ComponentLayer[] | string | VariableReference;
 }
 
 // Variable value types - more specific than before
@@ -70,9 +73,15 @@ export interface RegistryEntry<T extends ReactComponentType<any>> {
   schema: ZodObject<any> | ZodSchema<any>;
   from?: string;
   isFromDefaultExport?: boolean;
-  defaultChildren?: ComponentLayer[] | string;
+  defaultChildren?: ComponentLayer[] | string | VariableReference;
   defaultVariableBindings?: DefaultVariableBinding[];
   fieldOverrides?: Record<string, FieldConfigFunction>;
+  /** 
+   * If defined, this component can only be added as a child of the specified parent types.
+   * Used to filter component options in the add popover and validate drag-and-drop.
+   * Example: TabsTrigger has childOf: ["TabsList"]
+   */
+  childOf?: string[];
 }
 
 // Improved field config function type
@@ -129,6 +138,30 @@ export const createVariable: CreateVariable = <T extends VariableValueType>(
   type,
   defaultValue,
 });
+
+/**
+ * Block definition for UI Builder.
+ * Blocks are pre-built component compositions that can be inserted as templates.
+ */
+export interface BlockDefinition {
+  /** Unique block name, e.g., "login-01" */
+  name: string;
+  /** Block category for grouping in UI, e.g., "login", "sidebar", "chart" */
+  category: string;
+  /** Human-readable description */
+  description?: string;
+  /** The ComponentLayer tree to insert when this block is selected */
+  template: ComponentLayer;
+  /** Optional preview image URL */
+  thumbnail?: string;
+  /** Required shadcn components for this block */
+  requiredComponents?: string[];
+}
+
+/**
+ * Block registry type - a record of block name to block definition
+ */
+export type BlockRegistry = Record<string, BlockDefinition>;
 
 
 

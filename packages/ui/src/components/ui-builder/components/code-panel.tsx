@@ -1,9 +1,8 @@
-// @ts-nocheck
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
 import {
   useLayerStore,
 } from "@workspace/ui/lib/ui-builder/store/layer-store";
-import { ComponentLayer } from '../types';
+import type { ComponentLayer } from '../types';
 import { useEditorStore } from "@workspace/ui/lib/ui-builder/store/editor-store";
 import { pageLayerToCode } from "@workspace/ui/components/ui-builder/internal/utils/templates";
 import { CodeBlock } from "@workspace/ui/components/ui-builder/components/codeblock";

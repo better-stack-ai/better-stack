@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, {
   useCallback,
   useLayoutEffect,
@@ -8,14 +7,14 @@ import React, {
 } from "react";
 import isDeepEqual from "fast-deep-equal";
 import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
-import { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
+import type { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
 import { cn } from "@workspace/ui/lib/utils";
 import {
   findAllParentLayersRecursive,
   hasLayerChildren,
 } from "@workspace/ui/lib/ui-builder/store/layer-utils";
 import { Plus } from "lucide-react";
-import { useHeTree, Id } from "he-tree-react";
+import { useHeTree, type Id } from "he-tree-react";
 import {
   TreeRowNode,
   TreeRowPlaceholder,
@@ -122,7 +121,7 @@ export const LayersTree: React.FC<LayersTreeProps> = React.memo(
             
           // Only update if children actually changed
           const currentLayer = layers[0];
-          const currentChildren = hasLayerChildren(currentLayer) ? currentLayer.children || [] : [];
+          const currentChildren = currentLayer && hasLayerChildren(currentLayer) ? currentLayer.children || [] : [];
           
           if (!isDeepEqual(currentChildren, updatedChildren)) {
             updateLayer(selectedPageId, {}, { children: updatedChildren });

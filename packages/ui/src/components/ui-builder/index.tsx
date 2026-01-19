@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
@@ -17,12 +16,13 @@ import { Button } from "@workspace/ui/components/button";
 import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
 import { useStore } from "@workspace/ui/hooks/use-store";
 import { useEditorStore } from "@workspace/ui/lib/ui-builder/store/editor-store";
-import {
+import type {
   ComponentRegistry,
   ComponentLayer,
   Variable,
   LayerChangeHandler,
-  VariableChangeHandler
+  VariableChangeHandler,
+  BlockRegistry
 } from "@workspace/ui/components/ui-builder/types";
 import { TailwindThemePanel } from "@workspace/ui/components/ui-builder/internal/tailwind-theme-panel";
 import { ConfigPanel } from "@workspace/ui/components/ui-builder/internal/config-panel";
@@ -73,6 +73,8 @@ interface UIBuilderBaseProps<TRegistry extends ComponentRegistry = ComponentRegi
   allowVariableEditing?: boolean;
   allowPagesCreation?: boolean;
   allowPagesDeletion?: boolean;
+  /** Optional block registry for the Blocks tab in the add component popover */
+  blocks?: BlockRegistry;
 }
 
 /**
@@ -128,6 +130,7 @@ const UIBuilder = <TRegistry extends ComponentRegistry = ComponentRegistry>({
   navLeftChildren,
   navRightChildren,
   showExport = true,
+  blocks,
 }: UIBuilderProps<TRegistry>) => {
   const layerStore = useStore(useLayerStore, (state) => state);
   const editorStore = useStore(useEditorStore, (state) => state);
@@ -152,7 +155,7 @@ const UIBuilder = <TRegistry extends ComponentRegistry = ComponentRegistry>({
   // Effect 1: Initialize Editor Store with registry and page form props
   useEffect(() => {
     if (editorStore && componentRegistry && !editorStoreInitialized) {
-      editorStore.initialize(componentRegistry, persistLayerStore, allowPagesCreation, allowPagesDeletion, allowVariableEditing);
+      editorStore.initialize(componentRegistry, persistLayerStore, allowPagesCreation, allowPagesDeletion, allowVariableEditing, blocks);
       setEditorStoreInitialized(true);
     }
   }, [
@@ -163,6 +166,7 @@ const UIBuilder = <TRegistry extends ComponentRegistry = ComponentRegistry>({
     allowPagesCreation,
     allowPagesDeletion,
     allowVariableEditing,
+    blocks,
   ]);
 
   // Effect 2: Conditionally initialize Layer Store *after* Editor Store is initialized
@@ -262,12 +266,12 @@ function MainLayout({ panelConfig }: { panelConfig: PanelConfig }) {
   // Update selected panel when panels change
   useEffect(() => {
     const editorPanel = mainPanels.find(panel => panel.title === "UI Editor");
-    const currentPanel = mainPanels.find(panel => panel.title === selectedPanel.title);
+    const currentPanel = mainPanels.find(panel => panel.title === selectedPanel?.title);
     
     if (!currentPanel) {
       setSelectedPanel(editorPanel || mainPanels[0]);
     }
-  }, [mainPanels, selectedPanel.title]);
+  }, [mainPanels, selectedPanel?.title]);
 
   const handlePanelClickById = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
     const panelIndex = parseInt(e.currentTarget.dataset.panelIndex || "0");
@@ -302,14 +306,14 @@ function MainLayout({ panelConfig }: { panelConfig: PanelConfig }) {
       </div>
       {/* Mobile Layout */}
       <div className="flex size-full flex-col md:hidden overflow-hidden ">
-        {selectedPanel.content}
+        {selectedPanel?.content}
         <div className="absolute bottom-4 left-4 right-4 z-50">
           <div className="flex justify-center rounded-full bg-primary p-2 shadow-lg">
             {mainPanels.map((panel, index) => (
               <Button
                 key={panel.title}
                 variant={
-                  selectedPanel.title !== panel.title ? "default" : "secondary"
+                  selectedPanel?.title !== panel.title ? "default" : "secondary"
                 }
                 size="sm"
                 className="flex-1"

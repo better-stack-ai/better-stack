@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { CONFIG, ConfigItem, StateType } from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/config";
+import { CONFIG, type ConfigItem, type StateType } from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control/config";
 import { Button } from "@workspace/ui/components/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@workspace/ui/components/dropdown-menu";
 import { MoreVertical } from "lucide-react";
@@ -83,7 +82,7 @@ type ClassNameGroupControlProps = {
                       : ""
                   }
                 >
-                  {CONFIG[String(key)].label || String(key)}
+                  {CONFIG[String(key)]?.label || String(key)}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
