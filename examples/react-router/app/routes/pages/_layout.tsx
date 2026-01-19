@@ -6,6 +6,7 @@ import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
+import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
 
 // Get base URL function - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -35,6 +36,7 @@ async function mockUploadFile(file: File): Promise<string> {
       "ai-chat": AiChatPluginOverrides,
       cms: CMSPluginOverrides,
       "form-builder": FormBuilderPluginOverrides,
+      kanban: KanbanPluginOverrides,
   }
 
 export default function Layout() {
@@ -184,6 +186,19 @@ export default function Layout() {
                         },
                         onRouteError: async (routeName, error, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Form Builder error:`, routeName, error.message);
+                        },
+                    },
+                    kanban: {
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        navigate: (href) => navigate(href),
+                        Link: ({ href, children, className, ...props }) => (
+                            <Link to={href || ""} className={className} {...props}>
+                              {children}
+                            </Link>
+                        ),
+                        onRouteRender: async (routeName, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Kanban route:`, routeName, context.path);
                         },
                     }
                 }}

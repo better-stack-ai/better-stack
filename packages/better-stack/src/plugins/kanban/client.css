@@ -1,0 +1,72 @@
+/* Kanban Plugin Client Styles */
+
+/* Kanban board container */
+[data-slot="kanban-board"] {
+	min-height: 400px;
+}
+
+/* Column styling */
+[data-slot="kanban-column"] {
+	min-width: 280px;
+	max-width: 350px;
+}
+
+@media (max-width: 768px) {
+	[data-slot="kanban-column"] {
+		min-width: 100%;
+		max-width: 100%;
+	}
+}
+
+/* Item dragging state */
+[data-slot="kanban-item"][data-dragging] {
+	opacity: 0.5;
+}
+
+/* Column dragging state */
+[data-slot="kanban-column"][data-dragging] {
+	opacity: 0.5;
+}
+
+/* Handle cursor */
+[data-slot="kanban-column-handle"],
+[data-slot="kanban-item-handle"] {
+	cursor: grab;
+}
+
+[data-slot="kanban-column-handle"]:active,
+[data-slot="kanban-item-handle"]:active {
+	cursor: grabbing;
+}
+
+/* Task card hover effect */
+.kanban-task-card {
+	transition: box-shadow 0.2s ease;
+}
+
+.kanban-task-card:hover {
+	box-shadow:
+		0 4px 6px -1px rgba(0, 0, 0, 0.1),
+		0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Priority badge colors */
+.kanban-priority-urgent {
+	--badge-bg: var(--destructive);
+	--badge-fg: var(--destructive-foreground);
+}
+
+.kanban-priority-high {
+	--badge-bg: rgb(249, 115, 22);
+	--badge-fg: white;
+}
+
+.kanban-priority-medium {
+	--badge-bg: var(--primary);
+	--badge-fg: var(--primary-foreground);
+}
+
+.kanban-priority-low {
+	--badge-bg: var(--secondary);
+	--badge-fg: var(--secondary-foreground);
+}

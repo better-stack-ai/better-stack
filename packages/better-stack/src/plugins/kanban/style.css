@@ -1,0 +1,4 @@
+/* Kanban Plugin Full Styles */
+/* This file includes Tailwind directives for consumers who need the full stylesheet */
+
+@import "./client.css";

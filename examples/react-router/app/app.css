@@ -16,6 +16,9 @@
 /* Import UI Builder plugin styles */
 @import "@btst/stack/plugins/ui-builder/css";
 
+/* Import Kanban plugin styles */
+@import "@btst/stack/plugins/kanban/css";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme {

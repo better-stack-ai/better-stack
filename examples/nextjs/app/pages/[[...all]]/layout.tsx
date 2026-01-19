@@ -14,6 +14,7 @@ import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
 import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client"
 import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
+import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
 
 // Get base URL - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -76,6 +77,7 @@ type PluginOverrides = {
     cms: CMSPluginOverrides,
     "form-builder": FormBuilderPluginOverrides,
     "ui-builder": UIBuilderPluginOverrides,
+    kanban: KanbanPluginOverrides,
 }
 
 export default function ExampleLayout({
@@ -245,6 +247,27 @@ export default function ExampleLayout({
                         refresh: () => router.refresh(),
                         Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
                         componentRegistry: defaultComponentRegistry,
+                    },
+                    kanban: {
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        navigate: (path) => router.push(path),
+                        refresh: () => router.refresh(),
+                        Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+                        onRouteRender: async (routeName, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Kanban route:`, routeName, context.path);
+                        },
+                        onRouteError: async (routeName, error, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Kanban error:`, routeName, error.message);
+                        },
+                        onBeforeBoardsPageRendered: (context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeBoardsPageRendered`);
+                            return true;
+                        },
+                        onBeforeBoardPageRendered: (boardId, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeBoardPageRendered:`, boardId);
+                            return true;
+                        },
                     }
                 }}
             >

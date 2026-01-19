@@ -298,6 +298,47 @@
         "default": "./dist/plugins/open-api/api/index.cjs"
       }
     },
+    "./plugins/kanban/api": {
+      "import": {
+        "types": "./dist/plugins/kanban/api/index.d.ts",
+        "default": "./dist/plugins/kanban/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/kanban/api/index.d.cts",
+        "default": "./dist/plugins/kanban/api/index.cjs"
+      }
+    },
+    "./plugins/kanban/client": {
+      "import": {
+        "types": "./dist/plugins/kanban/client/index.d.ts",
+        "default": "./dist/plugins/kanban/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/kanban/client/index.d.cts",
+        "default": "./dist/plugins/kanban/client/index.cjs"
+      }
+    },
+    "./plugins/kanban/client/components": {
+      "import": {
+        "types": "./dist/plugins/kanban/client/components/index.d.ts",
+        "default": "./dist/plugins/kanban/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/kanban/client/components/index.d.cts",
+        "default": "./dist/plugins/kanban/client/components/index.cjs"
+      }
+    },
+    "./plugins/kanban/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/kanban/client/hooks/index.d.ts",
+        "default": "./dist/plugins/kanban/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/kanban/client/hooks/index.d.cts",
+        "default": "./dist/plugins/kanban/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/kanban/css": "./dist/plugins/kanban/style.css",
     "./plugins/route-docs/client": {
       "import": {
         "types": "./dist/plugins/route-docs/client/index.d.ts",
@@ -389,6 +430,18 @@
       ],
       "plugins/open-api/api": [
         "./dist/plugins/open-api/api/index.d.ts"
+      ],
+      "plugins/kanban/api": [
+        "./dist/plugins/kanban/api/index.d.ts"
+      ],
+      "plugins/kanban/client": [
+        "./dist/plugins/kanban/client/index.d.ts"
+      ],
+      "plugins/kanban/client/components": [
+        "./dist/plugins/kanban/client/components/index.d.ts"
+      ],
+      "plugins/kanban/client/hooks": [
+        "./dist/plugins/kanban/client/hooks/index.d.ts"
       ],
       "plugins/route-docs/client": [
         "./dist/plugins/route-docs/client/index.d.ts"
