@@ -638,38 +638,40 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 					};
 
 					try {
-					// Verify the board exists before attempting deletion
-					const existingBoard = await adapter.findOne<Board>({
-						model: "kanbanBoard",
-						where: [{ field: "id", value: ctx.params.id, operator: "eq" as const }],
-					});
+						// Verify the board exists before attempting deletion
+						const existingBoard = await adapter.findOne<Board>({
+							model: "kanbanBoard",
+							where: [
+								{ field: "id", value: ctx.params.id, operator: "eq" as const },
+							],
+						});
 
-					if (!existingBoard) {
-						throw ctx.error(404, { message: "Board not found" });
-					}
-
-					if (hooks?.onBeforeDeleteBoard) {
-						const canDelete = await hooks.onBeforeDeleteBoard(
-							ctx.params.id,
-							context,
-						);
-						if (!canDelete) {
-							throw ctx.error(403, {
-								message: "Unauthorized: Cannot delete board",
-							});
+						if (!existingBoard) {
+							throw ctx.error(404, { message: "Board not found" });
 						}
-					}
 
-					await adapter.delete<Board>({
-						model: "kanbanBoard",
-						where: [{ field: "id", value: ctx.params.id }],
-					});
+						if (hooks?.onBeforeDeleteBoard) {
+							const canDelete = await hooks.onBeforeDeleteBoard(
+								ctx.params.id,
+								context,
+							);
+							if (!canDelete) {
+								throw ctx.error(403, {
+									message: "Unauthorized: Cannot delete board",
+								});
+							}
+						}
 
-					if (hooks?.onBoardDeleted) {
-						await hooks.onBoardDeleted(ctx.params.id, context);
-					}
+						await adapter.delete<Board>({
+							model: "kanbanBoard",
+							where: [{ field: "id", value: ctx.params.id }],
+						});
 
-					return { success: true };
+						if (hooks?.onBoardDeleted) {
+							await hooks.onBoardDeleted(ctx.params.id, context);
+						}
+
+						return { success: true };
 					} catch (error) {
 						if (hooks?.onDeleteBoardError) {
 							await hooks.onDeleteBoardError(error as Error, context);
@@ -806,38 +808,40 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 					};
 
 					try {
-					// Verify the column exists before attempting deletion
-					const existingColumn = await adapter.findOne<Column>({
-						model: "kanbanColumn",
-						where: [{ field: "id", value: ctx.params.id, operator: "eq" as const }],
-					});
+						// Verify the column exists before attempting deletion
+						const existingColumn = await adapter.findOne<Column>({
+							model: "kanbanColumn",
+							where: [
+								{ field: "id", value: ctx.params.id, operator: "eq" as const },
+							],
+						});
 
-					if (!existingColumn) {
-						throw ctx.error(404, { message: "Column not found" });
-					}
-
-					if (hooks?.onBeforeDeleteColumn) {
-						const canDelete = await hooks.onBeforeDeleteColumn(
-							ctx.params.id,
-							context,
-						);
-						if (!canDelete) {
-							throw ctx.error(403, {
-								message: "Unauthorized: Cannot delete column",
-							});
+						if (!existingColumn) {
+							throw ctx.error(404, { message: "Column not found" });
 						}
-					}
 
-					await adapter.delete<Column>({
-						model: "kanbanColumn",
-						where: [{ field: "id", value: ctx.params.id }],
-					});
+						if (hooks?.onBeforeDeleteColumn) {
+							const canDelete = await hooks.onBeforeDeleteColumn(
+								ctx.params.id,
+								context,
+							);
+							if (!canDelete) {
+								throw ctx.error(403, {
+									message: "Unauthorized: Cannot delete column",
+								});
+							}
+						}
 
-					if (hooks?.onColumnDeleted) {
-						await hooks.onColumnDeleted(ctx.params.id, context);
-					}
+						await adapter.delete<Column>({
+							model: "kanbanColumn",
+							where: [{ field: "id", value: ctx.params.id }],
+						});
 
-					return { success: true };
+						if (hooks?.onColumnDeleted) {
+							await hooks.onColumnDeleted(ctx.params.id, context);
+						}
+
+						return { success: true };
 					} catch (error) {
 						throw error;
 					}
@@ -1039,38 +1043,40 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 					};
 
 					try {
-					// Verify the task exists before attempting deletion
-					const existingTask = await adapter.findOne<Task>({
-						model: "kanbanTask",
-						where: [{ field: "id", value: ctx.params.id, operator: "eq" as const }],
-					});
+						// Verify the task exists before attempting deletion
+						const existingTask = await adapter.findOne<Task>({
+							model: "kanbanTask",
+							where: [
+								{ field: "id", value: ctx.params.id, operator: "eq" as const },
+							],
+						});
 
-					if (!existingTask) {
-						throw ctx.error(404, { message: "Task not found" });
-					}
-
-					if (hooks?.onBeforeDeleteTask) {
-						const canDelete = await hooks.onBeforeDeleteTask(
-							ctx.params.id,
-							context,
-						);
-						if (!canDelete) {
-							throw ctx.error(403, {
-								message: "Unauthorized: Cannot delete task",
-							});
+						if (!existingTask) {
+							throw ctx.error(404, { message: "Task not found" });
 						}
-					}
 
-					await adapter.delete<Task>({
-						model: "kanbanTask",
-						where: [{ field: "id", value: ctx.params.id }],
-					});
+						if (hooks?.onBeforeDeleteTask) {
+							const canDelete = await hooks.onBeforeDeleteTask(
+								ctx.params.id,
+								context,
+							);
+							if (!canDelete) {
+								throw ctx.error(403, {
+									message: "Unauthorized: Cannot delete task",
+								});
+							}
+						}
 
-					if (hooks?.onTaskDeleted) {
-						await hooks.onTaskDeleted(ctx.params.id, context);
-					}
+						await adapter.delete<Task>({
+							model: "kanbanTask",
+							where: [{ field: "id", value: ctx.params.id }],
+						});
 
-					return { success: true };
+						if (hooks?.onTaskDeleted) {
+							await hooks.onTaskDeleted(ctx.params.id, context);
+						}
+
+						return { success: true };
 					} catch (error) {
 						throw error;
 					}
