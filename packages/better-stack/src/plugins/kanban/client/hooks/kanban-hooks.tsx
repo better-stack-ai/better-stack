@@ -274,6 +274,29 @@ export function useColumnMutations() {
 		},
 	});
 
+	const reorderMutation = useMutation({
+		mutationFn: async ({
+			boardId,
+			columnIds,
+		}: {
+			boardId: string;
+			columnIds: string[];
+		}) => {
+			const response = await client("@post/columns/reorder", {
+				method: "POST",
+				body: { boardId, columnIds },
+				headers,
+			});
+			if ("error" in response && response.error) {
+				throw new Error(String(response.error));
+			}
+			return response.data as unknown as { success: boolean };
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["boards"] });
+		},
+	});
+
 	return {
 		createColumn: createMutation.mutateAsync,
 		updateColumn: (
@@ -281,9 +304,12 @@ export function useColumnMutations() {
 			data: Parameters<typeof updateMutation.mutateAsync>[0]["data"],
 		) => updateMutation.mutateAsync({ id, data }),
 		deleteColumn: deleteMutation.mutateAsync,
+		reorderColumns: (boardId: string, columnIds: string[]) =>
+			reorderMutation.mutateAsync({ boardId, columnIds }),
 		isCreating: createMutation.isPending,
 		isUpdating: updateMutation.isPending,
 		isDeleting: deleteMutation.isPending,
+		isReordering: reorderMutation.isPending,
 	};
 }
 
@@ -394,6 +420,29 @@ export function useTaskMutations() {
 		},
 	});
 
+	const reorderMutation = useMutation({
+		mutationFn: async ({
+			columnId,
+			taskIds,
+		}: {
+			columnId: string;
+			taskIds: string[];
+		}) => {
+			const response = await client("@post/tasks/reorder", {
+				method: "POST",
+				body: { columnId, taskIds },
+				headers,
+			});
+			if ("error" in response && response.error) {
+				throw new Error(String(response.error));
+			}
+			return response.data as unknown as { success: boolean };
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["boards"] });
+		},
+	});
+
 	return {
 		createTask: createMutation.mutateAsync,
 		updateTask: (
@@ -403,9 +452,12 @@ export function useTaskMutations() {
 		deleteTask: deleteMutation.mutateAsync,
 		moveTask: (taskId: string, targetColumnId: string, targetOrder: number) =>
 			moveMutation.mutateAsync({ taskId, targetColumnId, targetOrder }),
+		reorderTasks: (columnId: string, taskIds: string[]) =>
+			reorderMutation.mutateAsync({ columnId, taskIds }),
 		isCreating: createMutation.isPending,
 		isUpdating: updateMutation.isPending,
 		isDeleting: deleteMutation.isPending,
 		isMoving: moveMutation.isPending,
+		isReordering: reorderMutation.isPending,
 	};
 }

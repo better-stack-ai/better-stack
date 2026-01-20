@@ -58,7 +58,7 @@ type ModalState =
 	| { type: "editTask"; columnId: string; taskId: string };
 
 export function BoardPage({ boardId }: BoardPageProps) {
-	const { data: board, isLoading, error, refetch } = useBoard(boardId);
+	const { data: board, error, refetch } = useBoard(boardId);
 	const { Link: OverrideLink, navigate: overrideNavigate } =
 		usePluginOverrides<KanbanPluginOverrides>("kanban");
 	const navigate =
@@ -68,10 +68,9 @@ export function BoardPage({ boardId }: BoardPageProps) {
 		});
 	const Link = OverrideLink || "a";
 
-	const { deleteBoard, updateBoard, isDeleting, isUpdating } =
-		useBoardMutations();
-	const { createColumn, updateColumn, deleteColumn } = useColumnMutations();
-	const { createTask, updateTask, deleteTask, moveTask } = useTaskMutations();
+	const { deleteBoard, isDeleting } = useBoardMutations();
+	const { deleteColumn, reorderColumns } = useColumnMutations();
+	const { deleteTask, moveTask, reorderTasks } = useTaskMutations();
 
 	const [modalState, setModalState] = useState<ModalState>({ type: "none" });
 	const [kanbanState, setKanbanState] = useState<
@@ -117,28 +116,70 @@ export function BoardPage({ boardId }: BoardPageProps) {
 				oldKeys.join("") !== newKeys.join("");
 
 			if (isColumnMove) {
-				// Column reorder - update column orders
-				for (let i = 0; i < newKeys.length; i++) {
-					const columnId = newKeys[i];
-					if (columnId) {
-						await updateColumn(columnId, { order: i });
-					}
-				}
+				// Column reorder - use atomic batch endpoint with transaction support
+				await reorderColumns(board.id, newKeys);
 			} else {
-				// Task moved - detect and update
+				// Task changes - detect cross-column moves and within-column reorders
+				const crossColumnMoves: Array<{
+					taskId: string;
+					targetColumnId: string;
+					targetOrder: number;
+				}> = [];
+				const columnsToReorder: Map<string, string[]> = new Map();
+
 				for (const [columnId, tasks] of Object.entries(newData)) {
+					const oldTasks = kanbanState[columnId] || [];
+					let hasOrderChanges = false;
+
 					for (let i = 0; i < tasks.length; i++) {
 						const task = tasks[i];
-						if (task && (task.columnId !== columnId || task.order !== i)) {
-							await moveTask(task.id, columnId, i);
+						if (!task) continue;
+
+						if (task.columnId !== columnId) {
+							// Task moved from another column - needs cross-column move
+							crossColumnMoves.push({
+								taskId: task.id,
+								targetColumnId: columnId,
+								targetOrder: i,
+							});
+						} else if (task.order !== i) {
+							// Task order changed within same column
+							hasOrderChanges = true;
 						}
 					}
+
+					// Check if tasks were removed from this column (moved elsewhere)
+					const newTaskIds = new Set(tasks.map((t) => t.id));
+					const tasksRemoved = oldTasks.some((t) => !newTaskIds.has(t.id));
+
+					// If only order changes within column (no cross-column moves affecting this column),
+					// use atomic reorder
+					if (
+						hasOrderChanges &&
+						crossColumnMoves.every((m) => m.targetColumnId !== columnId) &&
+						!tasksRemoved
+					) {
+						columnsToReorder.set(
+							columnId,
+							tasks.map((t) => t.id),
+						);
+					}
+				}
+
+				// Handle cross-column moves first (these need individual moveTask calls)
+				for (const move of crossColumnMoves) {
+					await moveTask(move.taskId, move.targetColumnId, move.targetOrder);
+				}
+
+				// Then handle within-column reorders atomically
+				for (const [columnId, taskIds] of columnsToReorder) {
+					await reorderTasks(columnId, taskIds);
 				}
 			}
 
 			refetch();
 		},
-		[board, kanbanState, updateColumn, moveTask, refetch],
+		[board, kanbanState, reorderColumns, moveTask, reorderTasks, refetch],
 	);
 
 	if (error) {

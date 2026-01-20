@@ -95,6 +95,13 @@ export interface KanbanBackendHooks {
 		context: KanbanApiContext,
 	) => Promise<void> | void;
 	/**
+	 * Called after a single board is read successfully
+	 */
+	onBoardRead?: (
+		board: Board,
+		context: KanbanApiContext,
+	) => Promise<void> | void;
+	/**
 	 * Called after a board is created successfully
 	 */
 	onBoardCreated?: (
@@ -120,6 +127,13 @@ export interface KanbanBackendHooks {
 	 * Called when listing boards fails
 	 */
 	onListBoardsError?: (
+		error: Error,
+		context: KanbanApiContext,
+	) => Promise<void> | void;
+	/**
+	 * Called when reading a single board fails
+	 */
+	onReadBoardError?: (
 		error: Error,
 		context: KanbanApiContext,
 	) => Promise<void> | void;
@@ -438,24 +452,30 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 							}
 						}
 
-						const columns = (board.kanbanColumn || [])
-							.sort((a, b) => a.order - b.order)
-							.map((col) => ({
-								...col,
-								tasks: tasksByColumn.get(col.id) || [],
-							}));
+					const columns = (board.kanbanColumn || [])
+						.sort((a, b) => a.order - b.order)
+						.map((col) => ({
+							...col,
+							tasks: tasksByColumn.get(col.id) || [],
+						}));
 
-						const { kanbanColumn: _, ...boardWithoutJoin } = board;
-						return {
-							...boardWithoutJoin,
-							columns,
-						};
-					} catch (error) {
-						if (hooks?.onListBoardsError) {
-							await hooks.onListBoardsError(error as Error, context);
-						}
-						throw error;
+					const { kanbanColumn: _, ...boardWithoutJoin } = board;
+					const result = {
+						...boardWithoutJoin,
+						columns,
+					};
+
+					if (hooks?.onBoardRead) {
+						await hooks.onBoardRead(result, context);
 					}
+
+					return result;
+				} catch (error) {
+					if (hooks?.onReadBoardError) {
+						await hooks.onReadBoardError(error as Error, context);
+					}
+					throw error;
+				}
 				},
 			);
 
