@@ -314,31 +314,38 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						});
 
 						// Get all column IDs to fetch tasks
-						const columnIds = new Set<string>();
+						const columnIds: string[] = [];
 						for (const board of boards) {
 							if (board.kanbanColumn) {
 								for (const col of board.kanbanColumn) {
-									columnIds.add(col.id);
+									columnIds.push(col.id);
 								}
 							}
 						}
 
-						// Fetch all tasks for these columns
-						const allTasks =
-							columnIds.size > 0
-								? await adapter.findMany<Task>({
-										model: "kanbanTask",
-										sortBy: { field: "order", direction: "asc" },
-									})
-								: [];
-
-						// Create a map of tasks by column ID
+						// Fetch tasks for each column in parallel (avoids loading all tasks from DB)
 						const tasksByColumn = new Map<string, Task[]>();
-						for (const task of allTasks) {
-							if (columnIds.has(task.columnId)) {
-								const existing = tasksByColumn.get(task.columnId) || [];
-								existing.push(task);
-								tasksByColumn.set(task.columnId, existing);
+						if (columnIds.length > 0) {
+							const taskQueries = columnIds.map((columnId) =>
+								adapter.findMany<Task>({
+									model: "kanbanTask",
+									where: [
+										{
+											field: "columnId",
+											value: columnId,
+											operator: "eq" as const,
+										},
+									],
+									sortBy: { field: "order", direction: "asc" },
+								}),
+							);
+							const taskResults = await Promise.all(taskQueries);
+							for (let i = 0; i < columnIds.length; i++) {
+								const columnId = columnIds[i];
+								const tasks = taskResults[i];
+								if (columnId && tasks) {
+									tasksByColumn.set(columnId, tasks);
+								}
 							}
 						}
 
@@ -404,22 +411,30 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 							throw ctx.error(404, { message: "Board not found" });
 						}
 
-						// Fetch tasks for columns
+						// Fetch tasks for each column in parallel (avoids loading all tasks from DB)
 						const columnIds = (board.kanbanColumn || []).map((c) => c.id);
-						const allTasks =
-							columnIds.length > 0
-								? await adapter.findMany<Task>({
-										model: "kanbanTask",
-										sortBy: { field: "order", direction: "asc" },
-									})
-								: [];
-
 						const tasksByColumn = new Map<string, Task[]>();
-						for (const task of allTasks) {
-							if (columnIds.includes(task.columnId)) {
-								const existing = tasksByColumn.get(task.columnId) || [];
-								existing.push(task);
-								tasksByColumn.set(task.columnId, existing);
+						if (columnIds.length > 0) {
+							const taskQueries = columnIds.map((columnId) =>
+								adapter.findMany<Task>({
+									model: "kanbanTask",
+									where: [
+										{
+											field: "columnId",
+											value: columnId,
+											operator: "eq" as const,
+										},
+									],
+									sortBy: { field: "order", direction: "asc" },
+								}),
+							);
+							const taskResults = await Promise.all(taskQueries);
+							for (let i = 0; i < columnIds.length; i++) {
+								const columnId = columnIds[i];
+								const tasks = taskResults[i];
+								if (columnId && tasks) {
+									tasksByColumn.set(columnId, tasks);
+								}
 							}
 						}
 
