@@ -7,15 +7,12 @@ import type {
 	Board,
 	BoardWithKanbanColumn,
 	Column,
-	ColumnWithKanbanTask,
 	ColumnWithTasks,
 	Task,
 } from "../types";
 import { slugify } from "../utils";
 import {
 	BoardListQuerySchema,
-	ColumnListQuerySchema,
-	TaskListQuerySchema,
 	createBoardSchema,
 	createColumnSchema,
 	createTaskSchema,
@@ -452,30 +449,30 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 							}
 						}
 
-					const columns = (board.kanbanColumn || [])
-						.sort((a, b) => a.order - b.order)
-						.map((col) => ({
-							...col,
-							tasks: tasksByColumn.get(col.id) || [],
-						}));
+						const columns = (board.kanbanColumn || [])
+							.sort((a, b) => a.order - b.order)
+							.map((col) => ({
+								...col,
+								tasks: tasksByColumn.get(col.id) || [],
+							}));
 
-					const { kanbanColumn: _, ...boardWithoutJoin } = board;
-					const result = {
-						...boardWithoutJoin,
-						columns,
-					};
+						const { kanbanColumn: _, ...boardWithoutJoin } = board;
+						const result = {
+							...boardWithoutJoin,
+							columns,
+						};
 
-					if (hooks?.onBoardRead) {
-						await hooks.onBoardRead(result, context);
+						if (hooks?.onBoardRead) {
+							await hooks.onBoardRead(result, context);
+						}
+
+						return result;
+					} catch (error) {
+						if (hooks?.onReadBoardError) {
+							await hooks.onReadBoardError(error as Error, context);
+						}
+						throw error;
 					}
-
-					return result;
-				} catch (error) {
-					if (hooks?.onReadBoardError) {
-						await hooks.onReadBoardError(error as Error, context);
-					}
-					throw error;
-				}
 				},
 			);
 

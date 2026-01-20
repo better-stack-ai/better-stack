@@ -4,7 +4,7 @@ import {
 } from "@lukemorales/query-key-factory";
 import type { KanbanApiRouter } from "./api";
 import { createApiClient } from "@btst/stack/plugins/client";
-import type { SerializedBoard, SerializedBoardWithColumns } from "./types";
+import type { SerializedBoardWithColumns } from "./types";
 
 interface BoardsListParams {
 	slug?: string;
