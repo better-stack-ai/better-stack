@@ -156,7 +156,11 @@ export function BoardPage({ boardId }: BoardPageProps) {
 
 					// If order changes within column (not a target of cross-column move),
 					// use atomic reorder
-					if (hasOrderChanges && !targetColumnsOfCrossMove.has(columnId) && !tasksRemoved) {
+					if (
+						hasOrderChanges &&
+						!targetColumnsOfCrossMove.has(columnId) &&
+						!tasksRemoved
+					) {
 						columnsToReorder.set(
 							columnId,
 							tasks.map((t) => t.id),
