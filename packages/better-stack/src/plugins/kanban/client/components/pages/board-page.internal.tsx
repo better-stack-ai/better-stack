@@ -79,21 +79,35 @@ export function BoardPage({ boardId }: BoardPageProps) {
 	const { deleteTask, moveTask, reorderTasks } = useTaskMutations();
 
 	const [modalState, setModalState] = useState<ModalState>({ type: "none" });
+
+	// Helper function to convert board columns to kanban state format
+	const computeKanbanData = useCallback(
+		(
+			columns: SerializedColumn[] | undefined,
+		): Record<string, SerializedTask[]> => {
+			if (!columns) return {};
+			return columns.reduce(
+				(acc, column) => {
+					acc[column.id] = column.tasks || [];
+					return acc;
+				},
+				{} as Record<string, SerializedTask[]>,
+			);
+		},
+		[],
+	);
+
+	// Initialize kanbanState with data from board to avoid flash of empty state
+	// Using lazy initializer ensures we have the correct state on first render
 	const [kanbanState, setKanbanState] = useState<
 		Record<string, SerializedTask[]>
-	>({});
+	>(() => computeKanbanData(board?.columns));
 
-	// Convert board data to kanban format
-	const serverKanbanData = useMemo(() => {
-		if (!board?.columns) return {};
-		return board.columns.reduce(
-			(acc, column) => {
-				acc[column.id] = column.tasks || [];
-				return acc;
-			},
-			{} as Record<string, SerializedTask[]>,
-		);
-	}, [board?.columns]);
+	// Keep kanbanState in sync when server data changes (e.g., after refetch)
+	const serverKanbanData = useMemo(
+		() => computeKanbanData(board?.columns),
+		[board?.columns, computeKanbanData],
+	);
 
 	useEffect(() => {
 		setKanbanState(serverKanbanData);
