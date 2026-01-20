@@ -9,7 +9,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@workspace/ui/components/card";
-import { useBoards } from "../../hooks/kanban-hooks";
+import { useSuspenseBoards } from "../../hooks/kanban-hooks";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
 import { EmptyState } from "../shared/empty-state";
@@ -17,7 +17,12 @@ import { PageWrapper } from "../shared/page-wrapper";
 import { format } from "date-fns";
 
 export function BoardsListPage() {
-	const { data: boards, isLoading, error, refetch } = useBoards();
+	const { data: boards, error, isFetching } = useSuspenseBoards();
+
+	// Suspense hooks only throw on initial fetch, not refetch failures
+	if (error && !isFetching) {
+		throw error;
+	}
 	const { Link: OverrideLink, navigate: overrideNavigate } =
 		usePluginOverrides<KanbanPluginOverrides>("kanban");
 	const Link = OverrideLink || "a";
@@ -26,10 +31,6 @@ export function BoardsListPage() {
 		((path: string) => {
 			window.location.href = path;
 		});
-
-	if (error) {
-		throw error;
-	}
 
 	const handleNewBoard = () => {
 		navigate("/pages/kanban/new");
@@ -52,7 +53,7 @@ export function BoardsListPage() {
 				</Button>
 			</div>
 
-			{boards && boards.length > 0 ? (
+			{boards.length > 0 ? (
 				<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 					{boards.map((board) => (
 						<Link

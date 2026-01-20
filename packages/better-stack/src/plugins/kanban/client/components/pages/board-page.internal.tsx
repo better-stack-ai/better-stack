@@ -28,7 +28,7 @@ import {
 	AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog";
 import {
-	useBoard,
+	useSuspenseBoard,
 	useBoardMutations,
 	useColumnMutations,
 	useTaskMutations,
@@ -58,7 +58,13 @@ type ModalState =
 	| { type: "editTask"; columnId: string; taskId: string };
 
 export function BoardPage({ boardId }: BoardPageProps) {
-	const { data: board, error, refetch } = useBoard(boardId);
+	const { data: board, error, refetch, isFetching } = useSuspenseBoard(boardId);
+
+	// Suspense hooks only throw on initial fetch, not refetch failures
+	if (error && !isFetching) {
+		throw error;
+	}
+
 	const { Link: OverrideLink, navigate: overrideNavigate } =
 		usePluginOverrides<KanbanPluginOverrides>("kanban");
 	const navigate =
@@ -196,10 +202,24 @@ export function BoardPage({ boardId }: BoardPageProps) {
 		[board, kanbanState, reorderColumns, moveTask, reorderTasks, refetch],
 	);
 
-	if (error) {
-		throw error;
-	}
+	const orderedColumns = useMemo(() => {
+		if (!board?.columns) return [];
+		const columnMap = new Map(board.columns.map((c) => [c.id, c]));
+		return Object.keys(kanbanState)
+			.map((columnId) => {
+				const column = columnMap.get(columnId);
+				if (!column) return null;
+				return {
+					...column,
+					tasks: kanbanState[columnId] || [],
+				};
+			})
+			.filter(
+				(c): c is SerializedColumn & { tasks: SerializedTask[] } => c !== null,
+			);
+	}, [board?.columns, kanbanState]);
 
+	// Board not found - only shown after data has loaded (not during loading)
 	if (!board) {
 		return (
 			<EmptyState
@@ -214,23 +234,6 @@ export function BoardPage({ boardId }: BoardPageProps) {
 			/>
 		);
 	}
-
-	const orderedColumns = useMemo(() => {
-		if (!board.columns) return [];
-		const columnMap = new Map(board.columns.map((c) => [c.id, c]));
-		return Object.keys(kanbanState)
-			.map((columnId) => {
-				const column = columnMap.get(columnId);
-				if (!column) return null;
-				return {
-					...column,
-					tasks: kanbanState[columnId] || [],
-				};
-			})
-			.filter(
-				(c): c is SerializedColumn & { tasks: SerializedTask[] } => c !== null,
-			);
-	}, [board.columns, kanbanState]);
 
 	return (
 		<PageWrapper data-testid="board-page">

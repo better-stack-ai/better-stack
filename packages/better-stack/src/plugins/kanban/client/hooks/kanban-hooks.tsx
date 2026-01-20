@@ -19,6 +19,42 @@ import type {
 	Priority,
 } from "../../types";
 
+// ============ Error Handling ============
+
+// Type guard for better-call error responses
+function isErrorResponse(
+	response: unknown,
+): response is { error: unknown; data?: never } {
+	return (
+		typeof response === "object" &&
+		response !== null &&
+		"error" in response &&
+		response.error !== null &&
+		response.error !== undefined
+	);
+}
+
+// Helper to convert error to a proper Error object with meaningful message
+function toError(error: unknown): Error {
+	if (error instanceof Error) {
+		return error;
+	}
+
+	if (typeof error === "object" && error !== null) {
+		const errorObj = error as Record<string, unknown>;
+		const message =
+			(typeof errorObj.message === "string" ? errorObj.message : null) ||
+			(typeof errorObj.error === "string" ? errorObj.error : null) ||
+			JSON.stringify(error);
+
+		const err = new Error(message);
+		Object.assign(err, error);
+		return err;
+	}
+
+	return new Error(String(error));
+}
+
 // ============ API Client Hook ============
 
 function useKanbanClient() {
@@ -129,8 +165,9 @@ export function useBoardMutations() {
 				body: data,
 				headers,
 			});
-			if ("error" in response && response.error) {
-				throw new Error(String(response.error));
+			if (isErrorResponse(response)) {
+				const errorResponse = response as { error: unknown };
+				throw toError(errorResponse.error);
 			}
 			return response.data as unknown as SerializedBoardWithColumns;
 		},
@@ -157,8 +194,9 @@ export function useBoardMutations() {
 				body: data,
 				headers,
 			});
-			if ("error" in response && response.error) {
-				throw new Error(String(response.error));
+			if (isErrorResponse(response)) {
+				const errorResponse = response as { error: unknown };
+				throw toError(errorResponse.error);
 			}
 			return response.data as unknown as SerializedBoard;
 		},
@@ -174,8 +212,9 @@ export function useBoardMutations() {
 				params: { id },
 				headers,
 			});
-			if ("error" in response && response.error) {
-				throw new Error(String(response.error));
+			if (isErrorResponse(response)) {
+				const errorResponse = response as { error: unknown };
+				throw toError(errorResponse.error);
 			}
 			return response.data as unknown as { success: boolean };
 		},
@@ -220,8 +259,9 @@ export function useColumnMutations() {
 				body: data,
 				headers,
 			});
-			if ("error" in response && response.error) {
-				throw new Error(String(response.error));
+			if (isErrorResponse(response)) {
+				const errorResponse = response as { error: unknown };
+				throw toError(errorResponse.error);
 			}
 			return response.data as unknown as SerializedColumn;
 		},
@@ -247,8 +287,9 @@ export function useColumnMutations() {
 				body: data,
 				headers,
 			});
-			if ("error" in response && response.error) {
-				throw new Error(String(response.error));
+			if (isErrorResponse(response)) {
+				const errorResponse = response as { error: unknown };
+				throw toError(errorResponse.error);
 			}
 			return response.data as unknown as SerializedColumn;
 		},
@@ -264,8 +305,9 @@ export function useColumnMutations() {
 				params: { id },
 				headers,
 			});
-			if ("error" in response && response.error) {
-				throw new Error(String(response.error));
+			if (isErrorResponse(response)) {
+				const errorResponse = response as { error: unknown };
+				throw toError(errorResponse.error);
 			}
 			return response.data as unknown as { success: boolean };
 		},
@@ -287,8 +329,9 @@ export function useColumnMutations() {
 				body: { boardId, columnIds },
 				headers,
 			});
-			if ("error" in response && response.error) {
-				throw new Error(String(response.error));
+			if (isErrorResponse(response)) {
+				const errorResponse = response as { error: unknown };
+				throw toError(errorResponse.error);
 			}
 			return response.data as unknown as { success: boolean };
 		},
@@ -336,8 +379,9 @@ export function useTaskMutations() {
 				body: data,
 				headers,
 			});
-			if ("error" in response && response.error) {
-				throw new Error(String(response.error));
+			if (isErrorResponse(response)) {
+				const errorResponse = response as { error: unknown };
+				throw toError(errorResponse.error);
 			}
 			return response.data as unknown as SerializedTask;
 		},
@@ -368,8 +412,9 @@ export function useTaskMutations() {
 				body: data,
 				headers,
 			});
-			if ("error" in response && response.error) {
-				throw new Error(String(response.error));
+			if (isErrorResponse(response)) {
+				const errorResponse = response as { error: unknown };
+				throw toError(errorResponse.error);
 			}
 			return response.data as unknown as SerializedTask;
 		},
@@ -385,8 +430,9 @@ export function useTaskMutations() {
 				params: { id },
 				headers,
 			});
-			if ("error" in response && response.error) {
-				throw new Error(String(response.error));
+			if (isErrorResponse(response)) {
+				const errorResponse = response as { error: unknown };
+				throw toError(errorResponse.error);
 			}
 			return response.data as unknown as { success: boolean };
 		},
@@ -410,8 +456,9 @@ export function useTaskMutations() {
 				body: { taskId, targetColumnId, targetOrder },
 				headers,
 			});
-			if ("error" in response && response.error) {
-				throw new Error(String(response.error));
+			if (isErrorResponse(response)) {
+				const errorResponse = response as { error: unknown };
+				throw toError(errorResponse.error);
 			}
 			return response.data as unknown as SerializedTask;
 		},
@@ -433,8 +480,9 @@ export function useTaskMutations() {
 				body: { columnId, taskIds },
 				headers,
 			});
-			if ("error" in response && response.error) {
-				throw new Error(String(response.error));
+			if (isErrorResponse(response)) {
+				const errorResponse = response as { error: unknown };
+				throw toError(errorResponse.error);
 			}
 			return response.data as unknown as { success: boolean };
 		},
