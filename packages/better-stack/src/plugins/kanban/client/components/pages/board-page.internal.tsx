@@ -126,6 +126,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 					targetOrder: number;
 				}> = [];
 				const columnsToReorder: Map<string, string[]> = new Map();
+				const targetColumnsOfCrossMove = new Set<string>();
 
 				for (const [columnId, tasks] of Object.entries(newData)) {
 					const oldTasks = kanbanState[columnId] || [];
@@ -142,6 +143,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 								targetColumnId: columnId,
 								targetOrder: i,
 							});
+							targetColumnsOfCrossMove.add(columnId);
 						} else if (task.order !== i) {
 							// Task order changed within same column
 							hasOrderChanges = true;
@@ -152,13 +154,9 @@ export function BoardPage({ boardId }: BoardPageProps) {
 					const newTaskIds = new Set(tasks.map((t) => t.id));
 					const tasksRemoved = oldTasks.some((t) => !newTaskIds.has(t.id));
 
-					// If only order changes within column (no cross-column moves affecting this column),
+					// If order changes within column (not a target of cross-column move),
 					// use atomic reorder
-					if (
-						hasOrderChanges &&
-						crossColumnMoves.every((m) => m.targetColumnId !== columnId) &&
-						!tasksRemoved
-					) {
+					if (hasOrderChanges && !targetColumnsOfCrossMove.has(columnId) && !tasksRemoved) {
 						columnsToReorder.set(
 							columnId,
 							tasks.map((t) => t.id),
@@ -174,6 +172,18 @@ export function BoardPage({ boardId }: BoardPageProps) {
 				// Then handle within-column reorders atomically
 				for (const [columnId, taskIds] of columnsToReorder) {
 					await reorderTasks(columnId, taskIds);
+				}
+
+				// Reorder target columns of cross-column moves to fix order collisions
+				// The moveTask only sets the moved task's order, so other tasks need reordering
+				for (const targetColumnId of targetColumnsOfCrossMove) {
+					const tasks = newData[targetColumnId];
+					if (tasks) {
+						await reorderTasks(
+							targetColumnId,
+							tasks.map((t) => t.id),
+						);
+					}
 				}
 			}
 
