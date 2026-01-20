@@ -832,12 +832,35 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 				},
 				async (ctx) => {
 					const { boardId, columnIds } = ctx.body;
+					const context: KanbanApiContext = {
+						body: ctx.body,
+						headers: ctx.headers,
+					};
 
+					// Check authorization for each column being reordered
+					if (hooks?.onBeforeUpdateColumn) {
+						for (let i = 0; i < columnIds.length; i++) {
+							const columnId = columnIds[i];
+							if (!columnId) continue;
+							const canUpdate = await hooks.onBeforeUpdateColumn(
+								columnId,
+								{ id: columnId, order: i },
+								context,
+							);
+							if (!canUpdate) {
+								throw ctx.error(403, {
+									message: "Unauthorized: Cannot reorder columns",
+								});
+							}
+						}
+					}
+
+					const updatedColumns: Column[] = [];
 					await adapter.transaction(async (tx) => {
 						for (let i = 0; i < columnIds.length; i++) {
 							const columnId = columnIds[i];
 							if (!columnId) continue;
-							await tx.update<Column>({
+							const updated = await tx.update<Column>({
 								model: "kanbanColumn",
 								where: [
 									{ field: "id", value: columnId },
@@ -845,8 +868,18 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 								],
 								update: { order: i, updatedAt: new Date() },
 							});
+							if (updated) {
+								updatedColumns.push(updated);
+							}
 						}
 					});
+
+					// Call onColumnUpdated for each reordered column
+					if (hooks?.onColumnUpdated) {
+						for (const column of updatedColumns) {
+							await hooks.onColumnUpdated(column, context);
+						}
+					}
 
 					return { success: true };
 				},
@@ -1022,6 +1055,10 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 				},
 				async (ctx) => {
 					const { taskId, targetColumnId, targetOrder } = ctx.body;
+					const context: KanbanApiContext = {
+						body: ctx.body,
+						headers: ctx.headers,
+					};
 
 					// Get current task
 					const task = await adapter.findOne<Task>({
@@ -1031,6 +1068,20 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					if (!task) {
 						throw ctx.error(404, { message: "Task not found" });
+					}
+
+					// Check authorization before moving task
+					if (hooks?.onBeforeUpdateTask) {
+						const canUpdate = await hooks.onBeforeUpdateTask(
+							taskId,
+							{ id: taskId, columnId: targetColumnId, order: targetOrder },
+							context,
+						);
+						if (!canUpdate) {
+							throw ctx.error(403, {
+								message: "Unauthorized: Cannot move task",
+							});
+						}
 					}
 
 					// Update task with new column and order
@@ -1044,6 +1095,10 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						},
 					});
 
+					if (hooks?.onTaskUpdated && updated) {
+						await hooks.onTaskUpdated(updated, context);
+					}
+
 					return updated;
 				},
 			);
@@ -1056,12 +1111,35 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 				},
 				async (ctx) => {
 					const { columnId, taskIds } = ctx.body;
+					const context: KanbanApiContext = {
+						body: ctx.body,
+						headers: ctx.headers,
+					};
 
+					// Check authorization for each task being reordered
+					if (hooks?.onBeforeUpdateTask) {
+						for (let i = 0; i < taskIds.length; i++) {
+							const taskId = taskIds[i];
+							if (!taskId) continue;
+							const canUpdate = await hooks.onBeforeUpdateTask(
+								taskId,
+								{ id: taskId, order: i },
+								context,
+							);
+							if (!canUpdate) {
+								throw ctx.error(403, {
+									message: "Unauthorized: Cannot reorder tasks",
+								});
+							}
+						}
+					}
+
+					const updatedTasks: Task[] = [];
 					await adapter.transaction(async (tx) => {
 						for (let i = 0; i < taskIds.length; i++) {
 							const taskId = taskIds[i];
 							if (!taskId) continue;
-							await tx.update<Task>({
+							const updated = await tx.update<Task>({
 								model: "kanbanTask",
 								where: [
 									{ field: "id", value: taskId },
@@ -1073,8 +1151,18 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 								],
 								update: { order: i, updatedAt: new Date() },
 							});
+							if (updated) {
+								updatedTasks.push(updated);
+							}
 						}
 					});
+
+					// Call onTaskUpdated for each reordered task
+					if (hooks?.onTaskUpdated) {
+						for (const task of updatedTasks) {
+							await hooks.onTaskUpdated(task, context);
+						}
+					}
 
 					return { success: true };
 				},
