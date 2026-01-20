@@ -124,13 +124,16 @@ export function BoardPage({ boardId }: BoardPageProps) {
 
 	const handleKanbanChange = useCallback(
 		async (newData: Record<string, SerializedTask[]>) => {
-			// Store previous state for rollback on error
-			const previousState = kanbanState;
-
-			// Optimistic update
-			setKanbanState(newData);
-
 			if (!board) return;
+
+			// Capture current state for change detection
+			// Note: We use a functional update to get the actual current state,
+			// avoiding stale closure issues with rapid successive operations
+			let previousState: Record<string, SerializedTask[]> = {};
+			setKanbanState((current) => {
+				previousState = current;
+				return newData;
+			});
 
 			try {
 				// Detect column reorder
@@ -219,13 +222,17 @@ export function BoardPage({ boardId }: BoardPageProps) {
 				// Sync with server after successful mutations
 				refetch();
 			} catch (error) {
-				// Revert optimistic update on error
-				setKanbanState(previousState);
+				// On error, refetch from server to get the authoritative state.
+				// We avoid manual rollback to previousState because with rapid successive
+				// operations, the captured previousState may be stale - a later operation
+				// may have already updated the state, and reverting would incorrectly
+				// undo that operation too. The server is the source of truth.
+				refetch();
 				// Re-throw so error boundaries or toast handlers can catch it
 				throw error;
 			}
 		},
-		[board, kanbanState, reorderColumns, moveTask, reorderTasks, refetch],
+		[board, reorderColumns, moveTask, reorderTasks, refetch],
 	);
 
 	const orderedColumns = useMemo(() => {
