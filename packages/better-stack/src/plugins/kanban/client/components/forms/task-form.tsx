@@ -41,8 +41,15 @@ export function TaskForm({
 	onDelete,
 }: TaskFormProps) {
 	const isEditing = !!taskId;
-	const { createTask, updateTask, isCreating, isUpdating, isDeleting } =
-		useTaskMutations();
+	const {
+		createTask,
+		updateTask,
+		moveTask,
+		isCreating,
+		isUpdating,
+		isDeleting,
+		isMoving,
+	} = useTaskMutations();
 
 	const [title, setTitle] = useState(task?.title || "");
 	const [description, setDescription] = useState(task?.description || "");
@@ -54,7 +61,7 @@ export function TaskForm({
 	);
 	const [error, setError] = useState<string | null>(null);
 
-	const isPending = isCreating || isUpdating || isDeleting;
+	const isPending = isCreating || isUpdating || isDeleting || isMoving;
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -67,12 +74,37 @@ export function TaskForm({
 
 		try {
 			if (isEditing && taskId) {
-				await updateTask(taskId, {
-					title,
-					description,
-					priority,
-					columnId: selectedColumnId,
-				});
+				const isColumnChanging =
+					task?.columnId && selectedColumnId !== task.columnId;
+
+				if (isColumnChanging) {
+					// When changing columns, use moveTask to properly calculate order
+					// First update the task properties (title, description, priority)
+					await updateTask(taskId, {
+						title,
+						description,
+						priority,
+					});
+
+					// Then move the task to the new column with calculated order
+					// Place at the end of the destination column
+					const targetColumn = columns.find((c) => c.id === selectedColumnId);
+					const targetTasks = targetColumn?.tasks || [];
+					const targetOrder =
+						targetTasks.length > 0
+							? Math.max(...targetTasks.map((t) => t.order)) + 1
+							: 0;
+
+					await moveTask(taskId, selectedColumnId, targetOrder);
+				} else {
+					// Same column - just update the task properties
+					await updateTask(taskId, {
+						title,
+						description,
+						priority,
+						columnId: selectedColumnId,
+					});
+				}
 			} else {
 				await createTask({
 					title,

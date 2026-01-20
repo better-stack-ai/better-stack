@@ -110,94 +110,106 @@ export function BoardPage({ boardId }: BoardPageProps) {
 
 	const handleKanbanChange = useCallback(
 		async (newData: Record<string, SerializedTask[]>) => {
+			// Store previous state for rollback on error
+			const previousState = kanbanState;
+
+			// Optimistic update
 			setKanbanState(newData);
 
 			if (!board) return;
 
-			// Detect column reorder
-			const oldKeys = Object.keys(kanbanState);
-			const newKeys = Object.keys(newData);
-			const isColumnMove =
-				oldKeys.length === newKeys.length &&
-				oldKeys.join("") !== newKeys.join("");
+			try {
+				// Detect column reorder
+				const oldKeys = Object.keys(previousState);
+				const newKeys = Object.keys(newData);
+				const isColumnMove =
+					oldKeys.length === newKeys.length &&
+					oldKeys.join("") !== newKeys.join("");
 
-			if (isColumnMove) {
-				// Column reorder - use atomic batch endpoint with transaction support
-				await reorderColumns(board.id, newKeys);
-			} else {
-				// Task changes - detect cross-column moves and within-column reorders
-				const crossColumnMoves: Array<{
-					taskId: string;
-					targetColumnId: string;
-					targetOrder: number;
-				}> = [];
-				const columnsToReorder: Map<string, string[]> = new Map();
-				const targetColumnsOfCrossMove = new Set<string>();
+				if (isColumnMove) {
+					// Column reorder - use atomic batch endpoint with transaction support
+					await reorderColumns(board.id, newKeys);
+				} else {
+					// Task changes - detect cross-column moves and within-column reorders
+					const crossColumnMoves: Array<{
+						taskId: string;
+						targetColumnId: string;
+						targetOrder: number;
+					}> = [];
+					const columnsToReorder: Map<string, string[]> = new Map();
+					const targetColumnsOfCrossMove = new Set<string>();
 
-				for (const [columnId, tasks] of Object.entries(newData)) {
-					const oldTasks = kanbanState[columnId] || [];
-					let hasOrderChanges = false;
+					for (const [columnId, tasks] of Object.entries(newData)) {
+						const oldTasks = previousState[columnId] || [];
+						let hasOrderChanges = false;
 
-					for (let i = 0; i < tasks.length; i++) {
-						const task = tasks[i];
-						if (!task) continue;
+						for (let i = 0; i < tasks.length; i++) {
+							const task = tasks[i];
+							if (!task) continue;
 
-						if (task.columnId !== columnId) {
-							// Task moved from another column - needs cross-column move
-							crossColumnMoves.push({
-								taskId: task.id,
-								targetColumnId: columnId,
-								targetOrder: i,
-							});
-							targetColumnsOfCrossMove.add(columnId);
-						} else if (task.order !== i) {
-							// Task order changed within same column
-							hasOrderChanges = true;
+							if (task.columnId !== columnId) {
+								// Task moved from another column - needs cross-column move
+								crossColumnMoves.push({
+									taskId: task.id,
+									targetColumnId: columnId,
+									targetOrder: i,
+								});
+								targetColumnsOfCrossMove.add(columnId);
+							} else if (task.order !== i) {
+								// Task order changed within same column
+								hasOrderChanges = true;
+							}
+						}
+
+						// Check if tasks were removed from this column (moved elsewhere)
+						const newTaskIds = new Set(tasks.map((t) => t.id));
+						const tasksRemoved = oldTasks.some((t) => !newTaskIds.has(t.id));
+
+						// If order changes within column (not a target of cross-column move),
+						// use atomic reorder
+						if (
+							hasOrderChanges &&
+							!targetColumnsOfCrossMove.has(columnId) &&
+							!tasksRemoved
+						) {
+							columnsToReorder.set(
+								columnId,
+								tasks.map((t) => t.id),
+							);
 						}
 					}
 
-					// Check if tasks were removed from this column (moved elsewhere)
-					const newTaskIds = new Set(tasks.map((t) => t.id));
-					const tasksRemoved = oldTasks.some((t) => !newTaskIds.has(t.id));
+					// Handle cross-column moves first (these need individual moveTask calls)
+					for (const move of crossColumnMoves) {
+						await moveTask(move.taskId, move.targetColumnId, move.targetOrder);
+					}
 
-					// If order changes within column (not a target of cross-column move),
-					// use atomic reorder
-					if (
-						hasOrderChanges &&
-						!targetColumnsOfCrossMove.has(columnId) &&
-						!tasksRemoved
-					) {
-						columnsToReorder.set(
-							columnId,
-							tasks.map((t) => t.id),
-						);
+					// Then handle within-column reorders atomically
+					for (const [columnId, taskIds] of columnsToReorder) {
+						await reorderTasks(columnId, taskIds);
+					}
+
+					// Reorder target columns of cross-column moves to fix order collisions
+					// The moveTask only sets the moved task's order, so other tasks need reordering
+					for (const targetColumnId of targetColumnsOfCrossMove) {
+						const tasks = newData[targetColumnId];
+						if (tasks) {
+							await reorderTasks(
+								targetColumnId,
+								tasks.map((t) => t.id),
+							);
+						}
 					}
 				}
 
-				// Handle cross-column moves first (these need individual moveTask calls)
-				for (const move of crossColumnMoves) {
-					await moveTask(move.taskId, move.targetColumnId, move.targetOrder);
-				}
-
-				// Then handle within-column reorders atomically
-				for (const [columnId, taskIds] of columnsToReorder) {
-					await reorderTasks(columnId, taskIds);
-				}
-
-				// Reorder target columns of cross-column moves to fix order collisions
-				// The moveTask only sets the moved task's order, so other tasks need reordering
-				for (const targetColumnId of targetColumnsOfCrossMove) {
-					const tasks = newData[targetColumnId];
-					if (tasks) {
-						await reorderTasks(
-							targetColumnId,
-							tasks.map((t) => t.id),
-						);
-					}
-				}
+				// Sync with server after successful mutations
+				refetch();
+			} catch (error) {
+				// Revert optimistic update on error
+				setKanbanState(previousState);
+				// Re-throw so error boundaries or toast handlers can catch it
+				throw error;
 			}
-
-			refetch();
 		},
 		[board, kanbanState, reorderColumns, moveTask, reorderTasks, refetch],
 	);
