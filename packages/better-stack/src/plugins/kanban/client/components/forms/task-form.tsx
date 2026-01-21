@@ -96,9 +96,7 @@ export function TaskForm({
 					// Then move the task to the new column with calculated order
 					// Place at the end of the destination column
 					try {
-						const targetColumn = columns.find(
-							(c) => c.id === selectedColumnId,
-						);
+						const targetColumn = columns.find((c) => c.id === selectedColumnId);
 						const targetTasks = targetColumn?.tasks || [];
 						const targetOrder =
 							targetTasks.length > 0
