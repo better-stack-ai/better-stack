@@ -494,9 +494,9 @@ export function BoardPage({ boardId }: BoardPageProps) {
 				open={modalState.type === "addTask"}
 				onOpenChange={(open: boolean) => !open && closeModal()}
 			>
-				<DialogContent className="max-w-2xl">
-					<DialogHeader>
-						<DialogTitle>Add Task</DialogTitle>
+			<DialogContent className="max-w-3xl max-h-screen overflow-y-auto">
+				<DialogHeader>
+					<DialogTitle>Add Task</DialogTitle>
 						<DialogDescription>Create a new task.</DialogDescription>
 					</DialogHeader>
 					{modalState.type === "addTask" && (
@@ -518,9 +518,9 @@ export function BoardPage({ boardId }: BoardPageProps) {
 				open={modalState.type === "editTask"}
 				onOpenChange={(open: boolean) => !open && closeModal()}
 			>
-				<DialogContent className="max-w-3xl">
-					<DialogHeader>
-						<DialogTitle>Edit Task</DialogTitle>
+			<DialogContent className="max-w-3xl max-h-screen overflow-y-auto">
+				<DialogHeader>
+					<DialogTitle>Edit Task</DialogTitle>
 						<DialogDescription>Update task details.</DialogDescription>
 					</DialogHeader>
 					{modalState.type === "editTask" && (

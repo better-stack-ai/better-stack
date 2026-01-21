@@ -127,6 +127,7 @@
     "./components/*": "./src/components/*.tsx",
     "./components/auto-form/shared-form-types": "./src/components/auto-form/shared-form-types.ts",
     "./components/minimal-tiptap": "./src/components/minimal-tiptap/index.ts",
+    "./components/minimal-tiptap/styles.css": "./src/components/minimal-tiptap/styles/index.css",
     "./components/ui-builder/internal/form-fields/classname-control": "./src/components/ui-builder/internal/form-fields/classname-control/index.tsx",
     "./components/ui-builder/internal/form-fields/children-searchable-select": "./src/components/ui-builder/internal/form-fields/children-searchable-select.tsx",
     "./components/ui-builder/internal/form-fields/iconname-field": "./src/components/ui-builder/internal/form-fields/iconname-field.tsx",
