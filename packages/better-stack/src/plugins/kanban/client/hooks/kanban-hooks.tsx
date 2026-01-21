@@ -353,6 +353,10 @@ export function useColumnMutations() {
 		isUpdating: updateMutation.isPending,
 		isDeleting: deleteMutation.isPending,
 		isReordering: reorderMutation.isPending,
+		createError: createMutation.error,
+		updateError: updateMutation.error,
+		deleteError: deleteMutation.error,
+		reorderError: reorderMutation.error,
 	};
 }
 
@@ -507,5 +511,10 @@ export function useTaskMutations() {
 		isDeleting: deleteMutation.isPending,
 		isMoving: moveMutation.isPending,
 		isReordering: reorderMutation.isPending,
+		createError: createMutation.error,
+		updateError: updateMutation.error,
+		deleteError: deleteMutation.error,
+		moveError: moveMutation.error,
+		reorderError: reorderMutation.error,
 	};
 }

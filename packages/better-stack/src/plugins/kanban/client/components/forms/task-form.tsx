@@ -78,8 +78,15 @@ export function TaskForm({
 					task?.columnId && selectedColumnId !== task.columnId;
 
 				if (isColumnChanging) {
-					// When changing columns, use moveTask to properly calculate order
+					// When changing columns, we need two operations:
+					// 1. Update task properties (title, description, priority)
+					// 2. Move task to new column with proper order calculation
+					//
+					// To avoid partial failure confusion, we attempt both operations
+					// but provide clear messaging if one succeeds and the other fails.
+
 					// First update the task properties (title, description, priority)
+					// If this fails, nothing is saved and the outer catch handles it
 					await updateTask(taskId, {
 						title,
 						description,
@@ -88,14 +95,30 @@ export function TaskForm({
 
 					// Then move the task to the new column with calculated order
 					// Place at the end of the destination column
-					const targetColumn = columns.find((c) => c.id === selectedColumnId);
-					const targetTasks = targetColumn?.tasks || [];
-					const targetOrder =
-						targetTasks.length > 0
-							? Math.max(...targetTasks.map((t) => t.order)) + 1
-							: 0;
+					try {
+						const targetColumn = columns.find(
+							(c) => c.id === selectedColumnId,
+						);
+						const targetTasks = targetColumn?.tasks || [];
+						const targetOrder =
+							targetTasks.length > 0
+								? Math.max(...targetTasks.map((t) => t.order)) + 1
+								: 0;
 
-					await moveTask(taskId, selectedColumnId, targetOrder);
+						await moveTask(taskId, selectedColumnId, targetOrder);
+					} catch (moveErr) {
+						// Properties were saved but column move failed
+						// Provide specific error message about partial success
+						const moveErrorMsg =
+							moveErr instanceof Error ? moveErr.message : "Unknown error";
+						setError(
+							`Task properties were saved, but moving to the new column failed: ${moveErrorMsg}. ` +
+								`You can try dragging the task to the desired column.`,
+						);
+						// Don't call onSuccess since the operation wasn't fully completed
+						// but also don't throw - we want to show the specific error
+						return;
+					}
 				} else {
 					// Same column - just update the task properties
 					await updateTask(taskId, {

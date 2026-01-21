@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { ArrowLeft, Plus, Settings, Trash2, Pencil } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@workspace/ui/components/button";
 import {
 	DropdownMenu,
@@ -118,8 +119,14 @@ export function BoardPage({ boardId }: BoardPageProps) {
 	}, []);
 
 	const handleDeleteBoard = useCallback(async () => {
-		await deleteBoard(boardId);
-		navigate("/pages/kanban");
+		try {
+			await deleteBoard(boardId);
+			navigate("/pages/kanban");
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : "Failed to delete board";
+			toast.error(message);
+		}
 	}, [deleteBoard, boardId, navigate]);
 
 	const handleKanbanChange = useCallback(
@@ -414,9 +421,17 @@ export function BoardPage({ boardId }: BoardPageProps) {
 						<AlertDialogAction
 							onClick={async () => {
 								if (modalState.type === "deleteColumn") {
-									await deleteColumn(modalState.columnId);
-									closeModal();
-									refetch();
+									try {
+										await deleteColumn(modalState.columnId);
+										closeModal();
+										refetch();
+									} catch (error) {
+										const message =
+											error instanceof Error
+												? error.message
+												: "Failed to delete column";
+										toast.error(message);
+									}
 								}
 							}}
 							className="bg-red-600 hover:bg-red-700"
@@ -522,9 +537,17 @@ export function BoardPage({ boardId }: BoardPageProps) {
 								refetch();
 							}}
 							onDelete={async () => {
-								await deleteTask(modalState.taskId);
-								closeModal();
-								refetch();
+								try {
+									await deleteTask(modalState.taskId);
+									closeModal();
+									refetch();
+								} catch (error) {
+									const message =
+										error instanceof Error
+											? error.message
+											: "Failed to delete task";
+									toast.error(message);
+								}
 							}}
 						/>
 					)}
