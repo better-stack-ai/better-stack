@@ -511,34 +511,45 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 							});
 						}
 
-						const newBoard = await adapter.create<Board>({
-							model: "kanbanBoard",
-							data: {
-								...boardData,
-								slug,
-								createdAt: new Date(),
-								updatedAt: new Date(),
-							},
-						});
-
-						// Create default columns
-						const defaultColumns = [
-							{ title: "To Do", order: 0, boardId: newBoard.id },
-							{ title: "In Progress", order: 1, boardId: newBoard.id },
-							{ title: "Done", order: 2, boardId: newBoard.id },
-						];
-
+						// Use transaction to ensure board and default columns are created atomically
+						let newBoard: Board | undefined;
 						const createdColumns: ColumnWithTasks[] = [];
-						for (const colData of defaultColumns) {
-							const col = await adapter.create<Column>({
-								model: "kanbanColumn",
+
+						await adapter.transaction(async (tx) => {
+							newBoard = await tx.create<Board>({
+								model: "kanbanBoard",
 								data: {
-									...colData,
+									...boardData,
+									slug,
 									createdAt: new Date(),
 									updatedAt: new Date(),
 								},
 							});
-							createdColumns.push({ ...col, tasks: [] });
+
+							// Create default columns
+							const defaultColumns = [
+								{ title: "To Do", order: 0, boardId: newBoard.id },
+								{ title: "In Progress", order: 1, boardId: newBoard.id },
+								{ title: "Done", order: 2, boardId: newBoard.id },
+							];
+
+							for (const colData of defaultColumns) {
+								const col = await tx.create<Column>({
+									model: "kanbanColumn",
+									data: {
+										...colData,
+										createdAt: new Date(),
+										updatedAt: new Date(),
+									},
+								});
+								createdColumns.push({ ...col, tasks: [] });
+							}
+						});
+
+						if (!newBoard) {
+							throw ctx.error(500, {
+								message: "Failed to create board",
+							});
 						}
 
 						const result = { ...newBoard, columns: createdColumns };
@@ -1131,7 +1142,11 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						},
 					});
 
-					if (hooks?.onTaskUpdated && updated) {
+					if (!updated) {
+						throw ctx.error(404, { message: "Task not found" });
+					}
+
+					if (hooks?.onTaskUpdated) {
 						await hooks.onTaskUpdated(updated, context);
 					}
 
