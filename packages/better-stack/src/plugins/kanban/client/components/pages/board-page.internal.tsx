@@ -518,7 +518,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 				open={modalState.type === "editTask"}
 				onOpenChange={(open: boolean) => !open && closeModal()}
 			>
-				<DialogContent className="max-w-2xl">
+				<DialogContent className="max-w-3xl">
 					<DialogHeader>
 						<DialogTitle>Edit Task</DialogTitle>
 						<DialogDescription>Update task details.</DialogDescription>

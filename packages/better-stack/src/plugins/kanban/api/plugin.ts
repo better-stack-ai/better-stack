@@ -325,10 +325,11 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						});
 
 						// Get all column IDs to fetch tasks
+						// Note: adapter returns joined data under schema key name ("column"), not model name
 						const columnIds: string[] = [];
 						for (const board of boards) {
-							if (board.kanbanColumn) {
-								for (const col of board.kanbanColumn) {
+							if (board.column) {
+								for (const col of board.column) {
 									columnIds.push(col.id);
 								}
 							}
@@ -362,13 +363,13 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 						// Map boards with columns and tasks
 						const result = boards.map((board) => {
-							const columns = (board.kanbanColumn || [])
+							const columns = (board.column || [])
 								.sort((a, b) => a.order - b.order)
 								.map((col) => ({
 									...col,
 									tasks: tasksByColumn.get(col.id) || [],
 								}));
-							const { kanbanColumn: _, ...boardWithoutJoin } = board;
+							const { column: _, ...boardWithoutJoin } = board;
 							return {
 								...boardWithoutJoin,
 								columns,
@@ -423,7 +424,8 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						}
 
 						// Fetch tasks for each column in parallel (avoids loading all tasks from DB)
-						const columnIds = (board.kanbanColumn || []).map((c) => c.id);
+						// Note: adapter returns joined data under schema key name ("column"), not model name
+						const columnIds = (board.column || []).map((c) => c.id);
 						const tasksByColumn = new Map<string, Task[]>();
 						if (columnIds.length > 0) {
 							const taskQueries = columnIds.map((columnId) =>
@@ -449,14 +451,14 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 							}
 						}
 
-						const columns = (board.kanbanColumn || [])
+						const columns = (board.column || [])
 							.sort((a, b) => a.order - b.order)
 							.map((col) => ({
 								...col,
 								tasks: tasksByColumn.get(col.id) || [],
 							}));
 
-						const { kanbanColumn: _, ...boardWithoutJoin } = board;
+						const { column: _, ...boardWithoutJoin } = board;
 						const result = {
 							...boardWithoutJoin,
 							columns,

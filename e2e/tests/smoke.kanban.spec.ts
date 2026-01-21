@@ -246,6 +246,12 @@ test("add column to board", async ({ page, request }) => {
 	await page.goto(`/pages/kanban/${board.id}`, { waitUntil: "networkidle" });
 	await expect(page.locator('[data-testid="board-page"]')).toBeVisible();
 
+	// IMPORTANT: Verify default columns are rendered before adding a new one
+	// This catches bugs where columns data isn't properly mapped from API response
+	await expect(page.getByText("To Do")).toBeVisible({ timeout: 5000 });
+	await expect(page.getByText("In Progress")).toBeVisible({ timeout: 5000 });
+	await expect(page.getByText("Done")).toBeVisible({ timeout: 5000 });
+
 	// Click the Actions dropdown
 	await page.getByRole("button", { name: /actions/i }).click();
 
@@ -265,8 +271,12 @@ test("add column to board", async ({ page, request }) => {
 	// Wait for the dialog to close
 	await expect(dialog).not.toBeVisible({ timeout: 5000 });
 
-	// Verify the new column appears
+	// Verify the new column appears alongside existing columns
 	await expect(page.getByText("Review")).toBeVisible({ timeout: 5000 });
+	// Verify existing columns are still visible after adding
+	await expect(page.getByText("To Do")).toBeVisible();
+	await expect(page.getByText("In Progress")).toBeVisible();
+	await expect(page.getByText("Done")).toBeVisible();
 
 	expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual([]);
 });

@@ -62,16 +62,20 @@ export type BoardWithColumns = Board & {
 
 /**
  * Board with joined column relationships from the database
+ * Note: The adapter returns joined data under the schema key name ("column"),
+ * not the model name ("kanbanColumn")
  */
 export type BoardWithKanbanColumn = Board & {
-	kanbanColumn?: Column[];
+	column?: Column[];
 };
 
 /**
  * Column with joined task relationships from the database
+ * Note: The adapter returns joined data under the schema key name ("task"),
+ * not the model name ("kanbanTask")
  */
 export type ColumnWithKanbanTask = Column & {
-	kanbanTask?: Task[];
+	task?: Task[];
 };
 
 // Serialized types for API responses (dates as strings)
