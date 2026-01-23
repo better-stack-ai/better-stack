@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader } from "@workspace/ui/components/card";
 export function BoardsListSkeleton() {
 	return (
 		<div className="container mx-auto py-8 px-4">
-			<div className="flex items-center justify-between mb-8">
+			<div className="w-full flex items-center justify-between mb-8">
 				<div>
 					<Skeleton className="h-9 w-48" />
 					<Skeleton className="h-5 w-64 mt-2" />

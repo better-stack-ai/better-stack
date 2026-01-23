@@ -5,7 +5,7 @@ import { Skeleton } from "@workspace/ui/components/skeleton";
 export function BoardSkeleton() {
 	return (
 		<div className="container mx-auto py-8 px-4">
-			<div className="flex items-center justify-between mb-8">
+			<div className="w-full flex items-center justify-between mb-8">
 				<div className="flex items-center gap-4">
 					<Skeleton className="h-5 w-5" />
 					<div>

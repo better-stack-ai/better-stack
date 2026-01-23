@@ -280,7 +280,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 			data-testid="board-page"
 			className="flex flex-col items-center"
 		>
-			<div className="flex items-center justify-between mb-8">
+			<div className="w-full flex items-center justify-between mb-8">
 				<div className="flex items-center gap-4">
 					<Link
 						href="/pages/kanban"

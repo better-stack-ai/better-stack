@@ -41,7 +41,9 @@ function ColumnContentComponent({
 					</Button>
 				</Kanban.ColumnHandle>
 				<div className="flex items-center gap-2 flex-1">
-					<span className="font-bold text-lg">{column.title}</span>
+					<span className="ont-bold text-lg line-clamp-1 flex-1 text-left">
+						{column.title}
+					</span>
 					<Badge variant="outline" className="pointer-events-none rounded-sm">
 						{column.tasks?.length || 0}
 					</Badge>
