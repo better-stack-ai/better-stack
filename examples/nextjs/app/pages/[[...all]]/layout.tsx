@@ -15,6 +15,7 @@ import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builde
 import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client"
 import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
 import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
+import { resolveUser, searchUsers } from "@/lib/mock-users"
 
 // Get base URL - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -254,6 +255,10 @@ export default function ExampleLayout({
                         navigate: (path) => router.push(path),
                         refresh: () => router.refresh(),
                         Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+                        // User resolution for assignees
+                        resolveUser,
+                        searchUsers,
+                        // Lifecycle hooks
                         onRouteRender: async (routeName, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Kanban route:`, routeName, context.path);
                         },

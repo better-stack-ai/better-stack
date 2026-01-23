@@ -10,7 +10,7 @@ import { createApiClient } from "@btst/stack/plugins/client";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { KanbanApiRouter } from "../../api";
 import { createKanbanQueryKeys } from "../../query-keys";
-import type { KanbanPluginOverrides } from "../overrides";
+import type { KanbanPluginOverrides, KanbanUser } from "../overrides";
 import type {
 	SerializedBoard,
 	SerializedBoardWithColumns,
@@ -517,4 +517,44 @@ export function useTaskMutations() {
 		moveError: moveMutation.error,
 		reorderError: reorderMutation.error,
 	};
+}
+
+// ============ User Resolution Hooks ============
+
+/**
+ * Hook to resolve a user from their ID
+ * Caches results to avoid repeated lookups
+ */
+export function useResolveUser(userId: string | undefined | null) {
+	const { resolveUser } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+
+	return useQuery<KanbanUser | null>({
+		queryKey: ["kanban", "users", userId],
+		queryFn: async () => {
+			if (!userId) return null;
+			const result = await resolveUser(userId);
+			return result;
+		},
+		enabled: !!userId,
+		staleTime: 5 * 60 * 1000, // Cache user info for 5 minutes
+		gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+	});
+}
+
+/**
+ * Hook to search for users available for assignment
+ * @param query - Search query (empty string for all users)
+ * @param boardId - Optional board context for scoped user lists
+ */
+export function useSearchUsers(query: string, boardId?: string) {
+	const { searchUsers } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+
+	return useQuery<KanbanUser[]>({
+		queryKey: ["kanban", "users", "search", query, boardId],
+		queryFn: async () => {
+			const result = await searchUsers(query, boardId);
+			return result;
+		},
+		staleTime: 30_000, // Cache search results for 30 seconds
+	});
 }

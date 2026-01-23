@@ -13,7 +13,8 @@ import {
 	SelectValue,
 } from "@workspace/ui/components/select";
 import { MinimalTiptapEditor } from "@workspace/ui/components/minimal-tiptap";
-import { useTaskMutations } from "../../hooks/kanban-hooks";
+import SearchSelect from "@workspace/ui/components/search-select";
+import { useTaskMutations, useSearchUsers } from "../../hooks/kanban-hooks";
 import { PRIORITY_OPTIONS } from "../../../utils";
 import type {
 	SerializedColumn,
@@ -23,6 +24,7 @@ import type {
 
 interface TaskFormProps {
 	columnId: string;
+	boardId: string;
 	taskId?: string;
 	task?: SerializedTask;
 	columns: SerializedColumn[];
@@ -33,6 +35,7 @@ interface TaskFormProps {
 
 export function TaskForm({
 	columnId,
+	boardId,
 	taskId,
 	task,
 	columns,
@@ -59,7 +62,15 @@ export function TaskForm({
 	const [selectedColumnId, setSelectedColumnId] = useState(
 		task?.columnId || columnId,
 	);
+	const [assigneeId, setAssigneeId] = useState<string>(task?.assigneeId || "");
 	const [error, setError] = useState<string | null>(null);
+
+	// Fetch available users for assignment
+	const { data: users = [] } = useSearchUsers("", boardId);
+	const userOptions = [
+		{ value: "", label: "Unassigned" },
+		...users.map((user) => ({ value: user.id, label: user.name })),
+	];
 
 	const isPending = isCreating || isUpdating || isDeleting || isMoving;
 
@@ -79,18 +90,19 @@ export function TaskForm({
 
 				if (isColumnChanging) {
 					// When changing columns, we need two operations:
-					// 1. Update task properties (title, description, priority)
+					// 1. Update task properties (title, description, priority, assigneeId)
 					// 2. Move task to new column with proper order calculation
 					//
 					// To avoid partial failure confusion, we attempt both operations
 					// but provide clear messaging if one succeeds and the other fails.
 
-					// First update the task properties (title, description, priority)
+					// First update the task properties (title, description, priority, assigneeId)
 					// If this fails, nothing is saved and the outer catch handles it
 					await updateTask(taskId, {
 						title,
 						description,
 						priority,
+						assigneeId: assigneeId || null,
 					});
 
 					// Then move the task to the new column with calculated order
@@ -124,6 +136,7 @@ export function TaskForm({
 						description,
 						priority,
 						columnId: selectedColumnId,
+						assigneeId: assigneeId || null,
 					});
 				}
 			} else {
@@ -132,6 +145,7 @@ export function TaskForm({
 					description,
 					priority,
 					columnId: selectedColumnId,
+					assigneeId: assigneeId || undefined,
 				});
 			}
 			onSuccess();
@@ -190,6 +204,17 @@ export function TaskForm({
 						</SelectContent>
 					</Select>
 				</div>
+			</div>
+
+			<div className="space-y-2">
+				<Label htmlFor="assignee">Assignee</Label>
+				<SearchSelect
+					options={userOptions}
+					value={assigneeId}
+					onChange={setAssigneeId}
+					placeholder="Select assignee"
+					emptyMessage="No users found"
+				/>
 			</div>
 
 			<div className="space-y-2">

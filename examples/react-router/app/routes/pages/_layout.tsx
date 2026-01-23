@@ -7,6 +7,7 @@ import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
 import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
+import { resolveUser, searchUsers } from "../../lib/mock-users"
 
 // Get base URL function - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -197,6 +198,10 @@ export default function Layout() {
                               {children}
                             </Link>
                         ),
+                        // User resolution for assignees
+                        resolveUser,
+                        searchUsers,
+                        // Lifecycle hooks
                         onRouteRender: async (routeName, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Kanban route:`, routeName, context.path);
                         },

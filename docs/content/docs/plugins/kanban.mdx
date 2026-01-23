@@ -5,6 +5,7 @@ description: Project management with boards, columns, tasks, drag-and-drop, and 
 
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
+import Image from "next/image";
 
 import kanbanDemo from "../../../assets/kanban-demo.png";
 
@@ -20,6 +21,7 @@ The Kanban plugin provides a full-featured project management system with:
 - **Boards** - Organize different projects or workflows
 - **Columns** - Define workflow stages (e.g., To Do, In Progress, Done)
 - **Tasks** - Track individual work items with priorities
+- **Assignees** - Assign users to tasks with avatar display
 - **Drag-and-Drop** - Reorder tasks and columns with smooth animations
 - **Priority Levels** - LOW, MEDIUM, HIGH, URGENT with visual badges
 - **Organization Support** - Optional scoping by user or organization
@@ -118,6 +120,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
     import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
     import Link from "next/link"
     import { useRouter } from "next/navigation"
+    import { resolveUser, searchUsers } from "@/lib/users" // Your user resolver
 
     const getBaseURL = () => 
       typeof window !== 'undefined' 
@@ -142,6 +145,9 @@ Configure framework-specific overrides in your `BetterStackProvider`:
               navigate: (path) => router.push(path),
               refresh: () => router.refresh(),
               Link: (props) => <Link {...props} />,
+              // Required: User resolution for assignees
+              resolveUser,
+              searchUsers,
             }
           }}
         >
@@ -157,6 +163,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
     import { Outlet, Link, useNavigate } from "react-router"
     import { BetterStackProvider } from "@btst/stack/context"
     import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
+    import { resolveUser, searchUsers } from "../lib/users" // Your user resolver
 
     const getBaseURL = () => 
       typeof window !== 'undefined' 
@@ -184,6 +191,9 @@ Configure framework-specific overrides in your `BetterStackProvider`:
                   {children}
                 </Link>
               ),
+              // Required: User resolution for assignees
+              resolveUser,
+              searchUsers,
             }
           }}
         >
@@ -199,6 +209,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
     import { BetterStackProvider } from "@btst/stack/context"
     import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
     import { Link, useRouter, Outlet } from "@tanstack/react-router"
+    import { resolveUser, searchUsers } from "../../lib/users" // Your user resolver
 
     const getBaseURL = () => 
       typeof window !== 'undefined' 
@@ -226,6 +237,9 @@ Configure framework-specific overrides in your `BetterStackProvider`:
                   {children}
                 </Link>
               ),
+              // Required: User resolution for assignees
+              resolveUser,
+              searchUsers,
             }
           }}
         >
@@ -241,6 +255,8 @@ Configure framework-specific overrides in your `BetterStackProvider`:
 - `apiBaseURL`: Base URL for API calls
 - `apiBasePath`: Path where your API is mounted
 - `navigate`: Function for programmatic navigation
+- `resolveUser`: Function to resolve user info from ID (for assignee display)
+- `searchUsers`: Function to search/list users (for assignee picker)
 
 **Optional overrides:**
 - `Link`: Custom Link component (defaults to `<a>` tag)
@@ -303,6 +319,152 @@ Tasks support four priority levels, each with a visual badge:
 | MEDIUM | Yellow | Standard priority (default) |
 | HIGH | Orange | Important tasks |
 | URGENT | Red | Critical tasks requiring immediate attention |
+
+## Task Assignees
+
+The kanban plugin supports assigning users to tasks. Since the plugin is authentication-agnostic, you provide resolver functions to integrate with your auth system.
+
+### KanbanUser Type
+
+The plugin uses a simple `KanbanUser` interface for user information:
+
+```ts
+interface KanbanUser {
+  id: string;       // Unique user identifier
+  name: string;     // Display name
+  avatarUrl?: string; // Optional avatar image URL
+  email?: string;   // Optional email address
+}
+```
+
+### Required Resolver Functions
+
+You must provide two resolver functions in your overrides:
+
+```tsx title="Context Overrides"
+overrides={{
+  kanban: {
+    // ... other overrides
+    
+    // Resolve user info from an ID (for displaying assignee on task cards)
+    resolveUser: (userId: string) => {
+      // Return KanbanUser or null if not found
+    },
+    
+    // Search/list users (for the assignee picker dropdown)
+    searchUsers: (query: string, boardId?: string) => {
+      // Return array of KanbanUser matching the query
+      // Return all users if query is empty
+    },
+  }
+}}
+```
+
+### Integration Examples
+
+<Tabs groupId="auth" items={["clerk", "nextauth", "mock"]} persist>
+  <Tab value="clerk">
+    ```tsx title="Clerk Integration"
+    import { clerkClient } from "@clerk/nextjs/server"
+    
+    const overrides = {
+      kanban: {
+        // ... other overrides
+        resolveUser: async (userId) => {
+          const user = await clerkClient.users.getUser(userId)
+          return {
+            id: user.id,
+            name: user.fullName || user.username || "Unknown",
+            avatarUrl: user.imageUrl,
+            email: user.emailAddresses[0]?.emailAddress,
+          }
+        },
+        searchUsers: async (query) => {
+          const users = await clerkClient.users.getUserList({ query, limit: 10 })
+          return users.map(user => ({
+            id: user.id,
+            name: user.fullName || user.username || "Unknown",
+            avatarUrl: user.imageUrl,
+            email: user.emailAddresses[0]?.emailAddress,
+          }))
+        },
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab value="nextauth">
+    ```tsx title="NextAuth/Prisma Integration"
+    import { prisma } from "@/lib/prisma"
+    
+    const overrides = {
+      kanban: {
+        // ... other overrides
+        resolveUser: async (userId) => {
+          const user = await prisma.user.findUnique({ 
+            where: { id: userId } 
+          })
+          return user ? {
+            id: user.id,
+            name: user.name || "Unknown",
+            avatarUrl: user.image || undefined,
+            email: user.email || undefined,
+          } : null
+        },
+        searchUsers: async (query) => {
+          const users = await prisma.user.findMany({
+            where: query ? {
+              OR: [
+                { name: { contains: query, mode: "insensitive" } },
+                { email: { contains: query, mode: "insensitive" } },
+              ]
+            } : undefined,
+            take: 10,
+          })
+          return users.map(user => ({
+            id: user.id,
+            name: user.name || "Unknown",
+            avatarUrl: user.image || undefined,
+            email: user.email || undefined,
+          }))
+        },
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab value="mock">
+    ```tsx title="Mock Users (for development)"
+    import type { KanbanUser } from "@btst/stack/plugins/kanban/client"
+    
+    const MOCK_USERS: KanbanUser[] = [
+      { id: "user-1", name: "Alice Johnson", avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=alice" },
+      { id: "user-2", name: "Bob Smith", avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=bob" },
+      { id: "user-3", name: "Carol Williams", avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=carol" },
+    ]
+    
+    const overrides = {
+      kanban: {
+        // ... other overrides
+        resolveUser: (userId) => MOCK_USERS.find(u => u.id === userId) ?? null,
+        searchUsers: (query) => {
+          if (!query) return MOCK_USERS
+          const lower = query.toLowerCase()
+          return MOCK_USERS.filter(u => u.name.toLowerCase().includes(lower))
+        },
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Assignee Display
+
+When a task has an assignee:
+- **Task Card**: Shows the user's avatar and name
+- **Task Form**: Displays a searchable dropdown to select/change assignee
+
+When no assignee is set, the task card shows "Unassigned" with a placeholder icon.
 
 ## API Reference
 
@@ -468,6 +630,10 @@ overrides={{
     apiBasePath: "/api/data",
     navigate: (path) => router.push(path),
     
+    // Required: User resolution for assignees
+    resolveUser: (userId) => findUserById(userId),
+    searchUsers: (query) => searchAllUsers(query),
+    
     // Optional overrides
     Link: (props) => <Link {...props} />,
     refresh: () => router.refresh(),
@@ -489,6 +655,16 @@ overrides={{
 }}
 ```
 
+**Required overrides:**
+
+| Override | Type | Description |
+|----------|------|-------------|
+| `apiBaseURL` | `string` | Base URL for API calls |
+| `apiBasePath` | `string` | Path where your API is mounted |
+| `navigate` | `(path: string) => void` | Function for programmatic navigation |
+| `resolveUser` | `(userId: string) => KanbanUser \| null` | Resolve user info from ID |
+| `searchUsers` | `(query: string, boardId?: string) => KanbanUser[]` | Search/list users for picker |
+
 ## React Hooks
 
 Import hooks from `@btst/stack/plugins/kanban/client/hooks` to use in your components:
@@ -500,6 +676,8 @@ import {
   useBoardMutations,
   useColumnMutations,
   useTaskMutations,
+  useResolveUser,
+  useSearchUsers,
 } from "@btst/stack/plugins/kanban/client/hooks"
 
 // List all boards
@@ -514,8 +692,14 @@ const { createBoard, updateBoard, deleteBoard, isCreating, isUpdating, isDeletin
 // Column mutations
 const { createColumn, updateColumn, deleteColumn } = useColumnMutations()
 
-// Task mutations
+// Task mutations (includes assigneeId support)
 const { createTask, updateTask, deleteTask, moveTask } = useTaskMutations()
+
+// Resolve user info (with caching)
+const { data: user, isLoading } = useResolveUser(assigneeId)
+
+// Search users for picker
+const { data: users, isLoading } = useSearchUsers(searchQuery, boardId)
 ```
 
 ## Types
@@ -523,6 +707,7 @@ const { createTask, updateTask, deleteTask, moveTask } = useTaskMutations()
 The plugin exports TypeScript types for all data structures:
 
 ```ts
+// API types
 import type { 
   Board, 
   Column, 
@@ -534,4 +719,10 @@ import type {
   SerializedColumn,
   SerializedTask,
 } from "@btst/stack/plugins/kanban/api"
+
+// Client types (for user resolution)
+import type { 
+  KanbanUser,
+  KanbanPluginOverrides,
+} from "@btst/stack/plugins/kanban/client"
 ```

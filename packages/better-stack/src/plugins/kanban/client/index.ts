@@ -5,4 +5,4 @@ export {
 	type RouteContext,
 	type LoaderContext,
 } from "./plugin";
-export { type KanbanPluginOverrides } from "./overrides";
+export { type KanbanPluginOverrides, type KanbanUser } from "./overrides";

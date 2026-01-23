@@ -422,6 +422,238 @@ test("board page with tasks shows priority badges", async ({
 	expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual([]);
 });
 
+// ============ Assignee Tests ============
+
+test("create task with assignee", async ({ page, request }) => {
+	const errors: string[] = [];
+	page.on("console", (msg) => {
+		if (msg.type() === "error") errors.push(msg.text());
+	});
+
+	// Create a board
+	const board = await createBoard(request, {
+		name: "Assignee Test Board",
+		description: "Board for testing assignee functionality",
+	});
+
+	// Navigate to the board page
+	await page.goto(`/pages/kanban/${board.id}`, { waitUntil: "networkidle" });
+	await expect(page.locator('[data-testid="board-page"]')).toBeVisible();
+
+	// Open add task dialog from the first column
+	const toDoColumn = page.locator('[data-slot="kanban-column"]').first();
+	await expect(toDoColumn).toBeVisible();
+
+	const columnMenuButton = toDoColumn
+		.locator("button")
+		.filter({ has: page.locator("svg") })
+		.first();
+	await columnMenuButton.click();
+
+	const addTaskButton = page.getByRole("menuitem", { name: /add task/i });
+	const addTaskVisible = await addTaskButton.isVisible().catch(() => false);
+
+	if (addTaskVisible) {
+		await addTaskButton.click();
+	} else {
+		await page.keyboard.press("Escape");
+		const directAddButton = toDoColumn.getByRole("button", {
+			name: /add task/i,
+		});
+		await directAddButton.click();
+	}
+
+	// Wait for the task form dialog
+	const dialog = page.locator('div[role="dialog"][data-slot="dialog-content"]');
+	await expect(dialog).toBeVisible({ timeout: 5000 });
+
+	// Fill out the task form
+	await page.getByLabel("Title").fill("Task with Assignee");
+
+	// Select an assignee - open the assignee combobox
+	const assigneeButton = dialog.locator('button[role="combobox"]').last();
+	await assigneeButton.click();
+
+	// Wait for the popover to be visible and stable
+	const aliceOption = page.getByRole("option", { name: /alice johnson/i });
+	await expect(aliceOption).toBeVisible({ timeout: 5000 });
+	await page.waitForTimeout(300); // Wait for animation to settle
+	await aliceOption.click({ force: true });
+
+	// Submit the form
+	await page.getByRole("button", { name: /create task/i }).click();
+
+	// Wait for the dialog to close
+	await expect(dialog).not.toBeVisible({ timeout: 5000 });
+
+	// Verify the task appears with the assignee name
+	await expect(page.getByText("Task with Assignee")).toBeVisible({
+		timeout: 5000,
+	});
+	await expect(page.getByText("Alice Johnson")).toBeVisible();
+
+	expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual([]);
+});
+
+test("task with assignee displays avatar", async ({ page, request }) => {
+	const errors: string[] = [];
+	page.on("console", (msg) => {
+		if (msg.type() === "error") errors.push(msg.text());
+	});
+
+	// Create a board with a task that has an assignee
+	const board = await createBoard(request, {
+		name: "Avatar Display Test Board",
+		description: "Testing assignee avatar display",
+	});
+
+	const columnId = board.columns[0].id;
+
+	// Create a task with Alice Johnson assigned (user-1)
+	await createTask(request, {
+		title: "Task with Avatar",
+		priority: "MEDIUM",
+		columnId: columnId,
+		assigneeId: "user-1",
+	});
+
+	// Navigate to the board page
+	await page.goto(`/pages/kanban/${board.id}`, { waitUntil: "networkidle" });
+	await expect(page.locator('[data-testid="board-page"]')).toBeVisible();
+
+	// Verify the task is visible
+	await expect(page.getByText("Task with Avatar")).toBeVisible();
+
+	// Verify the assignee name is shown
+	await expect(page.getByText("Alice Johnson")).toBeVisible();
+
+	// Verify an avatar image is displayed (from dicebear)
+	const avatar = page.locator('img[src*="dicebear"]');
+	await expect(avatar).toBeVisible();
+
+	expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual([]);
+});
+
+test("change task assignee", async ({ page, request }) => {
+	const errors: string[] = [];
+	page.on("console", (msg) => {
+		if (msg.type() === "error") errors.push(msg.text());
+	});
+
+	// Create a board with a task that has an assignee
+	const board = await createBoard(request, {
+		name: "Change Assignee Test Board",
+		description: "Testing changing task assignee",
+	});
+
+	const columnId = board.columns[0].id;
+
+	// Create a task with Alice Johnson assigned (user-1)
+	await createTask(request, {
+		title: "Task to Reassign",
+		priority: "MEDIUM",
+		columnId: columnId,
+		assigneeId: "user-1",
+	});
+
+	// Navigate to the board page
+	await page.goto(`/pages/kanban/${board.id}`, { waitUntil: "networkidle" });
+	await expect(page.locator('[data-testid="board-page"]')).toBeVisible();
+
+	// Verify Alice Johnson is the current assignee
+	await expect(page.getByText("Alice Johnson")).toBeVisible();
+
+	// Click on the task to open edit modal
+	await page.getByText("Task to Reassign").click();
+
+	// Wait for the edit dialog
+	const dialog = page.locator('div[role="dialog"][data-slot="dialog-content"]');
+	await expect(dialog).toBeVisible({ timeout: 5000 });
+
+	// Change the assignee - open the assignee combobox
+	const assigneeButton = dialog.locator('button[role="combobox"]').last();
+	await assigneeButton.click();
+
+	// Wait for the popover to be visible and stable
+	const bobOption = page.getByRole("option", { name: /bob smith/i });
+	await expect(bobOption).toBeVisible({ timeout: 5000 });
+	await page.waitForTimeout(300); // Wait for animation to settle
+	await bobOption.click({ force: true });
+
+	// Submit the form
+	await page.getByRole("button", { name: /update task/i }).click();
+
+	// Wait for the dialog to close
+	await expect(dialog).not.toBeVisible({ timeout: 5000 });
+
+	// Verify the new assignee is shown
+	await expect(page.getByText("Bob Smith")).toBeVisible({ timeout: 5000 });
+	// Alice should no longer be visible (since there's only one task)
+	await expect(page.getByText("Alice Johnson")).not.toBeVisible();
+
+	expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual([]);
+});
+
+test("unassign task", async ({ page, request }) => {
+	const errors: string[] = [];
+	page.on("console", (msg) => {
+		if (msg.type() === "error") errors.push(msg.text());
+	});
+
+	// Create a board with an assigned task
+	const board = await createBoard(request, {
+		name: "Unassign Test Board",
+		description: "Testing unassigning a task",
+	});
+
+	const columnId = board.columns[0].id;
+
+	// Create a task with Carol Williams assigned (user-3)
+	await createTask(request, {
+		title: "Task to Unassign",
+		priority: "HIGH",
+		columnId: columnId,
+		assigneeId: "user-3",
+	});
+
+	// Navigate to the board page
+	await page.goto(`/pages/kanban/${board.id}`, { waitUntil: "networkidle" });
+	await expect(page.locator('[data-testid="board-page"]')).toBeVisible();
+
+	// Verify Carol Williams is the current assignee
+	await expect(page.getByText("Carol Williams")).toBeVisible();
+
+	// Click on the task to open edit modal
+	await page.getByText("Task to Unassign").click();
+
+	// Wait for the edit dialog
+	const dialog = page.locator('div[role="dialog"][data-slot="dialog-content"]');
+	await expect(dialog).toBeVisible({ timeout: 5000 });
+
+	// Change the assignee to "Unassigned" - open the assignee combobox
+	const assigneeButton = dialog.locator('button[role="combobox"]').last();
+	await assigneeButton.click();
+
+	// Wait for the popover to be visible and stable
+	const unassignedOption = page.getByRole("option", { name: /unassigned/i });
+	await expect(unassignedOption).toBeVisible({ timeout: 5000 });
+	await page.waitForTimeout(300); // Wait for animation to settle
+	await unassignedOption.click({ force: true });
+
+	// Submit the form
+	await page.getByRole("button", { name: /update task/i }).click();
+
+	// Wait for the dialog to close
+	await expect(dialog).not.toBeVisible({ timeout: 5000 });
+
+	// Verify the task now shows as unassigned
+	await expect(page.getByText("Unassigned")).toBeVisible({ timeout: 5000 });
+	// Carol should no longer be visible
+	await expect(page.getByText("Carol Williams")).not.toBeVisible();
+
+	expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual([]);
+});
+
 // Helper function to create a board
 async function createBoard(
 	request: APIRequestContext,
@@ -453,6 +685,7 @@ async function createTask(
 		description?: string;
 		priority?: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 		columnId: string;
+		assigneeId?: string;
 	},
 ) {
 	const response = await request.post("/api/data/tasks", {
@@ -464,6 +697,7 @@ async function createTask(
 			description: data.description,
 			priority: data.priority || "MEDIUM",
 			columnId: data.columnId,
+			assigneeId: data.assigneeId,
 		},
 	});
 	expect(response.ok()).toBeTruthy();

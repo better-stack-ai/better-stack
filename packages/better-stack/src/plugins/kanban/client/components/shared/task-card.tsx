@@ -8,6 +8,8 @@ import * as Kanban from "@workspace/ui/components/kanban";
 import { format } from "date-fns";
 import type { SerializedTask } from "../../../types";
 import { getPriorityConfig } from "../../../utils";
+import { useResolveUser } from "../../hooks/kanban-hooks";
+import { UserAvatar } from "./user-avatar";
 
 interface TaskCardProps {
 	task: SerializedTask;
@@ -16,6 +18,7 @@ interface TaskCardProps {
 
 function TaskCardComponent({ task, onClick }: TaskCardProps) {
 	const priorityConfig = getPriorityConfig(task.priority);
+	const { data: assignee } = useResolveUser(task.assigneeId);
 
 	return (
 		<Kanban.Item value={task.id} asChild>
@@ -51,10 +54,15 @@ function TaskCardComponent({ task, onClick }: TaskCardProps) {
 
 					<div className="flex items-center justify-between text-muted-foreground text-xs">
 						{task.assigneeId ? (
-							<span className="line-clamp-1">Assigned</span>
+							<div className="flex items-center gap-1.5">
+								<UserAvatar user={assignee ?? null} size="sm" />
+								<span className="line-clamp-1">
+									{assignee?.name || "Assigned"}
+								</span>
+							</div>
 						) : (
-							<div className="flex items-center gap-1">
-								<div className="size-2 rounded-full bg-destructive/20" />
+							<div className="flex items-center gap-1.5">
+								<UserAvatar user={null} size="sm" />
 								<span className="line-clamp-1">Unassigned</span>
 							</div>
 						)}

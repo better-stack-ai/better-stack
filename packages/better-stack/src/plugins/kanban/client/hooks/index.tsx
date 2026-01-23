@@ -6,4 +6,6 @@ export {
 	useBoardMutations,
 	useColumnMutations,
 	useTaskMutations,
+	useResolveUser,
+	useSearchUsers,
 } from "./kanban-hooks";

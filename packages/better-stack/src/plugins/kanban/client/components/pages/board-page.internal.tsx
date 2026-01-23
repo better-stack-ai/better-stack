@@ -505,6 +505,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 					{modalState.type === "addTask" && (
 						<TaskForm
 							columnId={modalState.columnId}
+							boardId={boardId}
 							columns={board.columns || []}
 							onClose={closeModal}
 							onSuccess={() => {
@@ -529,6 +530,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 					{modalState.type === "editTask" && (
 						<TaskForm
 							columnId={modalState.columnId}
+							boardId={boardId}
 							taskId={modalState.taskId}
 							task={board.columns
 								?.find((c) => c.id === modalState.columnId)

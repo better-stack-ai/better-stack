@@ -2,6 +2,17 @@ import type { ComponentType } from "react";
 import type { KanbanLocalization } from "./localization";
 
 /**
+ * User information for assignee display/selection
+ * Framework-agnostic - consumers map their auth system to this shape
+ */
+export interface KanbanUser {
+	id: string;
+	name: string;
+	avatarUrl?: string;
+	email?: string;
+}
+
+/**
  * Context passed to lifecycle hooks
  */
 export interface RouteContext {
@@ -60,6 +71,28 @@ export interface KanbanPluginOverrides {
 	 * Optional headers to pass with API requests (e.g., for SSR auth)
 	 */
 	headers?: HeadersInit;
+
+	// ============ User Resolution (required for assignee features) ============
+
+	/**
+	 * Resolve user info from an assigneeId
+	 * Called when rendering task cards/forms that have an assignee
+	 * Return null for unknown users (will show fallback UI)
+	 */
+	resolveUser: (
+		userId: string,
+	) => Promise<KanbanUser | null> | KanbanUser | null;
+
+	/**
+	 * Search/list users available for assignment
+	 * Called when user opens the assignee picker
+	 * @param query - Search query (empty string for initial load)
+	 * @param boardId - Optional board context for scoped user lists
+	 */
+	searchUsers: (
+		query: string,
+		boardId?: string,
+	) => Promise<KanbanUser[]> | KanbanUser[];
 
 	// ============ Lifecycle Hooks (optional) ============
 
