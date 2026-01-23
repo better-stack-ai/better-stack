@@ -276,7 +276,10 @@ export function BoardPage({ boardId }: BoardPageProps) {
 	}
 
 	return (
-		<PageWrapper data-testid="board-page" className="flex flex-col items-center">
+		<PageWrapper
+			data-testid="board-page"
+			className="flex flex-col items-center"
+		>
 			<div className="flex items-center justify-between mb-8">
 				<div className="flex items-center gap-4">
 					<Link
