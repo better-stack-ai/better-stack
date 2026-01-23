@@ -276,7 +276,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 	}
 
 	return (
-		<PageWrapper data-testid="board-page">
+		<PageWrapper data-testid="board-page" className="flex flex-col items-center">
 			<div className="flex items-center justify-between mb-8">
 				<div className="flex items-center gap-4">
 					<Link
@@ -494,7 +494,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 				open={modalState.type === "addTask"}
 				onOpenChange={(open: boolean) => !open && closeModal()}
 			>
-				<DialogContent className="max-w-3xl max-h-screen overflow-y-auto">
+				<DialogContent className="max-w-3xl! max-h-screen overflow-y-auto">
 					<DialogHeader>
 						<DialogTitle>Add Task</DialogTitle>
 						<DialogDescription>Create a new task.</DialogDescription>
@@ -518,7 +518,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 				open={modalState.type === "editTask"}
 				onOpenChange={(open: boolean) => !open && closeModal()}
 			>
-				<DialogContent className="max-w-3xl max-h-screen overflow-y-auto">
+				<DialogContent className="max-w-3xl! max-h-screen overflow-y-auto">
 					<DialogHeader>
 						<DialogTitle>Edit Task</DialogTitle>
 						<DialogDescription>Update task details.</DialogDescription>
