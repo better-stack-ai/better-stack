@@ -46,7 +46,7 @@ function TaskCardComponent({ task, onClick }: TaskCardProps) {
 						</span>
 						<Badge
 							variant={priorityConfig.variant}
-							className="pointer-events-none h-5 rounded-sm px-1.5 text-[11px] capitalize"
+							className={`pointer-events-none h-5 rounded-sm px-1.5 text-[11px] capitalize ${priorityConfig.className}`}
 						>
 							{priorityConfig.label}
 						</Badge>

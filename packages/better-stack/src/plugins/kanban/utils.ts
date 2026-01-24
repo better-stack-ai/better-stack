@@ -60,19 +60,39 @@ export function reorderItems<T extends { id: string; order: number }>(
 export function getPriorityConfig(priority: string): {
 	label: string;
 	variant: "default" | "secondary" | "destructive" | "outline";
-	color: string;
+	className: string;
 } {
 	switch (priority) {
 		case "URGENT":
-			return { label: "Urgent", variant: "destructive", color: "red" };
+			return {
+				label: "Urgent",
+				variant: "destructive",
+				className: "kanban-priority-urgent",
+			};
 		case "HIGH":
-			return { label: "High", variant: "destructive", color: "orange" };
+			return {
+				label: "High",
+				variant: "outline",
+				className: "kanban-priority-high",
+			};
 		case "MEDIUM":
-			return { label: "Medium", variant: "default", color: "yellow" };
+			return {
+				label: "Medium",
+				variant: "default",
+				className: "kanban-priority-medium",
+			};
 		case "LOW":
-			return { label: "Low", variant: "secondary", color: "gray" };
+			return {
+				label: "Low",
+				variant: "secondary",
+				className: "kanban-priority-low",
+			};
 		default:
-			return { label: "Medium", variant: "default", color: "yellow" };
+			return {
+				label: "Medium",
+				variant: "default",
+				className: "kanban-priority-medium",
+			};
 	}
 }
 

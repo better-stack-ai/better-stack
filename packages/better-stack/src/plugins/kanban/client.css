@@ -44,21 +44,25 @@
 
 /* Priority badge colors */
 .kanban-priority-urgent {
-	--badge-bg: var(--destructive);
-	--badge-fg: var(--destructive-foreground);
+	background-color: var(--destructive) !important;
+	color: var(--destructive-foreground) !important;
+	border-color: var(--destructive) !important;
 }
 
 .kanban-priority-high {
-	--badge-bg: rgb(249, 115, 22);
-	--badge-fg: white;
+	background-color: rgb(249, 115, 22) !important;
+	color: white !important;
+	border-color: rgb(249, 115, 22) !important;
 }
 
 .kanban-priority-medium {
-	--badge-bg: var(--primary);
-	--badge-fg: var(--primary-foreground);
+	background-color: var(--primary) !important;
+	color: var(--primary-foreground) !important;
+	border-color: var(--primary) !important;
 }
 
 .kanban-priority-low {
-	--badge-bg: var(--secondary);
-	--badge-fg: var(--secondary-foreground);
+	background-color: var(--secondary) !important;
+	color: var(--secondary-foreground) !important;
+	border-color: var(--secondary) !important;
 }

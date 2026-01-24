@@ -121,13 +121,25 @@ export function BoardPage({ boardId }: BoardPageProps) {
 	const handleDeleteBoard = useCallback(async () => {
 		try {
 			await deleteBoard(boardId);
+			closeModal();
+			// Use both navigate and a fallback to ensure navigation works
+			// Some frameworks may have issues with router.push after mutations
 			navigate("/pages/kanban");
+			// Fallback: if navigate doesn't work, use window.location
+			if (typeof window !== "undefined") {
+				setTimeout(() => {
+					// Only redirect if we're still on the same page after 100ms
+					if (window.location.pathname.includes(boardId)) {
+						window.location.href = "/pages/kanban";
+					}
+				}, 100);
+			}
 		} catch (error) {
 			const message =
 				error instanceof Error ? error.message : "Failed to delete board";
 			toast.error(message);
 		}
-	}, [deleteBoard, boardId, navigate]);
+	}, [deleteBoard, boardId, navigate, closeModal]);
 
 	const handleKanbanChange = useCallback(
 		async (newData: Record<string, SerializedTask[]>) => {
@@ -481,13 +493,13 @@ export function BoardPage({ boardId }: BoardPageProps) {
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
+						<Button
 							onClick={handleDeleteBoard}
 							disabled={isDeleting}
 							className="bg-red-600 hover:bg-red-700"
 						>
 							{isDeleting ? "Deleting..." : "Delete"}
-						</AlertDialogAction>
+						</Button>
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>

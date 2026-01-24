@@ -64,7 +64,7 @@ export default function SearchSelect({
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="border-input w-full min-w-[var(--radix-popper-anchor-width)] p-0 z-[100]"
+          className="border-input w-full min-w-[var(--radix-popper-anchor-width)] p-0 z-[9999]"
           align="start"
         >
           <Command>
