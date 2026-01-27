@@ -5,6 +5,7 @@ description: Visual drag-and-drop page builder with component registry, variable
 
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
+import { BookOpen } from "lucide-react";
 import Image from "next/image";
 
 import uiBuilderDemo from "../../../assets/ui-builder-demo-1.gif";
@@ -16,6 +17,17 @@ import uiBuilderDemo from "../../../assets/ui-builder-demo-1.gif";
 </div>
 
 The UI Builder plugin provides a visual drag-and-drop page creation interface where administrators can create pages using pre-defined components. Pages are stored as JSON layers in the CMS and can be rendered on public routes.
+
+<div className="flex gap-4 my-4">
+  <a href="https://www.uibuilder.app/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+    <BookOpen className="w-5 h-5" />
+    Full Documentation
+  </a>
+</div>
+
+<Callout type="info">
+For comprehensive documentation including interactive demos, block templates, and advanced customization options, visit [uibuilder.app](https://www.uibuilder.app/).
+</Callout>
 
 **Key Features:**
 - **Visual Page Builder** - Drag-and-drop interface for creating pages with components
