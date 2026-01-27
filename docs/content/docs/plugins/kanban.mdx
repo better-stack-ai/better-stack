@@ -1,0 +1,728 @@
+---
+title: Kanban Plugin
+description: Project management with boards, columns, tasks, drag-and-drop, and priority levels
+---
+
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "fumadocs-ui/components/callout";
+import Image from "next/image";
+
+import kanbanDemo from "../../../assets/kanban-demo.png";
+
+<div className="grid grid-cols-1 gap-2 my-2">
+  <a href={kanbanDemo.src} target="_blank" rel="noopener noreferrer">
+    <Image src={kanbanDemo} alt="Kanban Plugin Demo - Board View" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+  </a>
+</div>
+
+## Overview
+
+The Kanban plugin provides a full-featured project management system with:
+- **Boards** - Organize different projects or workflows
+- **Columns** - Define workflow stages (e.g., To Do, In Progress, Done)
+- **Tasks** - Track individual work items with priorities
+- **Assignees** - Assign users to tasks with avatar display
+- **Drag-and-Drop** - Reorder tasks and columns with smooth animations
+- **Priority Levels** - LOW, MEDIUM, HIGH, URGENT with visual badges
+- **Organization Support** - Optional scoping by user or organization
+
+## Installation
+
+<Callout type="info">
+Ensure you followed the general [framework installation guide](/installation) first.
+</Callout>
+
+Follow these steps to add the Kanban plugin to your Better Stack setup.
+
+### 1. Add Plugin to Backend API
+
+Import and register the kanban backend plugin in your `better-stack.ts` file:
+
+```ts title="lib/better-stack.ts"
+import { betterStack } from "@btst/stack"
+import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
+// ... your adapter imports
+
+const { handler, dbSchema } = betterStack({
+  basePath: "/api/data",
+  plugins: {
+    kanban: kanbanBackendPlugin()
+  },
+  adapter: (db) => createPrismaAdapter(prisma, db, { 
+    provider: "postgresql" 
+  })
+})
+
+export { handler, dbSchema }
+```
+
+The `kanbanBackendPlugin()` accepts optional hooks for customizing behavior (authorization, logging, etc.).
+
+### 2. Add Plugin to Client
+
+Register the kanban client plugin in your `better-stack-client.tsx` file:
+
+```tsx title="lib/better-stack-client.tsx"
+import { createStackClient } from "@btst/stack/client"
+import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
+import { QueryClient } from "@tanstack/react-query"
+
+const getBaseURL = () => 
+   (process.env.BASE_URL || "http://localhost:3000")
+
+export const getStackClient = (queryClient: QueryClient) => {
+  const baseURL = getBaseURL()
+  return createStackClient({
+    plugins: {
+      kanban: kanbanClientPlugin({
+        // Required configuration
+        apiBaseURL: baseURL,
+        apiBasePath: "/api/data",
+        siteBaseURL: baseURL,
+        siteBasePath: "/pages",
+        queryClient: queryClient,
+        // Optional: SEO configuration
+        seo: {
+          siteName: "My Kanban App",
+          description: "Manage your projects with kanban boards",
+        },
+      })
+    }
+  })
+}
+```
+
+**Required configuration:**
+- `apiBaseURL`: Base URL for API calls during SSR data prefetching
+- `apiBasePath`: Path where your API is mounted (e.g., `/api/data`)
+- `siteBaseURL`: Base URL of your site
+- `siteBasePath`: Path where your pages are mounted (e.g., `/pages`)
+- `queryClient`: React Query client instance
+
+### 3. Import Plugin CSS
+
+Add the kanban plugin CSS to your global stylesheet:
+
+```css title="app/globals.css"
+@import "@btst/stack/plugins/kanban/css";
+```
+
+This includes all necessary styles for the kanban board components and drag-and-drop functionality.
+
+### 4. Add Context Overrides
+
+Configure framework-specific overrides in your `BetterStackProvider`:
+
+<Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
+  <Tab value="next-js">
+    ```tsx title="app/pages/[[...all]]/layout.tsx"
+    import { BetterStackProvider } from "@btst/stack/context"
+    import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
+    import Link from "next/link"
+    import { useRouter } from "next/navigation"
+    import { resolveUser, searchUsers } from "@/lib/users" // Your user resolver
+
+    const getBaseURL = () => 
+      typeof window !== 'undefined' 
+        ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
+        : (process.env.BASE_URL || "http://localhost:3000")
+
+    type PluginOverrides = {
+      kanban: KanbanPluginOverrides
+    }
+
+    export default function Layout({ children }) {
+      const router = useRouter()
+      const baseURL = getBaseURL()
+      
+      return (
+        <BetterStackProvider<PluginOverrides>
+          basePath="/pages"
+          overrides={{
+            kanban: {
+              apiBaseURL: baseURL,
+              apiBasePath: "/api/data",
+              navigate: (path) => router.push(path),
+              refresh: () => router.refresh(),
+              Link: (props) => <Link {...props} />,
+              // Required: User resolution for assignees
+              resolveUser,
+              searchUsers,
+            }
+          }}
+        >
+          {children}
+        </BetterStackProvider>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab value="react-router">
+    ```tsx title="app/routes/pages/_layout.tsx"
+    import { Outlet, Link, useNavigate } from "react-router"
+    import { BetterStackProvider } from "@btst/stack/context"
+    import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
+    import { resolveUser, searchUsers } from "../lib/users" // Your user resolver
+
+    const getBaseURL = () => 
+      typeof window !== 'undefined' 
+        ? (import.meta.env.VITE_BASE_URL || window.location.origin)
+        : (process.env.BASE_URL || "http://localhost:5173")
+
+    type PluginOverrides = {
+      kanban: KanbanPluginOverrides
+    }
+
+    export default function Layout() {
+      const navigate = useNavigate()
+      const baseURL = getBaseURL()
+      
+      return (
+        <BetterStackProvider<PluginOverrides>
+          basePath="/pages"
+          overrides={{
+            kanban: {
+              apiBaseURL: baseURL,
+              apiBasePath: "/api/data",
+              navigate: (href) => navigate(href),
+              Link: ({ href, children, className, ...props }) => (
+                <Link to={href || ""} className={className} {...props}>
+                  {children}
+                </Link>
+              ),
+              // Required: User resolution for assignees
+              resolveUser,
+              searchUsers,
+            }
+          }}
+        >
+          <Outlet />
+        </BetterStackProvider>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab value="tanstack">
+    ```tsx title="src/routes/pages/route.tsx"
+    import { BetterStackProvider } from "@btst/stack/context"
+    import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
+    import { Link, useRouter, Outlet } from "@tanstack/react-router"
+    import { resolveUser, searchUsers } from "../../lib/users" // Your user resolver
+
+    const getBaseURL = () => 
+      typeof window !== 'undefined' 
+        ? (import.meta.env.VITE_BASE_URL || window.location.origin)
+        : (process.env.BASE_URL || "http://localhost:3000")
+
+    type PluginOverrides = {
+      kanban: KanbanPluginOverrides
+    }
+
+    function Layout() {
+      const router = useRouter()
+      const baseURL = getBaseURL()
+
+      return (
+        <BetterStackProvider<PluginOverrides>
+          basePath="/pages"
+          overrides={{
+            kanban: {
+              apiBaseURL: baseURL,
+              apiBasePath: "/api/data",
+              navigate: (href) => router.navigate({ href }),
+              Link: ({ href, children, className, ...props }) => (
+                <Link to={href} className={className} {...props}>
+                  {children}
+                </Link>
+              ),
+              // Required: User resolution for assignees
+              resolveUser,
+              searchUsers,
+            }
+          }}
+        >
+          <Outlet />
+        </BetterStackProvider>
+      )
+    }
+    ```
+  </Tab>
+</Tabs>
+
+**Required overrides:**
+- `apiBaseURL`: Base URL for API calls
+- `apiBasePath`: Path where your API is mounted
+- `navigate`: Function for programmatic navigation
+- `resolveUser`: Function to resolve user info from ID (for assignee display)
+- `searchUsers`: Function to search/list users (for assignee picker)
+
+**Optional overrides:**
+- `Link`: Custom Link component (defaults to `<a>` tag)
+- `refresh`: Function to refresh server-side cache
+- `localization`: Custom localization strings
+
+### 5. Generate Database Schema
+
+After adding the plugin, generate your database schema using the CLI:
+
+```bash
+npx @btst/cli generate --orm prisma --config lib/better-stack.ts  --output prisma/schema.prisma
+```
+
+This will create the necessary database tables for boards, columns, and tasks. Run migrations as needed for your ORM.
+
+## Congratulations, You're Done!
+
+Your kanban plugin is now fully configured and ready to use! Here's a quick reference of what's available:
+
+### API Endpoints
+
+The kanban plugin provides the following API endpoints (mounted at your configured `apiBasePath`):
+
+**Boards:**
+- **GET** `/boards` - List boards with optional filtering
+- **GET** `/boards/:id` - Get a single board with columns and tasks
+- **POST** `/boards` - Create a new board (with default columns)
+- **PUT** `/boards/:id` - Update a board
+- **DELETE** `/boards/:id` - Delete a board
+
+**Columns:**
+- **POST** `/columns` - Create a new column
+- **PUT** `/columns/:id` - Update a column
+- **DELETE** `/columns/:id` - Delete a column
+- **POST** `/columns/reorder` - Reorder columns within a board
+
+**Tasks:**
+- **POST** `/tasks` - Create a new task
+- **PUT** `/tasks/:id` - Update a task
+- **DELETE** `/tasks/:id` - Delete a task
+- **POST** `/tasks/move` - Move a task to a different column
+- **POST** `/tasks/reorder` - Reorder tasks within a column
+
+### Page Routes
+
+The kanban plugin automatically creates the following pages (mounted at your configured `siteBasePath`):
+
+- `/kanban` - Boards list page
+- `/kanban/new` - Create new board page
+- `/kanban/:boardId` - Board detail page with kanban view
+
+### Priority Levels
+
+Tasks support four priority levels, each with a visual badge:
+
+| Priority | Badge Color | Use Case |
+|----------|-------------|----------|
+| LOW | Gray | Nice-to-have tasks |
+| MEDIUM | Yellow | Standard priority (default) |
+| HIGH | Orange | Important tasks |
+| URGENT | Red | Critical tasks requiring immediate attention |
+
+## Task Assignees
+
+The kanban plugin supports assigning users to tasks. Since the plugin is authentication-agnostic, you provide resolver functions to integrate with your auth system.
+
+### KanbanUser Type
+
+The plugin uses a simple `KanbanUser` interface for user information:
+
+```ts
+interface KanbanUser {
+  id: string;       // Unique user identifier
+  name: string;     // Display name
+  avatarUrl?: string; // Optional avatar image URL
+  email?: string;   // Optional email address
+}
+```
+
+### Required Resolver Functions
+
+You must provide two resolver functions in your overrides:
+
+```tsx title="Context Overrides"
+overrides={{
+  kanban: {
+    // ... other overrides
+    
+    // Resolve user info from an ID (for displaying assignee on task cards)
+    resolveUser: (userId: string) => {
+      // Return KanbanUser or null if not found
+    },
+    
+    // Search/list users (for the assignee picker dropdown)
+    searchUsers: (query: string, boardId?: string) => {
+      // Return array of KanbanUser matching the query
+      // Return all users if query is empty
+    },
+  }
+}}
+```
+
+### Integration Examples
+
+<Tabs groupId="auth" items={["clerk", "nextauth", "mock"]} persist>
+  <Tab value="clerk">
+    ```tsx title="Clerk Integration"
+    import { clerkClient } from "@clerk/nextjs/server"
+    
+    const overrides = {
+      kanban: {
+        // ... other overrides
+        resolveUser: async (userId) => {
+          const user = await clerkClient.users.getUser(userId)
+          return {
+            id: user.id,
+            name: user.fullName || user.username || "Unknown",
+            avatarUrl: user.imageUrl,
+            email: user.emailAddresses[0]?.emailAddress,
+          }
+        },
+        searchUsers: async (query) => {
+          const users = await clerkClient.users.getUserList({ query, limit: 10 })
+          return users.map(user => ({
+            id: user.id,
+            name: user.fullName || user.username || "Unknown",
+            avatarUrl: user.imageUrl,
+            email: user.emailAddresses[0]?.emailAddress,
+          }))
+        },
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab value="nextauth">
+    ```tsx title="NextAuth/Prisma Integration"
+    import { prisma } from "@/lib/prisma"
+    
+    const overrides = {
+      kanban: {
+        // ... other overrides
+        resolveUser: async (userId) => {
+          const user = await prisma.user.findUnique({ 
+            where: { id: userId } 
+          })
+          return user ? {
+            id: user.id,
+            name: user.name || "Unknown",
+            avatarUrl: user.image || undefined,
+            email: user.email || undefined,
+          } : null
+        },
+        searchUsers: async (query) => {
+          const users = await prisma.user.findMany({
+            where: query ? {
+              OR: [
+                { name: { contains: query, mode: "insensitive" } },
+                { email: { contains: query, mode: "insensitive" } },
+              ]
+            } : undefined,
+            take: 10,
+          })
+          return users.map(user => ({
+            id: user.id,
+            name: user.name || "Unknown",
+            avatarUrl: user.image || undefined,
+            email: user.email || undefined,
+          }))
+        },
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab value="mock">
+    ```tsx title="Mock Users (for development)"
+    import type { KanbanUser } from "@btst/stack/plugins/kanban/client"
+    
+    const MOCK_USERS: KanbanUser[] = [
+      { id: "user-1", name: "Alice Johnson", avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=alice" },
+      { id: "user-2", name: "Bob Smith", avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=bob" },
+      { id: "user-3", name: "Carol Williams", avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=carol" },
+    ]
+    
+    const overrides = {
+      kanban: {
+        // ... other overrides
+        resolveUser: (userId) => MOCK_USERS.find(u => u.id === userId) ?? null,
+        searchUsers: (query) => {
+          if (!query) return MOCK_USERS
+          const lower = query.toLowerCase()
+          return MOCK_USERS.filter(u => u.name.toLowerCase().includes(lower))
+        },
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Assignee Display
+
+When a task has an assignee:
+- **Task Card**: Shows the user's avatar and name
+- **Task Form**: Displays a searchable dropdown to select/change assignee
+
+When no assignee is set, the task card shows "Unassigned" with a placeholder icon.
+
+## API Reference
+
+### Backend (`@btst/stack/plugins/kanban/api`)
+
+#### kanbanBackendPlugin
+
+Creates the kanban backend plugin with optional hooks for authorization and customization.
+
+```ts
+import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
+
+const { handler, dbSchema } = betterStack({
+  plugins: {
+    kanban: kanbanBackendPlugin(hooks)
+  },
+  // ...
+})
+```
+
+#### KanbanBackendHooks
+
+Customize backend behavior with optional lifecycle hooks. All hooks are optional and allow you to add authorization, logging, and custom behavior:
+
+```ts title="lib/better-stack.ts"
+import { kanbanBackendPlugin, type KanbanBackendHooks } from "@btst/stack/plugins/kanban/api"
+
+const kanbanHooks: KanbanBackendHooks = {
+  // Board hooks
+  onBeforeListBoards: async (filter, context) => {
+    // Return false to deny access
+    return isAuthenticated(context.headers)
+  },
+  onBeforeCreateBoard: async (data, context) => {
+    return isAuthenticated(context.headers)
+  },
+  onBeforeUpdateBoard: async (boardId, data, context) => {
+    return isBoardOwner(boardId, context.headers)
+  },
+  onBeforeDeleteBoard: async (boardId, context) => {
+    return isBoardOwner(boardId, context.headers)
+  },
+  
+  // Column hooks
+  onBeforeCreateColumn: async (data, context) => {
+    return canEditBoard(data.boardId, context.headers)
+  },
+  onBeforeUpdateColumn: async (columnId, data, context) => {
+    return canEditColumn(columnId, context.headers)
+  },
+  onBeforeDeleteColumn: async (columnId, context) => {
+    return canEditColumn(columnId, context.headers)
+  },
+  
+  // Task hooks
+  onBeforeCreateTask: async (data, context) => {
+    return canEditColumn(data.columnId, context.headers)
+  },
+  onBeforeUpdateTask: async (taskId, data, context) => {
+    return canEditTask(taskId, context.headers)
+  },
+  onBeforeDeleteTask: async (taskId, context) => {
+    return canEditTask(taskId, context.headers)
+  },
+  
+  // Lifecycle hooks
+  onBoardCreated: async (board, context) => {
+    console.log("Board created:", board.name)
+  },
+  onTaskCreated: async (task, context) => {
+    console.log("Task created:", task.title)
+  },
+}
+
+const { handler, dbSchema } = betterStack({
+  plugins: {
+    kanban: kanbanBackendPlugin(kanbanHooks)
+  },
+  // ...
+})
+```
+
+**Available hooks:**
+
+| Hook | Description |
+|------|-------------|
+| `onBeforeListBoards` | Called before listing boards. Return false to deny. |
+| `onBeforeCreateBoard` | Called before creating a board. Return false to deny. |
+| `onBeforeReadBoard` | Called before reading a single board. Return false to deny. |
+| `onBeforeUpdateBoard` | Called before updating a board. Return false to deny. |
+| `onBeforeDeleteBoard` | Called before deleting a board. Return false to deny. |
+| `onBeforeCreateColumn` | Called before creating a column. Return false to deny. |
+| `onBeforeUpdateColumn` | Called before updating a column. Return false to deny. |
+| `onBeforeDeleteColumn` | Called before deleting a column. Return false to deny. |
+| `onBeforeCreateTask` | Called before creating a task. Return false to deny. |
+| `onBeforeUpdateTask` | Called before updating a task. Return false to deny. |
+| `onBeforeDeleteTask` | Called before deleting a task. Return false to deny. |
+| `onBoardsRead` | Called after boards are listed successfully. |
+| `onBoardCreated` | Called after a board is created. |
+| `onBoardUpdated` | Called after a board is updated. |
+| `onBoardDeleted` | Called after a board is deleted. |
+| `onColumnCreated` | Called after a column is created. |
+| `onColumnUpdated` | Called after a column is updated. |
+| `onColumnDeleted` | Called after a column is deleted. |
+| `onTaskCreated` | Called after a task is created. |
+| `onTaskUpdated` | Called after a task is updated. |
+| `onTaskDeleted` | Called after a task is deleted. |
+
+### Client (`@btst/stack/plugins/kanban/client`)
+
+#### kanbanClientPlugin
+
+Creates the kanban client plugin with routes, loaders, and meta generators.
+
+```tsx title="lib/better-stack-client.tsx"
+kanban: kanbanClientPlugin({
+  // Required configuration
+  apiBaseURL: baseURL,
+  apiBasePath: "/api/data",
+  siteBaseURL: baseURL,
+  siteBasePath: "/pages",
+  queryClient: queryClient,
+  // Optional SEO configuration
+  seo: {
+    siteName: "My Kanban App",
+    description: "Project management",
+  },
+  // Optional hooks
+  hooks: {
+    beforeLoadBoards: async (context) => {
+      return isAuthenticated(context.headers)
+    },
+    beforeLoadBoard: async (boardId, context) => {
+      return canViewBoard(boardId, context.headers)
+    },
+  },
+})
+```
+
+#### KanbanClientHooks
+
+Customize client-side behavior with lifecycle hooks:
+
+| Hook | Description |
+|------|-------------|
+| `beforeLoadBoards` | Called before loading boards list. Return false to cancel. |
+| `afterLoadBoards` | Called after boards are loaded. |
+| `beforeLoadBoard` | Called before loading a single board. Return false to cancel. |
+| `afterLoadBoard` | Called after a board is loaded. |
+| `beforeLoadNewBoard` | Called before loading the new board page. Return false to cancel. |
+| `afterLoadNewBoard` | Called after the new board page is loaded. |
+| `onLoadError` | Called when a loading error occurs. |
+
+#### KanbanPluginOverrides
+
+Configure framework-specific overrides and route lifecycle hooks:
+
+```tsx
+overrides={{
+  kanban: {
+    // Required overrides
+    apiBaseURL: baseURL,
+    apiBasePath: "/api/data",
+    navigate: (path) => router.push(path),
+    
+    // Required: User resolution for assignees
+    resolveUser: (userId) => findUserById(userId),
+    searchUsers: (query) => searchAllUsers(query),
+    
+    // Optional overrides
+    Link: (props) => <Link {...props} />,
+    refresh: () => router.refresh(),
+    
+    // Optional lifecycle hooks
+    onRouteRender: async (routeName, context) => {
+      console.log("Rendering route:", routeName)
+    },
+    onBeforeBoardsPageRendered: (context) => {
+      return isAuthenticated()
+    },
+    onBeforeBoardPageRendered: (boardId, context) => {
+      return canViewBoard(boardId)
+    },
+    onBeforeNewBoardPageRendered: (context) => {
+      return canCreateBoard()
+    },
+  }
+}}
+```
+
+**Required overrides:**
+
+| Override | Type | Description |
+|----------|------|-------------|
+| `apiBaseURL` | `string` | Base URL for API calls |
+| `apiBasePath` | `string` | Path where your API is mounted |
+| `navigate` | `(path: string) => void` | Function for programmatic navigation |
+| `resolveUser` | `(userId: string) => KanbanUser \| null` | Resolve user info from ID |
+| `searchUsers` | `(query: string, boardId?: string) => KanbanUser[]` | Search/list users for picker |
+
+## React Hooks
+
+Import hooks from `@btst/stack/plugins/kanban/client/hooks` to use in your components:
+
+```tsx
+import { 
+  useBoards,
+  useBoard,
+  useBoardMutations,
+  useColumnMutations,
+  useTaskMutations,
+  useResolveUser,
+  useSearchUsers,
+} from "@btst/stack/plugins/kanban/client/hooks"
+
+// List all boards
+const { data: boards, isLoading, error } = useBoards()
+
+// Get a single board with columns and tasks
+const { data: board, isLoading, error } = useBoard(boardId)
+
+// Board mutations
+const { createBoard, updateBoard, deleteBoard, isCreating, isUpdating, isDeleting } = useBoardMutations()
+
+// Column mutations
+const { createColumn, updateColumn, deleteColumn } = useColumnMutations()
+
+// Task mutations (includes assigneeId support)
+const { createTask, updateTask, deleteTask, moveTask } = useTaskMutations()
+
+// Resolve user info (with caching)
+const { data: user, isLoading } = useResolveUser(assigneeId)
+
+// Search users for picker
+const { data: users, isLoading } = useSearchUsers(searchQuery, boardId)
+```
+
+## Types
+
+The plugin exports TypeScript types for all data structures:
+
+```ts
+// API types
+import type { 
+  Board, 
+  Column, 
+  Task, 
+  Priority,
+  BoardWithColumns,
+  ColumnWithTasks,
+  SerializedBoard,
+  SerializedColumn,
+  SerializedTask,
+} from "@btst/stack/plugins/kanban/api"
+
+// Client types (for user resolution)
+import type { 
+  KanbanUser,
+  KanbanPluginOverrides,
+} from "@btst/stack/plugins/kanban/client"
+```

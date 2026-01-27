@@ -5,6 +5,7 @@ import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
 import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
 import { uiBuilderClientPlugin, defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
+import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
 import { QueryClient } from "@tanstack/react-query"
 
 // Get base URL function - works on both server and client
@@ -119,6 +120,18 @@ export const getStackClient = (queryClient: QueryClient) => {
                 title: "Client Route Documentation",
                 description: "Documentation for all client routes in this application",
                 siteBasePath: "/pages",
+            }),
+            // Kanban plugin for project management boards
+            kanban: kanbanClientPlugin({
+                apiBaseURL: baseURL,
+                apiBasePath: "/api/data",
+                siteBaseURL: baseURL,
+                siteBasePath: "/pages",
+                queryClient: queryClient,
+                seo: {
+                    siteName: "Better Stack Kanban",
+                    description: "Manage your projects with kanban boards",
+                },
             }),
         }
     })

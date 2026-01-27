@@ -97,6 +97,7 @@ export default defineConfig({
 				"**/*.relations-cms.spec.ts",
 				"**/*.form-builder.spec.ts",
 				"**/*.ui-builder.spec.ts",
+				"**/*.kanban.spec.ts",
 			],
 		},
 		{

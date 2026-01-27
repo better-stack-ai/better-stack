@@ -1,0 +1,7 @@
+/* Kanban Plugin Full Styles */
+/* This file includes Tailwind directives for consumers who need the full stylesheet */
+
+@import "./client.css";
+
+/* Import minimal-tiptap styles for rich text editor in task forms */
+@import "@workspace/ui/components/minimal-tiptap/styles.css";

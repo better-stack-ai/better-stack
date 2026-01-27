@@ -6,6 +6,8 @@ import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
+import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
+import { resolveUser, searchUsers } from "../../lib/mock-users"
 import { Link, useRouter, Outlet, createFileRoute } from "@tanstack/react-router"
 
 // Get base URL function - works on both server and client
@@ -36,6 +38,7 @@ type PluginOverrides = {
     "ai-chat": AiChatPluginOverrides,
     cms: CMSPluginOverrides,
     "form-builder": FormBuilderPluginOverrides,
+    kanban: KanbanPluginOverrides,
 }
 
 export const Route = createFileRoute('/pages')({
@@ -193,6 +196,23 @@ function Layout() {
                         },
                         onRouteError: async (routeName, error, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Form Builder error:`, routeName, error.message);
+                        },
+                    },
+                    kanban: {
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        navigate: (href) => router.navigate({ href }),
+                        Link: ({ href, children, className, ...props }) => (
+                            <Link to={href} className={className} {...props}>
+                              {children}
+                            </Link>
+                        ),
+                        // User resolution for assignees
+                        resolveUser,
+                        searchUsers,
+                        // Lifecycle hooks
+                        onRouteRender: async (routeName, context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Kanban route:`, routeName, context.path);
                         },
                     }
                 }}

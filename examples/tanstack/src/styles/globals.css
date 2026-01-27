@@ -6,6 +6,7 @@
 @import "@btst/stack/plugins/form-builder/css";
 @import "@btst/stack/plugins/ai-chat/css";
 @import "@btst/stack/plugins/ui-builder/css";
+@import "@btst/stack/plugins/kanban/css";
 
 @custom-variant dark (&:is(.dark *));
 

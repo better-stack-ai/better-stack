@@ -15,6 +15,7 @@
       "plugins/cms",
       "plugins/form-builder",
       "plugins/ui-builder",
+      "plugins/kanban",
       "plugins/open-api",
       "plugins/route-docs",
       "plugins/better-auth-ui",

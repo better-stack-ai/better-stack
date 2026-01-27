@@ -97,6 +97,12 @@ export default defineBuildConfig({
 		"./src/plugins/ui-builder/client/index.ts",
 		"./src/plugins/ui-builder/client/components/index.ts",
 		"./src/plugins/ui-builder/client/hooks/index.tsx",
+		// kanban plugin entries
+		"./src/plugins/kanban/api/index.ts",
+		"./src/plugins/kanban/client/index.ts",
+		"./src/plugins/kanban/client/components/index.tsx",
+		"./src/plugins/kanban/client/hooks/index.tsx",
+		"./src/plugins/kanban/query-keys.ts",
 	],
 	hooks: {
 		"rollup:options"(_ctx, options) {

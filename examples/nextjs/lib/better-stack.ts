@@ -7,6 +7,7 @@ import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
+import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
 import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
 import { openai } from "@ai-sdk/openai"
 import { tool } from "ai"
@@ -198,6 +199,20 @@ const { handler, dbSchema } = betterStack({
             title: "Better Stack Example API",
             description: "API documentation for the Next.js example application",
             theme: "kepler",
+        }),
+        // Kanban plugin for project management boards
+        kanban: kanbanBackendPlugin({
+            onBeforeListBoards: async (filter, context) => {
+                console.log("onBeforeListBoards hook called", filter);
+                return true;
+            },
+            onBeforeCreateBoard: async (data, context) => {
+                console.log("onBeforeCreateBoard hook called", data.name);
+                return true;
+            },
+            onBoardCreated: async (board, context) => {
+                console.log("Board created:", board.id, board.name);
+            },
         }),
     },
     adapter: (db) => createMemoryAdapter(db)({})
