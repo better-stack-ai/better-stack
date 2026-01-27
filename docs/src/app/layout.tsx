@@ -1,6 +1,6 @@
+import { AnalyticsWithBasePath } from '@/components/analytics';
 import CustomSearchDialog from '@/components/search-dialog';
 import './global.css';
-import { Analytics } from '@vercel/analytics/next';
 import { RootProvider } from 'fumadocs-ui/provider/next';
 import { Metadata } from 'next';
 import { Inter } from 'next/font/google';
@@ -26,7 +26,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             SearchDialog: CustomSearchDialog,
           }}
         >{children}</RootProvider>
-        <Analytics />
+        <AnalyticsWithBasePath />
       </body>
     </html>
   );
