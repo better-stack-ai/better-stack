@@ -41,7 +41,7 @@ export default function SearchSelect({
   const [open, setOpen] = useState<boolean>(false)
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={false}>
         <PopoverTrigger asChild>
           <Button
             id={id}
@@ -66,6 +66,7 @@ export default function SearchSelect({
         <PopoverContent
           className="border-input w-full min-w-[var(--radix-popper-anchor-width)] p-0 z-[9999]"
           align="start"
+          usePortal={false}
         >
           <Command>
             <CommandInput placeholder="Search options..." />
