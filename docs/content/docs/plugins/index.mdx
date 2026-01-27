@@ -4,7 +4,7 @@ description: Available plugins and features for Better Stack
 ---
 
 import { Card, Cards } from "fumadocs-ui/components/card";
-import { BookOpen, Database, Hammer, Bot, Shield, FileText, FileCode, Route, Layout } from "lucide-react";
+import { BookOpen, Database, Hammer, Bot, Shield, FileText, FileCode, Route, Layout, Columns3 } from "lucide-react";
 
 
 Better Stack provides a collection of full-stack plugins that you can easily integrate into your React application. Each plugin includes routes, APIs, database schemas, components, and hooks—everything you need to add complete features to your app. 
@@ -41,6 +41,12 @@ With more plugins coming soon, you can add complete features to your app in minu
     href="/plugins/ui-builder"
     icon={<Layout size={20} />}
     description="Visual drag-and-drop page builder with component registry and public rendering."
+  />
+  <Card
+    title="Kanban Plugin"
+    href="/plugins/kanban"
+    icon={<Columns3 size={20} />}
+    description="Project management with boards, columns, tasks, drag-and-drop, and priority levels."
   />
   <Card
     title="OpenAPI Plugin"
