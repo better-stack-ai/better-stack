@@ -27,19 +27,24 @@ npm install @btst/stack
 
 Enable the features you need and keep building your product.
 
-### Examples of installable features
+### Available plugins
 
-* Blog
-* AI Chat
-* CMS
-* Newsletter
-* Scheduling
-* Kanban board
-* Analytics dashboard
-* Generic forms
+| Plugin | Description |
+|--------|-------------|
+| **Blog** | Content management, editor, drafts, publishing, SEO, RSS feeds |
+| **AI Chat** | AI-powered chat with conversation history, streaming, and customizable models |
+| **CMS** | Headless CMS with custom content types, Zod schemas, and auto-generated forms |
+| **Form Builder** | Dynamic form builder with drag-and-drop editor, submissions, and validation |
+| **UI Builder** | Visual drag-and-drop page builder with component registry and public rendering |
+| **Kanban** | Project management with boards, columns, tasks, drag-and-drop, and priority levels |
+| **OpenAPI** | Auto-generated API documentation with interactive Scalar UI |
+| **Route Docs** | Auto-generated client route documentation with interactive navigation |
+| **Better Auth UI** | Beautiful shadcn/ui authentication components for better-auth |
 
-Each feature ships **frontend + backend together**:
+Each plugin ships **frontend + backend together**:
 routes, APIs, database models, React components, SSR, and SEO — already wired.
+
+**Want a specific plugin?** [Open an issue](https://github.com/better-stack-ai/better-stack/issues/new) and let us know!
 
 ---
 
@@ -57,31 +62,40 @@ You keep your codebase, database, and deployment.
 
 ## Minimal usage
 
-lib/better-stack.ts:
-```ts
+```ts title="lib/better-stack.ts"
 import { betterStack } from "@btst/stack"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
+import { createMemoryAdapter } from "@btst/adapter-memory"
 
-export const { handler } = betterStack({
+export const { handler, dbSchema } = betterStack({
+  basePath: "/api/data",
   plugins: {
-    blog: blogBackendPlugin(blogConfig)
-  }
+    blog: blogBackendPlugin()
+  },
+  adapter: (db) => createMemoryAdapter(db)({})
 })
 ```
 
-lib/better-stack-client.tsx:
-```tsx
+```tsx title="lib/better-stack-client.tsx"
 import { createStackClient } from "@btst/stack/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { QueryClient } from "@tanstack/react-query"
 
-const client = createStackClient({
-  plugins: {
-    blog: blogClientPlugin(blogConfig)
-  }
-})
+export const getStackClient = (queryClient: QueryClient) =>
+  createStackClient({
+    plugins: {
+      blog: blogClientPlugin({
+        apiBaseURL: "http://localhost:3000",
+        apiBasePath: "/api/data",
+        siteBaseURL: "http://localhost:3000",
+        siteBasePath: "/pages",
+        queryClient,
+      })
+    }
+  })
 ```
-Now you have a working blog: API, DB schema, pages, SSR, and SEO.
+
+Now you have a working blog with API, pages, SSR, and SEO. See the [full installation guide](https://www.better-stack.ai/docs/installation) for database adapters, auth hooks, and framework-specific setup.
 
 ## Database schemas & migrations
 
