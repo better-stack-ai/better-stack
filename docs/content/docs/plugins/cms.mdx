@@ -103,12 +103,12 @@ export type CMSTypes = {
 
 Register the CMS backend plugin with your content types:
 
-```ts title="lib/better-stack.ts"
-import { betterStack } from "@btst/stack"
+```ts title="lib/stack.ts"
+import { stack } from "@btst/stack"
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 import { ProductSchema, TestimonialSchema } from "./cms-schemas"
 
-const { handler, dbSchema } = betterStack({
+const { handler, dbSchema } = stack({
   basePath: "/api/data",
   plugins: {
     cms: cmsBackendPlugin({
@@ -139,7 +139,7 @@ export { handler, dbSchema }
 
 Register the CMS client plugin:
 
-```tsx title="lib/better-stack-client.tsx"
+```tsx title="lib/stack-client.tsx"
 import { createStackClient } from "@btst/stack/client"
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
 import { QueryClient } from "@tanstack/react-query"
@@ -175,7 +175,7 @@ type PluginOverrides = {
   cms: CMSPluginOverrides,
 }
 
-<BetterStackProvider<PluginOverrides>
+<StackProvider<PluginOverrides>
   basePath="/pages"
   overrides={{
     cms: {
@@ -192,7 +192,7 @@ type PluginOverrides = {
   }}
 >
   {children}
-</BetterStackProvider>
+</StackProvider>
 ```
 
 ### 5. Import CSS
@@ -255,10 +255,10 @@ const ProductSchema = z.object({
 });
 ```
 
-2. Provide `uploadImage` in your BetterStackProvider overrides:
+2. Provide `uploadImage` in your StackProvider overrides:
 
 ```ts
-// In your BetterStackProvider overrides
+// In your StackProvider overrides
 cms: {
   uploadImage: async (file: File) => {
     // Upload to S3, Cloudinary, etc. and return the URL
@@ -575,7 +575,7 @@ The CMS plugin provides two levels of hooks for authorization:
 
 Use `hooks` in the client plugin config for **async authorization** during SSR. These run in loaders before pages render, supporting async session checks and redirects:
 
-```tsx title="lib/better-stack-client.tsx"
+```tsx title="lib/stack-client.tsx"
 import { redirect } from "next/navigation" // or your framework's redirect
 
 cms: cmsClientPlugin({
@@ -612,7 +612,7 @@ cms: cmsClientPlugin({
 
 ### Override Hooks (Client-Side)
 
-Use lifecycle hooks in `BetterStackProvider` overrides for **synchronous** client-side checks (SPA navigation):
+Use lifecycle hooks in `StackProvider` overrides for **synchronous** client-side checks (SPA navigation):
 
 ```tsx title="app/pages/layout.tsx"
 cms: {
@@ -676,7 +676,7 @@ function MyColorPicker({ field, label, isRequired, fieldConfigItem }: AutoFormIn
   )
 }
 
-// In your BetterStackProvider overrides:
+// In your StackProvider overrides:
 cms: {
   fieldComponents: {
     // Override the built-in "file" type
@@ -1129,35 +1129,35 @@ export default function DirectoryPage() {
 
 #### CMSBackendConfig
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/cms/types.ts" name="CMSBackendConfig" />
+<AutoTypeTable path="../packages/stack/src/plugins/cms/types.ts" name="CMSBackendConfig" />
 
 #### CMSBackendHooks
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/cms/types.ts" name="CMSBackendHooks" />
+<AutoTypeTable path="../packages/stack/src/plugins/cms/types.ts" name="CMSBackendHooks" />
 
 #### CMSHookContext
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/cms/types.ts" name="CMSHookContext" />
+<AutoTypeTable path="../packages/stack/src/plugins/cms/types.ts" name="CMSHookContext" />
 
 ### Client (`@btst/stack/plugins/cms/client`)
 
 #### cmsClientPlugin
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/cms/client/plugin.tsx" name="cmsClientPlugin" />
+<AutoTypeTable path="../packages/stack/src/plugins/cms/client/plugin.tsx" name="cmsClientPlugin" />
 
 #### CMSClientConfig
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/cms/client/plugin.tsx" name="CMSClientConfig" />
+<AutoTypeTable path="../packages/stack/src/plugins/cms/client/plugin.tsx" name="CMSClientConfig" />
 
 #### CMSClientHooks
 
 Customize client-side behavior with lifecycle hooks. These hooks run during SSR data loading and support async authorization:
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/cms/client/plugin.tsx" name="CMSClientHooks" />
+<AutoTypeTable path="../packages/stack/src/plugins/cms/client/plugin.tsx" name="CMSClientHooks" />
 
 **Example usage:**
 
-```tsx title="lib/better-stack-client.tsx"
+```tsx title="lib/stack-client.tsx"
 cms: cmsClientPlugin({
   // ... rest of the config
   headers: options?.headers,
@@ -1183,13 +1183,13 @@ cms: cmsClientPlugin({
 
 #### LoaderContext
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/cms/client/plugin.tsx" name="LoaderContext" />
+<AutoTypeTable path="../packages/stack/src/plugins/cms/client/plugin.tsx" name="LoaderContext" />
 
 #### CMSPluginOverrides
 
 Configure framework-specific overrides and route lifecycle hooks:
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/cms/client/overrides.ts" name="CMSPluginOverrides" />
+<AutoTypeTable path="../packages/stack/src/plugins/cms/client/overrides.ts" name="CMSPluginOverrides" />
 
 ### Schema Converter Utilities (`@btst/stack/plugins/cms/client`)
 

@@ -1,7 +1,7 @@
 import { useParams, useNavigate, Link } from "react-router";
 import type { Route } from "./+types/index";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { BetterStackProvider } from "@btst/stack/context";
+import { StackProvider } from "@btst/stack/context";
 import { FormRenderer } from "@btst/stack/plugins/form-builder/client/components";
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client";
 import { Button } from "~/components/ui/button";
@@ -40,7 +40,7 @@ export default function FormDemoPage() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BetterStackProvider<PluginOverrides>
+      <StackProvider<PluginOverrides>
         basePath=""
         overrides={{
           "form-builder": {
@@ -85,7 +85,7 @@ export default function FormDemoPage() {
             </div>
           </div>
         </main>
-      </BetterStackProvider>
+      </StackProvider>
     </QueryClientProvider>
   );
 }

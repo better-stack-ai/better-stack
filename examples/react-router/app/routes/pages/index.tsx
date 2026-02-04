@@ -6,7 +6,7 @@ import {
   QueryClient,
   useQueryClient
 } from "@tanstack/react-query";
-import { getStackClient } from "~/lib/better-stack-client";
+import { getStackClient } from "~/lib/stack-client";
 import { normalizePath } from "@btst/stack/client";
 
 export async function loader({ params }: Route.LoaderArgs) {

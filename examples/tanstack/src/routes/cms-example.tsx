@@ -1,5 +1,5 @@
 import { useContentTypes, useContent } from "@btst/stack/plugins/cms/client/hooks"
-import { BetterStackProvider } from "@btst/stack/context"
+import { StackProvider } from "@btst/stack/context"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { Link, useRouter, createFileRoute } from "@tanstack/react-router"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
@@ -170,7 +170,7 @@ function CMSExamplePage() {
 
     return (
         <QueryClientProvider client={context.queryClient}>
-            <BetterStackProvider<PluginOverrides>
+            <StackProvider<PluginOverrides>
                 basePath="/cms-example"
                 overrides={{
                     cms: {
@@ -187,7 +187,7 @@ function CMSExamplePage() {
                 }}
             >
                 <CMSExampleContent />
-            </BetterStackProvider>
+            </StackProvider>
         </QueryClientProvider>
     )
 }

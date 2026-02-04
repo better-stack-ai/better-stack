@@ -1,7 +1,7 @@
 import { 
     useContent, 
 } from "@btst/stack/plugins/cms/client/hooks"
-import { BetterStackProvider } from "@btst/stack/context"
+import { StackProvider } from "@btst/stack/context"
 import { Link, useNavigate } from "react-router"
 import { useState, useMemo } from "react"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
@@ -166,7 +166,7 @@ export default function DirectoryPage() {
     const baseURL = getBaseURL()
 
     return (
-        <BetterStackProvider<PluginOverrides>
+        <StackProvider<PluginOverrides>
             basePath="/directory"
             overrides={{
                 cms: {
@@ -182,7 +182,7 @@ export default function DirectoryPage() {
             }}
         >
             <DirectoryContent />
-        </BetterStackProvider>
+        </StackProvider>
     )
 }
 

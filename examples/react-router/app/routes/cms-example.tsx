@@ -1,5 +1,5 @@
 import { useContentTypes, useContent } from "@btst/stack/plugins/cms/client/hooks"
-import { BetterStackProvider } from "@btst/stack/context"
+import { StackProvider } from "@btst/stack/context"
 import { Link, useNavigate } from "react-router"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 // Import the CMS type map for type-safe hooks
@@ -163,7 +163,7 @@ export default function CMSExamplePage() {
     const baseURL = getBaseURL()
 
     return (
-        <BetterStackProvider<PluginOverrides>
+        <StackProvider<PluginOverrides>
             basePath="/cms-example"
             overrides={{
                 cms: {
@@ -180,6 +180,6 @@ export default function CMSExamplePage() {
             }}
         >
             <CMSExampleContent />
-        </BetterStackProvider>
+        </StackProvider>
     )
 }

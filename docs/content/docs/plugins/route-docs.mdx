@@ -36,12 +36,12 @@ Ensure you followed the general [framework installation guide](/installation) fi
 
 Import and register the Route Docs client plugin in your client configuration:
 
-```tsx title="lib/better-stack-client.tsx"
-import { betterStackClient } from "@btst/stack/client"
+```tsx title="lib/stack-client.tsx"
+import { stackClient } from "@btst/stack/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
 
-const { ClientProvider, routes, ...client } = betterStackClient({
+const { ClientProvider, routes, ...client } = stackClient({
   basePath: "/pages",
   apiBasePath: "/api/data",
   queryClient: queryClient,
@@ -123,7 +123,7 @@ For each route, detailed documentation includes:
 
 The Route Docs plugin introspects all registered client plugins:
 
-1. **Context Access** - Better Stack passes a context object containing all plugins
+1. **Context Access** - BTST passes a context object containing all plugins
 2. **Route Traversal** - The plugin iterates over all client plugins and their routes
 3. **Metadata Extraction** - Route metadata including path, parameters, and meta tags are collected
 4. **Sitemap Collection** - Each plugin's sitemap entries are gathered and matched to routes

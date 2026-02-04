@@ -1,7 +1,7 @@
 "use client";
 
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
-import { BetterStackProvider } from "@btst/stack/context";
+import { StackProvider } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -31,7 +31,7 @@ export default function PublicChatPage() {
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<BetterStackProvider<PluginOverrides>
+			<StackProvider<PluginOverrides>
 				basePath=""
 				overrides={{
 					"ai-chat": {
@@ -52,7 +52,7 @@ export default function PublicChatPage() {
 						/>
 					</main>
 				</div>
-			</BetterStackProvider>
+			</StackProvider>
 		</QueryClientProvider>
 	);
 }

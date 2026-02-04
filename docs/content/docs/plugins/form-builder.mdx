@@ -46,11 +46,11 @@ Ensure you followed the general [framework installation guide](/installation) fi
 
 Register the Form Builder backend plugin:
 
-```ts title="lib/better-stack.ts"
-import { betterStack } from "@btst/stack"
+```ts title="lib/stack.ts"
+import { stack } from "@btst/stack"
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
 
-const { handler, dbSchema } = betterStack({
+const { handler, dbSchema } = stack({
   basePath: "/api/data",
   plugins: {
     formBuilder: formBuilderBackendPlugin({
@@ -96,7 +96,7 @@ export { handler, dbSchema }
 
 Register the Form Builder client plugin:
 
-```tsx title="lib/better-stack-client.tsx"
+```tsx title="lib/stack-client.tsx"
 import { createStackClient } from "@btst/stack/client"
 import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
 import { QueryClient } from "@tanstack/react-query"
@@ -149,7 +149,7 @@ type PluginOverrides = {
   "form-builder": FormBuilderPluginOverrides,
 }
 
-<BetterStackProvider<PluginOverrides>
+<StackProvider<PluginOverrides>
   basePath="/pages"
   overrides={{
     "form-builder": {
@@ -174,7 +174,7 @@ type PluginOverrides = {
   }}
 >
   {children}
-</BetterStackProvider>
+</StackProvider>
 ```
 
 ### 4. Import CSS
@@ -453,7 +453,7 @@ All hooks receive a context object with:
 
 Use `hooks` in the client plugin config for **async authorization** during SSR:
 
-```tsx title="lib/better-stack-client.tsx"
+```tsx title="lib/stack-client.tsx"
 import { redirect } from "next/navigation"
 
 "form-builder": formBuilderClientPlugin({
@@ -630,7 +630,7 @@ Creates the client plugin with routes and SSR loaders.
 | `uploadFile` | `(file: File) => Promise<string>` | No | File upload handler |
 | `fieldComponents` | `Record<string, ComponentType>` | No | Custom field components |
 | `localization` | `FormBuilderLocalization` | No | Custom labels |
-| `showAttribution` | `boolean` | No | Show Better Stack attribution |
+| `showAttribution` | `boolean` | No | Show BTST attribution |
 | `onRouteRender` | `(route, context) => void` | No | Lifecycle hook |
 | `onRouteError` | `(route, error, context) => void` | No | Error hook |
 

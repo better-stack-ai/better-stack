@@ -1,9 +1,9 @@
 ---
-description: "Rules for AI agents working with the better-stack monorepo - plugin development, build configuration, and testing"
+description: "Rules for AI agents working with the BTST monorepo - plugin development, build configuration, and testing"
 alwaysApply: true
 ---
 
-# Better Stack Monorepo - Agent Rules
+# BTST Monorepo - Agent Rules
 
 This document contains essential rules and patterns for AI agents working with this monorepo.
 
@@ -310,7 +310,7 @@ SSR loaders **don't throw** - they let React Query store errors so ErrorBoundary
 
 When creating new exports, update both files:
 
-1. **`packages/better-stack/build.config.ts`** - Add entry to the entries array:
+1. **`packages/stack/build.config.ts`** - Add entry to the entries array:
 ```typescript
 entries: [
   // ... existing entries
@@ -320,7 +320,7 @@ entries: [
 ]
 ```
 
-2. **`packages/better-stack/package.json`** - Add exports AND typesVersions:
+2. **`packages/stack/package.json`** - Add exports AND typesVersions:
 ```json
 {
   "exports": {
@@ -362,20 +362,20 @@ The `postbuild.cjs` script copies CSS files automatically.
 When adding a new plugin or changing plugin configuration, update ALL three example apps:
 
 1. **Next.js** (`examples/nextjs/`)
-   - `lib/better-stack.tsx` - Backend plugin registration
-   - `lib/better-stack-client.tsx` - Client plugin registration
+   - `lib/stack.tsx` - Backend plugin registration
+   - `lib/stack-client.tsx` - Client plugin registration
    - `app/pages/[[...all]]/layout.tsx` - Override configuration
    - `app/globals.css` - CSS import: `@import "@btst/stack/plugins/{name}/css";`
 
 2. **React Router** (`examples/react-router/`)
-   - `app/lib/better-stack.tsx` - Backend plugin registration
-   - `app/lib/better-stack-client.tsx` - Client plugin registration
+   - `app/lib/stack.tsx` - Backend plugin registration
+   - `app/lib/stack-client.tsx` - Client plugin registration
    - `app/routes/pages/_layout.tsx` - Override configuration
    - `app/app.css` - CSS import: `@import "@btst/stack/plugins/{name}/css";`
 
 3. **TanStack** (`examples/tanstack/`)
-   - `src/lib/better-stack.tsx` - Backend plugin registration
-   - `src/lib/better-stack-client.tsx` - Client plugin registration
+   - `src/lib/stack.tsx` - Backend plugin registration
+   - `src/lib/stack-client.tsx` - Client plugin registration
    - `src/routes/pages/route.tsx` - Override configuration
    - `src/styles/app.css` - CSS import: `@import "@btst/stack/plugins/{name}/css";`
 
@@ -490,7 +490,7 @@ Documentation is in `docs/content/docs/`. Update when adding/changing plugins:
 **Example workflow:**
 ```bash
 # 1. Make changes to component
-# packages/better-stack/src/plugins/ai-chat/client/components/chat-layout.tsx
+# packages/stack/src/plugins/ai-chat/client/components/chat-layout.tsx
 
 # 2. Update corresponding docs
 # docs/content/docs/plugins/ai-chat.mdx

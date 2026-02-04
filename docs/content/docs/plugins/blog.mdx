@@ -33,19 +33,19 @@ import blogDemo3 from "../../../assets/blog-demo-3.png";
 Ensure you followed the general [framework installation guide](/installation) first.
 </Callout>
 
-Follow these steps to add the Blog plugin to your Better Stack setup.
+Follow these steps to add the Blog plugin to your BTST setup.
 
 
 ### 1. Add Plugin to Backend API
 
-Import and register the blog backend plugin in your `better-stack.ts` file:
+Import and register the blog backend plugin in your `stack.ts` file:
 
-```ts title="lib/better-stack.ts"
-import { betterStack } from "@btst/stack"
+```ts title="lib/stack.ts"
+import { stack } from "@btst/stack"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 // ... your adapter imports
 
-const { handler, dbSchema } = betterStack({
+const { handler, dbSchema } = stack({
   basePath: "/api/data",
   plugins: {
     blog: blogBackendPlugin()
@@ -62,9 +62,9 @@ The `blogBackendPlugin()` accepts optional hooks for customizing behavior (autho
 
 ### 2. Add Plugin to Client
 
-Register the blog client plugin in your `better-stack-client.tsx` file:
+Register the blog client plugin in your `stack-client.tsx` file:
 
-```tsx title="lib/better-stack-client.tsx"
+```tsx title="lib/stack-client.tsx"
 import { createStackClient } from "@btst/stack/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { QueryClient } from "@tanstack/react-query"
@@ -120,12 +120,12 @@ This includes all necessary styles for the blog components, markdown rendering, 
 
 ### 4. Add Context Overrides
 
-Configure framework-specific overrides in your `BetterStackProvider`:
+Configure framework-specific overrides in your `StackProvider`:
 
 <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
   <Tab value="next-js">
     ```tsx title="app/pages/[[...all]]/layout.tsx"
-    import { BetterStackProvider } from "@btst/stack/context"
+    import { StackProvider } from "@btst/stack/context"
     import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
     import Link from "next/link"
     import Image from "next/image"
@@ -145,7 +145,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
       const baseURL = getBaseURL()
       
       return (
-        <BetterStackProvider<PluginOverrides>
+        <StackProvider<PluginOverrides>
           basePath="/pages"
           overrides={{
             blog: {
@@ -164,7 +164,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
           }}
         >
           {children}
-        </BetterStackProvider>
+        </StackProvider>
       )
     }
     ```
@@ -173,7 +173,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
   <Tab value="react-router">
     ```tsx title="app/routes/pages/_layout.tsx"
     import { Outlet, Link, useNavigate } from "react-router"
-    import { BetterStackProvider } from "@btst/stack/context"
+    import { StackProvider } from "@btst/stack/context"
     import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 
     const getBaseURL = () => 
@@ -190,7 +190,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
       const baseURL = getBaseURL()
       
       return (
-        <BetterStackProvider<PluginOverrides>
+        <StackProvider<PluginOverrides>
           basePath="/pages"
           overrides={{
             blog: {
@@ -210,7 +210,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
           }}
         >
           <Outlet />
-        </BetterStackProvider>
+        </StackProvider>
       )
     }
     ```
@@ -218,7 +218,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
 
   <Tab value="tanstack">
     ```tsx title="src/routes/pages/route.tsx"
-    import { BetterStackProvider } from "@btst/stack/context"
+    import { StackProvider } from "@btst/stack/context"
     import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
     import { Link, useRouter, Outlet } from "@tanstack/react-router"
 
@@ -236,7 +236,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
       const baseURL = getBaseURL()
 
       return (
-        <BetterStackProvider<PluginOverrides>
+        <StackProvider<PluginOverrides>
           basePath="/pages"
           overrides={{
             blog: {
@@ -256,7 +256,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
           }}
         >
           <Outlet />
-        </BetterStackProvider>
+        </StackProvider>
       )
     }
     ```
@@ -274,7 +274,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
 - `Image`: Custom Image component (useful for Next.js Image optimization)
 - `refresh`: Function to refresh server-side cache (useful for Next.js)
 - `localization`: Custom localization strings
-- `showAttribution`: Whether to show Better Stack attribution
+- `showAttribution`: Whether to show BTST attribution
 
 <Callout type="warn">
 **Why provide API paths again?** You already configured these in Section 2, but that configuration is only available to **server-side loaders**. The overrides here provide the same values to **client-side components** (like hooks, forms, and UI) via React Context. These two contexts serve different phases: loaders prefetch data server-side before rendering, while components use data during actual rendering (both SSR and CSR).
@@ -285,7 +285,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
 After adding the plugin, generate your database schema using the CLI:
 
 ```bash
-npx @btst/cli generate --orm prisma --config lib/better-stack.ts  --output prisma/schema.prisma
+npx @btst/cli generate --orm prisma --config lib/stack.ts  --output prisma/schema.prisma
 ```
 
 This will create the necessary database tables for posts and tags. Run migrations as needed for your ORM.
@@ -328,17 +328,17 @@ To add authorization rules and customize behavior, you can use the lifecycle hoo
 
 #### blogBackendPlugin
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/api/plugin.ts" name="blogBackendPlugin" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="blogBackendPlugin" />
 
 #### BlogBackendHooks
 
 Customize backend behavior with optional lifecycle hooks. All hooks are optional and allow you to add authorization, logging, and custom behavior:
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/api/plugin.ts" name="BlogBackendHooks" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogBackendHooks" />
 
 **Example usage:**
 
-```ts title="lib/better-stack.ts"
+```ts title="lib/stack.ts"
 import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/blog/api"
 
 const blogHooks: BlogBackendHooks = {
@@ -361,7 +361,7 @@ const blogHooks: BlogBackendHooks = {
   // ... other hooks
 }
 
-const { handler, dbSchema } = betterStack({
+const { handler, dbSchema } = stack({
   plugins: {
     blog: blogBackendPlugin(blogHooks)
   },
@@ -371,23 +371,23 @@ const { handler, dbSchema } = betterStack({
 
 #### BlogApiContext
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/api/plugin.ts" name="BlogApiContext" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogApiContext" />
 
 ### Client (`@btst/stack/plugins/blog/client`)
 
 #### blogClientPlugin
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/plugin.tsx" name="blogClientPlugin" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="blogClientPlugin" />
 
 #### BlogClientConfig
 
 The client plugin accepts a configuration object with required fields and optional SEO settings:
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/plugin.tsx" name="BlogClientConfig" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="BlogClientConfig" />
 
 **Example usage:**
 
-```tsx title="lib/better-stack-client.tsx"
+```tsx title="lib/stack-client.tsx"
 blog: blogClientPlugin({
   // Required configuration
   apiBaseURL: baseURL,
@@ -410,11 +410,11 @@ blog: blogClientPlugin({
 
 Customize client-side behavior with lifecycle hooks. These hooks are called during data fetching (both SSR and CSR):
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/plugin.tsx" name="BlogClientHooks" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="BlogClientHooks" />
 
 **Example usage:**
 
-```tsx title="lib/better-stack-client.tsx"
+```tsx title="lib/stack-client.tsx"
 blog: blogClientPlugin({
   // ... rest of the config
   headers: options?.headers,
@@ -445,17 +445,17 @@ blog: blogClientPlugin({
 
 #### RouteContext
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/plugin.tsx" name="RouteContext" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="RouteContext" />
 
 #### LoaderContext
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/plugin.tsx" name="LoaderContext" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="LoaderContext" />
 
 #### BlogPluginOverrides
 
 Configure framework-specific overrides and route lifecycle hooks. All lifecycle hooks are optional:
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/overrides.ts" name="BlogPluginOverrides" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/overrides.ts" name="BlogPluginOverrides" />
 
 **Example usage:**
 
@@ -486,44 +486,44 @@ You can import the hooks from `"@btst/stack/plugins/blog/client/hooks"` to use i
 
 #### UsePostsOptions
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostsOptions" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostsOptions" />
 
 #### UsePostsResult
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostsResult" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostsResult" />
 
 #### UsePostResult
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostResult" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostResult" />
 
 #### UsePostSearchOptions
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostSearchOptions" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostSearchOptions" />
 
 #### UsePostSearchResult
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostSearchResult" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostSearchResult" />
 
 #### UseNextPreviousPostsOptions
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseNextPreviousPostsOptions" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseNextPreviousPostsOptions" />
 
 #### UseNextPreviousPostsResult
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseNextPreviousPostsResult" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseNextPreviousPostsResult" />
 
 #### UseRecentPostsOptions
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseRecentPostsOptions" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseRecentPostsOptions" />
 
 #### UseRecentPostsResult
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseRecentPostsResult" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseRecentPostsResult" />
 
 #### PostCreateInput
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="PostCreateInput" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="PostCreateInput" />
 
 #### PostUpdateInput
 
-<AutoTypeTable path="../packages/better-stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="PostUpdateInput" />
+<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="PostUpdateInput" />

@@ -1,0 +1,220 @@
+---
+title: Breaking Changes
+description: Migration guides for upgrading between major versions
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+
+This page documents breaking changes between major versions and provides migration guides.
+
+---
+
+## v1 → v2: Rebranding to BTST
+
+BTST v2 introduces a rebranding from "Better Stack" to "BTST". This guide covers all the changes you need to make to upgrade your project.
+
+<Callout type="info">
+  This is a breaking change that requires updates to imports, function names, and file references. The functionality remains the same.
+</Callout>
+
+### Summary of Changes
+
+| v1 (Better Stack) | v2 (BTST) |
+|-------------------|-----------|
+| `betterStack()` | `stack()` |
+| `betterStackClient()` | `stackClient()` |
+| `BetterStackProvider` | `StackProvider` |
+| `useBetterStack` | `useStack` |
+| `BetterStackAttribution` | `StackAttribution` |
+| `better-stack.ts` | `stack.ts` |
+| `better-stack-client.tsx` | `stack-client.tsx` |
+| `"Powered by Better Stack"` | `"Powered by BTST"` |
+
+### Migration Steps
+
+<Steps>
+
+<Step>
+#### Update Package
+
+Update your `@btst/stack` package to v2:
+
+```bash
+npm install @btst/stack@latest
+# or
+pnpm add @btst/stack@latest
+```
+</Step>
+
+<Step>
+#### Rename Backend Setup Function
+
+Update your backend configuration file (commonly `lib/better-stack.ts` → `lib/stack.ts`):
+
+```diff
+- import { betterStack } from "@btst/stack";
++ import { stack } from "@btst/stack";
+
+- export const { api, clientConfig, generateSitemap } = betterStack({
++ export const { api, clientConfig, generateSitemap } = stack({
+    // ... your configuration
+  });
+```
+</Step>
+
+<Step>
+#### Rename Client Setup Function
+
+Update your client configuration file (commonly `lib/better-stack-client.tsx` → `lib/stack-client.tsx`):
+
+```diff
+- import { betterStackClient } from "@btst/stack/client";
++ import { stackClient } from "@btst/stack/client";
+
+- export const { PluginPages, routes, loaders, metas } = betterStackClient({
++ export const { PluginPages, routes, loaders, metas } = stackClient({
+    // ... your configuration
+  });
+```
+</Step>
+
+<Step>
+#### Update Provider Component
+
+If you're using the provider component directly:
+
+```diff
+- import { BetterStackProvider } from "@btst/stack/client";
++ import { StackProvider } from "@btst/stack/client";
+
+function App() {
+  return (
+-   <BetterStackProvider overrides={overrides}>
++   <StackProvider overrides={overrides}>
+      {children}
+-   </BetterStackProvider>
++   </StackProvider>
+  );
+}
+```
+</Step>
+
+<Step>
+#### Update Hook Imports
+
+If you're using the context hook directly:
+
+```diff
+- import { useBetterStack } from "@btst/stack/client";
++ import { useStack } from "@btst/stack/client";
+
+function MyComponent() {
+-   const context = useBetterStack();
++   const context = useStack();
+    // ...
+}
+```
+</Step>
+
+<Step>
+#### Update Attribution Component
+
+If you're using the attribution component:
+
+```diff
+- import { BetterStackAttribution } from "@workspace/ui/components/better-stack-attribution";
++ import { StackAttribution } from "@workspace/ui/components/stack-attribution";
+
+- <BetterStackAttribution />
++ <StackAttribution />
+```
+</Step>
+
+<Step>
+#### Update File Imports
+
+Update any imports that reference the old filenames:
+
+```diff
+- import { api } from "@/lib/better-stack";
++ import { api } from "@/lib/stack";
+
+- import { PluginPages } from "@/lib/better-stack-client";
++ import { PluginPages } from "@/lib/stack-client";
+```
+</Step>
+
+<Step>
+#### Rename Files (Optional but Recommended)
+
+For consistency, rename your configuration files:
+
+```bash
+# Backend config
+mv lib/better-stack.ts lib/stack.ts
+
+# Client config  
+mv lib/better-stack-client.tsx lib/stack-client.tsx
+
+# Auth config (if applicable)
+mv lib/better-stack-auth.ts lib/stack-auth.ts
+```
+</Step>
+
+</Steps>
+
+### Find and Replace
+
+You can use these find-and-replace patterns to quickly update your codebase:
+
+| Find | Replace |
+|------|---------|
+| `betterStack(` | `stack(` |
+| `betterStackClient(` | `stackClient(` |
+| `BetterStackProvider` | `StackProvider` |
+| `useBetterStack` | `useStack` |
+| `BetterStackAttribution` | `StackAttribution` |
+| `better-stack-attribution` | `stack-attribution` |
+| `from "@/lib/better-stack"` | `from "@/lib/stack"` |
+| `from "@/lib/better-stack-client"` | `from "@/lib/stack-client"` |
+| `from "./better-stack"` | `from "./stack"` |
+| `from "./better-stack-client"` | `from "./stack-client"` |
+
+### TypeScript Types
+
+The following types have been renamed:
+
+```diff
+- import type { BetterStackContext } from "@btst/stack";
++ import type { StackContext } from "@btst/stack";
+```
+
+### Localization Strings
+
+If you've customized localization, update any references:
+
+```diff
+- "Powered by Better Stack"
++ "Powered by BTST"
+```
+
+### No Functional Changes
+
+<Callout type="info">
+  All plugin functionality, APIs, database schemas, and component behavior remain unchanged. This is purely a naming/branding update.
+</Callout>
+
+The following are **unchanged**:
+- All plugin configurations and options
+- Database schemas and adapters
+- API endpoints and routes
+- Component props and behavior
+- Hook return values and options
+- SSR, meta tags, and sitemap generation
+
+---
+
+## Need Help?
+
+If you encounter any issues during migration, please [open an issue](https://github.com/better-stack-ai/better-stack/issues) on GitHub.

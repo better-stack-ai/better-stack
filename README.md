@@ -1,4 +1,4 @@
-# @btst/stack — Better Stack
+# @btst/stack — BTST
 
 <div align="center">
 
@@ -14,9 +14,9 @@ Framework-agnostic. Database-flexible. No lock-in.
 
 ---
 
-## What is Better Stack?
+## What is BTST?
 
-Better Stack lets you **install production-ready app features as npm packages**.
+BTST lets you **install production-ready app features as npm packages**.
 
 Instead of spending weeks building the same things again and again  
 (routes, APIs, database schemas, SSR, SEO, forms…):
@@ -62,12 +62,12 @@ You keep your codebase, database, and deployment.
 
 ## Minimal usage
 
-```ts title="lib/better-stack.ts"
-import { betterStack } from "@btst/stack"
+```ts title="lib/stack.ts"
+import { stack } from "@btst/stack"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 import { createMemoryAdapter } from "@btst/adapter-memory"
 
-export const { handler, dbSchema } = betterStack({
+export const { handler, dbSchema } = stack({
   basePath: "/api/data",
   plugins: {
     blog: blogBackendPlugin()
@@ -76,7 +76,7 @@ export const { handler, dbSchema } = betterStack({
 })
 ```
 
-```tsx title="lib/better-stack-client.tsx"
+```tsx title="lib/stack-client.tsx"
 import { createStackClient } from "@btst/stack/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { QueryClient } from "@tanstack/react-query"
@@ -108,7 +108,7 @@ npm install -D @btst/cli
 Generate drizzle schema:
 
 ```bash
-npx @btst/cli generate --orm drizzle --config lib/better-stack.ts --output db/schema.ts
+npx @btst/cli generate --orm drizzle --config lib/stack.ts --output db/schema.ts
 ```
 
 Supports Prisma, Drizzle, MongoDB and Kysely SQL dialects.

@@ -1,5 +1,5 @@
 import type { Route } from "./+types/route";
-import { handler } from "~/lib/better-stack";
+import { handler } from "~/lib/stack";
 
 export function loader({ request }: Route.LoaderArgs) {
   return handler(request);

@@ -1,5 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { getStackClient } from "@/lib/better-stack-client";
+import { getStackClient } from "@/lib/stack-client";
 import { normalizePath } from "@btst/stack/client";
 
 export const Route = createFileRoute("/pages/$")({

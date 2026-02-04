@@ -1,7 +1,7 @@
 // src/routes/sitemap[.]xml.ts
 import { createFileRoute } from '@tanstack/react-router'
 import { QueryClient } from '@tanstack/react-query'
-import { getStackClient } from '@/lib/better-stack-client'
+import { getStackClient } from '@/lib/stack-client'
 import { sitemapEntryToXmlString } from '@btst/stack/client'
 
 export const Route = createFileRoute('/sitemap.xml')({

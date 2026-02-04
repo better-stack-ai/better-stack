@@ -12,8 +12,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Better Stack',
-    template: '%s | Better Stack',
+    default: 'BTST',
+    template: '%s | BTST',
   },
 };
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { BetterStackProvider } from "@btst/stack/context"
+import { StackProvider } from "@btst/stack/context"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
@@ -56,7 +56,7 @@ function Layout() {
     return (
         <QueryClientProvider client={context.queryClient}>
             <ReactQueryDevtools initialIsOpen={false} />
-            <BetterStackProvider<PluginOverrides>
+            <StackProvider<PluginOverrides>
                 basePath="/pages"
                 overrides={{
                     blog: {
@@ -218,7 +218,7 @@ function Layout() {
                 }}
             >
                 <Outlet />
-            </BetterStackProvider>
+            </StackProvider>
         </QueryClientProvider>
     )
 }

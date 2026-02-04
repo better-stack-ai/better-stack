@@ -13,7 +13,7 @@ export const baseOptions: BaseLayoutProps = {
   nav: {
     title: (
       <>
-        <span>BETTER-STACK</span> 
+        <span>BTST</span> 
       </>
     ),
     url:"https://www.better-stack.ai"

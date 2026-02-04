@@ -15,7 +15,7 @@ import openApiDemo from "../../../assets/openapi-demo.png";
   </a>
 </div>
 
-The OpenAPI plugin automatically generates OpenAPI 3.1 documentation for all your Better Stack plugins. It provides both a JSON schema endpoint and an interactive API reference UI powered by [Scalar](https://scalar.com/).
+The OpenAPI plugin automatically generates OpenAPI 3.1 documentation for all your BTST plugins. It provides both a JSON schema endpoint and an interactive API reference UI powered by [Scalar](https://scalar.com/).
 
 ## Features
 
@@ -33,15 +33,15 @@ Ensure you followed the general [framework installation guide](/installation) fi
 
 ### Add Plugin to Backend API
 
-Import and register the OpenAPI backend plugin in your `better-stack.ts` file:
+Import and register the OpenAPI backend plugin in your `stack.ts` file:
 
-```ts title="lib/better-stack.ts"
-import { betterStack } from "@btst/stack"
+```ts title="lib/stack.ts"
+import { stack } from "@btst/stack"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
 // ... your adapter imports
 
-const { handler, dbSchema } = betterStack({
+const { handler, dbSchema } = stack({
   basePath: "/api/data",
   plugins: {
     blog: blogBackendPlugin(),
@@ -123,7 +123,7 @@ The plugin supports all Scalar themes:
 
 The OpenAPI plugin introspects all registered plugins at startup:
 
-1. **Context Injection** - Better Stack passes a context object containing all plugins to each plugin's `routes()` function
+1. **Context Injection** - BTST passes a context object containing all plugins to each plugin's `routes()` function
 2. **Endpoint Traversal** - The OpenAPI plugin iterates over all other plugins and their endpoints
 3. **Schema Extraction** - Zod schemas from `query`, `body`, and `params` are converted to OpenAPI schema objects
 4. **Path Transformation** - Express-style paths (`:param`) are converted to OpenAPI format (`{param}`)

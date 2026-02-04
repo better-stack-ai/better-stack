@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { QueryClient } from "@tanstack/react-query";
-import { getStackClient } from "@/lib/better-stack-client";
+import { getStackClient } from "@/lib/stack-client";
 
 //make sitemap dynamic
 export const dynamic = "force-dynamic";

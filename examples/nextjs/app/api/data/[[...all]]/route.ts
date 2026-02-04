@@ -1,4 +1,4 @@
-import { handler } from "@/lib/better-stack"
+import { handler } from "@/lib/stack"
 
 export const GET = handler
 export const POST = handler

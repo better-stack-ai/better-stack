@@ -1,5 +1,5 @@
 {
-    "title": "Better Stack",
+    "title": "BTST",
     "description": "A composable full-stack plugin system for modern React frameworks.",
     "icon": "Building",
     "root": true,
@@ -7,6 +7,7 @@
       "---[Hammer]Getting Started---",
       "index",
       "installation",
+      "breaking-changes",
       "how-it-works",
       "---[Layers]Plugins---",
       "plugins/index",

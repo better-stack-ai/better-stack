@@ -1,13 +1,13 @@
 ---
 title: Plugin Development
-description: Build your own plugins for Better Stack
+description: Build your own plugins for BTST
 ---
 
-Learn how to create custom plugins for Better Stack. Plugins extend your application with new features, routes, and API endpoints while maintaining full type safety across backend and frontend.
+Learn how to create custom plugins for BTST. Plugins extend your application with new features, routes, and API endpoints while maintaining full type safety across backend and frontend.
 
 ## Overview
 
-A Better Stack plugin consists of two parts:
+A BTST plugin consists of two parts:
 
 - **Backend Plugin** - Defines database schema and API endpoints
 - **Client Plugin** - Provides routes, React components, and hooks
@@ -601,15 +601,15 @@ This pattern ensures:
 
 ### Backend Registration
 
-Register plugins in your Better Stack configuration:
+Register plugins in your BTST configuration:
 
 ```typescript
-import { betterStack } from "@btst/stack"
+import { stack } from "@btst/stack"
 import { createMemoryAdapter } from "@btst/adapter-memory"
 import { todosBackendPlugin } from "./plugins/todo/api/backend"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 
-const { handler, dbSchema } = betterStack({
+const { handler, dbSchema } = stack({
   basePath: "/api/data",
   plugins: {
     todos: todosBackendPlugin,
@@ -881,7 +881,7 @@ Features:
 
 A production-ready plugin with advanced features:
 
-**Source Code:** [Blog Plugin](https://github.com/better-stack-ai/better-stack/tree/main/packages/better-stack/src/plugins/blog)
+**Source Code:** [Blog Plugin](https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/blog)
 
 Features:
 - Multiple related models (posts, tags, postTags)

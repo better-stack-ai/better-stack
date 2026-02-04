@@ -1,2 +1,2 @@
-import { dbSchema as db } from "./better-stack"
+import { dbSchema as db } from "./stack"
 export default db

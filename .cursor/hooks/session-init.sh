@@ -1,5 +1,5 @@
 #!/bin/bash
-# Session initialization hook for better-stack monorepo
+# Session initialization hook for BTST monorepo
 # Sets up environment variables for the session
 
 # Read JSON input from stdin (required by hooks spec)
@@ -12,6 +12,6 @@ cat << 'EOF'
   "env": {
     "NODE_OPTIONS": "--max-old-space-size=8192"
   },
-  "additional_context": "This is the better-stack monorepo. Use Node.js v22 (run: source ~/.nvm/nvm.sh && nvm use 22). Build with: pnpm build. Typecheck with: pnpm typecheck. Lint with: pnpm lint."
+  "additional_context": "This is the BTST monorepo. Use Node.js v22 (run: source ~/.nvm/nvm.sh && nvm use 22). Build with: pnpm build. Typecheck with: pnpm typecheck. Lint with: pnpm lint."
 }
 EOF
