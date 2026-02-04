@@ -7,7 +7,7 @@ const config = {
   reactStrictMode: true,
   basePath: '/docs',
   assetPrefix: '/docs',
-  transpilePackages: ['stack'],
+  transpilePackages: ['@btst/stack'],
   async rewrites() {
     return [
       {
