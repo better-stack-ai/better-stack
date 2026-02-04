@@ -16,7 +16,7 @@ import betterAuthUiDemo from "../../../assets/better-auth-ui-demo.webp";
   </a>
 </div>
 
-The Better Auth UI plugin provides beautiful, plug-and-play authentication UI components built with [shadcn/ui](https://ui.shadcn.com/) for [better-auth](https://www.better-auth.com/). This is a fork of the popular [better-auth-ui](https://github.com/better-auth-ui/better-auth-ui) library, adapted for seamless integration with Better Stack.
+The Better Auth UI plugin provides beautiful, plug-and-play authentication UI components built with [shadcn/ui](https://ui.shadcn.com/) for [better-auth](https://www.better-auth.com/). This is a fork of the popular [better-auth-ui](https://github.com/better-auth-ui/better-auth-ui) library, adapted for seamless integration with BTST.
 
 <div className="flex gap-4 my-4">
   <a href="https://github.com/better-stack-ai/better-auth-ui" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -69,9 +69,9 @@ yarn add @btst/better-auth-ui
 
 ### 2. Configure the Stack Client (Server-Side)
 
-Import and register the auth plugins in your `better-stack-client.tsx` file:
+Import and register the auth plugins in your `stack-client.tsx` file:
 
-```tsx title="lib/better-stack-client.tsx"
+```tsx title="lib/stack-client.tsx"
 import { createStackClient } from "@btst/stack/client"
 import { 
   authClientPlugin, 
@@ -112,7 +112,7 @@ export function getStackClient(queryClient: QueryClient, options?: { headers?: H
 }
 ```
 
-### 3. Configure the BetterStackProvider (Client-Side Layout)
+### 3. Configure the StackProvider (Client-Side Layout)
 
 Configure the plugin overrides in your catch-all layout file:
 
@@ -121,7 +121,7 @@ Configure the plugin overrides in your catch-all layout file:
     ```tsx title="app/p/[[...all]]/layout.tsx"
     "use client"
 
-    import { BetterStackProvider } from "@btst/stack/context"
+    import { StackProvider } from "@btst/stack/context"
     import type { 
       AuthPluginOverrides, 
       AccountPluginOverrides,
@@ -151,7 +151,7 @@ Configure the plugin overrides in your catch-all layout file:
       }
 
       return (
-        <BetterStackProvider<PluginOverrides>
+        <StackProvider<PluginOverrides>
           basePath="/p"
           overrides={{
             auth: {
@@ -189,7 +189,7 @@ Configure the plugin overrides in your catch-all layout file:
           }}
         >
           {children}
-        </BetterStackProvider>
+        </StackProvider>
       )
     }
     ```
@@ -322,7 +322,7 @@ account: {
 
 Enable team and organization management:
 
-```tsx title="lib/better-stack-client.tsx"
+```tsx title="lib/stack-client.tsx"
 import { organizationClientPlugin } from "@btst/better-auth-ui/client"
 
 // In your plugins config:
@@ -359,6 +359,6 @@ organization: {
 For comprehensive documentation on all configuration options, customization, and advanced features, visit:
 
 - **[Better Auth UI Documentation](https://better-auth-ui.com/)** – Official documentation with demos and guides
-- **[GitHub Repository (Fork)](https://github.com/better-stack-ai/better-auth-ui)** – Source code for the Better Stack fork
+- **[GitHub Repository (Fork)](https://github.com/better-stack-ai/better-auth-ui)** – Source code for the fork
 - **[Original Repository](https://github.com/better-auth-ui/better-auth-ui)** – Upstream repository with 1.4k+ stars
 - **[better-auth Documentation](https://www.better-auth.com/)** – Documentation for the underlying auth library

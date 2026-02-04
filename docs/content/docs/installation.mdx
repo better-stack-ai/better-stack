@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Learn how to install and configure Better Stack in your project.
+description: Learn how to install and configure BTST in your project.
 ---
 
 import { Steps, Step } from "fumadocs-ui/components/steps";
@@ -10,7 +10,7 @@ import { Callout } from "fumadocs-ui/components/callout";
 
 ## Prerequisites
 
-In order to use Better Stack, your application must meet the following requirements:
+In order to use BTST, your application must meet the following requirements:
 
 - **[shadcn/ui](https://ui.shadcn.com/)** installed with CSS variables enabled - Plugins use shadcn/ui components. To verify CSS variables are enabled, check that your `components.json` has `"cssVariables": true` or your Tailwind config uses CSS variables for colors.
 - **[Sonner](https://ui.shadcn.com/docs/components/sonner)** `<Toaster />` component configured for toast notifications
@@ -21,7 +21,7 @@ In order to use Better Stack, your application must meet the following requireme
   <Step>
     ### Install the Package
 
-    Let's start by adding Better Stack to your project:
+    Let's start by adding BTST to your project:
 
     <Tabs groupId="installation" items={['npm', 'pnpm', 'yarn']} persist>
       <Tab value="npm">
@@ -44,14 +44,14 @@ In order to use Better Stack, your application must meet the following requireme
     </Tabs>
 
     <Callout type="info">
-      Better Stack plugins require `@tanstack/react-query` for server-side prefetching and client-side data fetching and state management.
+      BTST plugins require `@tanstack/react-query` for server-side prefetching and client-side data fetching and state management.
     </Callout>
   </Step>
 
   <Step>
     ### Install Database Adapter
 
-    Better Stack requires a database adapter to work with your database. Choose one based on your setup:
+    BTST requires a database adapter to work with your database. Choose one based on your setup:
 
     <Tabs groupId="adapter-type" items={["prisma", "drizzle", "kysely", "mongodb", "memory"]} persist>
       <Tab value="prisma">
@@ -179,18 +179,18 @@ In order to use Better Stack, your application must meet the following requireme
   <Step>
     ### Create Backend Instance
 
-    Create a file named `better-stack.ts` in your `lib/` folder to configure the backend API:
+    Create a file named `stack.ts` in your `lib/` folder to configure the backend API:
 
     <Tabs groupId="adapter-type" items={["prisma", "drizzle", "kysely", "mongodb", "memory"]} persist>
       <Tab value="prisma">
-        ```ts title="lib/better-stack.ts"
-        import { betterStack } from "@btst/stack"
+        ```ts title="lib/stack.ts"
+        import { stack } from "@btst/stack"
         import { createPrismaAdapter } from "@btst/adapter-prisma"
         import { PrismaClient } from "@prisma/client"
 
         const prisma = new PrismaClient()
 
-        const { handler, dbSchema } = betterStack({
+        const { handler, dbSchema } = stack({
           basePath: "/api/data",
           plugins: {
             // Add your backend plugins here
@@ -205,8 +205,8 @@ In order to use Better Stack, your application must meet the following requireme
       </Tab>
 
       <Tab value="drizzle">
-        ```ts title="lib/better-stack.ts"
-        import { betterStack } from "@btst/stack"
+        ```ts title="lib/stack.ts"
+        import { stack } from "@btst/stack"
         import { createDrizzleAdapter } from "@btst/adapter-drizzle"
         import { drizzle } from "drizzle-orm/postgres-js" // or "drizzle-orm/mysql2", "drizzle-orm/better-sqlite3", etc.
         import postgres from "postgres"
@@ -214,7 +214,7 @@ In order to use Better Stack, your application must meet the following requireme
         const client = postgres(process.env.DATABASE_URL!)
         const drizzleDb = drizzle(client)
 
-        const { handler, dbSchema } = betterStack({
+        const { handler, dbSchema } = stack({
           basePath: "/api/data",
           plugins: {
             // Add your backend plugins here
@@ -227,8 +227,8 @@ In order to use Better Stack, your application must meet the following requireme
       </Tab>
 
       <Tab value="kysely">
-        ```ts title="lib/better-stack.ts"
-        import { betterStack } from "@btst/stack"
+        ```ts title="lib/stack.ts"
+        import { stack } from "@btst/stack"
         import { createKyselyAdapter } from "@btst/adapter-kysely"
         import { Kysely, PostgresDialect } from "kysely"
         import { Pool } from "pg"
@@ -239,7 +239,7 @@ In order to use Better Stack, your application must meet the following requireme
           })
         })
 
-        const { handler, dbSchema } = betterStack({
+        const { handler, dbSchema } = stack({
           basePath: "/api/data",
           plugins: {
             // Add your backend plugins here
@@ -252,15 +252,15 @@ In order to use Better Stack, your application must meet the following requireme
       </Tab>
 
       <Tab value="mongodb">
-        ```ts title="lib/better-stack.ts"
-        import { betterStack } from "@btst/stack"
+        ```ts title="lib/stack.ts"
+        import { stack } from "@btst/stack"
         import { createMongodbAdapter } from "@btst/adapter-mongodb"
         import { MongoClient } from "mongodb"
 
         const client = new MongoClient(process.env.MONGODB_URI!)
         const mongoDb = client.db()
 
-        const { handler, dbSchema } = betterStack({
+        const { handler, dbSchema } = stack({
           basePath: "/api/data",
           plugins: {
             // Add your backend plugins here
@@ -274,12 +274,12 @@ In order to use Better Stack, your application must meet the following requireme
       </Tab>
 
       <Tab value="memory">
-        ```ts title="lib/better-stack.ts"
+        ```ts title="lib/stack.ts"
         // IMPORTANT: Memory adapter is used for development and testing only
-        import { betterStack } from "@btst/stack"
+        import { stack } from "@btst/stack"
         import { createMemoryAdapter } from "@btst/adapter-memory"
 
-        const { handler, dbSchema } = betterStack({
+        const { handler, dbSchema } = stack({
           basePath: "/api/data",
           plugins: {
             // Add your backend plugins here
@@ -294,9 +294,9 @@ In order to use Better Stack, your application must meet the following requireme
 
     <Callout type="info">
     **What happens here:**
-    - `betterStack()` collects all plugin database schemas and merges them into a unified `dbSchema`
+    - `stack()` collects all plugin database schemas and merges them into a unified `dbSchema`
     - The `basePath` determines where your API is mounted (e.g., `/api/data/*`)
-    - The `adapter` function receives this merged schema (`db`) and returns an adapter that translates Better Stack's database operations to your ORM
+    - The `adapter` function receives this merged schema (`db`) and returns an adapter that translates BTST's database operations to your ORM
     - The `handler` is a request handler function `(request: Request) => Promise<Response>` that processes all API calls
     </Callout>
 
@@ -305,13 +305,13 @@ In order to use Better Stack, your application must meet the following requireme
  <Tabs items={["prisma", "drizzle", "kysely"]}>
   <Tab value="prisma">
     ```bash
-    npx @btst/cli generate --config=lib/better-stack.ts --orm=prisma --output=schema.prisma
+    npx @btst/cli generate --config=lib/stack.ts --orm=prisma --output=schema.prisma
     ```
   </Tab>
 
   <Tab value="drizzle">
     ```bash
-    npx @btst/cli generate --config=lib/better-stack.ts --orm=drizzle --output=src/db/schema.ts
+    npx @btst/cli generate --config=lib/stack.ts --orm=drizzle --output=src/db/schema.ts
     ```
   </Tab>
 
@@ -321,17 +321,17 @@ In order to use Better Stack, your application must meet the following requireme
     **Using DATABASE_URL environment variable:**
 
     ```bash
-    DATABASE_URL=sqlite:./dev.db npx @btst/cli generate --config=lib/better-stack.ts --orm=kysely --output=migrations/schema.sql
+    DATABASE_URL=sqlite:./dev.db npx @btst/cli generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql
     ```
 
     **Or using --database-url flag:**
 
     ```bash
-    npx @btst/cli generate --config=lib/better-stack.ts --orm=kysely --output=migrations/schema.sql --database-url=sqlite:./dev.db
+    npx @btst/cli generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql --database-url=sqlite:./dev.db
     ```
 
     ```bash
-    npx @btst/cli generate --config=lib/better-stack.ts --orm=kysely --output=migrations/schema.sql --database-url=postgres://user:pass@localhost:5432/db
+    npx @btst/cli generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql --database-url=postgres://user:pass@localhost:5432/db
     ```
   </Tab>
 </Tabs>
@@ -344,12 +344,12 @@ In order to use Better Stack, your application must meet the following requireme
   <Step>
     ### Create API Route
 
-    Create a catch-all API route to handle Better Stack requests. The route will handle requests for the path `/api/data/*`. If you use a different path make sure to update the `basePath` in the `betterStack` config to match your chosen path.
+    Create a catch-all API route to handle BTST requests. The route will handle requests for the path `/api/data/*`. If you use a different path make sure to update the `basePath` in the `stack` config to match your chosen path.
 
     <Tabs  groupId="frameworks" items={["next-js", "react-router", "tanstack", "nodejs"]} persist>
       <Tab value="next-js">
         ```ts title="app/api/data/[[...all]]/route.ts"
-        import { handler } from "@/lib/better-stack"
+        import { handler } from "@/lib/stack"
 
         export const GET = handler
         export const POST = handler
@@ -360,7 +360,7 @@ In order to use Better Stack, your application must meet the following requireme
 
       <Tab value="react-router">
         ```ts title="app/routes/api/data/route.ts"
-        import { handler } from "~/lib/better-stack"
+        import { handler } from "~/lib/stack"
         import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node"
 
         export async function loader({ request }: LoaderFunctionArgs) {
@@ -376,7 +376,7 @@ In order to use Better Stack, your application must meet the following requireme
       <Tab value="tanstack">
         ```ts title="src/routes/api/data/$.ts"
         import { createFileRoute } from '@tanstack/react-router'
-        import { handler } from '@/lib/better-stack'
+        import { handler } from '@/lib/stack'
 
         export const Route = createFileRoute('/api/data/$')({
           server: {
@@ -404,7 +404,7 @@ In order to use Better Stack, your application must meet the following requireme
 
         ```ts title="server.ts"
         import express from "express"
-        import { handler } from "./lib/better-stack"
+        import { handler } from "./lib/stack"
         import { toNodeHandler } from "@btst/stack/api"
 
         const app = express()
@@ -424,13 +424,13 @@ In order to use Better Stack, your application must meet the following requireme
 
         ```ts title="server.ts"
         import express from "express"
-        import { handler } from "./lib/better-stack"
+        import { handler } from "./lib/stack"
         import { toNodeHandler } from "@btst/stack/api"
 
         const app = express()
         app.use(express.json()) // Parse JSON bodies
         
-        // Convert and mount Better Stack handler
+        // Convert and mount BTST handler
         app.all("/api/data/*", toNodeHandler(handler))
         
         app.listen(3000)
@@ -459,7 +459,7 @@ In order to use Better Stack, your application must meet the following requireme
 
     Create a client instance that routes requests to plugin pages, prefetches their data on the server, and renders them with instant hydration on the client:
 
-    ```ts title="lib/better-stack-client.tsx"
+    ```ts title="lib/stack-client.tsx"
     import { createStackClient } from "@btst/stack/client"
     import { QueryClient } from "@tanstack/react-query"
 
@@ -626,12 +626,12 @@ In order to use Better Stack, your application must meet the following requireme
   <Step>
     ### Set Up Layout Provider
 
-    Wrap your Better Stack pages with the `BetterStackProvider` to enable framework-specific overrides:
+    Wrap your BTST pages with the `StackProvider` to enable framework-specific overrides:
 
     <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
       <Tab value="next-js">
         ```tsx title="app/pages/[[...all]]/layout.tsx"
-        import { BetterStackProvider } from "@btst/stack/context"
+        import { StackProvider } from "@btst/stack/context"
         import type { ExamplePluginOverrides } from "@btst/stack/plugins/example/client"
         import Link from "next/link"
         import Image from "next/image"
@@ -647,7 +647,7 @@ In order to use Better Stack, your application must meet the following requireme
           const router = useRouter()
           
           return (
-            <BetterStackProvider<PluginOverrides>
+            <StackProvider<PluginOverrides>
               basePath="/pages"
               overrides={{
                 example: {
@@ -660,7 +660,7 @@ In order to use Better Stack, your application must meet the following requireme
               }}
             >
               {children}
-            </BetterStackProvider>
+            </StackProvider>
           )
         }
         ```
@@ -669,7 +669,7 @@ In order to use Better Stack, your application must meet the following requireme
       <Tab value="react-router">
         ```tsx title="app/routes/pages/_layout.tsx"
         import { Outlet, Link, useNavigate } from "react-router"
-        import { BetterStackProvider } from "@btst/stack/context"
+        import { StackProvider } from "@btst/stack/context"
         import type { ExamplePluginOverrides } from "@btst/stack/plugins/example/client"
 
         // Define the shape of all plugin overrides
@@ -682,7 +682,7 @@ In order to use Better Stack, your application must meet the following requireme
           const navigate = useNavigate()
           
           return (
-            <BetterStackProvider<PluginOverrides>
+            <StackProvider<PluginOverrides>
               basePath="/pages"
               overrides={{
                 example: {
@@ -698,7 +698,7 @@ In order to use Better Stack, your application must meet the following requireme
               }}
             >
               <Outlet />
-            </BetterStackProvider>
+            </StackProvider>
           )
         }
         ```
@@ -706,7 +706,7 @@ In order to use Better Stack, your application must meet the following requireme
 
       <Tab value="tanstack">
         ```tsx title="src/routes/pages/route.tsx"
-        import { BetterStackProvider } from "@btst/stack/context"
+        import { StackProvider } from "@btst/stack/context"
         import { QueryClientProvider } from "@tanstack/react-query"
         import type { ExamplePluginOverrides } from "@btst/stack/plugins/example/client"
         import { Link, useRouter, Outlet, createFileRoute } from "@tanstack/react-router"
@@ -727,7 +727,7 @@ In order to use Better Stack, your application must meet the following requireme
 
           return (
             <QueryClientProvider client={context.queryClient}>
-              <BetterStackProvider<PluginOverrides>
+              <StackProvider<PluginOverrides>
                 basePath="/pages"
                 overrides={{
                   example: {
@@ -743,7 +743,7 @@ In order to use Better Stack, your application must meet the following requireme
                 }}
               >
                 <Outlet />
-              </BetterStackProvider>
+              </StackProvider>
             </QueryClientProvider>
           )
         }
@@ -761,7 +761,7 @@ In order to use Better Stack, your application must meet the following requireme
   <Step>
     ### Set Up Page Handler
 
-    Create a catch-all route to handle Better Stack pages defined in your plugins. This enables server-side rendering, metadata generation and automatic route handling.
+    Create a catch-all route to handle BTST pages defined in your plugins. This enables server-side rendering, metadata generation and automatic route handling.
 
     <Tabs  groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist >
       <Tab value="next-js">
@@ -769,7 +769,7 @@ In order to use Better Stack, your application must meet the following requireme
         import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
         import { notFound } from "next/navigation"
         import { getOrCreateQueryClient } from "@/lib/query-client"
-        import { getStackClient } from "@/lib/better-stack-client"
+        import { getStackClient } from "@/lib/stack-client"
         import { metaElementsToObject, normalizePath } from "@btst/stack/client"
         import { Metadata } from "next"
 
@@ -816,7 +816,7 @@ In order to use Better Stack, your application must meet the following requireme
         import type { Route } from "./+types/index"
         import { useLoaderData } from "react-router"
         import { dehydrate, HydrationBoundary, QueryClient, useQueryClient } from "@tanstack/react-query"
-        import { getStackClient } from "~/lib/better-stack-client"
+        import { getStackClient } from "~/lib/stack-client"
         import { normalizePath } from "@btst/stack/client"
 
         export async function loader({ params }: Route.LoaderArgs) {
@@ -857,7 +857,7 @@ In order to use Better Stack, your application must meet the following requireme
       <Tab value="tanstack">
         ```tsx title="src/routes/pages/$.tsx"
         import { createFileRoute, notFound } from "@tanstack/react-router"
-        import { getStackClient } from "@/lib/better-stack-client"
+        import { getStackClient } from "@/lib/stack-client"
         import { normalizePath } from "@btst/stack/client"
 
         export const Route = createFileRoute("/pages/$")({
@@ -931,7 +931,7 @@ In order to use Better Stack, your application must meet the following requireme
         ```ts title="app/sitemap.ts"
         import type { MetadataRoute } from "next"
         import { QueryClient } from "@tanstack/react-query"
-        import { getStackClient } from "@/lib/better-stack-client"
+        import { getStackClient } from "@/lib/stack-client"
 
         export const dynamic = "force-dynamic"
 
@@ -947,7 +947,7 @@ In order to use Better Stack, your application must meet the following requireme
         ```ts title="app/routes/sitemap.xml.ts"
         import type { Route } from "./+types/sitemap.xml"
         import { QueryClient } from "@tanstack/react-query"
-        import { getStackClient } from "~/lib/better-stack-client"
+        import { getStackClient } from "~/lib/stack-client"
         import { sitemapEntryToXmlString } from "@btst/stack/client"
 
         export async function loader({}: Route.LoaderArgs) {
@@ -971,7 +971,7 @@ In order to use Better Stack, your application must meet the following requireme
         // Note: [.] syntax in TanStack Router creates a route for "sitemap.xml"
         import { createFileRoute } from "@tanstack/react-router"
         import { QueryClient } from "@tanstack/react-query"
-        import { getStackClient } from "@/lib/better-stack-client"
+        import { getStackClient } from "@/lib/stack-client"
         import { sitemapEntryToXmlString } from "@btst/stack/client"
 
         export const Route = createFileRoute("/sitemap.xml")({

@@ -1,5 +1,5 @@
 import { useContentItemPopulated } from "@btst/stack/plugins/cms/client/hooks"
-import { BetterStackProvider } from "@btst/stack/context"
+import { StackProvider } from "@btst/stack/context"
 import { Link, useNavigate, useParams } from "react-router"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 import type { CMSTypes } from "../../lib/cms-schemas"
@@ -149,7 +149,7 @@ export default function ResourceDetailPage() {
     const id = params.id as string
 
     return (
-        <BetterStackProvider<PluginOverrides>
+        <StackProvider<PluginOverrides>
             basePath="/directory"
             overrides={{
                 cms: {
@@ -165,7 +165,7 @@ export default function ResourceDetailPage() {
             }}
         >
             <ResourceDetailContent id={id} />
-        </BetterStackProvider>
+        </StackProvider>
     )
 }
 

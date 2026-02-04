@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { handler } from "@/lib/better-stack"
+import { handler } from "@/lib/stack"
 
 
 export const Route = createFileRoute("/api/data/$")({

@@ -1,16 +1,16 @@
 ---
 title: Database Adapters
-description: Learn about database adapters and the Better Stack data layer
+description: Learn about database adapters and the BTST data layer
 ---
 
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
 
-Better Stack uses a flexible adapter system that allows you to connect to any database through your preferred ORM. The adapter acts as a bridge between Better Stack's unified data layer and your database of choice.
+BTST uses a flexible adapter system that allows you to connect to any database through your preferred ORM. The adapter acts as a bridge between BTST's unified data layer and your database of choice.
 
 ## Package Overview
 
-Better Stack consists of separate npm packages under the `@btst` namespace:
+BTST consists of separate npm packages under the `@btst` namespace:
 
 - **`@btst/stack`** - Core package (install this first)
 - **`@btst/adapter-*`** - Database adapters (install one based on your ORM)
@@ -21,7 +21,7 @@ See the [Installation guide](/installation) for setup instructions.
 
 ## Available Adapters
 
-Better Stack provides official adapters for popular ORMs:
+BTST provides official adapters for popular ORMs:
 
 - **Prisma** - `@btst/adapter-prisma` - Supports PostgreSQL, MySQL, SQLite, CockroachDB, and MongoDB
 - **Drizzle** - `@btst/adapter-drizzle` - Supports PostgreSQL, MySQL, SQLite, and more
@@ -45,18 +45,18 @@ See the [Installation guide](/installation#install-database-adapter) for detaile
 
 ## Usage
 
-When you configure Better Stack, the `betterStack()` function collects all plugin database schemas and merges them into a unified schema. The adapter function receives this merged schema and returns an adapter that translates Better Stack's database operations to your ORM.
+When you configure BTST, the `stack()` function collects all plugin database schemas and merges them into a unified schema. The adapter function receives this merged schema and returns an adapter that translates BTST's database operations to your ORM.
 
 <Tabs groupId="adapter-type" items={["prisma", "drizzle", "kysely", "mongodb", "memory"]} persist>
   <Tab value="prisma">
-    ```ts title="lib/better-stack.ts"
-    import { betterStack } from "@btst/stack"
+    ```ts title="lib/stack.ts"
+    import { stack } from "@btst/stack"
     import { createPrismaAdapter } from "@btst/adapter-prisma"
     import { PrismaClient } from "@prisma/client"
 
     const prisma = new PrismaClient()
 
-    const { handler, dbSchema } = betterStack({
+    const { handler, dbSchema } = stack({
       basePath: "/api/data",
       plugins: {
         // Your plugins here
@@ -72,8 +72,8 @@ When you configure Better Stack, the `betterStack()` function collects all plugi
   </Tab>
 
   <Tab value="drizzle">
-    ```ts title="lib/better-stack.ts"
-    import { betterStack } from "@btst/stack"
+    ```ts title="lib/stack.ts"
+    import { stack } from "@btst/stack"
     import { createDrizzleAdapter } from "@btst/adapter-drizzle"
     import { drizzle } from "drizzle-orm/postgres-js" // or "drizzle-orm/mysql2", "drizzle-orm/better-sqlite3", etc.
     import postgres from "postgres"
@@ -81,7 +81,7 @@ When you configure Better Stack, the `betterStack()` function collects all plugi
     const client = postgres(process.env.DATABASE_URL!)
     const drizzleDb = drizzle(client)
 
-    const { handler, dbSchema } = betterStack({
+    const { handler, dbSchema } = stack({
       basePath: "/api/data",
       plugins: {
         // Your plugins here
@@ -94,8 +94,8 @@ When you configure Better Stack, the `betterStack()` function collects all plugi
   </Tab>
 
   <Tab value="kysely">
-    ```ts title="lib/better-stack.ts"
-    import { betterStack } from "@btst/stack"
+    ```ts title="lib/stack.ts"
+    import { stack } from "@btst/stack"
     import { createKyselyAdapter } from "@btst/adapter-kysely"
     import { Kysely, PostgresDialect } from "kysely"
     import { Pool } from "pg"
@@ -106,7 +106,7 @@ When you configure Better Stack, the `betterStack()` function collects all plugi
       })
     })
 
-    const { handler, dbSchema } = betterStack({
+    const { handler, dbSchema } = stack({
       basePath: "/api/data",
       plugins: {
         // Your plugins here
@@ -119,15 +119,15 @@ When you configure Better Stack, the `betterStack()` function collects all plugi
   </Tab>
 
   <Tab value="mongodb">
-    ```ts title="lib/better-stack.ts"
-    import { betterStack } from "@btst/stack"
+    ```ts title="lib/stack.ts"
+    import { stack } from "@btst/stack"
     import { createMongodbAdapter } from "@btst/adapter-mongodb"
     import { MongoClient } from "mongodb"
 
     const client = new MongoClient(process.env.MONGODB_URI!)
     const mongoDb = client.db()
 
-    const { handler, dbSchema } = betterStack({
+    const { handler, dbSchema } = stack({
       basePath: "/api/data",
       plugins: {
         // Your plugins here
@@ -140,12 +140,12 @@ When you configure Better Stack, the `betterStack()` function collects all plugi
   </Tab>
 
   <Tab value="memory">
-    ```ts title="lib/better-stack.ts"
+    ```ts title="lib/stack.ts"
     // IMPORTANT: Memory adapter is used for development and testing only
-    import { betterStack } from "@btst/stack"
+    import { stack } from "@btst/stack"
     import { createMemoryAdapter } from "@btst/adapter-memory"
 
-    const { handler, dbSchema } = betterStack({
+    const { handler, dbSchema } = stack({
       basePath: "/api/data",
       plugins: {
         // Your plugins here
@@ -168,22 +168,22 @@ The `adapter` function receives the merged database schema (`db`) containing all
 
 The adapter pattern follows this flow:
 
-1. `betterStack()` merges all plugin schemas into a unified `db` object
+1. `stack()` merges all plugin schemas into a unified `db` object
 2. Your `adapter` function receives this `db` object
 3. The adapter creator function (e.g., `createPrismaAdapter`, `createDrizzleAdapter`) returns an adapter instance
 4. This adapter instance implements the common interface (create, update, findOne, etc.)
 
-The adapter function signature allows the adapter to be configured with both Better Stack's schema and any ORM-specific options.
+The adapter function signature allows the adapter to be configured with both BTST's schema and any ORM-specific options.
 
 ## Database Schema Generation
 
-After configuring your adapter, you'll need to generate database schemas and migrations. Better Stack provides a CLI tool to help with this process.
+After configuring your adapter, you'll need to generate database schemas and migrations. BTST provides a CLI tool to help with this process.
 
 See the [CLI documentation](/cli) for detailed information on generating schemas for Prisma, Drizzle, and Kysely, as well as running migrations.
 
 ## How Data Layer Works
 
-Better Stack's data layer is built on [Better DB](https://github.com/better-stack-ai/better-auth/tree/main/packages/btst), a fork of better-auth's database layer. Better DB is a type-safe database abstraction layer that provides:
+BTST's data layer is built on [Better DB](https://github.com/better-stack-ai/better-auth/tree/main/packages/btst), a fork of better-auth's database layer. Better DB is a type-safe database abstraction layer that provides:
 
 - **Unified Schema Definition**: Plugins define their database schemas using Better DB's schema definition API
 - **Schema Composition**: All plugin schemas are automatically merged into a single unified schema
@@ -320,7 +320,7 @@ Available `onDelete` options:
 
 ## Using Other Better Auth Compatible Adapters
 
-Better DB is a fork of better-auth's database layer, which means existing [better-auth adapters](https://www.better-auth.com/docs/concepts/database) can work with Better Stack with a small wrapper modification. The wrapper is necessary because Better Stack's plugin system merges schemas differently than better-auth plugins.
+Better DB is a fork of better-auth's database layer, which means existing [better-auth adapters](https://www.better-auth.com/docs/concepts/database) can work with BTST with a small wrapper modification. The wrapper is necessary because BTST's plugin system merges schemas differently than better-auth plugins.
 
 This allows you to leverage the wide ecosystem of better-auth adapters. The wrapper function needs to inject the Better DB schema into the better-auth adapter's plugin system so it can find your models. Here's an example of how `@btst/adapter-prisma` wraps better-auth's Prisma adapter:
 
@@ -366,4 +366,4 @@ You can apply the same pattern to wrap other better-auth compatible adapters tha
 
 ## Better DB Package
 
-Better DB is a fork of [better-auth](https://www.better-auth.com)'s database layer. For more information about the underlying data layer, see the [Better DB package](https://github.com/better-stack-ai/better-auth/tree/main/packages/btst) on GitHub. This package provides the core database abstraction that powers Better Stack's adapter system.
+Better DB is a fork of [better-auth](https://www.better-auth.com)'s database layer. For more information about the underlying data layer, see the [Better DB package](https://github.com/better-stack-ai/better-auth/tree/main/packages/btst) on GitHub. This package provides the core database abstraction that powers BTST's adapter system.

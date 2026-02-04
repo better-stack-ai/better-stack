@@ -1,9 +1,9 @@
 ---
 title: How It Works
-description: Understand the architecture and key concepts behind Better Stack.
+description: Understand the architecture and key concepts behind BTST.
 ---
 
-Here's a high-level overview of how Better Stack works:
+Here's a high-level overview of how BTST works:
 
 ![Architecture Overview](../../assets/architecture.png)
 
@@ -11,10 +11,10 @@ Here's a high-level overview of how Better Stack works:
 
 The server handles database operations, API endpoints, data prefetching, routing, and server-side rendering.
 
-**`betterStack`** manages the backend layer:
+**`stack`** manages the backend layer:
 
 - **API Router**: Routes incoming requests to the appropriate plugin handlers. Returns a handler function that you mount at your API path.
-- **DB Adapter**: Translates Better Stack's database operations to your ORM (Prisma, Drizzle, Kysely, MongoDB). Plugins define schemas that get merged and passed to the adapter.
+- **DB Adapter**: Translates BTST's database operations to your ORM (Prisma, Drizzle, Kysely, MongoDB). Plugins define schemas that get merged and passed to the adapter.
 
 **`stackClient`** manages the rendering layer:
 
@@ -46,25 +46,25 @@ Note: 3rd party plugins may use a different state management library.
 
 **Context & Overrides**
 
-The `BetterStackProvider` wraps your pages and injects framework-specific components via React Context. Plugin components access these overrides through `usePluginOverrides()`, allowing them to use your framework's `Link`, `Image`, and navigation without tight coupling and to avoid breaking the client/server boundary in frameworks like Next.js.
+The `StackProvider` wraps your pages and injects framework-specific components via React Context. Plugin components access these overrides through `usePluginOverrides()`, allowing them to use your framework's `Link`, `Image`, and navigation without tight coupling and to avoid breaking the client/server boundary in frameworks like Next.js.
 
 ## Plugins
 
-Plugins are the building blocks of Better Stack. Each feature (like Blog) ships as **two separate plugins**—one for the backend, one for the client—that you register independently:
+Plugins are the building blocks of BTST. Each feature (like Blog) ships as **two separate plugins**—one for the backend, one for the client—that you register independently:
 
 ```ts
-// Backend: lib/better-stack.ts
-import { betterStack } from "@btst/stack"
+// Backend: lib/stack.ts
+import { stack } from "@btst/stack"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 
-const { handler } = betterStack({
+const { handler } = stack({
   plugins: {
     blog: blogBackendPlugin({ /* config */ })
   },
   // ...
 })
 
-// Client: lib/better-stack-client.tsx
+// Client: lib/stack-client.tsx
 import { createStackClient } from "@btst/stack/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 
@@ -75,7 +75,7 @@ const stackClient = createStackClient({
 })
 ```
 
-**Backend plugins** (registered in `betterStack`):
+**Backend plugins** (registered in `stack`):
 - Define database schemas (tables, columns, relations)
 - Register API route handlers for CRUD operations
 - Provide hooks for authorization and custom logic

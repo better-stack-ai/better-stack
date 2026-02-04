@@ -1,4 +1,4 @@
-name: Better Stack Release
+name: BTST Release
 
 on:
   release:
@@ -32,17 +32,17 @@ jobs:
       - run: pnpm install
 
       - name: Copy README to package
-        run: cp README.md packages/better-stack/README.md
+        run: cp README.md packages/stack/README.md
 
       - name: Typecheck
-        working-directory: packages/better-stack
+        working-directory: packages/stack
         run: pnpm typecheck
 
       - name: Build packages
         run: pnpm build --filter "@btst/stack" --force
 
       - name: Verify tag matches package version
-        working-directory: packages/better-stack
+        working-directory: packages/stack
         run: |
           PKG_VERSION=$(node -p "require('./package.json').version")
           if [ -n "${{ github.event.release.tag_name }}" ]; then
@@ -57,7 +57,7 @@ jobs:
           fi
 
       - name: Publish to npm
-        working-directory: packages/better-stack
+        working-directory: packages/stack
         run: npm publish --access public --provenance
 
       - name: Upload npm logs on failure

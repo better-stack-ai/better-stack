@@ -1,19 +1,19 @@
 ---
 title: CLI
-description: Generate database schemas and migrations using the Better Stack CLI.
+description: Generate database schemas and migrations using the BTST CLI.
 ---
 
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
 
 
-The Better Stack CLI (`@btst/cli`) helps you generate database schemas and migrations from your plugin `dbSchema` exports.
+The BTST CLI (`@btst/cli`) helps you generate database schemas and migrations from your plugin `dbSchema` exports.
 
 ## About Better DB
 
-Better Stack uses [Better DB (`@btst/db`)](https://github.com/better-stack-ai/better-auth/tree/main/packages/btst) as its database abstraction layer—a specialized fork of [better-auth](https://www.better-auth.com)'s database layer optimized for Better Stack's plugin architecture.
+BTST uses [Better DB (`@btst/db`)](https://github.com/better-stack-ai/better-auth/tree/main/packages/btst) as its database abstraction layer—a specialized fork of [better-auth](https://www.better-auth.com)'s database layer optimized for BTST's plugin architecture.
 
-The CLI works with the `dbSchema` exported from your Better Stack configuration, which is built using Better DB's schema definition API. All plugin schemas are automatically merged into a unified schema that the CLI can process.
+The CLI works with the `dbSchema` exported from your BTST configuration, which is built using Better DB's schema definition API. All plugin schemas are automatically merged into a unified schema that the CLI can process.
 
 Install the CLI as a dev dependency:
 
@@ -41,25 +41,25 @@ Install the CLI as a dev dependency:
 
 | Parameter | Command | Required | Values | Description |
 |-----------|---------|----------|--------|-------------|
-| `--config` | `generate`, `migrate` | Yes | File path (e.g., `db.ts`, `lib/better-stack.ts`) | Path to your Better Stack configuration file that exports `dbSchema` |
+| `--config` | `generate`, `migrate` | Yes | File path (e.g., `db.ts`, `lib/stack.ts`) | Path to your BTST configuration file that exports `dbSchema` |
 | `--orm` | `generate` | Yes | `prisma`, `drizzle`, `kysely` | The ORM to generate schema for |
 | `--output` | `generate`, `migrate` | Yes (generate), Yes (migrate) | File path | Output file path for generated schema or migration SQL |
 | `--database-url` | `generate` (kysely only), `migrate` | Yes (kysely generate), Yes (migrate) | Database connection string | Database URL (can also use `DATABASE_URL` environment variable) |
 
 ## Generate
 
-Generate database schemas for your ORM from your Better Stack `dbSchema`:
+Generate database schemas for your ORM from your BTST `dbSchema`:
 
 <Tabs items={["prisma", "drizzle", "kysely"]}>
   <Tab value="prisma">
     ```bash
-    npx @btst/cli generate --config=lib/better-stack.ts --orm=prisma --output=schema.prisma
+    npx @btst/cli generate --config=lib/stack.ts --orm=prisma --output=schema.prisma
     ```
   </Tab>
 
   <Tab value="drizzle">
     ```bash
-    npx @btst/cli generate --config=lib/better-stack.ts --orm=drizzle --output=src/db/schema.ts
+    npx @btst/cli generate --config=lib/stack.ts --orm=drizzle --output=src/db/schema.ts
     ```
   </Tab>
 
@@ -69,17 +69,17 @@ Generate database schemas for your ORM from your Better Stack `dbSchema`:
     **Using DATABASE_URL environment variable:**
 
     ```bash
-    DATABASE_URL=sqlite:./dev.db npx @btst/cli generate --config=lib/better-stack.ts --orm=kysely --output=migrations/schema.sql
+    DATABASE_URL=sqlite:./dev.db npx @btst/cli generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql
     ```
 
     **Or using --database-url flag:**
 
     ```bash
-    npx @btst/cli generate --config=lib/better-stack.ts --orm=kysely --output=migrations/schema.sql --database-url=sqlite:./dev.db
+    npx @btst/cli generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql --database-url=sqlite:./dev.db
     ```
 
     ```bash
-    npx @btst/cli generate --config=lib/better-stack.ts --orm=kysely --output=migrations/schema.sql --database-url=postgres://user:pass@localhost:5432/db
+    npx @btst/cli generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql --database-url=postgres://user:pass@localhost:5432/db
     ```
   </Tab>
 </Tabs>
@@ -92,17 +92,17 @@ Migrate your database schema directly (Kysely only). For Prisma and Drizzle, use
 **Using DATABASE_URL environment variable:**
 
 ```bash
-DATABASE_URL=sqlite:./dev.db npx @btst/cli migrate --config=lib/better-stack.ts
+DATABASE_URL=sqlite:./dev.db npx @btst/cli migrate --config=lib/stack.ts
 ```
 
 **Or using --database-url flag:**
 
 ```bash
-npx @btst/cli migrate --config=lib/better-stack.ts --database-url=sqlite:./dev.db
+npx @btst/cli migrate --config=lib/stack.ts --database-url=sqlite:./dev.db
 ```
 
 ```bash
-npx @btst/cli migrate --config=lib/better-stack.ts --database-url=postgres://user:pass@localhost:5432/db
+npx @btst/cli migrate --config=lib/stack.ts --database-url=postgres://user:pass@localhost:5432/db
 ```
 
 ### Generate SQL to File
@@ -110,17 +110,17 @@ npx @btst/cli migrate --config=lib/better-stack.ts --database-url=postgres://use
 Instead of running migrations directly, generate SQL to a file:
 
 ```bash
-npx @btst/cli migrate --config=lib/better-stack.ts --output=migrations.sql --database-url=sqlite:./dev.db
+npx @btst/cli migrate --config=lib/stack.ts --output=migrations.sql --database-url=sqlite:./dev.db
 ```
 
 ## Gotchas
 
 Because the CLI executes your config file to extract the `dbSchema`, there are a few limitations to be aware of:
 
-- **Path aliases don't work**: Path aliases (like `@/` or `~/`) configured in your TypeScript config won't work for any imports used in your `better-stack.ts` file or any files it imports. Use relative paths instead.
+- **Path aliases don't work**: Path aliases (like `@/` or `~/`) configured in your TypeScript config won't work for any imports used in your `stack.ts` file or any files it imports. Use relative paths instead.
 
 - **Environment variables**: If your config file or its imports have conditional checks for available environment variables (e.g., checking if `process.env.SOME_VAR` exists), you should also pass those environment variables when running CLI commands:
 
 ```bash
-SOME_VAR=value npx @btst/cli generate --config=lib/better-stack.ts --orm=prisma --output=schema.prisma
+SOME_VAR=value npx @btst/cli generate --config=lib/stack.ts --orm=prisma --output=schema.prisma
 ```

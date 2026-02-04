@@ -1,14 +1,14 @@
 "use client";
 
 import { PageLayout } from "./page-layout";
-import { BetterStackAttribution } from "./better-stack-attribution";
+import { StackAttribution } from "./stack-attribution";
 
 export interface PageWrapperProps {
 	children: React.ReactNode;
 	className?: string;
 	testId?: string;
 	/**
-	 * Whether to show the "Powered by Better Stack" attribution.
+	 * Whether to show the "Powered by BTST" attribution.
 	 * Defaults to true.
 	 */
 	showAttribution?: boolean;
@@ -39,7 +39,7 @@ export function PageWrapper({
 				{children}
 			</PageLayout>
 
-			{showAttribution && <BetterStackAttribution />}
+			{showAttribution && <StackAttribution />}
 		</>
 	);
 }

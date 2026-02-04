@@ -32,18 +32,18 @@ The Kanban plugin provides a full-featured project management system with:
 Ensure you followed the general [framework installation guide](/installation) first.
 </Callout>
 
-Follow these steps to add the Kanban plugin to your Better Stack setup.
+Follow these steps to add the Kanban plugin to your BTST setup.
 
 ### 1. Add Plugin to Backend API
 
-Import and register the kanban backend plugin in your `better-stack.ts` file:
+Import and register the kanban backend plugin in your `stack.ts` file:
 
-```ts title="lib/better-stack.ts"
-import { betterStack } from "@btst/stack"
+```ts title="lib/stack.ts"
+import { stack } from "@btst/stack"
 import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
 // ... your adapter imports
 
-const { handler, dbSchema } = betterStack({
+const { handler, dbSchema } = stack({
   basePath: "/api/data",
   plugins: {
     kanban: kanbanBackendPlugin()
@@ -60,9 +60,9 @@ The `kanbanBackendPlugin()` accepts optional hooks for customizing behavior (aut
 
 ### 2. Add Plugin to Client
 
-Register the kanban client plugin in your `better-stack-client.tsx` file:
+Register the kanban client plugin in your `stack-client.tsx` file:
 
-```tsx title="lib/better-stack-client.tsx"
+```tsx title="lib/stack-client.tsx"
 import { createStackClient } from "@btst/stack/client"
 import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
 import { QueryClient } from "@tanstack/react-query"
@@ -111,12 +111,12 @@ This includes all necessary styles for the kanban board components and drag-and-
 
 ### 4. Add Context Overrides
 
-Configure framework-specific overrides in your `BetterStackProvider`:
+Configure framework-specific overrides in your `StackProvider`:
 
 <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
   <Tab value="next-js">
     ```tsx title="app/pages/[[...all]]/layout.tsx"
-    import { BetterStackProvider } from "@btst/stack/context"
+    import { StackProvider } from "@btst/stack/context"
     import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
     import Link from "next/link"
     import { useRouter } from "next/navigation"
@@ -136,7 +136,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
       const baseURL = getBaseURL()
       
       return (
-        <BetterStackProvider<PluginOverrides>
+        <StackProvider<PluginOverrides>
           basePath="/pages"
           overrides={{
             kanban: {
@@ -152,7 +152,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
           }}
         >
           {children}
-        </BetterStackProvider>
+        </StackProvider>
       )
     }
     ```
@@ -161,7 +161,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
   <Tab value="react-router">
     ```tsx title="app/routes/pages/_layout.tsx"
     import { Outlet, Link, useNavigate } from "react-router"
-    import { BetterStackProvider } from "@btst/stack/context"
+    import { StackProvider } from "@btst/stack/context"
     import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
     import { resolveUser, searchUsers } from "../lib/users" // Your user resolver
 
@@ -179,7 +179,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
       const baseURL = getBaseURL()
       
       return (
-        <BetterStackProvider<PluginOverrides>
+        <StackProvider<PluginOverrides>
           basePath="/pages"
           overrides={{
             kanban: {
@@ -198,7 +198,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
           }}
         >
           <Outlet />
-        </BetterStackProvider>
+        </StackProvider>
       )
     }
     ```
@@ -206,7 +206,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
 
   <Tab value="tanstack">
     ```tsx title="src/routes/pages/route.tsx"
-    import { BetterStackProvider } from "@btst/stack/context"
+    import { StackProvider } from "@btst/stack/context"
     import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
     import { Link, useRouter, Outlet } from "@tanstack/react-router"
     import { resolveUser, searchUsers } from "../../lib/users" // Your user resolver
@@ -225,7 +225,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
       const baseURL = getBaseURL()
 
       return (
-        <BetterStackProvider<PluginOverrides>
+        <StackProvider<PluginOverrides>
           basePath="/pages"
           overrides={{
             kanban: {
@@ -244,7 +244,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
           }}
         >
           <Outlet />
-        </BetterStackProvider>
+        </StackProvider>
       )
     }
     ```
@@ -268,7 +268,7 @@ Configure framework-specific overrides in your `BetterStackProvider`:
 After adding the plugin, generate your database schema using the CLI:
 
 ```bash
-npx @btst/cli generate --orm prisma --config lib/better-stack.ts  --output prisma/schema.prisma
+npx @btst/cli generate --orm prisma --config lib/stack.ts  --output prisma/schema.prisma
 ```
 
 This will create the necessary database tables for boards, columns, and tasks. Run migrations as needed for your ORM.
@@ -477,7 +477,7 @@ Creates the kanban backend plugin with optional hooks for authorization and cust
 ```ts
 import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
 
-const { handler, dbSchema } = betterStack({
+const { handler, dbSchema } = stack({
   plugins: {
     kanban: kanbanBackendPlugin(hooks)
   },
@@ -489,7 +489,7 @@ const { handler, dbSchema } = betterStack({
 
 Customize backend behavior with optional lifecycle hooks. All hooks are optional and allow you to add authorization, logging, and custom behavior:
 
-```ts title="lib/better-stack.ts"
+```ts title="lib/stack.ts"
 import { kanbanBackendPlugin, type KanbanBackendHooks } from "@btst/stack/plugins/kanban/api"
 
 const kanbanHooks: KanbanBackendHooks = {
@@ -539,7 +539,7 @@ const kanbanHooks: KanbanBackendHooks = {
   },
 }
 
-const { handler, dbSchema } = betterStack({
+const { handler, dbSchema } = stack({
   plugins: {
     kanban: kanbanBackendPlugin(kanbanHooks)
   },
@@ -579,7 +579,7 @@ const { handler, dbSchema } = betterStack({
 
 Creates the kanban client plugin with routes, loaders, and meta generators.
 
-```tsx title="lib/better-stack-client.tsx"
+```tsx title="lib/stack-client.tsx"
 kanban: kanbanClientPlugin({
   // Required configuration
   apiBaseURL: baseURL,

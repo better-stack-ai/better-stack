@@ -1,6 +1,6 @@
 import { createFileRoute, useParams, useNavigate, Link } from "@tanstack/react-router"
 import { QueryClientProvider } from "@tanstack/react-query"
-import { BetterStackProvider } from "@btst/stack/context"
+import { StackProvider } from "@btst/stack/context"
 import { FormRenderer } from "@btst/stack/plugins/form-builder/client/components"
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
 import { Button } from "@/components/ui/button"
@@ -27,7 +27,7 @@ function FormDemoPage() {
 
   return (
     <QueryClientProvider client={context.queryClient}>
-      <BetterStackProvider<PluginOverrides>
+      <StackProvider<PluginOverrides>
         basePath=""
         overrides={{
           "form-builder": {
@@ -72,7 +72,7 @@ function FormDemoPage() {
             </div>
           </div>
         </main>
-      </BetterStackProvider>
+      </StackProvider>
     </QueryClientProvider>
   )
 }

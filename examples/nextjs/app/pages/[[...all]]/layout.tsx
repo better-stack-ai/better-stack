@@ -1,6 +1,6 @@
 "use client"
 import React, { useState } from "react"
-import { BetterStackProvider } from "@btst/stack/context"
+import { StackProvider } from "@btst/stack/context"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import Link from "next/link"
@@ -94,7 +94,7 @@ export default function ExampleLayout({
     return (
         <QueryClientProvider client={queryClient}>
             <ReactQueryDevtools initialIsOpen={false} />
-            <BetterStackProvider<PluginOverrides>
+            <StackProvider<PluginOverrides>
                 basePath="/pages"
                 overrides={{
                     todos: {
@@ -277,7 +277,7 @@ export default function ExampleLayout({
                 }}
             >
                 {children}
-            </BetterStackProvider>
+            </StackProvider>
         </QueryClientProvider>
     )
 }

@@ -1,4 +1,4 @@
-import { handler } from "@/lib/better-stack-public-chat";
+import { handler } from "@/lib/stack-public-chat";
 
 export const GET = handler;
 export const POST = handler;

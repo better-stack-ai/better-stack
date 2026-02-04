@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { BetterStackProvider } from "@btst/stack/context";
+import { StackProvider } from "@btst/stack/context";
 import { FormRenderer } from "@btst/stack/plugins/form-builder/client/components";
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client";
 import { getOrCreateQueryClient } from "@/lib/query-client";
@@ -29,7 +29,7 @@ export default function FormDemoPage() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BetterStackProvider<PluginOverrides>
+      <StackProvider<PluginOverrides>
         basePath=""
         overrides={{
           "form-builder": {
@@ -71,7 +71,7 @@ export default function FormDemoPage() {
             </div>
           </div>
         </main>
-      </BetterStackProvider>
+      </StackProvider>
     </QueryClientProvider>
   );
 }

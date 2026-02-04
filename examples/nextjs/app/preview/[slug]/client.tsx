@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { QueryClientProvider } from "@tanstack/react-query"
-import { BetterStackProvider } from "@btst/stack/context"
+import { StackProvider } from "@btst/stack/context"
 import { getOrCreateQueryClient } from "@/lib/query-client"
 import { PageRenderer, defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
 import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client"
@@ -34,7 +34,7 @@ export default function PreviewPageClient({ slug }: PreviewPageClientProps) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BetterStackProvider<PluginOverrides>
+      <StackProvider<PluginOverrides>
         basePath="/preview"
         overrides={{
           "ui-builder": {
@@ -80,7 +80,7 @@ export default function PreviewPageClient({ slug }: PreviewPageClientProps) {
             )}
           />
         </div>
-      </BetterStackProvider>
+      </StackProvider>
     </QueryClientProvider>
   )
 }

@@ -1,6 +1,6 @@
 import type { Route } from "./+types/sitemap.xml";
 import { QueryClient } from "@tanstack/react-query";
-import { getStackClient } from "~/lib/better-stack-client";
+import { getStackClient } from "~/lib/stack-client";
 import { sitemapEntryToXmlString } from "@btst/stack/client";
 
 export async function loader({}: Route.LoaderArgs) {

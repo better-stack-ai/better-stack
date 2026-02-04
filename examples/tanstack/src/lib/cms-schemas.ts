@@ -3,7 +3,7 @@
  *
  * This file defines the Zod schemas for CMS content types.
  * Import these schemas in both:
- * - Server-side: better-stack.ts for backend validation
+ * - Server-side: stack.ts for backend validation
  * - Client-side: components for type-safe hooks
  */
 import { z } from "zod"

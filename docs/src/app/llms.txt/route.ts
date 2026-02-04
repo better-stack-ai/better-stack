@@ -5,9 +5,9 @@ export const revalidate = false;
 export async function GET() {
   const pages = source.getPages();
   
-  const content = `# Better Stack Documentation
+  const content = `# BTST Documentation
 
-> Better Stack is a modern full-stack framework for building web applications.
+> BTST is a modern full-stack framework for building web applications.
 
 ## Available Documentation Pages
 

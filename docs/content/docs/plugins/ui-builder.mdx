@@ -47,12 +47,12 @@ Ensure you followed the general [framework installation guide](/installation) fi
 
 The UI Builder stores pages as CMS content items. Add the pre-configured content type to your CMS:
 
-```ts title="lib/better-stack.ts"
-import { betterStack } from "@btst/stack"
+```ts title="lib/stack.ts"
+import { stack } from "@btst/stack"
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
 
-const { handler, dbSchema } = betterStack({
+const { handler, dbSchema } = stack({
   basePath: "/api/data",
   plugins: {
     cms: cmsBackendPlugin({
@@ -82,7 +82,7 @@ export { handler, dbSchema }
 
 Register the UI Builder client plugin:
 
-```tsx title="lib/better-stack-client.tsx"
+```tsx title="lib/stack-client.tsx"
 import { createStackClient } from "@btst/stack/client"
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
 import { uiBuilderClientPlugin, defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
@@ -147,7 +147,7 @@ type PluginOverrides = {
   "ui-builder": UIBuilderPluginOverrides,
 }
 
-<BetterStackProvider<PluginOverrides>
+<StackProvider<PluginOverrides>
   basePath="/pages"
   overrides={{
     "cms": {
@@ -168,7 +168,7 @@ type PluginOverrides = {
   }}
 >
   {children}
-</BetterStackProvider>
+</StackProvider>
 ```
 
 ### 4. Install Required Dependencies
@@ -716,7 +716,7 @@ function CreatePage() {
 
 Use hooks in the client plugin config for async authorization during SSR:
 
-```tsx title="lib/better-stack-client.tsx"
+```tsx title="lib/stack-client.tsx"
 import { redirect } from "next/navigation"
 
 "ui-builder": uiBuilderClientPlugin({
@@ -867,7 +867,7 @@ Creates the client plugin with routes and SSR loaders.
 | `Link` | `ComponentType` | No | Link component |
 | `refresh` | `() => void` | No | Refresh function |
 | `componentRegistry` | `ComponentRegistry` | No | Custom component registry |
-| `showAttribution` | `boolean` | No | Show Better Stack attribution |
+| `showAttribution` | `boolean` | No | Show BTST attribution |
 
 #### defaultComponentRegistry
 

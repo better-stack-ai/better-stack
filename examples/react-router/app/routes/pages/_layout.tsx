@@ -1,7 +1,7 @@
 // app/routes/__root.tsx
 import { useState, useEffect } from "react";
 import { Outlet, Link, useNavigate } from "react-router";
-import { BetterStackProvider } from "@btst/stack/context"
+import { StackProvider } from "@btst/stack/context"
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
@@ -47,7 +47,7 @@ export default function Layout() {
     const navigate = useNavigate()
   return (
     
-            <BetterStackProvider<PluginOverrides>
+            <StackProvider<PluginOverrides>
                 basePath="/pages"
                 overrides={{
                     blog: {
@@ -209,7 +209,7 @@ export default function Layout() {
                 }}
             >
                 <Outlet />
-            </BetterStackProvider>
+            </StackProvider>
             
   );
 }

@@ -3,7 +3,7 @@ import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
 import { headers } from "next/headers"
 import { notFound } from "next/navigation"
 import { getOrCreateQueryClient } from "@/lib/query-client"
-import { getStackClient } from "@/lib/better-stack-client"
+import { getStackClient } from "@/lib/stack-client"
 import { metaElementsToObject, normalizePath } from "@btst/stack/client"
 import { Metadata } from "next"
 

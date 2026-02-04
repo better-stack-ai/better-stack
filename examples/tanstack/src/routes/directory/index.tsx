@@ -1,7 +1,7 @@
 import { 
     useContent, 
 } from "@btst/stack/plugins/cms/client/hooks"
-import { BetterStackProvider } from "@btst/stack/context"
+import { StackProvider } from "@btst/stack/context"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { Link, useRouter, createFileRoute } from "@tanstack/react-router"
 import { useState, useMemo } from "react"
@@ -173,7 +173,7 @@ function DirectoryPage() {
 
     return (
         <QueryClientProvider client={context.queryClient}>
-            <BetterStackProvider<PluginOverrides>
+            <StackProvider<PluginOverrides>
                 basePath="/directory"
                 overrides={{
                     cms: {
@@ -189,7 +189,7 @@ function DirectoryPage() {
                 }}
             >
                 <DirectoryContent />
-            </BetterStackProvider>
+            </StackProvider>
         </QueryClientProvider>
     )
 }
