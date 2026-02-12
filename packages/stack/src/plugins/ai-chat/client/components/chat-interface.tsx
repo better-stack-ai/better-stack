@@ -362,6 +362,12 @@ export function ChatInterface({
 		const savedInput = input;
 		const savedFiles = files ? [...files] : [];
 
+		// Capture the message count before sending so we can restore to this
+		// exact point on failure. The SDK may append both a user message and a
+		// partial assistant message during streaming — using a fixed snapshot
+		// length removes all of them instead of just the last one.
+		const messageCountBeforeSend = messages.length;
+
 		// Clear input immediately (optimistically) - the AI SDK renders messages optimistically,
 		// so we need to clear the input before the message appears to avoid duplicate text
 		setInput("");
@@ -394,8 +400,9 @@ export function ChatInterface({
 			if (isFirstMessageSentRef.current && !hasNavigatedRef.current) {
 				isFirstMessageSentRef.current = false;
 			}
-			// Remove the failed optimistic user message the SDK added before the request
-			setMessages((prev) => prev.slice(0, -1));
+			// Remove all messages the SDK added after our send attempt (optimistic
+			// user message AND any partial assistant message from a mid-stream failure).
+			setMessages((prev) => prev.slice(0, messageCountBeforeSend));
 			console.error("Error sending message:", error);
 		}
 	};
