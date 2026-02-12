@@ -285,7 +285,10 @@ export function ChatInterface({
 	// Reset the scroll lock when a new generation starts so auto-scroll
 	// resumes for the next assistant response.
 	useEffect(() => {
-		if (status === "streaming" && prevStatusRef.current !== "streaming") {
+		if (
+			status !== prevStatusRef.current &&
+			(status === "streaming" || status === "submitted")
+		) {
 			userHasScrolledRef.current = false;
 		}
 		prevStatusRef.current = status;
@@ -346,6 +349,14 @@ export function ChatInterface({
 		if (!isPublicMode && !id && messages.length === 0) {
 			isFirstMessageSentRef.current = true;
 		}
+
+		// Re-enable auto-scroll so the user's own message (and any subsequent
+		// error indicator or assistant reply) is scrolled into view.  Without
+		// this, if the user had scrolled up earlier, userHasScrolledRef stays
+		// true and none of the new content would be auto-scrolled to — and if
+		// the request fails before reaching "streaming" status the ref would
+		// remain stuck permanently.
+		userHasScrolledRef.current = false;
 
 		// Save current values before clearing - we'll restore them if send fails
 		const savedInput = input;
