@@ -10,6 +10,7 @@ import type {
   AutoFormInputComponentProps,
   ComponentLayer,
   FieldConfigFunction,
+  Variable,
 } from "@workspace/ui/components/ui-builder/types";
 import IconNameField from "@workspace/ui/components/ui-builder/internal/form-fields/iconname-field";
 import { Textarea } from "@workspace/ui/components/textarea";
@@ -35,6 +36,13 @@ import { Card, CardContent } from "@workspace/ui/components/card";
 import BreakpointClassNameControl from "@workspace/ui/components/ui-builder/internal/form-fields/classname-control";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select";
 
 export const classNameFieldOverrides: FieldConfigFunction = (
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -62,10 +70,18 @@ export const classNameFieldOverrides: FieldConfigFunction = (
 };
 
  
-export const childrenFieldOverrides: FieldConfigFunction = (
-  layer,
+export const childrenFieldOverrides = (
+  layer: ComponentLayer,
+  allowVariableBinding = true
 ) => {
   return {
+    renderParent: allowVariableBinding
+      ? ({ children }: { children: React.ReactNode }) => (
+          <ChildrenVariableBindingWrapper>
+            {children}
+          </ChildrenVariableBindingWrapper>
+        )
+      : undefined,
     fieldType: ({
       label,
       isRequired,
@@ -109,7 +125,7 @@ export const iconNameFieldOverrides: FieldConfigFunction = (layer) => {
 
 export const childrenAsTextareaFieldOverrides = (
   layer: ComponentLayer,
-  allowVariableBinding = false
+  allowVariableBinding = true
 ) => {
   return {
     renderParent: allowVariableBinding
@@ -143,7 +159,7 @@ export const childrenAsTextareaFieldOverrides = (
 
 export const childrenAsTipTapFieldOverrides = (
   layer: ComponentLayer,
-  allowVariableBinding = false
+  allowVariableBinding = true
 ) => {
   return {
     renderParent: allowVariableBinding
@@ -187,16 +203,16 @@ export const childrenAsTipTapFieldOverrides = (
 };
 
 // Memoized common field overrides to avoid recreating objects
-const memoizedCommonFieldOverrides = new Map<boolean, Record<string, FieldConfigFunction>>();
+const memoizedCommonFieldOverrides = new Map<boolean, Record<string, (layer: ComponentLayer) => ReturnType<FieldConfigFunction>>>();
 
-export const commonFieldOverrides = (allowBinding = false) => {
+export const commonFieldOverrides = (allowBinding = true) => {
   if (memoizedCommonFieldOverrides.has(allowBinding)) {
     return memoizedCommonFieldOverrides.get(allowBinding)!;
   }
   
   const overrides = {
     className: (layer: ComponentLayer) => classNameFieldOverrides(layer),
-    children: (layer: ComponentLayer) => childrenFieldOverrides(layer),
+    children: (layer: ComponentLayer) => childrenFieldOverrides(layer, allowBinding),
   };
   
   memoizedCommonFieldOverrides.set(allowBinding, overrides);
@@ -207,6 +223,162 @@ export const commonVariableRenderParentOverrides = (propName: string) => {
   return {
     renderParent: ({ children }: { children: React.ReactNode }) => (
       <VariableBindingWrapper propName={propName}>{children}</VariableBindingWrapper>
+    ),
+  };
+};
+
+/**
+ * Component for function props that shows a dropdown of all functions
+ * from the function registry. Variable binding is handled by the wrapper.
+ */
+function FunctionPropField({
+  propName,
+  label,
+  isRequired,
+  fieldConfigItem,
+}: {
+  propName: string;
+  label: string;
+  isRequired?: boolean;
+  fieldConfigItem?: { description?: React.ReactNode };
+}) {
+  const selectedLayerId = useLayerStore((state) => state.selectedLayerId);
+  const findLayerById = useLayerStore((state) => state.findLayerById);
+  const updateLayer = useLayerStore((state) => state.updateLayer);
+  const incrementRevision = useEditorStore((state) => state.incrementRevision);
+  const functionRegistry = useEditorStore((state) => state.functionRegistry);
+  const unbindPropFromVariable = useLayerStore(
+    (state) => state.unbindPropFromVariable
+  );
+
+  const selectedLayer = findLayerById(selectedLayerId);
+
+  if (!selectedLayer || !functionRegistry) {
+    return (
+      <FormFieldWrapper
+        label={label}
+        isRequired={isRequired}
+        fieldConfigItem={fieldConfigItem}
+      >
+        <Select disabled>
+          <SelectTrigger>
+            <SelectValue placeholder="No function registry available" />
+          </SelectTrigger>
+        </Select>
+      </FormFieldWrapper>
+    );
+  }
+
+  // Get the function registry entries as array
+  const functionEntries = Object.entries(functionRegistry);
+
+  // Get the current selected function ID (direct binding only, variable binding handled by wrapper)
+  const getCurrentFunctionId = (): string => {
+    const directFuncId = selectedLayer.props[`__function_${propName}`];
+    if (typeof directFuncId === 'string') {
+      return directFuncId;
+    }
+    return '';
+  };
+
+  const handleValueChange = (value: string) => {
+    if (value === '__none__') {
+      // Clear the function
+      unbindPropFromVariable(selectedLayer.id, propName);
+      // Also remove any direct function binding
+      // Note: We must explicitly set values to undefined rather than deleting keys,
+      // because updateLayer merges props with { ...layer.props, ...newProps }
+      updateLayer(selectedLayer.id, {
+        [`__function_${propName}`]: undefined,
+        [propName]: undefined,
+      });
+      incrementRevision();
+      return;
+    }
+
+    // Direct function binding from registry
+    const funcDef = functionRegistry[value];
+    if (funcDef) {
+      // Store the function ID for code generation and store the actual function
+      unbindPropFromVariable(selectedLayer.id, propName);
+      updateLayer(selectedLayer.id, { 
+        ...selectedLayer.props, 
+        [propName]: funcDef.fn,
+        [`__function_${propName}`]: value 
+      });
+      incrementRevision();
+    }
+  };
+
+  const currentFunctionId = getCurrentFunctionId();
+
+  // Get display text for current selection
+  const getDisplayText = () => {
+    if (currentFunctionId) {
+      const funcDef = functionRegistry[currentFunctionId];
+      return funcDef?.name || currentFunctionId;
+    }
+    return 'Select a function...';
+  };
+
+  return (
+    <FormFieldWrapper
+      label={label}
+      isRequired={isRequired}
+      fieldConfigItem={fieldConfigItem}
+    >
+      <Select
+        value={currentFunctionId}
+        onValueChange={handleValueChange}
+      >
+        <SelectTrigger className="w-full mb-0">
+          <SelectValue placeholder="Select a function...">
+            {getDisplayText()}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {/* Option to clear */}
+          <SelectItem value="__none__">
+            <span className="text-muted-foreground">None (clear)</span>
+          </SelectItem>
+
+          {/* Direct functions from registry */}
+          {functionEntries.length > 0 && (
+            <>
+              {functionEntries.map(([id, funcDef]) => (
+                <SelectItem key={id} value={id}>
+                  <div className="flex flex-col">
+                    <span>{funcDef.name}</span>
+                    {funcDef.description && (
+                      <span className="text-xs text-muted-foreground">
+                        {funcDef.description}
+                      </span>
+                    )}
+                  </div>
+                </SelectItem>
+              ))}
+            </>
+          )}
+        </SelectContent>
+      </Select>
+    </FormFieldWrapper>
+  );
+}
+
+/**
+ * Field override for function props (onClick, onSubmit, etc.)
+ * Shows a dropdown to select directly from functionRegistry,
+ * with a separate bind button for function-type variables (consistent with other fields).
+ */
+export const functionPropFieldOverrides = (propName: string): ReturnType<FieldConfigFunction> => {
+  return {
+    renderParent: ({ children }: { children: React.ReactNode }) => (
+      <VariableBindingWrapper propName={propName} isFunctionProp={true}>
+        {children}
+      </VariableBindingWrapper>
+    ),
+    fieldType: (props: AutoFormInputComponentProps) => (
+      <FunctionPropField propName={propName} {...props} />
     ),
   };
 };
@@ -249,15 +421,19 @@ export const textInputFieldOverrides = (
 export function VariableBindingWrapper({
   propName,
   children,
+  isFunctionProp = false,
 }: {
   propName: string;
   children: React.ReactNode;
+  /** Set to true when binding to function props (onClick, onSubmit, etc.) */
+  isFunctionProp?: boolean;
 }) {
   const variables = useLayerStore((state) => state.variables);
   const selectedLayerId = useLayerStore((state) => state.selectedLayerId);
   const findLayerById = useLayerStore((state) => state.findLayerById);
   const isBindingImmutable = useLayerStore((state) => state.isBindingImmutable);
   const incrementRevision = useEditorStore((state) => state.incrementRevision);
+  const functionRegistry = useEditorStore((state) => state.functionRegistry);
   const unbindPropFromVariable = useLayerStore(
     (state) => state.unbindPropFromVariable
   );
@@ -270,12 +446,29 @@ export function VariableBindingWrapper({
     return <>{children}</>;
   }
 
+  // Filter variables based on prop type
+  // Function props should only show function-type variables
+  // Non-function props should show non-function variables
+  const filteredVariables = variables.filter((v) => 
+    isFunctionProp ? v.type === 'function' : v.type !== 'function'
+  );
+
   const currentValue = selectedLayer.props[propName];
   const isCurrentlyBound = isVariableReference(currentValue);
   const boundVariable = isCurrentlyBound
     ? variables.find((v) => v.id === currentValue.__variableRef)
     : null;
   const isImmutable = isBindingImmutable(selectedLayer.id, propName);
+
+  // Get function display name for function-type variables
+  const getFunctionDisplayValue = (variable: Variable) => {
+    if (variable.type === 'function' && functionRegistry) {
+      const funcId = String(variable.defaultValue);
+      const funcDef = functionRegistry[funcId];
+      return funcDef ? funcDef.name : funcId;
+    }
+    return String(variable.defaultValue);
+  };
 
   const handleBindToVariable = (variableId: string) => {
     bindPropToVariable(selectedLayer.id, propName, variableId);
@@ -288,6 +481,18 @@ export function VariableBindingWrapper({
     incrementRevision();
   };
 
+  const emptyMessage = isFunctionProp 
+    ? "No function variables defined" 
+    : "No variables defined";
+
+  const bindLabel = isFunctionProp 
+    ? "Bind to Function Variable" 
+    : "Bind to Variable";
+
+  const tooltipLabel = isFunctionProp 
+    ? "Bind Function" 
+    : "Bind Variable";
+
   return (
     <div className="flex w-full gap-2 items-end">
       {isCurrentlyBound && boundVariable ? (
@@ -295,7 +500,7 @@ export function VariableBindingWrapper({
         <div className="flex flex-col gap-2 w-full">
           <Label>{propName.charAt(0).toUpperCase() + propName.slice(1)}</Label>
           <div className="flex items-end gap-2 w-full">
-            <Card className="w-full">
+            <Card className="w-full overflow-hidden min-w-0">
               <CardContent className="py-1 px-4">
                 <div className="flex items-center gap-2 w-full">
                   <Link className="h-4 w-4 flex-shrink-0" />
@@ -312,7 +517,7 @@ export function VariableBindingWrapper({
                       )}
                     </div>
                     <span className="text-xs text-muted-foreground truncate">
-                      {String(boundVariable.defaultValue)}
+                      {getFunctionDisplayValue(boundVariable)}
                     </span>
                   </div>
                 </div>
@@ -325,6 +530,7 @@ export function VariableBindingWrapper({
                     variant="outline"
                     onClick={handleUnbind}
                     className="px-3 h-10"
+                    data-testid="unbind-variable-button"
                   >
                     <Unlink className="h-4 w-4" />
                   </Button>
@@ -343,19 +549,19 @@ export function VariableBindingWrapper({
               <Tooltip>
                 <DropdownMenuTrigger asChild>
                   <TooltipTrigger asChild>
-                    <Button variant="outline" size="sm" className="px-3 h-10">
+                    <Button variant="outline" size="sm" className="px-3 h-10" data-testid="bind-variable-button">
                       <Link className="h-4 w-4 my-1" />
                     </Button>
                   </TooltipTrigger>
                 </DropdownMenuTrigger>
-                <TooltipContent>Bind Variable</TooltipContent>
+                <TooltipContent>{tooltipLabel}</TooltipContent>
               </Tooltip>
               <DropdownMenuContent align="end" className="w-56">
                 <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground border-b">
-                  Bind to Variable
+                  {bindLabel}
                 </div>
-                {variables.length > 0 ? (
-                  variables.map((variable) => (
+                {filteredVariables.length > 0 ? (
+                  filteredVariables.map((variable) => (
                     <DropdownMenuItem
                       key={variable.id}
                       onClick={() => handleBindToVariable(variable.id)}
@@ -371,7 +577,7 @@ export function VariableBindingWrapper({
                             </span>
                           </div>
                           <span className="text-xs text-muted-foreground truncate">
-                            {String(variable.defaultValue)}
+                            {getFunctionDisplayValue(variable)}
                           </span>
                         </div>
                       </div>
@@ -379,7 +585,7 @@ export function VariableBindingWrapper({
                   ))
                 ) : (
                   <div className="px-3 py-2 text-xs text-muted-foreground">
-                    No variables defined
+                    {emptyMessage}
                   </div>
                 )}
               </DropdownMenuContent>
@@ -465,7 +671,7 @@ export function ChildrenVariableBindingWrapper({
         <div className="flex flex-col gap-2 w-full">
           <Label>Children</Label>
           <div className="flex items-end gap-2 w-full">
-            <Card className="w-full">
+            <Card className="w-full overflow-hidden min-w-0">
               <CardContent className="py-1 px-4">
                 <div className="flex items-center gap-2 w-full">
                   <Link className="h-4 w-4 flex-shrink-0" />
@@ -495,6 +701,7 @@ export function ChildrenVariableBindingWrapper({
                     variant="outline"
                     onClick={handleUnbind}
                     className="px-3 h-10"
+                    data-testid="unbind-children-button"
                   >
                     <Unlink className="h-4 w-4" />
                   </Button>
@@ -513,7 +720,7 @@ export function ChildrenVariableBindingWrapper({
               <Tooltip>
                 <DropdownMenuTrigger asChild>
                   <TooltipTrigger asChild>
-                    <Button variant="outline" size="sm" className="px-3 h-10">
+                    <Button variant="outline" size="sm" className="px-3 h-10" data-testid="bind-children-button">
                       <Link className="h-4 w-4 my-1" />
                     </Button>
                   </TooltipTrigger>
