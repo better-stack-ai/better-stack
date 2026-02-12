@@ -1,4 +1,14 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+/**
+ * Wait for the chat interface to finish streaming and return to the "ready" state.
+ * Uses the data-chat-status attribute exposed by ChatInterface.
+ */
+async function waitForChatReady(page: Page, timeout = 30000) {
+	await expect(
+		page.locator('[data-testid="chat-interface"][data-chat-status="ready"]'),
+	).toBeVisible({ timeout });
+}
 
 const hasOpenAiKey =
 	typeof process.env.OPENAI_API_KEY === "string" &&
@@ -545,8 +555,8 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 			chatInterface.locator('[aria-label="AI response"]'),
 		).toBeVisible({ timeout: 30000 });
 
-		// Wait for the response to complete (status should be ready)
-		await page.waitForTimeout(2000);
+		// Wait for streaming to complete
+		await waitForChatReady(page);
 
 		// Hover over the AI message to reveal retry button
 		const aiMessage = chatInterface
@@ -559,8 +569,8 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		await expect(retryButton).toBeVisible({ timeout: 5000 });
 		await retryButton.click();
 
-		// Wait for the new response to complete
-		await page.waitForTimeout(7000);
+		// Wait for the retry response to complete
+		await waitForChatReady(page);
 
 		// Verify there's still only one user message and one AI response
 		const userMessages = chatInterface.locator('[aria-label="Your message"]');
@@ -612,8 +622,8 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 			chatInterface.locator('[aria-label="AI response"]'),
 		).toBeVisible({ timeout: 30000 });
 
-		// Wait for the response to complete
-		await page.waitForTimeout(2000);
+		// Wait for streaming to complete
+		await waitForChatReady(page);
 
 		// Wait for URL to update with conversation ID
 		await page.waitForURL(/\/pages\/chat\/[a-zA-Z0-9-]+/, { timeout: 10000 });
@@ -648,7 +658,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		});
 
 		// Wait for new AI response to complete
-		await page.waitForTimeout(5000);
+		await waitForChatReady(page);
 
 		// Reload the page to verify persistence
 		await page.goto(conversationUrl);
@@ -695,7 +705,9 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		await expect(
 			chatInterface.locator('[aria-label="AI response"]'),
 		).toBeVisible({ timeout: 30000 });
-		await page.waitForTimeout(2000);
+
+		// Wait for first response to complete
+		await waitForChatReady(page);
 
 		// Send second message
 		await input.fill("Second question");
@@ -704,8 +716,11 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 			timeout: 15000,
 		});
 
-		// Wait for second AI response
-		await page.waitForTimeout(3000);
+		// Wait for second AI response to complete
+		await expect(
+			chatInterface.locator('[aria-label="AI response"]'),
+		).toHaveCount(2, { timeout: 30000 });
+		await waitForChatReady(page);
 
 		// Wait for URL to update with conversation ID
 		await page.waitForURL(/\/pages\/chat\/[a-zA-Z0-9-]+/, { timeout: 10000 });
@@ -748,7 +763,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		});
 
 		// Wait for new AI response to complete
-		await page.waitForTimeout(5000);
+		await waitForChatReady(page);
 
 		// Reload and verify persistence - the edit should have truncated the conversation
 		await page.goto(conversationUrl);

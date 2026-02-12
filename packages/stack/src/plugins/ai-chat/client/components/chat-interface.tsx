@@ -170,6 +170,12 @@ export function ChatInterface({
 			transport,
 			onError: (err) => {
 				console.error("useChat onError:", err);
+				// Reset first-message tracking if the send failed before a conversation was created.
+				// Without this, isFirstMessageSentRef stays true and the next successful send
+				// skips the "first message" navigation logic, corrupting the conversation flow.
+				if (!id && !hasNavigatedRef.current) {
+					isFirstMessageSentRef.current = false;
+				}
 			},
 			onFinish: async () => {
 				// In public mode, skip all persistence-related operations
@@ -271,8 +277,43 @@ export function ChatInterface({
 	const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
 	const scrollRef = useRef<HTMLDivElement>(null);
 
-	// Auto-scroll to bottom when messages change
+	// Track whether the user has manually scrolled away from the bottom.
+	// When true, auto-scroll is paused so the user can read earlier context.
+	const userHasScrolledRef = useRef(false);
+	const prevStatusRef = useRef(status);
+
+	// Reset the scroll lock when a new generation starts so auto-scroll
+	// resumes for the next assistant response.
 	useEffect(() => {
+		if (
+			status !== prevStatusRef.current &&
+			(status === "streaming" || status === "submitted")
+		) {
+			userHasScrolledRef.current = false;
+		}
+		prevStatusRef.current = status;
+	}, [status]);
+
+	// Attach a scroll listener to detect when the user scrolls away from the bottom.
+	useEffect(() => {
+		const viewport = scrollRef.current?.querySelector(
+			"[data-radix-scroll-area-viewport]",
+		);
+		if (!viewport) return;
+
+		const handleScroll = () => {
+			const { scrollTop, scrollHeight, clientHeight } = viewport;
+			const isNearBottom = scrollHeight - scrollTop - clientHeight < 50;
+			userHasScrolledRef.current = !isNearBottom;
+		};
+
+		viewport.addEventListener("scroll", handleScroll);
+		return () => viewport.removeEventListener("scroll", handleScroll);
+	}, []);
+
+	// Auto-scroll to bottom when messages change, unless the user has scrolled away
+	useEffect(() => {
+		if (userHasScrolledRef.current) return;
 		if (scrollRef.current) {
 			const scrollElement = scrollRef.current.querySelector(
 				"[data-radix-scroll-area-viewport]",
@@ -309,9 +350,23 @@ export function ChatInterface({
 			isFirstMessageSentRef.current = true;
 		}
 
+		// Re-enable auto-scroll so the user's own message (and any subsequent
+		// error indicator or assistant reply) is scrolled into view.  Without
+		// this, if the user had scrolled up earlier, userHasScrolledRef stays
+		// true and none of the new content would be auto-scrolled to — and if
+		// the request fails before reaching "streaming" status the ref would
+		// remain stuck permanently.
+		userHasScrolledRef.current = false;
+
 		// Save current values before clearing - we'll restore them if send fails
 		const savedInput = input;
 		const savedFiles = files ? [...files] : [];
+
+		// Capture the message count before sending so we can restore to this
+		// exact point on failure. The SDK may append both a user message and a
+		// partial assistant message during streaming — using a fixed snapshot
+		// length removes all of them instead of just the last one.
+		const messageCountBeforeSend = messages.length;
 
 		// Clear input immediately (optimistically) - the AI SDK renders messages optimistically,
 		// so we need to clear the input before the message appears to avoid duplicate text
@@ -341,6 +396,13 @@ export function ChatInterface({
 			// Restore input on failure so user can retry
 			setInput(savedInput);
 			setAttachedFiles(savedFiles);
+			// Reset first-message tracking so the next attempt still triggers navigation
+			if (isFirstMessageSentRef.current && !hasNavigatedRef.current) {
+				isFirstMessageSentRef.current = false;
+			}
+			// Remove all messages the SDK added after our send attempt (optimistic
+			// user message AND any partial assistant message from a mid-stream failure).
+			setMessages((prev) => prev.slice(0, messageCountBeforeSend));
 			console.error("Error sending message:", error);
 		}
 	};
@@ -410,6 +472,7 @@ export function ChatInterface({
 						className,
 					)}
 					data-testid="chat-interface"
+					data-chat-status={status}
 				>
 					{/* Messages Area */}
 					<ScrollArea ref={scrollRef} className="flex-1 h-full">

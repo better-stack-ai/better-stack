@@ -102,6 +102,8 @@ export default defineConfig({
 		},
 		{
 			name: "tanstack:memory",
+			fullyParallel: false,
+			workers: 1,
 			use: { baseURL: "http://localhost:3004" },
 			testMatch: [
 				"**/*.blog.spec.ts",
@@ -113,6 +115,8 @@ export default defineConfig({
 		},
 		{
 			name: "react-router:memory",
+			fullyParallel: false,
+			workers: 1,
 			use: { baseURL: "http://localhost:3005" },
 			testMatch: [
 				"**/*.blog.spec.ts",
