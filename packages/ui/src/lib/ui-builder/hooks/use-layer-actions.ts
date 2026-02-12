@@ -7,9 +7,15 @@ import { canPasteLayer } from '@workspace/ui/lib/ui-builder/utils/paste-validati
 /**
  * Hook that provides layer actions with clipboard support.
  * Uses the global clipboard from editor store for cross-component copy/paste.
+ *
+ * Clipboard state is read **imperatively** (via `getState()`) rather than
+ * through a reactive Zustand selector. This avoids O(N) re-renders across
+ * every layer instance whenever a copy/cut occurs. Callers that need a
+ * reactive `canPaste` boolean for rendering should subscribe to the clipboard
+ * slice directly in that component (see `ContextMenuPortalItems`).
  * 
  * @param layerId - The ID of the layer to operate on (optional, defaults to selected layer)
- * @returns Object with clipboard state and action handlers
+ * @returns Object with action handlers, permission flags, and an imperative `getCanPaste` check
  */
 export function useGlobalLayerActions(layerId?: string) {
   // Layer store
@@ -20,11 +26,11 @@ export function useGlobalLayerActions(layerId?: string) {
   const addLayerDirect = useLayerStore((state) => state.addLayerDirect);
   const isLayerAPage = useLayerStore((state) => state.isLayerAPage);
 
-  // Editor store - including clipboard
+  // Editor store — clipboard is read imperatively (not subscribed) to prevent
+  // every layer instance from re-rendering on copy/cut operations.
   const componentRegistry = useEditorStore((state) => state.registry);
   const allowPagesCreation = useEditorStore((state) => state.allowPagesCreation);
   const allowPagesDeletion = useEditorStore((state) => state.allowPagesDeletion);
-  const clipboard = useEditorStore((state) => state.clipboard);
   const setClipboard = useEditorStore((state) => state.setClipboard);
   const clearClipboard = useEditorStore((state) => state.clearClipboard);
 
@@ -130,20 +136,19 @@ export function useGlobalLayerActions(layerId?: string) {
   }, [effectiveLayerId, isLayerAPage, allowPagesCreation, duplicateLayer]);
 
   /**
-   * Check if paste operation is valid for a target layer
+   * Imperatively check whether a paste operation is currently valid.
+   * Reads clipboard from the store snapshot — does NOT trigger re-renders.
+   * Use inside event handlers or keyboard shortcut callbacks.
    */
-  const canPerformPaste = useCallback(
-    (targetLayerId: string): boolean => {
+  const getCanPaste = useCallback(
+    (): boolean => {
+      if (!effectiveLayerId) return false;
+      const { clipboard } = useEditorStore.getState();
       if (!clipboard.layer) return false;
-      return canPasteLayer(clipboard.layer, targetLayerId, componentRegistry, findLayerById);
+      return canPasteLayer(clipboard.layer, effectiveLayerId, componentRegistry, findLayerById);
     },
-    [clipboard.layer, componentRegistry, findLayerById]
+    [effectiveLayerId, componentRegistry, findLayerById]
   );
-
-  // Compute whether paste is currently possible
-  const canPaste = effectiveLayerId
-    ? canPerformPaste(effectiveLayerId)
-    : false;
 
   // Compute permissions for layer operations
   const isPage = effectiveLayerId ? isLayerAPage(effectiveLayerId) : false;
@@ -152,8 +157,7 @@ export function useGlobalLayerActions(layerId?: string) {
   const canCut = canDelete; // Cut is only possible if we can delete
 
   return {
-    clipboard,
-    canPaste,
+    getCanPaste,
     canDuplicate,
     canDelete,
     canCut,

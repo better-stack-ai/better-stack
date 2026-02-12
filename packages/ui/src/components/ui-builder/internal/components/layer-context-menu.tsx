@@ -45,7 +45,7 @@ export const LayerContextMenu: React.FC<LayerContextMenuProps> = ({
     handlePaste,
     handleDelete,
     handleDuplicate,
-    canPaste,
+    getCanPaste,
   } = useGlobalLayerActions(layerId);
 
   // Handle right-click - open global context menu
@@ -108,7 +108,7 @@ export const LayerContextMenu: React.FC<LayerContextMenuProps> = ({
         key: SHORTCUTS.paste.key,
         handler: (e) => {
           if (isInputFocused()) return;
-          if (!canPaste) return;
+          if (!getCanPaste()) return;
           e.preventDefault();
           handlePaste();
         },
@@ -132,7 +132,7 @@ export const LayerContextMenu: React.FC<LayerContextMenuProps> = ({
         },
       },
     ];
-  }, [isSelected, canPaste, handleCopy, handleCut, handlePaste, handleDuplicate, handleDelete, isInputFocused]);
+  }, [isSelected, handleCopy, handleCut, handlePaste, handleDuplicate, handleDelete, getCanPaste, isInputFocused]);
 
   useKeyboardShortcuts(keyCombinations);
 

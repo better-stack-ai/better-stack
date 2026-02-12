@@ -8,6 +8,7 @@ import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
 import { canComponentAcceptChildren } from "@workspace/ui/lib/ui-builder/store/schema-utils";
 import { SHORTCUTS } from "@workspace/ui/lib/ui-builder/shortcuts/shortcut-registry";
 import { useGlobalLayerActions } from "@workspace/ui/lib/ui-builder/hooks/use-layer-actions";
+import { canPasteLayer } from "@workspace/ui/lib/ui-builder/utils/paste-validation";
 import { AddComponentsPopover } from "@workspace/ui/components/ui-builder/internal/components/add-component-popover";
 import { cn } from "@workspace/ui/lib/utils";
 import { useFrame } from "@workspace/ui/components/ui-builder/internal/canvas/auto-frame";
@@ -197,10 +198,14 @@ const ContextMenuPortalItems: React.FC<ContextMenuPortalItemsProps> = ({
   onAction,
 }) => {
   const selectedLayer = useLayerStore((state) => state.findLayerById(layerId));
+  const findLayerById = useLayerStore((state) => state.findLayerById);
   const componentRegistry = useEditorStore((state) => state.registry);
 
+  // Subscribe to clipboard reactively here — this is a singleton component
+  // (only one context menu open at a time) so O(1) re-renders are fine.
+  const clipboardLayer = useEditorStore((state) => state.clipboard.layer);
+
   const {
-    canPaste,
     canDuplicate,
     canDelete,
     canCut,
@@ -210,6 +215,12 @@ const ContextMenuPortalItems: React.FC<ContextMenuPortalItemsProps> = ({
     handleDelete,
     handleDuplicate,
   } = useGlobalLayerActions(layerId);
+
+  // Compute reactive canPaste locally from the clipboard subscription
+  const canPaste = React.useMemo(() => {
+    if (!clipboardLayer) return false;
+    return canPasteLayer(clipboardLayer, layerId, componentRegistry, findLayerById);
+  }, [clipboardLayer, layerId, componentRegistry, findLayerById]);
 
   // Check if component can have children added
   const canRenderAddChild = React.useMemo(() => {
