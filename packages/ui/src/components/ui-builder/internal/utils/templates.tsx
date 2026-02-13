@@ -507,23 +507,29 @@ const generateVariablePropsInterface = (
     return `    ${variableIdentifiers!.get(variable.id)}: (...args: unknown[]) => unknown;`;
   });
   
-  // Track function IDs already covered by function-type variables so we can
-  // skip them when generating metadata entries (avoids duplicate interface members
-  // when a variable binding and a __function_* metadata entry reference the same ID).
-  const coveredFunctionIds = new Set<string>();
+  // Track identifiers already emitted by function-type variables so we can skip
+  // metadata entries that would produce the same identifier (avoids duplicate
+  // interface members). We deduplicate by *resolved identifier*, not by function
+  // ID, because a variable named "myHandler" and a metadata entry for function ID
+  // "submitForm" produce different identifiers — both must appear in the interface
+  // since generatePropsString may emit JSX referencing either one.
+  const emittedFunctionIdentifiers = new Set<string>();
   for (const variable of functionVariables) {
-    const funcId = variable.defaultValue;
-    if (typeof funcId === 'string') {
-      coveredFunctionIds.add(funcId);
+    const identifier = variableIdentifiers!.get(variable.id);
+    if (identifier) {
+      emittedFunctionIdentifiers.add(identifier);
     }
   }
 
   // Generate function types from __function_* metadata (function registry references)
   // Sanitize function IDs through functionIdentifiers to ensure valid TS interface member names
-  // Skip any function IDs already emitted via function-type variables above.
+  // Skip any entries whose sanitized identifier collides with one already emitted above.
   const functionMetadataTypes = hasFunctionMetadata
     ? Array.from(functionMetadataIds)
-        .filter(funcId => !coveredFunctionIds.has(funcId))
+        .filter(funcId => {
+          const sanitizedId = functionIdentifiers?.get(funcId) ?? toValidIdentifier(funcId);
+          return !emittedFunctionIdentifiers.has(sanitizedId);
+        })
         .map(funcId => {
           const funcDef = functionRegistry?.[funcId];
           const sanitizedId = functionIdentifiers?.get(funcId) ?? toValidIdentifier(funcId);
