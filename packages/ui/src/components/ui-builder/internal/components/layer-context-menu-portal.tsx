@@ -216,11 +216,14 @@ const ContextMenuPortalItems: React.FC<ContextMenuPortalItemsProps> = ({
     handleDuplicate,
   } = useGlobalLayerActions(layerId);
 
-  // Compute reactive canPaste locally from the clipboard subscription
+  // Compute reactive canPaste locally from the clipboard subscription.
+  // `selectedLayer` is included so the memo recomputes when the target
+  // layer's data changes (e.g. children type switches from array to string),
+  // since `findLayerById` is a stable function ref that won't trigger updates.
   const canPaste = React.useMemo(() => {
-    if (!clipboardLayer) return false;
+    if (!clipboardLayer || !selectedLayer) return false;
     return canPasteLayer(clipboardLayer, layerId, componentRegistry, findLayerById);
-  }, [clipboardLayer, layerId, componentRegistry, findLayerById]);
+  }, [clipboardLayer, layerId, componentRegistry, findLayerById, selectedLayer]);
 
   // Check if component can have children added
   const canRenderAddChild = React.useMemo(() => {

@@ -291,8 +291,37 @@ export const pageLayerToCode = (
     });
   }
   
-  // Generate unique sanitized identifiers for function metadata IDs
-  const functionIdentifiers = generateFunctionIdentifiers(functionMetadataIds);
+  // Collect identifiers already claimed by function-type variables so that
+  // metadata entries that sanitize to the same identifier get a unique suffix
+  // instead of silently colliding (which would cause the dedup filter to drop
+  // the metadata entry, making both JSX bindings reference one functions.* member).
+  const functionVarReservedIds = new Set<string>();
+  for (const variable of variables) {
+    if (variable.type === 'function') {
+      const identifier = variableIdentifiers.get(variable.id);
+      if (identifier) {
+        functionVarReservedIds.add(identifier);
+      }
+    }
+  }
+
+  // Generate unique sanitized identifiers for function metadata IDs,
+  // reserving identifiers already used by function-type variables
+  const functionIdentifiers = generateFunctionIdentifiers(functionMetadataIds, functionVarReservedIds);
+
+  // When a metadata func ID is also the defaultValue of a function variable,
+  // they reference the same underlying function — reuse the variable's
+  // identifier so both JSX references target the same functions.xxx member.
+  for (const variable of variables) {
+    if (variable.type === 'function' && typeof variable.defaultValue === 'string') {
+      if (functionMetadataIds.has(variable.defaultValue)) {
+        const varIdentifier = variableIdentifiers.get(variable.id);
+        if (varIdentifier) {
+          functionIdentifiers.set(variable.defaultValue, varIdentifier);
+        }
+      }
+    }
+  }
   
   const pageProps = generatePropsString(restOfProps, variables, variableIdentifiers, functionIdentifiers);
   const imports = new Set<string>();
