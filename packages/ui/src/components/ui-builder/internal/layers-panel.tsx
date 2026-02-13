@@ -8,6 +8,7 @@ import React, {
 import isDeepEqual from "fast-deep-equal";
 import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
 import type { ComponentLayer } from "@workspace/ui/components/ui-builder/types";
+import { isVariableReference } from "@workspace/ui/lib/ui-builder/utils/variable-resolver";
 import { cn } from "@workspace/ui/lib/utils";
 import {
   findAllParentLayersRecursive,
@@ -35,8 +36,6 @@ const LayersPanel: React.FC<LayersPanelProps> = ({ className }) => {
     findLayerById,
     updateLayer,
     selectLayer,
-    removeLayer,
-    duplicateLayer,
   } = useLayerStore();
 
   const pageLayer = findLayerById(selectedPageId);
@@ -55,8 +54,6 @@ const LayersPanel: React.FC<LayersPanelProps> = ({ className }) => {
       selectedLayerId={selectedLayerId}
       updateLayer={updateLayer}
       selectLayer={selectLayer}
-      removeLayer={removeLayer}
-      duplicateLayer={duplicateLayer}
     />
   );
 };
@@ -72,8 +69,6 @@ interface LayersTreeProps {
     layerRest?: Partial<Omit<ComponentLayer, "props">>
   ) => void;
   selectLayer: (layerId: string) => void;
-  removeLayer: (layerId: string) => void;
-  duplicateLayer: (layerId: string) => void;
 }
 
 export const LayersTree: React.FC<LayersTreeProps> = React.memo(
@@ -84,8 +79,6 @@ export const LayersTree: React.FC<LayersTreeProps> = React.memo(
     selectedLayerId,
     updateLayer,
     selectLayer,
-    removeLayer,
-    duplicateLayer,
   }) => {
     const [openIdsArray, setOpenIdsArray] = useState<Id[]>([]);
 
@@ -190,9 +183,6 @@ export const LayersTree: React.FC<LayersTreeProps> = React.memo(
             level={stat.level}
             selectedLayerId={selectedLayerId}
             selectLayer={selectLayer}
-            removeLayer={removeLayer}
-            duplicateLayer={duplicateLayer}
-            updateLayer={updateLayer}
           />
         );
       },
@@ -200,9 +190,6 @@ export const LayersTree: React.FC<LayersTreeProps> = React.memo(
         handleNodeToggle,
         selectedLayerId,
         selectLayer,
-        removeLayer,
-        duplicateLayer,
-        updateLayer,
         layers,
       ]
     );
@@ -218,6 +205,10 @@ export const LayersTree: React.FC<LayersTreeProps> = React.memo(
         } else if (typeof layer.children === 'string') {
           // Convert string children to empty array for tree traversal
           // The actual text content is preserved in the original layer
+          processed.children = [];
+        } else if (isVariableReference(layer.children)) {
+          // Convert variable reference children to empty array for tree traversal
+          // The variable binding is preserved in the original layer
           processed.children = [];
         } else if (!layer.children) {
           // Ensure undefined/null children become empty arrays

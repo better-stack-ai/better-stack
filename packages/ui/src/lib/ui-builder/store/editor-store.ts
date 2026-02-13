@@ -1,6 +1,25 @@
 import { create, type StateCreator } from 'zustand';
-import { type ComponentType as ReactComponentType } from "react";
-import type { RegistryEntry, ComponentRegistry, BlockRegistry } from '@workspace/ui/components/ui-builder/types';
+import type { ComponentType as ReactComponentType } from "react";
+import type { RegistryEntry, ComponentRegistry, BlockRegistry, FunctionRegistry, FunctionDefinition, ComponentLayer } from '@workspace/ui/components/ui-builder/types';
+
+/**
+ * Clipboard state for copy/cut/paste operations
+ */
+export interface ClipboardState {
+  layer: ComponentLayer | null;
+  isCut: boolean;
+  sourceLayerId: string | null;
+}
+
+/**
+ * Context menu state for right-click menus
+ */
+export interface ContextMenuState {
+  open: boolean;
+  x: number;
+  y: number;
+  layerId: string | null;
+}
 
 
 
@@ -10,9 +29,11 @@ export interface EditorStore {
 
     registry: ComponentRegistry;
     blocks: BlockRegistry | undefined;
+    functionRegistry: FunctionRegistry | undefined;
 
-    initialize: (registry: ComponentRegistry, persistLayerStoreConfig: boolean, allowPagesCreation: boolean, allowPagesDeletion: boolean, allowVariableEditing: boolean, blocks?: BlockRegistry) => void;
+    initialize: (registry: ComponentRegistry, persistLayerStoreConfig: boolean, allowPagesCreation: boolean, allowPagesDeletion: boolean, allowVariableEditing: boolean, blocks?: BlockRegistry, functionRegistry?: FunctionRegistry) => void;
     getComponentDefinition: (type: string) => RegistryEntry<ReactComponentType<any>> | undefined;
+    getFunctionDefinition: (id: string) => FunctionDefinition | undefined;
 
     persistLayerStoreConfig: boolean;
     setPersistLayerStoreConfig: (shouldPersist: boolean) => void;
@@ -33,6 +54,16 @@ export interface EditorStore {
     setShowLeftPanel: (show: boolean) => void;
     showRightPanel: boolean;
     setShowRightPanel: (show: boolean) => void;
+
+    // Clipboard state for copy/cut/paste
+    clipboard: ClipboardState;
+    setClipboard: (clipboard: ClipboardState) => void;
+    clearClipboard: () => void;
+
+    // Context menu state for right-click menus
+    contextMenu: ContextMenuState;
+    openContextMenu: (x: number, y: number, layerId: string) => void;
+    closeContextMenu: () => void;
 }
 
 const store: StateCreator<EditorStore, [], []> = (set, get) => ({
@@ -41,9 +72,10 @@ const store: StateCreator<EditorStore, [], []> = (set, get) => ({
 
     registry: {},
     blocks: undefined,
+    functionRegistry: undefined,
 
-    initialize: (registry, persistLayerStoreConfig, allowPagesCreation, allowPagesDeletion, allowVariableEditing, blocks) => {
-        set(state => ({ ...state, registry, persistLayerStoreConfig, allowPagesCreation, allowPagesDeletion, allowVariableEditing, blocks }));
+    initialize: (registry, persistLayerStoreConfig, allowPagesCreation, allowPagesDeletion, allowVariableEditing, blocks, functionRegistry) => {
+        set(state => ({ ...state, registry, persistLayerStoreConfig, allowPagesCreation, allowPagesDeletion, allowVariableEditing, blocks, functionRegistry }));
     },
     getComponentDefinition: (type: string) => {
         const { registry } = get();
@@ -52,6 +84,13 @@ const store: StateCreator<EditorStore, [], []> = (set, get) => ({
             return undefined;
         }
         return registry[type];
+    },
+    getFunctionDefinition: (id: string) => {
+        const { functionRegistry } = get();
+        if (!functionRegistry) {
+            return undefined;
+        }
+        return functionRegistry[id];
     },
 
     persistLayerStoreConfig: true,
@@ -72,6 +111,45 @@ const store: StateCreator<EditorStore, [], []> = (set, get) => ({
     setShowLeftPanel: (show) => set({ showLeftPanel: show }),
     showRightPanel: true,
     setShowRightPanel: (show) => set({ showRightPanel: show }),
+
+    // Clipboard state for copy/cut/paste
+    clipboard: {
+        layer: null,
+        isCut: false,
+        sourceLayerId: null,
+    },
+    setClipboard: (clipboard) => set({ clipboard }),
+    clearClipboard: () => set({ 
+        clipboard: { 
+            layer: null, 
+            isCut: false, 
+            sourceLayerId: null 
+        } 
+    }),
+
+    // Context menu state for right-click menus
+    contextMenu: {
+        open: false,
+        x: 0,
+        y: 0,
+        layerId: null,
+    },
+    openContextMenu: (x, y, layerId) => set({
+        contextMenu: {
+            open: true,
+            x,
+            y,
+            layerId,
+        }
+    }),
+    closeContextMenu: () => set({
+        contextMenu: {
+            open: false,
+            x: 0,
+            y: 0,
+            layerId: null,
+        }
+    }),
 });
 
 export const useEditorStore = create<EditorStore>()(store);

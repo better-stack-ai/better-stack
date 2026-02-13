@@ -797,7 +797,7 @@ interface ComponentLayer {
 interface Variable {
   id: string
   name: string
-  type: "string" | "number" | "boolean"
+  type: "string" | "number" | "boolean" | "function"
   defaultValue: any
 }
 
@@ -894,6 +894,7 @@ import UIBuilder from "@workspace/ui/components/ui-builder"
 <UIBuilder
   componentRegistry={myRegistry}
   blocks={myBlocks}
+  functionRegistry={myFunctionRegistry}
   initialLayers={initialLayers}
   initialVariables={initialVariables}
   onChange={(layers) => saveLayers(layers)}
@@ -914,6 +915,7 @@ import UIBuilder from "@workspace/ui/components/ui-builder"
 |------|------|----------|---------|-------------|
 | `componentRegistry` | `ComponentRegistry` | Yes | - | Registry of available components |
 | `blocks` | `BlockRegistry` | No | - | Pre-built block templates for the Blocks tab |
+| `functionRegistry` | `FunctionRegistry` | No | - | Bindable event handlers (onClick, onSubmit, etc.) |
 | `initialLayers` | `ComponentLayer[]` | No | - | Initial layer tree to load |
 | `initialVariables` | `Variable[]` | No | - | Initial variables to load |
 | `onChange` | `(layers: ComponentLayer[]) => void` | No | - | Callback when layers change |
@@ -995,6 +997,50 @@ A record of block name to block definition:
 type BlockRegistry = Record<string, BlockDefinition>
 ```
 
+#### FunctionDefinition
+
+Defines a callable function that can be bound to component event handlers via the function registry:
+
+```ts
+interface FunctionDefinition {
+  name: string                // Human-readable name
+  schema: ZodTuple | ZodObject | ZodSchema  // Parameter schema
+  fn: (...args: any[]) => any // The actual function
+  description?: string        // Description shown in UI
+  typeSignature?: string      // TS type signature for code generation
+}
+```
+
+#### FunctionRegistry
+
+A record of function ID to function definition:
+
+```ts
+type FunctionRegistry = Record<string, FunctionDefinition>
+```
+
+Variables with `type: "function"` reference a key in the `FunctionRegistry`. At runtime, the function is resolved and bound to the component prop (e.g. `onClick`, `onSubmit`).
+
+```tsx
+import { z } from "zod"
+
+const functionRegistry: FunctionRegistry = {
+  handleSubmit: {
+    name: "Handle Submit",
+    description: "Process form submission",
+    schema: z.tuple([z.custom<React.FormEvent<HTMLFormElement>>()]),
+    fn: (e) => { e.preventDefault(); console.log("submitted") },
+    typeSignature: "(e: React.FormEvent<HTMLFormElement>) => void",
+  },
+}
+
+<UIBuilder
+  componentRegistry={myRegistry}
+  functionRegistry={functionRegistry}
+  // ...
+/>
+```
+
 #### ComponentLayer
 
 The structure representing a component in the UI Builder tree:
@@ -1017,7 +1063,7 @@ Variable definition for dynamic content:
 interface Variable {
   id: string
   name: string
-  type: "string" | "number" | "boolean"
+  type: "string" | "number" | "boolean" | "function"
   defaultValue: any
 }
 ```

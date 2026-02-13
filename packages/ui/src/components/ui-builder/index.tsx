@@ -22,12 +22,14 @@ import type {
   Variable,
   LayerChangeHandler,
   VariableChangeHandler,
-  BlockRegistry
+  BlockRegistry,
+  FunctionRegistry
 } from "@workspace/ui/components/ui-builder/types";
 import { TailwindThemePanel } from "@workspace/ui/components/ui-builder/internal/tailwind-theme-panel";
 import { ConfigPanel } from "@workspace/ui/components/ui-builder/internal/config-panel";
 import { VariablesPanel } from "@workspace/ui/components/ui-builder/internal/variables-panel";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
+import { Toaster } from "@workspace/ui/components/sonner";
 
 /**
  * TabsContentConfig defines the structure for the content of the page config panel tabs.
@@ -75,6 +77,8 @@ interface UIBuilderBaseProps<TRegistry extends ComponentRegistry = ComponentRegi
   allowPagesDeletion?: boolean;
   /** Optional block registry for the Blocks tab in the add component popover */
   blocks?: BlockRegistry;
+  /** Optional function registry for bindable event handlers (onClick, onSubmit, etc.) */
+  functionRegistry?: FunctionRegistry;
 }
 
 /**
@@ -131,6 +135,7 @@ const UIBuilder = <TRegistry extends ComponentRegistry = ComponentRegistry>({
   navRightChildren,
   showExport = true,
   blocks,
+  functionRegistry,
 }: UIBuilderProps<TRegistry>) => {
   const layerStore = useStore(useLayerStore, (state) => state);
   const editorStore = useStore(useEditorStore, (state) => state);
@@ -155,7 +160,7 @@ const UIBuilder = <TRegistry extends ComponentRegistry = ComponentRegistry>({
   // Effect 1: Initialize Editor Store with registry and page form props
   useEffect(() => {
     if (editorStore && componentRegistry && !editorStoreInitialized) {
-      editorStore.initialize(componentRegistry, persistLayerStore, allowPagesCreation, allowPagesDeletion, allowVariableEditing, blocks);
+      editorStore.initialize(componentRegistry, persistLayerStore, allowPagesCreation, allowPagesDeletion, allowVariableEditing, blocks, functionRegistry);
       setEditorStoreInitialized(true);
     }
   }, [
@@ -167,6 +172,7 @@ const UIBuilder = <TRegistry extends ComponentRegistry = ComponentRegistry>({
     allowPagesDeletion,
     allowVariableEditing,
     blocks,
+    functionRegistry,
   ]);
 
   // Effect 2: Conditionally initialize Layer Store *after* Editor Store is initialized
@@ -220,7 +226,8 @@ const UIBuilder = <TRegistry extends ComponentRegistry = ComponentRegistry>({
       disableTransitionOnChange
     >
       <TooltipProvider>
-      {layout}
+        {layout}
+        <Toaster position="bottom-right" />
       </TooltipProvider>
     </ThemeProvider>
   );
