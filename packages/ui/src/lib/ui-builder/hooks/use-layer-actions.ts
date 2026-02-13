@@ -19,7 +19,9 @@ import { canPasteLayer } from '@workspace/ui/lib/ui-builder/utils/paste-validati
  */
 export function useGlobalLayerActions(layerId?: string) {
   // Layer store
-  const selectedLayerId = useLayerStore((state) => state.selectedLayerId);
+  // NOTE: `selectedLayerId` is read imperatively (not subscribed) because every
+  // current caller always provides `layerId`. A reactive subscription would
+  // cause O(N) re-renders across all layer instances on every selection change.
   const findLayerById = useLayerStore((state) => state.findLayerById);
   const removeLayer = useLayerStore((state) => state.removeLayer);
   const duplicateLayer = useLayerStore((state) => state.duplicateLayer);
@@ -34,8 +36,9 @@ export function useGlobalLayerActions(layerId?: string) {
   const setClipboard = useEditorStore((state) => state.setClipboard);
   const clearClipboard = useEditorStore((state) => state.clearClipboard);
 
-  // Get the effective layer ID (passed in or selected)
-  const effectiveLayerId = layerId ?? selectedLayerId;
+  // Get the effective layer ID — falls back to selectedLayerId imperatively
+  // to avoid a reactive subscription that would fire on every selection change.
+  const effectiveLayerId = layerId ?? useLayerStore.getState().selectedLayerId;
 
   /**
    * Copy the layer to clipboard
