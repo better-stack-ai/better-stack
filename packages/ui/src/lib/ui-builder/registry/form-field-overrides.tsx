@@ -302,9 +302,8 @@ function FunctionPropField({
       // Store the function ID for code generation and store the actual function
       unbindPropFromVariable(selectedLayer.id, propName);
       updateLayer(selectedLayer.id, { 
-        ...selectedLayer.props, 
         [propName]: funcDef.fn,
-        [`__function_${propName}`]: value 
+        [`__function_${propName}`]: value,
       });
       incrementRevision();
     }
