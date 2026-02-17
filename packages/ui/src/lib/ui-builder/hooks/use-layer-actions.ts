@@ -18,10 +18,10 @@ import { canPasteLayer } from '@workspace/ui/lib/ui-builder/utils/paste-validati
  * @returns Object with action handlers, permission flags, and an imperative `getCanPaste` check
  */
 export function useGlobalLayerActions(layerId?: string) {
-  // Layer store
-  // NOTE: `selectedLayerId` is read imperatively (not subscribed) because every
-  // current caller always provides `layerId`. A reactive subscription would
-  // cause O(N) re-renders across all layer instances on every selection change.
+  // Layer store — `selectedLayerId` is read imperatively via `getState()`
+  // inside each handler (not subscribed) to avoid O(N) re-renders across all
+  // layer instances on every selection change while still reading the current
+  // value at call time.
   const findLayerById = useLayerStore((state) => state.findLayerById);
   const removeLayer = useLayerStore((state) => state.removeLayer);
   const duplicateLayer = useLayerStore((state) => state.duplicateLayer);
@@ -36,14 +36,22 @@ export function useGlobalLayerActions(layerId?: string) {
   const setClipboard = useEditorStore((state) => state.setClipboard);
   const clearClipboard = useEditorStore((state) => state.clearClipboard);
 
-  // Get the effective layer ID — falls back to selectedLayerId imperatively
-  // to avoid a reactive subscription that would fire on every selection change.
-  const effectiveLayerId = layerId ?? useLayerStore.getState().selectedLayerId;
+  /**
+   * Returns the effective layer ID at call time.
+   * When `layerId` is provided it is returned directly; otherwise
+   * `selectedLayerId` is read from the store snapshot so handlers always
+   * operate on the *current* selection rather than a stale closure value.
+   */
+  const getEffectiveLayerId = useCallback(
+    () => layerId ?? useLayerStore.getState().selectedLayerId,
+    [layerId]
+  );
 
   /**
    * Copy the layer to clipboard
    */
   const handleCopy = useCallback(() => {
+    const effectiveLayerId = getEffectiveLayerId();
     if (!effectiveLayerId) return;
 
     const layer = findLayerById(effectiveLayerId);
@@ -57,12 +65,13 @@ export function useGlobalLayerActions(layerId?: string) {
       isCut: false,
       sourceLayerId: effectiveLayerId,
     });
-  }, [effectiveLayerId, findLayerById, setClipboard]);
+  }, [getEffectiveLayerId, findLayerById, setClipboard]);
 
   /**
    * Cut the layer (copy to clipboard and delete)
    */
   const handleCut = useCallback(() => {
+    const effectiveLayerId = getEffectiveLayerId();
     if (!effectiveLayerId) return;
 
     const layer = findLayerById(effectiveLayerId);
@@ -83,12 +92,13 @@ export function useGlobalLayerActions(layerId?: string) {
 
     // Delete the original layer
     removeLayer(effectiveLayerId);
-  }, [effectiveLayerId, findLayerById, isLayerAPage, allowPagesDeletion, removeLayer, setClipboard]);
+  }, [getEffectiveLayerId, findLayerById, isLayerAPage, allowPagesDeletion, removeLayer, setClipboard]);
 
   /**
    * Paste the clipboard layer into the selected layer.
    */
   const handlePaste = useCallback(() => {
+    const effectiveLayerId = getEffectiveLayerId();
     if (!effectiveLayerId) return;
 
     // Read current clipboard state imperatively to avoid stale closure
@@ -110,12 +120,13 @@ export function useGlobalLayerActions(layerId?: string) {
     if (currentClipboard.isCut) {
       clearClipboard();
     }
-  }, [effectiveLayerId, componentRegistry, findLayerById, addLayerDirect, clearClipboard]);
+  }, [getEffectiveLayerId, componentRegistry, findLayerById, addLayerDirect, clearClipboard]);
 
   /**
    * Delete the layer
    */
   const handleDelete = useCallback(() => {
+    const effectiveLayerId = getEffectiveLayerId();
     if (!effectiveLayerId) return;
 
     // Check if we can delete this layer (for pages, check permissions)
@@ -123,12 +134,13 @@ export function useGlobalLayerActions(layerId?: string) {
     if (isPage && !allowPagesDeletion) return;
 
     removeLayer(effectiveLayerId);
-  }, [effectiveLayerId, isLayerAPage, allowPagesDeletion, removeLayer]);
+  }, [getEffectiveLayerId, isLayerAPage, allowPagesDeletion, removeLayer]);
 
   /**
    * Duplicate the layer
    */
   const handleDuplicate = useCallback(() => {
+    const effectiveLayerId = getEffectiveLayerId();
     if (!effectiveLayerId) return;
 
     // Check if we can duplicate this layer (for pages, check permissions)
@@ -136,7 +148,7 @@ export function useGlobalLayerActions(layerId?: string) {
     if (isPage && !allowPagesCreation) return;
 
     duplicateLayer(effectiveLayerId);
-  }, [effectiveLayerId, isLayerAPage, allowPagesCreation, duplicateLayer]);
+  }, [getEffectiveLayerId, isLayerAPage, allowPagesCreation, duplicateLayer]);
 
   /**
    * Imperatively check whether a paste operation is currently valid.
@@ -145,16 +157,22 @@ export function useGlobalLayerActions(layerId?: string) {
    */
   const getCanPaste = useCallback(
     (): boolean => {
+      const effectiveLayerId = getEffectiveLayerId();
       if (!effectiveLayerId) return false;
       const { clipboard } = useEditorStore.getState();
       if (!clipboard.layer) return false;
       return canPasteLayer(clipboard.layer, effectiveLayerId, componentRegistry, findLayerById);
     },
-    [effectiveLayerId, componentRegistry, findLayerById]
+    [getEffectiveLayerId, componentRegistry, findLayerById]
   );
 
-  // Compute permissions for layer operations
-  const isPage = effectiveLayerId ? isLayerAPage(effectiveLayerId) : false;
+  // Compute permissions for layer operations.
+  // Uses getState() snapshot for render-time values. When `layerId` is provided
+  // this is always correct; when omitted it reflects the selection at the time
+  // of the most recent render (handlers above read imperatively for call-time
+  // correctness).
+  const effectiveLayerIdForPermissions = getEffectiveLayerId();
+  const isPage = effectiveLayerIdForPermissions ? isLayerAPage(effectiveLayerIdForPermissions) : false;
   const canDuplicate = !isPage || allowPagesCreation;
   const canDelete = !isPage || allowPagesDeletion;
   const canCut = canDelete; // Cut is only possible if we can delete
