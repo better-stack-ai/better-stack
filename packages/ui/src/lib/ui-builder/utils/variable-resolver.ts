@@ -78,16 +78,8 @@ export function resolveVariableReferences(
     
     // Skip props that were already resolved via __function_* metadata
     // Only skip if functionRegistry was provided, otherwise preserve the original value
-    if (functionMetadata[key]) {
-      if (!functionRegistry) {
-        // Warn when function metadata exists but no registry is provided
-        console.warn(
-          `Function metadata "__function_${key}" found but no functionRegistry provided. ` +
-          `Falling back to original prop value for "${key}".`
-        );
-      } else {
-        continue;
-      }
+    if (functionMetadata[key] && functionRegistry) {
+      continue;
     }
     
     if (isVariableReference(value)) {
@@ -107,8 +99,9 @@ export function resolveVariableReferences(
               resolved[key] = undefined;
             }
           } else {
-            // No function registry provided
-            console.warn('Function-type variable found but no functionRegistry provided');
+            // No function registry provided — skip silently.
+            // Callers like props-panel and server-layer-renderer intentionally
+            // omit the registry; warning here would produce spam.
             resolved[key] = undefined;
           }
         } else {
