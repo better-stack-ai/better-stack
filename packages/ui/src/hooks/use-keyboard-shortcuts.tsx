@@ -9,6 +9,8 @@ export interface KeyCombination {
   };
   key: string;
   handler: (event: KeyboardEvent) => void;
+  /** Whether to automatically call event.preventDefault() when the shortcut matches. Defaults to true. */
+  preventDefault?: boolean;
 }
 
 export function useKeyboardShortcuts(combinations: KeyCombination[]) {
@@ -24,7 +26,9 @@ export function useKeyboardShortcuts(combinations: KeyCombination[]) {
           event.key.toLowerCase() === key.toLowerCase();
 
         if (isMatch) {
-          event.preventDefault();
+          if (combo.preventDefault !== false) {
+            event.preventDefault();
+          }
           handler(event);
         }
       });

@@ -418,8 +418,14 @@ const store: StateCreator<LayerStore, [], []> = (set, get) => (
 
     // Bind a component prop to a variable reference
     bindPropToVariable: (layerId, propName, variableId) => {
-      // Store a special object as prop to indicate binding
-      get().updateLayer(layerId, { [propName]: { __variableRef: variableId } });
+      // Store a special object as prop to indicate binding.
+      // Also clear any existing __function_* metadata for this prop so
+      // the variable binding takes effect at runtime (resolveVariableReferences
+      // gives __function_* metadata strict priority over variable references).
+      get().updateLayer(layerId, {
+        [propName]: { __variableRef: variableId },
+        [`__function_${propName}`]: undefined,
+      });
     },
 
     // Unbind a component prop from a variable reference and set default value from schema

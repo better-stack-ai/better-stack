@@ -174,7 +174,7 @@ test.describe("UI Builder Plugin - Admin Pages", () => {
 
 		// Save the page
 		await page.getByRole("button", { name: "Save" }).click();
-		await expect(page.locator("text=/saved/i")).toBeVisible({
+		await expect(page.locator("text=/saved/i").first()).toBeVisible({
 			timeout: 10000,
 		});
 
