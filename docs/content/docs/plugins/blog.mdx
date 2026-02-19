@@ -527,3 +527,48 @@ You can import the hooks from `"@btst/stack/plugins/blog/client/hooks"` to use i
 #### PostUpdateInput
 
 <AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="PostUpdateInput" />
+
+## Server-side Data Access
+
+The blog plugin exposes standalone getter functions for server-side and SSG use cases. These bypass the HTTP layer entirely and query the database directly.
+
+### Two patterns
+
+**Pattern 1 — via `stack().api` (recommended for runtime server code)**
+
+After calling `stack()`, the returned object includes a fully-typed `api` namespace. Getters are pre-bound to the adapter:
+
+```ts title="app/lib/stack.ts"
+import { myStack } from "./stack"; // your stack() instance
+
+// In a Server Component, generateStaticParams, etc.
+const posts = await myStack.api.blog.getAllPosts({ published: true });
+const post  = await myStack.api.blog.getPostBySlug("hello-world");
+const tags  = await myStack.api.blog.getAllTags();
+```
+
+**Pattern 2 — direct import (SSG, build-time, or custom adapter)**
+
+Import getters directly and pass any `Adapter`:
+
+```ts
+import { getAllPosts, getPostBySlug, getAllTags } from "@btst/stack/plugins/blog/api";
+
+// e.g. in Next.js generateStaticParams
+export async function generateStaticParams() {
+  const posts = await getAllPosts(myAdapter, { published: true });
+  return posts.map((p) => ({ slug: p.slug }));
+}
+```
+
+### Available getters
+
+| Function | Description |
+|---|---|
+| `getAllPosts(adapter, params?)` | Returns all posts matching optional filter/pagination params |
+| `getPostBySlug(adapter, slug)` | Returns a single post by slug, or `null` if not found |
+| `getAllTags(adapter)` | Returns all tags |
+
+### `PostListParams`
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/getters.ts" name="PostListParams" />

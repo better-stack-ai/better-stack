@@ -6,6 +6,7 @@ import { blogSchema as dbSchema } from "../db";
 import type { Post, PostWithPostTag, Tag } from "../types";
 import { slugify } from "../utils";
 import { createPostSchema, updatePostSchema } from "../schemas";
+import { getAllPosts, getPostBySlug, getAllTags } from "./getters";
 
 export const PostListQuerySchema = z.object({
 	slug: z.string().optional(),
@@ -168,6 +169,13 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 		dbPlugin: dbSchema,
 
+		api: (adapter) => ({
+			getAllPosts: (params?: Parameters<typeof getAllPosts>[1]) =>
+				getAllPosts(adapter, params),
+			getPostBySlug: (slug: string) => getPostBySlug(adapter, slug),
+			getAllTags: () => getAllTags(adapter),
+		}),
+
 		routes: (adapter: Adapter) => {
 			const findOrCreateTags = async (
 				tagInputs: Array<
@@ -265,141 +273,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							}
 						}
 
-						let tagFilterPostIds: Set<string> | null = null;
-
-						if (query.tagSlug) {
-							const tag = await adapter.findOne<Tag>({
-								model: "tag",
-								where: [
-									{
-										field: "slug",
-										value: query.tagSlug,
-										operator: "eq" as const,
-									},
-								],
-							});
-
-							if (!tag) {
-								return [];
-							}
-
-							const postTags = await adapter.findMany<{
-								postId: string;
-								tagId: string;
-							}>({
-								model: "postTag",
-								where: [
-									{
-										field: "tagId",
-										value: tag.id,
-										operator: "eq" as const,
-									},
-								],
-							});
-							tagFilterPostIds = new Set(postTags.map((pt) => pt.postId));
-							if (tagFilterPostIds.size === 0) {
-								return [];
-							}
-						}
-
-						const whereConditions = [];
-
-						if (query.published !== undefined) {
-							whereConditions.push({
-								field: "published",
-								value: query.published,
-								operator: "eq" as const,
-							});
-						}
-
-						if (query.slug) {
-							whereConditions.push({
-								field: "slug",
-								value: query.slug,
-								operator: "eq" as const,
-							});
-						}
-
-						const posts = await adapter.findMany<PostWithPostTag>({
-							model: "post",
-							limit:
-								query.query || query.tagSlug ? undefined : (query.limit ?? 10),
-							offset:
-								query.query || query.tagSlug ? undefined : (query.offset ?? 0),
-							where: whereConditions,
-							sortBy: {
-								field: "createdAt",
-								direction: "desc",
-							},
-							join: {
-								postTag: true,
-							},
-						});
-
-						// Collect unique tag IDs from joined postTag data
-						const tagIds = new Set<string>();
-						for (const post of posts) {
-							if (post.postTag) {
-								for (const pt of post.postTag) {
-									tagIds.add(pt.tagId);
-								}
-							}
-						}
-
-						// Fetch all tags at once
-						const tags =
-							tagIds.size > 0
-								? await adapter.findMany<Tag>({
-										model: "tag",
-									})
-								: [];
-						const tagMap = new Map<string, Tag>();
-						for (const tag of tags) {
-							if (tagIds.has(tag.id)) {
-								tagMap.set(tag.id, tag);
-							}
-						}
-
-						// Map tags to posts (spread to avoid circular references)
-						let result = posts.map((post) => {
-							const postTags = (post.postTag || [])
-								.map((pt) => {
-									const tag = tagMap.get(pt.tagId);
-									return tag ? { ...tag } : undefined;
-								})
-								.filter((tag): tag is Tag => tag !== undefined);
-							const { postTag: _, ...postWithoutJoin } = post;
-							return {
-								...postWithoutJoin,
-								tags: postTags,
-							};
-						});
-
-						if (tagFilterPostIds) {
-							result = result.filter((post) => tagFilterPostIds!.has(post.id));
-						}
-
-						if (query.query) {
-							const searchLower = query.query.toLowerCase();
-							result = result.filter((post) => {
-								const titleMatch = post.title
-									?.toLowerCase()
-									.includes(searchLower);
-								const contentMatch = post.content
-									?.toLowerCase()
-									.includes(searchLower);
-								const excerptMatch = post.excerpt
-									?.toLowerCase()
-									.includes(searchLower);
-								return titleMatch || contentMatch || excerptMatch;
-							});
-						}
-
-						if (query.tagSlug || query.query) {
-							const offset = query.offset ?? 0;
-							const limit = query.limit ?? 10;
-							result = result.slice(offset, offset + limit);
-						}
+						const result = await getAllPosts(adapter, query);
 
 						if (hooks?.onPostsRead) {
 							await hooks.onPostsRead(result, query, context);
@@ -806,9 +680,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 					method: "GET",
 				},
 				async () => {
-					return await adapter.findMany<Tag>({
-						model: "tag",
-					});
+					return await getAllTags(adapter);
 				},
 			);
 

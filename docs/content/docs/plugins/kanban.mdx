@@ -726,3 +726,48 @@ import type {
   KanbanPluginOverrides,
 } from "@btst/stack/plugins/kanban/client"
 ```
+
+## Server-side Data Access
+
+The Kanban plugin exposes standalone getter functions for server-side and SSG use cases.
+
+### Two patterns
+
+**Pattern 1 — via `stack().api`**
+
+```ts title="app/lib/stack.ts"
+import { myStack } from "./stack";
+
+// List all boards (with columns and tasks)
+const boards = await myStack.api.kanban.getAllBoards({ ownerId: "user-123" });
+
+// Get a single board with full column/task tree
+const board  = await myStack.api.kanban.getBoardById("board-456");
+if (board) {
+  board.columns.forEach((col) => {
+    console.log(col.title, col.tasks.length, "tasks");
+  });
+}
+```
+
+**Pattern 2 — direct import**
+
+```ts
+import {
+  getAllBoards,
+  getBoardById,
+} from "@btst/stack/plugins/kanban/api";
+
+// In Next.js generateStaticParams
+export async function generateStaticParams() {
+  const boards = await getAllBoards(myAdapter);
+  return boards.map((b) => ({ slug: b.slug }));
+}
+```
+
+### Available getters
+
+| Function | Description |
+|---|---|
+| `getAllBoards(adapter, params?)` | Returns all boards with columns and tasks; supports slug/ownerId/organizationId filters |
+| `getBoardById(adapter, id)` | Returns a single board with full column/task tree, or `null` |

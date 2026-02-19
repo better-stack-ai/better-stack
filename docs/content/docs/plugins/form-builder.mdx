@@ -704,3 +704,43 @@ const result = zodSchema.safeParse(submissionData)
 
 <AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="FormSchemaMetadata" />
 
+## Server-side Data Access
+
+The Form Builder plugin exposes standalone getter functions for server-side use cases.
+
+### Two patterns
+
+**Pattern 1 — via `stack().api`**
+
+```ts title="app/lib/stack.ts"
+import { myStack } from "./stack";
+
+const forms       = await myStack.api["form-builder"].getAllForms({ status: "active" });
+const form        = await myStack.api["form-builder"].getFormBySlug("contact");
+const submissions = await myStack.api["form-builder"].getFormSubmissions(form!.id);
+```
+
+**Pattern 2 — direct import**
+
+```ts
+import {
+  getAllForms,
+  getFormBySlug,
+  getFormSubmissions,
+} from "@btst/stack/plugins/form-builder/api";
+
+const form = await getFormBySlug(myAdapter, "contact");
+if (form) {
+  const result = await getFormSubmissions(myAdapter, form.id, { limit: 50 });
+  console.log(result.total, "submissions");
+}
+```
+
+### Available getters
+
+| Function | Description |
+|---|---|
+| `getAllForms(adapter, params?)` | Returns paginated forms with optional status filter |
+| `getFormBySlug(adapter, slug)` | Returns a single form by slug, or `null` |
+| `getFormSubmissions(adapter, formId, params?)` | Returns paginated submissions for a form |
+

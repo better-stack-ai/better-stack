@@ -24,6 +24,7 @@ import {
 	listSubmissionsQuerySchema,
 } from "../schemas";
 import { slugify, extractIpAddress, extractUserAgent } from "../utils";
+import { getAllForms, getFormBySlug, getFormSubmissions } from "./getters";
 
 /**
  * Serialize a Form for API response (convert dates to strings)
@@ -82,6 +83,16 @@ export const formBuilderBackendPlugin = (
 		name: "form-builder",
 
 		dbPlugin: dbSchema,
+
+		api: (adapter) => ({
+			getAllForms: (params?: Parameters<typeof getAllForms>[1]) =>
+				getAllForms(adapter, params),
+			getFormBySlug: (slug: string) => getFormBySlug(adapter, slug),
+			getFormSubmissions: (
+				formId: string,
+				params?: Parameters<typeof getFormSubmissions>[2],
+			) => getFormSubmissions(adapter, formId, params),
+		}),
 
 		routes: (adapter: Adapter) => {
 			// Helper to create hook context from request

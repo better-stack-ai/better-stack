@@ -3,13 +3,7 @@ import { defineBackendPlugin } from "@btst/stack/plugins/api";
 import { createEndpoint } from "@btst/stack/plugins/api";
 import { z } from "zod";
 import { kanbanSchema as dbSchema } from "../db";
-import type {
-	Board,
-	BoardWithKanbanColumn,
-	Column,
-	ColumnWithTasks,
-	Task,
-} from "../types";
+import type { Board, Column, ColumnWithTasks, Task } from "../types";
 import { slugify } from "../utils";
 import {
 	BoardListQuerySchema,
@@ -23,6 +17,7 @@ import {
 	updateColumnSchema,
 	updateTaskSchema,
 } from "../schemas";
+import { getAllBoards, getBoardById } from "./getters";
 
 /**
  * Context passed to kanban API hooks
@@ -261,6 +256,12 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 		dbPlugin: dbSchema,
 
+		api: (adapter) => ({
+			getAllBoards: (params?: Parameters<typeof getAllBoards>[1]) =>
+				getAllBoards(adapter, params),
+			getBoardById: (id: string) => getBoardById(adapter, id),
+		}),
+
 		routes: (adapter: Adapter) => {
 			// ============ Board Endpoints ============
 
@@ -284,97 +285,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 							}
 						}
 
-						const whereConditions = [];
-
-						if (query.slug) {
-							whereConditions.push({
-								field: "slug",
-								value: query.slug,
-								operator: "eq" as const,
-							});
-						}
-
-						if (query.ownerId) {
-							whereConditions.push({
-								field: "ownerId",
-								value: query.ownerId,
-								operator: "eq" as const,
-							});
-						}
-
-						if (query.organizationId) {
-							whereConditions.push({
-								field: "organizationId",
-								value: query.organizationId,
-								operator: "eq" as const,
-							});
-						}
-
-						const boards = await adapter.findMany<BoardWithKanbanColumn>({
-							model: "kanbanBoard",
-							limit: query.limit ?? 50,
-							offset: query.offset ?? 0,
-							where: whereConditions,
-							sortBy: {
-								field: "createdAt",
-								direction: "desc",
-							},
-							join: {
-								kanbanColumn: true,
-							},
-						});
-
-						// Get all column IDs to fetch tasks
-						// Note: adapter returns joined data under schema key name ("column"), not model name
-						const columnIds: string[] = [];
-						for (const board of boards) {
-							if (board.column) {
-								for (const col of board.column) {
-									columnIds.push(col.id);
-								}
-							}
-						}
-
-						// Fetch tasks for each column in parallel (avoids loading all tasks from DB)
-						const tasksByColumn = new Map<string, Task[]>();
-						if (columnIds.length > 0) {
-							const taskQueries = columnIds.map((columnId) =>
-								adapter.findMany<Task>({
-									model: "kanbanTask",
-									where: [
-										{
-											field: "columnId",
-											value: columnId,
-											operator: "eq" as const,
-										},
-									],
-									sortBy: { field: "order", direction: "asc" },
-								}),
-							);
-							const taskResults = await Promise.all(taskQueries);
-							for (let i = 0; i < columnIds.length; i++) {
-								const columnId = columnIds[i];
-								const tasks = taskResults[i];
-								if (columnId && tasks) {
-									tasksByColumn.set(columnId, tasks);
-								}
-							}
-						}
-
-						// Map boards with columns and tasks
-						const result = boards.map((board) => {
-							const columns = (board.column || [])
-								.sort((a, b) => a.order - b.order)
-								.map((col) => ({
-									...col,
-									tasks: tasksByColumn.get(col.id) || [],
-								}));
-							const { column: _, ...boardWithoutJoin } = board;
-							return {
-								...boardWithoutJoin,
-								columns,
-							};
-						});
+						const result = await getAllBoards(adapter, query);
 
 						if (hooks?.onBoardsRead) {
 							await hooks.onBoardsRead(result, query, context);
@@ -409,60 +320,11 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 							}
 						}
 
-						const board = await adapter.findOne<BoardWithKanbanColumn>({
-							model: "kanbanBoard",
-							where: [
-								{ field: "id", value: params.id, operator: "eq" as const },
-							],
-							join: {
-								kanbanColumn: true,
-							},
-						});
+						const result = await getBoardById(adapter, params.id);
 
-						if (!board) {
+						if (!result) {
 							throw ctx.error(404, { message: "Board not found" });
 						}
-
-						// Fetch tasks for each column in parallel (avoids loading all tasks from DB)
-						// Note: adapter returns joined data under schema key name ("column"), not model name
-						const columnIds = (board.column || []).map((c) => c.id);
-						const tasksByColumn = new Map<string, Task[]>();
-						if (columnIds.length > 0) {
-							const taskQueries = columnIds.map((columnId) =>
-								adapter.findMany<Task>({
-									model: "kanbanTask",
-									where: [
-										{
-											field: "columnId",
-											value: columnId,
-											operator: "eq" as const,
-										},
-									],
-									sortBy: { field: "order", direction: "asc" },
-								}),
-							);
-							const taskResults = await Promise.all(taskQueries);
-							for (let i = 0; i < columnIds.length; i++) {
-								const columnId = columnIds[i];
-								const tasks = taskResults[i];
-								if (columnId && tasks) {
-									tasksByColumn.set(columnId, tasks);
-								}
-							}
-						}
-
-						const columns = (board.column || [])
-							.sort((a, b) => a.order - b.order)
-							.map((col) => ({
-								...col,
-								tasks: tasksByColumn.get(col.id) || [],
-							}));
-
-						const { column: _, ...boardWithoutJoin } = board;
-						const result = {
-							...boardWithoutJoin,
-							columns,
-						};
 
 						if (hooks?.onBoardRead) {
 							await hooks.onBoardRead(result, context);

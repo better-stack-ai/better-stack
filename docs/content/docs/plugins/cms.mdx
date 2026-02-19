@@ -1248,3 +1248,42 @@ const result = zodSchema.safeParse(data)
 <AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="FormStep" />
 
 <AutoTypeTable path="../packages/ui/src/lib/schema-converter.ts" name="FormSchemaMetadata" />
+
+## Server-side Data Access
+
+The CMS plugin exposes standalone getter functions for server-side and SSG use cases.
+
+### Two patterns
+
+**Pattern 1 — via `stack().api`**
+
+```ts title="app/lib/stack.ts"
+import { myStack } from "./stack";
+
+const types  = await myStack.api.cms.getAllContentTypes();
+const items  = await myStack.api.cms.getAllContentItems("posts", { limit: 10 });
+const item   = await myStack.api.cms.getContentItemBySlug("posts", "my-first-post");
+```
+
+**Pattern 2 — direct import**
+
+```ts
+import {
+  getAllContentTypes,
+  getAllContentItems,
+  getContentItemBySlug,
+} from "@btst/stack/plugins/cms/api";
+
+export async function generateStaticParams() {
+  const result = await getAllContentItems(myAdapter, "posts", { limit: 100 });
+  return result.items.map((item) => ({ slug: item.slug }));
+}
+```
+
+### Available getters
+
+| Function | Description |
+|---|---|
+| `getAllContentTypes(adapter)` | Returns all registered content types, sorted by name |
+| `getAllContentItems(adapter, typeSlug, params?)` | Returns paginated items for a content type |
+| `getContentItemBySlug(adapter, typeSlug, slug)` | Returns a single item by slug, or `null` |

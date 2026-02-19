@@ -23,6 +23,11 @@ import type {
 } from "../types";
 import { listContentQuerySchema } from "../schemas";
 import { slugify } from "../utils";
+import {
+	getAllContentTypes,
+	getAllContentItems,
+	getContentItemBySlug,
+} from "./getters";
 
 /**
  * Migrate a legacy JSON Schema (version 1) to unified format (version 2)
@@ -511,34 +516,52 @@ async function populateRelations(
  *
  * @param config - Configuration with content types and optional hooks
  */
-export const cmsBackendPlugin = (config: CMSBackendConfig) =>
-	defineBackendPlugin({
+export const cmsBackendPlugin = (config: CMSBackendConfig) => {
+	// Shared sync state — used by both the api factory and routes handlers so
+	// that calling a getter before any HTTP request has been made still
+	// triggers the one-time content-type sync.
+	let syncPromise: Promise<void> | null = null;
+
+	const ensureSynced = (adapter: Adapter) => {
+		if (!syncPromise) {
+			syncPromise = syncContentTypes(adapter, config).catch((err) => {
+				// Allow retry on next call if sync fails
+				syncPromise = null;
+				throw err;
+			});
+		}
+		return syncPromise;
+	};
+
+	return defineBackendPlugin({
 		name: "cms",
 
 		dbPlugin: dbSchema,
 
+		api: (adapter) => ({
+			getAllContentTypes: async () => {
+				await ensureSynced(adapter);
+				return getAllContentTypes(adapter);
+			},
+			getAllContentItems: async (
+				contentTypeSlug: string,
+				params?: Parameters<typeof getAllContentItems>[2],
+			) => {
+				await ensureSynced(adapter);
+				return getAllContentItems(adapter, contentTypeSlug, params);
+			},
+			getContentItemBySlug: async (contentTypeSlug: string, slug: string) => {
+				await ensureSynced(adapter);
+				return getContentItemBySlug(adapter, contentTypeSlug, slug);
+			},
+		}),
+
 		routes: (adapter: Adapter) => {
-			// Sync content types on first request using promise-based lock
-			// This prevents race conditions when multiple concurrent requests arrive
-			// on cold start within the same instance
-			let syncPromise: Promise<void> | null = null;
-
-			const ensureSynced = async () => {
-				if (!syncPromise) {
-					syncPromise = syncContentTypes(adapter, config).catch((err) => {
-						// If sync fails, allow retry on next request
-						syncPromise = null;
-						throw err;
-					});
-				}
-				await syncPromise;
-			};
-
 			// Helper to get content type by slug
 			const getContentType = async (
 				slug: string,
 			): Promise<ContentType | null> => {
-				await ensureSynced();
+				await ensureSynced(adapter);
 				return adapter.findOne<ContentType>({
 					model: "contentType",
 					where: [{ field: "slug", value: slug, operator: "eq" as const }],
@@ -560,7 +583,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 				"/content-types",
 				{ method: "GET" },
 				async (ctx) => {
-					await ensureSynced();
+					await ensureSynced(adapter);
 
 					const contentTypes = await adapter.findMany<ContentType>({
 						model: "contentType",
@@ -1139,7 +1162,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 					const { slug } = ctx.params;
 					const { itemId } = ctx.query;
 
-					await ensureSynced();
+					await ensureSynced(adapter);
 
 					// Get the target content type
 					const targetContentType = await getContentType(slug);
@@ -1239,7 +1262,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 					const { slug, sourceType } = ctx.params;
 					const { itemId, fieldName, limit, offset } = ctx.query;
 
-					await ensureSynced();
+					await ensureSynced(adapter);
 
 					// Verify target content type exists
 					const targetContentType = await getContentType(slug);
@@ -1317,6 +1340,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) =>
 			};
 		},
 	});
+};
 
 export type CMSApiRouter = ReturnType<
 	ReturnType<typeof cmsBackendPlugin>["routes"]

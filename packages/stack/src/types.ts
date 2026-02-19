@@ -8,7 +8,7 @@ import type { Endpoint, Router } from "better-call";
  */
 export interface StackContext {
 	/** All registered backend plugins */
-	plugins: Record<string, BackendPlugin<any>>;
+	plugins: Record<string, BackendPlugin<any, any>>;
 	/** The API base path (e.g., "/api/data") */
 	basePath: string;
 	/** The database adapter */
@@ -40,9 +40,14 @@ export interface ClientStackContext<
  * You can optionally provide a base schema via the dbSchema config option.
  *
  * @template TRoutes - The exact shape of routes this plugin provides (preserves keys and endpoint types)
+ * @template TApi - The shape of the server-side API surface exposed via `stack().api`
  */
 export interface BackendPlugin<
 	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
+	TApi extends Record<string, (...args: any[]) => any> = Record<
+		string,
+		(...args: any[]) => any
+	>,
 > {
 	name: string;
 
@@ -56,6 +61,15 @@ export interface BackendPlugin<
 	 */
 	routes: (adapter: Adapter, context?: StackContext) => TRoutes;
 	dbPlugin: DbPlugin;
+
+	/**
+	 * Optional factory that returns server-side getter functions bound to the adapter.
+	 * The returned object is merged into `stack().api.<pluginName>.*` for direct
+	 * server-side or SSG data access without going through HTTP.
+	 *
+	 * @param adapter - The adapter instance shared with `routes`
+	 */
+	api?: (adapter: Adapter) => TApi;
 }
 
 /**
@@ -88,12 +102,24 @@ export interface ClientPlugin<
 }
 
 /**
+ * Utility type that maps each plugin key to the return type of its `api` factory.
+ * Used to build the fully-typed `stack().api` surface.
+ */
+export type PluginApis<
+	TPlugins extends Record<string, BackendPlugin<any, any>>,
+> = {
+	[K in keyof TPlugins]: TPlugins[K] extends BackendPlugin<any, infer TApi>
+		? TApi
+		: never;
+};
+
+/**
  * Configuration for creating the backend library
  */
 export interface BackendLibConfig<
-	TPlugins extends Record<string, BackendPlugin<any>> = Record<
+	TPlugins extends Record<string, BackendPlugin<any, any>> = Record<
 		string,
-		BackendPlugin<any>
+		BackendPlugin<any, any>
 	>,
 > {
 	basePath: string;
@@ -150,11 +176,12 @@ export type PluginRoutes<
  * Example: { messages: { list: Endpoint } } => { messages_list: Endpoint }
  */
 export type PrefixedPluginRoutes<
-	TPlugins extends Record<string, BackendPlugin<any>>,
+	TPlugins extends Record<string, BackendPlugin<any, any>>,
 > = UnionToIntersection<
 	{
 		[PluginKey in keyof TPlugins]: TPlugins[PluginKey] extends BackendPlugin<
-			infer TRoutes
+			infer TRoutes,
+			any
 		>
 			? {
 					[RouteKey in keyof TRoutes as `${PluginKey & string}_${RouteKey & string}`]: TRoutes[RouteKey];
@@ -172,10 +199,18 @@ export type PrefixedPluginRoutes<
  */
 export interface BackendLib<
 	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
+	TApis extends Record<
+		string,
+		Record<string, (...args: any[]) => any>
+	> = Record<string, Record<string, (...args: any[]) => any>>,
 > {
 	handler: (request: Request) => Promise<Response>; // API route handler
 	router: Router; // Better-call router
 	dbSchema: DatabaseDefinition; // Better-db schema
+	/** The database adapter shared across all plugins */
+	adapter: Adapter;
+	/** Fully-typed server-side getter functions, namespaced per plugin */
+	api: TApis;
 }
 
 /**
