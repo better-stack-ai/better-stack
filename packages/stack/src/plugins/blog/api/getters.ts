@@ -41,18 +41,20 @@ export async function getAllPosts(
 ): Promise<PostListResult> {
 	const query = params ?? {};
 
-	let tagFilterPostIds: Set<string> | null = null;
+	const whereConditions: Array<{
+		field: string;
+		value: string | number | boolean | string[] | number[] | Date | null;
+		operator: "eq" | "in";
+	}> = [];
 
+	// Resolve tagSlug → post IDs up front, then push an `in` condition so the
+	// adapter can filter and paginate entirely at the DB level.  The previous
+	// approach loaded every post into memory and filtered with a JS Set, which
+	// scans the whole table on every request.
 	if (query.tagSlug) {
 		const tag = await adapter.findOne<Tag>({
 			model: "tag",
-			where: [
-				{
-					field: "slug",
-					value: query.tagSlug,
-					operator: "eq" as const,
-				},
-			],
+			where: [{ field: "slug", value: query.tagSlug, operator: "eq" as const }],
 		});
 
 		if (!tag) {
@@ -61,21 +63,20 @@ export async function getAllPosts(
 
 		const postTags = await adapter.findMany<{ postId: string; tagId: string }>({
 			model: "postTag",
-			where: [
-				{
-					field: "tagId",
-					value: tag.id,
-					operator: "eq" as const,
-				},
-			],
+			where: [{ field: "tagId", value: tag.id, operator: "eq" as const }],
 		});
-		tagFilterPostIds = new Set(postTags.map((pt) => pt.postId));
-		if (tagFilterPostIds.size === 0) {
+
+		const taggedPostIds = postTags.map((pt) => pt.postId);
+		if (taggedPostIds.length === 0) {
 			return { items: [], total: 0, limit: query.limit, offset: query.offset };
 		}
-	}
 
-	const whereConditions = [];
+		whereConditions.push({
+			field: "id",
+			value: taggedPostIds,
+			operator: "in" as const,
+		});
+	}
 
 	if (query.published !== undefined) {
 		whereConditions.push({
@@ -93,32 +94,30 @@ export async function getAllPosts(
 		});
 	}
 
-	// For DB-paginated paths (no in-memory filtering), count total up front.
-	// For in-memory-filtered paths (query/tagSlug), total is computed after filtering.
-	// TODO: remove cast once @btst/db types expose adapter.count()
-	const dbPaginationOnly = !query.query && !query.tagSlug;
-	const dbTotal: number | undefined = dbPaginationOnly
-		? await adapter.count({
-				model: "post",
-				where: whereConditions.length > 0 ? whereConditions : undefined,
-			})
+	// Full-text search across title/content/excerpt must remain in-memory:
+	// the adapter's `contains` operator is case-sensitive and cannot be
+	// grouped with AND conditions using OR connectors in all adapter
+	// implementations.  All other filters above are pushed to DB, so the
+	// in-memory pass only scans the already-narrowed result set.
+	const needsInMemoryFilter = !!query.query;
+
+	const dbWhere = whereConditions.length > 0 ? whereConditions : undefined;
+
+	const dbTotal: number | undefined = !needsInMemoryFilter
+		? await adapter.count({ model: "post", where: dbWhere })
 		: undefined;
 
 	const posts = await adapter.findMany<PostWithPostTag>({
 		model: "post",
-		limit: dbPaginationOnly ? (query.limit ?? 10) : undefined,
-		offset: dbPaginationOnly ? (query.offset ?? 0) : undefined,
+		limit: !needsInMemoryFilter ? (query.limit ?? 10) : undefined,
+		offset: !needsInMemoryFilter ? (query.offset ?? 0) : undefined,
 		where: whereConditions,
-		sortBy: {
-			field: "createdAt",
-			direction: "desc",
-		},
-		join: {
-			postTag: true,
-		},
+		sortBy: { field: "createdAt", direction: "desc" },
+		join: { postTag: true },
 	});
 
-	// Collect unique tag IDs
+	// Collect the unique tag IDs present in this page of posts, then fetch
+	// only those tags (not the entire tags table).
 	const tagIds = new Set<string>();
 	for (const post of posts) {
 		if (post.postTag) {
@@ -128,21 +127,21 @@ export async function getAllPosts(
 		}
 	}
 
-	// Fetch all tags at once
 	const tags =
 		tagIds.size > 0
 			? await adapter.findMany<Tag>({
 					model: "tag",
+					where: [
+						{
+							field: "id",
+							value: Array.from(tagIds),
+							operator: "in" as const,
+						},
+					],
 				})
 			: [];
-	const tagMap = new Map<string, Tag>();
-	for (const tag of tags) {
-		if (tagIds.has(tag.id)) {
-			tagMap.set(tag.id, tag);
-		}
-	}
+	const tagMap = new Map<string, Tag>(tags.map((t) => [t.id, t]));
 
-	// Map tags to posts
 	let result = posts.map((post) => {
 		const postTags = (post.postTag || [])
 			.map((pt) => {
@@ -151,28 +150,20 @@ export async function getAllPosts(
 			})
 			.filter((tag): tag is Tag => tag !== undefined);
 		const { postTag: _, ...postWithoutJoin } = post;
-		return {
-			...postWithoutJoin,
-			tags: postTags,
-		};
+		return { ...postWithoutJoin, tags: postTags };
 	});
-
-	if (tagFilterPostIds) {
-		result = result.filter((post) => tagFilterPostIds!.has(post.id));
-	}
 
 	if (query.query) {
 		const searchLower = query.query.toLowerCase();
-		result = result.filter((post) => {
-			const titleMatch = post.title?.toLowerCase().includes(searchLower);
-			const contentMatch = post.content?.toLowerCase().includes(searchLower);
-			const excerptMatch = post.excerpt?.toLowerCase().includes(searchLower);
-			return titleMatch || contentMatch || excerptMatch;
-		});
+		result = result.filter(
+			(post) =>
+				post.title?.toLowerCase().includes(searchLower) ||
+				post.content?.toLowerCase().includes(searchLower) ||
+				post.excerpt?.toLowerCase().includes(searchLower),
+		);
 	}
 
-	if (query.tagSlug || query.query) {
-		// Capture total after in-memory filters but before pagination slice
+	if (needsInMemoryFilter) {
 		const total = result.length;
 		const offset = query.offset ?? 0;
 		const limit = query.limit ?? 10;
@@ -180,7 +171,6 @@ export async function getAllPosts(
 		return { items: result, total, limit: query.limit, offset: query.offset };
 	}
 
-	// DB-paginated path: total was fetched with adapter.count() above
 	return {
 		items: result,
 		total: dbTotal ?? result.length,

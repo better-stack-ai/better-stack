@@ -221,6 +221,189 @@ describe("blog getters", () => {
 			expect(result.total).toBe(0);
 		});
 
+		it("filters posts by tagSlug - returns only tagged posts", async () => {
+			const taggedPost = await adapter.create({
+				model: "post",
+				data: {
+					title: "Tagged Post",
+					slug: "tagged-post",
+					content: "Content",
+					excerpt: "",
+					published: true,
+					tags: [],
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			for (let i = 1; i <= 3; i++) {
+				await adapter.create({
+					model: "post",
+					data: {
+						title: `Untagged Post ${i}`,
+						slug: `untagged-${i}`,
+						content: "Content",
+						excerpt: "",
+						published: true,
+						tags: [],
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+				});
+			}
+			const tag = await adapter.create({
+				model: "tag",
+				data: {
+					name: "TypeScript",
+					slug: "typescript",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			await adapter.create({
+				model: "postTag",
+				data: { postId: (taggedPost as any).id, tagId: (tag as any).id },
+			});
+
+			const result = await getAllPosts(adapter, { tagSlug: "typescript" });
+			expect(result.items).toHaveLength(1);
+			expect(result.total).toBe(1);
+			expect(result.items[0]!.slug).toBe("tagged-post");
+		});
+
+		it("paginates tagSlug results at the DB level - limit/offset respected", async () => {
+			// Create a tag and 5 posts tagged with it, plus 10 untagged posts.
+			// With DB-level filtering the findMany should only receive 5 rows,
+			// never loading the 10 untagged posts into memory.
+			const tag = await adapter.create({
+				model: "tag",
+				data: {
+					name: "JS",
+					slug: "js",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			for (let i = 1; i <= 5; i++) {
+				const post = await adapter.create({
+					model: "post",
+					data: {
+						title: `JS Post ${i}`,
+						slug: `js-post-${i}`,
+						content: "Content",
+						excerpt: "",
+						published: true,
+						tags: [],
+						createdAt: new Date(Date.now() + i * 1000),
+						updatedAt: new Date(),
+					},
+				});
+				await adapter.create({
+					model: "postTag",
+					data: { postId: (post as any).id, tagId: (tag as any).id },
+				});
+			}
+			for (let i = 1; i <= 10; i++) {
+				await adapter.create({
+					model: "post",
+					data: {
+						title: `Noise Post ${i}`,
+						slug: `noise-${i}`,
+						content: "Content",
+						excerpt: "",
+						published: true,
+						tags: [],
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+				});
+			}
+
+			const page1 = await getAllPosts(adapter, {
+				tagSlug: "js",
+				limit: 2,
+				offset: 0,
+			});
+			expect(page1.items).toHaveLength(2);
+			expect(page1.total).toBe(5);
+			expect(page1.items.every((p) => p.slug.startsWith("js-post"))).toBe(true);
+
+			const page2 = await getAllPosts(adapter, {
+				tagSlug: "js",
+				limit: 2,
+				offset: 2,
+			});
+			expect(page2.items).toHaveLength(2);
+			expect(page2.total).toBe(5);
+
+			const page3 = await getAllPosts(adapter, {
+				tagSlug: "js",
+				limit: 2,
+				offset: 4,
+			});
+			expect(page3.items).toHaveLength(1);
+			expect(page3.total).toBe(5);
+
+			// Pages must be disjoint
+			const allSlugs = [...page1.items, ...page2.items, ...page3.items].map(
+				(p) => p.slug,
+			);
+			expect(new Set(allSlugs).size).toBe(5);
+		});
+
+		it("tagSlug combined with published filter only returns published tagged posts", async () => {
+			const tag = await adapter.create({
+				model: "tag",
+				data: {
+					name: "CSS",
+					slug: "css",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			const published = await adapter.create({
+				model: "post",
+				data: {
+					title: "Published CSS Post",
+					slug: "pub-css",
+					content: "Content",
+					excerpt: "",
+					published: true,
+					tags: [],
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			const draft = await adapter.create({
+				model: "post",
+				data: {
+					title: "Draft CSS Post",
+					slug: "draft-css",
+					content: "Content",
+					excerpt: "",
+					published: false,
+					tags: [],
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			await adapter.create({
+				model: "postTag",
+				data: { postId: (published as any).id, tagId: (tag as any).id },
+			});
+			await adapter.create({
+				model: "postTag",
+				data: { postId: (draft as any).id, tagId: (tag as any).id },
+			});
+
+			const result = await getAllPosts(adapter, {
+				tagSlug: "css",
+				published: true,
+			});
+			expect(result.items).toHaveLength(1);
+			expect(result.total).toBe(1);
+			expect(result.items[0]!.slug).toBe("pub-css");
+		});
+
 		it("total reflects count before pagination slice for in-memory filters", async () => {
 			for (let i = 1; i <= 4; i++) {
 				await adapter.create({
