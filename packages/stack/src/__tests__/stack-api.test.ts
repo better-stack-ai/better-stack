@@ -93,8 +93,8 @@ describe("stack.api surface", () => {
 
 		// Retrieve via stack.api
 		const posts = await backend.api.blog.getAllPosts();
-		expect(posts).toHaveLength(1);
-		expect(posts[0]!.slug).toBe("hello-world");
+		expect(posts.items).toHaveLength(1);
+		expect(posts.items[0]!.slug).toBe("hello-world");
 
 		// Verify same adapter - data is shared
 		const bySlug = await backend.api.blog.getPostBySlug("hello-world");

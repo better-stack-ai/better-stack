@@ -15,8 +15,22 @@ export interface PostListParams {
 }
 
 /**
+ * Paginated result returned by {@link getAllPosts}.
+ */
+export interface PostListResult {
+	items: Array<Post & { tags: Tag[] }>;
+	total: number;
+	limit?: number;
+	offset?: number;
+}
+
+/**
  * Retrieve all posts matching optional filter criteria.
- * Pure DB function - no hooks, no HTTP context. Safe for SSG and server-side use.
+ * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
+ *
+ * @remarks **Security:** Authorization hooks (e.g. `onBeforeListPosts`) are NOT
+ * called. The caller is responsible for any access-control checks before
+ * invoking this function.
  *
  * @param adapter - The database adapter
  * @param params - Optional filter/pagination parameters (same shape as the list API query)
@@ -24,7 +38,7 @@ export interface PostListParams {
 export async function getAllPosts(
 	adapter: Adapter,
 	params?: PostListParams,
-): Promise<Array<Post & { tags: Tag[] }>> {
+): Promise<PostListResult> {
 	const query = params ?? {};
 
 	let tagFilterPostIds: Set<string> | null = null;
@@ -42,7 +56,7 @@ export async function getAllPosts(
 		});
 
 		if (!tag) {
-			return [];
+			return { items: [], total: 0, limit: query.limit, offset: query.offset };
 		}
 
 		const postTags = await adapter.findMany<{ postId: string; tagId: string }>({
@@ -57,7 +71,7 @@ export async function getAllPosts(
 		});
 		tagFilterPostIds = new Set(postTags.map((pt) => pt.postId));
 		if (tagFilterPostIds.size === 0) {
-			return [];
+			return { items: [], total: 0, limit: query.limit, offset: query.offset };
 		}
 	}
 
@@ -79,10 +93,21 @@ export async function getAllPosts(
 		});
 	}
 
+	// For DB-paginated paths (no in-memory filtering), count total up front.
+	// For in-memory-filtered paths (query/tagSlug), total is computed after filtering.
+	// TODO: remove cast once @btst/db types expose adapter.count()
+	const dbPaginationOnly = !query.query && !query.tagSlug;
+	const dbTotal: number | undefined = dbPaginationOnly
+		? await (adapter as any).count({
+				model: "post",
+				where: whereConditions.length > 0 ? whereConditions : undefined,
+			})
+		: undefined;
+
 	const posts = await adapter.findMany<PostWithPostTag>({
 		model: "post",
-		limit: query.query || query.tagSlug ? undefined : (query.limit ?? 10),
-		offset: query.query || query.tagSlug ? undefined : (query.offset ?? 0),
+		limit: dbPaginationOnly ? (query.limit ?? 10) : undefined,
+		offset: dbPaginationOnly ? (query.offset ?? 0) : undefined,
 		where: whereConditions,
 		sortBy: {
 			field: "createdAt",
@@ -147,17 +172,30 @@ export async function getAllPosts(
 	}
 
 	if (query.tagSlug || query.query) {
+		// Capture total after in-memory filters but before pagination slice
+		const total = result.length;
 		const offset = query.offset ?? 0;
 		const limit = query.limit ?? 10;
 		result = result.slice(offset, offset + limit);
+		return { items: result, total, limit: query.limit, offset: query.offset };
 	}
 
-	return result;
+	// DB-paginated path: total was fetched with adapter.count() above
+	return {
+		items: result,
+		total: dbTotal ?? result.length,
+		limit: query.limit,
+		offset: query.offset,
+	};
 }
 
 /**
  * Retrieve a single post by its slug, including associated tags.
  * Returns null if no post is found.
+ * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
+ *
+ * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter
  * @param slug - The post slug
@@ -166,17 +204,22 @@ export async function getPostBySlug(
 	adapter: Adapter,
 	slug: string,
 ): Promise<(Post & { tags: Tag[] }) | null> {
-	const results = await getAllPosts(adapter, { slug });
-	return results[0] ?? null;
+	const { items } = await getAllPosts(adapter, { slug });
+	return items[0] ?? null;
 }
 
 /**
- * Retrieve all tags.
+ * Retrieve all tags, sorted alphabetically by name.
+ * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
+ *
+ * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter
  */
 export async function getAllTags(adapter: Adapter): Promise<Tag[]> {
 	return adapter.findMany<Tag>({
 		model: "tag",
+		sortBy: { field: "name", direction: "asc" },
 	});
 }

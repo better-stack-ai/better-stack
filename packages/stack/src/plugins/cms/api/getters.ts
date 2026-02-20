@@ -86,7 +86,10 @@ export function serializeContentItemWithType(
 
 /**
  * Retrieve all content types.
- * Pure DB function - no hooks, no HTTP context. Safe for SSG and server-side use.
+ * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
+ *
+ * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter
  */
@@ -102,7 +105,11 @@ export async function getAllContentTypes(
 
 /**
  * Retrieve all content items for a given content type, with optional pagination.
- * Pure DB function - no hooks, no HTTP context. Safe for SSG and server-side use.
+ * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
+ *
+ * @remarks **Security:** Authorization hooks (e.g. `onBeforeListItems`) are NOT
+ * called. The caller is responsible for any access-control checks before
+ * invoking this function.
  *
  * @param adapter - The database adapter
  * @param contentTypeSlug - The slug of the content type to query
@@ -158,11 +165,11 @@ export async function getAllContentItems(
 		});
 	}
 
-	const allItems = await adapter.findMany<ContentItem>({
+	// TODO: remove cast once @btst/db types expose adapter.count()
+	const total: number = await (adapter as any).count({
 		model: "contentItem",
 		where: whereConditions,
 	});
-	const total = allItems.length;
 
 	const items = await adapter.findMany<ContentItemWithType>({
 		model: "contentItem",
@@ -184,7 +191,10 @@ export async function getAllContentItems(
 /**
  * Retrieve a single content item by its slug within a content type.
  * Returns null if the content type or item is not found.
- * Pure DB function - no hooks, no HTTP context. Safe for SSG and server-side use.
+ * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
+ *
+ * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter
  * @param contentTypeSlug - The slug of the content type

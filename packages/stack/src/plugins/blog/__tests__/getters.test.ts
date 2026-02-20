@@ -18,9 +18,10 @@ describe("blog getters", () => {
 	});
 
 	describe("getAllPosts", () => {
-		it("returns empty array when no posts exist", async () => {
-			const posts = await getAllPosts(adapter);
-			expect(posts).toEqual([]);
+		it("returns empty result when no posts exist", async () => {
+			const result = await getAllPosts(adapter);
+			expect(result.items).toEqual([]);
+			expect(result.total).toBe(0);
 		});
 
 		it("returns all posts with empty tags array", async () => {
@@ -38,10 +39,11 @@ describe("blog getters", () => {
 				},
 			});
 
-			const posts = await getAllPosts(adapter);
-			expect(posts).toHaveLength(1);
-			expect(posts[0]!.slug).toBe("hello-world");
-			expect(posts[0]!.tags).toEqual([]);
+			const result = await getAllPosts(adapter);
+			expect(result.items).toHaveLength(1);
+			expect(result.total).toBe(1);
+			expect(result.items[0]!.slug).toBe("hello-world");
+			expect(result.items[0]!.tags).toEqual([]);
 		});
 
 		it("filters posts by published status", async () => {
@@ -73,12 +75,14 @@ describe("blog getters", () => {
 			});
 
 			const published = await getAllPosts(adapter, { published: true });
-			expect(published).toHaveLength(1);
-			expect(published[0]!.slug).toBe("published");
+			expect(published.items).toHaveLength(1);
+			expect(published.total).toBe(1);
+			expect(published.items[0]!.slug).toBe("published");
 
 			const drafts = await getAllPosts(adapter, { published: false });
-			expect(drafts).toHaveLength(1);
-			expect(drafts[0]!.slug).toBe("draft");
+			expect(drafts.items).toHaveLength(1);
+			expect(drafts.total).toBe(1);
+			expect(drafts.items[0]!.slug).toBe("draft");
 		});
 
 		it("filters posts by slug", async () => {
@@ -110,8 +114,9 @@ describe("blog getters", () => {
 			});
 
 			const result = await getAllPosts(adapter, { slug: "post-a" });
-			expect(result).toHaveLength(1);
-			expect(result[0]!.slug).toBe("post-a");
+			expect(result.items).toHaveLength(1);
+			expect(result.total).toBe(1);
+			expect(result.items[0]!.slug).toBe("post-a");
 		});
 
 		it("searches posts by query string", async () => {
@@ -143,8 +148,9 @@ describe("blog getters", () => {
 			});
 
 			const result = await getAllPosts(adapter, { query: "typescript" });
-			expect(result).toHaveLength(1);
-			expect(result[0]!.slug).toBe("ts-tips");
+			expect(result.items).toHaveLength(1);
+			expect(result.total).toBe(1);
+			expect(result.items[0]!.slug).toBe("ts-tips");
 		});
 
 		it("respects limit and offset", async () => {
@@ -165,13 +171,15 @@ describe("blog getters", () => {
 			}
 
 			const page1 = await getAllPosts(adapter, { limit: 2, offset: 0 });
-			expect(page1).toHaveLength(2);
+			expect(page1.items).toHaveLength(2);
+			expect(page1.total).toBe(5);
 
 			const page2 = await getAllPosts(adapter, { limit: 2, offset: 2 });
-			expect(page2).toHaveLength(2);
+			expect(page2.items).toHaveLength(2);
+			expect(page2.total).toBe(5);
 
 			// Pages should be different posts
-			expect(page1[0]!.slug).not.toBe(page2[0]!.slug);
+			expect(page1.items[0]!.slug).not.toBe(page2.items[0]!.slug);
 		});
 
 		it("attaches tags to posts", async () => {
@@ -202,14 +210,41 @@ describe("blog getters", () => {
 				data: { postId: (post as any).id, tagId: (tag as any).id },
 			});
 
-			const posts = await getAllPosts(adapter);
-			expect(posts[0]!.tags).toHaveLength(1);
-			expect(posts[0]!.tags[0]!.slug).toBe("javascript");
+			const result = await getAllPosts(adapter);
+			expect(result.items[0]!.tags).toHaveLength(1);
+			expect(result.items[0]!.tags[0]!.slug).toBe("javascript");
 		});
 
 		it("filters posts by tagSlug and returns empty for missing tag", async () => {
 			const result = await getAllPosts(adapter, { tagSlug: "nonexistent" });
-			expect(result).toEqual([]);
+			expect(result.items).toEqual([]);
+			expect(result.total).toBe(0);
+		});
+
+		it("total reflects count before pagination slice for in-memory filters", async () => {
+			for (let i = 1; i <= 4; i++) {
+				await adapter.create({
+					model: "post",
+					data: {
+						title: `TypeScript Post ${i}`,
+						slug: `ts-post-${i}`,
+						content: "TypeScript content",
+						excerpt: "",
+						published: true,
+						tags: [],
+						createdAt: new Date(Date.now() + i * 1000),
+						updatedAt: new Date(),
+					},
+				});
+			}
+
+			const result = await getAllPosts(adapter, {
+				query: "TypeScript",
+				limit: 2,
+				offset: 0,
+			});
+			expect(result.items).toHaveLength(2);
+			expect(result.total).toBe(4);
 		});
 	});
 
@@ -247,7 +282,7 @@ describe("blog getters", () => {
 			expect(tags).toEqual([]);
 		});
 
-		it("returns all tags", async () => {
+		it("returns all tags sorted alphabetically by name", async () => {
 			await adapter.create({
 				model: "tag",
 				data: {
@@ -269,7 +304,8 @@ describe("blog getters", () => {
 
 			const tags = await getAllTags(adapter);
 			expect(tags).toHaveLength(2);
-			expect(tags.map((t) => t.slug).sort()).toEqual(["react", "typescript"]);
+			expect(tags[0]!.name).toBe("React");
+			expect(tags[1]!.name).toBe("TypeScript");
 		});
 	});
 });

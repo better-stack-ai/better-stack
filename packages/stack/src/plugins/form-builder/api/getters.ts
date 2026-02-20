@@ -54,7 +54,11 @@ export function serializeFormSubmissionWithData(
 
 /**
  * Retrieve all forms with optional status filter and pagination.
- * Pure DB function - no hooks, no HTTP context. Safe for SSG and server-side use.
+ * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
+ *
+ * @remarks **Security:** Authorization hooks (e.g. `onBeforeListForms`) are NOT
+ * called. The caller is responsible for any access-control checks before
+ * invoking this function.
  *
  * @param adapter - The database adapter
  * @param params - Optional filter/pagination parameters
@@ -82,11 +86,11 @@ export async function getAllForms(
 		});
 	}
 
-	const allForms = await adapter.findMany<Form>({
+	// TODO: remove cast once @btst/db types expose adapter.count()
+	const total: number = await (adapter as any).count({
 		model: "form",
 		where: whereConditions.length > 0 ? whereConditions : undefined,
 	});
-	const total = allForms.length;
 
 	const forms = await adapter.findMany<Form>({
 		model: "form",
@@ -107,7 +111,10 @@ export async function getAllForms(
 /**
  * Retrieve a single form by its slug.
  * Returns null if the form is not found.
- * Pure DB function - no hooks, no HTTP context. Safe for SSG and server-side use.
+ * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
+ *
+ * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter
  * @param slug - The form slug
@@ -131,7 +138,10 @@ export async function getFormBySlug(
 /**
  * Retrieve submissions for a form by form ID, with optional pagination.
  * Returns an empty result if the form does not exist.
- * Pure DB function - no hooks, no HTTP context. Safe for server-side use.
+ * Pure DB function — no hooks, no HTTP context. Safe for server-side use.
+ *
+ * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter
  * @param formId - The form ID
@@ -161,11 +171,11 @@ export async function getFormSubmissions(
 		};
 	}
 
-	const allSubmissions = await adapter.findMany<FormSubmission>({
+	// TODO: remove cast once @btst/db types expose adapter.count()
+	const total: number = await (adapter as any).count({
 		model: "formSubmission",
 		where: [{ field: "formId", value: formId, operator: "eq" as const }],
 	});
-	const total = allSubmissions.length;
 
 	const submissions = await adapter.findMany<FormSubmissionWithForm>({
 		model: "formSubmission",

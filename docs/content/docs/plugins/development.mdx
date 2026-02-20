@@ -300,6 +300,10 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 Plugins can expose a typed `api` surface that lets server code — Server Components, `generateStaticParams`, cron jobs, scripts — query the database directly, **without going through HTTP**.
 
+<Callout type="warn">
+**Getter functions bypass authorization hooks.** Plugin hooks such as `onBeforeListPosts` or `onBeforeListForms` are **not** called when you invoke getters via `myStack.api.*`. These functions are pure database calls — the caller is fully responsible for performing any access-control checks before invoking them. Do not call getters from user-facing request handlers without adding your own authorization logic first.
+</Callout>
+
 Add an `api` factory to `defineBackendPlugin`. The factory receives the shared adapter and returns an object of async functions:
 
 ```typescript

@@ -6,7 +6,12 @@ import { blogSchema as dbSchema } from "../db";
 import type { Post, PostWithPostTag, Tag } from "../types";
 import { slugify } from "../utils";
 import { createPostSchema, updatePostSchema } from "../schemas";
-import { getAllPosts, getPostBySlug, getAllTags } from "./getters";
+import {
+	getAllPosts,
+	getPostBySlug,
+	getAllTags,
+	type PostListResult,
+} from "./getters";
 
 export const PostListQuerySchema = z.object({
 	slug: z.string().optional(),
@@ -87,12 +92,12 @@ export interface BlogBackendHooks {
 
 	/**
 	 * Called after posts are read successfully
-	 * @param posts - Array of posts that were read
+	 * @param result - Paginated result containing posts and total count
 	 * @param filter - Query parameters used for filtering
 	 * @param context - Request context
 	 */
 	onPostsRead?: (
-		posts: Post[],
+		result: PostListResult,
 		filter: z.infer<typeof PostListQuerySchema>,
 		context: BlogApiContext,
 	) => Promise<void> | void;
