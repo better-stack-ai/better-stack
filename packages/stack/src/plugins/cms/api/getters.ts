@@ -12,7 +12,7 @@ import type {
  * Serialize a ContentType for SSR/SSG use (convert dates to strings).
  * Applies lazy migration for legacy schemas (version 1 → 2).
  */
-function serializeContentType(ct: ContentType): SerializedContentType {
+export function serializeContentType(ct: ContentType): SerializedContentType {
 	const needsMigration = !ct.autoFormVersion || ct.autoFormVersion < 2;
 	const migratedJsonSchema = needsMigration
 		? migrateToUnifiedSchema(ct.jsonSchema, ct.fieldConfig)
@@ -29,7 +29,7 @@ function serializeContentType(ct: ContentType): SerializedContentType {
 	};
 }
 
-function migrateToUnifiedSchema(
+export function migrateToUnifiedSchema(
 	jsonSchemaStr: string,
 	fieldConfigStr: string | null | undefined,
 ): string {
@@ -61,7 +61,7 @@ function migrateToUnifiedSchema(
 /**
  * Serialize a ContentItem for SSR/SSG use (convert dates to strings).
  */
-function serializeContentItem(item: ContentItem): SerializedContentItem {
+export function serializeContentItem(item: ContentItem): SerializedContentItem {
 	return {
 		...item,
 		createdAt: item.createdAt.toISOString(),
@@ -72,7 +72,7 @@ function serializeContentItem(item: ContentItem): SerializedContentItem {
 /**
  * Serialize a ContentItem with parsed data and joined ContentType.
  */
-function serializeContentItemWithType(
+export function serializeContentItemWithType(
 	item: ContentItemWithType,
 ): SerializedContentItemWithType {
 	return {

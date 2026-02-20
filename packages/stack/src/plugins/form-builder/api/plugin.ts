@@ -11,9 +11,6 @@ import type {
 	FormBuilderBackendConfig,
 	FormBuilderHookContext,
 	SubmissionHookContext,
-	SerializedForm,
-	SerializedFormSubmission,
-	SerializedFormSubmissionWithData,
 	FormInput,
 	FormUpdate,
 } from "../types";
@@ -24,51 +21,14 @@ import {
 	listSubmissionsQuerySchema,
 } from "../schemas";
 import { slugify, extractIpAddress, extractUserAgent } from "../utils";
-import { getAllForms, getFormBySlug, getFormSubmissions } from "./getters";
-
-/**
- * Serialize a Form for API response (convert dates to strings)
- */
-function serializeForm(form: Form): SerializedForm {
-	return {
-		id: form.id,
-		name: form.name,
-		slug: form.slug,
-		description: form.description,
-		schema: form.schema,
-		successMessage: form.successMessage,
-		redirectUrl: form.redirectUrl,
-		status: form.status,
-		createdBy: form.createdBy,
-		createdAt: form.createdAt.toISOString(),
-		updatedAt: form.updatedAt.toISOString(),
-	};
-}
-
-/**
- * Serialize a FormSubmission for API response (convert dates to strings)
- */
-function serializeFormSubmission(
-	submission: FormSubmission,
-): SerializedFormSubmission {
-	return {
-		...submission,
-		submittedAt: submission.submittedAt.toISOString(),
-	};
-}
-
-/**
- * Serialize a FormSubmission with parsed data and joined Form
- */
-function serializeFormSubmissionWithData(
-	submission: FormSubmissionWithForm,
-): SerializedFormSubmissionWithData {
-	return {
-		...serializeFormSubmission(submission),
-		parsedData: JSON.parse(submission.data),
-		form: submission.form ? serializeForm(submission.form) : undefined,
-	};
-}
+import {
+	getAllForms,
+	getFormBySlug,
+	getFormSubmissions,
+	serializeForm,
+	serializeFormSubmission,
+	serializeFormSubmissionWithData,
+} from "./getters";
 
 /**
  * Form Builder backend plugin

@@ -14,8 +14,6 @@ import type {
 	ContentRelation,
 	CMSBackendConfig,
 	CMSHookContext,
-	SerializedContentType,
-	SerializedContentItem,
 	SerializedContentItemWithType,
 	RelationConfig,
 	RelationValue,
@@ -27,98 +25,10 @@ import {
 	getAllContentTypes,
 	getAllContentItems,
 	getContentItemBySlug,
+	serializeContentType,
+	serializeContentItem,
+	serializeContentItemWithType,
 } from "./getters";
-
-/**
- * Migrate a legacy JSON Schema (version 1) to unified format (version 2)
- * by merging fieldConfig values into the JSON Schema properties
- */
-function migrateToUnifiedSchema(
-	jsonSchemaStr: string,
-	fieldConfigStr: string | null | undefined,
-): string {
-	if (!fieldConfigStr) {
-		return jsonSchemaStr;
-	}
-
-	try {
-		const jsonSchema = JSON.parse(jsonSchemaStr);
-		const fieldConfig = JSON.parse(fieldConfigStr);
-
-		if (!jsonSchema.properties || typeof fieldConfig !== "object") {
-			return jsonSchemaStr;
-		}
-
-		// Merge fieldType from fieldConfig into each property
-		for (const [key, config] of Object.entries(fieldConfig)) {
-			if (
-				jsonSchema.properties[key] &&
-				typeof config === "object" &&
-				config !== null &&
-				"fieldType" in config
-			) {
-				jsonSchema.properties[key].fieldType = (
-					config as { fieldType: string }
-				).fieldType;
-			}
-		}
-
-		return JSON.stringify(jsonSchema);
-	} catch {
-		// If parsing fails, return original
-		return jsonSchemaStr;
-	}
-}
-
-/**
- * Serialize a ContentType for API response (convert dates to strings)
- * Also applies lazy migration for legacy schemas (version 1 → 2)
- */
-function serializeContentType(ct: ContentType): SerializedContentType {
-	// Check if this is a legacy schema that needs migration
-	const needsMigration = !ct.autoFormVersion || ct.autoFormVersion < 2;
-
-	// Apply lazy migration: merge fieldConfig into jsonSchema on read
-	const migratedJsonSchema = needsMigration
-		? migrateToUnifiedSchema(ct.jsonSchema, ct.fieldConfig)
-		: ct.jsonSchema;
-
-	return {
-		id: ct.id,
-		name: ct.name,
-		slug: ct.slug,
-		description: ct.description,
-		jsonSchema: migratedJsonSchema,
-		createdAt: ct.createdAt.toISOString(),
-		updatedAt: ct.updatedAt.toISOString(),
-	};
-}
-
-/**
- * Serialize a ContentItem for API response (convert dates to strings)
- */
-function serializeContentItem(item: ContentItem): SerializedContentItem {
-	return {
-		...item,
-		createdAt: item.createdAt.toISOString(),
-		updatedAt: item.updatedAt.toISOString(),
-	};
-}
-
-/**
- * Serialize a ContentItem with parsed data and joined ContentType
- */
-function serializeContentItemWithType(
-	item: ContentItemWithType,
-): SerializedContentItemWithType {
-	return {
-		...serializeContentItem(item),
-		parsedData: JSON.parse(item.data),
-		contentType: item.contentType
-			? serializeContentType(item.contentType)
-			: undefined,
-	};
-}
 
 /**
  * Sync content types from config to database

@@ -11,7 +11,7 @@ import type {
 /**
  * Serialize a Form for SSR/SSG use (convert dates to strings).
  */
-function serializeForm(form: Form): SerializedForm {
+export function serializeForm(form: Form): SerializedForm {
 	return {
 		id: form.id,
 		name: form.name,
@@ -30,7 +30,7 @@ function serializeForm(form: Form): SerializedForm {
 /**
  * Serialize a FormSubmission for SSR/SSG use (convert dates to strings).
  */
-function serializeFormSubmission(
+export function serializeFormSubmission(
 	submission: FormSubmission,
 ): SerializedFormSubmission {
 	return {
@@ -42,7 +42,7 @@ function serializeFormSubmission(
 /**
  * Serialize a FormSubmission with parsed data and joined Form.
  */
-function serializeFormSubmissionWithData(
+export function serializeFormSubmissionWithData(
 	submission: FormSubmissionWithForm,
 ): SerializedFormSubmissionWithData {
 	return {
