@@ -75,8 +75,9 @@ describe("kanban getters", () => {
 
 	describe("getAllBoards", () => {
 		it("returns empty array when no boards exist", async () => {
-			const boards = await getAllBoards(adapter);
-			expect(boards).toEqual([]);
+			const { items, total } = await getAllBoards(adapter);
+			expect(items).toEqual([]);
+			expect(total).toBe(0);
 		});
 
 		it("returns all boards with columns and tasks", async () => {
