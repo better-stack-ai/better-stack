@@ -194,8 +194,33 @@ export async function getPostBySlug(
 	adapter: Adapter,
 	slug: string,
 ): Promise<(Post & { tags: Tag[] }) | null> {
-	const { items } = await getAllPosts(adapter, { slug });
-	return items[0] ?? null;
+	const posts = await adapter.findMany<PostWithPostTag>({
+		model: "post",
+		where: [{ field: "slug", value: slug, operator: "eq" as const }],
+		limit: 1,
+		join: { postTag: true },
+	});
+
+	if (posts.length === 0) return null;
+
+	const post = posts[0]!;
+	const tagIds = (post.postTag || []).map((pt) => pt.tagId);
+
+	const tags =
+		tagIds.length > 0
+			? await adapter.findMany<Tag>({
+					model: "tag",
+					where: [{ field: "id", value: tagIds, operator: "in" as const }],
+				})
+			: [];
+
+	const tagMap = new Map<string, Tag>(tags.map((t) => [t.id, t]));
+	const resolvedTags = (post.postTag || [])
+		.map((pt) => tagMap.get(pt.tagId))
+		.filter((t): t is Tag => t !== undefined);
+
+	const { postTag: _, ...postWithoutJoin } = post;
+	return { ...postWithoutJoin, tags: resolvedTags };
 }
 
 /**
