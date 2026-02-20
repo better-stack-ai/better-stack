@@ -178,8 +178,8 @@ export interface SerializedContentItem
  */
 export interface SerializedContentItemWithType<TData = Record<string, unknown>>
 	extends SerializedContentItem {
-	/** Parsed data object (JSON.parse of data field). Null when the stored JSON is corrupted. */
-	parsedData: TData | null;
+	/** Parsed data object (JSON.parse of data field). */
+	parsedData: TData;
 	/** Joined content type */
 	contentType?: SerializedContentType;
 	/**

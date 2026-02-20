@@ -9,6 +9,47 @@ import type { z } from "zod";
 import type { BoardListQuerySchema } from "../schemas";
 
 /**
+ * Given a raw board record (with a `column` join), fetches tasks for every
+ * column in parallel and returns the sorted columns with their tasks attached.
+ * Strips the raw `column` join field from the returned board object.
+ */
+async function hydrateColumnsWithTasks(
+	adapter: Adapter,
+	board: BoardWithKanbanColumn,
+): Promise<BoardWithColumns> {
+	const columnIds = (board.column || []).map((c) => c.id);
+	const tasksByColumn = new Map<string, Task[]>();
+
+	if (columnIds.length > 0) {
+		const taskResults = await Promise.all(
+			columnIds.map((columnId) =>
+				adapter.findMany<Task>({
+					model: "kanbanTask",
+					where: [
+						{ field: "columnId", value: columnId, operator: "eq" as const },
+					],
+					sortBy: { field: "order", direction: "asc" },
+				}),
+			),
+		);
+		for (let i = 0; i < columnIds.length; i++) {
+			const columnId = columnIds[i];
+			const tasks = taskResults[i];
+			if (columnId && tasks) {
+				tasksByColumn.set(columnId, tasks);
+			}
+		}
+	}
+
+	const columns: ColumnWithTasks[] = (board.column || [])
+		.sort((a, b) => a.order - b.order)
+		.map((col) => ({ ...col, tasks: tasksByColumn.get(col.id) || [] }));
+
+	const { column: _, ...boardWithoutJoin } = board;
+	return { ...boardWithoutJoin, columns };
+}
+
+/**
  * Retrieve all boards matching optional filter criteria, with columns and tasks.
  * Pure DB function - no hooks, no HTTP context. Safe for SSG and server-side use.
  *
@@ -60,52 +101,9 @@ export async function getAllBoards(
 		join: { kanbanColumn: true },
 	});
 
-	// Collect all column IDs to fetch tasks
-	const columnIds: string[] = [];
-	for (const board of boards) {
-		if (board.column) {
-			for (const col of board.column) {
-				columnIds.push(col.id);
-			}
-		}
-	}
-
-	// Fetch tasks for each column in parallel
-	const tasksByColumn = new Map<string, Task[]>();
-	if (columnIds.length > 0) {
-		const taskQueries = columnIds.map((columnId) =>
-			adapter.findMany<Task>({
-				model: "kanbanTask",
-				where: [
-					{ field: "columnId", value: columnId, operator: "eq" as const },
-				],
-				sortBy: { field: "order", direction: "asc" },
-			}),
-		);
-		const taskResults = await Promise.all(taskQueries);
-		for (let i = 0; i < columnIds.length; i++) {
-			const columnId = columnIds[i];
-			const tasks = taskResults[i];
-			if (columnId && tasks) {
-				tasksByColumn.set(columnId, tasks);
-			}
-		}
-	}
-
-	// Map boards with sorted columns and tasks
-	return boards.map((board) => {
-		const columns: ColumnWithTasks[] = (board.column || [])
-			.sort((a, b) => a.order - b.order)
-			.map((col) => ({
-				...col,
-				tasks: tasksByColumn.get(col.id) || [],
-			}));
-		const { column: _, ...boardWithoutJoin } = board;
-		return {
-			...boardWithoutJoin,
-			columns,
-		};
-	});
+	return Promise.all(
+		boards.map((board) => hydrateColumnsWithTasks(adapter, board)),
+	);
 }
 
 /**
@@ -130,39 +128,5 @@ export async function getBoardById(
 		return null;
 	}
 
-	const columnIds = (board.column || []).map((c) => c.id);
-	const tasksByColumn = new Map<string, Task[]>();
-
-	if (columnIds.length > 0) {
-		const taskQueries = columnIds.map((columnId) =>
-			adapter.findMany<Task>({
-				model: "kanbanTask",
-				where: [
-					{ field: "columnId", value: columnId, operator: "eq" as const },
-				],
-				sortBy: { field: "order", direction: "asc" },
-			}),
-		);
-		const taskResults = await Promise.all(taskQueries);
-		for (let i = 0; i < columnIds.length; i++) {
-			const columnId = columnIds[i];
-			const tasks = taskResults[i];
-			if (columnId && tasks) {
-				tasksByColumn.set(columnId, tasks);
-			}
-		}
-	}
-
-	const columns: ColumnWithTasks[] = (board.column || [])
-		.sort((a, b) => a.order - b.order)
-		.map((col) => ({
-			...col,
-			tasks: tasksByColumn.get(col.id) || [],
-		}));
-
-	const { column: _, ...boardWithoutJoin } = board;
-	return {
-		...boardWithoutJoin,
-		columns,
-	};
+	return hydrateColumnsWithTasks(adapter, board);
 }
