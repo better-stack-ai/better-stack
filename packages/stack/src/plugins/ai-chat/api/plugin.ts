@@ -16,6 +16,7 @@ import {
 	updateConversationSchema,
 } from "../schemas";
 import type { Conversation, ConversationWithMessages, Message } from "../types";
+import { getAllConversations, getConversationById } from "./getters";
 
 /**
  * Context passed to AI Chat API hooks
@@ -286,6 +287,13 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 		name: "ai-chat",
 		// Always include db schema - in public mode we just don't use it
 		dbPlugin: dbSchema,
+
+		api: (adapter) => ({
+			getAllConversations: (userId?: string) =>
+				getAllConversations(adapter, userId),
+			getConversationById: (id: string) => getConversationById(adapter, id),
+		}),
+
 		routes: (adapter: Adapter) => {
 			const mode = config.mode ?? "authenticated";
 			const isPublicMode = mode === "public";

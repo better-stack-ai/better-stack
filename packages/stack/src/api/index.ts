@@ -3,6 +3,7 @@ import type {
 	BackendLibConfig,
 	BackendLib,
 	PrefixedPluginRoutes,
+	PluginApis,
 	StackContext,
 } from "../types";
 import { defineDb } from "@btst/db";
@@ -33,7 +34,9 @@ export function stack<
 	TPlugins extends Record<string, any>,
 	TRoutes extends
 		PrefixedPluginRoutes<TPlugins> = PrefixedPluginRoutes<TPlugins>,
->(config: BackendLibConfig<TPlugins>): BackendLib<TRoutes> {
+>(
+	config: BackendLibConfig<TPlugins>,
+): BackendLib<TRoutes, PluginApis<TPlugins>> {
 	const { plugins, adapter, dbSchema, basePath } = config;
 
 	// Collect all routes from all plugins with type-safe prefixed keys
@@ -67,6 +70,14 @@ export function stack<
 		}
 	}
 
+	// Build the typed api surface by calling each plugin's api factory
+	const pluginApis = {} as PluginApis<TPlugins>;
+	for (const [pluginKey, plugin] of Object.entries(plugins)) {
+		if (plugin.api) {
+			(pluginApis as any)[pluginKey] = plugin.api(adapterInstance);
+		}
+	}
+
 	// Create the composed router
 	const router = createRouter(allRoutes, {
 		basePath: basePath,
@@ -76,6 +87,8 @@ export function stack<
 		handler: router.handler,
 		router,
 		dbSchema: betterDbSchema,
+		adapter: adapterInstance,
+		api: pluginApis,
 	};
 }
 
@@ -83,5 +96,6 @@ export type {
 	BackendPlugin,
 	BackendLibConfig,
 	BackendLib,
+	PluginApis,
 	StackContext,
 } from "../types";

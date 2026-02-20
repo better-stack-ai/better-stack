@@ -437,7 +437,8 @@ export const kanbanClientPlugin = (config: KanbanClientConfig) =>
 					method: "GET",
 					query: { limit: 100 },
 				});
-				boards = ((res as { data?: unknown }).data ??
+				// /boards returns BoardListResult { items, total, limit, offset }
+				boards = ((res.data as any)?.items ??
 					[]) as SerializedBoardWithColumns[];
 			} catch {
 				// Ignore errors for sitemap

@@ -91,8 +91,10 @@ function createBoardsQueries(
 						throw toError(errorResponse.error);
 					}
 
-					return ((response as { data?: unknown }).data ??
-						[]) as unknown as SerializedBoardWithColumns[];
+					const envelope = (response as { data?: unknown }).data as
+						| { items?: SerializedBoardWithColumns[] }
+						| undefined;
+					return envelope?.items ?? ([] as SerializedBoardWithColumns[]);
 				} catch (error) {
 					throw error;
 				}
@@ -142,9 +144,10 @@ function createBoardsQueries(
 						throw toError(errorResponse.error);
 					}
 
-					const boards = ((response as { data?: unknown }).data ??
-						[]) as unknown as SerializedBoardWithColumns[];
-					return boards[0] ?? null;
+					const envelope = (response as { data?: unknown }).data as
+						| { items?: SerializedBoardWithColumns[] }
+						| undefined;
+					return envelope?.items?.[0] ?? null;
 				} catch (error) {
 					throw error;
 				}

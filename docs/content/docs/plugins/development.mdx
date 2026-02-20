@@ -296,6 +296,94 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
   })
 ```
 
+### Server-side API (Getter Functions)
+
+Plugins can expose a typed `api` surface that lets server code — Server Components, `generateStaticParams`, cron jobs, scripts — query the database directly, **without going through HTTP**.
+
+<Callout type="warn">
+**Getter functions bypass authorization hooks.** Plugin hooks such as `onBeforeListPosts` or `onBeforeListForms` are **not** called when you invoke getters via `myStack.api.*`. These functions are pure database calls — the caller is fully responsible for performing any access-control checks before invoking them. Do not call getters from user-facing request handlers without adding your own authorization logic first.
+</Callout>
+
+Add an `api` factory to `defineBackendPlugin`. The factory receives the shared adapter and returns an object of async functions:
+
+```typescript
+export const todosBackendPlugin = defineBackendPlugin({
+  name: "todos",
+  dbPlugin: dbSchema,
+
+  // Expose server-side getters bound to the adapter
+  api: (adapter) => ({
+    listTodos: () =>
+      adapter.findMany<Todo>({ model: "todo", sortBy: { field: "createdAt", direction: "desc" } }),
+
+    getTodoById: (id: string) =>
+      adapter.findOne<Todo>({ model: "todo", where: [{ field: "id", value: id, operator: "eq" }] }),
+  }),
+
+  routes: (adapter: Adapter) => {
+    // ... existing HTTP endpoints
+  },
+})
+```
+
+After calling `stack()`, the returned object exposes the combined `api` namespace — one key per plugin — plus the raw `adapter`:
+
+```typescript
+import { stack } from "@btst/stack"
+import { todosBackendPlugin } from "./plugins/todo/api/backend"
+
+export const myStack = stack({
+  basePath: "/api/data",
+  plugins: { todos: todosBackendPlugin },
+  adapter: (db) => createMemoryAdapter(db)({}),
+})
+
+// Fully typed — no HTTP roundtrip
+const todos = await myStack.api.todos.listTodos()
+const todo  = await myStack.api.todos.getTodoById("abc-123")
+
+// Or use the raw adapter directly
+const raw = await myStack.adapter.findMany<Todo>({ model: "todo" })
+```
+
+**When to use this pattern:**
+
+| Use case | Approach |
+|----------|----------|
+| Server Component / RSC | `myStack.api.todos.listTodos()` |
+| `generateStaticParams` (Next.js) | Import getters directly and pass any adapter |
+| Cron job / script | `myStack.api.*` or direct getter import |
+| HTTP route handler | HTTP endpoint via `routes` as normal |
+
+**Tip — direct getter imports for SSG/build-time:**
+
+If you need access to data before your `stack()` instance is available (e.g. at build time with a separate adapter), export the getter functions independently and pass an adapter yourself:
+
+```typescript
+// api/getters.ts
+import type { Adapter } from "@btst/stack/plugins/api"
+import type { Todo } from "../types"
+
+export async function listTodos(adapter: Adapter) {
+  return adapter.findMany<Todo>({ model: "todo" })
+}
+
+// api/backend.ts
+import { listTodos } from "./getters"
+
+export const todosBackendPlugin = defineBackendPlugin({
+  name: "todos",
+  dbPlugin: dbSchema,
+  api: (adapter) => ({
+    listTodos: () => listTodos(adapter),
+  }),
+  routes: (adapter) => { /* ... */ },
+})
+
+// In api/index.ts — re-export for consumers
+export { listTodos } from "./getters"
+```
+
 ---
 
 ## Client Plugin
@@ -609,12 +697,12 @@ import { createMemoryAdapter } from "@btst/adapter-memory"
 import { todosBackendPlugin } from "./plugins/todo/api/backend"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 
-const { handler, dbSchema } = stack({
+// Export the full stack instance so myStack.api.* is accessible anywhere
+export const myStack = stack({
   basePath: "/api/data",
   plugins: {
     todos: todosBackendPlugin,
     blog: blogBackendPlugin({
-      // Backend hooks for authorization
       onBeforeCreatePost: async (data, context) => {
         // Check authentication
         return true
@@ -627,7 +715,17 @@ const { handler, dbSchema } = stack({
   adapter: (db) => createMemoryAdapter(db)({})
 })
 
-export { handler, dbSchema }
+// Named re-exports for the HTTP route handler and DB schema
+export const { handler, dbSchema } = myStack
+
+// myStack also exposes:
+//   myStack.adapter  — raw database adapter
+//   myStack.api      — typed server-side getters per plugin
+//
+// Usage in a Server Component or generateStaticParams:
+//   const todos = await myStack.api.todos.listTodos()
+//   const todo  = await myStack.api.todos.getTodoById("abc-123")
+//   const posts = await myStack.api.blog.getAllPosts({ published: true })
 ```
 
 ### Client Registration
@@ -711,21 +809,59 @@ export type Todo = {
 }
 ```
 
+**File: `lib/plugins/todo/api/getters.ts`**
+```typescript
+import type { Adapter } from "@btst/stack/plugins/api"
+import type { Todo } from "../types"
+
+/** Retrieve all todos, sorted newest-first. Safe for server-side and SSG use. */
+export async function listTodos(adapter: Adapter): Promise<Todo[]> {
+  return adapter.findMany<Todo>({
+    model: "todo",
+    sortBy: { field: "createdAt", direction: "desc" },
+  }) as Promise<Todo[]>
+}
+
+/** Retrieve a single todo by ID. Returns null if not found. */
+export async function getTodoById(
+  adapter: Adapter,
+  id: string,
+): Promise<Todo | null> {
+  return adapter.findOne<Todo>({
+    model: "todo",
+    where: [{ field: "id", value: id, operator: "eq" }],
+  })
+}
+```
+
 **File: `lib/plugins/todo/api/backend.ts`**
 ```typescript
 import { type Adapter, defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api"
 import { z } from "zod"
 import { todosSchema as dbSchema } from "../schema"
 import type { Todo } from "../types"
+import { listTodos, getTodoById } from "./getters"
 
 const createTodoSchema = z.object({
   title: z.string().min(1),
   completed: z.boolean().optional().default(false)
 })
 
+const updateTodoSchema = z.object({
+  title: z.string().min(1).optional(),
+  completed: z.boolean().optional()
+})
+
 export const todosBackendPlugin = defineBackendPlugin({
   name: "todos",
   dbPlugin: dbSchema,
+
+  // Server-side getters — available as myStack.api.todos.*
+  api: (adapter) => ({
+    listTodos: () => listTodos(adapter),
+    getTodoById: (id: string) => getTodoById(adapter, id),
+  }),
+
   routes: (adapter: Adapter) => {
     const listTodos = createEndpoint("/todos", { method: "GET" },
       async () => adapter.findMany<Todo>({ model: "todo" }) || []
@@ -737,8 +873,27 @@ export const todosBackendPlugin = defineBackendPlugin({
         data: { ...ctx.body, createdAt: new Date() }
       })
     )
+
+    const updateTodo = createEndpoint("/todos/:id", { method: "PUT", body: updateTodoSchema },
+      async (ctx) => {
+        const updated = await adapter.update({
+          model: "todo",
+          where: [{ field: "id", value: ctx.params.id }],
+          update: ctx.body
+        })
+        if (!updated) throw new Error("Todo not found")
+        return updated
+      }
+    )
+
+    const deleteTodo = createEndpoint("/todos/:id", { method: "DELETE" },
+      async (ctx) => {
+        await adapter.delete({ model: "todo", where: [{ field: "id", value: ctx.params.id }] })
+        return { success: true }
+      }
+    )
     
-    return { listTodos, createTodo } as const
+    return { listTodos, createTodo, updateTodo, deleteTodo } as const
   }
 })
 
@@ -874,7 +1029,9 @@ A basic CRUD plugin demonstrating core concepts:
 Features:
 - Basic CRUD operations
 - Database schema
-- API endpoints
+- API endpoints (list, create, update, delete)
+- Server-side getter functions (`getters.ts`)
+- `stack().api.todos.*` surface for direct server-side access
 - Client components and hooks
 
 ### Full-Featured Plugin: Blog

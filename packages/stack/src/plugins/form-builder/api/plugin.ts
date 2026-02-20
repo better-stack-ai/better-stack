@@ -11,9 +11,6 @@ import type {
 	FormBuilderBackendConfig,
 	FormBuilderHookContext,
 	SubmissionHookContext,
-	SerializedForm,
-	SerializedFormSubmission,
-	SerializedFormSubmissionWithData,
 	FormInput,
 	FormUpdate,
 } from "../types";
@@ -24,50 +21,14 @@ import {
 	listSubmissionsQuerySchema,
 } from "../schemas";
 import { slugify, extractIpAddress, extractUserAgent } from "../utils";
-
-/**
- * Serialize a Form for API response (convert dates to strings)
- */
-function serializeForm(form: Form): SerializedForm {
-	return {
-		id: form.id,
-		name: form.name,
-		slug: form.slug,
-		description: form.description,
-		schema: form.schema,
-		successMessage: form.successMessage,
-		redirectUrl: form.redirectUrl,
-		status: form.status,
-		createdBy: form.createdBy,
-		createdAt: form.createdAt.toISOString(),
-		updatedAt: form.updatedAt.toISOString(),
-	};
-}
-
-/**
- * Serialize a FormSubmission for API response (convert dates to strings)
- */
-function serializeFormSubmission(
-	submission: FormSubmission,
-): SerializedFormSubmission {
-	return {
-		...submission,
-		submittedAt: submission.submittedAt.toISOString(),
-	};
-}
-
-/**
- * Serialize a FormSubmission with parsed data and joined Form
- */
-function serializeFormSubmissionWithData(
-	submission: FormSubmissionWithForm,
-): SerializedFormSubmissionWithData {
-	return {
-		...serializeFormSubmission(submission),
-		parsedData: JSON.parse(submission.data),
-		form: submission.form ? serializeForm(submission.form) : undefined,
-	};
-}
+import {
+	getAllForms,
+	getFormBySlug as getFormBySlugFromDb,
+	getFormSubmissions,
+	serializeForm,
+	serializeFormSubmission,
+	serializeFormSubmissionWithData,
+} from "./getters";
 
 /**
  * Form Builder backend plugin
@@ -82,6 +43,16 @@ export const formBuilderBackendPlugin = (
 		name: "form-builder",
 
 		dbPlugin: dbSchema,
+
+		api: (adapter) => ({
+			getAllForms: (params?: Parameters<typeof getAllForms>[1]) =>
+				getAllForms(adapter, params),
+			getFormBySlug: (slug: string) => getFormBySlugFromDb(adapter, slug),
+			getFormSubmissions: (
+				formId: string,
+				params?: Parameters<typeof getFormSubmissions>[2],
+			) => getFormSubmissions(adapter, formId, params),
+		}),
 
 		routes: (adapter: Adapter) => {
 			// Helper to create hook context from request
@@ -114,7 +85,6 @@ export const formBuilderBackendPlugin = (
 					const { status, limit, offset } = ctx.query;
 					const context = createContext(ctx.headers);
 
-					// Call before hook for auth check
 					if (config.hooks?.onBeforeListForms) {
 						const canList = await config.hooks.onBeforeListForms(context);
 						if (!canList) {
@@ -122,41 +92,7 @@ export const formBuilderBackendPlugin = (
 						}
 					}
 
-					const whereConditions: Array<{
-						field: string;
-						value: string;
-						operator: "eq";
-					}> = [];
-					if (status) {
-						whereConditions.push({
-							field: "status",
-							value: status,
-							operator: "eq" as const,
-						});
-					}
-
-					// Get total count
-					const allForms = await adapter.findMany<Form>({
-						model: "form",
-						where: whereConditions.length > 0 ? whereConditions : undefined,
-					});
-					const total = allForms.length;
-
-					// Get paginated forms
-					const forms = await adapter.findMany<Form>({
-						model: "form",
-						where: whereConditions.length > 0 ? whereConditions : undefined,
-						limit,
-						offset,
-						sortBy: { field: "createdAt", direction: "desc" },
-					});
-
-					return {
-						items: forms.map(serializeForm),
-						total,
-						limit,
-						offset,
-					};
+					return getAllForms(adapter, { status, limit, offset });
 				},
 			);
 
@@ -178,16 +114,13 @@ export const formBuilderBackendPlugin = (
 						}
 					}
 
-					const form = await adapter.findOne<Form>({
-						model: "form",
-						where: [{ field: "slug", value: slug, operator: "eq" as const }],
-					});
+					const form = await getFormBySlugFromDb(adapter, slug);
 
 					if (!form) {
 						throw ctx.error(404, { message: "Form not found" });
 					}
 
-					return serializeForm(form);
+					return form;
 				},
 			);
 
@@ -647,33 +580,7 @@ export const formBuilderBackendPlugin = (
 						}
 					}
 
-					// Get total count
-					const allSubmissions = await adapter.findMany<FormSubmission>({
-						model: "formSubmission",
-						where: [
-							{ field: "formId", value: formId, operator: "eq" as const },
-						],
-					});
-					const total = allSubmissions.length;
-
-					// Get paginated submissions
-					const submissions = await adapter.findMany<FormSubmissionWithForm>({
-						model: "formSubmission",
-						where: [
-							{ field: "formId", value: formId, operator: "eq" as const },
-						],
-						limit,
-						offset,
-						sortBy: { field: "submittedAt", direction: "desc" },
-						join: { form: true },
-					});
-
-					return {
-						items: submissions.map(serializeFormSubmissionWithData),
-						total,
-						limit,
-						offset,
-					};
+					return getFormSubmissions(adapter, formId, { limit, offset });
 				},
 			);
 

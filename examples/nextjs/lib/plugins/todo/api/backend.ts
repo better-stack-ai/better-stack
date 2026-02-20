@@ -2,6 +2,7 @@ import { type Adapter, defineBackendPlugin, createEndpoint } from "@btst/stack/p
 import { z } from "zod"
 import { todosSchema as dbSchema } from "../schema"
 import type { Todo } from "../types"
+import { listTodos, getTodoById } from "./getters"
 
 const createTodoSchema = z.object({
     title: z.string().min(1, "Title is required"),
@@ -22,6 +23,12 @@ export const todosBackendPlugin = defineBackendPlugin({
     name: "todos",
 
     dbPlugin: dbSchema,
+
+    // Server-side getters — available as myStack.api.todos.*
+    api: (adapter) => ({
+        listTodos: () => listTodos(adapter),
+        getTodoById: (id: string) => getTodoById(adapter, id),
+    }),
 
     routes: (adapter: Adapter) => {
         const listTodos = createEndpoint(

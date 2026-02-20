@@ -99,13 +99,14 @@ function createPostsQueries(
 						},
 						headers,
 					});
-					// Check for errors (better-call returns Error$1<unknown> | Data<Post[]>)
+					// Check for errors (better-call returns Error$1<unknown> | Data<PostListResult>)
 					if (isErrorResponse(response)) {
 						const errorResponse = response as { error: unknown };
 						throw toError(errorResponse.error);
 					}
-					// Type narrowed to Data<Post[]> after error check
-					return ((response as { data?: unknown }).data ??
+					// Extract .items from the paginated response for infinite scroll compatibility
+					const dataResponse = response as { data?: { items?: unknown[] } };
+					return (dataResponse.data?.items ??
 						[]) as unknown as SerializedPost[];
 				} catch (error) {
 					// Re-throw errors so React Query can catch them
@@ -126,14 +127,14 @@ function createPostsQueries(
 						query: { slug, limit: 1 },
 						headers,
 					});
-					// Check for errors (better-call returns Error$1<unknown> | Data<Post[]>)
+					// Check for errors (better-call returns Error$1<unknown> | Data<PostListResult>)
 					if (isErrorResponse(response)) {
 						const errorResponse = response as { error: unknown };
 						throw toError(errorResponse.error);
 					}
-					// Type narrowed to Data<Post[]> after error check
-					const dataResponse = response as { data?: unknown[] };
-					return (dataResponse.data?.[0] ??
+					// Type narrowed to Data<PostListResult> after error check — access .items[0]
+					const dataResponse = response as { data?: { items?: unknown[] } };
+					return (dataResponse.data?.items?.[0] ??
 						null) as unknown as SerializedPost | null;
 				} catch (error) {
 					// Re-throw errors so React Query can catch them
@@ -181,13 +182,14 @@ function createPostsQueries(
 						},
 						headers,
 					});
-					// Check for errors (better-call returns Error$1<unknown> | Data<Post[]>)
+					// Check for errors (better-call returns Error$1<unknown> | Data<PostListResult>)
 					if (isErrorResponse(response)) {
 						const errorResponse = response as { error: unknown };
 						throw toError(errorResponse.error);
 					}
-					// Type narrowed to Data<Post[]> after error check
-					let posts = ((response as { data?: unknown }).data ??
+					// Extract .items from the paginated response
+					const recentResponse = response as { data?: { items?: unknown[] } };
+					let posts = (recentResponse.data?.items ??
 						[]) as unknown as SerializedPost[];
 
 					// Exclude current post if specified
@@ -228,13 +230,14 @@ function createDraftsQueries(
 						},
 						headers,
 					});
-					// Check for errors (better-call returns Error$1<unknown> | Data<Post[]>)
+					// Check for errors (better-call returns Error$1<unknown> | Data<PostListResult>)
 					if (isErrorResponse(response)) {
 						const errorResponse = response as { error: unknown };
 						throw toError(errorResponse.error);
 					}
-					// Type narrowed to Data<Post[]> after error check
-					return ((response as { data?: unknown }).data ??
+					// Extract .items from the paginated response for infinite scroll compatibility
+					const draftsResponse = response as { data?: { items?: unknown[] } };
+					return (draftsResponse.data?.items ??
 						[]) as unknown as SerializedPost[];
 				} catch (error) {
 					// Re-throw errors so React Query can catch them

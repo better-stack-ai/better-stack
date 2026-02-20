@@ -750,7 +750,8 @@ export const blogClientPlugin = (config: BlogClientConfig) =>
 						published: "true",
 					},
 				});
-				const page = (res.data ?? []) as unknown as SerializedPost[];
+				// The /posts endpoint returns PostListResult { items, total, limit, offset }
+				const page = ((res.data as any)?.items ?? []) as SerializedPost[];
 				posts.push(...page);
 				if (page.length < limit) break;
 				offset += limit;

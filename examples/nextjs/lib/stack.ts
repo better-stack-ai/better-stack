@@ -97,7 +97,7 @@ const blogHooks: BlogBackendHooks = {
     },
 };
 
-const { handler, dbSchema } = stack({
+export const myStack = stack({
     basePath: "/api/data",
     plugins: {
         todos: todosBackendPlugin,
@@ -218,4 +218,4 @@ const { handler, dbSchema } = stack({
     adapter: (db) => createMemoryAdapter(db)({})
 })
 
-export { handler, dbSchema }
+export const { handler, dbSchema } = myStack

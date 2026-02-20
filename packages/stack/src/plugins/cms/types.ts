@@ -178,7 +178,7 @@ export interface SerializedContentItem
  */
 export interface SerializedContentItemWithType<TData = Record<string, unknown>>
 	extends SerializedContentItem {
-	/** Parsed data object (JSON.parse of data field) */
+	/** Parsed data object (JSON.parse of data field). */
 	parsedData: TData;
 	/** Joined content type */
 	contentType?: SerializedContentType;

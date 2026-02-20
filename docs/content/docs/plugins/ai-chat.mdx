@@ -929,3 +929,43 @@ overrides={{
 #### AiChatLocalization
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/localization/index.ts" name="AiChatLocalization" />
+
+## Server-side Data Access
+
+The AI Chat plugin exposes standalone getter functions for server-side use cases, giving you direct access to conversation history without going through HTTP.
+
+### Two patterns
+
+**Pattern 1 — via `stack().api`**
+
+```ts title="app/lib/stack.ts"
+import { myStack } from "./stack";
+
+// List all conversations (optionally scoped to a user)
+const all        = await myStack.api["ai-chat"].getAllConversations();
+const userConvs  = await myStack.api["ai-chat"].getAllConversations("user-123");
+
+// Get a conversation with its full message history
+const conv       = await myStack.api["ai-chat"].getConversationById("conv-456");
+if (conv) {
+  console.log(conv.messages); // Message[]
+}
+```
+
+**Pattern 2 — direct import**
+
+```ts
+import {
+  getAllConversations,
+  getConversationById,
+} from "@btst/stack/plugins/ai-chat/api";
+
+const conv = await getConversationById(myAdapter, conversationId);
+```
+
+### Available getters
+
+| Function | Description |
+|---|---|
+| `getAllConversations(adapter, userId?)` | Returns all conversations, optionally filtered by userId |
+| `getConversationById(adapter, id)` | Returns a conversation with messages, or `null` |

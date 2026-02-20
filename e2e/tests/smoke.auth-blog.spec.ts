@@ -88,7 +88,8 @@ async function cleanupAuthTestPosts(request: any) {
 
 	if (draftsResponse.status() === 200) {
 		const drafts = await draftsResponse.json();
-		for (const post of drafts) {
+		// /posts returns PostListResult { items, total, … }
+		for (const post of drafts.items ?? []) {
 			// Only delete if it matches auth test patterns
 			const isAuthTestPost = authTestPatterns.some((pattern) =>
 				pattern.test(post.title),
@@ -109,7 +110,7 @@ async function cleanupAuthTestPosts(request: any) {
 
 	if (publishedResponse.status() === 200) {
 		const published = await publishedResponse.json();
-		for (const post of published) {
+		for (const post of published.items ?? []) {
 			const isAuthTestPost = authTestPatterns.some((pattern) =>
 				pattern.test(post.title),
 			);
@@ -134,11 +135,11 @@ test.describe("Blog Authentication - API Level", () => {
 			headers,
 		});
 
-		// Should successfully return drafts
+		// Should successfully return drafts — response is PostListResult { items, total, … }
 		expect(response.status()).toBe(200);
 		const data = await response.json();
-		expect(Array.isArray(data)).toBe(true);
-		console.log("[Test] Drafts retrieved:", data.length);
+		expect(Array.isArray(data.items)).toBe(true);
+		console.log("[Test] Drafts retrieved:", data.items.length);
 	});
 
 	test("API: unauthenticated user is blocked from listing drafts", async ({
@@ -327,7 +328,10 @@ test.describe("Blog Authentication - API Level", () => {
 		);
 		expect(listResponse.status()).toBe(200);
 		const drafts = await listResponse.json();
-		const postStillExists = drafts.some((p: any) => p.id === post.id);
+		// /posts returns PostListResult { items, total, … }
+		const postStillExists = (drafts.items ?? []).some(
+			(p: any) => p.id === post.id,
+		);
 		expect(postStillExists).toBe(false);
 	});
 
@@ -337,11 +341,14 @@ test.describe("Blog Authentication - API Level", () => {
 		// Request public posts (should work without auth)
 		const response = await request.get(`${API_BASE}/posts?published=true`);
 
-		// Should successfully return public posts
+		// Should successfully return public posts — response is PostListResult { items, total, … }
 		expect(response.status()).toBe(200);
 		const data = await response.json();
-		expect(Array.isArray(data)).toBe(true);
-		console.log("[Test] Public posts retrieved without auth:", data.length);
+		expect(Array.isArray(data.items)).toBe(true);
+		console.log(
+			"[Test] Public posts retrieved without auth:",
+			data.items.length,
+		);
 	});
 
 	test("API: cookies are properly forwarded in requests", async ({

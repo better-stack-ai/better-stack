@@ -1,6 +1,6 @@
 {
   "name": "@btst/stack",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "A composable, plugin-based library for building full-stack applications.",
   "repository": {
     "type": "git",

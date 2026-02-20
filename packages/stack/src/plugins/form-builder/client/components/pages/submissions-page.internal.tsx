@@ -147,7 +147,7 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 												{sub.id.slice(0, 8)}...
 											</TableCell>
 											<TableCell className="max-w-xs truncate text-sm text-muted-foreground">
-												{formatSubmissionData(sub.parsedData)}
+												{formatSubmissionData(sub.parsedData ?? {})}
 											</TableCell>
 											<TableCell className="text-muted-foreground">
 												{new Date(sub.submittedAt).toLocaleString()}

@@ -42,9 +42,11 @@ export { createDbPlugin } from "@btst/db";
  * ```
  *
  * @template TRoutes - The exact shape of routes (auto-inferred from routes function)
+ * @template TApi - The shape of the server-side api surface (auto-inferred from api factory)
  */
 export function defineBackendPlugin<
 	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
->(plugin: BackendPlugin<TRoutes>): BackendPlugin<TRoutes> {
+	TApi extends Record<string, (...args: any[]) => any> = never,
+>(plugin: BackendPlugin<TRoutes, TApi>): BackendPlugin<TRoutes, TApi> {
 	return plugin;
 }
