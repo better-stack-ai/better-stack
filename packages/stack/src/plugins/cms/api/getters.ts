@@ -71,18 +71,13 @@ export function serializeContentItem(item: ContentItem): SerializedContentItem {
 
 /**
  * Serialize a ContentItem with parsed data and joined ContentType.
- * If `item.data` is corrupted JSON, `parsedData` is set to `null` rather than
- * throwing, so one bad row cannot crash the entire list or SSG build.
+ * Throws a SyntaxError if `item.data` is not valid JSON, so corrupted rows
+ * produce a visible, debuggable error rather than silently returning null.
  */
 export function serializeContentItemWithType(
 	item: ContentItemWithType,
 ): SerializedContentItemWithType {
-	let parsedData: Record<string, unknown> | null = null;
-	try {
-		parsedData = JSON.parse(item.data);
-	} catch {
-		// Corrupted JSON — leave parsedData as null so callers can handle it
-	}
+	const parsedData = JSON.parse(item.data) as Record<string, unknown>;
 	return {
 		...serializeContentItem(item),
 		parsedData,
