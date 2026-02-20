@@ -404,6 +404,52 @@ describe("blog getters", () => {
 			expect(result.items[0]!.slug).toBe("pub-css");
 		});
 
+		it("returns all posts when no limit is specified (DB path - more than 10)", async () => {
+			for (let i = 1; i <= 15; i++) {
+				await adapter.create({
+					model: "post",
+					data: {
+						title: `Post ${i}`,
+						slug: `post-${i}`,
+						content: "Content",
+						excerpt: "",
+						published: true,
+						tags: [],
+						createdAt: new Date(Date.now() + i * 1000),
+						updatedAt: new Date(),
+					},
+				});
+			}
+
+			const result = await getAllPosts(adapter);
+			expect(result.items).toHaveLength(15);
+			expect(result.total).toBe(15);
+			expect(result.limit).toBeUndefined();
+		});
+
+		it("returns all matching posts when no limit is specified (in-memory query path - more than 10)", async () => {
+			for (let i = 1; i <= 15; i++) {
+				await adapter.create({
+					model: "post",
+					data: {
+						title: `TypeScript Post ${i}`,
+						slug: `ts-post-${i}`,
+						content: "TypeScript content",
+						excerpt: "",
+						published: true,
+						tags: [],
+						createdAt: new Date(Date.now() + i * 1000),
+						updatedAt: new Date(),
+					},
+				});
+			}
+
+			const result = await getAllPosts(adapter, { query: "TypeScript" });
+			expect(result.items).toHaveLength(15);
+			expect(result.total).toBe(15);
+			expect(result.limit).toBeUndefined();
+		});
+
 		it("total reflects count before pagination slice for in-memory filters", async () => {
 			for (let i = 1; i <= 4; i++) {
 				await adapter.create({

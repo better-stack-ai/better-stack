@@ -109,8 +109,8 @@ export async function getAllPosts(
 
 	const posts = await adapter.findMany<PostWithPostTag>({
 		model: "post",
-		limit: !needsInMemoryFilter ? (query.limit ?? 10) : undefined,
-		offset: !needsInMemoryFilter ? (query.offset ?? 0) : undefined,
+		limit: !needsInMemoryFilter ? query.limit : undefined,
+		offset: !needsInMemoryFilter ? query.offset : undefined,
 		where: whereConditions,
 		sortBy: { field: "createdAt", direction: "desc" },
 		join: { postTag: true },
@@ -166,8 +166,11 @@ export async function getAllPosts(
 	if (needsInMemoryFilter) {
 		const total = result.length;
 		const offset = query.offset ?? 0;
-		const limit = query.limit ?? 10;
-		result = result.slice(offset, offset + limit);
+		const limit = query.limit;
+		result = result.slice(
+			offset,
+			limit !== undefined ? offset + limit : undefined,
+		);
 		return { items: result, total, limit: query.limit, offset: query.offset };
 	}
 
