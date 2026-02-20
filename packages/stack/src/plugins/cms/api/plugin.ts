@@ -560,45 +560,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 						throw ctx.error(404, { message: "Content type not found" });
 					}
 
-					const whereConditions = [
-						{
-							field: "contentTypeId",
-							value: contentType.id,
-							operator: "eq" as const,
-						},
-					];
-
-					if (slug) {
-						whereConditions.push({
-							field: "slug",
-							value: slug,
-							operator: "eq" as const,
-						});
-					}
-
-					// Get total count
-					const allItems = await adapter.findMany<ContentItem>({
-						model: "contentItem",
-						where: whereConditions,
-					});
-					const total = allItems.length;
-
-					// Get paginated items
-					const items = await adapter.findMany<ContentItemWithType>({
-						model: "contentItem",
-						where: whereConditions,
-						limit,
-						offset,
-						sortBy: { field: "createdAt", direction: "desc" },
-						join: { contentType: true },
-					});
-
-					return {
-						items: items.map(serializeContentItemWithType),
-						total,
-						limit,
-						offset,
-					};
+					return getAllContentItems(adapter, typeSlug, { slug, limit, offset });
 				},
 			);
 
