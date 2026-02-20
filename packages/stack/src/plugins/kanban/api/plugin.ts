@@ -3,7 +3,13 @@ import { defineBackendPlugin } from "@btst/stack/plugins/api";
 import { createEndpoint } from "@btst/stack/plugins/api";
 import { z } from "zod";
 import { kanbanSchema as dbSchema } from "../db";
-import type { Board, Column, ColumnWithTasks, Task } from "../types";
+import type {
+	Board,
+	BoardWithColumns,
+	Column,
+	ColumnWithTasks,
+	Task,
+} from "../types";
 import { slugify } from "../utils";
 import {
 	BoardListQuerySchema,
@@ -17,7 +23,7 @@ import {
 	updateColumnSchema,
 	updateTaskSchema,
 } from "../schemas";
-import { getAllBoards, getBoardById, type BoardListResult } from "./getters";
+import { getAllBoards, getBoardById } from "./getters";
 
 /**
  * Context passed to kanban API hooks
@@ -79,10 +85,12 @@ export interface KanbanBackendHooks {
 	) => Promise<boolean> | boolean;
 
 	/**
-	 * Called after boards are listed successfully
+	 * Called after boards are listed successfully.
+	 * Receives the items array (same shape as `board[]`) for consistency
+	 * with analogous hooks in other plugins (e.g. `onPostsRead`).
 	 */
 	onBoardsRead?: (
-		result: BoardListResult,
+		boards: BoardWithColumns[],
 		filter: z.infer<typeof BoardListQuerySchema>,
 		context: KanbanApiContext,
 	) => Promise<void> | void;
@@ -288,7 +296,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						const result = await getAllBoards(adapter, query);
 
 						if (hooks?.onBoardsRead) {
-							await hooks.onBoardsRead(result, query, context);
+							await hooks.onBoardsRead(result.items, query, context);
 						}
 
 						return result;
