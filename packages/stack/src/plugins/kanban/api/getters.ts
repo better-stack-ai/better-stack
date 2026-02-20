@@ -9,6 +9,16 @@ import type { z } from "zod";
 import type { BoardListQuerySchema } from "../schemas";
 
 /**
+ * Paginated result returned by {@link getAllBoards}.
+ */
+export interface BoardListResult {
+	items: BoardWithColumns[];
+	total: number;
+	limit?: number;
+	offset?: number;
+}
+
+/**
  * Given a raw board record (with a `column` join), fetches tasks for every
  * column in parallel and returns the sorted columns with their tasks attached.
  * Strips the raw `column` join field from the returned board object.
@@ -59,7 +69,7 @@ async function hydrateColumnsWithTasks(
 export async function getAllBoards(
 	adapter: Adapter,
 	params?: z.infer<typeof BoardListQuerySchema>,
-): Promise<BoardWithColumns[]> {
+): Promise<BoardListResult> {
 	const query = params ?? {};
 
 	const whereConditions: Array<{
@@ -92,18 +102,25 @@ export async function getAllBoards(
 		});
 	}
 
-	const boards = await adapter.findMany<BoardWithKanbanColumn>({
-		model: "kanbanBoard",
-		limit: query.limit ?? 50,
-		offset: query.offset ?? 0,
-		where: whereConditions.length > 0 ? whereConditions : undefined,
-		sortBy: { field: "createdAt", direction: "desc" },
-		join: { kanbanColumn: true },
-	});
+	const where = whereConditions.length > 0 ? whereConditions : undefined;
 
-	return Promise.all(
+	const [boards, total] = await Promise.all([
+		adapter.findMany<BoardWithKanbanColumn>({
+			model: "kanbanBoard",
+			limit: query.limit ?? 50,
+			offset: query.offset ?? 0,
+			where,
+			sortBy: { field: "createdAt", direction: "desc" },
+			join: { kanbanColumn: true },
+		}),
+		adapter.count({ model: "kanbanBoard", where }),
+	]);
+
+	const items = await Promise.all(
 		boards.map((board) => hydrateColumnsWithTasks(adapter, board)),
 	);
+
+	return { items, total, limit: query.limit, offset: query.offset };
 }
 
 /**

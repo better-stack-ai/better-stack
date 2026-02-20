@@ -739,10 +739,14 @@ The Kanban plugin exposes standalone getter functions for server-side and SSG us
 import { myStack } from "./stack";
 
 // List all boards (with columns and tasks)
-const boards = await myStack.api.kanban.getAllBoards({ ownerId: "user-123" });
+const result = await myStack.api.kanban.getAllBoards({ ownerId: "user-123" });
+// result.items  — BoardWithColumns[]
+// result.total  — total count before pagination
+// result.limit  — applied limit
+// result.offset — applied offset
 
 // Get a single board with full column/task tree
-const board  = await myStack.api.kanban.getBoardById("board-456");
+const board = await myStack.api.kanban.getBoardById("board-456");
 if (board) {
   board.columns.forEach((col) => {
     console.log(col.title, col.tasks.length, "tasks");
@@ -760,14 +764,18 @@ import {
 
 // In Next.js generateStaticParams
 export async function generateStaticParams() {
-  const boards = await getAllBoards(myAdapter);
-  return boards.map((b) => ({ slug: b.slug }));
+  const { items } = await getAllBoards(myAdapter);
+  return items.map((b) => ({ slug: b.slug }));
 }
 ```
 
 ### Available getters
 
-| Function | Description |
-|---|---|
-| `getAllBoards(adapter, params?)` | Returns all boards with columns and tasks; supports slug/ownerId/organizationId filters |
-| `getBoardById(adapter, id)` | Returns a single board with full column/task tree, or `null` |
+| Function | Returns | Description |
+|---|---|---|
+| `getAllBoards(adapter, params?)` | `BoardListResult` | Paginated boards with columns and tasks; supports slug/ownerId/organizationId filters |
+| `getBoardById(adapter, id)` | `BoardWithColumns \| null` | Single board with full column/task tree, or `null` |
+
+### `BoardListResult`
+
+<AutoTypeTable path="../packages/stack/src/plugins/kanban/api/getters.ts" name="BoardListResult" />

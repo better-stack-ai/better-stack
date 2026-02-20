@@ -84,8 +84,9 @@ describe("kanban getters", () => {
 			const col = (await createColumn(adapter, board.id, "To Do", 0)) as any;
 			await createTask(adapter, col.id, "Task 1", 0);
 
-			const boards = await getAllBoards(adapter);
+			const { items: boards, total } = await getAllBoards(adapter);
 			expect(boards).toHaveLength(1);
+			expect(total).toBe(1);
 			expect(boards[0]!.slug).toBe("my-board");
 			expect(boards[0]!.columns).toHaveLength(1);
 			expect(boards[0]!.columns[0]!.title).toBe("To Do");
@@ -96,7 +97,7 @@ describe("kanban getters", () => {
 		it("returns boards with empty columns array when no columns exist", async () => {
 			await createBoard(adapter, "Empty Board", "empty-board");
 
-			const boards = await getAllBoards(adapter);
+			const { items: boards } = await getAllBoards(adapter);
 			expect(boards).toHaveLength(1);
 			expect(boards[0]!.columns).toEqual([]);
 		});
@@ -105,18 +106,22 @@ describe("kanban getters", () => {
 			await createBoard(adapter, "Board A", "board-a");
 			await createBoard(adapter, "Board B", "board-b");
 
-			const result = await getAllBoards(adapter, { slug: "board-a" });
-			expect(result).toHaveLength(1);
-			expect(result[0]!.slug).toBe("board-a");
+			const { items, total } = await getAllBoards(adapter, { slug: "board-a" });
+			expect(items).toHaveLength(1);
+			expect(total).toBe(1);
+			expect(items[0]!.slug).toBe("board-a");
 		});
 
 		it("filters boards by ownerId", async () => {
 			await createBoard(adapter, "Alice Board", "alice-board", "user-alice");
 			await createBoard(adapter, "Bob Board", "bob-board", "user-bob");
 
-			const result = await getAllBoards(adapter, { ownerId: "user-alice" });
-			expect(result).toHaveLength(1);
-			expect(result[0]!.slug).toBe("alice-board");
+			const { items, total } = await getAllBoards(adapter, {
+				ownerId: "user-alice",
+			});
+			expect(items).toHaveLength(1);
+			expect(total).toBe(1);
+			expect(items[0]!.slug).toBe("alice-board");
 		});
 
 		it("sorts columns by order", async () => {
@@ -126,7 +131,7 @@ describe("kanban getters", () => {
 			await createColumn(adapter, board.id, "To Do", 0);
 			await createColumn(adapter, board.id, "In Progress", 1);
 
-			const boards = await getAllBoards(adapter);
+			const { items: boards } = await getAllBoards(adapter);
 			expect(boards[0]!.columns[0]!.title).toBe("To Do");
 			expect(boards[0]!.columns[1]!.title).toBe("In Progress");
 			expect(boards[0]!.columns[2]!.title).toBe("Done");

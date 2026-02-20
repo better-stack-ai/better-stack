@@ -4,4 +4,4 @@ export {
 	type KanbanApiContext,
 	type KanbanBackendHooks,
 } from "./plugin";
-export { getAllBoards, getBoardById } from "./getters";
+export { getAllBoards, getBoardById, type BoardListResult } from "./getters";

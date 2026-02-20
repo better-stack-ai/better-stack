@@ -17,7 +17,7 @@ import {
 	updateColumnSchema,
 	updateTaskSchema,
 } from "../schemas";
-import { getAllBoards, getBoardById } from "./getters";
+import { getAllBoards, getBoardById, type BoardListResult } from "./getters";
 
 /**
  * Context passed to kanban API hooks
@@ -82,7 +82,7 @@ export interface KanbanBackendHooks {
 	 * Called after boards are listed successfully
 	 */
 	onBoardsRead?: (
-		boards: Board[],
+		result: BoardListResult,
 		filter: z.infer<typeof BoardListQuerySchema>,
 		context: KanbanApiContext,
 	) => Promise<void> | void;
