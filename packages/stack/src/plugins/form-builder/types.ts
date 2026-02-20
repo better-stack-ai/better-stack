@@ -82,8 +82,8 @@ export interface SerializedFormSubmission
 export interface SerializedFormSubmissionWithData<
 	TData = Record<string, unknown>,
 > extends SerializedFormSubmission {
-	/** Parsed data object (JSON.parse of data field) */
-	parsedData: TData;
+	/** Parsed data object (JSON.parse of data field). Null when the stored JSON is corrupted. */
+	parsedData: TData | null;
 	/** Joined form */
 	form?: SerializedForm;
 }

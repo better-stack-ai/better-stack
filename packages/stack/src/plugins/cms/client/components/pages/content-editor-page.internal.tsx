@@ -241,7 +241,7 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 					contentType={contentType}
 					initialData={
 						isEditing
-							? item?.parsedData
+							? (item?.parsedData ?? undefined)
 							: Object.keys(prefillParams).length > 0
 								? convertPrefillToFormData(
 										prefillParams,
