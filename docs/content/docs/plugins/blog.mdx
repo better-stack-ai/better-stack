@@ -542,9 +542,14 @@ After calling `stack()`, the returned object includes a fully-typed `api` namesp
 import { myStack } from "./stack"; // your stack() instance
 
 // In a Server Component, generateStaticParams, etc.
-const posts = await myStack.api.blog.getAllPosts({ published: true });
-const post  = await myStack.api.blog.getPostBySlug("hello-world");
-const tags  = await myStack.api.blog.getAllTags();
+const result = await myStack.api.blog.getAllPosts({ published: true });
+// result.items  — Post[]
+// result.total  — total count before pagination
+// result.limit  — applied limit
+// result.offset — applied offset
+
+const post = await myStack.api.blog.getPostBySlug("hello-world");
+const tags = await myStack.api.blog.getAllTags();
 ```
 
 **Pattern 2 — direct import (SSG, build-time, or custom adapter)**
@@ -556,19 +561,23 @@ import { getAllPosts, getPostBySlug, getAllTags } from "@btst/stack/plugins/blog
 
 // e.g. in Next.js generateStaticParams
 export async function generateStaticParams() {
-  const posts = await getAllPosts(myAdapter, { published: true });
-  return posts.map((p) => ({ slug: p.slug }));
+  const { items } = await getAllPosts(myAdapter, { published: true });
+  return items.map((p) => ({ slug: p.slug }));
 }
 ```
 
 ### Available getters
 
-| Function | Description |
-|---|---|
-| `getAllPosts(adapter, params?)` | Returns all posts matching optional filter/pagination params |
-| `getPostBySlug(adapter, slug)` | Returns a single post by slug, or `null` if not found |
-| `getAllTags(adapter)` | Returns all tags |
+| Function | Returns | Description |
+|---|---|---|
+| `getAllPosts(adapter, params?)` | `PostListResult` | Paginated posts matching optional filter params |
+| `getPostBySlug(adapter, slug)` | `Post \| null` | Single post by slug, or `null` if not found |
+| `getAllTags(adapter)` | `Tag[]` | All tags, sorted alphabetically |
 
 ### `PostListParams`
 
 <AutoTypeTable path="../packages/stack/src/plugins/blog/api/getters.ts" name="PostListParams" />
+
+### `PostListResult`
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/getters.ts" name="PostListResult" />
