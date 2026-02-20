@@ -273,6 +273,56 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							}
 						}
 
+						// Preserve pre-refactor behaviour: when a tagSlug is provided
+						// but the tag doesn't exist or has no associated posts, return an
+						// empty result without invoking onPostsRead.  The getAllPosts getter
+						// handles these cases with early returns of its own, but the hook
+						// call lives here in the handler and must be guarded the same way.
+						if (query.tagSlug) {
+							const tag = await adapter.findOne<Tag>({
+								model: "tag",
+								where: [
+									{
+										field: "slug",
+										value: query.tagSlug,
+										operator: "eq" as const,
+									},
+								],
+							});
+
+							if (!tag) {
+								return {
+									items: [],
+									total: 0,
+									limit: query.limit,
+									offset: query.offset,
+								};
+							}
+
+							const postTags = await adapter.findMany<{
+								postId: string;
+								tagId: string;
+							}>({
+								model: "postTag",
+								where: [
+									{
+										field: "tagId",
+										value: tag.id,
+										operator: "eq" as const,
+									},
+								],
+							});
+
+							if (postTags.length === 0) {
+								return {
+									items: [],
+									total: 0,
+									limit: query.limit,
+									offset: query.offset,
+								};
+							}
+						}
+
 						const result = await getAllPosts(adapter, query);
 
 						if (hooks?.onPostsRead) {
