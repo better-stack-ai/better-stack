@@ -98,7 +98,7 @@ export async function getAllPosts(
 	// TODO: remove cast once @btst/db types expose adapter.count()
 	const dbPaginationOnly = !query.query && !query.tagSlug;
 	const dbTotal: number | undefined = dbPaginationOnly
-		? await (adapter as any).count({
+		? await adapter.count({
 				model: "post",
 				where: whereConditions.length > 0 ? whereConditions : undefined,
 			})

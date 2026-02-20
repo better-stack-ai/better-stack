@@ -41,13 +41,21 @@ export function serializeFormSubmission(
 
 /**
  * Serialize a FormSubmission with parsed data and joined Form.
+ * If `submission.data` is corrupted JSON, `parsedData` is set to `null` rather
+ * than throwing, so one bad row cannot crash the entire list or SSG build.
  */
 export function serializeFormSubmissionWithData(
 	submission: FormSubmissionWithForm,
 ): SerializedFormSubmissionWithData {
+	let parsedData: Record<string, unknown> | null = null;
+	try {
+		parsedData = JSON.parse(submission.data);
+	} catch {
+		// Corrupted JSON — leave parsedData as null so callers can handle it
+	}
 	return {
 		...serializeFormSubmission(submission),
-		parsedData: JSON.parse(submission.data),
+		parsedData,
 		form: submission.form ? serializeForm(submission.form) : undefined,
 	};
 }
@@ -87,7 +95,7 @@ export async function getAllForms(
 	}
 
 	// TODO: remove cast once @btst/db types expose adapter.count()
-	const total: number = await (adapter as any).count({
+	const total: number = await adapter.count({
 		model: "form",
 		where: whereConditions.length > 0 ? whereConditions : undefined,
 	});
@@ -172,7 +180,7 @@ export async function getFormSubmissions(
 	}
 
 	// TODO: remove cast once @btst/db types expose adapter.count()
-	const total: number = await (adapter as any).count({
+	const total: number = await adapter.count({
 		model: "formSubmission",
 		where: [{ field: "formId", value: formId, operator: "eq" as const }],
 	});
