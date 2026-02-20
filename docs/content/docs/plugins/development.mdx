@@ -693,12 +693,12 @@ import { createMemoryAdapter } from "@btst/adapter-memory"
 import { todosBackendPlugin } from "./plugins/todo/api/backend"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 
+// Export the full stack instance so myStack.api.* is accessible anywhere
 export const myStack = stack({
   basePath: "/api/data",
   plugins: {
     todos: todosBackendPlugin,
     blog: blogBackendPlugin({
-      // Backend hooks for authorization
       onBeforeCreatePost: async (data, context) => {
         // Check authentication
         return true
@@ -711,17 +711,17 @@ export const myStack = stack({
   adapter: (db) => createMemoryAdapter(db)({})
 })
 
-// myStack exposes:
-//   .handler    — HTTP route handler
-//   .dbSchema   — Better-db schema
-//   .adapter    — Raw database adapter
-//   .api        — Typed server-side getters per plugin
+// Named re-exports for the HTTP route handler and DB schema
+export const { handler, dbSchema } = myStack
+
+// myStack also exposes:
+//   myStack.adapter  — raw database adapter
+//   myStack.api      — typed server-side getters per plugin
 //
 // Usage in a Server Component or generateStaticParams:
 //   const todos = await myStack.api.todos.listTodos()
+//   const todo  = await myStack.api.todos.getTodoById("abc-123")
 //   const posts = await myStack.api.blog.getAllPosts({ published: true })
-
-export const { handler, dbSchema } = myStack
 ```
 
 ### Client Registration
@@ -805,16 +805,47 @@ export type Todo = {
 }
 ```
 
+**File: `lib/plugins/todo/api/getters.ts`**
+```typescript
+import type { Adapter } from "@btst/stack/plugins/api"
+import type { Todo } from "../types"
+
+/** Retrieve all todos, sorted newest-first. Safe for server-side and SSG use. */
+export async function listTodos(adapter: Adapter): Promise<Todo[]> {
+  return adapter.findMany<Todo>({
+    model: "todo",
+    sortBy: { field: "createdAt", direction: "desc" },
+  }) as Promise<Todo[]>
+}
+
+/** Retrieve a single todo by ID. Returns null if not found. */
+export async function getTodoById(
+  adapter: Adapter,
+  id: string,
+): Promise<Todo | null> {
+  return adapter.findOne<Todo>({
+    model: "todo",
+    where: [{ field: "id", value: id, operator: "eq" }],
+  })
+}
+```
+
 **File: `lib/plugins/todo/api/backend.ts`**
 ```typescript
 import { type Adapter, defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api"
 import { z } from "zod"
 import { todosSchema as dbSchema } from "../schema"
 import type { Todo } from "../types"
+import { listTodos, getTodoById } from "./getters"
 
 const createTodoSchema = z.object({
   title: z.string().min(1),
   completed: z.boolean().optional().default(false)
+})
+
+const updateTodoSchema = z.object({
+  title: z.string().min(1).optional(),
+  completed: z.boolean().optional()
 })
 
 export const todosBackendPlugin = defineBackendPlugin({
@@ -823,10 +854,8 @@ export const todosBackendPlugin = defineBackendPlugin({
 
   // Server-side getters — available as myStack.api.todos.*
   api: (adapter) => ({
-    listTodos: () =>
-      adapter.findMany<Todo>({ model: "todo", sortBy: { field: "createdAt", direction: "desc" } }) as Promise<Todo[]>,
-    getTodoById: (id: string) =>
-      adapter.findOne<Todo>({ model: "todo", where: [{ field: "id", value: id, operator: "eq" }] }),
+    listTodos: () => listTodos(adapter),
+    getTodoById: (id: string) => getTodoById(adapter, id),
   }),
 
   routes: (adapter: Adapter) => {
@@ -840,8 +869,27 @@ export const todosBackendPlugin = defineBackendPlugin({
         data: { ...ctx.body, createdAt: new Date() }
       })
     )
+
+    const updateTodo = createEndpoint("/todos/:id", { method: "PUT", body: updateTodoSchema },
+      async (ctx) => {
+        const updated = await adapter.update({
+          model: "todo",
+          where: [{ field: "id", value: ctx.params.id }],
+          update: ctx.body
+        })
+        if (!updated) throw new Error("Todo not found")
+        return updated
+      }
+    )
+
+    const deleteTodo = createEndpoint("/todos/:id", { method: "DELETE" },
+      async (ctx) => {
+        await adapter.delete({ model: "todo", where: [{ field: "id", value: ctx.params.id }] })
+        return { success: true }
+      }
+    )
     
-    return { listTodos, createTodo } as const
+    return { listTodos, createTodo, updateTodo, deleteTodo } as const
   }
 })
 
@@ -977,7 +1025,9 @@ A basic CRUD plugin demonstrating core concepts:
 Features:
 - Basic CRUD operations
 - Database schema
-- API endpoints
+- API endpoints (list, create, update, delete)
+- Server-side getter functions (`getters.ts`)
+- `stack().api.todos.*` surface for direct server-side access
 - Client components and hooks
 
 ### Full-Featured Plugin: Blog
