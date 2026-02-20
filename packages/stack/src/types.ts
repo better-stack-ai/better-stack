@@ -40,14 +40,13 @@ export interface ClientStackContext<
  * You can optionally provide a base schema via the dbSchema config option.
  *
  * @template TRoutes - The exact shape of routes this plugin provides (preserves keys and endpoint types)
- * @template TApi - The shape of the server-side API surface exposed via `stack().api`
+ * @template TApi - The shape of the server-side API surface exposed via `stack().api`.
+ *   Defaults to `never` so that plugins without an `api` factory are excluded from the
+ *   `stack().api` namespace entirely, preventing accidental access of `undefined` at runtime.
  */
 export interface BackendPlugin<
 	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
-	TApi extends Record<string, (...args: any[]) => any> = Record<
-		string,
-		(...args: any[]) => any
-	>,
+	TApi extends Record<string, (...args: any[]) => any> = never,
 > {
 	name: string;
 
@@ -103,15 +102,20 @@ export interface ClientPlugin<
 
 /**
  * Utility type that maps each plugin key to the return type of its `api` factory.
- * Used to build the fully-typed `stack().api` surface.
+ * Plugin keys whose `TApi` resolves to `never` (i.e. plugins with no `api` factory)
+ * are excluded from the resulting type via key remapping, preventing TypeScript from
+ * suggesting callable functions on what is actually `undefined` at runtime.
  */
 export type PluginApis<
 	TPlugins extends Record<string, BackendPlugin<any, any>>,
 > = {
-	[K in keyof TPlugins]: TPlugins[K] extends BackendPlugin<any, infer TApi>
-		? TApi
-		: never;
+	[K in keyof TPlugins as _ApiOf<TPlugins[K]> extends never
+		? never
+		: K]: _ApiOf<TPlugins[K]>;
 };
+
+/** @internal Extract the TApi parameter from a BackendPlugin type. */
+type _ApiOf<T> = T extends BackendPlugin<any, infer TApi> ? TApi : never;
 
 /**
  * Configuration for creating the backend library

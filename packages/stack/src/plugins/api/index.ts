@@ -46,10 +46,7 @@ export { createDbPlugin } from "@btst/db";
  */
 export function defineBackendPlugin<
 	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
-	TApi extends Record<string, (...args: any[]) => any> = Record<
-		string,
-		(...args: any[]) => any
-	>,
+	TApi extends Record<string, (...args: any[]) => any> = never,
 >(plugin: BackendPlugin<TRoutes, TApi>): BackendPlugin<TRoutes, TApi> {
 	return plugin;
 }
