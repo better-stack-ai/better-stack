@@ -160,10 +160,11 @@ test.describe("Form Builder Plugin - Admin Pages", () => {
 		await expect(emailItem).toBeVisible({ timeout: 5000 });
 		await emailItem.dragTo(dropZone);
 
-		// Wait for field to be added
+		// Wait for field to be added and schema state to update
 		await expect(
 			canvas.getByText("Email", { exact: true }).first(),
 		).toBeVisible();
+		await page.waitForTimeout(500); // Allow drag-and-drop state to flush
 
 		// Save the form - after creation we're redirected to edit page
 		await page.getByRole("button", { name: "Create" }).click();
@@ -218,6 +219,7 @@ test.describe("Form Builder Plugin - Admin Pages", () => {
 		await expect(
 			canvasArea.getByText("Email", { exact: true }).first(),
 		).toBeVisible();
+		await page.waitForTimeout(500); // Allow drag-and-drop state to flush
 
 		// Save the form
 		await page.getByRole("button", { name: "Create" }).click();
@@ -277,6 +279,7 @@ test.describe("Form Builder Plugin - Admin Pages", () => {
 		await expect(
 			canvasArea.getByText("Email", { exact: true }).first(),
 		).toBeVisible();
+		await page.waitForTimeout(500); // Allow drag-and-drop state to flush
 
 		// Save the form
 		await page.getByRole("button", { name: "Create" }).click();
