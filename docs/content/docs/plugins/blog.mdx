@@ -527,3 +527,57 @@ You can import the hooks from `"@btst/stack/plugins/blog/client/hooks"` to use i
 #### PostUpdateInput
 
 <AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="PostUpdateInput" />
+
+## Server-side Data Access
+
+The blog plugin exposes standalone getter functions for server-side and SSG use cases. These bypass the HTTP layer entirely and query the database directly.
+
+### Two patterns
+
+**Pattern 1 — via `stack().api` (recommended for runtime server code)**
+
+After calling `stack()`, the returned object includes a fully-typed `api` namespace. Getters are pre-bound to the adapter:
+
+```ts title="app/lib/stack.ts"
+import { myStack } from "./stack"; // your stack() instance
+
+// In a Server Component, generateStaticParams, etc.
+const result = await myStack.api.blog.getAllPosts({ published: true });
+// result.items  — Post[]
+// result.total  — total count before pagination
+// result.limit  — applied limit
+// result.offset — applied offset
+
+const post = await myStack.api.blog.getPostBySlug("hello-world");
+const tags = await myStack.api.blog.getAllTags();
+```
+
+**Pattern 2 — direct import (SSG, build-time, or custom adapter)**
+
+Import getters directly and pass any `Adapter`:
+
+```ts
+import { getAllPosts, getPostBySlug, getAllTags } from "@btst/stack/plugins/blog/api";
+
+// e.g. in Next.js generateStaticParams
+export async function generateStaticParams() {
+  const { items } = await getAllPosts(myAdapter, { published: true });
+  return items.map((p) => ({ slug: p.slug }));
+}
+```
+
+### Available getters
+
+| Function | Returns | Description |
+|---|---|---|
+| `getAllPosts(adapter, params?)` | `PostListResult` | Paginated posts matching optional filter params |
+| `getPostBySlug(adapter, slug)` | `Post \| null` | Single post by slug, or `null` if not found |
+| `getAllTags(adapter)` | `Tag[]` | All tags, sorted alphabetically |
+
+### `PostListParams`
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/getters.ts" name="PostListParams" />
+
+### `PostListResult`
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/getters.ts" name="PostListResult" />

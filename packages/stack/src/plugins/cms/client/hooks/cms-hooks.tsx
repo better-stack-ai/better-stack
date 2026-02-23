@@ -608,9 +608,11 @@ export function useCreateContent<TData = Record<string, unknown>>(
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({
 				queryKey: queries.cmsContent.list._def,
+				refetchType: "all",
 			});
 			await queryClient.invalidateQueries({
 				queryKey: queries.cmsTypes.list._def,
+				refetchType: "all",
 			});
 			if (refresh) {
 				await refresh();
@@ -675,6 +677,7 @@ export function useUpdateContent<TData = Record<string, unknown>>(
 			}
 			await queryClient.invalidateQueries({
 				queryKey: queries.cmsContent.list._def,
+				refetchType: "all",
 			});
 			if (refresh) {
 				await refresh();
