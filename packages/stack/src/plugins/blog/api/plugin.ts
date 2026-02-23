@@ -275,7 +275,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 						const result = await getAllPosts(adapter, query);
 
-						if (hooks?.onPostsRead && result.items.length > 0) {
+						if (hooks?.onPostsRead) {
 							await hooks.onPostsRead(result.items, query, context);
 						}
 
