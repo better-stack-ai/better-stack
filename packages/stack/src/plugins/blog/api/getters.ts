@@ -111,7 +111,7 @@ export async function getAllPosts(
 		model: "post",
 		limit: !needsInMemoryFilter ? query.limit : undefined,
 		offset: !needsInMemoryFilter ? query.offset : undefined,
-		where: whereConditions,
+		where: dbWhere,
 		sortBy: { field: "createdAt", direction: "desc" },
 		join: { postTag: true },
 	});
