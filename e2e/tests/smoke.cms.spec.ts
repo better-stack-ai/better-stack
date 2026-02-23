@@ -63,6 +63,7 @@ test.describe("CMS Hooks Example", () => {
 		// Category select
 		const categorySelect = page.locator('button[role="combobox"]').first();
 		await categorySelect.click();
+		await page.locator('[role="option"]').first().waitFor({ state: "visible" });
 		await page.locator('[role="option"]').first().click();
 
 		await page.locator('button[type="submit"]').click();
@@ -251,6 +252,7 @@ test.describe("CMS Plugin", () => {
 		// Category select - find and click the select trigger
 		const categorySelect = page.locator('button[role="combobox"]').first();
 		await categorySelect.click();
+		await page.locator('[role="option"]').first().waitFor({ state: "visible" });
 		await page.locator('[role="option"]').first().click();
 
 		// Submit the form - wait for button to be ready
@@ -285,6 +287,7 @@ test.describe("CMS Plugin", () => {
 		// Category select
 		const categorySelect = page.locator('button[role="combobox"]').first();
 		await categorySelect.click();
+		await page.locator('[role="option"]').first().waitFor({ state: "visible" });
 		await page.locator('[role="option"]').first().click();
 
 		await page.locator('button[type="submit"]').click();
@@ -327,6 +330,7 @@ test.describe("CMS Plugin", () => {
 		// Category select
 		const categorySelect = page.locator('button[role="combobox"]').first();
 		await categorySelect.click();
+		await page.locator('[role="option"]').first().waitFor({ state: "visible" });
 		await page.locator('[role="option"]').first().click();
 
 		await page.locator('button[type="submit"]').click();
@@ -554,6 +558,7 @@ test.describe("CMS Image Upload", () => {
 		// Category select
 		const categorySelect = page.locator('button[role="combobox"]').first();
 		await categorySelect.click();
+		await page.locator('[role="option"]').first().waitFor({ state: "visible" });
 		await page.locator('[role="option"]').first().click();
 
 		// Upload an image
@@ -602,6 +607,7 @@ test.describe("CMS Image Upload", () => {
 		// Category select
 		const categorySelect = page.locator('button[role="combobox"]').first();
 		await categorySelect.click();
+		await page.locator('[role="option"]').first().waitFor({ state: "visible" });
 		await page.locator('[role="option"]').first().click();
 
 		// Upload an image
