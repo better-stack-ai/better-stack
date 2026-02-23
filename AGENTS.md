@@ -57,6 +57,48 @@ onRouteRender, onRouteError
 onBefore*PageRendered
 ```
 
+### Server-side API Factory (`api`)
+
+Every backend plugin can expose a typed `api` surface for direct server-side or SSG data access (no HTTP roundtrip). Add an `api` factory alongside `routes`:
+
+```typescript
+// src/plugins/{name}/api/getters.ts  — pure DB functions, no hooks/HTTP context
+export async function listItems(adapter: Adapter): Promise<Item[]> { ... }
+export async function getItemById(adapter: Adapter, id: string): Promise<Item | null> { ... }
+
+// src/plugins/{name}/api/plugin.ts
+export const myBackendPlugin = defineBackendPlugin({
+  name: "{name}",
+  dbPlugin: dbSchema,
+  api: (adapter) => ({          // ← bound to shared adapter
+    listItems: () => listItems(adapter),
+    getItemById: (id: string) => getItemById(adapter, id),
+  }),
+  routes: (adapter) => { /* HTTP endpoints */ },
+})
+
+// src/plugins/{name}/api/index.ts  — re-export getters for direct import
+export { listItems, getItemById } from "./getters";
+```
+
+After calling `stack()`, the result exposes `api` (namespaced per plugin) and `adapter`:
+
+```typescript
+export const myStack = stack({ basePath, plugins, adapter })
+export const { handler, dbSchema } = myStack
+
+// Use in Server Components, generateStaticParams, scripts, etc.
+const items = await myStack.api["{name}"].listItems()
+const item  = await myStack.api["{name}"].getItemById("abc")
+```
+
+**Rules:**
+- Keep getters in a separate `getters.ts` — no HTTP context, no lifecycle hooks
+- The `api` factory and `routes` factory share the same adapter instance
+- If the plugin has a one-time init/sync step (like CMS `syncContentTypes`), call it inside each getter wrapper — not just inside `routes`
+- Re-export getters from `api/index.ts` for consumers who need direct import (SSG/build-time)
+- Authorization hooks are **not** called via `stack().api.*` — callers are responsible for access control
+
 ### Query Keys Factory
 
 Create a query keys file for React Query integration:
@@ -522,3 +564,7 @@ The `AutoTypeTable` component automatically pulls from TypeScript files, so ensu
 9. **Suspense errors not caught** - If errors from `useSuspenseQuery` aren't caught by ErrorBoundary, add the manual throw pattern: `if (error && !isFetching) { throw error; }`
 
 10. **Missing ComposedRoute wrapper** - Page components must be wrapped with `ComposedRoute` to get proper Suspense + ErrorBoundary handling. Without it, errors crash the entire app.
+
+11. **`stack().api` bypasses authorization hooks** - Getters accessed via `myStack.api.*` skip all `onBefore*` hooks. Never use them as a substitute for authenticated HTTP endpoints — enforce access control at the call site.
+
+12. **Plugin init steps not called via `api`** - If a plugin's `routes` factory runs a one-time setup (e.g. CMS `syncContentTypes`), that same setup must also be awaited inside the `api` getter wrappers, otherwise direct getter calls will query an uninitialised database.
