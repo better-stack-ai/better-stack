@@ -470,6 +470,21 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 		return syncPromise;
 	};
 
+	const getContentTypesWithCounts = async (adapter: Adapter) => {
+		const contentTypes = await getAllContentTypes(adapter);
+		return Promise.all(
+			contentTypes.map(async (ct) => {
+				const count: number = await adapter.count({
+					model: "contentItem",
+					where: [
+						{ field: "contentTypeId", value: ct.id, operator: "eq" as const },
+					],
+				});
+				return { ...ct, itemCount: count };
+			}),
+		);
+	};
+
 	const createCMSPrefetchForRoute = (adapter: Adapter): CMSPrefetchForRoute => {
 		return async function prefetchForRoute(
 			key: CMSRouteKey,
@@ -482,46 +497,14 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 			switch (key) {
 				case "dashboard":
 				case "newContent": {
-					// Fetch content types with item counts to match the HTTP endpoint shape
-					const contentTypes = await getAllContentTypes(adapter);
-					const typesWithCounts = await Promise.all(
-						contentTypes.map(async (ct) => {
-							const count: number = await adapter.count({
-								model: "contentItem",
-								where: [
-									{
-										field: "contentTypeId",
-										value: ct.id,
-										operator: "eq" as const,
-									},
-								],
-							});
-							return { ...ct, itemCount: count };
-						}),
-					);
+					const typesWithCounts = await getContentTypesWithCounts(adapter);
 					qc.setQueryData(CMS_QUERY_KEYS.typesList(), typesWithCounts);
 					break;
 				}
 				case "contentList": {
 					const typeSlug = params?.typeSlug ?? "";
 					const [contentTypes, contentItems] = await Promise.all([
-						getAllContentTypes(adapter).then(async (types) => {
-							return Promise.all(
-								types.map(async (ct) => {
-									const count: number = await adapter.count({
-										model: "contentItem",
-										where: [
-											{
-												field: "contentTypeId",
-												value: ct.id,
-												operator: "eq" as const,
-											},
-										],
-									});
-									return { ...ct, itemCount: count };
-								}),
-							);
-						}),
+						getContentTypesWithCounts(adapter),
 						getAllContentItems(adapter, typeSlug, { limit: 20, offset: 0 }),
 					]);
 					qc.setQueryData(CMS_QUERY_KEYS.typesList(), contentTypes);
@@ -545,23 +528,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					const typeSlug = params?.typeSlug ?? "";
 					const id = params?.id ?? "";
 					const [contentTypes, item] = await Promise.all([
-						getAllContentTypes(adapter).then(async (types) => {
-							return Promise.all(
-								types.map(async (ct) => {
-									const count: number = await adapter.count({
-										model: "contentItem",
-										where: [
-											{
-												field: "contentTypeId",
-												value: ct.id,
-												operator: "eq" as const,
-											},
-										],
-									});
-									return { ...ct, itemCount: count };
-								}),
-							);
-						}),
+						getContentTypesWithCounts(adapter),
 						id ? getContentItemById(adapter, id) : Promise.resolve(null),
 					]);
 					qc.setQueryData(CMS_QUERY_KEYS.typesList(), contentTypes);
