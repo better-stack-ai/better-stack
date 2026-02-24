@@ -5,6 +5,7 @@ import {
 import type { KanbanApiRouter } from "./api";
 import { createApiClient } from "@btst/stack/plugins/client";
 import type { SerializedBoardWithColumns } from "./types";
+import { boardsListDiscriminator } from "./api/query-key-defs";
 
 interface BoardsListParams {
 	slug?: string;
@@ -63,15 +64,7 @@ function createBoardsQueries(
 ) {
 	return createQueryKeys("boards", {
 		list: (params?: BoardsListParams) => ({
-			queryKey: [
-				{
-					slug: params?.slug,
-					ownerId: params?.ownerId,
-					organizationId: params?.organizationId,
-					limit: params?.limit ?? 50,
-					offset: params?.offset ?? 0,
-				},
-			],
+			queryKey: [boardsListDiscriminator(params)],
 			queryFn: async () => {
 				try {
 					const response = await client("/boards", {

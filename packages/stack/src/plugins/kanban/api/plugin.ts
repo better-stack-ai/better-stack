@@ -24,6 +24,54 @@ import {
 	updateTaskSchema,
 } from "../schemas";
 import { getAllBoards, getBoardById } from "./getters";
+import { KANBAN_QUERY_KEYS } from "./query-key-defs";
+import { serializeBoard } from "./serializers";
+import type { QueryClient } from "@tanstack/react-query";
+
+/**
+ * Route keys for the Kanban plugin — matches the keys returned by
+ * `stackClient.router.getRoute(path).routeKey`.
+ */
+export type KanbanRouteKey = "boards" | "newBoard" | "board";
+
+interface KanbanPrefetchForRoute {
+	(key: "boards" | "newBoard", qc: QueryClient): Promise<void>;
+	(key: "board", qc: QueryClient, params: { boardId: string }): Promise<void>;
+}
+
+function createKanbanPrefetchForRoute(
+	adapter: Adapter,
+): KanbanPrefetchForRoute {
+	return async function prefetchForRoute(
+		key: KanbanRouteKey,
+		qc: QueryClient,
+		params?: Record<string, string>,
+	): Promise<void> {
+		switch (key) {
+			case "boards": {
+				const result = await getAllBoards(adapter, { limit: 50, offset: 0 });
+				qc.setQueryData(
+					KANBAN_QUERY_KEYS.boardsList({}),
+					result.items.map(serializeBoard),
+				);
+				break;
+			}
+			case "board": {
+				const boardId = params?.boardId ?? "";
+				if (boardId) {
+					const board = await getBoardById(adapter, boardId);
+					qc.setQueryData(
+						KANBAN_QUERY_KEYS.boardDetail(boardId),
+						board ? serializeBoard(board) : null,
+					);
+				}
+				break;
+			}
+			default:
+				break;
+		}
+	} as KanbanPrefetchForRoute;
+}
 
 /**
  * Context passed to kanban API hooks
@@ -268,6 +316,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 			getAllBoards: (params?: Parameters<typeof getAllBoards>[1]) =>
 				getAllBoards(adapter, params),
 			getBoardById: (id: string) => getBoardById(adapter, id),
+			prefetchForRoute: createKanbanPrefetchForRoute(adapter),
 		}),
 
 		routes: (adapter: Adapter) => {

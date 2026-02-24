@@ -628,8 +628,8 @@ importers:
         specifier: 2.0.3
         version: 2.0.3(cbbb9f8f765bc2577d5d561739823056)
       '@btst/yar':
-        specifier: 1.1.1
-        version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.6))(@types/react@19.2.6)
+        specifier: 1.2.0
+        version: 1.2.0(@types/react-dom@19.2.3(@types/react@19.2.6))(@types/react@19.2.6)
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.6
@@ -1242,6 +1242,12 @@ packages:
 
   '@btst/yar@1.1.1':
     resolution: {integrity: sha512-KF5bg0WPS2385HD5cCYYqguoiSWMK9V0k1wn912QGVZ5Ih142d0S5bfW5n9kXltbLoFzDaK3d3PSGvSfbrd7Ag==}
+    peerDependencies:
+      '@types/react': ^19.1.16
+      '@types/react-dom': ^19.1.9
+
+  '@btst/yar@1.2.0':
+    resolution: {integrity: sha512-+pjP7tkARs8ENwq0mTGdXLtOD2IEcv4tAgN8tHkAWjmAmldbjeqNkZzSt9KJFhW6bZJEORtRQKnYI1vN152f5A==}
     peerDependencies:
       '@types/react': ^19.1.16
       '@types/react-dom': ^19.1.9
@@ -9452,6 +9458,12 @@ snapshots:
       - vue
 
   '@btst/yar@1.1.1(@types/react-dom@19.2.3(@types/react@19.2.6))(@types/react@19.2.6)':
+    dependencies:
+      '@types/react': 19.2.6
+      '@types/react-dom': 19.2.3(@types/react@19.2.6)
+      rou3: 0.7.12
+
+  '@btst/yar@1.2.0(@types/react-dom@19.2.3(@types/react@19.2.6))(@types/react@19.2.6)':
     dependencies:
       '@types/react': 19.2.6
       '@types/react-dom': 19.2.3(@types/react@19.2.6)

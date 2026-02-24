@@ -2,6 +2,7 @@ import { lazy } from "react";
 import {
 	defineClientPlugin,
 	createApiClient,
+	isConnectionError,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
@@ -181,6 +182,12 @@ function createDashboardLoader(config: CMSClientConfig) {
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
 				// Let Error Boundaries handle errors when components render
+				if (isConnectionError(error)) {
+					console.warn(
+						"[btst/cms] route.loader() failed — no server running at build time. " +
+							"Use myStack.api.cms.prefetchForRoute() for SSG data prefetching.",
+					);
+				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
 				}
@@ -275,6 +282,12 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
 				// Let Error Boundaries handle errors when components render
+				if (isConnectionError(error)) {
+					console.warn(
+						"[btst/cms] route.loader() failed — no server running at build time. " +
+							"Use myStack.api.cms.prefetchForRoute() for SSG data prefetching.",
+					);
+				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
 				}
@@ -357,6 +370,12 @@ function createContentEditorLoader(
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
 				// Let Error Boundaries handle errors when components render
+				if (isConnectionError(error)) {
+					console.warn(
+						"[btst/cms] route.loader() failed — no server running at build time. " +
+							"Use myStack.api.cms.prefetchForRoute() for SSG data prefetching.",
+					);
+				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
 				}

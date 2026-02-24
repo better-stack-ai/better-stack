@@ -7,6 +7,90 @@ import type { Post, PostWithPostTag, Tag } from "../types";
 import { slugify } from "../utils";
 import { createPostSchema, updatePostSchema } from "../schemas";
 import { getAllPosts, getPostBySlug, getAllTags } from "./getters";
+import { BLOG_QUERY_KEYS } from "./query-key-defs";
+import { serializePost, serializeTag } from "./serializers";
+import type { QueryClient } from "@tanstack/react-query";
+
+/**
+ * Route keys for the blog plugin — matches the keys returned by
+ * `stackClient.router.getRoute(path).routeKey`.
+ */
+export type BlogRouteKey =
+	| "posts"
+	| "drafts"
+	| "post"
+	| "tag"
+	| "newPost"
+	| "editPost";
+
+/**
+ * Overloaded signature for `prefetchForRoute`.
+ * TypeScript enforces the correct params for each routeKey at call sites.
+ */
+interface BlogPrefetchForRoute {
+	(key: "posts" | "drafts" | "newPost", qc: QueryClient): Promise<void>;
+	(
+		key: "post" | "editPost",
+		qc: QueryClient,
+		params: { slug: string },
+	): Promise<void>;
+	(key: "tag", qc: QueryClient, params: { tagSlug: string }): Promise<void>;
+}
+
+function createBlogPrefetchForRoute(adapter: Adapter): BlogPrefetchForRoute {
+	return async function prefetchForRoute(
+		key: BlogRouteKey,
+		qc: QueryClient,
+		params?: Record<string, string>,
+	): Promise<void> {
+		switch (key) {
+			case "posts":
+			case "drafts": {
+				const published = key === "posts";
+				const [result, tags] = await Promise.all([
+					getAllPosts(adapter, { published, limit: 10 }),
+					getAllTags(adapter),
+				]);
+				qc.setQueryData(BLOG_QUERY_KEYS.postsList({ published, limit: 10 }), {
+					pages: [result.items.map(serializePost)],
+					pageParams: [0],
+				});
+				qc.setQueryData(BLOG_QUERY_KEYS.tagsList(), tags.map(serializeTag));
+				break;
+			}
+			case "post":
+			case "editPost": {
+				const slug = params?.slug ?? "";
+				if (slug) {
+					const post = await getPostBySlug(adapter, slug);
+					qc.setQueryData(
+						BLOG_QUERY_KEYS.postDetail(slug),
+						post ? serializePost(post) : null,
+					);
+				}
+				break;
+			}
+			case "tag": {
+				const tagSlug = params?.tagSlug ?? "";
+				const [result, tags] = await Promise.all([
+					getAllPosts(adapter, { published: true, limit: 10, tagSlug }),
+					getAllTags(adapter),
+				]);
+				qc.setQueryData(
+					BLOG_QUERY_KEYS.postsList({ published: true, limit: 10, tagSlug }),
+					{
+						pages: [result.items.map(serializePost)],
+						pageParams: [0],
+					},
+				);
+				qc.setQueryData(BLOG_QUERY_KEYS.tagsList(), tags.map(serializeTag));
+				break;
+			}
+			default:
+				break;
+		}
+	} as BlogPrefetchForRoute;
+}
 
 export const PostListQuerySchema = z.object({
 	slug: z.string().optional(),
@@ -174,6 +258,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 				getAllPosts(adapter, params),
 			getPostBySlug: (slug: string) => getPostBySlug(adapter, slug),
 			getAllTags: () => getAllTags(adapter),
+			prefetchForRoute: createBlogPrefetchForRoute(adapter),
 		}),
 
 		routes: (adapter: Adapter) => {

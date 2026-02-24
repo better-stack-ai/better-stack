@@ -1,7 +1,7 @@
 export {
 	kanbanBackendPlugin,
 	type KanbanApiRouter,
-	type KanbanApiContext,
-	type KanbanBackendHooks,
+	type KanbanRouteKey,
 } from "./plugin";
-export { getAllBoards, getBoardById, type BoardListResult } from "./getters";
+export { getAllBoards, getBoardById } from "./getters";
+export { serializeBoard, serializeColumn, serializeTask } from "./serializers";

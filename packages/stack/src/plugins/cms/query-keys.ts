@@ -9,6 +9,7 @@ import type {
 	SerializedContentItemWithType,
 	PaginatedContentItems,
 } from "./types";
+import { contentListDiscriminator } from "./api/query-key-defs";
 
 interface ContentListParams {
 	limit?: number;
@@ -115,7 +116,7 @@ function createContentQueries(
 ) {
 	return createQueryKeys("cmsContent", {
 		list: (params: { typeSlug: string } & ContentListParams) => ({
-			queryKey: [params],
+			queryKey: [contentListDiscriminator(params)],
 			queryFn: async () => {
 				try {
 					const response: unknown = await client("/content/:typeSlug", {

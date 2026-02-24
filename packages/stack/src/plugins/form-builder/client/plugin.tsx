@@ -3,6 +3,7 @@ import { lazy } from "react";
 import {
 	defineClientPlugin,
 	createApiClient,
+	isConnectionError,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
@@ -197,6 +198,12 @@ function createFormListLoader(config: FormBuilderClientConfig) {
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
+				if (isConnectionError(error)) {
+					console.warn(
+						"[btst/form-builder] route.loader() failed — no server running at build time. " +
+							"Use myStack.api.formBuilder.prefetchForRoute() for SSG data prefetching.",
+					);
+				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
 				}
@@ -265,6 +272,12 @@ function createFormBuilderLoader(
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
+				if (isConnectionError(error)) {
+					console.warn(
+						"[btst/form-builder] route.loader() failed — no server running at build time. " +
+							"Use myStack.api.formBuilder.prefetchForRoute() for SSG data prefetching.",
+					);
+				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
 				}
@@ -364,6 +377,12 @@ function createSubmissionsLoader(
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
+				if (isConnectionError(error)) {
+					console.warn(
+						"[btst/form-builder] route.loader() failed — no server running at build time. " +
+							"Use myStack.api.formBuilder.prefetchForRoute() for SSG data prefetching.",
+					);
+				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
 				}

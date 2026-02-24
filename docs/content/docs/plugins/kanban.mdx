@@ -779,3 +779,59 @@ export async function generateStaticParams() {
 ### `BoardListResult`
 
 <AutoTypeTable path="../packages/stack/src/plugins/kanban/api/getters.ts" name="BoardListResult" />
+
+## Static Site Generation (SSG)
+
+`route.loader()` makes HTTP requests to `apiBaseURL`, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
+
+### `prefetchForRoute(routeKey, queryClient, params?)`
+
+| Route key | Params required | Data prefetched |
+|---|---|---|
+| `"boards"` | — | First page of boards |
+| `"newBoard"` | — | *(nothing)* |
+| `"board"` | `{ boardId: string }` | Single board with columns and tasks |
+
+### Next.js example
+
+```tsx title="app/pages/kanban/page.tsx"
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
+import { getOrCreateQueryClient } from "@/lib/query-client"
+import { getStackClient } from "@/lib/stack-client"
+import { myStack } from "@/lib/stack"
+import { metaElementsToObject, normalizePath } from "@btst/stack/client"
+import type { Metadata } from "next"
+
+export async function generateStaticParams() {
+  return [{}]
+}
+
+// export const revalidate = 3600 // uncomment for ISR
+
+export async function generateMetadata(): Promise<Metadata> {
+  const queryClient = getOrCreateQueryClient()
+  const stackClient = getStackClient(queryClient)
+  const route = stackClient.router.getRoute(normalizePath(["kanban"]))
+  if (!route) return { title: "Kanban Boards" }
+  await myStack.api.kanban.prefetchForRoute("boards", queryClient)
+  return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
+}
+
+export default async function KanbanBoardsPage() {
+  const queryClient = getOrCreateQueryClient()
+  const stackClient = getStackClient(queryClient)
+  const route = stackClient.router.getRoute(normalizePath(["kanban"]))
+  if (!route) return null
+  // Reads directly from DB — works at build time, no HTTP server required
+  await myStack.api.kanban.prefetchForRoute("boards", queryClient)
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <route.PageComponent />
+    </HydrationBoundary>
+  )
+}
+```
+
+### Query key consistency
+
+`prefetchForRoute` uses the same query key shapes as `createKanbanQueryKeys` (the HTTP client). The shared constants live in `@btst/stack/plugins/kanban/api` as `KANBAN_QUERY_KEYS` and `boardsListDiscriminator`, so the two paths can never drift silently.

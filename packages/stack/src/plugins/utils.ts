@@ -1,4 +1,23 @@
 import { createClient } from "better-call/client";
+
+/**
+ * Returns true when a fetch error is a connection-refused / no-server error.
+ * Used in SSR loaders to emit an actionable build-time warning when
+ * `route.loader()` is called during `next build` with no HTTP server running.
+ */
+export function isConnectionError(err: unknown): boolean {
+	if (!(err instanceof Error)) return false;
+	const code =
+		(err as unknown as { cause?: { code?: string } }).cause?.code ??
+		(err as unknown as { code?: string }).code;
+	return (
+		err.message.includes("ECONNREFUSED") ||
+		err.message.includes("fetch failed") ||
+		err.message.includes("ERR_CONNECTION_REFUSED") ||
+		code === "ECONNREFUSED" ||
+		code === "ERR_CONNECTION_REFUSED"
+	);
+}
 import type { Router, Endpoint } from "better-call";
 
 interface CreateApiClientOptions {

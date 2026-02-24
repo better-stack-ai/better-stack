@@ -5,6 +5,7 @@ import {
 import type { BlogApiRouter } from "./api";
 import { createApiClient } from "@btst/stack/plugins/client";
 import type { SerializedPost, SerializedTag } from "./types";
+import { postsListDiscriminator } from "./api/query-key-defs";
 
 interface PostsListParams {
 	query?: string;
@@ -71,15 +72,12 @@ function createPostsQueries(
 	return createQueryKeys("posts", {
 		list: (params?: PostsListParams) => ({
 			queryKey: [
-				{
-					query:
-						params?.query !== undefined && params?.query?.trim() === ""
-							? undefined
-							: params?.query,
-					limit: params?.limit ?? 10,
+				postsListDiscriminator({
 					published: params?.published ?? true,
+					limit: params?.limit ?? 10,
 					tagSlug: params?.tagSlug,
-				},
+					query: params?.query,
+				}),
 			],
 			queryFn: async ({ pageParam }: { pageParam?: number }) => {
 				try {

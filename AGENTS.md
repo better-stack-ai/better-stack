@@ -99,6 +99,120 @@ const item  = await myStack.api["{name}"].getItemById("abc")
 - Re-export getters from `api/index.ts` for consumers who need direct import (SSG/build-time)
 - Authorization hooks are **not** called via `stack().api.*` — callers are responsible for access control
 
+### SSG Support (`prefetchForRoute`)
+
+`route.loader()` makes HTTP requests that **silently fail at `next build`** (no server running). Plugins that support SSG expose `prefetchForRoute` on the `api` factory to seed the React Query cache directly from the DB instead.
+
+**Required files per plugin:**
+
+| File | Purpose |
+|---|---|
+| `api/query-key-defs.ts` | Shared key shapes — import into both `query-keys.ts` and `prefetchForRoute` to prevent drift |
+| `api/serializers.ts` | Convert `Date` fields to ISO strings before `setQueryData` |
+| `api/getters.ts` | Add any ID-based getters `prefetchForRoute` needs (e.g. `getItemById`) |
+| `api/plugin.ts` | `RouteKey` type + typed overloads + wire `prefetchForRoute` into `api` factory |
+| `api/index.ts` | Re-export `RouteKey`, serializers, `PLUGIN_QUERY_KEYS` |
+| `query-keys.ts` | Import discriminator fn from `api/query-key-defs.ts` |
+| `client/plugin.tsx` | Import and call `isConnectionError` in each loader `catch` block |
+
+**`api/query-key-defs.ts`:**
+```typescript
+export function itemsListDiscriminator(params?: { limit?: number }) {
+  return { limit: params?.limit ?? 20 }
+}
+export const PLUGIN_QUERY_KEYS = {
+  itemsList: (params?: { limit?: number }) =>
+    ["items", "list", itemsListDiscriminator(params)] as const,
+  itemDetail: (id: string) => ["items", "detail", id] as const,
+}
+```
+
+**`prefetchForRoute` in `api/plugin.ts`:**
+```typescript
+export type PluginRouteKey = "list" | "detail" | "new"
+
+// Typed overloads enforce correct params per route key
+interface PluginPrefetchForRoute {
+  (key: "list" | "new", qc: QueryClient): Promise<void>
+  (key: "detail", qc: QueryClient, params: { id: string }): Promise<void>
+}
+
+function createPluginPrefetchForRoute(adapter: Adapter): PluginPrefetchForRoute {
+  return async function prefetchForRoute(key, qc, params?) {
+    switch (key) {
+      case "list": {
+        const { items, total, limit, offset } = await listItems(adapter)
+        // useInfiniteQuery lists require { pages, pageParams } shape
+        qc.setQueryData(PLUGIN_QUERY_KEYS.itemsList(), {
+          pages: [{ items: items.map(serializeItem), total, limit, offset }],
+          pageParams: [0],
+        })
+        break
+      }
+      case "detail": {
+        const item = await getItemById(adapter, params!.id)
+        if (item) qc.setQueryData(PLUGIN_QUERY_KEYS.itemDetail(params!.id), serializeItem(item))
+        break
+      }
+      case "new": break
+    }
+  } as PluginPrefetchForRoute
+}
+
+api: (adapter) => ({
+  listItems: () => listItems(adapter),
+  prefetchForRoute: createPluginPrefetchForRoute(adapter),
+})
+```
+
+Rules: serialize `Date` → ISO string; for plugins with a one-time init step (e.g. CMS `ensureSynced`), call it once at the top of `prefetchForRoute` — it is idempotent and safe for concurrent SSG calls.
+
+**Build-time warning in `client/plugin.tsx` loader `catch` blocks:**
+```typescript
+import { isConnectionError } from "@btst/stack/plugins/client"
+
+// in each loader catch block:
+if (isConnectionError(error)) {
+  console.warn("[btst/{plugin}] route.loader() failed — no server at build time. Use myStack.api.{plugin}.prefetchForRoute() for SSG.")
+}
+```
+
+**SSG `page.tsx` pattern (Next.js — outside `[[...all]]/`):**
+```tsx
+export async function generateStaticParams() { return [{}] }
+// export const revalidate = 3600  // ISR
+
+export async function generateMetadata(): Promise<Metadata> {
+  const queryClient = getOrCreateQueryClient()
+  const stackClient = getStackClient(queryClient)
+  const route = stackClient.router.getRoute(normalizePath(["{plugin}"]))
+  if (!route) return { title: "Fallback" }
+  await myStack.api.{plugin}.prefetchForRoute("list", queryClient)
+  return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
+}
+
+export default async function Page() {
+  const queryClient = getOrCreateQueryClient()
+  const stackClient = getStackClient(queryClient)
+  const route = stackClient.router.getRoute(normalizePath(["{plugin}"]))
+  if (!route) notFound()
+  await myStack.api.{plugin}.prefetchForRoute("list", queryClient)
+  return <HydrationBoundary state={dehydrate(queryClient)}><route.PageComponent /></HydrationBoundary>
+}
+```
+
+The shared `StackProvider` layout must be at `app/pages/layout.tsx` (not `[[...all]]/layout.tsx`) so it applies to both SSG pages and the catch-all.
+
+**Plugins with SSG support:**
+
+| Plugin | Prefetched route keys | Skipped |
+|---|---|---|
+| Blog | `posts`, `drafts`, `post`, `tag`, `editPost` | `newPost` |
+| CMS | `dashboard`, `contentList`, `editContent` | `newContent` |
+| Form Builder | `formList`, `editForm`, `submissions` | `newForm` |
+| Kanban | `boards`, `board` | `newBoard` |
+| AI Chat | — (per-user, not static) | all |
+
 ### Query Keys Factory
 
 Create a query keys file for React Query integration:
@@ -568,3 +682,11 @@ The `AutoTypeTable` component automatically pulls from TypeScript files, so ensu
 11. **`stack().api` bypasses authorization hooks** - Getters accessed via `myStack.api.*` skip all `onBefore*` hooks. Never use them as a substitute for authenticated HTTP endpoints — enforce access control at the call site.
 
 12. **Plugin init steps not called via `api`** - If a plugin's `routes` factory runs a one-time setup (e.g. CMS `syncContentTypes`), that same setup must also be awaited inside the `api` getter wrappers, otherwise direct getter calls will query an uninitialised database.
+
+13. **`route.loader()` silently fails at build time** - No HTTP server exists during `next build`, so fetches fail silently and the static page renders empty. Use `myStack.api.{plugin}.prefetchForRoute()` in SSG pages instead.
+
+14. **Query key drift between HTTP and SSG paths** - Share key builders via `api/query-key-defs.ts`; import discriminator functions into `query-keys.ts`. Never hardcode key shapes in two places.
+
+15. **Wrong data shape for infinite queries** - Lists backed by `useInfiniteQuery` need `{ pages: [...], pageParams: [...] }` in `setQueryData`. Flat arrays will break hydration.
+
+16. **Dates not serialized before `setQueryData`** - DB getters return `Date` objects; the HTTP cache holds ISO strings. Always serialize (e.g. `serializePost`) before `setQueryData`.
