@@ -117,6 +117,29 @@ export async function getAllForms(
 }
 
 /**
+ * Retrieve a single form by its ID (UUID).
+ * Returns null if the form is not found.
+ * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
+ *
+ * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * responsible for any access-control checks before invoking this function.
+ *
+ * @param adapter - The database adapter
+ * @param id - The form UUID
+ */
+export async function getFormById(
+	adapter: Adapter,
+	id: string,
+): Promise<SerializedForm | null> {
+	const form = await adapter.findOne<Form>({
+		model: "form",
+		where: [{ field: "id", value: id, operator: "eq" as const }],
+	});
+	if (!form) return null;
+	return serializeForm(form);
+}
+
+/**
  * Retrieve a single form by its slug.
  * Returns null if the form is not found.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.

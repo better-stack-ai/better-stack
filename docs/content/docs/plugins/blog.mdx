@@ -581,3 +581,112 @@ export async function generateStaticParams() {
 ### `PostListResult`
 
 <AutoTypeTable path="../packages/stack/src/plugins/blog/api/getters.ts" name="PostListResult" />
+
+## Static Site Generation (SSG)
+
+`route.loader()` makes HTTP requests to `apiBaseURL`, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
+
+### `prefetchForRoute(routeKey, queryClient, params?)`
+
+| Route key | Params required | Data prefetched |
+|---|---|---|
+| `"posts"` | — | Published posts list |
+| `"drafts"` | — | Draft posts list |
+| `"post"` | `{ slug: string }` | Single post detail |
+| `"tag"` | `{ tagSlug: string }` | Tag + tagged posts |
+| `"newPost"` | — | *(nothing)* |
+| `"editPost"` | `{ slug: string }` | Post to edit |
+
+### Next.js example
+
+```tsx title="app/pages/blog/page.tsx"
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
+import { getOrCreateQueryClient } from "@/lib/query-client"
+import { getStackClient } from "@/lib/stack-client"
+import { myStack } from "@/lib/stack"
+import { metaElementsToObject, normalizePath } from "@btst/stack/client"
+import type { Metadata } from "next"
+
+// Opt into SSG — Next.js generates this page at build time
+export async function generateStaticParams() {
+  return [{}]
+}
+
+// export const revalidate = 3600 // uncomment for ISR (1 hour)
+
+export async function generateMetadata(): Promise<Metadata> {
+  const queryClient = getOrCreateQueryClient()
+  const stackClient = getStackClient(queryClient)
+  const route = stackClient.router.getRoute(normalizePath(["blog"]))
+  if (!route) return { title: "Blog" }
+  await myStack.api.blog.prefetchForRoute("posts", queryClient)
+  return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
+}
+
+export default async function BlogListPage() {
+  const queryClient = getOrCreateQueryClient()
+  const stackClient = getStackClient(queryClient)
+  const route = stackClient.router.getRoute(normalizePath(["blog"]))
+  if (!route) return null
+  // Reads directly from DB — works at build time, no HTTP server required
+  await myStack.api.blog.prefetchForRoute("posts", queryClient)
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <route.PageComponent />
+    </HydrationBoundary>
+  )
+}
+```
+
+For individual post pages, also generate the static params list:
+
+```tsx title="app/pages/blog/[slug]/page.tsx"
+export async function generateStaticParams() {
+  const { items } = await myStack.api.blog.getAllPosts({ published: true, limit: 1000 })
+  return items.map((p) => ({ slug: p.slug }))
+}
+
+export default async function BlogPostPage({ params }: { params: { slug: string } }) {
+  const queryClient = getOrCreateQueryClient()
+  const stackClient = getStackClient(queryClient)
+  const route = stackClient.router.getRoute(normalizePath(["blog", params.slug]))
+  if (!route) return null
+  await myStack.api.blog.prefetchForRoute("post", queryClient, { slug: params.slug })
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <route.PageComponent />
+    </HydrationBoundary>
+  )
+}
+```
+
+### ISR cache invalidation
+
+If you use [Incremental Static Regeneration](https://nextjs.org/docs/app/building-your-application/data-fetching/incremental-static-regeneration), the static page cache must be purged whenever content changes. Wire up `revalidatePath` (or `revalidateTag`) inside the backend lifecycle hooks so Next.js regenerates the page on the next request:
+
+```ts title="lib/stack.ts"
+import { revalidatePath } from "next/cache"
+import type { BlogBackendHooks } from "@btst/stack/plugins/blog"
+
+const blogHooks: BlogBackendHooks = {
+  onPostCreated: async (post) => {
+    revalidatePath("/blog")
+    revalidatePath(`/blog/${post.slug}`)
+  },
+  onPostUpdated: async (post) => {
+    revalidatePath("/blog")
+    revalidatePath(`/blog/${post.slug}`)
+  },
+  onPostDeleted: async (postId) => {
+    revalidatePath("/blog")
+  },
+}
+```
+
+<Callout type="info">
+`revalidatePath` / `revalidateTag` are Next.js APIs — import them from `"next/cache"`. They are no-ops outside of a Next.js runtime, so this pattern is safe to use in the `lib/stack.ts` shared file without breaking other frameworks.
+</Callout>
+
+### Query key consistency
+
+`prefetchForRoute` uses the same query key shapes as `createBlogQueryKeys` (the HTTP client). The shared constants live in `@btst/stack/plugins/blog/api` as `BLOG_QUERY_KEYS` and `postsListDiscriminator`, so the two paths can never drift silently.

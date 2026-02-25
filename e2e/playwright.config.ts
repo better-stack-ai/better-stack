@@ -98,6 +98,7 @@ export default defineConfig({
 				"**/*.form-builder.spec.ts",
 				"**/*.ui-builder.spec.ts",
 				"**/*.kanban.spec.ts",
+				"**/*.ssg.spec.ts",
 			],
 		},
 		{

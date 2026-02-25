@@ -192,6 +192,30 @@ export async function getAllContentItems(
 }
 
 /**
+ * Retrieve a single content item by its ID.
+ * Returns null if the item is not found.
+ * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
+ *
+ * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * responsible for any access-control checks before invoking this function.
+ *
+ * @param adapter - The database adapter
+ * @param id - The content item ID (UUID)
+ */
+export async function getContentItemById(
+	adapter: Adapter,
+	id: string,
+): Promise<SerializedContentItemWithType | null> {
+	const item = await adapter.findOne<ContentItemWithType>({
+		model: "contentItem",
+		where: [{ field: "id", value: id, operator: "eq" as const }],
+		join: { contentType: true },
+	});
+	if (!item) return null;
+	return serializeContentItemWithType(item);
+}
+
+/**
  * Retrieve a single content item by its slug within a content type.
  * Returns null if the content type or item is not found.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.

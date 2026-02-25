@@ -1,6 +1,7 @@
 import {
 	defineClientPlugin,
 	createApiClient,
+	isConnectionError,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
@@ -178,6 +179,12 @@ function createBoardsLoader(config: KanbanClientConfig) {
 					await hooks.onLoadError(error, context);
 				}
 			} catch (error) {
+				if (isConnectionError(error)) {
+					console.warn(
+						"[btst/kanban] route.loader() failed — no server running at build time. " +
+							"Use myStack.api.kanban.prefetchForRoute() for SSG data prefetching.",
+					);
+				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
 				}
@@ -241,6 +248,12 @@ function createBoardLoader(boardId: string, config: KanbanClientConfig) {
 					await hooks.onLoadError(error, context);
 				}
 			} catch (error) {
+				if (isConnectionError(error)) {
+					console.warn(
+						"[btst/kanban] route.loader() failed — no server running at build time. " +
+							"Use myStack.api.kanban.prefetchForRoute() for SSG data prefetching.",
+					);
+				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
 				}

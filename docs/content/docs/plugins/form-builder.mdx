@@ -744,3 +744,78 @@ if (form) {
 | `getFormBySlug(adapter, slug)` | Returns a single form by slug, or `null` |
 | `getFormSubmissions(adapter, formId, params?)` | Returns paginated submissions for a form |
 
+## Static Site Generation (SSG)
+
+`route.loader()` makes HTTP requests to `apiBaseURL`, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
+
+### `prefetchForRoute(routeKey, queryClient, params?)`
+
+| Route key | Params required | Data prefetched |
+|---|---|---|
+| `"formList"` | — | First page of forms |
+| `"newForm"` | — | *(nothing)* |
+| `"editForm"` | `{ id: string }` | Single form by ID |
+| `"submissions"` | `{ formId: string }` | First page of submissions for a form |
+
+### Next.js example
+
+```tsx title="app/pages/forms/page.tsx"
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
+import { getOrCreateQueryClient } from "@/lib/query-client"
+import { getStackClient } from "@/lib/stack-client"
+import { myStack } from "@/lib/stack"
+import { metaElementsToObject, normalizePath } from "@btst/stack/client"
+import type { Metadata } from "next"
+
+export async function generateStaticParams() {
+  return [{}]
+}
+
+// export const revalidate = 3600 // uncomment for ISR
+
+export async function generateMetadata(): Promise<Metadata> {
+  const queryClient = getOrCreateQueryClient()
+  const stackClient = getStackClient(queryClient)
+  const route = stackClient.router.getRoute(normalizePath(["forms"]))
+  if (!route) return { title: "Forms" }
+  await myStack.api.formBuilder.prefetchForRoute("formList", queryClient)
+  return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
+}
+
+export default async function FormsListPage() {
+  const queryClient = getOrCreateQueryClient()
+  const stackClient = getStackClient(queryClient)
+  const route = stackClient.router.getRoute(normalizePath(["forms"]))
+  if (!route) return null
+  // Reads directly from DB — works at build time, no HTTP server required
+  await myStack.api.formBuilder.prefetchForRoute("formList", queryClient)
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <route.PageComponent />
+    </HydrationBoundary>
+  )
+}
+```
+
+### ISR cache invalidation
+
+If you use [Incremental Static Regeneration](https://nextjs.org/docs/app/building-your-application/data-fetching/incremental-static-regeneration), call `revalidatePath` inside the backend lifecycle hooks so Next.js regenerates the page on the next request:
+
+```ts title="lib/stack.ts"
+import { revalidatePath } from "next/cache"
+import type { FormBuilderBackendHooks } from "@btst/stack/plugins/form-builder"
+
+const formHooks: FormBuilderBackendHooks = {
+  onAfterFormCreated: async (form) => {
+    revalidatePath("/forms", "page")
+  },
+  onAfterFormUpdated: async (form) => {
+    revalidatePath("/forms", "page")
+  },
+}
+```
+
+### Query key consistency
+
+`prefetchForRoute` uses the same query key shapes as `createFormBuilderQueryKeys` (the HTTP client). The shared constants live in `@btst/stack/plugins/form-builder/api` as `FORM_QUERY_KEYS`, `formsListDiscriminator`, and `submissionsListDiscriminator`, so the two paths can never drift silently.
+

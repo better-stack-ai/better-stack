@@ -1287,3 +1287,89 @@ export async function generateStaticParams() {
 | `getAllContentTypes(adapter)` | Returns all registered content types, sorted by name |
 | `getAllContentItems(adapter, typeSlug, params?)` | Returns paginated items for a content type |
 | `getContentItemBySlug(adapter, typeSlug, slug)` | Returns a single item by slug, or `null` |
+
+## Static Site Generation (SSG)
+
+`route.loader()` makes HTTP requests to `apiBaseURL`, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
+
+### `prefetchForRoute(routeKey, queryClient, params?)`
+
+| Route key | Params required | Data prefetched |
+|---|---|---|
+| `"dashboard"` | — | All content types (with item counts) |
+| `"contentList"` | `{ typeSlug: string }` | Content types + first page of items |
+| `"newContent"` | — | All content types |
+| `"editContent"` | `{ typeSlug: string; id: string }` | Content types + specific item |
+
+<Callout type="info">
+`prefetchForRoute` calls `ensureSynced(adapter)` internally before any DB query. This function is idempotent — concurrent calls during `generateStaticParams` + `generateMetadata` + `page` all share the same Promise and the schema sync runs exactly once.
+</Callout>
+
+### Next.js example
+
+```tsx title="app/pages/cms/[typeSlug]/page.tsx"
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
+import { getOrCreateQueryClient } from "@/lib/query-client"
+import { getStackClient } from "@/lib/stack-client"
+import { myStack } from "@/lib/stack"
+import { metaElementsToObject, normalizePath } from "@btst/stack/client"
+import type { Metadata } from "next"
+
+// Generate one static page per content type slug
+export async function generateStaticParams() {
+  const types = await myStack.api.cms.getAllContentTypes()
+  return types.map((t) => ({ typeSlug: t.slug }))
+}
+
+export async function generateMetadata(
+  { params }: { params: { typeSlug: string } }
+): Promise<Metadata> {
+  const queryClient = getOrCreateQueryClient()
+  const stackClient = getStackClient(queryClient)
+  const route = stackClient.router.getRoute(normalizePath(["cms", params.typeSlug]))
+  if (!route) return { title: "Content" }
+  await myStack.api.cms.prefetchForRoute("contentList", queryClient, { typeSlug: params.typeSlug })
+  return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
+}
+
+export default async function ContentListPage({ params }: { params: { typeSlug: string } }) {
+  const queryClient = getOrCreateQueryClient()
+  const stackClient = getStackClient(queryClient)
+  const route = stackClient.router.getRoute(normalizePath(["cms", params.typeSlug]))
+  if (!route) return null
+  await myStack.api.cms.prefetchForRoute("contentList", queryClient, { typeSlug: params.typeSlug })
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <route.PageComponent />
+    </HydrationBoundary>
+  )
+}
+```
+
+### ISR cache invalidation
+
+If you use [Incremental Static Regeneration](https://nextjs.org/docs/app/building-your-application/data-fetching/incremental-static-regeneration), call `revalidatePath` inside the backend lifecycle hooks so Next.js regenerates the page on the next request:
+
+```ts title="lib/stack.ts"
+import { revalidatePath } from "next/cache"
+import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
+
+cmsBackendPlugin({
+  contentTypes: { ... },
+  hooks: {
+    onAfterCreate: async (item, context) => {
+      revalidatePath(`/cms/${context.typeSlug}`, "page")
+    },
+    onAfterUpdate: async (item, context) => {
+      revalidatePath(`/cms/${context.typeSlug}`, "page")
+    },
+    onAfterDelete: async (id, context) => {
+      revalidatePath(`/cms/${context.typeSlug}`, "page")
+    },
+  },
+})
+```
+
+### Query key consistency
+
+`prefetchForRoute` uses the same query key shapes as `createCMSQueryKeys` (the HTTP client). The shared constants live in `@btst/stack/plugins/cms/api` as `CMS_QUERY_KEYS` and `contentListDiscriminator`, so the two paths can never drift silently.

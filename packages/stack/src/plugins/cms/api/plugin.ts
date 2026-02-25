@@ -25,10 +25,37 @@ import {
 	getAllContentTypes,
 	getAllContentItems,
 	getContentItemBySlug,
+	getContentItemById,
 	serializeContentType,
 	serializeContentItem,
 	serializeContentItemWithType,
 } from "./getters";
+import type { QueryClient } from "@tanstack/react-query";
+import { CMS_QUERY_KEYS } from "./query-key-defs";
+
+/**
+ * Route keys for the CMS plugin — matches the keys returned by
+ * `stackClient.router.getRoute(path).routeKey`.
+ */
+export type CMSRouteKey =
+	| "dashboard"
+	| "contentList"
+	| "newContent"
+	| "editContent";
+
+interface CMSPrefetchForRoute {
+	(key: "dashboard" | "newContent", qc: QueryClient): Promise<void>;
+	(
+		key: "contentList",
+		qc: QueryClient,
+		params: { typeSlug: string },
+	): Promise<void>;
+	(
+		key: "editContent",
+		qc: QueryClient,
+		params: { typeSlug: string; id: string },
+	): Promise<void>;
+}
 
 /**
  * Sync content types from config to database
@@ -443,6 +470,79 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 		return syncPromise;
 	};
 
+	const getContentTypesWithCounts = async (adapter: Adapter) => {
+		const contentTypes = await getAllContentTypes(adapter);
+		return Promise.all(
+			contentTypes.map(async (ct) => {
+				const count: number = await adapter.count({
+					model: "contentItem",
+					where: [
+						{ field: "contentTypeId", value: ct.id, operator: "eq" as const },
+					],
+				});
+				return { ...ct, itemCount: count };
+			}),
+		);
+	};
+
+	const createCMSPrefetchForRoute = (adapter: Adapter): CMSPrefetchForRoute => {
+		return async function prefetchForRoute(
+			key: CMSRouteKey,
+			qc: QueryClient,
+			params?: Record<string, string>,
+		): Promise<void> {
+			// Sync content types once at the top — idempotent for concurrent SSG calls
+			await ensureSynced(adapter);
+
+			switch (key) {
+				case "dashboard":
+				case "newContent": {
+					const typesWithCounts = await getContentTypesWithCounts(adapter);
+					qc.setQueryData(CMS_QUERY_KEYS.typesList(), typesWithCounts);
+					break;
+				}
+				case "contentList": {
+					const typeSlug = params?.typeSlug ?? "";
+					const [contentTypes, contentItems] = await Promise.all([
+						getContentTypesWithCounts(adapter),
+						getAllContentItems(adapter, typeSlug, { limit: 20, offset: 0 }),
+					]);
+					qc.setQueryData(CMS_QUERY_KEYS.typesList(), contentTypes);
+					qc.setQueryData(
+						CMS_QUERY_KEYS.contentList({ typeSlug, limit: 20, offset: 0 }),
+						{
+							pages: [
+								{
+									items: contentItems.items,
+									total: contentItems.total,
+									limit: contentItems.limit ?? 20,
+									offset: contentItems.offset ?? 0,
+								},
+							],
+							pageParams: [0],
+						},
+					);
+					break;
+				}
+				case "editContent": {
+					const typeSlug = params?.typeSlug ?? "";
+					const id = params?.id ?? "";
+					const [contentTypes, item] = await Promise.all([
+						getContentTypesWithCounts(adapter),
+						id ? getContentItemById(adapter, id) : Promise.resolve(null),
+					]);
+					qc.setQueryData(CMS_QUERY_KEYS.typesList(), contentTypes);
+					if (id) {
+						qc.setQueryData(CMS_QUERY_KEYS.contentDetail(typeSlug, id), item);
+					}
+					break;
+				}
+				default:
+					break;
+			}
+		} as CMSPrefetchForRoute;
+	};
+
 	return defineBackendPlugin({
 		name: "cms",
 
@@ -464,6 +564,11 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 				await ensureSynced(adapter);
 				return getContentItemBySlug(adapter, contentTypeSlug, slug);
 			},
+			getContentItemById: async (id: string) => {
+				await ensureSynced(adapter);
+				return getContentItemById(adapter, id);
+			},
+			prefetchForRoute: createCMSPrefetchForRoute(adapter),
 		}),
 
 		routes: (adapter: Adapter) => {

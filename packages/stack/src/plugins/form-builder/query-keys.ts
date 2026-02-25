@@ -10,6 +10,10 @@ import type {
 	PaginatedFormSubmissions,
 	SerializedFormSubmissionWithData,
 } from "./types";
+import {
+	formsListDiscriminator,
+	submissionsListDiscriminator,
+} from "./api/query-key-defs";
 
 interface FormListParams {
 	status?: "active" | "inactive" | "archived";
@@ -75,7 +79,7 @@ function createFormsQueries(
 ) {
 	return createQueryKeys("forms", {
 		list: (params: FormListParams = {}) => ({
-			queryKey: ["list", params],
+			queryKey: ["list", formsListDiscriminator(params)],
 			queryFn: async () => {
 				try {
 					const response: unknown = await client("/forms", {
@@ -147,7 +151,7 @@ function createSubmissionsQueries(
 ) {
 	return createQueryKeys("formSubmissions", {
 		list: (params: SubmissionListParams) => ({
-			queryKey: [params],
+			queryKey: [submissionsListDiscriminator(params)],
 			queryFn: async () => {
 				try {
 					const response: unknown = await client("/forms/:formId/submissions", {

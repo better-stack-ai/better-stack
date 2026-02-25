@@ -23,12 +23,101 @@ import {
 import { slugify, extractIpAddress, extractUserAgent } from "../utils";
 import {
 	getAllForms,
+	getFormById as getFormByIdFromDb,
 	getFormBySlug as getFormBySlugFromDb,
 	getFormSubmissions,
 	serializeForm,
 	serializeFormSubmission,
 	serializeFormSubmissionWithData,
 } from "./getters";
+import { FORM_QUERY_KEYS } from "./query-key-defs";
+import type { QueryClient } from "@tanstack/react-query";
+
+/**
+ * Route keys for the Form Builder plugin — matches the keys returned by
+ * `stackClient.router.getRoute(path).routeKey`.
+ */
+export type FormBuilderRouteKey =
+	| "formList"
+	| "newForm"
+	| "editForm"
+	| "submissions";
+
+interface FormBuilderPrefetchForRoute {
+	(key: "formList" | "newForm", qc: QueryClient): Promise<void>;
+	(
+		key: "editForm" | "submissions",
+		qc: QueryClient,
+		params: { id: string },
+	): Promise<void>;
+}
+
+function createFormBuilderPrefetchForRoute(
+	adapter: Parameters<typeof getAllForms>[0],
+): FormBuilderPrefetchForRoute {
+	return async function prefetchForRoute(
+		key: FormBuilderRouteKey,
+		qc: QueryClient,
+		params?: Record<string, string>,
+	): Promise<void> {
+		switch (key) {
+			case "formList": {
+				const result = await getAllForms(adapter, { limit: 20, offset: 0 });
+				qc.setQueryData(FORM_QUERY_KEYS.formsList({ limit: 20, offset: 0 }), {
+					pages: [
+						{
+							items: result.items,
+							total: result.total,
+							limit: result.limit ?? 20,
+							offset: result.offset ?? 0,
+						},
+					],
+					pageParams: [0],
+				});
+				break;
+			}
+			case "editForm": {
+				const id = params?.id ?? "";
+				if (id) {
+					const form = await getFormByIdFromDb(adapter, id);
+					qc.setQueryData(FORM_QUERY_KEYS.formById(id), form);
+				}
+				break;
+			}
+			case "submissions": {
+				const id = params?.id ?? "";
+				if (id) {
+					const [form, submissionsResult] = await Promise.all([
+						getFormByIdFromDb(adapter, id),
+						getFormSubmissions(adapter, id, { limit: 20, offset: 0 }),
+					]);
+					qc.setQueryData(FORM_QUERY_KEYS.formById(id), form);
+					qc.setQueryData(
+						FORM_QUERY_KEYS.submissionsList({
+							formId: id,
+							limit: 20,
+							offset: 0,
+						}),
+						{
+							pages: [
+								{
+									items: submissionsResult.items,
+									total: submissionsResult.total,
+									limit: submissionsResult.limit ?? 20,
+									offset: submissionsResult.offset ?? 0,
+								},
+							],
+							pageParams: [0],
+						},
+					);
+				}
+				break;
+			}
+			default:
+				break;
+		}
+	} as FormBuilderPrefetchForRoute;
+}
 
 /**
  * Form Builder backend plugin
@@ -47,11 +136,13 @@ export const formBuilderBackendPlugin = (
 		api: (adapter) => ({
 			getAllForms: (params?: Parameters<typeof getAllForms>[1]) =>
 				getAllForms(adapter, params),
+			getFormById: (id: string) => getFormByIdFromDb(adapter, id),
 			getFormBySlug: (slug: string) => getFormBySlugFromDb(adapter, slug),
 			getFormSubmissions: (
 				formId: string,
 				params?: Parameters<typeof getFormSubmissions>[2],
 			) => getFormSubmissions(adapter, formId, params),
+			prefetchForRoute: createFormBuilderPrefetchForRoute(adapter),
 		}),
 
 		routes: (adapter: Adapter) => {

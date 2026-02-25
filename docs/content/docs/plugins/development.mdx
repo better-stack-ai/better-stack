@@ -21,7 +21,10 @@ You can create plugins **inside your project** (like the [Todo example](#in-proj
 ```
 your-plugin/
 ├── api/
-│   └── backend.ts      # Backend plugin with API endpoints
+│   ├── backend.ts          # Backend plugin (defineBackendPlugin)
+│   ├── getters.ts          # Pure DB functions — no HTTP context
+│   ├── query-key-defs.ts   # Shared query key shapes (prevents SSG/SSR drift)
+│   └── serializers.ts      # Convert Date fields to strings for the query cache
 ├── client/
 │   ├── client.tsx      # Client plugin with routes
 │   ├── hooks.tsx       # React Query hooks
@@ -50,7 +53,8 @@ import {
 import { 
   defineClientPlugin,   // Create a client plugin
   createRoute,          // Define a route
-  createApiClient       // Type-safe API client
+  createApiClient,      // Type-safe API client
+  isConnectionError     // Detect build-time "no server" fetch failures
 } from "@btst/stack/plugins/client"
 ```
 
@@ -436,26 +440,38 @@ export const todosClientPlugin = (config: TodosClientConfig) =>
 
 ### SSR Data Loaders
 
-Loaders prefetch data during server-side rendering:
+Loaders prefetch data during server-side rendering. Always add an `isConnectionError` check in the `catch` block so developers get an actionable warning if they call `route.loader()` during `next build` when no HTTP server is running (instead of a silent empty page):
 
 ```typescript
+import { createApiClient, isConnectionError } from "@btst/stack/plugins/client"
+
 function todosLoader(config: TodosClientConfig) {
   return async () => {
     // Only run on server
     if (typeof window === "undefined") {
       const { queryClient, apiBasePath, apiBaseURL } = config
       
-      await queryClient.prefetchQuery({
-        queryKey: ["todos"],
-        queryFn: async () => {
-          const client = createApiClient<TodosApiRouter>({
-            baseURL: apiBaseURL,
-            basePath: apiBasePath,
-          })
-          const response = await client("/todos", { method: "GET" })
-          return response.data
-        },
-      })
+      try {
+        await queryClient.prefetchQuery({
+          queryKey: ["todos"],
+          queryFn: async () => {
+            const client = createApiClient<TodosApiRouter>({
+              baseURL: apiBaseURL,
+              basePath: apiBasePath,
+            })
+            const response = await client("/todos", { method: "GET" })
+            return response.data
+          },
+        })
+      } catch (error) {
+        if (isConnectionError(error)) {
+          console.warn(
+            "[your-plugin] route.loader() failed — no server running at build time. " +
+            "Use myStack.api.todos.prefetchForRoute() for SSG data prefetching."
+          )
+        }
+        // Don't re-throw — let Error Boundaries handle it during render
+      }
     }
   }
 }
@@ -482,6 +498,174 @@ function createTodosMeta(config: TodosClientConfig, path: string) {
   }
 }
 ```
+
+### Static Site Generation (SSG)
+
+`route.loader()` makes HTTP requests that **fail silently** during `next build` because no HTTP server is running. Plugins that support SSG must expose a `prefetchForRoute` method on the `api` factory so consumers can seed the query cache directly from the database at build time.
+
+#### 1. Shared query key constants (`api/query-key-defs.ts`)
+
+Create a file that both `query-keys.ts` (the HTTP client path) and `prefetchForRoute` (the DB path) import from. This prevents the two paths drifting out of sync silently:
+
+```typescript
+// api/query-key-defs.ts
+export function todosListDiscriminator(params?: { limit?: number }) {
+  return { limit: params?.limit ?? 20 }
+}
+
+export const TODO_QUERY_KEYS = {
+  list: (params?: { limit?: number }) =>
+    ["todos", "list", todosListDiscriminator(params)] as const,
+  detail: (id: string) => ["todos", "detail", id] as const,
+}
+```
+
+Import `todosListDiscriminator` in `query-keys.ts` so both paths use the identical key shape.
+
+#### 2. Serializers (`api/serializers.ts`)
+
+DB getters return `Date` objects; the HTTP path returns ISO strings. Always serialize before calling `setQueryData`:
+
+```typescript
+// api/serializers.ts
+import type { Todo } from "../types"
+
+export function serializeTodo(todo: Todo) {
+  return {
+    ...todo,
+    createdAt: todo.createdAt.toISOString(),
+  }
+}
+```
+
+#### 3. `RouteKey` type and `prefetchForRoute` overloads (`api/backend.ts`)
+
+Use typed function overloads so TypeScript enforces the correct `params` per route:
+
+```typescript
+import type { QueryClient } from "@tanstack/react-query"
+import { TODO_QUERY_KEYS } from "./query-key-defs"
+import { serializeTodo } from "./serializers"
+import { listTodos, getTodoById } from "./getters"
+
+export type TodosRouteKey = "list" | "detail" | "new"
+
+interface TodosPrefetchForRoute {
+  (key: "list" | "new", qc: QueryClient): Promise<void>
+  (key: "detail", qc: QueryClient, params: { id: string }): Promise<void>
+}
+
+function createTodosPrefetchForRoute(adapter: Adapter): TodosPrefetchForRoute {
+  return async function prefetchForRoute(
+    key: TodosRouteKey,
+    qc: QueryClient,
+    params?: Record<string, string>,
+  ): Promise<void> {
+    switch (key) {
+      case "list": {
+        const todos = await listTodos(adapter)
+        // Lists backed by useInfiniteQuery need the { pages, pageParams } shape
+        qc.setQueryData(TODO_QUERY_KEYS.list(), {
+          pages: [todos.map(serializeTodo)],
+          pageParams: [0],
+        })
+        break
+      }
+      case "detail": {
+        const todo = await getTodoById(adapter, params!.id)
+        if (todo) qc.setQueryData(TODO_QUERY_KEYS.detail(params!.id), serializeTodo(todo))
+        break
+      }
+      case "new":
+        break // no data needed
+    }
+  } as TodosPrefetchForRoute
+}
+
+export const todosBackendPlugin = defineBackendPlugin({
+  name: "todos",
+  dbPlugin: dbSchema,
+  api: (adapter) => ({
+    listTodos: () => listTodos(adapter),
+    getTodoById: (id: string) => getTodoById(adapter, id),
+    prefetchForRoute: createTodosPrefetchForRoute(adapter), // ← SSG entry point
+  }),
+  routes: (adapter) => { /* ... HTTP endpoints */ },
+})
+```
+
+#### 4. SSG `page.tsx` (consumer side, Next.js App Router)
+
+The consumer creates a dedicated static page outside `[[...all]]/` that calls `prefetchForRoute` instead of `route.loader()`:
+
+```tsx
+// app/pages/todos/page.tsx
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
+import { notFound } from "next/navigation"
+import { getOrCreateQueryClient } from "@/lib/query-client"
+import { getStackClient } from "@/lib/stack-client"
+import { myStack } from "@/lib/stack"
+import { metaElementsToObject, normalizePath } from "@btst/stack/client"
+import type { Metadata } from "next"
+
+export async function generateStaticParams() { return [{}] }
+// export const revalidate = 3600  // uncomment for ISR
+
+export async function generateMetadata(): Promise<Metadata> {
+  const queryClient = getOrCreateQueryClient()
+  const stackClient = getStackClient(queryClient)
+  const route = stackClient.router.getRoute(normalizePath(["todos"]))
+  if (!route) return { title: "Todos" }
+  await myStack.api.todos.prefetchForRoute("list", queryClient)
+  return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
+}
+
+export default async function TodosPage() {
+  const queryClient = getOrCreateQueryClient()
+  const stackClient = getStackClient(queryClient)
+  const route = stackClient.router.getRoute(normalizePath(["todos"]))
+  if (!route) notFound()
+  // Direct DB read — no HTTP server required at build time
+  await myStack.api.todos.prefetchForRoute("list", queryClient)
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <route.PageComponent />
+    </HydrationBoundary>
+  )
+}
+```
+
+<Callout type="info">
+The shared `StackProvider` layout must live at `app/pages/layout.tsx` (not inside `[[...all]]/layout.tsx`) so it applies to both the catch-all routes and these specific SSG pages.
+</Callout>
+
+#### 5. ISR cache invalidation
+
+If you enable [Incremental Static Regeneration](https://nextjs.org/docs/app/building-your-application/data-fetching/incremental-static-regeneration) (`export const revalidate = 3600`), the cached page must be purged whenever the underlying data changes. Wire up `revalidatePath` (or `revalidateTag`) inside the backend plugin hooks:
+
+```ts title="lib/stack.ts"
+import { revalidatePath } from "next/cache"
+
+const myPlugin = myBackendPlugin({
+  hooks: {
+    onAfterCreate: async (item) => {
+      revalidatePath("/todos")
+    },
+    onAfterUpdate: async (item) => {
+      revalidatePath("/todos")
+    },
+    onAfterDelete: async (id) => {
+      revalidatePath("/todos")
+    },
+  },
+})
+```
+
+<Callout type="info">
+`revalidatePath` / `revalidateTag` are Next.js APIs imported from `"next/cache"`. They are no-ops outside of a Next.js runtime, so it is safe to call them from a shared `lib/stack.ts` without breaking non-Next.js frameworks.
+</Callout>
+
+---
 
 ### Client Hooks
 
@@ -1044,6 +1228,9 @@ Features:
 - Multiple related models (posts, tags, postTags)
 - Complex queries with pagination, filtering, search
 - SSR data loading with React Query
+- **SSG support** via `prefetchForRoute` — seeds the query cache at build time without HTTP
+- `api/query-key-defs.ts` — shared key constants used by both `query-keys.ts` and `prefetchForRoute`
+- `api/serializers.ts` — `Date` → ISO string conversion for consistent cache hydration
 - SEO meta generation
 - Sitemap generation
 - Authorization and lifecycle hooks
