@@ -660,6 +660,33 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
 }
 ```
 
+### ISR cache invalidation
+
+If you use [Incremental Static Regeneration](https://nextjs.org/docs/app/building-your-application/data-fetching/incremental-static-regeneration), the static page cache must be purged whenever content changes. Wire up `revalidatePath` (or `revalidateTag`) inside the backend lifecycle hooks so Next.js regenerates the page on the next request:
+
+```ts title="lib/stack.ts"
+import { revalidatePath } from "next/cache"
+import type { BlogBackendHooks } from "@btst/stack/plugins/blog"
+
+const blogHooks: BlogBackendHooks = {
+  onPostCreated: async (post) => {
+    revalidatePath("/blog")
+    revalidatePath(`/blog/${post.slug}`)
+  },
+  onPostUpdated: async (post) => {
+    revalidatePath("/blog")
+    revalidatePath(`/blog/${post.slug}`)
+  },
+  onPostDeleted: async (postId) => {
+    revalidatePath("/blog")
+  },
+}
+```
+
+<Callout type="info">
+`revalidatePath` / `revalidateTag` are Next.js APIs — import them from `"next/cache"`. They are no-ops outside of a Next.js runtime, so this pattern is safe to use in the `lib/stack.ts` shared file without breaking other frameworks.
+</Callout>
+
 ### Query key consistency
 
 `prefetchForRoute` uses the same query key shapes as `createBlogQueryKeys` (the HTTP client). The shared constants live in `@btst/stack/plugins/blog/api` as `BLOG_QUERY_KEYS` and `postsListDiscriminator`, so the two paths can never drift silently.

@@ -797,6 +797,24 @@ export default async function FormsListPage() {
 }
 ```
 
+### ISR cache invalidation
+
+If you use [Incremental Static Regeneration](https://nextjs.org/docs/app/building-your-application/data-fetching/incremental-static-regeneration), call `revalidatePath` inside the backend lifecycle hooks so Next.js regenerates the page on the next request:
+
+```ts title="lib/stack.ts"
+import { revalidatePath } from "next/cache"
+import type { FormBuilderBackendHooks } from "@btst/stack/plugins/form-builder"
+
+const formHooks: FormBuilderBackendHooks = {
+  onAfterFormCreated: async (form) => {
+    revalidatePath("/forms", "page")
+  },
+  onAfterFormUpdated: async (form) => {
+    revalidatePath("/forms", "page")
+  },
+}
+```
+
 ### Query key consistency
 
 `prefetchForRoute` uses the same query key shapes as `createFormBuilderQueryKeys` (the HTTP client). The shared constants live in `@btst/stack/plugins/form-builder/api` as `FORM_QUERY_KEYS`, `formsListDiscriminator`, and `submissionsListDiscriminator`, so the two paths can never drift silently.

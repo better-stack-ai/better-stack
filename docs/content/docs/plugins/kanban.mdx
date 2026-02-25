@@ -832,6 +832,27 @@ export default async function KanbanBoardsPage() {
 }
 ```
 
+### ISR cache invalidation
+
+If you use [Incremental Static Regeneration](https://nextjs.org/docs/app/building-your-application/data-fetching/incremental-static-regeneration), call `revalidatePath` inside the backend lifecycle hooks so Next.js regenerates the page on the next request:
+
+```ts title="lib/stack.ts"
+import { revalidatePath } from "next/cache"
+import type { KanbanBackendHooks } from "@btst/stack/plugins/kanban/api"
+
+const kanbanHooks: KanbanBackendHooks = {
+  onBoardCreated: async (board) => {
+    revalidatePath("/kanban")
+  },
+  onBoardUpdated: async (board) => {
+    revalidatePath("/kanban")
+  },
+  onBoardDeleted: async (boardId) => {
+    revalidatePath("/kanban")
+  },
+}
+```
+
 ### Query key consistency
 
 `prefetchForRoute` uses the same query key shapes as `createKanbanQueryKeys` (the HTTP client). The shared constants live in `@btst/stack/plugins/kanban/api` as `KANBAN_QUERY_KEYS` and `boardsListDiscriminator`, so the two paths can never drift silently.

@@ -1346,6 +1346,30 @@ export default async function ContentListPage({ params }: { params: { typeSlug: 
 }
 ```
 
+### ISR cache invalidation
+
+If you use [Incremental Static Regeneration](https://nextjs.org/docs/app/building-your-application/data-fetching/incremental-static-regeneration), call `revalidatePath` inside the backend lifecycle hooks so Next.js regenerates the page on the next request:
+
+```ts title="lib/stack.ts"
+import { revalidatePath } from "next/cache"
+import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
+
+cmsBackendPlugin({
+  contentTypes: { ... },
+  hooks: {
+    onAfterCreate: async (item, context) => {
+      revalidatePath(`/cms/${context.typeSlug}`, "page")
+    },
+    onAfterUpdate: async (item, context) => {
+      revalidatePath(`/cms/${context.typeSlug}`, "page")
+    },
+    onAfterDelete: async (id, context) => {
+      revalidatePath(`/cms/${context.typeSlug}`, "page")
+    },
+  },
+})
+```
+
 ### Query key consistency
 
 `prefetchForRoute` uses the same query key shapes as `createCMSQueryKeys` (the HTTP client). The shared constants live in `@btst/stack/plugins/cms/api` as `CMS_QUERY_KEYS` and `contentListDiscriminator`, so the two paths can never drift silently.
