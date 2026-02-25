@@ -1,13 +1,12 @@
 /**
- * SSG example: CMS content list page
+ * SSG example: CMS content list page with Next.js cache tags
  *
- * Generates a static page for every registered content type at build time.
- * `generateStaticParams` fetches all content type slugs directly from the DB.
+ * Generates a static page for each registered content type at build time.
+ * Data is tagged with `'ssg-cms-${typeSlug}'` so that mutations via the
+ * backend plugin hooks (lib/stack.ts → revalidatePath) trigger regeneration
+ * on the next request.
  *
- * Note: `prefetchForRoute("contentList")` calls `ensureSynced()` once at the
- * top. During concurrent SSG (generateStaticParams + generateMetadata + page),
- * `ensureSynced` is idempotent — subsequent calls reuse the same Promise so
- * schema sync only runs once per build process.
+ * ISR (`revalidate = 3600`) provides a time-based fallback.
  */
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
 import { notFound } from "next/navigation"
@@ -19,10 +18,10 @@ import type { Metadata } from "next"
 
 export async function generateStaticParams() {
     const contentTypes = await myStack.api.cms.getAllContentTypes()
-    return contentTypes.map((ct) => ({ typeSlug: ct.slug }))
+    return contentTypes.map((ct: { slug: string }) => ({ typeSlug: ct.slug }))
 }
 
-// export const revalidate = 3600 // uncomment to enable ISR
+export const revalidate = 3600 // ISR: regenerate at most once per hour
 
 export async function generateMetadata({
     params,
@@ -38,7 +37,7 @@ export async function generateMetadata({
     return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
 }
 
-export default async function CMSContentListPage({
+export default async function SsgCmsContentListPage({
     params,
 }: {
     params: Promise<{ typeSlug: string }>

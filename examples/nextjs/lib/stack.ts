@@ -12,6 +12,7 @@ import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
 import { openai } from "@ai-sdk/openai"
 import { tool } from "ai"
 import { z } from "zod"
+import { revalidateTag, revalidatePath } from "next/cache"
 
 // Import shared CMS schemas - these are used for both backend validation and client type inference
 import { ProductSchema, TestimonialSchema, CategorySchema, ResourceSchema, CommentSchema } from "./cms-schemas"
@@ -71,12 +72,18 @@ const blogHooks: BlogBackendHooks = {
     // Lifecycle hooks - perform actions after operations
     onPostCreated: async (post) => {
         console.log("Post created:", post.id, post.title);
+        // Purge the ISR cache so the next request regenerates with fresh data
+        revalidatePath("/pages/ssg-blog");
+        revalidatePath(`/pages/ssg-blog/${post.slug}`);
     },
     onPostUpdated: async (post) => {
         console.log("Post updated:", post.id, post.title);
+        revalidatePath("/pages/ssg-blog");
+        revalidatePath(`/pages/ssg-blog/${post.slug}`);
     },
     onPostDeleted: async (postId) => {
         console.log("Post deleted:", postId);
+        revalidatePath("/pages/ssg-blog");
     },
     onPostsRead: async (posts) => {
         console.log("Posts read:", posts.length, "items");
@@ -97,8 +104,14 @@ const blogHooks: BlogBackendHooks = {
     },
 };
 
-export const myStack = stack({
-    basePath: "/api/data",
+// Use a global singleton to share the same myStack (and in-memory adapter)
+// across Next.js module boundaries (API routes vs page/SSG bundles are bundled
+// separately, but all run in the same Node.js process).
+const globalForStack = global as typeof global & { __btst_stack__?: ReturnType<typeof stack> };
+
+function createStack() {
+    return stack({
+        basePath: "/api/data",
     plugins: {
         todos: todosBackendPlugin,
         blog: blogBackendPlugin(blogHooks),
@@ -168,12 +181,15 @@ export const myStack = stack({
             hooks: {
                 onAfterCreate: async (item, context) => {
                     console.log("CMS item created:", context.typeSlug, item.slug);
+                    revalidatePath(`/pages/ssg-cms/${context.typeSlug}`, "page");
                 },
                 onAfterUpdate: async (item, context) => {
                     console.log("CMS item updated:", context.typeSlug, item.slug);
+                    revalidatePath(`/pages/ssg-cms/${context.typeSlug}`, "page");
                 },
                 onAfterDelete: async (id, context) => {
                     console.log("CMS item deleted:", context.typeSlug, id);
+                    revalidatePath(`/pages/ssg-cms/${context.typeSlug}`, "page");
                 },
             },
         }),
@@ -182,9 +198,11 @@ export const myStack = stack({
             hooks: {
                 onAfterFormCreated: async (form, context) => {
                     console.log("Form created:", form.name, form.slug);
+                    revalidatePath("/pages/ssg-forms", "page");
                 },
                 onAfterFormUpdated: async (form, context) => {
                     console.log("Form updated:", form.name);
+                    revalidatePath("/pages/ssg-forms", "page");
                 },
                 onAfterSubmission: async (submission, form, context) => {
                     console.log("Form submission received:", form.name, submission.id);
@@ -212,10 +230,14 @@ export const myStack = stack({
             },
             onBoardCreated: async (board, context) => {
                 console.log("Board created:", board.id, board.name);
+                revalidatePath("/pages/ssg-kanban", "page");
             },
         }),
     },
-    adapter: (db) => createMemoryAdapter(db)({})
-})
+        adapter: (db) => createMemoryAdapter(db)({})
+    })
+}
+
+export const myStack = globalForStack.__btst_stack__ ??= createStack()
 
 export const { handler, dbSchema } = myStack

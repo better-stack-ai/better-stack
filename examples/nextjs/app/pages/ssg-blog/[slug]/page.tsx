@@ -1,24 +1,30 @@
 /**
- * SSG example: Individual blog post page
+ * SSG example: Individual blog post page with ISR + on-demand revalidation
  *
- * Generates a static page for every published blog post at build time.
- * `generateStaticParams` fetches all published slugs directly from the DB
- * via the server-side API so no dev server needs to be running.
+ * Uses `prefetchForRoute` (direct DB access). `myStack` is stored as a global
+ * singleton in `lib/stack.ts` so all Next.js module bundles share the same
+ * in-memory adapter instance — the post created via the API is visible here.
+ *
+ * New slugs are rendered on-demand (dynamicParams: true), so posts created
+ * after the build are served fresh on their first visit.
+ *
+ * Backend plugin hooks in `lib/stack.ts` call `revalidatePath` on
+ * create/update/delete to purge the ISR cache on demand.
  */
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
 import { notFound } from "next/navigation"
 import { getOrCreateQueryClient } from "@/lib/query-client"
 import { getStackClient } from "@/lib/stack-client"
 import { myStack } from "@/lib/stack"
-import { metaElementsToObject, normalizePath } from "@btst/stack/client"
+import { normalizePath, metaElementsToObject } from "@btst/stack/client"
 import type { Metadata } from "next"
 
 export async function generateStaticParams() {
     const result = await myStack.api.blog.getAllPosts({ published: true })
-    return result.items.map((post) => ({ slug: post.slug }))
+    return result.items.map((post: { slug: string }) => ({ slug: post.slug }))
 }
 
-// export const revalidate = 3600 // uncomment to enable ISR
+export const revalidate = 3600
 
 export async function generateMetadata({
     params,
@@ -34,7 +40,7 @@ export async function generateMetadata({
     return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
 }
 
-export default async function BlogPostPage({
+export default async function SsgBlogPostPage({
     params,
 }: {
     params: Promise<{ slug: string }>

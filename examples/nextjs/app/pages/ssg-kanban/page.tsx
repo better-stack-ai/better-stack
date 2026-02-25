@@ -1,13 +1,12 @@
 /**
- * SSG example: Blog list page
+ * SSG example: Kanban boards list page with ISR
  *
- * This page demonstrates how to statically generate the blog list with
- * data pre-seeded into the query cache via the server-side API.
+ * Statically generates the kanban boards list at build time.
+ * When a board is created/updated/deleted, the backend plugin hooks in
+ * lib/stack.ts call revalidatePath('/pages/ssg-kanban', 'page') to
+ * trigger regeneration on the next request.
  *
- * Using `prefetchForRoute` bypasses the HTTP layer so this page builds
- * correctly even when no dev server is running (i.e. during `next build`).
- *
- * To enable ISR, uncomment the `revalidate` export below.
+ * ISR (`revalidate = 3600`) provides a time-based fallback.
  */
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
 import { notFound } from "next/navigation"
@@ -17,29 +16,27 @@ import { myStack } from "@/lib/stack"
 import { metaElementsToObject, normalizePath } from "@btst/stack/client"
 import type { Metadata } from "next"
 
-// Generate at build time — the blog list is a single static page
 export async function generateStaticParams() {
     return [{}]
 }
 
-// export const revalidate = 3600 // uncomment to enable ISR (1 hour)
+export const revalidate = 3600 // ISR: regenerate at most once per hour
 
 export async function generateMetadata(): Promise<Metadata> {
     const queryClient = getOrCreateQueryClient()
     const stackClient = getStackClient(queryClient)
-    const route = stackClient.router.getRoute(normalizePath(["blog"]))
-    if (!route) return { title: "Blog" }
-    await myStack.api.blog.prefetchForRoute("posts", queryClient)
+    const route = stackClient.router.getRoute(normalizePath(["kanban"]))
+    if (!route) return { title: "Kanban Boards" }
+    await myStack.api.kanban.prefetchForRoute("boards", queryClient)
     return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
 }
 
-export default async function BlogListPage() {
+export default async function SsgKanbanBoardsPage() {
     const queryClient = getOrCreateQueryClient()
     const stackClient = getStackClient(queryClient)
-    const route = stackClient.router.getRoute(normalizePath(["blog"]))
+    const route = stackClient.router.getRoute(normalizePath(["kanban"]))
     if (!route) notFound()
-    // Prefetch directly from the DB — no HTTP request needed at build time
-    await myStack.api.blog.prefetchForRoute("posts", queryClient)
+    await myStack.api.kanban.prefetchForRoute("boards", queryClient)
     return (
         <HydrationBoundary state={dehydrate(queryClient)}>
             {route.PageComponent && <route.PageComponent />}

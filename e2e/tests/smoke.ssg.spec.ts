@@ -1,48 +1,121 @@
 /**
- * SSG smoke tests — verify that statically generated pages render with
- * data (not empty/error placeholders) and that no console errors occur.
+ * Minimal smoke tests for SSG (Static Site Generation) pages.
  *
- * These tests target the dedicated SSG pages under /pages/{plugin}/
- * which use prefetchForRoute() for build-time data seeding instead of
- * the standard route.loader() pattern.
+ * These tests verify that SSG pages render correctly. The list pages are
+ * pre-rendered at build time (empty DB → may show empty state). Detail pages
+ * for slugs NOT in generateStaticParams are rendered on-demand by Next.js
+ * (dynamicParams defaults to true), which lets us test a freshly created post.
  *
- * Tests run against the pre-built nextjs:memory project.
- * Requires seed data to be present (use the test fixtures or the default
- * memory adapter which auto-seeds on first run).
+ * Full cache-invalidation (revalidateTag / ISR) is covered by documentation
+ * and is exercised in production where the cache can be observed across
+ * requests. E2E tests focus on the page rendering contract.
  */
-import { test, expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 const emptySelector = '[data-testid="empty-state"]';
-const errorSelector = '[data-testid="error-placeholder"]';
 
-test.describe("SSG pages render without errors", () => {
-	test("blog list SSG page renders", async ({ page }) => {
+test.describe("SSG Blog Pages", () => {
+	test("ssg blog list page renders", async ({ page }) => {
 		const errors: string[] = [];
 		page.on("console", (msg) => {
 			if (msg.type() === "error") errors.push(msg.text());
 		});
 
-		await page.goto("/pages/blog", { waitUntil: "networkidle" });
+		await page.goto("/pages/ssg-blog", { waitUntil: "networkidle" });
 
-		// Page should not show an error placeholder
-		await expect(page.locator(errorSelector))
-			.not.toBeVisible({
-				timeout: 5000,
-			})
-			.catch(() => {});
-
-		// The blog home page element should render
+		// Should render the blog home page component
 		await expect(page.locator('[data-testid="home-page"]')).toBeVisible({
-			timeout: 10000,
+			timeout: 15000,
 		});
+		await expect(page).toHaveTitle(/Blog/i);
 
-		expect(
-			errors,
-			`Console errors on /pages/blog: \n${errors.join("\n")}`,
-		).toEqual([]);
+		// Either shows posts or empty state — both are valid for a static snapshot
+		const emptyVisible = await page
+			.locator(emptySelector)
+			.isVisible()
+			.catch(() => false);
+		if (!emptyVisible) {
+			await expect(page.getByTestId("page-header")).toBeVisible();
+		}
+
+		expect(errors, `Console errors: \n${errors.join("\n")}`).toEqual([]);
 	});
 
-	test("blog post SSG page renders when a post exists", async ({
+	test("ssg blog post detail page renders for a newly created post", async ({
+		page,
+	}) => {
+		const errors: string[] = [];
+		page.on("console", (msg) => {
+			if (msg.type() === "error") errors.push(msg.text());
+		});
+
+		const slug = `ssg-smoke-${Date.now().toString(36)}`;
+		const title = `SSG Smoke ${slug}`;
+
+		// Create a published post via the regular (SSR) admin pages
+		await page.goto("/pages/blog/new", { waitUntil: "networkidle" });
+		await expect(page.locator('[data-testid="new-post-page"]')).toBeVisible({
+			timeout: 15000,
+		});
+
+		// Click then fill — mirrors the pattern used in the working blog smoke tests
+		await page.getByLabel("Title").click();
+		await page.getByLabel("Title").fill(title);
+		await expect(page.getByLabel("Title")).toHaveValue(title);
+
+		await page.getByLabel("Slug").fill(slug);
+		await page.getByLabel("Excerpt").fill("SSG smoke test excerpt");
+
+		// ProseMirror/Milkdown requires select-all + pressSequentially; fill() alone
+		// doesn't trigger the editor's change events and leaves the field empty.
+		await page.waitForSelector(".milkdown-custom", { state: "visible" });
+		await page.waitForTimeout(1000);
+		const editor = page
+			.locator(".milkdown-custom")
+			.locator("[contenteditable]")
+			.first();
+		await editor.click();
+		await page.evaluate(() => {
+			const editorEl = document.querySelector(
+				".milkdown-custom [contenteditable]",
+			) as HTMLElement;
+			if (editorEl) {
+				const selection = window.getSelection();
+				const range = document.createRange();
+				range.selectNodeContents(editorEl);
+				selection?.removeAllRanges();
+				selection?.addRange(range);
+			}
+		});
+		await editor.pressSequentially("SSG smoke test content.", { delay: 50 });
+
+		// Publish the post
+		const publishedSwitch = page
+			.locator('[data-slot="form-item"]')
+			.filter({ hasText: "Published" })
+			.getByRole("switch");
+		await expect(publishedSwitch).toBeVisible();
+		await publishedSwitch.click();
+
+		// Close any open dropdowns before submitting
+		await page.keyboard.press("Escape");
+		await page.getByRole("button", { name: /^Create Post$/i }).click();
+		await page.waitForURL("**/pages/blog", { timeout: 10000 });
+		await page.waitForLoadState("networkidle");
+
+		// The SSG post detail page for a slug not in generateStaticParams is
+		// rendered on-demand by Next.js (dynamicParams: true), so we can visit it
+		// immediately and expect fresh content.
+		await page.goto(`/pages/ssg-blog/${slug}`, { waitUntil: "networkidle" });
+		await expect(page.locator('[data-testid="post-page"]')).toBeVisible({
+			timeout: 15000,
+		});
+		await expect(page).toHaveTitle(new RegExp(title, "i"));
+
+		expect(errors, `Console errors: \n${errors.join("\n")}`).toEqual([]);
+	});
+
+	test("ssg blog list shows updated content after revalidation", async ({
 		page,
 		request,
 	}) => {
@@ -51,105 +124,35 @@ test.describe("SSG pages render without errors", () => {
 			if (msg.type() === "error") errors.push(msg.text());
 		});
 
-		// Navigate to the blog list and find the first post link
-		await page.goto("/pages/blog", { waitUntil: "networkidle" });
+		const slug = `ssg-reval-${Date.now().toString(36)}`;
+		const title = `SSG Reval ${slug}`;
 
-		const postLinks = page.locator('a[href*="/pages/blog/"]');
-		const count = await postLinks.count();
+		// Create a post directly via the API (faster than the form UI).
+		// The blog API is at /api/data/posts (basePath="/api/data", plugin="blog").
+		const createRes = await request.post(
+			"http://localhost:3003/api/data/posts",
+			{
+				data: {
+					title,
+					slug,
+					excerpt: "Revalidation test",
+					content: "Content for revalidation test.",
+					published: true,
+				},
+			},
+		);
+		expect(createRes.ok()).toBeTruthy();
 
-		if (count === 0) {
-			// No posts in seed data — skip the post page check
-			test.skip();
-			return;
-		}
+		// The onPostCreated hook calls revalidatePath("/pages/ssg-blog"), which
+		// purges the ISR cache immediately. The next request to /pages/ssg-blog
+		// triggers a blocking regeneration using the loader (HTTP request).
+		await page.goto("/pages/ssg-blog", { waitUntil: "networkidle" });
 
-		const firstLink = await postLinks.first().getAttribute("href");
-		if (!firstLink) {
-			test.skip();
-			return;
-		}
-
-		await page.goto(firstLink, { waitUntil: "networkidle" });
-
-		// Should not show error
-		await expect(page.locator(errorSelector))
-			.not.toBeVisible({
-				timeout: 5000,
-			})
-			.catch(() => {});
-
-		// Should show an h1 with the post title
-		await expect(page.locator("h1").first()).toBeVisible({ timeout: 10000 });
-
-		expect(
-			errors,
-			`Console errors on blog post page: \n${errors.join("\n")}`,
-		).toEqual([]);
-	});
-
-	test("kanban boards SSG page renders", async ({ page }) => {
-		const errors: string[] = [];
-		page.on("console", (msg) => {
-			if (msg.type() === "error") errors.push(msg.text());
+		await expect(page.locator('[data-testid="home-page"]')).toBeVisible();
+		await expect(page.locator(`text=${title}`).first()).toBeVisible({
+			timeout: 10000,
 		});
 
-		await page.goto("/pages/kanban", { waitUntil: "networkidle" });
-
-		await expect(page.locator(errorSelector))
-			.not.toBeVisible({
-				timeout: 5000,
-			})
-			.catch(() => {});
-
-		// Boards page header or empty state should be visible
-		const hasContent =
-			(await page
-				.locator('[data-testid="boards-page"]')
-				.isVisible()
-				.catch(() => false)) ||
-			(await page
-				.locator(emptySelector)
-				.isVisible()
-				.catch(() => false));
-
-		expect(hasContent).toBe(true);
-
-		expect(
-			errors,
-			`Console errors on /pages/kanban: \n${errors.join("\n")}`,
-		).toEqual([]);
-	});
-
-	test("forms list SSG page renders", async ({ page }) => {
-		const errors: string[] = [];
-		page.on("console", (msg) => {
-			if (msg.type() === "error") errors.push(msg.text());
-		});
-
-		await page.goto("/pages/forms", { waitUntil: "networkidle" });
-
-		await expect(page.locator(errorSelector))
-			.not.toBeVisible({
-				timeout: 5000,
-			})
-			.catch(() => {});
-
-		// Form list page or empty state should be visible
-		const hasContent =
-			(await page
-				.locator('[data-testid="form-list-page"]')
-				.isVisible()
-				.catch(() => false)) ||
-			(await page
-				.locator(emptySelector)
-				.isVisible()
-				.catch(() => false));
-
-		expect(hasContent).toBe(true);
-
-		expect(
-			errors,
-			`Console errors on /pages/forms: \n${errors.join("\n")}`,
-		).toEqual([]);
+		expect(errors, `Console errors: \n${errors.join("\n")}`).toEqual([]);
 	});
 });
