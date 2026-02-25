@@ -639,6 +639,32 @@ export default async function TodosPage() {
 The shared `StackProvider` layout must live at `app/pages/layout.tsx` (not inside `[[...all]]/layout.tsx`) so it applies to both the catch-all routes and these specific SSG pages.
 </Callout>
 
+#### 5. ISR cache invalidation
+
+If you enable [Incremental Static Regeneration](https://nextjs.org/docs/app/building-your-application/data-fetching/incremental-static-regeneration) (`export const revalidate = 3600`), the cached page must be purged whenever the underlying data changes. Wire up `revalidatePath` (or `revalidateTag`) inside the backend plugin hooks:
+
+```ts title="lib/stack.ts"
+import { revalidatePath } from "next/cache"
+
+const myPlugin = myBackendPlugin({
+  hooks: {
+    onAfterCreate: async (item) => {
+      revalidatePath("/todos")
+    },
+    onAfterUpdate: async (item) => {
+      revalidatePath("/todos")
+    },
+    onAfterDelete: async (id) => {
+      revalidatePath("/todos")
+    },
+  },
+})
+```
+
+<Callout type="info">
+`revalidatePath` / `revalidateTag` are Next.js APIs imported from `"next/cache"`. They are no-ops outside of a Next.js runtime, so it is safe to call them from a shared `lib/stack.ts` without breaking non-Next.js frameworks.
+</Callout>
+
 ---
 
 ### Client Hooks
