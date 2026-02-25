@@ -40,7 +40,7 @@ import {
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
-import { lazy, memo, Suspense, useMemo, useState } from "react";
+import { lazy, memo, Suspense, useEffect, useMemo, useState } from "react";
 import {
 	type FieldPath,
 	type SubmitHandler,
@@ -325,6 +325,10 @@ const CustomPostUpdateSchema = PostUpdateSchema.omit({
 type AddPostFormProps = {
 	onClose: () => void;
 	onSuccess: (post: { published: boolean }) => void;
+	/** Called once with the form instance so parent components can access form state */
+	onFormReady?: (
+		form: UseFormReturn<z.input<typeof CustomPostCreateSchema>>,
+	) => void;
 };
 
 const addPostFormPropsAreEqual = (
@@ -333,10 +337,15 @@ const addPostFormPropsAreEqual = (
 ): boolean => {
 	if (prevProps.onClose !== nextProps.onClose) return false;
 	if (prevProps.onSuccess !== nextProps.onSuccess) return false;
+	if (prevProps.onFormReady !== nextProps.onFormReady) return false;
 	return true;
 };
 
-const AddPostFormComponent = ({ onClose, onSuccess }: AddPostFormProps) => {
+const AddPostFormComponent = ({
+	onClose,
+	onSuccess,
+	onFormReady,
+}: AddPostFormProps) => {
 	const [featuredImageUploading, setFeaturedImageUploading] = useState(false);
 	const { localization } = usePluginOverrides<
 		BlogPluginOverrides,
@@ -393,6 +402,12 @@ const AddPostFormComponent = ({ onClose, onSuccess }: AddPostFormProps) => {
 		},
 	});
 
+	// Expose form instance to parent for AI context integration
+	useEffect(() => {
+		onFormReady?.(form);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
 	return (
 		<PostFormBody
 			form={form}
@@ -417,6 +432,10 @@ type EditPostFormProps = {
 	onClose: () => void;
 	onSuccess: (post: { slug: string; published: boolean }) => void;
 	onDelete?: () => void;
+	/** Called once with the form instance so parent components can access form state */
+	onFormReady?: (
+		form: UseFormReturn<z.input<typeof CustomPostUpdateSchema>>,
+	) => void;
 };
 
 const editPostFormPropsAreEqual = (
@@ -427,6 +446,7 @@ const editPostFormPropsAreEqual = (
 	if (prevProps.onClose !== nextProps.onClose) return false;
 	if (prevProps.onSuccess !== nextProps.onSuccess) return false;
 	if (prevProps.onDelete !== nextProps.onDelete) return false;
+	if (prevProps.onFormReady !== nextProps.onFormReady) return false;
 	return true;
 };
 
@@ -435,6 +455,7 @@ const EditPostFormComponent = ({
 	onClose,
 	onSuccess,
 	onDelete,
+	onFormReady,
 }: EditPostFormProps) => {
 	const [featuredImageUploading, setFeaturedImageUploading] = useState(false);
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -536,6 +557,12 @@ const EditPostFormComponent = ({
 		},
 		values: initialData as z.input<typeof schema>,
 	});
+
+	// Expose form instance to parent for AI context integration
+	useEffect(() => {
+		onFormReady?.(form);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
 	if (!post) {
 		return <EmptyList message={localization.BLOG_PAGE_NOT_FOUND_DESCRIPTION} />;

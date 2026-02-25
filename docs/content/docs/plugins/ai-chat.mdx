@@ -564,6 +564,92 @@ import { ChatLayout, type ChatLayoutProps, type UIMessage } from "@btst/stack/pl
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/components/chat-layout.tsx" name="ChatLayoutProps" />
 
+#### Widget layout — built-in trigger (default)
+
+The default widget mode manages its own open/close state and renders a floating trigger button. Drop it anywhere in your layout and it just works:
+
+```tsx
+<ChatLayout
+  apiBaseURL=""
+  apiBasePath="/api/data"
+  layout="widget"
+  widgetHeight="520px"
+/>
+```
+
+#### Widget layout — externally controlled (no trigger)
+
+Use `defaultOpen` and `showTrigger={false}` when your own UI handles opening and closing — for example, a Next.js [intercepting route](https://nextjs.org/docs/app/building-your-application/routing/intercepting-routes) modal or a custom dialog. The chat panel is immediately visible and the built-in trigger button is not rendered:
+
+```tsx
+{/* Rendered inside a modal/dialog that you control */}
+<ChatLayout
+  apiBaseURL=""
+  apiBasePath="/api/data"
+  layout="widget"
+  widgetHeight="500px"
+  defaultOpen={true}
+  showTrigger={false}
+/>
+```
+
+**Next.js parallel-routes + intercepting-routes pattern** — a common way to display the widget as a modal overlay while keeping a floating button on every page:
+
+```
+app/
+  @chatWidget/
+    default.tsx          ← floating button (Link to /chat)
+    loading.tsx          ← loading overlay
+    (.)chat/
+      page.tsx           ← intercepting route: renders modal with ChatLayout
+  chat/
+    page.tsx             ← full-page fallback (hard nav / refresh)
+  layout.tsx             ← passes chatWidget slot into the body
+```
+
+```tsx title="app/@chatWidget/default.tsx"
+"use client";
+import Link from "next/link";
+import { BotIcon } from "lucide-react";
+
+export default function ChatWidgetButton() {
+  return (
+    <Link href="/chat" className="fixed bottom-6 right-6 z-50 ...">
+      <BotIcon className="size-8" />
+    </Link>
+  );
+}
+```
+
+```tsx title="app/@chatWidget/(.)chat/page.tsx"
+"use client";
+import { useRouter } from "next/navigation";
+import { StackProvider } from "@btst/stack/context";
+import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
+
+export default function ChatModal() {
+  const router = useRouter();
+  return (
+    {/* Backdrop */}
+    <div className="fixed inset-0 z-50 bg-black/50" onClick={() => router.back()}>
+      {/* Modal card */}
+      <div className="..." onClick={(e) => e.stopPropagation()}>
+        <StackProvider ...>
+          {/* Panel is pre-opened; no trigger button rendered */}
+          <ChatLayout
+            apiBaseURL="..."
+            apiBasePath="/api/data"
+            layout="widget"
+            defaultOpen={true}
+            showTrigger={false}
+          />
+        </StackProvider>
+      </div>
+    </div>
+  );
+}
+```
+
 **Example usage with localStorage persistence:**
 
 ```tsx
@@ -969,3 +1055,152 @@ const conv = await getConversationById(myAdapter, conversationId);
 |---|---|
 | `getAllConversations(adapter, userId?)` | Returns all conversations, optionally filtered by userId |
 | `getConversationById(adapter, id)` | Returns a conversation with messages, or `null` |
+
+## Route-Aware AI Context
+
+The AI chat plugin supports **route-aware context** — pages register contextual data and client-side tool handlers that the chat widget reads automatically. This enables:
+
+- The AI to summarize content from the current page
+- The AI to fill in forms or update editors on the user's behalf
+- Dynamic suggestion chips that change based on which page is open
+
+### Setup
+
+**Step 1 — Add `PageAIContextProvider` to your root layout** (above all `StackProvider` instances):
+
+```tsx title="app/layout.tsx"
+import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"
+
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <body>
+        <PageAIContextProvider>
+          {/* Everything else, including StackProvider and your chat modal */}
+          {children}
+        </PageAIContextProvider>
+      </body>
+    </html>
+  )
+}
+```
+
+<Callout type="info">
+Place `PageAIContextProvider` above any `StackProvider` so it spans both the main app tree and any chat modals rendered as Next.js parallel/intercept routes. Both trees need to be descendants of the same context instance for context to flow between them.
+</Callout>
+
+**Step 2 — Enable page tools in your backend config**:
+
+```ts title="lib/stack.ts"
+aiChatBackendPlugin({
+  model: openai("gpt-4o"),
+  enablePageTools: true, // activates built-in fillBlogForm, updatePageLayers tools
+})
+```
+
+### Registering Page Context
+
+Call `useRegisterPageAIContext` in any page component to publish context to the chat. The registration is cleaned up automatically when the component unmounts.
+
+```tsx
+import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context"
+
+// Blog post page — provides content for summarization
+function BlogPostPage({ post }) {
+  useRegisterPageAIContext(post ? {
+    routeName: "blog-post",
+    pageDescription: `Blog post: "${post.title}"\n\n${post.content.slice(0, 8000)}`,
+    suggestions: ["Summarize this post", "What are the key takeaways?"],
+  } : null)
+
+  // ...
+}
+```
+
+Pass `null` to conditionally disable context (e.g. while data is loading).
+
+### Client-Side Tools
+
+Pages can expose **client-side tool handlers** — functions the AI can call to mutate page state. Built-in tools (`fillBlogForm`, `updatePageLayers`) are already wired up in the blog and UI builder plugins. For custom pages:
+
+**1. Register a tool handler on the page:**
+
+```tsx
+import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context"
+
+function ProductPage({ product, cart }) {
+  useRegisterPageAIContext({
+    routeName: "product-detail",
+    pageDescription: `Product: ${product.name}. Price: $${product.price}.`,
+    suggestions: ["Tell me about this product", "Add to cart"],
+    clientTools: {
+      addToCart: async ({ quantity }) => {
+        cart.add(product.id, quantity)
+        return { success: true, message: `Added ${quantity} to cart` }
+      }
+    }
+  })
+}
+```
+
+**2. Register the tool schema server-side** (so the LLM knows the parameter shapes):
+
+```ts title="lib/stack.ts"
+import { tool } from "ai"
+import { z } from "zod"
+
+aiChatBackendPlugin({
+  model: openai("gpt-4o"),
+  enablePageTools: true,
+  clientToolSchemas: {
+    addToCart: tool({
+      description: "Add the current product to the shopping cart",
+      parameters: z.object({ quantity: z.number().int().min(1) }),
+      // No execute — this is handled client-side
+    }),
+  }
+})
+```
+
+When the AI calls `addToCart`, the return value from the client handler is sent back to the model as the tool result, allowing the conversation to continue.
+
+### Built-In Page Tools
+
+| Tool | Registered by | Description |
+|---|---|---|
+| `fillBlogForm` | Blog new/edit pages | Fills title, content, excerpt, and tags in the post editor |
+| `updatePageLayers` | UI builder edit page | Replaces the component layer tree in the page builder |
+
+### API Reference
+
+#### `PageAIContextProvider`
+
+```tsx
+import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"
+
+<PageAIContextProvider>
+  {children}
+</PageAIContextProvider>
+```
+
+#### `useRegisterPageAIContext(config)`
+
+```ts
+import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context"
+
+useRegisterPageAIContext({
+  routeName: string,           // shown as badge in chat header
+  pageDescription: string,     // injected into system prompt (max 8,000 chars)
+  suggestions?: string[],      // quick-action chips in chat empty state
+  clientTools?: {              // handlers the AI can invoke
+    [toolName: string]: (args: any) => Promise<{ success: boolean; message?: string }>
+  }
+})
+```
+
+#### `AiChatBackendConfig` — new options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `enablePageTools` | `boolean` | `false` | Activate page tool support |
+| `clientToolSchemas` | `Record<string, Tool>` | — | Custom tool schemas for non-BTST pages |

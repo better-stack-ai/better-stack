@@ -37,4 +37,14 @@ export const chatRequestSchema = z.object({
 	),
 	conversationId: z.string().optional(),
 	model: z.string().optional(),
+	/**
+	 * Description of the current page context, injected into the AI system prompt.
+	 * Sent by ChatInterface when a page has registered context via useRegisterPageAIContext.
+	 */
+	pageContext: z.string().max(8000).optional(),
+	/**
+	 * Names of client-side tools currently available on the page.
+	 * The server includes matching tool schemas in the streamText call.
+	 */
+	availableTools: z.array(z.string()).optional(),
 });

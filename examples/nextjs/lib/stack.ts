@@ -126,6 +126,8 @@ function createStack() {
             tools: {
                 stackDocs: stackDocsTool,
             },
+            // Enable route-aware page tools (fillBlogForm, updatePageLayers, etc.)
+            enablePageTools: true,
             // Optional: Extract userId from headers to scope conversations per user
             // getUserId: async (ctx) => {
             //     const userId = ctx.headers?.get('x-user-id');

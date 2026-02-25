@@ -10,6 +10,7 @@ import type { TodosPluginOverrides } from "@/lib/plugins/todo/client/overrides"
 import { getOrCreateQueryClient } from "@/lib/query-client"
 import { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
+import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
 import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client"
@@ -277,6 +278,19 @@ export default function ExampleLayout({
                 }}
             >
                 {children}
+                {/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}
+                <div
+                    className="fixed bottom-6 right-6 z-50 w-[380px] shadow-xl"
+                    data-testid="chat-widget"
+                >
+                    <ChatLayout
+                        apiBaseURL={getBaseURL()}
+                        apiBasePath="/api/data"
+                        layout="widget"
+                        widgetHeight="520px"
+                        showSidebar={false}
+                    />
+                </div>
             </StackProvider>
         </QueryClientProvider>
     )

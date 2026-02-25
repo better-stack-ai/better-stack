@@ -426,7 +426,7 @@ export function MyPageComponent({ id }: { id: string }) {
 
 **How it works:**
 - `ComposedRoute` renders nested `<Suspense>` + `<ErrorBoundary>` around `PageComponent`
-- Loading fallbacks only render on client (`typeof window !== "undefined"`) to avoid hydration mismatch
+- Loading fallbacks are always provided to `<Suspense>` on both server and client — never guard them with `typeof window !== "undefined"`, as that creates a different JSX tree on each side and shifts React's `useId()` counter, causing hydration mismatches in descendants (Radix `Select`, `Dialog`, etc.). Since Suspense only emits fallback HTML when the boundary actually suspends during SSR, having a consistent fallback prop is safe.
 - `resetKeys={[path]}` resets the error boundary on navigation
 
 ### Suspense Hooks & Error Throwing
@@ -656,6 +656,46 @@ cd docs && pnpm build
 ```
 
 The `AutoTypeTable` component automatically pulls from TypeScript files, so ensure your types have JSDoc comments for good documentation.
+
+## AI Chat Plugin Integration
+
+Plugin pages can register AI context so the chat widget understands the current page and can act on it (fill forms, update editors, summarize content).
+
+**In the `.internal.tsx` page component**, call `useRegisterPageAIContext`:
+
+```tsx
+import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
+
+// Read-only (content pages — summarization, suggestions only)
+useRegisterPageAIContext(item ? {
+  routeName: "my-plugin-detail",
+  pageDescription: `Viewing: "${item.title}"\n\n${item.content?.slice(0, 8000)}`,
+  suggestions: ["Summarize this", "What are the key points?"],
+} : null); // pass null while loading
+
+// With client-side tools (form/editor pages)
+const formRef = useRef<UseFormReturn<any> | null>(null);
+useRegisterPageAIContext({
+  routeName: "my-plugin-edit",
+  pageDescription: "User is editing…",
+  suggestions: ["Fill in the form for me"],
+  clientTools: {
+    fillMyForm: async ({ title }) => {
+      if (!formRef.current) return { success: false, message: "Form not ready" };
+      formRef.current.setValue("title", title, { shouldValidate: true });
+      return { success: true };
+    },
+  },
+});
+```
+
+**For first-party tools**, add the server-side schema to `BUILT_IN_PAGE_TOOL_SCHEMAS` in `src/plugins/ai-chat/api/page-tools.ts` (no `execute` — handled client-side). Built-ins (`fillBlogForm`, `updatePageLayers`) are already registered there.
+
+**`PageAIContextProvider` must wrap the root layout** (above all `StackProvider` instances) in all three example apps — it is already wired up there.
+
+**References:** blog `new/edit-post-page.internal.tsx` (`fillBlogForm`), blog `post-page.internal.tsx` (read-only), ui-builder `page-builder-page.internal.tsx` (`updatePageLayers`).
+
+---
 
 ## Common Pitfalls
 

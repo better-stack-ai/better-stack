@@ -13,6 +13,7 @@ import { MyRouterContext } from '@/router'
 import { ThemeProvider } from 'next-themes'
 import { Navbar } from '@/components/navbar'
 import { Toaster } from 'sonner'
+import { PageAIContextProvider } from '@btst/stack/plugins/ai-chat/client/context'
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   head: () => ({
@@ -109,16 +110,18 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
         <HeadContent />
       </head>
       <body>
-        <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-          <Navbar />
-          {children}
-          <Toaster />
-        </ThemeProvider>
+        <PageAIContextProvider>
+          <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+            >
+            <Navbar />
+            {children}
+            <Toaster />
+          </ThemeProvider>
+        </PageAIContextProvider>
         <Scripts />
       </body>
     </html>

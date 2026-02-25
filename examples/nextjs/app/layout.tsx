@@ -2,6 +2,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner"
 import { ThemeProvider } from "next-themes";
 import { Navbar } from "@/components/navbar";
+import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -25,16 +26,18 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-          <Navbar />
-          {children}
-          <Toaster />
-        </ThemeProvider>
+        <PageAIContextProvider>
+          <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+            >
+            <Navbar />
+            {children}
+            <Toaster />
+          </ThemeProvider>
+        </PageAIContextProvider>
       </body>
     </html>
   );

@@ -1202,6 +1202,139 @@ export function useCreateTodo() {
 
 ---
 
+## AI Chat Plugin Integration
+
+Plugins can participate in the **route-aware AI context** system. When a user opens the chat widget while viewing one of your plugin's pages, it can automatically:
+
+- Inject a description of the current page into the AI's system prompt
+- Expose action chips (quick suggestions) relevant to the page
+- Provide **client-side tool handlers** the AI can call to mutate page state (fill forms, update editors, etc.)
+
+### Step 1 — Register context from the page component
+
+Call `useRegisterPageAIContext` inside your `.internal.tsx` page component. The registration is automatically cleaned up on unmount.
+
+```tsx
+import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context"
+import { useRef, useCallback } from "react"
+import type { UseFormReturn } from "react-hook-form"
+
+export function MyPluginEditPage() {
+  // Capture the form instance via an onFormReady callback from your form component
+  const formRef = useRef<UseFormReturn<any> | null>(null)
+  const handleFormReady = useCallback((form: UseFormReturn<any>) => {
+    formRef.current = form
+  }, [])
+
+  useRegisterPageAIContext({
+    // Short identifier shown as a badge in the chat widget header
+    routeName: "my-plugin-edit",
+
+    // Injected into the AI system prompt (capped at 8,000 characters)
+    pageDescription: "User is editing a My Plugin item. When asked to fill in the form, call the fillMyPluginForm tool.",
+
+    // Quick-action chips shown in the chat empty state (merged with static suggestions)
+    suggestions: ["Fill in the form for me", "Suggest a title"],
+
+    // Handlers the AI can invoke — keyed by tool name
+    clientTools: {
+      fillMyPluginForm: async ({ title, description }) => {
+        const form = formRef.current
+        if (!form) return { success: false, message: "Form not ready" }
+        if (title !== undefined) form.setValue("title", title, { shouldValidate: true })
+        if (description !== undefined) form.setValue("description", description)
+        return { success: true, message: "Form filled" }
+      },
+    },
+  })
+
+  return <MyPluginForm onFormReady={handleFormReady} />
+}
+```
+
+Pass `null` to conditionally disable the context while data is loading:
+
+```tsx
+useRegisterPageAIContext(item ? {
+  routeName: "my-plugin-detail",
+  pageDescription: `Viewing: "${item.title}"\n\n${item.content?.slice(0, 8000)}`,
+  suggestions: ["Summarize this", "What are the key points?"],
+} : null)
+```
+
+### Step 2 — Register the tool schema server-side
+
+Client-side tool handlers need a matching server-side schema so the LLM knows what parameters to send.
+
+**For first-party BTST plugins**, add the schema to `BUILT_IN_PAGE_TOOL_SCHEMAS` in `src/plugins/ai-chat/api/page-tools.ts`:
+
+```ts
+// packages/stack/src/plugins/ai-chat/api/page-tools.ts
+import { tool } from "ai"
+import { z } from "zod"
+
+export const BUILT_IN_PAGE_TOOL_SCHEMAS: Record<string, Tool> = {
+  // ...existing built-in tools (fillBlogForm, updatePageLayers)
+
+  fillMyPluginForm: tool({
+    description: "Fill in the my-plugin form fields. Call this when the user asks to populate or draft the form.",
+    inputSchema: z.object({
+      title: z.string().optional().describe("The item title"),
+      description: z.string().optional().describe("A short description"),
+    }),
+    // No execute — this is handled entirely client-side via onToolCall in ChatInterface
+  }),
+}
+```
+
+**For consumer (third-party) plugins**, instruct users to pass `clientToolSchemas` in `aiChatBackendPlugin`:
+
+```ts
+// Consumer's lib/stack.ts
+aiChatBackendPlugin({
+  model: openai("gpt-4o"),
+  enablePageTools: true,
+  clientToolSchemas: {
+    fillMyPluginForm: tool({
+      description: "Fill in the my-plugin form fields",
+      parameters: z.object({ title: z.string().optional() }),
+    }),
+  },
+})
+```
+
+### Step 3 — Ensure PageAIContextProvider is in the root layout
+
+The `PageAIContextProvider` must be present **above all `StackProvider` instances** in every example app's root layout. It is already wired up in the BTST example apps — you only need to ensure your plugin's pages call `useRegisterPageAIContext` correctly.
+
+<Callout type="info">
+`useRegisterPageAIContext` silently no-ops when `PageAIContextProvider` is absent from the tree. If context doesn't appear in the chat widget, check that the provider wraps the root layout.
+</Callout>
+
+### Read-only context (no tools)
+
+If your page only displays content the AI should be able to read but not mutate, omit `clientTools`:
+
+```tsx
+// Blog post detail page — AI can summarize but not write
+useRegisterPageAIContext(post ? {
+  routeName: "blog-post",
+  pageDescription: `Blog post: "${post.title}"\n\n${post.content?.slice(0, 8000)}`,
+  suggestions: ["Summarize this post", "What are the key takeaways?"],
+} : null)
+```
+
+### Reference implementations inside BTST
+
+| Plugin | File | Tools exposed |
+|---|---|---|
+| Blog (new post) | `blog/client/components/pages/new-post-page.internal.tsx` | `fillBlogForm` |
+| Blog (edit post) | `blog/client/components/pages/edit-post-page.internal.tsx` | `fillBlogForm` |
+| Blog (post detail) | `blog/client/components/pages/post-page.internal.tsx` | none (read-only) |
+| UI Builder | `ui-builder/client/components/pages/page-builder-page.internal.tsx` | `updatePageLayers` |
+
+---
+
 ## Reference Implementations
 
 ### Simple Plugin: Todo

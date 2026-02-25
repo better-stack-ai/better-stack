@@ -7,6 +7,9 @@ import { PageWrapper } from "../shared/page-wrapper";
 import { BLOG_LOCALIZATION } from "../../localization";
 import type { BlogPluginOverrides } from "../../overrides";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
+import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
+import { useRef, useCallback } from "react";
+import type { UseFormReturn } from "react-hook-form";
 
 // Internal component with actual page content
 export function EditPostPage({ slug }: { slug: string }) {
@@ -36,6 +39,40 @@ export function EditPostPage({ slug }: { slug: string }) {
 		},
 	});
 
+	// Ref to capture the form instance from EditPostForm via onFormReady callback
+	const formRef = useRef<UseFormReturn<any> | null>(null);
+	const handleFormReady = useCallback((form: UseFormReturn<any>) => {
+		formRef.current = form;
+	}, []);
+
+	// Register AI context so the chat can fill in the edit form
+	useRegisterPageAIContext({
+		routeName: "blog-edit-post",
+		pageDescription: `User is editing a blog post (slug: "${slug}") in the admin editor.`,
+		suggestions: [
+			"Improve this post's title",
+			"Rewrite the intro paragraph",
+			"Suggest better tags",
+		],
+		clientTools: {
+			fillBlogForm: async ({ title, content, excerpt, tags }) => {
+				const form = formRef.current;
+				if (!form) return { success: false, message: "Form not ready" };
+				if (title !== undefined)
+					form.setValue("title", title, { shouldValidate: true });
+				if (content !== undefined)
+					form.setValue("content", content, { shouldValidate: true });
+				if (excerpt !== undefined) form.setValue("excerpt", excerpt);
+				if (tags !== undefined)
+					form.setValue(
+						"tags",
+						tags.map((name: string) => ({ name })),
+					);
+				return { success: true, message: "Form updated successfully" };
+			},
+		},
+	});
+
 	const handleClose = () => {
 		navigate(`${basePath}/blog`);
 	};
@@ -61,6 +98,7 @@ export function EditPostPage({ slug }: { slug: string }) {
 				onClose={handleClose}
 				onSuccess={handleSuccess}
 				onDelete={handleDelete}
+				onFormReady={handleFormReady}
 			/>
 		</PageWrapper>
 	);
