@@ -234,6 +234,17 @@ export function ChatInterface({
 							err instanceof Error ? err.message : "Tool execution failed",
 					});
 				}
+			} else {
+				// No handler found — this happens when the user navigates away while a
+				// tool-call response is streaming and the page context changes. Always
+				// call addToolOutput so sendAutomaticallyWhen can unblock; without this
+				// the conversation gets permanently stuck waiting for a missing output.
+				addToolOutputRef.current?.({
+					tool: toolName,
+					toolCallId: toolCall.toolCallId,
+					state: "output-error",
+					errorText: `No client-side handler registered for tool "${toolName}". The page context may have changed while the response was streaming.`,
+				});
 			}
 		},
 		onError: (err) => {
