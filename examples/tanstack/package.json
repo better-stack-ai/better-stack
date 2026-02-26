@@ -7,7 +7,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "start": "node .output/server/index.mjs",
-    "start:e2e": "rm -rf .output && rm -rf .nitro && rm -rf .tanstack && rm -rf node_modules && pnpm install && pnpm build && NODE_ENV=test dotenv -e .env -- node .output/server/index.mjs"
+    "start:e2e": "rm -rf .output && rm -rf .nitro && rm -rf .tanstack && rm -rf node_modules && pnpm install && NODE_OPTIONS=--max-old-space-size=8192 pnpm build && NODE_ENV=test dotenv -e .env -- node .output/server/index.mjs"
   },
   "keywords": [],
   "author": "",
