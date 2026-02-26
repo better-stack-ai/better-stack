@@ -10,6 +10,7 @@ import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
 import { useRef, useCallback } from "react";
 import type { UseFormReturn } from "react-hook-form";
+import { createFillBlogFormHandler } from "./fill-blog-form-handler";
 
 // Internal component with actual page content
 export function EditPostPage({ slug }: { slug: string }) {
@@ -55,21 +56,10 @@ export function EditPostPage({ slug }: { slug: string }) {
 			"Suggest better tags",
 		],
 		clientTools: {
-			fillBlogForm: async ({ title, content, excerpt, tags }) => {
-				const form = formRef.current;
-				if (!form) return { success: false, message: "Form not ready" };
-				if (title !== undefined)
-					form.setValue("title", title, { shouldValidate: true });
-				if (content !== undefined)
-					form.setValue("content", content, { shouldValidate: true });
-				if (excerpt !== undefined) form.setValue("excerpt", excerpt);
-				if (tags !== undefined)
-					form.setValue(
-						"tags",
-						tags.map((name: string) => ({ name })),
-					);
-				return { success: true, message: "Form updated successfully" };
-			},
+			fillBlogForm: createFillBlogFormHandler(
+				formRef,
+				"Form updated successfully",
+			),
 		},
 	});
 
