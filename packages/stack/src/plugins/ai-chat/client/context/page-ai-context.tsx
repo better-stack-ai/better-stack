@@ -164,7 +164,7 @@ export function PageAIContextProvider({
  * // Blog post page
  * useRegisterPageAIContext(post ? {
  *   routeName: "blog-post",
- *   pageDescription: `Blog post: "${post.title}"\n\n${post.content?.slice(0, 8000)}`,
+ *   pageDescription: `Blog post: "${post.title}"\n\n${post.content?.slice(0, 16000)}`,
  *   suggestions: ["Summarize this post", "What are the key takeaways?"],
  * } : null)
  */

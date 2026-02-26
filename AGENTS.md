@@ -669,7 +669,7 @@ import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/con
 // Read-only (content pages — summarization, suggestions only)
 useRegisterPageAIContext(item ? {
   routeName: "my-plugin-detail",
-  pageDescription: `Viewing: "${item.title}"\n\n${item.content?.slice(0, 8000)}`,
+  pageDescription: `Viewing: "${item.title}"\n\n${item.content?.slice(0, 16000)}`,
   suggestions: ["Summarize this", "What are the key points?"],
 } : null); // pass null while loading
 

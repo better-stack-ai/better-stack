@@ -102,8 +102,8 @@ function buildPageDescription(
 		layerFormat,
 	].join("\n");
 
-	// Trim to fit the 8,000-char server-side limit, cutting the layers JSON if needed
-	if (full.length <= 8000) return full;
+	// Trim to fit the 16,000-char server-side limit, cutting the layers JSON if needed
+	if (full.length <= 16000) return full;
 
 	// Re-build with truncated layers JSON
 	const overhead =
@@ -120,7 +120,7 @@ function buildPageDescription(
 			layerFormat,
 		].join("\n").length + 30; // 30-char buffer for "...(truncated)"
 
-	const budget = Math.max(0, 8000 - overhead);
+	const budget = Math.max(0, 16000 - overhead);
 	const truncatedLayers =
 		layersJson.length > budget
 			? layersJson.slice(0, budget) + "\n...(truncated)"

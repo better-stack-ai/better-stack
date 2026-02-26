@@ -1257,7 +1257,7 @@ Pass `null` to conditionally disable the context while data is loading:
 ```tsx
 useRegisterPageAIContext(item ? {
   routeName: "my-plugin-detail",
-  pageDescription: `Viewing: "${item.title}"\n\n${item.content?.slice(0, 8000)}`,
+  pageDescription: `Viewing: "${item.title}"\n\n${item.content?.slice(0, 16000)}`,
   suggestions: ["Summarize this", "What are the key points?"],
 } : null)
 ```
@@ -1319,7 +1319,7 @@ If your page only displays content the AI should be able to read but not mutate,
 // Blog post detail page — AI can summarize but not write
 useRegisterPageAIContext(post ? {
   routeName: "blog-post",
-  pageDescription: `Blog post: "${post.title}"\n\n${post.content?.slice(0, 8000)}`,
+  pageDescription: `Blog post: "${post.title}"\n\n${post.content?.slice(0, 16000)}`,
   suggestions: ["Summarize this post", "What are the key takeaways?"],
 } : null)
 ```

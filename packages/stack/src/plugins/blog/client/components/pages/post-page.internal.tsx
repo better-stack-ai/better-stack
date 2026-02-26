@@ -70,7 +70,11 @@ export function PostPage({ slug }: { slug: string }) {
 		post
 			? {
 					routeName: "blog-post",
-					pageDescription: `Blog post: "${post.title}"\nAuthor: ${post.authorId ?? "Unknown"}\n\n${(post.content ?? "").slice(0, 8000)}`,
+					pageDescription:
+						`Blog post: "${post.title}"\nAuthor: ${post.authorId ?? "Unknown"}\n\n${post.content ?? ""}`.slice(
+							0,
+							16000,
+						),
 					suggestions: [
 						"Summarize this post",
 						"What are the key takeaways?",
