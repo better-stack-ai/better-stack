@@ -7,7 +7,11 @@ import { ChatMessage } from "./chat-message";
 import { ChatInput, type AttachedFile } from "./chat-input";
 import { StackAttribution } from "@workspace/ui/components/stack-attribution";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
-import { DefaultChatTransport, type UIMessage } from "ai";
+import {
+	DefaultChatTransport,
+	lastAssistantMessageIsCompleteWithToolCalls,
+	type UIMessage,
+} from "ai";
 import { cn } from "@workspace/ui/lib/utils";
 import { usePluginOverrides, useBasePath } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../overrides";
@@ -20,6 +24,7 @@ import {
 	useConversations,
 	type SerializedConversation,
 } from "../hooks/chat-hooks";
+import { usePageAIContext } from "../context/page-ai-context";
 
 interface ChatInterfaceProps {
 	apiPath?: string;
@@ -55,6 +60,9 @@ export function ChatInterface({
 	);
 	const basePath = useBasePath();
 	const isPublicMode = mode === "public";
+
+	// Read page AI context registered by the current page
+	const pageAIContext = usePageAIContext();
 
 	const localization = { ...AI_CHAT_LOCALIZATION, ...customLocalization };
 	const queryClient = useQueryClient();
@@ -126,6 +134,13 @@ export function ChatInterface({
 			!initialMessages || initialMessages.length === 0,
 	);
 
+	// Ref to always have the latest pageAIContext in the transport callback
+	// without recreating the transport on every context change
+	const pageAIContextRef = useRef(pageAIContext);
+	useEffect(() => {
+		pageAIContextRef.current = pageAIContext;
+	}, [pageAIContext]);
+
 	// Memoize the transport to prevent recreation on every render
 	const transport = useMemo(
 		() =>
@@ -135,8 +150,20 @@ export function ChatInterface({
 				body: isPublicMode
 					? undefined
 					: () => ({ conversationId: conversationIdRef.current }),
-				// Handle edit operations by using truncated messages from the ref
+				// Handle edit operations and inject page context
 				prepareSendMessagesRequest: ({ messages: hookMessages }) => {
+					const currentPageContext = pageAIContextRef.current;
+
+					// Build page context fields to include in every request
+					const pageContextBody = currentPageContext?.pageDescription
+						? {
+								pageContext: currentPageContext.pageDescription,
+								availableTools: Object.keys(
+									currentPageContext.clientTools ?? {},
+								),
+							}
+						: {};
+
 					// If we're in an edit operation, use the truncated messages + new user message
 					if (editMessagesRef.current !== null) {
 						const newUserMessage = hookMessages[hookMessages.length - 1];
@@ -150,6 +177,7 @@ export function ChatInterface({
 							body: {
 								messages: messagesToSend,
 								conversationId: conversationIdRef.current,
+								...pageContextBody,
 							},
 						};
 					}
@@ -158,6 +186,7 @@ export function ChatInterface({
 						body: {
 							messages: hookMessages,
 							conversationId: conversationIdRef.current,
+							...pageContextBody,
 						},
 					};
 				},
@@ -165,48 +194,99 @@ export function ChatInterface({
 		[apiPath, isPublicMode],
 	);
 
-	const { messages, sendMessage, status, error, setMessages, regenerate } =
-		useChat({
-			transport,
-			onError: (err) => {
-				console.error("useChat onError:", err);
-				// Reset first-message tracking if the send failed before a conversation was created.
-				// Without this, isFirstMessageSentRef stays true and the next successful send
-				// skips the "first message" navigation logic, corrupting the conversation flow.
-				if (!id && !hasNavigatedRef.current) {
-					isFirstMessageSentRef.current = false;
-				}
-			},
-			onFinish: async () => {
-				// In public mode, skip all persistence-related operations
-				if (isPublicMode) return;
+	// Use a ref so addToolOutput is always current inside the onToolCall closure
+	const addToolOutputRef = useRef<
+		ReturnType<typeof useChat>["addToolOutput"] | null
+	>(null);
 
-				// Invalidate conversation list to show new/updated conversations
-				await queryClient.invalidateQueries({
+	const {
+		messages,
+		sendMessage,
+		status,
+		error,
+		setMessages,
+		regenerate,
+		addToolOutput,
+	} = useChat({
+		transport,
+		// Automatically resubmit after all client-side tool results are provided
+		sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+		onToolCall: async ({ toolCall }) => {
+			// Dispatch client-side tool calls to the handler registered by the current page.
+			// In AI SDK v5, onToolCall returns void — addToolOutput must be called explicitly.
+			const toolName = toolCall.toolName;
+			const handler = pageAIContextRef.current?.clientTools?.[toolName];
+			if (handler) {
+				try {
+					const result = await handler(toolCall.input);
+					// No await — avoids potential deadlocks with sendAutomaticallyWhen
+					addToolOutputRef.current?.({
+						tool: toolName,
+						toolCallId: toolCall.toolCallId,
+						output: result,
+					});
+				} catch (err) {
+					addToolOutputRef.current?.({
+						tool: toolName,
+						toolCallId: toolCall.toolCallId,
+						state: "output-error",
+						errorText:
+							err instanceof Error ? err.message : "Tool execution failed",
+					});
+				}
+			} else {
+				// No handler found — this happens when the user navigates away while a
+				// tool-call response is streaming and the page context changes. Always
+				// call addToolOutput so sendAutomaticallyWhen can unblock; without this
+				// the conversation gets permanently stuck waiting for a missing output.
+				addToolOutputRef.current?.({
+					tool: toolName,
+					toolCallId: toolCall.toolCallId,
+					state: "output-error",
+					errorText: `No client-side handler registered for tool "${toolName}". The page context may have changed while the response was streaming.`,
+				});
+			}
+		},
+		onError: (err) => {
+			console.error("useChat onError:", err);
+			// Reset first-message tracking if the send failed before a conversation was created.
+			// Without this, isFirstMessageSentRef stays true and the next successful send
+			// skips the "first message" navigation logic, corrupting the conversation flow.
+			if (!id && !hasNavigatedRef.current) {
+				isFirstMessageSentRef.current = false;
+			}
+		},
+		onFinish: async () => {
+			// In public mode, skip all persistence-related operations
+			if (isPublicMode) return;
+
+			// Invalidate conversation list to show new/updated conversations
+			await queryClient.invalidateQueries({
+				queryKey: conversationsListQueryKey,
+			});
+
+			// If this was the first message on a new chat, update the URL without full navigation
+			// This avoids losing the in-memory messages during component remount
+			if (isFirstMessageSentRef.current && !id && !hasNavigatedRef.current) {
+				hasNavigatedRef.current = true;
+				// Wait for the invalidation to complete and refetch conversations
+				await queryClient.refetchQueries({
 					queryKey: conversationsListQueryKey,
 				});
-
-				// If this was the first message on a new chat, update the URL without full navigation
-				// This avoids losing the in-memory messages during component remount
-				if (isFirstMessageSentRef.current && !id && !hasNavigatedRef.current) {
-					hasNavigatedRef.current = true;
-					// Wait for the invalidation to complete and refetch conversations
-					await queryClient.refetchQueries({
-						queryKey: conversationsListQueryKey,
-					});
-					// Get the updated conversations from cache
-					const cachedConversations = queryClient.getQueryData<
-						SerializedConversation[]
-					>(conversationsListQueryKey);
-					if (cachedConversations && cachedConversations.length > 0) {
-						// The most recently updated conversation should be the one we just created
-						const newConversation = cachedConversations[0];
-						if (newConversation) {
-							// Update our local state
-							setCurrentConversationId(newConversation.id);
-							conversationIdRef.current = newConversation.id;
-							// Update URL without navigation to preserve in-memory messages
-							// Use replaceState to avoid adding to history stack
+				// Get the updated conversations from cache
+				const cachedConversations = queryClient.getQueryData<
+					SerializedConversation[]
+				>(conversationsListQueryKey);
+				if (cachedConversations && cachedConversations.length > 0) {
+					// The most recently updated conversation should be the one we just created
+					const newConversation = cachedConversations[0];
+					if (newConversation) {
+						// Update our local state
+						setCurrentConversationId(newConversation.id);
+						conversationIdRef.current = newConversation.id;
+						// Only update the URL in full-page mode; in widget mode the chat is
+						// embedded in another page and clobbering the URL is disruptive.
+						if (variant === "full") {
 							const newUrl = `${basePath}/chat/${newConversation.id}`;
 							if (typeof window !== "undefined") {
 								window.history.replaceState(
@@ -218,8 +298,14 @@ export function ChatInterface({
 						}
 					}
 				}
-			},
-		});
+			}
+		},
+	});
+
+	// Keep addToolOutputRef in sync so onToolCall always has the latest reference
+	useEffect(() => {
+		addToolOutputRef.current = addToolOutput;
+	}, [addToolOutput]);
 
 	// Load existing conversation messages when navigating to a conversation
 	useEffect(() => {
@@ -487,20 +573,29 @@ export function ChatInterface({
 									<div className="flex-1 flex items-center justify-center text-muted-foreground">
 										<p>{localization.CHAT_EMPTY_STATE}</p>
 									</div>
-									{chatSuggestions && chatSuggestions.length > 0 && (
-										<div className="flex flex-wrap justify-center gap-2 pb-4 max-w-md mx-auto">
-											{chatSuggestions.map((suggestion, index) => (
-												<button
-													key={index}
-													type="button"
-													onClick={() => setInput(suggestion)}
-													className="px-3 py-2 text-sm rounded-lg border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors text-foreground"
-												>
-													{suggestion}
-												</button>
-											))}
-										</div>
-									)}
+									{(() => {
+										// Merge static suggestions from overrides with dynamic ones from page context.
+										// Page context suggestions appear first (most relevant to current page).
+										const pageSuggestions = pageAIContext?.suggestions ?? [];
+										const allSuggestions = [
+											...pageSuggestions,
+											...(chatSuggestions ?? []),
+										];
+										return allSuggestions.length > 0 ? (
+											<div className="flex flex-wrap justify-center gap-2 pb-4 max-w-md mx-auto">
+												{allSuggestions.map((suggestion, index) => (
+													<button
+														key={index}
+														type="button"
+														onClick={() => setInput(suggestion)}
+														className="px-3 py-2 text-sm rounded-lg border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors text-foreground"
+													>
+														{suggestion}
+													</button>
+												))}
+											</div>
+										) : null;
+									})()}
 								</div>
 							) : (
 								messages.map((m, index) => (

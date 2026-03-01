@@ -24,6 +24,11 @@ import {
 	updateTaskSchema,
 } from "../schemas";
 import { getAllBoards, getBoardById } from "./getters";
+import {
+	createKanbanTask,
+	findOrCreateKanbanBoard,
+	getKanbanColumnsByBoardId,
+} from "./mutations";
 import { KANBAN_QUERY_KEYS } from "./query-key-defs";
 import { serializeBoard } from "./serializers";
 import type { QueryClient } from "@tanstack/react-query";
@@ -317,6 +322,13 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 				getAllBoards(adapter, params),
 			getBoardById: (id: string) => getBoardById(adapter, id),
 			prefetchForRoute: createKanbanPrefetchForRoute(adapter),
+			// Mutations
+			createTask: (input: Parameters<typeof createKanbanTask>[1]) =>
+				createKanbanTask(adapter, input),
+			findOrCreateBoard: (slug: string, name: string, columnTitles: string[]) =>
+				findOrCreateKanbanBoard(adapter, slug, name, columnTitles),
+			getColumnsByBoardId: (boardId: string) =>
+				getKanbanColumnsByBoardId(adapter, boardId),
 		}),
 
 		routes: (adapter: Adapter) => {

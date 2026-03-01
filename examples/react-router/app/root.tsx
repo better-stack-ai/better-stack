@@ -16,6 +16,7 @@ import "./app.css";
 import { ThemeProvider } from "next-themes";
 import { Navbar } from "./components/navbar";
 import { Toaster } from "sonner";
+import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -40,16 +41,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <Navbar />
-          {children}
-          <Toaster />
-        </ThemeProvider>
+        <PageAIContextProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <Navbar />
+            {children}
+            <Toaster />
+          </ThemeProvider>
+        </PageAIContextProvider>
         <ScrollRestoration />
         <Scripts />
       </body>

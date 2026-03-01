@@ -20,6 +20,7 @@ import { Badge } from "@workspace/ui/components/badge";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { OnThisPage, OnThisPageSelect } from "../shared/on-this-page";
 import type { SerializedPost } from "../../../types";
+import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
 
 // Internal component with actual page content
 export function PostPage({ slug }: { slug: string }) {
@@ -63,6 +64,25 @@ export function PostPage({ slug }: { slug: string }) {
 		excludeSlug: slug,
 		enabled: !!post,
 	});
+
+	// Register page AI context so the chat can summarize and discuss this post
+	useRegisterPageAIContext(
+		post
+			? {
+					routeName: "blog-post",
+					pageDescription:
+						`Blog post: "${post.title}"\nAuthor: ${post.authorId ?? "Unknown"}\n\n${post.content ?? ""}`.slice(
+							0,
+							16000,
+						),
+					suggestions: [
+						"Summarize this post",
+						"What are the key takeaways?",
+						"Explain this in simpler terms",
+					],
+				}
+			: null,
+	);
 
 	if (!slug || !post) {
 		return (

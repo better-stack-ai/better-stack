@@ -17,6 +17,7 @@ import {
 } from "../schemas";
 import type { Conversation, ConversationWithMessages, Message } from "../types";
 import { getAllConversations, getConversationById } from "./getters";
+import { BUILT_IN_PAGE_TOOL_SCHEMAS } from "./page-tools";
 
 /**
  * Context passed to AI Chat API hooks
@@ -270,6 +271,31 @@ export interface AiChatBackendConfig {
 	tools?: Record<string, Tool>;
 
 	/**
+	 * Enable route-aware page tools.
+	 * When true, the server will include tool schemas for client-side page tools
+	 * (e.g. fillBlogForm, updatePageLayers) based on the availableTools list
+	 * sent with each request.
+	 * @default false
+	 */
+	enablePageTools?: boolean;
+
+	/**
+	 * Custom client-side tool schemas for non-BTST pages.
+	 * Merged with built-in page tool schemas (fillBlogForm, updatePageLayers).
+	 * Only included when enablePageTools is true and the tool name appears in
+	 * the availableTools list sent with the request.
+	 *
+	 * @example
+	 * clientToolSchemas: {
+	 *   addToCart: tool({
+	 *     description: "Add current product to cart",
+	 *     parameters: z.object({ quantity: z.number().int().min(1) }),
+	 *   }),
+	 * }
+	 */
+	clientToolSchemas?: Record<string, Tool>;
+
+	/**
 	 * Optional hooks for customizing plugin behavior
 	 */
 	hooks?: AiChatBackendHooks;
@@ -350,7 +376,12 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 					body: chatRequestSchema,
 				},
 				async (ctx) => {
-					const { messages: rawMessages, conversationId } = ctx.body;
+					const {
+						messages: rawMessages,
+						conversationId,
+						pageContext,
+						availableTools,
+					} = ctx.body;
 					const uiMessages = rawMessages as UIMessage[];
 
 					const context: ChatApiContext = {
@@ -388,22 +419,54 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 						// Convert UIMessages to CoreMessages for streamText
 						const modelMessages = convertToModelMessages(uiMessages);
 
-						// Add system prompt if configured
-						const messagesWithSystem = config.systemPrompt
+						// Build system prompt: base config + optional page context
+						const pageContextContent =
+							pageContext && pageContext.trim()
+								? `\n\nCurrent page context:\n${pageContext}`
+								: "";
+						const systemContent = config.systemPrompt
+							? `${config.systemPrompt}${pageContextContent}`
+							: pageContextContent || undefined;
+
+						const messagesWithSystem = systemContent
 							? [
-									{ role: "system" as const, content: config.systemPrompt },
+									{ role: "system" as const, content: systemContent },
 									...modelMessages,
 								]
 							: modelMessages;
+
+						// Merge page tool schemas when enablePageTools is on
+						// Built-in schemas + consumer custom schemas, filtered by availableTools from request
+						const activePageTools: Record<string, Tool> =
+							config.enablePageTools &&
+							availableTools &&
+							availableTools.length > 0
+								? (() => {
+										const allPageSchemas = {
+											...BUILT_IN_PAGE_TOOL_SCHEMAS,
+											...(config.clientToolSchemas ?? {}),
+										};
+										return Object.fromEntries(
+											availableTools
+												.filter((name) => name in allPageSchemas)
+												.map((name) => [name, allPageSchemas[name]!]),
+										);
+									})()
+								: {};
+
+						const mergedTools =
+							Object.keys(activePageTools).length > 0
+								? { ...config.tools, ...activePageTools }
+								: config.tools;
 
 						// PUBLIC MODE: Stream without persistence
 						if (isPublicMode) {
 							const result = streamText({
 								model: config.model,
 								messages: messagesWithSystem,
-								tools: config.tools,
+								tools: mergedTools,
 								// Enable multi-step tool calls if tools are configured
-								...(config.tools ? { stopWhen: stepCountIs(5) } : {}),
+								...(mergedTools ? { stopWhen: stepCountIs(5) } : {}),
 							});
 
 							return result.toUIMessageStreamResponse({
@@ -557,9 +620,9 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 						const result = streamText({
 							model: config.model,
 							messages: messagesWithSystem,
-							tools: config.tools,
+							tools: mergedTools,
 							// Enable multi-step tool calls if tools are configured
-							...(config.tools ? { stopWhen: stepCountIs(5) } : {}),
+							...(mergedTools ? { stopWhen: stepCountIs(5) } : {}),
 							onFinish: async (completion: { text: string }) => {
 								// Wrap in try-catch since this runs after the response is sent
 								// and errors would otherwise become unhandled promise rejections

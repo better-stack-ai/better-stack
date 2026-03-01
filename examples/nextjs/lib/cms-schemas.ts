@@ -119,6 +119,39 @@ export const CommentSchema = z.object({
     }),
 })
 
+// ========== Client Profile Schema (WealthReview Demo) ==========
+export const ClientProfileSchema = z.object({
+    clientName: z.string().min(1).meta({ description: "Client full name" }),
+    age: z.coerce.number().min(18).max(120).meta({ description: "Client age" }),
+    riskTolerance: z.enum(["conservative", "moderate", "aggressive"]).meta({
+        description: "Risk tolerance level",
+    }),
+    totalAssets: z.coerce.number().min(0).optional().meta({
+        description: "Total declared assets (CAD)",
+    }),
+    windfallAmount: z.coerce.number().min(0).optional().meta({
+        description: "Incoming windfall amount, if applicable (CAD)",
+    }),
+    lifeEvents: z.string().optional().meta({
+        description: "Upcoming or recent life events (comma-separated)",
+        fieldType: "textarea",
+    }),
+    recommendation: z.string().meta({
+        description: "AI-generated advisor recommendation",
+        fieldType: "textarea",
+    }),
+    amlFlag: z.boolean().default(false).meta({
+        description: "AML escalation flag — requires compliance review if true",
+    }),
+    amlReason: z.string().optional().meta({
+        description: "Reason for AML flag, if applicable",
+        fieldType: "textarea",
+    }),
+    confidenceScore: z.coerce.number().min(0).max(100).meta({
+        description: "AI confidence score (0–100)",
+    }),
+})
+
 // ========== Type Exports ==========
 
 /** Inferred type for Product data */
@@ -135,6 +168,9 @@ export type ResourceData = z.infer<typeof ResourceSchema>
 
 /** Inferred type for Comment data */
 export type CommentData = z.infer<typeof CommentSchema>
+
+/** Inferred type for ClientProfile data */
+export type ClientProfileData = z.infer<typeof ClientProfileSchema>
 
 /**
  * Type map for all CMS content types.
@@ -165,4 +201,5 @@ export type CMSTypes = {
     category: CategoryData
     resource: ResourceData
     comment: CommentData
+    "client-profile": ClientProfileData
 }

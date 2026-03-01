@@ -99,6 +99,8 @@ export default defineConfig({
 				"**/*.ui-builder.spec.ts",
 				"**/*.kanban.spec.ts",
 				"**/*.ssg.spec.ts",
+				"**/*.page-context.spec.ts",
+				"**/*.wealthreview.spec.ts",
 			],
 		},
 		{
@@ -112,6 +114,7 @@ export default defineConfig({
 				"**/*.cms.spec.ts",
 				"**/*.relations-cms.spec.ts",
 				"**/*.form-builder.spec.ts",
+				"**/*.page-context.spec.ts",
 			],
 		},
 		{
@@ -125,6 +128,7 @@ export default defineConfig({
 				"**/*.cms.spec.ts",
 				"**/*.relations-cms.spec.ts",
 				"**/*.form-builder.spec.ts",
+				"**/*.page-context.spec.ts",
 			],
 		},
 	],
