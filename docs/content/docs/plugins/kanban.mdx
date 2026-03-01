@@ -856,3 +856,96 @@ const kanbanHooks: KanbanBackendHooks = {
 ### Query key consistency
 
 `prefetchForRoute` uses the same query key shapes as `createKanbanQueryKeys` (the HTTP client). The shared constants live in `@btst/stack/plugins/kanban/api` as `KANBAN_QUERY_KEYS` and `boardsListDiscriminator`, so the two paths can never drift silently.
+
+## Server-side Mutations
+
+In addition to the read-only getters, the Kanban plugin exposes **mutation functions** for creating boards, columns, and tasks directly from server-side code — no HTTP roundtrip required. These live in `api/mutations.ts` and are re-exported from `@btst/stack/plugins/kanban/api`.
+
+<Callout type="warn">
+**Mutation functions bypass authorization hooks.** Hooks such as `onBeforeCreateBoard` and `onBeforeCreateTask` are **not** called when you use these functions. They are pure database writes — the caller is responsible for any access-control checks before invoking them. Never call mutations from user-facing request handlers without adding your own authorization logic first.
+</Callout>
+
+### Available mutations
+
+| Function | Description |
+|---|---|
+| `createKanbanTask(adapter, input)` | Create a task in a column; auto-computes insertion order |
+| `findOrCreateKanbanBoard(adapter, slug, name, columns)` | Find a board by slug or create it with custom column titles |
+| `getKanbanColumnsByBoardId(adapter, boardId)` | List columns for a board sorted by order |
+
+### `createKanbanTask`
+
+```ts
+import { createKanbanTask } from "@btst/stack/plugins/kanban/api"
+
+await createKanbanTask(myStack.adapter, {
+  title: "Review Q1 financials",
+  columnId: "col-abc",
+  description: "See attached report",
+  priority: "HIGH",         // "LOW" | "MEDIUM" | "HIGH" | "URGENT"
+})
+```
+
+### `findOrCreateKanbanBoard`
+
+Creates a board with custom column titles on first call; returns the existing board on subsequent calls. Safe to call concurrently — uses find-before-create.
+
+```ts
+import { findOrCreateKanbanBoard, getKanbanColumnsByBoardId } from "@btst/stack/plugins/kanban/api"
+
+const board = await findOrCreateKanbanBoard(
+  myStack.adapter,
+  "advisor-review-queue",           // slug (URL-safe, unique)
+  "Advisor Review Queue",           // display name (used only on creation)
+  ["New Intakes", "Under Review", "Escalated"], // column titles (used only on creation)
+)
+
+const columns = await getKanbanColumnsByBoardId(myStack.adapter, board.id)
+const target = columns.find((c) => c.title === "New Intakes")
+```
+
+### Via `myStack.api.kanban`
+
+All three functions are also available pre-bound to the stack adapter:
+
+```ts
+const board = await myStack.api.kanban.findOrCreateBoard(
+  "advisor-review-queue",
+  "Advisor Review Queue",
+  ["New Intakes", "Under Review", "Escalated"],
+)
+const columns = await myStack.api.kanban.getColumnsByBoardId(board.id)
+await myStack.api.kanban.createTask({
+  title: "Sarah Chen — Ready for Review",
+  columnId: columns[0]!.id,
+  priority: "MEDIUM",
+})
+```
+
+### Inside an AI tool `execute` function
+
+The primary use case for mutations is populating Kanban boards from server-side AI tool callbacks:
+
+```ts title="lib/stack.ts"
+import { tool } from "ai"
+import { z } from "zod"
+import { createKanbanTask, findOrCreateKanbanBoard, getKanbanColumnsByBoardId } from "@btst/stack/plugins/kanban/api"
+
+// Adapter captured after stack() returns — safe for tool execute closures
+let adapter: any
+
+const myTool = tool({
+  description: "Create a review card",
+  inputSchema: z.object({ title: z.string(), urgent: z.boolean() }),
+  execute: async ({ title, urgent }) => {
+    const board = await findOrCreateKanbanBoard(adapter, "review", "Review Queue", ["To Do", "Urgent"])
+    const columns = await getKanbanColumnsByBoardId(adapter, board.id)
+    const col = urgent ? columns.find((c) => c.title === "Urgent") : columns[0]
+    await createKanbanTask(adapter, { title, columnId: col!.id, priority: urgent ? "URGENT" : "MEDIUM" })
+    return { success: true }
+  },
+})
+
+export const myStack = stack({ plugins: { aiChat: aiChatBackendPlugin({ tools: { myTool } }), kanban: kanbanBackendPlugin() } })
+adapter = myStack.adapter
+```

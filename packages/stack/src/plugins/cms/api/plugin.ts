@@ -30,6 +30,7 @@ import {
 	serializeContentItem,
 	serializeContentItemWithType,
 } from "./getters";
+import { createCMSContentItem } from "./mutations";
 import type { QueryClient } from "@tanstack/react-query";
 import { CMS_QUERY_KEYS } from "./query-key-defs";
 
@@ -569,6 +570,14 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 				return getContentItemById(adapter, id);
 			},
 			prefetchForRoute: createCMSPrefetchForRoute(adapter),
+			// Mutations
+			createContentItem: async (
+				typeSlug: string,
+				input: Parameters<typeof createCMSContentItem>[2],
+			) => {
+				await ensureSynced(adapter);
+				return createCMSContentItem(adapter, typeSlug, input);
+			},
 		}),
 
 		routes: (adapter: Adapter) => {

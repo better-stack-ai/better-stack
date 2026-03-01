@@ -99,6 +99,32 @@ const item  = await myStack.api["{name}"].getItemById("abc")
 - Re-export getters from `api/index.ts` for consumers who need direct import (SSG/build-time)
 - Authorization hooks are **not** called via `stack().api.*` — callers are responsible for access control
 
+### Server-side Mutations (`mutations.ts`)
+
+Plugins expose write operations in a separate `api/mutations.ts` file — distinct from the read-only `getters.ts`. Both are re-exported from `api/index.ts` and wired into the `api` factory.
+
+**Rules:**
+- Keep mutations in `mutations.ts` — no authorization hooks, no HTTP context
+- Document clearly in JSDoc: "Authorization hooks are NOT called"
+- Re-export from `api/index.ts` alongside getters
+- Common use case: AI tool `execute` callbacks, cron jobs, admin scripts
+
+**Adapter capture pattern for AI tool `execute` functions:**
+```typescript
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _adapter: any
+
+const myTool = tool({
+  execute: async (params) => {
+    await createKanbanTask(_adapter, { title: params.title, columnId: "col-id" })
+    return { success: true }
+  }
+})
+
+export const myStack = stack({ plugins: { ..., aiChat: aiChatBackendPlugin({ tools: { myTool } }) } })
+_adapter = myStack.adapter  // set after stack() returns, before any HTTP requests
+```
+
 ### SSG Support (`prefetchForRoute`)
 
 `route.loader()` makes HTTP requests that **silently fail at `next build`** (no server running). Plugins that support SSG expose `prefetchForRoute` on the `api` factory to seed the React Query cache directly from the DB instead.
@@ -730,3 +756,7 @@ useRegisterPageAIContext({
 15. **Wrong data shape for infinite queries** - Lists backed by `useInfiniteQuery` need `{ pages: [...], pageParams: [...] }` in `setQueryData`. Flat arrays will break hydration.
 
 16. **Dates not serialized before `setQueryData`** - DB getters return `Date` objects; the HTTP cache holds ISO strings. Always serialize (e.g. `serializePost`) before `setQueryData`.
+
+17. **Putting write operations in `getters.ts`** - Write functions (create, update, delete) belong in `mutations.ts`, not `getters.ts`. This keeps the naming convention clear and signals to callers that no authorization hooks are invoked.
+
+18. **Tool `execute` adapter reference not set** - If a tool's `execute` function uses `_adapter` captured from `myStack.adapter`, make sure the assignment `_adapter = myStack.adapter` runs unconditionally at module level (not inside an `if` branch). In Next.js dev mode with hot reload, the global singleton pattern (`globalForStack.__btst_stack__ ??= createStack()`) means `createStack()` only runs once — ensure the assignment happens inside `createStack()` before returning, not outside.

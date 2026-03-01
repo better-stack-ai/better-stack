@@ -22,7 +22,8 @@ You can create plugins **inside your project** (like the [Todo example](#in-proj
 your-plugin/
 ├── api/
 │   ├── backend.ts          # Backend plugin (defineBackendPlugin)
-│   ├── getters.ts          # Pure DB functions — no HTTP context
+│   ├── getters.ts          # Pure DB read functions — no HTTP context
+│   ├── mutations.ts        # Server-side write functions — no hooks, no HTTP context
 │   ├── query-key-defs.ts   # Shared query key shapes (prevents SSG/SSR drift)
 │   └── serializers.ts      # Convert Date fields to strings for the query cache
 ├── client/
@@ -386,6 +387,105 @@ export const todosBackendPlugin = defineBackendPlugin({
 
 // In api/index.ts — re-export for consumers
 export { listTodos } from "./getters"
+```
+
+### Server-side Mutations (`mutations.ts`)
+
+Plugins can also expose **write operations** that bypass the HTTP layer — useful inside AI tool `execute` callbacks, cron jobs, admin scripts, or any server-side code that needs to create or update records without going through an HTTP endpoint.
+
+Keep mutations in a **separate `api/mutations.ts`** file, distinct from the read-only `getters.ts`. Both are re-exported from `api/index.ts` and exposed on the `api` factory.
+
+<Callout type="warn">
+**Mutation functions bypass authorization hooks.** Plugin hooks such as `onBeforeCreateTask` are **not** called when you use these functions directly. The caller is responsible for any access-control checks before invoking mutations. Never call them from user-facing request handlers without adding your own authorization logic first.
+</Callout>
+
+```typescript
+// api/mutations.ts — write operations, no hooks, no HTTP context
+import type { Adapter } from "@btst/stack/plugins/api"
+import type { Todo } from "../types"
+
+export interface CreateTodoInput {
+  title: string
+  description?: string
+}
+
+/**
+ * Create a todo directly in the database.
+ *
+ * @remarks Authorization hooks are NOT called. The caller is responsible for
+ * access-control checks.
+ */
+export async function createTodo(
+  adapter: Adapter,
+  input: CreateTodoInput,
+): Promise<Todo> {
+  return adapter.create<Todo>({
+    model: "todo",
+    data: {
+      title: input.title,
+      description: input.description,
+      completed: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  })
+}
+```
+
+Wire mutations into the `api` factory alongside the read methods:
+
+```typescript
+// api/backend.ts
+import { listTodos } from "./getters"
+import { createTodo, type CreateTodoInput } from "./mutations"
+
+export const todosBackendPlugin = defineBackendPlugin({
+  name: "todos",
+  dbPlugin: dbSchema,
+  api: (adapter) => ({
+    // Reads
+    listTodos: () => listTodos(adapter),
+    // Mutations
+    createTodo: (input: CreateTodoInput) => createTodo(adapter, input),
+  }),
+  routes: (adapter) => { /* HTTP endpoints */ },
+})
+
+// api/index.ts — re-export both
+export { listTodos } from "./getters"
+export { createTodo, type CreateTodoInput } from "./mutations"
+```
+
+**Common use case — inside an AI tool `execute` function:**
+
+Because AI tool `execute` functions run at request time (after module initialization), the adapter can safely be captured via a module-level variable set immediately after `stack()` returns:
+
+```typescript title="lib/stack.ts"
+import { createTodo } from "./plugins/todo/api/mutations"
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _adapter: any
+
+const myTool = tool({
+  description: "Create a new task",
+  inputSchema: z.object({ title: z.string() }),
+  execute: async ({ title }) => {
+    await createTodo(_adapter, { title })
+    return { success: true }
+  },
+})
+
+export const myStack = stack({
+  plugins: {
+    todos: todosBackendPlugin,
+    aiChat: aiChatBackendPlugin({ tools: { myTool } }),
+  },
+  adapter: (db) => createMemoryAdapter(db)({}),
+})
+
+// Adapter is now available — execute() only fires during HTTP requests,
+// which occur after module initialization is complete.
+_adapter = myStack.adapter
 ```
 
 ---

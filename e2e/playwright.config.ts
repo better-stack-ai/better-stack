@@ -100,6 +100,7 @@ export default defineConfig({
 				"**/*.kanban.spec.ts",
 				"**/*.ssg.spec.ts",
 				"**/*.page-context.spec.ts",
+				"**/*.wealthreview.spec.ts",
 			],
 		},
 		{
