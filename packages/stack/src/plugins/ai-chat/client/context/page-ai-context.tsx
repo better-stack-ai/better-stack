@@ -178,16 +178,49 @@ export function useRegisterPageAIContext(
 	const ctx = useContext(PageAIAPIContext);
 	const id = useId();
 
+	// Always keep the ref current so clientTools handlers are never stale.
+	// Updating a ref during render is safe — the value is visible to any effect
+	// that runs in the same commit.
+	const configRef = useRef<PageAIContextConfig | null>(config);
+	configRef.current = config;
+
 	useEffect(() => {
-		if (!ctx || !config) return;
-		ctx.register(id, config);
+		if (!ctx || !configRef.current) return;
+		// Register a live proxy that always reads from configRef. This ensures
+		// clientTools handlers are fresh even when the effect doesn't re-run —
+		// for example when a handler's closure captures new state but the
+		// serializable fields (routeName, pageDescription, suggestions) are unchanged.
+		// JSON.stringify silently strips function values, so clientTools would be
+		// invisible to a plain JSON.stringify(config) dependency check.
+		ctx.register(id, {
+			get routeName() {
+				return configRef.current!.routeName;
+			},
+			get pageDescription() {
+				return configRef.current!.pageDescription;
+			},
+			get suggestions() {
+				return configRef.current?.suggestions;
+			},
+			get clientTools() {
+				return configRef.current?.clientTools;
+			},
+		});
 		return () => {
 			ctx.unregister(id);
 		};
-		// Stringify to deep-compare config without referential instability
-		// (inline objects and functions are recreated on every render).
+		// Track serializable fields individually. JSON.stringify on the whole config
+		// would silently strip clientTools (functions), making handler changes invisible.
+		// Handler freshness is provided by the ref-proxy above instead.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [ctx, id, JSON.stringify(config)]);
+	}, [
+		ctx,
+		id,
+		config === null,
+		config?.routeName,
+		config?.pageDescription,
+		JSON.stringify(config?.suggestions),
+	]);
 }
 
 /**
