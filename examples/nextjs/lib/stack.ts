@@ -21,7 +21,6 @@ import {
     findOrCreateKanbanBoard,
     getKanbanColumnsByBoardId,
 } from "@btst/stack/plugins/kanban/api"
-import { createCMSContentItem } from "@btst/stack/plugins/cms/api"
 
 // Tool to fetch BTST documentation
 const stackDocsTool = tool({
@@ -116,10 +115,11 @@ const blogHooks: BlogBackendHooks = {
 const globalForStack = global as typeof global & { __btst_stack__?: ReturnType<typeof stack> };
 
 // WealthReview Demo — AI-native financial intake tool
-// The execute function closes over `wealthReviewAdapter` which is set immediately
-// after stack() returns — always available by the time any HTTP request fires.
+// Both references are set inside createStack() before any HTTP request fires.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let wealthReviewAdapter: any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let wealthReviewCmsApi: any
 
 const submitIntakeAssessment = tool({
     description:
@@ -168,8 +168,11 @@ const submitIntakeAssessment = tool({
         const adapter = wealthReviewAdapter
 
         // 1. Persist client profile in CMS
+        // Use api.cms.createContentItem (not the standalone mutation) so that
+        // ensureSynced() runs first — required if no CMS HTTP request has been
+        // made before this tool call (the content type won't exist otherwise).
         const slug = `client-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-        await createCMSContentItem(adapter, "client-profile", {
+        await wealthReviewCmsApi.createContentItem("client-profile", {
             slug,
             data: {
                 ...params,
@@ -352,10 +355,11 @@ function createStack() {
         adapter: (db) => createMemoryAdapter(db)({})
     })
 
-    // Capture adapter for the WealthReview tool's execute function.
+    // Capture adapter and CMS api for the WealthReview tool's execute function.
     // Safe to assign here — execute only runs during HTTP requests, which
     // occur after module initialization is complete.
     wealthReviewAdapter = s.adapter
+    wealthReviewCmsApi = s.api.cms
 
     return s
 }

@@ -117,17 +117,23 @@ test.describe("WealthReview AI Demo", () => {
 			timeout: 10000,
 		});
 
-		// Navigate to Kanban and verify the escalated card exists
+		// Navigate to Kanban and click into the Advisor Review Queue board
 		await page.goto("/pages/kanban");
 		await expect(page.getByText("Advisor Review Queue")).toBeVisible({
 			timeout: 15000,
 		});
 
-		// The Escalated column should have a card (look for escalation indicators)
+		// Click through to the board detail so we can see columns and cards
+		await page.getByText("Advisor Review Queue").click();
+
+		// The Escalated column header should be visible on the board detail page
+		await expect(page.getByText("Escalated").first()).toBeVisible({
+			timeout: 15000,
+		});
+
+		// The AML-flagged card title should contain "ESCALATED"
 		await expect(
-			page
-				.getByText("Escalated")
-				.or(page.getByText("ESCALATED", { exact: false })),
+			page.getByText("ESCALATED", { exact: false }).first(),
 		).toBeVisible({ timeout: 10000 });
 	});
 
