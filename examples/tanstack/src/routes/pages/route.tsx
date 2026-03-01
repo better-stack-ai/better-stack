@@ -221,7 +221,7 @@ function Layout() {
                 <Outlet />
                 {/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}
                 <div
-                    className="fixed bottom-6 right-6 z-50 w-[380px] shadow-xl"
+                    className="fixed bottom-6 right-6 z-50"
                     data-testid="chat-widget"
                 >
                     <ChatLayout

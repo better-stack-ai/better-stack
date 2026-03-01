@@ -42,8 +42,10 @@ interface ChatLayoutBaseProps {
 interface ChatLayoutWidgetProps extends ChatLayoutBaseProps {
 	/** Widget mode: compact embeddable panel with a floating trigger button */
 	layout: "widget";
-	/** Height of the widget panel */
+	/** Height of the widget panel. Default: `"600px"` */
 	widgetHeight?: string | number;
+	/** Width of the widget panel. Default: `"380px"` */
+	widgetWidth?: string | number;
 	/**
 	 * Whether the widget panel starts open. Default: `false`.
 	 * Set to `true` when embedding inside an already-open container such as a
@@ -87,6 +89,8 @@ export function ChatLayout(props: ChatLayoutProps) {
 	// Widget-specific props — TypeScript narrows props to ChatLayoutWidgetProps here
 	const widgetHeight =
 		props.layout === "widget" ? (props.widgetHeight ?? "600px") : "600px";
+	const widgetWidth =
+		props.layout === "widget" ? (props.widgetWidth ?? "380px") : "380px";
 	const defaultOpen =
 		props.layout === "widget" ? (props.defaultOpen ?? false) : false;
 	const showTrigger =
@@ -126,10 +130,10 @@ export function ChatLayout(props: ChatLayoutProps) {
 				{/* Chat panel — always mounted to preserve conversation state, hidden when closed */}
 				<div
 					className={cn(
-						"flex flex-col w-full border rounded-xl overflow-hidden bg-background shadow-sm",
+						"flex flex-col border rounded-xl overflow-hidden bg-background shadow-xl",
 						widgetOpen ? "flex" : "hidden",
 					)}
-					style={{ height: widgetHeight }}
+					style={{ height: widgetHeight, width: widgetWidth }}
 				>
 					{/* Widget header with page context badge and action buttons */}
 					<div className="flex items-center gap-1.5 px-3 py-1.5 border-b bg-muted/40">
