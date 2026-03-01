@@ -194,10 +194,10 @@ export function useRegisterPageAIContext(
 		// invisible to a plain JSON.stringify(config) dependency check.
 		ctx.register(id, {
 			get routeName() {
-				return configRef.current!.routeName;
+				return configRef.current?.routeName ?? "";
 			},
 			get pageDescription() {
-				return configRef.current!.pageDescription;
+				return configRef.current?.pageDescription ?? "";
 			},
 			get suggestions() {
 				return configRef.current?.suggestions;
