@@ -570,7 +570,7 @@ export function ChatInterface({
 						>
 							{messages.length === 0 ? (
 								<div className="flex flex-col h-full min-h-[300px]">
-									<div className="flex-1 flex items-center justify-center text-muted-foreground">
+									<div className="flex-1 flex items-center justify-center text-muted-foreground mb-4">
 										<p>{localization.CHAT_EMPTY_STATE}</p>
 									</div>
 									{(() => {
