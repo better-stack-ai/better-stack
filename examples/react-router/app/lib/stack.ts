@@ -74,6 +74,7 @@ const { handler, dbSchema } = stack({
         aiChat: aiChatBackendPlugin({
             model: openai("gpt-4o"),
             mode: "authenticated",
+            enablePageTools: true,
             hooks: {
                 onConversationCreated: async (conversation) => {
                     console.log("Conversation created:", conversation.id);
