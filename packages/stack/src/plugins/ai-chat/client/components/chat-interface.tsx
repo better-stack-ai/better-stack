@@ -161,6 +161,7 @@ export function ChatInterface({
 								availableTools: Object.keys(
 									currentPageContext.clientTools ?? {},
 								),
+								routeName: currentPageContext.routeName,
 							}
 						: {};
 

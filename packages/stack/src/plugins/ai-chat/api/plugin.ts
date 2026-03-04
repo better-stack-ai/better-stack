@@ -17,7 +17,10 @@ import {
 } from "../schemas";
 import type { Conversation, ConversationWithMessages, Message } from "../types";
 import { getAllConversations, getConversationById } from "./getters";
-import { BUILT_IN_PAGE_TOOL_SCHEMAS } from "./page-tools";
+import {
+	BUILT_IN_PAGE_TOOL_ROUTE_ALLOWLIST,
+	BUILT_IN_PAGE_TOOL_SCHEMAS,
+} from "./page-tools";
 
 /**
  * Context passed to AI Chat API hooks
@@ -381,6 +384,7 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 						conversationId,
 						pageContext,
 						availableTools,
+						routeName,
 					} = ctx.body;
 					const uiMessages = rawMessages as UIMessage[];
 
@@ -435,21 +439,39 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 								]
 							: modelMessages;
 
-						// Merge page tool schemas when enablePageTools is on
-						// Built-in schemas + consumer custom schemas, filtered by availableTools from request
+						// Merge page tool schemas when enablePageTools is on.
+						// Built-in schemas are only included when the request's routeName is in
+						// the tool's allowlist — this prevents a page from claiming tools that
+						// are intended for a different route (e.g. requesting updatePageLayers
+						// from a blog page). Consumer clientToolSchemas are trusted as-is.
 						const activePageTools: Record<string, Tool> =
 							config.enablePageTools &&
 							availableTools &&
 							availableTools.length > 0
 								? (() => {
-										const allPageSchemas = {
-											...BUILT_IN_PAGE_TOOL_SCHEMAS,
-											...(config.clientToolSchemas ?? {}),
-										};
+										const consumerSchemas = config.clientToolSchemas ?? {};
 										return Object.fromEntries(
 											availableTools
-												.filter((name) => name in allPageSchemas)
-												.map((name) => [name, allPageSchemas[name]!]),
+												.filter((name) => {
+													// Built-in tool: require routeName to be in its allowlist
+													if (name in BUILT_IN_PAGE_TOOL_SCHEMAS) {
+														const allowed =
+															BUILT_IN_PAGE_TOOL_ROUTE_ALLOWLIST[name];
+														return (
+															allowed &&
+															routeName &&
+															allowed.includes(routeName)
+														);
+													}
+													// Consumer-defined tool: allow if schema is registered
+													return name in consumerSchemas;
+												})
+												.map((name) => {
+													const schema =
+														BUILT_IN_PAGE_TOOL_SCHEMAS[name] ??
+														consumerSchemas[name]!;
+													return [name, schema];
+												}),
 										);
 									})()
 								: {};

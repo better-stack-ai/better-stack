@@ -47,4 +47,10 @@ export const chatRequestSchema = z.object({
 	 * The server includes matching tool schemas in the streamText call.
 	 */
 	availableTools: z.array(z.string()).optional(),
+	/**
+	 * The routeName registered by the page via useRegisterPageAIContext.
+	 * Cross-validated server-side against each built-in tool's route allowlist
+	 * to prevent a page from claiming tools intended for a different route.
+	 */
+	routeName: z.string().optional(),
 });

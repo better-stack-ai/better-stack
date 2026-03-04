@@ -3,15 +3,32 @@ import type { Tool } from "ai";
 import { z } from "zod";
 
 /**
+ * Maps each built-in page tool to the route names that are permitted to request it.
+ *
+ * The server cross-checks the `routeName` field sent with every chat request
+ * against this allowlist before including a built-in tool in the streamText call.
+ * A tool is only activated when both conditions are true:
+ *   1. The tool name appears in the request's `availableTools` list, AND
+ *   2. The request's `routeName` is in this tool's allowlist.
+ *
+ * Consumer-defined tools (via `clientToolSchemas`) are not validated here —
+ * the consumer is responsible for their own access control.
+ */
+export const BUILT_IN_PAGE_TOOL_ROUTE_ALLOWLIST: Record<string, string[]> = {
+	/** Blog new-post and edit-post pages */
+	fillBlogForm: ["blog-new-post", "blog-edit-post", "newPost", "editPost"],
+	/** UI builder edit page */
+	updatePageLayers: ["ui-builder-edit-page"],
+};
+
+/**
  * Built-in client-side-only tool schemas for route-aware AI context.
  *
  * These tools have no `execute` function — they are handled on the client side
  * via the onToolCall handler in ChatInterface, which dispatches to handlers
  * registered by pages via useRegisterPageAIContext.
  *
- * Consumers can add their own tool schemas via clientToolSchemas in AiChatBackendConfig.
- * The server merges built-ins + consumer schemas and filters by the availableTools
- * list sent with each request.
+ * Consumers can add their own tool schemas via `clientToolSchemas` in AiChatBackendConfig.
  */
 export const BUILT_IN_PAGE_TOOL_SCHEMAS: Record<string, Tool> = {
 	/**

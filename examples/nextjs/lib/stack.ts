@@ -382,15 +382,15 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
         adapter: (db) => createMemoryAdapter(db)({})
     })
 
-    // Capture adapter and CMS api for the WealthReview tool's execute function.
-    // Safe to assign here — execute only runs during HTTP requests, which
-    // occur after module initialization is complete.
-    wealthReviewAdapter = s.adapter
-    wealthReviewCmsApi = s.api.cms
-
     return s
 }
 
 export const myStack = globalForStack.__btst_stack__ ??= createStack()
+
+// Re-assign after the ??= so these are always valid, even after Next.js HMR
+// re-evaluates this module (which resets the `let` variables to undefined while
+// createStack() does NOT re-run because the global already holds the stack).
+wealthReviewAdapter = myStack.adapter
+wealthReviewCmsApi = myStack.api.cms
 
 export const { handler, dbSchema } = myStack

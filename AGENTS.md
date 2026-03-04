@@ -121,8 +121,12 @@ const myTool = tool({
   }
 })
 
-export const myStack = stack({ plugins: { ..., aiChat: aiChatBackendPlugin({ tools: { myTool } }) } })
-_adapter = myStack.adapter  // set after stack() returns, before any HTTP requests
+// With the global singleton pattern, use ??= so createStack() only runs once,
+// then ALWAYS assign _adapter after the ??= — never inside createStack().
+// During Next.js HMR the module re-evaluates (resetting `let` to undefined)
+// but createStack() doesn't re-run, so assignments inside it would be skipped.
+export const myStack = globalForStack.__btst_stack__ ??= createStack()
+_adapter = myStack.adapter
 ```
 
 ### SSG Support (`prefetchForRoute`)
@@ -759,4 +763,10 @@ useRegisterPageAIContext({
 
 17. **Putting write operations in `getters.ts`** - Write functions (create, update, delete) belong in `mutations.ts`, not `getters.ts`. This keeps the naming convention clear and signals to callers that no authorization hooks are invoked.
 
-18. **Tool `execute` adapter reference not set** - If a tool's `execute` function uses `_adapter` captured from `myStack.adapter`, make sure the assignment `_adapter = myStack.adapter` runs unconditionally at module level (not inside an `if` branch). In Next.js dev mode with hot reload, the global singleton pattern (`globalForStack.__btst_stack__ ??= createStack()`) means `createStack()` only runs once — ensure the assignment happens inside `createStack()` before returning, not outside.
+18. **Tool `execute` adapter reference not set** - If a tool's `execute` function uses `_adapter` captured from `myStack.adapter`, assign it **after** the `??=` line, not inside `createStack()`. During Next.js HMR the module re-evaluates (resetting `let` variables to `undefined`), but `createStack()` does **not** re-run because the global already holds the stack — so any assignment inside `createStack()` is skipped. Place the assignment unconditionally after the export line so it runs on every module evaluation:
+
+```typescript
+export const myStack = globalForStack.__btst_stack__ ??= createStack()
+// Must be here — not inside createStack() — so HMR re-evaluation re-syncs the reference
+_adapter = myStack.adapter
+```
