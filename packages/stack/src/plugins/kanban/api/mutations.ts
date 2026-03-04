@@ -60,8 +60,19 @@ export async function createKanbanTask(
 }
 
 /**
+ * Coalesces concurrent `findOrCreateKanbanBoard` calls within the same process.
+ * Keyed by slug; entries are removed once the creation promise settles.
+ */
+const _pendingBoardCreations = new Map<string, Promise<Board>>();
+
+/**
  * Find a board by slug, or create it with the given name and custom column titles.
- * Safe to call concurrently — uses a find-first pattern before creating.
+ *
+ * Concurrency-safe at two levels:
+ * - **Same process**: concurrent calls with the same slug share a single in-flight
+ *   Promise (via `_pendingBoardCreations`), so only one DB write is attempted.
+ * - **Cross-instance**: the DB `unique` constraint on `slug` causes the losing
+ *   write to throw; the catch block re-fetches and returns the winner's board.
  *
  * @remarks **Security:** No authorization hooks are called. The caller is
  * responsible for any access-control checks before invoking this function.
@@ -84,32 +95,56 @@ export async function findOrCreateKanbanBoard(
 
 	if (existing) return existing;
 
-	const board = await adapter.create<Board>({
-		model: "kanbanBoard",
-		data: {
-			name,
-			slug,
-			createdAt: new Date(),
-			updatedAt: new Date(),
-		},
-	});
+	// Coalesce same-process concurrent calls for this slug
+	const inflight = _pendingBoardCreations.get(slug);
+	if (inflight) return inflight;
 
-	await Promise.all(
-		columnTitles.map((title, index) =>
-			adapter.create<Column>({
-				model: "kanbanColumn",
+	const creation = (async () => {
+		try {
+			const board = await adapter.create<Board>({
+				model: "kanbanBoard",
 				data: {
-					title,
-					boardId: board.id,
-					order: index,
+					name,
+					slug,
 					createdAt: new Date(),
 					updatedAt: new Date(),
 				},
-			}),
-		),
-	);
+			});
 
-	return board;
+			await Promise.all(
+				columnTitles.map((title, index) =>
+					adapter.create<Column>({
+						model: "kanbanColumn",
+						data: {
+							title,
+							boardId: board.id,
+							order: index,
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						},
+					}),
+				),
+			);
+
+			return board;
+		} catch (err) {
+			// Cross-instance race: another process won the unique-constraint race.
+			// Re-fetch so all callers return the same board.
+			const winner = await adapter.findOne<Board>({
+				model: "kanbanBoard",
+				where: [{ field: "slug", value: slug, operator: "eq" as const }],
+			});
+			if (winner) return winner;
+			throw err;
+		}
+	})();
+
+	_pendingBoardCreations.set(slug, creation);
+	try {
+		return await creation;
+	} finally {
+		_pendingBoardCreations.delete(slug);
+	}
 }
 
 /**
