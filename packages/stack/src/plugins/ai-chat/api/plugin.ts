@@ -253,6 +253,32 @@ export type AiChatMode = "authenticated" | "public";
 /**
  * Configuration for AI Chat backend plugin
  */
+/**
+ * Extracts only the literal (non-index-signature) keys from a type.
+ * For `Record<string, T>` this resolves to `never`, so collision checks are
+ * skipped when the tools map is typed with a broad string index.
+ */
+type KnownKeys<T> = {
+	[K in keyof T]: string extends K ? never : K;
+}[keyof T];
+
+/**
+ * Ensures `TClientTools` has no keys that are also literal keys in `TTools`.
+ * Colliding keys are mapped to `never`, which produces a compile-time error
+ * at the point of the duplicate key. When `TTools` uses a string index
+ * signature the check is skipped to avoid false positives.
+ */
+type NoKeyCollision<
+	TTools,
+	TClientTools extends Record<string, Tool>,
+> = KnownKeys<TTools> & keyof TClientTools extends never
+	? TClientTools
+	: {
+			[K in keyof TClientTools]: K extends KnownKeys<TTools>
+				? never // duplicate of a server-side tool — remove from clientToolSchemas
+				: TClientTools[K];
+		};
+
 export interface AiChatBackendConfig {
 	/**
 	 * The language model to use for chat completions.
@@ -328,7 +354,15 @@ export interface AiChatBackendConfig {
  *
  * @param config - Configuration including model, tools, and optional hooks
  */
-export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
+export const aiChatBackendPlugin = <
+	TTools extends Record<string, Tool> = Record<never, Tool>,
+	TClientTools extends Record<string, Tool> = Record<never, Tool>,
+>(
+	config: Omit<AiChatBackendConfig, "tools" | "clientToolSchemas"> & {
+		tools?: TTools;
+		clientToolSchemas?: NoKeyCollision<TTools, TClientTools>;
+	},
+) =>
 	defineBackendPlugin({
 		name: "ai-chat",
 		// Always include db schema - in public mode we just don't use it
@@ -466,7 +500,8 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 							availableTools &&
 							availableTools.length > 0
 								? (() => {
-										const consumerSchemas = config.clientToolSchemas ?? {};
+										const consumerSchemas: Record<string, Tool> =
+											(config.clientToolSchemas as Record<string, Tool>) ?? {};
 										return Object.fromEntries(
 											availableTools
 												.filter((name) => {
