@@ -30,12 +30,36 @@ test.skip(
 );
 
 /**
- * Wait for the chat interface to return to ready state after streaming.
+ * Wait for the chat interface to be in a specific status.
+ * Use before sending a message to ensure the hook is initialised (status="ready"
+ * or status="idle" both indicate the chat is not actively streaming).
+ * Use after sending with a long timeout to wait for the AI response to complete.
  */
 async function waitForChatReady(page: Page, timeout = 60000) {
 	await expect(
 		page.locator('[data-testid="chat-interface"][data-chat-status="ready"]'),
 	).toBeVisible({ timeout });
+}
+
+/**
+ * Wait for the chat to reach a non-busy state before the first submission.
+ * AI SDK v5 uses "ready" as the initial status. If the status attribute is not
+ * yet painted (very fast navigation), we fall back to a small fixed wait so
+ * that React effects (including the transport setup) have time to flush.
+ */
+async function waitForChatInitialized(page: Page) {
+	// Prefer the semantic status attribute; fall back gracefully after 3 s.
+	const chatLocator = page.locator('[data-testid="chat-interface"]');
+	const ready = chatLocator.and(
+		page.locator('[data-chat-status="ready"],[data-chat-status="idle"]'),
+	);
+	try {
+		await expect(ready).toBeVisible({ timeout: 3000 });
+	} catch {
+		// Status not yet painted — wait one animation frame worth of time so
+		// React's useEffect flush (pageAIContextRef sync, transport init) completes.
+		await page.waitForTimeout(500);
+	}
 }
 
 test.describe("WealthReview AI Demo", () => {
@@ -47,12 +71,19 @@ test.describe("WealthReview AI Demo", () => {
 		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
 		await expect(page.getByPlaceholder("Type a message...")).toBeVisible();
 
+		// Wait for the chat hook to finish initialising before submitting.
+		// Sending before effects flush can result in the AI receiving the request
+		// before its tool list is fully configured, causing a text-only response.
+		await waitForChatInitialized(page);
+
 		// Send a routine client intake message (no AML signals)
 		const input = page.getByPlaceholder("Type a message...");
 		await input.fill(
 			"Hi, I'm Sarah, 34 years old. I'm getting married next year and I just inherited $50,000 from my grandmother. I currently have no debt and about $30,000 in savings. I'd like to know if my current moderate-risk investments still make sense.",
 		);
-		await page.keyboard.press("Enter");
+		// Use element-scoped press so the Enter key is guaranteed to target the
+		// textarea even if focus shifted during fill.
+		await input.press("Enter");
 
 		// Verify message sent
 		await expect(
@@ -93,12 +124,14 @@ test.describe("WealthReview AI Demo", () => {
 
 		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
 
+		await waitForChatInitialized(page);
+
 		// Send a message with clear AML risk signals
 		const input = page.getByPlaceholder("Type a message...");
 		await input.fill(
 			"Hi, I'm Alex. I run a small import business and I want to invest $200,000. The money came from overseas sales over the past 3 months from accounts in multiple countries. I'd like to move it all into Canadian equities immediately.",
 		);
-		await page.keyboard.press("Enter");
+		await input.press("Enter");
 
 		await expect(
 			page
@@ -144,12 +177,14 @@ test.describe("WealthReview AI Demo", () => {
 
 		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
 
+		await waitForChatInitialized(page);
+
 		// Send a complete client profile in one message to minimize turns
 		const input = page.getByPlaceholder("Type a message...");
 		await input.fill(
 			"Hi, I'm Jamie Chen, 45 years old, conservative investor. I have $500,000 in RRSPs and plan to retire in 10 years. No debts. I want a review of whether my allocation is still appropriate.",
 		);
-		await page.keyboard.press("Enter");
+		await input.press("Enter");
 
 		await expect(
 			page
