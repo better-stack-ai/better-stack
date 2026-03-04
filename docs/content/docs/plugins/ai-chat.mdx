@@ -1204,3 +1204,38 @@ useRegisterPageAIContext({
 |---|---|---|---|
 | `enablePageTools` | `boolean` | `false` | Activate page tool support |
 | `clientToolSchemas` | `Record<string, Tool>` | — | Custom tool schemas for non-BTST pages |
+| `hooks.onBeforeToolsActivated` | `(toolNames, routeName, context) => string[]` | — | Filter active tools per request; throw to abort with 403 |
+
+### Tool Authorization Hook
+
+`onBeforeToolsActivated` runs server-side after the structural `routeName` allowlist check. Use it to add user-level authorization — for example, restricting which tools are available based on the authenticated user's role or subscription tier.
+
+```ts title="lib/stack.ts"
+import type { AiChatBackendHooks } from "@btst/stack/plugins/ai-chat/api"
+
+aiChatBackendPlugin({
+  enablePageTools: true,
+  hooks: {
+    onBeforeToolsActivated: async (toolNames, routeName, context) => {
+      const role = await getUserRole(context.headers);
+      // Viewers cannot use any interactive tools
+      if (role === "viewer") return [];
+      // Non-editors cannot fill the blog form
+      if (role !== "editor") return toolNames.filter(t => t !== "fillBlogForm");
+      return toolNames;
+    },
+  },
+})
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `toolNames` | `string[]` | Tools that passed the routeName allowlist check |
+| `routeName` | `string \| undefined` | Claimed route name from the request |
+| `context` | `ChatApiContext` | Full request context (headers, body, etc.) |
+
+Return a subset of `toolNames` to allow, or `[]` to suppress all page tools. Throw an `Error` to abort the entire chat request — the endpoint catches it and returns a **403** response.
+
+<Callout type="info">
+This hook runs **after** the structural `routeName` allowlist check (which validates that each built-in tool is only requested from its intended page). `onBeforeToolsActivated` is the right place to add user-specific logic — the two layers are complementary.
+</Callout>

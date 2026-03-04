@@ -102,6 +102,23 @@ export interface AiChatBackendHooks {
 		context: ChatApiContext,
 	) => Promise<boolean> | boolean;
 
+	/**
+	 * Called after the structural routeName/allowlist validation, with the list
+	 * of tool names that passed. Return a filtered subset to further restrict
+	 * which tools the LLM sees, or return [] to suppress all page tools.
+	 * Throw an Error to abort the entire chat request with a 403 response.
+	 * Not called when no tools passed the structural validation step.
+	 *
+	 * @param toolNames - Names that passed the routeName allowlist check
+	 * @param routeName - routeName claimed by the request (may be undefined)
+	 * @param context   - Full request context (headers, body, etc.)
+	 */
+	onBeforeToolsActivated?: (
+		toolNames: string[],
+		routeName: string | undefined,
+		context: ChatApiContext,
+	) => Promise<string[]> | string[];
+
 	// ============== Lifecycle Hooks ==============
 
 	/**
@@ -475,6 +492,36 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 										);
 									})()
 								: {};
+
+						// Consumer hook: user-level tool authorization.
+						// Runs after the structural routeName allowlist check.
+						// A thrown Error is caught and returned as a 403 response,
+						// consistent with how onBeforeChat handles return false → 403.
+						if (
+							config.hooks?.onBeforeToolsActivated &&
+							Object.keys(activePageTools).length > 0
+						) {
+							try {
+								const allowed = await config.hooks.onBeforeToolsActivated(
+									Object.keys(activePageTools),
+									routeName,
+									context,
+								);
+								const allowedSet = new Set(allowed);
+								for (const key of Object.keys(activePageTools)) {
+									if (!allowedSet.has(key)) {
+										delete activePageTools[key];
+									}
+								}
+							} catch (hookError) {
+								throw ctx.error(403, {
+									message:
+										hookError instanceof Error
+											? hookError.message
+											: "Unauthorized: Tool activation denied",
+								});
+							}
+						}
 
 						const mergedTools =
 							Object.keys(activePageTools).length > 0

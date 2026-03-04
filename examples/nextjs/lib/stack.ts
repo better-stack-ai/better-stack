@@ -278,6 +278,16 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
                 onAfterChat: async (conversationId, messages) => {
                     console.log("Chat completed in conversation:", conversationId, "Messages:", messages.length);
                 },
+                onBeforeToolsActivated: async (toolNames, routeName, context) => {
+                    // E2E test hook: deny all tools when the test sentinel header is present.
+                    // In production, replace this with real user-role checks, e.g.:
+                    // const role = context.headers?.get?.("x-user-role");
+                    // if (role !== "editor") return toolNames.filter(t => t !== "fillBlogForm");
+                    if (context.headers?.get?.("x-btst-deny-tools") === "1") {
+                        throw new Error("Tools denied by test hook");
+                    }
+                    return toolNames;
+                },
             },
         }),
         // CMS plugin with content types defined as Zod schemas

@@ -206,6 +206,56 @@ test.describe("Page AI Context — structural (no OpenAI key needed)", () => {
 			timeout: 30000,
 		});
 	});
+
+	test("routeName is sent in the chat API request body", async ({ page }) => {
+		await page.goto("/pages/blog/new", { waitUntil: "networkidle" });
+		await waitForChatWidget(page);
+
+		let capturedBody: Record<string, any> | null = null;
+
+		await page.route("**/api/data/chat", async (route) => {
+			capturedBody = route.request().postDataJSON() as Record<
+				string,
+				any
+			> | null;
+			await route.abort();
+		});
+
+		const input = page.getByPlaceholder("Type a message...").last();
+		await input.fill("hello");
+		await page.keyboard.press("Enter");
+
+		await page.waitForTimeout(1000);
+
+		expect(capturedBody).not.toBeNull();
+		expect(capturedBody!.routeName).toBe("blog-new-post");
+	});
+
+	test("onBeforeToolsActivated hook denies tools and returns 403", async ({
+		request,
+	}) => {
+		// POST directly to the chat API with the test sentinel header.
+		// The example app's onBeforeToolsActivated hook throws when it sees
+		// x-btst-deny-tools: "1", which the endpoint catches and maps to 403.
+		const response = await request.post("/api/data/chat", {
+			headers: {
+				"Content-Type": "application/json",
+				"x-btst-deny-tools": "1",
+			},
+			data: {
+				messages: [
+					{
+						role: "user",
+						parts: [{ type: "text", text: "hello" }],
+					},
+				],
+				availableTools: ["fillBlogForm"],
+				routeName: "blog-new-post",
+			},
+		});
+
+		expect(response.status()).toBe(403);
+	});
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
