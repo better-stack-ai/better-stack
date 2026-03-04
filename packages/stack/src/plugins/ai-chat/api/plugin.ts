@@ -523,9 +523,13 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 							}
 						}
 
+						// Page tools are layered under server-side tools so that a
+						// clientToolSchemas entry with the same name as a tool in
+						// config.tools never silently drops its `execute` function.
+						// Server-side tools always win on collision.
 						const mergedTools =
 							Object.keys(activePageTools).length > 0
-								? { ...config.tools, ...activePageTools }
+								? { ...activePageTools, ...config.tools }
 								: config.tools;
 
 						// PUBLIC MODE: Stream without persistence
