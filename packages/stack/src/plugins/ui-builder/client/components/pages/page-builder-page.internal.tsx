@@ -22,9 +22,12 @@ import { toast } from "sonner";
 import UIBuilder from "@workspace/ui/components/ui-builder";
 import type {
 	ComponentLayer,
+	ComponentRegistry,
 	Variable,
 } from "@workspace/ui/components/ui-builder/types";
 
+import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
+import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
 import {
 	useSuspenseUIBuilderPage,
 	useCreateUIBuilderPage,
@@ -37,6 +40,104 @@ import type { SerializedUIBuilderPage } from "../../../types";
 
 export interface PageBuilderPageProps {
 	id?: string;
+}
+
+/**
+ * Generate a concise AI-readable description of the available components
+ * in the component registry, including their prop names.
+ */
+function buildRegistryDescription(registry: ComponentRegistry): string {
+	const lines: string[] = [];
+	for (const [name, entry] of Object.entries(registry) as [
+		string,
+		{ schema?: unknown },
+	][]) {
+		let propsLine = "";
+		try {
+			const shape = (entry.schema as any)?.shape as
+				| Record<string, unknown>
+				| undefined;
+			if (shape) {
+				const fields = Object.keys(shape).join(", ");
+				propsLine = ` — props: ${fields}`;
+			}
+		} catch {
+			// ignore schema introspection errors
+		}
+		lines.push(`- ${name}${propsLine}`);
+	}
+	return lines.join("\n");
+}
+
+/**
+ * Build the full page description string for the AI context.
+ * Stays within the 8,000-character pageContext limit.
+ */
+function buildPageDescription(
+	id: string | undefined,
+	slug: string,
+	layers: ComponentLayer[],
+	registry: ComponentRegistry,
+): string {
+	const header = id
+		? `UI Builder — editing page (slug: "${slug}")`
+		: "UI Builder — creating new page";
+
+	const layersJson = JSON.stringify(layers, null, 2);
+
+	const registryDesc = buildRegistryDescription(registry);
+
+	const layerFormat = `Each layer: { id: string, type: string, name: string, props: Record<string,any>, children?: ComponentLayer[] | string }`;
+
+	const full = [
+		header,
+		"",
+		`## Current Layers (${layers.length})`,
+		layersJson,
+		"",
+		`## Available Component Types`,
+		registryDesc,
+		"",
+		`## ComponentLayer format`,
+		layerFormat,
+	].join("\n");
+
+	// Trim to fit the 16,000-char server-side limit, cutting the layers JSON if needed
+	if (full.length <= 16000) return full;
+
+	// Re-build with truncated layers JSON
+	const overhead =
+		[
+			header,
+			"",
+			`## Current Layers (${layers.length})`,
+			"",
+			"",
+			`## Available Component Types`,
+			registryDesc,
+			"",
+			`## ComponentLayer format`,
+			layerFormat,
+		].join("\n").length + 30; // 30-char buffer for "...(truncated)"
+
+	const budget = Math.max(0, 16000 - overhead);
+	const truncatedLayers =
+		layersJson.length > budget
+			? layersJson.slice(0, budget) + "\n...(truncated)"
+			: layersJson;
+
+	return [
+		header,
+		"",
+		`## Current Layers (${layers.length})`,
+		truncatedLayers,
+		"",
+		`## Available Component Types`,
+		registryDesc,
+		"",
+		`## ComponentLayer format`,
+		layerFormat,
+	].join("\n");
 }
 
 /**
@@ -138,6 +239,37 @@ function PageBuilderPageContent({
 
 	// Auto-generate slug from first page name
 	const [autoSlug, setAutoSlug] = useState(!id);
+
+	// Register AI context so the chat can update the page layout
+	useRegisterPageAIContext({
+		routeName: id ? "ui-builder-edit-page" : "ui-builder-new-page",
+		pageDescription: buildPageDescription(id, slug, layers, componentRegistry),
+		suggestions: [
+			"Add a hero section",
+			"Add a 3-column feature grid",
+			"Make the layout full-width",
+			"Add a card with a title, description, and button",
+			"Replace the layout with a centered single-column design",
+		],
+		clientTools: {
+			updatePageLayers: async ({ layers: newLayers }) => {
+				// Drive the UIBuilder's Zustand store directly so the editor
+				// and layers panel update immediately. The store's onChange
+				// callback will propagate back to the parent's `layers` state.
+				const store = useLayerStore.getState();
+				store.initialize(
+					newLayers,
+					store.selectedPageId || newLayers[0]?.id,
+					undefined,
+					store.variables,
+				);
+				return {
+					success: true,
+					message: `Applied ${newLayers.length} layer(s) to the page`,
+				};
+			},
+		},
+	});
 
 	// Handle layers change from UIBuilder
 	const handleLayersChange = useCallback(

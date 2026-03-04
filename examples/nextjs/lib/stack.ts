@@ -15,7 +15,12 @@ import { z } from "zod"
 import { revalidateTag, revalidatePath } from "next/cache"
 
 // Import shared CMS schemas - these are used for both backend validation and client type inference
-import { ProductSchema, TestimonialSchema, CategorySchema, ResourceSchema, CommentSchema } from "./cms-schemas"
+import { ProductSchema, TestimonialSchema, CategorySchema, ResourceSchema, CommentSchema, ClientProfileSchema } from "./cms-schemas"
+import {
+    createKanbanTask,
+    findOrCreateKanbanBoard,
+    getKanbanColumnsByBoardId,
+} from "@btst/stack/plugins/kanban/api"
 
 // Tool to fetch BTST documentation
 const stackDocsTool = tool({
@@ -109,8 +114,112 @@ const blogHooks: BlogBackendHooks = {
 // separately, but all run in the same Node.js process).
 const globalForStack = global as typeof global & { __btst_stack__?: ReturnType<typeof stack> };
 
+// WealthReview Demo — AI-native financial intake tool
+// Both references are set inside createStack() before any HTTP request fires.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let wealthReviewAdapter: any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let wealthReviewCmsApi: any
+
+const submitIntakeAssessment = tool({
+    description:
+        "Submit the completed client intake assessment. Call this once you have gathered sufficient information about the client's financial situation. Creates a client profile record and adds a card to the advisor review queue.",
+    inputSchema: z.object({
+        clientName: z.string().describe("Full name of the client"),
+        age: z.number().int().min(18).describe("Client age"),
+        riskTolerance: z
+            .enum(["conservative", "moderate", "aggressive"])
+            .describe("Assessed risk tolerance"),
+        totalAssets: z
+            .number()
+            .min(0)
+            .optional()
+            .describe("Total declared assets in CAD"),
+        windfallAmount: z
+            .number()
+            .min(0)
+            .optional()
+            .describe("Incoming windfall amount in CAD, if applicable"),
+        lifeEvents: z
+            .array(z.string())
+            .describe("Upcoming or recent life events (marriage, retirement, etc.)"),
+        recommendation: z
+            .string()
+            .describe("AI-generated recommendation for the human advisor"),
+        amlFlag: z
+            .boolean()
+            .describe(
+                "Set true if the case shows AML risk signals (large international transfers, unusual source of funds, etc.)",
+            ),
+        amlReason: z
+            .string()
+            .optional()
+            .describe("Explanation of the AML flag — required when amlFlag is true"),
+        confidenceScore: z
+            .number()
+            .min(0)
+            .max(100)
+            .describe("Your confidence in the recommendation (0–100)"),
+    }),
+    execute: async (params) => {
+        if (!wealthReviewAdapter) {
+            throw new Error("[WealthReview] Adapter not initialized")
+        }
+        const adapter = wealthReviewAdapter
+
+        // 1. Persist client profile in CMS
+        // Use api.cms.createContentItem (not the standalone mutation) so that
+        // ensureSynced() runs first — required if no CMS HTTP request has been
+        // made before this tool call (the content type won't exist otherwise).
+        const slug = `client-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+        await wealthReviewCmsApi.createContentItem("client-profile", {
+            slug,
+            data: {
+                ...params,
+                lifeEvents: params.lifeEvents.join(", "),
+            },
+        })
+
+        // 2. Ensure the advisor review board exists (idempotent)
+        const board = await findOrCreateKanbanBoard(
+            adapter,
+            "advisor-review-queue",
+            "Advisor Review Queue",
+            ["New Intakes", "Under Review", "Escalated"],
+        )
+
+        // 3. Route to the correct column
+        const columns = await getKanbanColumnsByBoardId(adapter, board.id)
+        const targetColumn = params.amlFlag
+            ? (columns.find((c: { title: string }) => c.title === "Escalated") ?? columns[columns.length - 1])
+            : (columns.find((c: { title: string }) => c.title === "New Intakes") ?? columns[0])
+
+        if (!targetColumn) {
+            throw new Error("[WealthReview] No columns found on review board")
+        }
+
+        // 4. Create the Kanban review card
+        await createKanbanTask(adapter, {
+            title: `${params.clientName}${params.amlFlag ? " — ⚠️ ESCALATED" : " — Ready for Review"}`,
+            columnId: targetColumn.id,
+            priority: params.amlFlag ? "URGENT" : "MEDIUM",
+            description: params.amlFlag
+                ? `AML FLAG: ${params.amlReason ?? "See assessment"}\nConfidence: ${params.confidenceScore}%\n\n${params.recommendation}`
+                : `Confidence: ${params.confidenceScore}%\n\n${params.recommendation}`,
+        })
+
+        return {
+            success: true,
+            escalated: params.amlFlag,
+            message: params.amlFlag
+                ? "This case has been flagged and routed to the Escalated column. A licensed compliance officer must review before proceeding."
+                : "Assessment complete. Your case has been added to the advisor review queue — you'll hear back shortly.",
+        }
+    },
+})
+
 function createStack() {
-    return stack({
+    const s = stack({
         basePath: "/api/data",
     plugins: {
         todos: todosBackendPlugin,
@@ -121,11 +230,41 @@ function createStack() {
         //   getUserId: async (ctx) => ctx.headers?.get('x-user-id'),
         aiChat: aiChatBackendPlugin({
             model: openai("gpt-4o"),
-            systemPrompt: "You are a helpful assistant that specializes in BTST framework. When asked about BTST, plugins, installation, or development topics, use the stackDocs tool to fetch the latest documentation. Be concise and friendly.",
+            systemPrompt: `You are WealthReview — an AI-native financial intake assistant for a licensed investment advisory firm. Your job is to conduct a brief, natural intake conversation with clients and then submit a structured assessment for human advisor review via the submitIntakeAssessment tool.
+
+## How to conduct intake
+
+The submitIntakeAssessment tool has these **required** fields: clientName, age, riskTolerance, lifeEvents (array, can be empty), recommendation (your written assessment), amlFlag, confidenceScore. All other fields (totalAssets, windfallAmount, amlReason) are **optional**.
+
+- Greet the client warmly and gather context from whatever they share.
+- If the client's opening message gives you enough to fill ALL required fields above — even partially (e.g. first name only, inferred risk tolerance, empty lifeEvents array) — call submitIntakeAssessment immediately. Do NOT ask any follow-up questions first.
+- Only ask a follow-up question when a genuinely critical required field cannot be reasonably inferred at all (e.g. the client gave no name, no age, and no indication of risk tolerance). Limit yourself to ONE question maximum. Never present a numbered list of questions. This is a conversation, not a form.
+- Once you have enough context to fill all required fields, call submitIntakeAssessment immediately.
+
+## AML risk detection — act immediately, do not ask follow-ups
+
+Flag and submit immediately (amlFlag: true) when you see ALL of:
+- A large sum (≥ $100,000 CAD), AND
+- Any of: international source of funds, multi-country origin, rapid accumulation ("past few months"), urgency to invest quickly, vague or generic business explanation
+
+When AML signals are present:
+- Do NOT ask follow-up questions. Submit at once with amlFlag: true and a clear amlReason naming the specific signals (e.g. "Large international transfer ($200k CAD) from multiple countries over a short period, with urgency to move into equities — FINTRAC reportable activity").
+- Set riskTolerance based on what the client said, or "moderate" if unclear.
+- After submitting, tell the client professionally that their inquiry requires a compliance review before proceeding and they will be contacted by the appropriate team. Do not elaborate.
+
+## After calling submitIntakeAssessment
+
+- Routine case: confirm their profile has been added to the advisor review queue and they'll hear back shortly.
+- Escalated case: confirm that a compliance review is required before proceeding and they'll be contacted.
+
+Keep all responses concise. Do not discuss the technology stack or internal tools.`,
             mode: "authenticated", // Default: persisted conversations
             tools: {
                 stackDocs: stackDocsTool,
+                submitIntakeAssessment,
             },
+            // Enable route-aware page tools (fillBlogForm, updatePageLayers, etc.)
+            enablePageTools: true,
             // Optional: Extract userId from headers to scope conversations per user
             // getUserId: async (ctx) => {
             //     const userId = ctx.headers?.get('x-user-id');
@@ -138,6 +277,16 @@ function createStack() {
                 },
                 onAfterChat: async (conversationId, messages) => {
                     console.log("Chat completed in conversation:", conversationId, "Messages:", messages.length);
+                },
+                onBeforeToolsActivated: async (toolNames, routeName, context) => {
+                    // E2E test hook: deny all tools when the test sentinel header is present.
+                    // In production, replace this with real user-role checks, e.g.:
+                    // const role = context.headers?.get?.("x-user-role");
+                    // if (role !== "editor") return toolNames.filter(t => t !== "fillBlogForm");
+                    if (context.headers?.get?.("x-btst-deny-tools") === "1") {
+                        throw new Error("Tools denied by test hook");
+                    }
+                    return toolNames;
                 },
             },
         }),
@@ -174,6 +323,12 @@ function createStack() {
                     slug: "comment", 
                     description: "Comments on resources (one-to-many relationship)",
                     schema: CommentSchema,
+                },
+                {
+                    name: "Client Profile",
+                    slug: "client-profile",
+                    description: "WealthReview AI — financial intake assessments submitted by the AI advisor",
+                    schema: ClientProfileSchema,
                 },
                 // UI Builder pages - stored as CMS content items
                 UI_BUILDER_CONTENT_TYPE,
@@ -236,8 +391,16 @@ function createStack() {
     },
         adapter: (db) => createMemoryAdapter(db)({})
     })
+
+    return s
 }
 
 export const myStack = globalForStack.__btst_stack__ ??= createStack()
+
+// Re-assign after the ??= so these are always valid, even after Next.js HMR
+// re-evaluates this module (which resets the `let` variables to undefined while
+// createStack() does NOT re-run because the global already holds the stack).
+wealthReviewAdapter = myStack.adapter
+wealthReviewCmsApi = myStack.api.cms
 
 export const { handler, dbSchema } = myStack

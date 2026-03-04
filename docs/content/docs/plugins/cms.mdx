@@ -1288,6 +1288,45 @@ export async function generateStaticParams() {
 | `getAllContentItems(adapter, typeSlug, params?)` | Returns paginated items for a content type |
 | `getContentItemBySlug(adapter, typeSlug, slug)` | Returns a single item by slug, or `null` |
 
+### Server-side mutation — `createContentItem`
+
+In addition to read-only getters, the CMS plugin exposes a **mutation function** for creating content items directly from server-side code.
+
+<Callout type="warn">
+**`createContentItem` bypasses authorization hooks and Zod schema validation.** Hooks such as `onBeforeCreate` and `onAfterCreate` are **not** called, and the data payload is stored as-is without running the content type's schema validation. The caller is responsible for providing valid, relation-free data and for any access-control checks. For relation fields or schema validation, use the HTTP endpoint instead.
+</Callout>
+
+**Via `myStack.api.cms`:**
+
+```ts
+await myStack.api.cms.createContentItem("client-profile", {
+  slug: `intake-${Date.now()}`,
+  data: {
+    clientName: "Sarah Chen",
+    age: 34,
+    riskTolerance: "moderate",
+    recommendation: "Rebalance windfall 80% equity, 20% cash.",
+    amlFlag: false,
+    confidenceScore: 94,
+  },
+})
+```
+
+**Direct import:**
+
+```ts
+import { createCMSContentItem } from "@btst/stack/plugins/cms/api"
+
+await createCMSContentItem(myStack.adapter, "client-profile", {
+  slug: `intake-${Date.now()}`,
+  data: { clientName: "Sarah Chen", age: 34, amlFlag: false },
+})
+```
+
+Throws if:
+- The content type slug is not found (run `ensureSynced` first if calling outside a plugin request)
+- A content item with the same slug already exists in that content type
+
 ## Static Site Generation (SSG)
 
 `route.loader()` makes HTTP requests to `apiBaseURL`, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.

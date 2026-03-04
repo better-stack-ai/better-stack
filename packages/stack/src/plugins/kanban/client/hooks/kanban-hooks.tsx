@@ -85,6 +85,7 @@ export function useBoards(params?: {
 	return useQuery({
 		...queries.boards.list(params),
 		staleTime: 30_000,
+		refetchOnWindowFocus: true,
 	});
 }
 
@@ -102,6 +103,7 @@ export function useSuspenseBoards(params?: {
 	const result = useSuspenseQuery({
 		...queries.boards.list(params),
 		staleTime: 30_000,
+		refetchOnWindowFocus: true,
 	});
 
 	if (result.error && !result.isFetching) {
@@ -121,6 +123,7 @@ export function useBoard(boardId: string) {
 	return useQuery({
 		...queries.boards.detail(boardId),
 		staleTime: 30_000,
+		refetchOnWindowFocus: true,
 		enabled: !!boardId,
 	});
 }
@@ -135,6 +138,7 @@ export function useSuspenseBoard(boardId: string) {
 	const result = useSuspenseQuery({
 		...queries.boards.detail(boardId),
 		staleTime: 30_000,
+		refetchOnWindowFocus: true,
 	});
 
 	if (result.error && !result.isFetching) {

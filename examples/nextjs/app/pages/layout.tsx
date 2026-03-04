@@ -10,6 +10,7 @@ import type { TodosPluginOverrides } from "@/lib/plugins/todo/client/overrides"
 import { getOrCreateQueryClient } from "@/lib/query-client"
 import { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
+import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
 import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client"
@@ -147,6 +148,13 @@ export default function ExampleLayout({
                         uploadFile: mockUploadFile,
                         Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
                         Image: NextImageWrapper,
+                        chatSuggestions: [
+                            "Hi, I'm Sarah, 34. I'm getting married next year and I just inherited $50,000 from my grandmother. I have no debt and about $30k in savings. I'm wondering if my current moderate-risk portfolio still makes sense.",
+                            "Hi, I run a small import business and want to invest $200,000. The money came from overseas sales across multiple countries over the past few months. I'd like to move it into Canadian equities right away.",
+                            "What information do I need to provide for a financial review?",
+                            "I'm approaching retirement in the next few years — what should I be thinking about?",
+                            "How is my risk tolerance assessed?",
+                        ],
                         // Lifecycle hooks
                         onRouteRender: async (routeName, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] AI Chat route:`, routeName, context.path);
@@ -277,6 +285,19 @@ export default function ExampleLayout({
                 }}
             >
                 {children}
+                {/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}
+                <div
+                    className="fixed bottom-6 right-6 z-50"
+                    data-testid="chat-widget"
+                >
+                    <ChatLayout
+                        apiBaseURL={getBaseURL()}
+                        apiBasePath="/api/data"
+                        layout="widget"
+                        widgetHeight="520px"
+                        showSidebar={false}
+                    />
+                </div>
             </StackProvider>
         </QueryClientProvider>
     )

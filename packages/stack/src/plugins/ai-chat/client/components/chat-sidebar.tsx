@@ -163,7 +163,7 @@ export function ChatSidebar({
 			</div>
 
 			{/* Conversations List */}
-			<ScrollArea className="flex-1">
+			<ScrollArea className="flex-1 [&_[data-slot=scroll-area-viewport]>div]:!block">
 				<div className="p-2">
 					{isLoading ? (
 						<div className="p-4 text-center text-sm text-muted-foreground">

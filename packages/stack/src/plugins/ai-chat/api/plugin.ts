@@ -17,6 +17,10 @@ import {
 } from "../schemas";
 import type { Conversation, ConversationWithMessages, Message } from "../types";
 import { getAllConversations, getConversationById } from "./getters";
+import {
+	BUILT_IN_PAGE_TOOL_ROUTE_ALLOWLIST,
+	BUILT_IN_PAGE_TOOL_SCHEMAS,
+} from "./page-tools";
 
 /**
  * Context passed to AI Chat API hooks
@@ -97,6 +101,23 @@ export interface AiChatBackendHooks {
 		conversationId: string,
 		context: ChatApiContext,
 	) => Promise<boolean> | boolean;
+
+	/**
+	 * Called after the structural routeName/allowlist validation, with the list
+	 * of tool names that passed. Return a filtered subset to further restrict
+	 * which tools the LLM sees, or return [] to suppress all page tools.
+	 * Throw an Error to abort the entire chat request with a 403 response.
+	 * Not called when no tools passed the structural validation step.
+	 *
+	 * @param toolNames - Names that passed the routeName allowlist check
+	 * @param routeName - routeName claimed by the request (may be undefined)
+	 * @param context   - Full request context (headers, body, etc.)
+	 */
+	onBeforeToolsActivated?: (
+		toolNames: string[],
+		routeName: string | undefined,
+		context: ChatApiContext,
+	) => Promise<string[]> | string[];
 
 	// ============== Lifecycle Hooks ==============
 
@@ -232,6 +253,32 @@ export type AiChatMode = "authenticated" | "public";
 /**
  * Configuration for AI Chat backend plugin
  */
+/**
+ * Extracts only the literal (non-index-signature) keys from a type.
+ * For `Record<string, T>` this resolves to `never`, so collision checks are
+ * skipped when the tools map is typed with a broad string index.
+ */
+type KnownKeys<T> = {
+	[K in keyof T]: string extends K ? never : K;
+}[keyof T];
+
+/**
+ * Ensures `TClientTools` has no keys that are also literal keys in `TTools`.
+ * Colliding keys are mapped to `never`, which produces a compile-time error
+ * at the point of the duplicate key. When `TTools` uses a string index
+ * signature the check is skipped to avoid false positives.
+ */
+type NoKeyCollision<
+	TTools,
+	TClientTools extends Record<string, Tool>,
+> = KnownKeys<TTools> & keyof TClientTools extends never
+	? TClientTools
+	: {
+			[K in keyof TClientTools]: K extends KnownKeys<TTools>
+				? never // duplicate of a server-side tool — remove from clientToolSchemas
+				: TClientTools[K];
+		};
+
 export interface AiChatBackendConfig {
 	/**
 	 * The language model to use for chat completions.
@@ -270,6 +317,31 @@ export interface AiChatBackendConfig {
 	tools?: Record<string, Tool>;
 
 	/**
+	 * Enable route-aware page tools.
+	 * When true, the server will include tool schemas for client-side page tools
+	 * (e.g. fillBlogForm, updatePageLayers) based on the availableTools list
+	 * sent with each request.
+	 * @default false
+	 */
+	enablePageTools?: boolean;
+
+	/**
+	 * Custom client-side tool schemas for non-BTST pages.
+	 * Merged with built-in page tool schemas (fillBlogForm, updatePageLayers).
+	 * Only included when enablePageTools is true and the tool name appears in
+	 * the availableTools list sent with the request.
+	 *
+	 * @example
+	 * clientToolSchemas: {
+	 *   addToCart: tool({
+	 *     description: "Add current product to cart",
+	 *     parameters: z.object({ quantity: z.number().int().min(1) }),
+	 *   }),
+	 * }
+	 */
+	clientToolSchemas?: Record<string, Tool>;
+
+	/**
 	 * Optional hooks for customizing plugin behavior
 	 */
 	hooks?: AiChatBackendHooks;
@@ -282,7 +354,15 @@ export interface AiChatBackendConfig {
  *
  * @param config - Configuration including model, tools, and optional hooks
  */
-export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
+export const aiChatBackendPlugin = <
+	TTools extends Record<string, Tool> = Record<never, Tool>,
+	TClientTools extends Record<string, Tool> = Record<never, Tool>,
+>(
+	config: Omit<AiChatBackendConfig, "tools" | "clientToolSchemas"> & {
+		tools?: TTools;
+		clientToolSchemas?: NoKeyCollision<TTools, TClientTools>;
+	},
+) =>
 	defineBackendPlugin({
 		name: "ai-chat",
 		// Always include db schema - in public mode we just don't use it
@@ -350,7 +430,13 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 					body: chatRequestSchema,
 				},
 				async (ctx) => {
-					const { messages: rawMessages, conversationId } = ctx.body;
+					const {
+						messages: rawMessages,
+						conversationId,
+						pageContext,
+						availableTools,
+						routeName,
+					} = ctx.body;
 					const uiMessages = rawMessages as UIMessage[];
 
 					const context: ChatApiContext = {
@@ -388,22 +474,107 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 						// Convert UIMessages to CoreMessages for streamText
 						const modelMessages = convertToModelMessages(uiMessages);
 
-						// Add system prompt if configured
-						const messagesWithSystem = config.systemPrompt
+						// Build system prompt: base config + optional page context
+						const pageContextContent =
+							pageContext && pageContext.trim()
+								? `\n\nCurrent page context:\n${pageContext}`
+								: "";
+						const systemContent = config.systemPrompt
+							? `${config.systemPrompt}${pageContextContent}`
+							: pageContextContent || undefined;
+
+						const messagesWithSystem = systemContent
 							? [
-									{ role: "system" as const, content: config.systemPrompt },
+									{ role: "system" as const, content: systemContent },
 									...modelMessages,
 								]
 							: modelMessages;
+
+						// Merge page tool schemas when enablePageTools is on.
+						// Built-in schemas are only included when the request's routeName is in
+						// the tool's allowlist — this prevents a page from claiming tools that
+						// are intended for a different route (e.g. requesting updatePageLayers
+						// from a blog page). Consumer clientToolSchemas are trusted as-is.
+						const activePageTools: Record<string, Tool> =
+							config.enablePageTools &&
+							availableTools &&
+							availableTools.length > 0
+								? (() => {
+										const consumerSchemas: Record<string, Tool> =
+											(config.clientToolSchemas as Record<string, Tool>) ?? {};
+										return Object.fromEntries(
+											availableTools
+												.filter((name) => {
+													// Built-in tool: require routeName to be in its allowlist
+													if (name in BUILT_IN_PAGE_TOOL_SCHEMAS) {
+														const allowed =
+															BUILT_IN_PAGE_TOOL_ROUTE_ALLOWLIST[name];
+														return (
+															allowed &&
+															routeName &&
+															allowed.includes(routeName)
+														);
+													}
+													// Consumer-defined tool: allow if schema is registered
+													return name in consumerSchemas;
+												})
+												.map((name) => {
+													const schema =
+														BUILT_IN_PAGE_TOOL_SCHEMAS[name] ??
+														consumerSchemas[name]!;
+													return [name, schema];
+												}),
+										);
+									})()
+								: {};
+
+						// Consumer hook: user-level tool authorization.
+						// Runs after the structural routeName allowlist check.
+						// A thrown Error is caught and returned as a 403 response,
+						// consistent with how onBeforeChat handles return false → 403.
+						if (
+							config.hooks?.onBeforeToolsActivated &&
+							Object.keys(activePageTools).length > 0
+						) {
+							try {
+								const allowed = await config.hooks.onBeforeToolsActivated(
+									Object.keys(activePageTools),
+									routeName,
+									context,
+								);
+								const allowedSet = new Set(allowed);
+								for (const key of Object.keys(activePageTools)) {
+									if (!allowedSet.has(key)) {
+										delete activePageTools[key];
+									}
+								}
+							} catch (hookError) {
+								throw ctx.error(403, {
+									message:
+										hookError instanceof Error
+											? hookError.message
+											: "Unauthorized: Tool activation denied",
+								});
+							}
+						}
+
+						// Page tools are layered under server-side tools so that a
+						// clientToolSchemas entry with the same name as a tool in
+						// config.tools never silently drops its `execute` function.
+						// Server-side tools always win on collision.
+						const mergedTools =
+							Object.keys(activePageTools).length > 0
+								? { ...activePageTools, ...config.tools }
+								: config.tools;
 
 						// PUBLIC MODE: Stream without persistence
 						if (isPublicMode) {
 							const result = streamText({
 								model: config.model,
 								messages: messagesWithSystem,
-								tools: config.tools,
+								tools: mergedTools,
 								// Enable multi-step tool calls if tools are configured
-								...(config.tools ? { stopWhen: stepCountIs(5) } : {}),
+								...(mergedTools ? { stopWhen: stepCountIs(5) } : {}),
 							});
 
 							return result.toUIMessageStreamResponse({
@@ -557,9 +728,9 @@ export const aiChatBackendPlugin = (config: AiChatBackendConfig) =>
 						const result = streamText({
 							model: config.model,
 							messages: messagesWithSystem,
-							tools: config.tools,
+							tools: mergedTools,
 							// Enable multi-step tool calls if tools are configured
-							...(config.tools ? { stopWhen: stepCountIs(5) } : {}),
+							...(mergedTools ? { stopWhen: stepCountIs(5) } : {}),
 							onFinish: async (completion: { text: string }) => {
 								// Wrap in try-catch since this runs after the response is sent
 								// and errors would otherwise become unhandled promise rejections

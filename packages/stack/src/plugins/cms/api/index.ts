@@ -12,4 +12,8 @@ export {
 	serializeContentItem,
 	serializeContentItemWithType,
 } from "./getters";
+export {
+	createCMSContentItem,
+	type CreateCMSContentItemInput,
+} from "./mutations";
 export { CMS_QUERY_KEYS } from "./query-key-defs";

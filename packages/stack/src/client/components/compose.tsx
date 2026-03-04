@@ -89,10 +89,13 @@ export function ComposedRoute({
 }) {
 	if (PageComponent) {
 		const content = <PageComponent {...props} />;
-		// Avoid server-side skeletons: only show loading fallback in the browser
-		const isBrowser = typeof window !== "undefined";
-		const suspenseFallback =
-			isBrowser && LoadingComponent ? <LoadingComponent /> : null;
+		// Always provide the same fallback on server and client — using
+		// `typeof window !== "undefined"` here would produce a different JSX tree
+		// on each side, shifting React's useId() counter and causing hydration
+		// mismatches in any descendant that uses Radix (Select, Dialog, etc.).
+		// If the Suspense boundary never actually suspends during SSR (data is
+		// prefetched), React won't emit the fallback into the HTML anyway.
+		const suspenseFallback = LoadingComponent ? <LoadingComponent /> : null;
 
 		// If an ErrorComponent is provided (which itself may be lazy), ensure we have
 		// a Suspense boundary that can handle both the page content and the lazy error UI

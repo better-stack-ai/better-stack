@@ -99,6 +99,36 @@ const item  = await myStack.api["{name}"].getItemById("abc")
 - Re-export getters from `api/index.ts` for consumers who need direct import (SSG/build-time)
 - Authorization hooks are **not** called via `stack().api.*` — callers are responsible for access control
 
+### Server-side Mutations (`mutations.ts`)
+
+Plugins expose write operations in a separate `api/mutations.ts` file — distinct from the read-only `getters.ts`. Both are re-exported from `api/index.ts` and wired into the `api` factory.
+
+**Rules:**
+- Keep mutations in `mutations.ts` — no authorization hooks, no HTTP context
+- Document clearly in JSDoc: "Authorization hooks are NOT called"
+- Re-export from `api/index.ts` alongside getters
+- Common use case: AI tool `execute` callbacks, cron jobs, admin scripts
+
+**Adapter capture pattern for AI tool `execute` functions:**
+```typescript
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _adapter: any
+
+const myTool = tool({
+  execute: async (params) => {
+    await createKanbanTask(_adapter, { title: params.title, columnId: "col-id" })
+    return { success: true }
+  }
+})
+
+// With the global singleton pattern, use ??= so createStack() only runs once,
+// then ALWAYS assign _adapter after the ??= — never inside createStack().
+// During Next.js HMR the module re-evaluates (resetting `let` to undefined)
+// but createStack() doesn't re-run, so assignments inside it would be skipped.
+export const myStack = globalForStack.__btst_stack__ ??= createStack()
+_adapter = myStack.adapter
+```
+
 ### SSG Support (`prefetchForRoute`)
 
 `route.loader()` makes HTTP requests that **silently fail at `next build`** (no server running). Plugins that support SSG expose `prefetchForRoute` on the `api` factory to seed the React Query cache directly from the DB instead.
@@ -426,7 +456,7 @@ export function MyPageComponent({ id }: { id: string }) {
 
 **How it works:**
 - `ComposedRoute` renders nested `<Suspense>` + `<ErrorBoundary>` around `PageComponent`
-- Loading fallbacks only render on client (`typeof window !== "undefined"`) to avoid hydration mismatch
+- Loading fallbacks are always provided to `<Suspense>` on both server and client — never guard them with `typeof window !== "undefined"`, as that creates a different JSX tree on each side and shifts React's `useId()` counter, causing hydration mismatches in descendants (Radix `Select`, `Dialog`, etc.). Since Suspense only emits fallback HTML when the boundary actually suspends during SSR, having a consistent fallback prop is safe.
 - `resetKeys={[path]}` resets the error boundary on navigation
 
 ### Suspense Hooks & Error Throwing
@@ -657,6 +687,46 @@ cd docs && pnpm build
 
 The `AutoTypeTable` component automatically pulls from TypeScript files, so ensure your types have JSDoc comments for good documentation.
 
+## AI Chat Plugin Integration
+
+Plugin pages can register AI context so the chat widget understands the current page and can act on it (fill forms, update editors, summarize content).
+
+**In the `.internal.tsx` page component**, call `useRegisterPageAIContext`:
+
+```tsx
+import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
+
+// Read-only (content pages — summarization, suggestions only)
+useRegisterPageAIContext(item ? {
+  routeName: "my-plugin-detail",
+  pageDescription: `Viewing: "${item.title}"\n\n${item.content?.slice(0, 16000)}`,
+  suggestions: ["Summarize this", "What are the key points?"],
+} : null); // pass null while loading
+
+// With client-side tools (form/editor pages)
+const formRef = useRef<UseFormReturn<any> | null>(null);
+useRegisterPageAIContext({
+  routeName: "my-plugin-edit",
+  pageDescription: "User is editing…",
+  suggestions: ["Fill in the form for me"],
+  clientTools: {
+    fillMyForm: async ({ title }) => {
+      if (!formRef.current) return { success: false, message: "Form not ready" };
+      formRef.current.setValue("title", title, { shouldValidate: true });
+      return { success: true };
+    },
+  },
+});
+```
+
+**For first-party tools**, add the server-side schema to `BUILT_IN_PAGE_TOOL_SCHEMAS` in `src/plugins/ai-chat/api/page-tools.ts` (no `execute` — handled client-side). Built-ins (`fillBlogForm`, `updatePageLayers`) are already registered there.
+
+**`PageAIContextProvider` must wrap the root layout** (above all `StackProvider` instances) in all three example apps — it is already wired up there.
+
+**References:** blog `new/edit-post-page.internal.tsx` (`fillBlogForm`), blog `post-page.internal.tsx` (read-only), ui-builder `page-builder-page.internal.tsx` (`updatePageLayers`).
+
+---
+
 ## Common Pitfalls
 
 1. **Missing overrides** - Client components using `usePluginOverrides()` will crash if overrides aren't configured in the layout or default values are not provided to the hook.
@@ -690,3 +760,13 @@ The `AutoTypeTable` component automatically pulls from TypeScript files, so ensu
 15. **Wrong data shape for infinite queries** - Lists backed by `useInfiniteQuery` need `{ pages: [...], pageParams: [...] }` in `setQueryData`. Flat arrays will break hydration.
 
 16. **Dates not serialized before `setQueryData`** - DB getters return `Date` objects; the HTTP cache holds ISO strings. Always serialize (e.g. `serializePost`) before `setQueryData`.
+
+17. **Putting write operations in `getters.ts`** - Write functions (create, update, delete) belong in `mutations.ts`, not `getters.ts`. This keeps the naming convention clear and signals to callers that no authorization hooks are invoked.
+
+18. **Tool `execute` adapter reference not set** - If a tool's `execute` function uses `_adapter` captured from `myStack.adapter`, assign it **after** the `??=` line, not inside `createStack()`. During Next.js HMR the module re-evaluates (resetting `let` variables to `undefined`), but `createStack()` does **not** re-run because the global already holds the stack — so any assignment inside `createStack()` is skipped. Place the assignment unconditionally after the export line so it runs on every module evaluation:
+
+```typescript
+export const myStack = globalForStack.__btst_stack__ ??= createStack()
+// Must be here — not inside createStack() — so HMR re-evaluation re-syncs the reference
+_adapter = myStack.adapter
+```

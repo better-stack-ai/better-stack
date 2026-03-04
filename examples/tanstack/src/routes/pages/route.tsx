@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query"
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
+import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
 import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
@@ -218,6 +219,19 @@ function Layout() {
                 }}
             >
                 <Outlet />
+                {/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}
+                <div
+                    className="fixed bottom-6 right-6 z-50"
+                    data-testid="chat-widget"
+                >
+                    <ChatLayout
+                        apiBaseURL={baseURL}
+                        apiBasePath="/api/data"
+                        layout="widget"
+                        widgetHeight="520px"
+                        showSidebar={false}
+                    />
+                </div>
             </StackProvider>
         </QueryClientProvider>
     )

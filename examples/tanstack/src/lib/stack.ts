@@ -73,9 +73,16 @@ const { handler, dbSchema } = stack({
         aiChat: aiChatBackendPlugin({
             model: openai("gpt-4o"),
             mode: "authenticated",
+            enablePageTools: true,
             hooks: {
                 onConversationCreated: async (conversation) => {
                     console.log("Conversation created:", conversation.id);
+                },
+                onBeforeToolsActivated: async (toolNames, _routeName, context) => {
+                    if (context.headers?.get?.("x-btst-deny-tools") === "1") {
+                        throw new Error("Tools denied by test hook");
+                    }
+                    return toolNames;
                 },
             },
         }),

@@ -260,14 +260,14 @@ export function ChatInput({
 				)}
 
 				{/* Text Input */}
-				<div className="relative flex-1">
+				<div className="relative flex-1 min-w-0">
 					<Textarea
 						value={input}
 						onChange={handleInputChange}
 						onKeyDown={handleKeyDown}
 						placeholder={placeholder || localization.CHAT_PLACEHOLDER}
 						className={cn(
-							"resize-none pr-12",
+							"resize-none pr-12 max-w-full",
 							isCompact
 								? "min-h-[40px] max-h-[120px] py-2"
 								: "min-h-[50px] max-h-[200px] py-3",
