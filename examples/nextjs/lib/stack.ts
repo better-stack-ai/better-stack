@@ -52,26 +52,25 @@ const stackDocsTool = tool({
 const blogHooks: BlogBackendHooks = {
     onBeforeCreatePost: async (data) => {
         console.log("onBeforeCreatePost hook called", data.title);
-        return true; // Allow for now
+        // throw new Error("Unauthorized") to deny
     },
     onBeforeUpdatePost: async (postId) => {
         // Example: Check if user owns the post or is admin
         console.log("onBeforeUpdatePost hook called for post:", postId);
-        return true; // Allow for now
+        // throw new Error("Unauthorized") to deny
     },
     onBeforeDeletePost: async (postId) => {
         // Example: Check if user can delete this post
         console.log("onBeforeDeletePost hook called for post:", postId);
-        return true; // Allow for now
+        // throw new Error("Unauthorized") to deny
     },
     onBeforeListPosts: async (filter) => {
         // Example: Allow public posts, require auth for drafts
         if (filter.published === false) {
             // Check authentication for drafts
             console.log("onBeforeListPosts: checking auth for drafts");
-            return true;
+            // throw new Error("Authentication required") to deny
         }
-        return true; // Allow for now
     },
 
     // Lifecycle hooks - perform actions after operations
@@ -377,11 +376,9 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
         kanban: kanbanBackendPlugin({
             onBeforeListBoards: async (filter, context) => {
                 console.log("onBeforeListBoards hook called", filter);
-                return true;
             },
             onBeforeCreateBoard: async (data, context) => {
                 console.log("onBeforeCreateBoard hook called", data.name);
-                return true;
             },
             onBoardCreated: async (board, context) => {
                 console.log("Board created:", board.id, board.name);

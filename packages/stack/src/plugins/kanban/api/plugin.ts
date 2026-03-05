@@ -30,6 +30,7 @@ import {
 	getKanbanColumnsByBoardId,
 } from "./mutations";
 import { KANBAN_QUERY_KEYS } from "./query-key-defs";
+import { runHookWithShim } from "../../utils";
 import { serializeBoard } from "./serializers";
 import type { QueryClient } from "@tanstack/react-query";
 
@@ -101,41 +102,41 @@ export interface KanbanApiContext<
 export interface KanbanBackendHooks {
 	// ============ Board Hooks ============
 	/**
-	 * Called before listing boards. Return false to deny access.
+	 * Called before listing boards. Throw an error to deny access.
 	 */
 	onBeforeListBoards?: (
 		filter: z.infer<typeof BoardListQuerySchema>,
 		context: KanbanApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before creating a board. Return false to deny access.
+	 * Called before creating a board. Throw an error to deny access.
 	 */
 	onBeforeCreateBoard?: (
 		data: z.infer<typeof createBoardSchema>,
 		context: KanbanApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before reading a single board. Return false to deny access.
+	 * Called before reading a single board. Throw an error to deny access.
 	 */
 	onBeforeReadBoard?: (
 		boardId: string,
 		context: KanbanApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before updating a board. Return false to deny access.
+	 * Called before updating a board. Throw an error to deny access.
 	 */
 	onBeforeUpdateBoard?: (
 		boardId: string,
 		data: z.infer<typeof updateBoardSchema>,
 		context: KanbanApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before deleting a board. Return false to deny access.
+	 * Called before deleting a board. Throw an error to deny access.
 	 */
 	onBeforeDeleteBoard?: (
 		boardId: string,
 		context: KanbanApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/**
 	 * Called after boards are listed successfully.
@@ -214,27 +215,27 @@ export interface KanbanBackendHooks {
 
 	// ============ Column Hooks ============
 	/**
-	 * Called before creating a column. Return false to deny access.
+	 * Called before creating a column. Throw an error to deny access.
 	 */
 	onBeforeCreateColumn?: (
 		data: z.infer<typeof createColumnSchema>,
 		context: KanbanApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before updating a column. Return false to deny access.
+	 * Called before updating a column. Throw an error to deny access.
 	 */
 	onBeforeUpdateColumn?: (
 		columnId: string,
 		data: z.infer<typeof updateColumnSchema>,
 		context: KanbanApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before deleting a column. Return false to deny access.
+	 * Called before deleting a column. Throw an error to deny access.
 	 */
 	onBeforeDeleteColumn?: (
 		columnId: string,
 		context: KanbanApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/**
 	 * Called after a column is created successfully
@@ -260,27 +261,27 @@ export interface KanbanBackendHooks {
 
 	// ============ Task Hooks ============
 	/**
-	 * Called before creating a task. Return false to deny access.
+	 * Called before creating a task. Throw an error to deny access.
 	 */
 	onBeforeCreateTask?: (
 		data: z.infer<typeof createTaskSchema>,
 		context: KanbanApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before updating a task. Return false to deny access.
+	 * Called before updating a task. Throw an error to deny access.
 	 */
 	onBeforeUpdateTask?: (
 		taskId: string,
 		data: z.infer<typeof updateTaskSchema>,
 		context: KanbanApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before deleting a task. Return false to deny access.
+	 * Called before deleting a task. Throw an error to deny access.
 	 */
 	onBeforeDeleteTask?: (
 		taskId: string,
 		context: KanbanApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/**
 	 * Called after a task is created successfully
@@ -346,12 +347,11 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeListBoards) {
-							const canList = await hooks.onBeforeListBoards(query, context);
-							if (!canList) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot list boards",
-								});
-							}
+							await runHookWithShim(
+								() => hooks.onBeforeListBoards!(query, context),
+								ctx.error,
+								"Unauthorized: Cannot list boards",
+							);
 						}
 
 						const result = await getAllBoards(adapter, query);
@@ -381,12 +381,11 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeReadBoard) {
-							const canRead = await hooks.onBeforeReadBoard(params.id, context);
-							if (!canRead) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot read board",
-								});
-							}
+							await runHookWithShim(
+								() => hooks.onBeforeReadBoard!(params.id, context),
+								ctx.error,
+								"Unauthorized: Cannot read board",
+							);
 						}
 
 						const result = await getBoardById(adapter, params.id);
@@ -423,15 +422,11 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeCreateBoard) {
-							const canCreate = await hooks.onBeforeCreateBoard(
-								ctx.body,
-								context,
+							await runHookWithShim(
+								() => hooks.onBeforeCreateBoard!(ctx.body, context),
+								ctx.error,
+								"Unauthorized: Cannot create board",
 							);
-							if (!canCreate) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot create board",
-								});
-							}
 						}
 
 						const { ...boardData } = ctx.body;
@@ -516,16 +511,16 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeUpdateBoard) {
-							const canUpdate = await hooks.onBeforeUpdateBoard(
-								ctx.params.id,
-								{ ...ctx.body, id: ctx.params.id },
-								context,
+							await runHookWithShim(
+								() =>
+									hooks.onBeforeUpdateBoard!(
+										ctx.params.id,
+										{ ...ctx.body, id: ctx.params.id },
+										context,
+									),
+								ctx.error,
+								"Unauthorized: Cannot update board",
 							);
-							if (!canUpdate) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot update board",
-								});
-							}
 						}
 
 						const { slug: rawSlug, ...restBoardData } = ctx.body;
@@ -595,15 +590,11 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						}
 
 						if (hooks?.onBeforeDeleteBoard) {
-							const canDelete = await hooks.onBeforeDeleteBoard(
-								ctx.params.id,
-								context,
+							await runHookWithShim(
+								() => hooks.onBeforeDeleteBoard!(ctx.params.id, context),
+								ctx.error,
+								"Unauthorized: Cannot delete board",
 							);
-							if (!canDelete) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot delete board",
-								});
-							}
 						}
 
 						await adapter.delete<Board>({
@@ -641,15 +632,11 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeCreateColumn) {
-							const canCreate = await hooks.onBeforeCreateColumn(
-								ctx.body,
-								context,
+							await runHookWithShim(
+								() => hooks.onBeforeCreateColumn!(ctx.body, context),
+								ctx.error,
+								"Unauthorized: Cannot create column",
 							);
-							if (!canCreate) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot create column",
-								});
-							}
 						}
 
 						// Get existing columns to determine order
@@ -704,16 +691,16 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeUpdateColumn) {
-							const canUpdate = await hooks.onBeforeUpdateColumn(
-								ctx.params.id,
-								{ ...ctx.body, id: ctx.params.id },
-								context,
+							await runHookWithShim(
+								() =>
+									hooks.onBeforeUpdateColumn!(
+										ctx.params.id,
+										{ ...ctx.body, id: ctx.params.id },
+										context,
+									),
+								ctx.error,
+								"Unauthorized: Cannot update column",
 							);
-							if (!canUpdate) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot update column",
-								});
-							}
 						}
 
 						const updated = await adapter.update<Column>({
@@ -765,15 +752,11 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						}
 
 						if (hooks?.onBeforeDeleteColumn) {
-							const canDelete = await hooks.onBeforeDeleteColumn(
-								ctx.params.id,
-								context,
+							await runHookWithShim(
+								() => hooks.onBeforeDeleteColumn!(ctx.params.id, context),
+								ctx.error,
+								"Unauthorized: Cannot delete column",
 							);
-							if (!canDelete) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot delete column",
-								});
-							}
 						}
 
 						await adapter.delete<Column>({
@@ -810,16 +793,16 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						for (let i = 0; i < columnIds.length; i++) {
 							const columnId = columnIds[i];
 							if (!columnId) continue;
-							const canUpdate = await hooks.onBeforeUpdateColumn(
-								columnId,
-								{ id: columnId, order: i },
-								context,
+							await runHookWithShim(
+								() =>
+									hooks.onBeforeUpdateColumn!(
+										columnId,
+										{ id: columnId, order: i },
+										context,
+									),
+								ctx.error,
+								"Unauthorized: Cannot reorder columns",
 							);
-							if (!canUpdate) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot reorder columns",
-								});
-							}
 						}
 					}
 
@@ -869,15 +852,11 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeCreateTask) {
-							const canCreate = await hooks.onBeforeCreateTask(
-								ctx.body,
-								context,
+							await runHookWithShim(
+								() => hooks.onBeforeCreateTask!(ctx.body, context),
+								ctx.error,
+								"Unauthorized: Cannot create task",
 							);
-							if (!canCreate) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot create task",
-								});
-							}
 						}
 
 						// Get existing tasks in column to determine order
@@ -939,16 +918,16 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeUpdateTask) {
-							const canUpdate = await hooks.onBeforeUpdateTask(
-								ctx.params.id,
-								{ ...ctx.body, id: ctx.params.id },
-								context,
+							await runHookWithShim(
+								() =>
+									hooks.onBeforeUpdateTask!(
+										ctx.params.id,
+										{ ...ctx.body, id: ctx.params.id },
+										context,
+									),
+								ctx.error,
+								"Unauthorized: Cannot update task",
 							);
-							if (!canUpdate) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot update task",
-								});
-							}
 						}
 
 						const updated = await adapter.update<Task>({
@@ -1000,15 +979,11 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						}
 
 						if (hooks?.onBeforeDeleteTask) {
-							const canDelete = await hooks.onBeforeDeleteTask(
-								ctx.params.id,
-								context,
+							await runHookWithShim(
+								() => hooks.onBeforeDeleteTask!(ctx.params.id, context),
+								ctx.error,
+								"Unauthorized: Cannot delete task",
 							);
-							if (!canDelete) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot delete task",
-								});
-							}
 						}
 
 						await adapter.delete<Task>({
@@ -1052,16 +1027,16 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					// Check authorization before moving task
 					if (hooks?.onBeforeUpdateTask) {
-						const canUpdate = await hooks.onBeforeUpdateTask(
-							taskId,
-							{ id: taskId, columnId: targetColumnId, order: targetOrder },
-							context,
+						await runHookWithShim(
+							() =>
+								hooks.onBeforeUpdateTask!(
+									taskId,
+									{ id: taskId, columnId: targetColumnId, order: targetOrder },
+									context,
+								),
+							ctx.error,
+							"Unauthorized: Cannot move task",
 						);
-						if (!canUpdate) {
-							throw ctx.error(403, {
-								message: "Unauthorized: Cannot move task",
-							});
-						}
 					}
 
 					// Update task with new column and order
@@ -1105,16 +1080,16 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						for (let i = 0; i < taskIds.length; i++) {
 							const taskId = taskIds[i];
 							if (!taskId) continue;
-							const canUpdate = await hooks.onBeforeUpdateTask(
-								taskId,
-								{ id: taskId, order: i },
-								context,
+							await runHookWithShim(
+								() =>
+									hooks.onBeforeUpdateTask!(
+										taskId,
+										{ id: taskId, order: i },
+										context,
+									),
+								ctx.error,
+								"Unauthorized: Cannot reorder tasks",
 							);
-							if (!canUpdate) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot reorder tasks",
-								});
-							}
 						}
 					}
 

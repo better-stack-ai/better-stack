@@ -167,23 +167,21 @@ export interface FormUpdate {
  * Backend hooks for Form Builder plugin
  *
  * All CRUD hooks receive ipAddress and headers for auth/rate limiting.
- * Return false from onBefore* hooks to reject the operation (throws 403).
+ * Throw an error from onBefore* hooks to reject the operation (throws 403).
  */
 export interface FormBuilderBackendHooks {
 	// ============================================================================
 	// FORM CRUD HOOKS (Admin operations)
 	// ============================================================================
 
-	/** Called before listing forms. Return false to deny access (403). */
-	onBeforeListForms?: (
-		ctx: FormBuilderHookContext,
-	) => Promise<boolean> | boolean;
+	/** Called before listing forms. Throw an error to deny access (403). */
+	onBeforeListForms?: (ctx: FormBuilderHookContext) => Promise<void> | void;
 
-	/** Called before creating a form. Return false to deny, or modified data. */
+	/** Called before creating a form. Throw an error to deny, or return modified data. */
 	onBeforeFormCreated?: (
 		data: FormInput,
 		ctx: FormBuilderHookContext,
-	) => Promise<FormInput | false> | FormInput | false;
+	) => Promise<FormInput | void> | FormInput | void;
 
 	/** Called after a form is created */
 	onAfterFormCreated?: (
@@ -191,18 +189,18 @@ export interface FormBuilderBackendHooks {
 		ctx: FormBuilderHookContext,
 	) => Promise<void> | void;
 
-	/** Called before getting a form by ID or slug. Return false to deny access. */
+	/** Called before getting a form by ID or slug. Throw an error to deny access. */
 	onBeforeGetForm?: (
 		idOrSlug: string,
 		ctx: FormBuilderHookContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
-	/** Called before updating a form. Return false to deny, or modified data. */
+	/** Called before updating a form. Throw an error to deny, or return modified data. */
 	onBeforeFormUpdated?: (
 		id: string,
 		data: FormUpdate,
 		ctx: FormBuilderHookContext,
-	) => Promise<FormUpdate | false> | FormUpdate | false;
+	) => Promise<FormUpdate | void> | FormUpdate | void;
 
 	/** Called after a form is updated */
 	onAfterFormUpdated?: (
@@ -210,11 +208,11 @@ export interface FormBuilderBackendHooks {
 		ctx: FormBuilderHookContext,
 	) => Promise<void> | void;
 
-	/** Called before deleting a form. Return false to deny. */
+	/** Called before deleting a form. Throw an error to deny. */
 	onBeforeFormDeleted?: (
 		id: string,
 		ctx: FormBuilderHookContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/** Called after a form is deleted */
 	onAfterFormDeleted?: (
@@ -230,16 +228,13 @@ export interface FormBuilderBackendHooks {
 	 * Called before processing a form submission.
 	 * Use for: spam protection, rate limiting, data validation/enrichment.
 	 *
-	 * @returns false to reject submission (400), or modified data to continue
+	 * Throw an error to reject submission (400), or return modified data to continue.
 	 */
 	onBeforeSubmission?: (
 		formSlug: string,
 		data: Record<string, unknown>,
 		ctx: SubmissionHookContext,
-	) =>
-		| Promise<Record<string, unknown> | false>
-		| Record<string, unknown>
-		| false;
+	) => Promise<Record<string, unknown> | void> | Record<string, unknown> | void;
 
 	/**
 	 * Called after a submission is saved.
@@ -263,23 +258,23 @@ export interface FormBuilderBackendHooks {
 	// SUBMISSIONS MANAGEMENT HOOKS (Admin viewing submissions)
 	// ============================================================================
 
-	/** Called before listing submissions. Return false to deny access (403). */
+	/** Called before listing submissions. Throw an error to deny access (403). */
 	onBeforeListSubmissions?: (
 		formId: string,
 		ctx: FormBuilderHookContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
-	/** Called before getting a submission. Return false to deny access. */
+	/** Called before getting a submission. Throw an error to deny access. */
 	onBeforeGetSubmission?: (
 		submissionId: string,
 		ctx: FormBuilderHookContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
-	/** Called before deleting a submission. Return false to deny. */
+	/** Called before deleting a submission. Throw an error to deny. */
 	onBeforeSubmissionDeleted?: (
 		submissionId: string,
 		ctx: FormBuilderHookContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/** Called after a submission is deleted */
 	onAfterSubmissionDeleted?: (

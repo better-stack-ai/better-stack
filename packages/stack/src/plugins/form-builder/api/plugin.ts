@@ -32,6 +32,7 @@ import {
 } from "./getters";
 import { FORM_QUERY_KEYS } from "./query-key-defs";
 import type { QueryClient } from "@tanstack/react-query";
+import { runHookWithShim } from "../../utils";
 
 /**
  * Route keys for the Form Builder plugin — matches the keys returned by
@@ -177,10 +178,11 @@ export const formBuilderBackendPlugin = (
 					const context = createContext(ctx.headers);
 
 					if (config.hooks?.onBeforeListForms) {
-						const canList = await config.hooks.onBeforeListForms(context);
-						if (!canList) {
-							throw ctx.error(403, { message: "Access denied" });
-						}
+						await runHookWithShim(
+							() => config.hooks!.onBeforeListForms!(context),
+							ctx.error,
+							"Access denied",
+						);
 					}
 
 					return getAllForms(adapter, { status, limit, offset });
@@ -199,10 +201,11 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook for access check
 					if (config.hooks?.onBeforeGetForm) {
-						const canGet = await config.hooks.onBeforeGetForm(slug, context);
-						if (!canGet) {
-							throw ctx.error(403, { message: "Access denied" });
-						}
+						await runHookWithShim(
+							() => config.hooks!.onBeforeGetForm!(slug, context),
+							ctx.error,
+							"Access denied",
+						);
 					}
 
 					const form = await getFormBySlugFromDb(adapter, slug);
@@ -227,10 +230,11 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook for access check
 					if (config.hooks?.onBeforeGetForm) {
-						const canGet = await config.hooks.onBeforeGetForm(id, context);
-						if (!canGet) {
-							throw ctx.error(403, { message: "Access denied" });
-						}
+						await runHookWithShim(
+							() => config.hooks!.onBeforeGetForm!(id, context),
+							ctx.error,
+							"Access denied",
+						);
 					}
 
 					const form = await adapter.findOne<Form>({
@@ -297,15 +301,13 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook - may modify data or deny operation
 					if (config.hooks?.onBeforeFormCreated) {
-						const result = await config.hooks.onBeforeFormCreated(
-							formInput,
-							context,
+						const hookResult = await runHookWithShim(
+							() => config.hooks!.onBeforeFormCreated!(formInput, context),
+							ctx.error,
+							"Create operation denied",
 						);
-						if (result === false) {
-							throw ctx.error(403, { message: "Create operation denied" });
-						}
-						if (result && typeof result === "object") {
-							formInput = result;
+						if (hookResult && typeof hookResult === "object") {
+							formInput = hookResult as typeof formInput;
 						}
 					}
 
@@ -410,16 +412,14 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook - may modify data or deny operation
 					if (config.hooks?.onBeforeFormUpdated) {
-						const result = await config.hooks.onBeforeFormUpdated(
-							id,
-							updateInput,
-							context,
+						const hookResult = await runHookWithShim(
+							() =>
+								config.hooks!.onBeforeFormUpdated!(id, updateInput, context),
+							ctx.error,
+							"Update operation denied",
 						);
-						if (result === false) {
-							throw ctx.error(403, { message: "Update operation denied" });
-						}
-						if (result && typeof result === "object") {
-							updateInput = result;
+						if (hookResult && typeof hookResult === "object") {
+							updateInput = hookResult as typeof updateInput;
 						}
 					}
 
@@ -485,13 +485,11 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook
 					if (config.hooks?.onBeforeFormDeleted) {
-						const canDelete = await config.hooks.onBeforeFormDeleted(
-							id,
-							context,
+						await runHookWithShim(
+							() => config.hooks!.onBeforeFormDeleted!(id, context),
+							ctx.error,
+							"Delete operation denied",
 						);
-						if (!canDelete) {
-							throw ctx.error(403, { message: "Delete operation denied" });
-						}
 					}
 
 					// Delete associated submissions first (cascade)
@@ -574,32 +572,40 @@ export const formBuilderBackendPlugin = (
 						throw ctx.error(400, { message: "Invalid form data" });
 					}
 
-					// Call before submission hook - may modify data or deny
+					// Call before submission hook - may modify data or deny.
+					// We call the hook directly (not via runHookWithShim) so that
+					// onSubmissionError receives the original Error, not a wrapped HTTP error.
 					let finalData = data as Record<string, unknown>;
 					if (config.hooks?.onBeforeSubmission) {
+						let hookResult: unknown;
+						let originalError: Error | undefined;
 						try {
-							const result = await config.hooks.onBeforeSubmission(
+							hookResult = await config.hooks.onBeforeSubmission(
 								slug,
 								data as Record<string, unknown>,
 								submissionContext,
 							);
-							if (result === false) {
-								throw ctx.error(400, { message: "Submission rejected" });
+							// Backward-compat: explicit false return → denial
+							if (hookResult === false) {
+								originalError = new Error("Submission rejected");
 							}
-							if (result && typeof result === "object") {
-								finalData = result;
-							}
-						} catch (error) {
-							// Call error hook if submission is rejected
+						} catch (e) {
+							originalError =
+								e instanceof Error ? e : new Error("Submission rejected");
+						}
+						if (originalError) {
 							if (config.hooks?.onSubmissionError) {
 								await config.hooks.onSubmissionError(
-									error as Error,
+									originalError,
 									slug,
 									data as Record<string, unknown>,
 									submissionContext,
 								);
 							}
-							throw error;
+							throw ctx.error(400, { message: originalError.message });
+						}
+						if (hookResult && typeof hookResult === "object") {
+							finalData = hookResult as Record<string, unknown>;
 						}
 					}
 
@@ -662,13 +668,11 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook for auth check
 					if (config.hooks?.onBeforeListSubmissions) {
-						const canList = await config.hooks.onBeforeListSubmissions(
-							formId,
-							context,
+						await runHookWithShim(
+							() => config.hooks!.onBeforeListSubmissions!(formId, context),
+							ctx.error,
+							"Access denied",
 						);
-						if (!canList) {
-							throw ctx.error(403, { message: "Access denied" });
-						}
 					}
 
 					return getFormSubmissions(adapter, formId, { limit, offset });
@@ -687,13 +691,11 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook for access check
 					if (config.hooks?.onBeforeGetSubmission) {
-						const canGet = await config.hooks.onBeforeGetSubmission(
-							subId,
-							context,
+						await runHookWithShim(
+							() => config.hooks!.onBeforeGetSubmission!(subId, context),
+							ctx.error,
+							"Access denied",
 						);
-						if (!canGet) {
-							throw ctx.error(403, { message: "Access denied" });
-						}
 					}
 
 					const submission = await adapter.findOne<FormSubmissionWithForm>({
@@ -731,13 +733,11 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook
 					if (config.hooks?.onBeforeSubmissionDeleted) {
-						const canDelete = await config.hooks.onBeforeSubmissionDeleted(
-							subId,
-							context,
+						await runHookWithShim(
+							() => config.hooks!.onBeforeSubmissionDeleted!(subId, context),
+							ctx.error,
+							"Delete operation denied",
 						);
-						if (!canDelete) {
-							throw ctx.error(403, { message: "Delete operation denied" });
-						}
 					}
 
 					await adapter.delete({

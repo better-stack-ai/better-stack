@@ -10,6 +10,7 @@ import { getAllPosts, getPostBySlug, getAllTags } from "./getters";
 import { BLOG_QUERY_KEYS } from "./query-key-defs";
 import { serializePost, serializeTag } from "./serializers";
 import type { QueryClient } from "@tanstack/react-query";
+import { runHookWithShim } from "../../utils";
 
 /**
  * Route keys for the blog plugin — matches the keys returned by
@@ -131,25 +132,25 @@ export interface BlogApiContext<TBody = any, TParams = any, TQuery = any> {
  */
 export interface BlogBackendHooks {
 	/**
-	 * Called before listing posts. Return false to deny access.
+	 * Called before listing posts. Throw an error to deny access.
 	 * @param filter - Query parameters for filtering posts
 	 * @param context - Request context with headers, etc.
 	 */
 	onBeforeListPosts?: (
 		filter: z.infer<typeof PostListQuerySchema>,
 		context: BlogApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before creating a post. Return false to deny access.
+	 * Called before creating a post. Throw an error to deny access.
 	 * @param data - Post data being created
 	 * @param context - Request context with headers, etc.
 	 */
 	onBeforeCreatePost?: (
 		data: z.infer<typeof createPostSchema>,
 		context: BlogApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before updating a post. Return false to deny access.
+	 * Called before updating a post. Throw an error to deny access.
 	 * @param postId - ID of the post being updated
 	 * @param data - Updated post data
 	 * @param context - Request context with headers, etc.
@@ -158,16 +159,16 @@ export interface BlogBackendHooks {
 		postId: string,
 		data: z.infer<typeof updatePostSchema>,
 		context: BlogApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before deleting a post. Return false to deny access.
+	 * Called before deleting a post. Throw an error to deny access.
 	 * @param postId - ID of the post being deleted
 	 * @param context - Request context with headers, etc.
 	 */
 	onBeforeDeletePost?: (
 		postId: string,
 		context: BlogApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/**
 	 * Called after posts are read successfully
@@ -350,12 +351,11 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeListPosts) {
-							const canList = await hooks.onBeforeListPosts(query, context);
-							if (!canList) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot list posts",
-								});
-							}
+							await runHookWithShim(
+								() => hooks.onBeforeListPosts!(query, context),
+								ctx.error,
+								"Unauthorized: Cannot list posts",
+							);
 						}
 
 						const result = await getAllPosts(adapter, query);
@@ -387,15 +387,11 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeCreatePost) {
-							const canCreate = await hooks.onBeforeCreatePost(
-								ctx.body,
-								context,
+							await runHookWithShim(
+								() => hooks.onBeforeCreatePost!(ctx.body, context),
+								ctx.error,
+								"Unauthorized: Cannot create post",
 							);
-							if (!canCreate) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot create post",
-								});
-							}
 						}
 
 						const { tags, ...postData } = ctx.body;
@@ -471,16 +467,12 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeUpdatePost) {
-							const canUpdate = await hooks.onBeforeUpdatePost(
-								ctx.params.id,
-								ctx.body,
-								context,
+							await runHookWithShim(
+								() =>
+									hooks.onBeforeUpdatePost!(ctx.params.id, ctx.body, context),
+								ctx.error,
+								"Unauthorized: Cannot update post",
 							);
-							if (!canUpdate) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot update post",
-								});
-							}
 						}
 
 						const { tags, slug: rawSlug, ...restPostData } = ctx.body;
@@ -598,15 +590,11 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 					try {
 						// Authorization hook
 						if (hooks?.onBeforeDeletePost) {
-							const canDelete = await hooks.onBeforeDeletePost(
-								ctx.params.id,
-								context,
+							await runHookWithShim(
+								() => hooks.onBeforeDeletePost!(ctx.params.id, context),
+								ctx.error,
+								"Unauthorized: Cannot delete post",
 							);
-							if (!canDelete) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot delete post",
-								});
-							}
 						}
 
 						await adapter.delete<Post>({
@@ -642,15 +630,11 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeListPosts) {
-							const canList = await hooks.onBeforeListPosts(
-								{ published: true },
-								context,
+							await runHookWithShim(
+								() => hooks.onBeforeListPosts!({ published: true }, context),
+								ctx.error,
+								"Unauthorized: Cannot list posts",
 							);
-							if (!canList) {
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot list posts",
-								});
-							}
 						}
 
 						const date = query.date;

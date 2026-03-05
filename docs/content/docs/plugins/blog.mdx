@@ -342,21 +342,24 @@ Customize backend behavior with optional lifecycle hooks. All hooks are optional
 import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/blog/api"
 
 const blogHooks: BlogBackendHooks = {
-  // Authorization hooks - return false to deny access
-  onBeforeListPosts(filter, context) {
-    if(filter.published === false) {
-        return isBlogAdmin(context.headers as Headers)
+  // Authorization hooks — throw to deny access
+  async onBeforeListPosts(filter, context) {
+    if (filter.published === false) {
+      if (!await isBlogAdmin(context.headers as Headers))
+        throw new Error("Admin access required to view drafts")
     }
-    return true
   },
-  onBeforeCreatePost(data, context) {
-    return isBlogAdmin(context.headers as Headers)
+  async onBeforeCreatePost(data, context) {
+    if (!await isBlogAdmin(context.headers as Headers))
+      throw new Error("Admin access required to create posts")
   },
-  onBeforeUpdatePost(postId, data, context) {
-    return isBlogAdmin(context.headers as Headers)
+  async onBeforeUpdatePost(postId, data, context) {
+    if (!await isBlogAdmin(context.headers as Headers))
+      throw new Error("Admin access required to update posts")
   },
-  onBeforeDeletePost(postId, context) {
-    return isBlogAdmin(context.headers as Headers)
+  async onBeforeDeletePost(postId, context) {
+    if (!await isBlogAdmin(context.headers as Headers))
+      throw new Error("Admin access required to delete posts")
   },
   // ... other hooks
 }
@@ -422,17 +425,17 @@ blog: blogClientPlugin({
     beforeLoadPosts: async (filter, context) => {
       // only allow loading draft posts for admin
       if (!filter.published) {
-        return isAdmin(context.headers)
+        if (!await isAdmin(context.headers))
+          throw new Error("Admin access required to view drafts")
       }
-      return true
     },
     afterLoadPost: async (post, slug, context) => {
       // only allow loading draft post for admin
       const isEditRoute = context.path?.includes('/edit');
       if (post?.published === false || isEditRoute) {
-        return isAdmin(context.headers)
+        if (!await isAdmin(context.headers))
+          throw new Error("Admin access required")
       }
-      return true
     },
     onLoadError(error, context) {
       //handle error during prefetching
@@ -472,8 +475,8 @@ overrides={{
     },
     // Optional lifecycle hooks
     onBeforePostsPageRendered: (context) => {
-      // Check if user can view posts list. This is helpful for SPA. Dont need for SSR as you should check auth in the loader.
-      return true
+      // Check if user can view posts list. Helpful for SPA; not needed for SSR (check auth in the loader instead).
+      // Throw to deny: throw new Error("Unauthorized")
     },
     // ... other hooks
   }

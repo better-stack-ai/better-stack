@@ -4,6 +4,7 @@ import {
 	defineClientPlugin,
 	createApiClient,
 	isConnectionError,
+	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
@@ -53,24 +54,24 @@ export interface LoaderContext {
  */
 export interface FormBuilderClientHooks {
 	/**
-	 * Called before loading the form list page. Return false to cancel loading.
+	 * Called before loading the form list page. Throw an error to cancel loading.
 	 * @param context - Loader context with path, params, etc.
 	 */
-	beforeLoadFormList?: (context: LoaderContext) => Promise<boolean> | boolean;
+	beforeLoadFormList?: (context: LoaderContext) => Promise<void> | void;
 	/**
 	 * Called after the form list is loaded.
 	 * @param context - Loader context
 	 */
 	afterLoadFormList?: (context: LoaderContext) => Promise<void> | void;
 	/**
-	 * Called before loading the form builder page. Return false to cancel loading.
+	 * Called before loading the form builder page. Throw an error to cancel loading.
 	 * @param id - The form ID (undefined for new forms)
 	 * @param context - Loader context
 	 */
 	beforeLoadFormBuilder?: (
 		id: string | undefined,
 		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
 	 * Called after the form builder is loaded.
 	 * @param id - The form ID (undefined for new forms)
@@ -81,14 +82,14 @@ export interface FormBuilderClientHooks {
 		context: LoaderContext,
 	) => Promise<void> | void;
 	/**
-	 * Called before loading the submissions page. Return false to cancel loading.
+	 * Called before loading the submissions page. Throw an error to cancel loading.
 	 * @param formId - The form ID
 	 * @param context - Loader context
 	 */
 	beforeLoadSubmissions?: (
 		formId: string,
 		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
 	 * Called after the submissions page is loaded.
 	 * @param formId - The form ID
@@ -146,10 +147,10 @@ function createFormListLoader(config: FormBuilderClientConfig) {
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadFormList) {
-					const canLoad = await hooks.beforeLoadFormList(context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadFormList hook");
-					}
+					await runClientHookWithShim(
+						() => hooks.beforeLoadFormList!(context),
+						"Load prevented by beforeLoadFormList hook",
+					);
 				}
 
 				const client = createApiClient<FormBuilderApiRouter>({
@@ -235,10 +236,10 @@ function createFormBuilderLoader(
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadFormBuilder) {
-					const canLoad = await hooks.beforeLoadFormBuilder(id, context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadFormBuilder hook");
-					}
+					await runClientHookWithShim(
+						() => hooks.beforeLoadFormBuilder!(id, context),
+						"Load prevented by beforeLoadFormBuilder hook",
+					);
 				}
 
 				const client = createApiClient<FormBuilderApiRouter>({
@@ -309,10 +310,10 @@ function createSubmissionsLoader(
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadSubmissions) {
-					const canLoad = await hooks.beforeLoadSubmissions(formId, context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadSubmissions hook");
-					}
+					await runClientHookWithShim(
+						() => hooks.beforeLoadSubmissions!(formId, context),
+						"Load prevented by beforeLoadSubmissions hook",
+					);
 				}
 
 				const client = createApiClient<FormBuilderApiRouter>({

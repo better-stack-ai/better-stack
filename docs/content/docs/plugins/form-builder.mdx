@@ -58,18 +58,20 @@ const { handler, dbSchema } = stack({
         // Authentication - check if user can access admin pages
         onBeforeListForms: async (ctx) => {
           const session = await getSession(ctx.headers)
-          return session?.user?.isAdmin === true
+          if (session?.user?.isAdmin !== true)
+            throw new Error("Admin access required")
         },
         onBeforeFormCreated: async (data, ctx) => {
           const session = await getSession(ctx.headers)
-          if (!session?.user?.isAdmin) return false
+          if (!session?.user?.isAdmin)
+            throw new Error("Admin access required")
           return data
         },
         // Rate limiting for public submissions
         onBeforeSubmission: async (formSlug, data, ctx) => {
           // Check rate limit by IP
           const isAllowed = await checkRateLimit(ctx.ipAddress, formSlug)
-          if (!isAllowed) return false
+          if (!isAllowed) throw new Error("Rate limit exceeded")
           return data
         },
         // Post-submission actions
@@ -365,18 +367,20 @@ formBuilderBackendPlugin({
   hooks: {
     // Form CRUD authorization
     onBeforeListForms: async (ctx) => {
-      // Return true to allow, false to deny
-      return isAdmin(ctx.headers)
+      // Throw to deny, return void to allow
+      if (!await isAdmin(ctx.headers))
+        throw new Error("Admin access required")
     },
     onBeforeFormCreated: async (data, ctx) => {
-      // Return false to deny, or modified data to allow
+      // Return modified data to allow, throw to deny
       return data
     },
     onBeforeFormUpdated: async (formId, data, ctx) => {
+      // Return modified data to allow, throw to deny
       return data
     },
     onBeforeFormDeleted: async (formId, ctx) => {
-      return true
+      // Throw to deny: throw new Error("Cannot delete this form")
     },
     
     // Form lifecycle
@@ -397,10 +401,10 @@ formBuilderBackendPlugin({
       
       // Rate limiting example
       const allowed = await checkRateLimit(ctx.ipAddress, formSlug)
-      if (!allowed) return false
+      if (!allowed) throw new Error("Rate limit exceeded")
       
       // Spam filtering
-      if (containsSpam(data)) return false
+      if (containsSpam(data)) throw new Error("Submission rejected")
       
       return data
     },
@@ -461,20 +465,22 @@ import { redirect } from "next/navigation"
   hooks: {
     beforeLoadFormList: async (context) => {
       const session = await getSession(context.headers)
-      return session?.user?.isAdmin === true
+      if (session?.user?.isAdmin !== true)
+        throw new Error("Admin access required")
     },
     beforeLoadFormBuilder: async (formId, context) => {
       // formId is undefined for new forms
       const session = await getSession(context.headers)
-      return session?.user?.isAdmin === true
+      if (session?.user?.isAdmin !== true)
+        throw new Error("Admin access required")
     },
     beforeLoadSubmissions: async (formId, context) => {
       const session = await getSession(context.headers)
-      return session?.user?.isAdmin === true
+      if (session?.user?.isAdmin !== true)
+        throw new Error("Admin access required")
     },
     afterLoadFormList: async (forms, context) => {
       console.log("Loaded", forms?.length, "forms")
-      return true
     },
     onLoadError: (error, context) => {
       // Redirect on authorization failure
@@ -638,12 +644,12 @@ Creates the client plugin with routes and SSR loaders.
 
 | Hook | Parameters | Return | Description |
 |------|------------|--------|-------------|
-| `beforeLoadFormList` | `context` | `boolean \| Promise<boolean>` | SSR auth for forms list |
-| `afterLoadFormList` | `forms, context` | `boolean` | Post-load hook |
-| `beforeLoadFormBuilder` | `formId, context` | `boolean \| Promise<boolean>` | SSR auth for builder |
-| `afterLoadFormBuilder` | `form, context` | `boolean` | Post-load hook |
-| `beforeLoadSubmissions` | `formId, context` | `boolean \| Promise<boolean>` | SSR auth for submissions |
-| `afterLoadSubmissions` | `submissions, context` | `boolean` | Post-load hook |
+| `beforeLoadFormList` | `context` | `void \| Promise<void>` | SSR auth for forms list — throw to deny |
+| `afterLoadFormList` | `forms, context` | `void` | Post-load hook |
+| `beforeLoadFormBuilder` | `formId, context` | `void \| Promise<void>` | SSR auth for builder — throw to deny |
+| `afterLoadFormBuilder` | `form, context` | `void` | Post-load hook |
+| `beforeLoadSubmissions` | `formId, context` | `void \| Promise<void>` | SSR auth for submissions — throw to deny |
+| `afterLoadSubmissions` | `submissions, context` | `void` | Post-load hook |
 | `onLoadError` | `error, context` | `void` | Handle auth failures |
 
 ### Schema Converter Utilities (`@btst/stack/plugins/form-builder/client`)

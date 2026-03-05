@@ -65,9 +65,9 @@ const { handler, dbSchema } = stack({
         onBeforeListContent: async (typeSlug, ctx) => {
           if (typeSlug === "ui-builder-page") {
             const session = await getSession(ctx.headers)
-            return session?.user?.isAdmin === true
+            if (session?.user?.isAdmin !== true)
+              throw new Error("Admin access required")
           }
-          return true
         },
       },
     })
@@ -725,12 +725,14 @@ import { redirect } from "next/navigation"
     beforeLoadPageList: async (context) => {
       // context.headers contains request headers
       const session = await getSession(context.headers)
-      return session?.user?.isAdmin === true
+      if (session?.user?.isAdmin !== true)
+        throw new Error("Admin access required")
     },
     beforeLoadPageBuilder: async (pageId, context) => {
       // pageId is undefined for new pages
       const session = await getSession(context.headers)
-      return session?.user?.isAdmin === true
+      if (session?.user?.isAdmin !== true)
+        throw new Error("Admin access required")
     },
     afterLoadPageList: async (context) => {
       console.log("Page list loaded")
@@ -750,9 +752,9 @@ import { redirect } from "next/navigation"
 
 | Hook | Parameters | Return | Description |
 |------|------------|--------|-------------|
-| `beforeLoadPageList` | `context` | `boolean \| Promise<boolean>` | SSR auth for page list |
+| `beforeLoadPageList` | `context` | `void \| Promise<void>` | SSR auth for page list — throw to deny |
 | `afterLoadPageList` | `context` | `void` | Post-load lifecycle |
-| `beforeLoadPageBuilder` | `pageId, context` | `boolean \| Promise<boolean>` | SSR auth for builder |
+| `beforeLoadPageBuilder` | `pageId, context` | `void \| Promise<void>` | SSR auth for builder — throw to deny |
 | `afterLoadPageBuilder` | `pageId, context` | `void` | Post-load lifecycle |
 | `onLoadError` | `error, context` | `void` | Handle auth failures |
 

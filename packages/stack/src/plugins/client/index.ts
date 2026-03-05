@@ -18,7 +18,11 @@ export type {
 	PluginOverrides,
 } from "../../types";
 
-export { createApiClient, isConnectionError } from "../utils";
+export {
+	createApiClient,
+	isConnectionError,
+	runClientHookWithShim,
+} from "../utils";
 
 // Re-export Yar types needed for plugins
 export type { Route } from "@btst/yar";

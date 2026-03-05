@@ -1,6 +1,7 @@
 import {
 	defineClientPlugin,
 	createApiClient,
+	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
@@ -92,35 +93,33 @@ export interface AiChatClientConfig {
  */
 export interface AiChatClientHooks {
 	/**
-	 * Called before loading conversations list. Return false to cancel loading.
+	 * Called before loading conversations list. Throw an error to cancel loading.
 	 * @param context - Loader context with path, params, etc.
 	 */
-	beforeLoadConversations?: (
-		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	beforeLoadConversations?: (context: LoaderContext) => Promise<void> | void;
 
 	/**
-	 * Called after conversations are loaded. Return false to cancel further processing.
+	 * Called after conversations are loaded. Throw an error to cancel further processing.
 	 * @param conversations - Array of loaded conversations or null
 	 * @param context - Loader context
 	 */
 	afterLoadConversations?: (
 		conversations: SerializedConversation[] | null,
 		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/**
-	 * Called before loading a single conversation. Return false to cancel loading.
+	 * Called before loading a single conversation. Throw an error to cancel loading.
 	 * @param id - Conversation ID being loaded
 	 * @param context - Loader context
 	 */
 	beforeLoadConversation?: (
 		id: string,
 		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/**
-	 * Called after a conversation is loaded. Return false to cancel further processing.
+	 * Called after a conversation is loaded. Throw an error to cancel further processing.
 	 * @param conversation - Loaded conversation or null if not found
 	 * @param id - Conversation ID that was requested
 	 * @param context - Loader context
@@ -131,7 +130,7 @@ export interface AiChatClientHooks {
 			| null,
 		id: string,
 		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/**
 	 * Called when a loading error occurs
@@ -163,10 +162,10 @@ function createConversationsLoader(config: AiChatClientConfig) {
 			try {
 				// Before hook
 				if (hooks?.beforeLoadConversations) {
-					const canLoad = await hooks.beforeLoadConversations(context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadConversations hook");
-					}
+					await runClientHookWithShim(
+						() => hooks.beforeLoadConversations!(context),
+						"Load prevented by beforeLoadConversations hook",
+					);
 				}
 
 				const client = createApiClient<AiChatApiRouter>({
@@ -185,13 +184,10 @@ function createConversationsLoader(config: AiChatClientConfig) {
 						queryClient.getQueryData<SerializedConversation[]>(
 							listQuery.queryKey,
 						) || null;
-					const canContinue = await hooks.afterLoadConversations(
-						conversations,
-						context,
+					await runClientHookWithShim(
+						() => hooks.afterLoadConversations!(conversations, context),
+						"Load prevented by afterLoadConversations hook",
 					);
-					if (canContinue === false) {
-						throw new Error("Load prevented by afterLoadConversations hook");
-					}
 				}
 
 				// Check for errors
@@ -230,10 +226,10 @@ function createConversationLoader(id: string, config: AiChatClientConfig) {
 			try {
 				// Before hook
 				if (hooks?.beforeLoadConversation) {
-					const canLoad = await hooks.beforeLoadConversation(id, context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadConversation hook");
-					}
+					await runClientHookWithShim(
+						() => hooks.beforeLoadConversation!(id, context),
+						"Load prevented by beforeLoadConversation hook",
+					);
 				}
 
 				const client = createApiClient<AiChatApiRouter>({
@@ -258,14 +254,10 @@ function createConversationLoader(id: string, config: AiChatClientConfig) {
 						queryClient.getQueryData<
 							SerializedConversation & { messages: SerializedMessage[] }
 						>(conversationQuery.queryKey) || null;
-					const canContinue = await hooks.afterLoadConversation(
-						conversation,
-						id,
-						context,
+					await runClientHookWithShim(
+						() => hooks.afterLoadConversation!(conversation, id, context),
+						"Load prevented by afterLoadConversation hook",
 					);
-					if (canContinue === false) {
-						throw new Error("Load prevented by afterLoadConversation hook");
-					}
 				}
 
 				// Check for errors

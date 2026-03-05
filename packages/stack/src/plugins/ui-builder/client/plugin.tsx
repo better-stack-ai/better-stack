@@ -3,6 +3,7 @@ import { lazy } from "react";
 import {
 	defineClientPlugin,
 	createApiClient,
+	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
@@ -69,10 +70,10 @@ function createPageListLoader(config: UIBuilderClientConfig) {
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadPageList) {
-					const canLoad = await hooks.beforeLoadPageList(context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadPageList hook");
-					}
+					await runClientHookWithShim(
+						() => hooks.beforeLoadPageList!(context),
+						"Load prevented by beforeLoadPageList hook",
+					);
 				}
 
 				const client = createApiClient<CMSApiRouter>({
@@ -161,10 +162,10 @@ function createPageBuilderLoader(
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadPageBuilder) {
-					const canLoad = await hooks.beforeLoadPageBuilder(id, context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadPageBuilder hook");
-					}
+					await runClientHookWithShim(
+						() => hooks.beforeLoadPageBuilder!(id, context),
+						"Load prevented by beforeLoadPageBuilder hook",
+					);
 				}
 
 				const client = createApiClient<CMSApiRouter>({
@@ -273,11 +274,11 @@ function createPageBuilderMeta(
  *   hooks: {
  *     beforeLoadPageList: async (ctx) => {
  *       const session = await getSession(ctx.headers)
- *       return session?.user?.isAdmin === true
+ *       if (!session?.user?.isAdmin) throw new Error("Admin access required")
  *     },
  *     beforeLoadPageBuilder: async (pageId, ctx) => {
  *       const session = await getSession(ctx.headers)
- *       return session?.user?.isAdmin === true
+ *       if (!session?.user?.isAdmin) throw new Error("Admin access required")
  *     },
  *     onLoadError: () => redirect("/auth/sign-in"),
  *   },

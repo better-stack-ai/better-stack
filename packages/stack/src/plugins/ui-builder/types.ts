@@ -92,24 +92,24 @@ export interface LoaderContext {
  */
 export interface UIBuilderClientHooks {
 	/**
-	 * Called before loading the page list. Return false to cancel loading.
+	 * Called before loading the page list. Throw an error to cancel loading.
 	 * @param context - Loader context with path, params, etc.
 	 */
-	beforeLoadPageList?: (context: LoaderContext) => Promise<boolean> | boolean;
+	beforeLoadPageList?: (context: LoaderContext) => Promise<void> | void;
 	/**
 	 * Called after the page list is loaded.
 	 * @param context - Loader context
 	 */
 	afterLoadPageList?: (context: LoaderContext) => Promise<void> | void;
 	/**
-	 * Called before loading the page builder. Return false to cancel loading.
+	 * Called before loading the page builder. Throw an error to cancel loading.
 	 * @param pageId - The page ID (undefined for new pages)
 	 * @param context - Loader context
 	 */
 	beforeLoadPageBuilder?: (
 		pageId: string | undefined,
 		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
 	 * Called after the page builder is loaded.
 	 * @param pageId - The page ID (undefined for new pages)

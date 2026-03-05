@@ -45,27 +45,26 @@ const { handler, dbSchema } = stack({
 			mode: "public", // Stateless mode - no database persistence
 			systemPrompt:
 				"You are a helpful customer support assistant. Be concise and friendly.",
-			hooks: {
-				onBeforeChat: async (messages, ctx) => {
-					// Example: Rate limiting by IP
-					const ip =
-						ctx.headers?.get("x-forwarded-for") ||
-						ctx.headers?.get("x-real-ip") ||
-						"unknown";
-					console.log(`[Public Chat] Request from IP: ${ip}`);
+		hooks: {
+			onBeforeChat: async (messages, ctx) => {
+				// Example: Rate limiting by IP
+				const ip =
+					ctx.headers?.get("x-forwarded-for") ||
+					ctx.headers?.get("x-real-ip") ||
+					"unknown";
+				console.log(`[Public Chat] Request from IP: ${ip}`);
 
-					const allowed = checkRateLimit(ip);
-					if (!allowed) {
-						console.log(`[Public Chat] Rate limit exceeded for ${ip}`);
-						return false;
-					}
+				const allowed = checkRateLimit(ip);
+				if (!allowed) {
+					console.log(`[Public Chat] Rate limit exceeded for ${ip}`);
+					throw new Error("Rate limit exceeded");
+				}
 
-					console.log(
-						`[Public Chat] Processing ${messages.length} message(s)`,
-					);
-					return true;
-				},
+				console.log(
+					`[Public Chat] Processing ${messages.length} message(s)`,
+				);
 			},
+		},
 		}),
 	},
 	adapter: (db) => createMemoryAdapter(db)({}),

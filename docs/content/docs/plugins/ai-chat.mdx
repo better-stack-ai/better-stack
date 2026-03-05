@@ -387,17 +387,18 @@ Customize backend behavior with optional lifecycle hooks. All hooks are optional
 import { aiChatBackendPlugin, type AiChatBackendHooks } from "@btst/stack/plugins/ai-chat/api"
 
 const chatHooks: AiChatBackendHooks = {
-  // Authorization hooks - return false to deny access
+  // Authorization hooks — throw to deny access
   onBeforeChat(messages, context) {
     const authHeader = context.headers?.get("authorization")
-    if (!authHeader) return false
-    return true
+    if (!authHeader) throw new Error("Unauthorized")
   },
-  onBeforeListConversations(context) {
-    return isAuthenticated(context.headers as Headers)
+  async onBeforeListConversations(context) {
+    if (!await isAuthenticated(context.headers as Headers))
+      throw new Error("Unauthorized")
   },
-  onBeforeDeleteConversation(conversationId, context) {
-    return isAuthenticated(context.headers as Headers)
+  async onBeforeDeleteConversation(conversationId, context) {
+    if (!await isAuthenticated(context.headers as Headers))
+      throw new Error("Unauthorized")
   },
   // Lifecycle hooks
   onConversationCreated(conversation, context) {
@@ -477,15 +478,12 @@ aiChat: aiChatClientPlugin({
   hooks: {
     beforeLoadConversations: async (context) => {
       // Check if user is authenticated before loading
-      if (!isAuthenticated(context.headers)) {
-        return false // Cancel loading
-      }
-      return true
+      if (!await isAuthenticated(context.headers))
+        throw new Error("Unauthorized")
     },
     afterLoadConversation: async (conversation, id, context) => {
       // Log access for analytics
       console.log("User accessed conversation:", id)
-      return true
     },
     onLoadError(error, context) {
       // Handle error - redirect to login
@@ -542,11 +540,11 @@ overrides={{
     // Optional lifecycle hooks
     onBeforeChatPageRendered: (context) => {
       // Check if user can view chat. Useful for SPA.
-      return true
+      // Throw to deny: throw new Error("Unauthorized")
     },
     onBeforeConversationPageRendered: (id, context) => {
-      // Check if user can view this specific conversation
-      return true
+      // Check if user can view this specific conversation.
+      // Throw to deny: throw new Error("Unauthorized")
     },
   }
 }}
@@ -907,10 +905,9 @@ const { handler, dbSchema } = stack({
           const ip = ctx.headers?.get("x-forwarded-for") || "unknown"
           const requests = rateLimiter.get(ip) || 0
           if (requests > 10) {
-            return false // Block request
+            throw new Error("Rate limit exceeded")
           }
           rateLimiter.set(ip, requests + 1)
-          return true
         },
       },
     })
