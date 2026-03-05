@@ -20,6 +20,17 @@ catalogs:
 
 neverBuiltDependencies: []
 
+supportedArchitectures:
+  os:
+    - current
+    - linux
+  cpu:
+    - current
+    - x64
+  libc:
+    - current
+    - glibc
+
 overrides:
   esbuild@<=0.24.2: '>=0.25.0'
   miniflare>zod: ^3.25.1
