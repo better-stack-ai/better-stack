@@ -9,8 +9,7 @@ const globalForStack = global as typeof global & {
 };
 
 function createStack() {
-	const apiKey = process.env.OPENAI_API_KEY;
-	const model = apiKey ? openai("gpt-4o-mini") : openai("gpt-4o-mini"); // Will fail gracefully if no key
+	const model = openai("gpt-4o-mini");
 
 	return stack({
 		basePath: "/api/data",
