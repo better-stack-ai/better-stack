@@ -1,9 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "@btst/stack/dist/plugins/ui-builder/client.css";
-@import "@btst/stack/dist/plugins/cms/client.css";
+@import "@btst/stack/plugins/ui-builder/css";
+@import "@btst/stack/plugins/cms/css";
 @import "@btst/stack/plugins/route-docs/css";
-@import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 
