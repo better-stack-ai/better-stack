@@ -45,7 +45,7 @@ const { handler, dbSchema } = stack({
 			mode: "public", // Stateless mode - no database persistence
 			systemPrompt:
 				"You are a helpful customer support assistant. Be concise and friendly.",
-			hooks: {
+		hooks: {
 			onBeforeChat: async (messages, ctx) => {
 				// Example: Rate limiting by IP
 				const ip =
@@ -64,7 +64,7 @@ const { handler, dbSchema } = stack({
 					`[Public Chat] Processing ${messages.length} message(s)`,
 				);
 			},
-			},
+		},
 		}),
 	},
 	adapter: (db) => createMemoryAdapter(db)({}),
