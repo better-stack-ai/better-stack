@@ -23,8 +23,9 @@ export async function runHookWithShim<T>(
 			message: e instanceof Error ? e.message : defaultMessage,
 		});
 	}
-	// undefined = void/new-style hook → allow. Any other falsy value → deny.
-	if (result !== undefined && !result) {
+	// Only an explicit `false` return is treated as old-style denial.
+	// undefined/void (new-style hooks) and any other truthy/object value are allowed through.
+	if (result === false) {
 		throw createError(errorStatus, { message: defaultMessage });
 	}
 	return result as Exclude<Awaited<T>, false>;
@@ -32,7 +33,7 @@ export async function runHookWithShim<T>(
 
 /**
  * Client-side equivalent of runHookWithShim — throws a plain Error instead of an HTTP error.
- * Hooks may deny by returning a falsy value (old) or throwing (new); both normalize to an Error.
+ * Hooks may deny by returning false (old) or throwing (new); both normalize to an Error.
  */
 export async function runClientHookWithShim<T>(
 	hookFn: () => Promise<T> | T,
@@ -44,8 +45,8 @@ export async function runClientHookWithShim<T>(
 	} catch (e) {
 		throw e instanceof Error ? e : new Error(defaultMessage);
 	}
-	// undefined = void/new-style hook → allow. Any other falsy value → deny.
-	if (result !== undefined && !result) {
+	// Only an explicit `false` return is treated as old-style denial.
+	if (result === false) {
 		throw new Error(defaultMessage);
 	}
 	return result as Exclude<Awaited<T>, false>;

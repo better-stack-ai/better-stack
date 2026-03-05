@@ -572,32 +572,37 @@ export const formBuilderBackendPlugin = (
 						throw ctx.error(400, { message: "Invalid form data" });
 					}
 
-					// Call before submission hook - may modify data or deny
+					// Call before submission hook - may modify data or deny.
+					// We call the hook directly (not via runHookWithShim) so that
+					// onSubmissionError receives the original Error, not a wrapped HTTP error.
 					let finalData = data as Record<string, unknown>;
 					if (config.hooks?.onBeforeSubmission) {
 						let hookResult: unknown;
+						let originalError: Error | undefined;
 						try {
-							hookResult = await runHookWithShim(
-								() =>
-									config.hooks!.onBeforeSubmission!(
-										slug,
-										data as Record<string, unknown>,
-										submissionContext,
-									),
-								ctx.error,
-								"Submission rejected",
-								400,
+							hookResult = await config.hooks.onBeforeSubmission(
+								slug,
+								data as Record<string, unknown>,
+								submissionContext,
 							);
-						} catch (denialErr) {
+							// Backward-compat: explicit false return → denial
+							if (hookResult === false) {
+								originalError = new Error("Submission rejected");
+							}
+						} catch (e) {
+							originalError =
+								e instanceof Error ? e : new Error("Submission rejected");
+						}
+						if (originalError) {
 							if (config.hooks?.onSubmissionError) {
 								await config.hooks.onSubmissionError(
-									denialErr as unknown as Error,
+									originalError,
 									slug,
 									data as Record<string, unknown>,
 									submissionContext,
 								);
 							}
-							throw denialErr;
+							throw ctx.error(400, { message: originalError.message });
 						}
 						if (hookResult && typeof hookResult === "object") {
 							finalData = hookResult as Record<string, unknown>;
