@@ -2,7 +2,6 @@ packages:
   - packages/**
   - docs
   - examples/*
-  - demos/*
   - e2e
 
 catalog:
