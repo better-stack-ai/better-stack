@@ -1,5 +1,4 @@
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getOrCreateQueryClient } from "@/lib/query-client";
 import { getStackClient } from "@/lib/stack-client";
@@ -8,6 +7,18 @@ import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
 
+async function safeGetHeaders(): Promise<Headers> {
+	const headersObj = new Headers();
+	try {
+		const { headers } = await import("next/headers");
+		const headersList = await headers();
+		headersList.forEach((value, key) => headersObj.set(key, value));
+	} catch {
+		// headers() not available in this context (e.g. WebContainers)
+	}
+	return headersObj;
+}
+
 export default async function Page({
 	params,
 }: {
@@ -15,9 +26,7 @@ export default async function Page({
 }) {
 	const { all } = await params;
 	const path = normalizePath(all);
-	const headersList = await headers();
-	const headersObj = new Headers();
-	headersList.forEach((value, key) => headersObj.set(key, value));
+	const headersObj = await safeGetHeaders();
 
 	const queryClient = getOrCreateQueryClient();
 	const stackClient = getStackClient(queryClient, { headers: headersObj });
@@ -39,9 +48,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
 	const { all } = await params;
 	const path = normalizePath(all);
-	const headersList = await headers();
-	const headersObj = new Headers();
-	headersList.forEach((value, key) => headersObj.set(key, value));
+	const headersObj = await safeGetHeaders();
 
 	const queryClient = getOrCreateQueryClient();
 	const stackClient = getStackClient(queryClient, { headers: headersObj });

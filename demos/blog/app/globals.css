@@ -2,7 +2,6 @@
 @import "tw-animate-css";
 @import "@btst/stack/plugins/blog/css";
 @import "@btst/stack/plugins/route-docs/css";
-@import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 
