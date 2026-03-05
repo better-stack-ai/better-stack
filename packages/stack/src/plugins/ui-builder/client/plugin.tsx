@@ -3,6 +3,7 @@ import { lazy } from "react";
 import {
 	defineClientPlugin,
 	createApiClient,
+	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
@@ -69,17 +70,10 @@ function createPageListLoader(config: UIBuilderClientConfig) {
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadPageList) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadPageList(context)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadPageList hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadPageList hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadPageList!(context),
+						"Load prevented by beforeLoadPageList hook",
+					);
 				}
 
 				const client = createApiClient<CMSApiRouter>({
@@ -168,20 +162,10 @@ function createPageBuilderLoader(
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadPageBuilder) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadPageBuilder(
-							id,
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadPageBuilder hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadPageBuilder hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadPageBuilder!(id, context),
+						"Load prevented by beforeLoadPageBuilder hook",
+					);
 				}
 
 				const client = createApiClient<CMSApiRouter>({

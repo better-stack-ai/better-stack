@@ -31,6 +31,27 @@ export async function runHookWithShim<T>(
 }
 
 /**
+ * Client-side equivalent of runHookWithShim — throws a plain Error instead of an HTTP error.
+ * Hooks may deny by returning a falsy value (old) or throwing (new); both normalize to an Error.
+ */
+export async function runClientHookWithShim<T>(
+	hookFn: () => Promise<T> | T,
+	defaultMessage: string,
+): Promise<Exclude<Awaited<T>, false>> {
+	let result: Awaited<T>;
+	try {
+		result = await hookFn();
+	} catch (e) {
+		throw e instanceof Error ? e : new Error(defaultMessage);
+	}
+	// undefined = void/new-style hook → allow. Any other falsy value → deny.
+	if (result !== undefined && !result) {
+		throw new Error(defaultMessage);
+	}
+	return result as Exclude<Awaited<T>, false>;
+}
+
+/**
  * Returns true when a fetch error is a connection-refused / no-server error.
  * Used in SSR loaders to emit an actionable build-time warning when
  * `route.loader()` is called during `next build` with no HTTP server running.

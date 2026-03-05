@@ -2,6 +2,7 @@ import {
 	defineClientPlugin,
 	createApiClient,
 	isConnectionError,
+	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
@@ -165,20 +166,10 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 			try {
 				// Before hook
 				if (hooks?.beforeLoadPosts) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadPosts(
-							{ published },
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadPosts hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadPosts hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadPosts!({ published }, context),
+						"Load prevented by beforeLoadPosts hook",
+					);
 				}
 
 				const limit = 10;
@@ -212,21 +203,10 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 				if (hooks?.afterLoadPosts) {
 					const posts =
 						queryClient.getQueryData<Post[]>(listQuery.queryKey) || null;
-					let shimDenied = false;
-					try {
-						const result = (await hooks.afterLoadPosts(
-							posts,
-							{ published },
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by afterLoadPosts hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by afterLoadPosts hook");
+					await runClientHookWithShim(
+						() => hooks.afterLoadPosts!(posts, { published }, context),
+						"Load prevented by afterLoadPosts hook",
+					);
 				}
 
 				// Check if there was an error after afterLoadPosts hook
@@ -280,20 +260,10 @@ function createPostLoader(
 			try {
 				// Before hook
 				if (hooks?.beforeLoadPost) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadPost(
-							slug,
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadPost hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadPost hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadPost!(slug, context),
+						"Load prevented by beforeLoadPost hook",
+					);
 				}
 
 				const client = createApiClient<BlogApiRouter>({
@@ -312,21 +282,10 @@ function createPostLoader(
 				if (hooks?.afterLoadPost) {
 					const post =
 						queryClient.getQueryData<Post>(postQuery.queryKey) || null;
-					let shimDenied = false;
-					try {
-						const result = (await hooks.afterLoadPost(
-							post,
-							slug,
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by afterLoadPost hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by afterLoadPost hook");
+					await runClientHookWithShim(
+						() => hooks.afterLoadPost!(post, slug, context),
+						"Load prevented by afterLoadPost hook",
+					);
 				}
 
 				// Check if there was an error after afterLoadPost hook
@@ -375,32 +334,18 @@ function createNewPostLoader(config: BlogClientConfig) {
 			try {
 				// Before hook
 				if (hooks?.beforeLoadNewPost) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadNewPost(context)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadNewPost hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadNewPost hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadNewPost!(context),
+						"Load prevented by beforeLoadNewPost hook",
+					);
 				}
 
 				// After hook
 				if (hooks?.afterLoadNewPost) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.afterLoadNewPost(context)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by afterLoadNewPost hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by afterLoadNewPost hook");
+					await runClientHookWithShim(
+						() => hooks.afterLoadNewPost!(context),
+						"Load prevented by afterLoadNewPost hook",
+					);
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR

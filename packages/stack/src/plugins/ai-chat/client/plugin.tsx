@@ -1,6 +1,7 @@
 import {
 	defineClientPlugin,
 	createApiClient,
+	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
@@ -161,19 +162,10 @@ function createConversationsLoader(config: AiChatClientConfig) {
 			try {
 				// Before hook
 				if (hooks?.beforeLoadConversations) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadConversations(
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadConversations hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadConversations hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadConversations!(context),
+						"Load prevented by beforeLoadConversations hook",
+					);
 				}
 
 				const client = createApiClient<AiChatApiRouter>({
@@ -192,20 +184,10 @@ function createConversationsLoader(config: AiChatClientConfig) {
 						queryClient.getQueryData<SerializedConversation[]>(
 							listQuery.queryKey,
 						) || null;
-					let shimDenied = false;
-					try {
-						const result = (await hooks.afterLoadConversations(
-							conversations,
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by afterLoadConversations hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by afterLoadConversations hook");
+					await runClientHookWithShim(
+						() => hooks.afterLoadConversations!(conversations, context),
+						"Load prevented by afterLoadConversations hook",
+					);
 				}
 
 				// Check for errors
@@ -244,20 +226,10 @@ function createConversationLoader(id: string, config: AiChatClientConfig) {
 			try {
 				// Before hook
 				if (hooks?.beforeLoadConversation) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadConversation(
-							id,
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadConversation hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadConversation hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadConversation!(id, context),
+						"Load prevented by beforeLoadConversation hook",
+					);
 				}
 
 				const client = createApiClient<AiChatApiRouter>({
@@ -282,21 +254,10 @@ function createConversationLoader(id: string, config: AiChatClientConfig) {
 						queryClient.getQueryData<
 							SerializedConversation & { messages: SerializedMessage[] }
 						>(conversationQuery.queryKey) || null;
-					let shimDenied = false;
-					try {
-						const result = (await hooks.afterLoadConversation(
-							conversation,
-							id,
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by afterLoadConversation hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by afterLoadConversation hook");
+					await runClientHookWithShim(
+						() => hooks.afterLoadConversation!(conversation, id, context),
+						"Load prevented by afterLoadConversation hook",
+					);
 				}
 
 				// Check for errors

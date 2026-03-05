@@ -2,6 +2,7 @@ import {
 	defineClientPlugin,
 	createApiClient,
 	isConnectionError,
+	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
@@ -141,17 +142,10 @@ function createBoardsLoader(config: KanbanClientConfig) {
 
 			try {
 				if (hooks?.beforeLoadBoards) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadBoards(context)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadBoards hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadBoards hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadBoards!(context),
+						"Load prevented by beforeLoadBoards hook",
+					);
 				}
 
 				const client = createApiClient<KanbanApiRouter>({
@@ -168,20 +162,10 @@ function createBoardsLoader(config: KanbanClientConfig) {
 					const boards = queryClient.getQueryData<SerializedBoardWithColumns[]>(
 						listQuery.queryKey,
 					);
-					let shimDenied = false;
-					try {
-						const result = (await hooks.afterLoadBoards(
-							boards || null,
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by afterLoadBoards hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by afterLoadBoards hook");
+					await runClientHookWithShim(
+						() => hooks.afterLoadBoards!(boards || null, context),
+						"Load prevented by afterLoadBoards hook",
+					);
 				}
 
 				const queryState = queryClient.getQueryState(listQuery.queryKey);
@@ -224,20 +208,10 @@ function createBoardLoader(boardId: string, config: KanbanClientConfig) {
 
 			try {
 				if (hooks?.beforeLoadBoard) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadBoard(
-							boardId,
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadBoard hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadBoard hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadBoard!(boardId, context),
+						"Load prevented by beforeLoadBoard hook",
+					);
 				}
 
 				const client = createApiClient<KanbanApiRouter>({
@@ -253,21 +227,10 @@ function createBoardLoader(boardId: string, config: KanbanClientConfig) {
 					const board = queryClient.getQueryData<SerializedBoardWithColumns>(
 						boardQuery.queryKey,
 					);
-					let shimDenied = false;
-					try {
-						const result = (await hooks.afterLoadBoard(
-							board || null,
-							boardId,
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by afterLoadBoard hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by afterLoadBoard hook");
+					await runClientHookWithShim(
+						() => hooks.afterLoadBoard!(board || null, boardId, context),
+						"Load prevented by afterLoadBoard hook",
+					);
 				}
 
 				const queryState = queryClient.getQueryState(boardQuery.queryKey);
@@ -309,31 +272,17 @@ function createNewBoardLoader(config: KanbanClientConfig) {
 
 			try {
 				if (hooks?.beforeLoadNewBoard) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadNewBoard(context)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadNewBoard hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadNewBoard hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadNewBoard!(context),
+						"Load prevented by beforeLoadNewBoard hook",
+					);
 				}
 
 				if (hooks?.afterLoadNewBoard) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.afterLoadNewBoard(context)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by afterLoadNewBoard hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by afterLoadNewBoard hook");
+					await runClientHookWithShim(
+						() => hooks.afterLoadNewBoard!(context),
+						"Load prevented by afterLoadNewBoard hook",
+					);
 				}
 			} catch (error) {
 				if (hooks?.onLoadError) {

@@ -3,6 +3,7 @@ import {
 	defineClientPlugin,
 	createApiClient,
 	isConnectionError,
+	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
@@ -149,19 +150,10 @@ function createDashboardLoader(config: CMSClientConfig) {
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadDashboard) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadDashboard(
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadDashboard hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadDashboard hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadDashboard!(context),
+						"Load prevented by beforeLoadDashboard hook",
+					);
 				}
 
 				const client = createApiClient<CMSApiRouter>({
@@ -226,20 +218,10 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadContentList) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadContentList(
-							typeSlug,
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadContentList hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadContentList hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadContentList!(typeSlug, context),
+						"Load prevented by beforeLoadContentList hook",
+					);
 				}
 
 				const client = createApiClient<CMSApiRouter>({
@@ -340,21 +322,10 @@ function createContentEditorLoader(
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadContentEditor) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadContentEditor(
-							typeSlug,
-							id,
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadContentEditor hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadContentEditor hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadContentEditor!(typeSlug, id, context),
+						"Load prevented by beforeLoadContentEditor hook",
+					);
 				}
 
 				const client = createApiClient<CMSApiRouter>({

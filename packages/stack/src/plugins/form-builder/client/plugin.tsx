@@ -4,6 +4,7 @@ import {
 	defineClientPlugin,
 	createApiClient,
 	isConnectionError,
+	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
@@ -146,17 +147,10 @@ function createFormListLoader(config: FormBuilderClientConfig) {
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadFormList) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadFormList(context)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadFormList hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadFormList hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadFormList!(context),
+						"Load prevented by beforeLoadFormList hook",
+					);
 				}
 
 				const client = createApiClient<FormBuilderApiRouter>({
@@ -242,20 +236,10 @@ function createFormBuilderLoader(
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadFormBuilder) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadFormBuilder(
-							id,
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadFormBuilder hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadFormBuilder hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadFormBuilder!(id, context),
+						"Load prevented by beforeLoadFormBuilder hook",
+					);
 				}
 
 				const client = createApiClient<FormBuilderApiRouter>({
@@ -326,20 +310,10 @@ function createSubmissionsLoader(
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadSubmissions) {
-					let shimDenied = false;
-					try {
-						const result = (await hooks.beforeLoadSubmissions(
-							formId,
-							context,
-						)) as unknown;
-						if (result === false) shimDenied = true;
-					} catch (e) {
-						throw e instanceof Error
-							? e
-							: new Error("Load prevented by beforeLoadSubmissions hook");
-					}
-					if (shimDenied)
-						throw new Error("Load prevented by beforeLoadSubmissions hook");
+					await runClientHookWithShim(
+						() => hooks.beforeLoadSubmissions!(formId, context),
+						"Load prevented by beforeLoadSubmissions hook",
+					);
 				}
 
 				const client = createApiClient<FormBuilderApiRouter>({
