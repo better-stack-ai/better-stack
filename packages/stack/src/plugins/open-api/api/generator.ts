@@ -96,7 +96,9 @@ function processZodType(zodType: z.ZodType<any>): Record<string, any> {
 	// Handle default - unwrap and process inner type, including default value
 	if (zodType instanceof z.ZodDefault) {
 		const innerType = (zodType as any)._def?.innerType;
-		const defaultValue = (zodType as any)._def?.defaultValue?.();
+		const rawDefault = (zodType as any)._def?.defaultValue;
+		const defaultValue =
+			typeof rawDefault === "function" ? rawDefault() : rawDefault;
 		if (innerType) {
 			const innerSchema = processZodType(innerType);
 			// Include the default value in the OpenAPI schema if it's JSON-serializable
