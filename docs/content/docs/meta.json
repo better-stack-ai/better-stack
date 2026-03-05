@@ -21,6 +21,11 @@
       "plugins/route-docs",
       "plugins/better-auth-ui",
       "plugins/development",
+      "---[Database]Databases---",
+      "databases/adapters",
+      "---[BookOpenCheck]Concepts---",
+      "cli",
+      "api-reference",
       "---[Play]Demos---",
       "demos/index",
       "demos/blog",
@@ -28,12 +33,7 @@
       "demos/cms",
       "demos/form-builder",
       "demos/kanban",
-      "demos/ui-builder",
-      "---[Database]Databases---",
-      "databases/adapters",
-      "---[BookOpenCheck]Concepts---",
-      "cli",
-      "api-reference"
+      "demos/ui-builder"
     ]
   }
   
