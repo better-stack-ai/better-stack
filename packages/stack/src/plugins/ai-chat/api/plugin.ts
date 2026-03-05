@@ -21,6 +21,7 @@ import {
 	BUILT_IN_PAGE_TOOL_ROUTE_ALLOWLIST,
 	BUILT_IN_PAGE_TOOL_SCHEMAS,
 } from "./page-tools";
+import { runHookWithShim } from "../../utils";
 
 /**
  * Context passed to AI Chat API hooks
@@ -450,25 +451,11 @@ export const aiChatBackendPlugin = <
 								role: msg.role,
 								content: getMessageTextContent(msg),
 							}));
-							let shimDenied = false;
-							try {
-								const result = (await config.hooks.onBeforeChat(
-									messagesForHook,
-									context,
-								)) as unknown;
-								if (result === false) shimDenied = true;
-							} catch (e) {
-								throw ctx.error(403, {
-									message:
-										e instanceof Error
-											? e.message
-											: "Unauthorized: Cannot start chat",
-								});
-							}
-							if (shimDenied)
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot start chat",
-								});
+							await runHookWithShim(
+								() => config.hooks!.onBeforeChat!(messagesForHook, context),
+								ctx.error,
+								"Unauthorized: Cannot start chat",
+							);
 						}
 
 						const firstMessage = uiMessages[0];
@@ -856,25 +843,15 @@ export const aiChatBackendPlugin = <
 
 						// Authorization hook
 						if (config.hooks?.onBeforeCreateConversation) {
-							let shimDenied = false;
-							try {
-								const result = (await config.hooks.onBeforeCreateConversation(
-									{ id, title },
-									context,
-								)) as unknown;
-								if (result === false) shimDenied = true;
-							} catch (e) {
-								throw ctx.error(403, {
-									message:
-										e instanceof Error
-											? e.message
-											: "Unauthorized: Cannot create conversation",
-								});
-							}
-							if (shimDenied)
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot create conversation",
-								});
+							await runHookWithShim(
+								() =>
+									config.hooks!.onBeforeCreateConversation!(
+										{ id, title },
+										context,
+									),
+								ctx.error,
+								"Unauthorized: Cannot create conversation",
+							);
 						}
 
 						const newConv = await adapter.create<Conversation>({
@@ -932,24 +909,11 @@ export const aiChatBackendPlugin = <
 
 						// Authorization hook
 						if (config.hooks?.onBeforeListConversations) {
-							let shimDenied = false;
-							try {
-								const result = (await config.hooks.onBeforeListConversations(
-									context,
-								)) as unknown;
-								if (result === false) shimDenied = true;
-							} catch (e) {
-								throw ctx.error(403, {
-									message:
-										e instanceof Error
-											? e.message
-											: "Unauthorized: Cannot list conversations",
-								});
-							}
-							if (shimDenied)
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot list conversations",
-								});
+							await runHookWithShim(
+								() => config.hooks!.onBeforeListConversations!(context),
+								ctx.error,
+								"Unauthorized: Cannot list conversations",
+							);
 						}
 
 						// Build where conditions - filter by userId if set
@@ -1020,25 +984,11 @@ export const aiChatBackendPlugin = <
 
 						// Authorization hook
 						if (config.hooks?.onBeforeGetConversation) {
-							let shimDenied = false;
-							try {
-								const result = (await config.hooks.onBeforeGetConversation(
-									id,
-									context,
-								)) as unknown;
-								if (result === false) shimDenied = true;
-							} catch (e) {
-								throw ctx.error(403, {
-									message:
-										e instanceof Error
-											? e.message
-											: "Unauthorized: Cannot get conversation",
-								});
-							}
-							if (shimDenied)
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot get conversation",
-								});
+							await runHookWithShim(
+								() => config.hooks!.onBeforeGetConversation!(id, context),
+								ctx.error,
+								"Unauthorized: Cannot get conversation",
+							);
 						}
 
 						// Fetch conversation with messages in a single query using join
@@ -1155,26 +1105,16 @@ export const aiChatBackendPlugin = <
 
 						// Authorization hook
 						if (config.hooks?.onBeforeUpdateConversation) {
-							let shimDenied = false;
-							try {
-								const result = (await config.hooks.onBeforeUpdateConversation(
-									id,
-									{ title },
-									context,
-								)) as unknown;
-								if (result === false) shimDenied = true;
-							} catch (e) {
-								throw ctx.error(403, {
-									message:
-										e instanceof Error
-											? e.message
-											: "Unauthorized: Cannot update conversation",
-								});
-							}
-							if (shimDenied)
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot update conversation",
-								});
+							await runHookWithShim(
+								() =>
+									config.hooks!.onBeforeUpdateConversation!(
+										id,
+										{ title },
+										context,
+									),
+								ctx.error,
+								"Unauthorized: Cannot update conversation",
+							);
 						}
 
 						const updated = await adapter.update<Conversation>({
@@ -1260,25 +1200,11 @@ export const aiChatBackendPlugin = <
 
 						// Authorization hook
 						if (config.hooks?.onBeforeDeleteConversation) {
-							let shimDenied = false;
-							try {
-								const result = (await config.hooks.onBeforeDeleteConversation(
-									id,
-									context,
-								)) as unknown;
-								if (result === false) shimDenied = true;
-							} catch (e) {
-								throw ctx.error(403, {
-									message:
-										e instanceof Error
-											? e.message
-											: "Unauthorized: Cannot delete conversation",
-								});
-							}
-							if (shimDenied)
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot delete conversation",
-								});
+							await runHookWithShim(
+								() => config.hooks!.onBeforeDeleteConversation!(id, context),
+								ctx.error,
+								"Unauthorized: Cannot delete conversation",
+							);
 						}
 
 						// Messages are automatically deleted via cascade (onDelete: "cascade")

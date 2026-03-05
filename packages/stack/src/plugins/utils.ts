@@ -1,6 +1,36 @@
 import { createClient } from "better-call/client";
 
 /**
+ * Runs a hook with backward-compatible denial handling.
+ * Hooks may deny by returning a falsy value (old) or throwing (new).
+ * Both are normalized to an HTTP error via `createError` (`ctx.error`).
+ * Returns the hook's result so transform hooks can apply mutations.
+ */
+export async function runHookWithShim<T>(
+	hookFn: () => Promise<T> | T,
+	createError: (
+		status: keyof typeof statusCodes | Status,
+		body: { message: string },
+	) => any,
+	defaultMessage: string,
+	errorStatus = 403 as keyof typeof statusCodes | Status,
+): Promise<Exclude<Awaited<T>, false>> {
+	let result: Awaited<T>;
+	try {
+		result = await hookFn();
+	} catch (e) {
+		throw createError(errorStatus, {
+			message: e instanceof Error ? e.message : defaultMessage,
+		});
+	}
+	// undefined = void/new-style hook → allow. Any other falsy value → deny.
+	if (result !== undefined && !result) {
+		throw createError(errorStatus, { message: defaultMessage });
+	}
+	return result as Exclude<Awaited<T>, false>;
+}
+
+/**
  * Returns true when a fetch error is a connection-refused / no-server error.
  * Used in SSR loaders to emit an actionable build-time warning when
  * `route.loader()` is called during `next build` with no HTTP server running.
@@ -18,7 +48,7 @@ export function isConnectionError(err: unknown): boolean {
 		code === "ERR_CONNECTION_REFUSED"
 	);
 }
-import type { Router, Endpoint } from "better-call";
+import type { Router, Endpoint, Status, statusCodes } from "better-call";
 
 interface CreateApiClientOptions {
 	baseURL?: string;

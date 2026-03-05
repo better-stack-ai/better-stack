@@ -33,6 +33,7 @@ import {
 import { createCMSContentItem } from "./mutations";
 import type { QueryClient } from "@tanstack/react-query";
 import { CMS_QUERY_KEYS } from "./query-key-defs";
+import { runHookWithShim } from "../../utils";
 
 /**
  * Route keys for the CMS plugin — matches the keys returned by
@@ -779,21 +780,11 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					// Call before hook - may deny operation
 					const processedData = validation.data as Record<string, unknown>;
 					if (config.hooks?.onBeforeCreate) {
-						let shimDenied = false;
-						try {
-							const result = (await config.hooks.onBeforeCreate(
-								processedData,
-								context,
-							)) as unknown;
-							if (result === false) shimDenied = true;
-						} catch (e) {
-							throw ctx.error(403, {
-								message:
-									e instanceof Error ? e.message : "Create operation denied",
-							});
-						}
-						if (shimDenied)
-							throw ctx.error(403, { message: "Create operation denied" });
+						await runHookWithShim(
+							() => config.hooks!.onBeforeCreate!(processedData, context),
+							ctx.error,
+							"Create operation denied",
+						);
 					}
 
 					const item = await adapter.create<ContentItem>({
@@ -930,22 +921,11 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					// Call before hook - may deny operation
 					const processedData = validatedData;
 					if (config.hooks?.onBeforeUpdate && validatedData) {
-						let shimDenied = false;
-						try {
-							const result = (await config.hooks.onBeforeUpdate(
-								id,
-								validatedData,
-								context,
-							)) as unknown;
-							if (result === false) shimDenied = true;
-						} catch (e) {
-							throw ctx.error(403, {
-								message:
-									e instanceof Error ? e.message : "Update operation denied",
-							});
-						}
-						if (shimDenied)
-							throw ctx.error(403, { message: "Update operation denied" });
+						await runHookWithShim(
+							() => config.hooks!.onBeforeUpdate!(id, validatedData, context),
+							ctx.error,
+							"Update operation denied",
+						);
 					}
 
 					// Sync relations to junction table if data was updated
@@ -1012,21 +992,11 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 
 					// Call before hook
 					if (config.hooks?.onBeforeDelete) {
-						let shimDenied = false;
-						try {
-							const result = (await config.hooks.onBeforeDelete(
-								id,
-								context,
-							)) as unknown;
-							if (result === false) shimDenied = true;
-						} catch (e) {
-							throw ctx.error(403, {
-								message:
-									e instanceof Error ? e.message : "Delete operation denied",
-							});
-						}
-						if (shimDenied)
-							throw ctx.error(403, { message: "Delete operation denied" });
+						await runHookWithShim(
+							() => config.hooks!.onBeforeDelete!(id, context),
+							ctx.error,
+							"Delete operation denied",
+						);
 					}
 
 					await adapter.delete({

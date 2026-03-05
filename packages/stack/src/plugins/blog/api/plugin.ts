@@ -10,6 +10,7 @@ import { getAllPosts, getPostBySlug, getAllTags } from "./getters";
 import { BLOG_QUERY_KEYS } from "./query-key-defs";
 import { serializePost, serializeTag } from "./serializers";
 import type { QueryClient } from "@tanstack/react-query";
+import { runHookWithShim } from "../../utils";
 
 /**
  * Route keys for the blog plugin — matches the keys returned by
@@ -350,25 +351,11 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeListPosts) {
-							let shimDenied = false;
-							try {
-								const result = (await hooks.onBeforeListPosts(
-									query,
-									context,
-								)) as unknown;
-								if (result === false) shimDenied = true;
-							} catch (e) {
-								throw ctx.error(403, {
-									message:
-										e instanceof Error
-											? e.message
-											: "Unauthorized: Cannot list posts",
-								});
-							}
-							if (shimDenied)
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot list posts",
-								});
+							await runHookWithShim(
+								() => hooks.onBeforeListPosts!(query, context),
+								ctx.error,
+								"Unauthorized: Cannot list posts",
+							);
 						}
 
 						const result = await getAllPosts(adapter, query);
@@ -400,25 +387,11 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeCreatePost) {
-							let shimDenied = false;
-							try {
-								const result = (await hooks.onBeforeCreatePost(
-									ctx.body,
-									context,
-								)) as unknown;
-								if (result === false) shimDenied = true;
-							} catch (e) {
-								throw ctx.error(403, {
-									message:
-										e instanceof Error
-											? e.message
-											: "Unauthorized: Cannot create post",
-								});
-							}
-							if (shimDenied)
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot create post",
-								});
+							await runHookWithShim(
+								() => hooks.onBeforeCreatePost!(ctx.body, context),
+								ctx.error,
+								"Unauthorized: Cannot create post",
+							);
 						}
 
 						const { tags, ...postData } = ctx.body;
@@ -494,26 +467,12 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeUpdatePost) {
-							let shimDenied = false;
-							try {
-								const result = (await hooks.onBeforeUpdatePost(
-									ctx.params.id,
-									ctx.body,
-									context,
-								)) as unknown;
-								if (result === false) shimDenied = true;
-							} catch (e) {
-								throw ctx.error(403, {
-									message:
-										e instanceof Error
-											? e.message
-											: "Unauthorized: Cannot update post",
-								});
-							}
-							if (shimDenied)
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot update post",
-								});
+							await runHookWithShim(
+								() =>
+									hooks.onBeforeUpdatePost!(ctx.params.id, ctx.body, context),
+								ctx.error,
+								"Unauthorized: Cannot update post",
+							);
 						}
 
 						const { tags, slug: rawSlug, ...restPostData } = ctx.body;
@@ -631,25 +590,11 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 					try {
 						// Authorization hook
 						if (hooks?.onBeforeDeletePost) {
-							let shimDenied = false;
-							try {
-								const result = (await hooks.onBeforeDeletePost(
-									ctx.params.id,
-									context,
-								)) as unknown;
-								if (result === false) shimDenied = true;
-							} catch (e) {
-								throw ctx.error(403, {
-									message:
-										e instanceof Error
-											? e.message
-											: "Unauthorized: Cannot delete post",
-								});
-							}
-							if (shimDenied)
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot delete post",
-								});
+							await runHookWithShim(
+								() => hooks.onBeforeDeletePost!(ctx.params.id, context),
+								ctx.error,
+								"Unauthorized: Cannot delete post",
+							);
 						}
 
 						await adapter.delete<Post>({
@@ -685,25 +630,11 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeListPosts) {
-							let shimDenied = false;
-							try {
-								const result = (await hooks.onBeforeListPosts(
-									{ published: true },
-									context,
-								)) as unknown;
-								if (result === false) shimDenied = true;
-							} catch (e) {
-								throw ctx.error(403, {
-									message:
-										e instanceof Error
-											? e.message
-											: "Unauthorized: Cannot list posts",
-								});
-							}
-							if (shimDenied)
-								throw ctx.error(403, {
-									message: "Unauthorized: Cannot list posts",
-								});
+							await runHookWithShim(
+								() => hooks.onBeforeListPosts!({ published: true }, context),
+								ctx.error,
+								"Unauthorized: Cannot list posts",
+							);
 						}
 
 						const date = query.date;
