@@ -68,11 +68,9 @@ export default function PagesLayout({
 								</Link>
 								<a
 									href="/api/data/reference"
-									target="_blank"
-									rel="noopener noreferrer"
 									className="text-muted-foreground hover:text-foreground transition-colors"
 								>
-									API Docs ↗
+									API Docs
 								</a>
 								<Link
 									href="/pages/route-docs"
