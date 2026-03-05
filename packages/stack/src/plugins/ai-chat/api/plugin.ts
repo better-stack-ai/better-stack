@@ -40,48 +40,46 @@ export interface ChatApiContext<TBody = any, TParams = any, TQuery = any> {
  */
 export interface AiChatBackendHooks {
 	// ============== Authorization Hooks ==============
-	// Return false to deny access
+	// Throw an error to deny access
 
 	/**
-	 * Called before processing a chat message. Return false to deny access.
+	 * Called before processing a chat message. Throw an error to deny access.
 	 * @param messages - Array of messages being sent
 	 * @param context - Request context with headers, etc.
 	 */
 	onBeforeChat?: (
 		messages: Array<{ role: string; content: string }>,
 		context: ChatApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/**
-	 * Called before listing conversations. Return false to deny access.
+	 * Called before listing conversations. Throw an error to deny access.
 	 * @param context - Request context with headers, etc.
 	 */
-	onBeforeListConversations?: (
-		context: ChatApiContext,
-	) => Promise<boolean> | boolean;
+	onBeforeListConversations?: (context: ChatApiContext) => Promise<void> | void;
 
 	/**
-	 * Called before getting a single conversation. Return false to deny access.
+	 * Called before getting a single conversation. Throw an error to deny access.
 	 * @param conversationId - ID of the conversation being accessed
 	 * @param context - Request context with headers, etc.
 	 */
 	onBeforeGetConversation?: (
 		conversationId: string,
 		context: ChatApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/**
-	 * Called before creating a conversation. Return false to deny access.
+	 * Called before creating a conversation. Throw an error to deny access.
 	 * @param data - Conversation data being created
 	 * @param context - Request context with headers, etc.
 	 */
 	onBeforeCreateConversation?: (
 		data: { id?: string; title?: string },
 		context: ChatApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/**
-	 * Called before updating a conversation. Return false to deny access.
+	 * Called before updating a conversation. Throw an error to deny access.
 	 * @param conversationId - ID of the conversation being updated
 	 * @param data - Updated conversation data
 	 * @param context - Request context with headers, etc.
@@ -90,17 +88,17 @@ export interface AiChatBackendHooks {
 		conversationId: string,
 		data: { title?: string },
 		context: ChatApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/**
-	 * Called before deleting a conversation. Return false to deny access.
+	 * Called before deleting a conversation. Throw an error to deny access.
 	 * @param conversationId - ID of the conversation being deleted
 	 * @param context - Request context with headers, etc.
 	 */
 	onBeforeDeleteConversation?: (
 		conversationId: string,
 		context: ChatApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/**
 	 * Called after the structural routeName/allowlist validation, with the list
@@ -452,15 +450,25 @@ export const aiChatBackendPlugin = <
 								role: msg.role,
 								content: getMessageTextContent(msg),
 							}));
-							const canChat = await config.hooks.onBeforeChat(
-								messagesForHook,
-								context,
-							);
-							if (!canChat) {
+							let shimDenied = false;
+							try {
+								const result = (await config.hooks.onBeforeChat(
+									messagesForHook,
+									context,
+								)) as unknown;
+								if (result === false) shimDenied = true;
+							} catch (e) {
+								throw ctx.error(403, {
+									message:
+										e instanceof Error
+											? e.message
+											: "Unauthorized: Cannot start chat",
+								});
+							}
+							if (shimDenied)
 								throw ctx.error(403, {
 									message: "Unauthorized: Cannot start chat",
 								});
-							}
 						}
 
 						const firstMessage = uiMessages[0];
@@ -848,15 +856,25 @@ export const aiChatBackendPlugin = <
 
 						// Authorization hook
 						if (config.hooks?.onBeforeCreateConversation) {
-							const canCreate = await config.hooks.onBeforeCreateConversation(
-								{ id, title },
-								context,
-							);
-							if (!canCreate) {
+							let shimDenied = false;
+							try {
+								const result = (await config.hooks.onBeforeCreateConversation(
+									{ id, title },
+									context,
+								)) as unknown;
+								if (result === false) shimDenied = true;
+							} catch (e) {
+								throw ctx.error(403, {
+									message:
+										e instanceof Error
+											? e.message
+											: "Unauthorized: Cannot create conversation",
+								});
+							}
+							if (shimDenied)
 								throw ctx.error(403, {
 									message: "Unauthorized: Cannot create conversation",
 								});
-							}
 						}
 
 						const newConv = await adapter.create<Conversation>({
@@ -914,13 +932,24 @@ export const aiChatBackendPlugin = <
 
 						// Authorization hook
 						if (config.hooks?.onBeforeListConversations) {
-							const canList =
-								await config.hooks.onBeforeListConversations(context);
-							if (!canList) {
+							let shimDenied = false;
+							try {
+								const result = (await config.hooks.onBeforeListConversations(
+									context,
+								)) as unknown;
+								if (result === false) shimDenied = true;
+							} catch (e) {
+								throw ctx.error(403, {
+									message:
+										e instanceof Error
+											? e.message
+											: "Unauthorized: Cannot list conversations",
+								});
+							}
+							if (shimDenied)
 								throw ctx.error(403, {
 									message: "Unauthorized: Cannot list conversations",
 								});
-							}
 						}
 
 						// Build where conditions - filter by userId if set
@@ -991,15 +1020,25 @@ export const aiChatBackendPlugin = <
 
 						// Authorization hook
 						if (config.hooks?.onBeforeGetConversation) {
-							const canGet = await config.hooks.onBeforeGetConversation(
-								id,
-								context,
-							);
-							if (!canGet) {
+							let shimDenied = false;
+							try {
+								const result = (await config.hooks.onBeforeGetConversation(
+									id,
+									context,
+								)) as unknown;
+								if (result === false) shimDenied = true;
+							} catch (e) {
+								throw ctx.error(403, {
+									message:
+										e instanceof Error
+											? e.message
+											: "Unauthorized: Cannot get conversation",
+								});
+							}
+							if (shimDenied)
 								throw ctx.error(403, {
 									message: "Unauthorized: Cannot get conversation",
 								});
-							}
 						}
 
 						// Fetch conversation with messages in a single query using join
@@ -1116,16 +1155,26 @@ export const aiChatBackendPlugin = <
 
 						// Authorization hook
 						if (config.hooks?.onBeforeUpdateConversation) {
-							const canUpdate = await config.hooks.onBeforeUpdateConversation(
-								id,
-								{ title },
-								context,
-							);
-							if (!canUpdate) {
+							let shimDenied = false;
+							try {
+								const result = (await config.hooks.onBeforeUpdateConversation(
+									id,
+									{ title },
+									context,
+								)) as unknown;
+								if (result === false) shimDenied = true;
+							} catch (e) {
+								throw ctx.error(403, {
+									message:
+										e instanceof Error
+											? e.message
+											: "Unauthorized: Cannot update conversation",
+								});
+							}
+							if (shimDenied)
 								throw ctx.error(403, {
 									message: "Unauthorized: Cannot update conversation",
 								});
-							}
 						}
 
 						const updated = await adapter.update<Conversation>({
@@ -1211,15 +1260,25 @@ export const aiChatBackendPlugin = <
 
 						// Authorization hook
 						if (config.hooks?.onBeforeDeleteConversation) {
-							const canDelete = await config.hooks.onBeforeDeleteConversation(
-								id,
-								context,
-							);
-							if (!canDelete) {
+							let shimDenied = false;
+							try {
+								const result = (await config.hooks.onBeforeDeleteConversation(
+									id,
+									context,
+								)) as unknown;
+								if (result === false) shimDenied = true;
+							} catch (e) {
+								throw ctx.error(403, {
+									message:
+										e instanceof Error
+											? e.message
+											: "Unauthorized: Cannot delete conversation",
+								});
+							}
+							if (shimDenied)
 								throw ctx.error(403, {
 									message: "Unauthorized: Cannot delete conversation",
 								});
-							}
 						}
 
 						// Messages are automatically deleted via cascade (onDelete: "cascade")

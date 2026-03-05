@@ -52,24 +52,24 @@ export interface LoaderContext {
  */
 export interface CMSClientHooks {
 	/**
-	 * Called before loading the dashboard page. Return false to cancel loading.
+	 * Called before loading the dashboard page. Throw an error to cancel loading.
 	 * @param context - Loader context with path, params, etc.
 	 */
-	beforeLoadDashboard?: (context: LoaderContext) => Promise<boolean> | boolean;
+	beforeLoadDashboard?: (context: LoaderContext) => Promise<void> | void;
 	/**
 	 * Called after the dashboard is loaded.
 	 * @param context - Loader context
 	 */
 	afterLoadDashboard?: (context: LoaderContext) => Promise<void> | void;
 	/**
-	 * Called before loading a content list page. Return false to cancel loading.
+	 * Called before loading a content list page. Throw an error to cancel loading.
 	 * @param typeSlug - The content type slug
 	 * @param context - Loader context
 	 */
 	beforeLoadContentList?: (
 		typeSlug: string,
 		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
 	 * Called after a content list is loaded.
 	 * @param typeSlug - The content type slug
@@ -80,7 +80,7 @@ export interface CMSClientHooks {
 		context: LoaderContext,
 	) => Promise<void> | void;
 	/**
-	 * Called before loading the content editor page. Return false to cancel loading.
+	 * Called before loading the content editor page. Throw an error to cancel loading.
 	 * @param typeSlug - The content type slug
 	 * @param id - The content item ID (undefined for new items)
 	 * @param context - Loader context
@@ -89,7 +89,7 @@ export interface CMSClientHooks {
 		typeSlug: string,
 		id: string | undefined,
 		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
 	 * Called after the content editor is loaded.
 	 * @param typeSlug - The content type slug
@@ -149,10 +149,19 @@ function createDashboardLoader(config: CMSClientConfig) {
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadDashboard) {
-					const canLoad = await hooks.beforeLoadDashboard(context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadDashboard hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.beforeLoadDashboard(
+							context,
+						)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by beforeLoadDashboard hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by beforeLoadDashboard hook");
 				}
 
 				const client = createApiClient<CMSApiRouter>({
@@ -217,10 +226,20 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadContentList) {
-					const canLoad = await hooks.beforeLoadContentList(typeSlug, context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadContentList hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.beforeLoadContentList(
+							typeSlug,
+							context,
+						)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by beforeLoadContentList hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by beforeLoadContentList hook");
 				}
 
 				const client = createApiClient<CMSApiRouter>({
@@ -321,14 +340,21 @@ function createContentEditorLoader(
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadContentEditor) {
-					const canLoad = await hooks.beforeLoadContentEditor(
-						typeSlug,
-						id,
-						context,
-					);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadContentEditor hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.beforeLoadContentEditor(
+							typeSlug,
+							id,
+							context,
+						)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by beforeLoadContentEditor hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by beforeLoadContentEditor hook");
 				}
 
 				const client = createApiClient<CMSApiRouter>({

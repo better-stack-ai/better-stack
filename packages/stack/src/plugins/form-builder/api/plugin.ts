@@ -177,10 +177,18 @@ export const formBuilderBackendPlugin = (
 					const context = createContext(ctx.headers);
 
 					if (config.hooks?.onBeforeListForms) {
-						const canList = await config.hooks.onBeforeListForms(context);
-						if (!canList) {
-							throw ctx.error(403, { message: "Access denied" });
+						let shimDenied = false;
+						try {
+							const result = (await config.hooks.onBeforeListForms(
+								context,
+							)) as unknown;
+							if (result === false) shimDenied = true;
+						} catch (e) {
+							throw ctx.error(403, {
+								message: e instanceof Error ? e.message : "Access denied",
+							});
 						}
+						if (shimDenied) throw ctx.error(403, { message: "Access denied" });
 					}
 
 					return getAllForms(adapter, { status, limit, offset });
@@ -199,10 +207,19 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook for access check
 					if (config.hooks?.onBeforeGetForm) {
-						const canGet = await config.hooks.onBeforeGetForm(slug, context);
-						if (!canGet) {
-							throw ctx.error(403, { message: "Access denied" });
+						let shimDenied = false;
+						try {
+							const result = (await config.hooks.onBeforeGetForm(
+								slug,
+								context,
+							)) as unknown;
+							if (result === false) shimDenied = true;
+						} catch (e) {
+							throw ctx.error(403, {
+								message: e instanceof Error ? e.message : "Access denied",
+							});
 						}
+						if (shimDenied) throw ctx.error(403, { message: "Access denied" });
 					}
 
 					const form = await getFormBySlugFromDb(adapter, slug);
@@ -227,10 +244,19 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook for access check
 					if (config.hooks?.onBeforeGetForm) {
-						const canGet = await config.hooks.onBeforeGetForm(id, context);
-						if (!canGet) {
-							throw ctx.error(403, { message: "Access denied" });
+						let shimDenied = false;
+						try {
+							const result = (await config.hooks.onBeforeGetForm(
+								id,
+								context,
+							)) as unknown;
+							if (result === false) shimDenied = true;
+						} catch (e) {
+							throw ctx.error(403, {
+								message: e instanceof Error ? e.message : "Access denied",
+							});
 						}
+						if (shimDenied) throw ctx.error(403, { message: "Access denied" });
 					}
 
 					const form = await adapter.findOne<Form>({
@@ -297,15 +323,24 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook - may modify data or deny operation
 					if (config.hooks?.onBeforeFormCreated) {
-						const result = await config.hooks.onBeforeFormCreated(
-							formInput,
-							context,
-						);
-						if (result === false) {
-							throw ctx.error(403, { message: "Create operation denied" });
+						let shimDenied = false;
+						let hookResult: unknown;
+						try {
+							hookResult = (await config.hooks.onBeforeFormCreated(
+								formInput,
+								context,
+							)) as unknown;
+							if (hookResult === false) shimDenied = true;
+						} catch (e) {
+							throw ctx.error(403, {
+								message:
+									e instanceof Error ? e.message : "Create operation denied",
+							});
 						}
-						if (result && typeof result === "object") {
-							formInput = result;
+						if (shimDenied)
+							throw ctx.error(403, { message: "Create operation denied" });
+						if (hookResult && typeof hookResult === "object") {
+							formInput = hookResult as typeof formInput;
 						}
 					}
 
@@ -410,16 +445,25 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook - may modify data or deny operation
 					if (config.hooks?.onBeforeFormUpdated) {
-						const result = await config.hooks.onBeforeFormUpdated(
-							id,
-							updateInput,
-							context,
-						);
-						if (result === false) {
-							throw ctx.error(403, { message: "Update operation denied" });
+						let shimDenied = false;
+						let hookResult: unknown;
+						try {
+							hookResult = (await config.hooks.onBeforeFormUpdated(
+								id,
+								updateInput,
+								context,
+							)) as unknown;
+							if (hookResult === false) shimDenied = true;
+						} catch (e) {
+							throw ctx.error(403, {
+								message:
+									e instanceof Error ? e.message : "Update operation denied",
+							});
 						}
-						if (result && typeof result === "object") {
-							updateInput = result;
+						if (shimDenied)
+							throw ctx.error(403, { message: "Update operation denied" });
+						if (hookResult && typeof hookResult === "object") {
+							updateInput = hookResult;
 						}
 					}
 
@@ -485,13 +529,21 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook
 					if (config.hooks?.onBeforeFormDeleted) {
-						const canDelete = await config.hooks.onBeforeFormDeleted(
-							id,
-							context,
-						);
-						if (!canDelete) {
-							throw ctx.error(403, { message: "Delete operation denied" });
+						let shimDenied = false;
+						try {
+							const result = (await config.hooks.onBeforeFormDeleted(
+								id,
+								context,
+							)) as unknown;
+							if (result === false) shimDenied = true;
+						} catch (e) {
+							throw ctx.error(403, {
+								message:
+									e instanceof Error ? e.message : "Delete operation denied",
+							});
 						}
+						if (shimDenied)
+							throw ctx.error(403, { message: "Delete operation denied" });
 					}
 
 					// Delete associated submissions first (cascade)
@@ -577,29 +629,48 @@ export const formBuilderBackendPlugin = (
 					// Call before submission hook - may modify data or deny
 					let finalData = data as Record<string, unknown>;
 					if (config.hooks?.onBeforeSubmission) {
+						let shimDenied = false;
+						let hookResult: unknown;
 						try {
-							const result = await config.hooks.onBeforeSubmission(
+							hookResult = (await config.hooks.onBeforeSubmission(
 								slug,
 								data as Record<string, unknown>,
 								submissionContext,
-							);
-							if (result === false) {
-								throw ctx.error(400, { message: "Submission rejected" });
-							}
-							if (result && typeof result === "object") {
-								finalData = result;
-							}
-						} catch (error) {
-							// Call error hook if submission is rejected
+							)) as unknown;
+							if (hookResult === false) shimDenied = true;
+						} catch (hookError) {
+							const denialErr = ctx.error(400, {
+								message:
+									hookError instanceof Error
+										? hookError.message
+										: "Submission rejected",
+							});
 							if (config.hooks?.onSubmissionError) {
 								await config.hooks.onSubmissionError(
-									error as Error,
+									denialErr as unknown as Error,
 									slug,
 									data as Record<string, unknown>,
 									submissionContext,
 								);
 							}
-							throw error;
+							throw denialErr;
+						}
+						if (shimDenied) {
+							const denialErr = ctx.error(400, {
+								message: "Submission rejected",
+							});
+							if (config.hooks?.onSubmissionError) {
+								await config.hooks.onSubmissionError(
+									denialErr as unknown as Error,
+									slug,
+									data as Record<string, unknown>,
+									submissionContext,
+								);
+							}
+							throw denialErr;
+						}
+						if (hookResult && typeof hookResult === "object") {
+							finalData = hookResult as Record<string, unknown>;
 						}
 					}
 
@@ -662,13 +733,19 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook for auth check
 					if (config.hooks?.onBeforeListSubmissions) {
-						const canList = await config.hooks.onBeforeListSubmissions(
-							formId,
-							context,
-						);
-						if (!canList) {
-							throw ctx.error(403, { message: "Access denied" });
+						let shimDenied = false;
+						try {
+							const result = (await config.hooks.onBeforeListSubmissions(
+								formId,
+								context,
+							)) as unknown;
+							if (result === false) shimDenied = true;
+						} catch (e) {
+							throw ctx.error(403, {
+								message: e instanceof Error ? e.message : "Access denied",
+							});
 						}
+						if (shimDenied) throw ctx.error(403, { message: "Access denied" });
 					}
 
 					return getFormSubmissions(adapter, formId, { limit, offset });
@@ -687,13 +764,19 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook for access check
 					if (config.hooks?.onBeforeGetSubmission) {
-						const canGet = await config.hooks.onBeforeGetSubmission(
-							subId,
-							context,
-						);
-						if (!canGet) {
-							throw ctx.error(403, { message: "Access denied" });
+						let shimDenied = false;
+						try {
+							const result = (await config.hooks.onBeforeGetSubmission(
+								subId,
+								context,
+							)) as unknown;
+							if (result === false) shimDenied = true;
+						} catch (e) {
+							throw ctx.error(403, {
+								message: e instanceof Error ? e.message : "Access denied",
+							});
 						}
+						if (shimDenied) throw ctx.error(403, { message: "Access denied" });
 					}
 
 					const submission = await adapter.findOne<FormSubmissionWithForm>({
@@ -731,13 +814,21 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook
 					if (config.hooks?.onBeforeSubmissionDeleted) {
-						const canDelete = await config.hooks.onBeforeSubmissionDeleted(
-							subId,
-							context,
-						);
-						if (!canDelete) {
-							throw ctx.error(403, { message: "Delete operation denied" });
+						let shimDenied = false;
+						try {
+							const result = (await config.hooks.onBeforeSubmissionDeleted(
+								subId,
+								context,
+							)) as unknown;
+							if (result === false) shimDenied = true;
+						} catch (e) {
+							throw ctx.error(403, {
+								message:
+									e instanceof Error ? e.message : "Delete operation denied",
+							});
 						}
+						if (shimDenied)
+							throw ctx.error(403, { message: "Delete operation denied" });
 					}
 
 					await adapter.delete({

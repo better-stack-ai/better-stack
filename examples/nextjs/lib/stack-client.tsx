@@ -53,13 +53,11 @@ export const getStackClient = (
     
                     // Loader Hooks - called during data fetching (SSR or CSR)
                     beforeLoadPosts: async (filter, context) => {
-                        
                         console.log(
                             `[${context.isSSR ? 'SSR' : 'CSR'}] beforeLoadPosts:`,
                             filter.published ? 'published' : 'drafts',
                             { filter }
                         );
-                        return true;
                     },
                     afterLoadPosts: async (posts, filter, context) => {
                         console.log(
@@ -68,14 +66,12 @@ export const getStackClient = (
                             posts?.length || 0,
                             'posts loaded'
                         );
-                        return true;
                     },
                     beforeLoadPost: async (slug, context) => {
                         console.log(
                             `[${context.isSSR ? 'SSR' : 'CSR'}] beforeLoadPost:`,
                             slug
                         );
-                        return true;
                     },
                     afterLoadPost: async (post, slug, context) => {
                         console.log(
@@ -83,7 +79,6 @@ export const getStackClient = (
                             slug,
                             post?.title || 'not found'
                         );
-                        return true;
                     },
                     onLoadError: async (error, context) => {
                         console.log(
@@ -110,11 +105,9 @@ export const getStackClient = (
                 hooks: {
                     beforeLoadConversations: async (context) => {
                         console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] beforeLoadConversations`);
-                        return true;
                     },
                     afterLoadConversations: async (conversations, context) => {
                         console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] afterLoadConversations:`, conversations?.length || 0);
-                        return true;
                     },
                 },
             }),
@@ -148,11 +141,9 @@ export const getStackClient = (
                 hooks: {
                     beforeLoadPageList: async (context) => {
                         console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] beforeLoadPageList`);
-                        return true;
                     },
                     beforeLoadPageBuilder: async (pageId, context) => {
                         console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] beforeLoadPageBuilder:`, pageId || 'new');
-                        return true;
                     },
                 },
             }),
@@ -178,11 +169,9 @@ export const getStackClient = (
                 hooks: {
                     beforeLoadBoards: async (context) => {
                         console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] beforeLoadBoards`);
-                        return true;
                     },
                     afterLoadBoards: async (boards, context) => {
                         console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] afterLoadBoards:`, boards?.length || 0);
-                        return true;
                     },
                 },
             }),

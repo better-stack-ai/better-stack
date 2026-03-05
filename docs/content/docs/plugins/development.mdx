@@ -252,11 +252,11 @@ For more control, plugins can accept hooks for authorization and lifecycle event
 
 ```typescript
 export interface BlogBackendHooks {
-  // Authorization hooks - return false to deny access
-  onBeforeCreatePost?: (data, context) => Promise<boolean> | boolean
-  onBeforeUpdatePost?: (postId, data, context) => Promise<boolean> | boolean
-  onBeforeDeletePost?: (postId, context) => Promise<boolean> | boolean
-  onBeforeListPosts?: (filter, context) => Promise<boolean> | boolean
+  // Authorization hooks - throw an error to deny access
+  onBeforeCreatePost?: (data, context) => Promise<void> | void
+  onBeforeUpdatePost?: (postId, data, context) => Promise<void> | void
+  onBeforeDeletePost?: (postId, context) => Promise<void> | void
+  onBeforeListPosts?: (filter, context) => Promise<void> | void
 
   // Lifecycle hooks - called after operations
   onPostCreated?: (post, context) => Promise<void> | void
@@ -278,11 +278,12 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
     routes: (adapter: Adapter) => {
       const createPost = createEndpoint("/posts", { method: "POST", body: createPostSchema },
         async (ctx) => {
-          // Authorization check
+          // Authorization check — throw to deny, return to allow
           if (hooks?.onBeforeCreatePost) {
-            const canCreate = await hooks.onBeforeCreatePost(ctx.body, { headers: ctx.headers })
-            if (!canCreate) {
-              throw ctx.error(403, { message: "Unauthorized" })
+            try {
+              await hooks.onBeforeCreatePost(ctx.body, { headers: ctx.headers })
+            } catch (e) {
+              throw ctx.error(403, { message: e instanceof Error ? e.message : "Unauthorized" })
             }
           }
           
@@ -988,8 +989,8 @@ export const myStack = stack({
     todos: todosBackendPlugin,
     blog: blogBackendPlugin({
       onBeforeCreatePost: async (data, context) => {
-        // Check authentication
-        return true
+        // Throw to deny, return to allow
+        // if (!session) throw new Error("Authentication required")
       },
       onPostCreated: async (post) => {
         console.log("Post created:", post.id)
@@ -1050,7 +1051,7 @@ export const getStackClient = (queryClient: QueryClient) => {
         hooks: {
           beforeLoadPosts: async (filter, context) => {
             console.log(`Loading ${filter.published ? 'published' : 'drafts'}`)
-            return true
+            // Throw to cancel loading: throw new Error("Not authorised")
           }
         }
       })

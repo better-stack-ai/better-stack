@@ -131,25 +131,25 @@ export interface BlogApiContext<TBody = any, TParams = any, TQuery = any> {
  */
 export interface BlogBackendHooks {
 	/**
-	 * Called before listing posts. Return false to deny access.
+	 * Called before listing posts. Throw an error to deny access.
 	 * @param filter - Query parameters for filtering posts
 	 * @param context - Request context with headers, etc.
 	 */
 	onBeforeListPosts?: (
 		filter: z.infer<typeof PostListQuerySchema>,
 		context: BlogApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before creating a post. Return false to deny access.
+	 * Called before creating a post. Throw an error to deny access.
 	 * @param data - Post data being created
 	 * @param context - Request context with headers, etc.
 	 */
 	onBeforeCreatePost?: (
 		data: z.infer<typeof createPostSchema>,
 		context: BlogApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before updating a post. Return false to deny access.
+	 * Called before updating a post. Throw an error to deny access.
 	 * @param postId - ID of the post being updated
 	 * @param data - Updated post data
 	 * @param context - Request context with headers, etc.
@@ -158,16 +158,16 @@ export interface BlogBackendHooks {
 		postId: string,
 		data: z.infer<typeof updatePostSchema>,
 		context: BlogApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before deleting a post. Return false to deny access.
+	 * Called before deleting a post. Throw an error to deny access.
 	 * @param postId - ID of the post being deleted
 	 * @param context - Request context with headers, etc.
 	 */
 	onBeforeDeletePost?: (
 		postId: string,
 		context: BlogApiContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/**
 	 * Called after posts are read successfully
@@ -350,12 +350,25 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeListPosts) {
-							const canList = await hooks.onBeforeListPosts(query, context);
-							if (!canList) {
+							let shimDenied = false;
+							try {
+								const result = (await hooks.onBeforeListPosts(
+									query,
+									context,
+								)) as unknown;
+								if (result === false) shimDenied = true;
+							} catch (e) {
+								throw ctx.error(403, {
+									message:
+										e instanceof Error
+											? e.message
+											: "Unauthorized: Cannot list posts",
+								});
+							}
+							if (shimDenied)
 								throw ctx.error(403, {
 									message: "Unauthorized: Cannot list posts",
 								});
-							}
 						}
 
 						const result = await getAllPosts(adapter, query);
@@ -387,15 +400,25 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeCreatePost) {
-							const canCreate = await hooks.onBeforeCreatePost(
-								ctx.body,
-								context,
-							);
-							if (!canCreate) {
+							let shimDenied = false;
+							try {
+								const result = (await hooks.onBeforeCreatePost(
+									ctx.body,
+									context,
+								)) as unknown;
+								if (result === false) shimDenied = true;
+							} catch (e) {
+								throw ctx.error(403, {
+									message:
+										e instanceof Error
+											? e.message
+											: "Unauthorized: Cannot create post",
+								});
+							}
+							if (shimDenied)
 								throw ctx.error(403, {
 									message: "Unauthorized: Cannot create post",
 								});
-							}
 						}
 
 						const { tags, ...postData } = ctx.body;
@@ -471,16 +494,26 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeUpdatePost) {
-							const canUpdate = await hooks.onBeforeUpdatePost(
-								ctx.params.id,
-								ctx.body,
-								context,
-							);
-							if (!canUpdate) {
+							let shimDenied = false;
+							try {
+								const result = (await hooks.onBeforeUpdatePost(
+									ctx.params.id,
+									ctx.body,
+									context,
+								)) as unknown;
+								if (result === false) shimDenied = true;
+							} catch (e) {
+								throw ctx.error(403, {
+									message:
+										e instanceof Error
+											? e.message
+											: "Unauthorized: Cannot update post",
+								});
+							}
+							if (shimDenied)
 								throw ctx.error(403, {
 									message: "Unauthorized: Cannot update post",
 								});
-							}
 						}
 
 						const { tags, slug: rawSlug, ...restPostData } = ctx.body;
@@ -598,15 +631,25 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 					try {
 						// Authorization hook
 						if (hooks?.onBeforeDeletePost) {
-							const canDelete = await hooks.onBeforeDeletePost(
-								ctx.params.id,
-								context,
-							);
-							if (!canDelete) {
+							let shimDenied = false;
+							try {
+								const result = (await hooks.onBeforeDeletePost(
+									ctx.params.id,
+									context,
+								)) as unknown;
+								if (result === false) shimDenied = true;
+							} catch (e) {
+								throw ctx.error(403, {
+									message:
+										e instanceof Error
+											? e.message
+											: "Unauthorized: Cannot delete post",
+								});
+							}
+							if (shimDenied)
 								throw ctx.error(403, {
 									message: "Unauthorized: Cannot delete post",
 								});
-							}
 						}
 
 						await adapter.delete<Post>({
@@ -642,15 +685,25 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeListPosts) {
-							const canList = await hooks.onBeforeListPosts(
-								{ published: true },
-								context,
-							);
-							if (!canList) {
+							let shimDenied = false;
+							try {
+								const result = (await hooks.onBeforeListPosts(
+									{ published: true },
+									context,
+								)) as unknown;
+								if (result === false) shimDenied = true;
+							} catch (e) {
+								throw ctx.error(403, {
+									message:
+										e instanceof Error
+											? e.message
+											: "Unauthorized: Cannot list posts",
+								});
+							}
+							if (shimDenied)
 								throw ctx.error(403, {
 									message: "Unauthorized: Cannot list posts",
 								});
-							}
 						}
 
 						const date = query.date;

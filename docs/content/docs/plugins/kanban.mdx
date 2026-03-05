@@ -493,41 +493,50 @@ Customize backend behavior with optional lifecycle hooks. All hooks are optional
 import { kanbanBackendPlugin, type KanbanBackendHooks } from "@btst/stack/plugins/kanban/api"
 
 const kanbanHooks: KanbanBackendHooks = {
-  // Board hooks
+  // Board hooks — throw to deny access
   onBeforeListBoards: async (filter, context) => {
-    // Return false to deny access
-    return isAuthenticated(context.headers)
+    if (!await isAuthenticated(context.headers))
+      throw new Error("Unauthorized")
   },
   onBeforeCreateBoard: async (data, context) => {
-    return isAuthenticated(context.headers)
+    if (!await isAuthenticated(context.headers))
+      throw new Error("Unauthorized")
   },
   onBeforeUpdateBoard: async (boardId, data, context) => {
-    return isBoardOwner(boardId, context.headers)
+    if (!await isBoardOwner(boardId, context.headers))
+      throw new Error("You do not own this board")
   },
   onBeforeDeleteBoard: async (boardId, context) => {
-    return isBoardOwner(boardId, context.headers)
+    if (!await isBoardOwner(boardId, context.headers))
+      throw new Error("You do not own this board")
   },
   
   // Column hooks
   onBeforeCreateColumn: async (data, context) => {
-    return canEditBoard(data.boardId, context.headers)
+    if (!await canEditBoard(data.boardId, context.headers))
+      throw new Error("Unauthorized")
   },
   onBeforeUpdateColumn: async (columnId, data, context) => {
-    return canEditColumn(columnId, context.headers)
+    if (!await canEditColumn(columnId, context.headers))
+      throw new Error("Unauthorized")
   },
   onBeforeDeleteColumn: async (columnId, context) => {
-    return canEditColumn(columnId, context.headers)
+    if (!await canEditColumn(columnId, context.headers))
+      throw new Error("Unauthorized")
   },
   
   // Task hooks
   onBeforeCreateTask: async (data, context) => {
-    return canEditColumn(data.columnId, context.headers)
+    if (!await canEditColumn(data.columnId, context.headers))
+      throw new Error("Unauthorized")
   },
   onBeforeUpdateTask: async (taskId, data, context) => {
-    return canEditTask(taskId, context.headers)
+    if (!await canEditTask(taskId, context.headers))
+      throw new Error("Unauthorized")
   },
   onBeforeDeleteTask: async (taskId, context) => {
-    return canEditTask(taskId, context.headers)
+    if (!await canEditTask(taskId, context.headers))
+      throw new Error("Unauthorized")
   },
   
   // Lifecycle hooks
@@ -551,17 +560,17 @@ const { handler, dbSchema } = stack({
 
 | Hook | Description |
 |------|-------------|
-| `onBeforeListBoards` | Called before listing boards. Return false to deny. |
-| `onBeforeCreateBoard` | Called before creating a board. Return false to deny. |
-| `onBeforeReadBoard` | Called before reading a single board. Return false to deny. |
-| `onBeforeUpdateBoard` | Called before updating a board. Return false to deny. |
-| `onBeforeDeleteBoard` | Called before deleting a board. Return false to deny. |
-| `onBeforeCreateColumn` | Called before creating a column. Return false to deny. |
-| `onBeforeUpdateColumn` | Called before updating a column. Return false to deny. |
-| `onBeforeDeleteColumn` | Called before deleting a column. Return false to deny. |
-| `onBeforeCreateTask` | Called before creating a task. Return false to deny. |
-| `onBeforeUpdateTask` | Called before updating a task. Return false to deny. |
-| `onBeforeDeleteTask` | Called before deleting a task. Return false to deny. |
+| `onBeforeListBoards` | Called before listing boards. Throw to deny. |
+| `onBeforeCreateBoard` | Called before creating a board. Throw to deny. |
+| `onBeforeReadBoard` | Called before reading a single board. Throw to deny. |
+| `onBeforeUpdateBoard` | Called before updating a board. Throw to deny. |
+| `onBeforeDeleteBoard` | Called before deleting a board. Throw to deny. |
+| `onBeforeCreateColumn` | Called before creating a column. Throw to deny. |
+| `onBeforeUpdateColumn` | Called before updating a column. Throw to deny. |
+| `onBeforeDeleteColumn` | Called before deleting a column. Throw to deny. |
+| `onBeforeCreateTask` | Called before creating a task. Throw to deny. |
+| `onBeforeUpdateTask` | Called before updating a task. Throw to deny. |
+| `onBeforeDeleteTask` | Called before deleting a task. Throw to deny. |
 | `onBoardsRead` | Called after boards are listed successfully. |
 | `onBoardCreated` | Called after a board is created. |
 | `onBoardUpdated` | Called after a board is updated. |
@@ -595,10 +604,12 @@ kanban: kanbanClientPlugin({
   // Optional hooks
   hooks: {
     beforeLoadBoards: async (context) => {
-      return isAuthenticated(context.headers)
+      if (!await isAuthenticated(context.headers))
+        throw new Error("Unauthorized")
     },
     beforeLoadBoard: async (boardId, context) => {
-      return canViewBoard(boardId, context.headers)
+      if (!await canViewBoard(boardId, context.headers))
+        throw new Error("Unauthorized")
     },
   },
 })
@@ -610,11 +621,11 @@ Customize client-side behavior with lifecycle hooks:
 
 | Hook | Description |
 |------|-------------|
-| `beforeLoadBoards` | Called before loading boards list. Return false to cancel. |
+| `beforeLoadBoards` | Called before loading boards list. Throw to cancel. |
 | `afterLoadBoards` | Called after boards are loaded. |
-| `beforeLoadBoard` | Called before loading a single board. Return false to cancel. |
+| `beforeLoadBoard` | Called before loading a single board. Throw to cancel. |
 | `afterLoadBoard` | Called after a board is loaded. |
-| `beforeLoadNewBoard` | Called before loading the new board page. Return false to cancel. |
+| `beforeLoadNewBoard` | Called before loading the new board page. Throw to cancel. |
 | `afterLoadNewBoard` | Called after the new board page is loaded. |
 | `onLoadError` | Called when a loading error occurs. |
 

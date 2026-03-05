@@ -69,10 +69,17 @@ function createPageListLoader(config: UIBuilderClientConfig) {
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadPageList) {
-					const canLoad = await hooks.beforeLoadPageList(context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadPageList hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.beforeLoadPageList(context)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by beforeLoadPageList hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by beforeLoadPageList hook");
 				}
 
 				const client = createApiClient<CMSApiRouter>({
@@ -161,10 +168,20 @@ function createPageBuilderLoader(
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadPageBuilder) {
-					const canLoad = await hooks.beforeLoadPageBuilder(id, context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadPageBuilder hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.beforeLoadPageBuilder(
+							id,
+							context,
+						)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by beforeLoadPageBuilder hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by beforeLoadPageBuilder hook");
 				}
 
 				const client = createApiClient<CMSApiRouter>({
@@ -273,11 +290,11 @@ function createPageBuilderMeta(
  *   hooks: {
  *     beforeLoadPageList: async (ctx) => {
  *       const session = await getSession(ctx.headers)
- *       return session?.user?.isAdmin === true
+ *       if (!session?.user?.isAdmin) throw new Error("Admin access required")
  *     },
  *     beforeLoadPageBuilder: async (pageId, ctx) => {
  *       const session = await getSession(ctx.headers)
- *       return session?.user?.isAdmin === true
+ *       if (!session?.user?.isAdmin) throw new Error("Admin access required")
  *     },
  *     onLoadError: () => redirect("/auth/sign-in"),
  *   },

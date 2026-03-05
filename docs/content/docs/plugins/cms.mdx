@@ -456,7 +456,7 @@ cmsBackendPlugin({
   hooks: {
     onBeforeCreate: async (data, context) => {
       console.log("Creating item in", context.typeSlug)
-      // Return false to deny, or modified data
+      // Return modified data to allow, throw to deny
       return data
     },
     onAfterCreate: async (item, context) => {
@@ -464,13 +464,14 @@ cmsBackendPlugin({
       // Trigger webhooks, notifications, etc.
     },
     onBeforeUpdate: async (id, data, context) => {
-      return data // or false to deny
+      // Return modified data to allow, throw to deny
+      return data
     },
     onAfterUpdate: async (item, context) => {
       // ...
     },
     onBeforeDelete: async (id, context) => {
-      return true // or false to deny
+      // Throw to deny: throw new Error("Cannot delete published content")
     },
     onAfterDelete: async (id, context) => {
       // ...
@@ -619,14 +620,14 @@ cms: {
   // ...required overrides
   onBeforeDashboardRendered: (context) => {
     // Sync check - runs during component render
-    return user?.isAdmin === true
+    if (user?.isAdmin !== true) throw new Error("Admin access required")
   },
   onBeforeListRendered: (typeSlug, context) => {
-    return true
+    // Throw to deny: throw new Error("Unauthorized")
   },
   onBeforeEditorRendered: (typeSlug, id, context) => {
     // id is null for new items
-    return true
+    // Throw to deny: throw new Error("Unauthorized")
   },
   onRouteRender: (routeName, context) => {
     // Track page views

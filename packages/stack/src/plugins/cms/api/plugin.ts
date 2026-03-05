@@ -779,13 +779,21 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					// Call before hook - may deny operation
 					const processedData = validation.data as Record<string, unknown>;
 					if (config.hooks?.onBeforeCreate) {
-						const result = await config.hooks.onBeforeCreate(
-							processedData,
-							context,
-						);
-						if (result === false) {
-							throw ctx.error(403, { message: "Create operation denied" });
+						let shimDenied = false;
+						try {
+							const result = (await config.hooks.onBeforeCreate(
+								processedData,
+								context,
+							)) as unknown;
+							if (result === false) shimDenied = true;
+						} catch (e) {
+							throw ctx.error(403, {
+								message:
+									e instanceof Error ? e.message : "Create operation denied",
+							});
 						}
+						if (shimDenied)
+							throw ctx.error(403, { message: "Create operation denied" });
 					}
 
 					const item = await adapter.create<ContentItem>({
@@ -922,14 +930,22 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					// Call before hook - may deny operation
 					const processedData = validatedData;
 					if (config.hooks?.onBeforeUpdate && validatedData) {
-						const result = await config.hooks.onBeforeUpdate(
-							id,
-							validatedData,
-							context,
-						);
-						if (result === false) {
-							throw ctx.error(403, { message: "Update operation denied" });
+						let shimDenied = false;
+						try {
+							const result = (await config.hooks.onBeforeUpdate(
+								id,
+								validatedData,
+								context,
+							)) as unknown;
+							if (result === false) shimDenied = true;
+						} catch (e) {
+							throw ctx.error(403, {
+								message:
+									e instanceof Error ? e.message : "Update operation denied",
+							});
 						}
+						if (shimDenied)
+							throw ctx.error(403, { message: "Update operation denied" });
 					}
 
 					// Sync relations to junction table if data was updated
@@ -996,10 +1012,21 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 
 					// Call before hook
 					if (config.hooks?.onBeforeDelete) {
-						const canDelete = await config.hooks.onBeforeDelete(id, context);
-						if (!canDelete) {
-							throw ctx.error(403, { message: "Delete operation denied" });
+						let shimDenied = false;
+						try {
+							const result = (await config.hooks.onBeforeDelete(
+								id,
+								context,
+							)) as unknown;
+							if (result === false) shimDenied = true;
+						} catch (e) {
+							throw ctx.error(403, {
+								message:
+									e instanceof Error ? e.message : "Delete operation denied",
+							});
 						}
+						if (shimDenied)
+							throw ctx.error(403, { message: "Delete operation denied" });
 					}
 
 					await adapter.delete({

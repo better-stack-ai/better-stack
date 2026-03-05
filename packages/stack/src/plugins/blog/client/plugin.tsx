@@ -91,16 +91,16 @@ export interface BlogClientConfig {
  */
 export interface BlogClientHooks {
 	/**
-	 * Called before loading posts list. Return false to cancel loading.
+	 * Called before loading posts list. Throw an error to cancel loading.
 	 * @param filter - Filter parameters including published status
 	 * @param context - Loader context with path, params, etc.
 	 */
 	beforeLoadPosts?: (
 		filter: { published: boolean },
 		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called after posts are loaded. Return false to cancel further processing.
+	 * Called after posts are loaded. Throw an error to cancel further processing.
 	 * @param posts - Array of loaded posts or null
 	 * @param filter - Filter parameters used
 	 * @param context - Loader context
@@ -109,18 +109,18 @@ export interface BlogClientHooks {
 		posts: Post[] | null,
 		filter: { published: boolean },
 		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before loading a single post. Return false to cancel loading.
+	 * Called before loading a single post. Throw an error to cancel loading.
 	 * @param slug - Post slug being loaded
 	 * @param context - Loader context
 	 */
 	beforeLoadPost?: (
 		slug: string,
 		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called after a post is loaded. Return false to cancel further processing.
+	 * Called after a post is loaded. Throw an error to cancel further processing.
 	 * @param post - Loaded post or null if not found
 	 * @param slug - Post slug that was requested
 	 * @param context - Loader context
@@ -129,17 +129,17 @@ export interface BlogClientHooks {
 		post: Post | null,
 		slug: string,
 		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before loading the new post page. Return false to cancel.
+	 * Called before loading the new post page. Throw an error to cancel.
 	 * @param context - Loader context
 	 */
-	beforeLoadNewPost?: (context: LoaderContext) => Promise<boolean> | boolean;
+	beforeLoadNewPost?: (context: LoaderContext) => Promise<void> | void;
 	/**
-	 * Called after the new post page is loaded. Return false to cancel.
+	 * Called after the new post page is loaded. Throw an error to cancel.
 	 * @param context - Loader context
 	 */
-	afterLoadNewPost?: (context: LoaderContext) => Promise<boolean> | boolean;
+	afterLoadNewPost?: (context: LoaderContext) => Promise<void> | void;
 	/**
 	 * Called when a loading error occurs
 	 * @param error - The error that occurred
@@ -165,10 +165,20 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 			try {
 				// Before hook
 				if (hooks?.beforeLoadPosts) {
-					const canLoad = await hooks.beforeLoadPosts({ published }, context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadPosts hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.beforeLoadPosts(
+							{ published },
+							context,
+						)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by beforeLoadPosts hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by beforeLoadPosts hook");
 				}
 
 				const limit = 10;
@@ -202,14 +212,21 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 				if (hooks?.afterLoadPosts) {
 					const posts =
 						queryClient.getQueryData<Post[]>(listQuery.queryKey) || null;
-					const canContinue = await hooks.afterLoadPosts(
-						posts,
-						{ published },
-						context,
-					);
-					if (canContinue === false) {
-						throw new Error("Load prevented by afterLoadPosts hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.afterLoadPosts(
+							posts,
+							{ published },
+							context,
+						)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by afterLoadPosts hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by afterLoadPosts hook");
 				}
 
 				// Check if there was an error after afterLoadPosts hook
@@ -263,10 +280,20 @@ function createPostLoader(
 			try {
 				// Before hook
 				if (hooks?.beforeLoadPost) {
-					const canLoad = await hooks.beforeLoadPost(slug, context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadPost hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.beforeLoadPost(
+							slug,
+							context,
+						)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by beforeLoadPost hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by beforeLoadPost hook");
 				}
 
 				const client = createApiClient<BlogApiRouter>({
@@ -285,10 +312,21 @@ function createPostLoader(
 				if (hooks?.afterLoadPost) {
 					const post =
 						queryClient.getQueryData<Post>(postQuery.queryKey) || null;
-					const canContinue = await hooks.afterLoadPost(post, slug, context);
-					if (canContinue === false) {
-						throw new Error("Load prevented by afterLoadPost hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.afterLoadPost(
+							post,
+							slug,
+							context,
+						)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by afterLoadPost hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by afterLoadPost hook");
 				}
 
 				// Check if there was an error after afterLoadPost hook
@@ -337,18 +375,32 @@ function createNewPostLoader(config: BlogClientConfig) {
 			try {
 				// Before hook
 				if (hooks?.beforeLoadNewPost) {
-					const canLoad = await hooks.beforeLoadNewPost(context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadNewPost hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.beforeLoadNewPost(context)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by beforeLoadNewPost hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by beforeLoadNewPost hook");
 				}
 
 				// After hook
 				if (hooks?.afterLoadNewPost) {
-					const canContinue = await hooks.afterLoadNewPost(context);
-					if (canContinue === false) {
-						throw new Error("Load prevented by afterLoadNewPost hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.afterLoadNewPost(context)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by afterLoadNewPost hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by afterLoadNewPost hook");
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR

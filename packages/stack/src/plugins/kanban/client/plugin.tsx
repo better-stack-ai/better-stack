@@ -86,39 +86,39 @@ export interface KanbanClientConfig {
  */
 export interface KanbanClientHooks {
 	/**
-	 * Called before loading boards list. Return false to cancel loading.
+	 * Called before loading boards list. Throw an error to cancel loading.
 	 */
-	beforeLoadBoards?: (context: LoaderContext) => Promise<boolean> | boolean;
+	beforeLoadBoards?: (context: LoaderContext) => Promise<void> | void;
 	/**
-	 * Called after boards are loaded. Return false to cancel further processing.
+	 * Called after boards are loaded. Throw an error to cancel further processing.
 	 */
 	afterLoadBoards?: (
 		boards: SerializedBoardWithColumns[] | null,
 		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before loading a single board. Return false to cancel loading.
+	 * Called before loading a single board. Throw an error to cancel loading.
 	 */
 	beforeLoadBoard?: (
 		boardId: string,
 		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called after a board is loaded. Return false to cancel further processing.
+	 * Called after a board is loaded. Throw an error to cancel further processing.
 	 */
 	afterLoadBoard?: (
 		board: SerializedBoardWithColumns | null,
 		boardId: string,
 		context: LoaderContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 	/**
-	 * Called before loading the new board page. Return false to cancel.
+	 * Called before loading the new board page. Throw an error to cancel.
 	 */
-	beforeLoadNewBoard?: (context: LoaderContext) => Promise<boolean> | boolean;
+	beforeLoadNewBoard?: (context: LoaderContext) => Promise<void> | void;
 	/**
-	 * Called after the new board page is loaded. Return false to cancel.
+	 * Called after the new board page is loaded. Throw an error to cancel.
 	 */
-	afterLoadNewBoard?: (context: LoaderContext) => Promise<boolean> | boolean;
+	afterLoadNewBoard?: (context: LoaderContext) => Promise<void> | void;
 	/**
 	 * Called when a loading error occurs
 	 */
@@ -141,10 +141,17 @@ function createBoardsLoader(config: KanbanClientConfig) {
 
 			try {
 				if (hooks?.beforeLoadBoards) {
-					const canLoad = await hooks.beforeLoadBoards(context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadBoards hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.beforeLoadBoards(context)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by beforeLoadBoards hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by beforeLoadBoards hook");
 				}
 
 				const client = createApiClient<KanbanApiRouter>({
@@ -161,13 +168,20 @@ function createBoardsLoader(config: KanbanClientConfig) {
 					const boards = queryClient.getQueryData<SerializedBoardWithColumns[]>(
 						listQuery.queryKey,
 					);
-					const canContinue = await hooks.afterLoadBoards(
-						boards || null,
-						context,
-					);
-					if (canContinue === false) {
-						throw new Error("Load prevented by afterLoadBoards hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.afterLoadBoards(
+							boards || null,
+							context,
+						)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by afterLoadBoards hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by afterLoadBoards hook");
 				}
 
 				const queryState = queryClient.getQueryState(listQuery.queryKey);
@@ -210,10 +224,20 @@ function createBoardLoader(boardId: string, config: KanbanClientConfig) {
 
 			try {
 				if (hooks?.beforeLoadBoard) {
-					const canLoad = await hooks.beforeLoadBoard(boardId, context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadBoard hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.beforeLoadBoard(
+							boardId,
+							context,
+						)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by beforeLoadBoard hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by beforeLoadBoard hook");
 				}
 
 				const client = createApiClient<KanbanApiRouter>({
@@ -229,14 +253,21 @@ function createBoardLoader(boardId: string, config: KanbanClientConfig) {
 					const board = queryClient.getQueryData<SerializedBoardWithColumns>(
 						boardQuery.queryKey,
 					);
-					const canContinue = await hooks.afterLoadBoard(
-						board || null,
-						boardId,
-						context,
-					);
-					if (canContinue === false) {
-						throw new Error("Load prevented by afterLoadBoard hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.afterLoadBoard(
+							board || null,
+							boardId,
+							context,
+						)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by afterLoadBoard hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by afterLoadBoard hook");
 				}
 
 				const queryState = queryClient.getQueryState(boardQuery.queryKey);
@@ -278,17 +309,31 @@ function createNewBoardLoader(config: KanbanClientConfig) {
 
 			try {
 				if (hooks?.beforeLoadNewBoard) {
-					const canLoad = await hooks.beforeLoadNewBoard(context);
-					if (!canLoad) {
-						throw new Error("Load prevented by beforeLoadNewBoard hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.beforeLoadNewBoard(context)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by beforeLoadNewBoard hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by beforeLoadNewBoard hook");
 				}
 
 				if (hooks?.afterLoadNewBoard) {
-					const canContinue = await hooks.afterLoadNewBoard(context);
-					if (canContinue === false) {
-						throw new Error("Load prevented by afterLoadNewBoard hook");
+					let shimDenied = false;
+					try {
+						const result = (await hooks.afterLoadNewBoard(context)) as unknown;
+						if (result === false) shimDenied = true;
+					} catch (e) {
+						throw e instanceof Error
+							? e
+							: new Error("Load prevented by afterLoadNewBoard hook");
 					}
+					if (shimDenied)
+						throw new Error("Load prevented by afterLoadNewBoard hook");
 				}
 			} catch (error) {
 				if (hooks?.onLoadError) {

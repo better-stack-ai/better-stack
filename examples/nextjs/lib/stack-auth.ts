@@ -78,7 +78,7 @@ const authenticatedBlogHooks: BlogBackendHooks = {
 		// Public posts are always allowed
 		if (filter.published === true) {
 			console.log("[Auth Hook] ✅ Allowing public posts (no auth required)");
-			return true;
+			return;
 		}
 
 		// Drafts require authentication
@@ -87,16 +87,13 @@ const authenticatedBlogHooks: BlogBackendHooks = {
 
 			if (!session) {
 				console.log("[Auth Hook] ❌ Blocking drafts - not authenticated");
-				return false;
+				throw new Error("Authentication required to view drafts");
 			}
 
 			console.log(
 				`[Auth Hook] ✅ Allowing drafts for user ${session.userId} (${session.role})`,
 			);
-			return true;
 		}
-
-		return true;
 	},
 
 	/**
@@ -110,13 +107,12 @@ const authenticatedBlogHooks: BlogBackendHooks = {
 
 		if (!session) {
 			console.log("[Auth Hook] ❌ Blocking post creation - not authenticated");
-			return false;
+			throw new Error("Authentication required to create posts");
 		}
 
 		console.log(
 			`[Auth Hook] ✅ Allowing post creation for user ${session.userId}`,
 		);
-		return true;
 	},
 
 	/**
@@ -130,20 +126,19 @@ const authenticatedBlogHooks: BlogBackendHooks = {
 
 		if (!session) {
 			console.log("[Auth Hook] ❌ Blocking post update - not authenticated");
-			return false;
+			throw new Error("Authentication required to update posts");
 		}
 
 		// Optional: Check post ownership
 		// const post = await getPostFromDatabase(postId);
 		// if (post.authorId !== session.userId && session.role !== 'admin') {
 		//   console.log('[Auth Hook] ❌ Blocking post update - not owner or admin');
-		//   return false;
+		//   throw new Error("You do not have permission to update this post");
 		// }
 
 		console.log(
 			`[Auth Hook] ✅ Allowing post update for user ${session.userId}`,
 		);
-		return true;
 	},
 
 	/**
@@ -157,19 +152,18 @@ const authenticatedBlogHooks: BlogBackendHooks = {
 
 		if (!session) {
 			console.log("[Auth Hook] ❌ Blocking post deletion - not authenticated");
-			return false;
+			throw new Error("Authentication required to delete posts");
 		}
 
 		// Optional: Require admin role for deletion
 		// if (session.role !== 'admin') {
 		//   console.log('[Auth Hook] ❌ Blocking post deletion - not admin');
-		//   return false;
+		//   throw new Error("Admin role required to delete posts");
 		// }
 
 		console.log(
 			`[Auth Hook] ✅ Allowing post deletion for user ${session.userId}`,
 		);
-		return true;
 	},
 
 	/**

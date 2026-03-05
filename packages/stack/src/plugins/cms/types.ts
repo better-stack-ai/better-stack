@@ -248,16 +248,16 @@ export interface CMSHookContext {
 /**
  * Hooks for customizing CMS backend behavior
  *
- * Note: Before hooks can only deny operations by returning `false`.
+ * Note: Before hooks deny operations by throwing an error.
  * They cannot modify the data being saved. This ensures consistency
  * between the stored content item data and relation junction tables.
  */
 export interface CMSBackendHooks {
-	/** Called before creating a content item. Return false to deny the operation. */
+	/** Called before creating a content item. Throw an error to deny the operation. */
 	onBeforeCreate?: (
 		data: Record<string, unknown>,
 		context: CMSHookContext,
-	) => Promise<false | void> | false | void;
+	) => Promise<void> | void;
 
 	/** Called after creating a content item */
 	onAfterCreate?: (
@@ -265,12 +265,12 @@ export interface CMSBackendHooks {
 		context: CMSHookContext,
 	) => Promise<void> | void;
 
-	/** Called before updating a content item. Return false to deny the operation. */
+	/** Called before updating a content item. Throw an error to deny the operation. */
 	onBeforeUpdate?: (
 		id: string,
 		data: Record<string, unknown>,
 		context: CMSHookContext,
-	) => Promise<false | void> | false | void;
+	) => Promise<void> | void;
 
 	/** Called after updating a content item */
 	onAfterUpdate?: (
@@ -278,11 +278,11 @@ export interface CMSBackendHooks {
 		context: CMSHookContext,
 	) => Promise<void> | void;
 
-	/** Called before deleting a content item */
+	/** Called before deleting a content item. Throw an error to deny the operation. */
 	onBeforeDelete?: (
 		id: string,
 		context: CMSHookContext,
-	) => Promise<boolean> | boolean;
+	) => Promise<void> | void;
 
 	/** Called after deleting a content item */
 	onAfterDelete?: (id: string, context: CMSHookContext) => Promise<void> | void;
