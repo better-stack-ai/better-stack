@@ -48,6 +48,12 @@ export default function PagesLayout({
 							</Link>
 							<div className="flex items-center gap-4 text-sm">
 								<Link
+									href="/pages/articles"
+									className="text-muted-foreground hover:text-foreground transition-colors"
+								>
+									Articles
+								</Link>
+								<Link
 									href="/pages/cms"
 									className="text-muted-foreground hover:text-foreground transition-colors"
 								>
