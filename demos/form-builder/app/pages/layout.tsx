@@ -7,7 +7,7 @@ import { StackProvider } from "@btst/stack/context";
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client";
 import { getOrCreateQueryClient } from "@/lib/query-client";
 
-type PluginOverrides = { formBuilder: FormBuilderPluginOverrides };
+type PluginOverrides = { "form-builder": FormBuilderPluginOverrides };
 
 export default function PagesLayout({
 	children,
@@ -26,7 +26,7 @@ export default function PagesLayout({
 			<StackProvider<PluginOverrides>
 				basePath="/pages"
 				overrides={{
-					formBuilder: {
+					"form-builder": {
 						apiBaseURL: baseURL,
 						apiBasePath: "/api/data",
 						navigate: (path) => router.push(path),
@@ -41,14 +41,14 @@ export default function PagesLayout({
 					<nav className="border-b bg-background sticky top-0 z-50">
 						<div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
 							<Link
-								href="/pages/form-builder"
+								href="/pages/forms"
 								className="font-semibold text-lg hover:opacity-75 transition-opacity"
 							>
 								BTST Form Builder Demo
 							</Link>
 							<div className="flex items-center gap-4 text-sm">
 								<Link
-									href="/pages/form-builder"
+									href="/pages/forms"
 									className="text-muted-foreground hover:text-foreground transition-colors"
 								>
 									Forms
