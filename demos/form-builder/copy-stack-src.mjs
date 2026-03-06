@@ -12,10 +12,10 @@ import { cp, mkdir, rm } from "fs/promises";
 import { existsSync } from "fs";
 
 const src = "node_modules/@btst/stack/src";
-const dest = ".btst-stack-src";
+const dest = "app/.btst-stack-src";
 
 const uiSrc = "node_modules/@btst/stack/dist/packages/ui";
-const uiDest = ".btst-stack-ui";
+const uiDest = "app/.btst-stack-ui";
 
 if (!existsSync(src)) {
 	// Likely running in the monorepo where the workspace symlink does not expose
