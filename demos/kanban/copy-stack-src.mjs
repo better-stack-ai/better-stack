@@ -19,7 +19,7 @@ const uiDest = "app/.btst-stack-ui";
 
 if (!existsSync(src)) {
 	// Likely running in the monorepo where the workspace symlink does not expose
-	// src/ — fall back gracefully; @source paths in globals.css cover this case.
+
 	console.log(
 		"[copy-stack-src] node_modules/@btst/stack/src not found, skipping",
 	);

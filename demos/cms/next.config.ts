@@ -1,9 +1,5 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-	async redirects() {
-		return [{ source: "/", destination: "/pages/cms", permanent: false }];
-	},
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;
