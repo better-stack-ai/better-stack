@@ -12,3 +12,4 @@
 # misc
 .DS_Store
 *.pem
+.btst-stack-src/
