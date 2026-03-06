@@ -53,6 +53,12 @@ export default function PagesLayout({
 								>
 									Forms
 								</Link>
+								<Link
+									href="/submit/contact-us"
+									className="text-muted-foreground hover:text-foreground transition-colors"
+								>
+									Live Demo
+								</Link>
 								<a
 									href="/api/data/reference"
 									className="text-muted-foreground hover:text-foreground transition-colors"
