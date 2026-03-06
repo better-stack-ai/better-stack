@@ -5,8 +5,11 @@ import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
 import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder";
 import { seedUIBuilderData } from "./seed";
 
+// Persist stack and seed promise on `global` so Next.js module re-evaluations
+// (HMR, per-request server components) don't create a second instance or re-run the seed.
 const globalForStack = global as typeof global & {
 	__btst_stack__?: ReturnType<typeof createStack>;
+	__btst_seeded__?: Promise<void>;
 };
 
 function createStack() {
@@ -28,6 +31,8 @@ function createStack() {
 
 export const myStack = (globalForStack.__btst_stack__ ??= createStack());
 
-seedUIBuilderData(myStack.api).catch(console.error);
+globalForStack.__btst_seeded__ ??= seedUIBuilderData(myStack.api).catch(
+	console.error,
+);
 
 export const { handler, dbSchema } = myStack;

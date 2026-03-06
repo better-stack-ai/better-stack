@@ -1,9 +1,4 @@
-let seeded = false;
-
 export async function seedCmsData(api: any) {
-	if (seeded) return;
-	seeded = true;
-
 	try {
 		// Check if articles already exist (getAllContentItems also calls ensureSynced)
 		const existing = await api.cms.getAllContentItems("article", { limit: 1 });
