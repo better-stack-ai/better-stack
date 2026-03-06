@@ -2,6 +2,15 @@
 @import "tw-animate-css";
 @import "@btst/stack/plugins/blog/css";
 @import "@btst/stack/plugins/route-docs/css";
+/* WebContainers workaround: the WASM Tailwind scanner cannot traverse node_modules
+ * (https://github.com/tailwindlabs/tailwindcss/issues/18418). copy-stack-src.mjs
+ * (run via predev/prebuild) copies @btst/stack/src outside node_modules so Tailwind
+ * can scan it. Safe to remove once the upstream bug is fixed. */
+@source "./.btst-stack-src/**/*.{ts,tsx}";
+@source "./.btst-stack-ui/**/*.{ts,tsx}";
+/* Monorepo fallback: direct source path used in local development */
+@source "../../../packages/stack/src/**/*.{ts,tsx}";
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
 
 @custom-variant dark (&:is(.dark *));
 

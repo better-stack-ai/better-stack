@@ -1,11 +1,6 @@
 import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 
-let seeded = false;
-
 export async function seedUIBuilderData(api: any) {
-	if (seeded) return;
-	seeded = true;
-
 	try {
 		// This also calls ensureSynced internally
 		const existing = await api.cms.getAllContentItems(UI_BUILDER_TYPE_SLUG, {

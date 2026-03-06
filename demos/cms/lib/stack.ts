@@ -4,8 +4,11 @@ import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
 import { z } from "zod";
 import { seedCmsData } from "./seed";
+// Persist stack and seed promise on `global` so Next.js module re-evaluations
+// (HMR, per-request server components) don't create a second instance or re-run the seed.
 const globalForStack = global as typeof global & {
 	__btst_stack__?: ReturnType<typeof createStack>;
+	__btst_seeded__?: Promise<void>;
 };
 
 // Simple article content type
@@ -45,7 +48,8 @@ function createStack() {
 
 export const myStack = (globalForStack.__btst_stack__ ??= createStack());
 
-// Seed demo data — uses api.cms.createContentItem which calls ensureSynced internally
-seedCmsData(myStack.api).catch(console.error);
+globalForStack.__btst_seeded__ ??= seedCmsData(myStack.api).catch(
+	console.error,
+);
 
 export const { handler, dbSchema } = myStack;

@@ -1,11 +1,6 @@
 import type { Adapter } from "@btst/stack/plugins/api";
 
-let seeded = false;
-
 export async function seedBlogData(adapter: Adapter) {
-	if (seeded) return;
-	seeded = true;
-
 	try {
 		// Check if posts already exist
 		const existing = await adapter.findMany({ model: "post", limit: 1 });

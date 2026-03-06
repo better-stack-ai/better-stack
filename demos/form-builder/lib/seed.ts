@@ -1,11 +1,6 @@
 import type { Adapter } from "@btst/stack/plugins/api";
 
-let seeded = false;
-
 export async function seedFormBuilderData(adapter: Adapter) {
-	if (seeded) return;
-	seeded = true;
-
 	try {
 		const existing = await adapter.findMany({ model: "form", limit: 1 });
 		if (existing.length > 0) return;

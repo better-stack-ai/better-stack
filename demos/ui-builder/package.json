@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "node copy-stack-src.mjs && next dev",
+    "build": "node copy-stack-src.mjs && next build",
     "start": "next start"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.118",
     "@btst/adapter-memory": "^2.0.3",
-    "@btst/stack": "^2.5.1",
+    "@btst/stack": "^2.5.2",
     "@btst/yar": "^1.2.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -46,7 +46,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.577.0",
-    "next": "16.1.6",
+    "next": "15.4.1",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
