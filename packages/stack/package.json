@@ -174,9 +174,7 @@
       }
     },
     "./plugins/ai-chat/css": "./dist/plugins/ai-chat/style.css",
-    "./plugins/ai-chat/css-wc": "./dist/plugins/ai-chat/style-wc.css",
     "./plugins/blog/css": "./dist/plugins/blog/style.css",
-    "./plugins/blog/css-wc": "./dist/plugins/blog/style-wc.css",
     "./plugins/cms/api": {
       "import": {
         "types": "./dist/plugins/cms/api/index.d.ts",
@@ -218,7 +216,6 @@
       }
     },
     "./plugins/cms/css": "./dist/plugins/cms/style.css",
-    "./plugins/cms/css-wc": "./dist/plugins/cms/style-wc.css",
     "./plugins/form-builder/api": {
       "import": {
         "types": "./dist/plugins/form-builder/api/index.d.ts",
@@ -260,7 +257,6 @@
       }
     },
     "./plugins/form-builder/css": "./dist/plugins/form-builder/style.css",
-    "./plugins/form-builder/css-wc": "./dist/plugins/form-builder/style-wc.css",
     "./plugins/ui-builder": {
       "import": {
         "types": "./dist/plugins/ui-builder/index.d.ts",
@@ -302,7 +298,6 @@
       }
     },
     "./plugins/ui-builder/css": "./dist/plugins/ui-builder/style.css",
-    "./plugins/ui-builder/css-wc": "./dist/plugins/ui-builder/style-wc.css",
     "./plugins/open-api/api": {
       "import": {
         "types": "./dist/plugins/open-api/api/index.d.ts",
@@ -354,7 +349,6 @@
       }
     },
     "./plugins/kanban/css": "./dist/plugins/kanban/style.css",
-    "./plugins/kanban/css-wc": "./dist/plugins/kanban/style-wc.css",
     "./plugins/route-docs/client": {
       "import": {
         "types": "./dist/plugins/route-docs/client/index.d.ts",
@@ -366,7 +360,6 @@
       }
     },
     "./plugins/route-docs/css": "./dist/plugins/route-docs/style.css",
-    "./plugins/route-docs/css-wc": "./dist/plugins/route-docs/style-wc.css",
     "./dist/*": "./dist/*",
     "./ui/css": "./dist/ui/components.css",
     "./package.json": "./package.json"

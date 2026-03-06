@@ -152,10 +152,9 @@ function resolveWorkspaceCssImports() {
 				);
 			}
 			const slug = generated.get(specifier);
-			const rel = path.relative(
-				path.dirname(filePath),
-				path.join(sharedDir, slug),
-			);
+			const rel = path
+				.relative(path.dirname(filePath), path.join(sharedDir, slug))
+				.replace(/\\/g, "/");
 			const relNormalized = rel.startsWith(".") ? rel : `./${rel}`;
 			modified = true;
 			return `@import "${relNormalized}";`;

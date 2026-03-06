@@ -1,7 +1,13 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "@btst/stack/plugins/blog/css-wc";
-@import "@btst/stack/plugins/route-docs/css-wc";
+@import "@btst/stack/plugins/blog/css";
+@import "@btst/stack/plugins/route-docs/css";
+/* WebContainers workaround: the WASM Tailwind scanner cannot traverse node_modules
+ * (https://github.com/tailwindlabs/tailwindcss/issues/18418). Pointing @source at the
+ * monorepo source directories directly sidesteps the issue since they live outside
+ * node_modules. Safe to remove once the upstream bug is fixed. */
+@source "../../../packages/stack/src/**/*.{ts,tsx}";
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
 
 @custom-variant dark (&:is(.dark *));
 
