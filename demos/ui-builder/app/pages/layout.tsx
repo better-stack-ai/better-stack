@@ -10,7 +10,7 @@ import { getOrCreateQueryClient } from "@/lib/query-client";
 
 type PluginOverrides = {
 	cms: CMSPluginOverrides;
-	uiBuilder: UIBuilderPluginOverrides;
+	"ui-builder": UIBuilderPluginOverrides;
 };
 
 export default function PagesLayout({
@@ -39,7 +39,7 @@ export default function PagesLayout({
 							<Link href={href || "#"} {...props} />
 						),
 					},
-					uiBuilder: {
+					"ui-builder": {
 						apiBaseURL: baseURL,
 						apiBasePath: "/api/data",
 						navigate: (path) => router.push(path),
