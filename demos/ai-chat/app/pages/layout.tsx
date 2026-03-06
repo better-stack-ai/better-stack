@@ -9,7 +9,7 @@ import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
 import { getOrCreateQueryClient } from "@/lib/query-client";
 
 type PluginOverrides = {
-	aiChat: AiChatPluginOverrides;
+	"ai-chat": AiChatPluginOverrides;
 };
 
 const hasApiKey =
@@ -33,7 +33,7 @@ export default function PagesLayout({
 				<StackProvider<PluginOverrides>
 					basePath="/pages"
 					overrides={{
-						aiChat: {
+						"ai-chat": {
 							apiBaseURL: baseURL,
 							apiBasePath: "/api/data",
 							mode: "public",
