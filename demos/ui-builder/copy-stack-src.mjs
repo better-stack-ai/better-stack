@@ -37,3 +37,17 @@ if (existsSync(uiSrc)) {
 } else {
 	console.log(`[copy-stack-src] ${uiSrc} not found, skipping`);
 }
+
+// When running inside the monorepo, the workspace-built dist/plugins/ has
+// @workspace/ui imports already inlined by postbuild.cjs. Copy those files
+// over the npm-installed ones so the demo uses the correct, self-contained CSS.
+// Outside the monorepo (StackBlitz/WebContainers), this path won't exist and
+// the step is silently skipped — the published npm package handles it instead.
+const workspacePluginsDist = "../../packages/stack/dist/plugins";
+const npmPluginsDist = "node_modules/@btst/stack/dist/plugins";
+if (existsSync(workspacePluginsDist)) {
+	await cp(workspacePluginsDist, npmPluginsDist, { recursive: true });
+	console.log(
+		`[copy-stack-src] overlaid ${workspacePluginsDist} → ${npmPluginsDist}`,
+	);
+}
