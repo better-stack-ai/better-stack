@@ -1,95 +1,64 @@
 import Link from "next/link";
+import { getOrCreateQueryClient } from "@/lib/query-client";
+import { getStackClient } from "@/lib/stack-client";
+import { generateSchema } from "@btst/stack/plugins/route-docs/client";
+import { myStack } from "@/lib/stack";
 
-type RouteItem = {
-	label: string;
-	path: string;
-	description: string;
-};
+type RouteItem = { label: string; path: string };
+type RouteGroup = { heading: string; routes: RouteItem[] };
 
-type RouteGroup = {
-	heading: string;
-	routes: RouteItem[];
-};
+const SITE_BASE_PATH = "/pages";
 
-const groups: RouteGroup[] = [
-	{
-		heading: "Blog",
-		routes: [
-			{
-				label: "Blog",
-				path: "/pages/blog",
-				description: "All published posts",
-			},
-			{
-				label: "Drafts",
-				path: "/pages/blog/drafts",
-				description: "Unpublished draft posts",
-			},
-			{
-				label: "New Post",
-				path: "/pages/blog/new",
-				description: "Create a new blog post",
-			},
-		],
-	},
-	{
-		heading: "Posts (seeded)",
-		routes: [
-			{
-				label: "Getting Started with BTST Blog",
-				path: "/pages/blog/getting-started",
-				description: "An introduction to the BTST blog plugin",
-			},
-			{
-				label: "Building Full-Stack Apps with Plugins",
-				path: "/pages/blog/full-stack-plugins",
-				description: "Plugin-first approach to full-stack development",
-			},
-			{
-				label: "SEO and Meta Tags in BTST",
-				path: "/pages/blog/seo-and-meta-tags",
-				description: "Auto-generated Open Graph and Twitter card meta tags",
-			},
-		],
-	},
-	{
-		heading: "Edit Posts (seeded)",
-		routes: [
-			{
-				label: "Edit: Getting Started with BTST Blog",
-				path: "/pages/blog/getting-started/edit",
-				description: "Edit the getting started post",
-			},
-			{
-				label: "Edit: Building Full-Stack Apps with Plugins",
-				path: "/pages/blog/full-stack-plugins/edit",
-				description: "Edit the full-stack plugins post",
-			},
-			{
-				label: "Edit: SEO and Meta Tags in BTST",
-				path: "/pages/blog/seo-and-meta-tags/edit",
-				description: "Edit the SEO post",
-			},
-		],
-	},
-	{
-		heading: "Docs",
-		routes: [
-			{
-				label: "Route Docs",
-				path: "/pages/route-docs",
-				description: "All client routes in this demo",
-			},
-			{
-				label: "API Reference",
-				path: "/api/data/reference",
-				description: "OpenAPI reference for the backend",
-			},
-		],
-	},
-];
+function routeKeyToLabel(key: string): string {
+	return key
+		.replace(/([A-Z])/g, " $1")
+		.replace(/^./, (s) => s.toUpperCase())
+		.trim();
+}
 
-export default function Home() {
+export default async function Home() {
+	const queryClient = getOrCreateQueryClient();
+	getStackClient(queryClient);
+	const schema = await generateSchema();
+
+	const blogPlugin = schema.plugins.find((p) => p.key === "blog");
+	const staticBlogRoutes: RouteItem[] =
+		blogPlugin?.routes
+			.filter((r) => r.pathParams.length === 0)
+			.map((r) => ({
+				label: routeKeyToLabel(r.key),
+				path: `${SITE_BASE_PATH}${r.path}`,
+			})) ?? [];
+
+	const { items: posts } = await myStack.api.blog.getAllPosts({
+		published: true,
+	});
+
+	const groups: RouteGroup[] = [
+		{ heading: "Blog", routes: staticBlogRoutes },
+		{
+			heading: "Posts (seeded)",
+			routes: posts.map((p) => ({
+				label: p.title,
+				path: `${SITE_BASE_PATH}/blog/${p.slug}`,
+			})),
+		},
+		{
+			heading: "Edit Posts (seeded)",
+			routes: posts.map((p) => ({
+				label: p.title,
+				path: `${SITE_BASE_PATH}/blog/${p.slug}/edit`,
+			})),
+		},
+		{
+			heading: "Docs",
+			routes: [
+				{ label: "Route Docs", path: `${SITE_BASE_PATH}/route-docs` },
+				{ label: "API Reference", path: "/api/data/reference" },
+			],
+		},
+	].filter((g) => g.routes.length > 0);
+
 	return (
 		<main className="min-h-screen flex items-center justify-center bg-background p-8">
 			<div className="w-full max-w-lg space-y-8">
@@ -108,18 +77,13 @@ export default function Home() {
 								{group.heading}
 							</p>
 							<ul className="space-y-1">
-								{group.routes.map(({ label, path, description }) => (
+								{group.routes.map(({ label, path }) => (
 									<li key={path}>
 										<Link
 											href={path}
 											className="flex items-center justify-between rounded-lg border px-4 py-3 text-sm hover:bg-accent hover:text-accent-foreground transition-colors group"
 										>
-											<div className="space-y-0.5 min-w-0 mr-4">
-												<div className="font-medium">{label}</div>
-												<div className="text-xs text-muted-foreground group-hover:text-accent-foreground/70">
-													{description}
-												</div>
-											</div>
+											<div className="font-medium truncate mr-4">{label}</div>
 											<code className="text-xs text-muted-foreground font-mono shrink-0 group-hover:text-accent-foreground/70">
 												{path}
 											</code>

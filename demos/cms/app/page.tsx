@@ -1,75 +1,70 @@
 import Link from "next/link";
+import { getOrCreateQueryClient } from "@/lib/query-client";
+import { getStackClient } from "@/lib/stack-client";
+import { generateSchema } from "@btst/stack/plugins/route-docs/client";
+import { myStack } from "@/lib/stack";
 
-type RouteItem = {
-	label: string;
-	path: string;
-	description: string;
-};
+type RouteItem = { label: string; path: string };
+type RouteGroup = { heading: string; routes: RouteItem[] };
 
-type RouteGroup = {
-	heading: string;
-	routes: RouteItem[];
-};
+const SITE_BASE_PATH = "/pages";
 
-const groups: RouteGroup[] = [
-	{
-		heading: "Articles (public)",
-		routes: [
-			{
-				label: "Articles",
-				path: "/pages/articles",
-				description: "Public-facing article listing",
-			},
-			{
-				label: "Welcome to BTST CMS",
-				path: "/pages/articles/welcome-to-btst-cms",
-				description: "Introduction to managing structured content",
-			},
-			{
-				label: "Getting Started with Content Types",
-				path: "/pages/articles/getting-started-with-content-types",
-				description: "How to define and manage content types",
-			},
-		],
-	},
-	{
-		heading: "CMS (admin)",
-		routes: [
-			{
-				label: "CMS Dashboard",
-				path: "/pages/cms",
-				description: "Manage content types and entries",
-			},
-			{
-				label: "Article List",
-				path: "/pages/cms/article",
-				description: "All article content items",
-			},
-			{
-				label: "New Article",
-				path: "/pages/cms/article/new",
-				description: "Create a new article",
-			},
-		],
-	},
-	{
-		heading: "Docs",
-		routes: [
-			{
-				label: "Route Docs",
-				path: "/pages/route-docs",
-				description: "All client routes in this demo",
-			},
-			{
-				label: "API Reference",
-				path: "/api/data/reference",
-				description: "OpenAPI reference for the backend",
-			},
-		],
-	},
-];
+function routeKeyToLabel(key: string): string {
+	return key
+		.replace(/([A-Z])/g, " $1")
+		.replace(/^./, (s) => s.toUpperCase())
+		.trim();
+}
 
-export default function Home() {
+export default async function Home() {
+	const queryClient = getOrCreateQueryClient();
+	getStackClient(queryClient);
+	const schema = await generateSchema();
+
+	const cmsPlugin = schema.plugins.find((p) => p.key === "cms");
+	const staticCmsRoutes: RouteItem[] =
+		cmsPlugin?.routes
+			.filter((r) => r.pathParams.length === 0)
+			.map((r) => ({
+				label: routeKeyToLabel(r.key),
+				path: `${SITE_BASE_PATH}${r.path}`,
+			})) ?? [];
+
+	const [contentTypes, { items: articles }] = await Promise.all([
+		myStack.api.cms.getAllContentTypes(),
+		myStack.api.cms.getAllContentItems("article"),
+	]);
+
+	// Expand parameterized CMS admin routes (/cms/:typeSlug, /cms/:typeSlug/new) with real content type slugs
+	const cmsTypeRoutes: RouteItem[] = contentTypes.flatMap((t) => [
+		{ label: t.name, path: `${SITE_BASE_PATH}/cms/${t.slug}` },
+		{ label: `New ${t.name}`, path: `${SITE_BASE_PATH}/cms/${t.slug}/new` },
+	]);
+
+	const groups: RouteGroup[] = [
+		{
+			heading: "Articles (public)",
+			routes: [
+				{ label: "Articles", path: `${SITE_BASE_PATH}/articles` },
+				...articles.map((item) => ({
+					label: (item.parsedData as { title?: string }).title ?? item.slug,
+					path: `${SITE_BASE_PATH}/articles/${item.slug}`,
+				})),
+			],
+		},
+		{
+			heading: "CMS (admin)",
+			routes: [...staticCmsRoutes, ...cmsTypeRoutes],
+		},
+		{
+			heading: "Docs",
+			routes: [
+				{ label: "Route Docs", path: `${SITE_BASE_PATH}/route-docs` },
+				{ label: "API Reference", path: "/api/data/reference" },
+			],
+		},
+	].filter((g) => g.routes.length > 0);
+
 	return (
 		<main className="min-h-screen flex items-center justify-center bg-background p-8">
 			<div className="w-full max-w-lg space-y-8">
@@ -88,18 +83,13 @@ export default function Home() {
 								{group.heading}
 							</p>
 							<ul className="space-y-1">
-								{group.routes.map(({ label, path, description }) => (
+								{group.routes.map(({ label, path }) => (
 									<li key={path}>
 										<Link
 											href={path}
 											className="flex items-center justify-between rounded-lg border px-4 py-3 text-sm hover:bg-accent hover:text-accent-foreground transition-colors group"
 										>
-											<div className="space-y-0.5 min-w-0 mr-4">
-												<div className="font-medium">{label}</div>
-												<div className="text-xs text-muted-foreground group-hover:text-accent-foreground/70">
-													{description}
-												</div>
-											</div>
+											<div className="font-medium truncate mr-4">{label}</div>
 											<code className="text-xs text-muted-foreground font-mono shrink-0 group-hover:text-accent-foreground/70">
 												{path}
 											</code>

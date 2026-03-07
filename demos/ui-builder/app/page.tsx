@@ -1,65 +1,66 @@
 import Link from "next/link";
+import { getOrCreateQueryClient } from "@/lib/query-client";
+import { getStackClient } from "@/lib/stack-client";
+import { generateSchema } from "@btst/stack/plugins/route-docs/client";
+import { myStack } from "@/lib/stack";
 
-type RouteItem = {
-	label: string;
-	path: string;
-	description: string;
-};
+type RouteItem = { label: string; path: string };
+type RouteGroup = { heading: string; routes: RouteItem[] };
 
-type RouteGroup = {
-	heading: string;
-	routes: RouteItem[];
-};
+const SITE_BASE_PATH = "/pages";
 
-const groups: RouteGroup[] = [
-	{
-		heading: "UI Builder",
-		routes: [
-			{
-				label: "Pages",
-				path: "/pages/ui-builder",
-				description: "All UI builder pages",
-			},
-			{
-				label: "New Page",
-				path: "/pages/ui-builder/new",
-				description: "Create a new visual page",
-			},
-		],
-	},
-	{
-		heading: "CMS (admin)",
-		routes: [
-			{
-				label: "CMS Dashboard",
-				path: "/pages/cms",
-				description: "Manage CMS content types and entries",
-			},
-			{
-				label: "UI Builder Content List",
-				path: "/pages/cms/ui-builder-page",
-				description: "CMS list of all UI builder pages",
-			},
-		],
-	},
-	{
-		heading: "Docs",
-		routes: [
-			{
-				label: "Route Docs",
-				path: "/pages/route-docs",
-				description: "All client routes in this demo",
-			},
-			{
-				label: "API Reference",
-				path: "/api/data/reference",
-				description: "OpenAPI reference for the backend",
-			},
-		],
-	},
-];
+function routeKeyToLabel(key: string): string {
+	return key
+		.replace(/([A-Z])/g, " $1")
+		.replace(/^./, (s) => s.toUpperCase())
+		.trim();
+}
 
-export default function Home() {
+export default async function Home() {
+	const queryClient = getOrCreateQueryClient();
+	getStackClient(queryClient);
+	const schema = await generateSchema();
+
+	const uiBuilderPlugin = schema.plugins.find((p) => p.key === "uiBuilder");
+	const staticUiBuilderRoutes: RouteItem[] =
+		uiBuilderPlugin?.routes
+			.filter((r) => r.pathParams.length === 0)
+			.map((r) => ({
+				label: routeKeyToLabel(r.key),
+				path: `${SITE_BASE_PATH}${r.path}`,
+			})) ?? [];
+
+	const cmsPlugin = schema.plugins.find((p) => p.key === "cms");
+	const staticCmsRoutes: RouteItem[] =
+		cmsPlugin?.routes
+			.filter((r) => r.pathParams.length === 0)
+			.map((r) => ({
+				label: routeKeyToLabel(r.key),
+				path: `${SITE_BASE_PATH}${r.path}`,
+			})) ?? [];
+
+	// Expand parameterized CMS admin routes with real content type slugs
+	const contentTypes = await myStack.api.cms.getAllContentTypes();
+	const cmsTypeRoutes: RouteItem[] = contentTypes.flatMap((t) => [
+		{ label: t.name, path: `${SITE_BASE_PATH}/cms/${t.slug}` },
+		{ label: `New ${t.name}`, path: `${SITE_BASE_PATH}/cms/${t.slug}/new` },
+	]);
+
+	const groups: RouteGroup[] = [
+		{ heading: "UI Builder", routes: staticUiBuilderRoutes },
+		{
+			heading: "CMS (admin)",
+			routes: [...staticCmsRoutes, ...cmsTypeRoutes],
+		},
+		{
+			heading: "Docs",
+			routes: [
+				{ label: "Route Docs", path: `${SITE_BASE_PATH}/route-docs` },
+				{ label: "API Reference", path: "/api/data/reference" },
+			],
+		},
+	].filter((g) => g.routes.length > 0);
+
 	return (
 		<main className="min-h-screen flex items-center justify-center bg-background p-8">
 			<div className="w-full max-w-lg space-y-8">
@@ -78,18 +79,13 @@ export default function Home() {
 								{group.heading}
 							</p>
 							<ul className="space-y-1">
-								{group.routes.map(({ label, path, description }) => (
+								{group.routes.map(({ label, path }) => (
 									<li key={path}>
 										<Link
 											href={path}
 											className="flex items-center justify-between rounded-lg border px-4 py-3 text-sm hover:bg-accent hover:text-accent-foreground transition-colors group"
 										>
-											<div className="space-y-0.5 min-w-0 mr-4">
-												<div className="font-medium">{label}</div>
-												<div className="text-xs text-muted-foreground group-hover:text-accent-foreground/70">
-													{description}
-												</div>
-											</div>
+											<div className="font-medium truncate mr-4">{label}</div>
 											<code className="text-xs text-muted-foreground font-mono shrink-0 group-hover:text-accent-foreground/70">
 												{path}
 											</code>
