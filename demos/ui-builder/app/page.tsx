@@ -3,6 +3,7 @@ import { getOrCreateQueryClient } from "@/lib/query-client";
 import { getStackClient } from "@/lib/stack-client";
 import { generateSchema } from "@btst/stack/plugins/route-docs/client";
 import { myStack } from "@/lib/stack";
+import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 
 type RouteItem = { label: string; path: string };
 type RouteGroup = { heading: string; routes: RouteItem[] };
@@ -48,7 +49,7 @@ export default async function Home() {
 
 	// Fetch published UI builder pages for public viewing links
 	const { items: allPages } = await myStack.api.cms.getAllContentItems(
-		"ui-builder-page",
+		UI_BUILDER_TYPE_SLUG,
 		{ limit: 100 },
 	);
 	const publishedPages = allPages.filter(
