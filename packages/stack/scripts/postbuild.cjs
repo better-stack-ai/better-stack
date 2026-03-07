@@ -2,9 +2,9 @@
 /*
   Post-build step for BTST package.
   - Copies all .css files from src/plugins/** to dist/plugins/** preserving structure
-  - Resolves @workspace/ui/... CSS imports in dist files by inlining the referenced
-    content into dist/plugins/shared/ and rewriting the import path — so consumers
-    outside the monorepo (e.g. npm installs, StackBlitz) never see workspace imports
+  - Resolves @workspace/ui/... CSS imports by inlining the referenced content directly
+    into each dist CSS file — producing fully self-contained files with no workspace
+    references, so npm consumers and StackBlitz never see unresolvable imports
   - Executes optional per-plugin postbuild scripts if present at:
     src/plugins/<plugin>/postbuild.(js|cjs|mjs)
 */
@@ -81,14 +81,15 @@ function inlineCssImports(cssContent, baseDir, seen = new Set()) {
 
 /**
  * After all plugin CSS files are copied to dist, scan them for
- * @import "@workspace/ui/..." declarations. For each unique specifier found:
- *   1. Resolve the actual file via packages/ui/package.json exports map
- *   2. Inline all relative sub-imports recursively into one blob
- *   3. Write the blob to dist/plugins/shared/<slug>.css
- *   4. Rewrite the @workspace/ui/... import in the dist CSS to the relative path
+ * @import "@workspace/ui/..." declarations and inline the referenced CSS
+ * content directly — replacing the import with the full CSS text.
  *
- * This keeps source files using proper workspace imports while ensuring the
- * published package is self-contained.
+ * This makes every dist CSS file fully self-contained: no @workspace/ui
+ * references survive into the published npm package, so consumers outside
+ * the monorepo (npm installs, StackBlitz) never see unresolvable imports.
+ *
+ * Strategy: inline rather than redirect to a shared/ file, so the package
+ * works correctly with no extra files and no relative-path assumptions.
  */
 function resolveWorkspaceCssImports() {
 	const UI_PKG_DIR = path.resolve(ROOT, "..", "ui");
@@ -112,10 +113,10 @@ function resolveWorkspaceCssImports() {
 	}
 
 	const WORKSPACE_IMPORT_RE = /@import\s+"(@workspace\/ui[^"]+)";?[ \t]*/g;
-	const sharedDir = path.join(DIST_PLUGINS_DIR, "shared");
 
-	// specifier → filename written in dist/plugins/shared/
-	const generated = new Map();
+	// Cache resolved+inlined content per specifier so each unique import is
+	// only read and processed once even if referenced by multiple dist files.
+	const cache = new Map();
 
 	if (!fs.existsSync(DIST_PLUGINS_DIR)) return;
 
@@ -129,35 +130,27 @@ function resolveWorkspaceCssImports() {
 		let modified = false;
 
 		content = content.replace(WORKSPACE_IMPORT_RE, (match, specifier) => {
-			if (!generated.has(specifier)) {
+			if (!cache.has(specifier)) {
 				const resolvedPath = resolveUiSpecifier(specifier);
 				if (!resolvedPath || !fs.existsSync(resolvedPath)) {
 					console.warn(
 						`@btst/stack: could not resolve workspace import: ${specifier}`,
 					);
+					cache.set(specifier, null);
 					return match;
 				}
 				const raw = fs.readFileSync(resolvedPath, "utf8");
+				// Recursively inline any relative sub-imports within the resolved file
 				const inlined = inlineCssImports(raw, path.dirname(resolvedPath));
-				// Derive a stable filename from the specifier
-				const slug = specifier
-					.replace("@workspace/ui/", "")
-					.replace(/\//g, "-");
-				ensureDir(sharedDir);
-				const destPath = path.join(sharedDir, slug);
-				fs.writeFileSync(destPath, inlined);
-				generated.set(specifier, slug);
+				cache.set(specifier, inlined);
 				console.log(
-					`@btst/stack: resolved workspace import "${specifier}" → shared/${slug}`,
+					`@btst/stack: inlined workspace import "${specifier}" into ${path.relative(DIST_PLUGINS_DIR, filePath)}`,
 				);
 			}
-			const slug = generated.get(specifier);
-			const rel = path
-				.relative(path.dirname(filePath), path.join(sharedDir, slug))
-				.replace(/\\/g, "/");
-			const relNormalized = rel.startsWith(".") ? rel : `./${rel}`;
+			const inlined = cache.get(specifier);
+			if (inlined === null) return match; // could not resolve — keep original
 			modified = true;
-			return `@import "${relNormalized}";`;
+			return inlined;
 		});
 
 		if (modified) {

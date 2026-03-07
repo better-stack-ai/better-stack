@@ -18,8 +18,6 @@ const uiSrc = "node_modules/@btst/stack/dist/packages/ui";
 const uiDest = "app/.btst-stack-ui";
 
 if (!existsSync(src)) {
-	// Likely running in the monorepo where the workspace symlink does not expose
-	// src/ — fall back gracefully; @source paths in globals.css cover this case.
 	console.log(
 		"[copy-stack-src] node_modules/@btst/stack/src not found, skipping",
 	);
@@ -29,17 +27,27 @@ if (!existsSync(src)) {
 await rm(dest, { recursive: true, force: true });
 await mkdir(dest, { recursive: true });
 await cp(src, dest, { recursive: true });
-console.log("[copy-stack-src] copied @btst/stack/src → .btst-stack-src");
+console.log(`[copy-stack-src] copied ${src} → ${dest}`);
 
 if (existsSync(uiSrc)) {
 	await rm(uiDest, { recursive: true, force: true });
 	await mkdir(uiDest, { recursive: true });
 	await cp(uiSrc, uiDest, { recursive: true });
-	console.log(
-		"[copy-stack-src] copied @btst/stack/dist/packages/ui → .btst-stack-ui",
-	);
+	console.log(`[copy-stack-src] copied ${uiSrc} → ${uiDest}`);
 } else {
+	console.log(`[copy-stack-src] ${uiSrc} not found, skipping`);
+}
+
+// When running inside the monorepo, the workspace-built dist/plugins/ has
+// @workspace/ui imports already inlined by postbuild.cjs. Copy those files
+// over the npm-installed ones so the demo uses the correct, self-contained CSS.
+// Outside the monorepo (StackBlitz/WebContainers), this path won't exist and
+// the step is silently skipped — the published npm package handles it instead.
+const workspacePluginsDist = "../../packages/stack/dist/plugins";
+const npmPluginsDist = "node_modules/@btst/stack/dist/plugins";
+if (existsSync(workspacePluginsDist)) {
+	await cp(workspacePluginsDist, npmPluginsDist, { recursive: true });
 	console.log(
-		"[copy-stack-src] node_modules/@btst/stack/dist/packages/ui not found, skipping",
+		`[copy-stack-src] overlaid ${workspacePluginsDist} → ${npmPluginsDist}`,
 	);
 }
