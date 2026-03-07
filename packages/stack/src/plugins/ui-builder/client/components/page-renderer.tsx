@@ -6,6 +6,7 @@ import { ErrorBoundary } from "react-error-boundary";
 import LayerRenderer from "@workspace/ui/components/ui-builder/layer-renderer";
 import type {
 	ComponentRegistry,
+	FunctionRegistry,
 	PropValue,
 } from "@workspace/ui/components/ui-builder/types";
 import { useSuspenseUIBuilderPageBySlug } from "../hooks/ui-builder-hooks";
@@ -59,6 +60,8 @@ export interface PageRendererProps {
 	componentRegistry?: ComponentRegistry;
 	/** Runtime variable values to override defaults */
 	variableValues?: Record<string, PropValue>;
+	/** Function registry for resolving function-type variable bindings */
+	functionRegistry?: FunctionRegistry;
 	/** Custom loading component */
 	LoadingComponent?: ComponentType;
 	/** Custom error component */
@@ -130,6 +133,7 @@ export function PageRenderer({
 	slug,
 	componentRegistry = defaultComponentRegistry,
 	variableValues,
+	functionRegistry,
 	LoadingComponent = DefaultLoadingComponent,
 	ErrorComponent = DefaultErrorComponent,
 	NotFoundComponent = DefaultNotFoundComponent,
@@ -144,6 +148,7 @@ export function PageRenderer({
 					slug={slug}
 					componentRegistry={componentRegistry}
 					variableValues={variableValues}
+					functionRegistry={functionRegistry}
 					NotFoundComponent={NotFoundComponent}
 					className={className}
 				/>
@@ -160,6 +165,7 @@ function SuspensePageRendererContent({
 	slug,
 	componentRegistry = defaultComponentRegistry,
 	variableValues,
+	functionRegistry,
 	NotFoundComponent = DefaultNotFoundComponent,
 	className,
 }: Omit<PageRendererProps, "LoadingComponent" | "ErrorComponent">) {
@@ -183,6 +189,7 @@ function SuspensePageRendererContent({
 			componentRegistry={componentRegistry}
 			variables={variables}
 			variableValues={variableValues}
+			functionRegistry={functionRegistry}
 		/>
 	);
 }
@@ -215,6 +222,7 @@ export function SuspensePageRenderer({
 	slug,
 	componentRegistry = defaultComponentRegistry,
 	variableValues,
+	functionRegistry,
 	NotFoundComponent = DefaultNotFoundComponent,
 	className,
 }: Omit<PageRendererProps, "LoadingComponent" | "ErrorComponent">): ReactNode {
@@ -223,6 +231,7 @@ export function SuspensePageRenderer({
 			slug={slug}
 			componentRegistry={componentRegistry}
 			variableValues={variableValues}
+			functionRegistry={functionRegistry}
 			NotFoundComponent={NotFoundComponent}
 			className={className}
 		/>

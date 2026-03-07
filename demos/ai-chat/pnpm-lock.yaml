@@ -9,17 +9,17 @@ importers:
   .:
     dependencies:
       '@ai-sdk/openai':
-        specifier: ^3.0.41
-        version: 3.0.41(zod@4.3.6)
+        specifier: ^2.0.68
+        version: 2.0.98(zod@4.3.6)
       '@ai-sdk/react':
-        specifier: ^3.0.118
-        version: 3.0.118(react@19.2.3)(zod@4.3.6)
+        specifier: ^2.0.94
+        version: 2.0.152(react@19.2.3)(zod@4.3.6)
       '@btst/adapter-memory':
         specifier: ^2.0.3
         version: 2.0.3(@better-auth/core@1.4.5(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@2.0.1(zod@4.3.6))(jose@6.2.0)(kysely@0.28.11)(nanostores@1.1.1))(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-auth@1.4.5(next@15.4.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vue@3.5.29(typescript@5.9.3)))(better-call@2.0.1(zod@4.3.6))(jose@6.2.0)(kysely@0.28.11)(nanostores@1.1.1)(next@15.4.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vue@3.5.29(typescript@5.9.3))
       '@btst/stack':
-        specifier: ^2.5.0
-        version: 2.5.0(1b6a0a45c8aa5a923a771880a4bfd1bd)
+        specifier: ^2.5.3
+        version: 2.5.3(37ea7fbbdb1664cc3e54767443b15e09)
       '@btst/yar':
         specifier: ^1.2.0
         version: 1.2.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)
@@ -45,8 +45,8 @@ importers:
         specifier: ^5.90.21
         version: 5.90.21(react@19.2.3)
       ai:
-        specifier: ^6.0.116
-        version: 6.0.116(zod@4.3.6)
+        specifier: ^5.0.94
+        version: 5.0.150(zod@4.3.6)
       better-call:
         specifier: ^2.0.1
         version: 2.0.1(zod@4.3.6)
@@ -150,33 +150,37 @@ importers:
 
 packages:
 
-  '@ai-sdk/gateway@3.0.66':
-    resolution: {integrity: sha512-SIQ0YY0iMuv+07HLsZ+bB990zUJ6S4ujORAh+Jv1V2KGNn73qQKnGO0JBk+w+Res8YqOFSycwDoWcFlQrVxS4A==}
+  '@ai-sdk/gateway@2.0.55':
+    resolution: {integrity: sha512-YDSA2eIQOfByg2Cd1FDtulqYNRSvXzwlHQRHvTl2VbX7oTr+MmR1g/21i5RdK+o15irqB/5VQNVOB0zOVY828Q==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/openai@3.0.41':
-    resolution: {integrity: sha512-IZ42A+FO+vuEQCVNqlnAPYQnnUpUfdJIwn1BEDOBywiEHa23fw7PahxVtlX9zm3/zMvTW4JKPzWyvAgDu+SQ2A==}
+  '@ai-sdk/openai@2.0.98':
+    resolution: {integrity: sha512-6BI2lpY0WBuLzwz1bVTVkB4gpupisiN5/bFrud0+gHNhgspYOvh5uLf+7sz/NKvAtRB47WEzlBxwDQwGdIpbQw==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/provider-utils@4.0.19':
-    resolution: {integrity: sha512-3eG55CrSWCu2SXlqq2QCsFjo3+E7+Gmg7i/oRVoSZzIodTuDSfLb3MRje67xE9RFea73Zao7Lm4mADIfUETKGg==}
+  '@ai-sdk/provider-utils@3.0.22':
+    resolution: {integrity: sha512-fFT1KfUUKktfAFm5mClJhS1oux9tP2qgzmEZVl5UdwltQ1LO/s8hd7znVrgKzivwv1s1FIPza0s9OpJaNB/vHw==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/provider@3.0.8':
-    resolution: {integrity: sha512-oGMAgGoQdBXbZqNG0Ze56CHjDZ1IDYOwGYxYjO5KLSlz5HiNQ9udIXsPZ61VWaHGZ5XW/jyjmr6t2xz2jGVwbQ==}
+  '@ai-sdk/provider@2.0.1':
+    resolution: {integrity: sha512-KCUwswvsC5VsW2PWFqF8eJgSCu5Ysj7m1TxiHTVA6g7k360bk0RNQENT8KTMAYEs+8fWPD3Uu4dEmzGHc+jGng==}
     engines: {node: '>=18'}
 
-  '@ai-sdk/react@3.0.118':
-    resolution: {integrity: sha512-fBAix8Jftxse6/2YJnOFkwW1/O6EQK4DK68M9DlFmZGAzBmsaHXEPVS77sVIlkaOWCy11bE7434NAVXRY+3OsQ==}
+  '@ai-sdk/react@2.0.152':
+    resolution: {integrity: sha512-F4/5Iu9rlM9zhfXwL6IJFew7/tI48vV9Ihv2Wy9nlTrz0YrtO0epTCroMQFNnUXUnQ9F8+ATxGyKWlGlaGgc4g==}
     engines: {node: '>=18'}
     peerDependencies:
       react: ^18 || ~19.0.1 || ~19.1.2 || ^19.2.1
+      zod: ^3.25.76 || ^4.1.8
+    peerDependenciesMeta:
+      zod:
+        optional: true
 
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
@@ -351,8 +355,8 @@ packages:
   '@btst/db@2.0.3':
     resolution: {integrity: sha512-ZY3+393oPAsFYHpgdCPewwlBNTTsSep66wNLRZnzbGdAmhVluuII56PmDFECD/4MB6EmZ/yZhUrOiGWUHHSWGg==}
 
-  '@btst/stack@2.5.0':
-    resolution: {integrity: sha512-kl1b7WMbsTJ3fuwsY7T98iZPY8iB2V9YxRniABSbMV0AO+auhnKlJseDTNbAwen/GRX+/rDFZ/AnGJQ0VlV+Lw==}
+  '@btst/stack@2.5.3':
+    resolution: {integrity: sha512-Nw2bXJJd8NSATRC+U2XUOc1lgYLKxfiNV6Lz28vGxUsh2pv0Mx6I/fCQgpstWckrC4N9AJ0V1szZ8xk7mJMl7g==}
     peerDependencies:
       '@ai-sdk/react': '>=2.0.0'
       '@btst/yar': '>=1.2.0'
@@ -1897,8 +1901,8 @@ packages:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
 
-  ai@6.0.116:
-    resolution: {integrity: sha512-7yM+cTmyRLeNIXwt4Vj+mrrJgVQ9RMIW5WO0ydoLoYkewIvsMcvUmqS4j2RJTUXaF1HphwmSKUMQ/HypNRGOmA==}
+  ai@5.0.150:
+    resolution: {integrity: sha512-a1tY3kt6NVDKU3ZTdVWDu0RwHpwXCKG0qVzqDVI6kkwnlKFvQRJsq7mPYjI0YSWFkt5DjL/Aq9NrDY4FhgUTyQ==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -3875,39 +3879,39 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/gateway@3.0.66(zod@4.3.6)':
+  '@ai-sdk/gateway@2.0.55(zod@4.3.6)':
     dependencies:
-      '@ai-sdk/provider': 3.0.8
-      '@ai-sdk/provider-utils': 4.0.19(zod@4.3.6)
+      '@ai-sdk/provider': 2.0.1
+      '@ai-sdk/provider-utils': 3.0.22(zod@4.3.6)
       '@vercel/oidc': 3.1.0
       zod: 4.3.6
 
-  '@ai-sdk/openai@3.0.41(zod@4.3.6)':
+  '@ai-sdk/openai@2.0.98(zod@4.3.6)':
     dependencies:
-      '@ai-sdk/provider': 3.0.8
-      '@ai-sdk/provider-utils': 4.0.19(zod@4.3.6)
+      '@ai-sdk/provider': 2.0.1
+      '@ai-sdk/provider-utils': 3.0.22(zod@4.3.6)
       zod: 4.3.6
 
-  '@ai-sdk/provider-utils@4.0.19(zod@4.3.6)':
+  '@ai-sdk/provider-utils@3.0.22(zod@4.3.6)':
     dependencies:
-      '@ai-sdk/provider': 3.0.8
+      '@ai-sdk/provider': 2.0.1
       '@standard-schema/spec': 1.1.0
       eventsource-parser: 3.0.6
       zod: 4.3.6
 
-  '@ai-sdk/provider@3.0.8':
+  '@ai-sdk/provider@2.0.1':
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/react@3.0.118(react@19.2.3)(zod@4.3.6)':
+  '@ai-sdk/react@2.0.152(react@19.2.3)(zod@4.3.6)':
     dependencies:
-      '@ai-sdk/provider-utils': 4.0.19(zod@4.3.6)
-      ai: 6.0.116(zod@4.3.6)
+      '@ai-sdk/provider-utils': 3.0.22(zod@4.3.6)
+      ai: 5.0.150(zod@4.3.6)
       react: 19.2.3
       swr: 2.4.1(react@19.2.3)
       throttleit: 2.1.0
-    transitivePeerDependencies:
-      - zod
+    optionalDependencies:
+      zod: 4.3.6
 
   '@alloc/quick-lru@5.2.0': {}
 
@@ -4184,9 +4188,9 @@ snapshots:
       - svelte
       - vue
 
-  '@btst/stack@2.5.0(1b6a0a45c8aa5a923a771880a4bfd1bd)':
+  '@btst/stack@2.5.3(37ea7fbbdb1664cc3e54767443b15e09)':
     dependencies:
-      '@ai-sdk/react': 3.0.118(react@19.2.3)(zod@4.3.6)
+      '@ai-sdk/react': 2.0.152(react@19.2.3)(zod@4.3.6)
       '@btst/db': 2.0.3(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.18)(better-call@2.0.1(zod@4.3.6))(jose@6.2.0)(kysely@0.28.11)(nanostores@1.1.1)(next@15.4.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vue@3.5.29(typescript@5.9.3))
       '@btst/yar': 1.2.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)
       '@hookform/resolvers': 5.2.2(react-hook-form@7.71.2(react@19.2.3))
@@ -4199,7 +4203,7 @@ snapshots:
       '@radix-ui/react-switch': 1.2.6(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@tailwindcss/typography': 0.5.19(tailwindcss@4.2.1)
       '@tanstack/react-query': 5.90.21(react@19.2.3)
-      ai: 6.0.116(zod@4.3.6)
+      ai: 5.0.150(zod@4.3.6)
       better-call: 2.0.1(zod@4.3.6)
       class-variance-authority: 0.7.1
       clsx: 2.1.1
@@ -6139,11 +6143,11 @@ snapshots:
 
   agent-base@7.1.4: {}
 
-  ai@6.0.116(zod@4.3.6):
+  ai@5.0.150(zod@4.3.6):
     dependencies:
-      '@ai-sdk/gateway': 3.0.66(zod@4.3.6)
-      '@ai-sdk/provider': 3.0.8
-      '@ai-sdk/provider-utils': 4.0.19(zod@4.3.6)
+      '@ai-sdk/gateway': 2.0.55(zod@4.3.6)
+      '@ai-sdk/provider': 2.0.1
+      '@ai-sdk/provider-utils': 3.0.22(zod@4.3.6)
       '@opentelemetry/api': 1.9.0
       zod: 4.3.6
 
@@ -6207,8 +6211,8 @@ snapshots:
 
   better-call@1.1.4(zod@4.3.6):
     dependencies:
-      '@better-auth/utils': 0.3.0
-      '@better-fetch/fetch': 1.1.18
+      '@better-auth/utils': 0.3.1
+      '@better-fetch/fetch': 1.1.21
       rou3: 0.7.12
       set-cookie-parser: 2.7.2
     optionalDependencies:

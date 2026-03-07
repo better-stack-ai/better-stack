@@ -38,4 +38,5 @@ export type {
 	Variable,
 	ComponentRegistry,
 	RegistryEntry,
+	FunctionRegistry,
 } from "./types";
