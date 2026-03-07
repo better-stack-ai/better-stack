@@ -71,7 +71,9 @@
       "!**/examples/**",
       "!**/packages/ui/**",
       "!**/docs/**",
-      "!**/test-results/**"
+      "!**/test-results/**",
+      "!**/.btst-stack-src/**",
+      "!**/.btst-stack-ui/**"
     ]
   }
 }
