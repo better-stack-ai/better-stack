@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "@btst/stack/dist/plugins/kanban/client.css";
+@import "@btst/stack/plugins/kanban/css";
 @import "@btst/stack/plugins/route-docs/css";
 /* WebContainers workaround: the WASM Tailwind scanner cannot traverse node_modules (https://github.com/tailwindlabs/tailwindcss/issues/18418). copy-stack-src.mjs (run via dev/build) copies @btst/stack/src outside node_modules so Tailwind can scan it. Safe to remove once the upstream bug is fixed. */
 @source "./.btst-stack-src/**/*.{ts,tsx}";
