@@ -467,7 +467,8 @@ export const aiChatBackendPlugin = <
 						const firstMessageContent = getMessageTextContent(firstMessage);
 
 						// Convert UIMessages to CoreMessages for streamText
-						const modelMessages = convertToModelMessages(uiMessages);
+						// In AI SDK v6 this became async — await is a no-op for v5's sync return
+						const modelMessages = await convertToModelMessages(uiMessages);
 
 						// Build system prompt: base config + optional page context
 						const pageContextContent =

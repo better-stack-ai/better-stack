@@ -3,6 +3,7 @@ import { getOrCreateQueryClient } from "@/lib/query-client";
 import { getStackClient } from "@/lib/stack-client";
 import { generateSchema } from "@btst/stack/plugins/route-docs/client";
 import { myStack } from "@/lib/stack";
+import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 
 type RouteItem = { label: string; path: string };
 type RouteGroup = { heading: string; routes: RouteItem[] };
@@ -46,8 +47,28 @@ export default async function Home() {
 		{ label: `New ${t.name}`, path: `${SITE_BASE_PATH}/cms/${t.slug}/new` },
 	]);
 
+	// Fetch published UI builder pages for public viewing links
+	const { items: allPages } = await myStack.api.cms.getAllContentItems(
+		UI_BUILDER_TYPE_SLUG,
+		{ limit: 100 },
+	);
+	const publishedPages = allPages.filter(
+		(item) =>
+			typeof item.data === "object" &&
+			item.data !== null &&
+			(item.data as Record<string, unknown>).status === "published",
+	);
+	const publicPageRoutes: RouteItem[] = [
+		{ label: "All Published Pages", path: "/view" },
+		...publishedPages.map((p) => ({
+			label: p.slug,
+			path: `/view/${p.slug}`,
+		})),
+	];
+
 	const groups: RouteGroup[] = [
 		{ heading: "UI Builder", routes: staticUiBuilderRoutes },
+		{ heading: "Public Pages", routes: publicPageRoutes },
 		{
 			heading: "CMS (admin)",
 			routes: [...staticCmsRoutes, ...cmsTypeRoutes],
