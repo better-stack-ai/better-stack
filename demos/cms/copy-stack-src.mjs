@@ -18,8 +18,6 @@ const uiSrc = "node_modules/@btst/stack/dist/packages/ui";
 const uiDest = "app/.btst-stack-ui";
 
 if (!existsSync(src)) {
-	// Likely running in the monorepo where the workspace symlink does not expose
-
 	console.log(
 		"[copy-stack-src] node_modules/@btst/stack/src not found, skipping",
 	);
@@ -29,17 +27,13 @@ if (!existsSync(src)) {
 await rm(dest, { recursive: true, force: true });
 await mkdir(dest, { recursive: true });
 await cp(src, dest, { recursive: true });
-console.log("[copy-stack-src] copied @btst/stack/src → .btst-stack-src");
+console.log(`[copy-stack-src] copied ${src} → ${dest}`);
 
 if (existsSync(uiSrc)) {
 	await rm(uiDest, { recursive: true, force: true });
 	await mkdir(uiDest, { recursive: true });
 	await cp(uiSrc, uiDest, { recursive: true });
-	console.log(
-		"[copy-stack-src] copied @btst/stack/dist/packages/ui → .btst-stack-ui",
-	);
+	console.log(`[copy-stack-src] copied ${uiSrc} → ${uiDest}`);
 } else {
-	console.log(
-		"[copy-stack-src] node_modules/@btst/stack/dist/packages/ui not found, skipping",
-	);
+	console.log(`[copy-stack-src] ${uiSrc} not found, skipping`);
 }
