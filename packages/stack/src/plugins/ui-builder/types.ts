@@ -134,4 +134,5 @@ export type {
 	Variable,
 	ComponentRegistry,
 	RegistryEntry,
+	FunctionRegistry,
 } from "@workspace/ui/components/ui-builder/types";

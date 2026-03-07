@@ -3,15 +3,53 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { z } from "zod";
+import { toast } from "sonner";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { StackProvider } from "@btst/stack/context";
 import { PageRenderer } from "@btst/stack/plugins/ui-builder/client/components";
 import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client";
+import type { FunctionRegistry } from "@btst/stack/plugins/ui-builder";
 import { getOrCreateQueryClient } from "@/lib/query-client";
 import { ArrowLeft, Loader2, AlertCircle, FileQuestion } from "lucide-react";
 
 type PluginOverrides = {
 	"ui-builder": UIBuilderPluginOverrides;
+};
+
+const functionRegistry: FunctionRegistry = {
+	showWelcomeToast: {
+		name: "Show Welcome Toast",
+		schema: z.tuple([]),
+		fn: () => {
+			toast.success("Welcome! Let's get started 🚀");
+		},
+		description: "Shows a welcome notification",
+	},
+	showSuccessToast: {
+		name: "Show Success Toast",
+		schema: z.tuple([]),
+		fn: () => {
+			toast.success("Action completed successfully!");
+		},
+		description: "Shows a success notification",
+	},
+	showInfoToast: {
+		name: "Show Info Toast",
+		schema: z.tuple([]),
+		fn: () => {
+			toast.info("Here's some helpful information.");
+		},
+		description: "Shows an info notification",
+	},
+	logToConsole: {
+		name: "Log to Console",
+		schema: z.tuple([]),
+		fn: () => {
+			console.log("[Demo] Button clicked at", new Date().toISOString());
+		},
+		description: "Logs a message to the browser console",
+	},
 };
 
 export default function PublicPageView() {
@@ -55,7 +93,7 @@ export default function PublicPageView() {
 									/view/{slug}
 								</code>
 								<Link
-									href={`/pages/ui-builder`}
+									href="/pages/ui-builder"
 									className="text-muted-foreground hover:text-foreground transition-colors"
 								>
 									Edit in builder
@@ -66,6 +104,7 @@ export default function PublicPageView() {
 
 					<PageRenderer
 						slug={slug}
+						functionRegistry={functionRegistry}
 						LoadingComponent={PageLoadingState}
 						ErrorComponent={PageErrorState}
 						NotFoundComponent={PageNotFoundState}
