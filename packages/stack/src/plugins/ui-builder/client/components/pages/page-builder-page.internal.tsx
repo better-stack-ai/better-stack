@@ -215,6 +215,7 @@ function PageBuilderPageContent({
 		navigate,
 		Link,
 		componentRegistry: customRegistry,
+		functionRegistry,
 	} = usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
 	const basePath = useBasePath();
 
@@ -463,6 +464,7 @@ function PageBuilderPageContent({
 				}
 				onVariablesChange={handleVariablesChange}
 				componentRegistry={componentRegistry}
+				functionRegistry={functionRegistry}
 				persistLayerStore={false}
 				allowVariableEditing={true}
 				allowPagesCreation={false}

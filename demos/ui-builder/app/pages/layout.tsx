@@ -6,6 +6,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { StackProvider } from "@btst/stack/context";
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client";
+import { functionRegistry } from "@/lib/function-registry";
 import { getOrCreateQueryClient } from "@/lib/query-client";
 
 type PluginOverrides = {
@@ -47,6 +48,7 @@ export default function PagesLayout({
 						Link: ({ href, ...props }) => (
 							<Link href={href || "#"} {...props} />
 						),
+						functionRegistry,
 					},
 				}}
 			>

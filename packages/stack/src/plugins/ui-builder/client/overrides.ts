@@ -1,5 +1,8 @@
 import type { ComponentType } from "react";
-import type { ComponentRegistry } from "@workspace/ui/components/ui-builder/types";
+import type {
+	ComponentRegistry,
+	FunctionRegistry,
+} from "@workspace/ui/components/ui-builder/types";
 import type { UIBuilderClientHooks } from "../types";
 
 /**
@@ -62,6 +65,12 @@ export interface UIBuilderPluginOverrides {
 	 * Component registry for the UI Builder
 	 */
 	componentRegistry?: ComponentRegistry;
+
+	/**
+	 * Function registry for resolving bindable event handlers (onClick, onSubmit, etc.)
+	 * in the preview modal and layer renderer.
+	 */
+	functionRegistry?: FunctionRegistry;
 
 	/**
 	 * Base path for UI Builder admin pages (default: /pages/ui-builder)

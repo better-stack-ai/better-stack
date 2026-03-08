@@ -57,6 +57,10 @@ export default async function Home() {
 				{ label: "API Reference", path: "/api/data/reference" },
 			],
 		},
+		{
+			heading: "Sitemap",
+			routes: [{ label: "Sitemap", path: `${SITE_BASE_PATH}/sitemap.xml` }],
+		},
 	].filter((g) => g.routes.length > 0);
 
 	return (

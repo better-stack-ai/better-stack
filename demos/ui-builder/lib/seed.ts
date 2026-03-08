@@ -13,6 +13,12 @@ const initialVariables = [
 		type: "function",
 		defaultValue: "showWelcomeToast",
 	},
+	{
+		id: "learnMoreFn",
+		name: "Learn More Action",
+		type: "function",
+		defaultValue: "showInfoToast",
+	},
 ];
 
 const initialLayers = [
@@ -167,6 +173,7 @@ const initialLayers = [
 								props: {
 									variant: "outline",
 									className: "flex-1",
+									onClick: { __variableRef: "learnMoreFn" },
 								},
 								children: [
 									{
