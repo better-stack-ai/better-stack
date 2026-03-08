@@ -2,11 +2,49 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { z } from "zod";
+import { toast } from "sonner";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { StackProvider } from "@btst/stack/context";
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client";
+import type { FunctionRegistry } from "@btst/stack/plugins/ui-builder";
 import { getOrCreateQueryClient } from "@/lib/query-client";
+
+const functionRegistry: FunctionRegistry = {
+	showWelcomeToast: {
+		name: "Show Welcome Toast",
+		schema: z.tuple([]),
+		fn: () => {
+			toast.success("Welcome! Let's get started 🚀");
+		},
+		description: "Shows a welcome notification",
+	},
+	showSuccessToast: {
+		name: "Show Success Toast",
+		schema: z.tuple([]),
+		fn: () => {
+			toast.success("Action completed successfully!");
+		},
+		description: "Shows a success notification",
+	},
+	showInfoToast: {
+		name: "Show Info Toast",
+		schema: z.tuple([]),
+		fn: () => {
+			toast.info("Here's some helpful information.");
+		},
+		description: "Shows an info notification",
+	},
+	logToConsole: {
+		name: "Log to Console",
+		schema: z.tuple([]),
+		fn: () => {
+			console.log("[Demo] Button clicked at", new Date().toISOString());
+		},
+		description: "Logs a message to the browser console",
+	},
+};
 
 type PluginOverrides = {
 	cms: CMSPluginOverrides;
@@ -47,6 +85,7 @@ export default function PagesLayout({
 						Link: ({ href, ...props }) => (
 							<Link href={href || "#"} {...props} />
 						),
+						functionRegistry,
 					},
 				}}
 			>
