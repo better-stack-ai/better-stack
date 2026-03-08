@@ -43,6 +43,7 @@ import {
 	commonFieldOverrides,
 	childrenAsTipTapFieldOverrides,
 	childrenAsTextareaFieldOverrides,
+	functionPropFieldOverrides,
 } from "@workspace/ui/lib/ui-builder/registry/form-field-overrides";
 
 /**
@@ -62,8 +63,120 @@ export const primitiveComponentDefinitions: ComponentRegistry = {
 			rel: z.enum(["noopener", "noreferrer", "nofollow"]).optional(),
 			title: z.string().optional(),
 			download: z.boolean().optional().default(false),
+			onClick: z.any().optional(),
 		}),
-		fieldOverrides: commonFieldOverrides(),
+		fieldOverrides: {
+			...commonFieldOverrides(),
+			onClick: () => functionPropFieldOverrides("onClick"),
+		},
+	},
+	button: {
+		schema: z.object({
+			className: z.string().optional(),
+			children: z.any().optional(),
+			type: z.enum(["button", "submit", "reset"]).optional().default("button"),
+			disabled: z.boolean().optional().default(false),
+			onClick: z.any().optional(),
+		}),
+		defaultChildren: "Button",
+		fieldOverrides: {
+			...commonFieldOverrides(),
+			onClick: () => functionPropFieldOverrides("onClick"),
+		},
+	},
+	form: {
+		schema: z.object({
+			className: z.string().optional(),
+			children: z.any().optional(),
+			action: z.string().optional(),
+			method: z.enum(["get", "post"]).optional(),
+			onSubmit: z.any().optional(),
+		}),
+		fieldOverrides: {
+			...commonFieldOverrides(),
+			onSubmit: () => functionPropFieldOverrides("onSubmit"),
+		},
+	},
+	input: {
+		schema: z.object({
+			className: z.string().optional(),
+			type: z
+				.enum([
+					"text",
+					"password",
+					"email",
+					"number",
+					"tel",
+					"url",
+					"search",
+					"date",
+					"time",
+					"hidden",
+				])
+				.optional()
+				.default("text"),
+			name: z.string().optional(),
+			placeholder: z.string().optional(),
+			defaultValue: z.string().optional(),
+			disabled: z.boolean().optional().default(false),
+			required: z.boolean().optional().default(false),
+			onChange: z.any().optional(),
+			onBlur: z.any().optional(),
+			onFocus: z.any().optional(),
+		}),
+		fieldOverrides: {
+			className: (layer) => classNameFieldOverrides(layer),
+			onChange: () => functionPropFieldOverrides("onChange"),
+			onBlur: () => functionPropFieldOverrides("onBlur"),
+			onFocus: () => functionPropFieldOverrides("onFocus"),
+		},
+	},
+	textarea: {
+		schema: z.object({
+			className: z.string().optional(),
+			name: z.string().optional(),
+			placeholder: z.string().optional(),
+			defaultValue: z.string().optional(),
+			rows: z.coerce.number().optional(),
+			disabled: z.boolean().optional().default(false),
+			required: z.boolean().optional().default(false),
+			onChange: z.any().optional(),
+			onBlur: z.any().optional(),
+			onFocus: z.any().optional(),
+		}),
+		fieldOverrides: {
+			className: (layer) => classNameFieldOverrides(layer),
+			onChange: () => functionPropFieldOverrides("onChange"),
+			onBlur: () => functionPropFieldOverrides("onBlur"),
+			onFocus: () => functionPropFieldOverrides("onFocus"),
+		},
+	},
+	select: {
+		schema: z.object({
+			className: z.string().optional(),
+			children: z.any().optional(),
+			name: z.string().optional(),
+			defaultValue: z.string().optional(),
+			disabled: z.boolean().optional().default(false),
+			required: z.boolean().optional().default(false),
+			onChange: z.any().optional(),
+		}),
+		fieldOverrides: {
+			...commonFieldOverrides(),
+			onChange: () => functionPropFieldOverrides("onChange"),
+		},
+	},
+	label: {
+		schema: z.object({
+			className: z.string().optional(),
+			children: z.any().optional(),
+			htmlFor: z.string().optional(),
+			onClick: z.any().optional(),
+		}),
+		fieldOverrides: {
+			...commonFieldOverrides(),
+			onClick: () => functionPropFieldOverrides("onClick"),
+		},
 	},
 	img: {
 		schema: z.object({
@@ -72,17 +185,23 @@ export const primitiveComponentDefinitions: ComponentRegistry = {
 			alt: z.string().optional(),
 			width: z.coerce.number().optional(),
 			height: z.coerce.number().optional(),
+			onClick: z.any().optional(),
 		}),
 		fieldOverrides: {
 			className: (layer) => classNameFieldOverrides(layer),
+			onClick: () => functionPropFieldOverrides("onClick"),
 		},
 	},
 	div: {
 		schema: z.object({
 			className: z.string().optional(),
 			children: z.any().optional(),
+			onClick: z.any().optional(),
 		}),
-		fieldOverrides: commonFieldOverrides(),
+		fieldOverrides: {
+			...commonFieldOverrides(),
+			onClick: () => functionPropFieldOverrides("onClick"),
+		},
 	},
 	iframe: {
 		schema: z.object({
@@ -119,55 +238,100 @@ export const primitiveComponentDefinitions: ComponentRegistry = {
 		schema: z.object({
 			className: z.string().optional(),
 			children: z.string().optional(),
+			onClick: z.any().optional(),
 		}),
 		defaultChildren: "Text",
 		fieldOverrides: {
 			className: (layer) => classNameFieldOverrides(layer),
 			children: (layer) => childrenAsTextareaFieldOverrides(layer),
+			onClick: () => functionPropFieldOverrides("onClick"),
 		},
 	},
 	h1: {
 		schema: z.object({
 			className: z.string().optional(),
 			children: z.string().optional(),
+			onClick: z.any().optional(),
 		}),
 		defaultChildren: "Heading 1",
 		fieldOverrides: {
-			className: (layer) => classNameFieldOverrides(layer),
+			...commonFieldOverrides(),
 			children: (layer) => childrenAsTextareaFieldOverrides(layer),
+			onClick: () => functionPropFieldOverrides("onClick"),
 		},
 	},
 	h2: {
 		schema: z.object({
 			className: z.string().optional(),
 			children: z.string().optional(),
+			onClick: z.any().optional(),
 		}),
 		defaultChildren: "Heading 2",
 		fieldOverrides: {
-			className: (layer) => classNameFieldOverrides(layer),
+			...commonFieldOverrides(),
 			children: (layer) => childrenAsTextareaFieldOverrides(layer),
+			onClick: () => functionPropFieldOverrides("onClick"),
 		},
 	},
 	h3: {
 		schema: z.object({
 			className: z.string().optional(),
 			children: z.string().optional(),
+			onClick: z.any().optional(),
 		}),
 		defaultChildren: "Heading 3",
 		fieldOverrides: {
-			className: (layer) => classNameFieldOverrides(layer),
+			...commonFieldOverrides(),
 			children: (layer) => childrenAsTextareaFieldOverrides(layer),
+			onClick: () => functionPropFieldOverrides("onClick"),
 		},
 	},
 	p: {
 		schema: z.object({
 			className: z.string().optional(),
 			children: z.string().optional(),
+			onClick: z.any().optional(),
 		}),
-		defaultChildren: "Paragraph",
+		defaultChildren: "Paragraph text",
 		fieldOverrides: {
-			className: (layer) => classNameFieldOverrides(layer),
+			...commonFieldOverrides(),
 			children: (layer) => childrenAsTextareaFieldOverrides(layer),
+			onClick: () => functionPropFieldOverrides("onClick"),
+		},
+	},
+	li: {
+		schema: z.object({
+			className: z.string().optional(),
+			children: z.string().optional(),
+			onClick: z.any().optional(),
+		}),
+		defaultChildren: "List item",
+		fieldOverrides: {
+			...commonFieldOverrides(),
+			children: (layer) => childrenAsTextareaFieldOverrides(layer),
+			onClick: () => functionPropFieldOverrides("onClick"),
+		},
+	},
+	ul: {
+		schema: z.object({
+			className: z.string().optional(),
+			children: z.any().optional(),
+			onClick: z.any().optional(),
+		}),
+		fieldOverrides: {
+			...commonFieldOverrides(),
+			onClick: () => functionPropFieldOverrides("onClick"),
+		},
+	},
+	ol: {
+		schema: z.object({
+			className: z.string().optional(),
+			children: z.any().optional(),
+			onClick: z.any().optional(),
+		}),
+		fieldOverrides: {
+			...commonFieldOverrides(),
+			onClick: () => functionPropFieldOverrides("onClick"),
 		},
 	},
 };
@@ -194,6 +358,7 @@ export const complexComponentDefinitions: ComponentRegistry = {
 				])
 				.default("default"),
 			size: z.enum(["default", "sm", "lg", "icon"]).default("default"),
+			onClick: z.any().optional(),
 		}),
 		from: "@/components/ui/button",
 		defaultChildren: [
@@ -205,7 +370,10 @@ export const complexComponentDefinitions: ComponentRegistry = {
 				children: "Button",
 			} satisfies ComponentLayer,
 		],
-		fieldOverrides: commonFieldOverrides(),
+		fieldOverrides: {
+			...commonFieldOverrides(),
+			onClick: () => functionPropFieldOverrides("onClick"),
+		},
 	},
 	Badge: {
 		component: Badge,
@@ -215,6 +383,7 @@ export const complexComponentDefinitions: ComponentRegistry = {
 			variant: z
 				.enum(["default", "secondary", "destructive", "outline"])
 				.default("default"),
+			onClick: z.any().optional(),
 		}),
 		from: "@/components/ui/badge",
 		defaultChildren: [
@@ -226,7 +395,10 @@ export const complexComponentDefinitions: ComponentRegistry = {
 				children: "Badge",
 			} satisfies ComponentLayer,
 		],
-		fieldOverrides: commonFieldOverrides(),
+		fieldOverrides: {
+			...commonFieldOverrides(),
+			onClick: () => functionPropFieldOverrides("onClick"),
+		},
 	},
 	Flexbox: {
 		component: Flexbox,
@@ -343,6 +515,7 @@ export const complexComponentDefinitions: ComponentRegistry = {
 			children: z.any().optional(),
 			type: z.enum(["single", "multiple"]).default("single"),
 			collapsible: z.boolean().optional(),
+			onValueChange: z.any().optional(),
 		}),
 		from: "@/components/ui/accordion",
 		defaultChildren: [
@@ -359,7 +532,7 @@ export const complexComponentDefinitions: ComponentRegistry = {
 						props: {},
 						children: [
 							{
-								id: "acc-trigger-text",
+								id: "acc-trigger-1-text",
 								type: "span",
 								name: "span",
 								props: {},
@@ -374,7 +547,45 @@ export const complexComponentDefinitions: ComponentRegistry = {
 						props: {},
 						children: [
 							{
-								id: "acc-content-text",
+								id: "acc-content-1-text",
+								type: "span",
+								name: "span",
+								props: {},
+								children: "Accordion Content Text",
+							},
+						],
+					},
+				],
+			},
+			{
+				id: "acc-item-2",
+				type: "AccordionItem",
+				name: "AccordionItem",
+				props: { value: "item-2" },
+				children: [
+					{
+						id: "acc-trigger-2",
+						type: "AccordionTrigger",
+						name: "AccordionTrigger",
+						props: {},
+						children: [
+							{
+								id: "acc-trigger-2-text",
+								type: "span",
+								name: "span",
+								props: {},
+								children: "Accordion Item #2",
+							},
+						],
+					},
+					{
+						id: "acc-content-2",
+						type: "AccordionContent",
+						name: "AccordionContent",
+						props: {},
+						children: [
+							{
+								id: "acc-content-2-text",
 								type: "span",
 								name: "span",
 								props: {},
@@ -385,7 +596,10 @@ export const complexComponentDefinitions: ComponentRegistry = {
 				],
 			},
 		] as ComponentLayer[],
-		fieldOverrides: commonFieldOverrides(),
+		fieldOverrides: {
+			...commonFieldOverrides(),
+			onValueChange: () => functionPropFieldOverrides("onValueChange"),
+		},
 	},
 	AccordionItem: {
 		component: AccordionItem,
@@ -395,6 +609,39 @@ export const complexComponentDefinitions: ComponentRegistry = {
 			value: z.string().default("item-1"),
 		}),
 		from: "@/components/ui/accordion",
+		childOf: ["Accordion"],
+		defaultChildren: [
+			{
+				id: "acc-trigger-default",
+				type: "AccordionTrigger",
+				name: "AccordionTrigger",
+				props: {},
+				children: [
+					{
+						id: "acc-trigger-default-text",
+						type: "span",
+						name: "span",
+						props: {},
+						children: "Accordion Item",
+					} satisfies ComponentLayer,
+				],
+			},
+			{
+				id: "acc-content-default",
+				type: "AccordionContent",
+				name: "AccordionContent",
+				props: {},
+				children: [
+					{
+						id: "acc-content-default-text",
+						type: "span",
+						name: "span",
+						props: {},
+						children: "Accordion Content",
+					} satisfies ComponentLayer,
+				],
+			},
+		] as ComponentLayer[],
 		fieldOverrides: commonFieldOverrides(),
 	},
 	AccordionTrigger: {
@@ -402,11 +649,14 @@ export const complexComponentDefinitions: ComponentRegistry = {
 		schema: z.object({
 			className: z.string().optional(),
 			children: z.any().optional(),
+			onClick: z.any().optional(),
 		}),
 		from: "@/components/ui/accordion",
+		childOf: ["AccordionItem"],
 		fieldOverrides: {
 			className: (layer) => classNameFieldOverrides(layer),
 			children: (layer) => childrenFieldOverrides(layer),
+			onClick: () => functionPropFieldOverrides("onClick"),
 		},
 	},
 	AccordionContent: {
@@ -416,6 +666,7 @@ export const complexComponentDefinitions: ComponentRegistry = {
 			children: z.any().optional(),
 		}),
 		from: "@/components/ui/accordion",
+		childOf: ["AccordionItem"],
 		fieldOverrides: commonFieldOverrides(),
 	},
 	Card: {
@@ -423,6 +674,7 @@ export const complexComponentDefinitions: ComponentRegistry = {
 		schema: z.object({
 			className: z.string().optional(),
 			children: z.any().optional(),
+			onClick: z.any().optional(),
 		}),
 		from: "@/components/ui/card",
 		defaultChildren: [
@@ -437,14 +689,30 @@ export const complexComponentDefinitions: ComponentRegistry = {
 						type: "CardTitle",
 						name: "CardTitle",
 						props: {},
-						children: "Card Title",
+						children: [
+							{
+								id: "card-title-text",
+								type: "span",
+								name: "span",
+								props: {},
+								children: "Card Title",
+							} satisfies ComponentLayer,
+						],
 					},
 					{
 						id: "card-description",
 						type: "CardDescription",
 						name: "CardDescription",
 						props: {},
-						children: "Card Description",
+						children: [
+							{
+								id: "card-description-text",
+								type: "span",
+								name: "span",
+								props: {},
+								children: "Card Description",
+							} satisfies ComponentLayer,
+						],
 					},
 				],
 			},
@@ -459,8 +727,8 @@ export const complexComponentDefinitions: ComponentRegistry = {
 						type: "span",
 						name: "span",
 						props: {},
-						children: "Card Content Text",
-					},
+						children: "Card Content",
+					} satisfies ComponentLayer,
 				],
 			},
 			{
@@ -474,12 +742,15 @@ export const complexComponentDefinitions: ComponentRegistry = {
 						type: "span",
 						name: "span",
 						props: {},
-						children: "Card Footer Text",
-					},
+						children: "Card Footer",
+					} satisfies ComponentLayer,
 				],
 			},
 		] as ComponentLayer[],
-		fieldOverrides: commonFieldOverrides(),
+		fieldOverrides: {
+			...commonFieldOverrides(),
+			onClick: () => functionPropFieldOverrides("onClick"),
+		},
 	},
 	CardHeader: {
 		component: CardHeader,
@@ -488,6 +759,7 @@ export const complexComponentDefinitions: ComponentRegistry = {
 			children: z.any().optional(),
 		}),
 		from: "@/components/ui/card",
+		childOf: ["Card"],
 		fieldOverrides: commonFieldOverrides(),
 	},
 	CardTitle: {
@@ -497,6 +769,7 @@ export const complexComponentDefinitions: ComponentRegistry = {
 			children: z.any().optional(),
 		}),
 		from: "@/components/ui/card",
+		childOf: ["CardHeader"],
 		fieldOverrides: commonFieldOverrides(),
 	},
 	CardDescription: {
@@ -506,6 +779,7 @@ export const complexComponentDefinitions: ComponentRegistry = {
 			children: z.any().optional(),
 		}),
 		from: "@/components/ui/card",
+		childOf: ["CardHeader"],
 		fieldOverrides: commonFieldOverrides(),
 	},
 	CardContent: {
@@ -515,6 +789,7 @@ export const complexComponentDefinitions: ComponentRegistry = {
 			children: z.any().optional(),
 		}),
 		from: "@/components/ui/card",
+		childOf: ["Card"],
 		fieldOverrides: commonFieldOverrides(),
 	},
 	CardFooter: {
@@ -524,6 +799,7 @@ export const complexComponentDefinitions: ComponentRegistry = {
 			children: z.any().optional(),
 		}),
 		from: "@/components/ui/card",
+		childOf: ["Card"],
 		fieldOverrides: commonFieldOverrides(),
 	},
 	Separator: {
