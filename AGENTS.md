@@ -500,9 +500,11 @@ When creating new exports, update both files:
 ```typescript
 entries: [
   // ... existing entries
-  { input: "src/plugins/{name}/query-keys.ts" },
-  { input: "src/plugins/{name}/client/hooks/index.tsx" },
-  { input: "src/plugins/{name}/client/components/index.tsx" },
+  "./src/plugins/{name}/api/index.ts",
+  "./src/plugins/{name}/client/index.ts",
+  "./src/plugins/{name}/client/hooks/index.tsx",
+  "./src/plugins/{name}/client/components/index.tsx",
+  "./src/plugins/{name}/query-keys.ts",
 ]
 ```
 
@@ -735,7 +737,7 @@ useRegisterPageAIContext({
 
 3. **Type exports** - Always add both `exports` AND `typesVersions` entries for new paths
 
-4. **CSS not loading** - Ensure CSS files are listed in postbuild.cjs patterns and exported in package.json
+4. **CSS not loading** - CSS files are auto-discovered from `src/plugins/` by `postbuild.cjs` — no manual registration needed. Ensure the `package.json` export entry (`"./plugins/{name}/css"`) is present
 
 5. **React Query stale data** - Use `staleTime: Infinity` for data that shouldn't refetch automatically
 

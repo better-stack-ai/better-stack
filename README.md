@@ -130,6 +130,13 @@ Full documentation, guides, and plugin development:
 
 ---
 
+## Contributing
+
+Bug reports, plugin PRs, and documentation improvements are welcome.
+See **[CONTRIBUTING.md](./CONTRIBUTING.md)** for the plugin development guide, testing instructions, and submission checklist.
+
+---
+
 If this saves you time, a ⭐ helps others find it.
 
 MIT © [olliethedev](https://github.com/olliethedev)
