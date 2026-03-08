@@ -600,7 +600,7 @@ entries: [
 }
 ```
 
-**CSS** — if your plugin ships UI components, add its CSS files to `packages/stack/scripts/postbuild.cjs` so they are copied during the build. Look for the existing pattern in that file and add your plugin alongside the others.
+**CSS** — if your plugin ships UI components, add the CSS export entry to `packages/stack/package.json` (`"./plugins/your-plugin/css": "./dist/plugins/your-plugin/client.css"`). CSS files are auto-discovered and copied by `postbuild.cjs` — no manual registration needed.
 
 ---
 
@@ -794,8 +794,7 @@ Before opening a pull request for a new plugin, verify every item:
 
 - [ ] `packages/stack/build.config.ts` — entries added for each new export path
 - [ ] `packages/stack/package.json` — `exports` and `typesVersions` added for each entry
-- [ ] CSS exported in `package.json` if the plugin ships UI components
-- [ ] `postbuild.cjs` updated if CSS files need copying
+- [ ] CSS exported in `package.json` if the plugin ships UI components (`postbuild.cjs` auto-discovers CSS files — no changes needed there)
 - [ ] `pnpm build` passes with no errors
 
 **Type checking and linting**
