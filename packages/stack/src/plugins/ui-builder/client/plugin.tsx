@@ -6,6 +6,7 @@ import {
 	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
+import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { CMSApiRouter } from "../../cms/api";
 import { createCMSQueryKeys } from "../../cms/query-keys";
@@ -48,6 +49,20 @@ export interface UIBuilderClientConfig {
 	hooks?: UIBuilderClientHooks;
 	/** Component registry to use for the UI Builder */
 	componentRegistry?: ComponentRegistry;
+
+	/**
+	 * Optional page component overrides.
+	 * Replace any plugin page with a custom React component.
+	 * The built-in component is used as the fallback when not provided.
+	 */
+	pageComponents?: {
+		/** Replaces the page list page */
+		pageList?: ComponentType;
+		/** Replaces the new page builder page */
+		newPage?: ComponentType;
+		/** Replaces the edit page builder page */
+		editPage?: ComponentType<{ id: string }>;
+	};
 }
 
 /**
@@ -290,23 +305,34 @@ export const uiBuilderClientPlugin = (config: UIBuilderClientConfig) =>
 		name: "ui-builder",
 
 		routes: () => ({
-			pageList: createRoute("/ui-builder", () => ({
-				PageComponent: () => <PageListPageComponent />,
-				loader: createPageListLoader(config),
-				meta: createPageListMeta(),
-			})),
+			pageList: createRoute("/ui-builder", () => {
+				const CustomPageList = config.pageComponents?.pageList;
+				return {
+					PageComponent: CustomPageList ?? (() => <PageListPageComponent />),
+					loader: createPageListLoader(config),
+					meta: createPageListMeta(),
+				};
+			}),
 
-			newPage: createRoute("/ui-builder/new", () => ({
-				PageComponent: () => <PageBuilderPageComponent />,
-				loader: createPageBuilderLoader(undefined, config),
-				meta: createPageBuilderMeta(undefined, config),
-			})),
+			newPage: createRoute("/ui-builder/new", () => {
+				const CustomNewPage = config.pageComponents?.newPage;
+				return {
+					PageComponent: CustomNewPage ?? (() => <PageBuilderPageComponent />),
+					loader: createPageBuilderLoader(undefined, config),
+					meta: createPageBuilderMeta(undefined, config),
+				};
+			}),
 
-			editPage: createRoute("/ui-builder/:id/edit", ({ params }) => ({
-				PageComponent: () => <PageBuilderPageComponent id={params.id} />,
-				loader: createPageBuilderLoader(params.id, config),
-				meta: createPageBuilderMeta(params.id, config),
-			})),
+			editPage: createRoute("/ui-builder/:id/edit", ({ params }) => {
+				const CustomEditPage = config.pageComponents?.editPage;
+				return {
+					PageComponent: CustomEditPage
+						? () => <CustomEditPage id={params.id} />
+						: () => <PageBuilderPageComponent id={params.id} />,
+					loader: createPageBuilderLoader(params.id, config),
+					meta: createPageBuilderMeta(params.id, config),
+				};
+			}),
 		}),
 
 		sitemap: async () => {

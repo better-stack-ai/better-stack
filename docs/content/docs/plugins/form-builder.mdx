@@ -204,6 +204,26 @@ The Form Builder plugin provides these admin routes:
 Admin routes are automatically set to `noindex` for SEO. Don't include them in your public sitemap.
 </Callout>
 
+### Page Component Overrides
+
+You can replace any built-in admin page with your own React component using the optional `pageComponents` field in `formBuilderClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided, so this is fully backward-compatible.
+
+```tsx
+formBuilderClientPlugin({
+  // ... other config
+  pageComponents: {
+    // Replace the form list page
+    formList: MyCustomFormList,
+    // Replace the new form page
+    newForm: MyCustomNewForm,
+    // Replace the form editor page — receives id as a prop
+    editForm: ({ id }) => <MyCustomFormEditor id={id} />,
+    // Replace the form submissions page — receives formId as a prop
+    submissions: ({ formId }) => <MyCustomSubmissions formId={formId} />,
+  },
+})
+```
+
 ## Form Builder UI
 
 The form builder provides a drag-and-drop interface with:

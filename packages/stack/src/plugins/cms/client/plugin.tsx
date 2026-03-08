@@ -6,6 +6,7 @@ import {
 	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
+import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { CMSApiRouter } from "../api";
 import { createCMSQueryKeys } from "../query-keys";
@@ -129,6 +130,22 @@ export interface CMSClientConfig {
 	headers?: Headers;
 	/** Optional hooks for customizing behavior (authorization, redirects, etc.) */
 	hooks?: CMSClientHooks;
+
+	/**
+	 * Optional page component overrides.
+	 * Replace any plugin page with a custom React component.
+	 * The built-in component is used as the fallback when not provided.
+	 */
+	pageComponents?: {
+		/** Replaces the CMS dashboard page */
+		dashboard?: ComponentType;
+		/** Replaces the content list page */
+		contentList?: ComponentType<{ typeSlug: string }>;
+		/** Replaces the new content editor page */
+		newContent?: ComponentType<{ typeSlug: string }>;
+		/** Replaces the edit content editor page */
+		editContent?: ComponentType<{ typeSlug: string; id: string }>;
+	};
 }
 
 /**
@@ -469,38 +486,54 @@ export const cmsClientPlugin = (config: CMSClientConfig) =>
 		name: "cms",
 
 		routes: () => ({
-			dashboard: createRoute("/cms", () => ({
-				PageComponent: () => <DashboardPageComponent />,
-				loader: createDashboardLoader(config),
-				meta: createDashboardMeta(),
-			})),
+			dashboard: createRoute("/cms", () => {
+				const CustomDashboard = config.pageComponents?.dashboard;
+				return {
+					PageComponent: CustomDashboard ?? (() => <DashboardPageComponent />),
+					loader: createDashboardLoader(config),
+					meta: createDashboardMeta(),
+				};
+			}),
 
-			contentList: createRoute("/cms/:typeSlug", ({ params }) => ({
-				PageComponent: () => (
-					<ContentListPageComponent typeSlug={params.typeSlug} />
-				),
-				loader: createContentListLoader(params.typeSlug, config),
-				meta: createContentListMeta(params.typeSlug, config),
-			})),
+			contentList: createRoute("/cms/:typeSlug", ({ params }) => {
+				const CustomContentList = config.pageComponents?.contentList;
+				return {
+					PageComponent: CustomContentList
+						? () => <CustomContentList typeSlug={params.typeSlug} />
+						: () => <ContentListPageComponent typeSlug={params.typeSlug} />,
+					loader: createContentListLoader(params.typeSlug, config),
+					meta: createContentListMeta(params.typeSlug, config),
+				};
+			}),
 
-			newContent: createRoute("/cms/:typeSlug/new", ({ params }) => ({
-				PageComponent: () => (
-					<ContentEditorPageComponent typeSlug={params.typeSlug} />
-				),
-				loader: createContentEditorLoader(params.typeSlug, undefined, config),
-				meta: createContentEditorMeta(params.typeSlug, undefined, config),
-			})),
+			newContent: createRoute("/cms/:typeSlug/new", ({ params }) => {
+				const CustomNewContent = config.pageComponents?.newContent;
+				return {
+					PageComponent: CustomNewContent
+						? () => <CustomNewContent typeSlug={params.typeSlug} />
+						: () => <ContentEditorPageComponent typeSlug={params.typeSlug} />,
+					loader: createContentEditorLoader(params.typeSlug, undefined, config),
+					meta: createContentEditorMeta(params.typeSlug, undefined, config),
+				};
+			}),
 
-			editContent: createRoute("/cms/:typeSlug/:id", ({ params }) => ({
-				PageComponent: () => (
-					<ContentEditorPageComponent
-						typeSlug={params.typeSlug}
-						id={params.id}
-					/>
-				),
-				loader: createContentEditorLoader(params.typeSlug, params.id, config),
-				meta: createContentEditorMeta(params.typeSlug, params.id, config),
-			})),
+			editContent: createRoute("/cms/:typeSlug/:id", ({ params }) => {
+				const CustomEditContent = config.pageComponents?.editContent;
+				return {
+					PageComponent: CustomEditContent
+						? () => (
+								<CustomEditContent typeSlug={params.typeSlug} id={params.id} />
+							)
+						: () => (
+								<ContentEditorPageComponent
+									typeSlug={params.typeSlug}
+									id={params.id}
+								/>
+							),
+					loader: createContentEditorLoader(params.typeSlug, params.id, config),
+					meta: createContentEditorMeta(params.typeSlug, params.id, config),
+				};
+			}),
 		}),
 
 		sitemap: async () => {

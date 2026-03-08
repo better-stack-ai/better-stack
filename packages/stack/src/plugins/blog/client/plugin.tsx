@@ -5,6 +5,7 @@ import {
 	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
+import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { BlogApiRouter } from "../api";
 import { createBlogQueryKeys } from "../query-keys";
@@ -84,6 +85,26 @@ export interface BlogClientConfig {
 
 	/** Optional headers for SSR (e.g., forwarding cookies) */
 	headers?: Headers;
+
+	/**
+	 * Optional page component overrides.
+	 * Replace any plugin page with a custom React component.
+	 * The built-in component is used as the fallback when not provided.
+	 */
+	pageComponents?: {
+		/** Replaces the published posts list page */
+		posts?: ComponentType;
+		/** Replaces the drafts list page */
+		drafts?: ComponentType;
+		/** Replaces the new post page */
+		newPost?: ComponentType;
+		/** Replaces the single post page */
+		post?: ComponentType<{ slug: string }>;
+		/** Replaces the edit post page */
+		editPost?: ComponentType<{ slug: string }>;
+		/** Replaces the tag posts page */
+		tag?: ComponentType<{ tagSlug: string }>;
+	};
 }
 
 /**
@@ -700,43 +721,57 @@ export const blogClientPlugin = (config: BlogClientConfig) =>
 
 		routes: () => ({
 			posts: createRoute("/blog", () => {
+				const CustomPosts = config.pageComponents?.posts;
 				return {
-					PageComponent: () => <HomePageComponent published={true} />,
+					PageComponent:
+						CustomPosts ?? (() => <HomePageComponent published={true} />),
 					loader: createPostsLoader(true, config),
 					meta: createPostsListMeta(true, config),
 				};
 			}),
 			drafts: createRoute("/blog/drafts", () => {
+				const CustomDrafts = config.pageComponents?.drafts;
 				return {
-					PageComponent: () => <HomePageComponent published={false} />,
+					PageComponent:
+						CustomDrafts ?? (() => <HomePageComponent published={false} />),
 					loader: createPostsLoader(false, config),
 					meta: createPostsListMeta(false, config),
 				};
 			}),
 			newPost: createRoute("/blog/new", () => {
+				const CustomNewPost = config.pageComponents?.newPost;
 				return {
-					PageComponent: NewPostPageComponent,
+					PageComponent: CustomNewPost ?? NewPostPageComponent,
 					loader: createNewPostLoader(config),
 					meta: createNewPostMeta(config),
 				};
 			}),
 			editPost: createRoute("/blog/:slug/edit", ({ params: { slug } }) => {
+				const CustomEditPost = config.pageComponents?.editPost;
 				return {
-					PageComponent: () => <EditPostPageComponent slug={slug} />,
+					PageComponent: CustomEditPost
+						? () => <CustomEditPost slug={slug} />
+						: () => <EditPostPageComponent slug={slug} />,
 					loader: createPostLoader(slug, config, `/blog/${slug}/edit`),
 					meta: createEditPostMeta(slug, config),
 				};
 			}),
 			tag: createRoute("/blog/tag/:tagSlug", ({ params: { tagSlug } }) => {
+				const CustomTag = config.pageComponents?.tag;
 				return {
-					PageComponent: () => <TagPageComponent tagSlug={tagSlug} />,
+					PageComponent: CustomTag
+						? () => <CustomTag tagSlug={tagSlug} />
+						: () => <TagPageComponent tagSlug={tagSlug} />,
 					loader: createTagLoader(tagSlug, config),
 					meta: createTagMeta(tagSlug, config),
 				};
 			}),
 			post: createRoute("/blog/:slug", ({ params: { slug } }) => {
+				const CustomPost = config.pageComponents?.post;
 				return {
-					PageComponent: () => <PostPageComponent slug={slug} />,
+					PageComponent: CustomPost
+						? () => <CustomPost slug={slug} />
+						: () => <PostPageComponent slug={slug} />,
 					loader: createPostLoader(slug, config),
 					meta: createPostMeta(slug, config),
 				};

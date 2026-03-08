@@ -311,6 +311,24 @@ The kanban plugin automatically creates the following pages (mounted at your con
 - `/kanban/new` - Create new board page
 - `/kanban/:boardId` - Board detail page with kanban view
 
+### Page Component Overrides
+
+You can replace any built-in page with your own React component using the optional `pageComponents` field in `kanbanClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided, so this is fully backward-compatible.
+
+```tsx
+kanbanClientPlugin({
+  // ... other config
+  pageComponents: {
+    // Replace the boards list page
+    boards: MyCustomBoardsPage,
+    // Replace the board detail page — receives boardId as a prop
+    board: ({ boardId }) => <MyCustomBoardPage boardId={boardId} />,
+    // Replace the new board page
+    newBoard: MyCustomNewBoardPage,
+  },
+})
+```
+
 ### Priority Levels
 
 Tasks support four priority levels, each with a visual badge:

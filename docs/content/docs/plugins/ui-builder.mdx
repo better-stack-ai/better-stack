@@ -211,6 +211,24 @@ The UI Builder plugin provides these admin routes:
 Admin routes are automatically set to `noindex` for SEO. Don't include them in your public sitemap.
 </Callout>
 
+### Page Component Overrides
+
+You can replace any built-in admin page with your own React component using the optional `pageComponents` field in `uiBuilderClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided, so this is fully backward-compatible.
+
+```tsx
+uiBuilderClientPlugin({
+  // ... other config
+  pageComponents: {
+    // Replace the page list page
+    pageList: MyCustomPageList,
+    // Replace the new page builder page
+    newPage: MyCustomNewPage,
+    // Replace the edit page builder page — receives id as a prop
+    editPage: ({ id }) => <MyCustomPageBuilder id={id} />,
+  },
+})
+```
+
 ## Component Registry
 
 The UI Builder uses a component registry to define available components. A default registry is provided with common components:

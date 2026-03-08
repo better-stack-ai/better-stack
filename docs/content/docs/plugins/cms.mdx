@@ -291,6 +291,28 @@ The CMS plugin provides these admin routes:
 Admin routes are automatically set to `noindex` for SEO. Don't include them in your public sitemap.
 </Callout>
 
+### Page Component Overrides
+
+You can replace any built-in admin page with your own React component using the optional `pageComponents` field in `cmsClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided, so this is fully backward-compatible.
+
+```tsx
+cmsClientPlugin({
+  // ... other config
+  pageComponents: {
+    // Replace the CMS dashboard page
+    dashboard: MyCustomDashboard,
+    // Replace the content list page — receives typeSlug as a prop
+    contentList: ({ typeSlug }) => <MyCustomContentList typeSlug={typeSlug} />,
+    // Replace the new content page — receives typeSlug as a prop
+    newContent: ({ typeSlug }) => <MyCustomNewContent typeSlug={typeSlug} />,
+    // Replace the edit content page — receives typeSlug and id as props
+    editContent: ({ typeSlug, id }) => (
+      <MyCustomEditContent typeSlug={typeSlug} id={id} />
+    ),
+  },
+})
+```
+
 ## Client Hooks
 
 Fetch content data in your frontend pages using the provided hooks. All hooks support **optional type generics** for full type safety on `parsedData`.

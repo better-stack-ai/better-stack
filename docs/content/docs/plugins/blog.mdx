@@ -320,6 +320,30 @@ The blog plugin automatically creates the following pages (mounted at your confi
 - `/blog/:slug/edit` - Edit post page
 - `/blog/tag/:tagSlug` - Posts filtered by tag
 
+### Page Component Overrides
+
+You can replace any built-in page with your own React component using the optional `pageComponents` field in `blogClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided, so this is fully backward-compatible.
+
+```tsx
+blogClientPlugin({
+  // ... other config
+  pageComponents: {
+    // Replace the published posts list page
+    posts: MyCustomPostsPage,
+    // Replace the single post page — receives the slug as a prop
+    post: ({ slug }) => <MyCustomPostPage slug={slug} />,
+    // Replace the edit post page — receives the slug as a prop
+    editPost: ({ slug }) => <MyCustomEditPage slug={slug} />,
+    // Replace the tag page — receives tagSlug as a prop
+    tag: ({ tagSlug }) => <MyCustomTagPage tagSlug={tagSlug} />,
+    // Replace the drafts list page
+    drafts: MyCustomDraftsPage,
+    // Replace the new post page
+    newPost: MyCustomNewPostPage,
+  },
+})
+```
+
 ### Adding Authorization
 
 To add authorization rules and customize behavior, you can use the lifecycle hooks defined in the API Reference section below. These hooks allow you to control access to API endpoints, add logging, and customize the plugin's behavior to fit your application's needs.
