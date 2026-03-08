@@ -11,9 +11,9 @@ export default async function PublicPagesListPage() {
 
 	const publishedPages = items.filter(
 		(item) =>
-			typeof item.data === "object" &&
-			item.data !== null &&
-			(item.data as Record<string, unknown>).status === "published",
+			item.parsedData !== null &&
+			item.parsedData !== undefined &&
+			(item.parsedData as Record<string, unknown>).status === "published",
 	);
 
 	return (
