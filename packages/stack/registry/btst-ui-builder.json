@@ -18,6 +18,7 @@
     "https://raw.githubusercontent.com/better-stack-ai/ui-builder/refs/heads/main/registry/block-registry.json",
     "input",
     "label",
+    "popover",
     "select",
     "separator",
     "skeleton",
@@ -131,12 +132,6 @@
       "type": "registry:component",
       "content": "import React from \"react\";\n\nimport { type EditorConfig, RenderLayer } from \"@/components/ui/ui-builder/internal/utils/render-utils\";\nimport { DevProfiler } from \"@/components/ui/ui-builder/internal/components/dev-profiler\";\n\nimport type { Variable, ComponentLayer, ComponentRegistry, PropValue, FunctionRegistry } from '@/components/ui/ui-builder/types';\n\ninterface LayerRendererProps<TRegistry extends ComponentRegistry = ComponentRegistry> {\n  className?: string;\n  page: ComponentLayer;\n  editorConfig?: EditorConfig;\n  componentRegistry: TRegistry;\n  /** Optional variable definitions */\n  variables?: Variable[];\n  /** Optional variable values to override defaults */\n  variableValues?: Record<string, PropValue>;\n  /** Optional function registry for resolving function-type variables */\n  functionRegistry?: FunctionRegistry;\n}\n\nconst LayerRenderer = React.memo<LayerRendererProps>(function LayerRenderer({\n  className,\n  page,\n  editorConfig,\n  componentRegistry,\n  variables,\n  variableValues,\n  functionRegistry,\n}) {\n\n  return (\n    <DevProfiler id=\"LayerRenderer\" threshold={30}>\n      <div className={className}>\n        <RenderLayer \n          layer={page} \n          editorConfig={editorConfig} \n          componentRegistry={componentRegistry} \n          variables={variables}\n          variableValues={variableValues}\n          functionRegistry={functionRegistry}\n        />\n      </div>\n    </DevProfiler>\n  );\n}) as <TRegistry extends ComponentRegistry = ComponentRegistry>(\n  props: LayerRendererProps<TRegistry>\n) => React.JSX.Element;\n\nexport default LayerRenderer;\n\n",
       "target": "src/components/ui/ui-builder/layer-renderer.tsx"
-    },
-    {
-      "path": "ui/components/popover.tsx",
-      "type": "registry:component",
-      "content": "\"use client\"\n\nimport * as React from \"react\"\nimport * as PopoverPrimitive from \"@radix-ui/react-popover\"\n\nimport { cn } from \"@/lib/utils\"\n\nfunction Popover({\n  ...props\n}: React.ComponentProps<typeof PopoverPrimitive.Root>) {\n  return <PopoverPrimitive.Root data-slot=\"popover\" {...props} />\n}\n\nfunction PopoverTrigger({\n  ...props\n}: React.ComponentProps<typeof PopoverPrimitive.Trigger>) {\n  return <PopoverPrimitive.Trigger data-slot=\"popover-trigger\" {...props} />\n}\n\nfunction PopoverContent({\n  className,\n  align = \"center\",\n  sideOffset = 4,\n  usePortal = true,\n  ...props\n}: React.ComponentProps<typeof PopoverPrimitive.Content> & {\n  usePortal?: boolean\n}) {\n  const content = (\n    <PopoverPrimitive.Content\n      data-slot=\"popover-content\"\n      align={align}\n      sideOffset={sideOffset}\n      className={cn(\n        \"bg-popover text-popover-foreground pointer-events-auto data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-72 origin-(--radix-popover-content-transform-origin) rounded-md border p-4 shadow-md outline-hidden\",\n        className\n      )}\n      {...props}\n    />\n  )\n\n  if (!usePortal) {\n    return content\n  }\n\n  return <PopoverPrimitive.Portal>{content}</PopoverPrimitive.Portal>\n}\n\nfunction PopoverAnchor({\n  ...props\n}: React.ComponentProps<typeof PopoverPrimitive.Anchor>) {\n  return <PopoverPrimitive.Anchor data-slot=\"popover-anchor\" {...props} />\n}\n\nexport { Popover, PopoverTrigger, PopoverContent, PopoverAnchor }\n",
-      "target": "src/components/ui/popover.tsx"
     },
     {
       "path": "ui/components/page-wrapper.tsx",

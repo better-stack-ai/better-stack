@@ -61,7 +61,9 @@ jobs:
       - name: Check for registry changes
         id: registry_diff
         run: |
-          git diff --exit-code packages/stack/registry/ || echo "changed=true" >> $GITHUB_OUTPUT
+          if [ -n "$(git status --porcelain packages/stack/registry/)" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Wait for other checks to complete
         if: steps.registry_diff.outputs.changed == 'true'

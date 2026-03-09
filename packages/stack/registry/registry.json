@@ -184,6 +184,7 @@
         "https://raw.githubusercontent.com/better-stack-ai/ui-builder/refs/heads/main/registry/block-registry.json",
         "input",
         "label",
+        "popover",
         "select",
         "separator",
         "skeleton",

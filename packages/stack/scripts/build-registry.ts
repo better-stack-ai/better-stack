@@ -107,6 +107,7 @@ const STANDARD_SHADCN_COMPONENTS = new Set([
 	"menubar",
 	"navigation-menu",
 	"pagination",
+	"popover",
 	"progress",
 	"radio-group",
 	"resizable",
@@ -254,8 +255,7 @@ const PLUGINS: PluginConfig[] = [
 			"@dnd-kit/core",
 			"@dnd-kit/sortable",
 			"@dnd-kit/utilities",
-			// search-select.tsx uses popover (embedded from workspace) which
-			// depends on @radix-ui/react-popover.
+			// search-select.tsx uses @radix-ui/react-popover directly (no portal)
 			"@radix-ui/react-popover",
 		],
 		extraRegistryDeps: [],

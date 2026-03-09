@@ -1,6 +1,7 @@
 "use client"
 
 import { useId, useState } from "react"
+import * as PopoverPrimitive from "@radix-ui/react-popover"
 import { CheckIcon, ChevronDownIcon } from "lucide-react"
 
 import { cn } from "@workspace/ui/lib/utils"
@@ -15,7 +16,6 @@ import {
 } from "@workspace/ui/components/command"
 import {
   Popover,
-  PopoverContent,
   PopoverTrigger,
 } from "@workspace/ui/components/popover"
 
@@ -63,10 +63,21 @@ export default function SearchSelect({
             />
           </Button>
         </PopoverTrigger>
-        <PopoverContent
-          className="border-input w-full min-w-[var(--radix-popper-anchor-width)] p-0 z-[9999]"
+        {/* Render without a portal so the dropdown stays within the dialog/form
+            DOM tree and isn't clipped by ancestor stacking contexts. */}
+        <PopoverPrimitive.Content
           align="start"
-          usePortal={false}
+          sideOffset={4}
+          className={cn(
+            "border-input bg-popover text-popover-foreground pointer-events-auto",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out",
+            "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+            "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2",
+            "data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+            "z-50 w-full min-w-[var(--radix-popper-anchor-width)] origin-(--radix-popover-content-transform-origin)",
+            "rounded-md border p-0 shadow-md outline-hidden",
+          )}
         >
           <Command>
             <CommandInput placeholder="Search options..." />
@@ -91,7 +102,7 @@ export default function SearchSelect({
               </CommandGroup>
             </CommandList>
           </Command>
-        </PopoverContent>
+        </PopoverPrimitive.Content>
       </Popover>
   )
 }
