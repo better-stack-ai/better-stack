@@ -39,8 +39,8 @@ export default defineConfig({
 			port: 3003,
 			reuseExistingServer: !process.env["CI"],
 			timeout: 300_000,
-			stdout: !process.env["CI"] ? "pipe" : "ignore",
-			stderr: !process.env.CI ? "pipe" : "ignore",
+			stdout: "pipe",
+			stderr: "pipe",
 			env: {
 				...process.env,
 				...nextjsEnv,

@@ -1,0 +1,132 @@
+name: Shadcn Registry
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'packages/stack/src/plugins/**'
+      - 'packages/stack/scripts/build-registry.ts'
+      - 'packages/stack/scripts/schema.ts'
+      - 'packages/stack/scripts/test-registry.sh'
+      - 'packages/ui/src/components/**'
+      - 'packages/ui/src/hooks/**'
+      - 'packages/ui/src/lib/**'
+      - 'packages/ui/src/styles/**'
+      - 'packages/stack/package.json'
+
+concurrency:
+  group: registry-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & validate registry
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          # Checkout the actual head branch so we can push back auto-commits
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build @btst/stack package
+        # The test script packs the built package for the consumer install step
+        run: pnpm --filter @btst/stack build
+
+      - name: Build registries
+        run: pnpm --filter @btst/stack build-registry
+
+      - name: Run end-to-end registry test
+        working-directory: packages/stack
+        run: bash scripts/test-registry.sh
+        timeout-minutes: 20
+        env:
+          CI: true
+
+      - name: Check for registry changes
+        id: registry_diff
+        run: |
+          if [ -n "$(git status --porcelain packages/stack/registry/)" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Wait for other checks to complete
+        if: steps.registry_diff.outputs.changed == 'true'
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.head_ref }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          running-workflow-name: 'Build & validate registry'
+          allowed-conclusions: success,skipped,neutral
+
+      - name: Commit updated registry files
+        if: steps.registry_diff.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add packages/stack/registry/
+          git commit -m "chore: update shadcn registry [skip ci]"
+          git push
+
+      - name: Post success comment
+        if: always() && job.status == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const MARKER = '<!-- btst-registry-comment -->';
+            const changed = '${{ steps.registry_diff.outputs.changed }}' === 'true';
+            const body = MARKER + '\n' + (changed
+              ? '✅ **Shadcn registry updated** — registry JSON files were rebuilt and committed to this branch.'
+              : '✅ **Shadcn registry validated** — no registry changes detected.');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            const existing = comments.find(
+              (c) => c.user?.login === 'github-actions[bot]' && c.body?.includes(MARKER),
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                comment_id: existing.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              });
+            }
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: registry-test-logs
+          path: /tmp/test-btst-registry-*/
+          retention-days: 3

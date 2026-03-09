@@ -5,6 +5,7 @@ import {
 	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
+import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { KanbanApiRouter } from "../api";
 import { createKanbanQueryKeys } from "../query-keys";
@@ -79,6 +80,20 @@ export interface KanbanClientConfig {
 
 	/** Optional headers for SSR (e.g., forwarding cookies) */
 	headers?: Headers;
+
+	/**
+	 * Optional page component overrides.
+	 * Replace any plugin page with a custom React component.
+	 * The built-in component is used as the fallback when not provided.
+	 */
+	pageComponents?: {
+		/** Replaces the boards list page */
+		boards?: ComponentType;
+		/** Replaces the new board page */
+		newBoard?: ComponentType;
+		/** Replaces the board detail page */
+		board?: ComponentType<{ boardId: string }>;
+	};
 }
 
 /**
@@ -407,22 +422,27 @@ export const kanbanClientPlugin = (config: KanbanClientConfig) =>
 
 		routes: () => ({
 			boards: createRoute("/kanban", () => {
+				const CustomBoards = config.pageComponents?.boards;
 				return {
-					PageComponent: () => <BoardsListPageComponent />,
+					PageComponent: CustomBoards ?? (() => <BoardsListPageComponent />),
 					loader: createBoardsLoader(config),
 					meta: createBoardsListMeta(config),
 				};
 			}),
 			newBoard: createRoute("/kanban/new", () => {
+				const CustomNewBoard = config.pageComponents?.newBoard;
 				return {
-					PageComponent: NewBoardPageComponent,
+					PageComponent: CustomNewBoard ?? NewBoardPageComponent,
 					loader: createNewBoardLoader(config),
 					meta: createNewBoardMeta(config),
 				};
 			}),
 			board: createRoute("/kanban/:boardId", ({ params: { boardId } }) => {
+				const CustomBoard = config.pageComponents?.board;
 				return {
-					PageComponent: () => <BoardPageComponent boardId={boardId} />,
+					PageComponent: CustomBoard
+						? () => <CustomBoard boardId={boardId} />
+						: () => <BoardPageComponent boardId={boardId} />,
 					loader: createBoardLoader(boardId, config),
 					meta: createBoardMeta(boardId, config),
 				};

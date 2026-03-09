@@ -115,6 +115,22 @@ Supports Prisma, Drizzle, MongoDB and Kysely SQL dialects.
 
 ---
 
+## Shadcn Registry
+
+Each plugin's UI layer is available as a [shadcn registry](https://ui.shadcn.com/docs/registry) block. Use it to **eject and fully customize** the page components while keeping all data-fetching and API logic from `@btst/stack`:
+
+```bash
+# Install a single plugin's UI
+npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-blog.json
+
+# Or install the full collection
+npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/registry.json
+```
+
+Components are copied into `src/components/btst/{plugin}/client/` — all relative imports remain valid and you can edit them freely.
+
+---
+
 ## Examples
 
 * [Next.js App Router](./examples/nextjs)

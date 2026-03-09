@@ -1,0 +1,267 @@
+---
+title: Shadcn Registry
+description: Eject and fully customize plugin UI components using the shadcn registry
+---
+
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "fumadocs-ui/components/callout";
+import { Card, Cards } from "fumadocs-ui/components/card";
+import { BookOpen, Bot, Database, FileText, Layout, Columns3 } from "lucide-react";
+
+Every BTST plugin ships its page components as a [shadcn v4 registry](https://ui.shadcn.com/docs/registry) block. This lets you **eject the entire view layer** into your own codebase and customize it freely — while all data-fetching, API logic, hooks, and routing stay untouched inside `@btst/stack`.
+
+## How it works
+
+The registry approach separates two concerns:
+
+| Layer | Where it lives after ejection |
+|---|---|
+| **View** (page components, styles) | Your repo at `src/components/btst/{plugin}/client/` |
+| **Data** (hooks, API calls, routing) | `@btst/stack/plugins/{plugin}/client/hooks` (npm package, unchanged) |
+
+Installing a registry block copies React component source files into your project. You own those files and can edit them however you like. The hooks they import remain in the npm package, so you always get data-layer bug fixes and new features via a normal `npm update`.
+
+## Install a plugin's UI
+
+Pick the plugin you want to customize:
+
+<Cards>
+  <Card title="Blog" href="/plugins/blog#shadcn-registry" icon={<BookOpen size={20} />} description="Posts list, post detail, editor, drafts, tag pages" />
+  <Card title="AI Chat" href="/plugins/ai-chat#shadcn-registry" icon={<Bot size={20} />} description="Chat home, conversation pages" />
+  <Card title="CMS" href="/plugins/cms#shadcn-registry" icon={<Database size={20} />} description="Dashboard, content list, editor pages" />
+  <Card title="Form Builder" href="/plugins/form-builder#shadcn-registry" icon={<FileText size={20} />} description="Form list, editor, submissions pages" />
+  <Card title="UI Builder" href="/plugins/ui-builder#shadcn-registry" icon={<Layout size={20} />} description="Page list, page builder editor" />
+  <Card title="Kanban" href="/plugins/kanban#shadcn-registry" icon={<Columns3 size={20} />} description="Boards list, board detail page" />
+</Cards>
+
+Or install a single plugin's UI directly:
+
+<Tabs items={["npx", "pnpm", "bunx"]}>
+  <Tab value="npx">
+    ```bash
+    # Blog
+    npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-blog.json
+
+    # AI Chat
+    npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-ai-chat.json
+
+    # CMS
+    npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-cms.json
+
+    # Form Builder
+    npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-form-builder.json
+
+    # UI Builder
+    npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-ui-builder.json
+
+    # Kanban
+    npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-kanban.json
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    # Blog
+    pnpx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-blog.json
+
+    # AI Chat
+    pnpx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-ai-chat.json
+
+    # CMS
+    pnpx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-cms.json
+
+    # Form Builder
+    pnpx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-form-builder.json
+
+    # UI Builder
+    pnpx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-ui-builder.json
+
+    # Kanban
+    pnpx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-kanban.json
+    ```
+  </Tab>
+  <Tab value="bunx">
+    ```bash
+    # Blog
+    bunx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-blog.json
+
+    # AI Chat
+    bunx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-ai-chat.json
+
+    # CMS
+    bunx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-cms.json
+
+    # Form Builder
+    bunx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-form-builder.json
+
+    # UI Builder
+    bunx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-ui-builder.json
+
+    # Kanban
+    bunx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-kanban.json
+    ```
+  </Tab>
+</Tabs>
+
+## Wire up ejected components
+
+After the install, import your ejected components and pass them to the client plugin via `pageComponents`. Any key you omit falls back to the built-in default, so you only need to override the pages you actually want to change.
+
+### Blog
+
+```tsx title="lib/stack-client.tsx"
+import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+import { HomePageComponent } from "@/components/btst/blog/client/components/pages/home-page"
+import { PostPageComponent } from "@/components/btst/blog/client/components/pages/post-page"
+
+blogClientPlugin({
+  apiBaseURL: "...",
+  apiBasePath: "/api/data",
+  siteBaseURL: "...",
+  siteBasePath: "/pages",
+  queryClient,
+  pageComponents: {
+    posts: HomePageComponent,    // published posts list
+    post: PostPageComponent,     // single post detail
+    // drafts | newPost | editPost | tag — omit to keep defaults
+  },
+})
+```
+
+### AI Chat
+
+```tsx title="lib/stack-client.tsx"
+import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
+import { ChatPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-page"
+import { ChatConversationPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-conversation-page"
+
+aiChatClientPlugin({
+  apiBaseURL: "...",
+  apiBasePath: "/api/data",
+  queryClient,
+  pageComponents: {
+    chat: ChatPageComponent,                         // chat home page
+    chatConversation: ChatConversationPageComponent, // conversation page (authenticated mode)
+  },
+})
+```
+
+### CMS
+
+```tsx title="lib/stack-client.tsx"
+import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
+import { DashboardPageComponent } from "@/components/btst/cms/client/components/pages/dashboard-page"
+import { ContentListPageComponent } from "@/components/btst/cms/client/components/pages/content-list-page"
+
+cmsClientPlugin({
+  apiBaseURL: "...",
+  apiBasePath: "/api/data",
+  queryClient,
+  pageComponents: {
+    dashboard: DashboardPageComponent,      // CMS dashboard
+    contentList: ContentListPageComponent,  // content list per type
+    // newContent | editContent — omit to keep defaults
+  },
+})
+```
+
+### Form Builder
+
+```tsx title="lib/stack-client.tsx"
+import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
+import { FormListPageComponent } from "@/components/btst/form-builder/client/components/pages/form-list-page"
+import { EditFormPageComponent } from "@/components/btst/form-builder/client/components/pages/edit-form-page"
+
+formBuilderClientPlugin({
+  apiBaseURL: "...",
+  apiBasePath: "/api/data",
+  queryClient,
+  pageComponents: {
+    formList: FormListPageComponent, // form list page
+    editForm: EditFormPageComponent, // form editor
+    // newForm | submissions — omit to keep defaults
+  },
+})
+```
+
+### UI Builder
+
+```tsx title="lib/stack-client.tsx"
+import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client"
+import { PageListPageComponent } from "@/components/btst/ui-builder/client/components/pages/page-list-page"
+import { EditPagePageComponent } from "@/components/btst/ui-builder/client/components/pages/edit-page-page"
+
+uiBuilderClientPlugin({
+  apiBaseURL: "...",
+  apiBasePath: "/api/data",
+  queryClient,
+  pageComponents: {
+    pageList: PageListPageComponent, // page list
+    editPage: EditPagePageComponent, // page builder editor
+    // newPage — omit to keep default
+  },
+})
+```
+
+### Kanban
+
+```tsx title="lib/stack-client.tsx"
+import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
+import { BoardsPageComponent } from "@/components/btst/kanban/client/components/pages/boards-page"
+import { BoardPageComponent } from "@/components/btst/kanban/client/components/pages/board-page"
+
+kanbanClientPlugin({
+  apiBaseURL: "...",
+  apiBasePath: "/api/data",
+  queryClient,
+  pageComponents: {
+    boards: BoardsPageComponent, // boards list
+    board: BoardPageComponent,   // board detail
+    // newBoard — omit to keep default
+  },
+})
+```
+
+## Available `pageComponents` keys
+
+| Plugin | Key | Props | Description |
+|---|---|---|---|
+| Blog | `posts` | — | Published posts list |
+| Blog | `drafts` | — | Drafts list |
+| Blog | `newPost` | — | New post editor |
+| Blog | `post` | `{ slug: string }` | Single post detail |
+| Blog | `editPost` | `{ slug: string }` | Edit post editor |
+| Blog | `tag` | `{ tagSlug: string }` | Tag + tagged posts |
+| AI Chat | `chat` | — | Chat home page |
+| AI Chat | `chatConversation` | `{ conversationId: string }` | Conversation detail |
+| CMS | `dashboard` | — | CMS dashboard |
+| CMS | `contentList` | `{ typeSlug: string }` | Content list per type |
+| CMS | `newContent` | `{ typeSlug: string }` | New content editor |
+| CMS | `editContent` | `{ typeSlug: string; id: string }` | Edit content editor |
+| Form Builder | `formList` | — | Form list |
+| Form Builder | `newForm` | — | New form editor |
+| Form Builder | `editForm` | `{ id: string }` | Form editor |
+| Form Builder | `submissions` | `{ formId: string }` | Form submissions |
+| UI Builder | `pageList` | — | Page list |
+| UI Builder | `newPage` | — | New page builder |
+| UI Builder | `editPage` | `{ id: string }` | Page builder editor |
+| Kanban | `boards` | — | Boards list |
+| Kanban | `newBoard` | — | New board |
+| Kanban | `board` | `{ boardId: string }` | Board detail |
+
+## What the registry installs
+
+<Callout type="info">
+**Hooks are never included.** Components import hooks from `@btst/stack/plugins/{plugin}/client/hooks`. Only the view layer is ejected.
+</Callout>
+
+The shadcn CLI reads the registry JSON, resolves all dependencies, and copies source files into your project. The directory structure is preserved exactly, so all relative imports between components remain valid with no manual path-fixing required.
+
+Standard shadcn components (Button, Dialog, etc.) referenced by the ejected files are listed as `registryDependencies` — the CLI installs them automatically.
+
+## Rebuilding the registry
+
+The registry JSON files are generated from source. If you are working in the monorepo and have changed plugin components, regenerate them before committing:
+
+```bash
+pnpm --filter @btst/stack build-registry
+```

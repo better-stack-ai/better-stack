@@ -26,6 +26,7 @@
       "---[BookOpenCheck]Concepts---",
       "cli",
       "api-reference",
+      "shadcn-registry",
       "---[Play]Demos---",
       "demos/index",
       "demos/blog",

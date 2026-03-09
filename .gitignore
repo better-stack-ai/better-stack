@@ -156,9 +156,10 @@ dist
 
 .tern-port
 
-# Stores VSCode versions used for testing VSCode extensions
+# VSCode files
 
 .vscode-test
+better-stack.code-workspace
 
 # yarn v2
 
@@ -204,3 +205,9 @@ state.txt
 # (README is copied during release from packages/better-db/README.md)
 packages/better-db/*/README.md
 !packages/better-db/README.md
+
+# Shadcn registry test projects (created by scripts/test-registry.sh)
+/tmp/test-btst-registry-*/
+
+# pnpm pack tarballs generated during registry testing
+packages/stack/*.tgz

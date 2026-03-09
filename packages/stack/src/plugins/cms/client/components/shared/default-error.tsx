@@ -4,7 +4,7 @@ import { AlertCircle } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 
 interface DefaultErrorProps {
-	error: Error;
+	error: unknown;
 	resetErrorBoundary?: () => void;
 }
 
@@ -18,7 +18,8 @@ export function DefaultError({ error, resetErrorBoundary }: DefaultErrorProps) {
 				Something went wrong
 			</h3>
 			<p className="text-sm text-muted-foreground mb-4 max-w-sm">
-				{error.message || "An unexpected error occurred"}
+				{(error instanceof Error ? error.message : undefined) ||
+					"An unexpected error occurred"}
 			</p>
 			{resetErrorBoundary && (
 				<Button variant="outline" onClick={resetErrorBoundary}>
