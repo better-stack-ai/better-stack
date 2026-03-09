@@ -26,7 +26,7 @@
     "stub": "unbuild --stub",
     "test": "vitest",
     "typecheck": "tsc --project tsconfig.json",
-    "build-registry": "npx tsx scripts/build-registry.ts",
+    "build-registry": "tsx scripts/build-registry.ts",
     "test-registry": "bash scripts/test-registry.sh",
     "host-registry": "npx http-server registry -p 8766 -c-1"
   },
@@ -521,6 +521,7 @@
     "zod": ">=4.2.0"
   },
   "devDependencies": {
+    "tsx": "catalog:",
     "@ai-sdk/react": "^2.0.94",
     "@btst/adapter-memory": "2.0.3",
     "@btst/yar": "1.2.0",
