@@ -238,12 +238,21 @@ console.log('tsconfig.json patched');
 "use client";
 // Smoke-test page: forces TypeScript to compile all installed btst plugin
 // components so that missing npm dependencies are caught at build time.
-export { HomePageComponent } from "@/components/btst/blog/client/components/pages/home-page";
-export { ChatPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-page";
-export { DashboardPageComponent } from "@/components/btst/cms/client/components/pages/dashboard-page";
-export { FormListPageComponent } from "@/components/btst/form-builder/client/components/pages/form-list-page";
-export { BoardsListPageComponent } from "@/components/btst/kanban/client/components/pages/boards-list-page";
-export { PageListPage } from "@/components/btst/ui-builder/client/components/pages/page-list-page";
+// Named imports ensure the full dependency chain is type-checked.
+import { HomePageComponent } from "@/components/btst/blog/client/components/pages/home-page";
+import { ChatPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-page";
+import { DashboardPageComponent } from "@/components/btst/cms/client/components/pages/dashboard-page";
+import { FormListPageComponent } from "@/components/btst/form-builder/client/components/pages/form-list-page";
+import { BoardsListPageComponent } from "@/components/btst/kanban/client/components/pages/boards-list-page";
+import { PageListPage } from "@/components/btst/ui-builder/client/components/pages/page-list-page";
+
+// Suppress unused-import warnings while still forcing TS to resolve everything.
+void [HomePageComponent, ChatPageComponent, DashboardPageComponent,
+      FormListPageComponent, BoardsListPageComponent, PageListPage];
+
+export default function SmokeTestPage() {
+  return <div data-testid="btst-smoke-test">Registry smoke test — all plugin imports resolved.</div>;
+}
 SMOKE_EOF
     success "Smoke-import page created at src/app/btst-smoke-test/page.tsx"
 
