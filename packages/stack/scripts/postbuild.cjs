@@ -2,6 +2,7 @@
 /*
   Post-build step for BTST package.
   - Copies all .css files from src/plugins/** to dist/plugins/** preserving structure
+  - Copies all .css files from src/components/** to dist/components/** preserving structure
   - Resolves @workspace/ui/... CSS imports by inlining the referenced content directly
     into each dist CSS file — producing fully self-contained files with no workspace
     references, so npm consumers and StackBlitz never see unresolvable imports
@@ -16,6 +17,8 @@ const { spawnSync } = require("child_process");
 const ROOT = path.resolve(__dirname, "..");
 const SRC_PLUGINS_DIR = path.join(ROOT, "src", "plugins");
 const DIST_PLUGINS_DIR = path.join(ROOT, "dist", "plugins");
+const SRC_COMPONENTS_DIR = path.join(ROOT, "src", "components");
+const DIST_COMPONENTS_DIR = path.join(ROOT, "dist", "components");
 
 function ensureDir(dirPath) {
 	if (!fs.existsSync(dirPath)) {
@@ -52,6 +55,20 @@ function copyAllPluginCss() {
 		for (const filePath of walk(srcPluginDir)) {
 			if (filePath.endsWith(".css")) {
 				copyFilePreserveDirs(filePath, SRC_PLUGINS_DIR, DIST_PLUGINS_DIR);
+			}
+		}
+	}
+}
+
+function copyAllComponentCss() {
+	console.log(`@btst/stack: running copyAllComponentCss`);
+	if (!fs.existsSync(SRC_COMPONENTS_DIR)) return;
+	for (const componentName of fs.readdirSync(SRC_COMPONENTS_DIR)) {
+		const srcComponentDir = path.join(SRC_COMPONENTS_DIR, componentName);
+		if (!fs.statSync(srcComponentDir).isDirectory()) continue;
+		for (const filePath of walk(srcComponentDir)) {
+			if (filePath.endsWith(".css")) {
+				copyFilePreserveDirs(filePath, SRC_COMPONENTS_DIR, DIST_COMPONENTS_DIR);
 			}
 		}
 	}
@@ -118,48 +135,52 @@ function resolveWorkspaceCssImports() {
 	// only read and processed once even if referenced by multiple dist files.
 	const cache = new Map();
 
-	if (!fs.existsSync(DIST_PLUGINS_DIR)) return;
+	function processDistDir(distDir) {
+		if (!fs.existsSync(distDir)) return;
+		for (const filePath of walk(distDir)) {
+			if (!filePath.endsWith(".css")) continue;
 
-	for (const filePath of walk(DIST_PLUGINS_DIR)) {
-		if (!filePath.endsWith(".css")) continue;
+			let content = fs.readFileSync(filePath, "utf8");
+			if (!WORKSPACE_IMPORT_RE.test(content)) continue;
+			WORKSPACE_IMPORT_RE.lastIndex = 0;
 
-		let content = fs.readFileSync(filePath, "utf8");
-		if (!WORKSPACE_IMPORT_RE.test(content)) continue;
-		WORKSPACE_IMPORT_RE.lastIndex = 0;
+			let modified = false;
 
-		let modified = false;
-
-		content = content.replace(WORKSPACE_IMPORT_RE, (match, specifier) => {
-			if (!cache.has(specifier)) {
-				const resolvedPath = resolveUiSpecifier(specifier);
-				if (!resolvedPath || !fs.existsSync(resolvedPath)) {
-					console.warn(
-						`@btst/stack: could not resolve workspace import: ${specifier}`,
+			content = content.replace(WORKSPACE_IMPORT_RE, (match, specifier) => {
+				if (!cache.has(specifier)) {
+					const resolvedPath = resolveUiSpecifier(specifier);
+					if (!resolvedPath || !fs.existsSync(resolvedPath)) {
+						console.warn(
+							`@btst/stack: could not resolve workspace import: ${specifier}`,
+						);
+						cache.set(specifier, null);
+						return match;
+					}
+					const raw = fs.readFileSync(resolvedPath, "utf8");
+					// Recursively inline any relative sub-imports within the resolved file
+					const inlined = inlineCssImports(raw, path.dirname(resolvedPath));
+					cache.set(specifier, inlined);
+					console.log(
+						`@btst/stack: inlined workspace import "${specifier}" into ${path.relative(distDir, filePath)}`,
 					);
-					cache.set(specifier, null);
-					return match;
 				}
-				const raw = fs.readFileSync(resolvedPath, "utf8");
-				// Recursively inline any relative sub-imports within the resolved file
-				const inlined = inlineCssImports(raw, path.dirname(resolvedPath));
-				cache.set(specifier, inlined);
+				const inlined = cache.get(specifier);
+				if (inlined === null) return match; // could not resolve — keep original
+				modified = true;
+				return inlined;
+			});
+
+			if (modified) {
+				fs.writeFileSync(filePath, content);
 				console.log(
-					`@btst/stack: inlined workspace import "${specifier}" into ${path.relative(DIST_PLUGINS_DIR, filePath)}`,
+					`@btst/stack: rewrote workspace imports in ${path.relative(distDir, filePath)}`,
 				);
 			}
-			const inlined = cache.get(specifier);
-			if (inlined === null) return match; // could not resolve — keep original
-			modified = true;
-			return inlined;
-		});
-
-		if (modified) {
-			fs.writeFileSync(filePath, content);
-			console.log(
-				`@btst/stack: rewrote workspace imports in ${path.relative(DIST_PLUGINS_DIR, filePath)}`,
-			);
 		}
 	}
+
+	processDistDir(DIST_PLUGINS_DIR);
+	processDistDir(DIST_COMPONENTS_DIR);
 }
 
 function runPerPluginPostbuilds() {
@@ -200,7 +221,9 @@ function runPerPluginPostbuilds() {
 
 function main() {
 	ensureDir(DIST_PLUGINS_DIR);
+	ensureDir(DIST_COMPONENTS_DIR);
 	copyAllPluginCss();
+	copyAllComponentCss();
 	resolveWorkspaceCssImports();
 	runPerPluginPostbuilds();
 }

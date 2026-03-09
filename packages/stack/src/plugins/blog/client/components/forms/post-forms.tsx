@@ -52,8 +52,8 @@ import { z } from "zod";
 import { FeaturedImageField } from "./image-field";
 
 const MarkdownEditor = lazy(() =>
-	import("./markdown-editor").then((module) => ({
-		default: module.MarkdownEditor,
+	import("./markdown-editor-with-overrides").then((module) => ({
+		default: module.MarkdownEditorWithOverrides,
 	})),
 );
 import { BLOG_LOCALIZATION } from "../../localization";

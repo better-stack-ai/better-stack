@@ -104,6 +104,17 @@ export default defineBuildConfig({
 		"./src/plugins/kanban/client/components/index.tsx",
 		"./src/plugins/kanban/client/hooks/index.tsx",
 		"./src/plugins/kanban/query-keys.ts",
+		// standalone component stubs are created by postbuild.cjs (no dts bundler overhead)
+		// "./src/components/auto-form/index.ts",
+		// "./src/components/stepped-auto-form/index.ts",
+		// "./src/components/kanban/index.ts",
+		// "./src/components/multi-select/index.ts",
+		// "./src/components/search-select/index.ts",
+		// "./src/components/empty/index.ts",
+		// "./src/components/markdown/index.ts",
+		// "./src/components/form-builder/index.ts",
+		// "./src/components/minimal-tiptap/index.ts",
+		// "./src/components/ui-builder/index.ts",
 	],
 	hooks: {
 		"rollup:options"(_ctx, options) {
@@ -155,8 +166,13 @@ export default defineBuildConfig({
 			// Add preserve directives plugin last (must be after transform plugins)
 			// Note: suppressPreserveModulesWarning is set because preserveModules IS set,
 			// but the plugin checks it before outputs are finalized, causing false warnings
+			// Exclude .d.ts files — they contain TypeScript-only syntax that Rollup's
+			// built-in parser (used by this plugin for AST inspection) cannot handle.
 			existingPlugins.push(
-				preserveDirectives({ suppressPreserveModulesWarning: true }),
+				preserveDirectives({
+					suppressPreserveModulesWarning: true,
+					exclude: ["**/*.d.ts", "**/*.d.cts", "**/*.d.mts"],
+				}),
 			);
 			(options as any).plugins = existingPlugins;
 

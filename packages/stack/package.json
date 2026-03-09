@@ -374,6 +374,109 @@
       }
     },
     "./plugins/route-docs/css": "./dist/plugins/route-docs/style.css",
+    "./components/markdown": {
+      "import": {
+        "types": "./dist/components/markdown/index.d.ts",
+        "default": "./dist/components/markdown/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/markdown/index.d.cts",
+        "default": "./dist/components/markdown/index.cjs"
+      }
+    },
+    "./components/markdown/css": "./dist/components/markdown/style.css",
+    "./components/auto-form": {
+      "import": {
+        "types": "./dist/components/auto-form/index.d.ts",
+        "default": "./dist/components/auto-form/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/auto-form/index.d.cts",
+        "default": "./dist/components/auto-form/index.cjs"
+      }
+    },
+    "./components/stepped-auto-form": {
+      "import": {
+        "types": "./dist/components/stepped-auto-form/index.d.ts",
+        "default": "./dist/components/stepped-auto-form/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/stepped-auto-form/index.d.cts",
+        "default": "./dist/components/stepped-auto-form/index.cjs"
+      }
+    },
+    "./components/form-builder": {
+      "import": {
+        "types": "./dist/components/form-builder/index.d.ts",
+        "default": "./dist/components/form-builder/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/form-builder/index.d.cts",
+        "default": "./dist/components/form-builder/index.cjs"
+      }
+    },
+    "./components/kanban": {
+      "import": {
+        "types": "./dist/components/kanban/index.d.ts",
+        "default": "./dist/components/kanban/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/kanban/index.d.cts",
+        "default": "./dist/components/kanban/index.cjs"
+      }
+    },
+    "./components/minimal-tiptap": {
+      "import": {
+        "types": "./dist/components/minimal-tiptap/index.d.ts",
+        "default": "./dist/components/minimal-tiptap/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/minimal-tiptap/index.d.cts",
+        "default": "./dist/components/minimal-tiptap/index.cjs"
+      }
+    },
+    "./components/minimal-tiptap/css": "./dist/components/minimal-tiptap/style.css",
+    "./components/multi-select": {
+      "import": {
+        "types": "./dist/components/multi-select/index.d.ts",
+        "default": "./dist/components/multi-select/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/multi-select/index.d.cts",
+        "default": "./dist/components/multi-select/index.cjs"
+      }
+    },
+    "./components/search-select": {
+      "import": {
+        "types": "./dist/components/search-select/index.d.ts",
+        "default": "./dist/components/search-select/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/search-select/index.d.cts",
+        "default": "./dist/components/search-select/index.cjs"
+      }
+    },
+    "./components/empty": {
+      "import": {
+        "types": "./dist/components/empty/index.d.ts",
+        "default": "./dist/components/empty/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/empty/index.d.cts",
+        "default": "./dist/components/empty/index.cjs"
+      }
+    },
+    "./components/ui-builder": {
+      "import": {
+        "types": "./dist/components/ui-builder/index.d.ts",
+        "default": "./dist/components/ui-builder/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/ui-builder/index.d.cts",
+        "default": "./dist/components/ui-builder/index.cjs"
+      }
+    },
+    "./components/ui-builder/css": "./dist/components/ui-builder/style.css",
     "./dist/*": "./dist/*",
     "./ui/css": "./dist/ui/components.css",
     "./package.json": "./package.json"
@@ -475,6 +578,36 @@
       ],
       "plugins/route-docs/client": [
         "./dist/plugins/route-docs/client/index.d.ts"
+      ],
+      "components/markdown": [
+        "./dist/components/markdown/index.d.ts"
+      ],
+      "components/auto-form": [
+        "./dist/components/auto-form/index.d.ts"
+      ],
+      "components/stepped-auto-form": [
+        "./dist/components/stepped-auto-form/index.d.ts"
+      ],
+      "components/form-builder": [
+        "./dist/components/form-builder/index.d.ts"
+      ],
+      "components/kanban": [
+        "./dist/components/kanban/index.d.ts"
+      ],
+      "components/minimal-tiptap": [
+        "./dist/components/minimal-tiptap/index.d.ts"
+      ],
+      "components/multi-select": [
+        "./dist/components/multi-select/index.d.ts"
+      ],
+      "components/search-select": [
+        "./dist/components/search-select/index.d.ts"
+      ],
+      "components/empty": [
+        "./dist/components/empty/index.d.ts"
+      ],
+      "components/ui-builder": [
+        "./dist/components/ui-builder/index.d.ts"
       ]
     }
   },

@@ -1,0 +1,30 @@
+.milkdown-custom .milkdown {
+	border-radius: calc(var(--radius) - 2px);
+	--crepe-color-background: var(--background);
+	--crepe-color-surface: var(--background);
+	--crepe-color-surface-low: var(--muted);
+	--crepe-color-on-background: var(--foreground);
+	--crepe-color-on-surface: var(--secondary-foreground);
+	--crepe-color-on-surface-variant: var(--muted-foreground);
+	--crepe-color-primary: var(--primary);
+	--crepe-color-secondary: var(--secondary);
+	--crepe-color-on-secondary: var(--secondary-foreground);
+	--crepe-color-outline: var(--muted-foreground);
+	--crepe-color-inverse: var(--popover);
+	--crepe-color-on-inverse: var(--popover-foreground);
+	--crepe-color-inline-code: var(--secondary-foreground);
+	--crepe-color-error: var(--destructive);
+	--crepe-color-hover: var(--accent);
+	--crepe-color-selected: var(--secondary);
+	--crepe-color-inline-area: var(--secondary);
+	--crepe-font-title: var(--font-sans);
+	--crepe-font-default: var(--font-sans);
+	--crepe-font-code: var(--font-mono);
+	--crepe-shadow-1:
+		0px 1px 3px 1px color-mix(in oklch, var(--ring) 28%, transparent), 0px 1px
+		2px 0px color-mix(in oklch, var(--ring) 22%, transparent);
+	--crepe-shadow-2:
+		0px 2px 6px 2px color-mix(in oklch, var(--ring) 28%, transparent), 0px 1px
+		2px 0px color-mix(in oklch, var(--ring) 22%, transparent);
+	height: inherit;
+}
