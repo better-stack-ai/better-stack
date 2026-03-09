@@ -14,11 +14,9 @@ BTST ships a set of UI components that can be used **without setting up any plug
 | `@btst/stack/components/stepped-auto-form` | — | `SteppedAutoForm` |
 | `@btst/stack/components/form-builder` | — | `FormBuilder` and schema helpers |
 | `@btst/stack/components/markdown` | `@btst/stack/components/markdown/css` | `MarkdownContent`, `MarkdownEditor` |
-| `@btst/stack/components/kanban` | — | `Kanban`, `KanbanBoard`, `KanbanColumn`, … |
 | `@btst/stack/components/multi-select` | — | `MultipleSelector` |
 | `@btst/stack/components/search-select` | — | `SearchSelect` |
 | `@btst/stack/components/empty` | — | `Empty`, `EmptyHeader`, `EmptyTitle`, … |
-| `@btst/stack/components/ui-builder` | `@btst/stack/components/ui-builder/css` | `UIBuilder`, `LayerRenderer`, `ServerLayerRenderer`, types |
 
 ---
 
@@ -146,46 +144,6 @@ The stylesheet also covers the Markdown editor. Import once from `@btst/stack/co
 
 ---
 
-## Kanban
-
-A full drag-and-drop kanban board built with `@dnd-kit`. [Learn more →](https://www.diceui.com/docs/components/radix/kanban)
-
-```ts
-import {
-  Kanban,
-  KanbanBoard,
-  KanbanColumn,
-  KanbanColumnHandle,
-  KanbanItem,
-  KanbanItemHandle,
-  KanbanOverlay,
-} from "@btst/stack/components/kanban"
-```
-
-```tsx
-<Kanban value={columns} onChange={setColumns}>
-  <KanbanBoard>
-    {columns.map((col) => (
-      <KanbanColumn key={col.id} value={col.id}>
-        <KanbanColumnHandle>{col.name}</KanbanColumnHandle>
-        {col.items.map((item) => (
-          <KanbanItem key={item.id} value={item.id}>
-            <KanbanItemHandle>{item.title}</KanbanItemHandle>
-          </KanbanItem>
-        ))}
-      </KanbanColumn>
-    ))}
-  </KanbanBoard>
-  <KanbanOverlay />
-</Kanban>
-```
-
-<Callout type="info">
-The full **Kanban plugin** (`@btst/stack/plugins/kanban`) adds a backend API and persistence on top of this component.
-</Callout>
-
----
-
 ## MultipleSelector
 
 A multi-select combobox with search, async options, and tag-style values:
@@ -263,95 +221,3 @@ import {
   </EmptyContent>
 </Empty>
 ```
-
----
-
-## UIBuilder
-
-The visual page-builder editor and its rendering primitives are all available without the plugin. [Learn more →](https://github.com/olliethedev/ui-builder)
-
-```ts
-import {
-  UIBuilder,
-  LayerRenderer,
-  ServerLayerRenderer,
-  PageConfigPanel,
-  defaultConfigTabsContent,
-  LoadingSkeleton,
-  getDefaultPanelConfigValues,
-  // Registry utilities
-  createComponentRegistry,
-  defaultComponentRegistry,
-  primitiveComponentDefinitions,
-  complexComponentDefinitions,
-  // Field override helpers
-  classNameFieldOverrides,
-  childrenFieldOverrides,
-  commonFieldOverrides,
-  // Type guards
-  isVariableReference,
-  createVariable,
-} from "@btst/stack/components/ui-builder"
-
-import type {
-  ComponentLayer,
-  ComponentRegistry,
-  Variable,
-  FunctionRegistry,
-  BlockRegistry,
-  PropValue,
-} from "@btst/stack/components/ui-builder"
-```
-
-Add the stylesheet (includes Tiptap styles used by the rich-text field):
-
-```css
-@import "@btst/stack/components/ui-builder/css";
-```
-
-### UIBuilder (editor)
-
-```tsx
-<UIBuilder
-  componentRegistry={myRegistry}
-  initialLayers={layers}
-  initialVariables={variables}
-  onChange={(layers) => saveLayers(layers)}
-  onVariablesChange={(vars) => saveVariables(vars)}
-  navRightChildren={<SaveButton />}
-/>
-```
-
-See the [UI Builder plugin docs](/plugins/ui-builder#api-reference) for the full props reference.
-
-### LayerRenderer (client component)
-
-Renders a saved `ComponentLayer` tree on the client:
-
-```tsx
-"use client"
-
-<LayerRenderer
-  page={rootLayer}
-  componentRegistry={myRegistry}
-  variables={variables}
-  variableValues={{ userName: "Alice" }}
-/>
-```
-
-### ServerLayerRenderer (server component)
-
-RSC/SSG-safe renderer — no `"use client"` needed:
-
-```tsx
-<ServerLayerRenderer
-  page={rootLayer}
-  componentRegistry={myRegistry}
-  variables={variables}
-  variableValues={{ currentYear: new Date().getFullYear() }}
-/>
-```
-
-<Callout type="info">
-The full **UI Builder plugin** (`@btst/stack/plugins/ui-builder`) layers CMS-backed persistence, admin routes, and SSR hooks on top of these primitives. Use the standalone imports when you manage your own storage or need the renderers outside of the plugin context.
-</Callout>

@@ -104,18 +104,17 @@ export default defineBuildConfig({
 		"./src/plugins/kanban/client/components/index.tsx",
 		"./src/plugins/kanban/client/hooks/index.tsx",
 		"./src/plugins/kanban/query-keys.ts",
-		// standalone component barrel entries (re-export from @workspace/ui, bundled at build time)
-		// NOTE: these require ~8 GB heap; the build script sets NODE_OPTIONS accordingly.
 		"./src/components/auto-form/index.ts",
 		"./src/components/stepped-auto-form/index.ts",
-		"./src/components/kanban/index.ts",
 		"./src/components/multi-select/index.ts",
 		"./src/components/search-select/index.ts",
 		"./src/components/empty/index.ts",
 		"./src/components/markdown/index.ts",
 		"./src/components/form-builder/index.ts",
-		// minimal-tiptap omitted — pulls in @tiptap/* + react-syntax-highlighter and OOMs the build
-		"./src/components/ui-builder/index.ts",
+		// standalone component these require >8 GB heap to build if included;
+		// "./src/components/kanban/index.ts",
+		// "./src/components/ui-builder/index.ts",
+		// "./src/components/minimal-tiptap/index.ts",
 	],
 	hooks: {
 		"rollup:options"(_ctx, options) {
