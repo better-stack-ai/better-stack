@@ -810,3 +810,5 @@ _adapter = myStack.adapter
 
 21. **Hooks accidentally included** — check that `hooks/` directory files show as `skip` in the build output. If a new plugin has hooks in a non-standard location, update `shouldExclude()` in `build-registry.ts`.
 
+22. **Workspace component adds a custom prop that standard shadcn doesn't have** — remove the custom prop from the workspace source and use the standard API instead. If you embed the custom component, shadcn CLI will overwrite it when installing other standard components that also depend on it (e.g. `popover`). The workspace version must be API-compatible with the shadcn standard.
+
