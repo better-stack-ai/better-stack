@@ -226,6 +226,28 @@ console.log('tsconfig.json patched');
     fi
 
     # ------------------------------------------------------------------
+    step "7b — Creating smoke-import page to force TypeScript to compile all plugin files"
+    # ------------------------------------------------------------------
+    # Without this page, `next build` only type-checks files reachable from
+    # existing pages. Installed plugin components are never imported, so missing
+    # npm dependencies (e.g. `remend`, `react-markdown`) go undetected.
+    # This page re-exports from each plugin's top-level page wrapper, which
+    # causes TypeScript to follow the full import chain for every plugin.
+    mkdir -p src/app/btst-smoke-test
+    cat > src/app/btst-smoke-test/page.tsx << 'SMOKE_EOF'
+"use client";
+// Smoke-test page: forces TypeScript to compile all installed btst plugin
+// components so that missing npm dependencies are caught at build time.
+export { HomePageComponent } from "@/components/btst/blog/client/components/pages/home-page";
+export { ChatPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-page";
+export { DashboardPageComponent } from "@/components/btst/cms/client/components/pages/dashboard-page";
+export { FormListPageComponent } from "@/components/btst/form-builder/client/components/pages/form-list-page";
+export { BoardsListPageComponent } from "@/components/btst/kanban/client/components/pages/boards-list-page";
+export { PageListPage } from "@/components/btst/ui-builder/client/components/pages/page-list-page";
+SMOKE_EOF
+    success "Smoke-import page created at src/app/btst-smoke-test/page.tsx"
+
+    # ------------------------------------------------------------------
     step "8 — Building the Next.js project"
     # ------------------------------------------------------------------
     npm install --legacy-peer-deps

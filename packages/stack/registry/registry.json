@@ -54,7 +54,12 @@
         "@btst/stack",
         "@ai-sdk/react",
         "ai",
-        "highlight.js"
+        "highlight.js",
+        "remend",
+        "react-markdown",
+        "rehype-highlight",
+        "rehype-raw",
+        "remark-gfm"
       ],
       "registryDependencies": [
         "accordion",

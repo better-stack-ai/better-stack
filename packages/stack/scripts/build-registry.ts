@@ -199,7 +199,18 @@ const PLUGINS: PluginConfig[] = [
 		description:
 			"Ejectable page components for the @btst/stack ai-chat plugin. " +
 			"Customize the UI layer while keeping data-fetching in @btst/stack.",
-		extraNpmDeps: ["@ai-sdk/react", "ai", "highlight.js"],
+		extraNpmDeps: [
+			"@ai-sdk/react",
+			"ai",
+			"highlight.js",
+			// chat-message.tsx uses remend to sanitise partial markdown during streaming
+			"remend",
+			// markdown-content.tsx (embedded from @workspace/ui) uses these for rendering
+			"react-markdown",
+			"rehype-highlight",
+			"rehype-raw",
+			"remark-gfm",
+		],
 		extraRegistryDeps: [],
 		// ai-chat has no utils.ts; schemas.ts only imports zod (already a core dep)
 		pluginRootFiles: ["types.ts", "schemas.ts"],
@@ -368,6 +379,7 @@ function shouldExclude(relPath: string): boolean {
  *   @workspace/ui/components/{x} → @/components/ui/{x}
  *   @workspace/ui/lib/{x}        → @/lib/{x}
  *   @workspace/ui/hooks/{x}      → @/hooks/{x}
+ *   @workspace/ui/{x}.css        → @/styles/{x}.css
  */
 function rewriteWorkspaceUiImports(content: string): string {
 	return content
@@ -382,6 +394,11 @@ function rewriteWorkspaceUiImports(content: string): string {
 		.replace(
 			/(['"])@workspace\/ui\/hooks\/([^'"]+)\1/g,
 			(_m, q, rest) => `${q}@/hooks/${rest}${q}`,
+		)
+		.replace(
+			// CSS side-effect imports: @workspace/ui/foo.css → @/styles/foo.css
+			/(['"])@workspace\/ui\/([^/'"]+\.css)\1/g,
+			(_m, q, rest) => `${q}@/styles/${rest}${q}`,
 		);
 }
 
@@ -533,6 +550,7 @@ async function embedPluginRootFiles(
 		components: new Set(),
 		hooks: new Set(),
 		libs: new Set(),
+		cssFiles: new Set(),
 	};
 
 	for (const fileName of fileNames) {
@@ -549,6 +567,7 @@ async function embedPluginRootFiles(
 			for (const c of refs.components) uiRefs.components.add(c);
 			for (const h of refs.hooks) uiRefs.hooks.add(h);
 			for (const l of refs.libs) uiRefs.libs.add(l);
+			for (const css of refs.cssFiles) uiRefs.cssFiles.add(css);
 
 			// Rewrite @workspace/ui/* → @/* (e.g. ui-builder/types.ts re-exports
 			// from @workspace/ui/components/ui-builder/types)
@@ -586,6 +605,12 @@ interface WorkspaceUiRefs {
 	 * Standard files provided by shadcn (utils) are excluded.
 	 */
 	libs: Set<string>;
+	/**
+	 * CSS file names (with extension) directly under @workspace/ui/*.css.
+	 * These are embedded at src/styles/{name}.css in the consumer project.
+	 * Example: @workspace/ui/markdown-content.css → src/styles/markdown-content.css
+	 */
+	cssFiles: Set<string>;
 }
 
 /** Names that shadcn always installs (live at src/lib/{name}.ts); skip embedding. */
@@ -596,6 +621,7 @@ function collectWorkspaceUiRefs(content: string): WorkspaceUiRefs {
 	const components = new Set<string>();
 	const hooks = new Set<string>();
 	const libs = new Set<string>();
+	const cssFiles = new Set<string>();
 
 	// Capture the FULL path after components/ — e.g. "auto-form/stepped-auto-form"
 	// as well as simple names like "accordion". The path ends at the closing quote.
@@ -614,8 +640,13 @@ function collectWorkspaceUiRefs(content: string): WorkspaceUiRefs {
 	)) {
 		if (!STANDARD_LIB_FILES.has(lib ?? "")) libs.add(lib ?? "");
 	}
+	for (const [, css] of content.matchAll(
+		/['"]@workspace\/ui\/([^/'"]+\.css)['"]/g,
+	)) {
+		cssFiles.add(css ?? "");
+	}
 
-	return { components, hooks, libs };
+	return { components, hooks, libs, cssFiles };
 }
 
 /**
@@ -757,6 +788,29 @@ async function loadWorkspaceUiLib(
 }
 
 /**
+ * Loads a workspace/ui CSS file from packages/ui/src/styles/ and returns a
+ * RegistryItemFile targeting src/styles/{name} in the consumer project.
+ */
+async function loadWorkspaceUiCssFile(
+	cssName: string,
+): Promise<RegistryItemFile | null> {
+	const UI_STYLES_DIR = resolve(WORKSPACE_ROOT, "packages/ui/src/styles");
+	const candidate = join(UI_STYLES_DIR, cssName);
+	try {
+		await access(candidate);
+		const content = await readFile(candidate, "utf-8");
+		return {
+			path: `ui/styles/${cssName}`,
+			type: "registry:file",
+			content,
+			target: `src/styles/${cssName}`,
+		};
+	} catch {
+		return null;
+	}
+}
+
+/**
  * Recursively resolves all custom workspace/ui component and hook files
  * needed, scanning each included file for further workspace/ui refs.
  *
@@ -773,16 +827,19 @@ async function resolveWorkspaceUiDeps(
 	const processedComponents = new Set<string>();
 	const processedHooks = new Set<string>();
 	const processedLibs = new Set<string>();
+	const processedCssFiles = new Set<string>();
 	const addedTargets = new Set<string>();
 
 	const pendingComponents = new Set<string>(initialRefs.components);
 	const pendingHooks = new Set<string>(initialRefs.hooks);
 	const pendingLibs = new Set<string>(initialRefs.libs ?? []);
+	const pendingCssFiles = new Set<string>(initialRefs.cssFiles ?? []);
 
 	while (
 		pendingComponents.size > 0 ||
 		pendingHooks.size > 0 ||
-		pendingLibs.size > 0
+		pendingLibs.size > 0 ||
+		pendingCssFiles.size > 0
 	) {
 		// Process component refs
 		for (const comp of Array.from(pendingComponents)) {
@@ -928,6 +985,28 @@ async function resolveWorkspaceUiDeps(
 				);
 			}
 		}
+
+		// Process CSS file refs (e.g. @workspace/ui/markdown-content.css)
+		for (const css of Array.from(pendingCssFiles)) {
+			pendingCssFiles.delete(css);
+			if (processedCssFiles.has(css)) continue;
+			processedCssFiles.add(css);
+
+			const file = await loadWorkspaceUiCssFile(css);
+			if (file) {
+				if (!addedTargets.has(file.target ?? "")) {
+					extraFiles.push(file);
+					addedTargets.add(file.target ?? "");
+					console.log(
+						`  add   src/styles/${css} (registry:file) [from @workspace/ui]`,
+					);
+				}
+			} else {
+				console.warn(
+					`  ⚠  @workspace/ui CSS "${css}" not found in packages/ui/src/styles/ — import may be unresolved`,
+				);
+			}
+		}
 	}
 
 	return { extraFiles, shadcnDeps };
@@ -953,6 +1032,7 @@ async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 		components: new Set(config.extraWorkspaceUiComponents ?? []),
 		hooks: new Set(),
 		libs: new Set(),
+		cssFiles: new Set(),
 	};
 
 	// ---- Embed plugin root files (types.ts, schemas.ts, utils.ts) ----------
@@ -973,6 +1053,7 @@ async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 		for (const c of rootUiRefs.components) allWorkspaceUiRefs.components.add(c);
 		for (const h of rootUiRefs.hooks) allWorkspaceUiRefs.hooks.add(h);
 		for (const l of rootUiRefs.libs) allWorkspaceUiRefs.libs.add(l);
+		for (const css of rootUiRefs.cssFiles) allWorkspaceUiRefs.cssFiles.add(css);
 	}
 
 	// ---- Glob all files in the client directory ----------------------------
@@ -1005,6 +1086,7 @@ async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 		for (const c of refs.components) allWorkspaceUiRefs.components.add(c);
 		for (const h of refs.hooks) allWorkspaceUiRefs.hooks.add(h);
 		for (const l of refs.libs) allWorkspaceUiRefs.libs.add(l);
+		for (const css of refs.cssFiles) allWorkspaceUiRefs.cssFiles.add(css);
 
 		// Apply import rewrites
 		content = rewriteWorkspaceUiImports(content);
