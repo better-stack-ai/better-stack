@@ -1,0 +1,223 @@
+---
+title: Standalone Components
+description: Use BTST's UI components independently of any plugin — auto-form, markdown editor, kanban, form builder, UI builder, and more.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+
+BTST ships a set of UI components that can be used **without setting up any plugin**. Each is available as its own import path from `@btst/stack`, so you only bundle what you use.
+
+| Import path | CSS export | What you get |
+|---|---|---|
+| `@btst/stack/components/auto-form` | — | `AutoForm`, `AutoFormSubmit` |
+| `@btst/stack/components/stepped-auto-form` | — | `SteppedAutoForm` |
+| `@btst/stack/components/form-builder` | — | `FormBuilder` and schema helpers |
+| `@btst/stack/components/markdown` | `@btst/stack/components/markdown/css` | `MarkdownContent`, `MarkdownEditor` |
+| `@btst/stack/components/multi-select` | — | `MultipleSelector` |
+| `@btst/stack/components/search-select` | — | `SearchSelect` |
+| `@btst/stack/components/empty` | — | `Empty`, `EmptyHeader`, `EmptyTitle`, … |
+
+---
+
+## AutoForm
+
+Generate forms automatically from Zod schemas. [Learn more →](https://github.com/better-stack-ai/form-builder)
+
+```ts
+import { AutoForm, AutoFormSubmit } from "@btst/stack/components/auto-form"
+import type { FieldConfig, Dependency } from "@btst/stack/components/auto-form"
+```
+
+```tsx
+<AutoForm
+  formSchema={z.object({
+    name: z.string().min(1),
+    email: z.string().email(),
+  })}
+  onSubmit={(values) => console.log(values)}
+>
+  <AutoFormSubmit>Submit</AutoFormSubmit>
+</AutoForm>
+```
+
+### Stepped AutoForm
+
+Multi-step wizard variant. [Learn more →](https://github.com/better-stack-ai/form-builder)
+
+```ts
+import { SteppedAutoForm } from "@btst/stack/components/stepped-auto-form"
+import type { SteppedAutoFormProps, StepperComponentProps } from "@btst/stack/components/stepped-auto-form"
+```
+
+---
+
+## FormBuilder
+
+A JSON-schema-driven form editor — lets users visually create form definitions that can be stored and later rendered. [Learn more →](https://github.com/better-stack-ai/form-builder)
+
+```ts
+import {
+  FormBuilder,
+  defaultComponents,
+  objectFieldDefinition,
+  arrayFieldDefinition,
+  defineComponent,
+  baseMetaSchema,
+  baseMetaSchemaWithPlaceholder,
+} from "@btst/stack/components/form-builder"
+import type {
+  FormBuilderComponentDefinition,
+  FormBuilderField,
+  JSONSchema,
+  JSONSchemaProperty,
+} from "@btst/stack/components/form-builder"
+```
+
+```tsx
+<FormBuilder
+  schema={currentSchema}
+  onChange={(schema) => setSchema(schema)}
+  components={defaultComponents}
+/>
+```
+
+<Callout type="info">
+The full **Form Builder plugin** (`@btst/stack/plugins/form-builder`) layers data persistence, API routes, and submissions on top of this component. Use the standalone import when you want to manage your own storage.
+</Callout>
+
+---
+
+## Markdown
+
+### MarkdownContent
+
+Renders Markdown/MDX to HTML with syntax highlighting:
+
+```ts
+import { MarkdownContent } from "@btst/stack/components/markdown"
+import type { MarkdownContentProps } from "@btst/stack/components/markdown"
+```
+
+```tsx
+<MarkdownContent content="# Hello\n\nSome **bold** text." />
+```
+
+Import the stylesheet in your root CSS (or layout):
+
+```css
+@import "@btst/stack/components/markdown/css";
+```
+
+### MarkdownEditor
+
+A rich Markdown editor powered by Milkdown/Crepe with optional image upload:
+
+```ts
+import { MarkdownEditor } from "@btst/stack/components/markdown"
+import type { MarkdownEditorProps } from "@btst/stack/components/markdown"
+```
+
+```tsx
+<MarkdownEditor
+  value={content}
+  onChange={(markdown) => setContent(markdown)}
+  placeholder="Write something..."
+  uploadImage={async (file) => {
+    const url = await uploadToStorage(file)
+    return url
+  }}
+/>
+```
+
+#### MarkdownEditor Props
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `value` | `string` | `""` | Current Markdown content |
+| `onChange` | `(markdown: string) => void` | — | Called on every change |
+| `className` | `string` | — | Additional CSS classes |
+| `placeholder` | `string` | `"Write something..."` | Placeholder when empty |
+| `uploadImage` | `(file: File) => Promise<string>` | — | Enables image upload; must return the public URL |
+
+The stylesheet also covers the Markdown editor. Import once from `@btst/stack/components/markdown/css`.
+
+---
+
+## MultipleSelector
+
+A multi-select combobox with search, async options, and tag-style values:
+
+```ts
+import { MultipleSelector } from "@btst/stack/components/multi-select"
+import type { Option, MultipleSelectorRef } from "@btst/stack/components/multi-select"
+```
+
+```tsx
+const options: Option[] = [
+  { value: "react", label: "React" },
+  { value: "vue", label: "Vue" },
+  { value: "svelte", label: "Svelte" },
+]
+
+<MultipleSelector
+  options={options}
+  value={selected}
+  onChange={setSelected}
+  placeholder="Select frameworks..."
+/>
+```
+
+---
+
+## SearchSelect
+
+A searchable single-value select powered by Radix + cmdk:
+
+```ts
+import { SearchSelect } from "@btst/stack/components/search-select"
+```
+
+```tsx
+<SearchSelect
+  options={[
+    { value: "us", label: "United States" },
+    { value: "gb", label: "United Kingdom" },
+  ]}
+  value={country}
+  onValueChange={setCountry}
+  placeholder="Select a country..."
+/>
+```
+
+---
+
+## Empty
+
+Composable empty-state UI components:
+
+```ts
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+  EmptyMedia,
+} from "@btst/stack/components/empty"
+```
+
+```tsx
+<Empty>
+  <EmptyMedia>
+    <InboxIcon className="size-12 text-muted-foreground" />
+  </EmptyMedia>
+  <EmptyHeader>
+    <EmptyTitle>No results</EmptyTitle>
+    <EmptyDescription>Try adjusting your search or filters.</EmptyDescription>
+  </EmptyHeader>
+  <EmptyContent>
+    <Button>Clear filters</Button>
+  </EmptyContent>
+</Empty>
+```

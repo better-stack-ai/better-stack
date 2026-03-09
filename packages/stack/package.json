@@ -1,6 +1,6 @@
 {
   "name": "@btst/stack",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "A composable, plugin-based library for building full-stack applications.",
   "repository": {
     "type": "git",
@@ -21,8 +21,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "unbuild --clean && node ./scripts/postbuild.cjs",
-    "build:analyze": "ANALYZE=1 unbuild --clean && node ./scripts/postbuild.cjs",
+    "build": "NODE_OPTIONS='--max-old-space-size=8192' unbuild --clean && node ./scripts/postbuild.cjs",
+    "build:analyze": "NODE_OPTIONS='--max-old-space-size=8192' ANALYZE=1 unbuild --clean && node ./scripts/postbuild.cjs",
     "stub": "unbuild --stub",
     "test": "vitest",
     "typecheck": "tsc --project tsconfig.json",
@@ -374,6 +374,77 @@
       }
     },
     "./plugins/route-docs/css": "./dist/plugins/route-docs/style.css",
+    "./components/markdown": {
+      "import": {
+        "types": "./dist/components/markdown/index.d.ts",
+        "default": "./dist/components/markdown/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/markdown/index.d.cts",
+        "default": "./dist/components/markdown/index.cjs"
+      }
+    },
+    "./components/markdown/css": "./dist/components/markdown/style.css",
+    "./components/auto-form": {
+      "import": {
+        "types": "./dist/components/auto-form/index.d.ts",
+        "default": "./dist/components/auto-form/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/auto-form/index.d.cts",
+        "default": "./dist/components/auto-form/index.cjs"
+      }
+    },
+    "./components/stepped-auto-form": {
+      "import": {
+        "types": "./dist/components/stepped-auto-form/index.d.ts",
+        "default": "./dist/components/stepped-auto-form/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/stepped-auto-form/index.d.cts",
+        "default": "./dist/components/stepped-auto-form/index.cjs"
+      }
+    },
+    "./components/form-builder": {
+      "import": {
+        "types": "./dist/components/form-builder/index.d.ts",
+        "default": "./dist/components/form-builder/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/form-builder/index.d.cts",
+        "default": "./dist/components/form-builder/index.cjs"
+      }
+    },
+    "./components/multi-select": {
+      "import": {
+        "types": "./dist/components/multi-select/index.d.ts",
+        "default": "./dist/components/multi-select/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/multi-select/index.d.cts",
+        "default": "./dist/components/multi-select/index.cjs"
+      }
+    },
+    "./components/search-select": {
+      "import": {
+        "types": "./dist/components/search-select/index.d.ts",
+        "default": "./dist/components/search-select/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/search-select/index.d.cts",
+        "default": "./dist/components/search-select/index.cjs"
+      }
+    },
+    "./components/empty": {
+      "import": {
+        "types": "./dist/components/empty/index.d.ts",
+        "default": "./dist/components/empty/index.mjs"
+      },
+      "require": {
+        "types": "./dist/components/empty/index.d.cts",
+        "default": "./dist/components/empty/index.cjs"
+      }
+    },
     "./dist/*": "./dist/*",
     "./ui/css": "./dist/ui/components.css",
     "./package.json": "./package.json"
@@ -475,6 +546,27 @@
       ],
       "plugins/route-docs/client": [
         "./dist/plugins/route-docs/client/index.d.ts"
+      ],
+      "components/markdown": [
+        "./dist/components/markdown/index.d.ts"
+      ],
+      "components/auto-form": [
+        "./dist/components/auto-form/index.d.ts"
+      ],
+      "components/stepped-auto-form": [
+        "./dist/components/stepped-auto-form/index.d.ts"
+      ],
+      "components/form-builder": [
+        "./dist/components/form-builder/index.d.ts"
+      ],
+      "components/multi-select": [
+        "./dist/components/multi-select/index.d.ts"
+      ],
+      "components/search-select": [
+        "./dist/components/search-select/index.d.ts"
+      ],
+      "components/empty": [
+        "./dist/components/empty/index.d.ts"
       ]
     }
   },

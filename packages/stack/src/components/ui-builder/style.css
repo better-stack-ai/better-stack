@@ -1,0 +1,5 @@
+/* Import minimal-tiptap styles for rich text editor in form field overrides */
+@import "@workspace/ui/components/minimal-tiptap/styles.css";
+
+/* Load Tailwind Typography plugin for prose classes used by Markdown component */
+@plugin "@tailwindcss/typography";

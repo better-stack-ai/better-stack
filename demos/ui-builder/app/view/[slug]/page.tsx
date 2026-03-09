@@ -87,14 +87,15 @@ function PageLoadingState() {
 	);
 }
 
-function PageErrorState({ error }: { error: Error }) {
+function PageErrorState({ error }: { error: unknown }) {
+	const message = error instanceof Error ? error.message : undefined;
 	return (
 		<div className="flex flex-col items-center justify-center py-24 gap-4 text-center px-4">
 			<AlertCircle className="h-10 w-10 text-destructive" />
 			<div>
 				<h3 className="font-semibold text-base">Failed to load page</h3>
 				<p className="text-sm text-muted-foreground mt-1">
-					{error?.message || "An unexpected error occurred."}
+					{message || "An unexpected error occurred."}
 				</p>
 			</div>
 			<Link href="/view" className="text-sm text-primary hover:underline">

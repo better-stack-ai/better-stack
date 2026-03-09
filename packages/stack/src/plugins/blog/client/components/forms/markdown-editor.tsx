@@ -9,25 +9,24 @@ import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { Slice } from "@milkdown/kit/prose/model";
 import { Selection } from "@milkdown/kit/prose/state";
 import { useLayoutEffect, useRef, useState } from "react";
-import { usePluginOverrides } from "@btst/stack/context";
-import type { BlogPluginOverrides } from "../../overrides";
-import { BLOG_LOCALIZATION } from "../../localization";
+
+export interface MarkdownEditorProps {
+	value?: string;
+	onChange?: (markdown: string) => void;
+	className?: string;
+	/** Optional image upload handler. When provided, enables image upload in the editor. */
+	uploadImage?: (file: File) => Promise<string>;
+	/** Placeholder text shown when the editor is empty. */
+	placeholder?: string;
+}
 
 export function MarkdownEditor({
 	value,
 	onChange,
 	className,
-}: {
-	value?: string;
-	onChange?: (markdown: string) => void;
-	className?: string;
-}) {
-	const { uploadImage, localization } = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", {
-		localization: BLOG_LOCALIZATION,
-	});
+	uploadImage,
+	placeholder = "Write something...",
+}: MarkdownEditorProps) {
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const crepeRef = useRef<Crepe | null>(null);
 	const isReadyRef = useRef(false);
@@ -52,14 +51,18 @@ export function MarkdownEditor({
 			defaultValue: initialValueRef.current,
 			featureConfigs: {
 				[CrepeFeature.Placeholder]: {
-					text: localization.BLOG_FORMS_EDITOR_PLACEHOLDER,
+					text: placeholder,
 				},
-				[CrepeFeature.ImageBlock]: {
-					onUpload: async (file) => {
-						const url = await uploadImage(file);
-						return url;
-					},
-				},
+				...(uploadImage
+					? {
+							[CrepeFeature.ImageBlock]: {
+								onUpload: async (file: File) => {
+									const url = await uploadImage(file);
+									return url;
+								},
+							},
+						}
+					: {}),
 			},
 		});
 

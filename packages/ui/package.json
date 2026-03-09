@@ -135,6 +135,7 @@
     "./components/ui-builder/internal/form-fields/iconname-field": "./src/components/ui-builder/internal/form-fields/iconname-field.tsx",
     "./components/shared-form-types": "./src/components/shared-form-types.ts",
     "./components/auto-form": "./src/components/auto-form/index.tsx",
+    "./components/auto-form/stepped-auto-form": "./src/components/auto-form/stepped-auto-form.tsx",
     "./components/auto-form/types": "./src/components/auto-form/types.ts",
     "./components/auto-form/helpers": "./src/components/auto-form/helpers.tsx",
     "./components/form-builder": "./src/components/form-builder/index.tsx",
