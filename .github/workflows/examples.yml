@@ -8,6 +8,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'demos/**'
+      - '.github/workflows/examples.yml'
 
 concurrency:
   group: demos-${{ github.ref }}
@@ -45,3 +46,16 @@ jobs:
         run: pnpm build
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+  all-demos:
+    name: Demo Projects
+    runs-on: ubuntu-latest
+    needs: build
+    if: always()
+    steps:
+      - name: Check all demo builds passed
+        run: |
+          if [[ "${{ needs.build.result }}" != "success" ]]; then
+            echo "One or more demo builds failed."
+            exit 1
+          fi
