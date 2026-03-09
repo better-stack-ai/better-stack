@@ -41,6 +41,9 @@ jobs:
       - name: Build
         run: pnpm -w build
 
+      - name: Knip
+        run: pnpm --filter @btst/stack run knip --reporter github-actions
+
       - name: Test
         run: pnpm -w test
 

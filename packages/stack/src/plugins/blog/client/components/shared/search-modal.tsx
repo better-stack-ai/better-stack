@@ -158,5 +158,3 @@ export function SearchModal<T extends SearchResult>({
 		</>
 	);
 }
-
-export default SearchModal;

@@ -1,0 +1,47 @@
+name: Demo Projects
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'demos/**'
+
+concurrency:
+  group: demos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build — ${{ matrix.demo }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        demo: [ai-chat, blog, cms, form-builder, kanban, ui-builder]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: demos/${{ matrix.demo }}/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: demos/${{ matrix.demo }}
+        run: pnpm install
+
+      - name: Build
+        working-directory: demos/${{ matrix.demo }}
+        run: pnpm build
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
