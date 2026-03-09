@@ -1257,3 +1257,54 @@ Return a subset of `toolNames` to allow, or `[]` to suppress all page tools. Thr
 <Callout type="info">
 This hook runs **after** the structural `routeName` allowlist check (which validates that each built-in tool is only requested from its intended page). `onBeforeToolsActivated` is the right place to add user-specific logic — the two layers are complementary.
 </Callout>
+
+## Shadcn Registry
+
+The AI Chat plugin UI layer is distributed as a [shadcn registry](https://ui.shadcn.com/docs/registry) block. Use the registry to **eject and fully customize** the page components while keeping all data-fetching and API logic from `@btst/stack`.
+
+<Callout type="info">
+The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/stack/plugins/ai-chat/client/hooks`.
+</Callout>
+
+<Tabs items={["npx", "pnpm", "bunx"]}>
+  <Tab value="npx">
+    ```bash
+    npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-ai-chat.json
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-ai-chat.json
+    ```
+  </Tab>
+  <Tab value="bunx">
+    ```bash
+    bunx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-ai-chat.json
+    ```
+  </Tab>
+</Tabs>
+
+This copies the page components into `src/components/btst/ai-chat/client/` in your project. All relative imports remain valid and you can edit the files freely — the plugin's data layer stays intact.
+
+### Using ejected components
+
+After installing, wire your custom components into the plugin via the `pageComponents` option in your client plugin config:
+
+```tsx title="lib/stack-client.tsx"
+import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
+// Import your ejected (and customized) page components
+import { ChatPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-page"
+import { ChatConversationPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-conversation-page"
+
+aiChatClientPlugin({
+  apiBaseURL: "...",
+  apiBasePath: "/api/data",
+  queryClient,
+  pageComponents: {
+    chat: ChatPageComponent,                          // replaces the chat home page
+    chatConversation: ChatConversationPageComponent,  // replaces the conversation page
+  },
+})
+```
+
+Any key you omit falls back to the built-in default, so you can override just the pages you want to change.
