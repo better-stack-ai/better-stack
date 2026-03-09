@@ -69,7 +69,7 @@ export default function PreviewPageClient({ slug }: PreviewPageClientProps) {
             ErrorComponent={({ error }) => (
               <div className="flex flex-col items-center justify-center min-h-[400px] text-center p-8">
                 <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Page</h1>
-                <p className="text-muted-foreground mb-4">{error.message}</p>
+                <p className="text-muted-foreground mb-4">{error instanceof Error ? error.message : String(error)}</p>
                 <Link 
                   href="/pages/ui-builder" 
                   className="text-primary hover:underline"
