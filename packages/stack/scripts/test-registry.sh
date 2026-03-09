@@ -35,13 +35,7 @@ SERVER_PORT=8766
 SERVER_PID=""
 TEST_PASSED=false
 
-# Plugins to install (must match the built registry file names).
-# Install order matters: ai-chat embeds the Radix-based accordion.tsx, but the
-# auto-form dependency pulled in by cms/form-builder installs the Base-UI version
-# of accordion on top of it. By installing ai-chat LAST (--overwrite is set
-# globally), our Radix accordion wins. auto-form only uses AccordionItem/Trigger/
-# Content (no `type` prop), so it works fine with the Radix version.
-PLUGIN_NAMES=("blog" "cms" "form-builder" "kanban" "ui-builder" "ai-chat")
+PLUGIN_NAMES=("blog" "ai-chat" "cms" "form-builder" "kanban" "ui-builder")
 
 # ---------------------------------------------------------------------------
 # Cleanup
@@ -174,13 +168,21 @@ main() {
         --legacy-peer-deps
     success "Common peer deps installed"
 
-    # Patch tsconfig: skipLibCheck so 3rd-party type errors don't block build
+    # Patch tsconfig — mirrors what the ui-builder project does:
+    # • skipLibCheck: true        — don't error on 3rd-party types in node_modules
+    # • strictFunctionTypes:false — bivariant function params (e.g. error callbacks)
+    # • exclude auto-form & minimal-tiptap — external registry components that
+    #   aren't ours to fix; exclude them the same way the ui-builder project does
     node -e "
 const fs = require('fs');
 const tc = JSON.parse(fs.readFileSync('tsconfig.json', 'utf8'));
 tc.compilerOptions = tc.compilerOptions || {};
 tc.compilerOptions.skipLibCheck = true;
 tc.compilerOptions.strictFunctionTypes = false;
+tc.exclude = tc.exclude || [];
+['src/components/ui/auto-form/**/*', 'src/components/ui/minimal-tiptap/**/*'].forEach(p => {
+  if (!tc.exclude.includes(p)) tc.exclude.push(p);
+});
 fs.writeFileSync('tsconfig.json', JSON.stringify(tc, null, 2));
 console.log('tsconfig.json patched');
 "
@@ -189,16 +191,16 @@ console.log('tsconfig.json patched');
     # ------------------------------------------------------------------
     step "7 — Installing plugin registry items via shadcn CLI"
     # ------------------------------------------------------------------
-    # Initialize shadcn using Radix UI as the base component library.
-    # Our source code targets the Radix-based shadcn API (e.g. Accordion with
-    # type="single"/collapsible). The latest shadcn@latest defaults to Base UI
-    # for some components (e.g. accordion), which has incompatible prop types.
-    # Use default style (new-york / default) so all shadcn components (including
-    # "form") are available. Accordion is handled separately: it is embedded from
-    # our workspace (Radix-based) rather than installed by the CLI, so the
-    # Base-UI accordion the CLI would install is never invoked.
-    npx --yes shadcn@latest init --defaults --force
-    success "shadcn init completed"
+    # Initialize shadcn with Radix as the base component library (radix-nova style).
+    # Our source code uses Radix-based shadcn APIs (Accordion type="single"/collapsible,
+    # Select onValueChange: (value: string) => void, etc.). The default shadcn@latest
+    # uses Base UI components with incompatible APIs for these primitives.
+    # Note: the "form" component has no files in the radix-nova registry, so it is
+    # embedded from packages/ui (see build-registry.ts — "form" excluded from
+    # STANDARD_SHADCN_COMPONENTS). All other standard components (select, accordion,
+    # dialog, dropdown-menu, …) are correctly Radix-based with this flag.
+    npx --yes shadcn@latest init --defaults --force --base radix
+    success "shadcn init completed (radix-nova)"
 
     INSTALL_FAILURES=()
 

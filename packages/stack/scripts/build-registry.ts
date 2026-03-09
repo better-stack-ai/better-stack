@@ -70,18 +70,18 @@ const EXTERNAL_REGISTRY_COMPONENTS: Record<string, string> = {
 // Components excluded from the shadcn standard-install list and instead
 // embedded directly from packages/ui/src/components/<name>.tsx:
 //
-// "accordion" — The latest shadcn CLI (base-nova / radix-nova styles) ships a
-//   Base-UI-based accordion that lacks `type` and `collapsible` props. Our
-//   workspace has a Radix-based version that the codebase relies on. Embed it
-//   so consumers always get the right API.  Plugins that need it must add
-//   "@radix-ui/react-accordion" to extraNpmDeps.
+// "form" — Both shadcn styles (base-nova / radix-nova) return an empty JSON
+//   for the form component (no files). The form.tsx in the workspace is fully
+//   functional. Plugins that use it must add "react-hook-form" and
+//   "@hookform/resolvers" to extraNpmDeps.
 //
-// "form" — The new shadcn styles (base-nova / radix-nova) return an empty JSON
-//   for the form component (no files).  The form.tsx in the workspace is fully
-//   functional and depends on react-hook-form + @radix-ui/react-slot.  Embed it
-//   so consumers always get a working form.  Plugins that need it must add
-//   "react-hook-form" and "@hookform/resolvers" to extraNpmDeps.
+// "accordion" is deliberately kept in this set — when the test uses
+// `shadcn init --base radix` the radix-nova style installs the Radix-based
+// accordion which has the correct `type` / `collapsible` API. The workspace
+// accordion is still embedded for plugins (ai-chat, ui-builder) that import it
+// directly, but shadcn's radix-nova accordion is the fallback for others.
 const STANDARD_SHADCN_COMPONENTS = new Set([
+	"accordion",
 	"alert",
 	"alert-dialog",
 	"aspect-ratio",
@@ -97,7 +97,6 @@ const STANDARD_SHADCN_COMPONENTS = new Set([
 	"collapsible",
 	"command",
 	"context-menu",
-	"date-picker",
 	"dialog",
 	"drawer",
 	"dropdown-menu",
@@ -108,7 +107,6 @@ const STANDARD_SHADCN_COMPONENTS = new Set([
 	"menubar",
 	"navigation-menu",
 	"pagination",
-	"popover",
 	"progress",
 	"radio-group",
 	"resizable",
@@ -145,6 +143,13 @@ interface PluginConfig {
 	extraNpmDevDeps?: string[];
 	/** Extra registryDependencies (e.g. external 3rd-party registry URLs) */
 	extraRegistryDeps: string[];
+	/**
+	 * Workspace UI components to force-embed regardless of whether they're
+	 * directly imported by plugin source files. Useful when an external registry
+	 * dependency (e.g. auto-form) imports a workspace-only component (e.g.
+	 * date-picker) that isn't declared in that registry's own registryDependencies.
+	 */
+	extraWorkspaceUiComponents?: string[];
 	/**
 	 * Files from the plugin root directory (alongside api/ and client/) to embed
 	 * as registry:lib entries. These are placed at src/components/btst/{name}/{file}
@@ -193,14 +198,7 @@ const PLUGINS: PluginConfig[] = [
 		description:
 			"Ejectable page components for the @btst/stack ai-chat plugin. " +
 			"Customize the UI layer while keeping data-fetching in @btst/stack.",
-		extraNpmDeps: [
-			"@ai-sdk/react",
-			"ai",
-			"highlight.js",
-			// accordion is embedded from workspace (Radix-based) rather than from
-			// the shadcn CLI, so we need to declare the peer dep manually.
-			"@radix-ui/react-accordion",
-		],
+		extraNpmDeps: ["@ai-sdk/react", "ai", "highlight.js"],
 		extraRegistryDeps: [],
 		// ai-chat has no utils.ts; schemas.ts only imports zod (already a core dep)
 		pluginRootFiles: ["types.ts", "schemas.ts"],
@@ -220,6 +218,9 @@ const PLUGINS: PluginConfig[] = [
 		],
 		extraNpmDevDeps: ["@types/slug"],
 		extraRegistryDeps: [],
+		// auto-form's date field imports @/components/ui/date-picker which is not
+		// in the radix-nova registry — embed it from workspace explicitly.
+		extraWorkspaceUiComponents: ["date-picker"],
 		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts"],
 	},
 	{
@@ -237,6 +238,9 @@ const PLUGINS: PluginConfig[] = [
 		],
 		extraNpmDevDeps: ["@types/slug"],
 		extraRegistryDeps: [],
+		// auto-form's date field imports @/components/ui/date-picker which is not
+		// in the radix-nova registry — embed it from workspace explicitly.
+		extraWorkspaceUiComponents: ["date-picker"],
 		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts"],
 	},
 	{
@@ -250,6 +254,9 @@ const PLUGINS: PluginConfig[] = [
 			"@dnd-kit/core",
 			"@dnd-kit/sortable",
 			"@dnd-kit/utilities",
+			// search-select.tsx uses popover (embedded from workspace) which
+			// depends on @radix-ui/react-popover.
+			"@radix-ui/react-popover",
 		],
 		extraRegistryDeps: [],
 		// kanban/utils.ts has no external npm imports (pure utility functions)
@@ -261,12 +268,7 @@ const PLUGINS: PluginConfig[] = [
 		description:
 			"Ejectable page components for the @btst/stack ui-builder plugin. " +
 			"Customize the UI layer while keeping data-fetching in @btst/stack.",
-		extraNpmDeps: [
-			"zod",
-			// accordion is embedded from workspace (Radix-based) rather than from
-			// the shadcn CLI, so we need to declare the peer dep manually.
-			"@radix-ui/react-accordion",
-		],
+		extraNpmDeps: ["zod"],
 		// Note: the UI Builder registry component (@workspace/ui/components/ui-builder)
 		// is handled via EXTERNAL_REGISTRY_COMPONENTS and added to registryDependencies
 		// automatically when detected in imports.
@@ -530,6 +532,7 @@ async function embedPluginRootFiles(
 	const uiRefs: WorkspaceUiRefs = {
 		components: new Set(),
 		hooks: new Set(),
+		libs: new Set(),
 	};
 
 	for (const fileName of fileNames) {
@@ -545,6 +548,7 @@ async function embedPluginRootFiles(
 			const refs = collectWorkspaceUiRefs(content);
 			for (const c of refs.components) uiRefs.components.add(c);
 			for (const h of refs.hooks) uiRefs.hooks.add(h);
+			for (const l of refs.libs) uiRefs.libs.add(l);
 
 			// Rewrite @workspace/ui/* → @/* (e.g. ui-builder/types.ts re-exports
 			// from @workspace/ui/components/ui-builder/types)
@@ -575,12 +579,23 @@ interface WorkspaceUiRefs {
 	components: Set<string>;
 	/** Hook names after @workspace/ui/hooks/ */
 	hooks: Set<string>;
+	/**
+	 * Lib utility names after @workspace/ui/lib/ or resolved from relative
+	 * imports like "../lib/{name}" inside workspace component files.
+	 * These are embedded at src/lib/{name}.ts in the consumer project.
+	 * Standard files provided by shadcn (utils) are excluded.
+	 */
+	libs: Set<string>;
 }
+
+/** Names that shadcn always installs (live at src/lib/{name}.ts); skip embedding. */
+const STANDARD_LIB_FILES = new Set(["utils"]);
 
 /** Scans raw source content (before rewriting) for @workspace/ui references. */
 function collectWorkspaceUiRefs(content: string): WorkspaceUiRefs {
 	const components = new Set<string>();
 	const hooks = new Set<string>();
+	const libs = new Set<string>();
 
 	// Capture the FULL path after components/ — e.g. "auto-form/stepped-auto-form"
 	// as well as simple names like "accordion". The path ends at the closing quote.
@@ -594,8 +609,42 @@ function collectWorkspaceUiRefs(content: string): WorkspaceUiRefs {
 	)) {
 		hooks.add(hook ?? "");
 	}
+	for (const [, lib] of content.matchAll(
+		/['"]@workspace\/ui\/lib\/([^'"]+)['"]/g,
+	)) {
+		if (!STANDARD_LIB_FILES.has(lib ?? "")) libs.add(lib ?? "");
+	}
 
-	return { components, hooks };
+	return { components, hooks, libs };
+}
+
+/**
+ * Scans ALREADY-REWRITTEN workspace component source for @/lib/ imports
+ * that originated from relative "../lib/..." paths or @workspace/ui/lib/...
+ * These need to be embedded as src/lib/{name}.ts in the consumer project.
+ */
+function collectLibRefsFromRewritten(content: string): Set<string> {
+	const libs = new Set<string>();
+	for (const [, lib] of content.matchAll(/['"]@\/lib\/([^'"]+)['"]/g)) {
+		if (!STANDARD_LIB_FILES.has(lib ?? "")) libs.add(lib ?? "");
+	}
+	return libs;
+}
+
+/** Names that shadcn always installs (live at src/hooks/{name}); skip embedding. */
+const STANDARD_HOOK_FILES = new Set(["use-toast"]);
+
+/**
+ * Scans ALREADY-REWRITTEN workspace component source for @/hooks/ imports
+ * that originated from @workspace/ui/hooks/... These need to be embedded
+ * as src/hooks/{name}.ts in the consumer project.
+ */
+function collectHookRefsFromRewritten(content: string): Set<string> {
+	const hooks = new Set<string>();
+	for (const [, hook] of content.matchAll(/['"]@\/hooks\/([^'"]+)['"]/g)) {
+		if (!STANDARD_HOOK_FILES.has(hook ?? "")) hooks.add(hook ?? "");
+	}
+	return hooks;
 }
 
 // ---------------------------------------------------------------------------
@@ -672,6 +721,42 @@ async function loadWorkspaceUiHook(
 }
 
 /**
+ * Loads a workspace/ui lib utility from packages/ui/src/lib/ and returns a
+ * RegistryItemFile targeting src/lib/{name}.ts in the consumer project.
+ */
+async function loadWorkspaceUiLib(
+	libName: string,
+): Promise<RegistryItemFile | null> {
+	const UI_LIB_DIR = resolve(WORKSPACE_ROOT, "packages/ui/src/lib");
+	const candidates = [
+		join(UI_LIB_DIR, `${libName}.ts`),
+		join(UI_LIB_DIR, `${libName}.tsx`),
+	];
+
+	for (const candidate of candidates) {
+		try {
+			await access(candidate);
+			const rawContent = await readFile(candidate, "utf-8");
+			// Rewrite @workspace/ui/lib/* → @/lib/* within the lib file itself
+			const content = rawContent.replace(
+				/(['"])@workspace\/ui\/lib\/([^'"]+)\1/g,
+				(_m, q, rest) => `${q}@/lib/${rest}${q}`,
+			);
+			const ext = candidate.endsWith(".tsx") ? ".tsx" : ".ts";
+			return {
+				path: `ui/lib/${libName}${ext}`,
+				type: "registry:lib",
+				content,
+				target: `src/lib/${libName}${ext}`,
+			};
+		} catch {
+			// File not found, try next
+		}
+	}
+	return null;
+}
+
+/**
  * Recursively resolves all custom workspace/ui component and hook files
  * needed, scanning each included file for further workspace/ui refs.
  *
@@ -687,12 +772,18 @@ async function resolveWorkspaceUiDeps(
 	const extraFiles: RegistryItemFile[] = [];
 	const processedComponents = new Set<string>();
 	const processedHooks = new Set<string>();
+	const processedLibs = new Set<string>();
 	const addedTargets = new Set<string>();
 
 	const pendingComponents = new Set<string>(initialRefs.components);
 	const pendingHooks = new Set<string>(initialRefs.hooks);
+	const pendingLibs = new Set<string>(initialRefs.libs ?? []);
 
-	while (pendingComponents.size > 0 || pendingHooks.size > 0) {
+	while (
+		pendingComponents.size > 0 ||
+		pendingHooks.size > 0 ||
+		pendingLibs.size > 0
+	) {
 		// Process component refs
 		for (const comp of Array.from(pendingComponents)) {
 			pendingComponents.delete(comp);
@@ -753,13 +844,20 @@ async function resolveWorkspaceUiDeps(
 				if (!addedTargets.has(file.target ?? "")) {
 					extraFiles.push(file);
 					addedTargets.add(file.target ?? "");
-					// Scan for further workspace/ui refs in the already-rewritten content
-					// (post-rewrite there should be none, but scan for safety)
+					// Scan rewritten content for workspace/ui refs.
+					// Note: after rewriting, @workspace/ui/* is gone — instead look for
+					// @/lib/ and @/hooks/ imports that need workspace-file embedding.
 					const refs = collectWorkspaceUiRefs(file.content ?? "");
 					for (const c of refs.components) {
 						if (!processedComponents.has(c)) pendingComponents.add(c);
 					}
 					for (const h of refs.hooks) {
+						if (!processedHooks.has(h)) pendingHooks.add(h);
+					}
+					for (const l of collectLibRefsFromRewritten(file.content ?? "")) {
+						if (!processedLibs.has(l)) pendingLibs.add(l);
+					}
+					for (const h of collectHookRefsFromRewritten(file.content ?? "")) {
 						if (!processedHooks.has(h)) pendingHooks.add(h);
 					}
 				}
@@ -788,10 +886,45 @@ async function resolveWorkspaceUiDeps(
 					for (const h of refs.hooks) {
 						if (!processedHooks.has(h)) pendingHooks.add(h);
 					}
+					for (const l of collectLibRefsFromRewritten(file.content ?? "")) {
+						if (!processedLibs.has(l)) pendingLibs.add(l);
+					}
+					for (const h of collectHookRefsFromRewritten(file.content ?? "")) {
+						if (!processedHooks.has(h)) pendingHooks.add(h);
+					}
+					console.log(
+						`  add   src/hooks/${hook}.ts (registry:hook) [from @workspace/ui/hooks]`,
+					);
 				}
 			} else {
 				console.warn(
 					`  ⚠  @workspace/ui hook "${hook}" not found locally — imports may be unresolved`,
+				);
+			}
+		}
+
+		// Process lib refs (e.g. compose-refs, needed by kanban.tsx)
+		for (const lib of Array.from(pendingLibs)) {
+			pendingLibs.delete(lib);
+			if (processedLibs.has(lib)) continue;
+			processedLibs.add(lib);
+
+			const file = await loadWorkspaceUiLib(lib);
+			if (file) {
+				if (!addedTargets.has(file.target ?? "")) {
+					extraFiles.push(file);
+					addedTargets.add(file.target ?? "");
+					console.log(
+						`  add   src/lib/${lib}.ts (registry:lib) [from @workspace/ui/lib]`,
+					);
+					// Scan for further @/lib/ refs in the lib file itself
+					for (const l of collectLibRefsFromRewritten(file.content ?? "")) {
+						if (!processedLibs.has(l)) pendingLibs.add(l);
+					}
+				}
+			} else {
+				console.warn(
+					`  ⚠  @workspace/ui lib "${lib}" not found — imports may be unresolved`,
 				);
 			}
 		}
@@ -813,8 +946,13 @@ async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 
 	const registryFiles: RegistryItemFile[] = [];
 	const allWorkspaceUiRefs: WorkspaceUiRefs = {
-		components: new Set(),
+		// Seed with any workspace UI components that must be embedded regardless of
+		// whether plugin source files directly import them (e.g. date-picker is
+		// needed by auto-form's date field but isn't imported by our CMS/form-builder
+		// source — so we force it in here).
+		components: new Set(config.extraWorkspaceUiComponents ?? []),
 		hooks: new Set(),
+		libs: new Set(),
 	};
 
 	// ---- Embed plugin root files (types.ts, schemas.ts, utils.ts) ----------
@@ -834,6 +972,7 @@ async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 		}
 		for (const c of rootUiRefs.components) allWorkspaceUiRefs.components.add(c);
 		for (const h of rootUiRefs.hooks) allWorkspaceUiRefs.hooks.add(h);
+		for (const l of rootUiRefs.libs) allWorkspaceUiRefs.libs.add(l);
 	}
 
 	// ---- Glob all files in the client directory ----------------------------
@@ -865,6 +1004,7 @@ async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 		const refs = collectWorkspaceUiRefs(content);
 		for (const c of refs.components) allWorkspaceUiRefs.components.add(c);
 		for (const h of refs.hooks) allWorkspaceUiRefs.hooks.add(h);
+		for (const l of refs.libs) allWorkspaceUiRefs.libs.add(l);
 
 		// Apply import rewrites
 		content = rewriteWorkspaceUiImports(content);

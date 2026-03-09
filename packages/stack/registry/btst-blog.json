@@ -21,7 +21,9 @@
     "@hookform/resolvers",
     "slug"
   ],
-  "devDependencies": ["@types/slug"],
+  "devDependencies": [
+    "@types/slug"
+  ],
   "registryDependencies": [
     "alert-dialog",
     "badge",
@@ -377,6 +379,12 @@
       "type": "registry:hook",
       "content": "\"use client\";\n\nimport { useEffect } from \"react\";\n\n/**\n * Base route context interface that plugins can extend\n */\nexport interface BaseRouteContext {\n\t/** Current route path */\n\tpath: string;\n\t/** Route parameters (e.g., { slug: \"my-post\" }) */\n\tparams?: Record<string, string>;\n\t/** Whether rendering on server (true) or client (false) */\n\tisSSR: boolean;\n\t/** Additional context properties */\n\t[key: string]: unknown;\n}\n\n/**\n * Minimum interface required for route lifecycle hooks\n * Plugin overrides should implement these optional hooks\n */\nexport interface RouteLifecycleOverrides<TContext extends BaseRouteContext> {\n\t/** Called when a route is rendered */\n\tonRouteRender?: (\n\t\trouteName: string,\n\t\tcontext: TContext,\n\t) => void | Promise<void>;\n\t/** Called when a route encounters an error */\n\tonRouteError?: (\n\t\trouteName: string,\n\t\terror: Error,\n\t\tcontext: TContext,\n\t) => void | Promise<void>;\n}\n\n/**\n * Hook to handle route lifecycle events\n * - Calls authorization check before render\n * - Calls onRouteRender on mount\n * - Handles errors with onRouteError\n *\n * @example\n * ```tsx\n * const overrides = usePluginOverrides<MyPluginOverrides>(\"myPlugin\");\n *\n * useRouteLifecycle({\n *   routeName: \"dashboard\",\n *   context: { path: \"/dashboard\", isSSR: typeof window === \"undefined\" },\n *   overrides,\n *   beforeRenderHook: (overrides, context) => {\n *     if (overrides.onBeforeDashboardRendered) {\n *       return overrides.onBeforeDashboardRendered(context);\n *     }\n *     return true;\n *   },\n * });\n * ```\n */\nexport function useRouteLifecycle<\n\tTContext extends BaseRouteContext,\n\tTOverrides extends RouteLifecycleOverrides<TContext>,\n>({\n\trouteName,\n\tcontext,\n\toverrides,\n\tbeforeRenderHook,\n}: {\n\trouteName: string;\n\tcontext: TContext;\n\toverrides: TOverrides;\n\tbeforeRenderHook?: (overrides: TOverrides, context: TContext) => boolean;\n}) {\n\t// Authorization check - runs synchronously before render\n\tif (beforeRenderHook) {\n\t\tconst canRender = beforeRenderHook(overrides, context);\n\t\tif (!canRender) {\n\t\t\tconst error = new Error(`Unauthorized: Cannot render ${routeName}`);\n\t\t\t// Call error hook synchronously\n\t\t\tif (overrides.onRouteError) {\n\t\t\t\ttry {\n\t\t\t\t\tconst result = overrides.onRouteError(routeName, error, context);\n\t\t\t\t\tif (result instanceof Promise) {\n\t\t\t\t\t\tresult.catch(() => {}); // Ignore promise rejection\n\t\t\t\t\t}\n\t\t\t\t} catch {\n\t\t\t\t\t// Ignore errors in error hook\n\t\t\t\t}\n\t\t\t}\n\t\t\tthrow error;\n\t\t}\n\t}\n\n\t// Lifecycle hook - runs on mount\n\tuseEffect(() => {\n\t\tif (overrides.onRouteRender) {\n\t\t\ttry {\n\t\t\t\tconst result = overrides.onRouteRender(routeName, context);\n\t\t\t\tif (result instanceof Promise) {\n\t\t\t\t\tresult.catch((error) => {\n\t\t\t\t\t\t// If onRouteRender throws, call onRouteError\n\t\t\t\t\t\tif (overrides.onRouteError) {\n\t\t\t\t\t\t\toverrides.onRouteError(routeName, error, context);\n\t\t\t\t\t\t}\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t} catch (error) {\n\t\t\t\t// If onRouteRender throws, call onRouteError\n\t\t\t\tif (overrides.onRouteError) {\n\t\t\t\t\toverrides.onRouteError(routeName, error as Error, context);\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}, [routeName, overrides, context]);\n}\n",
       "target": "src/hooks/use-route-lifecycle.ts"
+    },
+    {
+      "path": "ui/hooks/use-debounce.ts",
+      "type": "registry:hook",
+      "content": "import { useEffect, useState } from \"react\";\n\nexport function useDebounce<T>(value: T, delay?: number): T {\n    const [debouncedValue, setDebouncedValue] = useState<T>(value);\n\n    useEffect(() => {\n        const timer = setTimeout(() => setDebouncedValue(value), delay || 500);\n\n        return () => {\n            clearTimeout(timer);\n        };\n    }, [value, delay]);\n\n    return debouncedValue;\n}",
+      "target": "src/hooks/use-debounce.ts"
     }
   ],
   "docs": "https://better-stack.ai/docs/plugins/blog"

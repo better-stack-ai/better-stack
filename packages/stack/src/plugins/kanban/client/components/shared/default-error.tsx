@@ -4,7 +4,7 @@ import { AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 
 interface DefaultErrorProps {
-	error?: Error;
+	error?: unknown;
 	reset?: () => void;
 }
 

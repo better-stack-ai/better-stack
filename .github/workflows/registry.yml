@@ -55,11 +55,23 @@ jobs:
         working-directory: packages/stack
         run: bash scripts/test-registry.sh
         timeout-minutes: 20
+        env:
+          CI: true
 
       - name: Check for registry changes
         id: registry_diff
         run: |
           git diff --exit-code packages/stack/registry/ || echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: Wait for other checks to complete
+        if: steps.registry_diff.outputs.changed == 'true'
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.head_ref }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          running-workflow-name: 'Build & validate registry'
+          allowed-conclusions: success,skipped,neutral
 
       - name: Commit updated registry files
         if: steps.registry_diff.outputs.changed == 'true'

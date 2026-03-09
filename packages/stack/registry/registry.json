@@ -26,7 +26,9 @@
         "@hookform/resolvers",
         "slug"
       ],
-      "devDependencies": ["@types/slug"],
+      "devDependencies": [
+        "@types/slug"
+      ],
       "registryDependencies": [
         "alert-dialog",
         "badge",
@@ -52,10 +54,10 @@
         "@btst/stack",
         "@ai-sdk/react",
         "ai",
-        "highlight.js",
-        "@radix-ui/react-accordion"
+        "highlight.js"
       ],
       "registryDependencies": [
+        "accordion",
         "alert-dialog",
         "badge",
         "button",
@@ -82,7 +84,9 @@
         "zod",
         "slug"
       ],
-      "devDependencies": ["@types/slug"],
+      "devDependencies": [
+        "@types/slug"
+      ],
       "registryDependencies": [
         "alert-dialog",
         "badge",
@@ -111,7 +115,9 @@
         "zod",
         "slug"
       ],
-      "devDependencies": ["@types/slug"],
+      "devDependencies": [
+        "@types/slug"
+      ],
       "registryDependencies": [
         "alert-dialog",
         "button",
@@ -138,7 +144,8 @@
         "date-fns",
         "@dnd-kit/core",
         "@dnd-kit/sortable",
-        "@dnd-kit/utilities"
+        "@dnd-kit/utilities",
+        "@radix-ui/react-popover"
       ],
       "registryDependencies": [
         "alert-dialog",
@@ -163,8 +170,12 @@
       "title": "UI Builder Plugin Pages",
       "description": "Ejectable page components for the @btst/stack ui-builder plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
       "author": "BTST <https://better-stack.ai>",
-      "dependencies": ["@btst/stack", "zod", "@radix-ui/react-accordion"],
+      "dependencies": [
+        "@btst/stack",
+        "zod"
+      ],
       "registryDependencies": [
+        "accordion",
         "alert-dialog",
         "badge",
         "button",
@@ -173,7 +184,6 @@
         "https://raw.githubusercontent.com/better-stack-ai/ui-builder/refs/heads/main/registry/block-registry.json",
         "input",
         "label",
-        "popover",
         "select",
         "separator",
         "skeleton",
