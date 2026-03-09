@@ -10,6 +10,8 @@ on:
       - 'packages/stack/scripts/test-registry.sh'
       - 'packages/ui/src/components/**'
       - 'packages/ui/src/hooks/**'
+      - 'packages/ui/src/lib/**'
+      - 'packages/ui/src/styles/**'
       - 'packages/stack/package.json'
 
 concurrency:

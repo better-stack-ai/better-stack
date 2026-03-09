@@ -2,16 +2,28 @@
 # test-registry.sh — End-to-end validation of the BTST shadcn registry.
 #
 # Steps:
-#  1. Build @btst/stack (ensures dist/ is fresh)
-#  2. Rebuild all registries from source
+#  1. Build @btst/stack (ensures dist/ is fresh) — skipped when CI=true
+#  2. Rebuild all registries from source         — skipped when CI=true
 #  3. Serve registry/ with http-server on port 8766
 #  4. npm-pack @btst/stack into a tarball
 #  5. Create a blank Next.js project (--use-npm) in /tmp/
 #  6. Install the packed tarball + shadcn add each plugin registry item
 #  7. npm run build → validates the project compiles
 #  8. Cleanup
+#
+# When invoked from the registry.yml workflow the caller has already run
+# `pnpm --filter @btst/stack build` and `pnpm --filter @btst/stack build-registry`
+# as dedicated steps, so steps 1 and 2 are skipped to avoid doubling build time.
+# Set CI=true (the workflow does this) or pass --skip-build to skip them.
 
 set -euo pipefail
+
+# --skip-build flag or CI=true skips steps 1 & 2 (build + build-registry).
+SKIP_BUILD=false
+for arg in "$@"; do
+    [[ "$arg" == "--skip-build" ]] && SKIP_BUILD=true
+done
+[[ "${CI:-}" == "true" ]] && SKIP_BUILD=true
 
 # ---------------------------------------------------------------------------
 # Colours
@@ -73,14 +85,22 @@ main() {
     step "1 — Building @btst/stack package (ensures dist/ is fresh)"
     # ------------------------------------------------------------------
     cd "$PACKAGE_DIR"
-    pnpm run build
-    success "@btst/stack built"
+    if [ "$SKIP_BUILD" = true ]; then
+        warn "Skipping build — dist/ assumed fresh (CI pre-step or --skip-build)"
+    else
+        pnpm run build
+        success "@btst/stack built"
+    fi
 
     # ------------------------------------------------------------------
     step "2 — Building all plugin registries"
     # ------------------------------------------------------------------
-    pnpm run build-registry
-    success "All registries built"
+    if [ "$SKIP_BUILD" = true ]; then
+        warn "Skipping build-registry — registry/ assumed fresh (CI pre-step or --skip-build)"
+    else
+        pnpm run build-registry
+        success "All registries built"
+    fi
 
     # ------------------------------------------------------------------
     step "3 — Starting HTTP server on port $SERVER_PORT"
