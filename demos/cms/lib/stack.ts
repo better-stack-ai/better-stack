@@ -4,8 +4,9 @@ import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
 import { z } from "zod";
 import { seedCmsData } from "./seed";
-// Persist stack and seed promise on `global` so Next.js module re-evaluations
-// (HMR, per-request server components) don't create a second instance or re-run the seed.
+// In-memory adapter only: Next.js evaluates this module in multiple bundle contexts
+// (API routes + page bundle) that share the same process. Pin to globalThis so both
+// contexts reference the same in-memory store.
 const globalForStack = global as typeof global & {
 	__btst_stack__?: ReturnType<typeof createStack>;
 	__btst_seeded__?: Promise<void>;

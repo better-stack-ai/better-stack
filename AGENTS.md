@@ -109,25 +109,19 @@ Plugins expose write operations in a separate `api/mutations.ts` file — distin
 - Re-export from `api/index.ts` alongside getters
 - Common use case: AI tool `execute` callbacks, cron jobs, admin scripts
 
-**Adapter capture pattern for AI tool `execute` functions:**
+**Accessing the adapter in AI tool `execute` functions:**
 ```typescript
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _adapter: any
+export const myStack = stack({ ... })
 
 const myTool = tool({
   execute: async (params) => {
-    await createKanbanTask(_adapter, { title: params.title, columnId: "col-id" })
+    await createKanbanTask(myStack.adapter, { title: params.title, columnId: "col-id" })
     return { success: true }
   }
 })
-
-// With the global singleton pattern, use ??= so createStack() only runs once,
-// then ALWAYS assign _adapter after the ??= — never inside createStack().
-// During Next.js HMR the module re-evaluates (resetting `let` to undefined)
-// but createStack() doesn't re-run, so assignments inside it would be skipped.
-export const myStack = globalForStack.__btst_stack__ ??= createStack()
-_adapter = myStack.adapter
 ```
+
+`myStack` is a module-level `const`. The `execute` closure runs lazily — only when an HTTP request invokes the tool, never at module init time — so `myStack` is always defined by then.
 
 ### SSG Support (`prefetchForRoute`)
 
@@ -796,13 +790,7 @@ Plugin UI pages are distributed as a shadcn v4 registry so consumers can eject a
 
 17. **Putting write operations in `getters.ts`** - Write functions (create, update, delete) belong in `mutations.ts`, not `getters.ts`. This keeps the naming convention clear and signals to callers that no authorization hooks are invoked.
 
-18. **Tool `execute` adapter reference not set** - If a tool's `execute` function uses `_adapter` captured from `myStack.adapter`, assign it **after** the `??=` line, not inside `createStack()`. During Next.js HMR the module re-evaluates (resetting `let` variables to `undefined`), but `createStack()` does **not** re-run because the global already holds the stack — so any assignment inside `createStack()` is skipped. Place the assignment unconditionally after the export line so it runs on every module evaluation:
-
-```typescript
-export const myStack = globalForStack.__btst_stack__ ??= createStack()
-// Must be here — not inside createStack() — so HMR re-evaluation re-syncs the reference
-_adapter = myStack.adapter
-```
+18. **Singleton pattern only needed with the in-memory adapter in Next.js** — Next.js bundles API routes and page components into separate module contexts in the same process, so a bare `stack()` call at module level would create two independent in-memory adapter instances with different data. Use `globalThis` to share the instance only when using `@btst/adapter-memory` in Next.js. With any real database adapter (Drizzle, Prisma, MongoDB, etc.), just call `stack()` at module level — multiple adapter instances all read and write the same database.
 
 19. **Registry not rebuilt after plugin changes** — always run `pnpm --filter @btst/stack build-registry` and commit the updated JSON files. The CI auto-commits them if forgotten.
 
