@@ -4,6 +4,9 @@ import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
 import { openai } from "@ai-sdk/openai";
 
+// In-memory adapter only: Next.js evaluates this module in multiple bundle contexts
+// (API routes + page bundle) that share the same process. Pin to globalThis so both
+// contexts reference the same in-memory store.
 const globalForStack = global as typeof global & {
 	__btst_stack__?: ReturnType<typeof createStack>;
 };

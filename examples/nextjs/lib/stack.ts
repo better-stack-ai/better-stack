@@ -108,17 +108,10 @@ const blogHooks: BlogBackendHooks = {
     },
 };
 
-// Use a global singleton to share the same myStack (and in-memory adapter)
-// across Next.js module boundaries (API routes vs page/SSG bundles are bundled
-// separately, but all run in the same Node.js process).
+// In-memory adapter only: Next.js evaluates lib/stack.ts in multiple bundle contexts
+// (API routes + page bundle) that share the same process. Pin to globalThis so both
+// contexts reference the same in-memory store.
 const globalForStack = global as typeof global & { __btst_stack__?: ReturnType<typeof stack> };
-
-// WealthReview Demo — AI-native financial intake tool
-// Both references are set inside createStack() before any HTTP request fires.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let wealthReviewAdapter: any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let wealthReviewCmsApi: any
 
 const submitIntakeAssessment = tool({
     description:
@@ -161,17 +154,12 @@ const submitIntakeAssessment = tool({
             .describe("Your confidence in the recommendation (0–100)"),
     }),
     execute: async (params) => {
-        if (!wealthReviewAdapter) {
-            throw new Error("[WealthReview] Adapter not initialized")
-        }
-        const adapter = wealthReviewAdapter
-
         // 1. Persist client profile in CMS
         // Use api.cms.createContentItem (not the standalone mutation) so that
         // ensureSynced() runs first — required if no CMS HTTP request has been
         // made before this tool call (the content type won't exist otherwise).
         const slug = `client-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-        await wealthReviewCmsApi.createContentItem("client-profile", {
+        await myStack.api.cms.createContentItem("client-profile", {
             slug,
             data: {
                 ...params,
@@ -181,14 +169,14 @@ const submitIntakeAssessment = tool({
 
         // 2. Ensure the advisor review board exists (idempotent)
         const board = await findOrCreateKanbanBoard(
-            adapter,
+            myStack.adapter,
             "advisor-review-queue",
             "Advisor Review Queue",
             ["New Intakes", "Under Review", "Escalated"],
         )
 
         // 3. Route to the correct column
-        const columns = await getKanbanColumnsByBoardId(adapter, board.id)
+        const columns = await getKanbanColumnsByBoardId(myStack.adapter, board.id)
         const targetColumn = params.amlFlag
             ? (columns.find((c: { title: string }) => c.title === "Escalated") ?? columns[columns.length - 1])
             : (columns.find((c: { title: string }) => c.title === "New Intakes") ?? columns[0])
@@ -198,7 +186,7 @@ const submitIntakeAssessment = tool({
         }
 
         // 4. Create the Kanban review card
-        await createKanbanTask(adapter, {
+        await createKanbanTask(myStack.adapter, {
             title: `${params.clientName}${params.amlFlag ? " — ⚠️ ESCALATED" : " — Ready for Review"}`,
             columnId: targetColumn.id,
             priority: params.amlFlag ? "URGENT" : "MEDIUM",
@@ -393,11 +381,5 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 }
 
 export const myStack = globalForStack.__btst_stack__ ??= createStack()
-
-// Re-assign after the ??= so these are always valid, even after Next.js HMR
-// re-evaluates this module (which resets the `let` variables to undefined while
-// createStack() does NOT re-run because the global already holds the stack).
-wealthReviewAdapter = myStack.adapter
-wealthReviewCmsApi = myStack.api.cms
 
 export const { handler, dbSchema } = myStack
