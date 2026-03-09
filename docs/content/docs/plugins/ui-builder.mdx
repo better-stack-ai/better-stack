@@ -373,7 +373,7 @@ Blocks are pre-built component compositions that users can insert as templates. 
 Create a block registry with reusable templates:
 
 ```tsx
-import type { BlockRegistry, ComponentLayer } from "@workspace/ui/components/ui-builder/types"
+import type { BlockRegistry, ComponentLayer } from "@btst/stack/components/ui-builder"
 
 const myBlocks: BlockRegistry = {
   "hero-01": {
@@ -461,8 +461,7 @@ const myBlocks: BlockRegistry = {
 Pass the block registry to the UIBuilder component:
 
 ```tsx
-import UIBuilder from "@workspace/ui/components/ui-builder"
-import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
+import { UIBuilder, defaultComponentRegistry } from "@btst/stack/components/ui-builder"
 
 function PageEditor() {
   return (
@@ -539,8 +538,7 @@ The `LayerRenderer` component renders pre-fetched ComponentLayer data. Use this 
 ```tsx title="app/pages/[slug]/page.tsx"
 "use client"
 
-import { LayerRenderer } from "@workspace/ui/components/ui-builder"
-import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
+import { LayerRenderer, defaultComponentRegistry } from "@btst/stack/components/ui-builder"
 
 export default function DynamicPage({ page, variables }: { 
   page: ComponentLayer, 
@@ -577,8 +575,7 @@ The `ServerLayerRenderer` is an SSR-friendly renderer that works in React Server
 
 ```tsx title="app/pages/[slug]/page.tsx"
 // No "use client" needed - this is a Server Component
-import { ServerLayerRenderer } from "@workspace/ui/components/ui-builder"
-import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
+import { ServerLayerRenderer, defaultComponentRegistry } from "@btst/stack/components/ui-builder"
 
 export default async function StaticPage({ params }: { params: { slug: string } }) {
   // Fetch page data on the server
@@ -908,10 +905,10 @@ const registry = createComponentRegistry({
 
 #### UIBuilder
 
-The main visual editor component. Import from `@workspace/ui/components/ui-builder`:
+The main visual editor component. Import from `@btst/stack/components/ui-builder`:
 
 ```tsx
-import UIBuilder from "@workspace/ui/components/ui-builder"
+import { UIBuilder } from "@btst/stack/components/ui-builder"
 
 <UIBuilder
   componentRegistry={myRegistry}
@@ -968,7 +965,7 @@ Component to render UI Builder pages on public routes (client component):
 Component to render pre-fetched ComponentLayer data (client component):
 
 ```tsx
-import { LayerRenderer } from "@workspace/ui/components/ui-builder"
+import { LayerRenderer } from "@btst/stack/components/ui-builder"
 
 <LayerRenderer
   page={rootLayer}
@@ -983,7 +980,7 @@ import { LayerRenderer } from "@workspace/ui/components/ui-builder"
 SSR-friendly renderer for React Server Components:
 
 ```tsx
-import { ServerLayerRenderer } from "@workspace/ui/components/ui-builder"
+import { ServerLayerRenderer } from "@btst/stack/components/ui-builder"
 
 // In a Server Component (no "use client" needed)
 <ServerLayerRenderer
@@ -994,7 +991,7 @@ import { ServerLayerRenderer } from "@workspace/ui/components/ui-builder"
 />
 ```
 
-### Types (`@workspace/ui/components/ui-builder/types`)
+### Types (`@btst/stack/components/ui-builder`)
 
 #### BlockDefinition
 
