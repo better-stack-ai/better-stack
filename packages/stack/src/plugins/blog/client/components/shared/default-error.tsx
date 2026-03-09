@@ -18,6 +18,7 @@ export function DefaultError({ error }: FallbackProps) {
 	const message =
 		process.env.NODE_ENV === "production"
 			? localization.BLOG_GENERIC_ERROR_MESSAGE
-			: (error?.message ?? localization.BLOG_GENERIC_ERROR_MESSAGE);
+			: ((error instanceof Error ? error.message : undefined) ??
+				localization.BLOG_GENERIC_ERROR_MESSAGE);
 	return <ErrorPlaceholder title={title} message={message} />;
 }

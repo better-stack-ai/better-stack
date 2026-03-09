@@ -21,7 +21,7 @@ export function DefaultError({ error }: FallbackProps) {
 		process.env.NODE_ENV === "production"
 			? (localization?.CHAT_GENERIC_ERROR_MESSAGE ??
 				AI_CHAT_LOCALIZATION.CHAT_GENERIC_ERROR_MESSAGE)
-			: (error?.message ??
+			: ((error instanceof Error ? error.message : undefined) ??
 				localization?.CHAT_GENERIC_ERROR_MESSAGE ??
 				AI_CHAT_LOCALIZATION.CHAT_GENERIC_ERROR_MESSAGE);
 	return <ErrorPlaceholder title={title} message={message} />;

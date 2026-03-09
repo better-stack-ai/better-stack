@@ -771,6 +771,46 @@ pnpm dev
 
 ---
 
+## Shadcn registry
+
+Plugin page components are published as a shadcn v4 registry so consumers can eject and customize the UI layer.
+
+### Install a plugin's pages
+
+```bash
+# Blog pages (replace "blog" with any plugin name)
+npx shadcn@latest add "https://raw.githubusercontent.com/better-stack-ai/better-stack/main/packages/stack/registry/btst-blog.json"
+```
+
+Files are installed into `src/components/btst/{plugin}/client/` with all relative imports preserved. Data-fetching hooks remain in `@btst/stack`.
+
+### Rebuild the registry locally
+
+```bash
+pnpm --filter @btst/stack build-registry
+```
+
+Output goes to `packages/stack/registry/`. These files are committed and must be regenerated whenever plugin UI components change.
+
+### Run the end-to-end registry test
+
+```bash
+pnpm --filter @btst/stack test-registry
+```
+
+This builds the registry, packs `@btst/stack`, spins up a blank Next.js project, installs every plugin via `shadcn add`, and runs `npm run build` to confirm it compiles.
+
+The GitHub Actions workflow (`.github/workflows/registry.yml`) runs this automatically on PRs that touch plugin source files and auto-commits updated registry JSON if anything changed.
+
+### Adding a new plugin to the registry
+
+1. Add a `PluginConfig` entry to the `PLUGINS` array in `packages/stack/scripts/build-registry.ts`.
+2. Run `pnpm --filter @btst/stack build-registry` to regenerate the JSONs.
+3. Run `pnpm --filter @btst/stack test-registry` locally to validate end-to-end.
+4. Commit the updated registry files alongside your plugin changes.
+
+---
+
 ## Submission checklist
 
 Before opening a pull request for a new plugin, verify every item:

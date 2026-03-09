@@ -1,0 +1,185 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "btst",
+  "homepage": "https://better-stack.ai",
+  "items": [
+    {
+      "name": "btst-blog",
+      "type": "registry:block",
+      "title": "Blog Plugin Pages",
+      "description": "Ejectable page components for the @btst/stack blog plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "@milkdown/crepe",
+        "@milkdown/kit",
+        "date-fns",
+        "highlight.js",
+        "react-intersection-observer",
+        "react-markdown",
+        "rehype-highlight",
+        "rehype-katex",
+        "rehype-raw",
+        "remark-gfm",
+        "remark-math",
+        "react-hook-form",
+        "@hookform/resolvers",
+        "slug"
+      ],
+      "devDependencies": ["@types/slug"],
+      "registryDependencies": [
+        "alert-dialog",
+        "badge",
+        "button",
+        "card",
+        "carousel",
+        "command",
+        "input",
+        "select",
+        "skeleton",
+        "switch",
+        "textarea"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/blog"
+    },
+    {
+      "name": "btst-ai-chat",
+      "type": "registry:block",
+      "title": "AI Chat Plugin Pages",
+      "description": "Ejectable page components for the @btst/stack ai-chat plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "@ai-sdk/react",
+        "ai",
+        "highlight.js",
+        "@radix-ui/react-accordion"
+      ],
+      "registryDependencies": [
+        "alert-dialog",
+        "badge",
+        "button",
+        "dialog",
+        "dropdown-menu",
+        "input",
+        "scroll-area",
+        "sheet",
+        "skeleton",
+        "textarea"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/ai-chat"
+    },
+    {
+      "name": "btst-cms",
+      "type": "registry:block",
+      "title": "CMS Plugin Pages",
+      "description": "Ejectable page components for the @btst/stack cms plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "react-hook-form",
+        "@hookform/resolvers",
+        "zod",
+        "slug"
+      ],
+      "devDependencies": ["@types/slug"],
+      "registryDependencies": [
+        "alert-dialog",
+        "badge",
+        "button",
+        "card",
+        "dialog",
+        "https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/auto-form.json",
+        "input",
+        "label",
+        "skeleton",
+        "table",
+        "textarea"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/cms"
+    },
+    {
+      "name": "btst-form-builder",
+      "type": "registry:block",
+      "title": "Form Builder Plugin Pages",
+      "description": "Ejectable page components for the @btst/stack form-builder plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "react-hook-form",
+        "@hookform/resolvers",
+        "zod",
+        "slug"
+      ],
+      "devDependencies": ["@types/slug"],
+      "registryDependencies": [
+        "alert-dialog",
+        "button",
+        "dialog",
+        "dropdown-menu",
+        "https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/auto-form.json",
+        "https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/form-builder.json",
+        "input",
+        "label",
+        "select",
+        "skeleton",
+        "table"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/form-builder"
+    },
+    {
+      "name": "btst-kanban",
+      "type": "registry:block",
+      "title": "Kanban Plugin Pages",
+      "description": "Ejectable page components for the @btst/stack kanban plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "date-fns",
+        "@dnd-kit/core",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities"
+      ],
+      "registryDependencies": [
+        "alert-dialog",
+        "avatar",
+        "badge",
+        "button",
+        "card",
+        "dialog",
+        "dropdown-menu",
+        "https://raw.githubusercontent.com/olliethedev/shadcn-minimal-tiptap/refs/heads/feat/markdown/registry/block-registry.json",
+        "input",
+        "label",
+        "select",
+        "skeleton",
+        "textarea"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/kanban"
+    },
+    {
+      "name": "btst-ui-builder",
+      "type": "registry:block",
+      "title": "UI Builder Plugin Pages",
+      "description": "Ejectable page components for the @btst/stack ui-builder plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": ["@btst/stack", "zod", "@radix-ui/react-accordion"],
+      "registryDependencies": [
+        "alert-dialog",
+        "badge",
+        "button",
+        "card",
+        "dropdown-menu",
+        "https://raw.githubusercontent.com/better-stack-ai/ui-builder/refs/heads/main/registry/block-registry.json",
+        "input",
+        "label",
+        "popover",
+        "select",
+        "separator",
+        "skeleton",
+        "table"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/ui-builder"
+    }
+  ]
+}
