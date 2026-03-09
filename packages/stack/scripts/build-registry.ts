@@ -59,7 +59,7 @@ const EXTERNAL_REGISTRY_COMPONENTS: Record<string, string> = {
 	"minimal-tiptap":
 		"https://raw.githubusercontent.com/olliethedev/shadcn-minimal-tiptap/refs/heads/feat/markdown/registry/block-registry.json",
 	"ui-builder":
-		"https://raw.githubusercontent.com/better-stack-ai/ui-builder/refs/heads/main/registry/block-registry.json",
+		"https://raw.githubusercontent.com/olliethedev/ui-builder/refs/heads/main/registry/block-registry.json",
 };
 
 // ---------------------------------------------------------------------------
