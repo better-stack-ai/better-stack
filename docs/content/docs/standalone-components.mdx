@@ -14,7 +14,6 @@ BTST ships a set of UI components that can be used **without setting up any plug
 | `@btst/stack/components/stepped-auto-form` | — | `SteppedAutoForm` |
 | `@btst/stack/components/form-builder` | — | `FormBuilder` and schema helpers |
 | `@btst/stack/components/markdown` | `@btst/stack/components/markdown/css` | `MarkdownContent`, `MarkdownEditor` |
-| `@btst/stack/components/minimal-tiptap` | `@btst/stack/components/minimal-tiptap/css` | `MinimalTiptap` |
 | `@btst/stack/components/kanban` | — | `Kanban`, `KanbanBoard`, `KanbanColumn`, … |
 | `@btst/stack/components/multi-select` | — | `MultipleSelector` |
 | `@btst/stack/components/search-select` | — | `SearchSelect` |
@@ -144,31 +143,6 @@ import type { MarkdownEditorProps } from "@btst/stack/components/markdown"
 | `uploadImage` | `(file: File) => Promise<string>` | — | Enables image upload; must return the public URL |
 
 The stylesheet also covers the Markdown editor. Import once from `@btst/stack/components/markdown/css`.
-
----
-
-## MinimalTiptap
-
-A lightweight rich-text editor built on Tiptap. [Learn more →](https://github.com/Aslam97/minimal-tiptap)
-
-```ts
-import { MinimalTiptap } from "@btst/stack/components/minimal-tiptap"
-import type { MinimalTiptapProps } from "@btst/stack/components/minimal-tiptap"
-```
-
-```tsx
-<MinimalTiptap
-  value={content}
-  onChange={(value) => setContent(value)}
-  className="min-h-[200px]"
-/>
-```
-
-Add the stylesheet:
-
-```css
-@import "@btst/stack/components/minimal-tiptap/css";
-```
 
 ---
 

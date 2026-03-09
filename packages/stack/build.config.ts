@@ -104,7 +104,8 @@ export default defineBuildConfig({
 		"./src/plugins/kanban/client/components/index.tsx",
 		"./src/plugins/kanban/client/hooks/index.tsx",
 		"./src/plugins/kanban/query-keys.ts",
-		// standalone component barrel entries — compiled by unbuild like every other entry
+		// standalone component barrel entries (re-export from @workspace/ui, bundled at build time)
+		// NOTE: these require ~8 GB heap; the build script sets NODE_OPTIONS accordingly.
 		"./src/components/auto-form/index.ts",
 		"./src/components/stepped-auto-form/index.ts",
 		"./src/components/kanban/index.ts",
@@ -113,7 +114,7 @@ export default defineBuildConfig({
 		"./src/components/empty/index.ts",
 		"./src/components/markdown/index.ts",
 		"./src/components/form-builder/index.ts",
-		"./src/components/minimal-tiptap/index.ts",
+		// minimal-tiptap omitted — pulls in @tiptap/* + react-syntax-highlighter and OOMs the build
 		"./src/components/ui-builder/index.ts",
 	],
 	hooks: {
