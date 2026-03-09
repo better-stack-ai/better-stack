@@ -73,7 +73,8 @@
       "!**/docs/**",
       "!**/test-results/**",
       "!**/.btst-stack-src/**",
-      "!**/.btst-stack-ui/**"
+      "!**/.btst-stack-ui/**",
+      "!**/packages/stack/registry/**"
     ]
   }
 }
