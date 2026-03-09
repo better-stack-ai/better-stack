@@ -29,13 +29,15 @@ function DefaultLoadingComponent(): ReactNode {
 /**
  * Default error component for PageRenderer
  */
-function DefaultErrorComponent({ error }: { error: Error }): ReactNode {
+function DefaultErrorComponent({ error }: { error: unknown }): ReactNode {
 	return (
 		<div className="flex flex-col items-center justify-center min-h-[200px] p-4">
 			<div className="text-destructive font-medium">
 				{uiBuilderLocalization.pageRenderer.error}
 			</div>
-			<div className="text-sm text-muted-foreground mt-2">{error.message}</div>
+			<div className="text-sm text-muted-foreground mt-2">
+				{error instanceof Error ? error.message : String(error)}
+			</div>
 		</div>
 	);
 }
@@ -65,7 +67,7 @@ export interface PageRendererProps {
 	/** Custom loading component */
 	LoadingComponent?: ComponentType;
 	/** Custom error component */
-	ErrorComponent?: ComponentType<{ error: Error }>;
+	ErrorComponent?: ComponentType<{ error: unknown }>;
 	/** Custom not found component */
 	NotFoundComponent?: ComponentType;
 	/** Additional className for the container */
