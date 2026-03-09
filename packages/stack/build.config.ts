@@ -104,17 +104,17 @@ export default defineBuildConfig({
 		"./src/plugins/kanban/client/components/index.tsx",
 		"./src/plugins/kanban/client/hooks/index.tsx",
 		"./src/plugins/kanban/query-keys.ts",
-		// standalone component stubs are created by postbuild.cjs (no dts bundler overhead)
-		// "./src/components/auto-form/index.ts",
-		// "./src/components/stepped-auto-form/index.ts",
-		// "./src/components/kanban/index.ts",
-		// "./src/components/multi-select/index.ts",
-		// "./src/components/search-select/index.ts",
-		// "./src/components/empty/index.ts",
-		// "./src/components/markdown/index.ts",
-		// "./src/components/form-builder/index.ts",
-		// "./src/components/minimal-tiptap/index.ts",
-		// "./src/components/ui-builder/index.ts",
+		// standalone component barrel entries — compiled by unbuild like every other entry
+		"./src/components/auto-form/index.ts",
+		"./src/components/stepped-auto-form/index.ts",
+		"./src/components/kanban/index.ts",
+		"./src/components/multi-select/index.ts",
+		"./src/components/search-select/index.ts",
+		"./src/components/empty/index.ts",
+		"./src/components/markdown/index.ts",
+		"./src/components/form-builder/index.ts",
+		"./src/components/minimal-tiptap/index.ts",
+		"./src/components/ui-builder/index.ts",
 	],
 	hooks: {
 		"rollup:options"(_ctx, options) {
