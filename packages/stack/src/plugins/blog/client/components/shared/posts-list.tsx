@@ -2,7 +2,7 @@ import { usePluginOverrides } from "@btst/stack/context";
 import type { SerializedPost } from "../../../types";
 import { Button } from "@workspace/ui/components/button";
 import { EmptyList } from "./empty-list";
-import SearchInput from "./search-input";
+import { SearchInput } from "./search-input";
 import type { BlogPluginOverrides } from "../../overrides";
 import { PostCard as DefaultPostCard } from "./post-card";
 import { BLOG_LOCALIZATION } from "../../localization";
