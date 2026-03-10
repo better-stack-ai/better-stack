@@ -36,7 +36,7 @@ export default function PagesLayout({
 						"ai-chat": {
 							apiBaseURL: baseURL,
 							apiBasePath: "/api/data",
-							mode: "public",
+							mode: "authenticated",
 							navigate: (path) => router.push(path),
 							refresh: () => router.refresh(),
 							Link: ({ href, ...props }) => (
@@ -65,6 +65,12 @@ export default function PagesLayout({
 										className="text-muted-foreground hover:text-foreground transition-colors"
 									>
 										Chat
+									</Link>
+									<Link
+										href="/widget"
+										className="text-muted-foreground hover:text-foreground transition-colors"
+									>
+										Widget
 									</Link>
 									<a
 										href="/api/data/reference"
