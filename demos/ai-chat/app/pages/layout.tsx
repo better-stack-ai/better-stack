@@ -36,7 +36,7 @@ export default function PagesLayout({
 						"ai-chat": {
 							apiBaseURL: baseURL,
 							apiBasePath: "/api/data",
-							mode: "authenticated",
+							mode: "public",
 							navigate: (path) => router.push(path),
 							refresh: () => router.refresh(),
 							Link: ({ href, ...props }) => (

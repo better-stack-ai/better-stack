@@ -19,7 +19,7 @@ function createStack() {
 		plugins: {
 			aiChat: aiChatBackendPlugin({
 				model,
-				mode: "authenticated",
+				mode: "public",
 				systemPrompt:
 					"You are a helpful assistant in the BTST AI Chat demo. Help users explore the BTST framework and its plugins.",
 			}),
