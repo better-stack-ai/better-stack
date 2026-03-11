@@ -30,7 +30,10 @@ export default async function Home() {
 			})) ?? [];
 
 	const groups: RouteGroup[] = [
-		{ heading: "Chat", routes: staticChatRoutes },
+		{
+			heading: "Chat",
+			routes: [...staticChatRoutes, { label: "Chat Widget", path: "/widget" }],
+		},
 		{
 			heading: "Docs",
 			routes: [

@@ -66,6 +66,12 @@ export default function PagesLayout({
 									>
 										Chat
 									</Link>
+									<Link
+										href="/widget"
+										className="text-muted-foreground hover:text-foreground transition-colors"
+									>
+										Widget
+									</Link>
 									<a
 										href="/api/data/reference"
 										className="text-muted-foreground hover:text-foreground transition-colors"
