@@ -1,4 +1,4 @@
-import type { Adapter } from "@btst/db";
+import type { DBAdapter as Adapter } from "@btst/db";
 import type { ContentType, ContentItem } from "../types";
 import { serializeContentItem } from "./getters";
 import type { SerializedContentItem } from "../types";

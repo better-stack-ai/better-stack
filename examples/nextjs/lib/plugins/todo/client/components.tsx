@@ -2,6 +2,7 @@
 
 import { useCreateTodo, useDeleteTodo, useTodos, useToggleTodo } from "./hooks";
 import type { TodosPluginOverrides } from "./overrides";
+import type { Todo } from "../types";
 import { useBasePath, usePluginOverrides } from "@btst/stack/context";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -64,7 +65,7 @@ function TodosList() {
   return (
     <>
       <div className="space-y-2 w-full" data-test-id="todos-list">
-        {todos?.map((todo) => (
+        {todos?.map((todo: Todo) => (
           <Item
             key={todo.id}
             className="flex items-center gap-3 border border-border rounded-md p-3"

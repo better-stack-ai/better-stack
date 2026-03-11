@@ -3,7 +3,7 @@ import { stack } from "../api";
 import { defineBackendPlugin } from "../plugins/api";
 import { createDbPlugin } from "@btst/db";
 import { createMemoryAdapter } from "@btst/adapter-memory";
-import type { Adapter, DatabaseDefinition } from "@btst/db";
+import type { DBAdapter as Adapter, DatabaseDefinition } from "@btst/db";
 import { blogBackendPlugin } from "../plugins/blog/api";
 import { kanbanBackendPlugin } from "../plugins/kanban/api";
 

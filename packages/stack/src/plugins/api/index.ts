@@ -18,7 +18,11 @@ export type {
 	ClientPlugin,
 } from "../../types";
 
-export type { Adapter, DatabaseDefinition, DbPlugin } from "@btst/db";
+export type {
+	DBAdapter as Adapter,
+	DatabaseDefinition,
+	DbPlugin,
+} from "@btst/db";
 
 // Re-export Better Call functions needed for plugins
 export type { Endpoint, Router } from "better-call";

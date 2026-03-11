@@ -1,4 +1,4 @@
-import type { Adapter } from "@btst/db";
+import type { DBAdapter as Adapter } from "@btst/db";
 import { defineBackendPlugin } from "@btst/stack/plugins/api";
 import { createEndpoint } from "@btst/stack/plugins/api";
 import { z } from "zod";

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { createMemoryAdapter } from "@btst/adapter-memory";
 import { defineDb } from "@btst/db";
-import type { Adapter } from "@btst/db";
+import type { DBAdapter as Adapter } from "@btst/db";
 import { blogSchema } from "../db";
 import { getAllPosts, getPostBySlug, getAllTags } from "../api/getters";
 
