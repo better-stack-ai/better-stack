@@ -26,7 +26,7 @@ export const getStackClient = (
 				apiBasePath: "/api/data",
 				siteBaseURL: baseURL,
 				siteBasePath: "/pages",
-				mode: "authenticated",
+				mode: "public",
 			}),
 			routeDocs: routeDocsClientPlugin({
 				queryClient,
