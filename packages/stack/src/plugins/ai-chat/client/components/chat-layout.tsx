@@ -37,6 +37,8 @@ interface ChatLayoutBaseProps {
 	initialMessages?: UIMessage[];
 	/** Called whenever messages change (for persistence). Only fires in public mode. */
 	onMessagesChange?: (messages: UIMessage[]) => void;
+	/** Called when the user clears the chat (e.g. clicks the trash button in widget mode). Use this to clear persisted messages. */
+	onClear?: () => void;
 }
 
 interface ChatLayoutWidgetProps extends ChatLayoutBaseProps {
@@ -84,6 +86,7 @@ export function ChatLayout(props: ChatLayoutProps) {
 		showSidebar = true,
 		initialMessages,
 		onMessagesChange,
+		onClear,
 	} = props;
 
 	// Widget-specific props — TypeScript narrows props to ChatLayoutWidgetProps here
@@ -156,7 +159,10 @@ export function ChatLayout(props: ChatLayoutProps) {
 							variant="ghost"
 							size="icon"
 							className="h-5 w-5"
-							onClick={() => setWidgetResetKey((prev) => prev + 1)}
+							onClick={() => {
+								onClear?.();
+								setWidgetResetKey((prev) => prev + 1);
+							}}
 							aria-label="Clear chat"
 							title="Clear chat"
 						>
@@ -292,6 +298,21 @@ export function ChatLayout(props: ChatLayoutProps) {
 							<Sparkles className="h-3 w-3" />
 							{pageAIContext.routeName}
 						</Badge>
+					)}
+
+					{onClear && (
+						<Button
+							variant="ghost"
+							size="icon"
+							onClick={() => {
+								onClear();
+								setChatResetKey((prev) => prev + 1);
+							}}
+							aria-label="Clear chat"
+							title="Clear chat"
+						>
+							<Trash2 className="h-4 w-4" />
+						</Button>
 					)}
 				</div>
 
