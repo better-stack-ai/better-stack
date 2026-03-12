@@ -1,4 +1,4 @@
-import type { Adapter } from "@btst/db";
+import type { DBAdapter as Adapter } from "@btst/db";
 import type { Post, PostWithPostTag, Tag } from "../types";
 
 /**

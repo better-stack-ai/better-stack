@@ -1,4 +1,4 @@
-import type { Adapter } from "@btst/db";
+import type { DBAdapter as Adapter } from "@btst/db";
 import { defineBackendPlugin } from "@btst/stack/plugins/api";
 import { createEndpoint } from "@btst/stack/plugins/api";
 import { z } from "zod";
@@ -444,7 +444,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						const createdColumns: ColumnWithTasks[] = [];
 
 						await adapter.transaction(async (tx) => {
-							newBoard = await tx.create<Board>({
+							const createdBoard = await tx.create<Board>({
 								model: "kanbanBoard",
 								data: {
 									...boardData,
@@ -453,12 +453,13 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 									updatedAt: new Date(),
 								},
 							});
+							newBoard = createdBoard;
 
 							// Create default columns
 							const defaultColumns = [
-								{ title: "To Do", order: 0, boardId: newBoard.id },
-								{ title: "In Progress", order: 1, boardId: newBoard.id },
-								{ title: "Done", order: 2, boardId: newBoard.id },
+								{ title: "To Do", order: 0, boardId: createdBoard.id },
+								{ title: "In Progress", order: 1, boardId: createdBoard.id },
+								{ title: "Done", order: 2, boardId: createdBoard.id },
 							];
 
 							for (const colData of defaultColumns) {
