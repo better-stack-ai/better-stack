@@ -1,5 +1,6 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type { KanbanLocalization } from "./localization";
+import type { SerializedTask } from "../types";
 
 /**
  * User information for assignee display/selection
@@ -142,4 +143,29 @@ export interface KanbanPluginOverrides {
 	 * @param context - Route context
 	 */
 	onBeforeNewBoardPageRendered?: (context: RouteContext) => boolean;
+
+	// ============ Slot Overrides ============
+
+	/**
+	 * Optional slot rendered at the bottom of the task detail dialog.
+	 * Use this to inject a comment thread or any custom content without
+	 * coupling the kanban plugin to the comments plugin.
+	 *
+	 * @example
+	 * ```tsx
+	 * kanban: {
+	 *   taskDetailBottomSlot: (task) => (
+	 *     <CommentThread
+	 *       resourceId={task.id}
+	 *       resourceType="kanban-task"
+	 *       apiBaseURL={apiBaseURL}
+	 *       apiBasePath="/api/data"
+	 *       currentUserId={session?.userId}
+	 *       loginHref="/login"
+	 *     />
+	 *   ),
+	 * }
+	 * ```
+	 */
+	taskDetailBottomSlot?: (task: SerializedTask) => ReactNode;
 }

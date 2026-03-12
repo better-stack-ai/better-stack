@@ -66,8 +66,11 @@ export function BoardPage({ boardId }: BoardPageProps) {
 		throw error;
 	}
 
-	const { Link: OverrideLink, navigate: overrideNavigate } =
-		usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const {
+		Link: OverrideLink,
+		navigate: overrideNavigate,
+		taskDetailBottomSlot,
+	} = usePluginOverrides<KanbanPluginOverrides>("kanban");
 	const navigate =
 		overrideNavigate ||
 		((path: string) => {
@@ -540,33 +543,49 @@ export function BoardPage({ boardId }: BoardPageProps) {
 						<DialogDescription>Update task details.</DialogDescription>
 					</DialogHeader>
 					{modalState.type === "editTask" && (
-						<TaskForm
-							columnId={modalState.columnId}
-							boardId={boardId}
-							taskId={modalState.taskId}
-							task={board.columns
-								?.find((c) => c.id === modalState.columnId)
-								?.tasks?.find((t) => t.id === modalState.taskId)}
-							columns={board.columns || []}
-							onClose={closeModal}
-							onSuccess={() => {
-								closeModal();
-								refetch();
-							}}
-							onDelete={async () => {
-								try {
-									await deleteTask(modalState.taskId);
+						<>
+							<TaskForm
+								columnId={modalState.columnId}
+								boardId={boardId}
+								taskId={modalState.taskId}
+								task={board.columns
+									?.find((c) => c.id === modalState.columnId)
+									?.tasks?.find((t) => t.id === modalState.taskId)}
+								columns={board.columns || []}
+								onClose={closeModal}
+								onSuccess={() => {
 									closeModal();
 									refetch();
-								} catch (error) {
-									const message =
-										error instanceof Error
-											? error.message
-											: "Failed to delete task";
-									toast.error(message);
-								}
-							}}
-						/>
+								}}
+								onDelete={async () => {
+									try {
+										await deleteTask(modalState.taskId);
+										closeModal();
+										refetch();
+									} catch (error) {
+										const message =
+											error instanceof Error
+												? error.message
+												: "Failed to delete task";
+										toast.error(message);
+									}
+								}}
+							/>
+							{taskDetailBottomSlot &&
+								(() => {
+									const task = board.columns
+										?.find((c) => c.id === modalState.columnId)
+										?.tasks?.find((t) => t.id === modalState.taskId);
+									return task ? (
+										<div
+											className="mt-4 pt-4 border-t"
+											data-testid="task-detail-bottom-slot"
+										>
+											{taskDetailBottomSlot(task)}
+										</div>
+									) : null;
+								})()}
+						</>
 					)}
 				</DialogContent>
 			</Dialog>

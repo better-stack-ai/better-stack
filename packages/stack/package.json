@@ -363,6 +363,57 @@
       }
     },
     "./plugins/kanban/css": "./dist/plugins/kanban/style.css",
+    "./plugins/comments/api": {
+      "import": {
+        "types": "./dist/plugins/comments/api/index.d.ts",
+        "default": "./dist/plugins/comments/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/comments/api/index.d.cts",
+        "default": "./dist/plugins/comments/api/index.cjs"
+      }
+    },
+    "./plugins/comments/client": {
+      "import": {
+        "types": "./dist/plugins/comments/client/index.d.ts",
+        "default": "./dist/plugins/comments/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/comments/client/index.d.cts",
+        "default": "./dist/plugins/comments/client/index.cjs"
+      }
+    },
+    "./plugins/comments/client/components": {
+      "import": {
+        "types": "./dist/plugins/comments/client/components/index.d.ts",
+        "default": "./dist/plugins/comments/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/comments/client/components/index.d.cts",
+        "default": "./dist/plugins/comments/client/components/index.cjs"
+      }
+    },
+    "./plugins/comments/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/comments/client/hooks/index.d.ts",
+        "default": "./dist/plugins/comments/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/comments/client/hooks/index.d.cts",
+        "default": "./dist/plugins/comments/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/comments/query-keys": {
+      "import": {
+        "types": "./dist/plugins/comments/query-keys.d.ts",
+        "default": "./dist/plugins/comments/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/comments/query-keys.d.cts",
+        "default": "./dist/plugins/comments/query-keys.cjs"
+      }
+    },
+    "./plugins/comments/css": "./dist/plugins/comments/style.css",
     "./plugins/route-docs/client": {
       "import": {
         "types": "./dist/plugins/route-docs/client/index.d.ts",
@@ -543,6 +594,21 @@
       ],
       "plugins/kanban/client/hooks": [
         "./dist/plugins/kanban/client/hooks/index.d.ts"
+      ],
+      "plugins/comments/api": [
+        "./dist/plugins/comments/api/index.d.ts"
+      ],
+      "plugins/comments/client": [
+        "./dist/plugins/comments/client/index.d.ts"
+      ],
+      "plugins/comments/client/components": [
+        "./dist/plugins/comments/client/components/index.d.ts"
+      ],
+      "plugins/comments/client/hooks": [
+        "./dist/plugins/comments/client/hooks/index.d.ts"
+      ],
+      "plugins/comments/query-keys": [
+        "./dist/plugins/comments/query-keys.d.ts"
       ],
       "plugins/route-docs/client": [
         "./dist/plugins/route-docs/client/index.d.ts"

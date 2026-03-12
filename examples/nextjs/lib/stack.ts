@@ -8,6 +8,7 @@ import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
 import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
+import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api"
 import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
 import { openai } from "@ai-sdk/openai"
 import { tool } from "ai"
@@ -359,6 +360,26 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
             title: "BTST Example API",
             description: "API documentation for the Next.js example application",
             theme: "kepler",
+        }),
+        // Comments plugin for threaded discussions
+        comments: commentsBackendPlugin({
+            autoApprove: false,
+            resolveUser: async (authorId) => {
+                // In production: look up your auth system's user by authorId
+                const user = await resolveUser(authorId)
+                if (!user) return null
+                return { name: user.name, avatarUrl: user.avatarUrl }
+            },
+            onBeforePost: async (input, ctx) => {
+                // In production: verify the session and that input.authorId matches
+                console.log("onBeforePost: new comment by", input.authorId, "on", input.resourceType, input.resourceId)
+            },
+            onAfterPost: async (comment, ctx) => {
+                console.log("Comment created:", comment.id, "status:", comment.status)
+            },
+            onAfterApprove: async (comment, ctx) => {
+                console.log("Comment approved:", comment.id)
+            },
         }),
         // Kanban plugin for project management boards
         kanban: kanbanBackendPlugin({

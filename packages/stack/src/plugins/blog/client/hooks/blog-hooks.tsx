@@ -15,7 +15,6 @@ import type { BlogApiRouter } from "../../api/plugin";
 import { useDebounce } from "./use-debounce";
 import { useEffect, useRef } from "react";
 import { z } from "zod";
-import { useInView } from "react-intersection-observer";
 import { createPostSchema, updatePostSchema } from "../../schemas";
 import { createBlogQueryKeys } from "../../query-keys";
 import { usePluginOverrides } from "@btst/stack/context";
@@ -604,16 +603,13 @@ export interface UseNextPreviousPostsResult {
 }
 
 /**
- * Hook for fetching previous and next posts relative to a given date
- * Uses useInView to only fetch when the component is in view
+ * Hook for fetching previous and next posts relative to a given date.
+ * Pair with `<WhenVisible>` in the render tree for lazy loading.
  */
 export function useNextPreviousPosts(
 	createdAt: string | Date,
 	options: UseNextPreviousPostsOptions = {},
-): UseNextPreviousPostsResult & {
-	ref: (node: Element | null) => void;
-	inView: boolean;
-} {
+): UseNextPreviousPostsResult {
 	const { apiBaseURL, apiBasePath, headers } =
 		usePluginOverrides<BlogPluginOverrides>("blog");
 	const client = createApiClient<BlogApiRouter>({
@@ -621,13 +617,6 @@ export function useNextPreviousPosts(
 		basePath: apiBasePath,
 	});
 	const queries = createBlogQueryKeys(client, headers);
-
-	const { ref, inView } = useInView({
-		// start a little early so the data is ready as it scrolls in
-		rootMargin: "200px 0px",
-		// run once; keep data cached after
-		triggerOnce: true,
-	});
 
 	const dateValue =
 		typeof createdAt === "string" ? new Date(createdAt) : createdAt;
@@ -641,7 +630,7 @@ export function useNextPreviousPosts(
 	>({
 		...baseQuery,
 		...SHARED_QUERY_CONFIG,
-		enabled: (options.enabled ?? true) && inView && !!client,
+		enabled: (options.enabled ?? true) && !!client,
 	});
 
 	return {
@@ -650,8 +639,6 @@ export function useNextPreviousPosts(
 		isLoading,
 		error,
 		refetch,
-		ref,
-		inView,
 	};
 }
 
@@ -682,15 +669,12 @@ export interface UseRecentPostsResult {
 }
 
 /**
- * Hook for fetching recent posts
- * Uses useInView to only fetch when the component is in view
+ * Hook for fetching recent posts.
+ * Pair with `<WhenVisible>` in the render tree for lazy loading.
  */
 export function useRecentPosts(
 	options: UseRecentPostsOptions = {},
-): UseRecentPostsResult & {
-	ref: (node: Element | null) => void;
-	inView: boolean;
-} {
+): UseRecentPostsResult {
 	const { apiBaseURL, apiBasePath, headers } =
 		usePluginOverrides<BlogPluginOverrides>("blog");
 	const client = createApiClient<BlogApiRouter>({
@@ -698,13 +682,6 @@ export function useRecentPosts(
 		basePath: apiBasePath,
 	});
 	const queries = createBlogQueryKeys(client, headers);
-
-	const { ref, inView } = useInView({
-		// start a little early so the data is ready as it scrolls in
-		rootMargin: "200px 0px",
-		// run once; keep data cached after
-		triggerOnce: true,
-	});
 
 	const baseQuery = queries.posts.recent({
 		limit: options.limit ?? 5,
@@ -719,7 +696,7 @@ export function useRecentPosts(
 	>({
 		...baseQuery,
 		...SHARED_QUERY_CONFIG,
-		enabled: (options.enabled ?? true) && inView && !!client,
+		enabled: (options.enabled ?? true) && !!client,
 	});
 
 	return {
@@ -727,7 +704,5 @@ export function useRecentPosts(
 		isLoading,
 		error,
 		refetch,
-		ref,
-		inView,
 	};
 }

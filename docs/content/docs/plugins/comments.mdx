@@ -1,0 +1,423 @@
+---
+title: Comments Plugin
+description: Threaded comments with moderation, likes, replies, and embeddable CommentThread component
+---
+
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "fumadocs-ui/components/callout";
+
+The Comments plugin adds threaded commenting to any resource in your application — blog posts, Kanban tasks, CMS content, or your own custom pages. Comments are displayed with the embeddable `CommentThread` component and managed via a built-in moderation dashboard.
+
+**Key Features:**
+- **Threaded replies** — Top-level comments and nested replies
+- **Like system** — One like per user, optimistic UI updates, denormalized counter
+- **Edit support** — Authors can edit their own comments; an "edited" timestamp is shown
+- **Moderation dashboard** — Tabbed view (Pending / Approved / Spam) with bulk actions
+- **Server-side user resolution** — `resolveUser` hook to embed author name and avatar in API responses
+- **Optimistic updates** — New comments appear instantly with a "Pending approval" badge when `autoApprove: false`
+- **Scroll-into-view lazy loading** — `CommentThread` is mounted only when it scrolls into the viewport
+
+## Installation
+
+<Callout type="info">
+Ensure you followed the general [framework installation guide](/installation) first.
+</Callout>
+
+### 1. Add Plugin to Backend API
+
+Register the comments backend plugin in your `stack.ts` file:
+
+```ts title="lib/stack.ts"
+import { stack } from "@btst/stack"
+import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api"
+
+const { handler, dbSchema } = stack({
+  basePath: "/api/data",
+  plugins: {
+    comments: commentsBackendPlugin({
+      // Automatically approve comments (default: false — requires moderation)
+      autoApprove: false,
+
+      // Resolve author display name and avatar from your auth system
+      resolveUser: async (authorId) => {
+        const user = await db.users.findById(authorId)
+        return user
+          ? { name: user.displayName, avatarUrl: user.avatarUrl }
+          : null
+      },
+
+      // Lifecycle hooks
+      onBeforePost: async (comment, ctx) => {
+        const session = await getSession(ctx.headers)
+        if (!session?.user) throw new Error("Authentication required")
+        if (comment.authorId !== session.user.id)
+          throw new Error("Forbidden")
+      },
+      onAfterPost: async (comment, ctx) => {
+        console.log("New comment posted:", comment.id)
+      },
+      onAfterApprove: async (comment, ctx) => {
+        // Send notification to comment author
+        await sendApprovalEmail(comment.authorId)
+      },
+    })
+  },
+  adapter: (db) => createMemoryAdapter(db)({})
+})
+
+export { handler, dbSchema }
+```
+
+### 2. Add Plugin to Client
+
+Register the comments client plugin in your `stack-client.tsx` file:
+
+```tsx title="lib/stack-client.tsx"
+import { createStackClient } from "@btst/stack/client"
+import { commentsClientPlugin } from "@btst/stack/plugins/comments/client"
+import { QueryClient } from "@tanstack/react-query"
+
+const getBaseURL = () =>
+  process.env.BASE_URL || "http://localhost:3000"
+
+export const getStackClient = (queryClient: QueryClient) => {
+  const baseURL = getBaseURL()
+  return createStackClient({
+    plugins: {
+      comments: commentsClientPlugin({
+        queryClient,
+        siteBaseURL: baseURL,
+        siteBasePath: "/pages",
+      }),
+    },
+    queryClient,
+  })
+}
+```
+
+### 3. Add CSS Import
+
+<Tabs items={["Next.js", "React Router", "TanStack"]}>
+<Tab value="Next.js">
+```css title="app/globals.css"
+@import "@btst/stack/plugins/comments/css";
+```
+</Tab>
+<Tab value="React Router">
+```css title="app/app.css"
+@import "@btst/stack/plugins/comments/css";
+```
+</Tab>
+<Tab value="TanStack">
+```css title="src/styles/globals.css"
+@import "@btst/stack/plugins/comments/css";
+```
+</Tab>
+</Tabs>
+
+### 4. Configure Overrides
+
+Add comments overrides to your layout file. You must also register the `CommentsPluginOverrides` type:
+
+<Tabs items={["Next.js", "React Router", "TanStack"]}>
+<Tab value="Next.js">
+```tsx title="app/pages/layout.tsx"
+import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
+
+type PluginOverrides = {
+  // ... existing plugins
+  comments: CommentsPluginOverrides
+}
+
+// Inside your StackProvider overrides:
+overrides={{
+  comments: {
+    apiBaseURL: baseURL,
+    apiBasePath: "/api/data",
+
+    // Access control for admin routes
+    onBeforeModerationPageRendered: async (context) => {
+      const session = await getSession()
+      if (!session?.user?.isAdmin) throw new Error("Admin access required")
+    },
+  }
+}}
+```
+</Tab>
+<Tab value="React Router">
+```tsx title="app/routes/pages/_layout.tsx"
+import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
+
+type PluginOverrides = {
+  // ... existing plugins
+  comments: CommentsPluginOverrides
+}
+
+// Inside your StackProvider overrides:
+overrides={{
+  comments: {
+    apiBaseURL: baseURL,
+    apiBasePath: "/api/data",
+    onBeforeModerationPageRendered: async (context) => {
+      const session = await getSession()
+      if (!session?.user?.isAdmin) throw new Error("Admin access required")
+    },
+  }
+}}
+```
+</Tab>
+<Tab value="TanStack">
+```tsx title="src/routes/pages/route.tsx"
+import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
+
+type PluginOverrides = {
+  // ... existing plugins
+  comments: CommentsPluginOverrides
+}
+
+// Inside your StackProvider overrides:
+overrides={{
+  comments: {
+    apiBaseURL: baseURL,
+    apiBasePath: "/api/data",
+    onBeforeModerationPageRendered: async (context) => {
+      const session = await getSession()
+      if (!session?.user?.isAdmin) throw new Error("Admin access required")
+    },
+  }
+}}
+```
+</Tab>
+</Tabs>
+
+## Embedding Comments
+
+The `CommentThread` component can be embedded anywhere — below a blog post, inside a Kanban task dialog, or on a custom page.
+
+```tsx
+import { CommentThread } from "@btst/stack/plugins/comments/client/components"
+
+<CommentThread
+  resourceId={post.slug}          // Unique identifier for the resource being commented on
+  resourceType="blog-post"        // Namespace — avoids ID collisions across resource types
+  apiBaseURL="https://example.com"
+  apiBasePath="/api/data"
+  currentUserId={session?.user?.id}  // Own-comment affordances (edit, delete, pending badge, dedup likes)
+  loginHref="/login"              // Shows "Please log in to comment" when currentUserId is not set
+  components={{
+    // Optional: replace the plain textarea with a rich editor
+    Input: MarkdownEditor,
+    // Optional: replace plain text rendering with markdown
+    Renderer: MarkdownContent,
+  }}
+/>
+```
+
+### Props
+
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `resourceId` | `string` | ✓ | Identifier for the resource (e.g. post slug, task ID) |
+| `resourceType` | `string` | ✓ | Type of resource (`"blog-post"`, `"kanban-task"`, etc.) |
+| `apiBaseURL` | `string` | ✓ | Base URL for API requests |
+| `apiBasePath` | `string` | ✓ | Path prefix where the API is mounted |
+| `currentUserId` | `string` | — | Authenticated user ID — enables edit/delete/pending badge |
+| `loginHref` | `string` | — | Login page URL shown to unauthenticated users |
+| `components.Input` | `ComponentType` | — | Custom input component (default: `<textarea>`) |
+| `components.Renderer` | `ComponentType` | — | Custom renderer for comment body (default: `<p>`) |
+
+### Blog Post Integration
+
+The blog plugin exposes a `postBottomSlot` override that renders below every post:
+
+```tsx
+import { CommentThread } from "@btst/stack/plugins/comments/client/components"
+
+overrides={{
+  blog: {
+    postBottomSlot: (post) => (
+      <CommentThread
+        resourceId={post.slug}
+        resourceType="blog-post"
+        apiBaseURL={baseURL}
+        apiBasePath="/api/data"
+        currentUserId={session?.user?.id}
+        loginHref="/login"
+      />
+    ),
+  }
+}}
+```
+
+### Kanban Task Integration
+
+The Kanban plugin exposes a `taskDetailBottomSlot` override that renders at the bottom of the task detail dialog:
+
+```tsx
+import { CommentThread } from "@btst/stack/plugins/comments/client/components"
+
+overrides={{
+  kanban: {
+    taskDetailBottomSlot: (task) => (
+      <CommentThread
+        resourceId={task.id}
+        resourceType="kanban-task"
+        apiBaseURL={baseURL}
+        apiBasePath="/api/data"
+        currentUserId={session?.user?.id}
+        loginHref="/login"
+      />
+    ),
+  }
+}}
+```
+
+### Comment Count Badge
+
+Use `CommentCount` to show the number of approved comments anywhere (e.g., in a post listing):
+
+```tsx
+import { CommentCount } from "@btst/stack/plugins/comments/client/components"
+
+<CommentCount
+  resourceId={post.slug}
+  resourceType="blog-post"
+  apiBaseURL={baseURL}
+  apiBasePath="/api/data"
+/>
+```
+
+## Moderation Dashboard
+
+The comments plugin adds a `/comments/moderation` admin route with:
+
+- **Tabbed views** — Pending, Approved, Spam
+- **Bulk actions** — Approve, Mark as spam, Delete
+- **Comment detail dialog** — View full body and metadata
+- **Per-row actions** — Approve, spam, delete from the table row
+
+Access is controlled by the `onBeforeModerationPageRendered` hook in `CommentsPluginOverrides`.
+
+## Backend Configuration
+
+### `commentsBackendPlugin` Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `autoApprove` | `boolean` | `false` | Automatically approve new comments |
+| `resolveUser` | `(authorId: string) => Promise<{ name: string; avatarUrl?: string } \| null>` | — | Map author IDs to display info; returns `null` → shows `"[deleted]"` |
+| `onBeforePost` | hook | — | Called before a comment is saved. Throw to reject. |
+| `onAfterPost` | hook | — | Called after a comment is saved. |
+| `onBeforeEdit` | hook | — | Called before a comment is updated. Throw to reject. |
+| `onAfterEdit` | hook | — | Called after a comment is updated. |
+| `onAfterApprove` | hook | — | Called after a comment is approved. |
+| `onAfterDelete` | hook | — | Called after a comment is deleted. |
+
+### Server-Side API (`stack.api.comments`)
+
+Direct database access without HTTP, useful in Server Components, cron jobs, or AI tools:
+
+```ts
+const items = await myStack.api.comments.listComments({
+  resourceId: "my-post",
+  resourceType: "blog-post",
+  status: "approved",
+})
+
+const count = await myStack.api.comments.getCommentCount({
+  resourceId: "my-post",
+  resourceType: "blog-post",
+})
+```
+
+<Callout type="warn">
+`stack().api.*` calls bypass authorization hooks. Callers are responsible for access control.
+</Callout>
+
+## React Hooks
+
+Import hooks from `@btst/stack/plugins/comments/client/hooks`:
+
+```tsx
+import {
+  useComments,
+  useCommentCount,
+  usePostComment,
+  useUpdateComment,
+  useDeleteComment,
+  useToggleLike,
+  useUpdateCommentStatus,
+} from "@btst/stack/plugins/comments/client/hooks"
+
+// Fetch approved comments for a resource
+const { data, isLoading } = useComments({
+  resourceId: "my-post",
+  resourceType: "blog-post",
+  status: "approved",
+})
+
+// Post a new comment (includes optimistic update)
+const { mutate: postComment } = usePostComment()
+postComment({
+  resourceId: "my-post",
+  resourceType: "blog-post",
+  authorId: "user-123",
+  body: "Great post!",
+})
+
+// Toggle like (one per user; optimistic update)
+const { mutate: toggleLike } = useToggleLike()
+toggleLike({ commentId: "comment-id", authorId: "user-123" })
+
+// Moderate a comment
+const { mutate: updateStatus } = useUpdateCommentStatus()
+updateStatus({ id: "comment-id", status: "approved" })
+```
+
+## API Reference
+
+### Client Plugin Overrides
+
+Configure the comments plugin behavior from your layout:
+
+#### `CommentsPluginOverrides`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `apiBaseURL` | `string` | Base URL for API requests |
+| `apiBasePath` | `string` | Path prefix for the API |
+| `onBeforeModerationPageRendered` | hook | Called before rendering the moderation dashboard. Throw to deny access. |
+| `onBeforeResourceCommentsRendered` | hook | Called before rendering the per-resource comments admin view. Throw to deny access. |
+
+### HTTP Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/comments` | List comments for a resource |
+| `POST` | `/comments` | Create a new comment |
+| `PATCH` | `/comments/:id` | Edit a comment body |
+| `GET` | `/comments/count` | Get approved comment count |
+| `POST` | `/comments/:id/like` | Toggle like on a comment |
+| `PATCH` | `/comments/:id/status` | Update moderation status |
+| `DELETE` | `/comments/:id` | Delete a comment |
+
+### `SerializedComment`
+
+Comments returned by the API include resolved author information:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Comment ID |
+| `resourceId` | `string` | Resource identifier |
+| `resourceType` | `string` | Resource type |
+| `parentId` | `string \| null` | Parent comment ID for replies |
+| `authorId` | `string` | Author user ID |
+| `resolvedAuthorName` | `string` | Display name from `resolveUser`, or `"[deleted]"` |
+| `resolvedAvatarUrl` | `string \| null` | Avatar URL from `resolveUser` |
+| `body` | `string` | Comment body |
+| `status` | `"pending" \| "approved" \| "spam"` | Moderation status |
+| `likes` | `number` | Denormalized like count |
+| `isLikedByCurrentUser` | `boolean` | Whether the requesting user has liked this comment |
+| `editedAt` | `string \| null` | ISO date string if the comment was edited |
+| `createdAt` | `string` | ISO date string |
+| `updatedAt` | `string` | ISO date string |

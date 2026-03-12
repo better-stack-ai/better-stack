@@ -1,0 +1,89 @@
+/**
+ * Internal query key constants for the Comments plugin.
+ * Shared between query-keys.ts (HTTP path) and any SSG/direct DB path
+ * to prevent key drift between loaders and prefetch calls.
+ */
+
+export interface CommentsListDiscriminator {
+	resourceId: string | undefined;
+	resourceType: string | undefined;
+	parentId: string | null | undefined;
+	status: string | undefined;
+	currentUserId: string | undefined;
+	limit: number;
+	offset: number;
+}
+
+/**
+ * Builds the discriminator object for the comments list query key.
+ */
+export function commentsListDiscriminator(params?: {
+	resourceId?: string;
+	resourceType?: string;
+	parentId?: string | null;
+	status?: string;
+	currentUserId?: string;
+	limit?: number;
+	offset?: number;
+}): CommentsListDiscriminator {
+	return {
+		resourceId: params?.resourceId,
+		resourceType: params?.resourceType,
+		parentId: params?.parentId,
+		status: params?.status,
+		currentUserId: params?.currentUserId,
+		limit: params?.limit ?? 20,
+		offset: params?.offset ?? 0,
+	};
+}
+
+export interface CommentCountDiscriminator {
+	resourceId: string;
+	resourceType: string;
+	status: string | undefined;
+}
+
+export function commentCountDiscriminator(params: {
+	resourceId: string;
+	resourceType: string;
+	status?: string;
+}): CommentCountDiscriminator {
+	return {
+		resourceId: params.resourceId,
+		resourceType: params.resourceType,
+		status: params.status,
+	};
+}
+
+/** Full query key builders — use with queryClient.setQueryData() */
+export const COMMENTS_QUERY_KEYS = {
+	/**
+	 * Key for comments list query.
+	 * Full key: ["comments", "list", { resourceId, resourceType, parentId, status, currentUserId, limit, offset }]
+	 */
+	commentsList: (params?: {
+		resourceId?: string;
+		resourceType?: string;
+		parentId?: string | null;
+		status?: string;
+		currentUserId?: string;
+		limit?: number;
+		offset?: number;
+	}) => ["comments", "list", commentsListDiscriminator(params)] as const,
+
+	/**
+	 * Key for a single comment detail query.
+	 * Full key: ["comments", "detail", id]
+	 */
+	commentDetail: (id: string) => ["comments", "detail", id] as const,
+
+	/**
+	 * Key for comment count query.
+	 * Full key: ["comments", "count", { resourceId, resourceType, status }]
+	 */
+	commentCount: (params: {
+		resourceId: string;
+		resourceType: string;
+		status?: string;
+	}) => ["comments", "count", commentCountDiscriminator(params)] as const,
+};

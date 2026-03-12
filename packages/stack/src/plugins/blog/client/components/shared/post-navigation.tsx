@@ -10,13 +10,11 @@ import type { SerializedPost } from "../../../types";
 interface PostNavigationProps {
 	previousPost: SerializedPost | null;
 	nextPost: SerializedPost | null;
-	ref?: (node: Element | null) => void;
 }
 
 export function PostNavigation({
 	previousPost,
 	nextPost,
-	ref,
 }: PostNavigationProps) {
 	const { Link } = usePluginOverrides<
 		BlogPluginOverrides,
@@ -29,9 +27,6 @@ export function PostNavigation({
 
 	return (
 		<>
-			{/* Ref div to trigger intersection observer when scrolled into view */}
-			{ref && <div ref={ref} />}
-
 			{/* Only show navigation buttons if posts are available */}
 			{(previousPost || nextPost) && (
 				<>

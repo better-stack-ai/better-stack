@@ -6,6 +6,7 @@ import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
 import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
+import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api"
 import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
 import { openai } from "@ai-sdk/openai"
 
@@ -152,6 +153,13 @@ const { handler, dbSchema } = stack({
             },
             onBoardCreated: async (board, context) => {
                 console.log("Board created:", board.id, board.name);
+            },
+        }),
+        // Comments plugin for threaded discussions
+        comments: commentsBackendPlugin({
+            autoApprove: false,
+            onBeforePost: async (input, ctx) => {
+                console.log("onBeforePost: new comment by", input.authorId)
             },
         }),
     },

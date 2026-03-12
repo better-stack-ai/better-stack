@@ -8,6 +8,8 @@ import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
 import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
+import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
+import { CommentThread } from "@btst/stack/plugins/comments/client/components"
 import { resolveUser, searchUsers } from "../../lib/mock-users"
 import { Link, useRouter, Outlet, createFileRoute } from "@tanstack/react-router"
 
@@ -40,6 +42,7 @@ type PluginOverrides = {
     cms: CMSPluginOverrides,
     "form-builder": FormBuilderPluginOverrides,
     kanban: KanbanPluginOverrides,
+    comments: CommentsPluginOverrides,
 }
 
 export const Route = createFileRoute('/pages')({
@@ -211,9 +214,27 @@ function Layout() {
                         // User resolution for assignees
                         resolveUser,
                         searchUsers,
+                        // Wire comments into task detail dialogs
+                        taskDetailBottomSlot: (task) => (
+                            <CommentThread
+                                resourceId={task.id}
+                                resourceType="kanban-task"
+                                apiBaseURL={baseURL}
+                                apiBasePath="/api/data"
+                                loginHref="/login"
+                            />
+                        ),
                         // Lifecycle hooks
                         onRouteRender: async (routeName, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Kanban route:`, routeName, context.path);
+                        },
+                    },
+                    comments: {
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        onBeforeModerationPageRendered: (context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeModerationPageRendered`);
+                            return true;
                         },
                     }
                 }}

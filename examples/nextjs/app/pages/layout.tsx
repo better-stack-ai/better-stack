@@ -16,6 +16,8 @@ import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builde
 import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client"
 import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
 import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
+import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
+import { CommentThread } from "@btst/stack/plugins/comments/client/components"
 import { resolveUser, searchUsers } from "@/lib/mock-users"
 
 // Get base URL - works on both server and client
@@ -80,6 +82,7 @@ type PluginOverrides = {
     "form-builder": FormBuilderPluginOverrides,
     "ui-builder": UIBuilderPluginOverrides,
     kanban: KanbanPluginOverrides,
+    comments: CommentsPluginOverrides,
 }
 
 export default function ExampleLayout({
@@ -111,6 +114,17 @@ export default function ExampleLayout({
                         refresh: () => router.refresh(),
                         uploadImage: mockUploadFile,
                         Image: NextImageWrapper,
+                        // Wire comments into the bottom of each blog post
+                        postBottomSlot: (post) => (
+                            <CommentThread
+                                resourceId={post.slug}
+                                resourceType="blog-post"
+                                apiBaseURL={baseURL}
+                                apiBasePath="/api/data"
+                                loginHref="/login"
+                                className="mt-8 pt-8 border-t"
+                            />
+                        ),
                         // Lifecycle Hooks - called during route rendering
                         onRouteRender: async (routeName, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onRouteRender: Route rendered:`, routeName, context.path);
@@ -266,6 +280,16 @@ export default function ExampleLayout({
                         // User resolution for assignees
                         resolveUser,
                         searchUsers,
+                        // Wire comments into the bottom of each task detail dialog
+                        taskDetailBottomSlot: (task) => (
+                            <CommentThread
+                                resourceId={task.id}
+                                resourceType="kanban-task"
+                                apiBaseURL={baseURL}
+                                apiBasePath="/api/data"
+                                loginHref="/login"
+                            />
+                        ),
                         // Lifecycle hooks
                         onRouteRender: async (routeName, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Kanban route:`, routeName, context.path);
@@ -280,6 +304,14 @@ export default function ExampleLayout({
                         onBeforeBoardPageRendered: (boardId, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeBoardPageRendered:`, boardId);
                             return true;
+                        },
+                    },
+                    comments: {
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        onBeforeModerationPageRendered: (context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeModerationPageRendered`);
+                            return true; // In production: check admin role
                         },
                     }
                 }}
