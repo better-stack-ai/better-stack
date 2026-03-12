@@ -11,7 +11,7 @@
     "@ai-sdk/openai": "^2.0.68",
     "@ai-sdk/react": "^2.0.94",
     "@btst/adapter-memory": "^2.1.0",
-    "@btst/stack": "^2.6.1",
+    "@btst/stack": "^2.7.0",
     "@btst/yar": "^1.2.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-dialog": "^1.1.15",
