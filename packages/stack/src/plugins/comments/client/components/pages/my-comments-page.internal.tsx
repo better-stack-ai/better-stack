@@ -36,6 +36,10 @@ import {
 	useSuspenseComments,
 	useDeleteComment,
 } from "../../hooks/use-comments";
+import {
+	COMMENTS_LOCALIZATION,
+	type CommentsLocalization,
+} from "../../localization";
 
 const PAGE_LIMIT = 20;
 
@@ -45,6 +49,7 @@ interface MyCommentsPageProps {
 	headers?: HeadersInit;
 	currentUserId?: CommentsPluginOverrides["currentUserId"];
 	resourceLinks?: CommentsPluginOverrides["resourceLinks"];
+	localization?: CommentsLocalization;
 }
 
 function getInitials(name: string | null | undefined) {
@@ -57,24 +62,30 @@ function getInitials(name: string | null | undefined) {
 		.toUpperCase();
 }
 
-function StatusBadge({ status }: { status: CommentStatus }) {
+function StatusBadge({
+	status,
+	loc,
+}: {
+	status: CommentStatus;
+	loc: CommentsLocalization;
+}) {
 	if (status === "approved") {
 		return (
 			<Badge variant="outline" className="text-green-700 border-green-300">
-				Approved
+				{loc.COMMENTS_MY_STATUS_APPROVED}
 			</Badge>
 		);
 	}
 	if (status === "pending") {
 		return (
 			<Badge variant="outline" className="text-yellow-700 border-yellow-300">
-				Pending
+				{loc.COMMENTS_MY_STATUS_PENDING}
 			</Badge>
 		);
 	}
 	return (
 		<Badge variant="outline" className="text-red-700 border-red-300">
-			Spam
+			{loc.COMMENTS_MY_STATUS_SPAM}
 		</Badge>
 	);
 }
@@ -109,7 +120,9 @@ export function MyCommentsPage({
 	headers,
 	currentUserId: currentUserIdProp,
 	resourceLinks,
+	localization: localizationProp,
 }: MyCommentsPageProps) {
+	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
 	const resolvedUserId = useResolvedCurrentUserId(currentUserIdProp);
 
 	if (!resolvedUserId) {
@@ -119,11 +132,9 @@ export function MyCommentsPage({
 				data-testid="my-comments-login-prompt"
 			>
 				<LogIn className="h-10 w-10 text-muted-foreground" />
-				<p className="text-lg font-medium">
-					Please log in to view your comments
-				</p>
+				<p className="text-lg font-medium">{loc.COMMENTS_MY_LOGIN_TITLE}</p>
 				<p className="text-sm text-muted-foreground">
-					You need to be logged in to see your comment history.
+					{loc.COMMENTS_MY_LOGIN_DESCRIPTION}
 				</p>
 			</div>
 		);
@@ -136,6 +147,7 @@ export function MyCommentsPage({
 			headers={headers}
 			currentUserId={resolvedUserId}
 			resourceLinks={resourceLinks}
+			loc={loc}
 		/>
 	);
 }
@@ -148,12 +160,14 @@ function MyCommentsList({
 	headers,
 	currentUserId,
 	resourceLinks,
+	loc,
 }: {
 	apiBaseURL: string;
 	apiBasePath: string;
 	headers?: HeadersInit;
 	currentUserId: string;
 	resourceLinks?: CommentsPluginOverrides["resourceLinks"];
+	loc: CommentsLocalization;
 }) {
 	const [page, setPage] = useState(1);
 	const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -176,10 +190,10 @@ function MyCommentsList({
 		if (!deleteId) return;
 		try {
 			await deleteMutation.mutateAsync(deleteId);
-			toast.success("Comment deleted");
+			toast.success(loc.COMMENTS_MY_TOAST_DELETED);
 			refetch();
 		} catch {
-			toast.error("Failed to delete comment");
+			toast.error(loc.COMMENTS_MY_TOAST_DELETE_ERROR);
 		} finally {
 			setDeleteId(null);
 		}
@@ -192,9 +206,9 @@ function MyCommentsList({
 				data-testid="my-comments-empty"
 			>
 				<MessageSquareOff className="h-10 w-10 text-muted-foreground" />
-				<p className="text-lg font-medium">No comments yet</p>
+				<p className="text-lg font-medium">{loc.COMMENTS_MY_EMPTY_TITLE}</p>
 				<p className="text-sm text-muted-foreground">
-					Comments you post will appear here.
+					{loc.COMMENTS_MY_EMPTY_DESCRIPTION}
 				</p>
 			</div>
 		);
@@ -203,9 +217,12 @@ function MyCommentsList({
 	return (
 		<div data-testid="my-comments-page" className="space-y-4">
 			<div>
-				<h1 className="text-2xl font-bold tracking-tight">My Comments</h1>
+				<h1 className="text-2xl font-bold tracking-tight">
+					{loc.COMMENTS_MY_PAGE_TITLE}
+				</h1>
 				<p className="text-sm text-muted-foreground mt-1">
-					{total} comment{total !== 1 ? "s" : ""}
+					{total} {loc.COMMENTS_MY_COL_COMMENT.toLowerCase()}
+					{total !== 1 ? "s" : ""}
 				</p>
 			</div>
 
@@ -217,12 +234,16 @@ function MyCommentsList({
 					<TableHeader>
 						<TableRow>
 							<TableHead className="w-10" />
-							<TableHead>Comment</TableHead>
+							<TableHead>{loc.COMMENTS_MY_COL_COMMENT}</TableHead>
 							<TableHead className="hidden sm:table-cell w-32">
-								Resource
+								{loc.COMMENTS_MY_COL_RESOURCE}
 							</TableHead>
-							<TableHead className="w-28">Status</TableHead>
-							<TableHead className="hidden md:table-cell w-36">Date</TableHead>
+							<TableHead className="w-28">
+								{loc.COMMENTS_MY_COL_STATUS}
+							</TableHead>
+							<TableHead className="hidden md:table-cell w-36">
+								{loc.COMMENTS_MY_COL_DATE}
+							</TableHead>
 							<TableHead className="w-16" />
 						</TableRow>
 					</TableHeader>
@@ -232,6 +253,7 @@ function MyCommentsList({
 								key={comment.id}
 								comment={comment}
 								resourceLinks={resourceLinks}
+								loc={loc}
 								onDelete={() => setDeleteId(comment.id)}
 								isDeleting={deleteMutation.isPending && deleteId === comment.id}
 							/>
@@ -258,19 +280,20 @@ function MyCommentsList({
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Delete comment?</AlertDialogTitle>
+						<AlertDialogTitle>{loc.COMMENTS_MY_DELETE_TITLE}</AlertDialogTitle>
 						<AlertDialogDescription>
-							This action cannot be undone. The comment will be permanently
-							removed.
+							{loc.COMMENTS_MY_DELETE_DESCRIPTION}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogCancel>
+							{loc.COMMENTS_MY_DELETE_CANCEL}
+						</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={handleDelete}
 							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
 						>
-							Delete
+							{loc.COMMENTS_MY_DELETE_CONFIRM}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
@@ -284,11 +307,13 @@ function MyCommentsList({
 function CommentRow({
 	comment,
 	resourceLinks,
+	loc,
 	onDelete,
 	isDeleting,
 }: {
 	comment: SerializedComment;
 	resourceLinks?: CommentsPluginOverrides["resourceLinks"];
+	loc: CommentsLocalization;
 	onDelete: () => void;
 	isDeleting: boolean;
 }) {
@@ -316,7 +341,7 @@ function CommentRow({
 				<p className="text-sm line-clamp-2">{comment.body}</p>
 				{comment.parentId && (
 					<span className="text-xs text-muted-foreground mt-0.5 block">
-						↩ Reply
+						{loc.COMMENTS_MY_REPLY_INDICATOR}
 					</span>
 				)}
 			</TableCell>
@@ -333,7 +358,7 @@ function CommentRow({
 							target="_blank"
 							rel="noopener noreferrer"
 						>
-							View
+							{loc.COMMENTS_MY_VIEW_LINK}
 							<ExternalLink className="h-3 w-3" />
 						</a>
 					) : (
@@ -345,7 +370,7 @@ function CommentRow({
 			</TableCell>
 
 			<TableCell>
-				<StatusBadge status={comment.status} />
+				<StatusBadge status={comment.status} loc={loc} />
 			</TableCell>
 
 			<TableCell className="hidden md:table-cell text-xs text-muted-foreground">
@@ -362,7 +387,7 @@ function CommentRow({
 					data-testid="my-comment-delete-button"
 				>
 					<Trash2 className="h-4 w-4" />
-					<span className="sr-only">Delete comment</span>
+					<span className="sr-only">{loc.COMMENTS_MY_DELETE_BUTTON_SR}</span>
 				</Button>
 			</TableCell>
 		</TableRow>

@@ -4,6 +4,7 @@ import { lazy } from "react";
 import { ComposedRoute } from "@btst/stack/client/components";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../../overrides";
+import { COMMENTS_LOCALIZATION } from "../../localization";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { PageWrapper } from "../shared/page-wrapper";
 
@@ -39,6 +40,7 @@ export function ModerationPageComponent() {
 
 function ModerationPageWrapper() {
 	const overrides = usePluginOverrides<CommentsPluginOverrides>("comments");
+	const loc = { ...COMMENTS_LOCALIZATION, ...overrides.localization };
 
 	useRouteLifecycle({
 		routeName: "moderation",
@@ -61,6 +63,7 @@ function ModerationPageWrapper() {
 				apiBaseURL={overrides.apiBaseURL}
 				apiBasePath={overrides.apiBasePath}
 				headers={overrides.headers as HeadersInit | undefined}
+				localization={loc}
 			/>
 		</PageWrapper>
 	);

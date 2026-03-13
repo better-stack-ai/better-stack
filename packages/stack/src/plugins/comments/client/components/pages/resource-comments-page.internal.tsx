@@ -17,6 +17,10 @@ import {
 import { CheckCircle, ShieldOff, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
+import {
+	COMMENTS_LOCALIZATION,
+	type CommentsLocalization,
+} from "../../localization";
 
 interface ResourceCommentsPageProps {
 	resourceId: string;
@@ -24,6 +28,7 @@ interface ResourceCommentsPageProps {
 	apiBaseURL: string;
 	apiBasePath: string;
 	headers?: HeadersInit;
+	localization?: CommentsLocalization;
 }
 
 function getInitials(name: string | null | undefined) {
@@ -42,7 +47,9 @@ export function ResourceCommentsPage({
 	apiBaseURL,
 	apiBasePath,
 	headers,
+	localization: localizationProp,
 }: ResourceCommentsPageProps) {
+	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
 	const config = { apiBaseURL, apiBasePath, headers };
 
 	const {
@@ -61,31 +68,31 @@ export function ResourceCommentsPage({
 	const handleApprove = async (id: string) => {
 		try {
 			await updateStatus.mutateAsync({ id, status: "approved" });
-			toast.success("Comment approved");
+			toast.success(loc.COMMENTS_RESOURCE_TOAST_APPROVED);
 			refetch();
 		} catch {
-			toast.error("Failed to approve");
+			toast.error(loc.COMMENTS_RESOURCE_TOAST_APPROVE_ERROR);
 		}
 	};
 
 	const handleSpam = async (id: string) => {
 		try {
 			await updateStatus.mutateAsync({ id, status: "spam" });
-			toast.success("Marked as spam");
+			toast.success(loc.COMMENTS_RESOURCE_TOAST_SPAM);
 			refetch();
 		} catch {
-			toast.error("Failed to update");
+			toast.error(loc.COMMENTS_RESOURCE_TOAST_SPAM_ERROR);
 		}
 	};
 
 	const handleDelete = async (id: string) => {
-		if (!window.confirm("Delete this comment?")) return;
+		if (!window.confirm(loc.COMMENTS_RESOURCE_DELETE_CONFIRM)) return;
 		try {
 			await deleteMutation.mutateAsync(id);
-			toast.success("Comment deleted");
+			toast.success(loc.COMMENTS_RESOURCE_TOAST_DELETED);
 			refetch();
 		} catch {
-			toast.error("Failed to delete");
+			toast.error(loc.COMMENTS_RESOURCE_TOAST_DELETE_ERROR);
 		}
 	};
 
@@ -95,7 +102,7 @@ export function ResourceCommentsPage({
 			data-testid="resource-comments-page"
 		>
 			<div>
-				<h1 className="text-2xl font-bold">Comments</h1>
+				<h1 className="text-2xl font-bold">{loc.COMMENTS_RESOURCE_TITLE}</h1>
 				<p className="text-muted-foreground text-sm mt-1">
 					{resourceType}/{resourceId}
 				</p>
@@ -104,7 +111,7 @@ export function ResourceCommentsPage({
 			{pendingTotal > 0 && (
 				<div className="space-y-3">
 					<h2 className="text-base font-semibold flex items-center gap-2">
-						Pending Review
+						{loc.COMMENTS_RESOURCE_PENDING_SECTION}
 						<Badge variant="secondary">{pendingTotal}</Badge>
 					</h2>
 					<div className="divide-y divide-border rounded-lg border">
@@ -112,6 +119,7 @@ export function ResourceCommentsPage({
 							<PendingCommentRow
 								key={comment.id}
 								comment={comment}
+								loc={loc}
 								onApprove={() => handleApprove(comment.id)}
 								onSpam={() => handleSpam(comment.id)}
 								onDelete={() => handleDelete(comment.id)}
@@ -124,13 +132,16 @@ export function ResourceCommentsPage({
 			)}
 
 			<div>
-				<h2 className="text-base font-semibold mb-4">Thread</h2>
+				<h2 className="text-base font-semibold mb-4">
+					{loc.COMMENTS_RESOURCE_THREAD_SECTION}
+				</h2>
 				<CommentThread
 					resourceId={resourceId}
 					resourceType={resourceType}
 					apiBaseURL={apiBaseURL}
 					apiBasePath={apiBasePath}
 					headers={headers}
+					localization={loc}
 				/>
 			</div>
 		</div>
@@ -139,6 +150,7 @@ export function ResourceCommentsPage({
 
 function PendingCommentRow({
 	comment,
+	loc,
 	onApprove,
 	onSpam,
 	onDelete,
@@ -146,6 +158,7 @@ function PendingCommentRow({
 	isDeleting,
 }: {
 	comment: SerializedComment;
+	loc: CommentsLocalization;
 	onApprove: () => void;
 	onSpam: () => void;
 	onDelete: () => void;
@@ -186,7 +199,7 @@ function PendingCommentRow({
 						data-testid="approve-button"
 					>
 						<CheckCircle className="h-3.5 w-3.5 mr-1" />
-						Approve
+						{loc.COMMENTS_RESOURCE_ACTION_APPROVE}
 					</Button>
 					<Button
 						size="sm"
@@ -196,7 +209,7 @@ function PendingCommentRow({
 						disabled={isUpdating}
 					>
 						<ShieldOff className="h-3.5 w-3.5 mr-1" />
-						Spam
+						{loc.COMMENTS_RESOURCE_ACTION_SPAM}
 					</Button>
 					<Button
 						size="sm"
@@ -206,7 +219,7 @@ function PendingCommentRow({
 						disabled={isDeleting}
 					>
 						<Trash2 className="h-3.5 w-3.5 mr-1" />
-						Delete
+						{loc.COMMENTS_RESOURCE_ACTION_DELETE}
 					</Button>
 				</div>
 			</div>

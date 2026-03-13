@@ -416,7 +416,7 @@ The comments plugin registers a `/comments/my-comments` route that shows the cur
 **Features:**
 - All comment statuses visible to the owner in one list, each with an inline status badge
 - Prev / Next pagination (20 per page)
-- Resource link column — click through to the original resource when `resourceLinks` is configured
+- Resource link column — click through to the original resource when `resourceLinks` is configured (links automatically include `#comments` so the page scrolls to the comment thread)
 - Delete button with confirmation dialog — calls `DELETE /comments/:id` (governed by `onBeforeDelete`)
 - Login prompt when `currentUserId` is not configured
 
@@ -475,7 +475,8 @@ Configure the comments plugin behavior from your layout:
 | `apiBaseURL` | `string` | Base URL for API requests |
 | `apiBasePath` | `string` | Path prefix for the API |
 | `currentUserId` | `string \| (() => string \| undefined \| Promise<string \| undefined>)` | Authenticated user's ID — used by the My Comments page. Supports async functions for session-based resolution. |
-| `resourceLinks` | `Record<string, (id: string) => string>` | Per-resource-type URL builders for linking comments back to their resource on the My Comments page (e.g. `{ "blog-post": (slug) => "/pages/blog/" + slug }`). |
+| `resourceLinks` | `Record<string, (id: string) => string>` | Per-resource-type URL builders for linking comments back to their resource on the My Comments page (e.g. `{ "blog-post": (slug) => "/pages/blog/" + slug }`). The plugin appends `#comments` automatically so the page scrolls to the thread. |
+| `localization` | `Partial<CommentsLocalization>` | Override any UI string in the plugin. Import `COMMENTS_LOCALIZATION` from `@btst/stack/plugins/comments/client` to see all available keys. |
 | `onBeforeModerationPageRendered` | hook | Called before rendering the moderation dashboard. Throw to deny access. |
 | `onBeforeResourceCommentsRendered` | hook | Called before rendering the per-resource comments admin view. Throw to deny access. |
 | `onBeforeMyCommentsPageRendered` | hook | Called before rendering the My Comments page. Throw to deny access (e.g. when no session exists). |

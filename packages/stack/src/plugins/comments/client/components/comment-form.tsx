@@ -3,6 +3,10 @@
 import { useState, type ComponentType } from "react";
 import { Button } from "@workspace/ui/components/button";
 import { Textarea } from "@workspace/ui/components/textarea";
+import {
+	COMMENTS_LOCALIZATION,
+	type CommentsLocalization,
+} from "../localization";
 
 export interface CommentFormProps {
 	/** Current user's ID — required to post */
@@ -24,19 +28,25 @@ export interface CommentFormProps {
 		disabled?: boolean;
 		placeholder?: string;
 	}>;
+	/** Localization strings */
+	localization?: Partial<CommentsLocalization>;
 }
 
 export function CommentForm({
 	authorId: _authorId,
 	initialBody = "",
-	submitLabel = "Post comment",
+	submitLabel,
 	onSubmit,
 	onCancel,
 	InputComponent,
+	localization: localizationProp,
 }: CommentFormProps) {
+	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
 	const [body, setBody] = useState(initialBody);
 	const [isPending, setIsPending] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+
+	const resolvedSubmitLabel = submitLabel ?? loc.COMMENTS_FORM_POST_COMMENT;
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -47,7 +57,9 @@ export function CommentForm({
 			await onSubmit(body.trim());
 			setBody("");
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to submit comment");
+			setError(
+				err instanceof Error ? err.message : loc.COMMENTS_FORM_SUBMIT_ERROR,
+			);
 		} finally {
 			setIsPending(false);
 		}
@@ -60,13 +72,13 @@ export function CommentForm({
 					value={body}
 					onChange={setBody}
 					disabled={isPending}
-					placeholder="Write a comment…"
+					placeholder={loc.COMMENTS_FORM_PLACEHOLDER}
 				/>
 			) : (
 				<Textarea
 					value={body}
 					onChange={(e) => setBody(e.target.value)}
-					placeholder="Write a comment…"
+					placeholder={loc.COMMENTS_FORM_PLACEHOLDER}
 					disabled={isPending}
 					rows={3}
 					className="resize-none"
@@ -84,11 +96,11 @@ export function CommentForm({
 						onClick={onCancel}
 						disabled={isPending}
 					>
-						Cancel
+						{loc.COMMENTS_FORM_CANCEL}
 					</Button>
 				)}
 				<Button type="submit" size="sm" disabled={isPending || !body.trim()}>
-					{isPending ? "Posting…" : submitLabel}
+					{isPending ? loc.COMMENTS_FORM_POSTING : resolvedSubmitLabel}
 				</Button>
 			</div>
 		</form>

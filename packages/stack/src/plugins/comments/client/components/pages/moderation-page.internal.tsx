@@ -44,11 +44,16 @@ import {
 	useUpdateCommentStatus,
 	useDeleteComment,
 } from "../../hooks/use-comments";
+import {
+	COMMENTS_LOCALIZATION,
+	type CommentsLocalization,
+} from "../../localization";
 
 interface ModerationPageProps {
 	apiBaseURL: string;
 	apiBasePath: string;
 	headers?: HeadersInit;
+	localization?: CommentsLocalization;
 }
 
 function getInitials(name: string | null | undefined) {
@@ -77,7 +82,9 @@ export function ModerationPage({
 	apiBaseURL,
 	apiBasePath,
 	headers,
+	localization: localizationProp,
 }: ModerationPageProps) {
+	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
 	const [activeTab, setActiveTab] = useState<CommentStatus>("pending");
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [viewComment, setViewComment] = useState<SerializedComment | null>(
@@ -95,7 +102,6 @@ export function ModerationPage({
 	const deleteMutation = useDeleteComment(config);
 
 	// Register AI context with pending comment previews
-	const pendingComments = activeTab === "pending" ? comments : [];
 	useRegisterPageAIContext({
 		routeName: "comments-moderation",
 		pageDescription: `${total} ${activeTab} comments in the moderation queue.\n\nTop ${activeTab} comments:\n${comments
@@ -131,20 +137,20 @@ export function ModerationPage({
 	const handleApprove = async (id: string) => {
 		try {
 			await updateStatus.mutateAsync({ id, status: "approved" });
-			toast.success("Comment approved");
+			toast.success(loc.COMMENTS_MODERATION_TOAST_APPROVED);
 			await refetch();
 		} catch {
-			toast.error("Failed to approve comment");
+			toast.error(loc.COMMENTS_MODERATION_TOAST_APPROVE_ERROR);
 		}
 	};
 
 	const handleSpam = async (id: string) => {
 		try {
 			await updateStatus.mutateAsync({ id, status: "spam" });
-			toast.success("Marked as spam");
+			toast.success(loc.COMMENTS_MODERATION_TOAST_SPAM);
 			await refetch();
 		} catch {
-			toast.error("Failed to update status");
+			toast.error(loc.COMMENTS_MODERATION_TOAST_SPAM_ERROR);
 		}
 	};
 
@@ -152,13 +158,18 @@ export function ModerationPage({
 		try {
 			await Promise.all(ids.map((id) => deleteMutation.mutateAsync(id)));
 			toast.success(
-				ids.length === 1 ? "Comment deleted" : `${ids.length} comments deleted`,
+				ids.length === 1
+					? loc.COMMENTS_MODERATION_TOAST_DELETED
+					: loc.COMMENTS_MODERATION_TOAST_DELETED_PLURAL.replace(
+							"{n}",
+							String(ids.length),
+						),
 			);
 			setSelected(new Set());
 			setDeleteIds([]);
 			await refetch();
 		} catch {
-			toast.error("Failed to delete comment(s)");
+			toast.error(loc.COMMENTS_MODERATION_TOAST_DELETE_ERROR);
 		}
 	};
 
@@ -168,20 +179,25 @@ export function ModerationPage({
 			await Promise.all(
 				ids.map((id) => updateStatus.mutateAsync({ id, status: "approved" })),
 			);
-			toast.success(`${ids.length} comment(s) approved`);
+			toast.success(
+				loc.COMMENTS_MODERATION_TOAST_BULK_APPROVED.replace(
+					"{n}",
+					String(ids.length),
+				),
+			);
 			setSelected(new Set());
 			await refetch();
 		} catch {
-			toast.error("Failed to approve comments");
+			toast.error(loc.COMMENTS_MODERATION_TOAST_BULK_APPROVE_ERROR);
 		}
 	};
 
 	return (
 		<div className="w-full max-w-5xl space-y-6" data-testid="moderation-page">
 			<div>
-				<h1 className="text-2xl font-bold">Comment Moderation</h1>
+				<h1 className="text-2xl font-bold">{loc.COMMENTS_MODERATION_TITLE}</h1>
 				<p className="text-muted-foreground text-sm mt-1">
-					Review and manage comments across all resources.
+					{loc.COMMENTS_MODERATION_DESCRIPTION}
 				</p>
 			</div>
 
@@ -194,13 +210,13 @@ export function ModerationPage({
 			>
 				<TabsList>
 					<TabsTrigger value="pending" data-testid="tab-pending">
-						Pending
+						{loc.COMMENTS_MODERATION_TAB_PENDING}
 					</TabsTrigger>
 					<TabsTrigger value="approved" data-testid="tab-approved">
-						Approved
+						{loc.COMMENTS_MODERATION_TAB_APPROVED}
 					</TabsTrigger>
 					<TabsTrigger value="spam" data-testid="tab-spam">
-						Spam
+						{loc.COMMENTS_MODERATION_TAB_SPAM}
 					</TabsTrigger>
 				</TabsList>
 			</Tabs>
@@ -209,7 +225,10 @@ export function ModerationPage({
 			{selected.size > 0 && (
 				<div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
 					<span className="text-sm text-muted-foreground">
-						{selected.size} selected
+						{loc.COMMENTS_MODERATION_SELECTED.replace(
+							"{n}",
+							String(selected.size),
+						)}
 					</span>
 					{activeTab !== "approved" && (
 						<Button
@@ -219,7 +238,7 @@ export function ModerationPage({
 							disabled={updateStatus.isPending}
 						>
 							<CheckCircle className="h-4 w-4 mr-1" />
-							Approve selected
+							{loc.COMMENTS_MODERATION_APPROVE_SELECTED}
 						</Button>
 					)}
 					<Button
@@ -229,7 +248,7 @@ export function ModerationPage({
 						onClick={() => setDeleteIds([...selected])}
 					>
 						<Trash2 className="h-4 w-4 mr-1" />
-						Delete selected
+						{loc.COMMENTS_MODERATION_DELETE_SELECTED}
 					</Button>
 				</div>
 			)}
@@ -237,7 +256,9 @@ export function ModerationPage({
 			{comments.length === 0 ? (
 				<div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
 					<CheckCircle className="h-8 w-8" />
-					<p className="text-sm">No {activeTab} comments.</p>
+					<p className="text-sm">
+						{loc.COMMENTS_MODERATION_EMPTY.replace("{status}", activeTab)}
+					</p>
 				</div>
 			) : (
 				<div className="rounded-lg border">
@@ -250,14 +271,16 @@ export function ModerationPage({
 											selected.size === comments.length && comments.length > 0
 										}
 										onCheckedChange={toggleSelectAll}
-										aria-label="Select all"
+										aria-label={loc.COMMENTS_MODERATION_SELECT_ALL}
 									/>
 								</TableHead>
-								<TableHead>Author</TableHead>
-								<TableHead>Comment</TableHead>
-								<TableHead>Resource</TableHead>
-								<TableHead>Date</TableHead>
-								<TableHead className="w-36">Actions</TableHead>
+								<TableHead>{loc.COMMENTS_MODERATION_COL_AUTHOR}</TableHead>
+								<TableHead>{loc.COMMENTS_MODERATION_COL_COMMENT}</TableHead>
+								<TableHead>{loc.COMMENTS_MODERATION_COL_RESOURCE}</TableHead>
+								<TableHead>{loc.COMMENTS_MODERATION_COL_DATE}</TableHead>
+								<TableHead className="w-36">
+									{loc.COMMENTS_MODERATION_COL_ACTIONS}
+								</TableHead>
 							</TableRow>
 						</TableHeader>
 						<TableBody>
@@ -271,7 +294,7 @@ export function ModerationPage({
 										<Checkbox
 											checked={selected.has(comment.id)}
 											onCheckedChange={() => toggleSelect(comment.id)}
-											aria-label="Select comment"
+											aria-label={loc.COMMENTS_MODERATION_SELECT_ONE}
 										/>
 									</TableCell>
 									<TableCell>
@@ -310,7 +333,7 @@ export function ModerationPage({
 												variant="ghost"
 												size="icon"
 												className="h-7 w-7"
-												title="View"
+												title={loc.COMMENTS_MODERATION_ACTION_VIEW}
 												onClick={() => setViewComment(comment)}
 												data-testid="view-button"
 											>
@@ -321,7 +344,7 @@ export function ModerationPage({
 													variant="ghost"
 													size="icon"
 													className="h-7 w-7 text-green-600 hover:text-green-700"
-													title="Approve"
+													title={loc.COMMENTS_MODERATION_ACTION_APPROVE}
 													onClick={() => handleApprove(comment.id)}
 													disabled={updateStatus.isPending}
 													data-testid="approve-button"
@@ -334,7 +357,7 @@ export function ModerationPage({
 													variant="ghost"
 													size="icon"
 													className="h-7 w-7 text-orange-500 hover:text-orange-600"
-													title="Mark as spam"
+													title={loc.COMMENTS_MODERATION_ACTION_SPAM}
 													onClick={() => handleSpam(comment.id)}
 													disabled={updateStatus.isPending}
 													data-testid="spam-button"
@@ -346,7 +369,7 @@ export function ModerationPage({
 												variant="ghost"
 												size="icon"
 												className="h-7 w-7 text-destructive hover:text-destructive"
-												title="Delete"
+												title={loc.COMMENTS_MODERATION_ACTION_DELETE}
 												onClick={() => setDeleteIds([comment.id])}
 												data-testid="delete-button"
 											>
@@ -365,7 +388,7 @@ export function ModerationPage({
 			<Dialog open={!!viewComment} onOpenChange={() => setViewComment(null)}>
 				<DialogContent className="max-w-2xl">
 					<DialogHeader>
-						<DialogTitle>Comment Details</DialogTitle>
+						<DialogTitle>{loc.COMMENTS_MODERATION_DIALOG_TITLE}</DialogTitle>
 					</DialogHeader>
 					{viewComment && (
 						<div className="space-y-4">
@@ -391,24 +414,32 @@ export function ModerationPage({
 
 							<div className="grid grid-cols-2 gap-3 text-sm">
 								<div>
-									<p className="text-muted-foreground text-xs">Resource</p>
+									<p className="text-muted-foreground text-xs">
+										{loc.COMMENTS_MODERATION_DIALOG_RESOURCE}
+									</p>
 									<p className="font-mono text-xs">
 										{viewComment.resourceType}/{viewComment.resourceId}
 									</p>
 								</div>
 								<div>
-									<p className="text-muted-foreground text-xs">Likes</p>
+									<p className="text-muted-foreground text-xs">
+										{loc.COMMENTS_MODERATION_DIALOG_LIKES}
+									</p>
 									<p>{viewComment.likes}</p>
 								</div>
 								{viewComment.parentId && (
 									<div>
-										<p className="text-muted-foreground text-xs">Reply to</p>
+										<p className="text-muted-foreground text-xs">
+											{loc.COMMENTS_MODERATION_DIALOG_REPLY_TO}
+										</p>
 										<p className="font-mono text-xs">{viewComment.parentId}</p>
 									</div>
 								)}
 								{viewComment.editedAt && (
 									<div>
-										<p className="text-muted-foreground text-xs">Edited</p>
+										<p className="text-muted-foreground text-xs">
+											{loc.COMMENTS_MODERATION_DIALOG_EDITED}
+										</p>
 										<p className="text-xs">
 											{new Date(viewComment.editedAt).toLocaleString()}
 										</p>
@@ -417,7 +448,9 @@ export function ModerationPage({
 							</div>
 
 							<div>
-								<p className="text-muted-foreground text-xs mb-1">Body</p>
+								<p className="text-muted-foreground text-xs mb-1">
+									{loc.COMMENTS_MODERATION_DIALOG_BODY}
+								</p>
 								<div className="p-3 bg-muted rounded-lg text-sm whitespace-pre-wrap break-words">
 									{viewComment.body}
 								</div>
@@ -435,7 +468,7 @@ export function ModerationPage({
 										data-testid="dialog-approve-button"
 									>
 										<CheckCircle className="h-4 w-4 mr-1" />
-										Approve
+										{loc.COMMENTS_MODERATION_DIALOG_APPROVE}
 									</Button>
 								)}
 								{viewComment.status !== "spam" && (
@@ -449,7 +482,7 @@ export function ModerationPage({
 										disabled={updateStatus.isPending}
 									>
 										<ShieldOff className="h-4 w-4 mr-1" />
-										Mark spam
+										{loc.COMMENTS_MODERATION_DIALOG_MARK_SPAM}
 									</Button>
 								)}
 								<Button
@@ -461,7 +494,7 @@ export function ModerationPage({
 									}}
 								>
 									<Trash2 className="h-4 w-4 mr-1" />
-									Delete
+									{loc.COMMENTS_MODERATION_DIALOG_DELETE}
 								</Button>
 							</div>
 						</div>
@@ -477,26 +510,31 @@ export function ModerationPage({
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
-							Delete{" "}
 							{deleteIds.length === 1
-								? "comment"
-								: `${deleteIds.length} comments`}
-							?
+								? loc.COMMENTS_MODERATION_DELETE_TITLE_SINGULAR
+								: loc.COMMENTS_MODERATION_DELETE_TITLE_PLURAL.replace(
+										"{n}",
+										String(deleteIds.length),
+									)}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							This action cannot be undone. The{" "}
-							{deleteIds.length === 1 ? "comment" : "comments"} will be
-							permanently deleted.
+							{deleteIds.length === 1
+								? loc.COMMENTS_MODERATION_DELETE_DESCRIPTION_SINGULAR
+								: loc.COMMENTS_MODERATION_DELETE_DESCRIPTION_PLURAL}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogCancel>
+							{loc.COMMENTS_MODERATION_DELETE_CANCEL}
+						</AlertDialogCancel>
 						<AlertDialogAction
 							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
 							onClick={() => handleDelete(deleteIds)}
 							data-testid="confirm-delete-button"
 						>
-							{deleteMutation.isPending ? "Deleting…" : "Delete"}
+							{deleteMutation.isPending
+								? loc.COMMENTS_MODERATION_DELETE_DELETING
+								: loc.COMMENTS_MODERATION_DELETE_CONFIRM}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

@@ -21,6 +21,10 @@ import {
 	useDeleteComment,
 	useToggleLike,
 } from "../hooks/use-comments";
+import {
+	COMMENTS_LOCALIZATION,
+	type CommentsLocalization,
+} from "../localization";
 
 /** Custom input component props */
 export interface CommentInputProps {
@@ -63,6 +67,8 @@ export interface CommentThreadProps {
 	components?: CommentComponents;
 	/** Optional className applied to the root wrapper */
 	className?: string;
+	/** Localization strings — defaults to English */
+	localization?: Partial<CommentsLocalization>;
 }
 
 const DEFAULT_RENDERER: ComponentType<CommentRendererProps> = ({ body }) => (
@@ -90,6 +96,7 @@ function CommentCard({
 	resourceType,
 	headers,
 	components,
+	loc,
 	onReplyClick,
 }: {
 	comment: SerializedComment;
@@ -100,6 +107,7 @@ function CommentCard({
 	resourceType: string;
 	headers?: HeadersInit;
 	components?: CommentComponents;
+	loc: CommentsLocalization;
 	onReplyClick: (parentId: string) => void;
 }) {
 	const [isEditing, setIsEditing] = useState(false);
@@ -118,7 +126,6 @@ function CommentCard({
 
 	const isOwn = currentUserId && comment.authorId === currentUserId;
 	const isPending = comment.status === "pending";
-	const isSpam = comment.status === "spam";
 	const isApproved = comment.status === "approved";
 
 	const handleEdit = async (body: string) => {
@@ -127,7 +134,7 @@ function CommentCard({
 	};
 
 	const handleDelete = async () => {
-		if (!window.confirm("Delete this comment?")) return;
+		if (!window.confirm(loc.COMMENTS_DELETE_CONFIRM)) return;
 		await deleteMutation.mutateAsync(comment.id);
 	};
 
@@ -169,7 +176,7 @@ function CommentCard({
 					</span>
 					{comment.editedAt && (
 						<span className="text-xs text-muted-foreground italic">
-							(edited)
+							{loc.COMMENTS_EDITED_BADGE}
 						</span>
 					)}
 					{isPending && isOwn && (
@@ -178,16 +185,7 @@ function CommentCard({
 							className="text-xs"
 							data-testid="pending-badge"
 						>
-							Pending approval
-						</Badge>
-					)}
-					{isSpam && isOwn && (
-						<Badge
-							variant="destructive"
-							className="text-xs"
-							data-testid="spam-badge"
-						>
-							Rejected
+							{loc.COMMENTS_PENDING_BADGE}
 						</Badge>
 					)}
 				</div>
@@ -196,8 +194,9 @@ function CommentCard({
 					<CommentForm
 						authorId={currentUserId ?? ""}
 						initialBody={comment.body}
-						submitLabel="Save"
+						submitLabel={loc.COMMENTS_SAVE_EDIT}
 						InputComponent={components?.Input}
+						localization={loc}
 						onSubmit={handleEdit}
 						onCancel={() => setIsEditing(false)}
 					/>
@@ -213,7 +212,11 @@ function CommentCard({
 								size="sm"
 								className="h-7 px-2 text-xs gap-1"
 								onClick={handleLike}
-								aria-label={comment.isLikedByCurrentUser ? "Unlike" : "Like"}
+								aria-label={
+									comment.isLikedByCurrentUser
+										? loc.COMMENTS_UNLIKE_ARIA
+										: loc.COMMENTS_LIKE_ARIA
+								}
 								data-testid="like-button"
 							>
 								<Heart
@@ -234,7 +237,7 @@ function CommentCard({
 								data-testid="reply-button"
 							>
 								<MessageSquare className="h-3.5 w-3.5 mr-1" />
-								Reply
+								{loc.COMMENTS_REPLY_BUTTON}
 							</Button>
 						)}
 
@@ -249,7 +252,7 @@ function CommentCard({
 										data-testid="edit-button"
 									>
 										<Pencil className="h-3.5 w-3.5 mr-1" />
-										Edit
+										{loc.COMMENTS_EDIT_BUTTON}
 									</Button>
 								)}
 								<Button
@@ -261,7 +264,7 @@ function CommentCard({
 									data-testid="delete-button"
 								>
 									<X className="h-3.5 w-3.5 mr-1" />
-									Delete
+									{loc.COMMENTS_DELETE_BUTTON}
 								</Button>
 							</>
 						)}
@@ -283,7 +286,9 @@ function CommentThreadInner({
 	loginHref,
 	headers,
 	components,
+	localization: localizationProp,
 }: CommentThreadProps) {
+	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
 	const [replyingTo, setReplyingTo] = useState<string | null>(null);
 	const [expandedReplies, setExpandedReplies] = useState<Set<string>>(
 		new Set(),
@@ -323,8 +328,6 @@ function CommentThreadInner({
 		setExpandedReplies((prev) => new Set(prev).add(parentId));
 	};
 
-	// Build a list including own pending comments (optimistic inserts include them)
-	// The server only returns approved comments so we need to show pending ones too
 	const allTopLevel = comments;
 
 	return (
@@ -333,8 +336,8 @@ function CommentThreadInner({
 				<MessageSquare className="h-5 w-5 text-muted-foreground" />
 				<h3 className="font-semibold text-sm">
 					{comments.length === 0
-						? "Comments"
-						: `${comments.length} Comment${comments.length === 1 ? "" : "s"}`}
+						? loc.COMMENTS_TITLE
+						: `${comments.length} ${loc.COMMENTS_TITLE}`}
 				</h3>
 			</div>
 
@@ -366,6 +369,7 @@ function CommentThreadInner({
 								resourceType={resourceType}
 								headers={headers}
 								components={components}
+								loc={loc}
 								onReplyClick={(parentId) => {
 									setReplyingTo(replyingTo === parentId ? null : parentId);
 								}}
@@ -381,6 +385,7 @@ function CommentThreadInner({
 								currentUserId={currentUserId}
 								headers={headers}
 								components={components}
+								loc={loc}
 								expanded={expandedReplies.has(comment.id)}
 								replyCount={comment.replyCount}
 								onToggle={() => {
@@ -399,8 +404,9 @@ function CommentThreadInner({
 									<CommentForm
 										authorId={currentUserId}
 										parentId={comment.id}
-										submitLabel="Post reply"
+										submitLabel={loc.COMMENTS_FORM_POST_REPLY}
 										InputComponent={components?.Input}
+										localization={loc}
 										onSubmit={(body) => handleReply(body, comment.id)}
 										onCancel={() => setReplyingTo(null)}
 									/>
@@ -413,7 +419,7 @@ function CommentThreadInner({
 
 			{!isLoading && allTopLevel.length === 0 && (
 				<p className="text-sm text-muted-foreground py-4 text-center">
-					Be the first to comment.
+					{loc.COMMENTS_EMPTY}
 				</p>
 			)}
 
@@ -423,8 +429,9 @@ function CommentThreadInner({
 				<div data-testid="comment-form-wrapper">
 					<CommentForm
 						authorId={currentUserId}
-						submitLabel="Post comment"
+						submitLabel={loc.COMMENTS_FORM_POST_COMMENT}
 						InputComponent={components?.Input}
+						localization={loc}
 						onSubmit={handlePost}
 					/>
 				</div>
@@ -435,7 +442,7 @@ function CommentThreadInner({
 				>
 					<LogIn className="h-6 w-6 text-muted-foreground" />
 					<p className="text-sm text-muted-foreground">
-						Please sign in to leave a comment.
+						{loc.COMMENTS_LOGIN_PROMPT}
 					</p>
 					{loginHref && (
 						<a
@@ -443,7 +450,7 @@ function CommentThreadInner({
 							className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4"
 							data-testid="login-link"
 						>
-							Sign in
+							{loc.COMMENTS_LOGIN_LINK}
 						</a>
 					)}
 				</div>
@@ -463,6 +470,7 @@ function RepliesSection({
 	currentUserId,
 	headers,
 	components,
+	loc,
 	expanded,
 	replyCount,
 	onToggle,
@@ -475,6 +483,7 @@ function RepliesSection({
 	currentUserId?: string;
 	headers?: HeadersInit;
 	components?: CommentComponents;
+	loc: CommentsLocalization;
 	expanded: boolean;
 	/** Pre-computed from the parent comment — avoids an extra fetch on mount. */
 	replyCount: number;
@@ -514,7 +523,10 @@ function RepliesSection({
 					data-testid="show-replies-button"
 				>
 					<Check className="h-3 w-3 mr-1" />
-					{displayCount} {displayCount === 1 ? "reply" : "replies"}
+					{displayCount}{" "}
+					{displayCount === 1
+						? loc.COMMENTS_REPLIES_SINGULAR
+						: loc.COMMENTS_REPLIES_PLURAL}
 				</Button>
 			)}
 			{expanded && (
@@ -533,6 +545,7 @@ function RepliesSection({
 							resourceType={resourceType}
 							headers={headers}
 							components={components}
+							loc={loc}
 							onReplyClick={() => {}} // No nested replies in v1
 						/>
 					))}
@@ -542,7 +555,7 @@ function RepliesSection({
 						className="h-7 px-2 text-xs"
 						onClick={onToggle}
 					>
-						Hide replies
+						{loc.COMMENTS_HIDE_REPLIES}
 					</Button>
 				</div>
 			)}

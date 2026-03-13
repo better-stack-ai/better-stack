@@ -12,12 +12,19 @@ export interface RouteContext {
 	[key: string]: unknown;
 }
 
+import type { CommentsLocalization } from "./localization";
+
 /**
  * Overridable configuration and hooks for the Comments plugin.
  *
  * Provide these in the layout wrapping your pages via `PluginOverridesProvider`.
  */
 export interface CommentsPluginOverrides {
+	/**
+	 * Localization strings for all Comments plugin UI.
+	 * Defaults to English when not provided.
+	 */
+	localization?: Partial<CommentsLocalization>;
 	/**
 	 * Base URL for API calls (e.g., "https://example.com")
 	 */
