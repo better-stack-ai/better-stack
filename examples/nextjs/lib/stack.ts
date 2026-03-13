@@ -366,9 +366,11 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
             autoApprove: false,
             resolveUser: async (authorId) => {
                 // In production: look up your auth system's user by authorId
-                const user = await resolveUser(authorId)
-                if (!user) return null
-                return { name: user.name, avatarUrl: user.avatarUrl }
+                return { name: `User ${authorId.slice(0, 8)}` }
+            },
+            onBeforeList: async (query, ctx) => {
+                // In production: restrict non-approved status filters to admin sessions
+                console.log("onBeforeList: status filter", query.status)
             },
             onBeforePost: async (input, ctx) => {
                 // In production: verify the session and that input.authorId matches
@@ -377,8 +379,23 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
             onAfterPost: async (comment, ctx) => {
                 console.log("Comment created:", comment.id, "status:", comment.status)
             },
+            onBeforeLike: async (commentId, authorId, ctx) => {
+                // In production: verify authorId matches the authenticated session
+                console.log("onBeforeLike: user", authorId, "toggling like on comment", commentId)
+            },
+            onBeforeStatusChange: async (commentId, status, ctx) => {
+                // In production: verify the caller has admin/moderator role
+                console.log("onBeforeStatusChange: comment", commentId, "->", status)
+            },
             onAfterApprove: async (comment, ctx) => {
                 console.log("Comment approved:", comment.id)
+            },
+            onBeforeDelete: async (commentId, ctx) => {
+                // In production: verify the caller has admin/moderator role
+                console.log("onBeforeDelete: comment", commentId)
+            },
+            onAfterDelete: async (commentId, ctx) => {
+                console.log("Comment deleted:", commentId)
             },
         }),
         // Kanban plugin for project management boards

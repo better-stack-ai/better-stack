@@ -46,8 +46,16 @@ const { handler, dbSchema } = stack({
           : null
       },
 
-      // Lifecycle hooks
+      // Lifecycle hooks — see Security section below for required configuration
+      onBeforeList: async (query, ctx) => {
+        // Restrict non-approved status filters (pending/spam) to admin sessions only
+        if (query.status && query.status !== "approved") {
+          const session = await getSession(ctx.headers)
+          if (!session?.user?.isAdmin) throw new Error("Admin access required")
+        }
+      },
       onBeforePost: async (comment, ctx) => {
+        // Required: verify session and that comment.authorId matches the authenticated user
         const session = await getSession(ctx.headers)
         if (!session?.user) throw new Error("Authentication required")
         if (comment.authorId !== session.user.id)
@@ -56,9 +64,25 @@ const { handler, dbSchema } = stack({
       onAfterPost: async (comment, ctx) => {
         console.log("New comment posted:", comment.id)
       },
+      onBeforeLike: async (commentId, authorId, ctx) => {
+        // Verify authorId matches the authenticated session
+        const session = await getSession(ctx.headers)
+        if (!session?.user) throw new Error("Authentication required")
+        if (authorId !== session.user.id) throw new Error("Forbidden")
+      },
+      onBeforeStatusChange: async (commentId, status, ctx) => {
+        // Require admin/moderator role for the moderation endpoint
+        const session = await getSession(ctx.headers)
+        if (!session?.user?.isAdmin) throw new Error("Admin access required")
+      },
       onAfterApprove: async (comment, ctx) => {
         // Send notification to comment author
         await sendApprovalEmail(comment.authorId)
+      },
+      onBeforeDelete: async (commentId, ctx) => {
+        // Require admin/moderator role — the Delete button is client-side only
+        const session = await getSession(ctx.headers)
+        if (!session?.user?.isAdmin) throw new Error("Admin access required")
       },
     })
   },
@@ -306,12 +330,22 @@ Access is controlled by the `onBeforeModerationPageRendered` hook in `CommentsPl
 |--------|------|---------|-------------|
 | `autoApprove` | `boolean` | `false` | Automatically approve new comments |
 | `resolveUser` | `(authorId: string) => Promise<{ name: string; avatarUrl?: string } \| null>` | — | Map author IDs to display info; returns `null` → shows `"[deleted]"` |
-| `onBeforePost` | hook | — | Called before a comment is saved. Throw to reject. |
+| `onBeforeList` | hook | — | Called before the comment list is returned. Throw to reject. When absent, any `status` filter other than `"approved"` is automatically rejected with 403 — preventing anonymous access to the moderation queues. |
+| `onBeforePost` | hook | — | Called before a comment is saved. Throw to reject. **Required for security** — see callout below. |
 | `onAfterPost` | hook | — | Called after a comment is saved. |
-| `onBeforeEdit` | hook | — | Called before a comment is updated. Throw to reject. |
-| `onAfterEdit` | hook | — | Called after a comment is updated. |
+| `onBeforeEdit` | hook | — | Called before a comment body is updated. Throw to reject. |
+| `onAfterEdit` | hook | — | Called after a comment body is updated. |
+| `onBeforeLike` | hook | — | Called before a like is toggled. Throw to reject. Use to verify `authorId` matches the authenticated session. |
+| `onBeforeStatusChange` | hook | — | Called before moderation status is changed. Throw to reject. Use to enforce admin-only access. |
 | `onAfterApprove` | hook | — | Called after a comment is approved. |
+| `onBeforeDelete` | hook | — | Called before a comment is deleted. Throw to reject. Use to enforce admin-only access. |
 | `onAfterDelete` | hook | — | Called after a comment is deleted. |
+
+<Callout type="warn">
+**`onBeforePost` is the only server-side identity gate for comment creation.** The `authorId` field is passed in the request body — without `onBeforePost`, any caller can post comments attributed to any user ID. Always verify that `input.authorId` matches the authenticated session (e.g. check a JWT or session cookie) and throw if it does not.
+
+If `onBeforePost` is not configured, the plugin emits a `console.warn` at startup.
+</Callout>
 
 ### Server-Side API (`stack.api.comments`)
 

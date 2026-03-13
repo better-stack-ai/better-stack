@@ -52,9 +52,24 @@ export interface CommentsBackendOptions {
 	) => Promise<{ name: string; avatarUrl?: string } | null>;
 
 	/**
+	 * Called before the comment list is returned. Throw to reject.
+	 * When this hook is absent, any request with `status` other than "approved"
+	 * is automatically rejected with 403 — preventing anonymous callers from
+	 * reading the pending/spam moderation queues. Configure this hook to
+	 * authorize admin callers (e.g. check session role).
+	 */
+	onBeforeList?: (
+		query: z.infer<typeof CommentListQuerySchema>,
+		context: CommentsApiContext,
+	) => Promise<void> | void;
+
+	/**
 	 * Called before a comment is created. Throw an error to reject the comment.
-	 * Use this to enforce authentication: validate that input.authorId is the
-	 * authenticated user (e.g. verify session, check JWT).
+	 *
+	 * ⚠️  SECURITY: This is the only server-side identity gate for comment
+	 * creation. Always verify that `input.authorId` matches the authenticated
+	 * session (e.g. verify JWT/session cookie). Without this hook, any caller
+	 * can post a comment attributed to any arbitrary user ID.
 	 */
 	onBeforePost?: (
 		input: z.infer<typeof createCommentSchema>,
@@ -88,10 +103,42 @@ export interface CommentsBackendOptions {
 	) => Promise<void> | void;
 
 	/**
+	 * Called before a like is toggled. Throw to reject.
+	 * Use this to verify that `authorId` matches the authenticated session —
+	 * without this hook any caller can like or unlike on behalf of any user ID.
+	 */
+	onBeforeLike?: (
+		commentId: string,
+		authorId: string,
+		context: CommentsApiContext,
+	) => Promise<void> | void;
+
+	/**
+	 * Called before a comment's status is changed. Throw to reject.
+	 * Use this to enforce admin-only access to the moderation endpoint —
+	 * the endpoint is otherwise unprotected at the network layer.
+	 */
+	onBeforeStatusChange?: (
+		commentId: string,
+		status: "pending" | "approved" | "spam",
+		context: CommentsApiContext,
+	) => Promise<void> | void;
+
+	/**
 	 * Called after a comment status is changed to "approved".
 	 */
 	onAfterApprove?: (
 		comment: Comment,
+		context: CommentsApiContext,
+	) => Promise<void> | void;
+
+	/**
+	 * Called before a comment is deleted. Throw to reject.
+	 * Use this to enforce admin-only access — the CommentCard UI hides the
+	 * Delete button behind an ownership check, but that is client-side only.
+	 */
+	onBeforeDelete?: (
+		commentId: string,
 		context: CommentsApiContext,
 	) => Promise<void> | void;
 
@@ -104,8 +151,16 @@ export interface CommentsBackendOptions {
 	) => Promise<void> | void;
 }
 
-export const commentsBackendPlugin = (options?: CommentsBackendOptions) =>
-	defineBackendPlugin({
+export const commentsBackendPlugin = (options?: CommentsBackendOptions) => {
+	if (!options?.onBeforePost) {
+		console.warn(
+			"[btst/comments] onBeforePost is not configured. " +
+				"Any caller can post a comment attributed to any user ID. " +
+				"Add onBeforePost to verify the session and that input.authorId matches the authenticated user.",
+		);
+	}
+
+	return defineBackendPlugin({
 		name: "comments",
 		dbPlugin: dbSchema,
 
@@ -132,6 +187,27 @@ export const commentsBackendPlugin = (options?: CommentsBackendOptions) =>
 						headers: ctx.headers,
 					};
 					try {
+						// Restrict non-approved status filters to authorized callers only.
+						// Without onBeforeList, anonymous callers cannot read pending/spam queues.
+						if (ctx.query.status && ctx.query.status !== "approved") {
+							if (!options?.onBeforeList) {
+								throw ctx.error(403, {
+									message: "Forbidden: status filter requires authorization",
+								});
+							}
+							await runHookWithShim(
+								() => options.onBeforeList!(ctx.query, context),
+								ctx.error,
+								"Forbidden: Cannot list comments with this status filter",
+							);
+						} else if (options?.onBeforeList) {
+							await runHookWithShim(
+								() => options.onBeforeList!(ctx.query, context),
+								ctx.error,
+								"Forbidden: Cannot list comments",
+							);
+						}
+
 						return await listComments(adapter, ctx.query, options?.resolveUser);
 					} catch (error) {
 						throw error;
@@ -243,7 +319,20 @@ export const commentsBackendPlugin = (options?: CommentsBackendOptions) =>
 				},
 				async (ctx) => {
 					const { id } = ctx.params;
+					const context: CommentsApiContext = {
+						params: ctx.params,
+						body: ctx.body,
+						headers: ctx.headers,
+					};
 					try {
+						if (options?.onBeforeLike) {
+							await runHookWithShim(
+								() => options.onBeforeLike!(id, ctx.body.authorId, context),
+								ctx.error,
+								"Unauthorized: Cannot like comment",
+							);
+						}
+
 						const result = await toggleCommentLike(
 							adapter,
 							id,
@@ -271,6 +360,15 @@ export const commentsBackendPlugin = (options?: CommentsBackendOptions) =>
 						headers: ctx.headers,
 					};
 					try {
+						if (options?.onBeforeStatusChange) {
+							await runHookWithShim(
+								() =>
+									options.onBeforeStatusChange!(id, ctx.body.status, context),
+								ctx.error,
+								"Unauthorized: Cannot change comment status",
+							);
+						}
+
 						const updated = await updateCommentStatus(
 							adapter,
 							id,
@@ -304,6 +402,14 @@ export const commentsBackendPlugin = (options?: CommentsBackendOptions) =>
 						headers: ctx.headers,
 					};
 					try {
+						if (options?.onBeforeDelete) {
+							await runHookWithShim(
+								() => options.onBeforeDelete!(id, context),
+								ctx.error,
+								"Unauthorized: Cannot delete comment",
+							);
+						}
+
 						const deleted = await deleteComment(adapter, id);
 						if (!deleted) {
 							throw ctx.error(404, { message: "Comment not found" });
@@ -331,6 +437,7 @@ export const commentsBackendPlugin = (options?: CommentsBackendOptions) =>
 			} as const;
 		},
 	});
+};
 
 export type CommentsApiRouter = ReturnType<
 	ReturnType<typeof commentsBackendPlugin>["routes"]

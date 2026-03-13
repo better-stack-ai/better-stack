@@ -157,8 +157,29 @@ const { handler, dbSchema } = stack({
         // Comments plugin for threaded discussions
         comments: commentsBackendPlugin({
             autoApprove: false,
+            resolveUser: async (authorId) => {
+                // In production: look up your auth system's user by authorId
+                return { name: `User ${authorId.slice(0, 8)}` }
+            },
+            onBeforeList: async (query, ctx) => {
+                // In production: restrict non-approved status filters to admin sessions
+                console.log("onBeforeList: status filter", query.status)
+            },
             onBeforePost: async (input, ctx) => {
+                // In production: verify the session and that input.authorId matches
                 console.log("onBeforePost: new comment by", input.authorId)
+            },
+            onBeforeLike: async (commentId, authorId, ctx) => {
+                // In production: verify authorId matches the authenticated session
+                console.log("onBeforeLike: user", authorId, "toggling like on comment", commentId)
+            },
+            onBeforeStatusChange: async (commentId, status, ctx) => {
+                // In production: verify the caller has admin/moderator role
+                console.log("onBeforeStatusChange: comment", commentId, "->", status)
+            },
+            onBeforeDelete: async (commentId, ctx) => {
+                // In production: verify the caller has admin/moderator role
+                console.log("onBeforeDelete: comment", commentId)
             },
         }),
     },
