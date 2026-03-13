@@ -475,7 +475,7 @@ Configure the comments plugin behavior from your layout:
 | `apiBaseURL` | `string` | Base URL for API requests |
 | `apiBasePath` | `string` | Path prefix for the API |
 | `currentUserId` | `string \| (() => string \| undefined \| Promise<string \| undefined>)` | Authenticated user's ID — used by the My Comments page. Supports async functions for session-based resolution. |
-| `resourceLinks` | `Record<string, (id: string) => string>` | Per-resource-type URL builders for linking comments back to their resource on the My Comments page (e.g. `{ "blog-post": (slug) => \`/pages/blog/${slug}\` }`). |
+| `resourceLinks` | `Record<string, (id: string) => string>` | Per-resource-type URL builders for linking comments back to their resource on the My Comments page (e.g. `{ "blog-post": (slug) => "/pages/blog/" + slug }`). |
 | `onBeforeModerationPageRendered` | hook | Called before rendering the moderation dashboard. Throw to deny access. |
 | `onBeforeResourceCommentsRendered` | hook | Called before rendering the per-resource comments admin view. Throw to deny access. |
 | `onBeforeMyCommentsPageRendered` | hook | Called before rendering the My Comments page. Throw to deny access (e.g. when no session exists). |
