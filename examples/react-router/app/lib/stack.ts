@@ -189,6 +189,13 @@ const { handler, dbSchema } = stack({
                 // In production: verify the caller has admin/moderator role
                 console.log("onBeforeDelete: comment", commentId)
             },
+            onBeforeListByAuthor: async (authorId, query, ctx) => {
+                // In production: verify authorId matches the authenticated session
+                // const session = await getSession(ctx.headers)
+                // if (!session?.user) throw new Error("Authentication required")
+                // if (authorId !== session.user.id && !session.user.isAdmin) throw new Error("Forbidden")
+                if (authorId !== "olliethedev") throw new Error("Forbidden")
+            },
         }),
     },
     adapter: (db) => createMemoryAdapter(db)({})
