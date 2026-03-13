@@ -40,6 +40,7 @@ Enable the features you need and keep building your product.
 | **OpenAPI** | Auto-generated API documentation with interactive Scalar UI |
 | **Route Docs** | Auto-generated client route documentation with interactive navigation |
 | **Better Auth UI** | Beautiful shadcn/ui authentication components for better-auth |
+| **Comments** | Commenting system with moderation, likes, and nested replies |
 
 Each plugin ships **frontend + backend together**:
 routes, APIs, database models, React components, SSR, and SEO — already wired.
