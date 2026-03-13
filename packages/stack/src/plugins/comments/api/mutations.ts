@@ -121,6 +121,9 @@ export async function deleteComment(
  * - If the user has already liked the comment: deletes the commentLike row and decrements the likes counter.
  * Returns the updated likes count.
  *
+ * All reads and writes are performed inside a single transaction to prevent
+ * concurrent requests from causing counter drift or duplicate like rows.
+ *
  * @remarks **Security:** No authorization hooks are called. The caller is
  * responsible for ensuring the requesting user is authenticated (authorId is valid).
  */
@@ -129,55 +132,57 @@ export async function toggleCommentLike(
 	commentId: string,
 	authorId: string,
 ): Promise<{ likes: number; isLiked: boolean }> {
-	const comment = await adapter.findOne<Comment>({
-		model: "comment",
-		where: [{ field: "id", value: commentId, operator: "eq" }],
-	});
-	if (!comment) {
-		throw new Error("Comment not found");
-	}
+	return adapter.transaction(async (tx) => {
+		const comment = await tx.findOne<Comment>({
+			model: "comment",
+			where: [{ field: "id", value: commentId, operator: "eq" }],
+		});
+		if (!comment) {
+			throw new Error("Comment not found");
+		}
 
-	const existingLike = await adapter.findOne<CommentLike>({
-		model: "commentLike",
-		where: [
-			{ field: "commentId", value: commentId, operator: "eq" },
-			{ field: "authorId", value: authorId, operator: "eq" },
-		],
-	});
-
-	let newLikes: number;
-	let isLiked: boolean;
-
-	if (existingLike) {
-		// Unlike
-		await adapter.delete({
+		const existingLike = await tx.findOne<CommentLike>({
 			model: "commentLike",
 			where: [
 				{ field: "commentId", value: commentId, operator: "eq" },
 				{ field: "authorId", value: authorId, operator: "eq" },
 			],
 		});
-		newLikes = Math.max(0, comment.likes - 1);
-		isLiked = false;
-	} else {
-		// Like
-		await adapter.create<CommentLike>({
-			model: "commentLike",
-			data: {
-				commentId,
-				authorId,
-				createdAt: new Date(),
-			},
+
+		let newLikes: number;
+		let isLiked: boolean;
+
+		if (existingLike) {
+			// Unlike
+			await tx.delete({
+				model: "commentLike",
+				where: [
+					{ field: "commentId", value: commentId, operator: "eq" },
+					{ field: "authorId", value: authorId, operator: "eq" },
+				],
+			});
+			newLikes = Math.max(0, comment.likes - 1);
+			isLiked = false;
+		} else {
+			// Like
+			await tx.create<CommentLike>({
+				model: "commentLike",
+				data: {
+					commentId,
+					authorId,
+					createdAt: new Date(),
+				},
+			});
+			newLikes = comment.likes + 1;
+			isLiked = true;
+		}
+
+		await tx.update<Comment>({
+			model: "comment",
+			where: [{ field: "id", value: commentId, operator: "eq" }],
+			update: { likes: newLikes, updatedAt: new Date() },
 		});
-		newLikes = comment.likes + 1;
-		isLiked = true;
-	}
 
-	await adapter.update<Comment>({
-		model: "comment",
-		where: [{ field: "id", value: commentId, operator: "eq" }],
-		update: { likes: newLikes, updatedAt: new Date() },
+		return { likes: newLikes, isLiked };
 	});
-
-	return { likes: newLikes, isLiked };
 }
