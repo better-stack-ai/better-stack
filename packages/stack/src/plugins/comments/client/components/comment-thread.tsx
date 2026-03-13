@@ -118,6 +118,8 @@ function CommentCard({
 
 	const isOwn = currentUserId && comment.authorId === currentUserId;
 	const isPending = comment.status === "pending";
+	const isSpam = comment.status === "spam";
+	const isApproved = comment.status === "approved";
 
 	const handleEdit = async (body: string) => {
 		await updateMutation.mutateAsync({ id: comment.id, body });
@@ -179,6 +181,15 @@ function CommentCard({
 							Pending approval
 						</Badge>
 					)}
+					{isSpam && isOwn && (
+						<Badge
+							variant="destructive"
+							className="text-xs"
+							data-testid="spam-badge"
+						>
+							Rejected
+						</Badge>
+					)}
 				</div>
 
 				{isEditing ? (
@@ -196,7 +207,7 @@ function CommentCard({
 
 				{!isEditing && (
 					<div className="flex items-center gap-1 mt-2">
-						{currentUserId && (
+						{currentUserId && isApproved && (
 							<Button
 								variant="ghost"
 								size="sm"
@@ -214,7 +225,7 @@ function CommentCard({
 							</Button>
 						)}
 
-						{currentUserId && !comment.parentId && (
+						{currentUserId && !comment.parentId && isApproved && (
 							<Button
 								variant="ghost"
 								size="sm"
@@ -229,16 +240,18 @@ function CommentCard({
 
 						{isOwn && (
 							<>
-								<Button
-									variant="ghost"
-									size="sm"
-									className="h-7 px-2 text-xs"
-									onClick={() => setIsEditing(true)}
-									data-testid="edit-button"
-								>
-									<Pencil className="h-3.5 w-3.5 mr-1" />
-									Edit
-								</Button>
+								{isApproved && (
+									<Button
+										variant="ghost"
+										size="sm"
+										className="h-7 px-2 text-xs"
+										onClick={() => setIsEditing(true)}
+										data-testid="edit-button"
+									>
+										<Pencil className="h-3.5 w-3.5 mr-1" />
+										Edit
+									</Button>
+								)}
 								<Button
 									variant="ghost"
 									size="sm"
