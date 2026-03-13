@@ -236,9 +236,18 @@ export default function Layout() {
                     comments: {
                         apiBaseURL: baseURL,
                         apiBasePath: "/api/data",
+                        // In production: derive from your auth session
+                        currentUserId: "olliethedev",
+                        resourceLinks: {
+                            "blog-post": (slug) => `/pages/blog/${slug}`,
+                        },
                         onBeforeModerationPageRendered: (context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeModerationPageRendered`);
-                            return true;
+                            return true; // In production: check admin role
+                        },
+                        onBeforeMyCommentsPageRendered: (context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeMyCommentsPageRendered`);
+                            return true; // In production: check authenticated session
                         },
                     }
                 }}
