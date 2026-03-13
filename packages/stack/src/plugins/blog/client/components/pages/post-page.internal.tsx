@@ -22,6 +22,8 @@ import { OnThisPage, OnThisPageSelect } from "../shared/on-this-page";
 import type { SerializedPost } from "../../../types";
 import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
 import { WhenVisible } from "@workspace/ui/components/when-visible";
+import { PostNavigationSkeleton } from "../loading/post-navigation-skeleton";
+import { RecentPostsCarouselSkeleton } from "../loading/recent-posts-carousel-skeleton";
 
 // Internal component with actual page content
 export function PostPage({ slug }: { slug: string }) {
