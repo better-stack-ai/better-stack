@@ -405,6 +405,13 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
             onAfterDelete: async (commentId, ctx) => {
                 console.log("Comment deleted:", commentId)
             },
+            onBeforeListByAuthor: async (authorId, query, ctx) => {
+                // In production: verify authorId matches the authenticated session
+                // const session = await getSession(ctx.headers)
+                // if (!session?.user) throw new Error("Authentication required")
+                // if (authorId !== session.user.id && !session.user.isAdmin) throw new Error("Forbidden")
+                if (authorId !== "olliethedev") throw new Error("Forbidden")
+            },
         }),
         // Kanban plugin for project management boards
         kanban: kanbanBackendPlugin({

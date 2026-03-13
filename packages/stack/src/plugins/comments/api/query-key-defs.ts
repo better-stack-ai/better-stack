@@ -10,6 +10,8 @@ export interface CommentsListDiscriminator {
 	parentId: string | null | undefined;
 	status: string | undefined;
 	currentUserId: string | undefined;
+	authorId: string | undefined;
+	sort: string | undefined;
 	limit: number;
 	offset: number;
 }
@@ -23,6 +25,8 @@ export function commentsListDiscriminator(params?: {
 	parentId?: string | null;
 	status?: string;
 	currentUserId?: string;
+	authorId?: string;
+	sort?: string;
 	limit?: number;
 	offset?: number;
 }): CommentsListDiscriminator {
@@ -32,6 +36,8 @@ export function commentsListDiscriminator(params?: {
 		parentId: params?.parentId,
 		status: params?.status,
 		currentUserId: params?.currentUserId,
+		authorId: params?.authorId,
+		sort: params?.sort,
 		limit: params?.limit ?? 20,
 		offset: params?.offset ?? 0,
 	};
@@ -67,6 +73,8 @@ export const COMMENTS_QUERY_KEYS = {
 		parentId?: string | null;
 		status?: string;
 		currentUserId?: string;
+		authorId?: string;
+		sort?: string;
 		limit?: number;
 		offset?: number;
 	}) => ["comments", "list", commentsListDiscriminator(params)] as const,

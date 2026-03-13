@@ -39,6 +39,35 @@ export interface CommentsPluginOverrides {
 	 */
 	showAttribution?: boolean;
 
+	/**
+	 * The ID of the currently authenticated user.
+	 *
+	 * Used by the My Comments page to scope the comment list to the current user.
+	 * Can be a static string or an async function (useful when the user ID must
+	 * be resolved from a session cookie at render time).
+	 *
+	 * When absent the My Comments page shows a "Please log in" prompt.
+	 */
+	currentUserId?:
+		| string
+		| (() => string | undefined | Promise<string | undefined>);
+
+	/**
+	 * Per-resource-type URL builders used to link each comment back to its
+	 * original resource on the My Comments page.
+	 *
+	 * @example
+	 * ```ts
+	 * resourceLinks: {
+	 *   "blog-post": (slug) => `/pages/blog/${slug}`,
+	 *   "kanban-task": (id) => `/pages/kanban?task=${id}`,
+	 * }
+	 * ```
+	 *
+	 * When a resource type has no entry the ID is shown as plain text.
+	 */
+	resourceLinks?: Record<string, (id: string) => string>;
+
 	// ============ Access Control Hooks ============
 
 	/**
@@ -60,6 +89,13 @@ export interface CommentsPluginOverrides {
 		resourceId: string,
 		context: RouteContext,
 	) => boolean;
+
+	/**
+	 * Called before the My Comments page is rendered.
+	 * Throw to block rendering (e.g., when the user is not authenticated).
+	 * @param context - Route context
+	 */
+	onBeforeMyCommentsPageRendered?: (context: RouteContext) => boolean | void;
 
 	// ============ Lifecycle Hooks ============
 

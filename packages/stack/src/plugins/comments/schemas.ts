@@ -41,6 +41,8 @@ export const CommentListQuerySchema = z.object({
 	parentId: z.string().optional().nullable(),
 	status: CommentStatusSchema.optional(),
 	currentUserId: z.string().optional(),
+	authorId: z.string().optional(),
+	sort: z.enum(["asc", "desc"]).optional(),
 	limit: z.coerce.number().int().min(1).max(100).optional(),
 	offset: z.coerce.number().int().min(0).optional(),
 });

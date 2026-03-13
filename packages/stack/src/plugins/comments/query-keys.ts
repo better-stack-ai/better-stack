@@ -16,6 +16,8 @@ interface CommentsListParams {
 	parentId?: string | null;
 	status?: "pending" | "approved" | "spam";
 	currentUserId?: string;
+	authorId?: string;
+	sort?: "asc" | "desc";
 	limit?: number;
 	offset?: number;
 }
@@ -79,6 +81,8 @@ function createCommentsQueries(
 						parentId: params?.parentId ?? undefined,
 						status: params?.status,
 						currentUserId: params?.currentUserId,
+						authorId: params?.authorId,
+						sort: params?.sort,
 						limit: params?.limit ?? 20,
 						offset: params?.offset ?? 0,
 					},

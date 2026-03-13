@@ -48,6 +48,8 @@ export function useComments(
 		parentId?: string | null;
 		status?: "pending" | "approved" | "spam";
 		currentUserId?: string;
+		authorId?: string;
+		sort?: "asc" | "desc";
 		limit?: number;
 		offset?: number;
 	},
@@ -85,6 +87,8 @@ export function useSuspenseComments(
 		parentId?: string | null;
 		status?: "pending" | "approved" | "spam";
 		currentUserId?: string;
+		authorId?: string;
+		sort?: "asc" | "desc";
 		limit?: number;
 		offset?: number;
 	},

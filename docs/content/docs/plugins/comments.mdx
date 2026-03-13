@@ -340,6 +340,7 @@ Access is controlled by the `onBeforeModerationPageRendered` hook in `CommentsPl
 | `onAfterApprove` | hook | — | Called after a comment is approved. |
 | `onBeforeDelete` | hook | — | Called before a comment is deleted. Throw to reject. Use to enforce admin-only access. |
 | `onAfterDelete` | hook | — | Called after a comment is deleted. |
+| `onBeforeListByAuthor` | hook | — | Called before returning comments filtered by `authorId`. Throw to reject. When absent, **any request with `authorId` returns 403** — preventing anonymous callers from reading any user's comment history. Use to verify `authorId` matches the authenticated session. |
 
 <Callout type="warn">
 **`onBeforePost` is required and must return `{ authorId: string }`.** `authorId` is intentionally absent from the POST body schema — the server derives identity exclusively from this hook. Resolve `authorId` from the session (e.g. JWT / session cookie) and throw if the user is not authenticated. A client can never forge comment authorship.
@@ -408,6 +409,59 @@ const { mutate: updateStatus } = useUpdateCommentStatus()
 updateStatus({ id: "comment-id", status: "approved" })
 ```
 
+## My Comments Page
+
+The comments plugin registers a `/comments/my-comments` route that shows the current user's full comment history — all statuses (approved, pending, spam) in a single paginated table, newest first.
+
+**Features:**
+- All comment statuses visible to the owner in one list, each with an inline status badge
+- Prev / Next pagination (20 per page)
+- Resource link column — click through to the original resource when `resourceLinks` is configured
+- Delete button with confirmation dialog — calls `DELETE /comments/:id` (governed by `onBeforeDelete`)
+- Login prompt when `currentUserId` is not configured
+
+### Setup
+
+Configure the overrides in your layout and the security hook in your backend:
+
+```tsx title="app/pages/layout.tsx"
+overrides={{
+  comments: {
+    apiBaseURL: baseURL,
+    apiBasePath: "/api/data",
+
+    // Provide the current user's ID so the page can scope the query
+    currentUserId: session?.user?.id,
+
+    // Map resource types to URLs so comments link back to their resource
+    resourceLinks: {
+      "blog-post": (slug) => `/pages/blog/${slug}`,
+      "kanban-task": (id) => `/pages/kanban?task=${id}`,
+    },
+
+    onBeforeMyCommentsPageRendered: (context) => {
+      if (!session?.user) throw new Error("Authentication required")
+    },
+  }
+}}
+```
+
+```ts title="lib/stack.ts"
+commentsBackendPlugin({
+  // ...
+  onBeforeListByAuthor: async (authorId, _query, ctx) => {
+    const session = await getSession(ctx.headers)
+    if (!session?.user) throw new Error("Authentication required")
+    if (authorId !== session.user.id && !session.user.isAdmin)
+      throw new Error("Forbidden")
+  },
+})
+```
+
+<Callout type="warn">
+**`onBeforeListByAuthor` is 403 by default.** Any `GET /comments?authorId=...` request returns 403 unless `onBeforeListByAuthor` is configured. This prevents anonymous callers from reading any user's comment history. Always validate that `authorId` matches the authenticated session.
+</Callout>
+
 ## API Reference
 
 ### Client Plugin Overrides
@@ -420,8 +474,11 @@ Configure the comments plugin behavior from your layout:
 |-------|------|-------------|
 | `apiBaseURL` | `string` | Base URL for API requests |
 | `apiBasePath` | `string` | Path prefix for the API |
+| `currentUserId` | `string \| (() => string \| undefined \| Promise<string \| undefined>)` | Authenticated user's ID — used by the My Comments page. Supports async functions for session-based resolution. |
+| `resourceLinks` | `Record<string, (id: string) => string>` | Per-resource-type URL builders for linking comments back to their resource on the My Comments page (e.g. `{ "blog-post": (slug) => \`/pages/blog/${slug}\` }`). |
 | `onBeforeModerationPageRendered` | hook | Called before rendering the moderation dashboard. Throw to deny access. |
 | `onBeforeResourceCommentsRendered` | hook | Called before rendering the per-resource comments admin view. Throw to deny access. |
+| `onBeforeMyCommentsPageRendered` | hook | Called before rendering the My Comments page. Throw to deny access (e.g. when no session exists). |
 
 ### HTTP Endpoints
 

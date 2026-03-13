@@ -753,3 +753,151 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		).toBeVisible();
 	});
 });
+
+// ─── My Comments Page ────────────────────────────────────────────────────────
+//
+// The example app's onBeforePost returns authorId "olliethedev" for every POST,
+// and the layout wires currentUserId: "olliethedev".  All tests in this block
+// rely on that fixture so they can verify comments appear on the my-comments page.
+
+test.describe("My Comments Page", () => {
+	const AUTHOR_ID = "olliethedev";
+
+	test("page renders without console errors", async ({ page }) => {
+		const errors: string[] = [];
+		page.on("console", (msg) => {
+			if (msg.type() === "error") errors.push(msg.text());
+		});
+
+		await page.goto("/pages/comments/my-comments", {
+			waitUntil: "networkidle",
+		});
+
+		// Either the list or the empty-state element must be visible
+		const hasPage = await page
+			.locator('[data-testid="my-comments-page"]')
+			.isVisible()
+			.catch(() => false);
+		const hasEmpty = await page
+			.locator('[data-testid="my-comments-empty"]')
+			.isVisible()
+			.catch(() => false);
+		expect(
+			hasPage || hasEmpty,
+			"Expected my-comments-page or my-comments-empty to be visible",
+		).toBe(true);
+
+		expect(errors, `Console errors detected:\n${errors.join("\n")}`).toEqual(
+			[],
+		);
+	});
+
+	test("populated state — comment created by current user appears in list", async ({
+		page,
+		request,
+	}) => {
+		const errors: string[] = [];
+		page.on("console", (msg) => {
+			if (msg.type() === "error") errors.push(msg.text());
+		});
+
+		// Create a comment — the example app's onBeforePost assigns authorId "olliethedev"
+		const uniqueBody = `My comment e2e ${Date.now()}`;
+		await createComment(request, {
+			resourceId: `e2e-mycomments-${Date.now()}`,
+			resourceType: "e2e-test",
+			body: uniqueBody,
+		});
+
+		await page.goto("/pages/comments/my-comments", {
+			waitUntil: "networkidle",
+		});
+
+		await expect(
+			page.locator('[data-testid="my-comments-list"]'),
+		).toBeVisible();
+
+		// The comment body should appear somewhere in the list (possibly on page 1)
+		await expect(page.getByText(uniqueBody)).toBeVisible();
+
+		expect(errors, `Console errors detected:\n${errors.join("\n")}`).toEqual(
+			[],
+		);
+	});
+
+	test("delete from list — comment disappears after confirmation", async ({
+		page,
+		request,
+	}) => {
+		const errors: string[] = [];
+		page.on("console", (msg) => {
+			if (msg.type() === "error") errors.push(msg.text());
+		});
+
+		const uniqueBody = `Delete me e2e ${Date.now()}`;
+		await createComment(request, {
+			resourceId: `e2e-delete-mycomments-${Date.now()}`,
+			resourceType: "e2e-test",
+			body: uniqueBody,
+		});
+
+		await page.goto("/pages/comments/my-comments", {
+			waitUntil: "networkidle",
+		});
+
+		// Find the row containing our comment
+		const row = page
+			.locator('[data-testid="my-comment-row"]')
+			.filter({ hasText: uniqueBody });
+		await expect(row).toBeVisible();
+
+		// Click the delete button on that row
+		await row.locator('[data-testid="my-comment-delete-button"]').click();
+
+		// Confirm the AlertDialog
+		await page.locator("button", { hasText: "Delete" }).last().click();
+		await page.waitForLoadState("networkidle");
+
+		// Row should no longer be visible
+		await expect(page.getByText(uniqueBody)).not.toBeVisible({ timeout: 5000 });
+
+		expect(errors, `Console errors detected:\n${errors.join("\n")}`).toEqual(
+			[],
+		);
+	});
+
+	test("API security — GET /comments?authorId=unknown returns 403", async ({
+		request,
+	}) => {
+		// The example app's onBeforeListByAuthor only allows "olliethedev"
+		const response = await request.get(
+			`/api/data/comments?authorId=unknown-user-12345`,
+		);
+		expect(
+			response.status(),
+			"Expected 403 when onBeforeListByAuthor is absent or rejects",
+		).toBe(403);
+	});
+
+	test("API — GET /comments?authorId=olliethedev returns comments", async ({
+		request,
+	}) => {
+		// Seed a comment so we have at least one
+		await createComment(request, {
+			resourceId: `e2e-api-author-${Date.now()}`,
+			resourceType: "e2e-test",
+			body: "Author filter API test",
+		});
+
+		const response = await request.get(
+			`/api/data/comments?authorId=${encodeURIComponent(AUTHOR_ID)}`,
+		);
+		expect(response.ok(), "Expected 200 for own-author query").toBeTruthy();
+		const body = await response.json();
+		expect(Array.isArray(body.items)).toBe(true);
+		// All returned comments must belong to the requested author
+		for (const item of body.items) {
+			expect(item.authorId).toBe(AUTHOR_ID);
+		}
+	});
+});

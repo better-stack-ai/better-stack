@@ -119,6 +119,13 @@ function buildBaseConditions(
 				: params.parentId;
 		conditions.push({ field: "parentId", value: parentValue, operator: "eq" });
 	}
+	if (params.authorId) {
+		conditions.push({
+			field: "authorId",
+			value: params.authorId,
+			operator: "eq",
+		});
+	}
 
 	return conditions;
 }
@@ -146,16 +153,24 @@ export async function listComments(
 ): Promise<CommentListResult> {
 	const limit = params.limit ?? 20;
 	const offset = params.offset ?? 0;
+	const sortDirection = params.sort ?? "asc";
 
-	// Default to "approved" when no status is provided so that omitting the
-	// parameter never leaks pending/spam comments to unauthenticated callers.
-	const statusFilter = params.status ?? "approved";
+	// When authorId is provided and no explicit status filter is requested,
+	// return all statuses (the "my comments" mode — the caller owns the data).
+	// Otherwise default to "approved" to prevent leaking pending/spam to
+	// unauthenticated callers.
+	const omitStatusFilter = !!params.authorId && !params.status;
+	const statusFilter = omitStatusFilter ? null : (params.status ?? "approved");
 	const baseConditions = buildBaseConditions(params);
 
 	let comments: Comment[];
 	let total: number;
 
-	if (statusFilter === "approved" && params.currentUserId) {
+	if (
+		!omitStatusFilter &&
+		statusFilter === "approved" &&
+		params.currentUserId
+	) {
 		// Fetch approved comments AND the current user's own pending comments so
 		// they remain visible after a page refresh (React Query cache is lost).
 		// Two separate queries are needed because the DB adapter only supports
@@ -167,7 +182,7 @@ export async function listComments(
 					...baseConditions,
 					{ field: "status", value: "approved", operator: "eq" },
 				],
-				sortBy: { field: "createdAt", direction: "asc" },
+				sortBy: { field: "createdAt", direction: sortDirection },
 			}),
 			adapter.findMany<Comment>({
 				model: "comment",
@@ -176,7 +191,7 @@ export async function listComments(
 					{ field: "status", value: "pending", operator: "eq" },
 					{ field: "authorId", value: params.currentUserId, operator: "eq" },
 				],
-				sortBy: { field: "createdAt", direction: "asc" },
+				sortBy: { field: "createdAt", direction: sortDirection },
 			}),
 		]);
 
@@ -186,19 +201,22 @@ export async function listComments(
 			...approvedRaw,
 			...ownPendingRaw.filter((c) => !approvedIds.has(c.id)),
 		];
-		merged.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+		merged.sort((a, b) => {
+			const diff = a.createdAt.getTime() - b.createdAt.getTime();
+			return sortDirection === "desc" ? -diff : diff;
+		});
 
 		total = merged.length;
 		comments = merged.slice(offset, offset + limit);
 	} else {
-		const where = [
-			...baseConditions,
-			{
+		const where: WhereCondition[] = [...baseConditions];
+		if (statusFilter !== null) {
+			where.push({
 				field: "status",
 				value: statusFilter,
 				operator: "eq",
-			} as WhereCondition,
-		];
+			});
+		}
 
 		const [found, count] = await Promise.all([
 			adapter.findMany<Comment>({
@@ -206,7 +224,7 @@ export async function listComments(
 				limit,
 				offset,
 				where,
-				sortBy: { field: "createdAt", direction: "asc" },
+				sortBy: { field: "createdAt", direction: sortDirection },
 			}),
 			adapter.count({ model: "comment", where }),
 		]);

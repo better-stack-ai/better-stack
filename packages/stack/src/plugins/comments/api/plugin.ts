@@ -154,6 +154,30 @@ export interface CommentsBackendOptions {
 		commentId: string,
 		context: CommentsApiContext,
 	) => Promise<void> | void;
+
+	/**
+	 * Called before the comment list is returned for an author-scoped query
+	 * (i.e. when `authorId` is present in `GET /comments`). Throw to reject.
+	 *
+	 * When this hook is **absent**, any request that includes `authorId` is
+	 * automatically rejected with 403 — preventing anonymous callers from
+	 * reading or probing any user's comment history.
+	 *
+	 * Use this hook to verify the `authorId` matches the authenticated session:
+	 * ```ts
+	 * onBeforeListByAuthor: async (authorId, _query, ctx) => {
+	 *   const session = await getSession(ctx.headers)
+	 *   if (!session?.user) throw new Error("Authentication required")
+	 *   if (authorId !== session.user.id && !session.user.isAdmin)
+	 *     throw new Error("Forbidden")
+	 * }
+	 * ```
+	 */
+	onBeforeListByAuthor?: (
+		authorId: string,
+		query: z.infer<typeof CommentListQuerySchema>,
+		context: CommentsApiContext,
+	) => Promise<void> | void;
 }
 
 export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
@@ -192,6 +216,28 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						headers: ctx.headers,
 					};
 					try {
+						// Author-scoped queries: require onBeforeListByAuthor (403 when absent).
+						// This is the single security gate for per-user comment history queries
+						// and runs before any status-filter check.
+						if (ctx.query.authorId) {
+							if (!options?.onBeforeListByAuthor) {
+								throw ctx.error(403, {
+									message:
+										"Forbidden: authorId filter requires onBeforeListByAuthor hook",
+								});
+							}
+							await runHookWithShim(
+								() =>
+									options.onBeforeListByAuthor!(
+										ctx.query.authorId!,
+										ctx.query,
+										context,
+									),
+								ctx.error,
+								"Forbidden: Cannot list comments for this author",
+							);
+						}
+
 						// Restrict non-approved status filters to authorized callers only.
 						// Without onBeforeList, anonymous callers cannot read pending/spam queues.
 						if (ctx.query.status && ctx.query.status !== "approved") {
@@ -205,7 +251,9 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 								ctx.error,
 								"Forbidden: Cannot list comments with this status filter",
 							);
-						} else if (options?.onBeforeList) {
+						} else if (options?.onBeforeList && !ctx.query.authorId) {
+							// Only call onBeforeList for non-author-scoped queries to avoid
+							// double-hooking when both authorId and onBeforeList are present.
 							await runHookWithShim(
 								() => options.onBeforeList!(ctx.query, context),
 								ctx.error,
