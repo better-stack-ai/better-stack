@@ -90,7 +90,7 @@ function useResolvedCurrentUserId(
 
 	useEffect(() => {
 		if (typeof raw === "function") {
-			Promise.resolve(raw()).then((id) => {
+			void Promise.resolve(raw()).then((id) => {
 				setResolved(id ?? undefined);
 			});
 		} else {
