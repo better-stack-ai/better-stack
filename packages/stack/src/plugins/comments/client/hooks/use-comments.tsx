@@ -190,8 +190,9 @@ export function usePostComment(
 			const previous = queryClient.getQueryData<CommentListResult>(listKey);
 
 			// Optimistic comment — shows to own author with "pending" badge
+			const optimisticId = `optimistic-${Date.now()}`;
 			const optimistic: SerializedComment = {
-				id: `optimistic-${Date.now()}`,
+				id: optimisticId,
 				resourceId: params.resourceId,
 				resourceType: params.resourceType,
 				parentId: input.parentId ?? null,
@@ -219,16 +220,34 @@ export function usePostComment(
 				};
 			});
 
-			return { previous, listKey };
+			return { previous, listKey, optimisticId };
+		},
+		onSuccess: (data, _input, context) => {
+			if (!context) return;
+			// Replace the optimistic item with the real server response.
+			// The server may return status "pending" (autoApprove: false) or "approved"
+			// (autoApprove: true). Either way we keep the item in the cache so the
+			// author continues to see their comment — with a "Pending approval" badge
+			// when pending. Without this, the onSettled invalidation would refetch
+			// only approved comments and make the pending entry disappear.
+			queryClient.setQueryData<CommentListResult>(context.listKey, (old) => {
+				if (!old) return old;
+				return {
+					...old,
+					items: old.items.map((item) =>
+						item.id === context.optimisticId ? data : item,
+					),
+				};
+			});
 		},
 		onError: (_err, _input, context) => {
 			if (context?.previous !== undefined) {
 				queryClient.setQueryData(context.listKey, context.previous);
 			}
 		},
-		onSettled: (_data, _error, input) => {
-			queryClient.invalidateQueries({ queryKey: getListKey(input.parentId) });
-		},
+		// No onSettled list invalidation — the mutation response is the ground
+		// truth. Invalidating would trigger a server refetch that returns only
+		// approved comments, erasing a pending optimistic entry from the cache.
 	});
 }
 
