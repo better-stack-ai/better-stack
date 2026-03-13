@@ -536,14 +536,52 @@ function RepliesSection({
  * />
  * ```
  */
+function CommentThreadSkeleton() {
+	return (
+		<div className="space-y-1">
+			{/* Header */}
+			<div className="flex items-center gap-2 mb-4">
+				<div className="h-5 w-5 rounded bg-muted animate-pulse" />
+				<div className="h-4 w-24 rounded bg-muted animate-pulse" />
+			</div>
+
+			{/* Comment rows */}
+			{[1, 2, 3].map((i) => (
+				<div key={i} className="flex gap-3 py-3">
+					<div className="h-8 w-8 rounded-full bg-muted shrink-0 mt-0.5 animate-pulse" />
+					<div className="flex-1 space-y-2">
+						<div className="flex items-center gap-2">
+							<div className="h-3 w-20 rounded bg-muted animate-pulse" />
+							<div className="h-3 w-14 rounded bg-muted animate-pulse" />
+						</div>
+						<div className="h-3 w-full rounded bg-muted animate-pulse" />
+						<div className="h-3 w-4/5 rounded bg-muted animate-pulse" />
+						<div className="flex gap-1 mt-1">
+							<div className="h-7 w-12 rounded bg-muted animate-pulse" />
+							<div className="h-7 w-14 rounded bg-muted animate-pulse" />
+						</div>
+					</div>
+				</div>
+			))}
+
+			{/* Separator */}
+			<div className="h-px w-full bg-muted my-4" />
+
+			{/* Textarea placeholder */}
+			<div className="space-y-2">
+				<div className="h-20 w-full rounded-md border bg-muted animate-pulse" />
+				<div className="flex justify-end">
+					<div className="h-9 w-28 rounded-md bg-muted animate-pulse" />
+				</div>
+			</div>
+		</div>
+	);
+}
+
 export function CommentThread(props: CommentThreadProps) {
 	return (
 		<WhenVisible
-			fallback={
-				<div className="h-32 flex items-center justify-center">
-					<MessageSquare className="h-5 w-5 text-muted-foreground animate-pulse" />
-				</div>
-			}
+			fallback={<CommentThreadSkeleton />}
 			rootMargin="300px"
 			className={props.className}
 		>

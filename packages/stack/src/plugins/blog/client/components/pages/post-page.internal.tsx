@@ -121,11 +121,17 @@ export function PostPage({ slug }: { slug: string }) {
 					</div>
 
 					<div className="flex flex-col gap-4 w-full">
-						<WhenVisible rootMargin="200px">
+						<WhenVisible
+							rootMargin="200px"
+							fallback={<PostNavigationSkeleton />}
+						>
 							<PostNavigation previousPost={previousPost} nextPost={nextPost} />
 						</WhenVisible>
 
-						<WhenVisible rootMargin="200px">
+						<WhenVisible
+							rootMargin="200px"
+							fallback={<RecentPostsCarouselSkeleton />}
+						>
 							<RecentPostsCarousel posts={recentPosts} />
 						</WhenVisible>
 
