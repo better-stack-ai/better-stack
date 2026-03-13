@@ -331,7 +331,7 @@ Access is controlled by the `onBeforeModerationPageRendered` hook in `CommentsPl
 | `autoApprove` | `boolean` | `false` | Automatically approve new comments |
 | `resolveUser` | `(authorId: string) => Promise<{ name: string; avatarUrl?: string } \| null>` | — | Map author IDs to display info; returns `null` → shows `"[deleted]"` |
 | `onBeforeList` | hook | — | Called before the comment list is returned. Throw to reject. When absent, any `status` filter other than `"approved"` is automatically rejected with 403 — preventing anonymous access to the moderation queues. |
-| `onBeforePost` | hook | — | Called before a comment is saved. Throw to reject. **Required for security** — see callout below. |
+| `onBeforePost` | hook | **required** | Called before a comment is saved. Throw to reject. **Required** — plugin throws at startup if absent. |
 | `onAfterPost` | hook | — | Called after a comment is saved. |
 | `onBeforeEdit` | hook | — | Called before a comment body is updated. Throw to reject. |
 | `onAfterEdit` | hook | — | Called after a comment body is updated. |
@@ -342,9 +342,9 @@ Access is controlled by the `onBeforeModerationPageRendered` hook in `CommentsPl
 | `onAfterDelete` | hook | — | Called after a comment is deleted. |
 
 <Callout type="warn">
-**`onBeforePost` is the only server-side identity gate for comment creation.** The `authorId` field is passed in the request body — without `onBeforePost`, any caller can post comments attributed to any user ID. Always verify that `input.authorId` matches the authenticated session (e.g. check a JWT or session cookie) and throw if it does not.
+**`onBeforePost` is required and must be provided.** The `authorId` field is passed in the request body — without `onBeforePost`, any caller can post comments attributed to any user ID. Always verify that `input.authorId` matches the authenticated session (e.g. check a JWT or session cookie) and throw if it does not.
 
-If `onBeforePost` is not configured, the plugin emits a `console.warn` at startup.
+`commentsBackendPlugin` throws an error at startup if `onBeforePost` is not configured.
 </Callout>
 
 ### Server-Side API (`stack.api.comments`)

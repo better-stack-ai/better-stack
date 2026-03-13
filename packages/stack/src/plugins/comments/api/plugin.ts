@@ -66,12 +66,15 @@ export interface CommentsBackendOptions {
 	/**
 	 * Called before a comment is created. Throw an error to reject the comment.
 	 *
-	 * ⚠️  SECURITY: This is the only server-side identity gate for comment
-	 * creation. Always verify that `input.authorId` matches the authenticated
-	 * session (e.g. verify JWT/session cookie). Without this hook, any caller
-	 * can post a comment attributed to any arbitrary user ID.
+	 * ⚠️  SECURITY REQUIRED: This is the only server-side identity gate for
+	 * comment creation. Always verify that `input.authorId` matches the
+	 * authenticated session (e.g. verify JWT/session cookie). Without this
+	 * hook, any caller can post a comment attributed to any arbitrary user ID.
+	 *
+	 * This field is required — `commentsBackendPlugin` throws at startup if
+	 * it is absent.
 	 */
-	onBeforePost?: (
+	onBeforePost: (
 		input: z.infer<typeof createCommentSchema>,
 		context: CommentsApiContext,
 	) => Promise<void> | void;
@@ -151,11 +154,11 @@ export interface CommentsBackendOptions {
 	) => Promise<void> | void;
 }
 
-export const commentsBackendPlugin = (options?: CommentsBackendOptions) => {
+export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 	if (!options?.onBeforePost) {
-		console.warn(
-			"[btst/comments] onBeforePost is not configured. " +
-				"Any caller can post a comment attributed to any user ID. " +
+		throw new Error(
+			"[btst/comments] onBeforePost is required. " +
+				"Any caller can post a comment attributed to any user ID without it. " +
 				"Add onBeforePost to verify the session and that input.authorId matches the authenticated user.",
 		);
 	}
@@ -228,13 +231,11 @@ export const commentsBackendPlugin = (options?: CommentsBackendOptions) => {
 						headers: ctx.headers,
 					};
 					try {
-						if (options?.onBeforePost) {
-							await runHookWithShim(
-								() => options.onBeforePost!(ctx.body, context),
-								ctx.error,
-								"Unauthorized: Cannot post comment",
-							);
-						}
+						await runHookWithShim(
+							() => options.onBeforePost(ctx.body, context),
+							ctx.error,
+							"Unauthorized: Cannot post comment",
+						);
 
 						const status = options?.autoApprove ? "approved" : "pending";
 						const comment = await createComment(adapter, {
