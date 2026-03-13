@@ -16,6 +16,7 @@ import type { SerializedComment } from "../../types";
 import { CommentForm } from "./comment-form";
 import {
 	useComments,
+	useInfiniteComments,
 	usePostComment,
 	useUpdateComment,
 	useDeleteComment,
@@ -25,6 +26,8 @@ import {
 	COMMENTS_LOCALIZATION,
 	type CommentsLocalization,
 } from "../localization";
+import { usePluginOverrides } from "@btst/stack/context";
+import type { CommentsPluginOverrides } from "../overrides";
 
 /** Custom input component props */
 export interface CommentInputProps {
@@ -69,6 +72,11 @@ export interface CommentThreadProps {
 	className?: string;
 	/** Localization strings — defaults to English */
 	localization?: Partial<CommentsLocalization>;
+	/**
+	 * Number of top-level comments to load per page.
+	 * Clicking "Load more" fetches the next page. Default: 10.
+	 */
+	pageSize?: number;
 }
 
 const DEFAULT_RENDERER: ComponentType<CommentRendererProps> = ({ body }) => (
@@ -97,6 +105,7 @@ function CommentCard({
 	headers,
 	components,
 	loc,
+	infiniteKey,
 	onReplyClick,
 }: {
 	comment: SerializedComment;
@@ -108,6 +117,9 @@ function CommentCard({
 	headers?: HeadersInit;
 	components?: CommentComponents;
 	loc: CommentsLocalization;
+	/** Infinite thread query key — pass for top-level comments so like optimistic
+	 *  updates target the correct InfiniteData cache entry. */
+	infiniteKey?: readonly unknown[];
 	onReplyClick: (parentId: string) => void;
 }) {
 	const [isEditing, setIsEditing] = useState(false);
@@ -122,6 +134,7 @@ function CommentCard({
 		resourceType,
 		parentId: comment.parentId,
 		currentUserId,
+		infiniteKey,
 	});
 
 	const isOwn = currentUserId && comment.authorId === currentUserId;
@@ -277,6 +290,8 @@ function CommentCard({
 
 // ─── Thread Inner (handles data) ──────────────────────────────────────────────
 
+const DEFAULT_PAGE_SIZE = 100;
+
 function CommentThreadInner({
 	resourceId,
 	resourceType,
@@ -287,7 +302,14 @@ function CommentThreadInner({
 	headers,
 	components,
 	localization: localizationProp,
+	pageSize: pageSizeProp,
 }: CommentThreadProps) {
+	const overrides = usePluginOverrides<
+		CommentsPluginOverrides,
+		Partial<CommentsPluginOverrides>
+	>("comments", {});
+	const pageSize =
+		pageSizeProp ?? overrides.defaultCommentPageSize ?? DEFAULT_PAGE_SIZE;
 	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
 	const [replyingTo, setReplyingTo] = useState<string | null>(null);
 	const [expandedReplies, setExpandedReplies] = useState<Set<string>>(
@@ -296,18 +318,28 @@ function CommentThreadInner({
 
 	const config = { apiBaseURL, apiBasePath, headers };
 
-	const { comments, isLoading } = useComments(config, {
+	const {
+		comments,
+		total,
+		isLoading,
+		loadMore,
+		hasMore,
+		isLoadingMore,
+		queryKey: threadQueryKey,
+	} = useInfiniteComments(config, {
 		resourceId,
 		resourceType,
 		status: "approved",
 		parentId: null,
 		currentUserId,
+		pageSize,
 	});
 
 	const postMutation = usePostComment(config, {
 		resourceId,
 		resourceType,
 		currentUserId,
+		infiniteKey: threadQueryKey,
 	});
 
 	const handlePost = async (body: string) => {
@@ -328,16 +360,12 @@ function CommentThreadInner({
 		setExpandedReplies((prev) => new Set(prev).add(parentId));
 	};
 
-	const allTopLevel = comments;
-
 	return (
 		<div className="space-y-1" data-testid="comment-thread">
 			<div className="flex items-center gap-2 mb-4">
 				<MessageSquare className="h-5 w-5 text-muted-foreground" />
 				<h3 className="font-semibold text-sm">
-					{comments.length === 0
-						? loc.COMMENTS_TITLE
-						: `${comments.length} ${loc.COMMENTS_TITLE}`}
+					{total === 0 ? loc.COMMENTS_TITLE : `${total} ${loc.COMMENTS_TITLE}`}
 				</h3>
 			</div>
 
@@ -356,9 +384,9 @@ function CommentThreadInner({
 				</div>
 			)}
 
-			{!isLoading && allTopLevel.length > 0 && (
+			{!isLoading && comments.length > 0 && (
 				<div className="divide-y divide-border">
-					{allTopLevel.map((comment) => (
+					{comments.map((comment) => (
 						<div key={comment.id}>
 							<CommentCard
 								comment={comment}
@@ -370,6 +398,7 @@ function CommentThreadInner({
 								headers={headers}
 								components={components}
 								loc={loc}
+								infiniteKey={threadQueryKey}
 								onReplyClick={(parentId) => {
 									setReplyingTo(replyingTo === parentId ? null : parentId);
 								}}
@@ -417,10 +446,24 @@ function CommentThreadInner({
 				</div>
 			)}
 
-			{!isLoading && allTopLevel.length === 0 && (
+			{!isLoading && comments.length === 0 && (
 				<p className="text-sm text-muted-foreground py-4 text-center">
 					{loc.COMMENTS_EMPTY}
 				</p>
+			)}
+
+			{hasMore && (
+				<div className="flex justify-center pt-2">
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => loadMore()}
+						disabled={isLoadingMore}
+						data-testid="load-more-comments"
+					>
+						{isLoadingMore ? loc.COMMENTS_LOADING_MORE : loc.COMMENTS_LOAD_MORE}
+					</Button>
+				</div>
 			)}
 
 			<Separator className="my-4" />

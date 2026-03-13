@@ -60,6 +60,13 @@ export interface CommentsPluginOverrides {
 		| (() => string | undefined | Promise<string | undefined>);
 
 	/**
+	 * Default number of top-level comments to load per page in `CommentThread`.
+	 * Can be overridden per-instance via the `pageSize` prop.
+	 * Defaults to 100 when not set.
+	 */
+	defaultCommentPageSize?: number;
+
+	/**
 	 * Per-resource-type URL builders used to link each comment back to its
 	 * original resource on the My Comments page.
 	 *

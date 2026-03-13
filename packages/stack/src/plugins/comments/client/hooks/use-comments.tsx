@@ -2,12 +2,15 @@
 
 import {
 	useQuery,
+	useInfiniteQuery,
 	useMutation,
 	useQueryClient,
 	useSuspenseQuery,
+	type InfiniteData,
 } from "@tanstack/react-query";
 import { createApiClient } from "@btst/stack/plugins/client";
 import { createCommentsQueryKeys } from "../../query-keys";
+import { commentsListDiscriminator } from "../../api/query-key-defs";
 import type { CommentsApiRouter } from "../../api";
 import type { SerializedComment, CommentListResult } from "../../types";
 
@@ -114,6 +117,92 @@ export function useSuspenseComments(
 }
 
 /**
+ * Infinite-scroll variant for the CommentThread component.
+ * Uses a separate "commentsThread" key namespace to avoid cache conflicts
+ * with the regular useComments / useSuspenseComments queries.
+ */
+export function useInfiniteComments(
+	config: CommentsClientConfig,
+	params: {
+		resourceId: string;
+		resourceType: string;
+		parentId?: string | null;
+		status?: "pending" | "approved" | "spam";
+		currentUserId?: string;
+		pageSize?: number;
+	},
+	options?: { enabled?: boolean },
+) {
+	const pageSize = params.pageSize ?? 10;
+	const client = getClient(config);
+
+	const queryKey = [
+		"commentsThread",
+		"list",
+		commentsListDiscriminator({
+			resourceId: params.resourceId,
+			resourceType: params.resourceType,
+			parentId: params.parentId ?? null,
+			status: params.status,
+			currentUserId: params.currentUserId,
+			limit: pageSize,
+			offset: 0,
+		}),
+	] as const;
+
+	const query = useInfiniteQuery<
+		CommentListResult,
+		Error,
+		InfiniteData<CommentListResult>,
+		typeof queryKey,
+		number
+	>({
+		queryKey,
+		queryFn: async ({ pageParam }) => {
+			const response = await client("/comments", {
+				method: "GET",
+				query: {
+					resourceId: params.resourceId,
+					resourceType: params.resourceType,
+					parentId: params.parentId ?? undefined,
+					status: params.status,
+					currentUserId: params.currentUserId,
+					limit: pageSize,
+					offset: pageParam,
+				},
+				headers: config.headers,
+			});
+			const data = (response as { data?: CommentListResult }).data;
+			if (!data) throw toError((response as { error?: unknown }).error);
+			return data;
+		},
+		initialPageParam: 0,
+		getNextPageParam: (lastPage) => {
+			const nextOffset = lastPage.offset + lastPage.limit;
+			return nextOffset < lastPage.total ? nextOffset : undefined;
+		},
+		staleTime: 30_000,
+		retry: false,
+		enabled: options?.enabled ?? true,
+	});
+
+	const comments = query.data?.pages.flatMap((p) => p.items) ?? [];
+	const total = query.data?.pages[0]?.total ?? 0;
+
+	return {
+		comments,
+		total,
+		queryKey,
+		isLoading: query.isLoading,
+		isFetching: query.isFetching,
+		loadMore: query.fetchNextPage,
+		hasMore: !!query.hasNextPage,
+		isLoadingMore: query.isFetchingNextPage,
+		error: query.error,
+	};
+}
+
+/**
  * Fetch the approved comment count for a resource.
  */
 export function useCommentCount(
@@ -144,6 +233,10 @@ export function useCommentCount(
  * Post a new comment with optimistic update.
  * When autoApprove is false the optimistic entry shows as "pending" — visible
  * only to the comment's own author via the `currentUserId` match in the UI.
+ *
+ * Pass `infiniteKey` (from `useInfiniteComments`) when the thread uses an
+ * infinite query so the optimistic update targets InfiniteData<CommentListResult>
+ * instead of a plain CommentListResult cache entry.
  */
 export function usePostComment(
 	config: CommentsClientConfig,
@@ -151,6 +244,8 @@ export function usePostComment(
 		resourceId: string;
 		resourceType: string;
 		currentUserId?: string;
+		/** When provided, optimistic updates target this infinite-query cache key. */
+		infiniteKey?: readonly unknown[];
 	},
 ) {
 	const queryClient = useQueryClient();
@@ -162,14 +257,22 @@ export function usePostComment(
 	// parentId must be normalised to null (not undefined) because useComments
 	// passes `parentId: null` explicitly — null and undefined produce different
 	// discriminator objects and therefore different React Query cache keys.
-	const getListKey = (parentId: string | null | undefined) =>
-		queries.comments.list({
+	const getListKey = (parentId: string | null | undefined) => {
+		// Top-level posts for a thread using useInfiniteComments get the infinite key.
+		if (params.infiniteKey && (parentId ?? null) === null) {
+			return params.infiniteKey;
+		}
+		return queries.comments.list({
 			resourceId: params.resourceId,
 			resourceType: params.resourceType,
 			parentId: parentId ?? null,
 			status: "approved",
 			currentUserId: params.currentUserId,
 		}).queryKey;
+	};
+
+	const isInfinitePost = (parentId: string | null | undefined) =>
+		!!params.infiniteKey && (parentId ?? null) === null;
 
 	return useMutation({
 		mutationFn: async (input: { body: string; parentId?: string | null }) => {
@@ -191,7 +294,6 @@ export function usePostComment(
 		onMutate: async (input) => {
 			const listKey = getListKey(input.parentId);
 			await queryClient.cancelQueries({ queryKey: listKey });
-			const previous = queryClient.getQueryData<CommentListResult>(listKey);
 
 			// Optimistic comment — shows to own author with "pending" badge
 			const optimisticId = `optimistic-${Date.now()}`;
@@ -213,6 +315,41 @@ export function usePostComment(
 				replyCount: 0,
 			};
 
+			if (isInfinitePost(input.parentId)) {
+				const previous =
+					queryClient.getQueryData<InfiniteData<CommentListResult>>(listKey);
+
+				queryClient.setQueryData<InfiniteData<CommentListResult>>(
+					listKey,
+					(old) => {
+						if (!old) {
+							return {
+								pages: [
+									{ items: [optimistic], total: 1, limit: 10, offset: 0 },
+								],
+								pageParams: [0],
+							};
+						}
+						const lastIdx = old.pages.length - 1;
+						return {
+							...old,
+							pages: old.pages.map((page, idx) =>
+								idx === lastIdx
+									? {
+											...page,
+											items: [...page.items, optimistic],
+											total: page.total + 1,
+										}
+									: page,
+							),
+						};
+					},
+				);
+
+				return { previous, isInfinite: true as const, listKey, optimisticId };
+			}
+
+			const previous = queryClient.getQueryData<CommentListResult>(listKey);
 			queryClient.setQueryData<CommentListResult>(listKey, (old) => {
 				if (!old) {
 					return { items: [optimistic], total: 1, limit: 20, offset: 0 };
@@ -224,7 +361,7 @@ export function usePostComment(
 				};
 			});
 
-			return { previous, listKey, optimisticId };
+			return { previous, isInfinite: false as const, listKey, optimisticId };
 		},
 		onSuccess: (data, _input, context) => {
 			if (!context) return;
@@ -234,15 +371,33 @@ export function usePostComment(
 			// author continues to see their comment — with a "Pending approval" badge
 			// when pending. Without this, the onSettled invalidation would refetch
 			// only approved comments and make the pending entry disappear.
-			queryClient.setQueryData<CommentListResult>(context.listKey, (old) => {
-				if (!old) return old;
-				return {
-					...old,
-					items: old.items.map((item) =>
-						item.id === context.optimisticId ? data : item,
-					),
-				};
-			});
+			if (context.isInfinite) {
+				queryClient.setQueryData<InfiniteData<CommentListResult>>(
+					context.listKey,
+					(old) => {
+						if (!old) return old;
+						return {
+							...old,
+							pages: old.pages.map((page) => ({
+								...page,
+								items: page.items.map((item) =>
+									item.id === context.optimisticId ? data : item,
+								),
+							})),
+						};
+					},
+				);
+			} else {
+				queryClient.setQueryData<CommentListResult>(context.listKey, (old) => {
+					if (!old) return old;
+					return {
+						...old,
+						items: old.items.map((item) =>
+							item.id === context.optimisticId ? data : item,
+						),
+					};
+				});
+			}
 		},
 		onError: (_err, _input, context) => {
 			if (context?.previous !== undefined) {
@@ -279,6 +434,8 @@ export function useUpdateComment(config: CommentsClientConfig) {
 			queryClient.invalidateQueries({
 				queryKey: queries.comments.list._def,
 			});
+			// Also invalidate the infinite thread cache so edits are reflected there.
+			queryClient.invalidateQueries({ queryKey: ["commentsThread"] });
 		},
 	});
 }
@@ -374,12 +531,18 @@ export function useDeleteComment(config: CommentsClientConfig) {
 			queryClient.invalidateQueries({
 				queryKey: queries.commentCount.byResource._def,
 			});
+			// Also invalidate the infinite thread cache so deletions are reflected there.
+			queryClient.invalidateQueries({ queryKey: ["commentsThread"] });
 		},
 	});
 }
 
 /**
  * Toggle a like on a comment with optimistic update.
+ *
+ * Pass `infiniteKey` (from `useInfiniteComments`) for top-level thread comments
+ * so the optimistic update targets InfiniteData<CommentListResult> instead of
+ * a plain CommentListResult cache entry.
  */
 export function useToggleLike(
 	config: CommentsClientConfig,
@@ -391,20 +554,58 @@ export function useToggleLike(
 		 *  Pass `null` for top-level comments, or the parent comment ID for replies. */
 		parentId?: string | null;
 		currentUserId?: string;
+		/** When the comment lives in an infinite thread, pass the thread's query key
+		 *  so the optimistic update targets the correct InfiniteData cache entry. */
+		infiniteKey?: readonly unknown[];
 	},
 ) {
 	const queryClient = useQueryClient();
 	const client = getClient(config);
 	const queries = createCommentsQueryKeys(client, config.headers);
 
-	// parentId must be normalised to null (not undefined) — same rule as usePostComment.
-	const listKey = queries.comments.list({
-		resourceId: params.resourceId,
-		resourceType: params.resourceType,
-		parentId: params.parentId ?? null,
-		status: "approved",
-		currentUserId: params.currentUserId,
-	}).queryKey;
+	// For top-level thread comments use the infinite key; for replies (or when no
+	// infinite key is supplied) fall back to the regular list cache entry.
+	const isInfinite = !!params.infiniteKey && (params.parentId ?? null) === null;
+	const listKey = isInfinite
+		? params.infiniteKey!
+		: queries.comments.list({
+				resourceId: params.resourceId,
+				resourceType: params.resourceType,
+				parentId: params.parentId ?? null,
+				status: "approved",
+				currentUserId: params.currentUserId,
+			}).queryKey;
+
+	function applyLikeUpdate(
+		commentId: string,
+		updater: (c: SerializedComment) => SerializedComment,
+	) {
+		if (isInfinite) {
+			queryClient.setQueryData<InfiniteData<CommentListResult>>(
+				listKey,
+				(old) => {
+					if (!old) return old;
+					return {
+						...old,
+						pages: old.pages.map((page) => ({
+							...page,
+							items: page.items.map((c) =>
+								c.id === commentId ? updater(c) : c,
+							),
+						})),
+					};
+				},
+			);
+		} else {
+			queryClient.setQueryData<CommentListResult>(listKey, (old) => {
+				if (!old) return old;
+				return {
+					...old,
+					items: old.items.map((c) => (c.id === commentId ? updater(c) : c)),
+				};
+			});
+		}
+	}
 
 	return useMutation({
 		mutationFn: async (input: { commentId: string; authorId: string }) => {
@@ -420,21 +621,18 @@ export function useToggleLike(
 		},
 		onMutate: async (input) => {
 			await queryClient.cancelQueries({ queryKey: listKey });
-			const previous = queryClient.getQueryData<CommentListResult>(listKey);
 
-			queryClient.setQueryData<CommentListResult>(listKey, (old) => {
-				if (!old) return old;
+			// Snapshot previous state for rollback.
+			const previous = isInfinite
+				? queryClient.getQueryData<InfiniteData<CommentListResult>>(listKey)
+				: queryClient.getQueryData<CommentListResult>(listKey);
+
+			applyLikeUpdate(input.commentId, (c) => {
+				const wasLiked = c.isLikedByCurrentUser;
 				return {
-					...old,
-					items: old.items.map((c) => {
-						if (c.id !== input.commentId) return c;
-						const wasLiked = c.isLikedByCurrentUser;
-						return {
-							...c,
-							isLikedByCurrentUser: !wasLiked,
-							likes: wasLiked ? Math.max(0, c.likes - 1) : c.likes + 1,
-						};
-					}),
+					...c,
+					isLikedByCurrentUser: !wasLiked,
+					likes: wasLiked ? Math.max(0, c.likes - 1) : c.likes + 1,
 				};
 			});
 

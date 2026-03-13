@@ -26,4 +26,7 @@ export const COMMENTS_THREAD = {
 	COMMENTS_FORM_POST_REPLY: "Post reply",
 	COMMENTS_FORM_POSTING: "Posting…",
 	COMMENTS_FORM_SUBMIT_ERROR: "Failed to submit comment",
+
+	COMMENTS_LOAD_MORE: "Load more comments",
+	COMMENTS_LOADING_MORE: "Loading…",
 };

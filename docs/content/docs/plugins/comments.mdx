@@ -247,6 +247,7 @@ import { CommentThread } from "@btst/stack/plugins/comments/client/components"
 | `apiBasePath` | `string` | ✓ | Path prefix where the API is mounted |
 | `currentUserId` | `string` | — | Authenticated user ID — enables edit/delete/pending badge |
 | `loginHref` | `string` | — | Login page URL shown to unauthenticated users |
+| `pageSize` | `number` | — | Comments per page. Falls back to `defaultCommentPageSize` from overrides, then 100. A "Load more" button appears when there are additional pages. |
 | `components.Input` | `ComponentType` | — | Custom input component (default: `<textarea>`) |
 | `components.Renderer` | `ComponentType` | — | Custom renderer for comment body (default: `<p>`) |
 
@@ -475,6 +476,7 @@ Configure the comments plugin behavior from your layout:
 | `apiBaseURL` | `string` | Base URL for API requests |
 | `apiBasePath` | `string` | Path prefix for the API |
 | `currentUserId` | `string \| (() => string \| undefined \| Promise<string \| undefined>)` | Authenticated user's ID — used by the My Comments page. Supports async functions for session-based resolution. |
+| `defaultCommentPageSize` | `number` | Default number of top-level comments per page for all `CommentThread` instances. Overridden per-instance by the `pageSize` prop. Defaults to `100` when not set. |
 | `resourceLinks` | `Record<string, (id: string) => string>` | Per-resource-type URL builders for linking comments back to their resource on the My Comments page (e.g. `{ "blog-post": (slug) => "/pages/blog/" + slug }`). The plugin appends `#comments` automatically so the page scrolls to the thread. |
 | `localization` | `Partial<CommentsLocalization>` | Override any UI string in the plugin. Import `COMMENTS_LOCALIZATION` from `@btst/stack/plugins/comments/client` to see all available keys. |
 | `onBeforeModerationPageRendered` | hook | Called before rendering the moderation dashboard. Throw to deny access. |
