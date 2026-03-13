@@ -122,13 +122,14 @@ export async function listComments(
 			operator: "eq",
 		});
 	}
-	if (params.status) {
-		whereConditions.push({
-			field: "status",
-			value: params.status,
-			operator: "eq",
-		});
-	}
+	// Default to "approved" when no status is provided so that omitting the
+	// parameter never leaks pending/spam comments to unauthenticated callers.
+	const statusFilter = params.status ?? "approved";
+	whereConditions.push({
+		field: "status",
+		value: statusFilter,
+		operator: "eq",
+	});
 	// When parentId is explicitly null we want top-level comments only
 	if (params.parentId !== undefined) {
 		if (params.parentId === null || params.parentId === "null") {
