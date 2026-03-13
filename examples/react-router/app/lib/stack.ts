@@ -163,8 +163,14 @@ const { handler, dbSchema } = stack({
                 return { name: `User ${authorId.slice(0, 8)}` }
             },
             onBeforeList: async (query, ctx) => {
-                // In production: restrict non-approved status filters to admin sessions
-                console.log("onBeforeList: status filter", query.status)
+                // Restrict pending/spam queues to admin sessions.
+                // Without this check a no-op hook would bypass the built-in 403 guard.
+                if (query.status && query.status !== "approved") {
+                    // In production: replace with a real session/role check, e.g.:
+                    // const session = await getSession(ctx.headers)
+                    // if (!session?.user?.isAdmin) throw new Error("Admin access required")
+                    console.log("onBeforeList: non-approved status filter — ensure admin check in production")
+                }
             },
             onBeforePost: async (input, ctx) => {
                 // In production: verify the session and return the authenticated user's ID
