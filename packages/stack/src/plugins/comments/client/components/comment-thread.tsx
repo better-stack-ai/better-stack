@@ -69,7 +69,8 @@ const DEFAULT_RENDERER: ComponentType<CommentRendererProps> = ({ body }) => (
 	<p className="text-sm whitespace-pre-wrap break-words">{body}</p>
 );
 
-function getInitials(name: string) {
+function getInitials(name: string | null | undefined) {
+	if (!name) return "?";
 	return name
 		.split(" ")
 		.slice(0, 2)

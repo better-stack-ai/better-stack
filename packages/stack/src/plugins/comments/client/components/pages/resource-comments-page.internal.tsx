@@ -26,7 +26,8 @@ interface ResourceCommentsPageProps {
 	headers?: HeadersInit;
 }
 
-function getInitials(name: string) {
+function getInitials(name: string | null | undefined) {
+	if (!name) return "?";
 	return name
 		.split(" ")
 		.slice(0, 2)
