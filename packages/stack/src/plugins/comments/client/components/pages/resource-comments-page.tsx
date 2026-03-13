@@ -1,10 +1,11 @@
 "use client";
 
-import { lazy, Suspense } from "react";
+import { lazy } from "react";
 import { ComposedRoute } from "@btst/stack/client/components";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../../overrides";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
+import { PageWrapper } from "../shared/page-wrapper";
 
 const ResourceCommentsPageInternal = lazy(() =>
 	import("./resource-comments-page.internal").then((m) => ({
@@ -76,16 +77,14 @@ function ResourceCommentsPageWrapper({
 	});
 
 	return (
-		<div className="w-full p-4 md:p-6 lg:p-8 flex flex-col items-start">
-			<Suspense fallback={<ResourceCommentsSkeleton />}>
-				<ResourceCommentsPageInternal
-					resourceId={resourceId}
-					resourceType={resourceType}
-					apiBaseURL={overrides.apiBaseURL}
-					apiBasePath={overrides.apiBasePath}
-					headers={overrides.headers as HeadersInit | undefined}
-				/>
-			</Suspense>
-		</div>
+		<PageWrapper>
+			<ResourceCommentsPageInternal
+				resourceId={resourceId}
+				resourceType={resourceType}
+				apiBaseURL={overrides.apiBaseURL}
+				apiBasePath={overrides.apiBasePath}
+				headers={overrides.headers as HeadersInit | undefined}
+			/>
+		</PageWrapper>
 	);
 }

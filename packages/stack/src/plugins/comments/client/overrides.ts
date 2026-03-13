@@ -33,6 +33,12 @@ export interface CommentsPluginOverrides {
 	 */
 	headers?: Record<string, string>;
 
+	/**
+	 * Whether to show the "Powered by BTST" attribution on plugin pages.
+	 * Defaults to true.
+	 */
+	showAttribution?: boolean;
+
 	// ============ Access Control Hooks ============
 
 	/**

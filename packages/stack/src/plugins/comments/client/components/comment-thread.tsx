@@ -481,7 +481,10 @@ function RepliesSection({
 		{ enabled: expanded },
 	);
 
-	if (replyCount === 0) return null;
+	// Hide when there are no known replies — but keep rendered when already
+	// expanded so a freshly-posted first reply (which increments replyCount
+	// only after the server responds) stays visible in the same session.
+	if (replyCount === 0 && !expanded) return null;
 
 	// Prefer the fetched count (accurate after optimistic inserts); fall back to
 	// the server-provided replyCount before the fetch completes.
@@ -502,7 +505,10 @@ function RepliesSection({
 				</Button>
 			)}
 			{expanded && (
-				<div className="border-l-2 border-border pl-3 space-y-0">
+				<div
+					className="border-l-2 border-border pl-3 space-y-0"
+					data-testid="replies-list"
+				>
 					{replies.map((reply) => (
 						<CommentCard
 							key={reply.id}

@@ -84,9 +84,52 @@ function enrichComment(
 	};
 }
 
+type WhereCondition = {
+	field: string;
+	value: string | number | boolean | Date | string[] | number[] | null;
+	operator: "eq";
+};
+
+/**
+ * Build the base WHERE conditions from common list params (excluding status).
+ */
+function buildBaseConditions(
+	params: z.infer<typeof CommentListQuerySchema>,
+): WhereCondition[] {
+	const conditions: WhereCondition[] = [];
+
+	if (params.resourceId) {
+		conditions.push({
+			field: "resourceId",
+			value: params.resourceId,
+			operator: "eq",
+		});
+	}
+	if (params.resourceType) {
+		conditions.push({
+			field: "resourceType",
+			value: params.resourceType,
+			operator: "eq",
+		});
+	}
+	if (params.parentId !== undefined) {
+		const parentValue =
+			params.parentId === null || params.parentId === "null"
+				? null
+				: params.parentId;
+		conditions.push({ field: "parentId", value: parentValue, operator: "eq" });
+	}
+
+	return conditions;
+}
+
 /**
  * List comments for a resource, optionally filtered by status and parentId.
  * Server-side resolves author display info and like status.
+ *
+ * When `status` is "approved" (default) and `currentUserId` is provided, the
+ * result also includes the current user's own pending comments so they remain
+ * visible after a page refresh without requiring admin access.
  *
  * Pure DB function — no hooks, no HTTP context. Safe for server-side use.
  *
@@ -104,63 +147,72 @@ export async function listComments(
 	const limit = params.limit ?? 20;
 	const offset = params.offset ?? 0;
 
-	const whereConditions: Array<{
-		field: string;
-		value: string | number | boolean | Date | string[] | number[] | null;
-		operator: "eq";
-	}> = [];
-
-	if (params.resourceId) {
-		whereConditions.push({
-			field: "resourceId",
-			value: params.resourceId,
-			operator: "eq",
-		});
-	}
-	if (params.resourceType) {
-		whereConditions.push({
-			field: "resourceType",
-			value: params.resourceType,
-			operator: "eq",
-		});
-	}
 	// Default to "approved" when no status is provided so that omitting the
 	// parameter never leaks pending/spam comments to unauthenticated callers.
 	const statusFilter = params.status ?? "approved";
-	whereConditions.push({
-		field: "status",
-		value: statusFilter,
-		operator: "eq",
-	});
-	// When parentId is explicitly null we want top-level comments only
-	if (params.parentId !== undefined) {
-		if (params.parentId === null || params.parentId === "null") {
-			whereConditions.push({
-				field: "parentId",
-				value: null,
+	const baseConditions = buildBaseConditions(params);
+
+	let comments: Comment[];
+	let total: number;
+
+	if (statusFilter === "approved" && params.currentUserId) {
+		// Fetch approved comments AND the current user's own pending comments so
+		// they remain visible after a page refresh (React Query cache is lost).
+		// Two separate queries are needed because the DB adapter only supports
+		// AND-chained equality conditions (no OR operator).
+		const [approvedRaw, ownPendingRaw] = await Promise.all([
+			adapter.findMany<Comment>({
+				model: "comment",
+				where: [
+					...baseConditions,
+					{ field: "status", value: "approved", operator: "eq" },
+				],
+				sortBy: { field: "createdAt", direction: "asc" },
+			}),
+			adapter.findMany<Comment>({
+				model: "comment",
+				where: [
+					...baseConditions,
+					{ field: "status", value: "pending", operator: "eq" },
+					{ field: "authorId", value: params.currentUserId, operator: "eq" },
+				],
+				sortBy: { field: "createdAt", direction: "asc" },
+			}),
+		]);
+
+		// Merge — approved takes precedence if an ID somehow appears in both.
+		const approvedIds = new Set(approvedRaw.map((c) => c.id));
+		const merged = [
+			...approvedRaw,
+			...ownPendingRaw.filter((c) => !approvedIds.has(c.id)),
+		];
+		merged.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+		total = merged.length;
+		comments = merged.slice(offset, offset + limit);
+	} else {
+		const where = [
+			...baseConditions,
+			{
+				field: "status",
+				value: statusFilter,
 				operator: "eq",
-			});
-		} else {
-			whereConditions.push({
-				field: "parentId",
-				value: params.parentId,
-				operator: "eq",
-			});
-		}
+			} as WhereCondition,
+		];
+
+		const [found, count] = await Promise.all([
+			adapter.findMany<Comment>({
+				model: "comment",
+				limit,
+				offset,
+				where,
+				sortBy: { field: "createdAt", direction: "asc" },
+			}),
+			adapter.count({ model: "comment", where }),
+		]);
+		comments = found;
+		total = count;
 	}
-
-	const where = whereConditions.length > 0 ? whereConditions : undefined;
-
-	const [comments, total] = await Promise.all([
-		adapter.findMany<Comment>({
-			model: "comment",
-			limit,
-			offset,
-			where,
-			sortBy: { field: "createdAt", direction: "asc" },
-		}),
-		adapter.count({ model: "comment", where }),
-	]);
 
 	// Resolve author display info server-side
 	const authorIds = comments.map((c) => c.authorId);
@@ -191,22 +243,41 @@ export async function listComments(
 		});
 	}
 
-	// Batch-count approved replies for top-level comments so the client can
-	// show the expand button without firing a separate request per comment.
+	// Batch-count replies for top-level comments so the client can show the
+	// expand button without firing a separate request per comment.
+	// When currentUserId is provided, also count the user's own pending replies
+	// so the button appears immediately after a page refresh.
 	const replyCounts = new Map<string, number>();
 	const isTopLevelQuery =
 		params.parentId === null || params.parentId === "null";
 	if (isTopLevelQuery && comments.length > 0) {
 		await Promise.all(
 			comments.map(async (c) => {
-				const count = await adapter.count({
+				const approvedCount = await adapter.count({
 					model: "comment",
 					where: [
 						{ field: "parentId", value: c.id, operator: "eq" },
 						{ field: "status", value: "approved", operator: "eq" },
 					],
 				});
-				replyCounts.set(c.id, count);
+
+				let ownPendingCount = 0;
+				if (params.currentUserId) {
+					ownPendingCount = await adapter.count({
+						model: "comment",
+						where: [
+							{ field: "parentId", value: c.id, operator: "eq" },
+							{ field: "status", value: "pending", operator: "eq" },
+							{
+								field: "authorId",
+								value: params.currentUserId,
+								operator: "eq",
+							},
+						],
+					});
+				}
+
+				replyCounts.set(c.id, approvedCount + ownPendingCount);
 			}),
 		);
 	}
