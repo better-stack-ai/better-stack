@@ -373,8 +373,10 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
                 console.log("onBeforeList: status filter", query.status)
             },
             onBeforePost: async (input, ctx) => {
-                // In production: verify the session and that input.authorId matches
-                console.log("onBeforePost: new comment by", input.authorId, "on", input.resourceType, input.resourceId)
+                // In production: verify the session and return the authenticated user's ID
+                // The authorId is no longer trusted from the client body — it is injected here
+                console.log("onBeforePost: new comment on", input.resourceType, input.resourceId)
+                return { authorId: "anonymous" } // In production: return { authorId: session.user.id }
             },
             onAfterPost: async (comment, ctx) => {
                 console.log("Comment created:", comment.id, "status:", comment.status)

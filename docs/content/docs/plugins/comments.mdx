@@ -55,11 +55,11 @@ const { handler, dbSchema } = stack({
         }
       },
       onBeforePost: async (comment, ctx) => {
-        // Required: verify session and that comment.authorId matches the authenticated user
+        // Required: resolve the authorId from the authenticated session
+        // Never use any ID supplied by the client
         const session = await getSession(ctx.headers)
         if (!session?.user) throw new Error("Authentication required")
-        if (comment.authorId !== session.user.id)
-          throw new Error("Forbidden")
+        return { authorId: session.user.id }
       },
       onAfterPost: async (comment, ctx) => {
         console.log("New comment posted:", comment.id)
@@ -331,7 +331,7 @@ Access is controlled by the `onBeforeModerationPageRendered` hook in `CommentsPl
 | `autoApprove` | `boolean` | `false` | Automatically approve new comments |
 | `resolveUser` | `(authorId: string) => Promise<{ name: string; avatarUrl?: string } \| null>` | — | Map author IDs to display info; returns `null` → shows `"[deleted]"` |
 | `onBeforeList` | hook | — | Called before the comment list is returned. Throw to reject. When absent, any `status` filter other than `"approved"` is automatically rejected with 403 — preventing anonymous access to the moderation queues. |
-| `onBeforePost` | hook | **required** | Called before a comment is saved. Throw to reject. **Required** — plugin throws at startup if absent. |
+| `onBeforePost` | hook | **required** | Called before a comment is saved. Must return `{ authorId: string }` derived from the authenticated session. Throw to reject. Plugin throws at startup if absent. |
 | `onAfterPost` | hook | — | Called after a comment is saved. |
 | `onBeforeEdit` | hook | — | Called before a comment body is updated. Throw to reject. |
 | `onAfterEdit` | hook | — | Called after a comment body is updated. |
@@ -342,7 +342,7 @@ Access is controlled by the `onBeforeModerationPageRendered` hook in `CommentsPl
 | `onAfterDelete` | hook | — | Called after a comment is deleted. |
 
 <Callout type="warn">
-**`onBeforePost` is required and must be provided.** The `authorId` field is passed in the request body — without `onBeforePost`, any caller can post comments attributed to any user ID. Always verify that `input.authorId` matches the authenticated session (e.g. check a JWT or session cookie) and throw if it does not.
+**`onBeforePost` is required and must return `{ authorId: string }`.** `authorId` is intentionally absent from the POST body schema — the server derives identity exclusively from this hook. Resolve `authorId` from the session (e.g. JWT / session cookie) and throw if the user is not authenticated. A client can never forge comment authorship.
 
 `commentsBackendPlugin` throws an error at startup if `onBeforePost` is not configured.
 </Callout>

@@ -10,7 +10,7 @@ export type Comment = {
 	id: string;
 	resourceId: string;
 	resourceType: string;
-	parentId?: string;
+	parentId: string | null;
 	authorId: string;
 	body: string;
 	status: CommentStatus;

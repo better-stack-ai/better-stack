@@ -29,7 +29,7 @@ export async function createComment(
 		data: {
 			resourceId: input.resourceId,
 			resourceType: input.resourceType,
-			parentId: input.parentId ?? undefined,
+			parentId: input.parentId ?? null,
 			authorId: input.authorId,
 			body: input.body,
 			status: input.status ?? "pending",

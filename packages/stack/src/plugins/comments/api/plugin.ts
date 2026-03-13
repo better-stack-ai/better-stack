@@ -64,20 +64,21 @@ export interface CommentsBackendOptions {
 	) => Promise<void> | void;
 
 	/**
-	 * Called before a comment is created. Throw an error to reject the comment.
+	 * Called before a comment is created. Must return `{ authorId: string }` —
+	 * the server-resolved identity of the commenter.
 	 *
-	 * ⚠️  SECURITY REQUIRED: This is the only server-side identity gate for
-	 * comment creation. Always verify that `input.authorId` matches the
-	 * authenticated session (e.g. verify JWT/session cookie). Without this
-	 * hook, any caller can post a comment attributed to any arbitrary user ID.
+	 * ⚠️  SECURITY REQUIRED: Derive `authorId` from the authenticated session
+	 * (e.g. JWT / session cookie). Never trust any ID supplied by the client.
+	 * Throw to reject the request (e.g. when the user is not authenticated).
 	 *
-	 * This field is required — `commentsBackendPlugin` throws at startup if
-	 * it is absent.
+	 * `authorId` is intentionally absent from the POST body schema. This hook
+	 * is the only place it can be set. `commentsBackendPlugin` throws at startup
+	 * if this hook is not provided.
 	 */
 	onBeforePost: (
 		input: z.infer<typeof createCommentSchema>,
 		context: CommentsApiContext,
-	) => Promise<void> | void;
+	) => Promise<{ authorId: string }> | { authorId: string };
 
 	/**
 	 * Called after a comment is successfully created.
@@ -158,8 +159,8 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 	if (!options?.onBeforePost) {
 		throw new Error(
 			"[btst/comments] onBeforePost is required. " +
-				"Any caller can post a comment attributed to any user ID without it. " +
-				"Add onBeforePost to verify the session and that input.authorId matches the authenticated user.",
+				"It must return { authorId: string } derived from the authenticated session. " +
+				"authorId is no longer accepted in the POST body — the server resolves identity exclusively via this hook.",
 		);
 	}
 
@@ -231,7 +232,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						headers: ctx.headers,
 					};
 					try {
-						await runHookWithShim(
+						const { authorId } = await runHookWithShim(
 							() => options.onBeforePost(ctx.body, context),
 							ctx.error,
 							"Unauthorized: Cannot post comment",
@@ -240,6 +241,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						const status = options?.autoApprove ? "approved" : "pending";
 						const comment = await createComment(adapter, {
 							...ctx.body,
+							authorId,
 							status,
 						});
 

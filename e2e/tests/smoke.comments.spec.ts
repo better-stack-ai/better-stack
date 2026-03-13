@@ -8,7 +8,6 @@ async function createComment(
 		resourceId: string;
 		resourceType: string;
 		parentId?: string | null;
-		authorId: string;
 		body: string;
 	},
 ) {
@@ -18,7 +17,6 @@ async function createComment(
 			resourceId: data.resourceId,
 			resourceType: data.resourceType,
 			parentId: data.parentId ?? null,
-			authorId: data.authorId,
 			body: data.body,
 		},
 	});
@@ -92,7 +90,6 @@ test.describe("Comments Plugin", () => {
 		const comment = await createComment(request, {
 			resourceId,
 			resourceType: "e2e-test",
-			authorId: "user-123",
 			body: "This is a test comment.",
 		});
 
@@ -129,7 +126,6 @@ test.describe("Comments Plugin", () => {
 		const comment = await createComment(request, {
 			resourceId,
 			resourceType: "e2e-test",
-			authorId: "user-456",
 			body: "Approvable comment.",
 		});
 
@@ -161,7 +157,6 @@ test.describe("Comments Plugin", () => {
 		await createComment(request, {
 			resourceId,
 			resourceType: "e2e-test",
-			authorId: "user-789",
 			body: "Approve me via UI.",
 		});
 
@@ -205,7 +200,6 @@ test.describe("Comments Plugin", () => {
 		const comment = await createComment(request, {
 			resourceId,
 			resourceType: "e2e-test",
-			authorId: "user-001",
 			body: "Count me.",
 		});
 		await approveComment(request, comment.id);
@@ -220,7 +214,6 @@ test.describe("Comments Plugin", () => {
 		const comment = await createComment(request, {
 			resourceId,
 			resourceType: "e2e-test",
-			authorId: "user-like",
 			body: "Like me.",
 		});
 
@@ -256,7 +249,6 @@ test.describe("Comments Plugin", () => {
 		const parent = await createComment(request, {
 			resourceId,
 			resourceType: "e2e-test",
-			authorId: "user-parent",
 			body: "Parent comment.",
 		});
 
@@ -264,7 +256,6 @@ test.describe("Comments Plugin", () => {
 			resourceId,
 			resourceType: "e2e-test",
 			parentId: parent.id,
-			authorId: "user-child",
 			body: "Reply to parent.",
 		});
 
@@ -286,7 +277,6 @@ test.describe("Comments Plugin", () => {
 		const comment = await createComment(request, {
 			resourceId,
 			resourceType: "blog-post",
-			authorId: "user-auth",
 			body: "Public comment on blog post.",
 		});
 		await approveComment(request, comment.id);
@@ -321,21 +311,19 @@ test.describe("Comments Plugin", () => {
 		);
 	});
 
-	test("deleted-user comment shows [deleted] name", async ({ request }) => {
-		const resourceId = `e2e-deleted-${Date.now()}`;
+	test("resolved author name is returned for comments", async ({ request }) => {
+		const resourceId = `e2e-author-${Date.now()}`;
 
-		// Create a comment with an author ID that the resolveUser hook won't find
 		const comment = await createComment(request, {
 			resourceId,
 			resourceType: "e2e-test",
-			authorId: "nonexistent-user-xyz",
-			body: "Comment from deleted user.",
+			body: "Comment with resolved author.",
 		});
 
 		// Approve it so it shows in the list
 		await approveComment(request, comment.id);
 
-		// Fetch the comment list and verify resolvedAuthorName
+		// Fetch the comment list and verify resolvedAuthorName is populated
 		const listResponse = await request.get(
 			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=e2e-test&status=approved`,
 		);
@@ -343,7 +331,8 @@ test.describe("Comments Plugin", () => {
 		const list = await listResponse.json();
 		const found = list.items.find((c: { id: string }) => c.id === comment.id);
 		expect(found).toBeDefined();
-		// Without resolveUser configured, falls back to "[deleted]"
-		expect(found.resolvedAuthorName).toBe("[deleted]");
+		// resolvedAuthorName should be a non-empty string (from resolveUser or "[deleted]" fallback)
+		expect(typeof found.resolvedAuthorName).toBe("string");
+		expect(found.resolvedAuthorName.length).toBeGreaterThan(0);
 	});
 });

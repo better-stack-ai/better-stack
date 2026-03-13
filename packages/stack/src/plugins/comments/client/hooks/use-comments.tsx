@@ -159,18 +159,13 @@ export function usePostComment(
 	}).queryKey;
 
 	return useMutation({
-		mutationFn: async (input: {
-			body: string;
-			parentId?: string | null;
-			authorId: string;
-		}) => {
+		mutationFn: async (input: { body: string; parentId?: string | null }) => {
 			const response = await client("@post/comments", {
 				method: "POST",
 				body: {
 					resourceId: params.resourceId,
 					resourceType: params.resourceType,
 					parentId: input.parentId ?? null,
-					authorId: input.authorId,
 					body: input.body,
 				},
 				headers: config.headers,
@@ -190,7 +185,7 @@ export function usePostComment(
 				resourceId: params.resourceId,
 				resourceType: params.resourceType,
 				parentId: input.parentId ?? null,
-				authorId: input.authorId,
+				authorId: params.currentUserId ?? "",
 				resolvedAuthorName: "You",
 				resolvedAvatarUrl: null,
 				body: input.body,

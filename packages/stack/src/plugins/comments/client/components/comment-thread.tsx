@@ -295,7 +295,6 @@ function CommentThreadInner({
 		await postMutation.mutateAsync({
 			body,
 			parentId: null,
-			authorId: currentUserId,
 		});
 	};
 
@@ -304,7 +303,6 @@ function CommentThreadInner({
 		await postMutation.mutateAsync({
 			body,
 			parentId,
-			authorId: currentUserId,
 		});
 		setReplyingTo(null);
 		setExpandedReplies((prev) => new Set(prev).add(parentId));

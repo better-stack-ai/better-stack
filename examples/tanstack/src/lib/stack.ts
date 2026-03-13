@@ -166,8 +166,9 @@ const { handler, dbSchema } = stack({
                 console.log("onBeforeList: status filter", query.status)
             },
             onBeforePost: async (input, ctx) => {
-                // In production: verify the session and that input.authorId matches
-                console.log("onBeforePost: new comment by", input.authorId)
+                // In production: verify the session and return the authenticated user's ID
+                console.log("onBeforePost: new comment on", input.resourceType, input.resourceId)
+                return { authorId: "anonymous" } // In production: return { authorId: session.user.id }
             },
             onBeforeLike: async (commentId, authorId, ctx) => {
                 // In production: verify authorId matches the authenticated session
