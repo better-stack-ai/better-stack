@@ -330,7 +330,7 @@ Access is controlled by the `onBeforeModerationPageRendered` hook in `CommentsPl
 |--------|------|---------|-------------|
 | `autoApprove` | `boolean` | `false` | Automatically approve new comments |
 | `resolveUser` | `(authorId: string) => Promise<{ name: string; avatarUrl?: string } \| null>` | — | Map author IDs to display info; returns `null` → shows `"[deleted]"` |
-| `onBeforeList` | hook | — | Called before the comment list is returned. Throw to reject. When absent, any `status` filter other than `"approved"` is automatically rejected with 403 — preventing anonymous access to the moderation queues. |
+| `onBeforeList` | hook | — | Called before the comment list or count is returned. Throw to reject. When absent, any `status` filter other than `"approved"` is automatically rejected with 403 on both `GET /comments` and `GET /comments/count` — preventing anonymous access to, or probing of, the moderation queues. |
 | `onBeforePost` | hook | **required** | Called before a comment is saved. Must return `{ authorId: string }` derived from the authenticated session. Throw to reject. Plugin throws at startup if absent. |
 | `onAfterPost` | hook | — | Called after a comment is saved. |
 | `onBeforeEdit` | hook | — | Called before a comment body is updated. Throw to reject. |

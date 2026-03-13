@@ -52,10 +52,11 @@ export interface CommentsBackendOptions {
 	) => Promise<{ name: string; avatarUrl?: string } | null>;
 
 	/**
-	 * Called before the comment list is returned. Throw to reject.
+	 * Called before the comment list or count is returned. Throw to reject.
 	 * When this hook is absent, any request with `status` other than "approved"
-	 * is automatically rejected with 403 — preventing anonymous callers from
-	 * reading the pending/spam moderation queues. Configure this hook to
+	 * is automatically rejected with 403 on both `GET /comments` and
+	 * `GET /comments/count` — preventing anonymous callers from reading or
+	 * probing the pending/spam moderation queues. Configure this hook to
 	 * authorize admin callers (e.g. check session role).
 	 */
 	onBeforeList?: (
@@ -304,7 +305,41 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 					query: CommentCountQuerySchema,
 				},
 				async (ctx) => {
+					const context: CommentsApiContext = {
+						query: ctx.query,
+						headers: ctx.headers,
+					};
 					try {
+						// Mirror the same authorization guard used by GET /comments.
+						// Without onBeforeList, non-approved status counts are blocked so
+						// unauthenticated callers cannot probe the moderation queue sizes.
+						if (ctx.query.status && ctx.query.status !== "approved") {
+							if (!options?.onBeforeList) {
+								throw ctx.error(403, {
+									message: "Forbidden: status filter requires authorization",
+								});
+							}
+							await runHookWithShim(
+								() =>
+									options.onBeforeList!(
+										{ ...ctx.query, status: ctx.query.status },
+										context,
+									),
+								ctx.error,
+								"Forbidden: Cannot count comments with this status filter",
+							);
+						} else if (options?.onBeforeList) {
+							await runHookWithShim(
+								() =>
+									options.onBeforeList!(
+										{ ...ctx.query, status: ctx.query.status },
+										context,
+									),
+								ctx.error,
+								"Forbidden: Cannot count comments",
+							);
+						}
+
 						const count = await getCommentCount(adapter, ctx.query);
 						return { count };
 					} catch (error) {
