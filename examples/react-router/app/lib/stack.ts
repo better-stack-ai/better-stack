@@ -160,7 +160,7 @@ const { handler, dbSchema } = stack({
             autoApprove: false,
             resolveUser: async (authorId) => {
                 // In production: look up your auth system's user by authorId
-                return { name: `User ${authorId.slice(0, 8)}` }
+                return { name: `User ${authorId}` }
             },
             onBeforeList: async (query, ctx) => {
                 // Restrict pending/spam queues to admin sessions.
@@ -175,7 +175,7 @@ const { handler, dbSchema } = stack({
             onBeforePost: async (input, ctx) => {
                 // In production: verify the session and return the authenticated user's ID
                 console.log("onBeforePost: new comment on", input.resourceType, input.resourceId)
-                return { authorId: "anonymous" } // In production: return { authorId: session.user.id }
+                return { authorId: "olliethedev" } // In production: return { authorId: session.user.id }
             },
             onBeforeLike: async (commentId, authorId, ctx) => {
                 // In production: verify authorId matches the authenticated session

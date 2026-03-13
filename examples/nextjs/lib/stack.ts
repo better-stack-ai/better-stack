@@ -366,7 +366,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
             autoApprove: false,
             resolveUser: async (authorId) => {
                 // In production: look up your auth system's user by authorId
-                return { name: `User ${authorId.slice(0, 8)}` }
+                return { name: `User ${authorId}` }
             },
             onBeforeList: async (query, ctx) => {
                 // Restrict pending/spam queues to admin sessions.
@@ -382,7 +382,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
                 // In production: verify the session and return the authenticated user's ID
                 // The authorId is no longer trusted from the client body — it is injected here
                 console.log("onBeforePost: new comment on", input.resourceType, input.resourceId)
-                return { authorId: "anonymous" } // In production: return { authorId: session.user.id }
+                return { authorId: "olliethedev" } // In production: return { authorId: session.user.id }
             },
             onAfterPost: async (comment, ctx) => {
                 console.log("Comment created:", comment.id, "status:", comment.status)

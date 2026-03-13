@@ -456,3 +456,300 @@ test.describe("Comments Plugin", () => {
 		expect(found.resolvedAuthorName.length).toBeGreaterThan(0);
 	});
 });
+
+// ─── Own pending comments visibility ────────────────────────────────────────────
+//
+// These tests cover the business rule: a user should always see their own
+// pending (awaiting-moderation) comments and replies, even after a page
+// refresh clears the React Query cache. The fix is server-side — GET /comments
+// with `currentUserId` returns approved + own-pending in a single response.
+//
+// The example app's onBeforePost hook returns authorId "olliethedev" for every
+// POST, so we use that as currentUserId in the query string to simulate the
+// logged-in user fetching their own pending content.
+
+test.describe("Own pending comments — visible after refresh (server-side fix)", () => {
+	// Shared authorId used by the example app's onBeforePost hook
+	const CURRENT_USER_ID = "olliethedev";
+
+	test("own pending top-level comment is included when currentUserId matches author", async ({
+		request,
+	}) => {
+		const resourceId = `e2e-own-pending-${Date.now()}`;
+		const resourceType = "e2e-test";
+
+		// POST creates a pending comment (autoApprove: false)
+		const comment = await createComment(request, {
+			resourceId,
+			resourceType,
+			body: "My pending comment — should survive refresh.",
+		});
+		expect(comment.status).toBe("pending");
+
+		// Simulates a page-refresh fetch: status defaults to "approved" but
+		// currentUserId is provided — own pending comments must be included.
+		const response = await request.get(
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&currentUserId=${CURRENT_USER_ID}`,
+		);
+		expect(response.ok()).toBeTruthy();
+		const body = await response.json();
+
+		const found = body.items.find((c: { id: string }) => c.id === comment.id);
+		expect(
+			found,
+			"Own pending comment must appear in the response with currentUserId",
+		).toBeDefined();
+		expect(found.status).toBe("pending");
+	});
+
+	test("pending comment is NOT returned when currentUserId is absent", async ({
+		request,
+	}) => {
+		const resourceId = `e2e-no-pending-${Date.now()}`;
+		const resourceType = "e2e-test";
+
+		const comment = await createComment(request, {
+			resourceId,
+			resourceType,
+			body: "Invisible pending comment — no currentUserId.",
+		});
+		expect(comment.status).toBe("pending");
+
+		// Fetch without currentUserId — only approved comments should be returned
+		const response = await request.get(
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}`,
+		);
+		expect(response.ok()).toBeTruthy();
+		const body = await response.json();
+
+		const found = body.items.find((c: { id: string }) => c.id === comment.id);
+		expect(
+			found,
+			"Pending comment must NOT appear without currentUserId",
+		).toBeUndefined();
+	});
+
+	test("another user's pending comment is NOT included even with currentUserId", async ({
+		request,
+	}) => {
+		const resourceId = `e2e-other-pending-${Date.now()}`;
+		const resourceType = "e2e-test";
+
+		// Comment is authored by "olliethedev" (from onBeforePost hook)
+		const comment = await createComment(request, {
+			resourceId,
+			resourceType,
+			body: "Comment by the real author.",
+		});
+		expect(comment.status).toBe("pending");
+
+		// A *different* userId should not see this pending comment
+		const response = await request.get(
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&currentUserId=some-other-user`,
+		);
+		expect(response.ok()).toBeTruthy();
+		const body = await response.json();
+
+		const found = body.items.find((c: { id: string }) => c.id === comment.id);
+		expect(
+			found,
+			"Pending comment from another author must NOT appear for a different currentUserId",
+		).toBeUndefined();
+	});
+
+	test("replyCount on parent includes own pending reply when currentUserId is provided", async ({
+		request,
+	}) => {
+		const resourceId = `e2e-replycount-${Date.now()}`;
+		const resourceType = "e2e-test";
+
+		// Create and approve parent so it appears in the top-level list
+		const parent = await createComment(request, {
+			resourceId,
+			resourceType,
+			body: "Parent comment for reply-count test.",
+		});
+		await approveComment(request, parent.id);
+
+		// Post a pending reply
+		await createComment(request, {
+			resourceId,
+			resourceType,
+			parentId: parent.id,
+			body: "My pending reply — should increment replyCount.",
+		});
+
+		// Fetch top-level comments WITH currentUserId
+		const withUserResponse = await request.get(
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=null&currentUserId=${CURRENT_USER_ID}`,
+		);
+		expect(withUserResponse.ok()).toBeTruthy();
+		const withUserBody = await withUserResponse.json();
+		const parentItem = withUserBody.items.find(
+			(c: { id: string }) => c.id === parent.id,
+		);
+		expect(parentItem).toBeDefined();
+		expect(
+			parentItem.replyCount,
+			"replyCount must include own pending reply when currentUserId is provided",
+		).toBe(1);
+	});
+
+	test("replyCount is 0 for a pending reply when currentUserId is absent", async ({
+		request,
+	}) => {
+		const resourceId = `e2e-replycount-nouser-${Date.now()}`;
+		const resourceType = "e2e-test";
+
+		const parent = await createComment(request, {
+			resourceId,
+			resourceType,
+			body: "Parent for replyCount-without-user test.",
+		});
+		await approveComment(request, parent.id);
+
+		// Pending reply — not approved, not counted without currentUserId
+		await createComment(request, {
+			resourceId,
+			resourceType,
+			parentId: parent.id,
+			body: "Pending reply — invisible without currentUserId.",
+		});
+
+		// Fetch without currentUserId
+		const response = await request.get(
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=null`,
+		);
+		expect(response.ok()).toBeTruthy();
+		const body = await response.json();
+		const parentItem = body.items.find(
+			(c: { id: string }) => c.id === parent.id,
+		);
+		expect(parentItem).toBeDefined();
+		expect(
+			parentItem.replyCount,
+			"replyCount must be 0 when reply is pending and currentUserId is absent",
+		).toBe(0);
+	});
+
+	test("own pending reply appears in replies list when currentUserId is provided", async ({
+		request,
+	}) => {
+		const resourceId = `e2e-pending-reply-list-${Date.now()}`;
+		const resourceType = "e2e-test";
+
+		const parent = await createComment(request, {
+			resourceId,
+			resourceType,
+			body: "Parent comment.",
+		});
+		await approveComment(request, parent.id);
+
+		// Post a pending reply
+		const reply = await createComment(request, {
+			resourceId,
+			resourceType,
+			parentId: parent.id,
+			body: "My pending reply — must survive refresh.",
+		});
+		expect(reply.status).toBe("pending");
+
+		// Simulates the RepliesSection fetch after a page refresh:
+		// status defaults to approved but currentUserId causes own-pending to be included
+		const response = await request.get(
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=${encodeURIComponent(parent.id)}&currentUserId=${CURRENT_USER_ID}`,
+		);
+		expect(response.ok()).toBeTruthy();
+		const body = await response.json();
+
+		const found = body.items.find((c: { id: string }) => c.id === reply.id);
+		expect(
+			found,
+			"Own pending reply must appear in the replies list with currentUserId",
+		).toBeDefined();
+		expect(found.status).toBe("pending");
+	});
+
+	test("own pending reply does NOT appear in replies list without currentUserId", async ({
+		request,
+	}) => {
+		const resourceId = `e2e-pending-reply-hidden-${Date.now()}`;
+		const resourceType = "e2e-test";
+
+		const parent = await createComment(request, {
+			resourceId,
+			resourceType,
+			body: "Parent comment.",
+		});
+		await approveComment(request, parent.id);
+
+		const reply = await createComment(request, {
+			resourceId,
+			resourceType,
+			parentId: parent.id,
+			body: "Pending reply — hidden without currentUserId.",
+		});
+		expect(reply.status).toBe("pending");
+
+		// Fetch without currentUserId — only approved replies returned
+		const response = await request.get(
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=${encodeURIComponent(parent.id)}`,
+		);
+		expect(response.ok()).toBeTruthy();
+		const body = await response.json();
+
+		const found = body.items.find((c: { id: string }) => c.id === reply.id);
+		expect(
+			found,
+			"Pending reply must NOT appear in the list without currentUserId",
+		).toBeUndefined();
+	});
+
+	test("pending-badge is shown for own pending comment in the UI", async ({
+		page,
+		request,
+	}) => {
+		// Seeds an approved comment so the thread renders, then posts via the UI
+		// and verifies the "Pending approval" badge appears on the new comment card.
+		const resourceId = `e2e-badge-${Date.now()}`;
+		const resourceType = "e2e-test";
+
+		const seed = await createComment(request, {
+			resourceId,
+			resourceType,
+			body: "Seed — ensures thread is mounted.",
+		});
+		await approveComment(request, seed.id);
+
+		await page.goto(
+			`/pages/comments/moderation/resource?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}`,
+			{ waitUntil: "networkidle" },
+		);
+
+		const hasThread = await page
+			.locator('[data-testid="comment-form"]')
+			.isVisible()
+			.catch(() => false);
+
+		if (!hasThread) {
+			// Resource-comments route not available in this example app — skip UI portion
+			test.skip();
+			return;
+		}
+
+		const textarea = page.locator('[data-testid="comment-form"] textarea');
+		await textarea.fill("My new pending comment.");
+		await page
+			.locator('[data-testid="comment-form"] button[type="submit"]')
+			.click();
+
+		// The pending badge must appear on the newly posted comment card
+		const newCard = page
+			.locator('[data-testid="comment-card"]')
+			.filter({ hasText: "My new pending comment." });
+		await expect(newCard).toBeVisible({ timeout: 5000 });
+		await expect(
+			newCard.locator('[data-testid="pending-badge"]'),
+		).toBeVisible();
+	});
+});
