@@ -252,13 +252,14 @@ export async function getCommentCount(
 		{ field: "resourceType", value: params.resourceType, operator: "eq" },
 	];
 
-	if (params.status) {
-		whereConditions.push({
-			field: "status",
-			value: params.status,
-			operator: "eq",
-		});
-	}
+	// Default to "approved" when no status is provided so that omitting the
+	// parameter never leaks pending/spam counts to unauthenticated callers.
+	const statusFilter = params.status ?? "approved";
+	whereConditions.push({
+		field: "status",
+		value: statusFilter,
+		operator: "eq",
+	});
 
 	return adapter.count({ model: "comment", where: whereConditions });
 }
