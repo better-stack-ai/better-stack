@@ -211,14 +211,6 @@ console.log('tsconfig.json patched');
     # ------------------------------------------------------------------
     step "7 — Installing plugin registry items via shadcn CLI"
     # ------------------------------------------------------------------
-    # Install shadcn as a local dev dependency to avoid stale npx cache issues.
-    # Using `npx --yes shadcn@latest` stores the CLI in a global npx cache; if a
-    # prior run cached an incomplete install (e.g. @antfu/ni missing its tinyexec
-    # sub-dep), subsequent runs fail with ERR_MODULE_NOT_FOUND. Installing locally
-    # lets npm resolve the full dependency tree cleanly every time.
-    npm install --save-dev shadcn --legacy-peer-deps
-    success "shadcn CLI installed locally"
-
     # Initialize shadcn with Radix as the base component library (radix-nova style).
     # Our source code uses Radix-based shadcn APIs (Accordion type="single"/collapsible,
     # Select onValueChange: (value: string) => void, etc.). The default shadcn@latest
@@ -227,7 +219,7 @@ console.log('tsconfig.json patched');
     # embedded from packages/ui (see build-registry.ts — "form" excluded from
     # STANDARD_SHADCN_COMPONENTS). All other standard components (select, accordion,
     # dialog, dropdown-menu, …) are correctly Radix-based with this flag.
-    npx shadcn init --defaults --force --base radix
+    npx --yes shadcn@4.0.5 init --defaults --force --base radix
     success "shadcn init completed (radix-nova)"
 
     INSTALL_FAILURES=()
@@ -238,7 +230,7 @@ console.log('tsconfig.json patched');
     # We treat those as warnings so the rest of the test can proceed.
     for PLUGIN in "${PLUGIN_NAMES[@]}"; do
         echo "Installing btst-${PLUGIN}…"
-        if npx shadcn add \
+        if npx --yes shadcn@4.0.5 add \
             "http://localhost:$SERVER_PORT/btst-${PLUGIN}.json" \
             --yes --overwrite 2>&1; then
             success "btst-${PLUGIN} installed"
