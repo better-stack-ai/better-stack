@@ -54,6 +54,8 @@ export interface SerializedComment {
 	editedAt: string | null;
 	createdAt: string;
 	updatedAt: string;
+	/** Number of approved direct replies. Always 0 for reply comments (non-null parentId). */
+	replyCount: number;
 }
 
 /**

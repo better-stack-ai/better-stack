@@ -51,6 +51,7 @@ export function useComments(
 		limit?: number;
 		offset?: number;
 	},
+	options?: { enabled?: boolean },
 ) {
 	const client = getClient(config);
 	const queries = createCommentsQueryKeys(client, config.headers);
@@ -59,6 +60,7 @@ export function useComments(
 		...queries.comments.list(params),
 		staleTime: 30_000,
 		retry: false,
+		enabled: options?.enabled ?? true,
 	});
 
 	return {
@@ -203,6 +205,7 @@ export function usePostComment(
 				editedAt: null,
 				createdAt: new Date().toISOString(),
 				updatedAt: new Date().toISOString(),
+				replyCount: 0,
 			};
 
 			queryClient.setQueryData<CommentListResult>(listKey, (old) => {
@@ -360,6 +363,10 @@ export function useToggleLike(
 	params: {
 		resourceId: string;
 		resourceType: string;
+		/** parentId of the comment being liked — must match the parentId used by
+		 *  useComments so the optimistic setQueryData hits the correct cache entry.
+		 *  Pass `null` for top-level comments, or the parent comment ID for replies. */
+		parentId?: string | null;
 		currentUserId?: string;
 	},
 ) {
@@ -367,9 +374,11 @@ export function useToggleLike(
 	const client = getClient(config);
 	const queries = createCommentsQueryKeys(client, config.headers);
 
+	// parentId must be normalised to null (not undefined) — same rule as usePostComment.
 	const listKey = queries.comments.list({
 		resourceId: params.resourceId,
 		resourceType: params.resourceType,
+		parentId: params.parentId ?? null,
 		status: "approved",
 		currentUserId: params.currentUserId,
 	}).queryKey;

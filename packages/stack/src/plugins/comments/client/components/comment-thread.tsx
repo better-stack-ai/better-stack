@@ -111,6 +111,7 @@ function CommentCard({
 	const toggleLikeMutation = useToggleLike(config, {
 		resourceId,
 		resourceType,
+		parentId: comment.parentId,
 		currentUserId,
 	});
 
@@ -367,6 +368,7 @@ function CommentThreadInner({
 								headers={headers}
 								components={components}
 								expanded={expandedReplies.has(comment.id)}
+								replyCount={comment.replyCount}
 								onToggle={() => {
 									setExpandedReplies((prev) => {
 										const next = new Set(prev);
@@ -448,6 +450,7 @@ function RepliesSection({
 	headers,
 	components,
 	expanded,
+	replyCount,
 	onToggle,
 }: {
 	parentId: string;
@@ -459,18 +462,29 @@ function RepliesSection({
 	headers?: HeadersInit;
 	components?: CommentComponents;
 	expanded: boolean;
+	/** Pre-computed from the parent comment — avoids an extra fetch on mount. */
+	replyCount: number;
 	onToggle: () => void;
 }) {
 	const config = { apiBaseURL, apiBasePath, headers };
-	const { comments: replies } = useComments(config, {
-		resourceId,
-		resourceType,
-		parentId,
-		status: "approved",
-		currentUserId,
-	});
+	// Only fetch reply bodies once the section is expanded.
+	const { comments: replies } = useComments(
+		config,
+		{
+			resourceId,
+			resourceType,
+			parentId,
+			status: "approved",
+			currentUserId,
+		},
+		{ enabled: expanded },
+	);
 
-	if (replies.length === 0) return null;
+	if (replyCount === 0) return null;
+
+	// Prefer the fetched count (accurate after optimistic inserts); fall back to
+	// the server-provided replyCount before the fetch completes.
+	const displayCount = expanded ? replies.length || replyCount : replyCount;
 
 	return (
 		<div className="pl-11">
@@ -483,7 +497,7 @@ function RepliesSection({
 					data-testid="show-replies-button"
 				>
 					<Check className="h-3 w-3 mr-1" />
-					{replies.length} {replies.length === 1 ? "reply" : "replies"}
+					{displayCount} {displayCount === 1 ? "reply" : "replies"}
 				</Button>
 			)}
 			{expanded && (

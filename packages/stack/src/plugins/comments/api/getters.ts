@@ -59,6 +59,7 @@ function enrichComment(
 	comment: Comment,
 	authorMap: Map<string, { name: string; avatarUrl: string | null }>,
 	likedCommentIds: Set<string>,
+	replyCount = 0,
 ): SerializedComment {
 	const author = authorMap.get(comment.authorId) ?? {
 		name: "[deleted]",
@@ -79,6 +80,7 @@ function enrichComment(
 		editedAt: comment.editedAt?.toISOString() ?? null,
 		createdAt: comment.createdAt.toISOString(),
 		updatedAt: comment.updatedAt.toISOString(),
+		replyCount,
 	};
 }
 
@@ -189,8 +191,28 @@ export async function listComments(
 		});
 	}
 
+	// Batch-count approved replies for top-level comments so the client can
+	// show the expand button without firing a separate request per comment.
+	const replyCounts = new Map<string, number>();
+	const isTopLevelQuery =
+		params.parentId === null || params.parentId === "null";
+	if (isTopLevelQuery && comments.length > 0) {
+		await Promise.all(
+			comments.map(async (c) => {
+				const count = await adapter.count({
+					model: "comment",
+					where: [
+						{ field: "parentId", value: c.id, operator: "eq" },
+						{ field: "status", value: "approved", operator: "eq" },
+					],
+				});
+				replyCounts.set(c.id, count);
+			}),
+		);
+	}
+
 	const items = comments.map((c) =>
-		enrichComment(c, authorMap, likedCommentIds),
+		enrichComment(c, authorMap, likedCommentIds, replyCounts.get(c.id) ?? 0),
 	);
 
 	return { items, total, limit, offset };

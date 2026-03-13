@@ -32,5 +32,6 @@ export function serializeComment(comment: Comment): Omit<
 		editedAt: comment.editedAt?.toISOString() ?? null,
 		createdAt: comment.createdAt.toISOString(),
 		updatedAt: comment.updatedAt.toISOString(),
+		replyCount: 0,
 	};
 }
