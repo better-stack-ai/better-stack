@@ -98,6 +98,7 @@ export default function Layout() {
                                 resourceType="blog-post"
                                 apiBaseURL={baseURL}
                                 apiBasePath="/api/data"
+                                currentUserId="anonymous" // In production: pass session?.user?.id
                                 loginHref="/login"
                                 className="mt-8 pt-8 border-t"
                             />
@@ -223,6 +224,7 @@ export default function Layout() {
                                 resourceType="kanban-task"
                                 apiBaseURL={baseURL}
                                 apiBasePath="/api/data"
+                                currentUserId="anonymous" // In production: pass session?.user?.id
                                 loginHref="/login"
                             />
                         ),
