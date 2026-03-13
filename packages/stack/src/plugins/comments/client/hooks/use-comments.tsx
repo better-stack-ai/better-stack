@@ -151,12 +151,19 @@ export function usePostComment(
 	const client = getClient(config);
 	const queries = createCommentsQueryKeys(client, config.headers);
 
-	const listKey = queries.comments.list({
-		resourceId: params.resourceId,
-		resourceType: params.resourceType,
-		status: "approved",
-		currentUserId: params.currentUserId,
-	}).queryKey;
+	// Compute the list key for a given parentId so optimistic updates always
+	// target the exact cache entry the component is subscribed to.
+	// parentId must be normalised to null (not undefined) because useComments
+	// passes `parentId: null` explicitly — null and undefined produce different
+	// discriminator objects and therefore different React Query cache keys.
+	const getListKey = (parentId: string | null | undefined) =>
+		queries.comments.list({
+			resourceId: params.resourceId,
+			resourceType: params.resourceType,
+			parentId: parentId ?? null,
+			status: "approved",
+			currentUserId: params.currentUserId,
+		}).queryKey;
 
 	return useMutation({
 		mutationFn: async (input: { body: string; parentId?: string | null }) => {
@@ -176,6 +183,7 @@ export function usePostComment(
 			return data as SerializedComment;
 		},
 		onMutate: async (input) => {
+			const listKey = getListKey(input.parentId);
 			await queryClient.cancelQueries({ queryKey: listKey });
 			const previous = queryClient.getQueryData<CommentListResult>(listKey);
 
@@ -208,15 +216,15 @@ export function usePostComment(
 				};
 			});
 
-			return { previous };
+			return { previous, listKey };
 		},
 		onError: (_err, _input, context) => {
 			if (context?.previous !== undefined) {
-				queryClient.setQueryData(listKey, context.previous);
+				queryClient.setQueryData(context.listKey, context.previous);
 			}
 		},
-		onSettled: () => {
-			queryClient.invalidateQueries({ queryKey: listKey });
+		onSettled: (_data, _error, input) => {
+			queryClient.invalidateQueries({ queryKey: getListKey(input.parentId) });
 		},
 	});
 }
