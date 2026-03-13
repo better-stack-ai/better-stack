@@ -100,6 +100,17 @@ function Layout() {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforePostPageRendered: checking access for`, slug, context.path);
                             return true;
                         },
+                        // Wire comments into the bottom of each blog post
+                        postBottomSlot: (post) => (
+                            <CommentThread
+                                resourceId={post.slug}
+                                resourceType="blog-post"
+                                apiBaseURL={baseURL}
+                                apiBasePath="/api/data"
+                                loginHref="/login"
+                                className="mt-8 pt-8 border-t"
+                            />
+                        ),
                     },
                     "ai-chat": {
                         mode: "authenticated",
