@@ -78,7 +78,7 @@ function createCommentsQueries(
 					query: {
 						resourceId: params?.resourceId,
 						resourceType: params?.resourceType,
-						parentId: params?.parentId ?? undefined,
+						parentId: params?.parentId === null ? "null" : params?.parentId,
 						status: params?.status,
 						currentUserId: params?.currentUserId,
 						authorId: params?.authorId,
