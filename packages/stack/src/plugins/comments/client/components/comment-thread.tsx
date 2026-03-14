@@ -13,6 +13,7 @@ import { Separator } from "@workspace/ui/components/separator";
 import { Heart, MessageSquare, Pencil, Check, X, LogIn } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { SerializedComment } from "../../types";
+import { getInitials } from "../utils";
 import { CommentForm } from "./comment-form";
 import {
 	useComments,
@@ -82,16 +83,6 @@ export interface CommentThreadProps {
 const DEFAULT_RENDERER: ComponentType<CommentRendererProps> = ({ body }) => (
 	<p className="text-sm whitespace-pre-wrap break-words">{body}</p>
 );
-
-function getInitials(name: string | null | undefined) {
-	if (!name) return "?";
-	return name
-		.split(" ")
-		.slice(0, 2)
-		.map((n) => n[0])
-		.join("")
-		.toUpperCase();
-}
 
 // ─── Comment Card ─────────────────────────────────────────────────────────────
 

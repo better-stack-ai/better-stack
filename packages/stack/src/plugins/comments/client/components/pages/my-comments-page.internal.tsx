@@ -40,6 +40,7 @@ import {
 	COMMENTS_LOCALIZATION,
 	type CommentsLocalization,
 } from "../../localization";
+import { getInitials } from "../../utils";
 
 const PAGE_LIMIT = 20;
 
@@ -50,16 +51,6 @@ interface MyCommentsPageProps {
 	currentUserId?: CommentsPluginOverrides["currentUserId"];
 	resourceLinks?: CommentsPluginOverrides["resourceLinks"];
 	localization?: CommentsLocalization;
-}
-
-function getInitials(name: string | null | undefined) {
-	if (!name) return "?";
-	return name
-		.split(" ")
-		.slice(0, 2)
-		.map((n) => n[0])
-		.join("")
-		.toUpperCase();
 }
 
 function StatusBadge({

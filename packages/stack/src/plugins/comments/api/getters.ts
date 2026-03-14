@@ -87,7 +87,7 @@ function enrichComment(
 type WhereCondition = {
 	field: string;
 	value: string | number | boolean | Date | string[] | number[] | null;
-	operator: "eq";
+	operator: "eq" | "lt" | "gt";
 };
 
 /**
@@ -231,7 +231,7 @@ export async function listComments(
 							{
 								field: "createdAt",
 								value: p.createdAt,
-								operator: dateOp as "eq",
+								operator: dateOp,
 							},
 						],
 					});

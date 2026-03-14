@@ -48,22 +48,13 @@ import {
 	COMMENTS_LOCALIZATION,
 	type CommentsLocalization,
 } from "../../localization";
+import { getInitials } from "../../utils";
 
 interface ModerationPageProps {
 	apiBaseURL: string;
 	apiBasePath: string;
 	headers?: HeadersInit;
 	localization?: CommentsLocalization;
-}
-
-function getInitials(name: string | null | undefined) {
-	if (!name) return "?";
-	return name
-		.split(" ")
-		.slice(0, 2)
-		.map((n) => n[0])
-		.join("")
-		.toUpperCase();
 }
 
 function StatusBadge({ status }: { status: CommentStatus }) {

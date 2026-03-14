@@ -21,6 +21,7 @@ import {
 	COMMENTS_LOCALIZATION,
 	type CommentsLocalization,
 } from "../../localization";
+import { getInitials } from "../../utils";
 
 interface ResourceCommentsPageProps {
 	resourceId: string;
@@ -29,16 +30,6 @@ interface ResourceCommentsPageProps {
 	apiBasePath: string;
 	headers?: HeadersInit;
 	localization?: CommentsLocalization;
-}
-
-function getInitials(name: string | null | undefined) {
-	if (!name) return "?";
-	return name
-		.split(" ")
-		.slice(0, 2)
-		.map((n) => n[0])
-		.join("")
-		.toUpperCase();
 }
 
 export function ResourceCommentsPage({

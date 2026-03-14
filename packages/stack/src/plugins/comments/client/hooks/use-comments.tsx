@@ -12,6 +12,7 @@ import { createApiClient } from "@btst/stack/plugins/client";
 import { createCommentsQueryKeys } from "../../query-keys";
 import type { CommentsApiRouter } from "../../api";
 import type { SerializedComment, CommentListResult } from "../../types";
+import { toError } from "../utils";
 
 interface CommentsClientConfig {
 	apiBaseURL: string;
@@ -24,18 +25,6 @@ function getClient(config: CommentsClientConfig) {
 		baseURL: config.apiBaseURL,
 		basePath: config.apiBasePath,
 	});
-}
-
-function toError(error: unknown): Error {
-	if (error instanceof Error) return error;
-	if (typeof error === "object" && error !== null) {
-		const obj = error as Record<string, unknown>;
-		const message =
-			(typeof obj.message === "string" ? obj.message : null) ||
-			JSON.stringify(error);
-		return new Error(message);
-	}
-	return new Error(String(error));
 }
 
 /**
