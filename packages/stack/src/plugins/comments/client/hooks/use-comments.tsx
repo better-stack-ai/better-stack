@@ -302,6 +302,8 @@ export function usePostComment(
 						const lastIdx = old.pages.length - 1;
 						return {
 							...old,
+							// Increment `total` on every page so the header count (which reads
+							// pages[0].total) stays in sync even after multiple pages are loaded.
 							pages: old.pages.map((page, idx) =>
 								idx === lastIdx
 									? {
@@ -309,7 +311,7 @@ export function usePostComment(
 											items: [...page.items, optimistic],
 											total: page.total + 1,
 										}
-									: page,
+									: { ...page, total: page.total + 1 },
 							),
 						};
 					},
