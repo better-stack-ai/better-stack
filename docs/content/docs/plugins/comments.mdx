@@ -64,6 +64,15 @@ const { handler, dbSchema } = stack({
       onAfterPost: async (comment, ctx) => {
         console.log("New comment posted:", comment.id)
       },
+      onBeforeEdit: async (commentId, update, ctx) => {
+        // Required: verify the caller owns the comment they are editing.
+        // Without this hook all edit requests return 403 by default.
+        const session = await getSession(ctx.headers)
+        if (!session?.user) throw new Error("Authentication required")
+        const comment = await db.comments.findById(commentId)
+        if (comment?.authorId !== session.user.id && !session.user.isAdmin)
+          throw new Error("Forbidden")
+      },
       onBeforeLike: async (commentId, authorId, ctx) => {
         // Verify authorId matches the authenticated session
         const session = await getSession(ctx.headers)
@@ -334,7 +343,7 @@ Access is controlled by the `onBeforeModerationPageRendered` hook in `CommentsPl
 | `onBeforeList` | hook | — | Called before the comment list or count is returned. Throw to reject. When absent, any `status` filter other than `"approved"` is automatically rejected with 403 on both `GET /comments` and `GET /comments/count` — preventing anonymous access to, or probing of, the moderation queues. |
 | `onBeforePost` | hook | **required** | Called before a comment is saved. Must return `{ authorId: string }` derived from the authenticated session. Throw to reject. Plugin throws at startup if absent. |
 | `onAfterPost` | hook | — | Called after a comment is saved. |
-| `onBeforeEdit` | hook | — | Called before a comment body is updated. Throw to reject. |
+| `onBeforeEdit` | hook | — | Called before a comment body is updated. Throw to reject. When absent, **all edit requests return 403** — preventing any unauthenticated caller from tampering with comment bodies. Configure to verify the caller owns the comment. |
 | `onAfterEdit` | hook | — | Called after a comment body is updated. |
 | `onBeforeLike` | hook | — | Called before a like is toggled. Throw to reject. Use to verify `authorId` matches the authenticated session. |
 | `onBeforeStatusChange` | hook | — | Called before moderation status is changed. Throw to reject. Use to enforce admin-only access. |

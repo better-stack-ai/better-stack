@@ -329,14 +329,21 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						headers: ctx.headers,
 					};
 					try {
-						if (options?.onBeforeEdit) {
-							await runHookWithShim(
-								() =>
-									options.onBeforeEdit!(id, { body: ctx.body.body }, context),
-								ctx.error,
-								"Unauthorized: Cannot edit comment",
-							);
+						// Require onBeforeEdit (403 when absent).
+						// Without an explicit hook the caller cannot be authenticated, so
+						// editing any comment body is rejected by default — matching the
+						// same secure-by-default pattern used for onBeforeListByAuthor.
+						if (!options?.onBeforeEdit) {
+							throw ctx.error(403, {
+								message:
+									"Forbidden: editing comments requires the onBeforeEdit hook",
+							});
 						}
+						await runHookWithShim(
+							() => options.onBeforeEdit!(id, { body: ctx.body.body }, context),
+							ctx.error,
+							"Unauthorized: Cannot edit comment",
+						);
 
 						const updated = await updateComment(adapter, id, ctx.body.body);
 						if (!updated) {
