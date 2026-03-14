@@ -447,6 +447,8 @@ export function useApproveComment(config: CommentsClientConfig) {
 			queryClient.invalidateQueries({
 				queryKey: queries.commentCount.byResource._def,
 			});
+			// Also invalidate the infinite thread cache so status changes are reflected there.
+			queryClient.invalidateQueries({ queryKey: ["commentsThread"] });
 		},
 	});
 }
@@ -481,6 +483,8 @@ export function useUpdateCommentStatus(config: CommentsClientConfig) {
 			queryClient.invalidateQueries({
 				queryKey: queries.commentCount.byResource._def,
 			});
+			// Also invalidate the infinite thread cache so status changes are reflected there.
+			queryClient.invalidateQueries({ queryKey: ["commentsThread"] });
 		},
 	});
 }
