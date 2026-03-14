@@ -408,7 +408,17 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 							await options.onAfterEdit(updated, context);
 						}
 
-						return updated;
+						// Return a fully serialized comment (same pattern as POST /comments)
+						// so the client receives resolvedAuthorName / resolvedAvatarUrl /
+						// isLikedByCurrentUser — the raw DB record from updateComment() lacks
+						// these fields and would cause the client-side cache update to replace
+						// the enriched comment with an incomplete object.
+						const serialized = await getCommentById(
+							adapter,
+							updated.id,
+							options?.resolveUser,
+						);
+						return serialized ?? updated;
 					} catch (error) {
 						throw error;
 					}
