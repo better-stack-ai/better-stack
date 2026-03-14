@@ -49,15 +49,24 @@ export interface CommentsPluginOverrides {
 	/**
 	 * The ID of the currently authenticated user.
 	 *
-	 * Used by the My Comments page to scope the comment list to the current user.
+	 * Used by the My Comments page and the per-resource comments admin view to
+	 * scope the comment list to the current user and to enable posting.
 	 * Can be a static string or an async function (useful when the user ID must
 	 * be resolved from a session cookie at render time).
 	 *
-	 * When absent the My Comments page shows a "Please log in" prompt.
+	 * When absent both pages show a "Please log in" prompt.
 	 */
 	currentUserId?:
 		| string
 		| (() => string | undefined | Promise<string | undefined>);
+
+	/**
+	 * URL to redirect unauthenticated users to when they try to post a comment.
+	 *
+	 * Forwarded to every embedded `CommentThread` (including the one on the
+	 * per-resource admin comments view). When absent no login link is shown.
+	 */
+	loginHref?: string;
 
 	/**
 	 * Default number of top-level comments to load per page in `CommentThread`.

@@ -29,6 +29,8 @@ interface ResourceCommentsPageProps {
 	apiBaseURL: string;
 	apiBasePath: string;
 	headers?: HeadersInit;
+	currentUserId?: string;
+	loginHref?: string;
 	localization?: CommentsLocalization;
 }
 
@@ -38,6 +40,8 @@ export function ResourceCommentsPage({
 	apiBaseURL,
 	apiBasePath,
 	headers,
+	currentUserId,
+	loginHref,
 	localization: localizationProp,
 }: ResourceCommentsPageProps) {
 	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
@@ -132,6 +136,8 @@ export function ResourceCommentsPage({
 					apiBaseURL={apiBaseURL}
 					apiBasePath={apiBasePath}
 					headers={headers}
+					currentUserId={currentUserId}
+					loginHref={loginHref}
 					localization={loc}
 				/>
 			</div>

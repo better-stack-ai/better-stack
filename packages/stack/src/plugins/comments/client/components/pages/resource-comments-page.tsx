@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy } from "react";
+import { lazy, useState, useEffect } from "react";
 import { ComposedRoute } from "@btst/stack/client/components";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../../overrides";
@@ -58,6 +58,21 @@ function ResourceCommentsPageWrapper({
 	const overrides = usePluginOverrides<CommentsPluginOverrides>("comments");
 	const loc = { ...COMMENTS_LOCALIZATION, ...overrides.localization };
 
+	// Resolve currentUserId — supports static string or async/sync function
+	const rawCurrentUserId = overrides.currentUserId;
+	const [resolvedUserId, setResolvedUserId] = useState<string | undefined>(
+		typeof rawCurrentUserId === "string" ? rawCurrentUserId : undefined,
+	);
+	useEffect(() => {
+		if (typeof rawCurrentUserId === "function") {
+			void Promise.resolve(rawCurrentUserId()).then((id) =>
+				setResolvedUserId(id ?? undefined),
+			);
+		} else {
+			setResolvedUserId(rawCurrentUserId ?? undefined);
+		}
+	}, [rawCurrentUserId]);
+
 	useRouteLifecycle({
 		routeName: "resourceComments",
 		context: {
@@ -86,6 +101,8 @@ function ResourceCommentsPageWrapper({
 				apiBaseURL={overrides.apiBaseURL}
 				apiBasePath={overrides.apiBasePath}
 				headers={overrides.headers as HeadersInit | undefined}
+				currentUserId={resolvedUserId}
+				loginHref={overrides.loginHref}
 				localization={loc}
 			/>
 		</PageWrapper>
