@@ -171,19 +171,18 @@ export async function listComments(
 		statusFilter === "approved" &&
 		params.currentUserId
 	) {
-		// Fetch approved comments AND the current user's own pending comments so
-		// they remain visible after a page refresh (React Query cache is lost).
-		// Two separate queries are needed because the DB adapter only supports
-		// AND-chained equality conditions (no OR operator).
-		const [approvedRaw, ownPendingRaw] = await Promise.all([
-			adapter.findMany<Comment>({
-				model: "comment",
-				where: [
-					...baseConditions,
-					{ field: "status", value: "approved", operator: "eq" },
-				],
-				sortBy: { field: "createdAt", direction: sortDirection },
-			}),
+		// Fetch the current user's own pending comments (always a small, bounded
+		// set — typically 0–5 per user per resource).  Then paginate approved
+		// comments entirely at the DB level by computing each pending comment's
+		// exact position in the merged sorted list.
+		//
+		// Algorithm:
+		//   For each pending p_i (sorted, 0-indexed):
+		//     mergedPosition[i] = countApprovedBefore(p_i) + i
+		//   where countApprovedBefore uses a `lt`/`gt` DB count on createdAt.
+		//   This lets us derive the exact approvedOffset and approvedLimit for
+		//   the requested page without loading the full approved set.
+		const [ownPendingAll, approvedCount] = await Promise.all([
 			adapter.findMany<Comment>({
 				model: "comment",
 				where: [
@@ -193,21 +192,90 @@ export async function listComments(
 				],
 				sortBy: { field: "createdAt", direction: sortDirection },
 			}),
+			adapter.count({
+				model: "comment",
+				where: [
+					...baseConditions,
+					{ field: "status", value: "approved", operator: "eq" },
+				],
+			}),
 		]);
 
-		// Merge — approved takes precedence if an ID somehow appears in both.
-		const approvedIds = new Set(approvedRaw.map((c) => c.id));
-		const merged = [
-			...approvedRaw,
-			...ownPendingRaw.filter((c) => !approvedIds.has(c.id)),
-		];
-		merged.sort((a, b) => {
-			const diff = a.createdAt.getTime() - b.createdAt.getTime();
-			return sortDirection === "desc" ? -diff : diff;
-		});
+		total = approvedCount + ownPendingAll.length;
 
-		total = merged.length;
-		comments = merged.slice(offset, offset + limit);
+		if (ownPendingAll.length === 0) {
+			// Fast path: no pending — paginate approved directly.
+			comments = await adapter.findMany<Comment>({
+				model: "comment",
+				limit,
+				offset,
+				where: [
+					...baseConditions,
+					{ field: "status", value: "approved", operator: "eq" },
+				],
+				sortBy: { field: "createdAt", direction: sortDirection },
+			});
+		} else {
+			// For each pending comment, count how many approved records precede
+			// it in the merged sort order.  The adapter supports `lt`/`gt` on
+			// date fields, so this is a single count query per pending comment
+			// (N_pending is tiny, so O(N_pending) queries is acceptable).
+			const dateOp = sortDirection === "asc" ? "lt" : "gt";
+			const pendingWithPositions = await Promise.all(
+				ownPendingAll.map(async (p, i) => {
+					const approvedBefore = await adapter.count({
+						model: "comment",
+						where: [
+							...baseConditions,
+							{ field: "status", value: "approved", operator: "eq" },
+							{
+								field: "createdAt",
+								value: p.createdAt,
+								operator: dateOp as "eq",
+							},
+						],
+					});
+					return { comment: p, mergedPosition: approvedBefore + i };
+				}),
+			);
+
+			// Partition pending into those that fall within [offset, offset+limit).
+			const pendingInWindow = pendingWithPositions.filter(
+				({ mergedPosition }) =>
+					mergedPosition >= offset && mergedPosition < offset + limit,
+			);
+			const countPendingBeforeWindow = pendingWithPositions.filter(
+				({ mergedPosition }) => mergedPosition < offset,
+			).length;
+
+			const approvedOffset = Math.max(0, offset - countPendingBeforeWindow);
+			const approvedLimit = limit - pendingInWindow.length;
+
+			const approvedPage =
+				approvedLimit > 0
+					? await adapter.findMany<Comment>({
+							model: "comment",
+							limit: approvedLimit,
+							offset: approvedOffset,
+							where: [
+								...baseConditions,
+								{ field: "status", value: "approved", operator: "eq" },
+							],
+							sortBy: { field: "createdAt", direction: sortDirection },
+						})
+					: [];
+
+			// Merge the approved page with the pending slice and re-sort.
+			const merged = [
+				...approvedPage,
+				...pendingInWindow.map(({ comment }) => comment),
+			];
+			merged.sort((a, b) => {
+				const diff = a.createdAt.getTime() - b.createdAt.getTime();
+				return sortDirection === "desc" ? -diff : diff;
+			});
+			comments = merged;
+		}
 	} else {
 		const where: WhereCondition[] = [...baseConditions];
 		if (statusFilter !== null) {
