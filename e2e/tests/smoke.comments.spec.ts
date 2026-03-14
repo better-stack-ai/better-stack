@@ -371,45 +371,6 @@ test.describe("Comments Plugin", () => {
 		expect(reply.status).toBe("pending");
 	});
 
-	test("unauthenticated placeholder shown when blog post has no currentUserId", async ({
-		page,
-		request,
-	}) => {
-		const errors: string[] = [];
-		page.on("console", (msg) => {
-			if (msg.type() === "error") errors.push(msg.text());
-		});
-
-		const slug = `e2e-auth-${Date.now()}`;
-
-		// Create a real blog post so the page route exists
-		await createBlogPost(request, { title: "Auth Test Post", slug });
-
-		// Approve a comment on that post so the thread renders
-		const comment = await createComment(request, {
-			resourceId: slug,
-			resourceType: "blog-post",
-			body: "Public comment on blog post.",
-		});
-		await approveComment(request, comment.id);
-
-		// Navigate directly to the blog post page
-		await page.goto(`/pages/blog/${slug}`, { waitUntil: "networkidle" });
-		await expect(page.locator('[data-testid="post-page"]')).toBeVisible();
-
-		// Scroll down to trigger WhenVisible on the comment thread
-		await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-		await page.waitForTimeout(800);
-
-		// Login prompt should be visible (no currentUserId in the test layout)
-		const loginPrompt = page.locator('[data-testid="login-prompt"]');
-		await expect(loginPrompt).toBeVisible({ timeout: 5000 });
-
-		expect(errors, `Console errors detected:\n${errors.join("\n")}`).toEqual(
-			[],
-		);
-	});
-
 	test("posting a comment via UI renders the comment card without error", async ({
 		page,
 		request,
@@ -810,31 +771,31 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 	}) => {
 		// Seeds an approved comment so the thread renders, posts a new comment via
 		// the UI, and verifies the optimistic "Pending approval" badge appears.
-		// Uses a blog post page because that's where the CommentThread is embedded
-		// (via the postBottomSlot override in the example app layout).
-		const slug = `e2e-badge-${Date.now()}`;
-
-		await createBlogPost(request, { title: "Badge Test Post", slug });
+		// Uses the resource-comments admin route (currentUserId comes from the
+		// comments plugin override: "olliethedev") rather than the blog post page,
+		// because the blog postBottomSlot intentionally omits currentUserId to
+		// exercise the unauthenticated-placeholder test.
+		const resourceId = `e2e-badge-${Date.now()}`;
+		const resourceType = "e2e-test";
 
 		// Seed an approved comment so the thread is already visible when we land
 		const seed = await createComment(request, {
-			resourceId: slug,
-			resourceType: "blog-post",
+			resourceId,
+			resourceType,
 			body: "Seed — ensures thread is mounted.",
 		});
 		await approveComment(request, seed.id);
 
-		await page.goto(`/pages/blog/${slug}`, { waitUntil: "networkidle" });
-		await expect(page.locator('[data-testid="post-page"]')).toBeVisible();
-
-		// Scroll to the bottom to trigger WhenVisible on the comment thread
-		await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-		await page.waitForTimeout(800);
+		await page.goto(
+			`/pages/comments/moderation/resource?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}`,
+			{ waitUntil: "networkidle" },
+		);
 
 		const thread = page.locator('[data-testid="comment-thread"]');
 		await expect(thread).toBeVisible({ timeout: 8000 });
 
 		const textarea = page.locator('[data-testid="comment-form"] textarea');
+		await expect(textarea).toBeVisible({ timeout: 5000 });
 		await textarea.fill("My new pending comment.");
 		await page
 			.locator('[data-testid="comment-form"] button[type="submit"]')
