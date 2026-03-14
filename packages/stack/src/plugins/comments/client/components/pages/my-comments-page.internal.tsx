@@ -317,9 +317,12 @@ function CommentRow({
 	onDelete: () => void;
 	isDeleting: boolean;
 }) {
-	const resourceUrl = resourceLinks?.[comment.resourceType]?.(
+	const resourceUrlBase = resourceLinks?.[comment.resourceType]?.(
 		comment.resourceId,
 	);
+	const resourceUrl = resourceUrlBase
+		? `${resourceUrlBase}#comments`
+		: undefined;
 
 	return (
 		<TableRow data-testid="my-comment-row">
