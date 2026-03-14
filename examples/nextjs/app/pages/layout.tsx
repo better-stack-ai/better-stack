@@ -313,6 +313,7 @@ export default function ExampleLayout({
                         apiBasePath: "/api/data",
                         // In production: derive from your auth session
                         currentUserId: "olliethedev",
+                        defaultCommentPageSize: 5,
                         resourceLinks: {
                             "blog-post": (slug) => `/pages/blog/${slug}`,
                         },

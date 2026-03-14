@@ -61,6 +61,37 @@ export function commentCountDiscriminator(params: {
 	};
 }
 
+/**
+ * Discriminator for the infinite thread query (top-level comments only).
+ * Intentionally excludes `offset` — pages are driven by `pageParam`, not the key.
+ */
+export interface CommentsThreadDiscriminator {
+	resourceId: string | undefined;
+	resourceType: string | undefined;
+	parentId: string | null | undefined;
+	status: string | undefined;
+	currentUserId: string | undefined;
+	limit: number;
+}
+
+export function commentsThreadDiscriminator(params?: {
+	resourceId?: string;
+	resourceType?: string;
+	parentId?: string | null;
+	status?: string;
+	currentUserId?: string;
+	limit?: number;
+}): CommentsThreadDiscriminator {
+	return {
+		resourceId: params?.resourceId,
+		resourceType: params?.resourceType,
+		parentId: params?.parentId,
+		status: params?.status,
+		currentUserId: params?.currentUserId,
+		limit: params?.limit ?? 20,
+	};
+}
+
 /** Full query key builders — use with queryClient.setQueryData() */
 export const COMMENTS_QUERY_KEYS = {
 	/**
@@ -94,4 +125,19 @@ export const COMMENTS_QUERY_KEYS = {
 		resourceType: string;
 		status?: string;
 	}) => ["comments", "count", commentCountDiscriminator(params)] as const,
+
+	/**
+	 * Key for the infinite thread query (top-level comments, load-more).
+	 * Full key: ["commentsThread", "list", { resourceId, resourceType, parentId, status, currentUserId, limit }]
+	 * Offset is excluded — it is driven by `pageParam`, not baked into the key.
+	 */
+	commentsThread: (params?: {
+		resourceId?: string;
+		resourceType?: string;
+		parentId?: string | null;
+		status?: string;
+		currentUserId?: string;
+		limit?: number;
+	}) =>
+		["commentsThread", "list", commentsThreadDiscriminator(params)] as const,
 };

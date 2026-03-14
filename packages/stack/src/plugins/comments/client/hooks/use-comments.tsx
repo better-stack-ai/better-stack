@@ -10,7 +10,6 @@ import {
 } from "@tanstack/react-query";
 import { createApiClient } from "@btst/stack/plugins/client";
 import { createCommentsQueryKeys } from "../../query-keys";
-import { commentsListDiscriminator } from "../../api/query-key-defs";
 import type { CommentsApiRouter } from "../../api";
 import type { SerializedComment, CommentListResult } from "../../types";
 
@@ -118,8 +117,11 @@ export function useSuspenseComments(
 
 /**
  * Infinite-scroll variant for the CommentThread component.
- * Uses a separate "commentsThread" key namespace to avoid cache conflicts
- * with the regular useComments / useSuspenseComments queries.
+ * Uses the "commentsThread" factory namespace (separate from the plain
+ * useComments / useSuspenseComments queries) to avoid InfiniteData shape conflicts.
+ *
+ * Mirrors the blog's usePosts pattern: spread the factory base query into
+ * useInfiniteQuery, drive pages via pageParam, and derive hasMore from server total.
  */
 export function useInfiniteComments(
 	config: CommentsClientConfig,
@@ -135,47 +137,25 @@ export function useInfiniteComments(
 ) {
 	const pageSize = params.pageSize ?? 10;
 	const client = getClient(config);
+	const queries = createCommentsQueryKeys(client, config.headers);
 
-	const queryKey = [
-		"commentsThread",
-		"list",
-		commentsListDiscriminator({
-			resourceId: params.resourceId,
-			resourceType: params.resourceType,
-			parentId: params.parentId ?? null,
-			status: params.status,
-			currentUserId: params.currentUserId,
-			limit: pageSize,
-			offset: 0,
-		}),
-	] as const;
+	const baseQuery = queries.commentsThread.list({
+		resourceId: params.resourceId,
+		resourceType: params.resourceType,
+		parentId: params.parentId ?? null,
+		status: params.status,
+		currentUserId: params.currentUserId,
+		limit: pageSize,
+	});
 
 	const query = useInfiniteQuery<
 		CommentListResult,
 		Error,
 		InfiniteData<CommentListResult>,
-		typeof queryKey,
+		typeof baseQuery.queryKey,
 		number
 	>({
-		queryKey,
-		queryFn: async ({ pageParam }) => {
-			const response = await client("/comments", {
-				method: "GET",
-				query: {
-					resourceId: params.resourceId,
-					resourceType: params.resourceType,
-					parentId: params.parentId ?? undefined,
-					status: params.status,
-					currentUserId: params.currentUserId,
-					limit: pageSize,
-					offset: pageParam,
-				},
-				headers: config.headers,
-			});
-			const data = (response as { data?: CommentListResult }).data;
-			if (!data) throw toError((response as { error?: unknown }).error);
-			return data;
-		},
+		...baseQuery,
 		initialPageParam: 0,
 		getNextPageParam: (lastPage) => {
 			const nextOffset = lastPage.offset + lastPage.limit;
@@ -192,7 +172,7 @@ export function useInfiniteComments(
 	return {
 		comments,
 		total,
-		queryKey,
+		queryKey: baseQuery.queryKey,
 		isLoading: query.isLoading,
 		isFetching: query.isFetching,
 		loadMore: query.fetchNextPage,

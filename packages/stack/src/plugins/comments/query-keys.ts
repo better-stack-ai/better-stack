@@ -8,6 +8,7 @@ import type { SerializedComment, CommentListResult } from "./types";
 import {
 	commentsListDiscriminator,
 	commentCountDiscriminator,
+	commentsThreadDiscriminator,
 } from "./api/query-key-defs";
 
 interface CommentsListParams {
@@ -62,6 +63,7 @@ export function createCommentsQueryKeys(
 	return mergeQueryKeys(
 		createCommentsQueries(client, headers),
 		createCommentCountQueries(client, headers),
+		createCommentsThreadQueries(client, headers),
 	);
 }
 
@@ -138,6 +140,65 @@ function createCommentCountQueries(
 					| { count: number }
 					| undefined;
 				return data?.count ?? 0;
+			},
+		}),
+	});
+}
+
+/**
+ * Factory for the infinite thread query key family.
+ * Mirrors the blog's `createPostsQueries` pattern: the key is stable (no offset),
+ * and pages are fetched via `pageParam` passed to the queryFn.
+ */
+function createCommentsThreadQueries(
+	client: ReturnType<typeof createApiClient<CommentsApiRouter>>,
+	headers?: HeadersInit,
+) {
+	return createQueryKeys("commentsThread", {
+		list: (params?: {
+			resourceId?: string;
+			resourceType?: string;
+			parentId?: string | null;
+			status?: "pending" | "approved" | "spam";
+			currentUserId?: string;
+			limit?: number;
+		}) => ({
+			// Offset is excluded from the key — it is driven by pageParam.
+			queryKey: [commentsThreadDiscriminator(params)],
+			queryFn: async ({
+				pageParam,
+			}: {
+				pageParam?: number;
+			} = {}): Promise<CommentListResult> => {
+				const response = await client("/comments", {
+					method: "GET",
+					query: {
+						resourceId: params?.resourceId,
+						resourceType: params?.resourceType,
+						parentId: params?.parentId === null ? "null" : params?.parentId,
+						status: params?.status,
+						currentUserId: params?.currentUserId,
+						limit: params?.limit ?? 20,
+						offset: pageParam ?? 0,
+					},
+					headers,
+				});
+
+				if (isErrorResponse(response)) {
+					throw toError((response as { error: unknown }).error);
+				}
+
+				const data = (response as { data?: unknown }).data as
+					| CommentListResult
+					| undefined;
+				return (
+					data ?? {
+						items: [],
+						total: 0,
+						limit: params?.limit ?? 20,
+						offset: pageParam ?? 0,
+					}
+				);
 			},
 		}),
 	});

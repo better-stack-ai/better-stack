@@ -1,6 +1,114 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import {
+	expect,
+	test,
+	type APIRequestContext,
+	type Page,
+} from "@playwright/test";
 
 // ─── API Helpers ────────────────────────────────────────────────────────────────
+
+/** Create a published blog post — used to host comment threads in load-more tests. */
+async function createBlogPost(
+	request: APIRequestContext,
+	data: { title: string; slug: string },
+) {
+	const response = await request.post("/api/data/posts", {
+		headers: { "content-type": "application/json" },
+		data: {
+			title: data.title,
+			content: `Content for ${data.title}`,
+			excerpt: `Excerpt for ${data.title}`,
+			slug: data.slug,
+			published: true,
+			publishedAt: new Date().toISOString(),
+			image: "",
+		},
+	});
+	expect(
+		response.ok(),
+		`createBlogPost failed: ${await response.text()}`,
+	).toBeTruthy();
+	return response.json();
+}
+
+/** Create N approved comments on a resource, sequentially with predictable bodies. */
+async function createApprovedComments(
+	request: APIRequestContext,
+	resourceId: string,
+	resourceType: string,
+	count: number,
+	bodyPrefix = "Load More Comment",
+) {
+	const comments = [];
+	for (let i = 1; i <= count; i++) {
+		const comment = await createComment(request, {
+			resourceId,
+			resourceType,
+			body: `${bodyPrefix} ${i}`,
+		});
+		await approveComment(request, comment.id);
+		comments.push(comment);
+	}
+	return comments;
+}
+
+/**
+ * Navigate to a blog post page, scroll to trigger the WhenVisible comment thread,
+ * then verify the load-more button and paginated comments behave correctly.
+ *
+ * Mirrors `testLoadMore` from smoke.blog.spec.ts.
+ */
+async function testLoadMoreComments(
+	page: Page,
+	postSlug: string,
+	totalCount: number,
+	options: { pageSize: number; bodyPrefix?: string },
+) {
+	const { pageSize, bodyPrefix = "Load More Comment" } = options;
+
+	await page.goto(`/pages/blog/${postSlug}`, { waitUntil: "networkidle" });
+	await expect(page.locator('[data-testid="post-page"]')).toBeVisible();
+
+	// Scroll to the bottom to trigger WhenVisible on the comment thread
+	await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+	await page.waitForTimeout(800);
+
+	// Comment thread must be mounted
+	const thread = page.locator('[data-testid="comment-thread"]');
+	await expect(thread).toBeVisible({ timeout: 8000 });
+
+	// First page of comments should be visible (comments are asc-sorted by date)
+	for (let i = 1; i <= pageSize; i++) {
+		await expect(
+			page.getByText(`${bodyPrefix} ${i}`, { exact: true }),
+		).toBeVisible({ timeout: 5000 });
+	}
+
+	// Comments beyond the first page must NOT be visible yet
+	for (let i = pageSize + 1; i <= totalCount; i++) {
+		await expect(
+			page.getByText(`${bodyPrefix} ${i}`, { exact: true }),
+		).not.toBeVisible();
+	}
+
+	// Load more button must be present
+	const loadMoreBtn = page.locator('[data-testid="load-more-comments"]');
+	await expect(loadMoreBtn).toBeVisible();
+
+	// Click it and wait for the next page to arrive
+	await loadMoreBtn.click();
+	await page.waitForTimeout(1000);
+
+	// All comments must now be visible
+	for (let i = 1; i <= totalCount; i++) {
+		await expect(
+			page.getByText(`${bodyPrefix} ${i}`, { exact: true }),
+		).toBeVisible({ timeout: 5000 });
+	}
+
+	// Load more button should be gone (no third page)
+	await expect(loadMoreBtn).not.toBeVisible();
+}
 
 async function createComment(
 	request: APIRequestContext,
@@ -899,5 +1007,85 @@ test.describe("My Comments Page", () => {
 		for (const item of body.items) {
 			expect(item.authorId).toBe(AUTHOR_ID);
 		}
+	});
+});
+
+// ─── Load More ────────────────────────────────────────────────────────────────
+//
+// These tests verify the comment thread pagination that powers the "Load more
+// comments" button.  They mirror the blog smoke tests for load-more: an API
+// contract test validates server-side limit/offset, and a UI test exercises
+// the full click-to-fetch cycle in the browser.
+//
+// The example app layouts set defaultCommentPageSize: 5 so that pagination
+// triggers after 5 comments — mirroring the blog's 10-per-page default.
+
+test.describe("Comment thread — load more", () => {
+	test("API pagination contract: limit/offset return correct slices", async ({
+		request,
+	}) => {
+		const resourceId = `e2e-pagination-${Date.now()}`;
+		const resourceType = "e2e-test";
+
+		// Create and approve 7 top-level comments
+		await createApprovedComments(request, resourceId, resourceType, 7);
+
+		// First page: 5 items, total = 7
+		const page1 = await request.get(
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=null&status=approved&limit=5&offset=0`,
+		);
+		expect(page1.ok()).toBeTruthy();
+		const body1 = await page1.json();
+		expect(body1.items).toHaveLength(5);
+		expect(body1.total).toBe(7);
+		expect(body1.limit).toBe(5);
+		expect(body1.offset).toBe(0);
+
+		// Second page: 2 items, total still = 7
+		const page2 = await request.get(
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=null&status=approved&limit=5&offset=5`,
+		);
+		expect(page2.ok()).toBeTruthy();
+		const body2 = await page2.json();
+		expect(body2.items).toHaveLength(2);
+		expect(body2.total).toBe(7);
+		expect(body2.limit).toBe(5);
+		expect(body2.offset).toBe(5);
+
+		// Third page (beyond end): 0 items
+		const page3 = await request.get(
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=null&status=approved&limit=5&offset=10`,
+		);
+		expect(page3.ok()).toBeTruthy();
+		const body3 = await page3.json();
+		expect(body3.items).toHaveLength(0);
+		expect(body3.total).toBe(7);
+	});
+
+	test("load more button on blog post page", async ({ page, request }) => {
+		const errors: string[] = [];
+		page.on("console", (msg) => {
+			if (msg.type() === "error") errors.push(msg.text());
+		});
+
+		const slug = `e2e-lm-comments-${Date.now()}`;
+
+		// Create a published blog post to host the comment thread
+		await createBlogPost(request, {
+			title: "Load More Comments Test Post",
+			slug,
+		});
+
+		// Create 7 approved comments so two pages are needed (pageSize = 5)
+		await createApprovedComments(request, slug, "blog-post", 7);
+
+		await testLoadMoreComments(page, slug, 7, {
+			pageSize: 5,
+			bodyPrefix: "Load More Comment",
+		});
+
+		expect(errors, `Console errors detected:\n${errors.join("\n")}`).toEqual(
+			[],
+		);
 	});
 });
