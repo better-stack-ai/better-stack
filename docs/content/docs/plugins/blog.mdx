@@ -509,6 +509,32 @@ overrides={{
 }}
 ```
 
+**Slot overrides:**
+
+| Override | Type | Description |
+|----------|------|-------------|
+| `postBottomSlot` | `(post: SerializedPost) => ReactNode` | Render additional content below each blog post — use to embed a `CommentThread` |
+
+```tsx
+import { CommentThread } from "@btst/stack/plugins/comments/client/components"
+
+overrides={{
+  blog: {
+    // ...
+    postBottomSlot: (post) => (
+      <CommentThread
+        resourceId={post.slug}
+        resourceType="blog-post"
+        apiBaseURL={baseURL}
+        apiBasePath="/api/data"
+        currentUserId={session?.user?.id}
+        loginHref="/login"
+      />
+    ),
+  }
+}}
+```
+
 ## React Data Hooks and Types
 You can import the hooks from `"@btst/stack/plugins/blog/client/hooks"` to use in your components.
 

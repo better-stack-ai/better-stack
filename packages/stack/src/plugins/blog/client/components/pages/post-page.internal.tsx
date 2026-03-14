@@ -21,6 +21,9 @@ import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { OnThisPage, OnThisPageSelect } from "../shared/on-this-page";
 import type { SerializedPost } from "../../../types";
 import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
+import { WhenVisible } from "@workspace/ui/components/when-visible";
+import { PostNavigationSkeleton } from "../loading/post-navigation-skeleton";
+import { RecentPostsCarouselSkeleton } from "../loading/recent-posts-carousel-skeleton";
 
 // Internal component with actual page content
 export function PostPage({ slug }: { slug: string }) {
@@ -52,14 +55,14 @@ export function PostPage({ slug }: { slug: string }) {
 
 	const { post } = useSuspensePost(slug ?? "");
 
-	const { previousPost, nextPost, ref } = useNextPreviousPosts(
+	const { previousPost, nextPost } = useNextPreviousPosts(
 		post?.createdAt ?? new Date(),
 		{
 			enabled: !!post,
 		},
 	);
 
-	const { recentPosts, ref: recentPostsRef } = useRecentPosts({
+	const { recentPosts } = useRecentPosts({
 		limit: 5,
 		excludeSlug: slug,
 		enabled: !!post,
@@ -120,13 +123,25 @@ export function PostPage({ slug }: { slug: string }) {
 					</div>
 
 					<div className="flex flex-col gap-4 w-full">
-						<PostNavigation
-							previousPost={previousPost}
-							nextPost={nextPost}
-							ref={ref}
-						/>
+						<WhenVisible
+							rootMargin="200px"
+							fallback={<PostNavigationSkeleton />}
+						>
+							<PostNavigation previousPost={previousPost} nextPost={nextPost} />
+						</WhenVisible>
 
-						<RecentPostsCarousel posts={recentPosts} ref={recentPostsRef} />
+						<WhenVisible
+							rootMargin="200px"
+							fallback={<RecentPostsCarouselSkeleton />}
+						>
+							<RecentPostsCarousel posts={recentPosts} />
+						</WhenVisible>
+
+						{overrides.postBottomSlot && (
+							<div data-testid="post-bottom-slot">
+								{overrides.postBottomSlot(post)}
+							</div>
+						)}
 					</div>
 				</div>
 				<OnThisPage markdown={post.content} />

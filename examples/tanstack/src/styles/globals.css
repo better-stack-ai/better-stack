@@ -7,6 +7,7 @@
 @import "@btst/stack/plugins/ai-chat/css";
 @import "@btst/stack/plugins/ui-builder/css";
 @import "@btst/stack/plugins/kanban/css";
+@import "@btst/stack/plugins/comments/css";
 
 @custom-variant dark (&:is(.dark *));
 

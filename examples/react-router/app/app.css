@@ -18,6 +18,7 @@
 
 /* Import Kanban plugin styles */
 @import "@btst/stack/plugins/kanban/css";
+@import "@btst/stack/plugins/comments/css";
 
 @custom-variant dark (&:is(.dark *));
 

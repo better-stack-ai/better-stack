@@ -15,7 +15,6 @@
         "@milkdown/kit",
         "date-fns",
         "highlight.js",
-        "react-intersection-observer",
         "react-markdown",
         "rehype-highlight",
         "rehype-katex",
@@ -168,6 +167,30 @@
         "textarea"
       ],
       "docs": "https://better-stack.ai/docs/plugins/kanban"
+    },
+    {
+      "name": "btst-comments",
+      "type": "registry:block",
+      "title": "Comments Plugin Pages",
+      "description": "Ejectable page components for the @btst/stack comments plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "date-fns"
+      ],
+      "registryDependencies": [
+        "alert-dialog",
+        "avatar",
+        "badge",
+        "button",
+        "checkbox",
+        "dialog",
+        "separator",
+        "table",
+        "tabs",
+        "textarea"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/comments"
     },
     {
       "name": "btst-ui-builder",

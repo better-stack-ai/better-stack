@@ -173,7 +173,6 @@ const PLUGINS: PluginConfig[] = [
 			"@milkdown/kit",
 			"date-fns",
 			"highlight.js",
-			"react-intersection-observer",
 			"react-markdown",
 			"rehype-highlight",
 			"rehype-katex",
@@ -272,6 +271,16 @@ const PLUGINS: PluginConfig[] = [
 		extraRegistryDeps: [],
 		// kanban/utils.ts has no external npm imports (pure utility functions)
 		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts"],
+	},
+	{
+		name: "comments",
+		title: "Comments Plugin Pages",
+		description:
+			"Ejectable page components for the @btst/stack comments plugin. " +
+			"Customize the UI layer while keeping data-fetching in @btst/stack.",
+		extraNpmDeps: ["date-fns"],
+		extraRegistryDeps: [],
+		pluginRootFiles: ["types.ts", "schemas.ts"],
 	},
 	{
 		name: "ui-builder",

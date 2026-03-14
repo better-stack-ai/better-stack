@@ -8,6 +8,7 @@ import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
 import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
+import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api"
 import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
 import { openai } from "@ai-sdk/openai"
 import { tool } from "ai"
@@ -359,6 +360,66 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
             title: "BTST Example API",
             description: "API documentation for the Next.js example application",
             theme: "kepler",
+        }),
+        // Comments plugin for threaded discussions
+        comments: commentsBackendPlugin({
+            autoApprove: false,
+            resolveUser: async (authorId) => {
+                // In production: look up your auth system's user by authorId
+                return { name: `User ${authorId}` }
+            },
+            onBeforeList: async (query, ctx) => {
+                // Restrict pending/spam queues to admin sessions.
+                // Without this check a no-op hook would bypass the built-in 403 guard.
+                if (query.status && query.status !== "approved") {
+                    // In production: replace with a real session/role check, e.g.:
+                    // const session = await getSession(ctx.headers)
+                    // if (!session?.user?.isAdmin) throw new Error("Admin access required")
+                    console.log("onBeforeList: non-approved status filter — ensure admin check in production")
+                }
+            },
+            onBeforePost: async (input, ctx) => {
+                // In production: verify the session and return the authenticated user's ID
+                // The authorId is no longer trusted from the client body — it is injected here
+                console.log("onBeforePost: new comment on", input.resourceType, input.resourceId)
+                return { authorId: "olliethedev" } // In production: return { authorId: session.user.id }
+            },
+            onAfterPost: async (comment, ctx) => {
+                console.log("Comment created:", comment.id, "status:", comment.status)
+            },
+            onBeforeLike: async (commentId, authorId, ctx) => {
+                // In production: verify authorId matches the authenticated session
+                console.log("onBeforeLike: user", authorId, "toggling like on comment", commentId)
+            },
+            onBeforeStatusChange: async (commentId, status, ctx) => {
+                // In production: verify the caller has admin/moderator role
+                console.log("onBeforeStatusChange: comment", commentId, "->", status)
+            },
+            onAfterApprove: async (comment, ctx) => {
+                console.log("Comment approved:", comment.id)
+            },
+            onBeforeDelete: async (commentId, ctx) => {
+                // In production: verify the caller has admin/moderator role
+                console.log("onBeforeDelete: comment", commentId)
+            },
+            onAfterDelete: async (commentId, ctx) => {
+                console.log("Comment deleted:", commentId)
+            },
+            onBeforeListByAuthor: async (authorId, query, ctx) => {
+                // In production: verify authorId matches the authenticated session
+                // const session = await getSession(ctx.headers)
+                // if (!session?.user) throw new Error("Authentication required")
+                // if (authorId !== session.user.id && !session.user.isAdmin) throw new Error("Forbidden")
+                if (authorId !== "olliethedev") throw new Error("Forbidden")
+            },
+            resolveCurrentUserId: async (ctx) => {
+                // In production: return session?.user?.id ?? null
+                // Demo only: echo back the client-supplied currentUserId from the raw
+                // request URL (NOT secure — for testing only). In a real app, derive
+                // the user ID from the session cookie or JWT instead.
+                const url = new URL((ctx.request as Request).url)
+                return url.searchParams.get("currentUserId") ?? null
+            },
         }),
         // Kanban plugin for project management boards
         kanban: kanbanBackendPlugin({

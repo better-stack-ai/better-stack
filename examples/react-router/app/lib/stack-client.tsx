@@ -3,6 +3,7 @@ import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
 import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
+import { commentsClientPlugin } from "@btst/stack/plugins/comments/client"
 import { uiBuilderClientPlugin, defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
 import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
@@ -132,6 +133,14 @@ export const getStackClient = (queryClient: QueryClient) => {
                     siteName: "BTST Kanban",
                     description: "Manage your projects with kanban boards",
                 },
+            }),
+            // Comments plugin — registers the /comments/moderation admin route
+            comments: commentsClientPlugin({
+                apiBaseURL: baseURL,
+                apiBasePath: "/api/data",
+                siteBaseURL: baseURL,
+                siteBasePath: "/pages",
+                queryClient: queryClient,
             }),
         }
     })

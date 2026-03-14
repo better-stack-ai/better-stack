@@ -14,6 +14,141 @@ const reactRouterEnv =
 	config({ path: resolve(__dirname, "../examples/react-router/.env") })
 		.parsed || {};
 
+// When BTST_FRAMEWORK is set, only the matching webServer and project are
+// started — useful for running a single framework locally or in a matrix CI job.
+type Framework = "nextjs" | "tanstack" | "react-router";
+const framework = process.env.BTST_FRAMEWORK as Framework | undefined;
+
+const allWebServers = [
+	{
+		framework: "nextjs" as Framework,
+		config: {
+			command: "pnpm -F examples/nextjs run start:e2e",
+			port: 3003,
+			reuseExistingServer: !process.env["CI"],
+			timeout: 300_000,
+			stdout: "pipe" as const,
+			stderr: "pipe" as const,
+			env: {
+				...process.env,
+				...nextjsEnv,
+				PORT: "3003",
+				HOST: "127.0.0.1",
+				BASE_URL: "http://localhost:3003",
+				NEXT_PUBLIC_BASE_URL: "http://localhost:3003",
+			},
+		},
+	},
+	{
+		framework: "tanstack" as Framework,
+		config: {
+			command: "pnpm -F examples/tanstack run start:e2e",
+			port: 3004,
+			reuseExistingServer: !process.env["CI"],
+			timeout: 300_000,
+			stdout: "pipe" as const,
+			stderr: "pipe" as const,
+			env: {
+				...process.env,
+				...tanstackEnv,
+				PORT: "3004",
+				HOST: "127.0.0.1",
+				BASE_URL: "http://localhost:3004",
+			},
+		},
+	},
+	{
+		framework: "react-router" as Framework,
+		config: {
+			command: "pnpm -F examples/react-router run start:e2e",
+			port: 3005,
+			reuseExistingServer: !process.env["CI"],
+			timeout: 300_000,
+			stdout: "pipe" as const,
+			stderr: "pipe" as const,
+			env: {
+				...process.env,
+				...reactRouterEnv,
+				PORT: "3005",
+				HOST: "127.0.0.1",
+				BASE_URL: "http://localhost:3005",
+			},
+		},
+	},
+];
+
+const allProjects = [
+	{
+		framework: "nextjs" as Framework,
+		config: {
+			name: "nextjs:memory",
+			fullyParallel: false,
+			workers: 1,
+			use: { baseURL: "http://localhost:3003" },
+			testMatch: [
+				"**/*.todos.spec.ts",
+				"**/*.auth-blog.spec.ts",
+				"**/*.blog.spec.ts",
+				"**/*.chat.spec.ts",
+				"**/*.public-chat.spec.ts",
+				"**/*.cms.spec.ts",
+				"**/*.relations-cms.spec.ts",
+				"**/*.form-builder.spec.ts",
+				"**/*.ui-builder.spec.ts",
+				"**/*.kanban.spec.ts",
+				"**/*.comments.spec.ts",
+				"**/*.ssg.spec.ts",
+				"**/*.page-context.spec.ts",
+				"**/*.wealthreview.spec.ts",
+			],
+		},
+	},
+	{
+		framework: "tanstack" as Framework,
+		config: {
+			name: "tanstack:memory",
+			fullyParallel: false,
+			workers: 1,
+			use: { baseURL: "http://localhost:3004" },
+			testMatch: [
+				"**/*.blog.spec.ts",
+				"**/*.chat.spec.ts",
+				"**/*.cms.spec.ts",
+				"**/*.relations-cms.spec.ts",
+				"**/*.form-builder.spec.ts",
+				"**/*.comments.spec.ts",
+				"**/*.page-context.spec.ts",
+			],
+		},
+	},
+	{
+		framework: "react-router" as Framework,
+		config: {
+			name: "react-router:memory",
+			fullyParallel: false,
+			workers: 1,
+			use: { baseURL: "http://localhost:3005" },
+			testMatch: [
+				"**/*.blog.spec.ts",
+				"**/*.chat.spec.ts",
+				"**/*.cms.spec.ts",
+				"**/*.relations-cms.spec.ts",
+				"**/*.form-builder.spec.ts",
+				"**/*.comments.spec.ts",
+				"**/*.page-context.spec.ts",
+			],
+		},
+	},
+];
+
+const webServers = framework
+	? allWebServers.filter((s) => s.framework === framework).map((s) => s.config)
+	: allWebServers.map((s) => s.config);
+
+const projects = framework
+	? allProjects.filter((p) => p.framework === framework).map((p) => p.config)
+	: allProjects.map((p) => p.config);
+
 export default defineConfig({
 	testDir: "./tests",
 	timeout: 90_000,
@@ -32,104 +167,6 @@ export default defineConfig({
 		navigationTimeout: 30_000,
 		baseURL: "http://localhost:3000",
 	},
-	webServer: [
-		// Next.js with memory provider and custom plugin
-		{
-			command: "pnpm -F examples/nextjs run start:e2e",
-			port: 3003,
-			reuseExistingServer: !process.env["CI"],
-			timeout: 300_000,
-			stdout: "pipe",
-			stderr: "pipe",
-			env: {
-				...process.env,
-				...nextjsEnv,
-				PORT: "3003",
-				HOST: "127.0.0.1",
-				BASE_URL: "http://localhost:3003",
-				NEXT_PUBLIC_BASE_URL: "http://localhost:3003",
-			},
-		},
-		{
-			command: "pnpm -F examples/tanstack run start:e2e",
-			port: 3004,
-			reuseExistingServer: !process.env["CI"],
-			timeout: 300_000,
-			stdout: "pipe",
-			stderr: "pipe",
-			env: {
-				...process.env,
-				...tanstackEnv,
-				PORT: "3004",
-				HOST: "127.0.0.1",
-				BASE_URL: "http://localhost:3004",
-			},
-		},
-		{
-			command: "pnpm -F examples/react-router run start:e2e",
-			port: 3005,
-			reuseExistingServer: !process.env["CI"],
-			timeout: 300_000,
-			stdout: "pipe",
-			stderr: "pipe",
-			env: {
-				...process.env,
-				...reactRouterEnv,
-				PORT: "3005",
-				HOST: "127.0.0.1",
-				BASE_URL: "http://localhost:3005",
-			},
-		},
-	],
-	projects: [
-		{
-			name: "nextjs:memory",
-			fullyParallel: false,
-			workers: 1,
-			use: { baseURL: "http://localhost:3003" },
-			testMatch: [
-				"**/*.todos.spec.ts",
-				"**/*.auth-blog.spec.ts",
-				"**/*.blog.spec.ts",
-				"**/*.chat.spec.ts",
-				"**/*.public-chat.spec.ts",
-				"**/*.cms.spec.ts",
-				"**/*.relations-cms.spec.ts",
-				"**/*.form-builder.spec.ts",
-				"**/*.ui-builder.spec.ts",
-				"**/*.kanban.spec.ts",
-				"**/*.ssg.spec.ts",
-				"**/*.page-context.spec.ts",
-				"**/*.wealthreview.spec.ts",
-			],
-		},
-		{
-			name: "tanstack:memory",
-			fullyParallel: false,
-			workers: 1,
-			use: { baseURL: "http://localhost:3004" },
-			testMatch: [
-				"**/*.blog.spec.ts",
-				"**/*.chat.spec.ts",
-				"**/*.cms.spec.ts",
-				"**/*.relations-cms.spec.ts",
-				"**/*.form-builder.spec.ts",
-				"**/*.page-context.spec.ts",
-			],
-		},
-		{
-			name: "react-router:memory",
-			fullyParallel: false,
-			workers: 1,
-			use: { baseURL: "http://localhost:3005" },
-			testMatch: [
-				"**/*.blog.spec.ts",
-				"**/*.chat.spec.ts",
-				"**/*.cms.spec.ts",
-				"**/*.relations-cms.spec.ts",
-				"**/*.form-builder.spec.ts",
-				"**/*.page-context.spec.ts",
-			],
-		},
-	],
+	webServer: webServers,
+	projects,
 });

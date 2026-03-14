@@ -219,7 +219,7 @@ console.log('tsconfig.json patched');
     # embedded from packages/ui (see build-registry.ts — "form" excluded from
     # STANDARD_SHADCN_COMPONENTS). All other standard components (select, accordion,
     # dialog, dropdown-menu, …) are correctly Radix-based with this flag.
-    npx --yes shadcn@latest init --defaults --force --base radix
+    npx --yes shadcn@4.0.5 init --defaults --force --base radix
     success "shadcn init completed (radix-nova)"
 
     INSTALL_FAILURES=()
@@ -230,7 +230,7 @@ console.log('tsconfig.json patched');
     # We treat those as warnings so the rest of the test can proceed.
     for PLUGIN in "${PLUGIN_NAMES[@]}"; do
         echo "Installing btst-${PLUGIN}…"
-        if npx --yes shadcn@latest add \
+        if npx --yes shadcn@4.0.5 add \
             "http://localhost:$SERVER_PORT/btst-${PLUGIN}.json" \
             --yes --overwrite 2>&1; then
             success "btst-${PLUGIN} installed"

@@ -35,6 +35,24 @@
       "cache": false,
       "env": ["OPENAI_API_KEY"]
     },
+    "e2e:smoke:nextjs": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "cache": false,
+      "env": ["OPENAI_API_KEY", "BTST_FRAMEWORK"]
+    },
+    "e2e:smoke:tanstack": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "cache": false,
+      "env": ["OPENAI_API_KEY", "BTST_FRAMEWORK"]
+    },
+    "e2e:smoke:react-router": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "cache": false,
+      "env": ["OPENAI_API_KEY", "BTST_FRAMEWORK"]
+    },
     "e2e:integration": {
       "dependsOn": ["^build"],
       "outputs": [],

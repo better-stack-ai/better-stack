@@ -104,6 +104,12 @@ export default defineBuildConfig({
 		"./src/plugins/kanban/client/components/index.tsx",
 		"./src/plugins/kanban/client/hooks/index.tsx",
 		"./src/plugins/kanban/query-keys.ts",
+		// comments plugin entries
+		"./src/plugins/comments/api/index.ts",
+		"./src/plugins/comments/client/index.ts",
+		"./src/plugins/comments/client/components/index.tsx",
+		"./src/plugins/comments/client/hooks/index.tsx",
+		"./src/plugins/comments/query-keys.ts",
 		"./src/components/auto-form/index.ts",
 		"./src/components/stepped-auto-form/index.ts",
 		"./src/components/multi-select/index.ts",
