@@ -93,6 +93,14 @@ const { handler, dbSchema } = stack({
         const session = await getSession(ctx.headers)
         if (!session?.user?.isAdmin) throw new Error("Admin access required")
       },
+
+      // Required to show authors their own pending comments after posting.
+      // Without this hook the feature is disabled — client-supplied
+      // currentUserId is ignored server-side to prevent impersonation.
+      resolveCurrentUserId: async (ctx) => {
+        const session = await getSession(ctx.headers)
+        return session?.user?.id ?? null
+      },
     })
   },
   adapter: (db) => createMemoryAdapter(db)({})
@@ -345,17 +353,19 @@ Access is controlled by the `onBeforeModerationPageRendered` hook in `CommentsPl
 | `onAfterPost` | hook | — | Called after a comment is saved. |
 | `onBeforeEdit` | hook | — | Called before a comment body is updated. Throw to reject. When absent, **all edit requests return 403** — preventing any unauthenticated caller from tampering with comment bodies. Configure to verify the caller owns the comment. |
 | `onAfterEdit` | hook | — | Called after a comment body is updated. |
-| `onBeforeLike` | hook | — | Called before a like is toggled. Throw to reject. Use to verify `authorId` matches the authenticated session. |
-| `onBeforeStatusChange` | hook | — | Called before moderation status is changed. Throw to reject. Use to enforce admin-only access. |
+| `onBeforeLike` | hook | — | Called before a like is toggled. Throw to reject. When absent, **all like/unlike requests return 403** — preventing unauthenticated callers from toggling likes on behalf of arbitrary user IDs. Configure to verify `authorId` matches the authenticated session. |
+| `onBeforeStatusChange` | hook | — | Called before moderation status is changed. Throw to reject. When absent, **all status-change requests return 403** — preventing unauthenticated callers from moderating comments. Configure to verify the caller has admin/moderator privileges. |
 | `onAfterApprove` | hook | — | Called after a comment is approved. |
-| `onBeforeDelete` | hook | — | Called before a comment is deleted. Throw to reject. Use to enforce admin-only access. |
+| `onBeforeDelete` | hook | — | Called before a comment is deleted. Throw to reject. When absent, **all delete requests return 403** — preventing unauthenticated callers from deleting comments. Configure to enforce admin-only access. |
 | `onAfterDelete` | hook | — | Called after a comment is deleted. |
 | `onBeforeListByAuthor` | hook | — | Called before returning comments filtered by `authorId`. Throw to reject. When absent, **any request with `authorId` returns 403** — preventing anonymous callers from reading any user's comment history. Use to verify `authorId` matches the authenticated session. |
+| `resolveCurrentUserId` | hook | **required** | Resolve the current authenticated user's ID from the session. Used to safely include the user's own pending comments alongside approved ones in `GET /comments`. The client-supplied `currentUserId` query parameter is never trusted — identity is resolved exclusively via this hook. Return `null`/`undefined` for unauthenticated requests. Plugin throws at startup if absent. |
 
 <Callout type="warn">
-**`onBeforePost` is required and must return `{ authorId: string }`.** `authorId` is intentionally absent from the POST body schema — the server derives identity exclusively from this hook. Resolve `authorId` from the session (e.g. JWT / session cookie) and throw if the user is not authenticated. A client can never forge comment authorship.
+**`onBeforePost` and `resolveCurrentUserId` are both required.** `commentsBackendPlugin` throws at startup if either is absent.
 
-`commentsBackendPlugin` throws an error at startup if `onBeforePost` is not configured.
+- `onBeforePost` must return `{ authorId: string }` derived from the session — `authorId` is intentionally absent from the POST body so clients can never forge authorship.
+- `resolveCurrentUserId` must return the session-verified user ID (or `null` when unauthenticated) — the `?currentUserId=…` query parameter sent by the client is completely discarded.
 </Callout>
 
 ### Server-Side API (`stack.api.comments`)

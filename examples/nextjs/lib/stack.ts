@@ -412,6 +412,10 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
                 // if (authorId !== session.user.id && !session.user.isAdmin) throw new Error("Forbidden")
                 if (authorId !== "olliethedev") throw new Error("Forbidden")
             },
+            resolveCurrentUserId: async (ctx) => {
+                // In production: return session?.user?.id ?? null
+                return "olliethedev"
+            },
         }),
         // Kanban plugin for project management boards
         kanban: kanbanBackendPlugin({

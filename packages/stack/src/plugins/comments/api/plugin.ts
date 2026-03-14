@@ -109,8 +109,11 @@ export interface CommentsBackendOptions {
 
 	/**
 	 * Called before a like is toggled. Throw to reject.
-	 * Use this to verify that `authorId` matches the authenticated session —
-	 * without this hook any caller can like or unlike on behalf of any user ID.
+	 *
+	 * When this hook is **absent**, any like/unlike request is automatically
+	 * rejected with 403 — preventing unauthenticated callers from toggling likes
+	 * on behalf of arbitrary user IDs. Configure this hook to verify `authorId`
+	 * matches the authenticated session.
 	 */
 	onBeforeLike?: (
 		commentId: string,
@@ -120,8 +123,11 @@ export interface CommentsBackendOptions {
 
 	/**
 	 * Called before a comment's status is changed. Throw to reject.
-	 * Use this to enforce admin-only access to the moderation endpoint —
-	 * the endpoint is otherwise unprotected at the network layer.
+	 *
+	 * When this hook is **absent**, any status-change request is automatically
+	 * rejected with 403 — preventing unauthenticated callers from moderating
+	 * comments. Configure this hook to verify the caller has admin/moderator
+	 * privileges.
 	 */
 	onBeforeStatusChange?: (
 		commentId: string,
@@ -139,8 +145,11 @@ export interface CommentsBackendOptions {
 
 	/**
 	 * Called before a comment is deleted. Throw to reject.
-	 * Use this to enforce admin-only access — the CommentCard UI hides the
-	 * Delete button behind an ownership check, but that is client-side only.
+	 *
+	 * When this hook is **absent**, any delete request is automatically rejected
+	 * with 403 — preventing unauthenticated callers from deleting comments. The
+	 * CommentCard UI hides the Delete button client-side, but that is not a
+	 * security boundary. Configure this hook to enforce admin-only access.
 	 */
 	onBeforeDelete?: (
 		commentId: string,
@@ -178,6 +187,27 @@ export interface CommentsBackendOptions {
 		query: z.infer<typeof CommentListQuerySchema>,
 		context: CommentsApiContext,
 	) => Promise<void> | void;
+
+	/**
+	 * Resolve the current authenticated user's ID from the request context
+	 * (e.g. session cookie or JWT). The resolved ID is used to include the
+	 * user's own pending comments alongside approved ones in `GET /comments`
+	 * responses so they remain visible after posting.
+	 *
+	 * Return `null` or `undefined` to indicate the request is unauthenticated.
+	 *
+	 * `commentsBackendPlugin` throws at startup if this hook is not provided.
+	 *
+	 * ```ts
+	 * resolveCurrentUserId: async (ctx) => {
+	 *   const session = await getSession(ctx.headers)
+	 *   return session?.user?.id ?? null
+	 * }
+	 * ```
+	 */
+	resolveCurrentUserId: (
+		context: CommentsApiContext,
+	) => Promise<string | null | undefined> | string | null | undefined;
 }
 
 export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
@@ -186,6 +216,15 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 			"[btst/comments] onBeforePost is required. " +
 				"It must return { authorId: string } derived from the authenticated session. " +
 				"authorId is no longer accepted in the POST body — the server resolves identity exclusively via this hook.",
+		);
+	}
+	if (!options?.resolveCurrentUserId) {
+		throw new Error(
+			"[btst/comments] resolveCurrentUserId is required. " +
+				"It must return the current user's ID derived from the authenticated session, " +
+				"or null/undefined when unauthenticated. " +
+				"The client-supplied currentUserId query parameter is never trusted — " +
+				"the server resolves identity exclusively via this hook.",
 		);
 	}
 
@@ -261,7 +300,22 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 							);
 						}
 
-						return await listComments(adapter, ctx.query, options?.resolveUser);
+						// Resolve currentUserId server-side — the client-supplied query
+						// parameter is intentionally discarded and replaced with the
+						// session-verified identity from resolveCurrentUserId.
+						let resolvedCurrentUserId: string | undefined;
+						try {
+							const result = await options.resolveCurrentUserId(context);
+							resolvedCurrentUserId = result ?? undefined;
+						} catch {
+							resolvedCurrentUserId = undefined;
+						}
+
+						return await listComments(
+							adapter,
+							{ ...ctx.query, currentUserId: resolvedCurrentUserId },
+							options?.resolveUser,
+						);
 					} catch (error) {
 						throw error;
 					}
@@ -427,13 +481,22 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						headers: ctx.headers,
 					};
 					try {
-						if (options?.onBeforeLike) {
-							await runHookWithShim(
-								() => options.onBeforeLike!(id, ctx.body.authorId, context),
-								ctx.error,
-								"Unauthorized: Cannot like comment",
-							);
+						// Require onBeforeLike (403 when absent) — same secure-by-default
+						// pattern used for onBeforeEdit, onBeforeStatusChange, and
+						// onBeforeDelete. The authorId in the request body is client-supplied
+						// and must be verified against the authenticated session; without
+						// this hook any caller can toggle likes on behalf of any user ID.
+						if (!options?.onBeforeLike) {
+							throw ctx.error(403, {
+								message:
+									"Forbidden: toggling likes requires the onBeforeLike hook",
+							});
 						}
+						await runHookWithShim(
+							() => options.onBeforeLike!(id, ctx.body.authorId, context),
+							ctx.error,
+							"Unauthorized: Cannot like comment",
+						);
 
 						const result = await toggleCommentLike(
 							adapter,
@@ -462,14 +525,22 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						headers: ctx.headers,
 					};
 					try {
-						if (options?.onBeforeStatusChange) {
-							await runHookWithShim(
-								() =>
-									options.onBeforeStatusChange!(id, ctx.body.status, context),
-								ctx.error,
-								"Unauthorized: Cannot change comment status",
-							);
+						// Require onBeforeStatusChange (403 when absent) — same
+						// secure-by-default pattern used for onBeforeEdit and
+						// onBeforeListByAuthor. Moderation is an admin operation; without
+						// this hook any unauthenticated caller could change any comment's
+						// status.
+						if (!options?.onBeforeStatusChange) {
+							throw ctx.error(403, {
+								message:
+									"Forbidden: changing comment status requires the onBeforeStatusChange hook",
+							});
 						}
+						await runHookWithShim(
+							() => options.onBeforeStatusChange!(id, ctx.body.status, context),
+							ctx.error,
+							"Unauthorized: Cannot change comment status",
+						);
 
 						const updated = await updateCommentStatus(
 							adapter,
@@ -504,13 +575,21 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						headers: ctx.headers,
 					};
 					try {
-						if (options?.onBeforeDelete) {
-							await runHookWithShim(
-								() => options.onBeforeDelete!(id, context),
-								ctx.error,
-								"Unauthorized: Cannot delete comment",
-							);
+						// Require onBeforeDelete (403 when absent) — same
+						// secure-by-default pattern used for onBeforeEdit and
+						// onBeforeListByAuthor. Deletion is an admin operation; without
+						// this hook any unauthenticated caller could delete any comment.
+						if (!options?.onBeforeDelete) {
+							throw ctx.error(403, {
+								message:
+									"Forbidden: deleting comments requires the onBeforeDelete hook",
+							});
 						}
+						await runHookWithShim(
+							() => options.onBeforeDelete!(id, context),
+							ctx.error,
+							"Unauthorized: Cannot delete comment",
+						);
 
 						const deleted = await deleteComment(adapter, id);
 						if (!deleted) {

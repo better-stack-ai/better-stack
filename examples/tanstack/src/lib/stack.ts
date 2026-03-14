@@ -195,6 +195,10 @@ const { handler, dbSchema } = stack({
                 // if (authorId !== session.user.id && !session.user.isAdmin) throw new Error("Forbidden")
                 if (authorId !== "olliethedev") throw new Error("Forbidden")
             },
+            resolveCurrentUserId: async (ctx) => {
+                // In production: return session?.user?.id ?? null
+                return "olliethedev"
+            },
         }),
     },
     adapter: (db) => createMemoryAdapter(db)({})
