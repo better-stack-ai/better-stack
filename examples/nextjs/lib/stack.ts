@@ -414,7 +414,8 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
             },
             resolveCurrentUserId: async (ctx) => {
                 // In production: return session?.user?.id ?? null
-                return "olliethedev"
+                // Demo only: echo back the client-supplied currentUserId (NOT secure)
+                return (ctx.query as { currentUserId?: string })?.currentUserId ?? null
             },
         }),
         // Kanban plugin for project management boards

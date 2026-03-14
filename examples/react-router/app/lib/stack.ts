@@ -198,7 +198,8 @@ const { handler, dbSchema } = stack({
             },
             resolveCurrentUserId: async (ctx) => {
                 // In production: return session?.user?.id ?? null
-                return "olliethedev"
+                // Demo only: echo back the client-supplied currentUserId (NOT secure)
+                return (ctx.query as { currentUserId?: string })?.currentUserId ?? null
             },
         }),
     },
