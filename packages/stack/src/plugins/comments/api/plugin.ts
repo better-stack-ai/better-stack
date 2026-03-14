@@ -253,6 +253,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 				async (ctx) => {
 					const context: CommentsApiContext = {
 						query: ctx.query,
+						request: ctx.request,
 						headers: ctx.headers,
 					};
 					try {
