@@ -5,6 +5,7 @@ import { commentsSchema as dbSchema } from "../db";
 import type { Comment } from "../types";
 import {
 	CommentListQuerySchema,
+	CommentListParamsSchema,
 	CommentCountQuerySchema,
 	createCommentSchema,
 	updateCommentSchema,
@@ -233,7 +234,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 		dbPlugin: dbSchema,
 
 		api: (adapter: Adapter) => ({
-			listComments: (params: z.infer<typeof CommentListQuerySchema>) =>
+			listComments: (params: z.infer<typeof CommentListParamsSchema>) =>
 				listComments(adapter, params, options?.resolveUser),
 			getCommentById: (id: string, currentUserId?: string) =>
 				getCommentById(adapter, id, options?.resolveUser, currentUserId),
@@ -300,9 +301,11 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 							);
 						}
 
-						// Resolve currentUserId server-side — the client-supplied query
-						// parameter is intentionally discarded and replaced with the
-						// session-verified identity from resolveCurrentUserId.
+						// Resolve the caller's identity server-side.
+						// currentUserId is NOT accepted from the query string (it is absent
+						// from CommentListQuerySchema) — it is always injected here from the
+						// session via resolveCurrentUserId. This prevents any anonymous caller
+						// from supplying an arbitrary user ID to read another user's pending comments.
 						let resolvedCurrentUserId: string | undefined;
 						try {
 							const result = await options.resolveCurrentUserId(context);

@@ -35,16 +35,34 @@ export const updateCommentStatusSchema = z.object({
 
 // ============ Query Schemas ============
 
+/**
+ * Schema for GET /comments query parameters.
+ *
+ * `currentUserId` is intentionally absent — it is never accepted from the client.
+ * The server always resolves the caller's identity via the `resolveCurrentUserId`
+ * hook and injects it internally. Accepting it from the client would allow any
+ * anonymous caller to supply an arbitrary user ID and read that user's pending
+ * (pre-moderation) comments.
+ */
 export const CommentListQuerySchema = z.object({
 	resourceId: z.string().optional(),
 	resourceType: z.string().optional(),
 	parentId: z.string().optional().nullable(),
 	status: CommentStatusSchema.optional(),
-	currentUserId: z.string().optional(),
 	authorId: z.string().optional(),
 	sort: z.enum(["asc", "desc"]).optional(),
 	limit: z.coerce.number().int().min(1).max(100).optional(),
 	offset: z.coerce.number().int().min(0).optional(),
+});
+
+/**
+ * Internal params schema used by `listComments()` and the `api` factory.
+ * Extends the HTTP query schema with `currentUserId`, which is always injected
+ * server-side (either by the HTTP handler via `resolveCurrentUserId`, or by a
+ * trusted server-side caller such as a Server Component or cron job).
+ */
+export const CommentListParamsSchema = CommentListQuerySchema.extend({
+	currentUserId: z.string().optional(),
 });
 
 export const CommentCountQuerySchema = z.object({

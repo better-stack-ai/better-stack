@@ -82,7 +82,12 @@ function createCommentsQueries(
 						resourceType: params?.resourceType,
 						parentId: params?.parentId === null ? "null" : params?.parentId,
 						status: params?.status,
-						currentUserId: params?.currentUserId,
+						// currentUserId is intentionally NOT sent to the server.
+						// The server resolves the caller's identity server-side via the
+						// resolveCurrentUserId hook. Sending it would allow any caller to
+						// impersonate another user and read their pending comments.
+						// It is still included in the queryKey above for client-side
+						// cache segregation (different users get different cache entries).
 						authorId: params?.authorId,
 						sort: params?.sort,
 						limit: params?.limit ?? 20,
@@ -177,7 +182,10 @@ function createCommentsThreadQueries(
 						resourceType: params?.resourceType,
 						parentId: params?.parentId === null ? "null" : params?.parentId,
 						status: params?.status,
-						currentUserId: params?.currentUserId,
+						// currentUserId is intentionally NOT sent to the server.
+						// The server resolves the caller's identity server-side via the
+						// resolveCurrentUserId hook. It is still included in the queryKey
+						// above for client-side cache segregation.
 						limit: params?.limit ?? 20,
 						offset: pageParam ?? 0,
 					},

@@ -7,7 +7,7 @@ import type {
 } from "../types";
 import type { z } from "zod";
 import type {
-	CommentListQuerySchema,
+	CommentListParamsSchema,
 	CommentCountQuerySchema,
 } from "../schemas";
 
@@ -94,7 +94,7 @@ type WhereCondition = {
  * Build the base WHERE conditions from common list params (excluding status).
  */
 function buildBaseConditions(
-	params: z.infer<typeof CommentListQuerySchema>,
+	params: z.infer<typeof CommentListParamsSchema>,
 ): WhereCondition[] {
 	const conditions: WhereCondition[] = [];
 
@@ -146,7 +146,7 @@ function buildBaseConditions(
  */
 export async function listComments(
 	adapter: Adapter,
-	params: z.infer<typeof CommentListQuerySchema>,
+	params: z.infer<typeof CommentListParamsSchema>,
 	resolveUser?: (
 		authorId: string,
 	) => Promise<{ name: string; avatarUrl?: string } | null>,
