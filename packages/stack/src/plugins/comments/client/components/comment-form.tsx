@@ -66,7 +66,11 @@ export function CommentForm({
 	};
 
 	return (
-		<form onSubmit={handleSubmit} className="flex flex-col gap-2">
+		<form
+			data-testid="comment-form"
+			onSubmit={handleSubmit}
+			className="flex flex-col gap-2"
+		>
 			{InputComponent ? (
 				<InputComponent
 					value={body}
