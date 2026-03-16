@@ -256,73 +256,70 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						request: ctx.request,
 						headers: ctx.headers,
 					};
-					try {
-						// Author-scoped queries: require onBeforeListByAuthor (403 when absent).
-						// This is the single security gate for per-user comment history queries
-						// and runs before any status-filter check.
-						if (ctx.query.authorId) {
-							if (!options?.onBeforeListByAuthor) {
-								throw ctx.error(403, {
-									message:
-										"Forbidden: authorId filter requires onBeforeListByAuthor hook",
-								});
-							}
-							await runHookWithShim(
-								() =>
-									options.onBeforeListByAuthor!(
-										ctx.query.authorId!,
-										ctx.query,
-										context,
-									),
-								ctx.error,
-								"Forbidden: Cannot list comments for this author",
-							);
-						}
 
-						// Restrict non-approved status filters to authorized callers only.
-						// Without onBeforeList, anonymous callers cannot read pending/spam queues.
-						if (ctx.query.status && ctx.query.status !== "approved") {
-							if (!options?.onBeforeList) {
-								throw ctx.error(403, {
-									message: "Forbidden: status filter requires authorization",
-								});
-							}
-							await runHookWithShim(
-								() => options.onBeforeList!(ctx.query, context),
-								ctx.error,
-								"Forbidden: Cannot list comments with this status filter",
-							);
-						} else if (options?.onBeforeList && !ctx.query.authorId) {
-							// Only call onBeforeList for non-author-scoped queries to avoid
-							// double-hooking when both authorId and onBeforeList are present.
-							await runHookWithShim(
-								() => options.onBeforeList!(ctx.query, context),
-								ctx.error,
-								"Forbidden: Cannot list comments",
-							);
+					// Author-scoped queries: require onBeforeListByAuthor (403 when absent).
+					// This is the single security gate for per-user comment history queries
+					// and runs before any status-filter check.
+					if (ctx.query.authorId) {
+						if (!options?.onBeforeListByAuthor) {
+							throw ctx.error(403, {
+								message:
+									"Forbidden: authorId filter requires onBeforeListByAuthor hook",
+							});
 						}
-
-						// Resolve the caller's identity server-side.
-						// currentUserId is NOT accepted from the query string (it is absent
-						// from CommentListQuerySchema) — it is always injected here from the
-						// session via resolveCurrentUserId. This prevents any anonymous caller
-						// from supplying an arbitrary user ID to read another user's pending comments.
-						let resolvedCurrentUserId: string | undefined;
-						try {
-							const result = await options.resolveCurrentUserId(context);
-							resolvedCurrentUserId = result ?? undefined;
-						} catch {
-							resolvedCurrentUserId = undefined;
-						}
-
-						return await listComments(
-							adapter,
-							{ ...ctx.query, currentUserId: resolvedCurrentUserId },
-							options?.resolveUser,
+						await runHookWithShim(
+							() =>
+								options.onBeforeListByAuthor!(
+									ctx.query.authorId!,
+									ctx.query,
+									context,
+								),
+							ctx.error,
+							"Forbidden: Cannot list comments for this author",
 						);
-					} catch (error) {
-						throw error;
 					}
+
+					// Restrict non-approved status filters to authorized callers only.
+					// Without onBeforeList, anonymous callers cannot read pending/spam queues.
+					if (ctx.query.status && ctx.query.status !== "approved") {
+						if (!options?.onBeforeList) {
+							throw ctx.error(403, {
+								message: "Forbidden: status filter requires authorization",
+							});
+						}
+						await runHookWithShim(
+							() => options.onBeforeList!(ctx.query, context),
+							ctx.error,
+							"Forbidden: Cannot list comments with this status filter",
+						);
+					} else if (options?.onBeforeList && !ctx.query.authorId) {
+						// Only call onBeforeList for non-author-scoped queries to avoid
+						// double-hooking when both authorId and onBeforeList are present.
+						await runHookWithShim(
+							() => options.onBeforeList!(ctx.query, context),
+							ctx.error,
+							"Forbidden: Cannot list comments",
+						);
+					}
+
+					// Resolve the caller's identity server-side.
+					// currentUserId is NOT accepted from the query string (it is absent
+					// from CommentListQuerySchema) — it is always injected here from the
+					// session via resolveCurrentUserId. This prevents any anonymous caller
+					// from supplying an arbitrary user ID to read another user's pending comments.
+					let resolvedCurrentUserId: string | undefined;
+					try {
+						const result = await options.resolveCurrentUserId(context);
+						resolvedCurrentUserId = result ?? undefined;
+					} catch {
+						resolvedCurrentUserId = undefined;
+					}
+
+					return await listComments(
+						adapter,
+						{ ...ctx.query, currentUserId: resolvedCurrentUserId },
+						options?.resolveUser,
+					);
 				},
 			);
 
@@ -338,37 +335,34 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						body: ctx.body,
 						headers: ctx.headers,
 					};
-					try {
-						const { authorId } = await runHookWithShim(
-							() => options.onBeforePost(ctx.body, context),
-							ctx.error,
-							"Unauthorized: Cannot post comment",
-						);
 
-						const status = options?.autoApprove ? "approved" : "pending";
-						const comment = await createComment(adapter, {
-							...ctx.body,
-							authorId,
-							status,
-						});
+					const { authorId } = await runHookWithShim(
+						() => options.onBeforePost(ctx.body, context),
+						ctx.error,
+						"Unauthorized: Cannot post comment",
+					);
 
-						if (options?.onAfterPost) {
-							await options.onAfterPost(comment, context);
-						}
+					const status = options?.autoApprove ? "approved" : "pending";
+					const comment = await createComment(adapter, {
+						...ctx.body,
+						authorId,
+						status,
+					});
 
-						// Return a fully serialized comment so the client receives
-						// resolvedAuthorName / resolvedAvatarUrl / isLikedByCurrentUser —
-						// without this the optimistic-update replacement crashes because
-						// those fields are undefined on the raw DB record.
-						const serialized = await getCommentById(
-							adapter,
-							comment.id,
-							options?.resolveUser,
-						);
-						return serialized ?? comment;
-					} catch (error) {
-						throw error;
+					if (options?.onAfterPost) {
+						await options.onAfterPost(comment, context);
 					}
+
+					// Return a fully serialized comment so the client receives
+					// resolvedAuthorName / resolvedAvatarUrl / isLikedByCurrentUser —
+					// without this the optimistic-update replacement crashes because
+					// those fields are undefined on the raw DB record.
+					const serialized = await getCommentById(
+						adapter,
+						comment.id,
+						options?.resolveUser,
+					);
+					return serialized ?? comment;
 				},
 			);
 
@@ -386,46 +380,43 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						body: ctx.body,
 						headers: ctx.headers,
 					};
-					try {
-						// Require onBeforeEdit (403 when absent).
-						// Without an explicit hook the caller cannot be authenticated, so
-						// editing any comment body is rejected by default — matching the
-						// same secure-by-default pattern used for onBeforeListByAuthor.
-						if (!options?.onBeforeEdit) {
-							throw ctx.error(403, {
-								message:
-									"Forbidden: editing comments requires the onBeforeEdit hook",
-							});
-						}
-						await runHookWithShim(
-							() => options.onBeforeEdit!(id, { body: ctx.body.body }, context),
-							ctx.error,
-							"Unauthorized: Cannot edit comment",
-						);
 
-						const updated = await updateComment(adapter, id, ctx.body.body);
-						if (!updated) {
-							throw ctx.error(404, { message: "Comment not found" });
-						}
-
-						if (options?.onAfterEdit) {
-							await options.onAfterEdit(updated, context);
-						}
-
-						// Return a fully serialized comment (same pattern as POST /comments)
-						// so the client receives resolvedAuthorName / resolvedAvatarUrl /
-						// isLikedByCurrentUser — the raw DB record from updateComment() lacks
-						// these fields and would cause the client-side cache update to replace
-						// the enriched comment with an incomplete object.
-						const serialized = await getCommentById(
-							adapter,
-							updated.id,
-							options?.resolveUser,
-						);
-						return serialized ?? updated;
-					} catch (error) {
-						throw error;
+					// Require onBeforeEdit (403 when absent).
+					// Without an explicit hook the caller cannot be authenticated, so
+					// editing any comment body is rejected by default — matching the
+					// same secure-by-default pattern used for onBeforeListByAuthor.
+					if (!options?.onBeforeEdit) {
+						throw ctx.error(403, {
+							message:
+								"Forbidden: editing comments requires the onBeforeEdit hook",
+						});
 					}
+					await runHookWithShim(
+						() => options.onBeforeEdit!(id, { body: ctx.body.body }, context),
+						ctx.error,
+						"Unauthorized: Cannot edit comment",
+					);
+
+					const updated = await updateComment(adapter, id, ctx.body.body);
+					if (!updated) {
+						throw ctx.error(404, { message: "Comment not found" });
+					}
+
+					if (options?.onAfterEdit) {
+						await options.onAfterEdit(updated, context);
+					}
+
+					// Return a fully serialized comment (same pattern as POST /comments)
+					// so the client receives resolvedAuthorName / resolvedAvatarUrl /
+					// isLikedByCurrentUser — the raw DB record from updateComment() lacks
+					// these fields and would cause the client-side cache update to replace
+					// the enriched comment with an incomplete object.
+					const serialized = await getCommentById(
+						adapter,
+						updated.id,
+						options?.resolveUser,
+					);
+					return serialized ?? updated;
 				},
 			);
 
@@ -441,42 +432,39 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						query: ctx.query,
 						headers: ctx.headers,
 					};
-					try {
-						// Mirror the same authorization guard used by GET /comments.
-						// Without onBeforeList, non-approved status counts are blocked so
-						// unauthenticated callers cannot probe the moderation queue sizes.
-						if (ctx.query.status && ctx.query.status !== "approved") {
-							if (!options?.onBeforeList) {
-								throw ctx.error(403, {
-									message: "Forbidden: status filter requires authorization",
-								});
-							}
-							await runHookWithShim(
-								() =>
-									options.onBeforeList!(
-										{ ...ctx.query, status: ctx.query.status },
-										context,
-									),
-								ctx.error,
-								"Forbidden: Cannot count comments with this status filter",
-							);
-						} else if (options?.onBeforeList) {
-							await runHookWithShim(
-								() =>
-									options.onBeforeList!(
-										{ ...ctx.query, status: ctx.query.status },
-										context,
-									),
-								ctx.error,
-								"Forbidden: Cannot count comments",
-							);
-						}
 
-						const count = await getCommentCount(adapter, ctx.query);
-						return { count };
-					} catch (error) {
-						throw error;
+					// Mirror the same authorization guard used by GET /comments.
+					// Without onBeforeList, non-approved status counts are blocked so
+					// unauthenticated callers cannot probe the moderation queue sizes.
+					if (ctx.query.status && ctx.query.status !== "approved") {
+						if (!options?.onBeforeList) {
+							throw ctx.error(403, {
+								message: "Forbidden: status filter requires authorization",
+							});
+						}
+						await runHookWithShim(
+							() =>
+								options.onBeforeList!(
+									{ ...ctx.query, status: ctx.query.status },
+									context,
+								),
+							ctx.error,
+							"Forbidden: Cannot count comments with this status filter",
+						);
+					} else if (options?.onBeforeList) {
+						await runHookWithShim(
+							() =>
+								options.onBeforeList!(
+									{ ...ctx.query, status: ctx.query.status },
+									context,
+								),
+							ctx.error,
+							"Forbidden: Cannot count comments",
+						);
 					}
+
+					const count = await getCommentCount(adapter, ctx.query);
+					return { count };
 				},
 			);
 
@@ -494,33 +482,30 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						body: ctx.body,
 						headers: ctx.headers,
 					};
-					try {
-						// Require onBeforeLike (403 when absent) — same secure-by-default
-						// pattern used for onBeforeEdit, onBeforeStatusChange, and
-						// onBeforeDelete. The authorId in the request body is client-supplied
-						// and must be verified against the authenticated session; without
-						// this hook any caller can toggle likes on behalf of any user ID.
-						if (!options?.onBeforeLike) {
-							throw ctx.error(403, {
-								message:
-									"Forbidden: toggling likes requires the onBeforeLike hook",
-							});
-						}
-						await runHookWithShim(
-							() => options.onBeforeLike!(id, ctx.body.authorId, context),
-							ctx.error,
-							"Unauthorized: Cannot like comment",
-						);
 
-						const result = await toggleCommentLike(
-							adapter,
-							id,
-							ctx.body.authorId,
-						);
-						return result;
-					} catch (error) {
-						throw error;
+					// Require onBeforeLike (403 when absent) — same secure-by-default
+					// pattern used for onBeforeEdit, onBeforeStatusChange, and
+					// onBeforeDelete. The authorId in the request body is client-supplied
+					// and must be verified against the authenticated session; without
+					// this hook any caller can toggle likes on behalf of any user ID.
+					if (!options?.onBeforeLike) {
+						throw ctx.error(403, {
+							message:
+								"Forbidden: toggling likes requires the onBeforeLike hook",
+						});
 					}
+					await runHookWithShim(
+						() => options.onBeforeLike!(id, ctx.body.authorId, context),
+						ctx.error,
+						"Unauthorized: Cannot like comment",
+					);
+
+					const result = await toggleCommentLike(
+						adapter,
+						id,
+						ctx.body.authorId,
+					);
+					return result;
 				},
 			);
 
@@ -538,41 +523,38 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						body: ctx.body,
 						headers: ctx.headers,
 					};
-					try {
-						// Require onBeforeStatusChange (403 when absent) — same
-						// secure-by-default pattern used for onBeforeEdit and
-						// onBeforeListByAuthor. Moderation is an admin operation; without
-						// this hook any unauthenticated caller could change any comment's
-						// status.
-						if (!options?.onBeforeStatusChange) {
-							throw ctx.error(403, {
-								message:
-									"Forbidden: changing comment status requires the onBeforeStatusChange hook",
-							});
-						}
-						await runHookWithShim(
-							() => options.onBeforeStatusChange!(id, ctx.body.status, context),
-							ctx.error,
-							"Unauthorized: Cannot change comment status",
-						);
 
-						const updated = await updateCommentStatus(
-							adapter,
-							id,
-							ctx.body.status,
-						);
-						if (!updated) {
-							throw ctx.error(404, { message: "Comment not found" });
-						}
-
-						if (ctx.body.status === "approved" && options?.onAfterApprove) {
-							await options.onAfterApprove(updated, context);
-						}
-
-						return updated;
-					} catch (error) {
-						throw error;
+					// Require onBeforeStatusChange (403 when absent) — same
+					// secure-by-default pattern used for onBeforeEdit and
+					// onBeforeListByAuthor. Moderation is an admin operation; without
+					// this hook any unauthenticated caller could change any comment's
+					// status.
+					if (!options?.onBeforeStatusChange) {
+						throw ctx.error(403, {
+							message:
+								"Forbidden: changing comment status requires the onBeforeStatusChange hook",
+						});
 					}
+					await runHookWithShim(
+						() => options.onBeforeStatusChange!(id, ctx.body.status, context),
+						ctx.error,
+						"Unauthorized: Cannot change comment status",
+					);
+
+					const updated = await updateCommentStatus(
+						adapter,
+						id,
+						ctx.body.status,
+					);
+					if (!updated) {
+						throw ctx.error(404, { message: "Comment not found" });
+					}
+
+					if (ctx.body.status === "approved" && options?.onAfterApprove) {
+						await options.onAfterApprove(updated, context);
+					}
+
+					return updated;
 				},
 			);
 
@@ -588,36 +570,33 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						params: ctx.params,
 						headers: ctx.headers,
 					};
-					try {
-						// Require onBeforeDelete (403 when absent) — same
-						// secure-by-default pattern used for onBeforeEdit and
-						// onBeforeListByAuthor. Deletion is an admin operation; without
-						// this hook any unauthenticated caller could delete any comment.
-						if (!options?.onBeforeDelete) {
-							throw ctx.error(403, {
-								message:
-									"Forbidden: deleting comments requires the onBeforeDelete hook",
-							});
-						}
-						await runHookWithShim(
-							() => options.onBeforeDelete!(id, context),
-							ctx.error,
-							"Unauthorized: Cannot delete comment",
-						);
 
-						const deleted = await deleteComment(adapter, id);
-						if (!deleted) {
-							throw ctx.error(404, { message: "Comment not found" });
-						}
-
-						if (options?.onAfterDelete) {
-							await options.onAfterDelete(id, context);
-						}
-
-						return { success: true };
-					} catch (error) {
-						throw error;
+					// Require onBeforeDelete (403 when absent) — same
+					// secure-by-default pattern used for onBeforeEdit and
+					// onBeforeListByAuthor. Deletion is an admin operation; without
+					// this hook any unauthenticated caller could delete any comment.
+					if (!options?.onBeforeDelete) {
+						throw ctx.error(403, {
+							message:
+								"Forbidden: deleting comments requires the onBeforeDelete hook",
+						});
 					}
+					await runHookWithShim(
+						() => options.onBeforeDelete!(id, context),
+						ctx.error,
+						"Unauthorized: Cannot delete comment",
+					);
+
+					const deleted = await deleteComment(adapter, id);
+					if (!deleted) {
+						throw ctx.error(404, { message: "Comment not found" });
+					}
+
+					if (options?.onAfterDelete) {
+						await options.onAfterDelete(id, context);
+					}
+
+					return { success: true };
 				},
 			);
 
