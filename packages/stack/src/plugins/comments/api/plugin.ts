@@ -355,14 +355,20 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 
 					// Return a fully serialized comment so the client receives
 					// resolvedAuthorName / resolvedAvatarUrl / isLikedByCurrentUser —
-					// without this the optimistic-update replacement crashes because
-					// those fields are undefined on the raw DB record.
+					// without this the optimistic-update replacement would insert an
+					// incomplete object (missing those fields, Date instead of ISO strings)
+					// into the React Query cache and cause rendering issues.
 					const serialized = await getCommentById(
 						adapter,
 						comment.id,
 						options?.resolveUser,
 					);
-					return serialized ?? comment;
+					if (!serialized) {
+						throw ctx.error(500, {
+							message: "Failed to retrieve created comment",
+						});
+					}
+					return serialized;
 				},
 			);
 
@@ -416,7 +422,12 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						updated.id,
 						options?.resolveUser,
 					);
-					return serialized ?? updated;
+					if (!serialized) {
+						throw ctx.error(500, {
+							message: "Failed to retrieve updated comment",
+						});
+					}
+					return serialized;
 				},
 			);
 
