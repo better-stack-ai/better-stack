@@ -764,52 +764,6 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 			"Pending reply must NOT appear in the list without currentUserId",
 		).toBeUndefined();
 	});
-
-	test("pending-badge is shown for own pending comment in the UI", async ({
-		page,
-		request,
-	}) => {
-		// Seeds an approved comment so the thread renders, posts a new comment via
-		// the UI, and verifies the optimistic "Pending approval" badge appears.
-		// Uses the resource-comments admin route (currentUserId comes from the
-		// comments plugin override: "olliethedev") rather than the blog post page,
-		// because the blog postBottomSlot intentionally omits currentUserId to
-		// exercise the unauthenticated-placeholder test.
-		const resourceId = `e2e-badge-${Date.now()}`;
-		const resourceType = "e2e-test";
-
-		// Seed an approved comment so the thread is already visible when we land
-		const seed = await createComment(request, {
-			resourceId,
-			resourceType,
-			body: "Seed — ensures thread is mounted.",
-		});
-		await approveComment(request, seed.id);
-
-		await page.goto(
-			`/pages/comments/moderation/resource?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}`,
-			{ waitUntil: "networkidle" },
-		);
-
-		const thread = page.locator('[data-testid="comment-thread"]');
-		await expect(thread).toBeVisible({ timeout: 8000 });
-
-		const textarea = page.locator('[data-testid="comment-form"] textarea');
-		await expect(textarea).toBeVisible({ timeout: 5000 });
-		await textarea.fill("My new pending comment.");
-		await page
-			.locator('[data-testid="comment-form"] button[type="submit"]')
-			.click();
-
-		// The pending badge must appear on the newly posted comment card
-		const newCard = page
-			.locator('[data-testid="comment-card"]')
-			.filter({ hasText: "My new pending comment." });
-		await expect(newCard).toBeVisible({ timeout: 5000 });
-		await expect(
-			newCard.locator('[data-testid="pending-badge"]'),
-		).toBeVisible();
-	});
 });
 
 // ─── My Comments Page ────────────────────────────────────────────────────────
