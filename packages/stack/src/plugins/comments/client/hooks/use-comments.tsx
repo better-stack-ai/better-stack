@@ -387,16 +387,9 @@ export function usePostComment(
 			}
 		},
 		onError: (_err, _input, context) => {
-			if (context?.previous !== undefined) {
-				queryClient.setQueryData(context.listKey, context.previous);
-			}
+			if (!context) return;
+			queryClient.setQueryData(context.listKey, context.previous);
 		},
-		// No onSettled list invalidation — the mutation response is the ground
-		// truth. Invalidating would trigger a server refetch that returns only
-		// approved comments, erasing a pending optimistic entry from the cache.
-		// Exception: the cold-cache reply case handled in onSuccess above, where
-		// invalidation is safe because the server includes the author's own pending
-		// reply via resolveCurrentUserId.
 	});
 }
 
