@@ -337,6 +337,7 @@ function CommentThreadInner({
 	const [expandedReplies, setExpandedReplies] = useState<Set<string>>(
 		new Set(),
 	);
+	const [replyOffsets, setReplyOffsets] = useState<Record<string, number>>({});
 
 	const config = { apiBaseURL, apiBasePath, headers };
 
@@ -378,6 +379,7 @@ function CommentThreadInner({
 		await postMutation.mutateAsync({
 			body,
 			parentId,
+			offset: replyOffsets[parentId] ?? 0,
 		});
 		setReplyingTo(null);
 		setExpandedReplies((prev) => new Set(prev).add(parentId));
@@ -449,6 +451,12 @@ function CommentThreadInner({
 											? next.delete(comment.id)
 											: next.add(comment.id);
 										return next;
+									});
+								}}
+								onOffsetChange={(offset) => {
+									setReplyOffsets((prev) => {
+										if (prev[comment.id] === offset) return prev;
+										return { ...prev, [comment.id]: offset };
 									});
 								}}
 								allowEditing={allowEditing}
@@ -547,6 +555,7 @@ function RepliesSection({
 	expanded,
 	replyCount,
 	onToggle,
+	onOffsetChange,
 	allowEditing,
 }: {
 	parentId: string;
@@ -562,6 +571,7 @@ function RepliesSection({
 	/** Pre-computed from the parent comment — avoids an extra fetch on mount. */
 	replyCount: number;
 	onToggle: () => void;
+	onOffsetChange: (offset: number) => void;
 	allowEditing: boolean;
 }) {
 	const REPLIES_PAGE_SIZE = 20;
@@ -593,6 +603,10 @@ function RepliesSection({
 			setLoadedReplies([]);
 		}
 	}, [expanded, parentId]);
+
+	useEffect(() => {
+		onOffsetChange(replyOffset);
+	}, [onOffsetChange, replyOffset]);
 
 	useEffect(() => {
 		if (!expanded) return;
