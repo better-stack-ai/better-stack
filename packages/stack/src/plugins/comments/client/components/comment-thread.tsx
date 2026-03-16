@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import { WhenVisible } from "@workspace/ui/components/when-visible";
 import {
 	Avatar,
@@ -564,9 +564,16 @@ function RepliesSection({
 	onToggle: () => void;
 	allowEditing: boolean;
 }) {
+	const REPLIES_PAGE_SIZE = 20;
 	const config = { apiBaseURL, apiBasePath, headers };
+	const [replyOffset, setReplyOffset] = useState(0);
+	const [loadedReplies, setLoadedReplies] = useState<SerializedComment[]>([]);
 	// Only fetch reply bodies once the section is expanded.
-	const { comments: replies } = useComments(
+	const {
+		comments: repliesPage,
+		total: repliesTotal,
+		isFetching: isFetchingReplies,
+	} = useComments(
 		config,
 		{
 			resourceId,
@@ -574,9 +581,29 @@ function RepliesSection({
 			parentId,
 			status: "approved",
 			currentUserId,
+			limit: REPLIES_PAGE_SIZE,
+			offset: replyOffset,
 		},
 		{ enabled: expanded },
 	);
+
+	useEffect(() => {
+		if (expanded) {
+			setReplyOffset(0);
+			setLoadedReplies([]);
+		}
+	}, [expanded, parentId]);
+
+	useEffect(() => {
+		if (!expanded) return;
+		setLoadedReplies((prev) => {
+			const byId = new Map(prev.map((item) => [item.id, item]));
+			for (const reply of repliesPage) {
+				byId.set(reply.id, reply);
+			}
+			return Array.from(byId.values());
+		});
+	}, [expanded, repliesPage]);
 
 	// Hide when there are no known replies — but keep rendered when already
 	// expanded so a freshly-posted first reply (which increments replyCount
@@ -585,7 +612,11 @@ function RepliesSection({
 
 	// Prefer the fetched count (accurate after optimistic inserts); fall back to
 	// the server-provided replyCount before the fetch completes.
-	const displayCount = expanded ? replies.length || replyCount : replyCount;
+	const displayCount = expanded
+		? loadedReplies.length || replyCount
+		: replyCount;
+	const effectiveReplyTotal = repliesTotal || replyCount;
+	const hasMoreReplies = loadedReplies.length < effectiveReplyTotal;
 
 	return (
 		<div className="pl-11">
@@ -611,7 +642,7 @@ function RepliesSection({
 					className="border-l-2 border-border pl-3 space-y-0"
 					data-testid="replies-list"
 				>
-					{replies.map((reply) => (
+					{loadedReplies.map((reply) => (
 						<CommentCard
 							key={reply.id}
 							comment={reply}
@@ -628,6 +659,24 @@ function RepliesSection({
 							allowEditing={allowEditing}
 						/>
 					))}
+					{hasMoreReplies && (
+						<div className="py-2">
+							<Button
+								variant="ghost"
+								size="sm"
+								className="h-7 px-2 text-xs"
+								onClick={() =>
+									setReplyOffset((prev) => prev + REPLIES_PAGE_SIZE)
+								}
+								disabled={isFetchingReplies}
+								data-testid="load-more-replies"
+							>
+								{isFetchingReplies
+									? loc.COMMENTS_LOADING_MORE
+									: loc.COMMENTS_LOAD_MORE}
+							</Button>
+						</div>
+					)}
 				</div>
 			)}
 		</div>
