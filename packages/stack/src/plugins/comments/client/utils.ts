@@ -14,7 +14,14 @@ export function useResolvedCurrentUserId(
 
 	useEffect(() => {
 		if (typeof raw === "function") {
-			void Promise.resolve(raw()).then((id) => setResolved(id ?? undefined));
+			void Promise.resolve(raw())
+				.then((id) => setResolved(id ?? undefined))
+				.catch((err: unknown) => {
+					console.error(
+						"[btst/comments] Failed to resolve currentUserId:",
+						err,
+					);
+				});
 		} else {
 			setResolved(raw ?? undefined);
 		}
