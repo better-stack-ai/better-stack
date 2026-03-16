@@ -47,7 +47,7 @@ SERVER_PORT=8766
 SERVER_PID=""
 TEST_PASSED=false
 
-PLUGIN_NAMES=("blog" "ai-chat" "cms" "form-builder" "kanban" "ui-builder")
+PLUGIN_NAMES=("blog" "ai-chat" "cms" "form-builder" "kanban" "comments" "ui-builder")
 
 # ---------------------------------------------------------------------------
 # Cleanup
@@ -188,6 +188,44 @@ main() {
         --legacy-peer-deps
     success "Common peer deps installed"
 
+    # Pin tiptap to 3.20.1 (post-install to avoid EOVERRIDE conflict with direct deps).
+    # Latest tiptap releases have breaking changes; 3.20.1 is the last known-good version
+    # for minimal-tiptap compatibility.
+    step "6b — Pinning tiptap packages to 3.20.1"
+    node -e "
+const fs = require('fs');
+const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+const V = '3.20.1';
+const pkgs = [
+  '@tiptap/core','@tiptap/react','@tiptap/pm','@tiptap/starter-kit',
+  '@tiptap/extensions','@tiptap/markdown',
+  '@tiptap/extension-blockquote','@tiptap/extension-bold',
+  '@tiptap/extension-bubble-menu','@tiptap/extension-bullet-list',
+  '@tiptap/extension-code','@tiptap/extension-code-block',
+  '@tiptap/extension-code-block-lowlight','@tiptap/extension-color',
+  '@tiptap/extension-document','@tiptap/extension-dropcursor',
+  '@tiptap/extension-floating-menu','@tiptap/extension-gapcursor',
+  '@tiptap/extension-hard-break','@tiptap/extension-heading',
+  '@tiptap/extension-horizontal-rule','@tiptap/extension-image',
+  '@tiptap/extension-italic','@tiptap/extension-link',
+  '@tiptap/extension-list','@tiptap/extension-list-item',
+  '@tiptap/extension-list-keymap','@tiptap/extension-ordered-list',
+  '@tiptap/extension-paragraph','@tiptap/extension-strike',
+  '@tiptap/extension-table','@tiptap/extension-text',
+  '@tiptap/extension-text-style','@tiptap/extension-typography',
+  '@tiptap/extension-underline'
+];
+pkg.overrides = pkg.overrides || {};
+for (const p of pkgs) {
+  if (pkg.dependencies?.[p]) pkg.dependencies[p] = V;
+  pkg.overrides[p] = V;
+}
+fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
+console.log('package.json updated with tiptap overrides');
+"
+    npm install --legacy-peer-deps
+    success "Tiptap packages pinned to 3.20.1"
+
     # Patch tsconfig — mirrors what the ui-builder project does:
     # • skipLibCheck: true        — don't error on 3rd-party types in node_modules
     # • strictFunctionTypes:false — bivariant function params (e.g. error callbacks)
@@ -280,11 +318,12 @@ import { ChatPageComponent } from "@/components/btst/ai-chat/client/components/p
 import { DashboardPageComponent } from "@/components/btst/cms/client/components/pages/dashboard-page";
 import { FormListPageComponent } from "@/components/btst/form-builder/client/components/pages/form-list-page";
 import { BoardsListPageComponent } from "@/components/btst/kanban/client/components/pages/boards-list-page";
+import { ModerationPageComponent } from "@/components/btst/comments/client/components/pages/moderation-page";
 import { PageListPage } from "@/components/btst/ui-builder/client/components/pages/page-list-page";
 
 // Suppress unused-import warnings while still forcing TS to resolve everything.
 void [HomePageComponent, ChatPageComponent, DashboardPageComponent,
-      FormListPageComponent, BoardsListPageComponent, PageListPage];
+      FormListPageComponent, BoardsListPageComponent, ModerationPageComponent, PageListPage];
 
 export default function SmokeTestPage() {
   return <div data-testid="btst-smoke-test">Registry smoke test — all plugin imports resolved.</div>;
