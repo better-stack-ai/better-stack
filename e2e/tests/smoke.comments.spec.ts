@@ -460,9 +460,10 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		expect(comment.status).toBe("pending");
 
 		// Simulates a page-refresh fetch: status defaults to "approved" but
-		// currentUserId is provided — own pending comments must be included.
+		// x-user-id header authenticates the session — own pending comments must be included.
 		const response = await request.get(
 			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&currentUserId=${CURRENT_USER_ID}`,
+			{ headers: { "x-user-id": CURRENT_USER_ID } },
 		);
 		expect(response.ok()).toBeTruthy();
 		const body = await response.json();
@@ -552,9 +553,10 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 			body: "My pending reply — should increment replyCount.",
 		});
 
-		// Fetch top-level comments WITH currentUserId
+		// Fetch top-level comments WITH currentUserId (x-user-id header authenticates the session)
 		const withUserResponse = await request.get(
 			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=null&currentUserId=${CURRENT_USER_ID}`,
+			{ headers: { "x-user-id": CURRENT_USER_ID } },
 		);
 		expect(withUserResponse.ok()).toBeTruthy();
 		const withUserBody = await withUserResponse.json();
@@ -628,9 +630,10 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		expect(reply.status).toBe("pending");
 
 		// Simulates the RepliesSection fetch after a page refresh:
-		// status defaults to approved but currentUserId causes own-pending to be included
+		// x-user-id header authenticates the session — own pending reply must be included
 		const response = await request.get(
 			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=${encodeURIComponent(parent.id)}&currentUserId=${CURRENT_USER_ID}`,
+			{ headers: { "x-user-id": CURRENT_USER_ID } },
 		);
 		expect(response.ok()).toBeTruthy();
 		const body = await response.json();

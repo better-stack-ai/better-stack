@@ -414,8 +414,9 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
             },
             resolveCurrentUserId: async (ctx) => {
                 // In production: return session?.user?.id ?? null
-                // Demo only: hardcoded to match the fake auth user in the example app layout.
-                return "olliethedev"
+                // Demo only: read from x-user-id header so E2E tests can simulate
+                // authenticated vs unauthenticated requests independently.
+                return ctx.headers.get?.("x-user-id") ?? null
             },
         }),
         // Kanban plugin for project management boards
