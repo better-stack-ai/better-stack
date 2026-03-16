@@ -74,7 +74,7 @@ trap cleanup EXIT
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-wait() {
+pause() {
     local seconds="${1:-20}"
     echo "Waiting ${seconds}s…"
     sleep "$seconds"
@@ -133,7 +133,7 @@ main() {
         fi
     done
     success "HTTP server running (PID: $SERVER_PID)"
-    wait 20
+    pause 20
 
     # ------------------------------------------------------------------
     step "4 — Packing @btst/stack with npm pack"
