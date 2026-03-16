@@ -416,7 +416,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
                 // In production: return session?.user?.id ?? null
                 // Demo only: read from x-user-id header so E2E tests can simulate
                 // authenticated vs unauthenticated requests independently.
-                return ctx.headers.get?.("x-user-id") ?? null
+                return ctx?.headers?.get?.("x-user-id") ?? null
             },
         }),
         // Kanban plugin for project management boards
