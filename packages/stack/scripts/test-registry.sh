@@ -72,6 +72,15 @@ cleanup() {
 trap cleanup EXIT
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+wait() {
+    local seconds="${1:-20}"
+    echo "Waiting ${seconds}s…"
+    sleep "$seconds"
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 main() {
@@ -112,7 +121,7 @@ main() {
     npx --yes http-server "$REGISTRY_DIR" -p $SERVER_PORT -c-1 --silent &
     SERVER_PID=$!
 
-    # Wait for server to be ready (up to 15s)
+    # Wait for server to be ready (up to 15s), then an extra 20s for stability
     for i in $(seq 1 15); do
         if curl -sf "http://localhost:$SERVER_PORT/btst-blog.json" > /dev/null 2>&1; then
             break
@@ -124,6 +133,7 @@ main() {
         fi
     done
     success "HTTP server running (PID: $SERVER_PID)"
+    wait 20
 
     # ------------------------------------------------------------------
     step "4 — Packing @btst/stack with npm pack"
@@ -188,44 +198,6 @@ main() {
         --legacy-peer-deps
     success "Common peer deps installed"
 
-    # Pin tiptap to 3.20.1 (post-install to avoid EOVERRIDE conflict with direct deps).
-    # Latest tiptap releases have breaking changes; 3.20.1 is the last known-good version
-    # for minimal-tiptap compatibility.
-    step "6b — Pinning tiptap packages to 3.20.1"
-    node -e "
-const fs = require('fs');
-const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
-const V = '3.20.1';
-const pkgs = [
-  '@tiptap/core','@tiptap/react','@tiptap/pm','@tiptap/starter-kit',
-  '@tiptap/extensions','@tiptap/markdown',
-  '@tiptap/extension-blockquote','@tiptap/extension-bold',
-  '@tiptap/extension-bubble-menu','@tiptap/extension-bullet-list',
-  '@tiptap/extension-code','@tiptap/extension-code-block',
-  '@tiptap/extension-code-block-lowlight','@tiptap/extension-color',
-  '@tiptap/extension-document','@tiptap/extension-dropcursor',
-  '@tiptap/extension-floating-menu','@tiptap/extension-gapcursor',
-  '@tiptap/extension-hard-break','@tiptap/extension-heading',
-  '@tiptap/extension-horizontal-rule','@tiptap/extension-image',
-  '@tiptap/extension-italic','@tiptap/extension-link',
-  '@tiptap/extension-list','@tiptap/extension-list-item',
-  '@tiptap/extension-list-keymap','@tiptap/extension-ordered-list',
-  '@tiptap/extension-paragraph','@tiptap/extension-strike',
-  '@tiptap/extension-table','@tiptap/extension-text',
-  '@tiptap/extension-text-style','@tiptap/extension-typography',
-  '@tiptap/extension-underline'
-];
-pkg.overrides = pkg.overrides || {};
-for (const p of pkgs) {
-  if (pkg.dependencies?.[p]) pkg.dependencies[p] = V;
-  pkg.overrides[p] = V;
-}
-fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
-console.log('package.json updated with tiptap overrides');
-"
-    npm install --legacy-peer-deps
-    success "Tiptap packages pinned to 3.20.1"
-
     # Patch tsconfig — mirrors what the ui-builder project does:
     # • skipLibCheck: true        — don't error on 3rd-party types in node_modules
     # • strictFunctionTypes:false — bivariant function params (e.g. error callbacks)
@@ -284,7 +256,48 @@ console.log('tsconfig.json patched');
     fi
 
     # ------------------------------------------------------------------
-    step "7b — Patching external registry files with known type errors"
+    step "7b — Pinning tiptap packages to 3.20.1"
+    # ------------------------------------------------------------------
+    # Must run AFTER all `shadcn add` calls so that tiptap packages are already
+    # present as direct dependencies — setting npm overrides for packages that
+    # are not yet direct deps and then having shadcn add them afterwards causes
+    # EOVERRIDE, which silently aborts the shadcn install and leaves plugin
+    # files (boards-list-page, page-list-page, …) unwritten.
+    node -e "
+const fs = require('fs');
+const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+const V = '3.20.1';
+const pkgs = [
+  '@tiptap/core','@tiptap/react','@tiptap/pm','@tiptap/starter-kit',
+  '@tiptap/extensions','@tiptap/markdown',
+  '@tiptap/extension-blockquote','@tiptap/extension-bold',
+  '@tiptap/extension-bubble-menu','@tiptap/extension-bullet-list',
+  '@tiptap/extension-code','@tiptap/extension-code-block',
+  '@tiptap/extension-code-block-lowlight','@tiptap/extension-color',
+  '@tiptap/extension-document','@tiptap/extension-dropcursor',
+  '@tiptap/extension-floating-menu','@tiptap/extension-gapcursor',
+  '@tiptap/extension-hard-break','@tiptap/extension-heading',
+  '@tiptap/extension-horizontal-rule','@tiptap/extension-image',
+  '@tiptap/extension-italic','@tiptap/extension-link',
+  '@tiptap/extension-list','@tiptap/extension-list-item',
+  '@tiptap/extension-list-keymap','@tiptap/extension-ordered-list',
+  '@tiptap/extension-paragraph','@tiptap/extension-strike',
+  '@tiptap/extension-table','@tiptap/extension-text',
+  '@tiptap/extension-text-style','@tiptap/extension-typography',
+  '@tiptap/extension-underline'
+];
+pkg.overrides = pkg.overrides || {};
+for (const p of pkgs) {
+  if (pkg.dependencies?.[p]) pkg.dependencies[p] = V;
+  pkg.overrides[p] = V;
+}
+fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
+console.log('package.json updated with tiptap overrides');
+"
+    success "Tiptap overrides written (npm install runs in step 8)"
+
+    # ------------------------------------------------------------------
+    step "7c — Patching external registry files with known type errors"
     # ------------------------------------------------------------------
     # Some files installed from external registries (e.g. the ui-builder component)
     # have TypeScript issues we cannot fix in their source. Add @ts-nocheck to
@@ -300,7 +313,7 @@ console.log('tsconfig.json patched');
     add_ts_nocheck "src/components/ui/minimal-tiptap/components/image/image-edit-block.tsx"
 
     # ------------------------------------------------------------------
-    step "7c — Creating smoke-import page to force TypeScript to compile all plugin files"
+    step "7d — Creating smoke-import page to force TypeScript to compile all plugin files"
     # ------------------------------------------------------------------
     # Without this page, `next build` only type-checks files reachable from
     # existing pages. Installed plugin components are never imported, so missing
