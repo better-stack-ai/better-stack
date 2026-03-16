@@ -215,6 +215,13 @@ export function usePostComment(
 		currentUserId?: string;
 		/** When provided, optimistic updates target this infinite-query cache key. */
 		infiniteKey?: readonly unknown[];
+		/**
+		 * Page size used by the corresponding `useInfiniteComments` call.
+		 * Used only when the infinite-query cache is empty at the time of the
+		 * optimistic update — ensures `getNextPageParam` computes the correct
+		 * `nextOffset` from `lastPage.limit` instead of a hardcoded fallback.
+		 */
+		pageSize?: number;
 	},
 ) {
 	const queryClient = useQueryClient();
@@ -294,7 +301,12 @@ export function usePostComment(
 						if (!old) {
 							return {
 								pages: [
-									{ items: [optimistic], total: 1, limit: 10, offset: 0 },
+									{
+										items: [optimistic],
+										total: 1,
+										limit: params.pageSize ?? 10,
+										offset: 0,
+									},
 								],
 								pageParams: [0],
 							};

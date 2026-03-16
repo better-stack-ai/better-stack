@@ -339,6 +339,7 @@ function CommentThreadInner({
 		resourceType,
 		currentUserId,
 		infiniteKey: threadQueryKey,
+		pageSize,
 	});
 
 	const handlePost = async (body: string) => {
