@@ -387,6 +387,14 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
             onAfterPost: async (comment, ctx) => {
                 console.log("Comment created:", comment.id, "status:", comment.status)
             },
+            onBeforeEdit: async (commentId, update, ctx) => {
+                // In production: verify the caller owns the comment they are editing, e.g.:
+                // const session = await getSession(ctx.headers)
+                // if (!session?.user) throw new Error("Authentication required")
+                // const comment = await db.comments.findById(commentId)
+                // if (comment?.authorId !== session.user.id && !session.user.isAdmin) throw new Error("Forbidden")
+                console.log("onBeforeEdit: comment", commentId)
+            },
             onBeforeLike: async (commentId, authorId, ctx) => {
                 // In production: verify authorId matches the authenticated session
                 console.log("onBeforeLike: user", authorId, "toggling like on comment", commentId)
