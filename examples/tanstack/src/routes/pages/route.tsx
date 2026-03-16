@@ -108,6 +108,7 @@ function Layout() {
                                 apiBaseURL={baseURL}
                                 apiBasePath="/api/data"
                                 currentUserId="olliethedev" // In production: pass session?.user?.id
+                                headers={{ "x-user-id": "olliethedev" }} // In production: omit (cookies sent automatically)
                                 loginHref="/login"
                                 className="mt-8 pt-8 border-t"
                             />
@@ -234,6 +235,7 @@ function Layout() {
                                 apiBaseURL={baseURL}
                                 apiBasePath="/api/data"
                                 currentUserId="olliethedev" // In production: pass session?.user?.id
+                                headers={{ "x-user-id": "olliethedev" }} // In production: omit (cookies sent automatically)
                                 loginHref="/login"
                             />
                         ),
