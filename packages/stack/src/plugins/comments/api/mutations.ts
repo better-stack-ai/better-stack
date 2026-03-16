@@ -116,17 +116,19 @@ export async function deleteComment(
 	});
 	if (!existing) return false;
 
-	// Remove child replies first so they don't become orphans.
-	// Their commentLike rows are cleaned up by the FK cascade on commentLike.commentId.
-	await adapter.delete({
-		model: "comment",
-		where: [{ field: "parentId", value: id, operator: "eq" }],
-	});
+	await adapter.transaction(async (tx) => {
+		// Remove child replies first so they don't become orphans.
+		// Their commentLike rows are cleaned up by the FK cascade on commentLike.commentId.
+		await tx.delete({
+			model: "comment",
+			where: [{ field: "parentId", value: id, operator: "eq" }],
+		});
 
-	// Remove the comment itself (its commentLike rows cascade via FK).
-	await adapter.delete({
-		model: "comment",
-		where: [{ field: "id", value: id, operator: "eq" }],
+		// Remove the comment itself (its commentLike rows cascade via FK).
+		await tx.delete({
+			model: "comment",
+			where: [{ field: "id", value: id, operator: "eq" }],
+		});
 	});
 	return true;
 }
