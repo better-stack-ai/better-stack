@@ -414,11 +414,8 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
             },
             resolveCurrentUserId: async (ctx) => {
                 // In production: return session?.user?.id ?? null
-                // Demo only: echo back the client-supplied currentUserId from the raw
-                // request URL (NOT secure — for testing only). In a real app, derive
-                // the user ID from the session cookie or JWT instead.
-                const url = new URL((ctx.request as Request).url)
-                return url.searchParams.get("currentUserId") ?? null
+                // Demo only: hardcoded to match the fake auth user in the example app layout.
+                return "olliethedev"
             },
         }),
         // Kanban plugin for project management boards
