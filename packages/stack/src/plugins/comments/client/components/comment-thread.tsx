@@ -86,6 +86,18 @@ export interface CommentThreadProps {
 	 * Clicking "Load more" fetches the next page. Default: 10.
 	 */
 	pageSize?: number;
+	/**
+	 * When false, the comment form and reply buttons are hidden.
+	 * Overrides the global `allowPosting` from `CommentsPluginOverrides`.
+	 * Defaults to true.
+	 */
+	allowPosting?: boolean;
+	/**
+	 * When false, the edit button is hidden on comment cards.
+	 * Overrides the global `allowEditing` from `CommentsPluginOverrides`.
+	 * Defaults to true.
+	 */
+	allowEditing?: boolean;
 }
 
 const DEFAULT_RENDERER: ComponentType<CommentRendererProps> = ({ body }) => (
@@ -106,6 +118,8 @@ function CommentCard({
 	loc,
 	infiniteKey,
 	onReplyClick,
+	allowPosting,
+	allowEditing,
 }: {
 	comment: SerializedComment;
 	currentUserId?: string;
@@ -120,6 +134,8 @@ function CommentCard({
 	 *  updates target the correct InfiniteData cache entry. */
 	infiniteKey?: readonly unknown[];
 	onReplyClick: (parentId: string) => void;
+	allowPosting: boolean;
+	allowEditing: boolean;
 }) {
 	const [isEditing, setIsEditing] = useState(false);
 	const Renderer = components?.Renderer ?? DEFAULT_RENDERER;
@@ -240,22 +256,25 @@ function CommentCard({
 							</Button>
 						)}
 
-						{currentUserId && !comment.parentId && isApproved && (
-							<Button
-								variant="ghost"
-								size="sm"
-								className="h-7 px-2 text-xs"
-								onClick={() => onReplyClick(comment.id)}
-								data-testid="reply-button"
-							>
-								<MessageSquare className="h-3.5 w-3.5 mr-1" />
-								{loc.COMMENTS_REPLY_BUTTON}
-							</Button>
-						)}
+						{allowPosting &&
+							currentUserId &&
+							!comment.parentId &&
+							isApproved && (
+								<Button
+									variant="ghost"
+									size="sm"
+									className="h-7 px-2 text-xs"
+									onClick={() => onReplyClick(comment.id)}
+									data-testid="reply-button"
+								>
+									<MessageSquare className="h-3.5 w-3.5 mr-1" />
+									{loc.COMMENTS_REPLY_BUTTON}
+								</Button>
+							)}
 
 						{isOwn && (
 							<>
-								{isApproved && (
+								{allowEditing && isApproved && (
 									<Button
 										variant="ghost"
 										size="sm"
@@ -302,6 +321,8 @@ function CommentThreadInner({
 	components,
 	localization: localizationProp,
 	pageSize: pageSizeProp,
+	allowPosting: allowPostingProp,
+	allowEditing: allowEditingProp,
 }: CommentThreadProps) {
 	const overrides = usePluginOverrides<
 		CommentsPluginOverrides,
@@ -309,6 +330,8 @@ function CommentThreadInner({
 	>("comments", {});
 	const pageSize =
 		pageSizeProp ?? overrides.defaultCommentPageSize ?? DEFAULT_PAGE_SIZE;
+	const allowPosting = allowPostingProp ?? overrides.allowPosting ?? true;
+	const allowEditing = allowEditingProp ?? overrides.allowEditing ?? true;
 	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
 	const [replyingTo, setReplyingTo] = useState<string | null>(null);
 	const [expandedReplies, setExpandedReplies] = useState<Set<string>>(
@@ -402,6 +425,8 @@ function CommentThreadInner({
 								onReplyClick={(parentId) => {
 									setReplyingTo(replyingTo === parentId ? null : parentId);
 								}}
+								allowPosting={allowPosting}
+								allowEditing={allowEditing}
 							/>
 
 							{/* Replies */}
@@ -426,9 +451,10 @@ function CommentThreadInner({
 										return next;
 									});
 								}}
+								allowEditing={allowEditing}
 							/>
 
-							{replyingTo === comment.id && currentUserId && (
+							{allowPosting && replyingTo === comment.id && currentUserId && (
 								<div className="pl-11 pb-3">
 									<CommentForm
 										authorId={currentUserId}
@@ -466,37 +492,41 @@ function CommentThreadInner({
 				</div>
 			)}
 
-			<Separator className="my-4" />
+			{allowPosting && (
+				<>
+					<Separator className="my-4" />
 
-			{currentUserId ? (
-				<div data-testid="comment-form-wrapper">
-					<CommentForm
-						authorId={currentUserId}
-						submitLabel={loc.COMMENTS_FORM_POST_COMMENT}
-						InputComponent={components?.Input}
-						localization={loc}
-						onSubmit={handlePost}
-					/>
-				</div>
-			) : (
-				<div
-					className="flex flex-col items-center gap-3 py-6 text-center border rounded-lg bg-muted/30"
-					data-testid="login-prompt"
-				>
-					<LogIn className="h-6 w-6 text-muted-foreground" />
-					<p className="text-sm text-muted-foreground">
-						{loc.COMMENTS_LOGIN_PROMPT}
-					</p>
-					{loginHref && (
-						<a
-							href={loginHref}
-							className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4"
-							data-testid="login-link"
+					{currentUserId ? (
+						<div data-testid="comment-form-wrapper">
+							<CommentForm
+								authorId={currentUserId}
+								submitLabel={loc.COMMENTS_FORM_POST_COMMENT}
+								InputComponent={components?.Input}
+								localization={loc}
+								onSubmit={handlePost}
+							/>
+						</div>
+					) : (
+						<div
+							className="flex flex-col items-center gap-3 py-6 text-center border rounded-lg bg-muted/30"
+							data-testid="login-prompt"
 						>
-							{loc.COMMENTS_LOGIN_LINK}
-						</a>
+							<LogIn className="h-6 w-6 text-muted-foreground" />
+							<p className="text-sm text-muted-foreground">
+								{loc.COMMENTS_LOGIN_PROMPT}
+							</p>
+							{loginHref && (
+								<a
+									href={loginHref}
+									className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4"
+									data-testid="login-link"
+								>
+									{loc.COMMENTS_LOGIN_LINK}
+								</a>
+							)}
+						</div>
 					)}
-				</div>
+				</>
 			)}
 		</div>
 	);
@@ -517,6 +547,7 @@ function RepliesSection({
 	expanded,
 	replyCount,
 	onToggle,
+	allowEditing,
 }: {
 	parentId: string;
 	resourceId: string;
@@ -531,6 +562,7 @@ function RepliesSection({
 	/** Pre-computed from the parent comment — avoids an extra fetch on mount. */
 	replyCount: number;
 	onToggle: () => void;
+	allowEditing: boolean;
 }) {
 	const config = { apiBaseURL, apiBasePath, headers };
 	// Only fetch reply bodies once the section is expanded.
@@ -592,6 +624,8 @@ function RepliesSection({
 							components={components}
 							loc={loc}
 							onReplyClick={() => {}} // No nested replies in v1
+							allowPosting={false}
+							allowEditing={allowEditing}
 						/>
 					))}
 				</div>

@@ -16,7 +16,7 @@ const MyCommentsPageInternal = lazy(() =>
 
 function MyCommentsPageSkeleton() {
 	return (
-		<div className="w-full max-w-3xl space-y-4 animate-pulse">
+		<div className="w-full max-w-3xl mx-auto space-y-4 animate-pulse">
 			<div className="h-8 w-48 rounded bg-muted" />
 			<div className="h-4 w-64 rounded bg-muted" />
 			<div className="rounded-lg border h-96 bg-muted" />

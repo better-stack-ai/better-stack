@@ -76,6 +76,24 @@ export interface CommentsPluginOverrides {
 	defaultCommentPageSize?: number;
 
 	/**
+	 * When false, the comment form and reply buttons are hidden in all
+	 * `CommentThread` instances. Users can still read existing comments.
+	 * Defaults to true.
+	 *
+	 * Can be overridden per-instance via the `allowPosting` prop on `CommentThread`.
+	 */
+	allowPosting?: boolean;
+
+	/**
+	 * When false, the edit button is hidden on all comment cards in all
+	 * `CommentThread` instances.
+	 * Defaults to true.
+	 *
+	 * Can be overridden per-instance via the `allowEditing` prop on `CommentThread`.
+	 */
+	allowEditing?: boolean;
+
+	/**
 	 * Per-resource-type URL builders used to link each comment back to its
 	 * original resource on the My Comments page.
 	 *

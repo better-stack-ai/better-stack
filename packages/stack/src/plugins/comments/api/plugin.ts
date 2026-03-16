@@ -33,15 +33,20 @@ export interface CommentsApiContext {
 	[key: string]: unknown;
 }
 
-/**
- * Configuration options for the comments backend plugin
- */
-export interface CommentsBackendOptions {
+/** Shared hook and config fields that are always present regardless of allowPosting. */
+interface CommentsBackendOptionsBase {
 	/**
 	 * When true, new comments are automatically approved (status: "approved").
 	 * Default: false — all comments start as "pending" until a moderator approves.
 	 */
 	autoApprove?: boolean;
+
+	/**
+	 * When false, the `PATCH /comments/:id` endpoint is not registered and
+	 * comment bodies cannot be edited.
+	 * Default: true.
+	 */
+	allowEditing?: boolean;
 
 	/**
 	 * Server-side user resolution hook. Called once per unique authorId when
@@ -64,23 +69,6 @@ export interface CommentsBackendOptions {
 		query: z.infer<typeof CommentListQuerySchema>,
 		context: CommentsApiContext,
 	) => Promise<void> | void;
-
-	/**
-	 * Called before a comment is created. Must return `{ authorId: string }` —
-	 * the server-resolved identity of the commenter.
-	 *
-	 * ⚠️  SECURITY REQUIRED: Derive `authorId` from the authenticated session
-	 * (e.g. JWT / session cookie). Never trust any ID supplied by the client.
-	 * Throw to reject the request (e.g. when the user is not authenticated).
-	 *
-	 * `authorId` is intentionally absent from the POST body schema. This hook
-	 * is the only place it can be set. `commentsBackendPlugin` throws at startup
-	 * if this hook is not provided.
-	 */
-	onBeforePost: (
-		input: z.infer<typeof createCommentSchema>,
-		context: CommentsApiContext,
-	) => Promise<{ authorId: string }> | { authorId: string };
 
 	/**
 	 * Called after a comment is successfully created.
@@ -148,9 +136,8 @@ export interface CommentsBackendOptions {
 	 * Called before a comment is deleted. Throw to reject.
 	 *
 	 * When this hook is **absent**, any delete request is automatically rejected
-	 * with 403 — preventing unauthenticated callers from deleting comments. The
-	 * CommentCard UI hides the Delete button client-side, but that is not a
-	 * security boundary. Configure this hook to enforce admin-only access.
+	 * with 403 — preventing unauthenticated callers from deleting comments.
+	 * Configure this hook to enforce admin-only access.
 	 */
 	onBeforeDelete?: (
 		commentId: string,
@@ -172,62 +159,97 @@ export interface CommentsBackendOptions {
 	 * When this hook is **absent**, any request that includes `authorId` is
 	 * automatically rejected with 403 — preventing anonymous callers from
 	 * reading or probing any user's comment history.
-	 *
-	 * Use this hook to verify the `authorId` matches the authenticated session:
-	 * ```ts
-	 * onBeforeListByAuthor: async (authorId, _query, ctx) => {
-	 *   const session = await getSession(ctx.headers)
-	 *   if (!session?.user) throw new Error("Authentication required")
-	 *   if (authorId !== session.user.id && !session.user.isAdmin)
-	 *     throw new Error("Forbidden")
-	 * }
-	 * ```
 	 */
 	onBeforeListByAuthor?: (
 		authorId: string,
 		query: z.infer<typeof CommentListQuerySchema>,
 		context: CommentsApiContext,
 	) => Promise<void> | void;
-
-	/**
-	 * Resolve the current authenticated user's ID from the request context
-	 * (e.g. session cookie or JWT). The resolved ID is used to include the
-	 * user's own pending comments alongside approved ones in `GET /comments`
-	 * responses so they remain visible after posting.
-	 *
-	 * Return `null` or `undefined` to indicate the request is unauthenticated.
-	 *
-	 * `commentsBackendPlugin` throws at startup if this hook is not provided.
-	 *
-	 * ```ts
-	 * resolveCurrentUserId: async (ctx) => {
-	 *   const session = await getSession(ctx.headers)
-	 *   return session?.user?.id ?? null
-	 * }
-	 * ```
-	 */
-	resolveCurrentUserId: (
-		context: CommentsApiContext,
-	) => Promise<string | null | undefined> | string | null | undefined;
 }
 
+/**
+ * Configuration options for the comments backend plugin.
+ *
+ * TypeScript enforces the security-critical hooks based on `allowPosting`:
+ * - When `allowPosting` is absent or `true`, `onBeforePost` and
+ *   `resolveCurrentUserId` are **required**.
+ * - When `allowPosting` is `false`, both become optional (the POST endpoint
+ *   is not registered so neither hook is ever called).
+ */
+export type CommentsBackendOptions = CommentsBackendOptionsBase &
+	(
+		| {
+				/**
+				 * Posting is enabled (default). `onBeforePost` and `resolveCurrentUserId`
+				 * are required to prevent anonymous authorship and impersonation.
+				 */
+				allowPosting?: true;
+
+				/**
+				 * Called before a comment is created. Must return `{ authorId: string }` —
+				 * the server-resolved identity of the commenter.
+				 *
+				 * ⚠️  SECURITY REQUIRED: Derive `authorId` from the authenticated session
+				 * (e.g. JWT / session cookie). Never trust any ID supplied by the client.
+				 * Throw to reject the request (e.g. when the user is not authenticated).
+				 *
+				 * `authorId` is intentionally absent from the POST body schema. This hook
+				 * is the only place it can be set.
+				 */
+				onBeforePost: (
+					input: z.infer<typeof createCommentSchema>,
+					context: CommentsApiContext,
+				) => Promise<{ authorId: string }> | { authorId: string };
+
+				/**
+				 * Resolve the current authenticated user's ID from the request context
+				 * (e.g. session cookie or JWT). Used to include the user's own pending
+				 * comments alongside approved ones in `GET /comments` responses so they
+				 * remain visible immediately after posting.
+				 *
+				 * Return `null` or `undefined` for unauthenticated requests.
+				 *
+				 * ```ts
+				 * resolveCurrentUserId: async (ctx) => {
+				 *   const session = await getSession(ctx.headers)
+				 *   return session?.user?.id ?? null
+				 * }
+				 * ```
+				 */
+				resolveCurrentUserId: (
+					context: CommentsApiContext,
+				) => Promise<string | null | undefined> | string | null | undefined;
+		  }
+		| {
+				/**
+				 * When `false`, the `POST /comments` endpoint is not registered.
+				 * No new comments or replies can be submitted — users can only read
+				 * existing comments. `onBeforePost` and `resolveCurrentUserId` become
+				 * optional because they are never called.
+				 */
+				allowPosting: false;
+				onBeforePost?: (
+					input: z.infer<typeof createCommentSchema>,
+					context: CommentsApiContext,
+				) => Promise<{ authorId: string }> | { authorId: string };
+				resolveCurrentUserId?: (
+					context: CommentsApiContext,
+				) => Promise<string | null | undefined> | string | null | undefined;
+		  }
+	);
+
 export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
-	if (!options?.onBeforePost) {
-		throw new Error(
-			"[btst/comments] onBeforePost is required. " +
-				"It must return { authorId: string } derived from the authenticated session. " +
-				"authorId is no longer accepted in the POST body — the server resolves identity exclusively via this hook.",
-		);
-	}
-	if (!options?.resolveCurrentUserId) {
-		throw new Error(
-			"[btst/comments] resolveCurrentUserId is required. " +
-				"It must return the current user's ID derived from the authenticated session, " +
-				"or null/undefined when unauthenticated. " +
-				"The client-supplied currentUserId query parameter is never trusted — " +
-				"the server resolves identity exclusively via this hook.",
-		);
-	}
+	const postingEnabled = options.allowPosting !== false;
+	const editingEnabled = options.allowEditing !== false;
+
+	// Narrow once so closures below see fully-typed (non-optional) hooks.
+	// TypeScript resolves onBeforePost / resolveCurrentUserId as required in
+	// the allowPosting?: true branch, so these will be Hook | undefined — but
+	// we only call them when postingEnabled is true.
+	const onBeforePost =
+		options.allowPosting !== false ? options.onBeforePost : undefined;
+	const resolveCurrentUserId =
+		options.allowPosting !== false ? options.resolveCurrentUserId : undefined;
 
 	return defineBackendPlugin({
 		name: "comments",
@@ -257,9 +279,6 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						headers: ctx.headers,
 					};
 
-					// Author-scoped queries: require onBeforeListByAuthor (403 when absent).
-					// This is the single security gate for per-user comment history queries
-					// and runs before any status-filter check.
 					if (ctx.query.authorId) {
 						if (!options?.onBeforeListByAuthor) {
 							throw ctx.error(403, {
@@ -279,8 +298,6 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						);
 					}
 
-					// Restrict non-approved status filters to authorized callers only.
-					// Without onBeforeList, anonymous callers cannot read pending/spam queues.
 					if (ctx.query.status && ctx.query.status !== "approved") {
 						if (!options?.onBeforeList) {
 							throw ctx.error(403, {
@@ -293,8 +310,6 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 							"Forbidden: Cannot list comments with this status filter",
 						);
 					} else if (options?.onBeforeList && !ctx.query.authorId) {
-						// Only call onBeforeList for non-author-scoped queries to avoid
-						// double-hooking when both authorId and onBeforeList are present.
 						await runHookWithShim(
 							() => options.onBeforeList!(ctx.query, context),
 							ctx.error,
@@ -302,17 +317,14 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						);
 					}
 
-					// Resolve the caller's identity server-side.
-					// currentUserId is NOT accepted from the query string (it is absent
-					// from CommentListQuerySchema) — it is always injected here from the
-					// session via resolveCurrentUserId. This prevents any anonymous caller
-					// from supplying an arbitrary user ID to read another user's pending comments.
 					let resolvedCurrentUserId: string | undefined;
-					try {
-						const result = await options.resolveCurrentUserId(context);
-						resolvedCurrentUserId = result ?? undefined;
-					} catch {
-						resolvedCurrentUserId = undefined;
+					if (resolveCurrentUserId) {
+						try {
+							const result = await resolveCurrentUserId(context);
+							resolvedCurrentUserId = result ?? undefined;
+						} catch {
+							resolvedCurrentUserId = undefined;
+						}
 					}
 
 					return await listComments(
@@ -331,13 +343,17 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 					body: createCommentSchema,
 				},
 				async (ctx) => {
+					if (!postingEnabled) {
+						throw ctx.error(403, { message: "Posting comments is disabled" });
+					}
+
 					const context: CommentsApiContext = {
 						body: ctx.body,
 						headers: ctx.headers,
 					};
 
 					const { authorId } = await runHookWithShim(
-						() => options.onBeforePost(ctx.body, context),
+						() => onBeforePost!(ctx.body, context),
 						ctx.error,
 						"Unauthorized: Cannot post comment",
 					);
@@ -353,11 +369,6 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						await options.onAfterPost(comment, context);
 					}
 
-					// Return a fully serialized comment so the client receives
-					// resolvedAuthorName / resolvedAvatarUrl / isLikedByCurrentUser —
-					// without this the optimistic-update replacement would insert an
-					// incomplete object (missing those fields, Date instead of ISO strings)
-					// into the React Query cache and cause rendering issues.
 					const serialized = await getCommentById(
 						adapter,
 						comment.id,
@@ -380,6 +391,10 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 					body: updateCommentSchema,
 				},
 				async (ctx) => {
+					if (!editingEnabled) {
+						throw ctx.error(403, { message: "Editing comments is disabled" });
+					}
+
 					const { id } = ctx.params;
 					const context: CommentsApiContext = {
 						params: ctx.params,
@@ -387,10 +402,6 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						headers: ctx.headers,
 					};
 
-					// Require onBeforeEdit (403 when absent).
-					// Without an explicit hook the caller cannot be authenticated, so
-					// editing any comment body is rejected by default — matching the
-					// same secure-by-default pattern used for onBeforeListByAuthor.
 					if (!options?.onBeforeEdit) {
 						throw ctx.error(403, {
 							message:
@@ -412,11 +423,6 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						await options.onAfterEdit(updated, context);
 					}
 
-					// Return a fully serialized comment (same pattern as POST /comments)
-					// so the client receives resolvedAuthorName / resolvedAvatarUrl /
-					// isLikedByCurrentUser — the raw DB record from updateComment() lacks
-					// these fields and would cause the client-side cache update to replace
-					// the enriched comment with an incomplete object.
 					const serialized = await getCommentById(
 						adapter,
 						updated.id,
@@ -444,9 +450,6 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						headers: ctx.headers,
 					};
 
-					// Mirror the same authorization guard used by GET /comments.
-					// Without onBeforeList, non-approved status counts are blocked so
-					// unauthenticated callers cannot probe the moderation queue sizes.
 					if (ctx.query.status && ctx.query.status !== "approved") {
 						if (!options?.onBeforeList) {
 							throw ctx.error(403, {
@@ -494,11 +497,6 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						headers: ctx.headers,
 					};
 
-					// Require onBeforeLike (403 when absent) — same secure-by-default
-					// pattern used for onBeforeEdit, onBeforeStatusChange, and
-					// onBeforeDelete. The authorId in the request body is client-supplied
-					// and must be verified against the authenticated session; without
-					// this hook any caller can toggle likes on behalf of any user ID.
 					if (!options?.onBeforeLike) {
 						throw ctx.error(403, {
 							message:
@@ -535,11 +533,6 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						headers: ctx.headers,
 					};
 
-					// Require onBeforeStatusChange (403 when absent) — same
-					// secure-by-default pattern used for onBeforeEdit and
-					// onBeforeListByAuthor. Moderation is an admin operation; without
-					// this hook any unauthenticated caller could change any comment's
-					// status.
 					if (!options?.onBeforeStatusChange) {
 						throw ctx.error(403, {
 							message:
@@ -582,10 +575,6 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						headers: ctx.headers,
 					};
 
-					// Require onBeforeDelete (403 when absent) — same
-					// secure-by-default pattern used for onBeforeEdit and
-					// onBeforeListByAuthor. Deletion is an admin operation; without
-					// this hook any unauthenticated caller could delete any comment.
 					if (!options?.onBeforeDelete) {
 						throw ctx.error(403, {
 							message:
@@ -613,8 +602,8 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 
 			return {
 				listComments: listCommentsEndpoint,
-				createComment: createCommentEndpoint,
-				updateComment: updateCommentEndpoint,
+				...(postingEnabled && { createComment: createCommentEndpoint }),
+				...(editingEnabled && { updateComment: updateCommentEndpoint }),
 				getCommentCount: getCommentCountEndpoint,
 				toggleLike: toggleLikeEndpoint,
 				updateCommentStatus: updateStatusEndpoint,

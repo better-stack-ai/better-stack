@@ -396,8 +396,14 @@ export function usePostComment(
 			// The server may return status "pending" (autoApprove: false) or "approved"
 			// (autoApprove: true). Either way we keep the item in the cache so the
 			// author continues to see their comment — with a "Pending approval" badge
-			// when pending. Without this, the onSettled invalidation would refetch
-			// only approved comments and make the pending entry disappear.
+			// when pending.
+			//
+			// For replies (non-infinite path): do NOT call invalidateQueries here.
+			// The setQueryData below already puts the authoritative server response
+			// (including the pending reply) in the cache. Invalidating would trigger
+			// a background refetch that goes to the server without auth context and
+			// returns only approved replies — overwriting the cache and making the
+			// pending reply disappear.
 			if (context.isInfinite) {
 				queryClient.setQueryData<InfiniteData<CommentListResult>>(
 					context.listKey,
@@ -416,7 +422,16 @@ export function usePostComment(
 				);
 			} else {
 				queryClient.setQueryData<CommentListResult>(context.listKey, (old) => {
-					if (!old) return old;
+					if (!old) {
+						// Cache was cleared between onMutate and onSuccess (rare).
+						// Seed it with the real server response so the reply stays visible.
+						return {
+							items: [data],
+							total: 1,
+							limit: params.pageSize ?? 20,
+							offset: 0,
+						};
+					}
 					return {
 						...old,
 						items: old.items.map((item) =>
@@ -424,10 +439,6 @@ export function usePostComment(
 						),
 					};
 				});
-
-				if (context.previous === undefined) {
-					queryClient.invalidateQueries({ queryKey: context.listKey });
-				}
 			}
 		},
 		onError: (_err, _input, context) => {
