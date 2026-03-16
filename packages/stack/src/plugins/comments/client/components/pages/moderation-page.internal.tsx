@@ -40,7 +40,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
 import type { SerializedComment, CommentStatus } from "../../../types";
 import {
-	useSuspenseComments,
+	useSuspenseModerationComments,
 	useUpdateCommentStatus,
 	useDeleteComment,
 } from "../../hooks/use-comments";
@@ -49,6 +49,7 @@ import {
 	type CommentsLocalization,
 } from "../../localization";
 import { getInitials } from "../../utils";
+import { Pagination } from "../shared/pagination";
 
 interface ModerationPageProps {
 	apiBaseURL: string;
@@ -77,6 +78,7 @@ export function ModerationPage({
 }: ModerationPageProps) {
 	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
 	const [activeTab, setActiveTab] = useState<CommentStatus>("pending");
+	const [currentPage, setCurrentPage] = useState(1);
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [viewComment, setViewComment] = useState<SerializedComment | null>(
 		null,
@@ -85,9 +87,11 @@ export function ModerationPage({
 
 	const config = { apiBaseURL, apiBasePath, headers };
 
-	const { comments, total, refetch } = useSuspenseComments(config, {
-		status: activeTab,
-	});
+	const { comments, total, limit, offset, totalPages, refetch } =
+		useSuspenseModerationComments(config, {
+			status: activeTab,
+			page: currentPage,
+		});
 
 	const updateStatus = useUpdateCommentStatus(config);
 	const deleteMutation = useDeleteComment(config);
@@ -196,6 +200,7 @@ export function ModerationPage({
 				value={activeTab}
 				onValueChange={(v) => {
 					setActiveTab(v as CommentStatus);
+					setCurrentPage(1);
 					setSelected(new Set());
 				}}
 			>
@@ -252,127 +257,137 @@ export function ModerationPage({
 					</p>
 				</div>
 			) : (
-				<div className="rounded-lg border">
-					<Table>
-						<TableHeader>
-							<TableRow>
-								<TableHead className="w-10">
-									<Checkbox
-										checked={
-											selected.size === comments.length && comments.length > 0
-										}
-										onCheckedChange={toggleSelectAll}
-										aria-label={loc.COMMENTS_MODERATION_SELECT_ALL}
-									/>
-								</TableHead>
-								<TableHead>{loc.COMMENTS_MODERATION_COL_AUTHOR}</TableHead>
-								<TableHead>{loc.COMMENTS_MODERATION_COL_COMMENT}</TableHead>
-								<TableHead>{loc.COMMENTS_MODERATION_COL_RESOURCE}</TableHead>
-								<TableHead>{loc.COMMENTS_MODERATION_COL_DATE}</TableHead>
-								<TableHead className="w-36">
-									{loc.COMMENTS_MODERATION_COL_ACTIONS}
-								</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{comments.map((comment) => (
-								<TableRow
-									key={comment.id}
-									data-testid="moderation-row"
-									data-comment-id={comment.id}
-								>
-									<TableCell>
+				<>
+					<div className="rounded-lg border">
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead className="w-10">
 										<Checkbox
-											checked={selected.has(comment.id)}
-											onCheckedChange={() => toggleSelect(comment.id)}
-											aria-label={loc.COMMENTS_MODERATION_SELECT_ONE}
+											checked={
+												selected.size === comments.length && comments.length > 0
+											}
+											onCheckedChange={toggleSelectAll}
+											aria-label={loc.COMMENTS_MODERATION_SELECT_ALL}
 										/>
-									</TableCell>
-									<TableCell>
-										<div className="flex items-center gap-2">
-											<Avatar className="h-7 w-7">
-												{comment.resolvedAvatarUrl && (
-													<AvatarImage src={comment.resolvedAvatarUrl} />
-												)}
-												<AvatarFallback className="text-xs">
-													{getInitials(comment.resolvedAuthorName)}
-												</AvatarFallback>
-											</Avatar>
-											<span className="text-sm font-medium truncate max-w-[100px]">
-												{comment.resolvedAuthorName}
-											</span>
-										</div>
-									</TableCell>
-									<TableCell>
-										<p className="text-sm text-muted-foreground max-w-xs truncate">
-											{comment.body}
-										</p>
-									</TableCell>
-									<TableCell>
-										<span className="text-xs text-muted-foreground">
-											{comment.resourceType}/{comment.resourceId}
-										</span>
-									</TableCell>
-									<TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-										{formatDistanceToNow(new Date(comment.createdAt), {
-											addSuffix: true,
-										})}
-									</TableCell>
-									<TableCell>
-										<div className="flex items-center gap-1">
-											<Button
-												variant="ghost"
-												size="icon"
-												className="h-7 w-7"
-												title={loc.COMMENTS_MODERATION_ACTION_VIEW}
-												onClick={() => setViewComment(comment)}
-												data-testid="view-button"
-											>
-												<Eye className="h-4 w-4" />
-											</Button>
-											{activeTab !== "approved" && (
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-7 w-7 text-green-600 hover:text-green-700"
-													title={loc.COMMENTS_MODERATION_ACTION_APPROVE}
-													onClick={() => handleApprove(comment.id)}
-													disabled={updateStatus.isPending}
-													data-testid="approve-button"
-												>
-													<CheckCircle className="h-4 w-4" />
-												</Button>
-											)}
-											{activeTab !== "spam" && (
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-7 w-7 text-orange-500 hover:text-orange-600"
-													title={loc.COMMENTS_MODERATION_ACTION_SPAM}
-													onClick={() => handleSpam(comment.id)}
-													disabled={updateStatus.isPending}
-													data-testid="spam-button"
-												>
-													<ShieldOff className="h-4 w-4" />
-												</Button>
-											)}
-											<Button
-												variant="ghost"
-												size="icon"
-												className="h-7 w-7 text-destructive hover:text-destructive"
-												title={loc.COMMENTS_MODERATION_ACTION_DELETE}
-												onClick={() => setDeleteIds([comment.id])}
-												data-testid="delete-button"
-											>
-												<Trash2 className="h-4 w-4" />
-											</Button>
-										</div>
-									</TableCell>
+									</TableHead>
+									<TableHead>{loc.COMMENTS_MODERATION_COL_AUTHOR}</TableHead>
+									<TableHead>{loc.COMMENTS_MODERATION_COL_COMMENT}</TableHead>
+									<TableHead>{loc.COMMENTS_MODERATION_COL_RESOURCE}</TableHead>
+									<TableHead>{loc.COMMENTS_MODERATION_COL_DATE}</TableHead>
+									<TableHead className="w-36">
+										{loc.COMMENTS_MODERATION_COL_ACTIONS}
+									</TableHead>
 								</TableRow>
-							))}
-						</TableBody>
-					</Table>
-				</div>
+							</TableHeader>
+							<TableBody>
+								{comments.map((comment) => (
+									<TableRow
+										key={comment.id}
+										data-testid="moderation-row"
+										data-comment-id={comment.id}
+									>
+										<TableCell>
+											<Checkbox
+												checked={selected.has(comment.id)}
+												onCheckedChange={() => toggleSelect(comment.id)}
+												aria-label={loc.COMMENTS_MODERATION_SELECT_ONE}
+											/>
+										</TableCell>
+										<TableCell>
+											<div className="flex items-center gap-2">
+												<Avatar className="h-7 w-7">
+													{comment.resolvedAvatarUrl && (
+														<AvatarImage src={comment.resolvedAvatarUrl} />
+													)}
+													<AvatarFallback className="text-xs">
+														{getInitials(comment.resolvedAuthorName)}
+													</AvatarFallback>
+												</Avatar>
+												<span className="text-sm font-medium truncate max-w-[100px]">
+													{comment.resolvedAuthorName}
+												</span>
+											</div>
+										</TableCell>
+										<TableCell>
+											<p className="text-sm text-muted-foreground max-w-xs truncate">
+												{comment.body}
+											</p>
+										</TableCell>
+										<TableCell>
+											<span className="text-xs text-muted-foreground">
+												{comment.resourceType}/{comment.resourceId}
+											</span>
+										</TableCell>
+										<TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+											{formatDistanceToNow(new Date(comment.createdAt), {
+												addSuffix: true,
+											})}
+										</TableCell>
+										<TableCell>
+											<div className="flex items-center gap-1">
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-7 w-7"
+													title={loc.COMMENTS_MODERATION_ACTION_VIEW}
+													onClick={() => setViewComment(comment)}
+													data-testid="view-button"
+												>
+													<Eye className="h-4 w-4" />
+												</Button>
+												{activeTab !== "approved" && (
+													<Button
+														variant="ghost"
+														size="icon"
+														className="h-7 w-7 text-green-600 hover:text-green-700"
+														title={loc.COMMENTS_MODERATION_ACTION_APPROVE}
+														onClick={() => handleApprove(comment.id)}
+														disabled={updateStatus.isPending}
+														data-testid="approve-button"
+													>
+														<CheckCircle className="h-4 w-4" />
+													</Button>
+												)}
+												{activeTab !== "spam" && (
+													<Button
+														variant="ghost"
+														size="icon"
+														className="h-7 w-7 text-orange-500 hover:text-orange-600"
+														title={loc.COMMENTS_MODERATION_ACTION_SPAM}
+														onClick={() => handleSpam(comment.id)}
+														disabled={updateStatus.isPending}
+														data-testid="spam-button"
+													>
+														<ShieldOff className="h-4 w-4" />
+													</Button>
+												)}
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-7 w-7 text-destructive hover:text-destructive"
+													title={loc.COMMENTS_MODERATION_ACTION_DELETE}
+													onClick={() => setDeleteIds([comment.id])}
+													data-testid="delete-button"
+												>
+													<Trash2 className="h-4 w-4" />
+												</Button>
+											</div>
+										</TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
+					</div>
+					<Pagination
+						currentPage={currentPage}
+						totalPages={totalPages}
+						onPageChange={setCurrentPage}
+						total={total}
+						limit={limit}
+						offset={offset}
+					/>
+				</>
 			)}
 
 			{/* View comment dialog */}

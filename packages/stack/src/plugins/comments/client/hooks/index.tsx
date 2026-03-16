@@ -1,6 +1,7 @@
 export {
 	useComments,
 	useSuspenseComments,
+	useSuspenseModerationComments,
 	useInfiniteComments,
 	useCommentCount,
 	usePostComment,

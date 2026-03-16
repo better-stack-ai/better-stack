@@ -105,6 +105,50 @@ export function useSuspenseComments(
 }
 
 /**
+ * Page-based variant for the moderation dashboard.
+ * Uses useSuspenseQuery with explicit offset so the table always shows exactly
+ * one page of results and navigation is handled by Prev / Next controls.
+ */
+export function useSuspenseModerationComments(
+	config: CommentsClientConfig,
+	params: {
+		status?: "pending" | "approved" | "spam";
+		limit?: number;
+		page?: number;
+	},
+) {
+	const limit = params.limit ?? 20;
+	const page = params.page ?? 1;
+	const offset = (page - 1) * limit;
+
+	const client = getClient(config);
+	const queries = createCommentsQueryKeys(client, config.headers);
+
+	const { data, refetch, error, isFetching } = useSuspenseQuery({
+		...queries.comments.list({ status: params.status, limit, offset }),
+		staleTime: 30_000,
+		retry: false,
+	});
+
+	if (error && !isFetching) {
+		throw error;
+	}
+
+	const comments = data?.items ?? [];
+	const total = data?.total ?? 0;
+	const totalPages = Math.max(1, Math.ceil(total / limit));
+
+	return {
+		comments,
+		total,
+		limit,
+		offset,
+		totalPages,
+		refetch,
+	};
+}
+
+/**
  * Infinite-scroll variant for the CommentThread component.
  * Uses the "commentsThread" factory namespace (separate from the plain
  * useComments / useSuspenseComments queries) to avoid InfiniteData shape conflicts.
