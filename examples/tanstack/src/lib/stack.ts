@@ -16,25 +16,25 @@ import { ProductSchema, TestimonialSchema, CategorySchema, ResourceSchema, Comme
 const blogHooks: BlogBackendHooks = {
     onBeforeCreatePost: async (data) => {
         console.log("onBeforeCreatePost hook called", data.title);
-        return true; // Allow for now
+        // throw new Error("Unauthorized") to deny
     },
     onBeforeUpdatePost: async (postId) => {
         // Example: Check if user owns the post or is admin
         console.log("onBeforeUpdatePost hook called for post:", postId);
-        return true; // Allow for now
+        // throw new Error("Unauthorized") to deny
     },
     onBeforeDeletePost: async (postId) => {
         // Example: Check if user can delete this post
         console.log("onBeforeDeletePost hook called for post:", postId);
-        return true; // Allow for now
+        // throw new Error("Unauthorized") to deny
     },
     onBeforeListPosts: async (filter) => {
         // Example: Allow public posts, require auth for drafts
         if (filter.published === false) {
             // Check authentication for drafts
             console.log("onBeforeListPosts: checking auth for drafts");
+            // throw new Error("Authentication required") to deny
         }
-        return true; // Allow for now
     },
 
     // Lifecycle hooks - perform actions after operations
@@ -148,7 +148,6 @@ const { handler, dbSchema } = stack({
         kanban: kanbanBackendPlugin({
             onBeforeListBoards: async (filter, context) => {
                 console.log("onBeforeListBoards hook called", filter);
-                return true;
             },
             onBoardCreated: async (board, context) => {
                 console.log("Board created:", board.id, board.name);
@@ -207,7 +206,7 @@ const { handler, dbSchema } = stack({
                 // In production: return session?.user?.id ?? null
                 // Demo only: read from x-user-id header so E2E tests can simulate
                 // authenticated vs unauthenticated requests independently.
-                return ctx.headers.get?.("x-user-id") ?? null
+                return ctx?.headers?.get?.("x-user-id") ?? null
             },
         }),
     },
