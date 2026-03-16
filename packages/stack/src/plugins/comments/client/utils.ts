@@ -1,3 +1,28 @@
+import { useState, useEffect } from "react";
+import type { CommentsPluginOverrides } from "./overrides";
+
+/**
+ * Resolves `currentUserId` from the plugin overrides, supporting both a static
+ * string and a sync/async function. Returns `undefined` until resolution completes.
+ */
+export function useResolvedCurrentUserId(
+	raw: CommentsPluginOverrides["currentUserId"],
+): string | undefined {
+	const [resolved, setResolved] = useState<string | undefined>(
+		typeof raw === "string" ? raw : undefined,
+	);
+
+	useEffect(() => {
+		if (typeof raw === "function") {
+			void Promise.resolve(raw()).then((id) => setResolved(id ?? undefined));
+		} else {
+			setResolved(raw ?? undefined);
+		}
+	}, [raw]);
+
+	return resolved;
+}
+
 /**
  * Normalise any thrown value into an Error.
  *

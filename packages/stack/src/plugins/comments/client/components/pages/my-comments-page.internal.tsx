@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
 	Table,
 	TableBody,
@@ -40,7 +40,7 @@ import {
 	COMMENTS_LOCALIZATION,
 	type CommentsLocalization,
 } from "../../localization";
-import { getInitials } from "../../utils";
+import { getInitials, useResolvedCurrentUserId } from "../../utils";
 
 const PAGE_LIMIT = 20;
 
@@ -79,28 +79,6 @@ function StatusBadge({
 			{loc.COMMENTS_MY_STATUS_SPAM}
 		</Badge>
 	);
-}
-
-// ─── Resolved currentUserId hook ─────────────────────────────────────────────
-
-function useResolvedCurrentUserId(
-	raw: CommentsPluginOverrides["currentUserId"],
-): string | undefined {
-	const [resolved, setResolved] = useState<string | undefined>(
-		typeof raw === "string" ? raw : undefined,
-	);
-
-	useEffect(() => {
-		if (typeof raw === "function") {
-			void Promise.resolve(raw()).then((id) => {
-				setResolved(id ?? undefined);
-			});
-		} else {
-			setResolved(raw ?? undefined);
-		}
-	}, [raw]);
-
-	return resolved;
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────

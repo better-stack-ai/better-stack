@@ -1,12 +1,13 @@
 "use client";
 
-import { lazy, useState, useEffect } from "react";
+import { lazy } from "react";
 import { ComposedRoute } from "@btst/stack/client/components";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../../overrides";
 import { COMMENTS_LOCALIZATION } from "../../localization";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { PageWrapper } from "../shared/page-wrapper";
+import { useResolvedCurrentUserId } from "../../utils";
 
 const ResourceCommentsPageInternal = lazy(() =>
 	import("./resource-comments-page.internal").then((m) => ({
@@ -57,21 +58,7 @@ function ResourceCommentsPageWrapper({
 }) {
 	const overrides = usePluginOverrides<CommentsPluginOverrides>("comments");
 	const loc = { ...COMMENTS_LOCALIZATION, ...overrides.localization };
-
-	// Resolve currentUserId — supports static string or async/sync function
-	const rawCurrentUserId = overrides.currentUserId;
-	const [resolvedUserId, setResolvedUserId] = useState<string | undefined>(
-		typeof rawCurrentUserId === "string" ? rawCurrentUserId : undefined,
-	);
-	useEffect(() => {
-		if (typeof rawCurrentUserId === "function") {
-			void Promise.resolve(rawCurrentUserId()).then((id) =>
-				setResolvedUserId(id ?? undefined),
-			);
-		} else {
-			setResolvedUserId(rawCurrentUserId ?? undefined);
-		}
-	}, [rawCurrentUserId]);
+	const resolvedUserId = useResolvedCurrentUserId(overrides.currentUserId);
 
 	useRouteLifecycle({
 		routeName: "resourceComments",
