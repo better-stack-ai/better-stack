@@ -10,7 +10,15 @@ import {
 import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
 import { Separator } from "@workspace/ui/components/separator";
-import { Heart, MessageSquare, Pencil, Check, X, LogIn } from "lucide-react";
+import {
+	Heart,
+	MessageSquare,
+	Pencil,
+	X,
+	LogIn,
+	ChevronDown,
+	ChevronUp,
+} from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { SerializedComment } from "../../types";
 import { getInitials } from "../utils";
@@ -548,21 +556,23 @@ function RepliesSection({
 
 	return (
 		<div className="pl-11">
-			{!expanded && (
-				<Button
-					variant="ghost"
-					size="sm"
-					className="h-7 px-2 text-xs mb-1"
-					onClick={onToggle}
-					data-testid="show-replies-button"
-				>
-					<Check className="h-3 w-3 mr-1" />
-					{displayCount}{" "}
-					{displayCount === 1
-						? loc.COMMENTS_REPLIES_SINGULAR
-						: loc.COMMENTS_REPLIES_PLURAL}
-				</Button>
-			)}
+			{/* Toggle button — always at the top so collapse is reachable without scrolling */}
+			<Button
+				variant="ghost"
+				size="sm"
+				className="h-7 px-2 text-xs mb-1"
+				onClick={onToggle}
+				data-testid={expanded ? "hide-replies-button" : "show-replies-button"}
+			>
+				{expanded ? (
+					<ChevronUp className="h-3 w-3 mr-1" />
+				) : (
+					<ChevronDown className="h-3 w-3 mr-1" />
+				)}
+				{expanded
+					? loc.COMMENTS_HIDE_REPLIES
+					: `${displayCount} ${displayCount === 1 ? loc.COMMENTS_REPLIES_SINGULAR : loc.COMMENTS_REPLIES_PLURAL}`}
+			</Button>
 			{expanded && (
 				<div
 					className="border-l-2 border-border pl-3 space-y-0"
@@ -583,14 +593,6 @@ function RepliesSection({
 							onReplyClick={() => {}} // No nested replies in v1
 						/>
 					))}
-					<Button
-						variant="ghost"
-						size="sm"
-						className="h-7 px-2 text-xs"
-						onClick={onToggle}
-					>
-						{loc.COMMENTS_HIDE_REPLIES}
-					</Button>
 				</div>
 			)}
 		</div>
