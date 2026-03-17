@@ -126,9 +126,18 @@ export const getStackClient = (queryClient: QueryClient) => {
   return createStackClient({
     plugins: {
       comments: commentsClientPlugin({
+        apiBaseURL: baseURL,
+        apiBasePath: "/api/data",
         queryClient,
         siteBaseURL: baseURL,
         siteBasePath: "/pages",
+        // optional headers + lifecycle hooks:
+        // headers: { cookie: request.headers.get("cookie") ?? "" },
+        // hooks: {
+        //   beforeLoadModeration: async (ctx) => { ... },
+        //   beforeLoadUserComments: async (ctx) => { ... },
+        //   onLoadError: async (error, ctx) => { ... },
+        // },
       }),
     },
     queryClient,
@@ -347,9 +356,11 @@ Access is controlled by the `onBeforeModerationPageRendered` hook in `CommentsPl
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `autoApprove` | `boolean` | `false` | Automatically approve new comments |
+| `allowPosting` | `boolean` | `true` | When `false`, the `POST /comments` endpoint is not registered (read-only comments mode). |
+| `allowEditing` | `boolean` | `true` | When `false`, the `PATCH /comments/:id` edit endpoint is not registered. |
 | `resolveUser` | `(authorId: string) => Promise<{ name: string; avatarUrl?: string } \| null>` | — | Map author IDs to display info; returns `null` → shows `"[deleted]"` |
 | `onBeforeList` | hook | — | Called before the comment list or count is returned. Throw to reject. When absent, any `status` filter other than `"approved"` is automatically rejected with 403 on both `GET /comments` and `GET /comments/count` — preventing anonymous access to, or probing of, the moderation queues. |
-| `onBeforePost` | hook | **required** | Called before a comment is saved. Must return `{ authorId: string }` derived from the authenticated session. Throw to reject. Plugin throws at startup if absent. |
+| `onBeforePost` | hook | **required when `allowPosting !== false`** | Called before a comment is saved. Must return `{ authorId: string }` derived from the authenticated session. Throw to reject. |
 | `onAfterPost` | hook | — | Called after a comment is saved. |
 | `onBeforeEdit` | hook | — | Called before a comment body is updated. Throw to reject. When absent, **all edit requests return 403** — preventing any unauthenticated caller from tampering with comment bodies. Configure to verify the caller owns the comment. |
 | `onAfterEdit` | hook | — | Called after a comment body is updated. |
@@ -359,10 +370,11 @@ Access is controlled by the `onBeforeModerationPageRendered` hook in `CommentsPl
 | `onBeforeDelete` | hook | — | Called before a comment is deleted. Throw to reject. When absent, **all delete requests return 403** — preventing unauthenticated callers from deleting comments. Configure to enforce admin-only access. |
 | `onAfterDelete` | hook | — | Called after a comment is deleted. |
 | `onBeforeListByAuthor` | hook | — | Called before returning comments filtered by `authorId`. Throw to reject. When absent, **any request with `authorId` returns 403** — preventing anonymous callers from reading any user's comment history. Use to verify `authorId` matches the authenticated session. |
-| `resolveCurrentUserId` | hook | **required** | Resolve the current authenticated user's ID from the session. Used to safely include the user's own pending comments alongside approved ones in `GET /comments`. The client-supplied `currentUserId` query parameter is never trusted — identity is resolved exclusively via this hook. Return `null`/`undefined` for unauthenticated requests. Plugin throws at startup if absent. |
+| `resolveCurrentUserId` | hook | **required when `allowPosting !== false`** | Resolve the current authenticated user's ID from the session. Used to safely include the user's own pending comments alongside approved ones in `GET /comments`. The client-supplied `currentUserId` query parameter is never trusted — identity is resolved exclusively via this hook. Return `null`/`undefined` for unauthenticated requests. |
 
 <Callout type="warn">
-**`onBeforePost` and `resolveCurrentUserId` are both required.** `commentsBackendPlugin` throws at startup if either is absent.
+When `allowPosting` is enabled (default), **`onBeforePost` and `resolveCurrentUserId` are both required**.  
+When `allowPosting: false`, both hooks become optional because `POST /comments` is disabled.
 
 - `onBeforePost` must return `{ authorId: string }` derived from the session — `authorId` is intentionally absent from the POST body so clients can never forge authorship.
 - `resolveCurrentUserId` must return the session-verified user ID (or `null` when unauthenticated) — the `?currentUserId=…` query parameter sent by the client is completely discarded.
@@ -429,9 +441,9 @@ const { mutate: updateStatus } = useUpdateCommentStatus()
 updateStatus({ id: "comment-id", status: "approved" })
 ```
 
-## My Comments Page
+## User Comments Page
 
-The comments plugin registers a `/comments/my-comments` route that shows the current user's full comment history — all statuses (approved, pending, spam) in a single paginated table, newest first.
+The comments plugin registers a `/comments` route that shows the current user's full comment history — all statuses (approved, pending, spam) in a single paginated table, newest first.
 
 **Features:**
 - All comment statuses visible to the owner in one list, each with an inline status badge
@@ -459,7 +471,7 @@ overrides={{
       "kanban-task": (id) => `/pages/kanban?task=${id}`,
     },
 
-    onBeforeMyCommentsPageRendered: (context) => {
+    onBeforeUserCommentsPageRendered: (context) => {
       if (!session?.user) throw new Error("Authentication required")
     },
   }
@@ -484,6 +496,22 @@ commentsBackendPlugin({
 
 ## API Reference
 
+### Client Plugin Factory
+
+`commentsClientPlugin(config)` accepts:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `apiBaseURL` | `string` | ✓ | Base URL for API requests (e.g. `https://example.com`). |
+| `apiBasePath` | `string` | ✓ | Path prefix where API routes are mounted (e.g. `/api/data`). |
+| `siteBaseURL` | `string` | ✓ | Base URL of your site, used for route metadata/canonical URLs. |
+| `siteBasePath` | `string` | ✓ | Base path where stack pages are mounted (e.g. `/pages`). |
+| `queryClient` | `QueryClient` | ✓ | React Query client instance shared with the stack. |
+| `headers` | `Headers` | — | Optional SSR headers for authenticated loader calls. |
+| `hooks.beforeLoadModeration` | `(context) => Promise<void> \| void` | — | Called before moderation page loader logic runs. Throw to cancel. |
+| `hooks.beforeLoadUserComments` | `(context) => Promise<void> \| void` | — | Called before User Comments page loader logic runs. Throw to cancel. |
+| `hooks.onLoadError` | `(error, context) => Promise<void> \| void` | — | Called when a loader hook throws/errors. |
+
 ### Client Plugin Overrides
 
 Configure the comments plugin behavior from your layout:
@@ -492,15 +520,22 @@ Configure the comments plugin behavior from your layout:
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `localization` | `Partial<CommentsLocalization>` | Override any UI string in the plugin. Import `COMMENTS_LOCALIZATION` from `@btst/stack/plugins/comments/client` to see all available keys. |
 | `apiBaseURL` | `string` | Base URL for API requests |
 | `apiBasePath` | `string` | Path prefix for the API |
-| `currentUserId` | `string \| (() => string \| undefined \| Promise<string \| undefined>)` | Authenticated user's ID — used by the My Comments page. Supports async functions for session-based resolution. |
+| `headers` | `Record<string, string>` | Optional headers for authenticated plugin API calls. |
+| `showAttribution` | `boolean` | Show/hide the "Powered by BTST" attribution on plugin pages (defaults to `true`). |
+| `currentUserId` | `string \| (() => string \| undefined \| Promise<string \| undefined>)` | Authenticated user's ID — used by the User Comments page. Supports async functions for session-based resolution. |
+| `loginHref` | `string` | Login route used by comment UIs when user is unauthenticated. |
 | `defaultCommentPageSize` | `number` | Default number of top-level comments per page for all `CommentThread` instances. Overridden per-instance by the `pageSize` prop. Defaults to `100` when not set. |
-| `resourceLinks` | `Record<string, (id: string) => string>` | Per-resource-type URL builders for linking comments back to their resource on the My Comments page (e.g. `{ "blog-post": (slug) => "/pages/blog/" + slug }`). The plugin appends `#comments` automatically so the page scrolls to the thread. |
-| `localization` | `Partial<CommentsLocalization>` | Override any UI string in the plugin. Import `COMMENTS_LOCALIZATION` from `@btst/stack/plugins/comments/client` to see all available keys. |
+| `allowPosting` | `boolean` | Hide/show comment form and reply actions globally in `CommentThread` instances (defaults to `true`). |
+| `allowEditing` | `boolean` | Hide/show edit affordances globally in `CommentThread` instances (defaults to `true`). |
+| `resourceLinks` | `Record<string, (id: string) => string>` | Per-resource-type URL builders for linking comments back to their resource on the User Comments page (e.g. `{ "blog-post": (slug) => "/pages/blog/" + slug }`). The plugin appends `#comments` automatically so the page scrolls to the thread. |
 | `onBeforeModerationPageRendered` | hook | Called before rendering the moderation dashboard. Throw to deny access. |
 | `onBeforeResourceCommentsRendered` | hook | Called before rendering the per-resource comments admin view. Throw to deny access. |
-| `onBeforeMyCommentsPageRendered` | hook | Called before rendering the My Comments page. Throw to deny access (e.g. when no session exists). |
+| `onBeforeUserCommentsPageRendered` | hook | Called before rendering the User Comments page. Throw to deny access (e.g. when no session exists). |
+| `onRouteRender` | `(routeName, context) => void \| Promise<void>` | Called when a comments route renders. |
+| `onRouteError` | `(routeName, error, context) => void \| Promise<void>` | Called when a comments route hits an error. |
 
 ### HTTP Endpoints
 

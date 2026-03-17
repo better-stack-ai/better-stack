@@ -257,8 +257,8 @@ function Layout() {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeModerationPageRendered`);
                             return true; // In production: check admin role
                         },
-                        onBeforeMyCommentsPageRendered: (context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeMyCommentsPageRendered`);
+                        onBeforeUserCommentsPageRendered: (context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeUserCommentsPageRendered`);
                             return true; // In production: check authenticated session
                         },
                     }

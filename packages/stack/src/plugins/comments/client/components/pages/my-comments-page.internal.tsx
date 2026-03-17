@@ -44,7 +44,7 @@ import { getInitials, useResolvedCurrentUserId } from "../../utils";
 
 const PAGE_LIMIT = 20;
 
-interface MyCommentsPageProps {
+interface UserCommentsPageProps {
 	apiBaseURL: string;
 	apiBasePath: string;
 	headers?: HeadersInit;
@@ -83,14 +83,14 @@ function StatusBadge({
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
-export function MyCommentsPage({
+export function UserCommentsPage({
 	apiBaseURL,
 	apiBasePath,
 	headers,
 	currentUserId: currentUserIdProp,
 	resourceLinks,
 	localization: localizationProp,
-}: MyCommentsPageProps) {
+}: UserCommentsPageProps) {
 	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
 	const resolvedUserId = useResolvedCurrentUserId(currentUserIdProp);
 
@@ -110,7 +110,7 @@ export function MyCommentsPage({
 	}
 
 	return (
-		<MyCommentsList
+		<UserCommentsList
 			apiBaseURL={apiBaseURL}
 			apiBasePath={apiBasePath}
 			headers={headers}
@@ -123,7 +123,7 @@ export function MyCommentsPage({
 
 // ─── List (suspense boundary is in ComposedRoute) ─────────────────────────────
 
-function MyCommentsList({
+function UserCommentsList({
 	apiBaseURL,
 	apiBasePath,
 	headers,

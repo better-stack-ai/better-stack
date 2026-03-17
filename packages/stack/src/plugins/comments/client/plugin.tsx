@@ -14,9 +14,9 @@ const ModerationPageComponent = lazy(() =>
 	})),
 );
 
-const MyCommentsPageComponent = lazy(() =>
+const UserCommentsPageComponent = lazy(() =>
 	import("./components/pages/my-comments-page").then((m) => ({
-		default: m.MyCommentsPageComponent,
+		default: m.UserCommentsPageComponent,
 	})),
 );
 
@@ -49,9 +49,9 @@ export interface CommentsClientHooks {
 	 */
 	beforeLoadModeration?: (context: LoaderContext) => Promise<void> | void;
 	/**
-	 * Called before loading the My Comments page. Throw to cancel.
+	 * Called before loading the User Comments page. Throw to cancel.
 	 */
-	beforeLoadMyComments?: (context: LoaderContext) => Promise<void> | void;
+	beforeLoadUserComments?: (context: LoaderContext) => Promise<void> | void;
 	/**
 	 * Called when a loading error occurs.
 	 */
@@ -107,20 +107,20 @@ function createModerationLoader(config: CommentsClientConfig) {
 	};
 }
 
-function createMyCommentsLoader(config: CommentsClientConfig) {
+function createUserCommentsLoader(config: CommentsClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
 			const { apiBasePath, apiBaseURL, headers, hooks } = config;
 			const context: LoaderContext = {
-				path: "/comments/my-comments",
+				path: "/comments",
 				isSSR: true,
 				apiBaseURL,
 				apiBasePath,
 				headers,
 			};
 			try {
-				if (hooks?.beforeLoadMyComments) {
-					await hooks.beforeLoadMyComments(context);
+				if (hooks?.beforeLoadUserComments) {
+					await hooks.beforeLoadUserComments(context);
 				}
 			} catch (error) {
 				if (isConnectionError(error)) {
@@ -153,10 +153,10 @@ export const commentsClientPlugin = (config: CommentsClientConfig) =>
 				loader: createModerationLoader(config),
 				meta: () => [{ title: "Comment Moderation" }],
 			})),
-			myComments: createRoute("/comments/my-comments", () => ({
-				PageComponent: MyCommentsPageComponent,
-				loader: createMyCommentsLoader(config),
-				meta: () => [{ title: "My Comments" }],
+			userComments: createRoute("/comments", () => ({
+				PageComponent: UserCommentsPageComponent,
+				loader: createUserCommentsLoader(config),
+				meta: () => [{ title: "User Comments" }],
 			})),
 		}),
 	});

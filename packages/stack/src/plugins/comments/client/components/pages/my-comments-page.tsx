@@ -8,13 +8,13 @@ import { COMMENTS_LOCALIZATION } from "../../localization";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { PageWrapper } from "../shared/page-wrapper";
 
-const MyCommentsPageInternal = lazy(() =>
+const UserCommentsPageInternal = lazy(() =>
 	import("./my-comments-page.internal").then((m) => ({
-		default: m.MyCommentsPage,
+		default: m.UserCommentsPage,
 	})),
 );
 
-function MyCommentsPageSkeleton() {
+function UserCommentsPageSkeleton() {
 	return (
 		<div className="w-full max-w-3xl mx-auto space-y-4 animate-pulse">
 			<div className="h-8 w-48 rounded bg-muted" />
@@ -24,33 +24,33 @@ function MyCommentsPageSkeleton() {
 	);
 }
 
-export function MyCommentsPageComponent() {
+export function UserCommentsPageComponent() {
 	return (
 		<ComposedRoute
-			path="/comments/my-comments"
-			PageComponent={MyCommentsPageWrapper}
-			LoadingComponent={MyCommentsPageSkeleton}
+			path="/comments"
+			PageComponent={UserCommentsPageWrapper}
+			LoadingComponent={UserCommentsPageSkeleton}
 			onError={(error) =>
-				console.error("[btst/comments] My Comments error:", error)
+				console.error("[btst/comments] User Comments error:", error)
 			}
 		/>
 	);
 }
 
-function MyCommentsPageWrapper() {
+function UserCommentsPageWrapper() {
 	const overrides = usePluginOverrides<CommentsPluginOverrides>("comments");
 	const loc = { ...COMMENTS_LOCALIZATION, ...overrides.localization };
 
 	useRouteLifecycle({
-		routeName: "myComments",
+		routeName: "userComments",
 		context: {
-			path: "/comments/my-comments",
+			path: "/comments",
 			isSSR: typeof window === "undefined",
 		},
 		overrides,
 		beforeRenderHook: (o, context) => {
-			if (o.onBeforeMyCommentsPageRendered) {
-				const result = o.onBeforeMyCommentsPageRendered(context);
+			if (o.onBeforeUserCommentsPageRendered) {
+				const result = o.onBeforeUserCommentsPageRendered(context);
 				return result === false ? false : true;
 			}
 			return true;
@@ -59,7 +59,7 @@ function MyCommentsPageWrapper() {
 
 	return (
 		<PageWrapper>
-			<MyCommentsPageInternal
+			<UserCommentsPageInternal
 				apiBaseURL={overrides.apiBaseURL}
 				apiBasePath={overrides.apiBasePath}
 				headers={overrides.headers as HeadersInit | undefined}

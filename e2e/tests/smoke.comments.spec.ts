@@ -697,7 +697,7 @@ test.describe("My Comments Page", () => {
 			if (msg.type() === "error") errors.push(msg.text());
 		});
 
-		await page.goto("/pages/comments/my-comments", {
+		await page.goto("/pages/comments", {
 			waitUntil: "networkidle",
 		});
 
@@ -737,7 +737,7 @@ test.describe("My Comments Page", () => {
 			body: uniqueBody,
 		});
 
-		await page.goto("/pages/comments/my-comments", {
+		await page.goto("/pages/comments", {
 			waitUntil: "networkidle",
 		});
 
@@ -769,7 +769,7 @@ test.describe("My Comments Page", () => {
 			body: uniqueBody,
 		});
 
-		await page.goto("/pages/comments/my-comments", {
+		await page.goto("/pages/comments", {
 			waitUntil: "networkidle",
 		});
 

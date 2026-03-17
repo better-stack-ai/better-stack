@@ -49,7 +49,7 @@ export interface CommentsPluginOverrides {
 	/**
 	 * The ID of the currently authenticated user.
 	 *
-	 * Used by the My Comments page and the per-resource comments admin view to
+	 * Used by the User Comments page and the per-resource comments admin view to
 	 * scope the comment list to the current user and to enable posting.
 	 * Can be a static string or an async function (useful when the user ID must
 	 * be resolved from a session cookie at render time).
@@ -95,7 +95,7 @@ export interface CommentsPluginOverrides {
 
 	/**
 	 * Per-resource-type URL builders used to link each comment back to its
-	 * original resource on the My Comments page.
+	 * original resource on the User Comments page.
 	 *
 	 * @example
 	 * ```ts
@@ -132,11 +132,11 @@ export interface CommentsPluginOverrides {
 	) => boolean;
 
 	/**
-	 * Called before the My Comments page is rendered.
+	 * Called before the User Comments page is rendered.
 	 * Throw to block rendering (e.g., when the user is not authenticated).
 	 * @param context - Route context
 	 */
-	onBeforeMyCommentsPageRendered?: (context: RouteContext) => boolean | void;
+	onBeforeUserCommentsPageRendered?: (context: RouteContext) => boolean | void;
 
 	// ============ Lifecycle Hooks ============
 
