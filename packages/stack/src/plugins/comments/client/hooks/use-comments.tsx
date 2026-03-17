@@ -419,7 +419,21 @@ export function usePostComment(
 				queryClient.setQueryData<InfiniteData<CommentListResult>>(
 					context.listKey,
 					(old) => {
-						if (!old) return old;
+						if (!old) {
+							// Cache was cleared between onMutate and onSuccess (rare).
+							// Seed with the real server response so the thread keeps the new comment.
+							return {
+								pages: [
+									{
+										items: [data],
+										total: 1,
+										limit: _input.limit ?? params.pageSize ?? 10,
+										offset: _input.offset ?? 0,
+									},
+								],
+								pageParams: [_input.offset ?? 0],
+							};
+						}
 						return {
 							...old,
 							pages: old.pages.map((page) => ({
