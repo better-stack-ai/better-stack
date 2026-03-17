@@ -517,9 +517,12 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		});
 		expect(comment.status).toBe("pending");
 
-		// A *different* userId should not see this pending comment
+		// A different authenticated user should not see this pending comment.
+		// The query param is spoofed as the author's ID, but the server resolves
+		// currentUserId from the authenticated header (x-user-id).
 		const response = await request.get(
-			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&currentUserId=some-other-user`,
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&currentUserId=${CURRENT_USER_ID}`,
+			{ headers: { "x-user-id": "some-other-user" } },
 		);
 		expect(response.ok()).toBeTruthy();
 		const body = await response.json();
