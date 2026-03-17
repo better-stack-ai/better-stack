@@ -101,7 +101,7 @@ export interface CommentThreadProps {
 }
 
 const DEFAULT_RENDERER: ComponentType<CommentRendererProps> = ({ body }) => (
-	<p className="text-sm whitespace-pre-wrap break-words">{body}</p>
+	<p className="text-sm whitespace-pre-wrap wrap-break-word">{body}</p>
 );
 
 // ─── Comment Card ─────────────────────────────────────────────────────────────
@@ -310,6 +310,7 @@ function CommentCard({
 
 const DEFAULT_PAGE_SIZE = 100;
 const REPLIES_PAGE_SIZE = 20;
+const OPTIMISTIC_ID_PREFIX = "optimistic-";
 
 function CommentThreadInner({
 	resourceId,
@@ -616,7 +617,27 @@ function RepliesSection({
 			for (const reply of repliesPage) {
 				byId.set(reply.id, reply);
 			}
-			return Array.from(byId.values());
+
+			// Reconcile optimistic replies once the real server reply arrives with
+			// a different id. Without this, both entries can persist in local state
+			// until the section is collapsed and re-opened.
+			const currentPageIds = new Set(repliesPage.map((reply) => reply.id));
+			const currentPageRealReplies = repliesPage.filter(
+				(reply) => !reply.id.startsWith(OPTIMISTIC_ID_PREFIX),
+			);
+
+			return Array.from(byId.values()).filter((reply) => {
+				if (!reply.id.startsWith(OPTIMISTIC_ID_PREFIX)) return true;
+				// Keep optimistic items still present in the current cache page.
+				if (currentPageIds.has(reply.id)) return true;
+				// Drop stale optimistic rows that have been replaced by a real reply.
+				return !currentPageRealReplies.some(
+					(realReply) =>
+						realReply.parentId === reply.parentId &&
+						realReply.authorId === reply.authorId &&
+						realReply.body === reply.body,
+				);
+			});
 		});
 	}, [expanded, repliesPage]);
 
