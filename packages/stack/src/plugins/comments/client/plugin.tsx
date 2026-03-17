@@ -136,6 +136,29 @@ function createUserCommentsLoader(config: CommentsClientConfig) {
 	};
 }
 
+function createCommentsRouteMeta(
+	config: CommentsClientConfig,
+	path: "/comments/moderation" | "/comments",
+	title: string,
+	description: string,
+) {
+	return () => {
+		const fullUrl = `${config.siteBaseURL}${config.siteBasePath}${path}`;
+		return [
+			{ title },
+			{ name: "title", content: title },
+			{ name: "description", content: description },
+			{ name: "robots", content: "noindex, nofollow" },
+			{ property: "og:title", content: title },
+			{ property: "og:description", content: description },
+			{ property: "og:url", content: fullUrl },
+			{ name: "twitter:card", content: "summary" },
+			{ name: "twitter:title", content: title },
+			{ name: "twitter:description", content: description },
+		];
+	};
+}
+
 /**
  * Comments client plugin — registers admin moderation routes.
  *
@@ -151,12 +174,22 @@ export const commentsClientPlugin = (config: CommentsClientConfig) =>
 			moderation: createRoute("/comments/moderation", () => ({
 				PageComponent: ModerationPageComponent,
 				loader: createModerationLoader(config),
-				meta: () => [{ title: "Comment Moderation" }],
+				meta: createCommentsRouteMeta(
+					config,
+					"/comments/moderation",
+					"Comment Moderation",
+					"Review and manage comments across all resources.",
+				),
 			})),
 			userComments: createRoute("/comments", () => ({
 				PageComponent: UserCommentsPageComponent,
 				loader: createUserCommentsLoader(config),
-				meta: () => [{ title: "User Comments" }],
+				meta: createCommentsRouteMeta(
+					config,
+					"/comments",
+					"User Comments",
+					"View and manage your comments across resources.",
+				),
 			})),
 		}),
 	});
