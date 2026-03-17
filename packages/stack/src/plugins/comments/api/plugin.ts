@@ -558,7 +558,17 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						await options.onAfterApprove(updated, context);
 					}
 
-					return updated;
+					const serialized = await getCommentById(
+						adapter,
+						updated.id,
+						options?.resolveUser,
+					);
+					if (!serialized) {
+						throw ctx.error(500, {
+							message: "Failed to retrieve updated comment",
+						});
+					}
+					return serialized;
 				},
 			);
 
