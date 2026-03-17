@@ -10,8 +10,8 @@
     "start:e2e": "rm -rf build && rm -rf .react-router && rm -rf node_modules && pnpm install && pnpm build && NODE_ENV=test dotenv -e .env -- react-router-serve ./build/server/index.js"
   },
   "dependencies": {
-    "@btst/adapter-memory": "^2.1.0",
-    "@btst/db": "^2.1.0",
+    "@btst/adapter-memory": "^2.1.1",
+    "@btst/db": "^2.1.1",
     "@btst/stack": "workspace:*",
     "ai": "^5.0.94",
     "@ai-sdk/react": "^2.0.94",
