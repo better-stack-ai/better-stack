@@ -309,6 +309,7 @@ function CommentCard({
 // ─── Thread Inner (handles data) ──────────────────────────────────────────────
 
 const DEFAULT_PAGE_SIZE = 100;
+const REPLIES_PAGE_SIZE = 20;
 
 function CommentThreadInner({
 	resourceId,
@@ -379,6 +380,7 @@ function CommentThreadInner({
 		await postMutation.mutateAsync({
 			body,
 			parentId,
+			limit: REPLIES_PAGE_SIZE,
 			offset: replyOffsets[parentId] ?? 0,
 		});
 		setReplyingTo(null);
@@ -574,7 +576,6 @@ function RepliesSection({
 	onOffsetChange: (offset: number) => void;
 	allowEditing: boolean;
 }) {
-	const REPLIES_PAGE_SIZE = 20;
 	const config = { apiBaseURL, apiBasePath, headers };
 	const [replyOffset, setReplyOffset] = useState(0);
 	const [loadedReplies, setLoadedReplies] = useState<SerializedComment[]>([]);

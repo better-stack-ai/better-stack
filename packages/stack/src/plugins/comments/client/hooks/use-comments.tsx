@@ -277,7 +277,11 @@ export function usePostComment(
 	// parentId must be normalised to null (not undefined) because useComments
 	// passes `parentId: null` explicitly — null and undefined produce different
 	// discriminator objects and therefore different React Query cache keys.
-	const getListKey = (parentId: string | null | undefined, offset?: number) => {
+	const getListKey = (
+		parentId: string | null | undefined,
+		offset?: number,
+		limit?: number,
+	) => {
 		// Top-level posts for a thread using useInfiniteComments get the infinite key.
 		if (params.infiniteKey && (parentId ?? null) === null) {
 			return params.infiniteKey;
@@ -288,6 +292,7 @@ export function usePostComment(
 			parentId: parentId ?? null,
 			status: "approved",
 			currentUserId: params.currentUserId,
+			limit,
 			offset,
 		}).queryKey;
 	};
@@ -299,6 +304,7 @@ export function usePostComment(
 		mutationFn: async (input: {
 			body: string;
 			parentId?: string | null;
+			limit?: number;
 			offset?: number;
 		}) => {
 			const response = await client("@post/comments", {
@@ -317,7 +323,7 @@ export function usePostComment(
 			return data as SerializedComment;
 		},
 		onMutate: async (input) => {
-			const listKey = getListKey(input.parentId, input.offset);
+			const listKey = getListKey(input.parentId, input.offset, input.limit);
 			await queryClient.cancelQueries({ queryKey: listKey });
 
 			// Optimistic comment — shows to own author with "pending" badge
@@ -433,7 +439,7 @@ export function usePostComment(
 						return {
 							items: [data],
 							total: 1,
-							limit: params.pageSize ?? 20,
+							limit: _input.limit ?? params.pageSize ?? 20,
 							offset: _input.offset ?? 0,
 						};
 					}
