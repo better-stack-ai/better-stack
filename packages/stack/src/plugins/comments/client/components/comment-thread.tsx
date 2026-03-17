@@ -761,12 +761,10 @@ function CommentThreadSkeleton() {
 
 export function CommentThread(props: CommentThreadProps) {
 	return (
-		<WhenVisible
-			fallback={<CommentThreadSkeleton />}
-			rootMargin="300px"
-			className={props.className}
-		>
-			<CommentThreadInner {...props} />
-		</WhenVisible>
+		<div id="comments" className={props.className}>
+			<WhenVisible fallback={<CommentThreadSkeleton />} rootMargin="300px">
+				<CommentThreadInner {...props} />
+			</WhenVisible>
+		</div>
 	);
 }
