@@ -4,7 +4,7 @@ import {
 } from "@lukemorales/query-key-factory";
 import type { CommentsApiRouter } from "./api";
 import { createApiClient } from "@btst/stack/plugins/client";
-import type { SerializedComment, CommentListResult } from "./types";
+import type { CommentListResult } from "./types";
 import {
 	commentsListDiscriminator,
 	commentCountDiscriminator,
@@ -90,16 +90,6 @@ function createCommentsQueries(
 					| CommentListResult
 					| undefined;
 				return data ?? { items: [], total: 0, limit: 20, offset: 0 };
-			},
-		}),
-
-		detail: (id: string) => ({
-			queryKey: [id],
-			queryFn: async (): Promise<SerializedComment | null> => {
-				if (!id) return null;
-				// Single comment fetch — reuse list with implicit filtering
-				// (the backend does not expose GET /comments/:id publicly, use list)
-				return null;
 			},
 		}),
 	});
