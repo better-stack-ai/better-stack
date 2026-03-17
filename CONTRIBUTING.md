@@ -709,12 +709,20 @@ test.describe("Your Plugin", () => {
 })
 ```
 
-Run the full E2E suite (requires all three example apps to start):
+Run the full E2E suite (starts all three example apps):
 
 ```bash
 cd e2e
 export $(cat ../examples/nextjs/.env | xargs)
 pnpm e2e:smoke
+```
+
+Run against a single framework only (starts only that framework's server — faster):
+
+```bash
+pnpm e2e:smoke:nextjs
+pnpm e2e:smoke:tanstack
+pnpm e2e:smoke:react-router
 ```
 
 Run a single test file:
@@ -723,13 +731,13 @@ Run a single test file:
 pnpm e2e:smoke -- tests/smoke.your-plugin.spec.ts
 ```
 
-Run against a specific framework:
+Run against a specific Playwright project:
 
 ```bash
 pnpm e2e:smoke -- --project="nextjs:memory"
 ```
 
-Tests run against three Playwright projects: `nextjs:memory` (port 3003), `tanstack:memory` (3004), `react-router:memory` (3005).
+Tests run against three Playwright projects: `nextjs:memory` (port 3003), `tanstack:memory` (3004), `react-router:memory` (3005). In CI, each framework runs as a separate parallel job via a matrix strategy.
 
 ---
 

@@ -47,7 +47,7 @@ SERVER_PORT=8766
 SERVER_PID=""
 TEST_PASSED=false
 
-PLUGIN_NAMES=("blog" "ai-chat" "cms" "form-builder" "kanban" "ui-builder")
+PLUGIN_NAMES=("blog" "ai-chat" "cms" "form-builder" "kanban" "comments" "ui-builder")
 
 # ---------------------------------------------------------------------------
 # Cleanup
@@ -70,6 +70,15 @@ cleanup() {
     echo -e "${GREEN}Cleanup complete.${NC}"
 }
 trap cleanup EXIT
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+pause() {
+    local seconds="${1:-20}"
+    echo "Waiting ${seconds}s…"
+    sleep "$seconds"
+}
 
 # ---------------------------------------------------------------------------
 # Main
@@ -112,7 +121,7 @@ main() {
     npx --yes http-server "$REGISTRY_DIR" -p $SERVER_PORT -c-1 --silent &
     SERVER_PID=$!
 
-    # Wait for server to be ready (up to 15s)
+    # Wait for server to be ready (up to 15s), then an extra 20s for stability
     for i in $(seq 1 15); do
         if curl -sf "http://localhost:$SERVER_PORT/btst-blog.json" > /dev/null 2>&1; then
             break
@@ -124,6 +133,7 @@ main() {
         fi
     done
     success "HTTP server running (PID: $SERVER_PID)"
+    pause 20
 
     # ------------------------------------------------------------------
     step "4 — Packing @btst/stack with npm pack"
@@ -219,7 +229,7 @@ console.log('tsconfig.json patched');
     # embedded from packages/ui (see build-registry.ts — "form" excluded from
     # STANDARD_SHADCN_COMPONENTS). All other standard components (select, accordion,
     # dialog, dropdown-menu, …) are correctly Radix-based with this flag.
-    npx --yes shadcn@latest init --defaults --force --base radix
+    npx --yes shadcn@4.0.5 init --defaults --force --base radix
     success "shadcn init completed (radix-nova)"
 
     INSTALL_FAILURES=()
@@ -230,7 +240,7 @@ console.log('tsconfig.json patched');
     # We treat those as warnings so the rest of the test can proceed.
     for PLUGIN in "${PLUGIN_NAMES[@]}"; do
         echo "Installing btst-${PLUGIN}…"
-        if npx --yes shadcn@latest add \
+        if npx --yes shadcn@4.0.5 add \
             "http://localhost:$SERVER_PORT/btst-${PLUGIN}.json" \
             --yes --overwrite 2>&1; then
             success "btst-${PLUGIN} installed"
@@ -246,7 +256,48 @@ console.log('tsconfig.json patched');
     fi
 
     # ------------------------------------------------------------------
-    step "7b — Patching external registry files with known type errors"
+    step "7b — Pinning tiptap packages to 3.20.1"
+    # ------------------------------------------------------------------
+    # Must run AFTER all `shadcn add` calls so that tiptap packages are already
+    # present as direct dependencies — setting npm overrides for packages that
+    # are not yet direct deps and then having shadcn add them afterwards causes
+    # EOVERRIDE, which silently aborts the shadcn install and leaves plugin
+    # files (boards-list-page, page-list-page, …) unwritten.
+    node -e "
+const fs = require('fs');
+const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+const V = '3.20.1';
+const pkgs = [
+  '@tiptap/core','@tiptap/react','@tiptap/pm','@tiptap/starter-kit',
+  '@tiptap/extensions','@tiptap/markdown',
+  '@tiptap/extension-blockquote','@tiptap/extension-bold',
+  '@tiptap/extension-bubble-menu','@tiptap/extension-bullet-list',
+  '@tiptap/extension-code','@tiptap/extension-code-block',
+  '@tiptap/extension-code-block-lowlight','@tiptap/extension-color',
+  '@tiptap/extension-document','@tiptap/extension-dropcursor',
+  '@tiptap/extension-floating-menu','@tiptap/extension-gapcursor',
+  '@tiptap/extension-hard-break','@tiptap/extension-heading',
+  '@tiptap/extension-horizontal-rule','@tiptap/extension-image',
+  '@tiptap/extension-italic','@tiptap/extension-link',
+  '@tiptap/extension-list','@tiptap/extension-list-item',
+  '@tiptap/extension-list-keymap','@tiptap/extension-ordered-list',
+  '@tiptap/extension-paragraph','@tiptap/extension-strike',
+  '@tiptap/extension-table','@tiptap/extension-text',
+  '@tiptap/extension-text-style','@tiptap/extension-typography',
+  '@tiptap/extension-underline'
+];
+pkg.overrides = pkg.overrides || {};
+for (const p of pkgs) {
+  if (pkg.dependencies?.[p]) pkg.dependencies[p] = V;
+  pkg.overrides[p] = V;
+}
+fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
+console.log('package.json updated with tiptap overrides');
+"
+    success "Tiptap overrides written (npm install runs in step 8)"
+
+    # ------------------------------------------------------------------
+    step "7c — Patching external registry files with known type errors"
     # ------------------------------------------------------------------
     # Some files installed from external registries (e.g. the ui-builder component)
     # have TypeScript issues we cannot fix in their source. Add @ts-nocheck to
@@ -262,7 +313,7 @@ console.log('tsconfig.json patched');
     add_ts_nocheck "src/components/ui/minimal-tiptap/components/image/image-edit-block.tsx"
 
     # ------------------------------------------------------------------
-    step "7c — Creating smoke-import page to force TypeScript to compile all plugin files"
+    step "7d — Creating smoke-import page to force TypeScript to compile all plugin files"
     # ------------------------------------------------------------------
     # Without this page, `next build` only type-checks files reachable from
     # existing pages. Installed plugin components are never imported, so missing
@@ -280,11 +331,12 @@ import { ChatPageComponent } from "@/components/btst/ai-chat/client/components/p
 import { DashboardPageComponent } from "@/components/btst/cms/client/components/pages/dashboard-page";
 import { FormListPageComponent } from "@/components/btst/form-builder/client/components/pages/form-list-page";
 import { BoardsListPageComponent } from "@/components/btst/kanban/client/components/pages/boards-list-page";
+import { ModerationPageComponent } from "@/components/btst/comments/client/components/pages/moderation-page";
 import { PageListPage } from "@/components/btst/ui-builder/client/components/pages/page-list-page";
 
 // Suppress unused-import warnings while still forcing TS to resolve everything.
 void [HomePageComponent, ChatPageComponent, DashboardPageComponent,
-      FormListPageComponent, BoardsListPageComponent, PageListPage];
+      FormListPageComponent, BoardsListPageComponent, ModerationPageComponent, PageListPage];
 
 export default function SmokeTestPage() {
   return <div data-testid="btst-smoke-test">Registry smoke test — all plugin imports resolved.</div>;

@@ -16,10 +16,9 @@ import { BLOG_LOCALIZATION } from "../../localization";
 
 interface RecentPostsCarouselProps {
 	posts: SerializedPost[];
-	ref?: (node: Element | null) => void;
 }
 
-export function RecentPostsCarousel({ posts, ref }: RecentPostsCarouselProps) {
+export function RecentPostsCarousel({ posts }: RecentPostsCarouselProps) {
 	const { PostCard, Link, localization } = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
@@ -32,9 +31,6 @@ export function RecentPostsCarousel({ posts, ref }: RecentPostsCarouselProps) {
 	const basePath = useBasePath();
 	return (
 		<div className="w-full">
-			{/* Ref div to trigger intersection observer when scrolled into view */}
-			{ref && <div ref={ref} />}
-
 			{posts && posts.length > 0 && (
 				<>
 					<div className="mt-4 py-4 w-full text-start border-t">

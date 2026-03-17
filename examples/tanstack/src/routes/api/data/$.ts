@@ -14,6 +14,9 @@ export const Route = createFileRoute("/api/data/$")({
       PUT: async ({ request }) => {
         return handler(request)
       },
+      PATCH: async ({ request }) => {
+        return handler(request)
+      },
       DELETE: async ({ request }) => {
         return handler(request)
       },

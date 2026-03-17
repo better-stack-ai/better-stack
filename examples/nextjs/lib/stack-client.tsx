@@ -7,6 +7,7 @@ import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client
 import { uiBuilderClientPlugin, defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
 import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
+import { commentsClientPlugin } from "@btst/stack/plugins/comments/client"
 import { QueryClient } from "@tanstack/react-query"
 
 // Get base URL function - works on both server and client
@@ -174,6 +175,15 @@ export const getStackClient = (
                         console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] afterLoadBoards:`, boards?.length || 0);
                     },
                 },
+            }),
+            // Comments plugin — registers the /comments/moderation admin route
+            comments: commentsClientPlugin({
+                apiBaseURL: baseURL,
+                apiBasePath: "/api/data",
+                siteBaseURL: baseURL,
+                siteBasePath: "/pages",
+                queryClient: queryClient,
+                headers: options?.headers,
             }),
         }
     })

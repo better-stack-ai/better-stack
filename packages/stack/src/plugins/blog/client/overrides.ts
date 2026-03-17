@@ -1,5 +1,5 @@
 import type { SerializedPost } from "../types";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type { BlogLocalization } from "./localization";
 
 /**
@@ -134,4 +134,29 @@ export interface BlogPluginOverrides {
 	 * @param context - Route context
 	 */
 	onBeforeDraftsPageRendered?: (context: RouteContext) => boolean;
+
+	// ============ Slot Overrides ============
+
+	/**
+	 * Optional slot rendered below the blog post body.
+	 * Use this to inject a comment thread or any custom content without
+	 * coupling the blog plugin to the comments plugin.
+	 *
+	 * @example
+	 * ```tsx
+	 * blog: {
+	 *   postBottomSlot: (post) => (
+	 *     <CommentThread
+	 *       resourceId={post.slug}
+	 *       resourceType="blog-post"
+	 *       apiBaseURL={apiBaseURL}
+	 *       apiBasePath="/api/data"
+	 *       currentUserId={session?.userId}
+	 *       loginHref="/login"
+	 *     />
+	 *   ),
+	 * }
+	 * ```
+	 */
+	postBottomSlot?: (post: SerializedPost) => ReactNode;
 }

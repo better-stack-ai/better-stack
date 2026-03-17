@@ -226,7 +226,6 @@ export function TaskForm({
 					}
 					output="markdown"
 					placeholder="Describe the task..."
-					editable={!isPending}
 					className="min-h-[150px]"
 				/>
 			</div>

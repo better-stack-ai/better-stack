@@ -124,3 +124,9 @@ Because the CLI executes your config file to extract the `dbSchema`, there are a
 ```bash
 SOME_VAR=value npx @btst/cli generate --config=lib/stack.ts --orm=prisma --output=schema.prisma
 ```
+
+or using dotenv-cli:
+
+```bash
+npx dotenv-cli -e .env.local -- npx @btst/cli generate --orm drizzle --config lib/stack.ts --output db/btst-schema.ts
+```

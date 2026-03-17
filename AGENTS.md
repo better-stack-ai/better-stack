@@ -588,6 +588,13 @@ export $(cat ../examples/nextjs/.env | xargs)
 pnpm e2e:smoke
 ```
 
+Run for a single framework only (starts only that framework's server):
+```bash
+pnpm e2e:smoke:nextjs
+pnpm e2e:smoke:tanstack
+pnpm e2e:smoke:react-router
+```
+
 Run specific test file:
 ```bash
 pnpm e2e:smoke -- tests/smoke.chat.spec.ts
@@ -605,7 +612,7 @@ The `playwright.config.ts` defines three projects:
 - `tanstack:memory` - port 3004
 - `react-router:memory` - port 3005
 
-All three web servers start for every test run. Timeout is 300 seconds per server.
+By default (`pnpm e2e:smoke`) all three web servers start. Set `BTST_FRAMEWORK=nextjs|tanstack|react-router` (or use the per-framework scripts above) to start only the matching server and run only its tests. The CI workflow uses a matrix to run each framework in a separate parallel job.
 
 ### API Key Requirements
 

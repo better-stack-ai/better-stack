@@ -8,6 +8,8 @@ import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
 import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
+import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
+import { CommentThread } from "@btst/stack/plugins/comments/client/components"
 import { resolveUser, searchUsers } from "../../lib/mock-users"
 
 // Get base URL function - works on both server and client
@@ -39,6 +41,7 @@ async function mockUploadFile(file: File): Promise<string> {
       cms: CMSPluginOverrides,
       "form-builder": FormBuilderPluginOverrides,
       kanban: KanbanPluginOverrides,
+      comments: CommentsPluginOverrides,
   }
 
 export default function Layout() {
@@ -88,6 +91,19 @@ export default function Layout() {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforePostPageRendered: checking access for`, slug, context.path);
                             return true;
                         },
+                        // Wire comments into the bottom of each blog post
+                        postBottomSlot: (post) => (
+                            <CommentThread
+                                resourceId={post.slug}
+                                resourceType="blog-post"
+                                apiBaseURL={baseURL}
+                                apiBasePath="/api/data"
+                                currentUserId="olliethedev" // In production: pass session?.user?.id
+                                headers={{ "x-user-id": "olliethedev" }} // In production: omit (cookies sent automatically)
+                                loginHref="/login"
+                                className="mt-8 pt-8 border-t"
+                            />
+                        ),
                     },
                     "ai-chat": {
                         mode: "authenticated",
@@ -202,9 +218,39 @@ export default function Layout() {
                         // User resolution for assignees
                         resolveUser,
                         searchUsers,
+                        // Wire comments into task detail dialogs
+                        taskDetailBottomSlot: (task) => (
+                            <CommentThread
+                                resourceId={task.id}
+                                resourceType="kanban-task"
+                                apiBaseURL={baseURL}
+                                apiBasePath="/api/data"
+                                currentUserId="olliethedev" // In production: pass session?.user?.id
+                                headers={{ "x-user-id": "olliethedev" }} // In production: omit (cookies sent automatically)
+                                loginHref="/login"
+                            />
+                        ),
                         // Lifecycle hooks
                         onRouteRender: async (routeName, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Kanban route:`, routeName, context.path);
+                        },
+                    },
+                    comments: {
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        // In production: derive from your auth session
+                        currentUserId: "olliethedev",
+                        defaultCommentPageSize: 5,
+                        resourceLinks: {
+                            "blog-post": (slug) => `/pages/blog/${slug}`,
+                        },
+                        onBeforeModerationPageRendered: (context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeModerationPageRendered`);
+                            return true; // In production: check admin role
+                        },
+                        onBeforeUserCommentsPageRendered: (context) => {
+                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeUserCommentsPageRendered`);
+                            return true; // In production: check authenticated session
                         },
                     }
                 }}

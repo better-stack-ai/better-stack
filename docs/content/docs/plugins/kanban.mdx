@@ -696,6 +696,32 @@ overrides={{
 | `resolveUser` | `(userId: string) => KanbanUser \| null` | Resolve user info from ID |
 | `searchUsers` | `(query: string, boardId?: string) => KanbanUser[]` | Search/list users for picker |
 
+**Slot overrides:**
+
+| Override | Type | Description |
+|----------|------|-------------|
+| `taskDetailBottomSlot` | `(task: SerializedTask) => ReactNode` | Render additional content below task details — use to embed a `CommentThread` |
+
+```tsx
+import { CommentThread } from "@btst/stack/plugins/comments/client/components"
+
+overrides={{
+  kanban: {
+    // ...
+    taskDetailBottomSlot: (task) => (
+      <CommentThread
+        resourceId={task.id}
+        resourceType="kanban-task"
+        apiBaseURL={baseURL}
+        apiBasePath="/api/data"
+        currentUserId={session?.user?.id}
+        loginHref="/login"
+      />
+    ),
+  }
+}}
+```
+
 ## React Hooks
 
 Import hooks from `@btst/stack/plugins/kanban/client/hooks` to use in your components:

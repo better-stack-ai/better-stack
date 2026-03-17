@@ -6,6 +6,7 @@ import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
 import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
+import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api"
 import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
 import { openai } from "@ai-sdk/openai"
 
@@ -15,25 +16,25 @@ import { ProductSchema, TestimonialSchema, CategorySchema, ResourceSchema, Comme
 const blogHooks: BlogBackendHooks = {
     onBeforeCreatePost: async (data) => {
         console.log("onBeforeCreatePost hook called", data.title);
-        return true; // Allow for now
+        // throw new Error("Unauthorized") to deny
     },
     onBeforeUpdatePost: async (postId) => {
         // Example: Check if user owns the post or is admin
         console.log("onBeforeUpdatePost hook called for post:", postId);
-        return true; // Allow for now
+        // throw new Error("Unauthorized") to deny
     },
     onBeforeDeletePost: async (postId) => {
         // Example: Check if user can delete this post
         console.log("onBeforeDeletePost hook called for post:", postId);
-        return true; // Allow for now
+        // throw new Error("Unauthorized") to deny
     },
     onBeforeListPosts: async (filter) => {
         // Example: Allow public posts, require auth for drafts
         if (filter.published === false) {
             // Check authentication for drafts
             console.log("onBeforeListPosts: checking auth for drafts");
+            // throw new Error("Authentication required") to deny
         }
-        return true; // Allow for now
     },
 
     // Lifecycle hooks - perform actions after operations
@@ -147,10 +148,65 @@ const { handler, dbSchema } = stack({
         kanban: kanbanBackendPlugin({
             onBeforeListBoards: async (filter, context) => {
                 console.log("onBeforeListBoards hook called", filter);
-                return true;
             },
             onBoardCreated: async (board, context) => {
                 console.log("Board created:", board.id, board.name);
+            },
+        }),
+        // Comments plugin for threaded discussions
+        comments: commentsBackendPlugin({
+            autoApprove: false,
+            resolveUser: async (authorId) => {
+                // In production: look up your auth system's user by authorId
+                return { name: `User ${authorId}` }
+            },
+            onBeforeList: async (query, ctx) => {
+                // Restrict pending/spam queues to admin sessions.
+                // Without this check a no-op hook would bypass the built-in 403 guard.
+                if (query.status && query.status !== "approved") {
+                    // In production: replace with a real session/role check, e.g.:
+                    // const session = await getSession(ctx.headers)
+                    // if (!session?.user?.isAdmin) throw new Error("Admin access required")
+                    console.log("onBeforeList: non-approved status filter — ensure admin check in production")
+                }
+            },
+            onBeforePost: async (input, ctx) => {
+                // In production: verify the session and return the authenticated user's ID
+                console.log("onBeforePost: new comment on", input.resourceType, input.resourceId)
+                return { authorId: "olliethedev" } // In production: return { authorId: session.user.id }
+            },
+            onBeforeEdit: async (commentId, update, ctx) => {
+                // In production: verify the caller owns the comment they are editing, e.g.:
+                // const session = await getSession(ctx.headers)
+                // if (!session?.user) throw new Error("Authentication required")
+                // const comment = await db.comments.findById(commentId)
+                // if (comment?.authorId !== session.user.id && !session.user.isAdmin) throw new Error("Forbidden")
+                console.log("onBeforeEdit: comment", commentId)
+            },
+            onBeforeLike: async (commentId, authorId, ctx) => {
+                // In production: verify authorId matches the authenticated session
+                console.log("onBeforeLike: user", authorId, "toggling like on comment", commentId)
+            },
+            onBeforeStatusChange: async (commentId, status, ctx) => {
+                // In production: verify the caller has admin/moderator role
+                console.log("onBeforeStatusChange: comment", commentId, "->", status)
+            },
+            onBeforeDelete: async (commentId, ctx) => {
+                // In production: verify the caller has admin/moderator role
+                console.log("onBeforeDelete: comment", commentId)
+            },
+            onBeforeListByAuthor: async (authorId, query, ctx) => {
+                // In production: verify authorId matches the authenticated session
+                // const session = await getSession(ctx.headers)
+                // if (!session?.user) throw new Error("Authentication required")
+                // if (authorId !== session.user.id && !session.user.isAdmin) throw new Error("Forbidden")
+                if (authorId !== "olliethedev") throw new Error("Forbidden")
+            },
+            resolveCurrentUserId: async (ctx) => {
+                // In production: return session?.user?.id ?? null
+                // Demo only: read from x-user-id header so E2E tests can simulate
+                // authenticated vs unauthenticated requests independently.
+                return ctx?.headers?.get?.("x-user-id") ?? null
             },
         }),
     },
