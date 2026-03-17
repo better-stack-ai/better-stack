@@ -168,20 +168,20 @@ importers:
         specifier: ^2.0.94
         version: 2.0.94(react@19.2.0)(zod@4.2.1)
       '@btst/adapter-drizzle':
-        specifier: ^2.1.0
-        version: 2.1.0(d36894e800afb4db2f9e5e0221688c82)
+        specifier: ^2.1.1
+        version: 2.1.1(d36894e800afb4db2f9e5e0221688c82)
       '@btst/adapter-kysely':
-        specifier: ^2.1.0
-        version: 2.1.0(d36894e800afb4db2f9e5e0221688c82)
+        specifier: ^2.1.1
+        version: 2.1.1(d36894e800afb4db2f9e5e0221688c82)
       '@btst/adapter-memory':
-        specifier: ^2.1.0
-        version: 2.1.0(d36894e800afb4db2f9e5e0221688c82)
+        specifier: ^2.1.1
+        version: 2.1.1(d36894e800afb4db2f9e5e0221688c82)
       '@btst/adapter-mongodb':
-        specifier: ^2.1.0
-        version: 2.1.0(d36894e800afb4db2f9e5e0221688c82)
+        specifier: ^2.1.1
+        version: 2.1.1(d36894e800afb4db2f9e5e0221688c82)
       '@btst/adapter-prisma':
-        specifier: ^2.1.0
-        version: 2.1.0(d36894e800afb4db2f9e5e0221688c82)
+        specifier: ^2.1.1
+        version: 2.1.1(d36894e800afb4db2f9e5e0221688c82)
       '@btst/stack':
         specifier: workspace:*
         version: link:../../packages/stack
@@ -301,11 +301,11 @@ importers:
         specifier: ^2.0.94
         version: 2.0.94(react@19.2.0)(zod@4.2.1)
       '@btst/adapter-memory':
-        specifier: ^2.1.0
-        version: 2.1.0(c2198a24bea9a8ec2b3f81da5c5a813c)
+        specifier: ^2.1.1
+        version: 2.1.1(c2198a24bea9a8ec2b3f81da5c5a813c)
       '@btst/db':
-        specifier: ^2.1.0
-        version: 2.1.0(1e0eff0d8983e02d86024039dbc291a5)
+        specifier: ^2.1.1
+        version: 2.1.1(1e0eff0d8983e02d86024039dbc291a5)
       '@btst/stack':
         specifier: workspace:*
         version: link:../../packages/stack
@@ -419,11 +419,11 @@ importers:
         specifier: ^2.0.94
         version: 2.0.94(react@19.2.0)(zod@4.2.1)
       '@btst/adapter-memory':
-        specifier: ^2.1.0
-        version: 2.1.0(bf56e8a25a6567ae0984dd8c13d80350)
+        specifier: ^2.1.1
+        version: 2.1.1(bf56e8a25a6567ae0984dd8c13d80350)
       '@btst/db':
-        specifier: ^2.1.0
-        version: 2.1.0(7888b9ecd667b8b1329619338f767b91)
+        specifier: ^2.1.1
+        version: 2.1.1(7888b9ecd667b8b1329619338f767b91)
       '@btst/stack':
         specifier: workspace:*
         version: link:../../packages/stack
@@ -531,8 +531,8 @@ importers:
   packages/stack:
     dependencies:
       '@btst/db':
-        specifier: 2.1.0
-        version: 2.1.0(96474bc0743c1003c33dade349465747)
+        specifier: 2.1.1
+        version: 2.1.1(96474bc0743c1003c33dade349465747)
       '@hookform/resolvers':
         specifier: '>=5.0.0'
         version: 5.2.2(react-hook-form@7.66.1(react@19.2.0))
@@ -625,8 +625,8 @@ importers:
         specifier: ^2.0.94
         version: 2.0.94(react@19.2.0)(zod@4.2.1)
       '@btst/adapter-memory':
-        specifier: 2.1.0
-        version: 2.1.0(a5510a3f22769efb216707712fe268fb)
+        specifier: 2.1.1
+        version: 2.1.1(a5510a3f22769efb216707712fe268fb)
       '@btst/yar':
         specifier: 1.2.0
         version: 1.2.0(@types/react-dom@19.2.3(@types/react@19.2.6))(@types/react@19.2.6)
@@ -1252,42 +1252,42 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@btst/adapter-drizzle@2.1.0':
-    resolution: {integrity: sha512-iuPrYtgNyWMX4AbKxnf4l57FoUlITG4tHCkRlApHu8ZjQI9i1xyq7EZMBQGDVMQF7SwNjFPeKaYcHZnyANDnHQ==}
+  '@btst/adapter-drizzle@2.1.1':
+    resolution: {integrity: sha512-VJv7SU1AaHTy3bB1Eu+HINf0dhw0tAGJIwJbY8HOXZRrcsgowDCXECXcJj8HPtQ2FuFdiSV3xFlNoMGzh+K9xg==}
     peerDependencies:
       '@better-auth/core': '>=1.5.0'
       better-auth: '>=1.5.0'
       drizzle-orm: ^0.30.0
 
-  '@btst/adapter-kysely@2.1.0':
-    resolution: {integrity: sha512-M+tMygIEHlXF8vz9m+G3YHsClgAueiRrQUTpa+lP3KCHi6ZIS/xmoUbHqz9kfKxyHybqlDpHaZoEIHXbNqOfpA==}
+  '@btst/adapter-kysely@2.1.1':
+    resolution: {integrity: sha512-4cZBLGNP98woKGup4qGES1Ifw2Gp530LRNZU32S55dMKnCX9mE3p/Phnjh9gGuW2yn67tkEhgHbWr7BNEMx+2Q==}
     peerDependencies:
       '@better-auth/core': '>=1.5.0'
       better-auth: '>=1.5.0'
       kysely: ^0.28.0
 
-  '@btst/adapter-memory@2.1.0':
-    resolution: {integrity: sha512-igH+KAlKkFaAvmb3L+KLVNEW2S53ykynFMz408r2BQVSLeQvkndSJNT77UN8If4mzY8ooIuH4PLxFsf72ukNGA==}
+  '@btst/adapter-memory@2.1.1':
+    resolution: {integrity: sha512-U7lnBTD4/5zNKZCHoNOXCFNjNiBeqxrT4dl2xO2BzMSRVLLxd6F66VF3ZWEkKn7j5eC+frm0IdcQJSfOuismVg==}
     peerDependencies:
       '@better-auth/core': '>=1.5.0'
       better-auth: '>=1.5.0'
 
-  '@btst/adapter-mongodb@2.1.0':
-    resolution: {integrity: sha512-do8YkUD0F7WMlauErUbecrq6gISxS+nUMOOMkLjW4EF95Rs/8N2y7qBTvRA0FYH52Ehga0YrtnLC46DPm75Ouw==}
+  '@btst/adapter-mongodb@2.1.1':
+    resolution: {integrity: sha512-5pnSZ582YQMlcH1gB82ECgOFxnEI4R0f7ltI3MWwFdiAR4zUnybuUejrufxHuPX667Xcy1T+GzKMW/TFl2Ntdw==}
     peerDependencies:
       '@better-auth/core': '>=1.5.0'
       better-auth: '>=1.5.0'
       mongodb: ^6.0.0
 
-  '@btst/adapter-prisma@2.1.0':
-    resolution: {integrity: sha512-vdAc4QHZedAnszLVb7WseTG1tcMzMSoIKaGyp5bX0BHoKEKe0pt91ZV43YR33D4RXZQ4gtO4L9ity89at5UsRA==}
+  '@btst/adapter-prisma@2.1.1':
+    resolution: {integrity: sha512-ibaIVP9sD2xJ2o+AYjwA2FOG100vlxDAuguHgq26Ok+ufp6QVFlovYbOZQ6TBWlIv2Qo+O6uJpw6+8AkauF1Pw==}
     peerDependencies:
       '@better-auth/core': '>=1.5.0'
       '@prisma/client': ^5.0.0
       better-auth: '>=1.5.0'
 
-  '@btst/db@2.1.0':
-    resolution: {integrity: sha512-lg01g29hyNkEpu21XR8i0Og6E9pZ8veV45cgjlFalXwmyTrkaXz5JjXCyXpcCpjUIus05GdUl0zOQmqG825MJw==}
+  '@btst/db@2.1.1':
+    resolution: {integrity: sha512-TsD09uB89HY741C/E5MaA9Ny7biYrUBwGtEwEXJiQREIOFHW7CcrTYI4dkYZphLZ8FpcpGJ2NJ1/Owfq4Qt67A==}
 
   '@btst/yar@1.1.1':
     resolution: {integrity: sha512-KF5bg0WPS2385HD5cCYYqguoiSWMK9V0k1wn912QGVZ5Ih142d0S5bfW5n9kXltbLoFzDaK3d3PSGvSfbrd7Ag==}
@@ -10161,10 +10161,10 @@ snapshots:
   '@biomejs/cli-win32-x64@2.2.4':
     optional: true
 
-  '@btst/adapter-drizzle@2.1.0(d36894e800afb4db2f9e5e0221688c82)':
+  '@btst/adapter-drizzle@2.1.1(d36894e800afb4db2f9e5e0221688c82)':
     dependencies:
       '@better-auth/core': 1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@2.0.1(zod@4.2.1))(jose@6.2.0)(kysely@0.28.8)(nanostores@1.1.1)
-      '@btst/db': 2.1.0(3581347f658bc9f101e33e2c3f774f40)
+      '@btst/db': 2.1.1(3581347f658bc9f101e33e2c3f774f40)
       better-auth: 1.5.4(767c499e38114c4057ee7367645c5c65)
       drizzle-orm: 0.41.0(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@7.5.0(@types/react@19.2.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(typescript@5.9.3))(typescript@5.9.3))(bun-types@1.3.2(@types/react@19.2.6))(kysely@0.28.8)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.5.0(@types/react@19.2.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(typescript@5.9.3))
     transitivePeerDependencies:
@@ -10194,10 +10194,10 @@ snapshots:
       - vitest
       - vue
 
-  '@btst/adapter-kysely@2.1.0(d36894e800afb4db2f9e5e0221688c82)':
+  '@btst/adapter-kysely@2.1.1(d36894e800afb4db2f9e5e0221688c82)':
     dependencies:
       '@better-auth/core': 1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@2.0.1(zod@4.2.1))(jose@6.2.0)(kysely@0.28.8)(nanostores@1.1.1)
-      '@btst/db': 2.1.0(3581347f658bc9f101e33e2c3f774f40)
+      '@btst/db': 2.1.1(3581347f658bc9f101e33e2c3f774f40)
       better-auth: 1.5.4(767c499e38114c4057ee7367645c5c65)
       kysely: 0.28.8
     transitivePeerDependencies:
@@ -10227,10 +10227,10 @@ snapshots:
       - vitest
       - vue
 
-  '@btst/adapter-memory@2.1.0(a5510a3f22769efb216707712fe268fb)':
+  '@btst/adapter-memory@2.1.1(a5510a3f22769efb216707712fe268fb)':
     dependencies:
       '@better-auth/core': 1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.2(zod@4.2.1))(jose@6.2.0)(kysely@0.28.11)(nanostores@1.1.1)
-      '@btst/db': 2.1.0(96474bc0743c1003c33dade349465747)
+      '@btst/db': 2.1.1(96474bc0743c1003c33dade349465747)
       better-auth: 1.5.4(b7f95548c7a541548ed762b7d2b5e699)
     transitivePeerDependencies:
       - '@better-auth/utils'
@@ -10260,10 +10260,10 @@ snapshots:
       - vitest
       - vue
 
-  '@btst/adapter-memory@2.1.0(bf56e8a25a6567ae0984dd8c13d80350)':
+  '@btst/adapter-memory@2.1.1(bf56e8a25a6567ae0984dd8c13d80350)':
     dependencies:
       '@better-auth/core': 1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@2.0.1(zod@4.2.1))(jose@6.2.0)(kysely@0.28.11)(nanostores@1.1.1)
-      '@btst/db': 2.1.0(7888b9ecd667b8b1329619338f767b91)
+      '@btst/db': 2.1.1(7888b9ecd667b8b1329619338f767b91)
       better-auth: 1.5.4(1dc77348176d3c9bfb27d1ebc08f2d41)
     transitivePeerDependencies:
       - '@better-auth/utils'
@@ -10293,10 +10293,10 @@ snapshots:
       - vitest
       - vue
 
-  '@btst/adapter-memory@2.1.0(c2198a24bea9a8ec2b3f81da5c5a813c)':
+  '@btst/adapter-memory@2.1.1(c2198a24bea9a8ec2b3f81da5c5a813c)':
     dependencies:
       '@better-auth/core': 1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@2.0.1(zod@4.2.1))(jose@6.2.0)(kysely@0.28.11)(nanostores@1.1.1)
-      '@btst/db': 2.1.0(1e0eff0d8983e02d86024039dbc291a5)
+      '@btst/db': 2.1.1(1e0eff0d8983e02d86024039dbc291a5)
       better-auth: 1.5.4(130cbf1f38546bcec8ebe7ee6b767f41)
     transitivePeerDependencies:
       - '@better-auth/utils'
@@ -10326,10 +10326,10 @@ snapshots:
       - vitest
       - vue
 
-  '@btst/adapter-memory@2.1.0(d36894e800afb4db2f9e5e0221688c82)':
+  '@btst/adapter-memory@2.1.1(d36894e800afb4db2f9e5e0221688c82)':
     dependencies:
       '@better-auth/core': 1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@2.0.1(zod@4.2.1))(jose@6.2.0)(kysely@0.28.8)(nanostores@1.1.1)
-      '@btst/db': 2.1.0(3581347f658bc9f101e33e2c3f774f40)
+      '@btst/db': 2.1.1(3581347f658bc9f101e33e2c3f774f40)
       better-auth: 1.5.4(767c499e38114c4057ee7367645c5c65)
     transitivePeerDependencies:
       - '@better-auth/utils'
@@ -10359,10 +10359,10 @@ snapshots:
       - vitest
       - vue
 
-  '@btst/adapter-mongodb@2.1.0(d36894e800afb4db2f9e5e0221688c82)':
+  '@btst/adapter-mongodb@2.1.1(d36894e800afb4db2f9e5e0221688c82)':
     dependencies:
       '@better-auth/core': 1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@2.0.1(zod@4.2.1))(jose@6.2.0)(kysely@0.28.8)(nanostores@1.1.1)
-      '@btst/db': 2.1.0(3581347f658bc9f101e33e2c3f774f40)
+      '@btst/db': 2.1.1(3581347f658bc9f101e33e2c3f774f40)
       better-auth: 1.5.4(767c499e38114c4057ee7367645c5c65)
       mongodb: 6.21.0(socks@2.8.7)
     transitivePeerDependencies:
@@ -10392,10 +10392,10 @@ snapshots:
       - vitest
       - vue
 
-  '@btst/adapter-prisma@2.1.0(d36894e800afb4db2f9e5e0221688c82)':
+  '@btst/adapter-prisma@2.1.1(d36894e800afb4db2f9e5e0221688c82)':
     dependencies:
       '@better-auth/core': 1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@2.0.1(zod@4.2.1))(jose@6.2.0)(kysely@0.28.8)(nanostores@1.1.1)
-      '@btst/db': 2.1.0(3581347f658bc9f101e33e2c3f774f40)
+      '@btst/db': 2.1.1(3581347f658bc9f101e33e2c3f774f40)
       '@prisma/client': 6.19.0(prisma@7.5.0(@types/react@19.2.6)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(typescript@5.9.3))(typescript@5.9.3)
       better-auth: 1.5.4(767c499e38114c4057ee7367645c5c65)
     transitivePeerDependencies:
@@ -10425,7 +10425,7 @@ snapshots:
       - vitest
       - vue
 
-  '@btst/db@2.1.0(1e0eff0d8983e02d86024039dbc291a5)':
+  '@btst/db@2.1.1(1e0eff0d8983e02d86024039dbc291a5)':
     dependencies:
       '@better-auth/core': 1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@2.0.1(zod@4.2.1))(jose@6.2.0)(kysely@0.28.11)(nanostores@1.1.1)
       better-auth: 1.5.4(130cbf1f38546bcec8ebe7ee6b767f41)
@@ -10458,7 +10458,7 @@ snapshots:
       - vitest
       - vue
 
-  '@btst/db@2.1.0(3581347f658bc9f101e33e2c3f774f40)':
+  '@btst/db@2.1.1(3581347f658bc9f101e33e2c3f774f40)':
     dependencies:
       '@better-auth/core': 1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@2.0.1(zod@4.2.1))(jose@6.2.0)(kysely@0.28.8)(nanostores@1.1.1)
       better-auth: 1.5.4(767c499e38114c4057ee7367645c5c65)
@@ -10491,7 +10491,7 @@ snapshots:
       - vitest
       - vue
 
-  '@btst/db@2.1.0(7888b9ecd667b8b1329619338f767b91)':
+  '@btst/db@2.1.1(7888b9ecd667b8b1329619338f767b91)':
     dependencies:
       '@better-auth/core': 1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@2.0.1(zod@4.2.1))(jose@6.2.0)(kysely@0.28.11)(nanostores@1.1.1)
       better-auth: 1.5.4(1dc77348176d3c9bfb27d1ebc08f2d41)
@@ -10524,7 +10524,7 @@ snapshots:
       - vitest
       - vue
 
-  '@btst/db@2.1.0(96474bc0743c1003c33dade349465747)':
+  '@btst/db@2.1.1(96474bc0743c1003c33dade349465747)':
     dependencies:
       '@better-auth/core': 1.5.4(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(better-call@1.3.2(zod@4.2.1))(jose@6.2.0)(kysely@0.28.11)(nanostores@1.1.1)
       better-auth: 1.5.4(b7f95548c7a541548ed762b7d2b5e699)
@@ -15874,7 +15874,7 @@ snapshots:
       '@typescript-eslint/parser': 8.47.0(eslint@8.57.1)(typescript@5.9.3)
       eslint: 8.57.1
       eslint-import-resolver-node: 0.3.9
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1)
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@8.57.1)
       eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.47.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1)
       eslint-plugin-jsx-a11y: 6.10.2(eslint@8.57.1)
       eslint-plugin-react: 7.37.5(eslint@8.57.1)
@@ -15914,7 +15914,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1):
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@8.57.1):
     dependencies:
       '@nolyfill/is-core-module': 1.0.39
       debug: 4.4.3
@@ -15944,14 +15944,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.47.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1))(eslint@8.57.1):
+  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.47.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
       '@typescript-eslint/parser': 8.47.0(eslint@8.57.1)(typescript@5.9.3)
       eslint: 8.57.1
       eslint-import-resolver-node: 0.3.9
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1)
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@8.57.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -15977,7 +15977,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 8.57.1
       eslint-import-resolver-node: 0.3.9
-      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.47.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.47.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1))(eslint@8.57.1)
+      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.47.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1)
       hasown: 2.0.2
       is-core-module: 2.16.1
       is-glob: 4.0.3
