@@ -448,6 +448,13 @@ function CommentThreadInner({
 								expanded={expandedReplies.has(comment.id)}
 								replyCount={comment.replyCount}
 								onToggle={() => {
+									const isExpanded = expandedReplies.has(comment.id);
+									if (!isExpanded) {
+										setReplyOffsets((prev) => {
+											if ((prev[comment.id] ?? 0) === 0) return prev;
+											return { ...prev, [comment.id]: 0 };
+										});
+									}
 									setExpandedReplies((prev) => {
 										const next = new Set(prev);
 										next.has(comment.id)
