@@ -535,14 +535,24 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						onBeforeGenerateToken: async (pathname, clientPayload) => {
 							if (hooks?.onBeforeUpload) {
 								const filename = pathname.split("/").pop() ?? pathname;
+								let parsed: Record<string, unknown> = {};
+								if (clientPayload) {
+									try {
+										parsed = JSON.parse(clientPayload);
+									} catch {
+										throw ctx.error(400, {
+											message: "Invalid clientPayload: expected a JSON string",
+										});
+									}
+								}
 								await runHookWithShim(
 									() =>
 										hooks.onBeforeUpload!(
 											{
 												filename,
 												mimeType:
-													(clientPayload ? JSON.parse(clientPayload) : {})
-														?.mimeType ?? "application/octet-stream",
+													(parsed?.mimeType as string | undefined) ??
+													"application/octet-stream",
 											},
 											context,
 										),
