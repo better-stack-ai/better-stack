@@ -74,8 +74,8 @@ export async function updateAsset(
 	}
 
 	if ("folderId" in input) {
-		// null explicitly clears the folder association
-		update.folderId = input.folderId === null ? undefined : input.folderId;
+		// null explicitly clears the folder association; undefined means "not provided"
+		update.folderId = input.folderId;
 	}
 
 	return adapter.update<Asset>({
@@ -165,11 +165,15 @@ export async function deleteFolder(
 		);
 	}
 
-	// Delete deepest folders first, then work back up to the root.
-	for (const folderId of allFolderIds.reverse()) {
-		await adapter.delete<Folder>({
-			model: "mediaFolder",
-			where: [{ field: "id", value: folderId, operator: "eq" as const }],
-		});
-	}
+	// Wrap all deletions in a transaction so the subtree is removed atomically.
+	// If any individual deletion fails the entire subtree is left intact.
+	await adapter.transaction(async (tx) => {
+		// Delete deepest folders first, then work back up to the root.
+		for (const folderId of [...allFolderIds].reverse()) {
+			await tx.delete<Folder>({
+				model: "mediaFolder",
+				where: [{ field: "id", value: folderId, operator: "eq" as const }],
+			});
+		}
+	});
 }

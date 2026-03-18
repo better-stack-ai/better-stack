@@ -7,12 +7,12 @@ import * as os from "node:os";
 // Factories are used so the packages do not need to be installed as devDependencies.
 
 const mockSend = vi.fn().mockResolvedValue({});
-const MockS3Client = vi.fn(() => ({ send: mockSend }));
-const MockPutObjectCommand = vi.fn((input: unknown) => ({
+const mockS3Client = vi.fn(() => ({ send: mockSend }));
+const mockPutObjectCommand = vi.fn((input: unknown) => ({
 	input,
 	__type: "PutObjectCommand",
 }));
-const MockDeleteObjectCommand = vi.fn((input: unknown) => ({
+const mockDeleteObjectCommand = vi.fn((input: unknown) => ({
 	input,
 	__type: "DeleteObjectCommand",
 }));
@@ -27,9 +27,9 @@ const mockHandleUpload = vi.fn().mockResolvedValue({
 const mockDel = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("@aws-sdk/client-s3", () => ({
-	S3Client: MockS3Client,
-	PutObjectCommand: MockPutObjectCommand,
-	DeleteObjectCommand: MockDeleteObjectCommand,
+	S3Client: mockS3Client,
+	PutObjectCommand: mockPutObjectCommand,
+	DeleteObjectCommand: mockDeleteObjectCommand,
 }));
 
 vi.mock("@aws-sdk/s3-request-presigner", () => ({
@@ -177,7 +177,7 @@ describe("s3Adapter", () => {
 			method: "PUT",
 			headers: { "Content-Type": "image/jpeg" },
 		});
-		expect(MockPutObjectCommand).toHaveBeenCalledWith(
+		expect(mockPutObjectCommand).toHaveBeenCalledWith(
 			expect.objectContaining({
 				Bucket: "my-bucket",
 				Key: "photo.jpg",
@@ -228,7 +228,7 @@ describe("s3Adapter", () => {
 
 		await adapter.delete("https://assets.example.com/photos/cat.jpg");
 
-		expect(MockDeleteObjectCommand).toHaveBeenCalledWith({
+		expect(mockDeleteObjectCommand).toHaveBeenCalledWith({
 			Bucket: "my-bucket",
 			Key: "photos/cat.jpg",
 		});

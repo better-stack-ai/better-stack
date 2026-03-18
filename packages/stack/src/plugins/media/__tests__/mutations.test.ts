@@ -111,6 +111,32 @@ describe("media mutations", () => {
 			expect(updated!.folderId).toBe("folder-new");
 		});
 
+		it("clears the folder association when folderId is null", async () => {
+			const asset = await createAsset(adapter, {
+				...assetInput,
+				folderId: "folder-to-clear",
+			});
+			expect(asset.folderId).toBe("folder-to-clear");
+
+			const updated = await updateAsset(adapter, asset.id, { folderId: null });
+			expect(updated).not.toBeNull();
+			expect(updated!.folderId == null).toBe(true);
+		});
+
+		it("does not change folderId when folderId is not in the input", async () => {
+			const asset = await createAsset(adapter, {
+				...assetInput,
+				folderId: "folder-keep",
+			});
+
+			const updated = await updateAsset(adapter, asset.id, {
+				alt: "new alt text",
+			});
+			expect(updated).not.toBeNull();
+			expect(updated!.folderId).toBe("folder-keep");
+			expect(updated!.alt).toBe("new alt text");
+		});
+
 		it("returns null for nonexistent asset", async () => {
 			const result = await updateAsset(adapter, "nonexistent-id", {
 				alt: "test",

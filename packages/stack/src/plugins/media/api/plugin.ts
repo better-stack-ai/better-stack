@@ -377,8 +377,10 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						);
 					}
 
-					await deleteAsset(adapter, ctx.params.id);
-
+					// Delete the storage file FIRST — if this fails the DB record is
+					// still intact and the deletion can be retried. Removing the DB
+					// record first would silently orphan the file in storage with no
+					// way to track or clean it up.
 					try {
 						await storageAdapter.delete(asset.url);
 					} catch (err) {
@@ -386,7 +388,12 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 							`[btst/media] Failed to delete file from storage: ${asset.url}`,
 							err,
 						);
+						throw ctx.error(500, {
+							message: "Failed to delete file from storage",
+						});
 					}
+
+					await deleteAsset(adapter, ctx.params.id);
 
 					if (hooks?.onAfterDelete) {
 						await hooks.onAfterDelete(ctx.params.id, context);
@@ -544,23 +551,38 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					}
 
 					const buffer = Buffer.from(await file.arrayBuffer());
+					const folderId =
+						(formData.get("folderId") as string | undefined) ?? undefined;
 					const { url } = await storageAdapter.upload(buffer, {
 						filename: file.name,
 						mimeType: file.type,
 						size: file.size,
-						folderId:
-							(formData.get("folderId") as string | undefined) ?? undefined,
+						folderId,
 					});
 
-					const asset = await createAsset(adapter, {
-						filename: url.split("/").pop() ?? file.name,
-						originalName: file.name,
-						mimeType: file.type,
-						size: file.size,
-						url,
-						folderId:
-							(formData.get("folderId") as string | undefined) ?? undefined,
-					});
+					// Create the DB record. If this fails, clean up the already-uploaded
+					// storage file so it does not become a silently orphaned file.
+					let asset: Asset;
+					try {
+						asset = await createAsset(adapter, {
+							filename: url.split("/").pop() ?? file.name,
+							originalName: file.name,
+							mimeType: file.type,
+							size: file.size,
+							url,
+							folderId,
+						});
+					} catch (err) {
+						try {
+							await storageAdapter.delete(url);
+						} catch (cleanupErr) {
+							console.error(
+								`[btst/media] Failed to clean up orphaned storage file after DB error: ${url}`,
+								cleanupErr,
+							);
+						}
+						throw err;
+					}
 
 					if (hooks?.onAfterUpload) {
 						await hooks.onAfterUpload(asset, context);
