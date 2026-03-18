@@ -70,30 +70,48 @@ export function s3Adapter(options: S3StorageAdapterOptions): S3StorageAdapter {
 		expiresIn = 300,
 	} = options;
 
+	let s3ModulePromise: Promise<typeof import("@aws-sdk/client-s3")> | null =
+		null;
 	let clientPromise: Promise<
 		InstanceType<typeof import("@aws-sdk/client-s3").S3Client>
 	> | null = null;
 
+	function getS3Module() {
+		if (!s3ModulePromise) {
+			s3ModulePromise = import("@aws-sdk/client-s3").catch(() => {
+				s3ModulePromise = null;
+				throw new Error(
+					"[@btst/stack] S3 adapter requires '@aws-sdk/client-s3'. " +
+						"Run: npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner",
+				);
+			});
+		}
+		return s3ModulePromise;
+	}
+
 	function getClient() {
 		if (!clientPromise) {
-			clientPromise = import("@aws-sdk/client-s3")
-				.then(({ S3Client }) => {
-					return new S3Client({
-						region,
-						endpoint,
-						credentials: { accessKeyId, secretAccessKey },
-						forcePathStyle: !!endpoint,
-					});
-				})
-				.catch(() => {
-					clientPromise = null;
-					throw new Error(
-						"[@btst/stack] S3 adapter requires '@aws-sdk/client-s3'. " +
-							"Run: npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner",
-					);
+			clientPromise = getS3Module().then(({ S3Client }) => {
+				return new S3Client({
+					region,
+					endpoint,
+					credentials: { accessKeyId, secretAccessKey },
+					forcePathStyle: !!endpoint,
 				});
+			});
 		}
-		return clientPromise;
+		return clientPromise.catch((error) => {
+			if (clientPromise) {
+				clientPromise = null;
+			}
+			if (s3ModulePromise && error instanceof Error) {
+				throw error;
+			}
+			throw new Error(
+				"[@btst/stack] S3 adapter requires '@aws-sdk/client-s3'. " +
+					"Run: npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner",
+			);
+		});
 	}
 
 	async function buildSignedUrl(
@@ -126,7 +144,7 @@ export function s3Adapter(options: S3StorageAdapterOptions): S3StorageAdapter {
 		): Promise<S3UploadToken> {
 			const [client, { PutObjectCommand }] = await Promise.all([
 				getClient(),
-				import("@aws-sdk/client-s3"),
+				getS3Module(),
 			]);
 
 			const key = uploadOptions.folderId
@@ -158,7 +176,7 @@ export function s3Adapter(options: S3StorageAdapterOptions): S3StorageAdapter {
 		async delete(url: string): Promise<void> {
 			const [client, { DeleteObjectCommand }] = await Promise.all([
 				getClient(),
-				import("@aws-sdk/client-s3"),
+				getS3Module(),
 			]);
 
 			const base = publicBaseUrl.replace(/\/$/, "");
