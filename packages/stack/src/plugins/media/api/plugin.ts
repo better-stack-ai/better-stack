@@ -39,6 +39,11 @@ function sanitizeS3KeySegment(s: string): string {
 	return s.replace(/[/\\]/g, "-").replace(/\.\./g, "_").trim() || "unknown";
 }
 
+function matchesUrlPrefix(url: string, prefix: string): boolean {
+	const normalizedPrefix = `${prefix.replace(/\/+$/, "")}/`;
+	return url.startsWith(normalizedPrefix);
+}
+
 /**
  * Context passed to media API hooks.
  */
@@ -170,10 +175,11 @@ export interface MediaBackendConfig {
 	 * When omitted the plugin automatically derives a safe default from the storage adapter:
 	 * - `s3Adapter` → the configured `publicBaseUrl`
 	 * - `vercelBlobAdapter` → any URL whose hostname ends with `.public.blob.vercel-storage.com`
-	 * - `localAdapter` → no restriction (the URL is generated server-side and never client-supplied)
+	 * - `localAdapter` → rejects client-supplied URLs; use `POST /media/upload` instead
 	 *
 	 * Provide this option only when you need to override the automatic default (e.g. to allow
-	 * assets from a CDN in front of your storage that uses a different domain).
+	 * assets from a CDN in front of your storage that uses a different domain). When using
+	 * `localAdapter`, setting `allowedUrlPrefixes` explicitly opts `POST /media/assets` back in.
 	 */
 	allowedUrlPrefixes?: string[];
 
@@ -310,11 +316,20 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 
 						if (allowedUrlPrefixes && allowedUrlPrefixes.length > 0) {
 							// Consumer-supplied override — validate against explicit list.
-							urlAllowed = allowedUrlPrefixes.some((p) => url.startsWith(p));
+							urlAllowed = allowedUrlPrefixes.some((p) =>
+								matchesUrlPrefix(url, p),
+							);
 							denialReason = `URL must start with one of: ${allowedUrlPrefixes.join(", ")}`;
+						} else if (isDirectAdapter(storageAdapter)) {
+							// localAdapter writes files server-side via POST /media/upload and returns
+							// relative URLs. Reject client-supplied asset URLs unless the consumer
+							// explicitly opts into trusted prefixes via allowedUrlPrefixes.
+							urlAllowed = false;
+							denialReason =
+								"Client-supplied asset URLs are not allowed with localAdapter. Use POST /media/upload instead, or configure allowedUrlPrefixes to explicitly allow trusted URL prefixes.";
 						} else if (isS3Adapter(storageAdapter)) {
 							// Auto-derived from s3Adapter's publicBaseUrl.
-							urlAllowed = url.startsWith(storageAdapter.urlPrefix);
+							urlAllowed = matchesUrlPrefix(url, storageAdapter.urlPrefix);
 							denialReason = `URL must start with the configured S3 publicBaseUrl: ${storageAdapter.urlPrefix}`;
 						} else if (isVercelBlobAdapter(storageAdapter)) {
 							// Vercel Blob public URLs always belong to a known CDN hostname suffix.
@@ -328,8 +343,6 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 							}
 							denialReason = `URL hostname must end with ${storageAdapter.urlHostnameSuffix}`;
 						}
-						// localAdapter: URL is generated entirely server-side via POST /media/upload
-						// and is never client-supplied, so no prefix check is needed.
 
 						if (!urlAllowed) {
 							throw ctx.error(400, { message: denialReason });
