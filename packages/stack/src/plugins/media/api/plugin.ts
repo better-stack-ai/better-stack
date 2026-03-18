@@ -2,7 +2,7 @@ import type { DBAdapter as Adapter } from "@btst/db";
 import { defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api";
 import { z } from "zod";
 import { mediaSchema as dbSchema } from "../db";
-import type { Asset } from "../types";
+import type { Asset, Folder } from "../types";
 import {
 	AssetListQuerySchema,
 	createAssetSchema,
@@ -30,6 +30,14 @@ import {
 	type StorageAdapter,
 } from "./storage-adapter";
 import { runHookWithShim } from "../../utils";
+
+/**
+ * Sanitize a string for use in an S3 object key.
+ * Strips path separators and parent-directory segments to prevent path traversal.
+ */
+function sanitizeS3KeySegment(s: string): string {
+	return s.replace(/[/\\]/g, "-").replace(/\.\./g, "_").trim() || "unknown";
+}
 
 /**
  * Context passed to media API hooks.
@@ -92,6 +100,39 @@ export interface MediaBackendHooks {
 		filter: z.infer<typeof AssetListQuerySchema>,
 		context: MediaApiContext,
 	) => Promise<void> | void;
+
+	/**
+	 * Called before updating an asset (PATCH). Throw to deny access.
+	 */
+	onBeforeUpdateAsset?: (
+		asset: Asset,
+		updates: z.infer<typeof updateAssetSchema>,
+		context: MediaApiContext,
+	) => Promise<void> | void;
+
+	/**
+	 * Called before listing folders. Throw to deny access.
+	 */
+	onBeforeListFolders?: (
+		filter: { parentId?: string },
+		context: MediaApiContext,
+	) => Promise<void> | void;
+
+	/**
+	 * Called before creating a folder. Throw to deny access.
+	 */
+	onBeforeCreateFolder?: (
+		input: z.infer<typeof createFolderSchema>,
+		context: MediaApiContext,
+	) => Promise<void> | void;
+
+	/**
+	 * Called before deleting a folder. Throw to deny access.
+	 */
+	onBeforeDeleteFolder?: (
+		folder: Folder,
+		context: MediaApiContext,
+	) => Promise<void> | void;
 }
 
 /**
@@ -123,6 +164,13 @@ export interface MediaBackendConfig {
 	 * Validated against the client-reported MIME type for `s3Adapter`.
 	 */
 	allowedMimeTypes?: string[];
+
+	/**
+	 * URL prefixes that are allowed when creating asset records via `POST /media/assets`.
+	 * If provided, the `url` field must start with one of these prefixes (e.g. your S3
+	 * public base URL or Vercel Blob domain). Prevents registering arbitrary external URLs.
+	 */
+	allowedUrlPrefixes?: string[];
 
 	/**
 	 * Optional lifecycle hooks for the media backend plugin.
@@ -169,6 +217,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 				storageAdapter,
 				maxFileSizeBytes = 10 * 1024 * 1024,
 				allowedMimeTypes,
+				allowedUrlPrefixes,
 				hooks,
 			} = config;
 
@@ -248,6 +297,17 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						});
 					}
 
+					if (allowedUrlPrefixes && allowedUrlPrefixes.length > 0) {
+						const allowed = allowedUrlPrefixes.some((prefix) =>
+							ctx.body.url.startsWith(prefix),
+						);
+						if (!allowed) {
+							throw ctx.error(400, {
+								message: `URL must start with one of: ${allowedUrlPrefixes.join(", ")}`,
+							});
+						}
+					}
+
 					const asset = await createAsset(adapter, ctx.body);
 
 					if (hooks?.onAfterUpload) {
@@ -268,6 +328,20 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					const existing = await getAssetById(adapter, ctx.params.id);
 					if (!existing) {
 						throw ctx.error(404, { message: "Asset not found" });
+					}
+
+					const context: MediaApiContext = {
+						body: ctx.body,
+						params: ctx.params,
+						headers: ctx.headers,
+					};
+
+					if (hooks?.onBeforeUpdateAsset) {
+						await runHookWithShim(
+							() => hooks.onBeforeUpdateAsset!(existing, ctx.body, context),
+							ctx.error,
+							"Unauthorized: Cannot update asset",
+						);
 					}
 
 					const updated = await updateAsset(adapter, ctx.params.id, ctx.body);
@@ -333,7 +407,21 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					}),
 				},
 				async (ctx) => {
-					return listFolders(adapter, { parentId: ctx.query.parentId });
+					const filter = { parentId: ctx.query.parentId };
+					const context: MediaApiContext = {
+						query: ctx.query,
+						headers: ctx.headers,
+					};
+
+					if (hooks?.onBeforeListFolders) {
+						await runHookWithShim(
+							() => hooks.onBeforeListFolders!(filter, context),
+							ctx.error,
+							"Unauthorized: Cannot list folders",
+						);
+					}
+
+					return listFolders(adapter, filter);
 				},
 			);
 
@@ -344,6 +432,19 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					body: createFolderSchema,
 				},
 				async (ctx) => {
+					const context: MediaApiContext = {
+						body: ctx.body,
+						headers: ctx.headers,
+					};
+
+					if (hooks?.onBeforeCreateFolder) {
+						await runHookWithShim(
+							() => hooks.onBeforeCreateFolder!(ctx.body, context),
+							ctx.error,
+							"Unauthorized: Cannot create folder",
+						);
+					}
+
 					return createFolder(adapter, ctx.body);
 				},
 			);
@@ -357,6 +458,19 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					const folder = await getFolderById(adapter, ctx.params.id);
 					if (!folder) {
 						throw ctx.error(404, { message: "Folder not found" });
+					}
+
+					const context: MediaApiContext = {
+						params: ctx.params,
+						headers: ctx.headers,
+					};
+
+					if (hooks?.onBeforeDeleteFolder) {
+						await runHookWithShim(
+							() => hooks.onBeforeDeleteFolder!(folder, context),
+							ctx.error,
+							"Unauthorized: Cannot delete folder",
+						);
 					}
 
 					try {
@@ -500,11 +614,23 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						});
 					}
 
+					let folderId: string | undefined = ctx.body.folderId;
+					if (folderId) {
+						const folder = await getFolderById(adapter, folderId);
+						if (!folder) {
+							throw ctx.error(404, {
+								message: "Folder not found",
+							});
+						}
+						folderId = folder.id;
+					}
+					const filename = sanitizeS3KeySegment(ctx.body.filename);
+
 					return storageAdapter.generateUploadToken({
-						filename: ctx.body.filename,
+						filename,
 						mimeType: ctx.body.mimeType,
 						size: ctx.body.size,
-						folderId: ctx.body.folderId,
+						folderId,
 					});
 				},
 			);
@@ -533,33 +659,46 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 
 					return storageAdapter.handleRequest(ctx.request, {
 						onBeforeGenerateToken: async (pathname, clientPayload) => {
+							const filename = pathname.split("/").pop() ?? pathname;
+							let parsed: Record<string, unknown> = {};
+							try {
+								parsed = clientPayload ? JSON.parse(clientPayload) : {};
+							} catch {
+								/* ignore invalid JSON — fall back to defaults */
+							}
+							const mimeType =
+								(parsed.mimeType as string | undefined) ??
+								"application/octet-stream";
+							const size = parsed.size as number | undefined;
+
 							if (hooks?.onBeforeUpload) {
-								const filename = pathname.split("/").pop() ?? pathname;
-								let parsed: Record<string, unknown> = {};
-								if (clientPayload) {
-									try {
-										parsed = JSON.parse(clientPayload);
-									} catch {
-										throw ctx.error(400, {
-											message: "Invalid clientPayload: expected a JSON string",
-										});
-									}
-								}
 								await runHookWithShim(
 									() =>
 										hooks.onBeforeUpload!(
-											{
-												filename,
-												mimeType:
-													(parsed?.mimeType as string | undefined) ??
-													"application/octet-stream",
-											},
+											{ filename, mimeType, size },
 											context,
 										),
 									ctx.error,
 									"Unauthorized: Cannot upload asset",
 								);
 							}
+
+							validateMimeType(mimeType, ctx);
+
+							if (size != null && size > maxFileSizeBytes) {
+								throw ctx.error(413, {
+									message: `File size ${size} bytes exceeds the limit of ${maxFileSizeBytes} bytes`,
+								});
+							}
+
+							return {
+								addRandomSuffix: true,
+								allowedContentTypes:
+									allowedMimeTypes && allowedMimeTypes.length > 0
+										? allowedMimeTypes
+										: undefined,
+								maximumSizeInBytes: maxFileSizeBytes,
+							};
 						},
 					});
 				},

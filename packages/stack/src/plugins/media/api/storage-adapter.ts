@@ -57,17 +57,27 @@ export interface S3StorageAdapter {
 }
 
 /**
+ * Options returned from onBeforeGenerateToken and passed to Vercel Blob's handleUpload.
+ */
+export interface VercelBlobTokenOptions {
+	addRandomSuffix?: boolean;
+	allowedContentTypes?: string[];
+	maximumSizeInBytes?: number;
+}
+
+/**
  * Callbacks provided to the Vercel Blob adapter when handling a request.
  */
 export interface VercelBlobHandlerCallbacks {
 	/**
 	 * Called before a client token is generated.
 	 * Throw to reject the upload (auth gate).
+	 * Return options to enforce allowedContentTypes and maximumSizeInBytes at the edge.
 	 */
 	onBeforeGenerateToken?: (
 		pathname: string,
 		clientPayload: string | null,
-	) => Promise<void> | void;
+	) => Promise<VercelBlobTokenOptions | void> | VercelBlobTokenOptions | void;
 }
 
 /**

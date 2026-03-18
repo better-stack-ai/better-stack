@@ -23,7 +23,11 @@ interface HandleUploadOptions {
 	onBeforeGenerateToken: (
 		pathname: string,
 		clientPayload?: string | null,
-	) => Promise<{ addRandomSuffix?: boolean; allowedContentTypes?: string[] }>;
+	) => Promise<{
+		addRandomSuffix?: boolean;
+		allowedContentTypes?: string[];
+		maximumSizeInBytes?: number;
+	}>;
 	onUploadCompleted: (args: {
 		blob: { url: string; pathname: string };
 		tokenPayload?: string | null;
@@ -94,14 +98,14 @@ export function vercelBlobAdapter(
 				request,
 				token: options.token,
 				onBeforeGenerateToken: async (pathname, clientPayload) => {
-					if (callbacks.onBeforeGenerateToken) {
-						await callbacks.onBeforeGenerateToken(
+					const tokenOptions =
+						(await callbacks.onBeforeGenerateToken?.(
 							pathname,
 							clientPayload ?? null,
-						);
-					}
+						)) ?? {};
 					return {
 						addRandomSuffix: true,
+						...tokenOptions,
 					};
 				},
 				onUploadCompleted: async () => {
