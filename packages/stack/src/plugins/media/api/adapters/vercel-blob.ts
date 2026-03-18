@@ -69,6 +69,7 @@ export function vercelBlobAdapter(
 ): VercelBlobStorageAdapter {
 	return {
 		type: "vercel-blob" as const,
+		urlHostnameSuffix: ".public.blob.vercel-storage.com",
 
 		async handleRequest(
 			request: Request,

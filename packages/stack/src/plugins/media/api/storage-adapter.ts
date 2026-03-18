@@ -47,6 +47,13 @@ export interface S3UploadToken {
 export interface S3StorageAdapter {
 	readonly type: "s3";
 	/**
+	 * The public base URL prefix for all assets in this bucket
+	 * (e.g. `"https://assets.example.com"`). Used by the plugin to
+	 * automatically validate client-supplied URLs when no explicit
+	 * `allowedUrlPrefixes` are configured.
+	 */
+	readonly urlPrefix: string;
+	/**
 	 * Generate a presigned PUT URL for direct client upload.
 	 */
 	generateUploadToken(options: UploadOptions): Promise<S3UploadToken>;
@@ -87,6 +94,12 @@ export interface VercelBlobHandlerCallbacks {
  */
 export interface VercelBlobStorageAdapter {
 	readonly type: "vercel-blob";
+	/**
+	 * Hostname suffix that all Vercel Blob public URLs end with.
+	 * Used by the plugin to automatically validate client-supplied URLs.
+	 * Always `".public.blob.vercel-storage.com"`.
+	 */
+	readonly urlHostnameSuffix: string;
 	/**
 	 * Process a raw request from `@vercel/blob/client`'s `upload()` or from
 	 * Vercel Blob's upload-completion webhook. Returns a JSON-serialisable object

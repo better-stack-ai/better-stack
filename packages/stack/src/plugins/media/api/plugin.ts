@@ -167,8 +167,13 @@ export interface MediaBackendConfig {
 
 	/**
 	 * URL prefixes that are allowed when creating asset records via `POST /media/assets`.
-	 * If provided, the `url` field must start with one of these prefixes (e.g. your S3
-	 * public base URL or Vercel Blob domain). Prevents registering arbitrary external URLs.
+	 * When omitted the plugin automatically derives a safe default from the storage adapter:
+	 * - `s3Adapter` → the configured `publicBaseUrl`
+	 * - `vercelBlobAdapter` → any URL whose hostname ends with `.public.blob.vercel-storage.com`
+	 * - `localAdapter` → no restriction (the URL is generated server-side and never client-supplied)
+	 *
+	 * Provide this option only when you need to override the automatic default (e.g. to allow
+	 * assets from a CDN in front of your storage that uses a different domain).
 	 */
 	allowedUrlPrefixes?: string[];
 
@@ -298,14 +303,36 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						});
 					}
 
-					if (allowedUrlPrefixes && allowedUrlPrefixes.length > 0) {
-						const allowed = allowedUrlPrefixes.some((prefix) =>
-							ctx.body.url.startsWith(prefix),
-						);
-						if (!allowed) {
-							throw ctx.error(400, {
-								message: `URL must start with one of: ${allowedUrlPrefixes.join(", ")}`,
-							});
+					{
+						const url = ctx.body.url;
+						let urlAllowed = true;
+						let denialReason = "";
+
+						if (allowedUrlPrefixes && allowedUrlPrefixes.length > 0) {
+							// Consumer-supplied override — validate against explicit list.
+							urlAllowed = allowedUrlPrefixes.some((p) => url.startsWith(p));
+							denialReason = `URL must start with one of: ${allowedUrlPrefixes.join(", ")}`;
+						} else if (isS3Adapter(storageAdapter)) {
+							// Auto-derived from s3Adapter's publicBaseUrl.
+							urlAllowed = url.startsWith(storageAdapter.urlPrefix);
+							denialReason = `URL must start with the configured S3 publicBaseUrl: ${storageAdapter.urlPrefix}`;
+						} else if (isVercelBlobAdapter(storageAdapter)) {
+							// Vercel Blob public URLs always belong to a known CDN hostname suffix.
+							try {
+								const hostname = new URL(url).hostname;
+								urlAllowed = hostname.endsWith(
+									storageAdapter.urlHostnameSuffix,
+								);
+							} catch {
+								urlAllowed = false;
+							}
+							denialReason = `URL hostname must end with ${storageAdapter.urlHostnameSuffix}`;
+						}
+						// localAdapter: URL is generated entirely server-side via POST /media/upload
+						// and is never client-supplied, so no prefix check is needed.
+
+						if (!urlAllowed) {
+							throw ctx.error(400, { message: denialReason });
 						}
 					}
 

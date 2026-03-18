@@ -118,6 +118,7 @@ export function s3Adapter(options: S3StorageAdapterOptions): S3StorageAdapter {
 
 	return {
 		type: "s3" as const,
+		urlPrefix: publicBaseUrl.replace(/\/$/, ""),
 
 		async generateUploadToken(
 			uploadOptions: UploadOptions,
