@@ -121,7 +121,9 @@ export async function createFolder(
 
 /**
  * Delete a folder record from the database by its ID.
- * Throws if any assets exist inside the folder.
+ * Child folders are cascade-deleted automatically. Throws if the folder or
+ * any of its descendants contain assets (which have associated storage files
+ * that must be deleted via the storage adapter first).
  * Pure DB function — no authorization hooks, no HTTP context.
  *
  * @remarks **Security:** No authorization hooks are called.
@@ -130,19 +132,44 @@ export async function deleteFolder(
 	adapter: Adapter,
 	id: string,
 ): Promise<void> {
-	const assetsInFolder = await adapter.count({
-		model: "mediaAsset",
-		where: [{ field: "folderId", value: id, operator: "eq" as const }],
-	});
+	// BFS to collect the target folder and all of its descendants.
+	const allFolderIds: string[] = [id];
+	const queue: string[] = [id];
 
-	if (assetsInFolder > 0) {
+	while (queue.length > 0) {
+		const parentId = queue.shift()!;
+		const children = await adapter.findMany<Folder>({
+			model: "mediaFolder",
+			where: [{ field: "parentId", value: parentId, operator: "eq" as const }],
+		});
+		for (const child of children) {
+			allFolderIds.push(child.id);
+			queue.push(child.id);
+		}
+	}
+
+	// Reject the deletion if any folder in the subtree contains assets.
+	// Assets map to real storage files — the caller must delete them via the
+	// storage adapter before removing the DB records.
+	let totalAssets = 0;
+	for (const folderId of allFolderIds) {
+		totalAssets += await adapter.count({
+			model: "mediaAsset",
+			where: [{ field: "folderId", value: folderId, operator: "eq" as const }],
+		});
+	}
+
+	if (totalAssets > 0) {
 		throw new Error(
-			`Cannot delete folder: it contains ${assetsInFolder} asset(s). Move or delete them first.`,
+			`Cannot delete folder: it or one of its subfolders contains ${totalAssets} asset(s). Move or delete them first.`,
 		);
 	}
 
-	await adapter.delete<Folder>({
-		model: "mediaFolder",
-		where: [{ field: "id", value: id, operator: "eq" as const }],
-	});
+	// Delete deepest folders first, then work back up to the root.
+	for (const folderId of allFolderIds.reverse()) {
+		await adapter.delete<Folder>({
+			model: "mediaFolder",
+			where: [{ field: "id", value: folderId, operator: "eq" as const }],
+		});
+	}
 }

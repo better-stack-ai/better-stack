@@ -222,7 +222,7 @@ describe("media mutations", () => {
 			).resolves.not.toThrow();
 		});
 
-		it("only deletes the targeted folder", async () => {
+		it("only deletes the targeted folder and not siblings", async () => {
 			const a = await createFolder(adapter, { name: "Folder A" });
 			await createFolder(adapter, { name: "Folder B" });
 
@@ -233,6 +233,41 @@ describe("media mutations", () => {
 			});
 			expect(remaining).toHaveLength(1);
 			expect(remaining[0]!.name).toBe("Folder B");
+		});
+
+		it("cascade-deletes child folders when the subtree has no assets", async () => {
+			const parent = await createFolder(adapter, { name: "Parent" });
+			const child = await createFolder(adapter, {
+				name: "Child",
+				parentId: parent.id,
+			});
+			const grandchild = await createFolder(adapter, {
+				name: "Grandchild",
+				parentId: child.id,
+			});
+
+			await deleteFolder(adapter, parent.id);
+
+			expect(await getFolderById(adapter, parent.id)).toBeNull();
+			expect(await getFolderById(adapter, child.id)).toBeNull();
+			expect(await getFolderById(adapter, grandchild.id)).toBeNull();
+		});
+
+		it("throws when a child folder contains assets and leaves the whole subtree intact", async () => {
+			const parent = await createFolder(adapter, { name: "Parent" });
+			const child = await createFolder(adapter, {
+				name: "Child",
+				parentId: parent.id,
+			});
+			await createAsset(adapter, { ...assetInput, folderId: child.id });
+
+			await expect(deleteFolder(adapter, parent.id)).rejects.toThrow(
+				"Cannot delete folder",
+			);
+
+			// Both folders still exist — no partial deletion.
+			expect(await getFolderById(adapter, parent.id)).not.toBeNull();
+			expect(await getFolderById(adapter, child.id)).not.toBeNull();
 		});
 	});
 });
