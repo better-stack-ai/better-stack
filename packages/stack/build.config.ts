@@ -44,6 +44,11 @@ export default defineBuildConfig({
 		"react/jsx-runtime",
 		"@tanstack/react-query",
 		"sonner",
+		// optional peerDependencies (media plugin)
+		"@vercel/blob",
+		"@vercel/blob/server",
+		"@aws-sdk/client-s3",
+		"@aws-sdk/s3-request-presigner",
 		// test/build-time deps kept external
 		"vitest",
 		"@vitest/runner",
@@ -110,6 +115,8 @@ export default defineBuildConfig({
 		"./src/plugins/comments/client/components/index.tsx",
 		"./src/plugins/comments/client/hooks/index.tsx",
 		"./src/plugins/comments/query-keys.ts",
+		// media plugin entries
+		"./src/plugins/media/api/index.ts",
 		"./src/components/auto-form/index.ts",
 		"./src/components/stepped-auto-form/index.ts",
 		"./src/components/multi-select/index.ts",

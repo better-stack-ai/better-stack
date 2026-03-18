@@ -144,13 +144,21 @@ test.describe("AI Chat Plugin", () => {
 	}) => {
 		// This test verifies that multiple messages in a conversation stay together
 		// and don't create separate history items (fixes the bug where every message
-		// created a new conversation)
+		// created a new conversation).
+		//
+		// A unique run ID is embedded in the first message so that conversations
+		// created by previous retry attempts don't bleed into the sidebar count
+		// assertion. The in-memory adapter persists state across Playwright retries
+		// within the same server process, so a fixed message text would cause
+		// multiple conversations with the same title to accumulate.
+		const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+		const firstMessage = `First msg in conv ${runId}`;
 
 		await page.goto("/pages/chat");
 
 		// Send first message
 		const input = page.getByPlaceholder("Type a message...");
-		await input.fill("First message in conversation");
+		await input.fill(firstMessage);
 		await page.keyboard.press("Enter");
 
 		// Wait for first AI response
@@ -158,7 +166,7 @@ test.describe("AI Chat Plugin", () => {
 			page
 				.locator('[data-testid="chat-interface"]')
 				.locator('[aria-label="AI response"]'),
-		).toBeVisible({ timeout: 30000 });
+		).toBeVisible({ timeout: 45000 });
 
 		// Wait for navigation to new conversation URL
 		await page.waitForURL(/\/pages\/chat\/[a-zA-Z0-9]+/, { timeout: 10000 });
@@ -179,9 +187,7 @@ test.describe("AI Chat Plugin", () => {
 
 		// Both messages should still be visible in the same conversation
 		await expect(
-			page
-				.locator('[data-testid="chat-interface"]')
-				.getByText("First message in conversation"),
+			page.locator('[data-testid="chat-interface"]').getByText(firstMessage),
 		).toBeVisible({ timeout: 10000 });
 		await expect(
 			page
@@ -189,11 +195,11 @@ test.describe("AI Chat Plugin", () => {
 				.getByText("Second message in same conversation"),
 		).toBeVisible({ timeout: 10000 });
 
-		// There should only be ONE conversation in the sidebar with "First message"
-		// (the title is based on the first message)
-		const sidebarConversations = page.locator(
-			'button:has-text("First message in conversation")',
-		);
+		// There should be exactly ONE conversation in the sidebar matching this
+		// run's unique first message. Searching by the unique runId ensures
+		// conversations from previous retry attempts (which used a different runId)
+		// are not counted.
+		const sidebarConversations = page.locator(`button:has-text("${runId}")`);
 		await expect(sidebarConversations).toHaveCount(1, { timeout: 5000 });
 	});
 

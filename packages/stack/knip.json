@@ -40,6 +40,7 @@
     "src/plugins/kanban/client/components/index.tsx",
     "src/plugins/kanban/client/hooks/index.tsx",
     "src/plugins/kanban/query-keys.ts",
+    "src/plugins/media/api/index.ts",
     "build.config.ts",
     "vitest.config.mts",
     "scripts/build-registry.ts",
@@ -63,6 +64,9 @@
     "remark-gfm",
     "remark-math",
     "tailwindcss",
-    "@tailwindcss/typography"
+    "@tailwindcss/typography",
+    "@aws-sdk/client-s3",
+    "@aws-sdk/s3-request-presigner",
+    "@vercel/blob"
   ]
 }
