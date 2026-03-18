@@ -309,6 +309,13 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						}
 					}
 
+					if (ctx.body.folderId) {
+						const folder = await getFolderById(adapter, ctx.body.folderId);
+						if (!folder) {
+							throw ctx.error(404, { message: "Folder not found" });
+						}
+					}
+
 					const asset = await createAsset(adapter, ctx.body);
 
 					if (hooks?.onAfterUpload) {
@@ -343,6 +350,13 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 							ctx.error,
 							"Unauthorized: Cannot update asset",
 						);
+					}
+
+					if (ctx.body.folderId != null) {
+						const folder = await getFolderById(adapter, ctx.body.folderId);
+						if (!folder) {
+							throw ctx.error(404, { message: "Folder not found" });
+						}
 					}
 
 					const updated = await updateAsset(adapter, ctx.params.id, ctx.body);
@@ -554,6 +568,14 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					const buffer = Buffer.from(await file.arrayBuffer());
 					const folderId =
 						(formData.get("folderId") as string | undefined) ?? undefined;
+
+					if (folderId) {
+						const folder = await getFolderById(adapter, folderId);
+						if (!folder) {
+							throw ctx.error(404, { message: "Folder not found" });
+						}
+					}
+
 					const { url } = await storageAdapter.upload(buffer, {
 						filename: file.name,
 						mimeType: file.type,
