@@ -101,19 +101,20 @@ export function s3Adapter(options: S3StorageAdapterOptions): S3StorageAdapter {
 		command: unknown,
 		opts: { expiresIn: number },
 	): Promise<string> {
+		let getSignedUrl: typeof import("@aws-sdk/s3-request-presigner")["getSignedUrl"];
 		try {
-			const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
-			return getSignedUrl(
-				client as Parameters<typeof getSignedUrl>[0],
-				command as Parameters<typeof getSignedUrl>[1],
-				opts,
-			);
+			({ getSignedUrl } = await import("@aws-sdk/s3-request-presigner"));
 		} catch {
 			throw new Error(
 				"[@btst/stack] S3 adapter requires '@aws-sdk/s3-request-presigner'. " +
 					"Run: npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner",
 			);
 		}
+		return getSignedUrl(
+			client as Parameters<typeof getSignedUrl>[0],
+			command as Parameters<typeof getSignedUrl>[1],
+			opts,
+		);
 	}
 
 	return {
