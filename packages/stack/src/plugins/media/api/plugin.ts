@@ -210,6 +210,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 			getAssetById: (id: string) => getAssetById(adapter, id),
 			listFolders: (params?: Parameters<typeof listFolders>[1]) =>
 				listFolders(adapter, params),
+			getFolderById: (id: string) => getFolderById(adapter, id),
 		}),
 
 		routes: (adapter: Adapter) => {
