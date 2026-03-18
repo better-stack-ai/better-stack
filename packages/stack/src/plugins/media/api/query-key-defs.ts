@@ -13,8 +13,8 @@ export interface AssetListDiscriminator {
 	folderId: string | undefined;
 	mimeType: string | undefined;
 	query: string | undefined;
-	limit: number;
-	offset: number;
+	limit: number | undefined;
+	offset: number | undefined;
 }
 
 export function assetListDiscriminator(
@@ -24,8 +24,8 @@ export function assetListDiscriminator(
 		folderId: params?.folderId,
 		mimeType: params?.mimeType,
 		query: params?.query,
-		limit: params?.limit ?? 20,
-		offset: params?.offset ?? 0,
+		limit: params?.limit,
+		offset: params?.offset,
 	};
 }
 
