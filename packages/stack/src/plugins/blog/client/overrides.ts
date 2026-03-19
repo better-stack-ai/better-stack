@@ -3,6 +3,18 @@ import type { ComponentType, ReactNode } from "react";
 import type { BlogLocalization } from "./localization";
 
 /**
+ * Props for the overridable blog featured image input component.
+ */
+export interface BlogImageInputFieldProps {
+	/** Current image URL value */
+	value: string;
+	/** Called when the image URL changes */
+	onChange: (value: string) => void;
+	/** Whether the field is required */
+	isRequired?: boolean;
+}
+
+/**
  * Context passed to lifecycle hooks
  */
 export interface RouteContext {
@@ -51,6 +63,50 @@ export interface BlogPluginOverrides {
 	 * Function used to upload an image and return its URL.
 	 */
 	uploadImage: (file: File) => Promise<string>;
+	/**
+	 * Optional custom component for the featured image field.
+	 *
+	 * When provided it replaces the default file-upload input entirely.
+	 * The component receives `value` (current URL string) and `onChange` (setter).
+	 *
+	 * Typical use case: render a preview when a value is set, and a media-picker
+	 * trigger when no value is set.
+	 *
+	 * @example
+	 * ```tsx
+	 * imageInputField: ({ value, onChange }) =>
+	 *   value ? (
+	 *     <div>
+	 *       <img src={value} alt="Preview" />
+	 *       <MediaPicker trigger={<button>Change</button>} accept={["image/*"]}
+	 *         onSelect={(assets) => onChange(assets[0].url)} />
+	 *     </div>
+	 *   ) : (
+	 *     <MediaPicker trigger={<button>Browse media</button>} accept={["image/*"]}
+	 *       onSelect={(assets) => onChange(assets[0].url)} />
+	 *   )
+	 * ```
+	 */
+	imageInputField?: ComponentType<BlogImageInputFieldProps>;
+
+	/**
+	 * Optional trigger component for a media picker.
+	 * When provided, it is rendered adjacent to the Markdown editor and allows
+	 * users to browse and select previously uploaded assets.
+	 * Receives `onSelect(url)` — insert the chosen URL into the editor.
+	 *
+	 * @example
+	 * ```tsx
+	 * imagePicker: ({ onSelect }) => (
+	 *   <MediaPicker
+	 *     trigger={<Button size="sm" variant="outline">Browse media</Button>}
+	 *     accept={["image/*"]}
+	 *     onSelect={(assets) => onSelect(assets[0].url)}
+	 *   />
+	 * )
+	 * ```
+	 */
+	imagePicker?: ComponentType<{ onSelect: (url: string) => void }>;
 	/**
 	 * Localization object for the blog plugin
 	 */

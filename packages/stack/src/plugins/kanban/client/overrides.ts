@@ -73,6 +73,30 @@ export interface KanbanPluginOverrides {
 	 */
 	headers?: HeadersInit;
 
+	/**
+	 * Function used to upload an image from the task description editor and return its URL.
+	 * Wired as the `uploader` prop of MinimalTiptapEditor — handles drag-drop image uploads.
+	 */
+	uploadImage?: (file: File) => Promise<string>;
+
+	/**
+	 * Optional trigger component for a media picker.
+	 * When provided, it appears inside the image insertion dialog of the task description editor,
+	 * letting users browse and select previously uploaded assets.
+	 *
+	 * @example
+	 * ```tsx
+	 * imagePicker: ({ onSelect }) => (
+	 *   <MediaPicker
+	 *     trigger={<Button size="sm" variant="outline">Browse media</Button>}
+	 *     accept={["image/*"]}
+	 *     onSelect={(assets) => onSelect(assets[0].url)}
+	 *   />
+	 * )
+	 * ```
+	 */
+	imagePicker?: ComponentType<{ onSelect: (url: string) => void }>;
+
 	// ============ User Resolution (required for assignee features) ============
 
 	/**

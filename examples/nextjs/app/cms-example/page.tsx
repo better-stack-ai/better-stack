@@ -13,10 +13,10 @@ import { getOrCreateQueryClient } from "@/lib/query-client"
 import type { CMSTypes } from "@/lib/cms-schemas"
 
 // Get base URL - works on both server and client
-const getBaseURL = () => 
-  typeof window !== 'undefined' 
-    ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
-    : (process.env.BASE_URL || "http://localhost:3000")
+const getBaseURL = () =>
+    typeof window !== 'undefined'
+        ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
+        : (process.env.BASE_URL || "http://localhost:3000")
 
 // Mock file upload function
 async function mockUploadFile(file: File): Promise<string> {
@@ -29,7 +29,7 @@ async function mockUploadFile(file: File): Promise<string> {
 // Shared Next.js Image wrapper
 function NextImageWrapper(props: React.ImgHTMLAttributes<HTMLImageElement>) {
     const { alt = "", src = "", width, height, ...rest } = props
-    
+
     if (!width || !height) {
         return (
             <span className="block relative w-full h-full">
@@ -43,7 +43,7 @@ function NextImageWrapper(props: React.ImgHTMLAttributes<HTMLImageElement>) {
             </span>
         )
     }
-    
+
     return (
         <Image
             alt={alt}
@@ -65,14 +65,14 @@ function CMSExampleContent() {
     const { contentTypes, isLoading: typesLoading, error: typesError } = useContentTypes()
     // Type-safe hook with load more functionality
     // The hook handles all pagination state internally
-    const { 
-        items, 
-        total, 
-        isLoading: itemsLoading, 
+    const {
+        items,
+        total,
+        isLoading: itemsLoading,
         error: itemsError,
         loadMore,
         hasMore,
-        isLoadingMore 
+        isLoadingMore
     } = useContent<CMSTypes, "product">("product", { limit: PAGE_SIZE })
 
     if (typesLoading || itemsLoading) {
@@ -110,9 +110,9 @@ function CMSExampleContent() {
                 ) : (
                     <div data-testid="content-types-list" className="space-y-2">
                         {contentTypes.map((type) => (
-                            <div 
-                                key={type.slug} 
-                                data-testid={`content-type-${type.slug}`}
+                            <div
+                                key={type.slug}
+                                data-testid={`content-type-${ type.slug }`}
                                 className="p-3 border rounded-lg flex justify-between items-center"
                             >
                                 <span className="font-medium" data-testid="content-type-name">{type.name}</span>
@@ -138,30 +138,43 @@ function CMSExampleContent() {
                     <>
                         <div data-testid="products-list" className="space-y-3">
                             {items.map((item) => (
-                                <div 
-                                    key={item.id} 
-                                    data-testid={`product-item-${item.slug}`}
+                                <div
+                                    key={item.id}
+                                    data-testid={`product-item-${ item.slug }`}
                                     className="p-4 border rounded-lg"
                                 >
                                     <div className="flex justify-between items-start">
-                                        <div>
-                                            {/* No more type guards needed - parsedData is fully typed! */}
-                                            <h3 className="font-medium" data-testid="product-name">
-                                                {item.parsedData.name}
-                                            </h3>
-                                            <p className="text-sm text-gray-500" data-testid="product-slug">
-                                                Slug: {item.slug}
-                                            </p>
-                                            {item.parsedData.description && (
-                                                <p className="text-sm mt-1" data-testid="product-description">
-                                                    {item.parsedData.description}
+                                        <div className="flex items-center gap-2">
+                                            <div className="size-15 relative overflow-hidden rounded">
+                                                <Image
+                                                    src={item.parsedData.image ?? ""}
+                                                    alt={item.parsedData.name}
+                                                    fill
+                                                    sizes="64px"
+                                                    quality={50}
+                                                    className="object-cover"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                {/* No more type guards needed - parsedData is fully typed! */}
+                                                <h3 className="font-medium" data-testid="product-name">
+                                                    {item.parsedData.name}
+                                                </h3>
+                                                <p className="text-sm text-gray-500" data-testid="product-slug">
+                                                    Slug: {item.slug}
                                                 </p>
-                                            )}
-                                            {item.parsedData.featured && (
-                                                <span className="inline-block mt-1 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
-                                                    Featured
-                                                </span>
-                                            )}
+                                                {item.parsedData.description && (
+                                                    <p className="text-sm mt-1" data-testid="product-description">
+                                                        {item.parsedData.description}
+                                                    </p>
+                                                )}
+                                                {item.parsedData.featured && (
+                                                    <span className="inline-block mt-1 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
+                                                        Featured
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                         <div className="text-right">
                                             <span className="text-lg font-semibold" data-testid="product-price">

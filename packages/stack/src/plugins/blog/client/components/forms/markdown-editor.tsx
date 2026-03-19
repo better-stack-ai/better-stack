@@ -8,7 +8,12 @@ import { editorViewCtx, parserCtx } from "@milkdown/kit/core";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { Slice } from "@milkdown/kit/prose/model";
 import { Selection } from "@milkdown/kit/prose/state";
-import { useLayoutEffect, useRef, useState } from "react";
+import {
+	useLayoutEffect,
+	useRef,
+	useState,
+	type MutableRefObject,
+} from "react";
 
 export interface MarkdownEditorProps {
 	value?: string;
@@ -18,6 +23,19 @@ export interface MarkdownEditorProps {
 	uploadImage?: (file: File) => Promise<string>;
 	/** Placeholder text shown when the editor is empty. */
 	placeholder?: string;
+	/**
+	 * Optional ref that will be populated with an `insertImage(url)` function.
+	 * Call `insertImageRef.current?.(url)` to programmatically insert an image.
+	 * The URL is expected to be already encoded by the caller.
+	 */
+	insertImageRef?: MutableRefObject<((url: string) => void) | null>;
+	/**
+	 * When provided, clicking the Crepe image block's upload area opens a media
+	 * picker instead of the native file dialog. The callback receives a `setUrl`
+	 * function — call it with the chosen URL to set it into the image block.
+	 * The URL passed to `setUrl` is expected to be already encoded by the caller.
+	 */
+	openMediaPickerForImageBlock?: (setUrl: (url: string) => void) => void;
 }
 
 export function MarkdownEditor({
@@ -26,6 +44,8 @@ export function MarkdownEditor({
 	className,
 	uploadImage,
 	placeholder = "Write something...",
+	insertImageRef,
+	openMediaPickerForImageBlock,
 }: MarkdownEditorProps) {
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const crepeRef = useRef<Crepe | null>(null);
@@ -33,6 +53,9 @@ export function MarkdownEditor({
 	const [isReady, setIsReady] = useState(false);
 	const onChangeRef = useRef<typeof onChange>(onChange);
 	const initialValueRef = useRef<string>(value ?? "");
+	const openMediaPickerRef = useRef<typeof openMediaPickerForImageBlock>(
+		openMediaPickerForImageBlock,
+	);
 	type ThrottledFn = ((markdown: string) => void) & {
 		cancel?: () => void;
 		flush?: () => void;
@@ -40,11 +63,23 @@ export function MarkdownEditor({
 	const throttledOnChangeRef = useRef<ThrottledFn | null>(null);
 
 	onChangeRef.current = onChange;
+	openMediaPickerRef.current = openMediaPickerForImageBlock;
 
 	useLayoutEffect(() => {
 		if (crepeRef.current) return;
 		const container = containerRef.current;
 		if (!container) return;
+
+		const hasMediaPicker = !!openMediaPickerRef.current;
+
+		const imageBlockConfig: Record<string, unknown> = {};
+		if (uploadImage) {
+			imageBlockConfig.onUpload = async (file: File) => uploadImage(file);
+		}
+		if (hasMediaPicker) {
+			imageBlockConfig.blockUploadPlaceholderText = "Media Picker";
+			imageBlockConfig.inlineUploadPlaceholderText = "Media Picker";
+		}
 
 		const crepe = new Crepe({
 			root: container,
@@ -53,18 +88,46 @@ export function MarkdownEditor({
 				[CrepeFeature.Placeholder]: {
 					text: placeholder,
 				},
-				...(uploadImage
-					? {
-							[CrepeFeature.ImageBlock]: {
-								onUpload: async (file: File) => {
-									const url = await uploadImage(file);
-									return url;
-								},
-							},
-						}
+				...(Object.keys(imageBlockConfig).length > 0
+					? { [CrepeFeature.ImageBlock]: imageBlockConfig }
 					: {}),
 			},
 		});
+
+		// Intercept clicks on Crepe image-block upload placeholders so that the
+		// native file dialog is suppressed and the media picker is opened instead.
+		const interceptHandler = (e: MouseEvent) => {
+			if (!openMediaPickerRef.current) return;
+			const target = e.target as Element;
+			// Only intercept clicks inside the upload placeholder area.
+			const inPlaceholder = target.closest(".image-edit .placeholder");
+			if (!inPlaceholder) return;
+			// Let the hidden file <input> itself through (shouldn't receive clicks normally).
+			if ((target as HTMLElement).matches("input")) return;
+
+			e.preventDefault();
+			e.stopPropagation();
+
+			const imageEdit = inPlaceholder.closest(".image-edit");
+			const linkInput = imageEdit?.querySelector(
+				".link-input-area",
+			) as HTMLInputElement | null;
+
+			openMediaPickerRef.current((url: string) => {
+				if (!linkInput) return;
+				// Use the native setter so Vue's reactivity picks up the change.
+				const nativeSetter = Object.getOwnPropertyDescriptor(
+					HTMLInputElement.prototype,
+					"value",
+				)?.set;
+				nativeSetter?.call(linkInput, url);
+				linkInput.dispatchEvent(new Event("input", { bubbles: true }));
+				linkInput.dispatchEvent(
+					new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+				);
+			});
+		};
+		container.addEventListener("click", interceptHandler, true);
 
 		// Prepare throttled onChange once per editor instance
 		throttledOnChangeRef.current = throttle((markdown: string) => {
@@ -86,6 +149,7 @@ export function MarkdownEditor({
 		crepeRef.current = crepe;
 
 		return () => {
+			container.removeEventListener("click", interceptHandler, true);
 			try {
 				isReadyRef.current = false;
 				throttledOnChangeRef.current?.cancel?.();
@@ -132,6 +196,38 @@ export function MarkdownEditor({
 			view.dispatch(tr);
 		});
 	}, [value, isReady]);
+
+	// Expose insertImage via ref so the parent can insert images programmatically
+	useLayoutEffect(() => {
+		if (!insertImageRef) return;
+		insertImageRef.current = (url: string) => {
+			if (!crepeRef.current || !isReadyRef.current) return;
+			try {
+				const currentMarkdown = crepeRef.current.getMarkdown?.() ?? "";
+				const imageMarkdown = `\n\n![](${url})\n\n`;
+				const newMarkdown = currentMarkdown.trimEnd() + imageMarkdown;
+				crepeRef.current.editor.action((ctx) => {
+					const view = ctx.get(editorViewCtx);
+					const parser = ctx.get(parserCtx);
+					const doc = parser(newMarkdown);
+					if (!doc) return;
+					const state = view.state;
+					const tr = state.tr.replace(
+						0,
+						state.doc.content.size,
+						new Slice(doc.content, 0, 0),
+					);
+					view.dispatch(tr);
+				});
+				if (onChangeRef.current) onChangeRef.current(newMarkdown);
+			} catch {
+				// Editor may not be ready yet
+			}
+		};
+		return () => {
+			if (insertImageRef) insertImageRef.current = null;
+		};
+	}, [insertImageRef]);
 
 	return (
 		<div ref={containerRef} className={cn("milkdown-custom", className)} />

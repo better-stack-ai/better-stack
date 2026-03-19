@@ -56,6 +56,12 @@ function buildFieldConfigFromJsonSchema(
 		string,
 		React.ComponentType<AutoFormInputComponentProps>
 	>,
+	imagePicker?: React.ComponentType<{ onSelect: (url: string) => void }>,
+	imageInputField?: React.ComponentType<{
+		value: string;
+		onChange: (value: string) => void;
+		isRequired?: boolean;
+	}>,
 ): FieldConfig<Record<string, unknown>> {
 	// Get base config from shared utility (handles fieldType from JSON Schema)
 	const baseConfig = buildFieldConfigBase(jsonSchema, fieldComponents);
@@ -73,14 +79,14 @@ function buildFieldConfigFromJsonSchema(
 		// Handle "file" fieldType when there's NO custom component for "file"
 		if (prop.fieldType === "file" && !fieldComponents?.["file"]) {
 			// Use CMSFileUpload as the default file component
-			if (!uploadImage) {
-				// Show a clear error message if uploadImage is not provided
+			if (!uploadImage && !imageInputField) {
+				// Show a clear error message if neither uploadImage nor imageInputField is provided
 				baseConfig[key] = {
 					...baseConfig[key],
 					fieldType: () => (
 						<div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
-							File upload requires an <code>uploadImage</code> function in CMS
-							overrides.
+							File upload requires an <code>uploadImage</code> or{" "}
+							<code>imageInputField</code> function in CMS overrides.
 						</div>
 					),
 				};
@@ -88,7 +94,12 @@ function buildFieldConfigFromJsonSchema(
 				baseConfig[key] = {
 					...baseConfig[key],
 					fieldType: (props: AutoFormInputComponentProps) => (
-						<CMSFileUpload {...props} uploadImage={uploadImage} />
+						<CMSFileUpload
+							{...props}
+							uploadImage={uploadImage ?? (() => Promise.resolve(""))}
+							imageInputField={imageInputField}
+							imagePicker={imagePicker}
+						/>
 					),
 				};
 			}
@@ -151,6 +162,8 @@ export function ContentForm({
 	const {
 		localization: customLocalization,
 		uploadImage,
+		imagePicker,
+		imageInputField,
 		fieldComponents,
 	} = usePluginOverrides<CMSPluginOverrides>("cms");
 	const localization = { ...CMS_LOCALIZATION, ...customLocalization };
@@ -214,8 +227,14 @@ export function ContentForm({
 	// Build field config for AutoForm (fieldType is now embedded in jsonSchema)
 	const fieldConfig = useMemo(
 		() =>
-			buildFieldConfigFromJsonSchema(jsonSchema, uploadImage, fieldComponents),
-		[jsonSchema, uploadImage, fieldComponents],
+			buildFieldConfigFromJsonSchema(
+				jsonSchema,
+				uploadImage,
+				fieldComponents,
+				imagePicker,
+				imageInputField,
+			),
+		[jsonSchema, uploadImage, fieldComponents, imagePicker, imageInputField],
 	);
 
 	// Find the field to use for slug auto-generation

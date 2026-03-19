@@ -1,5 +1,5 @@
 // app/routes/__root.tsx
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Outlet, Link, useNavigate } from "react-router";
 import { StackProvider } from "@btst/stack/context"
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
@@ -10,7 +10,11 @@ import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builde
 import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
 import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
 import { CommentThread } from "@btst/stack/plugins/comments/client/components"
+import type { MediaPluginOverrides } from "@btst/stack/plugins/media/client"
+import { MediaPicker, ImageInputField, uploadMediaFile } from "@btst/stack/plugins/media/client/components"
+import { Button } from "../../components/ui/button"
 import { resolveUser, searchUsers } from "../../lib/mock-users"
+import { getOrCreateQueryClient } from "../../lib/query-client"
 
 // Get base URL function - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -20,19 +24,6 @@ const getBaseURL = () =>
       ? (import.meta.env.VITE_BASE_URL || window.location.origin)
       : (process.env.BASE_URL || "http://localhost:5173")
 
-// Mock file upload URLs
-const MOCK_IMAGE_URL = "https://placehold.co/400/png"
-const MOCK_FILE_URL = "https://example-files.online-convert.com/document/txt/example.txt"
-
-// Mock file upload function that returns appropriate URL based on file type
-async function mockUploadFile(file: File): Promise<string> {
-    console.log("uploadFile", file.name, file.type)
-    // Return image placeholder for images, txt file URL for other file types
-    if (file.type.startsWith("image/")) {
-        return MOCK_IMAGE_URL
-    }
-    return MOCK_FILE_URL
-}
 
 // Define the shape of all plugin overrides
   type PluginOverrides = {
@@ -42,6 +33,7 @@ async function mockUploadFile(file: File): Promise<string> {
       "form-builder": FormBuilderPluginOverrides,
       kanban: KanbanPluginOverrides,
       comments: CommentsPluginOverrides,
+      media: MediaPluginOverrides,
   }
 
 export default function Layout() {
@@ -49,6 +41,13 @@ export default function Layout() {
     const baseURL = getBaseURL()
     console.log("baseURL", baseURL)
     const navigate = useNavigate()
+    const [queryClient] = useState(() => getOrCreateQueryClient())
+
+    const uploadImage = async (file: File) => {
+        const asset = await uploadMediaFile(file, baseURL)
+        return asset.url
+    }
+
   return (
     
             <StackProvider<PluginOverrides>
@@ -58,7 +57,9 @@ export default function Layout() {
                         apiBaseURL: baseURL,
                         apiBasePath: "/api/data",
                         navigate: (href) => navigate(href),
-                        uploadImage: mockUploadFile,
+                        uploadImage,
+                        imagePicker: ImagePicker,
+                        imageInputField: ImageInputField,
                         Link: ({ href, children, className, ...props }) => (
                             <Link to={href || ""} className={className} {...props}>
                               {children}
@@ -110,7 +111,7 @@ export default function Layout() {
                         apiBaseURL: baseURL,
                         apiBasePath: "/api/data",
                         navigate: (href) => navigate(href),
-                        uploadFile: mockUploadFile,
+                        uploadFile: uploadImage,
                         Link: ({ href, children, className, ...props }) => (
                             <Link to={href || ""} className={className} {...props}>
                               {children}
@@ -124,68 +125,14 @@ export default function Layout() {
                         apiBaseURL: baseURL,
                         apiBasePath: "/api/data",
                         navigate: (href) => navigate(href),
-                        uploadImage: mockUploadFile,
+                        uploadImage,
+                        imagePicker: ImagePicker,
+                        imageInputField: ImageInputField,
                         Link: ({ href, children, className, ...props }) => (
                             <Link to={href || ""} className={className} {...props}>
                               {children}
                             </Link>
                         ),
-                        // Custom field components for CMS forms
-                        // These override the default auto-form field types
-                        fieldComponents: {
-                            // Override "file" to use uploadImage from context
-                            file: ({ field, label, isRequired, fieldConfigItem }) => {
-                                const [preview, setPreview] = useState<string | null>(field.value || null);
-                                const [uploading, setUploading] = useState(false);
-                                // Sync preview with field.value when it changes (e.g., when editing an existing item)
-                                useEffect(() => {
-                                    const normalizedValue = field.value || null;
-                                    if (normalizedValue !== preview) {
-                                        setPreview(normalizedValue);
-                                    }
-                                }, [field.value, preview]);
-                                return (
-                                    <div className="space-y-2" data-testid="custom-file-field">
-                                        <label className="text-sm font-medium">
-                                            {label}
-                                            {isRequired && <span className="text-destructive"> *</span>}
-                                        </label>
-                                        {!preview ? (
-                                            <input
-                                                type="file"
-                                                accept="image/*"
-                                                data-testid="image-upload-input"
-                                                disabled={uploading}
-                                                onChange={async (e) => {
-                                                    const file = e.target.files?.[0];
-                                                    if (file) {
-                                                        setUploading(true);
-                                                        try {
-                                                            const url = await mockUploadFile(file);
-                                                            setPreview(url);
-                                                            field.onChange(url);
-                                                        } finally {
-                                                            setUploading(false);
-                                                        }
-                                                    }
-                                                }}
-                                                className="block w-full text-sm"
-                                            />
-                                        ) : (
-                                            <div className="flex items-center gap-2">
-                                                <img src={preview} alt="Preview" className="h-16 w-16 object-cover rounded" data-testid="image-preview" />
-                                                <button type="button" onClick={() => { setPreview(null); field.onChange(""); }} className="text-sm text-destructive" data-testid="remove-image-button">
-                                                    Remove
-                                                </button>
-                                            </div>
-                                        )}
-                                        {fieldConfigItem?.description && (
-                                            <p className="text-sm text-muted-foreground">{String(fieldConfigItem.description)}</p>
-                                        )}
-                                    </div>
-                                );
-                            },
-                        },
                         onRouteRender: async (routeName, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] CMS route:`, routeName, context.path);
                         },
@@ -215,6 +162,8 @@ export default function Layout() {
                               {children}
                             </Link>
                         ),
+                        uploadImage,
+                        imagePicker: ImagePicker,
                         // User resolution for assignees
                         resolveUser,
                         searchUsers,
@@ -252,7 +201,19 @@ export default function Layout() {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeUserCommentsPageRendered`);
                             return true; // In production: check authenticated session
                         },
-                    }
+                    },
+                    media: {
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        queryClient,
+                        uploadMode: "direct",
+                        navigate: (href) => navigate(href),
+                        Link: ({ href, children, className, ...props }) => (
+                            <Link to={href || ""} className={className} {...props}>
+                              {children}
+                            </Link>
+                        ),
+                    },
                 }}
             >
                 <Outlet />
@@ -272,4 +233,23 @@ export default function Layout() {
             </StackProvider>
             
   );
+}
+
+const ImagePicker = ({ onSelect }: { onSelect: (url: string) => void }) => {
+    return (
+        <MediaPicker
+            trigger={
+                <Button
+                    variant="outline"
+                    size="sm"
+                    data-testid="open-media-picker"
+                    className="hidden"
+                >
+                    Browse Media
+                </Button>
+            }
+            accept={["image/*"]}
+            onSelect={(assets) => onSelect(assets[0].url)}
+        />
+    )
 }

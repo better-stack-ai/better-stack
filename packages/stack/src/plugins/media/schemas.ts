@@ -12,7 +12,8 @@ export const createAssetSchema = z.object({
 	filename: z.string().min(1),
 	originalName: z.string().min(1),
 	mimeType: z.string().min(1),
-	size: z.number().int().positive(),
+	// Allow 0 for URL-registered assets where size is unknown at registration time.
+	size: z.number().int().min(0),
 	url: z.string().url(),
 	folderId: z.string().optional(),
 	alt: z.string().optional(),

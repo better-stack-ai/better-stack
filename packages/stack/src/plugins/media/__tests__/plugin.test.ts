@@ -215,17 +215,34 @@ async function createAssetViaApi(
 	};
 }
 
-function invokeEndpoint(
+async function parseRequestBody(
+	request: Request,
+): Promise<Record<string, unknown> | undefined> {
+	const contentType = request.headers.get("content-type") ?? "";
+	if (contentType.includes("multipart/form-data")) {
+		const formData = await request.formData();
+		const body: Record<string, unknown> = {};
+		formData.forEach((value, key) => {
+			body[key] = value;
+		});
+		return body;
+	}
+	return undefined;
+}
+
+async function invokeEndpoint(
 	backend: ReturnType<typeof createBackend>,
 	endpointKey: string,
 	request: Request,
 ) {
+	const body = await parseRequestBody(request);
 	return (backend.router as any).endpoints[endpointKey]({
 		request,
 		headers: request.headers,
 		method: request.method,
 		params: {},
 		query: {},
+		body,
 		asResponse: true,
 	});
 }

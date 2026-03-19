@@ -1,4 +1,5 @@
 import type { Editor } from "@tiptap/react"
+import type { ComponentType } from "react"
 import type { VariantProps } from "class-variance-authority"
 import type { toggleVariants } from "@workspace/ui/components/toggle"
 import { useState } from "react"
@@ -16,9 +17,10 @@ import { ImageEditBlock } from "./image-edit-block"
 
 interface ImageEditDialogProps extends VariantProps<typeof toggleVariants> {
   editor: Editor
+  imagePickerTrigger?: ComponentType<{ onSelect: (url: string) => void }>
 }
 
-const ImageEditDialog = ({ editor, size, variant }: ImageEditDialogProps) => {
+const ImageEditDialog = ({ editor, size, variant, imagePickerTrigger }: ImageEditDialogProps) => {
   const [open, setOpen] = useState(false)
 
   return (
@@ -41,7 +43,7 @@ const ImageEditDialog = ({ editor, size, variant }: ImageEditDialogProps) => {
             Upload an image from your computer
           </DialogDescription>
         </DialogHeader>
-        <ImageEditBlock editor={editor} close={() => setOpen(false)} />
+        <ImageEditBlock editor={editor} close={() => setOpen(false)} imagePickerTrigger={imagePickerTrigger} />
       </DialogContent>
     </Dialog>
   )

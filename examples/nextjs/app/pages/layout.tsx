@@ -18,35 +18,26 @@ import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
 import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
 import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
 import { CommentThread } from "@btst/stack/plugins/comments/client/components"
+import type { MediaPluginOverrides } from "@btst/stack/plugins/media/client"
+import { MediaPicker, ImageInputField, uploadMediaFile } from "@btst/stack/plugins/media/client/components"
 import { resolveUser, searchUsers } from "@/lib/mock-users"
+import { Button } from "@/components/ui/button"
 
 // Get base URL - works on both server and client
 // On server: uses process.env.BASE_URL
 // On client: uses NEXT_PUBLIC_BASE_URL or falls back to window.location.origin (which will be correct)
-const getBaseURL = () => 
-  typeof window !== 'undefined' 
-    ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
-    : (process.env.BASE_URL || "http://localhost:3000")
+const getBaseURL = () =>
+    typeof window !== 'undefined'
+        ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
+        : (process.env.BASE_URL || "http://localhost:3000")
 
-// Mock file upload URLs
-const MOCK_IMAGE_URL = "https://placehold.co/400/png"
-const MOCK_FILE_URL = "https://example-files.online-convert.com/document/txt/example.txt"
 
-// Mock file upload function that returns appropriate URL based on file type
-async function mockUploadFile(file: File): Promise<string> {
-    console.log("uploadFile", file.name, file.type)
-    // Return image placeholder for images, txt file URL for other file types
-    if (file.type.startsWith("image/")) {
-        return MOCK_IMAGE_URL
-    }
-    return MOCK_FILE_URL
-}
 
 // Shared Next.js Image wrapper for plugins
 // Handles both cases: with explicit dimensions or using fill mode
 function NextImageWrapper(props: React.ImgHTMLAttributes<HTMLImageElement>) {
     const { alt = "", src = "", width, height, ...rest } = props
-    
+
     // Use fill mode if width or height are not provided
     if (!width || !height) {
         return (
@@ -61,7 +52,7 @@ function NextImageWrapper(props: React.ImgHTMLAttributes<HTMLImageElement>) {
             </span>
         )
     }
-    
+
     return (
         <Image
             alt={alt}
@@ -83,6 +74,7 @@ type PluginOverrides = {
     "ui-builder": UIBuilderPluginOverrides,
     kanban: KanbanPluginOverrides,
     comments: CommentsPluginOverrides,
+    media: MediaPluginOverrides,
 }
 
 export default function ExampleLayout({
@@ -94,6 +86,12 @@ export default function ExampleLayout({
     // fresh instance to avoid stale client cache overriding hydrated data
     const [queryClient] = useState(() => getOrCreateQueryClient())
     const baseURL = getBaseURL()
+
+    const uploadImage = React.useCallback(
+        async (file: File) => {
+            const asset = await uploadMediaFile(file, baseURL)
+		return asset.url;
+	}, [baseURL]);
 
     return (
         <QueryClientProvider client={queryClient}>
@@ -112,7 +110,9 @@ export default function ExampleLayout({
                         apiBasePath: "/api/data",
                         navigate: (path) => router.push(path),
                         refresh: () => router.refresh(),
-                        uploadImage: mockUploadFile,
+                        uploadImage,
+                        imagePicker: ImagePicker,
+                        imageInputField: ImageInputField,
                         Image: NextImageWrapper,
                         // Wire comments into the bottom of each blog post
                         postBottomSlot: (post) => (
@@ -129,29 +129,29 @@ export default function ExampleLayout({
                         ),
                         // Lifecycle Hooks - called during route rendering
                         onRouteRender: async (routeName, context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onRouteRender: Route rendered:`, routeName, context.path);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] onRouteRender: Route rendered:`, routeName, context.path);
                         },
                         onRouteError: async (routeName, error, context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onRouteError: Route error:`, routeName, error.message, context.path);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] onRouteError: Route error:`, routeName, error.message, context.path);
                         },
                         onBeforePostsPageRendered: (context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforePostsPageRendered: checking access for`, context.path);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] onBeforePostsPageRendered: checking access for`, context.path);
                             return true;
                         },
                         onBeforeDraftsPageRendered: (context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeDraftsPageRendered: checking auth for`, context.path);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] onBeforeDraftsPageRendered: checking auth for`, context.path);
                             return true;
                         },
                         onBeforeNewPostPageRendered: (context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeNewPostPageRendered: checking permissions for`, context.path);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] onBeforeNewPostPageRendered: checking permissions for`, context.path);
                             return true;
                         },
                         onBeforeEditPostPageRendered: (slug, context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeEditPostPageRendered: checking permissions for`, slug, context.path);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] onBeforeEditPostPageRendered: checking permissions for`, slug, context.path);
                             return true;
                         },
                         onBeforePostPageRendered: (slug, context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforePostPageRendered: checking access for`, slug, context.path);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] onBeforePostPageRendered: checking access for`, slug, context.path);
                             return true;
                         },
                     },
@@ -161,7 +161,7 @@ export default function ExampleLayout({
                         apiBasePath: "/api/data",
                         navigate: (path) => router.push(path),
                         refresh: () => router.refresh(),
-                        uploadFile: mockUploadFile,
+                        uploadFile: uploadImage,
                         Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
                         Image: NextImageWrapper,
                         chatSuggestions: [
@@ -173,10 +173,10 @@ export default function ExampleLayout({
                         ],
                         // Lifecycle hooks
                         onRouteRender: async (routeName, context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] AI Chat route:`, routeName, context.path);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] AI Chat route:`, routeName, context.path);
                         },
                         onRouteError: async (routeName, error, context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] AI Chat error:`, routeName, error.message);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] AI Chat error:`, routeName, error.message);
                         },
                     },
                     cms: {
@@ -184,71 +184,17 @@ export default function ExampleLayout({
                         apiBasePath: "/api/data",
                         navigate: (path) => router.push(path),
                         refresh: () => router.refresh(),
-                        uploadImage: mockUploadFile,
+                        uploadImage,
+                        imagePicker: ImagePicker,
+                        imageInputField: ImageInputField,
                         Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
                         Image: NextImageWrapper,
-                        // Custom field components for CMS forms
-                        // These override the default auto-form field types
-                        fieldComponents: {
-                            // Override "file" to use uploadImage from context
-                            file: ({ field, label, isRequired, fieldConfigItem, fieldProps }) => {
-                                const [preview, setPreview] = React.useState<string | null>(field.value || null);
-                                const [uploading, setUploading] = React.useState(false);
-                                // Sync preview with field.value when it changes (e.g., when editing an existing item)
-                                React.useEffect(() => {
-                                    const normalizedValue = field.value || null;
-                                    if (normalizedValue !== preview) {
-                                        setPreview(normalizedValue);
-                                    }
-                                }, [field.value, preview]);
-                                return (
-                                    <div className="space-y-2" data-testid="custom-file-field">
-                                        <label className="text-sm font-medium">
-                                            {label}
-                                            {isRequired && <span className="text-destructive"> *</span>}
-                                        </label>
-                                        {!preview ? (
-                                            <input
-                                                type="file"
-                                                accept="image/*"
-                                                data-testid="image-upload-input"
-                                                disabled={uploading}
-                                                onChange={async (e) => {
-                                                    const file = e.target.files?.[0];
-                                                    if (file) {
-                                                        setUploading(true);
-                                                        try {
-                                                            const url = await mockUploadFile(file);
-                                                            setPreview(url);
-                                                            field.onChange(url);
-                                                        } finally {
-                                                            setUploading(false);
-                                                        }
-                                                    }
-                                                }}
-                                                className="block w-full text-sm"
-                                            />
-                                        ) : (
-                                            <div className="flex items-center gap-2">
-                                                <img src={preview} alt="Preview" className="h-16 w-16 object-cover rounded" data-testid="image-preview" />
-                                                <button type="button" onClick={() => { setPreview(null); field.onChange(""); }} className="text-sm text-destructive" data-testid="remove-image-button">
-                                                    Remove
-                                                </button>
-                                            </div>
-                                        )}
-                                        {fieldConfigItem?.description && (
-                                            <p className="text-sm text-muted-foreground">{String(fieldConfigItem.description)}</p>
-                                        )}
-                                    </div>
-                                );
-                            },
-                        },
                         // Lifecycle hooks
                         onRouteRender: async (routeName, context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] CMS route:`, routeName, context.path);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] CMS route:`, routeName, context.path);
                         },
                         onRouteError: async (routeName, error, context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] CMS error:`, routeName, error.message);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] CMS error:`, routeName, error.message);
                         },
                     },
                     "form-builder": {
@@ -259,10 +205,10 @@ export default function ExampleLayout({
                         Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
                         // Lifecycle hooks
                         onRouteRender: async (routeName, context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Form Builder route:`, routeName, context.path);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] Form Builder route:`, routeName, context.path);
                         },
                         onRouteError: async (routeName, error, context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Form Builder error:`, routeName, error.message);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] Form Builder error:`, routeName, error.message);
                         },
                     },
                     "ui-builder": {
@@ -279,6 +225,9 @@ export default function ExampleLayout({
                         navigate: (path) => router.push(path),
                         refresh: () => router.refresh(),
                         Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+
+                        uploadImage,
+                        imagePicker: ImagePicker,
                         // User resolution for assignees
                         resolveUser,
                         searchUsers,
@@ -296,17 +245,17 @@ export default function ExampleLayout({
                         ),
                         // Lifecycle hooks
                         onRouteRender: async (routeName, context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Kanban route:`, routeName, context.path);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] Kanban route:`, routeName, context.path);
                         },
                         onRouteError: async (routeName, error, context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] Kanban error:`, routeName, error.message);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] Kanban error:`, routeName, error.message);
                         },
                         onBeforeBoardsPageRendered: (context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeBoardsPageRendered`);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] onBeforeBoardsPageRendered`);
                             return true;
                         },
                         onBeforeBoardPageRendered: (boardId, context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeBoardPageRendered:`, boardId);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] onBeforeBoardPageRendered:`, boardId);
                             return true;
                         },
                     },
@@ -317,17 +266,26 @@ export default function ExampleLayout({
                         currentUserId: "olliethedev",
                         defaultCommentPageSize: 5,
                         resourceLinks: {
-                            "blog-post": (slug) => `/pages/blog/${slug}`,
+                            "blog-post": (slug) => `/pages/blog/${ slug }`,
                         },
                         onBeforeModerationPageRendered: (context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeModerationPageRendered`);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] onBeforeModerationPageRendered`);
                             return true; // In production: check admin role
                         },
                         onBeforeUserCommentsPageRendered: (context) => {
-                            console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeUserCommentsPageRendered`);
+                            console.log(`[${ context.isSSR ? 'SSR' : 'CSR' }] onBeforeUserCommentsPageRendered`);
                             return true; // In production: check authenticated session
                         },
-                    }
+                    },
+                    media: {
+                        apiBaseURL: baseURL,
+                        apiBasePath: "/api/data",
+                        queryClient,
+                        uploadMode: "direct",
+                        navigate: (path) => router.push(path),
+                        Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+                        Image: NextImageWrapper,
+                    },
                 }}
             >
                 {children}
@@ -349,3 +307,20 @@ export default function ExampleLayout({
     )
 }
 
+const ImagePicker = ({ onSelect }: { onSelect: (url: string) => void }) => {
+    return (
+        <MediaPicker
+            trigger={
+                <Button
+                    variant="outline"
+                    size="sm"
+                    data-testid="open-media-picker"
+                >
+                    Browse Media
+                </Button>
+            }
+            accept={["image/*"]}
+            onSelect={(assets) => onSelect(assets[0].url)}
+        />
+    )
+}

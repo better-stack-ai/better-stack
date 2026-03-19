@@ -424,6 +424,47 @@
         "default": "./dist/plugins/media/api/index.cjs"
       }
     },
+    "./plugins/media/client": {
+      "import": {
+        "types": "./dist/plugins/media/client/index.d.ts",
+        "default": "./dist/plugins/media/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/media/client/index.d.cts",
+        "default": "./dist/plugins/media/client/index.cjs"
+      }
+    },
+    "./plugins/media/client/components": {
+      "import": {
+        "types": "./dist/plugins/media/client/components/index.d.ts",
+        "default": "./dist/plugins/media/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/media/client/components/index.d.cts",
+        "default": "./dist/plugins/media/client/components/index.cjs"
+      }
+    },
+    "./plugins/media/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/media/client/hooks/index.d.ts",
+        "default": "./dist/plugins/media/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/media/client/hooks/index.d.cts",
+        "default": "./dist/plugins/media/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/media/query-keys": {
+      "import": {
+        "types": "./dist/plugins/media/query-keys.d.ts",
+        "default": "./dist/plugins/media/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/media/query-keys.d.cts",
+        "default": "./dist/plugins/media/query-keys.cjs"
+      }
+    },
+    "./plugins/media/css": "./dist/plugins/media/client.css",
     "./plugins/route-docs/client": {
       "import": {
         "types": "./dist/plugins/route-docs/client/index.d.ts",
@@ -622,6 +663,18 @@
       ],
       "plugins/media/api": [
         "./dist/plugins/media/api/index.d.ts"
+      ],
+      "plugins/media/client": [
+        "./dist/plugins/media/client/index.d.ts"
+      ],
+      "plugins/media/client/components": [
+        "./dist/plugins/media/client/components/index.d.ts"
+      ],
+      "plugins/media/client/hooks": [
+        "./dist/plugins/media/client/hooks/index.d.ts"
+      ],
+      "plugins/media/query-keys": [
+        "./dist/plugins/media/query-keys.d.ts"
       ],
       "plugins/route-docs/client": [
         "./dist/plugins/route-docs/client/index.d.ts"

@@ -28,12 +28,43 @@ export function FeaturedImageField({
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [isUploading, setIsUploading] = useState(false);
 
-	const { uploadImage, Image, localization } = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", { localization: BLOG_LOCALIZATION });
+	const {
+		uploadImage,
+		Image,
+		localization,
+		imageInputField: ImageInput,
+	} = usePluginOverrides<BlogPluginOverrides, Partial<BlogPluginOverrides>>(
+		"blog",
+		{ localization: BLOG_LOCALIZATION },
+	);
 
 	const ImageComponent = Image ? Image : DefaultImage;
+
+	// When a custom imageInput component is provided via overrides, delegate to it.
+	if (ImageInput) {
+		return (
+			<FormItem className="flex flex-col">
+				<FormLabel>
+					{localization.BLOG_FORMS_FEATURED_IMAGE_LABEL}
+					{isRequired && (
+						<span className="text-destructive">
+							{" "}
+							{localization.BLOG_FORMS_FEATURED_IMAGE_REQUIRED_ASTERISK}
+						</span>
+					)}
+				</FormLabel>
+				<FormControl>
+					<ImageInput
+						value={value || ""}
+						onChange={onChange}
+						isRequired={isRequired}
+					/>
+				</FormControl>
+				<FormDescription />
+				<FormMessage />
+			</FormItem>
+		);
+	}
 
 	const handleImageUpload = async (
 		event: React.ChangeEvent<HTMLInputElement>,
