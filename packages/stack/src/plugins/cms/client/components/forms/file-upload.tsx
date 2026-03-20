@@ -86,28 +86,7 @@ export function CMSFileUpload({
 	} = fieldProps;
 	const showLabel = _showLabel === undefined ? true : _showLabel;
 
-	// When a custom imageInputField component is provided via overrides, delegate to it.
-	if (ImageInputField) {
-		return (
-			<FormItem>
-				{showLabel && (
-					<AutoFormLabel
-						label={fieldConfigItem?.label || label}
-						isRequired={isRequired}
-					/>
-				)}
-				<FormControl>
-					<ImageInputField
-						value={field.value || ""}
-						onChange={field.onChange}
-						isRequired={isRequired}
-					/>
-				</FormControl>
-				<AutoFormTooltip fieldConfigItem={fieldConfigItem} />
-				<FormMessage />
-			</FormItem>
-		);
-	}
+	// All hooks must be called unconditionally before any early return.
 	const [isUploading, setIsUploading] = useState(false);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(
 		field.value || null,
@@ -125,7 +104,6 @@ export function CMSFileUpload({
 			const file = e.target.files?.[0];
 			if (!file) return;
 
-			// Check if it's an image
 			if (!file.type.startsWith("image/")) {
 				toast.error("Please select an image file");
 				return;
@@ -150,6 +128,29 @@ export function CMSFileUpload({
 		setPreviewUrl(null);
 		field.onChange("");
 	}, [field]);
+
+	// When a custom imageInputField component is provided via overrides, delegate to it.
+	if (ImageInputField) {
+		return (
+			<FormItem>
+				{showLabel && (
+					<AutoFormLabel
+						label={fieldConfigItem?.label || label}
+						isRequired={isRequired}
+					/>
+				)}
+				<FormControl>
+					<ImageInputField
+						value={field.value || ""}
+						onChange={field.onChange}
+						isRequired={isRequired}
+					/>
+				</FormControl>
+				<AutoFormTooltip fieldConfigItem={fieldConfigItem} />
+				<FormMessage />
+			</FormItem>
+		);
+	}
 
 	return (
 		<FormItem>
