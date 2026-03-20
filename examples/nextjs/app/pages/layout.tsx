@@ -18,8 +18,8 @@ import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
 import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
 import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
 import { CommentThread } from "@btst/stack/plugins/comments/client/components"
-import type { MediaPluginOverrides } from "@btst/stack/plugins/media/client"
-import { MediaPicker, ImageInputField, uploadMediaFile } from "@btst/stack/plugins/media/client/components"
+import { uploadAsset, type MediaPluginOverrides } from "@btst/stack/plugins/media/client"
+import { MediaPicker, ImageInputField } from "@btst/stack/plugins/media/client/components"
 import { resolveUser, searchUsers } from "@/lib/mock-users"
 import { Button } from "@/components/ui/button"
 
@@ -86,12 +86,22 @@ export default function ExampleLayout({
     // fresh instance to avoid stale client cache overriding hydrated data
     const [queryClient] = useState(() => getOrCreateQueryClient())
     const baseURL = getBaseURL()
+    const mediaClientConfig = React.useMemo(
+        () => ({
+            apiBaseURL: baseURL,
+            apiBasePath: "/api/data",
+            uploadMode: "direct" as const,
+        }),
+        [baseURL],
+    )
 
     const uploadImage = React.useCallback(
         async (file: File) => {
-            const asset = await uploadMediaFile(file, baseURL, "/api/data")
-		return asset.url;
-	}, [baseURL]);
+            const asset = await uploadAsset(mediaClientConfig, { file })
+            return asset.url
+        },
+        [mediaClientConfig],
+    )
 
     // For chat file attachments we embed as a data URL so OpenAI can read the
     // content directly — a local /uploads/... path is not reachable from OpenAI's servers.
@@ -291,10 +301,8 @@ export default function ExampleLayout({
                         },
                     },
                     media: {
-                        apiBaseURL: baseURL,
-                        apiBasePath: "/api/data",
+                        ...mediaClientConfig,
                         queryClient,
-                        uploadMode: "direct",
                         navigate: (path) => router.push(path),
                         Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
                         Image: NextImageWrapper,

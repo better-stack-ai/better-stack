@@ -9,8 +9,8 @@ import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builde
 import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
 import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
 import { CommentThread } from "@btst/stack/plugins/comments/client/components"
-import type { MediaPluginOverrides } from "@btst/stack/plugins/media/client"
-import { MediaPicker, ImageInputField, uploadMediaFile } from "@btst/stack/plugins/media/client/components"
+import { uploadAsset, type MediaPluginOverrides } from "@btst/stack/plugins/media/client"
+import { MediaPicker, ImageInputField } from "@btst/stack/plugins/media/client/components"
 import { Button } from "../../components/ui/button"
 import { resolveUser, searchUsers } from "../../lib/mock-users"
 import { Link, useRouter, Outlet, createFileRoute } from "@tanstack/react-router"
@@ -45,9 +45,14 @@ function Layout() {
     const router = useRouter()
     const routeContext = Route.useRouteContext()
     const baseURL = getBaseURL()
+    const mediaClientConfig = {
+        apiBaseURL: baseURL,
+        apiBasePath: "/api/data",
+        uploadMode: "direct" as const,
+    }
 
     const uploadImage = async (file: File) => {
-        const asset = await uploadMediaFile(file, baseURL, "/api/data")
+        const asset = await uploadAsset(mediaClientConfig, { file })
         return asset.url
     }
 
@@ -217,10 +222,8 @@ function Layout() {
                         },
                     },
                     media: {
-                        apiBaseURL: baseURL,
-                        apiBasePath: "/api/data",
+                        ...mediaClientConfig,
                         queryClient: routeContext.queryClient,
-                        uploadMode: "direct",
                         navigate: (href) => router.navigate({ href }),
                         Link: ({ href, children, className, ...props }) => (
                             <Link to={href} className={className} {...props}>

@@ -74,8 +74,9 @@ export interface KanbanPluginOverrides {
 	headers?: HeadersInit;
 
 	/**
-	 * Function used to upload an image from the task description editor and return its URL.
-	 * Wired as the `uploader` prop of MinimalTiptapEditor — handles drag-drop image uploads.
+	 * Function used to upload a new image file from the task description editor
+	 * and return its URL. This is separate from `imagePicker`, which selects an
+	 * existing asset URL.
 	 */
 	uploadImage?: (file: File) => Promise<string>;
 

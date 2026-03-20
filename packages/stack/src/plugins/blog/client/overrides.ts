@@ -60,7 +60,8 @@ export interface BlogPluginOverrides {
 		React.ImgHTMLAttributes<HTMLImageElement> & Record<string, any>
 	>;
 	/**
-	 * Function used to upload an image and return its URL.
+	 * Function used to upload a new image file and return its URL.
+	 * This is separate from `imagePicker`, which selects an existing asset URL.
 	 */
 	uploadImage: (file: File) => Promise<string>;
 	/**

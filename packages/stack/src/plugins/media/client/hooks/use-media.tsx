@@ -12,7 +12,7 @@ import type { MediaPluginOverrides } from "../overrides";
 import { createMediaQueryKeys } from "../../query-keys";
 import type { AssetListParams } from "../../api/getters";
 import type { SerializedAsset, SerializedFolder } from "../../types";
-import { compressImage } from "../utils/image-compression";
+import { uploadAsset } from "../upload";
 
 function useMediaConfig() {
 	return usePluginOverrides<MediaPluginOverrides>("media");
@@ -99,139 +99,17 @@ export function useUploadAsset() {
 			}: {
 				file: File;
 				folderId?: string;
-			}): Promise<SerializedAsset> => {
-				const processedFile =
-					imageCompression === false
-						? file
-						: await compressImage(
-								file,
-								imageCompression ?? {
-									maxWidth: 2048,
-									maxHeight: 2048,
-									quality: 0.85,
-								},
-							);
-
-				const base = `${apiBaseURL}${apiBasePath}`;
-				const headersObj = new Headers(headers as HeadersInit | undefined);
-
-				if (uploadMode === "direct") {
-					const formData = new FormData();
-					formData.append("file", processedFile);
-					if (folderId) formData.append("folderId", folderId);
-					const res = await fetch(`${base}/media/upload`, {
-						method: "POST",
-						headers: headersObj,
-						body: formData,
-					});
-					if (!res.ok) {
-						const err = await res
-							.json()
-							.catch(() => ({ message: res.statusText }));
-						throw new Error(err.message ?? "Upload failed");
-					}
-					return res.json();
-				}
-
-				if (uploadMode === "s3") {
-					const tokenRes = await fetch(`${base}/media/upload/token`, {
-						method: "POST",
-						headers: {
-							...Object.fromEntries(headersObj.entries()),
-							"Content-Type": "application/json",
-						},
-						body: JSON.stringify({
-							filename: processedFile.name,
-							mimeType: processedFile.type,
-							size: processedFile.size,
-							folderId,
-						}),
-					});
-					if (!tokenRes.ok) {
-						const err = await tokenRes
-							.json()
-							.catch(() => ({ message: tokenRes.statusText }));
-						throw new Error(err.message ?? "Failed to get upload token");
-					}
-					const token = (await tokenRes.json()) as {
-						type: "presigned-url";
-						payload: {
-							uploadUrl: string;
-							publicUrl: string;
-							key: string;
-							method: "PUT";
-							headers: Record<string, string>;
-						};
-					};
-
-					const putRes = await fetch(token.payload.uploadUrl, {
-						method: "PUT",
-						headers: token.payload.headers,
-						body: processedFile,
-					});
-					if (!putRes.ok) throw new Error("Failed to upload to S3");
-
-					const assetRes = await fetch(`${base}/media/assets`, {
-						method: "POST",
-						headers: {
-							...Object.fromEntries(headersObj.entries()),
-							"Content-Type": "application/json",
-						},
-						body: JSON.stringify({
-							filename: processedFile.name,
-							originalName: file.name,
-							mimeType: processedFile.type,
-							size: processedFile.size,
-							url: token.payload.publicUrl,
-							folderId,
-						}),
-					});
-					if (!assetRes.ok) {
-						const err = await assetRes
-							.json()
-							.catch(() => ({ message: assetRes.statusText }));
-						throw new Error(err.message ?? "Failed to register asset");
-					}
-					return assetRes.json();
-				}
-
-				if (uploadMode === "vercel-blob") {
-					// Dynamic import keeps @vercel/blob/client optional
-					const { upload } = await import("@vercel/blob/client");
-					const blob = await upload(processedFile.name, processedFile, {
-						access: "public",
-						handleUploadUrl: `${base}/media/upload/vercel-blob`,
-						clientPayload: JSON.stringify({
-							mimeType: processedFile.type,
-							size: processedFile.size,
-						}),
-					});
-					const assetRes = await fetch(`${base}/media/assets`, {
-						method: "POST",
-						headers: {
-							...Object.fromEntries(headersObj.entries()),
-							"Content-Type": "application/json",
-						},
-						body: JSON.stringify({
-							filename: processedFile.name,
-							originalName: file.name,
-							mimeType: processedFile.type,
-							size: processedFile.size,
-							url: blob.url,
-							folderId,
-						}),
-					});
-					if (!assetRes.ok) {
-						const err = await assetRes
-							.json()
-							.catch(() => ({ message: assetRes.statusText }));
-						throw new Error(err.message ?? "Failed to register asset");
-					}
-					return assetRes.json();
-				}
-
-				throw new Error(`Unknown uploadMode: ${uploadMode}`);
-			},
+			}): Promise<SerializedAsset> =>
+				uploadAsset(
+					{
+						apiBaseURL,
+						apiBasePath,
+						headers,
+						uploadMode,
+						imageCompression,
+					},
+					{ file, folderId },
+				),
 			onSuccess: () => {
 				reactQueryClient.invalidateQueries({ queryKey: ["mediaAssets"] });
 			},

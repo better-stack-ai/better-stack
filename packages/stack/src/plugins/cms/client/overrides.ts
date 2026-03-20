@@ -58,8 +58,9 @@ export interface CMSPluginOverrides {
 	>;
 
 	/**
-	 * Function used to upload an image and return its URL.
-	 * Used by the default "file" field component.
+	 * Function used to upload a new image file and return its URL.
+	 * Used by the default "file" field component when not selecting an existing
+	 * asset via `imagePicker` or `imageInputField`.
 	 */
 	uploadImage?: (file: File) => Promise<string>;
 

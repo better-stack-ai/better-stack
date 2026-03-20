@@ -326,28 +326,3 @@ export function ImageInputField({
 		</div>
 	);
 }
-
-/**
- * Upload a file via the media plugin's direct upload endpoint.
- * @param file - The file to upload.
- * @param baseURL - The base URL of the server (e.g. `https://example.com`).
- * @param apiBasePath - The API base path configured for the media plugin (e.g. `/api/v2`). Defaults to `/api/data`.
- */
-export async function uploadMediaFile(
-	file: File,
-	baseURL: string,
-	apiBasePath: string,
-): Promise<SerializedAsset> {
-	const formData = new FormData();
-	formData.append("file", file);
-	const res = await fetch(`${baseURL}${apiBasePath}/media/upload`, {
-		method: "POST",
-		body: formData,
-	});
-	if (!res.ok) {
-		const err = await res.json().catch(() => ({ message: res.statusText }));
-		throw new Error(err.message ?? "Upload failed");
-	}
-	const asset = (await res.json()) as SerializedAsset;
-	return asset;
-}
