@@ -121,17 +121,20 @@ main() {
     npx --yes http-server "$REGISTRY_DIR" -p $SERVER_PORT -c-1 --silent &
     SERVER_PID=$!
 
-    # Wait for server to be ready (up to 15s), then an extra 20s for stability
-    for i in $(seq 1 15); do
-        if curl -sf "http://localhost:$SERVER_PORT/btst-blog.json" > /dev/null 2>&1; then
+    # Wait for server to be ready. `npx http-server` can take >15s on a cold cache
+    # or slow CI; use 127.0.0.1 to avoid IPv6 localhost ordering quirks.
+    SERVER_READY=false
+    for _ in $(seq 1 60); do
+        if curl -sf "http://127.0.0.1:$SERVER_PORT/btst-blog.json" > /dev/null 2>&1; then
+            SERVER_READY=true
             break
         fi
         sleep 1
-        if [ "$i" = "15" ]; then
-            error "HTTP server did not become available in time"
-            exit 1
-        fi
     done
+    if [ "$SERVER_READY" != true ]; then
+        error "HTTP server did not become available in time (waited 60s; check npx / port $SERVER_PORT)"
+        exit 1
+    fi
     success "HTTP server running (PID: $SERVER_PID)"
     pause 20
 

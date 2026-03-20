@@ -1,5 +1,6 @@
 "use client";
 import { lazy } from "react";
+import type { FallbackProps } from "react-error-boundary";
 import { usePluginOverrides } from "@btst/stack/context";
 import { ComposedRoute } from "@btst/stack/client/components";
 import type { MediaPluginOverrides } from "../../overrides";
@@ -17,10 +18,11 @@ function LibraryLoading() {
 	);
 }
 
-function LibraryError({ error }: { error: Error }) {
+function LibraryError({ error }: FallbackProps) {
+	const message = error instanceof Error ? error.message : String(error);
 	return (
 		<div className="flex h-96 items-center justify-center p-8 text-destructive">
-			<p className="text-sm">{error.message}</p>
+			<p className="text-sm">{message}</p>
 		</div>
 	);
 }
