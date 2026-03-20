@@ -3,6 +3,7 @@ import { useState, useCallback, useRef, type ComponentType } from "react";
 import {
 	useAssets,
 	useDeleteAsset,
+	useDeleteFolder,
 	useFolders,
 	useUploadAsset,
 	useCreateFolder,
@@ -100,15 +101,6 @@ function FolderTreeItem({
 				))}
 		</div>
 	);
-}
-
-function useDeleteFolder() {
-	const { mutateAsync } = useDeleteAsset();
-	// Reuse hook but for folders — separate import at top handles this
-	const {
-		useDeleteFolder: _useDeleteFolder,
-	} = require("../../hooks/use-media");
-	return _useDeleteFolder();
 }
 
 function LibrarySidebar({
