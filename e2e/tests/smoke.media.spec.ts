@@ -26,8 +26,11 @@ async function openMediaPicker(page: Page) {
 
 // Helper: upload a file inside the open MediaPicker (Upload tab)
 async function uploadInMediaPicker(page: Page) {
-	// Switch to Upload tab
-	await page.getByRole("tab", { name: /upload/i }).click();
+	// The blog editor opens the picker lower on the page in Next.js, so the
+	// tab strip can render partially offscreen at the configured viewport.
+	const uploadTab = page.getByRole("tab", { name: /upload/i }).last();
+	await uploadTab.scrollIntoViewIfNeeded();
+	await uploadTab.click();
 
 	// Find the hidden file input inside the upload tab
 	const fileInput = page.locator('[data-testid="media-upload-input"]').first();
@@ -39,7 +42,9 @@ async function uploadInMediaPicker(page: Page) {
 	});
 
 	// Wait for upload to complete — a thumbnail should appear in the Browse tab
-	await page.getByRole("tab", { name: /browse/i }).click();
+	const browseTab = page.getByRole("tab", { name: /browse/i }).last();
+	await browseTab.scrollIntoViewIfNeeded();
+	await browseTab.click();
 	// The uploaded asset should appear in the grid
 	await expect(
 		page.locator('[data-testid="media-asset-item"]').first(),
@@ -71,6 +76,9 @@ async function openBlogEditorMediaPicker(page: Page) {
 		'[data-testid="image-picker-trigger"] [data-testid="open-media-picker"]',
 	);
 	await expect(trigger).toBeVisible({ timeout: 10000 });
+	await trigger.evaluate((element) =>
+		element.scrollIntoView({ block: "center", inline: "nearest" }),
+	);
 	await trigger.click();
 	await expect(page.getByText("Media Library")).toBeVisible({ timeout: 5000 });
 }

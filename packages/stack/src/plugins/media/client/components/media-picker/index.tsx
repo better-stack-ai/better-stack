@@ -122,13 +122,13 @@ export function MediaPicker({
 		>
 			<PopoverTrigger asChild>{trigger}</PopoverTrigger>
 			<PopoverContent
-				className="w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-hidden p-0 sm:w-[900px]"
+				className="w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-hidden p-0 sm:w-[820px]"
 				align="start"
 				sideOffset={8}
 				collisionPadding={8}
 				style={{
-					maxWidth: "min(900px, calc(100vw - 1rem))",
-					height: "min(720px, calc(100dvh - 1rem))",
+					maxWidth: "min(820px, calc(100vw - 1rem))",
+					height: "min(640px, calc(100dvh - 2rem))",
 				}}
 			>
 				<div className="flex h-full flex-col overflow-hidden rounded-md">
