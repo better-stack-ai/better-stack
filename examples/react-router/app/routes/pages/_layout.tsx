@@ -243,7 +243,6 @@ const ImagePicker = ({ onSelect }: { onSelect: (url: string) => void }) => {
                     variant="outline"
                     size="sm"
                     data-testid="open-media-picker"
-                    className="hidden"
                 >
                     Browse Media
                 </Button>
