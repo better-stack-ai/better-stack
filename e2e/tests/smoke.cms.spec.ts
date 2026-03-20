@@ -1,4 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { readFileSync } from "fs";
+import { resolve } from "path";
+
+// Shared test image buffer loaded once for the whole module
+const testImageBuffer = readFileSync(
+	resolve(__dirname, "../fixtures/test-image.png"),
+);
 
 // Ignore network/resource 404s from image thumbnail loading (local adapter
 // serves uploads as static Next.js files; the preview <img> may 404 in
@@ -453,6 +460,49 @@ test.describe("CMS Plugin", () => {
 	});
 });
 
+// ─── MediaPicker helpers (reused across CMS image upload tests) ─────────────
+
+/** Open the MediaPicker popover via the `open-media-picker` trigger. */
+async function openMediaPicker(page: Page) {
+	const triggerBtn = page.locator('[data-testid="open-media-picker"]').first();
+	await expect(triggerBtn).toBeVisible({ timeout: 10000 });
+	await triggerBtn.click();
+	await expect(page.getByText("Media Library")).toBeVisible({ timeout: 5000 });
+}
+
+/**
+ * Inside an open MediaPicker, switch to the Upload tab and set a test image,
+ * then switch to Browse to wait for the uploaded asset to appear.
+ */
+async function uploadInMediaPicker(page: Page) {
+	await page.getByRole("tab", { name: /upload/i }).click();
+	const fileInput = page.locator('[data-testid="media-upload-input"]').first();
+	await expect(fileInput).toBeAttached({ timeout: 5000 });
+	await fileInput.setInputFiles({
+		name: "test-product-image.png",
+		mimeType: "image/png",
+		buffer: testImageBuffer,
+	});
+	// Switch to Browse and wait for the uploaded thumbnail to appear
+	await page.getByRole("tab", { name: /browse/i }).click();
+	await expect(
+		page.locator('[data-testid="media-asset-item"]').first(),
+	).toBeVisible({ timeout: 15000 });
+}
+
+/** Click the first asset in the Browse grid, then confirm selection. */
+async function selectFirstAsset(page: Page) {
+	await page.locator('[data-testid="media-asset-item"]').first().click();
+	const selectBtn = page.locator('[data-testid="media-select-button"]');
+	await expect(selectBtn).toBeVisible({ timeout: 3000 });
+	await selectBtn.click();
+	await expect(page.getByText("Media Library")).not.toBeVisible({
+		timeout: 5000,
+	});
+}
+
+// ─── CMS Image Upload tests ──────────────────────────────────────────────────
+
 test.describe("CMS Image Upload", () => {
 	// Generate unique ID for each test run to avoid slug collisions
 	const testRunId = Date.now().toString(36);
@@ -466,9 +516,9 @@ test.describe("CMS Image Upload", () => {
 
 		await page.goto("/pages/cms/product/new", { waitUntil: "networkidle" });
 
-		// Should show the image upload input
-		const imageUploadInput = page.locator('[data-testid="image-upload-input"]');
-		await expect(imageUploadInput).toBeAttached({ timeout: 5000 });
+		// The MediaPicker trigger button should be visible in the image field
+		const trigger = page.locator('[data-testid="open-media-picker"]').first();
+		await expect(trigger).toBeVisible({ timeout: 5000 });
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
 			[],
@@ -484,27 +534,20 @@ test.describe("CMS Image Upload", () => {
 
 		await page.goto("/pages/cms/product/new", { waitUntil: "networkidle" });
 
-		// Wait for the image upload input to be visible
-		const imageUploadInput = page.locator('[data-testid="image-upload-input"]');
-		await expect(imageUploadInput).toBeAttached({ timeout: 5000 });
+		// Open the MediaPicker and upload via the Upload tab
+		await openMediaPicker(page);
+		await uploadInMediaPicker(page);
+		await selectFirstAsset(page);
 
-		// Upload a test image file
-		const testImageBase64 =
-			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-		await imageUploadInput.setInputFiles({
-			name: "test-product-image.png",
-			mimeType: "image/png",
-			buffer: Buffer.from(testImageBase64, "base64"),
-		});
-
-		// Wait for the preview to appear
+		// After selection the image preview should appear
 		const imagePreview = page.locator('[data-testid="image-preview"]');
 		await expect(imagePreview).toBeVisible({ timeout: 10000 });
 
-		// The preview should show a real URL from the media plugin upload endpoint
+		// The preview should show a real URL (not a mock placeholder)
 		const previewSrc = await imagePreview.getAttribute("src");
 		expect(previewSrc).toBeTruthy();
 		expect(previewSrc).not.toBe("");
+		expect(previewSrc).not.toContain("placehold.co");
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
 			[],
@@ -520,29 +563,23 @@ test.describe("CMS Image Upload", () => {
 
 		await page.goto("/pages/cms/product/new", { waitUntil: "networkidle" });
 
-		// Upload an image first
-		const imageUploadInput = page.locator('[data-testid="image-upload-input"]');
-		await expect(imageUploadInput).toBeAttached({ timeout: 5000 });
-
-		const testImageBase64 =
-			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-		await imageUploadInput.setInputFiles({
-			name: "to-remove.png",
-			mimeType: "image/png",
-			buffer: Buffer.from(testImageBase64, "base64"),
-		});
+		// Upload via MediaPicker
+		await openMediaPicker(page);
+		await uploadInMediaPicker(page);
+		await selectFirstAsset(page);
 
 		// Wait for preview
 		const imagePreview = page.locator('[data-testid="image-preview"]');
 		await expect(imagePreview).toBeVisible({ timeout: 10000 });
 
 		// Click remove button
-		const removeButton = page.locator('[data-testid="remove-image-button"]');
-		await removeButton.click();
+		await page.locator('[data-testid="remove-image-button"]').click();
 
-		// Preview should be hidden, upload input should reappear
+		// Preview should be gone; the Browse Media trigger should reappear
 		await expect(imagePreview).not.toBeVisible();
-		await expect(imageUploadInput).toBeAttached();
+		await expect(
+			page.locator('[data-testid="open-media-picker"]').first(),
+		).toBeVisible();
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
 			[],
@@ -572,17 +609,10 @@ test.describe("CMS Image Upload", () => {
 		await page.locator('[role="option"]').first().waitFor({ state: "visible" });
 		await page.locator('[role="option"]').first().click();
 
-		// Upload an image
-		const imageUploadInput = page.locator('[data-testid="image-upload-input"]');
-		await expect(imageUploadInput).toBeAttached({ timeout: 5000 });
-
-		const testImageBase64 =
-			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-		await imageUploadInput.setInputFiles({
-			name: "product-image.png",
-			mimeType: "image/png",
-			buffer: Buffer.from(testImageBase64, "base64"),
-		});
+		// Upload an image via MediaPicker
+		await openMediaPicker(page);
+		await uploadInMediaPicker(page);
+		await selectFirstAsset(page);
 
 		// Wait for preview
 		const imagePreview = page.locator('[data-testid="image-preview"]');
@@ -622,17 +652,10 @@ test.describe("CMS Image Upload", () => {
 		await page.locator('[role="option"]').first().waitFor({ state: "visible" });
 		await page.locator('[role="option"]').first().click();
 
-		// Upload an image
-		const imageUploadInput = page.locator('[data-testid="image-upload-input"]');
-		await expect(imageUploadInput).toBeAttached({ timeout: 5000 });
-
-		const testImageBase64 =
-			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-		await imageUploadInput.setInputFiles({
-			name: "original-image.png",
-			mimeType: "image/png",
-			buffer: Buffer.from(testImageBase64, "base64"),
-		});
+		// Upload an image via MediaPicker
+		await openMediaPicker(page);
+		await uploadInMediaPicker(page);
+		await selectFirstAsset(page);
 
 		// Wait for preview
 		let imagePreview = page.locator('[data-testid="image-preview"]');
@@ -650,7 +673,7 @@ test.describe("CMS Image Upload", () => {
 		const row = page.locator(`tr:has-text("${expectedSlug}")`);
 		await row.locator("button:has(svg.lucide-pencil)").click();
 
-		// On edit page, image preview should still be visible
+		// On edit page, image preview should still be visible (loaded from DB)
 		imagePreview = page.locator('[data-testid="image-preview"]');
 		await expect(imagePreview).toBeVisible({ timeout: 10000 });
 

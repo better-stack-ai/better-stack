@@ -74,10 +74,8 @@ test.describe("Media Plugin — direct upload via MediaPicker", () => {
 		await page.goto("/pages/blog/new", { waitUntil: "networkidle" });
 		await expect(page.locator('[data-testid="new-post-page"]')).toBeVisible();
 
-		// The image picker trigger should be visible adjacent to the markdown editor
-		const trigger = page
-			.locator('[data-testid="image-picker-trigger"]')
-			.first();
+		// ImageInputField renders a "Browse Media" button (open-media-picker) when no image is set
+		const trigger = page.locator('[data-testid="open-media-picker"]').first();
 		await expect(trigger).toBeVisible({ timeout: 10000 });
 
 		expect(errors, `Console errors: \n${errors.join("\n")}`).toEqual([]);
@@ -94,10 +92,8 @@ test.describe("Media Plugin — direct upload via MediaPicker", () => {
 
 		await page.goto("/pages/cms/product/new", { waitUntil: "networkidle" });
 
-		// The image picker trigger should be visible inside the file upload field
-		const trigger = page
-			.locator('[data-testid="image-picker-trigger"]')
-			.first();
+		// ImageInputField renders a "Browse Media" button (open-media-picker) when no image is set
+		const trigger = page.locator('[data-testid="open-media-picker"]').first();
 		await expect(trigger).toBeVisible({ timeout: 10000 });
 
 		expect(errors, `Console errors: \n${errors.join("\n")}`).toEqual([]);

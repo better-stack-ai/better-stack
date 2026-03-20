@@ -240,7 +240,11 @@ export function MediaPicker({
 }
 
 /**
- * ImageInputField — a component that displays an image preview and a media picker button.
+ * ImageInputField — displays an image preview with change/remove actions, or a
+ * "Browse Media" button that opens the full MediaPicker popover (Browse / Upload / URL tabs).
+ *
+ * Upload mode, folder selection, and multi-mode cloud support are all handled inside
+ * the MediaPicker's UploadTab — this component is purely a thin wrapper.
  */
 export function ImageInputField({
 	value,
@@ -277,7 +281,12 @@ export function ImageInputField({
 				<div className="flex gap-2">
 					<MediaPicker
 						trigger={
-							<Button variant="outline" size="sm" type="button">
+							<Button
+								variant="outline"
+								size="sm"
+								type="button"
+								data-testid="open-media-picker"
+							>
 								Change Image
 							</Button>
 						}
@@ -288,6 +297,7 @@ export function ImageInputField({
 						type="button"
 						variant="destructive"
 						size="sm"
+						data-testid="remove-image-button"
 						onClick={() => onChange("")}
 					>
 						Remove
@@ -296,20 +306,24 @@ export function ImageInputField({
 			</div>
 		);
 	}
+
 	return (
-		<MediaPicker
-			trigger={
-				<Button
-					variant="outline"
-					className="justify-start text-muted-foreground"
-					data-testid="open-media-picker"
-				>
-					Browse Media
-				</Button>
-			}
-			accept={["image/*"]}
-			onSelect={(assets) => onChange(assets[0]?.url ?? "")}
-		/>
+		<div className="flex flex-wrap gap-2 items-center">
+			<MediaPicker
+				trigger={
+					<Button
+						variant="outline"
+						size="sm"
+						type="button"
+						data-testid="open-media-picker"
+					>
+						Browse Media
+					</Button>
+				}
+				accept={["image/*"]}
+				onSelect={(assets) => onChange(assets[0]?.url ?? "")}
+			/>
+		</div>
 	);
 }
 

@@ -93,6 +93,19 @@ export default function ExampleLayout({
 		return asset.url;
 	}, [baseURL]);
 
+    // For chat file attachments we embed as a data URL so OpenAI can read the
+    // content directly — a local /uploads/... path is not reachable from OpenAI's servers.
+    const uploadFileForChat = React.useCallback(
+        (file: File): Promise<string> =>
+            new Promise((resolve, reject) => {
+                const reader = new FileReader()
+                reader.onload = (e) => resolve(e.target?.result as string)
+                reader.onerror = () => reject(new Error("Failed to read file"))
+                reader.readAsDataURL(file)
+            }),
+        [],
+    );
+
     return (
         <QueryClientProvider client={queryClient}>
             <ReactQueryDevtools initialIsOpen={false} />
@@ -161,7 +174,7 @@ export default function ExampleLayout({
                         apiBasePath: "/api/data",
                         navigate: (path) => router.push(path),
                         refresh: () => router.refresh(),
-                        uploadFile: uploadImage,
+                        uploadFile: uploadFileForChat,
                         Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
                         Image: NextImageWrapper,
                         chatSuggestions: [
