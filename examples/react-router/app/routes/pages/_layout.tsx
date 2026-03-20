@@ -267,7 +267,7 @@ const ImagePicker = ({ onSelect }: { onSelect: (url: string) => void }) => {
                 </Button>
             }
             accept={["image/*"]}
-            onSelect={(assets) => onSelect(assets[0].url)}
+            onSelect={(assets) => onSelect(assets[0]?.url ?? "")}
         />
     )
 }
