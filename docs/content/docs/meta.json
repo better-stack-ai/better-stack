@@ -18,6 +18,7 @@
       "plugins/ui-builder",
       "plugins/kanban",
       "plugins/comments",
+      "plugins/media",
       "plugins/open-api",
       "plugins/route-docs",
       "plugins/better-auth-ui",

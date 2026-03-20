@@ -4,7 +4,7 @@ description: Available plugins and features for BTST
 ---
 
 import { Card, Cards } from "fumadocs-ui/components/card";
-import { BookOpen, Database, Hammer, Bot, Shield, FileText, FileCode, Route, Layout, Columns3 } from "lucide-react";
+import { BookOpen, Database, Hammer, Bot, Shield, FileText, FileCode, Route, Layout, Columns3, MessageSquare, ImageIcon } from "lucide-react";
 
 
 BTST provides a collection of full-stack plugins that you can easily integrate into your React application. Each plugin includes routes, APIs, database schemas, components, and hooks—everything you need to add complete features to your app. 
@@ -47,6 +47,18 @@ With more plugins coming soon, you can add complete features to your app in minu
     href="/plugins/kanban"
     icon={<Columns3 size={20} />}
     description="Project management with boards, columns, tasks, drag-and-drop, and priority levels."
+  />
+  <Card
+    title="Comments Plugin"
+    href="/plugins/comments"
+    icon={<MessageSquare size={20} />}
+    description="Threaded comments with moderation, likes, replies, and embeddable comment threads."
+  />
+  <Card
+    title="Media Plugin"
+    href="/plugins/media"
+    icon={<ImageIcon size={20} />}
+    description="Media library with uploads, folders, picker UI, URL registration, and reusable image inputs."
   />
   <Card
     title="OpenAPI Plugin"
