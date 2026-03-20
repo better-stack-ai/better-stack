@@ -159,7 +159,7 @@
         "card",
         "dialog",
         "dropdown-menu",
-        "https://raw.githubusercontent.com/olliethedev/shadcn-minimal-tiptap/refs/heads/feat/markdown/registry/block-registry.json",
+        "https://raw.githubusercontent.com/olliethedev/shadcn-minimal-tiptap/refs/heads/feat/image-upload-config/registry/block-registry.json",
         "input",
         "label",
         "select",
