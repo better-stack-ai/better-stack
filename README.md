@@ -37,6 +37,7 @@ Enable the features you need and keep building your product.
 | **Form Builder** | Dynamic form builder with drag-and-drop editor, submissions, and validation |
 | **UI Builder** | Visual drag-and-drop page builder with component registry and public rendering |
 | **Kanban** | Project management with boards, columns, tasks, drag-and-drop, and priority levels |
+| **Media** | Media library with uploads, folders, picker UI, URL registration, and reusable image inputs |
 | **OpenAPI** | Auto-generated API documentation with interactive Scalar UI |
 | **Route Docs** | Auto-generated client route documentation with interactive navigation |
 | **Better Auth UI** | Beautiful shadcn/ui authentication components for better-auth |
@@ -121,8 +122,8 @@ Supports Prisma, Drizzle, MongoDB and Kysely SQL dialects.
 Each plugin's UI layer is available as a [shadcn registry](https://ui.shadcn.com/docs/registry) block. Use it to **eject and fully customize** the page components while keeping all data-fetching and API logic from `@btst/stack`:
 
 ```bash
-# Install a single plugin's UI
-npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-blog.json
+# Install a single plugin's UI (for example, Media)
+npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-media.json
 
 # Or install the full collection
 npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/registry.json
