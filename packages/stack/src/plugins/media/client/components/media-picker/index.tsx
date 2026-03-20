@@ -264,12 +264,14 @@ export function ImageInputField({
 						className="h-auto w-full max-w-xs rounded-md border object-cover"
 						width={400}
 						height={300}
+						data-testid="image-preview"
 					/>
 				) : (
 					<img
 						src={value}
 						alt="Featured image preview"
 						className="h-auto w-full max-w-xs rounded-md border object-cover"
+						data-testid="image-preview"
 					/>
 				)}
 				<div className="flex gap-2">
@@ -282,7 +284,12 @@ export function ImageInputField({
 						accept={["image/*"]}
 						onSelect={(assets) => onChange(assets[0]?.url ?? "")}
 					/>
-					<Button variant="destructive" size="sm" onClick={() => onChange("")}>
+					<Button
+						type="button"
+						variant="destructive"
+						size="sm"
+						onClick={() => onChange("")}
+					>
 						Remove
 					</Button>
 				</div>
