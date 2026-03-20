@@ -32,16 +32,16 @@ export function MarkdownEditorWithOverrides(
 	const triggerContainerRef = useRef<HTMLDivElement | null>(null);
 
 	// Single onSelect handler for ImagePickerTrigger.
-	// URLs are encoded here before being forwarded to either destination.
+	// URLs returned by the media plugin are already percent-encoded at the
+	// source (storage adapter), so no additional encoding is applied here.
 	const handleSelect = useCallback((url: string) => {
-		const encodedUrl = encodeURI(url);
 		if (pendingInsertUrlRef.current) {
 			// Crepe image block flow: set the URL into the block's link input.
-			pendingInsertUrlRef.current(encodedUrl);
+			pendingInsertUrlRef.current(url);
 			pendingInsertUrlRef.current = null;
 		} else {
 			// Normal flow: insert image at end of markdown content.
-			insertImageRef.current?.(encodedUrl);
+			insertImageRef.current?.(url);
 		}
 	}, []);
 

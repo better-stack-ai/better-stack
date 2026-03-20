@@ -26,14 +26,14 @@ export interface MarkdownEditorProps {
 	/**
 	 * Optional ref that will be populated with an `insertImage(url)` function.
 	 * Call `insertImageRef.current?.(url)` to programmatically insert an image.
-	 * The URL is expected to be already encoded by the caller.
+	 * The URL must be a valid, percent-encoded URL (storage adapters guarantee this).
 	 */
 	insertImageRef?: MutableRefObject<((url: string) => void) | null>;
 	/**
 	 * When provided, clicking the Crepe image block's upload area opens a media
 	 * picker instead of the native file dialog. The callback receives a `setUrl`
 	 * function — call it with the chosen URL to set it into the image block.
-	 * The URL passed to `setUrl` is expected to be already encoded by the caller.
+	 * The URL must be a valid, percent-encoded URL (storage adapters guarantee this).
 	 */
 	openMediaPickerForImageBlock?: (setUrl: (url: string) => void) => void;
 }

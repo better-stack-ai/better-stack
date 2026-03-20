@@ -159,7 +159,13 @@ export function s3Adapter(options: S3StorageAdapterOptions): S3StorageAdapter {
 			});
 
 			const uploadUrl = await buildSignedUrl(client, command, { expiresIn });
-			const publicUrl = `${publicBaseUrl.replace(/\/$/, "")}/${key}`;
+
+			// Percent-encode each path segment so the stored public URL is always
+			// valid. The raw `key` is used for the S3 key (which the AWS SDK
+			// handles separately); the encoded form is what gets stored in the DB
+			// and returned to clients.
+			const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+			const publicUrl = `${publicBaseUrl.replace(/\/$/, "")}/${encodedKey}`;
 
 			return {
 				type: "presigned-url",
@@ -180,9 +186,11 @@ export function s3Adapter(options: S3StorageAdapterOptions): S3StorageAdapter {
 			]);
 
 			const base = publicBaseUrl.replace(/\/$/, "");
-			const key = url.startsWith(base)
+			const encodedKey = url.startsWith(base)
 				? url.slice(base.length + 1)
 				: (url.split("/").pop() ?? url);
+			// Decode the percent-encoded key back to the raw S3 object key.
+			const key = decodeURIComponent(encodedKey);
 
 			await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 		},
