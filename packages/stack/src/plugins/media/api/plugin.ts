@@ -595,6 +595,28 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						});
 					}
 
+					if (
+						typeof (fileRaw as any).size !== "number" ||
+						(fileRaw as any).size < 0
+					) {
+						throw ctx.error(400, {
+							message: "File 'size' is missing or invalid",
+						});
+					}
+					if (
+						typeof (fileRaw as any).name !== "string" ||
+						!(fileRaw as any).name
+					) {
+						throw ctx.error(400, {
+							message: "File 'name' is missing or invalid",
+						});
+					}
+					if (typeof (fileRaw as any).type !== "string") {
+						throw ctx.error(400, {
+							message: "File 'type' is missing or invalid",
+						});
+					}
+
 					// Safe to treat as a File-like object after the duck-type check above.
 					const file = fileRaw as Pick<
 						File,
@@ -628,7 +650,10 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					}
 
 					const buffer = Buffer.from(await file.arrayBuffer());
-					const folderId = (body.folderId as string | undefined) ?? undefined;
+					const folderId =
+						typeof body.folderId === "string" && body.folderId
+							? body.folderId
+							: undefined;
 
 					if (folderId) {
 						const folder = await getFolderById(adapter, folderId);
