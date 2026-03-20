@@ -145,16 +145,18 @@ function CMSExampleContent() {
                                 >
                                     <div className="flex justify-between items-start">
                                         <div className="flex items-center gap-2">
-                                            <div className="size-15 relative overflow-hidden rounded">
-                                                <Image
-                                                    src={item.parsedData.image ?? ""}
-                                                    alt={item.parsedData.name}
-                                                    fill
-                                                    sizes="64px"
-                                                    quality={50}
-                                                    className="object-cover"
-                                                />
-                                            </div>
+                                            {item.parsedData.image && (
+                                                <div className="size-15 relative overflow-hidden rounded">
+                                                    <Image
+                                                        src={item.parsedData.image}
+                                                        alt={item.parsedData.name}
+                                                        fill
+                                                        sizes="64px"
+                                                        quality={50}
+                                                        className="object-cover"
+                                                    />
+                                                </div>
+                                            )}
 
                                             <div>
                                                 {/* No more type guards needed - parsedData is fully typed! */}
