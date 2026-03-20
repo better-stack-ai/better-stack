@@ -317,9 +317,6 @@ export async function uploadMediaFile(
 	formData.append("file", file);
 	const res = await fetch(`${baseURL}/api/data/media/upload`, {
 		method: "POST",
-		headers: {
-			"Content-Type": "multipart/form-data",
-		},
 		body: formData,
 	});
 	if (!res.ok) {
