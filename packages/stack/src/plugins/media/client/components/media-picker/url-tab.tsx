@@ -41,7 +41,7 @@ export function UrlTab({
 				Paste a public URL to register it as an asset without uploading a file.
 			</p>
 			<form onSubmit={handleSubmit} className="flex flex-col gap-2">
-				<div className="flex gap-2">
+				<div className="flex flex-col gap-2 sm:flex-row">
 					<Input
 						type="url"
 						value={url}
@@ -51,7 +51,12 @@ export function UrlTab({
 						data-testid="media-url-input"
 						autoFocus
 					/>
-					<Button type="submit" size="sm" disabled={isPending || !url.trim()}>
+					<Button
+						type="submit"
+						size="sm"
+						disabled={isPending || !url.trim()}
+						className="w-full sm:w-auto"
+					>
 						{isPending ? (
 							<Loader2 className="mr-1 size-4 animate-spin" />
 						) : (

@@ -1,41 +1,77 @@
 import { useDeleteAsset } from "../../hooks/use-media";
 import type { SerializedAsset } from "../../../types";
 import { cn } from "@workspace/ui/lib/utils";
-import { File, Check, Trash2 } from "lucide-react";
+import { File, Check, Copy, Trash2 } from "lucide-react";
 import { isImage, formatBytes } from "./utils";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { MediaPluginOverrides } from "../../overrides";
+import { AssetPreviewButton } from "./asset-preview-button";
+import { toast } from "sonner";
 
 export function AssetCard({
 	asset,
-	selected,
 	onToggle,
+	selected = false,
+	onDelete,
+	apiBaseURL,
 }: {
 	asset: SerializedAsset;
-	selected: boolean;
-	onToggle: () => void;
+	selected?: boolean;
+	onToggle?: () => void;
+	onDelete?: (id: string) => void | Promise<void>;
+	apiBaseURL?: string;
 }) {
 	const { mutateAsync: deleteAsset } = useDeleteAsset();
 	const { Image: ImageComponent } = usePluginOverrides<
 		MediaPluginOverrides,
 		Partial<MediaPluginOverrides>
 	>("media", {});
+	const imageAsset = isImage(asset.mimeType);
+	const selectable = typeof onToggle === "function";
+
+	const copyUrl = () => {
+		let fullUrl: string;
+		try {
+			fullUrl = new URL(asset.url, apiBaseURL).href;
+		} catch {
+			fullUrl = asset.url;
+		}
+		navigator.clipboard
+			.writeText(fullUrl)
+			.then(() => toast.success("URL copied"));
+	};
+
+	const handleDelete = () => {
+		if (onDelete) {
+			return onDelete(asset.id);
+		}
+
+		if (confirm(`Delete "${asset.originalName}"?`)) {
+			return deleteAsset(asset.id).catch(console.error);
+		}
+	};
 
 	return (
 		<div
-			role="button"
-			tabIndex={0}
+			role={selectable ? "button" : undefined}
+			tabIndex={selectable ? 0 : undefined}
 			data-testid="media-asset-item"
 			onClick={onToggle}
-			onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onToggle()}
+			onKeyDown={(e) => {
+				if (selectable && (e.key === "Enter" || e.key === " ")) {
+					e.preventDefault();
+					onToggle();
+				}
+			}}
 			className={cn(
 				"group relative cursor-pointer rounded-md border bg-muted/30 p-1 transition-all hover:border-ring hover:shadow-sm",
+				!selectable && "cursor-default",
 				selected && "border-ring ring-1 ring-ring",
 			)}
 		>
 			{/* Thumbnail */}
-			<div className="flex h-20 items-center justify-center overflow-hidden rounded bg-muted">
-				{isImage(asset.mimeType) ? (
+			<div className="flex h-28 items-center justify-center overflow-hidden rounded bg-muted">
+				{imageAsset ? (
 					ImageComponent ? (
 						<ImageComponent
 							src={asset.url}
@@ -77,20 +113,38 @@ export function AssetCard({
 				</div>
 			)}
 
-			{/* Delete button (on hover) */}
-			<button
-				type="button"
-				title="Delete"
-				onClick={(e) => {
-					e.stopPropagation();
-					if (confirm(`Delete "${asset.originalName}"?`)) {
-						deleteAsset(asset.id).catch(console.error);
-					}
-				}}
-				className="absolute left-1 top-1 hidden rounded bg-destructive/80 p-0.5 text-white group-hover:flex"
-			>
-				<Trash2 className="size-3" />
-			</button>
+			<div className="absolute right-1 top-1 hidden gap-1 group-hover:flex">
+				{apiBaseURL ? (
+					<button
+						type="button"
+						title="Copy URL"
+						onClick={(e) => {
+							e.stopPropagation();
+							copyUrl();
+						}}
+						className="rounded bg-background/80 p-0.5 shadow hover:bg-background"
+					>
+						<Copy className="size-3" />
+					</button>
+				) : null}
+				{imageAsset ? (
+					<AssetPreviewButton
+						asset={asset}
+						className="rounded bg-background/80 p-0.5 shadow hover:bg-background"
+					/>
+				) : null}
+				<button
+					type="button"
+					title="Delete"
+					onClick={(e) => {
+						e.stopPropagation();
+						void handleDelete();
+					}}
+					className="rounded bg-destructive/80 p-0.5 text-white hover:bg-destructive"
+				>
+					<Trash2 className="size-3" />
+				</button>
+			</div>
 		</div>
 	);
 }

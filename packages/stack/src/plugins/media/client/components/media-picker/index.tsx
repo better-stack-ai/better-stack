@@ -122,13 +122,13 @@ export function MediaPicker({
 		>
 			<PopoverTrigger asChild>{trigger}</PopoverTrigger>
 			<PopoverContent
-				className="w-[900px] p-0"
+				className="w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-hidden p-0 sm:w-[900px]"
 				align="start"
 				sideOffset={8}
-				collisionPadding={16}
+				collisionPadding={8}
 				style={{
-					maxWidth: "min(900px, 95vw)",
-					height: "min(550px, calc(100vh - 120px))",
+					maxWidth: "min(900px, calc(100vw - 1rem))",
+					height: "min(720px, calc(100dvh - 1rem))",
 				}}
 			>
 				<div className="flex h-full flex-col overflow-hidden rounded-md">
@@ -145,9 +145,9 @@ export function MediaPicker({
 					</div>
 
 					{/* Body */}
-					<div className="flex min-h-0 flex-1">
+					<div className="flex min-h-0 flex-1 flex-col md:flex-row">
 						{/* Folder sidebar */}
-						<div className="w-44 shrink-0 border-r bg-muted/20 overflow-hidden">
+						<div className="max-h-40 w-full shrink-0 overflow-hidden border-b bg-muted/20 md:max-h-none md:w-44 md:border-b-0 md:border-r">
 							<FolderTree
 								selectedId={selectedFolder}
 								onSelect={setSelectedFolder}
@@ -155,45 +155,62 @@ export function MediaPicker({
 						</div>
 
 						{/* Main panel */}
-						<div className="flex min-w-0 flex-1 flex-col p-3">
+						<div className="flex min-w-0 flex-1 flex-col p-3 overflow-y-hidden">
 							<Tabs
 								value={activeTab}
 								onValueChange={(v) => setActiveTab(v as any)}
 								className="flex flex-1 flex-col min-h-0"
 							>
-								<TabsList className="h-8 w-fit shrink-0">
-									<TabsTrigger value="browse" className="h-6 px-3 text-xs">
+								<TabsList className="grid h-auto w-full shrink-0 grid-cols-3 md:flex md:w-fit">
+									<TabsTrigger
+										value="browse"
+										className="h-8 px-2 text-xs md:h-6 md:px-3"
+									>
 										<Image className="mr-1 size-3" />
 										Browse
 									</TabsTrigger>
-									<TabsTrigger value="upload" className="h-6 px-3 text-xs">
+									<TabsTrigger
+										value="upload"
+										className="h-8 px-2 text-xs md:h-6 md:px-3"
+									>
 										<Upload className="mr-1 size-3" />
 										Upload
 									</TabsTrigger>
-									<TabsTrigger value="url" className="h-6 px-3 text-xs">
+									<TabsTrigger
+										value="url"
+										className="h-8 px-2 text-xs md:h-6 md:px-3"
+									>
 										<Link className="mr-1 size-3" />
 										URL
 									</TabsTrigger>
 								</TabsList>
 
 								<div className="mt-2 min-h-0 flex-1">
-									<TabsContent value="browse" className="m-0 h-full">
+									<TabsContent
+										value="browse"
+										className="m-0 h-full min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
+									>
 										<BrowseTab
 											folderId={selectedFolder}
 											selected={selectedAssets}
-											multiple={multiple}
 											accept={accept}
 											onToggle={handleToggleAsset}
 										/>
 									</TabsContent>
-									<TabsContent value="upload" className="m-0 h-full">
+									<TabsContent
+										value="upload"
+										className="m-0 h-full min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
+									>
 										<UploadTab
 											folderId={selectedFolder}
 											accept={accept}
 											onUploaded={handleUploaded}
 										/>
 									</TabsContent>
-									<TabsContent value="url" className="m-0 h-full">
+									<TabsContent
+										value="url"
+										className="m-0 h-full min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
+									>
 										<UrlTab
 											folderId={selectedFolder}
 											onRegistered={handleUrlRegistered}
@@ -205,18 +222,19 @@ export function MediaPicker({
 					</div>
 
 					{/* Footer */}
-					<div className="flex items-center justify-between border-t px-3 py-2">
+					<div className="flex flex-col gap-2 border-t px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
 						<span className="text-xs text-muted-foreground">
 							{selectedAssets.length > 0
 								? `${selectedAssets.length} selected`
 								: "Click a file to select it"}
 						</span>
-						<div className="flex gap-2">
+						<div className="flex w-full gap-2 sm:w-auto">
 							<Button
 								type="button"
 								variant="ghost"
 								size="sm"
 								onClick={handleClose}
+								className="flex-1 sm:flex-none"
 							>
 								Cancel
 							</Button>
@@ -226,6 +244,7 @@ export function MediaPicker({
 								data-testid="media-select-button"
 								onClick={handleConfirm}
 								disabled={selectedAssets.length === 0}
+								className="flex-1 sm:flex-none"
 							>
 								{multiple
 									? `Select ${selectedAssets.length > 0 ? `(${selectedAssets.length})` : ""}`

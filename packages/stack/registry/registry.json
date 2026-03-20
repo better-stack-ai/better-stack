@@ -232,6 +232,7 @@
       ],
       "registryDependencies": [
         "button",
+        "dialog",
         "input",
         "popover",
         "tabs"

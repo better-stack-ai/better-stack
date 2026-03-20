@@ -64,7 +64,7 @@ export function UploadTab({
 					void handleFiles(e.dataTransfer.files);
 				}}
 				className={cn(
-					"flex flex-1 flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed transition-colors",
+					"flex flex-1 flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors sm:px-6",
 					dragging ? "border-ring bg-ring/5" : "border-muted-foreground/30",
 				)}
 			>

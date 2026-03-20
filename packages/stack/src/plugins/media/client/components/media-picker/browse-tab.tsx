@@ -9,20 +9,25 @@ import { matchesAccept } from "./utils";
 
 export function BrowseTab({
 	folderId,
-	selected,
-	multiple,
+	selected = [],
 	accept,
 	onToggle,
+	onDelete,
+	apiBaseURL,
+	emptyMessage = "No files found",
 }: {
 	folderId: string | null;
-	selected: SerializedAsset[];
-	multiple: boolean;
+	selected?: SerializedAsset[];
 	accept?: string[];
-	onToggle: (asset: SerializedAsset) => void;
+	onToggle?: (asset: SerializedAsset) => void;
+	onDelete?: (id: string) => void | Promise<void>;
+	apiBaseURL?: string;
+	emptyMessage?: string;
 }) {
 	const [search, setSearch] = useState("");
 	const [debouncedSearch, setDebouncedSearch] = useState("");
 	const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const selectable = typeof onToggle === "function";
 
 	const handleSearch = (v: string) => {
 		setSearch(v);
@@ -43,7 +48,7 @@ export function BrowseTab({
 		: allAssets;
 
 	return (
-		<div className="flex h-full flex-col gap-2">
+		<div className="flex h-full min-h-0 flex-col gap-2">
 			<div className="relative">
 				<Search className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
 				<Input
@@ -73,17 +78,19 @@ export function BrowseTab({
 			) : filtered.length === 0 ? (
 				<div className="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
 					<Image className="size-8" />
-					<p>No files found</p>
+					<p>{emptyMessage}</p>
 				</div>
 			) : (
-				<div className="flex-1 overflow-y-auto">
-					<div className="grid grid-cols-3 gap-2 pb-2 sm:grid-cols-4 lg:grid-cols-5">
+				<div className="flex-1 overflow-y-auto overscroll-contain">
+					<div className="grid grid-cols-2 gap-2 pb-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
 						{filtered.map((asset) => (
 							<AssetCard
 								key={asset.id}
 								asset={asset}
 								selected={selected.some((s) => s.id === asset.id)}
-								onToggle={() => onToggle(asset)}
+								onToggle={selectable ? () => onToggle(asset) : undefined}
+								onDelete={onDelete}
+								apiBaseURL={apiBaseURL}
 							/>
 						))}
 					</div>
