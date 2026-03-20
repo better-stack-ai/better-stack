@@ -30,16 +30,6 @@ export {
 	type LocalStorageAdapterOptions,
 } from "./adapters/local";
 
-export {
-	s3Adapter,
-	type S3StorageAdapterOptions,
-} from "./adapters/s3";
-
-export {
-	vercelBlobAdapter,
-	type VercelBlobStorageAdapterOptions,
-} from "./adapters/vercel-blob";
-
 export type {
 	StorageAdapter,
 	DirectStorageAdapter,

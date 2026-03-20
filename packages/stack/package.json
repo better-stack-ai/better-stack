@@ -424,6 +424,26 @@
         "default": "./dist/plugins/media/api/index.cjs"
       }
     },
+    "./plugins/media/api/adapters/s3": {
+      "import": {
+        "types": "./dist/plugins/media/api/adapters/s3.d.ts",
+        "default": "./dist/plugins/media/api/adapters/s3.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/media/api/adapters/s3.d.cts",
+        "default": "./dist/plugins/media/api/adapters/s3.cjs"
+      }
+    },
+    "./plugins/media/api/adapters/vercel-blob": {
+      "import": {
+        "types": "./dist/plugins/media/api/adapters/vercel-blob.d.ts",
+        "default": "./dist/plugins/media/api/adapters/vercel-blob.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/media/api/adapters/vercel-blob.d.cts",
+        "default": "./dist/plugins/media/api/adapters/vercel-blob.cjs"
+      }
+    },
     "./plugins/media/client": {
       "import": {
         "types": "./dist/plugins/media/client/index.d.ts",
@@ -663,6 +683,12 @@
       ],
       "plugins/media/api": [
         "./dist/plugins/media/api/index.d.ts"
+      ],
+      "plugins/media/api/adapters/s3": [
+        "./dist/plugins/media/api/adapters/s3.d.ts"
+      ],
+      "plugins/media/api/adapters/vercel-blob": [
+        "./dist/plugins/media/api/adapters/vercel-blob.d.ts"
       ],
       "plugins/media/client": [
         "./dist/plugins/media/client/index.d.ts"
