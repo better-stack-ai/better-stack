@@ -89,7 +89,7 @@ export default function ExampleLayout({
 
     const uploadImage = React.useCallback(
         async (file: File) => {
-            const asset = await uploadMediaFile(file, baseURL)
+            const asset = await uploadMediaFile(file, baseURL, "/api/data")
 		return asset.url;
 	}, [baseURL]);
 

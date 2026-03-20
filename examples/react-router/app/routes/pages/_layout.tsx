@@ -44,7 +44,7 @@ export default function Layout() {
     const [queryClient] = useState(() => getOrCreateQueryClient())
 
     const uploadImage = async (file: File) => {
-        const asset = await uploadMediaFile(file, baseURL)
+        const asset = await uploadMediaFile(file, baseURL, "/api/data")
         return asset.url
     }
 

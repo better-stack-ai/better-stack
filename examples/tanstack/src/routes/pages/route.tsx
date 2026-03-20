@@ -47,7 +47,7 @@ function Layout() {
     const baseURL = getBaseURL()
 
     const uploadImage = async (file: File) => {
-        const asset = await uploadMediaFile(file, baseURL)
+        const asset = await uploadMediaFile(file, baseURL, "/api/data")
         return asset.url
     }
 
