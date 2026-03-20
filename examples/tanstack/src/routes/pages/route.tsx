@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react"
 import { StackProvider } from "@btst/stack/context"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import { useCallback, useMemo } from "react"
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
@@ -10,6 +10,9 @@ import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builde
 import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
 import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
 import { CommentThread } from "@btst/stack/plugins/comments/client/components"
+import { uploadAsset, type MediaPluginOverrides } from "@btst/stack/plugins/media/client"
+import { MediaPicker, ImageInputField } from "@btst/stack/plugins/media/client/components"
+import { Button } from "../../components/ui/button"
 import { resolveUser, searchUsers } from "../../lib/mock-users"
 import { Link, useRouter, Outlet, createFileRoute } from "@tanstack/react-router"
 
@@ -21,20 +24,6 @@ const getBaseURL = () =>
     ? (import.meta.env.VITE_BASE_URL || window.location.origin)
     : (process.env.BASE_URL || "http://localhost:3000")
 
-// Mock file upload URLs
-const MOCK_IMAGE_URL = "https://placehold.co/400/png"
-const MOCK_FILE_URL = "https://example-files.online-convert.com/document/txt/example.txt"
-
-// Mock file upload function that returns appropriate URL based on file type
-async function mockUploadFile(file: File): Promise<string> {
-    console.log("uploadFile", file.name, file.type)
-    // Return image placeholder for images, txt file URL for other file types
-    if (file.type.startsWith("image/")) {
-        return MOCK_IMAGE_URL
-    }
-    return MOCK_FILE_URL
-}
-
 // Define the shape of all plugin overrides
 type PluginOverrides = {
     blog: BlogPluginOverrides,
@@ -43,6 +32,7 @@ type PluginOverrides = {
     "form-builder": FormBuilderPluginOverrides,
     kanban: KanbanPluginOverrides,
     comments: CommentsPluginOverrides,
+    media: MediaPluginOverrides,
 }
 
 export const Route = createFileRoute('/pages')({
@@ -54,11 +44,37 @@ export const Route = createFileRoute('/pages')({
 
 function Layout() {
     const router = useRouter()
-    const context = Route.useRouteContext()
+    const routeContext = Route.useRouteContext()
     const baseURL = getBaseURL()
+    const mediaClientConfig = useMemo(
+        () => ({
+            apiBaseURL: baseURL,
+            apiBasePath: "/api/data",
+            uploadMode: "direct" as const,
+        }),
+        [baseURL],
+    )
+
+    const uploadImage = useCallback(async (file: File) => {
+        const asset = await uploadAsset(mediaClientConfig, { file })
+        return asset.url
+    }, [mediaClientConfig])
+
+    // For chat file attachments we embed as a data URL so OpenAI can read the
+    // content directly — a local /uploads/... path is not reachable from OpenAI's servers.
+    const uploadFileForChat = useCallback(
+        (file: File): Promise<string> =>
+            new Promise((resolve, reject) => {
+                const reader = new FileReader()
+                reader.onload = (e) => resolve(e.target?.result as string)
+                reader.onerror = () => reject(new Error("Failed to read file"))
+                reader.readAsDataURL(file)
+            }),
+        [],
+    )
 
     return (
-        <QueryClientProvider client={context.queryClient}>
+        <QueryClientProvider client={routeContext.queryClient}>
             <ReactQueryDevtools initialIsOpen={false} />
             <StackProvider<PluginOverrides>
                 basePath="/pages"
@@ -67,7 +83,9 @@ function Layout() {
                         apiBaseURL: baseURL,
                         apiBasePath: "/api/data",
                         navigate: (href) => router.navigate({ href }),
-                        uploadImage: mockUploadFile,
+                        uploadImage,
+                        imagePicker: ImagePicker,
+                        imageInputField: ImageInputField,
                         Link: ({ href, children, className, ...props }) => (
                             <Link to={href} className={className} {...props}>
                               {children}
@@ -119,7 +137,7 @@ function Layout() {
                         apiBaseURL: baseURL,
                         apiBasePath: "/api/data",
                         navigate: (href) => router.navigate({ href }),
-                        uploadFile: mockUploadFile,
+                        uploadFile: uploadFileForChat,
                         Link: ({ href, children, className, ...props }) => (
                             <Link to={href} className={className} {...props}>
                               {children}
@@ -133,68 +151,14 @@ function Layout() {
                         apiBaseURL: baseURL,
                         apiBasePath: "/api/data",
                         navigate: (href) => router.navigate({ href }),
-                        uploadImage: mockUploadFile,
+                        uploadImage,
+                        imagePicker: ImagePicker,
+                        imageInputField: ImageInputField,
                         Link: ({ href, children, className, ...props }) => (
                             <Link to={href} className={className} {...props}>
                               {children}
                             </Link>
                         ),
-                        // Custom field components for CMS forms
-                        // These override the default auto-form field types
-                        fieldComponents: {
-                            // Override "file" to use uploadImage from context
-                            file: ({ field, label, isRequired, fieldConfigItem }) => {
-                                const [preview, setPreview] = useState<string | null>(field.value || null);
-                                const [uploading, setUploading] = useState(false);
-                                // Sync preview with field.value when it changes (e.g., when editing an existing item)
-                                useEffect(() => {
-                                    const normalizedValue = field.value || null;
-                                    if (normalizedValue !== preview) {
-                                        setPreview(normalizedValue);
-                                    }
-                                }, [field.value, preview]);
-                                return (
-                                    <div className="space-y-2" data-testid="custom-file-field">
-                                        <label className="text-sm font-medium">
-                                            {label}
-                                            {isRequired && <span className="text-destructive"> *</span>}
-                                        </label>
-                                        {!preview ? (
-                                            <input
-                                                type="file"
-                                                accept="image/*"
-                                                data-testid="image-upload-input"
-                                                disabled={uploading}
-                                                onChange={async (e) => {
-                                                    const file = e.target.files?.[0];
-                                                    if (file) {
-                                                        setUploading(true);
-                                                        try {
-                                                            const url = await mockUploadFile(file);
-                                                            setPreview(url);
-                                                            field.onChange(url);
-                                                        } finally {
-                                                            setUploading(false);
-                                                        }
-                                                    }
-                                                }}
-                                                className="block w-full text-sm"
-                                            />
-                                        ) : (
-                                            <div className="flex items-center gap-2">
-                                                <img src={preview} alt="Preview" className="h-16 w-16 object-cover rounded" data-testid="image-preview" />
-                                                <button type="button" onClick={() => { setPreview(null); field.onChange(""); }} className="text-sm text-destructive" data-testid="remove-image-button">
-                                                    Remove
-                                                </button>
-                                            </div>
-                                        )}
-                                        {fieldConfigItem?.description && (
-                                            <p className="text-sm text-muted-foreground">{String(fieldConfigItem.description)}</p>
-                                        )}
-                                    </div>
-                                );
-                            },
-                        },
                         onRouteRender: async (routeName, context) => {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] CMS route:`, routeName, context.path);
                         },
@@ -224,6 +188,8 @@ function Layout() {
                               {children}
                             </Link>
                         ),
+                        uploadImage,
+                        imagePicker: ImagePicker,
                         // User resolution for assignees
                         resolveUser,
                         searchUsers,
@@ -261,7 +227,17 @@ function Layout() {
                             console.log(`[${context.isSSR ? 'SSR' : 'CSR'}] onBeforeUserCommentsPageRendered`);
                             return true; // In production: check authenticated session
                         },
-                    }
+                    },
+                    media: {
+                        ...mediaClientConfig,
+                        queryClient: routeContext.queryClient,
+                        navigate: (href) => router.navigate({ href }),
+                        Link: ({ href, children, className, ...props }) => (
+                            <Link to={href} className={className} {...props}>
+                              {children}
+                            </Link>
+                        ),
+                    },
                 }}
             >
                 <Outlet />
@@ -283,3 +259,20 @@ function Layout() {
     )
 }
 
+const ImagePicker = ({ onSelect }: { onSelect: (url: string) => void }) => {
+    return (
+        <MediaPicker
+            trigger={
+                <Button
+                    variant="outline"
+                    size="sm"
+                    data-testid="open-media-picker"
+                >
+                    Browse Media
+                </Button>
+            }
+            accept={["image/*"]}
+            onSelect={(assets) => onSelect(assets[0]?.url ?? "")}
+        />
+    )
+}

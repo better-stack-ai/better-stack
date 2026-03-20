@@ -3,6 +3,18 @@ import type { CMSLocalization } from "./localization";
 import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
 
 /**
+ * Props for the overridable CMS image input field component.
+ */
+export interface CmsImageInputFieldProps {
+	/** Current image URL value */
+	value: string;
+	/** Called when the image URL changes */
+	onChange: (value: string) => void;
+	/** Whether the field is required */
+	isRequired?: boolean;
+}
+
+/**
  * Context passed to lifecycle hooks
  */
 export interface RouteContext {
@@ -46,10 +58,53 @@ export interface CMSPluginOverrides {
 	>;
 
 	/**
-	 * Function used to upload an image and return its URL.
-	 * Used by the default "file" field component.
+	 * Function used to upload a new image file and return its URL.
+	 * Used by the default "file" field component when not selecting an existing
+	 * asset via `imagePicker` or `imageInputField`.
 	 */
 	uploadImage?: (file: File) => Promise<string>;
+
+	/**
+	 * Optional custom component for image fields (fieldType: "file").
+	 *
+	 * When provided it replaces the default file-upload input entirely.
+	 * The component receives `value` (current URL string) and `onChange` (setter).
+	 *
+	 * @example
+	 * ```tsx
+	 * imageInputField: ({ value, onChange }) =>
+	 *   value ? (
+	 *     <div>
+	 *       <img src={value} alt="Preview" />
+	 *       <MediaPicker trigger={<button>Change</button>} accept={["image/*"]}
+	 *         onSelect={(assets) => onChange(assets[0].url)} />
+	 *     </div>
+	 *   ) : (
+	 *     <MediaPicker trigger={<button>Browse media</button>} accept={["image/*"]}
+	 *       onSelect={(assets) => onChange(assets[0].url)} />
+	 *   )
+	 * ```
+	 */
+	imageInputField?: ComponentType<CmsImageInputFieldProps>;
+
+	/**
+	 * Optional trigger component for a media picker.
+	 * When provided, it is rendered inside the default "file" field component as a
+	 * "Browse media" option, letting users select a previously uploaded asset.
+	 * Receives `onSelect(url)` — the URL is set as the field value.
+	 *
+	 * @example
+	 * ```tsx
+	 * imagePicker: ({ onSelect }) => (
+	 *   <MediaPicker
+	 *     trigger={<Button size="sm" variant="outline">Browse media</Button>}
+	 *     accept={["image/*"]}
+	 *     onSelect={(assets) => onSelect(assets[0].url)}
+	 *   />
+	 * )
+	 * ```
+	 */
+	imagePicker?: ComponentType<{ onSelect: (url: string) => void }>;
 
 	/**
 	 * Custom field components for AutoForm fields.

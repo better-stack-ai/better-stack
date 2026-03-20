@@ -1,3 +1,6 @@
 .nitro
 .output
 .tanstack
+
+# Local media uploads (localAdapter writes to public/uploads/)
+/public/uploads/**

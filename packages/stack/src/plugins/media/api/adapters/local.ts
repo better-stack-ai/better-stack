@@ -51,13 +51,20 @@ export function localAdapter(
 
 			await fs.writeFile(filePath, buffer);
 
-			const url = `${publicPath.replace(/\/$/, "")}/${storedFilename}`;
+			// Percent-encode the filename segment so the returned URL is always a
+			// valid URL — e.g. spaces become %20. The raw storedFilename is used for
+			// the filesystem path; the encoded form is what gets stored in the DB and
+			// served to clients.
+			const url = `${publicPath.replace(/\/$/, "")}/${encodeURIComponent(storedFilename)}`;
 			return { url };
 		},
 
 		async delete(url: string): Promise<void> {
-			const filename = url.split("/").pop();
-			if (!filename) return;
+			// The stored URL has an encoded filename (e.g. "my%20file.png"); decode
+			// it back to the raw filesystem name before building the file path.
+			const encodedFilename = url.split("/").pop();
+			if (!encodedFilename) return;
+			const filename = decodeURIComponent(encodedFilename);
 
 			const filePath = path.join(uploadDir, filename);
 			try {

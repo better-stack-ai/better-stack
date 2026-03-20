@@ -555,6 +555,13 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 				"/media/upload",
 				{
 					method: "POST",
+					metadata: {
+						// Tell Better Call this endpoint accepts multipart/form-data so it
+						// parses the body into a FormData object and exposes it as ctx.body.
+						// Without this, Better Call may pre-read the body stream and calling
+						// ctx.request.formData() afterwards fails with "Body already read".
+						allowedMediaTypes: ["multipart/form-data"],
+					},
 				},
 				async (ctx) => {
 					if (!isDirectAdapter(storageAdapter)) {
@@ -564,20 +571,57 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						});
 					}
 
-					if (!ctx.request) {
+					// Better Call parses multipart/form-data into a plain object on ctx.body,
+					// where each field's value is preserved as-is (File instances for file fields).
+					const body = ctx.body as Record<string, unknown> | undefined;
+
+					if (!body || typeof body !== "object") {
 						throw ctx.error(400, {
-							message: "Request object is not available",
+							message: "Expected multipart/form-data request body",
 						});
 					}
 
-					const formData = await ctx.request.formData();
-					const file = formData.get("file");
+					const fileRaw = body.file;
 
-					if (!file || !(file instanceof File)) {
+					// Use a duck-type check instead of instanceof File to avoid
+					// cross-module-boundary failures (e.g. undici's File vs globalThis.File).
+					if (
+						!fileRaw ||
+						typeof fileRaw !== "object" ||
+						typeof (fileRaw as any).arrayBuffer !== "function"
+					) {
 						throw ctx.error(400, {
 							message: "Missing 'file' field in form data",
 						});
 					}
+
+					if (
+						typeof (fileRaw as any).size !== "number" ||
+						(fileRaw as any).size < 0
+					) {
+						throw ctx.error(400, {
+							message: "File 'size' is missing or invalid",
+						});
+					}
+					if (
+						typeof (fileRaw as any).name !== "string" ||
+						!(fileRaw as any).name
+					) {
+						throw ctx.error(400, {
+							message: "File 'name' is missing or invalid",
+						});
+					}
+					if (typeof (fileRaw as any).type !== "string") {
+						throw ctx.error(400, {
+							message: "File 'type' is missing or invalid",
+						});
+					}
+
+					// Safe to treat as a File-like object after the duck-type check above.
+					const file = fileRaw as Pick<
+						File,
+						"name" | "type" | "size" | "arrayBuffer"
+					>;
 
 					const context: MediaApiContext = { headers: ctx.headers };
 
@@ -607,7 +651,9 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 
 					const buffer = Buffer.from(await file.arrayBuffer());
 					const folderId =
-						(formData.get("folderId") as string | undefined) ?? undefined;
+						typeof body.folderId === "string" && body.folderId
+							? body.folderId
+							: undefined;
 
 					if (folderId) {
 						const folder = await getFolderById(adapter, folderId);

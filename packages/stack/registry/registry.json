@@ -159,7 +159,7 @@
         "card",
         "dialog",
         "dropdown-menu",
-        "https://raw.githubusercontent.com/olliethedev/shadcn-minimal-tiptap/refs/heads/feat/markdown/registry/block-registry.json",
+        "https://raw.githubusercontent.com/olliethedev/shadcn-minimal-tiptap/refs/heads/feat/image-upload-config/registry/block-registry.json",
         "input",
         "label",
         "select",
@@ -219,6 +219,25 @@
         "table"
       ],
       "docs": "https://better-stack.ai/docs/plugins/ui-builder"
+    },
+    {
+      "name": "btst-media",
+      "type": "registry:block",
+      "title": "Media Plugin Pages",
+      "description": "Ejectable page components for the @btst/stack media plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "@vercel/blob"
+      ],
+      "registryDependencies": [
+        "button",
+        "dialog",
+        "input",
+        "popover",
+        "tabs"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/media"
     }
   ]
 }

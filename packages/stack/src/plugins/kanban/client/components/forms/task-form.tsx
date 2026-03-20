@@ -14,7 +14,9 @@ import {
 } from "@workspace/ui/components/select";
 import { MinimalTiptapEditor } from "@workspace/ui/components/minimal-tiptap";
 import SearchSelect from "@workspace/ui/components/search-select";
+import { usePluginOverrides } from "@btst/stack/context";
 import { useTaskMutations, useSearchUsers } from "../../hooks/kanban-hooks";
+import type { KanbanPluginOverrides } from "../../overrides";
 import { PRIORITY_OPTIONS } from "../../../utils";
 import type {
 	SerializedColumn,
@@ -44,6 +46,8 @@ export function TaskForm({
 	onDelete,
 }: TaskFormProps) {
 	const isEditing = !!taskId;
+	const { uploadImage, imagePicker: imagePickerTrigger } =
+		usePluginOverrides<KanbanPluginOverrides>("kanban");
 	const {
 		createTask,
 		updateTask,
@@ -155,7 +159,7 @@ export function TaskForm({
 	};
 
 	return (
-		<form onSubmit={handleSubmit} className="space-y-4">
+		<form onSubmit={handleSubmit} className="space-y-4 overflow-x-hidden">
 			<div className="space-y-2">
 				<Label htmlFor="title">Title *</Label>
 				<Input
@@ -227,6 +231,8 @@ export function TaskForm({
 					output="markdown"
 					placeholder="Describe the task..."
 					className="min-h-[150px]"
+					uploader={uploadImage}
+					imagePickerTrigger={imagePickerTrigger}
 				/>
 			</div>
 
