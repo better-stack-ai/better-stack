@@ -4,6 +4,7 @@ import {
 	isConnectionError,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
+import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import { LibraryPageComponent } from "./components/pages/library-page";
 import { createMediaQueryKeys } from "../query-keys";
@@ -46,6 +47,15 @@ export interface MediaClientConfig {
 	headers?: HeadersInit;
 	/** Optional lifecycle hooks for the media client plugin */
 	hooks?: MediaClientHooks;
+	/**
+	 * Optional page component overrides.
+	 * Replace any plugin page with a custom React component.
+	 * The built-in component is used as the fallback when not provided.
+	 */
+	pageComponents?: {
+		/** Replaces the media library page */
+		library?: ComponentType;
+	};
 }
 
 /**
@@ -72,11 +82,14 @@ export const mediaClientPlugin = (config: MediaClientConfig) =>
 		name: "media",
 
 		routes: () => ({
-			library: createRoute("/media", () => ({
-				PageComponent: LibraryPageComponent,
-				loader: createMediaLibraryLoader(config),
-				meta: createMediaLibraryMeta(config),
-			})),
+			library: createRoute("/media", () => {
+				const CustomLibrary = config.pageComponents?.library;
+				return {
+					PageComponent: CustomLibrary ?? LibraryPageComponent,
+					loader: createMediaLibraryLoader(config),
+					meta: createMediaLibraryMeta(config),
+				};
+			}),
 		}),
 	});
 

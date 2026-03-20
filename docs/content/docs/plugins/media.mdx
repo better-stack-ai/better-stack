@@ -611,3 +611,53 @@ Authorization hooks are not called when you use `stack().api.media.*` or direct 
 The Media plugin does not currently support build-time SSG prefetching. Its client loader warns when no server is available at build time, and the library route is intended to run against a live API.
 
 Use the Media plugin for authenticated dashboards, admin tools, and editor workflows rather than static public pages.
+
+## Shadcn Registry
+
+The Media plugin UI layer is distributed as a [shadcn registry](https://ui.shadcn.com/docs/registry) block. Use the registry to **eject and fully customize** the page components while keeping all data-fetching and API logic from `@btst/stack`.
+
+<Callout type="info">
+The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/stack/plugins/media/client/hooks`.
+</Callout>
+
+<Tabs items={["npx", "pnpm", "bunx"]}>
+  <Tab value="npx">
+    ```bash
+    npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-media.json
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-media.json
+    ```
+  </Tab>
+  <Tab value="bunx">
+    ```bash
+    bunx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-media.json
+    ```
+  </Tab>
+</Tabs>
+
+This copies the media page components into `src/components/btst/media/client/` in your project. All relative imports remain valid and you can edit the files freely while the plugin's data layer stays intact.
+
+### Using ejected components
+
+After installing, wire your custom components into the plugin via the `pageComponents` option in your client plugin config:
+
+```tsx title="lib/stack-client.tsx"
+import { mediaClientPlugin } from "@btst/stack/plugins/media/client"
+import { LibraryPageComponent } from "@/components/btst/media/client/components/pages/library-page"
+
+mediaClientPlugin({
+  apiBaseURL: "...",
+  apiBasePath: "/api/data",
+  siteBaseURL: "...",
+  siteBasePath: "/pages",
+  queryClient,
+  pageComponents: {
+    library: LibraryPageComponent, // replaces the media library page
+  },
+})
+```
+
+The ejected library page still relies on your `media` `StackProvider` overrides for API configuration, navigation, upload mode, and hooks.
