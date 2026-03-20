@@ -1,5 +1,5 @@
 // app/routes/__root.tsx
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Outlet, Link, useNavigate } from "react-router";
 import { StackProvider } from "@btst/stack/context"
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
@@ -42,26 +42,32 @@ export default function Layout() {
     console.log("baseURL", baseURL)
     const navigate = useNavigate()
     const [queryClient] = useState(() => getOrCreateQueryClient())
-    const mediaClientConfig = {
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        uploadMode: "direct" as const,
-    }
+    const mediaClientConfig = useMemo(
+        () => ({
+            apiBaseURL: baseURL,
+            apiBasePath: "/api/data",
+            uploadMode: "direct" as const,
+        }),
+        [baseURL],
+    )
 
-    const uploadImage = async (file: File) => {
+    const uploadImage = useCallback(async (file: File) => {
         const asset = await uploadAsset(mediaClientConfig, { file })
         return asset.url
-    }
+    }, [mediaClientConfig])
 
     // For chat file attachments we embed as a data URL so OpenAI can read the
     // content directly — a local /uploads/... path is not reachable from OpenAI's servers.
-    const uploadFileForChat = (file: File): Promise<string> =>
-        new Promise((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = (e) => resolve(e.target?.result as string)
-            reader.onerror = () => reject(new Error("Failed to read file"))
-            reader.readAsDataURL(file)
-        })
+    const uploadFileForChat = useCallback(
+        (file: File): Promise<string> =>
+            new Promise((resolve, reject) => {
+                const reader = new FileReader()
+                reader.onload = (e) => resolve(e.target?.result as string)
+                reader.onerror = () => reject(new Error("Failed to read file"))
+                reader.readAsDataURL(file)
+            }),
+        [],
+    )
 
   return (
     

@@ -1,6 +1,7 @@
 import { StackProvider } from "@btst/stack/context"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import { useCallback, useMemo } from "react"
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
@@ -45,26 +46,32 @@ function Layout() {
     const router = useRouter()
     const routeContext = Route.useRouteContext()
     const baseURL = getBaseURL()
-    const mediaClientConfig = {
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        uploadMode: "direct" as const,
-    }
+    const mediaClientConfig = useMemo(
+        () => ({
+            apiBaseURL: baseURL,
+            apiBasePath: "/api/data",
+            uploadMode: "direct" as const,
+        }),
+        [baseURL],
+    )
 
-    const uploadImage = async (file: File) => {
+    const uploadImage = useCallback(async (file: File) => {
         const asset = await uploadAsset(mediaClientConfig, { file })
         return asset.url
-    }
+    }, [mediaClientConfig])
 
     // For chat file attachments we embed as a data URL so OpenAI can read the
     // content directly — a local /uploads/... path is not reachable from OpenAI's servers.
-    const uploadFileForChat = (file: File): Promise<string> =>
-        new Promise((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = (e) => resolve(e.target?.result as string)
-            reader.onerror = () => reject(new Error("Failed to read file"))
-            reader.readAsDataURL(file)
-        })
+    const uploadFileForChat = useCallback(
+        (file: File): Promise<string> =>
+            new Promise((resolve, reject) => {
+                const reader = new FileReader()
+                reader.onload = (e) => resolve(e.target?.result as string)
+                reader.onerror = () => reject(new Error("Failed to read file"))
+                reader.readAsDataURL(file)
+            }),
+        [],
+    )
 
     return (
         <QueryClientProvider client={routeContext.queryClient}>
