@@ -748,6 +748,7 @@ Plugin UI pages are distributed as a shadcn v4 registry so consumers can eject a
 ### Key design rules
 
 - **Hooks are excluded** from the registry. Components import hooks from `@btst/stack/plugins/{name}/client/hooks`. Only the view layer is ejectable.
+- **Routable plugin pages should be wired back in via `pageComponents`** on the client plugin config when the plugin supports page overrides. If a plugin intentionally does not support `pageComponents`, document the direct-import rendering pattern clearly in the plugin docs and shared shadcn registry guide.
 - **`@workspace/ui` imports are rewritten**: standard shadcn components → `registryDependencies`; custom components (`page-wrapper`, `empty`, etc.) → embedded as `registry:component` files from `packages/ui/src/`; multi-file components (`auto-form`, `minimal-tiptap`, `ui-builder`) → external registry URL in `registryDependencies`.
 - **Directory structure is preserved**: source files land at `src/components/btst/{name}/client/{relative}` so all relative imports remain valid with no rewriting.
 - **`EXTERNAL_REGISTRY_COMPONENTS`** in `build-registry.ts` maps directory-based workspace/ui components to their external registry URLs.

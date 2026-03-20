@@ -792,6 +792,8 @@ npx shadcn@latest add "https://raw.githubusercontent.com/better-stack-ai/better-
 
 Files are installed into `src/components/btst/{plugin}/client/` with all relative imports preserved. Data-fetching hooks remain in `@btst/stack`.
 
+When a plugin exposes `pageComponents` on its client config, wire the ejected routable pages back in through that option. If a plugin intentionally does not support `pageComponents`, document the direct-import rendering pattern clearly in the plugin docs and the shared shadcn registry guide.
+
 ### Rebuild the registry locally
 
 ```bash
