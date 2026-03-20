@@ -219,6 +219,24 @@
         "table"
       ],
       "docs": "https://better-stack.ai/docs/plugins/ui-builder"
+    },
+    {
+      "name": "btst-media",
+      "type": "registry:block",
+      "title": "Media Plugin Pages",
+      "description": "Ejectable page components for the @btst/stack media plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "@vercel/blob"
+      ],
+      "registryDependencies": [
+        "button",
+        "input",
+        "popover",
+        "tabs"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/media"
     }
   ]
 }

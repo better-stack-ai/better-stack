@@ -297,6 +297,19 @@ const PLUGINS: PluginConfig[] = [
 		// hook files (excluded). Only types.ts is needed by ejected components.
 		pluginRootFiles: ["types.ts"],
 	},
+	{
+		name: "media",
+		title: "Media Plugin Pages",
+		description:
+			"Ejectable page components for the @btst/stack media plugin. " +
+			"Customize the UI layer while keeping data-fetching in @btst/stack.",
+		// @vercel/blob is required by @btst/stack's use-media hook even when using
+		// "direct" upload mode — Turbopack statically resolves dynamic imports so
+		// the package must be present at build time.
+		extraNpmDeps: ["@vercel/blob"],
+		extraRegistryDeps: [],
+		pluginRootFiles: ["types.ts", "schemas.ts"],
+	},
 ];
 
 // ---------------------------------------------------------------------------

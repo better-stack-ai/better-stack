@@ -47,7 +47,7 @@ SERVER_PORT=8766
 SERVER_PID=""
 TEST_PASSED=false
 
-PLUGIN_NAMES=("blog" "ai-chat" "cms" "form-builder" "kanban" "comments" "ui-builder")
+PLUGIN_NAMES=("ui-builder" "blog" "ai-chat" "cms" "form-builder" "kanban" "comments" "media")
 
 # ---------------------------------------------------------------------------
 # Cleanup
@@ -333,10 +333,12 @@ import { FormListPageComponent } from "@/components/btst/form-builder/client/com
 import { BoardsListPageComponent } from "@/components/btst/kanban/client/components/pages/boards-list-page";
 import { ModerationPageComponent } from "@/components/btst/comments/client/components/pages/moderation-page";
 import { PageListPage } from "@/components/btst/ui-builder/client/components/pages/page-list-page";
+import { LibraryPageComponent } from "@/components/btst/media/client/components/pages/library-page";
 
 // Suppress unused-import warnings while still forcing TS to resolve everything.
 void [HomePageComponent, ChatPageComponent, DashboardPageComponent,
-      FormListPageComponent, BoardsListPageComponent, ModerationPageComponent, PageListPage];
+      FormListPageComponent, BoardsListPageComponent, ModerationPageComponent, PageListPage,
+      LibraryPageComponent];
 
 export default function SmokeTestPage() {
   return <div data-testid="btst-smoke-test">Registry smoke test — all plugin imports resolved.</div>;
