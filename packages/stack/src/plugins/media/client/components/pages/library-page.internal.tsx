@@ -3,7 +3,6 @@ import { useState, useCallback, useRef, type ComponentType } from "react";
 import {
 	useAssets,
 	useDeleteAsset,
-	useDeleteFolder,
 	useFolders,
 	useUploadAsset,
 	useCreateFolder,
@@ -13,14 +12,12 @@ import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import {
 	Folder,
-	FolderOpen,
 	Image,
 	File as FileIcon,
 	Upload,
 	Trash2,
 	Search,
 	X,
-	ChevronRight,
 	Loader2,
 	FolderPlus,
 	Check,
@@ -31,77 +28,8 @@ import { toast } from "sonner";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { MediaPluginOverrides } from "../../overrides";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
-
-function formatBytes(bytes: number) {
-	if (bytes < 1024) return `${bytes} B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-	return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function FolderTreeItem({
-	folder,
-	selectedId,
-	onSelect,
-	depth = 0,
-}: {
-	folder: SerializedFolder;
-	selectedId: string | null;
-	onSelect: (id: string | null) => void;
-	depth?: number;
-}) {
-	const [expanded, setExpanded] = useState(false);
-	const { data: childrenRaw = [] } = useFolders(folder.id);
-	const children = childrenRaw as SerializedFolder[];
-	const { mutateAsync: deleteFolder } = useDeleteFolder();
-
-	return (
-		<div>
-			<div
-				className="group flex items-center"
-				style={{ paddingLeft: `${8 + depth * 12}px` }}
-			>
-				<button
-					type="button"
-					onClick={() => {
-						onSelect(folder.id);
-						setExpanded((v) => !v);
-					}}
-					className={cn(
-						"flex flex-1 items-center gap-1.5 rounded px-2 py-1 text-left text-sm hover:bg-muted",
-						selectedId === folder.id && "bg-muted font-medium",
-					)}
-				>
-					{children.length > 0 ? (
-						<ChevronRight
-							className={cn(
-								"size-3 shrink-0 transition-transform",
-								expanded && "rotate-90",
-							)}
-						/>
-					) : (
-						<span className="size-3" />
-					)}
-					{expanded ? (
-						<FolderOpen className="size-3.5 shrink-0 text-amber-500" />
-					) : (
-						<Folder className="size-3.5 shrink-0 text-amber-500" />
-					)}
-					<span className="truncate">{folder.name}</span>
-				</button>
-			</div>
-			{expanded &&
-				children.map((child) => (
-					<FolderTreeItem
-						key={child.id}
-						folder={child}
-						selectedId={selectedId}
-						onSelect={onSelect}
-						depth={depth + 1}
-					/>
-				))}
-		</div>
-	);
-}
+import { formatBytes } from "../media-picker/utils";
+import { FolderTreeItem } from "../media-picker/folder-tree";
 
 function LibrarySidebar({
 	selectedFolder,

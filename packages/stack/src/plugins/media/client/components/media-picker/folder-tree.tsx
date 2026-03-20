@@ -128,7 +128,7 @@ export function FolderTree({
 	);
 }
 
-function FolderTreeItem({
+export function FolderTreeItem({
 	folder,
 	selectedId,
 	onSelect,
