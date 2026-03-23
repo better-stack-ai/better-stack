@@ -65,10 +65,6 @@ The `mediaBackendPlugin()` requires a `storageAdapter`. BTST currently ships wit
 Pick the backend storage adapter first, then make the client-side `uploadMode` match it. A mismatch between the two is the most common Media plugin integration mistake.
 </Callout>
 
-<Callout type="info">
-`vercelBlobAdapter()` uses Vercel Blob's `handleUpload` helper from `@vercel/blob/client`, which matches the current npm package export layout and the standard Next.js server-route upload flow.
-</Callout>
-
 ### 2. Add Plugin to Client
 
 Register the media client plugin in your `stack-client.tsx` file:
