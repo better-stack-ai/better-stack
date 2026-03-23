@@ -59,7 +59,6 @@ export const mediaSchema = createDbPlugin("media", {
 				references: {
 					model: "mediaFolder",
 					field: "id",
-					onDelete: "cascade",
 				},
 			},
 			createdAt: {
