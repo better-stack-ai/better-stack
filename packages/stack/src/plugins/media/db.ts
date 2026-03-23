@@ -31,6 +31,10 @@ export const mediaSchema = createDbPlugin("media", {
 			folderId: {
 				type: "string",
 				required: false,
+				references: {
+					model: "mediaFolder",
+					field: "id",
+				},
 			},
 			alt: {
 				type: "string",
@@ -52,6 +56,11 @@ export const mediaSchema = createDbPlugin("media", {
 			parentId: {
 				type: "string",
 				required: false,
+				references: {
+					model: "mediaFolder",
+					field: "id",
+					onDelete: "cascade",
+				},
 			},
 			createdAt: {
 				type: "date",
