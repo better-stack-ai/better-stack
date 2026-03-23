@@ -88,7 +88,7 @@ export interface VercelBlobHandlerCallbacks {
 }
 
 /**
- * Vercel Blob storage adapter — uses the `@vercel/blob/server` `handleUpload`
+ * Vercel Blob storage adapter — uses the `@vercel/blob/client` `handleUpload`
  * protocol. The same endpoint handles both token generation and upload
  * completion notifications from Vercel's servers.
  */

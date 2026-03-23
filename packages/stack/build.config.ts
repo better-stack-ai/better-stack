@@ -46,7 +46,7 @@ export default defineBuildConfig({
 		"sonner",
 		// optional peerDependencies (media plugin)
 		"@vercel/blob",
-		"@vercel/blob/server",
+		"@vercel/blob/client",
 		"@aws-sdk/client-s3",
 		"@aws-sdk/s3-request-presigner",
 		// test/build-time deps kept external

@@ -36,7 +36,7 @@ vi.mock("@aws-sdk/s3-request-presigner", () => ({
 	getSignedUrl: mockGetSignedUrl,
 }));
 
-vi.mock("@vercel/blob/server", () => ({
+vi.mock("@vercel/blob/client", () => ({
 	handleUpload: mockHandleUpload,
 }));
 
