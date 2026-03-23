@@ -1,6 +1,7 @@
 import type {
 	VercelBlobStorageAdapter,
 	VercelBlobHandlerCallbacks,
+	VercelBlobHandleUploadBody,
 } from "../storage-adapter";
 
 export interface VercelBlobStorageAdapterOptions {
@@ -17,7 +18,7 @@ export interface VercelBlobStorageAdapterOptions {
  * Defined inline so we do not hard-depend on a specific `@vercel/blob` release.
  */
 interface HandleUploadOptions {
-	body: unknown;
+	body: VercelBlobHandleUploadBody;
 	request: Request;
 	token?: string;
 	onBeforeGenerateToken: (
@@ -73,13 +74,14 @@ export function vercelBlobAdapter(
 
 		async handleRequest(
 			request: Request,
+			body: VercelBlobHandleUploadBody,
 			callbacks: VercelBlobHandlerCallbacks,
 		): Promise<unknown> {
 			let handleUpload: HandleUploadFn;
 			try {
 				const vercelBlobClient =
 					/* @vite-ignore */
-					(await import("@vercel/blob/client")) as {
+					(await import("@vercel/blob/client")) as unknown as {
 						handleUpload: HandleUploadFn;
 					};
 				({ handleUpload } = vercelBlobClient);
@@ -90,8 +92,6 @@ export function vercelBlobAdapter(
 						"Run: npm install @vercel/blob",
 				);
 			}
-
-			const body = await request.json();
 
 			return handleUpload({
 				body,

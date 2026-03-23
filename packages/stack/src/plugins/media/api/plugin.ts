@@ -788,7 +788,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						});
 					}
 
-					return storageAdapter.handleRequest(ctx.request, {
+					return storageAdapter.handleRequest(ctx.request, ctx.body, {
 						onBeforeGenerateToken: async (pathname, clientPayload) => {
 							const filename = pathname.split("/").pop() ?? pathname;
 							let parsed: Record<string, unknown> = {};

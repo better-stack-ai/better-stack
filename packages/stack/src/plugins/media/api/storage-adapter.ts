@@ -73,6 +73,37 @@ export interface VercelBlobTokenOptions {
 }
 
 /**
+ * Minimal blob metadata sent back by Vercel Blob's upload completion callback.
+ * Keep this intentionally small so BTST does not hard-depend on a specific SDK type.
+ */
+export interface VercelBlobCallbackBlob {
+	url: string;
+	pathname: string;
+	[key: string]: unknown;
+}
+
+export interface VercelBlobGenerateClientTokenBody {
+	type: "blob.generate-client-token";
+	payload: {
+		pathname: string;
+		multipart: boolean;
+		clientPayload: string | null;
+	};
+}
+
+export interface VercelBlobUploadCompletedBody {
+	type: "blob.upload-completed";
+	payload: {
+		blob: VercelBlobCallbackBlob;
+		tokenPayload?: string | null;
+	};
+}
+
+export type VercelBlobHandleUploadBody =
+	| VercelBlobGenerateClientTokenBody
+	| VercelBlobUploadCompletedBody;
+
+/**
  * Callbacks provided to the Vercel Blob adapter when handling a request.
  */
 export interface VercelBlobHandlerCallbacks {
@@ -107,6 +138,7 @@ export interface VercelBlobStorageAdapter {
 	 */
 	handleRequest(
 		request: Request,
+		body: VercelBlobHandleUploadBody,
 		callbacks: VercelBlobHandlerCallbacks,
 	): Promise<unknown>;
 	/**

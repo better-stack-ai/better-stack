@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
+import type { VercelBlobHandleUploadBody } from "../api/storage-adapter";
 
 // Top-level vi.mock calls are hoisted by Vitest before any imports.
 // Factories are used so the packages do not need to be installed as devDependencies.
@@ -271,9 +272,13 @@ describe("vercelBlobAdapter", () => {
 		const { vercelBlobAdapter } = await import("../api/adapters/vercel-blob");
 		const adapter = vercelBlobAdapter();
 
-		const body = {
+		const body: VercelBlobHandleUploadBody = {
 			type: "blob.generate-client-token",
-			payload: { pathname: "photo.jpg" },
+			payload: {
+				pathname: "photo.jpg",
+				multipart: false,
+				clientPayload: null,
+			},
 		};
 		const request = new Request("https://example.com/api/upload", {
 			method: "POST",
@@ -281,7 +286,7 @@ describe("vercelBlobAdapter", () => {
 			headers: { "Content-Type": "application/json" },
 		});
 
-		const result = await adapter.handleRequest(request, {});
+		const result = await adapter.handleRequest(request, body, {});
 
 		expect(mockHandleUpload).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -300,9 +305,13 @@ describe("vercelBlobAdapter", () => {
 		const adapter = vercelBlobAdapter();
 
 		const onBeforeGenerateToken = vi.fn().mockResolvedValue(undefined);
-		const body = {
+		const body: VercelBlobHandleUploadBody = {
 			type: "blob.generate-client-token",
-			payload: { pathname: "test.jpg" },
+			payload: {
+				pathname: "test.jpg",
+				multipart: false,
+				clientPayload: null,
+			},
 		};
 		const request = new Request("https://example.com/api/upload", {
 			method: "POST",
@@ -310,7 +319,7 @@ describe("vercelBlobAdapter", () => {
 			headers: { "Content-Type": "application/json" },
 		});
 
-		await adapter.handleRequest(request, { onBeforeGenerateToken });
+		await adapter.handleRequest(request, body, { onBeforeGenerateToken });
 
 		// Verify that handleUpload received an onBeforeGenerateToken callback
 		const callArgs = mockHandleUpload.mock.calls[0]![0] as Record<
@@ -323,6 +332,41 @@ describe("vercelBlobAdapter", () => {
 		const cb = callArgs.onBeforeGenerateToken as Function;
 		await cb("test.jpg", null);
 		expect(onBeforeGenerateToken).toHaveBeenCalledWith("test.jpg", null);
+	});
+
+	it("reuses the already-parsed request body without reading the request again", async () => {
+		const { vercelBlobAdapter } = await import("../api/adapters/vercel-blob");
+		const adapter = vercelBlobAdapter();
+
+		const body: VercelBlobHandleUploadBody = {
+			type: "blob.generate-client-token",
+			payload: {
+				pathname: "consumed.jpg",
+				multipart: false,
+				clientPayload: null,
+			},
+		};
+		const request = new Request("https://example.com/api/upload", {
+			method: "POST",
+			body: JSON.stringify(body),
+			headers: { "Content-Type": "application/json" },
+		});
+
+		// Simulate the BTST route layer parsing the request before the adapter runs.
+		const parsedBody = await request.json();
+
+		const result = await adapter.handleRequest(request, parsedBody, {});
+
+		expect(mockHandleUpload).toHaveBeenCalledWith(
+			expect.objectContaining({
+				body: parsedBody,
+				request,
+			}),
+		);
+		expect(result).toEqual({
+			type: "blob.generate-client-token",
+			clientToken: "tok123",
+		});
 	});
 
 	it("calls del when deleting a blob by URL", async () => {
