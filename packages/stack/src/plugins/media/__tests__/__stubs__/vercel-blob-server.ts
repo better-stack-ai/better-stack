@@ -4,6 +4,6 @@
  */
 export async function handleUpload(_options: unknown): Promise<unknown> {
 	throw new Error(
-		"handleUpload is not available in the installed @vercel/blob version. Use a version that exports @vercel/blob/server.",
+		"handleUpload is not available in the installed @vercel/blob version. BTST requires a version that exports @vercel/blob/server.",
 	);
 }

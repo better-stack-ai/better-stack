@@ -13,7 +13,7 @@ export interface VercelBlobStorageAdapterOptions {
 }
 
 /**
- * Minimal subset of the `@vercel/blob/server` `handleUpload` options.
+ * Minimal subset of the `@vercel/blob/client` `handleUpload` options.
  * Defined inline so we do not hard-depend on a specific `@vercel/blob` release.
  */
 interface HandleUploadOptions {
@@ -40,11 +40,11 @@ type DelFn = (url: string, options?: { token?: string }) => Promise<void>;
 /**
  * Create a Vercel Blob storage adapter using the signed direct-upload protocol.
  * The server never receives file bytes — it only issues short-lived client tokens
- * via `@vercel/blob`'s `handleUpload` helper (available via `@vercel/blob/server`
+ * via `@vercel/blob`'s `handleUpload` helper (available via `@vercel/blob/client`
  * in compatible versions).
  *
  * @remarks Requires `@vercel/blob` as an optional peer dependency (version
- * with `handleUpload` exported from `@vercel/blob/server`).
+ * with `handleUpload` exported from `@vercel/blob/client`).
  *
  * Upload flow:
  * 1. Client calls `POST /media/upload/vercel-blob` to obtain a client token.
@@ -77,17 +77,16 @@ export function vercelBlobAdapter(
 		): Promise<unknown> {
 			let handleUpload: HandleUploadFn;
 			try {
-				const vercelBlobServer =
+				const vercelBlobClient =
 					/* @vite-ignore */
-					// @ts-expect-error — @vercel/blob/server may not be exported in all installed versions
-					(await import("@vercel/blob/server")) as {
+					(await import("@vercel/blob/client")) as {
 						handleUpload: HandleUploadFn;
 					};
-				({ handleUpload } = vercelBlobServer);
+				({ handleUpload } = vercelBlobClient);
 			} catch {
 				throw new Error(
 					"[@btst/stack] Vercel Blob adapter requires '@vercel/blob' with " +
-						"'handleUpload' exported from '@vercel/blob/server'. " +
+						"'handleUpload' exported from '@vercel/blob/client'. " +
 						"Run: npm install @vercel/blob",
 				);
 			}
