@@ -84,14 +84,14 @@ function createVercelBlobStorageAdapter(
 	return {
 		type: "vercel-blob",
 		urlHostnameSuffix: ".public.blob.vercel-storage.com",
-		handleRequest: vi.fn(async (request, callbacks) => {
-			const body = (await request.json()) as {
+		handleRequest: vi.fn(async (request, body, callbacks) => {
+			const parsedBody = (body ?? ((await request.json()) as unknown)) as {
 				pathname?: string;
 				clientPayload?: string | null;
 			};
 			const tokenOptions = await callbacks.onBeforeGenerateToken?.(
-				body.pathname ?? "photo.jpg",
-				body.clientPayload ?? null,
+				parsedBody.pathname ?? "photo.jpg",
+				parsedBody.clientPayload ?? null,
 			);
 			return { ok: true, tokenOptions };
 		}),
