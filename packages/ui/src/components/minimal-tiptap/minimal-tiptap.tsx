@@ -1,6 +1,7 @@
 import "./styles/index.css"
 
 import type { Content, Editor } from "@tiptap/react"
+import type { ComponentType } from "react"
 import type { UseMinimalTiptapEditorProps } from "./hooks/use-minimal-tiptap"
 import { EditorContent, EditorContext } from "@tiptap/react"
 import { Separator } from "@workspace/ui/components/separator"
@@ -23,9 +24,21 @@ export interface MinimalTiptapProps extends Omit<
   onChange?: (value: Content) => void
   className?: string
   editorContentClassName?: string
+  /**
+   * Optional trigger component for a media picker.
+   * When provided, it appears inside the image insertion dialog as a "Browse media" section.
+   * Receives `onSelect(url)` — the URL is inserted as an image node.
+   */
+  imagePickerTrigger?: ComponentType<{ onSelect: (url: string) => void }>
 }
 
-const Toolbar = ({ editor }: { editor: Editor }) => (
+const Toolbar = ({
+  editor,
+  imagePickerTrigger,
+}: {
+  editor: Editor
+  imagePickerTrigger?: ComponentType<{ onSelect: (url: string) => void }>
+}) => (
   <div className="border-border flex h-12 shrink-0 overflow-x-auto border-b p-2">
     <div className="flex w-max items-center gap-px">
       <SectionOne editor={editor} activeLevels={[1, 2, 3, 4, 5, 6]} />
@@ -63,6 +76,7 @@ const Toolbar = ({ editor }: { editor: Editor }) => (
         editor={editor}
         activeActions={["codeBlock", "blockquote", "horizontalRule"]}
         mainActionCount={0}
+        imagePickerTrigger={imagePickerTrigger}
       />
     </div>
   </div>
@@ -73,6 +87,7 @@ export const MinimalTiptapEditor = ({
   onChange,
   className,
   editorContentClassName,
+  imagePickerTrigger,
   ...props
 }: MinimalTiptapProps) => {
   const editor = useMinimalTiptapEditor({
@@ -91,6 +106,7 @@ export const MinimalTiptapEditor = ({
         editor={editor}
         className={className}
         editorContentClassName={editorContentClassName}
+        imagePickerTrigger={imagePickerTrigger}
       />
     </EditorContext.Provider>
   )
@@ -104,6 +120,7 @@ export const MainMinimalTiptapEditor = ({
   editor: providedEditor,
   className,
   editorContentClassName,
+  imagePickerTrigger,
 }: MinimalTiptapProps & { editor: Editor }) => {
   const { editor } = useTiptapEditor(providedEditor)
 
@@ -121,7 +138,7 @@ export const MainMinimalTiptapEditor = ({
         className
       )}
     >
-      <Toolbar editor={editor} />
+      <Toolbar editor={editor} imagePickerTrigger={imagePickerTrigger} />
       <EditorContent
         editor={editor}
         className={cn("minimal-tiptap-editor", editorContentClassName)}

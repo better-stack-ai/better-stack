@@ -1,5 +1,6 @@
 import * as React from "react"
 import type { Editor } from "@tiptap/react"
+import type { ComponentType } from "react"
 import type { FormatAction } from "../../types"
 import type { toggleVariants } from "@workspace/ui/components/toggle"
 import type { VariantProps } from "class-variance-authority"
@@ -56,6 +57,7 @@ interface SectionFiveProps extends VariantProps<typeof toggleVariants> {
   editor: Editor
   activeActions?: InsertElementAction[]
   mainActionCount?: number
+  imagePickerTrigger?: ComponentType<{ onSelect: (url: string) => void }>
 }
 
 export const SectionFive: React.FC<SectionFiveProps> = ({
@@ -64,11 +66,12 @@ export const SectionFive: React.FC<SectionFiveProps> = ({
   mainActionCount = 0,
   size,
   variant,
+  imagePickerTrigger,
 }) => {
   return (
     <>
       <LinkEditPopover editor={editor} size={size} variant={variant} />
-      <ImageEditDialog editor={editor} size={size} variant={variant} />
+      <ImageEditDialog editor={editor} size={size} variant={variant} imagePickerTrigger={imagePickerTrigger} />
       <ToolbarSection
         editor={editor}
         actions={formatActions}

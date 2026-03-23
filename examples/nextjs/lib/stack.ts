@@ -9,6 +9,7 @@ import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
 import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
 import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api"
+import { mediaBackendPlugin, localAdapter } from "@btst/stack/plugins/media/api"
 import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
 import { openai } from "@ai-sdk/openai"
 import { tool } from "ai"
@@ -439,6 +440,12 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
                 console.log("Board created:", board.id, board.name);
                 revalidatePath("/pages/ssg-kanban", "page");
             },
+        }),
+        // Media plugin for asset management
+        media: mediaBackendPlugin({
+            storageAdapter: localAdapter(),
+            // Allow external URLs for testing (e.g. placehold.co used by e2e smoke tests)
+            allowedUrlPrefixes: ["https://placehold.co"],
         }),
     },
         adapter: (db) => createMemoryAdapter(db)({})

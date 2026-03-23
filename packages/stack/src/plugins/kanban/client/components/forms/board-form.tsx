@@ -50,7 +50,7 @@ export function BoardForm({ board, onClose, onSuccess }: BoardFormProps) {
 	};
 
 	return (
-		<form onSubmit={handleSubmit} className="space-y-4">
+		<form onSubmit={handleSubmit} className="space-y-4 overflow-x-hidden">
 			<div className="space-y-2">
 				<Label htmlFor="name">Name *</Label>
 				<Input

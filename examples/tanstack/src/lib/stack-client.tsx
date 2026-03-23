@@ -7,6 +7,7 @@ import { uiBuilderClientPlugin, defaultComponentRegistry } from "@btst/stack/plu
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
 import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
 import { commentsClientPlugin } from "@btst/stack/plugins/comments/client"
+import { mediaClientPlugin } from "@btst/stack/plugins/media/client"
 import { QueryClient } from "@tanstack/react-query"
 
 // Get base URL function - works on both server and client
@@ -136,6 +137,14 @@ export const getStackClient = (queryClient: QueryClient) => {
             }),
             // Comments plugin — registers the /comments/moderation admin route
             comments: commentsClientPlugin({
+                apiBaseURL: baseURL,
+                apiBasePath: "/api/data",
+                siteBaseURL: baseURL,
+                siteBasePath: "/pages",
+                queryClient: queryClient,
+            }),
+            // Media plugin — registers the /media library route
+            media: mediaClientPlugin({
                 apiBaseURL: baseURL,
                 apiBasePath: "/api/data",
                 siteBaseURL: baseURL,

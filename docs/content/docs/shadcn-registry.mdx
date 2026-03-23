@@ -6,7 +6,7 @@ description: Eject and fully customize plugin UI components using the shadcn reg
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
 import { Card, Cards } from "fumadocs-ui/components/card";
-import { BookOpen, Bot, Database, FileText, Layout, Columns3 } from "lucide-react";
+import { BookOpen, Bot, Database, FileText, Layout, Columns3, MessageSquare, ImageIcon } from "lucide-react";
 
 Every BTST plugin ships its page components as a [shadcn v4 registry](https://ui.shadcn.com/docs/registry) block. This lets you **eject the entire view layer** into your own codebase and customize it freely — while all data-fetching, API logic, hooks, and routing stay untouched inside `@btst/stack`.
 
@@ -32,6 +32,8 @@ Pick the plugin you want to customize:
   <Card title="Form Builder" href="/plugins/form-builder#shadcn-registry" icon={<FileText size={20} />} description="Form list, editor, submissions pages" />
   <Card title="UI Builder" href="/plugins/ui-builder#shadcn-registry" icon={<Layout size={20} />} description="Page list, page builder editor" />
   <Card title="Kanban" href="/plugins/kanban#shadcn-registry" icon={<Columns3 size={20} />} description="Boards list, board detail page" />
+  <Card title="Comments" href="/plugins/comments" icon={<MessageSquare size={20} />} description="Moderation pages, user comments pages, and reusable thread UI" />
+  <Card title="Media" href="/plugins/media#shadcn-registry" icon={<ImageIcon size={20} />} description="Media library page and reusable picker UI" />
 </Cards>
 
 Or install a single plugin's UI directly:
@@ -56,6 +58,12 @@ Or install a single plugin's UI directly:
 
     # Kanban
     npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-kanban.json
+
+    # Comments
+    npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-comments.json
+
+    # Media
+    npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-media.json
     ```
   </Tab>
   <Tab value="pnpm">
@@ -77,6 +85,12 @@ Or install a single plugin's UI directly:
 
     # Kanban
     pnpx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-kanban.json
+
+    # Comments
+    pnpx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-comments.json
+
+    # Media
+    pnpx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-media.json
     ```
   </Tab>
   <Tab value="bunx">
@@ -98,13 +112,19 @@ Or install a single plugin's UI directly:
 
     # Kanban
     bunx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-kanban.json
+
+    # Comments
+    bunx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-comments.json
+
+    # Media
+    bunx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-media.json
     ```
   </Tab>
 </Tabs>
 
 ## Wire up ejected components
 
-After the install, import your ejected components and pass them to the client plugin via `pageComponents`. Any key you omit falls back to the built-in default, so you only need to override the pages you actually want to change.
+After the install, most plugins let you import your ejected components and pass them to the client plugin via `pageComponents`. Any key you omit falls back to the built-in default, so you only need to override the pages you actually want to change.
 
 ### Blog
 
@@ -221,7 +241,45 @@ kanbanClientPlugin({
 })
 ```
 
+### Comments
+
+Comments is a little different: the ejected UI is typically rendered directly in your app rather than passed through a `pageComponents` option.
+
+```tsx title="app/comments/moderation/page.tsx"
+import { ModerationPageComponent } from "@/components/btst/comments/client/components/pages/moderation-page"
+
+export default function CommentsModerationPage() {
+  return <ModerationPageComponent />
+}
+```
+
+Keep `commentsClientPlugin()` registered and your `comments` overrides configured in `StackProvider`. The ejected page components will continue to use the shared hooks from `@btst/stack/plugins/comments/client/hooks`.
+
+### Media
+
+Media uses a single `pageComponents.library` override for the media library page.
+
+```tsx title="lib/stack-client.tsx"
+import { mediaClientPlugin } from "@btst/stack/plugins/media/client"
+import { LibraryPageComponent } from "@/components/btst/media/client/components/pages/library-page"
+
+mediaClientPlugin({
+  apiBaseURL: "...",
+  apiBasePath: "/api/data",
+  siteBaseURL: "...",
+  siteBasePath: "/pages",
+  queryClient,
+  pageComponents: {
+    library: LibraryPageComponent, // media library page
+  },
+})
+```
+
+Keep your `media` overrides configured in `StackProvider` so the ejected component can resolve API config, upload mode, and hooks correctly.
+
 ## Available `pageComponents` keys
+
+The table below covers the plugins that currently support `pageComponents` overrides directly. Comments still use the direct-import pattern shown above.
 
 | Plugin | Key | Props | Description |
 |---|---|---|---|
@@ -247,6 +305,7 @@ kanbanClientPlugin({
 | Kanban | `boards` | — | Boards list |
 | Kanban | `newBoard` | — | New board |
 | Kanban | `board` | `{ boardId: string }` | Board detail |
+| Media | `library` | — | Media library page |
 
 ## What the registry installs
 

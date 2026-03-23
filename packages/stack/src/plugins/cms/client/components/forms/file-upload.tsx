@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useCallback, useEffect, type ChangeEvent } from "react";
+import {
+	useState,
+	useCallback,
+	useEffect,
+	type ChangeEvent,
+	type ComponentType,
+} from "react";
 import { toast } from "sonner";
 import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
 import { Input } from "@workspace/ui/components/input";
@@ -23,6 +29,20 @@ export interface CMSFileUploadProps extends AutoFormInputComponentProps {
 	 * This is required - consumers must provide an upload implementation.
 	 */
 	uploadImage: (file: File) => Promise<string>;
+	/**
+	 * Optional custom component for the image field.
+	 * When provided, it replaces the default file-upload input entirely.
+	 */
+	imageInputField?: ComponentType<{
+		value: string;
+		onChange: (value: string) => void;
+		isRequired?: boolean;
+	}>;
+	/**
+	 * Optional trigger component for a media picker.
+	 * When provided, it is rendered as a "Browse media" option.
+	 */
+	imagePicker?: ComponentType<{ onSelect: (url: string) => void }>;
 }
 
 /**
@@ -54,6 +74,8 @@ export function CMSFileUpload({
 	fieldProps,
 	field,
 	uploadImage,
+	imageInputField: ImageInputField,
+	imagePicker: ImagePickerTrigger,
 }: CMSFileUploadProps) {
 	// Exclude showLabel and value from props spread
 	// File inputs cannot have their value set programmatically (browser security)
@@ -63,6 +85,8 @@ export function CMSFileUpload({
 		...safeFieldProps
 	} = fieldProps;
 	const showLabel = _showLabel === undefined ? true : _showLabel;
+
+	// All hooks must be called unconditionally before any early return.
 	const [isUploading, setIsUploading] = useState(false);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(
 		field.value || null,
@@ -80,7 +104,6 @@ export function CMSFileUpload({
 			const file = e.target.files?.[0];
 			if (!file) return;
 
-			// Check if it's an image
 			if (!file.type.startsWith("image/")) {
 				toast.error("Please select an image file");
 				return;
@@ -106,6 +129,29 @@ export function CMSFileUpload({
 		field.onChange("");
 	}, [field]);
 
+	// When a custom imageInputField component is provided via overrides, delegate to it.
+	if (ImageInputField) {
+		return (
+			<FormItem>
+				{showLabel && (
+					<AutoFormLabel
+						label={fieldConfigItem?.label || label}
+						isRequired={isRequired}
+					/>
+				)}
+				<FormControl>
+					<ImageInputField
+						value={field.value || ""}
+						onChange={field.onChange}
+						isRequired={isRequired}
+					/>
+				</FormControl>
+				<AutoFormTooltip fieldConfigItem={fieldConfigItem} />
+				<FormMessage />
+			</FormItem>
+		);
+	}
+
 	return (
 		<FormItem>
 			{showLabel && (
@@ -116,19 +162,31 @@ export function CMSFileUpload({
 			)}
 			{!previewUrl && (
 				<FormControl>
-					<div className="relative">
-						<Input
-							type="file"
-							accept="image/*"
-							{...safeFieldProps}
-							onChange={handleFileChange}
-							disabled={isUploading}
-							className="cursor-pointer"
-							data-testid="image-upload-input"
-						/>
-						{isUploading && (
-							<div className="absolute inset-0 flex items-center justify-center bg-background/80">
-								<Loader2 className="h-4 w-4 animate-spin" />
+					<div className="space-y-2">
+						<div className="relative">
+							<Input
+								type="file"
+								accept="image/*"
+								{...safeFieldProps}
+								onChange={handleFileChange}
+								disabled={isUploading}
+								className="cursor-pointer"
+								data-testid="image-upload-input"
+							/>
+							{isUploading && (
+								<div className="absolute inset-0 flex items-center justify-center bg-background/80">
+									<Loader2 className="h-4 w-4 animate-spin" />
+								</div>
+							)}
+						</div>
+						{ImagePickerTrigger && (
+							<div data-testid="image-picker-trigger">
+								<ImagePickerTrigger
+									onSelect={(url: string) => {
+										setPreviewUrl(url);
+										field.onChange(url);
+									}}
+								/>
 							</div>
 						)}
 					</div>

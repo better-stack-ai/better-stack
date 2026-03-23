@@ -117,6 +117,12 @@ export default defineBuildConfig({
 		"./src/plugins/comments/query-keys.ts",
 		// media plugin entries
 		"./src/plugins/media/api/index.ts",
+		"./src/plugins/media/api/adapters/s3.ts",
+		"./src/plugins/media/api/adapters/vercel-blob.ts",
+		"./src/plugins/media/client/index.ts",
+		"./src/plugins/media/client/components/index.tsx",
+		"./src/plugins/media/client/hooks/index.tsx",
+		"./src/plugins/media/query-keys.ts",
 		"./src/components/auto-form/index.ts",
 		"./src/components/stepped-auto-form/index.ts",
 		"./src/components/multi-select/index.ts",
