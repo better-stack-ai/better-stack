@@ -68,6 +68,9 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 			.join("\n"),
 		backendEntries: metas
 			.map((m) => {
+				if (m.key === "ai-chat") {
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: undefined as any }),`;
+				}
 				if (m.key === "ui-builder") {
 					return `\t\t${m.configKey}: ${m.backendSymbol},`;
 				}

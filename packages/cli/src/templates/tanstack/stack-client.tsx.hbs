@@ -11,7 +11,7 @@ export function getStackClient(queryClient: QueryClient) {
 	return createStackClient({
 		plugins: {
 {{#if clientEntries}}
-{{clientEntries}}
+{{{clientEntries}}}
 {{else}}
 			// Add client plugins here.
 {{/if}}

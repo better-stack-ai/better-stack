@@ -10,7 +10,7 @@ import {
 	select,
 	text,
 } from "@clack/prompts";
-import { Command } from "commander";
+import { Command, InvalidOptionArgumentError } from "commander";
 import {
 	ADAPTERS,
 	DEFAULT_PLUGIN_SELECTION,
@@ -34,7 +34,7 @@ import { buildScaffoldPlan } from "../utils/scaffold-plan";
 import { collectPrerequisiteWarnings } from "../utils/validate-prerequisites";
 import type { Adapter, Framework, InitOptions, PluginKey } from "../types";
 
-type InitCliOptions = Omit<InitOptions, "plugins">;
+type InitCliOptions = InitOptions;
 
 function ensureNotCancelled<T>(value: T | symbol): T {
 	if (isCancel(value)) {
@@ -94,6 +94,10 @@ async function detectOrSelectAdapter(
 }
 
 async function selectPlugins(options: InitCliOptions): Promise<PluginKey[]> {
+	if (options.plugins?.length) {
+		return options.plugins;
+	}
+
 	if (options.yes) return DEFAULT_PLUGIN_SELECTION;
 
 	const plugins = ensureNotCancelled(
@@ -110,6 +114,37 @@ async function selectPlugins(options: InitCliOptions): Promise<PluginKey[]> {
 	);
 
 	return plugins as PluginKey[];
+}
+
+function parsePluginOption(value: string): PluginKey[] {
+	const available = PLUGINS.map((plugin) => plugin.key);
+	const availableSet = new Set(available);
+
+	if (value.trim().toLowerCase() === "all") {
+		return [...available];
+	}
+
+	const requested = value
+		.split(",")
+		.map((part) => part.trim())
+		.filter(Boolean);
+
+	if (requested.length === 0) {
+		throw new InvalidOptionArgumentError(
+			"Expected a comma-separated list of plugins or 'all'.",
+		);
+	}
+
+	const invalid = requested.filter(
+		(plugin) => !availableSet.has(plugin as PluginKey),
+	);
+	if (invalid.length > 0) {
+		throw new InvalidOptionArgumentError(
+			`Unknown plugin(s): ${invalid.join(", ")}. Valid: ${available.join(", ")}`,
+		);
+	}
+
+	return Array.from(new Set(requested)) as PluginKey[];
 }
 
 async function pickConflictPolicy(
@@ -136,6 +171,11 @@ export function createInitCommand() {
 		.option(
 			"--adapter <adapter>",
 			"memory | prisma | drizzle | kysely | mongodb",
+		)
+		.option(
+			"--plugins <plugins>",
+			"Comma-separated plugin keys, or 'all'",
+			parsePluginOption,
 		)
 		.option("--skip-install", "Skip dependency install")
 		.option("--cwd <path>", "Target project directory")
@@ -283,11 +323,18 @@ export function createInitCommand() {
 				}
 			}
 
+			const layoutStatus =
+				framework === "nextjs"
+					? "yes (generated app/pages/layout.tsx)"
+					: layoutPatch.updated
+						? "yes"
+						: "manual action may be needed";
+
 			outro(`BTST init complete.
 Files written: ${writeResult.written.length}
 Files skipped: ${writeResult.skipped.length}
 CSS updated: ${cssPatch.updated ? "yes" : "no"}
-Layout patched: ${layoutPatch.updated ? "yes" : "manual action may be needed"}
+Layout patched: ${layoutStatus}
 
 Next steps:
 - Verify routes under /pages/*

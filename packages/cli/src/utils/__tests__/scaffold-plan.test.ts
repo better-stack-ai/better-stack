@@ -71,4 +71,33 @@ describe("scaffold plan", () => {
 			);
 		},
 	);
+
+	it("renders ui-builder backend plugin without invoking it", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["ui-builder"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+
+		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
+		expect(stackFile?.content).toContain("uiBuilder: UI_BUILDER_CONTENT_TYPE,");
+		expect(stackFile?.content).not.toContain("UI_BUILDER_CONTENT_TYPE()");
+	});
+
+	it("renders ai-chat backend plugin with compile-safe placeholder model", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["ai-chat"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+
+		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
+		expect(stackFile?.content).toContain(
+			"aiChat: aiChatBackendPlugin({ model: undefined as any }),",
+		);
+	});
 });

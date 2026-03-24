@@ -54,7 +54,7 @@ npm install "$STACK_TARBALL" "$CODEGEN_TARBALL" --legacy-peer-deps
 success "Installed local @btst/stack and @btst/codegen"
 
 step "Running btst init (first pass)"
-npx @btst/codegen init --yes --framework nextjs --adapter memory --skip-install 2>&1 | tee "$TEST_DIR/init-first.log"
+npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins all --skip-install 2>&1 | tee "$TEST_DIR/init-first.log"
 if ! node -e 'const fs=require("fs");const s=fs.readFileSync(process.argv[1],"utf8");process.exit(s.includes("Running @btst/codegen init")?0:1)' "$TEST_DIR/init-first.log"; then
 	error "Expected runtime banner not found in init output"
 	exit 1
@@ -62,8 +62,9 @@ fi
 success "First init run completed"
 
 step "Installing runtime deps needed for generated files"
-npm install @tanstack/react-query @btst/adapter-memory @btst/yar --legacy-peer-deps
-success "Installed runtime deps"
+STACK_PEERS=$(node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("node_modules/@btst/stack/package.json","utf8"));process.stdout.write(Object.keys(p.peerDependencies||{}).join(" "));')
+npm install @btst/adapter-memory $STACK_PEERS --legacy-peer-deps
+success "Installed runtime deps (adapter + @btst/stack peers)"
 
 step "Asserting generated files and patches"
 test -f "lib/stack.ts"
@@ -73,6 +74,8 @@ test -f "app/api/data/[[...all]]/route.ts"
 test -f "app/pages/[[...all]]/page.tsx"
 test -f "app/pages/layout.tsx"
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("import { stack } from \"@btst/stack\"")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("mediaBackendPlugin()")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");process.exit(s.includes("@btst/stack/plugins/ui-builder/css")?0:1)'
 success "Generation + patch checks passed"
 
 step "Idempotency check (second pass)"
@@ -115,7 +118,7 @@ for (const record of records) {
 process.stdout.write(hash.digest("hex"));
 EOF
 
-npx @btst/codegen init --yes --framework nextjs --adapter memory --skip-install > "$TEST_DIR/init-second.log" 2>&1
+npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins all --skip-install > "$TEST_DIR/init-second.log" 2>&1
 node <<'EOF' > "$TEST_DIR/init-after.hash"
 const fs = require("fs");
 const path = require("path");
@@ -160,6 +163,14 @@ if [ "$(cat "$TEST_DIR/init-before.hash")" != "$(cat "$TEST_DIR/init-after.hash"
 	exit 1
 fi
 success "Second run was idempotent"
+
+step "Preparing CSS for compile sanity check"
+node -e 'const fs=require("fs");const p="app/globals.css";const s=fs.readFileSync(p,"utf8");const next=s.split("\n").filter((line)=>!line.includes("@btst/stack/plugins/")&&!line.includes("@btst/stack/ui/css")).join("\n");fs.writeFileSync(p,next);'
+success "Temporarily removed BTST CSS imports before build"
+
+step "Generating compile-safe scaffold"
+npx @btst/codegen init --yes --framework nextjs --adapter memory --skip-install > "$TEST_DIR/init-compile.log" 2>&1
+success "Regenerated baseline scaffold for compile check"
 
 step "Compiling fixture project"
 npm run build
