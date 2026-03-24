@@ -32,15 +32,9 @@ import {
 } from "../utils/passthrough";
 import { buildScaffoldPlan } from "../utils/scaffold-plan";
 import { collectPrerequisiteWarnings } from "../utils/validate-prerequisites";
-import type { Adapter, Framework, PluginKey } from "../types";
+import type { Adapter, Framework, InitOptions, PluginKey } from "../types";
 
-interface InitCliOptions {
-	cwd?: string;
-	framework?: Framework;
-	adapter?: Adapter;
-	yes?: boolean;
-	skipInstall?: boolean;
-}
+type InitCliOptions = Omit<InitOptions, "plugins">;
 
 function ensureNotCancelled<T>(value: T | symbol): T {
 	if (isCancel(value)) {

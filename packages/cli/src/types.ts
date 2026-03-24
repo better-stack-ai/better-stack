@@ -25,14 +25,6 @@ export interface InitOptions {
 	skipInstall?: boolean;
 }
 
-export interface ProjectContext {
-	cwd: string;
-	framework: Framework;
-	packageManager: PackageManager;
-	alias: AliasPrefix;
-	cssFile: string;
-}
-
 export interface FileWritePlanItem {
 	path: string;
 	content: string;
