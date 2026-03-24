@@ -28,14 +28,16 @@ export async function patchCssImports(
 	const importBlock = added
 		.map((specifier) => toImportLine(specifier))
 		.join("\n");
-	const firstNonImportIndex = content
-		.split("\n")
-		.findIndex((line) => !line.trimStart().startsWith("@import "));
+	const lines = content.split("\n");
+	const firstNonImportIndex = lines.findIndex(
+		(line) => !line.trimStart().startsWith("@import "),
+	);
 
-	if (firstNonImportIndex <= 0) {
+	if (firstNonImportIndex === 0) {
 		content = `${importBlock}\n${content}`;
+	} else if (firstNonImportIndex === -1) {
+		content = content.length > 0 ? `${content}\n${importBlock}` : importBlock;
 	} else {
-		const lines = content.split("\n");
 		lines.splice(firstNonImportIndex, 0, importBlock, "");
 		content = lines.join("\n");
 	}

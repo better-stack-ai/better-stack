@@ -33,6 +33,20 @@ describe("patchers", () => {
 		expect(second.match(/test\/base\.css/g)?.length).toBe(1);
 	});
 
+	it("appends imports when file contains only import lines", async () => {
+		const cwd = await makeTempProject("css-import-only");
+		await mkdir(join(cwd, "app"), { recursive: true });
+		const cssPath = join(cwd, "app/globals.css");
+		await writeFile(cssPath, '@import "tailwindcss";\n@import "foo.css";');
+
+		await patchCssImports(cwd, "app/globals.css", ["test/plugin.css"]);
+		const next = await readFile(cssPath, "utf8");
+
+		expect(next).toBe(
+			'@import "tailwindcss";\n@import "foo.css";\n@import "test/plugin.css";',
+		);
+	});
+
 	it("patches layout with QueryClientProvider", async () => {
 		const cwd = await makeTempProject("layout-patch");
 		await mkdir(join(cwd, "app"), { recursive: true });
