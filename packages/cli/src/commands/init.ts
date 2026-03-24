@@ -288,7 +288,12 @@ export function createInitCommand() {
 			}
 
 			if (adapterNeedsGenerate(adapter)) {
-				const hint = getGenerateHintForAdapter(adapter);
+				const stackPath =
+					plan.files.find((file) => file.path.endsWith("lib/stack.ts"))?.path ??
+					(framework === "react-router"
+						? "app/lib/stack.ts"
+						: "src/lib/stack.ts");
+				const hint = getGenerateHintForAdapter(adapter, stackPath);
 				if (hint) {
 					const runNow = rawOptions.yes
 						? false
@@ -302,12 +307,6 @@ export function createInitCommand() {
 						const orm = ADAPTERS.find(
 							(item) => item.key === adapter,
 						)?.ormForGenerate;
-						const stackPath =
-							plan.files.find((file) => file.path.endsWith("lib/stack.ts"))
-								?.path ??
-							(framework === "react-router"
-								? "app/lib/stack.ts"
-								: "src/lib/stack.ts");
 						const args = orm
 							? [`--orm=${orm}`, `--config=${stackPath}`]
 							: [`--config=${stackPath}`];

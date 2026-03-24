@@ -14,6 +14,7 @@ export async function collectPrerequisiteWarnings(
 	let cssContent = "";
 	for (const candidate of [
 		"app/globals.css",
+		"src/app/globals.css",
 		"src/styles/globals.css",
 		"app/app.css",
 	]) {
@@ -31,6 +32,7 @@ export async function collectPrerequisiteWarnings(
 	let hasSonner = false;
 	for (const candidate of [
 		"app/layout.tsx",
+		"src/app/layout.tsx",
 		"app/root.tsx",
 		"src/routes/__root.tsx",
 	]) {

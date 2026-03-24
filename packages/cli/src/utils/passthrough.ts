@@ -7,7 +7,10 @@ export function adapterNeedsGenerate(adapter: Adapter): boolean {
 	return Boolean(ADAPTERS.find((item) => item.key === adapter)?.ormForGenerate);
 }
 
-export function getGenerateHintForAdapter(adapter: Adapter): string | null {
+export function getGenerateHintForAdapter(
+	adapter: Adapter,
+	configPath: string,
+): string | null {
 	const meta = ADAPTERS.find((item) => item.key === adapter);
 	if (!meta?.ormForGenerate) return null;
 
@@ -18,7 +21,7 @@ export function getGenerateHintForAdapter(adapter: Adapter): string | null {
 				? "src/db/schema.ts"
 				: "migrations/schema.sql";
 
-	return `npx @btst/codegen generate --orm=${meta.ormForGenerate} --config=lib/stack.ts --output=${output}`;
+	return `npx @btst/codegen generate --orm=${meta.ormForGenerate} --config=${configPath} --output=${output}`;
 }
 
 export async function runCliPassthrough(input: {
