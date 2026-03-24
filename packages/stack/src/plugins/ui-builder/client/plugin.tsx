@@ -3,6 +3,7 @@ import { lazy } from "react";
 import {
 	defineClientPlugin,
 	createApiClient,
+	isConnectionError,
 	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
@@ -144,16 +145,22 @@ function createPageListLoader(config: UIBuilderClientConfig) {
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
-				const errToStore =
-					error instanceof Error ? error : new Error(String(error));
-				await queryClient.prefetchInfiniteQuery({
-					queryKey: uiBuilderListQueryKey,
-					queryFn: () => {
-						throw errToStore;
-					},
-					initialPageParam: 0,
-					retry: false,
-				});
+				if (isConnectionError(error)) {
+					console.warn(
+						"[btst/ui-builder] route.loader() failed — no server running at build time.",
+					);
+				} else {
+					const errToStore =
+						error instanceof Error ? error : new Error(String(error));
+					await queryClient.prefetchInfiniteQuery({
+						queryKey: uiBuilderListQueryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						initialPageParam: 0,
+						retry: false,
+					});
+				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
 				}
@@ -223,7 +230,11 @@ function createPageBuilderLoader(
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
-				if (pageQuery) {
+				if (isConnectionError(error)) {
+					console.warn(
+						"[btst/ui-builder] route.loader() failed — no server running at build time.",
+					);
+				} else if (pageQuery) {
 					const errToStore =
 						error instanceof Error ? error : new Error(String(error));
 					await queryClient.prefetchQuery({
