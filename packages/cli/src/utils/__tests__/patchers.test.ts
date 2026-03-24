@@ -53,6 +53,20 @@ describe("patchers", () => {
 		);
 	});
 
+	it("keeps blank lines inside import block when inserting imports", async () => {
+		const cwd = await makeTempProject("css-import-gaps");
+		await mkdir(join(cwd, "app"), { recursive: true });
+		const cssPath = join(cwd, "app/globals.css");
+		await writeFile(cssPath, '@import "a.css";\n\n@import "b.css";\n');
+
+		await patchCssImports(cwd, "app/globals.css", ["test/plugin.css"]);
+		const next = await readFile(cssPath, "utf8");
+
+		expect(next).toBe(
+			'@import "a.css";\n\n@import "b.css";\n@import "test/plugin.css";',
+		);
+	});
+
 	it("patches layout with QueryClientProvider", async () => {
 		const cwd = await makeTempProject("layout-patch");
 		await mkdir(join(cwd, "app"), { recursive: true });
