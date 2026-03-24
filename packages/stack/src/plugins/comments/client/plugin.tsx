@@ -9,6 +9,7 @@ import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
 import type { CommentsApiRouter } from "../api";
 import { createCommentsQueryKeys } from "../query-keys";
+import { createSanitizedSSRLoaderError } from "../../utils";
 
 // Lazy load page components for code splitting
 const ModerationPageComponent = lazy(() =>
@@ -113,8 +114,7 @@ function createModerationLoader(config: CommentsClientConfig) {
 						"[btst/comments] route.loader() failed — no server running at build time.",
 					);
 				} else {
-					const errToStore =
-						error instanceof Error ? error : new Error(String(error));
+					const errToStore = createSanitizedSSRLoaderError();
 					await queryClient.prefetchQuery({
 						queryKey: listQuery.queryKey,
 						queryFn: () => {
@@ -162,8 +162,7 @@ function createUserCommentsLoader(config: CommentsClientConfig) {
 						"[btst/comments] route.loader() failed — no server running at build time.",
 					);
 				} else {
-					const errToStore =
-						error instanceof Error ? error : new Error(String(error));
+					const errToStore = createSanitizedSSRLoaderError();
 					await queryClient.prefetchQuery({
 						queryKey: listQuery.queryKey,
 						queryFn: () => {

@@ -11,6 +11,7 @@ import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { CMSApiRouter } from "../../cms/api";
 import { createCMSQueryKeys } from "../../cms/query-keys";
+import { createSanitizedSSRLoaderError } from "../../utils";
 import { UI_BUILDER_TYPE_SLUG } from "../schemas";
 import type {
 	UIBuilderClientHooks,
@@ -147,11 +148,11 @@ function createPageListLoader(config: UIBuilderClientConfig) {
 				// Error hook - log the error but don't throw during SSR
 				if (isConnectionError(error)) {
 					console.warn(
-						"[btst/ui-builder] route.loader() failed — no server running at build time.",
+						"[btst/ui-builder] route.loader() failed — no server running at build time. " +
+							"Use myStack.api.uiBuilder.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else {
-					const errToStore =
-						error instanceof Error ? error : new Error(String(error));
+					const errToStore = createSanitizedSSRLoaderError();
 					await queryClient.prefetchInfiniteQuery({
 						queryKey: uiBuilderListQueryKey,
 						queryFn: () => {
@@ -232,11 +233,11 @@ function createPageBuilderLoader(
 				// Error hook - log the error but don't throw during SSR
 				if (isConnectionError(error)) {
 					console.warn(
-						"[btst/ui-builder] route.loader() failed — no server running at build time.",
+						"[btst/ui-builder] route.loader() failed — no server running at build time. " +
+							"Use myStack.api.uiBuilder.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else if (pageQuery) {
-					const errToStore =
-						error instanceof Error ? error : new Error(String(error));
+					const errToStore = createSanitizedSSRLoaderError();
 					await queryClient.prefetchQuery({
 						queryKey: pageQuery.queryKey,
 						queryFn: () => {

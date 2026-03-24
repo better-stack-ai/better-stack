@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
-import { createApiClient } from "../plugins/client";
+import { createApiClient, SSR_LOADER_ERROR_MESSAGE } from "../plugins/client";
 import { blogClientPlugin } from "../plugins/blog/client";
 import type { BlogApiRouter } from "../plugins/blog/api";
 import { createBlogQueryKeys } from "../plugins/blog/query-keys";
@@ -64,7 +64,7 @@ describe("client plugin SSR loaders", () => {
 		});
 
 		expect(getErrorMessage(queryClient, listQuery.queryKey)).toBe(
-			expectedError.message,
+			SSR_LOADER_ERROR_MESSAGE,
 		);
 	});
 
@@ -102,7 +102,7 @@ describe("client plugin SSR loaders", () => {
 		});
 
 		expect(getErrorMessage(queryClient, listQuery.queryKey)).toBe(
-			expectedError.message,
+			SSR_LOADER_ERROR_MESSAGE,
 		);
 	});
 
@@ -135,7 +135,7 @@ describe("client plugin SSR loaders", () => {
 		const listQuery = queries.forms.list({ limit: 20, offset: 0 });
 
 		expect(getErrorMessage(queryClient, listQuery.queryKey)).toBe(
-			expectedError.message,
+			SSR_LOADER_ERROR_MESSAGE,
 		);
 	});
 
@@ -174,7 +174,7 @@ describe("client plugin SSR loaders", () => {
 		const uiBuilderQueryKey = [...listQuery.queryKey, "ui-builder"] as const;
 
 		expect(getErrorMessage(queryClient, uiBuilderQueryKey)).toBe(
-			expectedError.message,
+			SSR_LOADER_ERROR_MESSAGE,
 		);
 	});
 
@@ -211,7 +211,7 @@ describe("client plugin SSR loaders", () => {
 		});
 
 		expect(getErrorMessage(queryClient, listQuery.queryKey)).toBe(
-			expectedError.message,
+			SSR_LOADER_ERROR_MESSAGE,
 		);
 	});
 });

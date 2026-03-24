@@ -44,12 +44,6 @@ export default async function ExamplePage({
     
     // Dehydrate with errors included so client doesn't refetch on error
     const dehydratedState = dehydrate(queryClient)
-    console.log("[SSR] Dehydrated queries:", Object.keys(dehydratedState.queries || {}).length, "queries")
-    if (dehydratedState.queries && dehydratedState.queries.length > 0) {
-        dehydratedState.queries.forEach((q) => {
-            console.log("[SSR] - Query:", JSON.stringify(q.queryKey), "state:", q.state.status)
-        })
-    }
 
     // Pass path to client resolver which has access to router via closure
     return (

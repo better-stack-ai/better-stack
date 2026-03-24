@@ -9,6 +9,7 @@ import {
 import { createRoute } from "@btst/yar";
 import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
+import { createSanitizedSSRLoaderError } from "../../utils";
 import type { FormBuilderApiRouter } from "../api";
 import { createFormBuilderQueryKeys } from "../query-keys";
 
@@ -221,8 +222,7 @@ function createFormListLoader(config: FormBuilderClientConfig) {
 							"Use myStack.api.formBuilder.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else {
-					const errToStore =
-						error instanceof Error ? error : new Error(String(error));
+					const errToStore = createSanitizedSSRLoaderError();
 					await queryClient.prefetchInfiniteQuery({
 						queryKey: listQuery.queryKey,
 						queryFn: () => {
@@ -304,8 +304,7 @@ function createFormBuilderLoader(
 							"Use myStack.api.formBuilder.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else if (formQuery) {
-					const errToStore =
-						error instanceof Error ? error : new Error(String(error));
+					const errToStore = createSanitizedSSRLoaderError();
 					await queryClient.prefetchQuery({
 						queryKey: formQuery.queryKey,
 						queryFn: () => {
@@ -416,8 +415,7 @@ function createSubmissionsLoader(
 							"Use myStack.api.formBuilder.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else {
-					const errToStore =
-						error instanceof Error ? error : new Error(String(error));
+					const errToStore = createSanitizedSSRLoaderError();
 					await queryClient.prefetchInfiniteQuery({
 						queryKey: submissionsQuery.queryKey,
 						queryFn: () => {

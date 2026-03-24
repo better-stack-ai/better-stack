@@ -7,6 +7,7 @@ import {
 import { createRoute } from "@btst/yar";
 import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
+import { createSanitizedSSRLoaderError } from "../../utils";
 import type { BlogApiRouter } from "../api";
 import { createBlogQueryKeys } from "../query-keys";
 import type { Post, SerializedPost, SerializedTag } from "../types";
@@ -249,8 +250,7 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 							"Use myStack.api.blog.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else {
-					const errToStore =
-						error instanceof Error ? error : new Error(String(error));
+					const errToStore = createSanitizedSSRLoaderError();
 					await queryClient.prefetchInfiniteQuery({
 						queryKey: listQuery.queryKey,
 						queryFn: () => {

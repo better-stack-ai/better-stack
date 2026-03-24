@@ -8,6 +8,7 @@ import {
 import { createRoute } from "@btst/yar";
 import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
+import { createSanitizedSSRLoaderError } from "../../utils";
 import type { CMSApiRouter } from "../api";
 import { createCMSQueryKeys } from "../query-keys";
 
@@ -204,8 +205,7 @@ function createDashboardLoader(config: CMSClientConfig) {
 							"Use myStack.api.cms.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else {
-					const errToStore =
-						error instanceof Error ? error : new Error(String(error));
+					const errToStore = createSanitizedSSRLoaderError();
 					await queryClient.prefetchQuery({
 						queryKey: typesQuery.queryKey,
 						queryFn: () => {
@@ -312,8 +312,7 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 							"Use myStack.api.cms.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else {
-					const errToStore =
-						error instanceof Error ? error : new Error(String(error));
+					const errToStore = createSanitizedSSRLoaderError();
 					await queryClient.prefetchInfiniteQuery({
 						queryKey: listQuery.queryKey,
 						queryFn: () => {
@@ -404,8 +403,7 @@ function createContentEditorLoader(
 							"Use myStack.api.cms.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else {
-					const errToStore =
-						error instanceof Error ? error : new Error(String(error));
+					const errToStore = createSanitizedSSRLoaderError();
 					await queryClient.prefetchQuery({
 						queryKey: typesQuery.queryKey,
 						queryFn: () => {
