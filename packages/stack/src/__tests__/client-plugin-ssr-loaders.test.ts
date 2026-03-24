@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import { createApiClient, SSR_LOADER_ERROR_MESSAGE } from "../plugins/client";
 import { blogClientPlugin } from "../plugins/blog/client";
@@ -30,7 +30,20 @@ function getErrorMessage(
 	return error instanceof Error ? error.message : null;
 }
 
+function mockFetchApiError(errorMessage: string) {
+	return vi.spyOn(globalThis, "fetch").mockResolvedValue(
+		new Response(JSON.stringify({ message: errorMessage }), {
+			status: 500,
+			headers: { "content-type": "application/json" },
+		}),
+	);
+}
+
 describe("client plugin SSR loaders", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
 	it("blog drafts loader seeds query error when beforeLoadPosts throws", async () => {
 		const queryClient = new QueryClient();
 		const expectedError = new Error("blog drafts blocked");
@@ -253,5 +266,64 @@ describe("client plugin SSR loaders", () => {
 		expect(getErrorMessage(queryClient, listQuery.queryKey)).toBe(
 			SSR_LOADER_ERROR_MESSAGE,
 		);
+	});
+
+	it("comments moderation loader calls onLoadError when prefetch stores API error", async () => {
+		const queryClient = new QueryClient();
+		const apiErrorMessage = "comments moderation api failed";
+		const onLoadError = vi.fn();
+		mockFetchApiError(apiErrorMessage);
+
+		const plugin = commentsClientPlugin({
+			apiBaseURL: API_BASE_URL,
+			apiBasePath: API_BASE_PATH,
+			siteBaseURL: SITE_BASE_URL,
+			siteBasePath: SITE_BASE_PATH,
+			queryClient,
+			headers: TEST_HEADERS,
+			hooks: {
+				onLoadError,
+			},
+		});
+
+		const route = plugin.routes().moderation();
+		await route.loader?.();
+
+		expect(onLoadError).toHaveBeenCalledTimes(1);
+		const [errorArg] = onLoadError.mock.calls[0] ?? [];
+		expect(errorArg).toBeInstanceOf(Error);
+		expect((errorArg as Error).message).toBe(apiErrorMessage);
+	});
+
+	it("comments user loader calls onLoadError when user-scoped prefetch stores API error", async () => {
+		const queryClient = new QueryClient();
+		const apiErrorMessage = "comments user api failed";
+		const onLoadError = vi.fn();
+		const currentUserId = "user-123";
+		mockFetchApiError(apiErrorMessage);
+
+		const plugin = commentsClientPlugin({
+			apiBaseURL: API_BASE_URL,
+			apiBasePath: API_BASE_PATH,
+			siteBaseURL: SITE_BASE_URL,
+			siteBasePath: SITE_BASE_PATH,
+			queryClient,
+			headers: TEST_HEADERS,
+			hooks: {
+				beforeLoadUserComments: (context) => {
+					context.currentUserId = currentUserId;
+				},
+				onLoadError,
+			},
+		});
+
+		const route = plugin.routes().userComments();
+		await route.loader?.();
+
+		expect(onLoadError).toHaveBeenCalledTimes(1);
+		const [errorArg, contextArg] = onLoadError.mock.calls[0] ?? [];
+		expect(errorArg).toBeInstanceOf(Error);
+		expect((errorArg as Error).message).toBe(apiErrorMessage);
+		expect(contextArg).toMatchObject({ currentUserId });
 	});
 });

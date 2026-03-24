@@ -113,6 +113,14 @@ function createModerationLoader(config: CommentsClientConfig) {
 					await hooks.beforeLoadModeration(context);
 				}
 				await queryClient.prefetchQuery(listQuery);
+				const queryState = queryClient.getQueryState(listQuery.queryKey);
+				if (queryState?.error && hooks?.onLoadError) {
+					const error =
+						queryState.error instanceof Error
+							? queryState.error
+							: new Error(String(queryState.error));
+					await hooks.onLoadError(error, context);
+				}
 			} catch (error) {
 				if (isConnectionError(error)) {
 					console.warn(
@@ -168,7 +176,16 @@ function createUserCommentsLoader(config: CommentsClientConfig) {
 						? context.currentUserId
 						: undefined;
 				if (currentUserId) {
-					await queryClient.prefetchQuery(getUserListQuery(currentUserId));
+					const listQuery = getUserListQuery(currentUserId);
+					await queryClient.prefetchQuery(listQuery);
+					const queryState = queryClient.getQueryState(listQuery.queryKey);
+					if (queryState?.error && hooks?.onLoadError) {
+						const error =
+							queryState.error instanceof Error
+								? queryState.error
+								: new Error(String(queryState.error));
+						await hooks.onLoadError(error, context);
+					}
 				}
 			} catch (error) {
 				if (isConnectionError(error)) {
