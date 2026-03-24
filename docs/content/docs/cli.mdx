@@ -1,6 +1,6 @@
 ---
 title: CLI
-description: Generate database schemas and migrations using the BTST CLI.
+description: Scaffold projects and run schema generation/migrations with BTST CLIs.
 ---
 
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
@@ -43,6 +43,8 @@ Common flags:
 - Root layout with `QueryClientProvider` where possible
 
 If root layout patching is not safe for your file shape, the command prints manual patch instructions instead of applying a destructive rewrite.
+
+Generated plugin config entries in `lib/stack.ts` and `lib/stack-client.tsx` use camelCase config keys (for example `aiChat`, `uiBuilder`, `formBuilder`) even though plugin selection flags use kebab-case names.
 
 ## Generate and Migrate via Codegen
 

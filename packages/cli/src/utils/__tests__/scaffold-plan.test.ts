@@ -99,6 +99,30 @@ describe("scaffold plan", () => {
 		expect(stackFile?.content).not.toContain("UI_BUILDER_CONTENT_TYPE()");
 	});
 
+	it("uses camelCase config keys for client plugins", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["ai-chat", "ui-builder", "form-builder"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+
+		const stackClientFile = plan.files.find((file) =>
+			file.path.endsWith("stack-client.tsx"),
+		);
+		expect(stackClientFile?.content).toContain("aiChat: aiChatClientPlugin({");
+		expect(stackClientFile?.content).toContain(
+			"uiBuilder: uiBuilderClientPlugin({",
+		);
+		expect(stackClientFile?.content).toContain(
+			"formBuilder: formBuilderClientPlugin({",
+		);
+		expect(stackClientFile?.content).not.toContain('"ai-chat":');
+		expect(stackClientFile?.content).not.toContain('"ui-builder":');
+		expect(stackClientFile?.content).not.toContain('"form-builder":');
+	});
+
 	it("renders ai-chat backend plugin with compile-safe placeholder model", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",

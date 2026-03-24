@@ -80,7 +80,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 		clientEntries: metas
 			.map((m) => {
 				const siteBase = "/pages";
-				return `\t\t\t${JSON.stringify(m.key)}: ${m.clientSymbol}({
+				return `\t\t\t${m.configKey}: ${m.clientSymbol}({
 \t\t\t\tapiBaseURL: baseURL,
 \t\t\t\tapiBasePath: "/api/data",
 \t\t\t\tsiteBaseURL: baseURL,
