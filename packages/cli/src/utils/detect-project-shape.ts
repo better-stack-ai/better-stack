@@ -1,15 +1,6 @@
-import { access } from "node:fs/promises";
 import { join } from "node:path";
 import type { Framework } from "../types";
-
-async function exists(path: string): Promise<boolean> {
-	try {
-		await access(path);
-		return true;
-	} catch {
-		return false;
-	}
-}
+import { exists } from "./exists";
 
 const FRAMEWORK_REQUIRED_PATHS: Record<Framework, string[]> = {
 	nextjs: [],

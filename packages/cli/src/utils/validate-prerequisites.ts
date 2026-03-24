@@ -1,14 +1,6 @@
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-
-async function exists(path: string): Promise<boolean> {
-	try {
-		await access(path);
-		return true;
-	} catch {
-		return false;
-	}
-}
+import { exists } from "./exists";
 
 export async function collectPrerequisiteWarnings(
 	cwd: string,
