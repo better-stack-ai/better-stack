@@ -218,5 +218,6 @@ export async function buildScaffoldPlan(
 		files,
 		layoutPatchTarget: frameworkPaths.layoutPatchTarget,
 		cssPatchTarget: input.cssFile,
+		pagesLayoutPath: frameworkPaths.pagesLayoutPath,
 	};
 }

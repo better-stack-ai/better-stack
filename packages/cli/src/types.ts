@@ -35,4 +35,5 @@ export interface ScaffoldPlan {
 	files: FileWritePlanItem[];
 	layoutPatchTarget: string;
 	cssPatchTarget: string;
+	pagesLayoutPath?: string;
 }

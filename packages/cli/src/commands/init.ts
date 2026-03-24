@@ -325,7 +325,7 @@ export function createInitCommand() {
 
 			const layoutStatus =
 				framework === "nextjs"
-					? "yes (generated app/pages/layout.tsx)"
+					? `yes (generated ${plan.pagesLayoutPath ?? "app/pages/layout.tsx"})`
 					: layoutPatch.updated
 						? "yes"
 						: "manual action may be needed";

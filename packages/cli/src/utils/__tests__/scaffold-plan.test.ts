@@ -24,6 +24,19 @@ describe("scaffold plan", () => {
 		expect(plan.files[1]?.content).toContain(
 			'const baseURL = "http://localhost:3000"',
 		);
+		expect(plan.pagesLayoutPath).toBe("app/pages/layout.tsx");
+	});
+
+	it("resolves src-prefixed Next.js pages layout path", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["blog"],
+			alias: "@/",
+			cssFile: "src/app/globals.css",
+		});
+
+		expect(plan.pagesLayoutPath).toBe("src/app/pages/layout.tsx");
 	});
 
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
