@@ -22,6 +22,48 @@ cleanup() {
 }
 trap cleanup EXIT
 
+write_project_hash() {
+	local output_file="$1"
+	node <<'EOF' > "$output_file"
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
+
+const root = process.cwd();
+const ignored = new Set(["node_modules", ".next", ".git"]);
+const records = [];
+
+function walk(dir) {
+	for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
+		if (ignored.has(name.name)) continue;
+		const absolutePath = path.join(dir, name.name);
+		const relativePath = path.relative(root, absolutePath);
+		if (name.isDirectory()) {
+			walk(absolutePath);
+			continue;
+		}
+		if (!name.isFile()) continue;
+		records.push({
+			path: relativePath,
+			content: fs.readFileSync(absolutePath),
+		});
+	}
+}
+
+walk(root);
+records.sort((a, b) => a.path.localeCompare(b.path));
+
+const hash = crypto.createHash("sha256");
+for (const record of records) {
+	hash.update(record.path);
+	hash.update("\0");
+	hash.update(record.content);
+	hash.update("\0");
+}
+process.stdout.write(hash.digest("hex"));
+EOF
+}
+
 step "Packing local tarballs"
 cd "$ROOT_DIR/packages/stack"
 STACK_TGZ=$(npm pack --quiet 2>/dev/null | tr -d '[:space:]')
@@ -79,84 +121,10 @@ node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8"
 success "Generation + patch checks passed"
 
 step "Idempotency check (second pass)"
-node <<'EOF' > "$TEST_DIR/init-before.hash"
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
-
-const root = process.cwd();
-const ignored = new Set(["node_modules", ".next", ".git"]);
-const records = [];
-
-function walk(dir) {
-	for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
-		if (ignored.has(name.name)) continue;
-		const absolutePath = path.join(dir, name.name);
-		const relativePath = path.relative(root, absolutePath);
-		if (name.isDirectory()) {
-			walk(absolutePath);
-			continue;
-		}
-		if (!name.isFile()) continue;
-		records.push({
-			path: relativePath,
-			content: fs.readFileSync(absolutePath),
-		});
-	}
-}
-
-walk(root);
-records.sort((a, b) => a.path.localeCompare(b.path));
-
-const hash = crypto.createHash("sha256");
-for (const record of records) {
-	hash.update(record.path);
-	hash.update("\0");
-	hash.update(record.content);
-	hash.update("\0");
-}
-process.stdout.write(hash.digest("hex"));
-EOF
+write_project_hash "$TEST_DIR/init-before.hash"
 
 npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins all --skip-install > "$TEST_DIR/init-second.log" 2>&1
-node <<'EOF' > "$TEST_DIR/init-after.hash"
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
-
-const root = process.cwd();
-const ignored = new Set(["node_modules", ".next", ".git"]);
-const records = [];
-
-function walk(dir) {
-	for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
-		if (ignored.has(name.name)) continue;
-		const absolutePath = path.join(dir, name.name);
-		const relativePath = path.relative(root, absolutePath);
-		if (name.isDirectory()) {
-			walk(absolutePath);
-			continue;
-		}
-		if (!name.isFile()) continue;
-		records.push({
-			path: relativePath,
-			content: fs.readFileSync(absolutePath),
-		});
-	}
-}
-
-walk(root);
-records.sort((a, b) => a.path.localeCompare(b.path));
-
-const hash = crypto.createHash("sha256");
-for (const record of records) {
-	hash.update(record.path);
-	hash.update("\0");
-	hash.update(record.content);
-	hash.update("\0");
-}
-process.stdout.write(hash.digest("hex"));
-EOF
+write_project_hash "$TEST_DIR/init-after.hash"
 
 if [ "$(cat "$TEST_DIR/init-before.hash")" != "$(cat "$TEST_DIR/init-after.hash")" ]; then
 	error "Second init run produced file changes"
