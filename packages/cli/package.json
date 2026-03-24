@@ -19,7 +19,7 @@
   },
   "type": "module",
   "bin": {
-    "btst": "./dist/index.cjs"
+    "btst": "dist/index.cjs"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
