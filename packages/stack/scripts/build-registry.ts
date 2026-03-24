@@ -280,7 +280,7 @@ const PLUGINS: PluginConfig[] = [
 			"Customize the UI layer while keeping data-fetching in @btst/stack.",
 		extraNpmDeps: ["date-fns"],
 		extraRegistryDeps: [],
-		pluginRootFiles: ["types.ts", "schemas.ts"],
+		pluginRootFiles: ["types.ts", "schemas.ts", "error-utils.ts"],
 	},
 	{
 		name: "ui-builder",
