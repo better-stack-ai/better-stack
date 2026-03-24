@@ -61,7 +61,6 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 
 	return {
 		backendImports: metas
-			.filter((m) => m.key !== "ui-builder")
 			.map((m) => `import { ${m.backendSymbol} } from "${m.backendImportPath}"`)
 			.join("\n"),
 		clientImports: metas
