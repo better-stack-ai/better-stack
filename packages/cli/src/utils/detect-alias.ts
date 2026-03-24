@@ -17,7 +17,13 @@ export async function detectAlias(cwd: string): Promise<AliasPrefix> {
 			continue;
 		}
 
-		const parsed = JSON.parse(await readFile(filePath, "utf8")) as TsConfigLike;
+		let parsed: TsConfigLike;
+		try {
+			const raw = await readFile(filePath, "utf8");
+			parsed = JSON.parse(raw) as TsConfigLike;
+		} catch {
+			continue;
+		}
 		const paths = parsed.compilerOptions?.paths ?? {};
 		if ("@/*" in paths) return "@/";
 		if ("~/*" in paths) return "~/";
