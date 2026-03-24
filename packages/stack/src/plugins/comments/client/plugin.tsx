@@ -2,10 +2,13 @@
 import { lazy } from "react";
 import {
 	defineClientPlugin,
+	createApiClient,
 	isConnectionError,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
+import type { CommentsApiRouter } from "../api";
+import { createCommentsQueryKeys } from "../query-keys";
 
 // Lazy load page components for code splitting
 const ModerationPageComponent = lazy(() =>
@@ -81,7 +84,7 @@ export interface CommentsClientConfig {
 function createModerationLoader(config: CommentsClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const { apiBasePath, apiBaseURL, headers, hooks } = config;
+			const { queryClient, apiBasePath, apiBaseURL, headers, hooks } = config;
 			const context: LoaderContext = {
 				path: "/comments/moderation",
 				isSSR: true,
@@ -89,15 +92,36 @@ function createModerationLoader(config: CommentsClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const client = createApiClient<CommentsApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const queries = createCommentsQueryKeys(client, headers);
+			const listQuery = queries.comments.list({
+				status: "pending",
+				limit: 20,
+				offset: 0,
+			});
 			try {
 				if (hooks?.beforeLoadModeration) {
 					await hooks.beforeLoadModeration(context);
 				}
+				await queryClient.prefetchQuery(listQuery);
 			} catch (error) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/comments] route.loader() failed — no server running at build time.",
 					);
+				} else {
+					const errToStore =
+						error instanceof Error ? error : new Error(String(error));
+					await queryClient.prefetchQuery({
+						queryKey: listQuery.queryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						retry: false,
+					});
 				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
@@ -110,7 +134,7 @@ function createModerationLoader(config: CommentsClientConfig) {
 function createUserCommentsLoader(config: CommentsClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const { apiBasePath, apiBaseURL, headers, hooks } = config;
+			const { queryClient, apiBasePath, apiBaseURL, headers, hooks } = config;
 			const context: LoaderContext = {
 				path: "/comments",
 				isSSR: true,
@@ -118,15 +142,35 @@ function createUserCommentsLoader(config: CommentsClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const client = createApiClient<CommentsApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const queries = createCommentsQueryKeys(client, headers);
+			const listQuery = queries.comments.list({
+				limit: 20,
+				offset: 0,
+			});
 			try {
 				if (hooks?.beforeLoadUserComments) {
 					await hooks.beforeLoadUserComments(context);
 				}
+				await queryClient.prefetchQuery(listQuery);
 			} catch (error) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/comments] route.loader() failed — no server running at build time.",
 					);
+				} else {
+					const errToStore =
+						error instanceof Error ? error : new Error(String(error));
+					await queryClient.prefetchQuery({
+						queryKey: listQuery.queryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						retry: false,
+					});
 				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);

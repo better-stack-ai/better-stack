@@ -160,6 +160,13 @@ function createFormListLoader(config: FormBuilderClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const client = createApiClient<FormBuilderApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const queries = createFormBuilderQueryKeys(client, headers);
+			const limit = 20;
+			const listQuery = queries.forms.list({ limit, offset: 0 });
 
 			try {
 				// Before hook - authorization check
@@ -170,15 +177,7 @@ function createFormListLoader(config: FormBuilderClientConfig) {
 					);
 				}
 
-				const client = createApiClient<FormBuilderApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
-				const queries = createFormBuilderQueryKeys(client, headers);
-				const limit = 20;
-
 				// Prefetch forms using infinite query
-				const listQuery = queries.forms.list({ limit, offset: 0 });
 				await queryClient.prefetchInfiniteQuery({
 					queryKey: listQuery.queryKey,
 					queryFn: async ({ pageParam = 0 }) => {
@@ -221,6 +220,17 @@ function createFormListLoader(config: FormBuilderClientConfig) {
 						"[btst/form-builder] route.loader() failed — no server running at build time. " +
 							"Use myStack.api.formBuilder.prefetchForRoute() for SSG data prefetching.",
 					);
+				} else {
+					const errToStore =
+						error instanceof Error ? error : new Error(String(error));
+					await queryClient.prefetchInfiniteQuery({
+						queryKey: listQuery.queryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						initialPageParam: 0,
+						retry: false,
+					});
 				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
@@ -249,6 +259,12 @@ function createFormBuilderLoader(
 				apiBasePath,
 				headers,
 			};
+			const client = createApiClient<FormBuilderApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const queries = createFormBuilderQueryKeys(client, headers);
+			const formQuery = id ? queries.forms.byId(id) : undefined;
 
 			try {
 				// Before hook - authorization check
@@ -259,15 +275,9 @@ function createFormBuilderLoader(
 					);
 				}
 
-				const client = createApiClient<FormBuilderApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
-				const queries = createFormBuilderQueryKeys(client, headers);
-
 				// Prefetch form if editing
 				if (id) {
-					await queryClient.prefetchQuery(queries.forms.byId(id));
+					await queryClient.prefetchQuery(formQuery!);
 				}
 
 				// After hook
@@ -277,9 +287,7 @@ function createFormBuilderLoader(
 
 				// Check if there was an error
 				if (id) {
-					const queryState = queryClient.getQueryState(
-						queries.forms.byId(id).queryKey,
-					);
+					const queryState = queryClient.getQueryState(formQuery!.queryKey);
 					if (queryState?.error && hooks?.onLoadError) {
 						const error =
 							queryState.error instanceof Error
@@ -295,6 +303,16 @@ function createFormBuilderLoader(
 						"[btst/form-builder] route.loader() failed — no server running at build time. " +
 							"Use myStack.api.formBuilder.prefetchForRoute() for SSG data prefetching.",
 					);
+				} else if (formQuery) {
+					const errToStore =
+						error instanceof Error ? error : new Error(String(error));
+					await queryClient.prefetchQuery({
+						queryKey: formQuery.queryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						retry: false,
+					});
 				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
@@ -323,6 +341,18 @@ function createSubmissionsLoader(
 				apiBasePath,
 				headers,
 			};
+			const client = createApiClient<FormBuilderApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const queries = createFormBuilderQueryKeys(client, headers);
+			const limit = 20;
+			const formQuery = queries.forms.byId(formId);
+			const submissionsQuery = queries.formSubmissions.list({
+				formId,
+				limit,
+				offset: 0,
+			});
 
 			try {
 				// Before hook - authorization check
@@ -333,21 +363,8 @@ function createSubmissionsLoader(
 					);
 				}
 
-				const client = createApiClient<FormBuilderApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
-				const queries = createFormBuilderQueryKeys(client, headers);
-				const limit = 20;
-
 				// Prefetch form and submissions
-				await queryClient.prefetchQuery(queries.forms.byId(formId));
-
-				const submissionsQuery = queries.formSubmissions.list({
-					formId,
-					limit,
-					offset: 0,
-				});
+				await queryClient.prefetchQuery(formQuery);
 				await queryClient.prefetchInfiniteQuery({
 					queryKey: submissionsQuery.queryKey,
 					queryFn: async ({ pageParam = 0 }) => {
@@ -379,9 +396,7 @@ function createSubmissionsLoader(
 				}
 
 				// Check if there was an error
-				const formState = queryClient.getQueryState(
-					queries.forms.byId(formId).queryKey,
-				);
+				const formState = queryClient.getQueryState(formQuery.queryKey);
 				const submissionsState = queryClient.getQueryState(
 					submissionsQuery.queryKey,
 				);
@@ -400,6 +415,17 @@ function createSubmissionsLoader(
 						"[btst/form-builder] route.loader() failed — no server running at build time. " +
 							"Use myStack.api.formBuilder.prefetchForRoute() for SSG data prefetching.",
 					);
+				} else {
+					const errToStore =
+						error instanceof Error ? error : new Error(String(error));
+					await queryClient.prefetchInfiniteQuery({
+						queryKey: submissionsQuery.queryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						initialPageParam: 0,
+						retry: false,
+					});
 				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
