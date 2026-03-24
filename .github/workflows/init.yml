@@ -1,0 +1,56 @@
+name: BTST Init CLI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'packages/cli/**'
+      - 'docs/content/docs/cli.mdx'
+      - 'docs/content/docs/installation.mdx'
+      - '.github/workflows/init.yml'
+
+concurrency:
+  group: init-cli-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  init-smoke:
+    name: Init smoke (nextjs + memory)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build @btst/stack
+        run: pnpm --filter @btst/stack build
+
+      - name: Build @btst/codegen
+        run: pnpm --filter @btst/codegen build
+
+      - name: Run init harness
+        working-directory: packages/cli
+        run: bash scripts/test-init.sh
+        timeout-minutes: 20
+        env:
+          CI: true
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: btst-init-fixtures
+          path: /tmp/test-btst-init-*/
+          retention-days: 3

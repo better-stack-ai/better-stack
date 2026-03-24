@@ -1,0 +1,54 @@
+{
+  "name": "@btst/codegen",
+  "version": "0.1.0",
+  "description": "BTST project scaffolding and CLI passthrough commands.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-stack-ai/better-stack.git"
+  },
+  "keywords": [
+    "btst",
+    "cli",
+    "codegen",
+    "scaffold"
+  ],
+  "author": "olliethedev",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "bin": {
+    "btst": "./dist/index.cjs"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "scripts"
+  ],
+  "scripts": {
+    "build": "unbuild --clean",
+    "stub": "unbuild --stub",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest run",
+    "test:init": "bash scripts/test-init.sh"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.11.0",
+    "commander": "^14.0.1",
+    "execa": "^9.6.0",
+    "handlebars": "^4.7.8",
+    "ts-morph": "^27.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.2",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "unbuild": "catalog:",
+    "vitest": "catalog:"
+  }
+}

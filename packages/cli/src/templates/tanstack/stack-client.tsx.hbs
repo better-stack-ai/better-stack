@@ -1,0 +1,23 @@
+import { createStackClient } from "@btst/stack/client"
+import { QueryClient } from "@tanstack/react-query"
+{{#if clientImports}}
+{{{clientImports}}}
+{{/if}}
+
+const getBaseURL = () =>
+	typeof window !== "undefined"
+		? import.meta.env.VITE_BASE_URL || window.location.origin
+		: process.env.BASE_URL || "http://localhost:3000"
+
+export function getStackClient(queryClient: QueryClient) {
+	const baseURL = getBaseURL()
+	return createStackClient({
+		plugins: {
+{{#if clientEntries}}
+{{clientEntries}}
+{{else}}
+			// Add client plugins here.
+{{/if}}
+		},
+	})
+}
