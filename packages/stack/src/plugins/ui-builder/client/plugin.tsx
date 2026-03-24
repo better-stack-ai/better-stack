@@ -3,6 +3,7 @@ import { lazy } from "react";
 import {
 	defineClientPlugin,
 	createApiClient,
+	isConnectionError,
 	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
@@ -10,6 +11,7 @@ import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { CMSApiRouter } from "../../cms/api";
 import { createCMSQueryKeys } from "../../cms/query-keys";
+import { createSanitizedSSRLoaderError } from "../../utils";
 import { UI_BUILDER_TYPE_SLUG } from "../schemas";
 import type {
 	UIBuilderClientHooks,
@@ -81,6 +83,18 @@ function createPageListLoader(config: UIBuilderClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const client = createApiClient<CMSApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const queries = createCMSQueryKeys(client, headers);
+			const limit = 20;
+			const listQuery = queries.cmsContent.list({
+				typeSlug,
+				limit,
+				offset: 0,
+			});
+			const uiBuilderListQueryKey = [...listQuery.queryKey, "ui-builder"];
 
 			try {
 				// Before hook - authorization check
@@ -91,21 +105,9 @@ function createPageListLoader(config: UIBuilderClientConfig) {
 					);
 				}
 
-				const client = createApiClient<CMSApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
-				const queries = createCMSQueryKeys(client, headers);
-				const limit = 20;
-
 				// Prefetch pages using infinite query
-				const listQuery = queries.cmsContent.list({
-					typeSlug,
-					limit,
-					offset: 0,
-				});
 				await queryClient.prefetchInfiniteQuery({
-					queryKey: [...listQuery.queryKey, "ui-builder"],
+					queryKey: uiBuilderListQueryKey,
 					queryFn: async ({ pageParam = 0 }) => {
 						const response: unknown = await client("/content/:typeSlug", {
 							method: "GET",
@@ -133,8 +135,7 @@ function createPageListLoader(config: UIBuilderClientConfig) {
 
 				// Check if there was an error
 				const queryState = queryClient.getQueryState([
-					...listQuery.queryKey,
-					"ui-builder",
+					...uiBuilderListQueryKey,
 				]);
 				if (queryState?.error && hooks?.onLoadError) {
 					const error =
@@ -145,6 +146,22 @@ function createPageListLoader(config: UIBuilderClientConfig) {
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
+				if (isConnectionError(error)) {
+					console.warn(
+						"[btst/ui-builder] route.loader() failed — no server running at build time. " +
+							"Use myStack.api.uiBuilder.prefetchForRoute() for SSG data prefetching.",
+					);
+				} else {
+					const errToStore = createSanitizedSSRLoaderError();
+					await queryClient.prefetchInfiniteQuery({
+						queryKey: uiBuilderListQueryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						initialPageParam: 0,
+						retry: false,
+					});
+				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
 				}
@@ -173,6 +190,14 @@ function createPageBuilderLoader(
 				apiBasePath,
 				headers,
 			};
+			const client = createApiClient<CMSApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const queries = createCMSQueryKeys(client, headers);
+			const pageQuery = id
+				? queries.cmsContent.detail(typeSlug, id)
+				: undefined;
 
 			try {
 				// Before hook - authorization check
@@ -183,17 +208,9 @@ function createPageBuilderLoader(
 					);
 				}
 
-				const client = createApiClient<CMSApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
-				const queries = createCMSQueryKeys(client, headers);
-
 				// Prefetch page if editing
 				if (id) {
-					await queryClient.prefetchQuery(
-						queries.cmsContent.detail(typeSlug, id),
-					);
+					await queryClient.prefetchQuery(pageQuery!);
 				}
 
 				// After hook
@@ -203,9 +220,7 @@ function createPageBuilderLoader(
 
 				// Check if there was an error
 				if (id) {
-					const queryState = queryClient.getQueryState(
-						queries.cmsContent.detail(typeSlug, id).queryKey,
-					);
+					const queryState = queryClient.getQueryState(pageQuery!.queryKey);
 					if (queryState?.error && hooks?.onLoadError) {
 						const error =
 							queryState.error instanceof Error
@@ -216,6 +231,21 @@ function createPageBuilderLoader(
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
+				if (isConnectionError(error)) {
+					console.warn(
+						"[btst/ui-builder] route.loader() failed — no server running at build time. " +
+							"Use myStack.api.uiBuilder.prefetchForRoute() for SSG data prefetching.",
+					);
+				} else if (pageQuery) {
+					const errToStore = createSanitizedSSRLoaderError();
+					await queryClient.prefetchQuery({
+						queryKey: pageQuery.queryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						retry: false,
+					});
+				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
 				}

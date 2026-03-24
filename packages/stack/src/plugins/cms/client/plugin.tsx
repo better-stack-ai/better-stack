@@ -8,6 +8,7 @@ import {
 import { createRoute } from "@btst/yar";
 import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
+import { createSanitizedSSRLoaderError } from "../../utils";
 import type { CMSApiRouter } from "../api";
 import { createCMSQueryKeys } from "../query-keys";
 
@@ -163,6 +164,12 @@ function createDashboardLoader(config: CMSClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const client = createApiClient<CMSApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const queries = createCMSQueryKeys(client, headers);
+			const typesQuery = queries.cmsTypes.list();
 
 			try {
 				// Before hook - authorization check
@@ -173,13 +180,7 @@ function createDashboardLoader(config: CMSClientConfig) {
 					);
 				}
 
-				const client = createApiClient<CMSApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
-				const queries = createCMSQueryKeys(client, headers);
-
-				await queryClient.prefetchQuery(queries.cmsTypes.list());
+				await queryClient.prefetchQuery(typesQuery);
 
 				// After hook
 				if (hooks?.afterLoadDashboard) {
@@ -187,9 +188,7 @@ function createDashboardLoader(config: CMSClientConfig) {
 				}
 
 				// Check if there was an error
-				const queryState = queryClient.getQueryState(
-					queries.cmsTypes.list().queryKey,
-				);
+				const queryState = queryClient.getQueryState(typesQuery.queryKey);
 				if (queryState?.error && hooks?.onLoadError) {
 					const error =
 						queryState.error instanceof Error
@@ -205,6 +204,15 @@ function createDashboardLoader(config: CMSClientConfig) {
 						"[btst/cms] route.loader() failed — no server running at build time. " +
 							"Use myStack.api.cms.prefetchForRoute() for SSG data prefetching.",
 					);
+				} else {
+					const errToStore = createSanitizedSSRLoaderError();
+					await queryClient.prefetchQuery({
+						queryKey: typesQuery.queryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						retry: false,
+					});
 				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
@@ -231,6 +239,18 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const client = createApiClient<CMSApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const queries = createCMSQueryKeys(client, headers);
+			const limit = 20;
+			const typesQuery = queries.cmsTypes.list();
+			const listQuery = queries.cmsContent.list({
+				typeSlug,
+				limit,
+				offset: 0,
+			});
 
 			try {
 				// Before hook - authorization check
@@ -241,22 +261,10 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 					);
 				}
 
-				const client = createApiClient<CMSApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
-				const queries = createCMSQueryKeys(client, headers);
-				const limit = 20;
-
 				// Prefetch content types
-				await queryClient.prefetchQuery(queries.cmsTypes.list());
+				await queryClient.prefetchQuery(typesQuery);
 
 				// Prefetch content list using infinite query (matches useSuspenseInfiniteQuery in hooks)
-				const listQuery = queries.cmsContent.list({
-					typeSlug,
-					limit,
-					offset: 0,
-				});
 				await queryClient.prefetchInfiniteQuery({
 					queryKey: listQuery.queryKey,
 					queryFn: async ({ pageParam = 0 }) => {
@@ -285,9 +293,7 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 				}
 
 				// Check if there was an error in either query
-				const typesState = queryClient.getQueryState(
-					queries.cmsTypes.list().queryKey,
-				);
+				const typesState = queryClient.getQueryState(typesQuery.queryKey);
 				const listState = queryClient.getQueryState(listQuery.queryKey);
 				const queryError = typesState?.error || listState?.error;
 				if (queryError && hooks?.onLoadError) {
@@ -305,6 +311,16 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 						"[btst/cms] route.loader() failed — no server running at build time. " +
 							"Use myStack.api.cms.prefetchForRoute() for SSG data prefetching.",
 					);
+				} else {
+					const errToStore = createSanitizedSSRLoaderError();
+					await queryClient.prefetchInfiniteQuery({
+						queryKey: listQuery.queryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						initialPageParam: 0,
+						retry: false,
+					});
 				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
@@ -335,6 +351,15 @@ function createContentEditorLoader(
 				apiBasePath,
 				headers,
 			};
+			const client = createApiClient<CMSApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const queries = createCMSQueryKeys(client, headers);
+			const typesQuery = queries.cmsTypes.list();
+			const detailQuery = id
+				? queries.cmsContent.detail(typeSlug, id)
+				: undefined;
 
 			try {
 				// Before hook - authorization check
@@ -345,17 +370,9 @@ function createContentEditorLoader(
 					);
 				}
 
-				const client = createApiClient<CMSApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
-				const queries = createCMSQueryKeys(client, headers);
-
-				const promises = [queryClient.prefetchQuery(queries.cmsTypes.list())];
+				const promises = [queryClient.prefetchQuery(typesQuery)];
 				if (id) {
-					promises.push(
-						queryClient.prefetchQuery(queries.cmsContent.detail(typeSlug, id)),
-					);
+					promises.push(queryClient.prefetchQuery(detailQuery!));
 				}
 				await Promise.all(promises);
 
@@ -365,13 +382,9 @@ function createContentEditorLoader(
 				}
 
 				// Check if there was an error
-				const typesState = queryClient.getQueryState(
-					queries.cmsTypes.list().queryKey,
-				);
+				const typesState = queryClient.getQueryState(typesQuery.queryKey);
 				const itemState = id
-					? queryClient.getQueryState(
-							queries.cmsContent.detail(typeSlug, id).queryKey,
-						)
+					? queryClient.getQueryState(detailQuery!.queryKey)
 					: null;
 				const queryError = typesState?.error || itemState?.error;
 				if (queryError && hooks?.onLoadError) {
@@ -389,6 +402,24 @@ function createContentEditorLoader(
 						"[btst/cms] route.loader() failed — no server running at build time. " +
 							"Use myStack.api.cms.prefetchForRoute() for SSG data prefetching.",
 					);
+				} else {
+					const errToStore = createSanitizedSSRLoaderError();
+					await queryClient.prefetchQuery({
+						queryKey: typesQuery.queryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						retry: false,
+					});
+					if (detailQuery) {
+						await queryClient.prefetchQuery({
+							queryKey: detailQuery.queryKey,
+							queryFn: () => {
+								throw errToStore;
+							},
+							retry: false,
+						});
+					}
 				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);

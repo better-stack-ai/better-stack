@@ -509,7 +509,7 @@ commentsBackendPlugin({
 | `queryClient` | `QueryClient` | ✓ | React Query client instance shared with the stack. |
 | `headers` | `Headers` | — | Optional SSR headers for authenticated loader calls. |
 | `hooks.beforeLoadModeration` | `(context) => Promise<void> \| void` | — | Called before moderation page loader logic runs. Throw to cancel. |
-| `hooks.beforeLoadUserComments` | `(context) => Promise<void> \| void` | — | Called before User Comments page loader logic runs. Throw to cancel. |
+| `hooks.beforeLoadUserComments` | `(context) => Promise<void> \| void` | — | Called before User Comments page loader logic runs. Throw to cancel. Optionally set `context.currentUserId` so SSR prefetch/error-seeding uses the same user-scoped cache key as the page query. |
 | `hooks.onLoadError` | `(error, context) => Promise<void> \| void` | — | Called when a loader hook throws/errors. |
 
 ### Client Plugin Overrides

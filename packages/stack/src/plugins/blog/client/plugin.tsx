@@ -7,6 +7,7 @@ import {
 import { createRoute } from "@btst/yar";
 import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
+import { createSanitizedSSRLoaderError } from "../../utils";
 import type { BlogApiRouter } from "../api";
 import { createBlogQueryKeys } from "../query-keys";
 import type { Post, SerializedPost, SerializedTag } from "../types";
@@ -183,6 +184,18 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const limit = 10;
+			const client = createApiClient<BlogApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			// note: for a module not to be bundled with client, and to be shared by client and server we need to add it to build.config.ts as an entry
+			const queries = createBlogQueryKeys(client, headers);
+			const listQuery = queries.posts.list({
+				query: undefined,
+				limit,
+				published: published,
+			});
 
 			try {
 				// Before hook
@@ -192,20 +205,6 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 						"Load prevented by beforeLoadPosts hook",
 					);
 				}
-
-				const limit = 10;
-				const client = createApiClient<BlogApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
-
-				// note: for a module not to be bundled with client, and to be shared by client and server we need to add it to build.config.ts as an entry
-				const queries = createBlogQueryKeys(client, headers);
-				const listQuery = queries.posts.list({
-					query: undefined,
-					limit,
-					published: published,
-				});
 
 				await queryClient.prefetchInfiniteQuery({
 					...listQuery,
@@ -250,6 +249,16 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 						"[btst/blog] route.loader() failed — no server running at build time. " +
 							"Use myStack.api.blog.prefetchForRoute() for SSG data prefetching.",
 					);
+				} else {
+					const errToStore = createSanitizedSSRLoaderError();
+					await queryClient.prefetchInfiniteQuery({
+						queryKey: listQuery.queryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						initialPageParam: 0,
+						retry: false,
+					});
 				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);

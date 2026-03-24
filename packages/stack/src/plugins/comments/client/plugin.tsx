@@ -2,10 +2,14 @@
 import { lazy } from "react";
 import {
 	defineClientPlugin,
+	createApiClient,
 	isConnectionError,
 } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
+import type { CommentsApiRouter } from "../api";
+import { createCommentsQueryKeys } from "../query-keys";
+import { createSanitizedSSRLoaderError } from "../../utils";
 
 // Lazy load page components for code splitting
 const ModerationPageComponent = lazy(() =>
@@ -36,6 +40,11 @@ export interface LoaderContext {
 	apiBasePath: string;
 	/** Optional headers for the request */
 	headers?: Headers;
+	/**
+	 * Optional current user ID for SSR loaders that need user-scoped query keys.
+	 * Hooks (e.g. beforeLoadUserComments) may populate this.
+	 */
+	currentUserId?: string;
 	/** Additional context properties */
 	[key: string]: unknown;
 }
@@ -81,7 +90,7 @@ export interface CommentsClientConfig {
 function createModerationLoader(config: CommentsClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const { apiBasePath, apiBaseURL, headers, hooks } = config;
+			const { queryClient, apiBasePath, apiBaseURL, headers, hooks } = config;
 			const context: LoaderContext = {
 				path: "/comments/moderation",
 				isSSR: true,
@@ -89,15 +98,43 @@ function createModerationLoader(config: CommentsClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const client = createApiClient<CommentsApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const queries = createCommentsQueryKeys(client, headers);
+			const listQuery = queries.comments.list({
+				status: "pending",
+				limit: 20,
+				offset: 0,
+			});
 			try {
 				if (hooks?.beforeLoadModeration) {
 					await hooks.beforeLoadModeration(context);
+				}
+				await queryClient.prefetchQuery(listQuery);
+				const queryState = queryClient.getQueryState(listQuery.queryKey);
+				if (queryState?.error && hooks?.onLoadError) {
+					const error =
+						queryState.error instanceof Error
+							? queryState.error
+							: new Error(String(queryState.error));
+					await hooks.onLoadError(error, context);
 				}
 			} catch (error) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/comments] route.loader() failed — no server running at build time.",
 					);
+				} else {
+					const errToStore = createSanitizedSSRLoaderError();
+					await queryClient.prefetchQuery({
+						queryKey: listQuery.queryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						retry: false,
+					});
 				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
@@ -110,7 +147,7 @@ function createModerationLoader(config: CommentsClientConfig) {
 function createUserCommentsLoader(config: CommentsClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const { apiBasePath, apiBaseURL, headers, hooks } = config;
+			const { queryClient, apiBasePath, apiBaseURL, headers, hooks } = config;
 			const context: LoaderContext = {
 				path: "/comments",
 				isSSR: true,
@@ -118,15 +155,58 @@ function createUserCommentsLoader(config: CommentsClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const client = createApiClient<CommentsApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const queries = createCommentsQueryKeys(client, headers);
+			const getUserListQuery = (currentUserId: string) =>
+				queries.comments.list({
+					authorId: currentUserId,
+					sort: "desc",
+					limit: 20,
+					offset: 0,
+				});
 			try {
 				if (hooks?.beforeLoadUserComments) {
 					await hooks.beforeLoadUserComments(context);
+				}
+				const currentUserId =
+					typeof context.currentUserId === "string"
+						? context.currentUserId
+						: undefined;
+				if (currentUserId) {
+					const listQuery = getUserListQuery(currentUserId);
+					await queryClient.prefetchQuery(listQuery);
+					const queryState = queryClient.getQueryState(listQuery.queryKey);
+					if (queryState?.error && hooks?.onLoadError) {
+						const error =
+							queryState.error instanceof Error
+								? queryState.error
+								: new Error(String(queryState.error));
+						await hooks.onLoadError(error, context);
+					}
 				}
 			} catch (error) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/comments] route.loader() failed — no server running at build time.",
 					);
+				} else {
+					const currentUserId =
+						typeof context.currentUserId === "string"
+							? context.currentUserId
+							: undefined;
+					if (currentUserId) {
+						const errToStore = createSanitizedSSRLoaderError();
+						await queryClient.prefetchQuery({
+							queryKey: getUserListQuery(currentUserId).queryKey,
+							queryFn: () => {
+								throw errToStore;
+							},
+							retry: false,
+						});
+					}
 				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);

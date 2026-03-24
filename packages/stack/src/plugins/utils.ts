@@ -109,6 +109,24 @@ export function isConnectionError(err: unknown): boolean {
 		code === "ERR_CONNECTION_REFUSED"
 	);
 }
+
+/**
+ * Public-safe message used when SSR loader failures are intentionally seeded
+ * into React Query so Error Boundaries can render on the client.
+ *
+ * Never include raw server error text here because dehydrated query state can
+ * be serialized into HTML.
+ */
+export const SSR_LOADER_ERROR_MESSAGE = "Failed to load data.";
+
+/**
+ * Creates a sanitized Error for SSR loader cache seeding.
+ *
+ * Use this instead of storing raw server errors in dehydrated query state.
+ */
+export function createSanitizedSSRLoaderError(): Error {
+	return new Error(SSR_LOADER_ERROR_MESSAGE);
+}
 import type { Router, Endpoint, Status, statusCodes } from "better-call";
 
 interface CreateApiClientOptions {

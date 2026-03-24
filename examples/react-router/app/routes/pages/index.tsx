@@ -12,7 +12,6 @@ import { normalizePath } from "@btst/stack/client";
 export async function loader({ params }: Route.LoaderArgs) {
   // params["*"] will contain the remaining URL after files/
   const path = normalizePath(params["*"]);
-  console.log({ path });
   // Create a new QueryClient for this request with the same config as the client
   // This ensures queries are configured consistently between server and client
   const queryClient = new QueryClient({
@@ -38,14 +37,7 @@ export async function loader({ params }: Route.LoaderArgs) {
   // Now dehydrate the QueryClient with the loaded data
   const dehydratedState = dehydrate(queryClient);
   const meta = route?.meta?.();
-  
-  console.log("[SSR] Dehydrated queries:", Object.keys(dehydratedState.queries || {}).length, "queries");
-  if (dehydratedState.queries && dehydratedState.queries.length > 0) {
-    dehydratedState.queries.forEach((q) => {
-      console.log("[SSR] - Query:", JSON.stringify(q.queryKey), "state:", q.state.status);
-    });
-  }
-  
+
   return {
     path,
     dehydratedState,
