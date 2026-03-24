@@ -10,7 +10,7 @@ import {
 	commentCountDiscriminator,
 	commentsThreadDiscriminator,
 } from "./api/query-key-defs";
-import { toError } from "./client/utils";
+import { toError } from "./error-utils";
 
 interface CommentsListParams {
 	resourceId?: string;
