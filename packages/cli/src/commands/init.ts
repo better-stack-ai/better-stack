@@ -57,6 +57,10 @@ async function detectOrSelectFramework(
 	if (options.framework) return options.framework;
 
 	const detected = await detectFramework(cwd);
+	if (options.yes) {
+		return detected ?? "nextjs";
+	}
+
 	if (detected) {
 		const accepted = ensureNotCancelled(
 			await confirm({
@@ -83,6 +87,7 @@ async function detectOrSelectAdapter(
 	options: InitCliOptions,
 ): Promise<Adapter> {
 	if (options.adapter) return options.adapter;
+	if (options.yes) return "memory";
 	return ensureNotCancelled(
 		await select({
 			message: "Select adapter",
