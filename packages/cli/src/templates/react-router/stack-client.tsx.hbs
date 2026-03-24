@@ -4,13 +4,10 @@ import { QueryClient } from "@tanstack/react-query"
 {{{clientImports}}}
 {{/if}}
 
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? import.meta.env.VITE_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:5173"
-
 export function getStackClient(queryClient: QueryClient) {
-	const baseURL = getBaseURL()
+{{#if clientEntries}}
+	const baseURL = "http://localhost:3000"
+{{/if}}
 	return createStackClient({
 		plugins: {
 {{#if clientEntries}}
