@@ -10,6 +10,10 @@ export async function patchCssImports(
 	cssFile: string,
 	importsToEnsure: string[],
 ): Promise<{ updated: boolean; added: string[] }> {
+	if (importsToEnsure.length === 0) {
+		return { updated: false, added: [] };
+	}
+
 	const fullPath = join(cwd, cssFile);
 	let content = await readFile(fullPath, "utf8");
 	const added: string[] = [];

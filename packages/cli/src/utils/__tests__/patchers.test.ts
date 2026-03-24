@@ -12,6 +12,12 @@ async function makeTempProject(name: string): Promise<string> {
 }
 
 describe("patchers", () => {
+	it("returns early when no imports are requested", async () => {
+		const cwd = await makeTempProject("css-empty-imports");
+		const result = await patchCssImports(cwd, "src/styles/globals.css", []);
+		expect(result).toEqual({ updated: false, added: [] });
+	});
+
 	it("patches css imports idempotently", async () => {
 		const cwd = await makeTempProject("css-patch");
 		await mkdir(join(cwd, "app"), { recursive: true });
