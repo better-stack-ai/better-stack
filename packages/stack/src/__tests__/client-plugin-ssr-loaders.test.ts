@@ -214,4 +214,44 @@ describe("client plugin SSR loaders", () => {
 			SSR_LOADER_ERROR_MESSAGE,
 		);
 	});
+
+	it("comments user loader seeds query error with user-scoped key when beforeLoadUserComments throws", async () => {
+		const queryClient = new QueryClient();
+		const expectedError = new Error("comments user view blocked");
+		const currentUserId = "user-123";
+
+		const plugin = commentsClientPlugin({
+			apiBaseURL: API_BASE_URL,
+			apiBasePath: API_BASE_PATH,
+			siteBaseURL: SITE_BASE_URL,
+			siteBasePath: SITE_BASE_PATH,
+			queryClient,
+			headers: TEST_HEADERS,
+			hooks: {
+				beforeLoadUserComments: (context) => {
+					context.currentUserId = currentUserId;
+					throw expectedError;
+				},
+			},
+		});
+
+		const route = plugin.routes().userComments();
+		await route.loader?.();
+
+		const client = createApiClient<CommentsApiRouter>({
+			baseURL: API_BASE_URL,
+			basePath: API_BASE_PATH,
+		});
+		const queries = createCommentsQueryKeys(client, TEST_HEADERS);
+		const listQuery = queries.comments.list({
+			authorId: currentUserId,
+			sort: "desc",
+			limit: 20,
+			offset: 0,
+		});
+
+		expect(getErrorMessage(queryClient, listQuery.queryKey)).toBe(
+			SSR_LOADER_ERROR_MESSAGE,
+		);
+	});
 });

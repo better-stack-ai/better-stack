@@ -40,6 +40,11 @@ export interface LoaderContext {
 	apiBasePath: string;
 	/** Optional headers for the request */
 	headers?: Headers;
+	/**
+	 * Optional current user ID for SSR loaders that need user-scoped query keys.
+	 * Hooks (e.g. beforeLoadUserComments) may populate this.
+	 */
+	currentUserId?: string;
 	/** Additional context properties */
 	[key: string]: unknown;
 }
@@ -147,29 +152,44 @@ function createUserCommentsLoader(config: CommentsClientConfig) {
 				basePath: apiBasePath,
 			});
 			const queries = createCommentsQueryKeys(client, headers);
-			const listQuery = queries.comments.list({
-				limit: 20,
-				offset: 0,
-			});
+			const getUserListQuery = (currentUserId: string) =>
+				queries.comments.list({
+					authorId: currentUserId,
+					sort: "desc",
+					limit: 20,
+					offset: 0,
+				});
 			try {
 				if (hooks?.beforeLoadUserComments) {
 					await hooks.beforeLoadUserComments(context);
 				}
-				await queryClient.prefetchQuery(listQuery);
+				const currentUserId =
+					typeof context.currentUserId === "string"
+						? context.currentUserId
+						: undefined;
+				if (currentUserId) {
+					await queryClient.prefetchQuery(getUserListQuery(currentUserId));
+				}
 			} catch (error) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/comments] route.loader() failed — no server running at build time.",
 					);
 				} else {
-					const errToStore = createSanitizedSSRLoaderError();
-					await queryClient.prefetchQuery({
-						queryKey: listQuery.queryKey,
-						queryFn: () => {
-							throw errToStore;
-						},
-						retry: false,
-					});
+					const currentUserId =
+						typeof context.currentUserId === "string"
+							? context.currentUserId
+							: undefined;
+					if (currentUserId) {
+						const errToStore = createSanitizedSSRLoaderError();
+						await queryClient.prefetchQuery({
+							queryKey: getUserListQuery(currentUserId).queryKey,
+							queryFn: () => {
+								throw errToStore;
+							},
+							retry: false,
+						});
+					}
 				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
