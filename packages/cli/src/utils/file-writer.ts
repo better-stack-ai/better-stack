@@ -1,23 +1,28 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { confirm, isCancel, select } from "@clack/prompts";
+import { diffLines } from "diff";
 import type { FileWritePlanItem } from "../types";
 
 export type ConflictPolicy = "ask" | "skip" | "overwrite";
 
+const PREVIEW_LINE_LIMIT = 12;
+
 function makeDiffPreview(previousContent: string, nextContent: string): string {
-	const before = previousContent.split("\n");
-	const after = nextContent.split("\n");
-	const max = Math.max(before.length, after.length);
+	const hunks = diffLines(previousContent, nextContent);
 	const out: string[] = [];
 
-	for (let index = 0; index < max; index++) {
-		const prev = before[index];
-		const next = after[index];
-		if (prev === next) continue;
-		if (prev !== undefined) out.push(`- ${prev}`);
-		if (next !== undefined) out.push(`+ ${next}`);
-		if (out.length > 12) break;
+	for (const hunk of hunks) {
+		if (!hunk.added && !hunk.removed) continue;
+		const lines = hunk.value.replace(/\n$/, "").split("\n");
+		const prefix = hunk.added ? "+" : "-";
+		for (const line of lines) {
+			out.push(`${prefix} ${line}`);
+			if (out.length >= PREVIEW_LINE_LIMIT) {
+				out.push("... (diff truncated)");
+				return out.join("\n");
+			}
+		}
 	}
 
 	return out.join("\n");
