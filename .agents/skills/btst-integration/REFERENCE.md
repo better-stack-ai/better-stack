@@ -1,5 +1,145 @@
 # BTST Integration — Reference
 
+## lib/stack.ts shape
+
+```ts
+import { stack } from "@btst/stack"
+import { createDrizzleAdapter } from "@btst/adapter-drizzle"  // or prisma / kysely / mongodb / memory
+import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
+import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
+// import more plugins…
+
+// Memory adapter + Next.js: pin to globalThis to share one instance across API and page bundles
+const g = global as typeof global & { __btst__?: ReturnType<typeof stack> }
+
+export const myStack = g.__btst__ ??= stack({
+  basePath: "/api/data",
+  plugins: {
+    blog: blogBackendPlugin({
+      // optional hooks — throw to deny
+      onBeforeCreatePost: async (data) => { /* auth check */ },
+      onPostCreated: async (post) => { /* revalidate, notify */ },
+    }),
+    aiChat: aiChatBackendPlugin({
+      model: openai("gpt-4o"),
+      systemPrompt: "You are a helpful assistant.",
+      mode: "authenticated",
+      getUserId: async (ctx) => ctx.headers?.get("x-user-id") ?? null,
+    }),
+    // add more plugins…
+  },
+  adapter: (db) => createDrizzleAdapter(schema, db, {}),
+  // For memory adapter: adapter: (db) => createMemoryAdapter(db)({})
+})
+
+export const { handler, dbSchema } = myStack
+```
+
+**Rules:**
+- For any real DB adapter (Drizzle, Prisma, Kysely, MongoDB), just call `stack()` at module level — no `globalThis` needed.
+- Only pin to `globalThis` when using `@btst/adapter-memory` in Next.js.
+
+---
+
+## lib/query-client.ts shape
+
+```ts
+import { QueryClient } from "@tanstack/react-query"
+
+// Next.js: singleton pattern — one QueryClient per server request, reused on client
+let queryClientSingleton: QueryClient | undefined
+
+export function getOrCreateQueryClient() {
+  if (typeof window === "undefined") {
+    // Server: always create a new instance so requests don't share data
+    return new QueryClient({
+      defaultOptions: { queries: { staleTime: 60 * 1000 } },
+    })
+  }
+  // Client: reuse the same instance across navigations
+  return (queryClientSingleton ??= new QueryClient({
+    defaultOptions: { queries: { staleTime: 60 * 1000 } },
+  }))
+}
+```
+
+---
+
+## API catch-all route
+
+**Next.js** (`app/api/data/[[...all]]/route.ts`):
+
+```ts
+import { myStack } from "@/lib/stack"
+
+export const { GET, POST, PUT, PATCH, DELETE } = myStack.handler
+```
+
+**React Router v7** (`app/routes/api.data.$.ts`):
+
+```ts
+import { myStack } from "~/lib/stack"
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router"
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  return myStack.handler(request)
+}
+export async function action({ request }: ActionFunctionArgs) {
+  return myStack.handler(request)
+}
+```
+
+**TanStack Start** (`src/routes/api/data/$.ts`):
+
+```ts
+import { myStack } from "~/lib/stack"
+import { createAPIFileRoute } from "@tanstack/start/api"
+
+export const APIRoute = createAPIFileRoute("/api/data/$")({
+  GET: ({ request }) => myStack.handler(request),
+  POST: ({ request }) => myStack.handler(request),
+  PUT: ({ request }) => myStack.handler(request),
+  PATCH: ({ request }) => myStack.handler(request),
+  DELETE: ({ request }) => myStack.handler(request),
+})
+```
+
+---
+
+## Pages catch-all route
+
+**Next.js** (`app/pages/[[...all]]/page.tsx`):
+
+```tsx
+import { notFound } from "next/navigation"
+import { headers } from "next/headers"
+import { HydrationBoundary, dehydrate } from "@tanstack/react-query"
+import { normalizePath } from "@btst/stack/client"
+import { getOrCreateQueryClient } from "@/lib/query-client"
+import { getStackClient } from "@/lib/stack-client"
+
+export default async function Page({ params }: { params: Promise<{ all?: string[] }> }) {
+  const headersList = await headers()
+  const headersObj = new Headers()
+  headersList.forEach((value, key) => headersObj.set(key, value))
+
+  const queryClient = getOrCreateQueryClient()
+  const stackClient = getStackClient(queryClient, { headers: headersObj })
+  const route = stackClient.router.getRoute(normalizePath((await params).all))
+
+  if (!route) notFound()
+  if (route.loader) await route.loader()
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <route.PageComponent />
+    </HydrationBoundary>
+  )
+}
+```
+
+---
+
 ## getBaseURL helper
 
 A server/client-safe URL helper — required for `apiBaseURL` in every plugin config and override.
@@ -192,6 +332,7 @@ export default function PagesLayout({ children }: { children: React.ReactNode })
 - `mode: "authenticated" | "public"` — conversation persistence mode
 - `uploadFile(file): Promise<string>` — for chat file attachments
 - `chatSuggestions: string[]` — pre-filled prompt suggestions
+- **Root layout requirement**: wrap the root layout (above all `StackProvider` instances) with `PageAIContextProvider` from `@btst/stack/plugins/ai-chat/client/context`. Individual pages then call `useRegisterPageAIContext()` — see the `btst-ai-context` skill.
 
 **ui-builder**
 - `componentRegistry` — pass `defaultComponentRegistry` or a custom one

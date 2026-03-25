@@ -16,7 +16,7 @@ description: Guides developers and AI agents through manual BTST library consump
 7. Create the pages **layout** file with `QueryClientProvider` + `StackProvider`.
 8. Run `@btst/cli generate` (and `migrate` for Kysely).
 
-See [REFERENCE.md](REFERENCE.md) for full code shapes.
+See [REFERENCE.md](REFERENCE.md) for full code shapes for every file.
 
 ## Workflow
 
@@ -68,6 +68,15 @@ Do not duplicate — the patcher and manual edits must both be idempotent.
   - `overrides={{ pluginKey: { apiBaseURL, apiBasePath, navigate, Link, Image?, refresh?, uploadImage?, ...hooks } }}`
   - Define a typed `PluginOverrides` interface importing `{Plugin}Overrides` from each plugin client package.
   - See [REFERENCE.md](REFERENCE.md) for the full per-plugin override shape and lifecycle hooks.
+- **ai-chat plugin only**: wrap the **root layout** (above `StackProvider`) with `PageAIContextProvider`:
+  ```tsx
+  import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"
+  // root layout.tsx (not the pages layout)
+  export default function RootLayout({ children }) {
+    return <PageAIContextProvider>{children}</PageAIContextProvider>
+  }
+  ```
+  Pages then call `useRegisterPageAIContext(...)` to register their AI context — see the `btst-ai-context` skill.
 
 ### 6) Generate schemas and run migrations
 
