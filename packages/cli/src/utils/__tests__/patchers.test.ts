@@ -39,6 +39,14 @@ describe("patchers", () => {
 		expect(second.match(/test\/base\.css/g)?.length).toBe(1);
 	});
 
+	it("does not throw when css file is missing", async () => {
+		const cwd = await makeTempProject("css-missing-file");
+		const result = await patchCssImports(cwd, "app/globals.css", [
+			"test/plugin.css",
+		]);
+		expect(result).toEqual({ updated: false, added: [] });
+	});
+
 	it("appends imports when file contains only import lines", async () => {
 		const cwd = await makeTempProject("css-import-only");
 		await mkdir(join(cwd, "app"), { recursive: true });

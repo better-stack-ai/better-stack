@@ -15,7 +15,15 @@ export async function patchCssImports(
 	}
 
 	const fullPath = join(cwd, cssFile);
-	let content = await readFile(fullPath, "utf8");
+	let content: string;
+	try {
+		content = await readFile(fullPath, "utf8");
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+			return { updated: false, added: [] };
+		}
+		throw error;
+	}
 	const added: string[] = [];
 
 	for (const specifier of importsToEnsure) {
