@@ -54,6 +54,12 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 	};
 }
 
+function getPublicSiteURLVar(framework: Framework) {
+	if (framework === "nextjs") return "NEXT_PUBLIC_SITE_URL";
+	if (framework === "react-router") return "PUBLIC_SITE_URL";
+	return "VITE_PUBLIC_SITE_URL";
+}
+
 function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 	const metas = PLUGINS.filter((plugin) =>
 		selectedPlugins.includes(plugin.key),
@@ -156,6 +162,7 @@ export async function buildScaffoldPlan(
 
 	const sharedContext = {
 		alias: input.alias,
+		publicSiteURLVar: getPublicSiteURLVar(input.framework),
 		...pluginContext,
 		...adapterContext,
 	};
@@ -163,16 +170,13 @@ export async function buildScaffoldPlan(
 	const files: FileWritePlanItem[] = [
 		{
 			path: frameworkPaths.stackPath,
-			content: await renderTemplate(
-				`${input.framework}/stack.ts.hbs`,
-				sharedContext,
-			),
+			content: await renderTemplate("shared/lib/stack.ts.hbs", sharedContext),
 			description: "BTST backend stack configuration",
 		},
 		{
 			path: frameworkPaths.stackClientPath,
 			content: await renderTemplate(
-				`${input.framework}/stack-client.tsx.hbs`,
+				"shared/lib/stack-client.tsx.hbs",
 				sharedContext,
 			),
 			description: "BTST client stack configuration",
