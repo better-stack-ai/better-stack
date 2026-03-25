@@ -149,7 +149,7 @@ describe("scaffold plan", () => {
 		});
 
 		const pagesRouteFile = plan.files.find((file) =>
-			file.path.endsWith("routes/pages/index.tsx"),
+			file.path.endsWith("routes/pages/$.tsx"),
 		);
 		expect(pagesRouteFile).toBeDefined();
 		expect(pagesRouteFile?.content).toContain(
