@@ -138,4 +138,26 @@ describe("scaffold plan", () => {
 			"aiChat: aiChatBackendPlugin({ model: undefined as any }),",
 		);
 	});
+
+	it("uses shared query client utility in react-router pages route template", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "react-router",
+			adapter: "memory",
+			plugins: ["blog"],
+			alias: "@/",
+			cssFile: "app/app.css",
+		});
+
+		const pagesRouteFile = plan.files.find((file) =>
+			file.path.endsWith("routes/pages/index.tsx"),
+		);
+		expect(pagesRouteFile).toBeDefined();
+		expect(pagesRouteFile?.content).toContain(
+			'import { getOrCreateQueryClient } from "@/lib/query-client"',
+		);
+		expect(pagesRouteFile?.content).toContain(
+			"const queryClient = getOrCreateQueryClient()",
+		);
+		expect(pagesRouteFile?.content).not.toContain("new QueryClient()");
+	});
 });

@@ -1,11 +1,12 @@
 import type { Route } from "./+types/index"
 import { useLoaderData, useRouteError } from "react-router"
-import { dehydrate, HydrationBoundary, QueryClient, useQueryClient } from "@tanstack/react-query"
+import { dehydrate, HydrationBoundary, useQueryClient } from "@tanstack/react-query"
 import { normalizePath } from "@btst/stack/client"
+import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient } from "{{alias}}lib/stack-client"
 
 export async function loader({ params }: Route.LoaderArgs) {
-	const queryClient = new QueryClient()
+	const queryClient = getOrCreateQueryClient()
 	const path = normalizePath(params["*"])
 	const route = getStackClient(queryClient).router.getRoute(path)
 
