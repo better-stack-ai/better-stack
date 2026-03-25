@@ -41,20 +41,23 @@ export async function patchCssImports(
 		.map((specifier) => toImportLine(specifier))
 		.join("\n");
 	const lines = content.split("\n");
-	const firstNonImportIndex = lines.findIndex(
+	const hasNonImportContent = lines.some(
 		(line) =>
 			line.trim().length > 0 && !line.trimStart().startsWith("@import "),
 	);
+	const lastImportIndex = lines.reduce((index, line, lineIndex) => {
+		if (line.trimStart().startsWith("@import ")) {
+			return lineIndex;
+		}
+		return index;
+	}, -1);
 
-	if (firstNonImportIndex === 0) {
-		content = `${importBlock}\n${content}`;
-	} else if (firstNonImportIndex === -1) {
-		content =
-			content.length > 0
-				? `${content.replace(/\n+$/, "")}\n${importBlock}`
-				: importBlock;
+	if (lastImportIndex === -1) {
+		content = content.length > 0 ? `${importBlock}\n${content}` : importBlock;
+	} else if (!hasNonImportContent) {
+		content = `${content.replace(/\n+$/, "")}\n${importBlock}`;
 	} else {
-		lines.splice(firstNonImportIndex, 0, importBlock, "");
+		lines.splice(lastImportIndex + 1, 0, importBlock);
 		content = lines.join("\n");
 	}
 

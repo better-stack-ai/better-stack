@@ -75,6 +75,40 @@ describe("patchers", () => {
 		);
 	});
 
+	it("inserts after the last import across comment separators", async () => {
+		const cwd = await makeTempProject("css-import-comment-separator");
+		await mkdir(join(cwd, "app"), { recursive: true });
+		const cssPath = join(cwd, "app/globals.css");
+		await writeFile(
+			cssPath,
+			'@import "a.css";\n/* plugin imports */\n@import "b.css";\nbody { color: red; }\n',
+		);
+
+		await patchCssImports(cwd, "app/globals.css", ["test/plugin.css"]);
+		const next = await readFile(cssPath, "utf8");
+
+		expect(next).toBe(
+			'@import "a.css";\n/* plugin imports */\n@import "b.css";\n@import "test/plugin.css";\nbody { color: red; }\n',
+		);
+	});
+
+	it("inserts after the last import even with at-rules between import groups", async () => {
+		const cwd = await makeTempProject("css-import-theme-separator");
+		await mkdir(join(cwd, "app"), { recursive: true });
+		const cssPath = join(cwd, "app/globals.css");
+		await writeFile(
+			cssPath,
+			'@import "a.css";\n@theme {\n\t--color-brand: oklch(62% 0.19 275);\n}\n@import "b.css";\n',
+		);
+
+		await patchCssImports(cwd, "app/globals.css", ["test/plugin.css"]);
+		const next = await readFile(cssPath, "utf8");
+
+		expect(next).toBe(
+			'@import "a.css";\n@theme {\n\t--color-brand: oklch(62% 0.19 275);\n}\n@import "b.css";\n@import "test/plugin.css";\n',
+		);
+	});
+
 	it("patches layout with QueryClientProvider", async () => {
 		const cwd = await makeTempProject("layout-patch");
 		await mkdir(join(cwd, "app"), { recursive: true });
