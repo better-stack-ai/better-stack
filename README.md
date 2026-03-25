@@ -135,7 +135,7 @@ Components are copied into `src/components/btst/{plugin}/client/` — all relati
 
 ## AI Agent Skills
 
-If you're using an AI coding agent (Cursor, Windsurf, etc.) you can install the BTST integration skill so your agent understands the plugin system, adapter setup, and wiring patterns out of the box:
+If you're using an AI coding agent (Cursor, Claude Code, VS Code, OpenAI Codex etc.) you can install the BTST integration skill so your agent understands the plugin system, adapter setup, and wiring patterns out of the box:
 
 ```bash
 npx skills@latest add better-stack-ai/better-stack/.agents/skills/btst-integration

@@ -345,6 +345,9 @@ Next steps:
 - Verify routes under /pages/*
 - Run your build
 - Use npx @btst/codegen generate or npx @btst/codegen migrate as needed
+
+Tip: Using an AI coding agent (Cursor, Claude Code, VS Code, OpenAI Codex etc.)? Install the BTST skill so your agent understands the plugin system out of the box:
+  npx skills@latest add better-stack-ai/better-stack/.agents/skills/btst-integration
 `);
 		});
 }
