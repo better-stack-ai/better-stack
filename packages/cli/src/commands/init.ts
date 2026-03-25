@@ -288,11 +288,17 @@ export function createInitCommand() {
 			}
 
 			if (adapterNeedsGenerate(adapter)) {
+				const fallbackStackPath =
+					framework === "react-router"
+						? "app/lib/stack.ts"
+						: framework === "tanstack"
+							? "src/lib/stack.ts"
+							: plan.files.some((file) => file.path.startsWith("src/"))
+								? "src/lib/stack.ts"
+								: "lib/stack.ts";
 				const stackPath =
 					plan.files.find((file) => file.path.endsWith("lib/stack.ts"))?.path ??
-					(framework === "react-router"
-						? "app/lib/stack.ts"
-						: "src/lib/stack.ts");
+					fallbackStackPath;
 				const hint = getGenerateHintForAdapter(adapter, stackPath);
 				if (hint) {
 					const runNow = rawOptions.yes
