@@ -64,6 +64,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 	const metas = PLUGINS.filter((plugin) =>
 		selectedPlugins.includes(plugin.key),
 	);
+	const hasUiBuilder = selectedPlugins.includes("ui-builder");
 
 	return {
 		backendImports: metas
@@ -77,11 +78,24 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 				if (m.key === "ai-chat") {
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: undefined as any }),`;
 				}
+				if (m.key === "cms") {
+					const contentTypes = hasUiBuilder
+						? "[UI_BUILDER_CONTENT_TYPE]"
+						: "[]";
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ contentTypes: ${contentTypes} }),`;
+				}
+				if (m.key === "comments") {
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ allowPosting: false }),`;
+				}
+				if (m.key === "media") {
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ storageAdapter: undefined as any }),`;
+				}
 				if (m.key === "ui-builder") {
-					return `\t\t${m.configKey}: ${m.backendSymbol},`;
+					return "";
 				}
 				return `\t\t${m.configKey}: ${m.backendSymbol}(),`;
 			})
+			.filter(Boolean)
 			.join("\n"),
 		clientEntries: metas
 			.map((m) => {
@@ -93,6 +107,63 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 \t\t\t\tsiteBasePath: "${siteBase}",
 \t\t\t\tqueryClient,
 \t\t\t}),`;
+			})
+			.join("\n"),
+		pagesLayoutOverrides: metas
+			.map((m) => {
+				if (m.key === "comments") {
+					return `\t\t\t\t\t${m.configKey}: {
+\t\t\t\t\t\tapiBaseURL: baseURL,
+\t\t\t\t\t\tapiBasePath: "/api/data",
+\t\t\t\t\t},`;
+				}
+				if (m.key === "media") {
+					return `\t\t\t\t\t${m.configKey}: {
+\t\t\t\t\t\tapiBaseURL: baseURL,
+\t\t\t\t\t\tapiBasePath: "/api/data",
+\t\t\t\t\t\tqueryClient,
+\t\t\t\t\t\tnavigate: (path) => router.push(path),
+\t\t\t\t\t\tLink: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t},`;
+				}
+				if (m.key === "blog") {
+					return `\t\t\t\t\t${m.configKey}: {
+\t\t\t\t\t\tapiBaseURL: baseURL,
+\t\t\t\t\t\tapiBasePath: "/api/data",
+\t\t\t\t\t\tnavigate: (path) => router.push(path),
+\t\t\t\t\t\tLink: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tuploadImage: async () => {
+\t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in app/pages/layout.tsx")
+\t\t\t\t\t\t},
+\t\t\t\t\t},`;
+				}
+				if (m.key === "kanban") {
+					return `\t\t\t\t\t${m.configKey}: {
+\t\t\t\t\t\tapiBaseURL: baseURL,
+\t\t\t\t\t\tapiBasePath: "/api/data",
+\t\t\t\t\t\tnavigate: (path) => router.push(path),
+\t\t\t\t\t\tLink: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tuploadImage: async () => {
+\t\t\t\t\t\t\tthrow new Error("TODO: implement kanban.uploadImage override in app/pages/layout.tsx")
+\t\t\t\t\t\t},
+\t\t\t\t\t\tresolveUser: async () => null,
+\t\t\t\t\t\tsearchUsers: async () => [],
+\t\t\t\t\t},`;
+				}
+				if (m.key === "ai-chat") {
+					return `\t\t\t\t\t${m.configKey}: {
+\t\t\t\t\t\tapiBaseURL: baseURL,
+\t\t\t\t\t\tapiBasePath: "/api/data",
+\t\t\t\t\t\tnavigate: (path) => router.push(path),
+\t\t\t\t\t\tLink: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t},`;
+				}
+				return `\t\t\t\t\t${m.configKey}: {
+\t\t\t\t\t\tapiBaseURL: baseURL,
+\t\t\t\t\t\tapiBasePath: "/api/data",
+\t\t\t\t\t\tnavigate: (path) => router.push(path),
+\t\t\t\t\t\tLink: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t},`;
 			})
 			.join("\n"),
 	};

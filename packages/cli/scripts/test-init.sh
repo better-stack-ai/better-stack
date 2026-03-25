@@ -116,7 +116,7 @@ test -f "app/api/data/[[...all]]/route.ts"
 test -f "app/pages/[[...all]]/page.tsx"
 test -f "app/pages/layout.tsx"
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("import { stack } from \"@btst/stack\"")?0:1)'
-node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("mediaBackendPlugin()")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("mediaBackendPlugin({ storageAdapter: undefined as any })")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");process.exit(s.includes("@btst/stack/plugins/ui-builder/css")?0:1)'
 success "Generation + patch checks passed"
 
@@ -132,13 +132,8 @@ if [ "$(cat "$TEST_DIR/init-before.hash")" != "$(cat "$TEST_DIR/init-after.hash"
 fi
 success "Second run was idempotent"
 
-step "Preparing CSS for compile sanity check"
-node -e 'const fs=require("fs");const p="app/globals.css";const s=fs.readFileSync(p,"utf8");const next=s.split("\n").filter((line)=>!line.includes("@btst/stack/plugins/")&&!line.includes("@btst/stack/ui/css")).join("\n");fs.writeFileSync(p,next);'
-success "Temporarily removed BTST CSS imports before build"
-
-step "Generating compile-safe scaffold"
-npx @btst/codegen init --yes --framework nextjs --adapter memory --skip-install > "$TEST_DIR/init-compile.log" 2>&1
-success "Regenerated baseline scaffold for compile check"
+step "Verifying compile on all-plugin scaffold"
+success "Keeping generated BTST CSS imports from --plugins all"
 
 step "Compiling fixture project"
 npm run build

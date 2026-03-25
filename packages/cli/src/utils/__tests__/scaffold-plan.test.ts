@@ -22,6 +22,15 @@ describe("scaffold plan", () => {
 		expect(plan.files[0]?.content).toContain("blogBackendPlugin()");
 		expect(plan.files[1]?.content).toContain("blogClientPlugin");
 		expect(plan.files[1]?.content).toContain("const baseURL = getBaseURL()");
+		expect(plan.files[5]?.content).toContain(
+			'import { StackProvider } from "@btst/stack/context"',
+		);
+		expect(plan.files[5]?.content).toContain(
+			"navigate: (path) => router.push(path)",
+		);
+		expect(plan.files[5]?.content).toContain(
+			'Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />',
+		);
 		expect(plan.pagesLayoutPath).toBe("app/pages/layout.tsx");
 	});
 
@@ -58,6 +67,14 @@ describe("scaffold plan", () => {
 			expect(stackClientFile?.content).not.toContain(
 				'const baseURL = "http://localhost:3000"',
 			);
+			if (framework === "nextjs") {
+				const pagesLayoutFile = plan.files.find((file) =>
+					file.path.endsWith("app/pages/layout.tsx"),
+				);
+				expect(pagesLayoutFile?.content).toBeDefined();
+				expect(pagesLayoutFile?.content).not.toContain("StackProvider");
+				expect(pagesLayoutFile?.content).not.toContain("useRouter");
+			}
 		},
 	);
 
@@ -86,7 +103,7 @@ describe("scaffold plan", () => {
 		},
 	);
 
-	it("renders ui-builder backend plugin without invoking it", async () => {
+	it("does not register ui-builder as a backend plugin entry", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
 			adapter: "memory",
@@ -96,8 +113,22 @@ describe("scaffold plan", () => {
 		});
 
 		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
-		expect(stackFile?.content).toContain("uiBuilder: UI_BUILDER_CONTENT_TYPE,");
-		expect(stackFile?.content).not.toContain("UI_BUILDER_CONTENT_TYPE()");
+		expect(stackFile?.content).not.toContain("uiBuilder:");
+	});
+
+	it("wires ui-builder content type into cms backend config", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["cms", "ui-builder"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+
+		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
+		expect(stackFile?.content).toContain(
+			"cms: cmsBackendPlugin({ contentTypes: [UI_BUILDER_CONTENT_TYPE] }),",
+		);
 	});
 
 	it("uses camelCase config keys for client plugins", async () => {
@@ -136,6 +167,51 @@ describe("scaffold plan", () => {
 		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
 		expect(stackFile?.content).toContain(
 			"aiChat: aiChatBackendPlugin({ model: undefined as any }),",
+		);
+	});
+
+	it("renders cms backend plugin with compile-safe placeholder config", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["cms"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+
+		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
+		expect(stackFile?.content).toContain(
+			"cms: cmsBackendPlugin({ contentTypes: [] }),",
+		);
+	});
+
+	it("renders comments backend plugin with compile-safe placeholder config", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["comments"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+
+		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
+		expect(stackFile?.content).toContain(
+			"comments: commentsBackendPlugin({ allowPosting: false }),",
+		);
+	});
+
+	it("renders media backend plugin with compile-safe placeholder config", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["media"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+
+		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
+		expect(stackFile?.content).toContain(
+			"media: mediaBackendPlugin({ storageAdapter: undefined as any }),",
 		);
 	});
 

@@ -1,6 +1,13 @@
 "use client"
 
+{{#if pagesLayoutOverrides}}
+import { StackProvider } from "@btst/stack/context"
+{{/if}}
 import { QueryClientProvider } from "@tanstack/react-query"
+{{#if pagesLayoutOverrides}}
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+{{/if}}
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 
 export default function BtstPagesLayout({
@@ -8,6 +15,27 @@ export default function BtstPagesLayout({
 }: {
 	children: React.ReactNode
 }) {
+{{#if pagesLayoutOverrides}}
+	const router = useRouter()
+{{/if}}
 	const queryClient = getOrCreateQueryClient()
+{{#if pagesLayoutOverrides}}
+	const baseURL = window.location.origin
+	return (
+		<QueryClientProvider client={queryClient}>
+			<StackProvider
+				basePath="/pages"
+				overrides={
+					{
+{{{pagesLayoutOverrides}}}
+					}
+				}
+			>
+				{children}
+			</StackProvider>
+		</QueryClientProvider>
+	)
+{{else}}
 	return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+{{/if}}
 }
