@@ -8,6 +8,18 @@ import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
 
 
+## AI Agent Skills
+
+If you're using an AI coding agent (Cursor, Windsurf, etc.) you can install the BTST integration skill so your agent understands the plugin system, adapter setup, and wiring patterns out of the box:
+
+```bash
+npx skills@latest add better-stack-ai/better-stack/.agents/skills/btst-integration
+```
+
+Or manually copy the [`SKILL.md`](https://github.com/better-stack-ai/better-stack/blob/main/.agents/skills/btst-integration/SKILL.md) file into your project's agent skills directory.
+
+---
+
 ## Prerequisites
 
 In order to use BTST, your application must meet the following requirements:
