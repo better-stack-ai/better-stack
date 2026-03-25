@@ -21,7 +21,7 @@ describe("scaffold plan", () => {
 		]);
 		expect(plan.files[0]?.content).toContain("blogBackendPlugin()");
 		expect(plan.files[1]?.content).toContain("blogClientPlugin");
-		expect(plan.files[1]?.content).toContain("const getBaseURL = () =>");
+		expect(plan.files[1]?.content).toContain("const baseURL = getBaseURL()");
 		expect(plan.pagesLayoutPath).toBe("app/pages/layout.tsx");
 	});
 
@@ -56,7 +56,7 @@ describe("scaffold plan", () => {
 			expect(stackClientFile?.content).not.toContain("const getBaseURL()");
 			expect(stackClientFile?.content).not.toContain("const getBaseURL =");
 			expect(stackClientFile?.content).not.toContain(
-				"const baseURL = getBaseURL()",
+				'const baseURL = "http://localhost:3000"',
 			);
 		},
 	);
@@ -77,9 +77,11 @@ describe("scaffold plan", () => {
 				file.path.endsWith("stack-client.tsx"),
 			);
 			expect(stackClientFile?.content).toBeDefined();
-			expect(stackClientFile?.content).toContain("const getBaseURL = () =>");
 			expect(stackClientFile?.content).toContain(
 				"const baseURL = getBaseURL()",
+			);
+			expect(stackClientFile?.content).toContain(
+				'if (typeof window !== "undefined")',
 			);
 		},
 	);
