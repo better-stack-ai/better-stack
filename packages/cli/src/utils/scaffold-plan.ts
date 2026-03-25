@@ -163,6 +163,8 @@ export async function buildScaffoldPlan(
 	const sharedContext = {
 		alias: input.alias,
 		publicSiteURLVar: getPublicSiteURLVar(input.framework),
+		useGlobalSingleton:
+			input.framework === "nextjs" && input.adapter === "memory",
 		...pluginContext,
 		...adapterContext,
 	};
