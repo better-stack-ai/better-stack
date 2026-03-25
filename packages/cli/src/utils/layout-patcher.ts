@@ -69,9 +69,10 @@ export async function patchLayoutWithQueryClientProvider(
 		for (const fn of candidateFunctions) {
 			const body = fn.getBody();
 			if (!body || !body.isKind(SyntaxKind.Block)) continue;
-			const returnStatement = body.getDescendantsOfKind(
-				SyntaxKind.ReturnStatement,
-			)[0];
+			const returnStatement = body
+				.getStatements()
+				.filter((s) => s.isKind(SyntaxKind.ReturnStatement))
+				.at(-1);
 			if (!returnStatement) continue;
 			const expression = returnStatement.getExpression();
 			if (!expression) continue;
