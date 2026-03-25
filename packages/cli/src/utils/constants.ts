@@ -10,7 +10,7 @@ export interface AdapterMeta {
 export interface PluginMeta {
 	key: PluginKey;
 	label: string;
-	cssImport: string;
+	cssImport?: string;
 	backendImportPath: string;
 	backendSymbol: string;
 	clientImportPath: string;
@@ -123,7 +123,6 @@ export const PLUGINS: readonly PluginMeta[] = [
 	{
 		key: "media",
 		label: "Media",
-		cssImport: "@btst/stack/plugins/media/css",
 		backendImportPath: "@btst/stack/plugins/media/api",
 		backendSymbol: "mediaBackendPlugin",
 		clientImportPath: "@btst/stack/plugins/media/client",

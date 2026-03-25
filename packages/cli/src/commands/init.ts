@@ -253,7 +253,9 @@ export function createInitCommand() {
 			);
 			const cssImports = PLUGINS.filter((plugin) =>
 				selectedPlugins.includes(plugin.key),
-			).map((plugin) => plugin.cssImport);
+			)
+				.map((plugin) => plugin.cssImport)
+				.filter((cssImport): cssImport is string => Boolean(cssImport));
 			const cssPatch = await patchCssImports(
 				cwd,
 				plan.cssPatchTarget,
