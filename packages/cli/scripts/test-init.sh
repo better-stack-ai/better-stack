@@ -89,6 +89,9 @@ npx --yes create-next-app@latest app \
 	--yes
 cd "$TEST_DIR/app"
 echo "legacy-peer-deps=true" > .npmrc
+step "Initializing shadcn Next.js baseline"
+npx --yes shadcn@latest init -t next -y > "$TEST_DIR/shadcn-init.log" 2>&1
+success "Initialized shadcn baseline in fixture"
 success "Fixture created at $TEST_DIR/app"
 
 step "Installing packed tarballs"
