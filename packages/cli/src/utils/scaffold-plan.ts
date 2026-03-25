@@ -36,8 +36,8 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 			stackPath: "app/lib/stack.ts",
 			stackClientPath: "app/lib/stack-client.tsx",
 			queryClientPath: "app/lib/query-client.ts",
-			apiRoutePath: "app/routes/api/data/route.ts",
-			pageRoutePath: "app/routes/pages/index.tsx",
+			apiRoutePath: "app/routes/api/data/$.ts",
+			pageRoutePath: "app/routes/pages/$.tsx",
 			pagesLayoutPath: undefined,
 			layoutPatchTarget: "app/root.tsx",
 		};
