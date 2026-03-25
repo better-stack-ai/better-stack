@@ -4,11 +4,23 @@ import { QueryClient } from "@tanstack/react-query"
 {{{clientImports}}}
 {{/if}}
 
-export function getStackClient(queryClient: QueryClient) {
+const stackClients = new WeakMap<QueryClient, ReturnType<typeof createStackClient>>()
 {{#if clientEntries}}
-	const baseURL = "http://localhost:3000"
+const getBaseURL = () =>
+	typeof window !== "undefined"
+		? window.location.origin
+		: (process.env.BTST_BASE_URL ??
+			import.meta.env.VITE_BASE_URL ??
+			"http://localhost:3000")
 {{/if}}
-	return createStackClient({
+
+export function getStackClient(queryClient: QueryClient) {
+	const cached = stackClients.get(queryClient)
+	if (cached) return cached
+{{#if clientEntries}}
+	const baseURL = getBaseURL()
+{{/if}}
+	const stackClient = createStackClient({
 		plugins: {
 {{#if clientEntries}}
 {{{clientEntries}}}
@@ -17,4 +29,6 @@ export function getStackClient(queryClient: QueryClient) {
 {{/if}}
 		},
 	})
+	stackClients.set(queryClient, stackClient)
+	return stackClient
 }
