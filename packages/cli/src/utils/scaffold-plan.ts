@@ -242,6 +242,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 \t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
 \t\t\t\t\t},`;
 			})
+			.filter(Boolean)
 			.join("\n"),
 		hasBetterAuthUi,
 	};
