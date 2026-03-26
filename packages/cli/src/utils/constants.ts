@@ -11,8 +11,8 @@ export interface PluginMeta {
 	key: PluginKey;
 	label: string;
 	cssImport?: string;
-	backendImportPath: string;
-	backendSymbol: string;
+	backendImportPath?: string;
+	backendSymbol?: string;
 	clientImportPath: string;
 	clientSymbol: string;
 	configKey: string;
@@ -128,6 +128,14 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/media/client",
 		clientSymbol: "mediaClientPlugin",
 		configKey: "media",
+	},
+	{
+		key: "better-auth-ui",
+		label: "Better Auth UI",
+		cssImport: "@btst/better-auth-ui/css",
+		clientImportPath: "@btst/better-auth-ui/client",
+		clientSymbol: "authClientPlugin",
+		configKey: "auth",
 	},
 ];
 

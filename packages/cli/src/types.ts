@@ -10,7 +10,8 @@ export type PluginKey =
 	| "ui-builder"
 	| "kanban"
 	| "comments"
-	| "media";
+	| "media"
+	| "better-auth-ui";
 
 export type PackageManager = "pnpm" | "npm" | "yarn";
 

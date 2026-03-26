@@ -65,20 +65,35 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 		selectedPlugins.includes(plugin.key),
 	);
 	const hasUiBuilder = selectedPlugins.includes("ui-builder");
-
 	const hasCms = selectedPlugins.includes("cms");
+	const hasBetterAuthUi = selectedPlugins.includes("better-auth-ui");
+
+	const backendMetas = metas.filter(
+		(m) =>
+			m.backendImportPath &&
+			m.backendSymbol &&
+			(m.key !== "ui-builder" || hasCms),
+	);
+
+	const clientMetas = metas.filter((m) => m.key !== "ui-builder" || hasCms);
 
 	return {
-		backendImports: metas
-			.filter((m) => m.key !== "ui-builder" || hasCms)
+		backendImports: backendMetas
 			.map((m) => `import { ${m.backendSymbol} } from "${m.backendImportPath}"`)
 			.join("\n"),
-		clientImports: metas
-			.filter((m) => m.key !== "ui-builder" || hasCms)
-			.map((m) => `import { ${m.clientSymbol} } from "${m.clientImportPath}"`)
+		clientImports: clientMetas
+			.map((m) => {
+				if (m.key === "better-auth-ui") {
+					return `import { authClientPlugin, accountClientPlugin, organizationClientPlugin } from "${m.clientImportPath}"`;
+				}
+				return `import { ${m.clientSymbol} } from "${m.clientImportPath}"`;
+			})
 			.join("\n"),
 		backendEntries: metas
 			.map((m) => {
+				if (m.key === "better-auth-ui") {
+					return "";
+				}
 				if (m.key === "ai-chat") {
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: undefined as any }),`;
 				}
@@ -101,9 +116,23 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 			})
 			.filter(Boolean)
 			.join("\n"),
-		clientEntries: metas
-			.filter((m) => m.key !== "ui-builder" || hasCms)
+		clientEntries: clientMetas
 			.map((m) => {
+				if (m.key === "better-auth-ui") {
+					const siteBase = "/pages";
+					return `\t\t\tauth: authClientPlugin({
+\t\t\t\tsiteBaseURL: baseURL,
+\t\t\t\tsiteBasePath: "${siteBase}",
+\t\t\t}),
+\t\t\taccount: accountClientPlugin({
+\t\t\t\tsiteBaseURL: baseURL,
+\t\t\t\tsiteBasePath: "${siteBase}",
+\t\t\t}),
+\t\t\torganization: organizationClientPlugin({
+\t\t\t\tsiteBaseURL: baseURL,
+\t\t\t\tsiteBasePath: "${siteBase}",
+\t\t\t}),`;
+				}
 				const siteBase = "/pages";
 				return `\t\t\t${m.configKey}: ${m.clientSymbol}({
 \t\t\t\tapiBaseURL: baseURL,
@@ -114,9 +143,37 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 \t\t\t}),`;
 			})
 			.join("\n"),
-		pagesLayoutOverrides: metas
-			.filter((m) => m.key !== "ui-builder" || hasCms)
+		pagesLayoutOverrides: clientMetas
 			.map((m) => {
+				if (m.key === "better-auth-ui") {
+					return `\t\t\t\t\tauth: {
+\t\t\t\t\t\tauthClient: undefined as any,
+\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
+\t\t\t\t\t\treplace: (path: string) => router.replace(path),
+\t\t\t\t\t\tonSessionChange: () => router.refresh(),
+\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tbasePath: "/pages/auth",
+\t\t\t\t\t\tredirectTo: "/pages/account/settings",
+\t\t\t\t\t},
+\t\t\t\t\taccount: {
+\t\t\t\t\t\tauthClient: undefined as any,
+\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
+\t\t\t\t\t\treplace: (path: string) => router.replace(path),
+\t\t\t\t\t\tonSessionChange: () => router.refresh(),
+\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tbasePath: "/pages/account",
+\t\t\t\t\t\taccount: { fields: ["image", "name"] },
+\t\t\t\t\t},
+\t\t\t\t\torganization: {
+\t\t\t\t\t\tauthClient: undefined as any,
+\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
+\t\t\t\t\t\treplace: (path: string) => router.replace(path),
+\t\t\t\t\t\tonSessionChange: () => router.refresh(),
+\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tbasePath: "/pages/org",
+\t\t\t\t\t\torganization: { basePath: "/pages/org" },
+\t\t\t\t\t},`;
+				}
 				if (m.key === "comments") {
 					return `\t\t\t\t\t${m.configKey}: {
 \t\t\t\t\t\tapiBaseURL: baseURL,
@@ -172,6 +229,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 \t\t\t\t\t},`;
 			})
 			.join("\n"),
+		hasBetterAuthUi,
 	};
 }
 

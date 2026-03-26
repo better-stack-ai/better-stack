@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildScaffoldPlan } from "../scaffold-plan";
+import { PLUGINS } from "../constants";
 
 describe("scaffold plan", () => {
 	it("builds expected files for nextjs", async () => {
@@ -258,5 +259,83 @@ describe("scaffold plan", () => {
 			"const queryClient = getOrCreateQueryClient()",
 		);
 		expect(pagesRouteFile?.content).not.toContain("context.queryClient");
+	});
+
+	it("generates three client plugin entries for better-auth-ui with no backend registration", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["better-auth-ui"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+
+		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
+		const stackClientFile = plan.files.find((file) =>
+			file.path.endsWith("stack-client.tsx"),
+		);
+		const pagesLayoutFile = plan.files.find((file) =>
+			file.path.endsWith("app/pages/layout.tsx"),
+		);
+
+		// No backend registration — stack.ts must not reference auth
+		expect(stackFile?.content).not.toContain("authClientPlugin");
+		expect(stackFile?.content).not.toContain("better-auth-ui");
+
+		// Combined import for all three client plugins
+		expect(stackClientFile?.content).toContain(
+			'import { authClientPlugin, accountClientPlugin, organizationClientPlugin } from "@btst/better-auth-ui/client"',
+		);
+
+		// Three client plugin entries
+		expect(stackClientFile?.content).toContain("auth: authClientPlugin({");
+		expect(stackClientFile?.content).toContain(
+			"account: accountClientPlugin({",
+		);
+		expect(stackClientFile?.content).toContain(
+			"organization: organizationClientPlugin({",
+		);
+
+		// No apiBaseURL/apiBasePath in better-auth-ui client entries
+		expect(stackClientFile?.content).not.toContain('apiBasePath: "/api/data"');
+
+		// Pages layout overrides — three blocks with authClient placeholder
+		expect(pagesLayoutFile?.content).toContain("authClient: undefined as any");
+		expect(pagesLayoutFile?.content).toContain('basePath: "/pages/auth"');
+		expect(pagesLayoutFile?.content).toContain('basePath: "/pages/account"');
+		expect(pagesLayoutFile?.content).toContain('basePath: "/pages/org"');
+		expect(pagesLayoutFile?.content).toContain(
+			"replace: (path: string) => router.replace(path)",
+		);
+		expect(pagesLayoutFile?.content).toContain(
+			"onSessionChange: () => router.refresh()",
+		);
+	});
+
+	it("does not include apiBaseURL/apiBasePath in better-auth-ui client entries when mixed with other plugins", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["blog", "better-auth-ui"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+
+		const stackClientFile = plan.files.find((file) =>
+			file.path.endsWith("stack-client.tsx"),
+		);
+
+		// blog entry still has apiBaseURL
+		expect(stackClientFile?.content).toContain("blog: blogClientPlugin({");
+		// better-auth-ui entries have siteBaseURL but not apiBasePath
+		expect(stackClientFile?.content).toContain("auth: authClientPlugin({");
+		expect(stackClientFile?.content).toContain(
+			"organization: organizationClientPlugin({",
+		);
+	});
+
+	it("includes better-auth-ui in the PLUGINS registry", () => {
+		const allKeys = PLUGINS.map((p) => p.key);
+		expect(allKeys).toContain("better-auth-ui");
 	});
 });

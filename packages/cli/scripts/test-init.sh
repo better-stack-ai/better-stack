@@ -73,10 +73,22 @@ test -f "$STACK_TARBALL"
 success "Packed @btst/stack -> $(basename "$STACK_TARBALL")"
 
 cd "$ROOT_DIR/packages/cli"
+npm run build --silent 2>/dev/null
 CODEGEN_TGZ=$(npm pack --quiet 2>/dev/null | tr -d '[:space:]')
 CODEGEN_TARBALL="$ROOT_DIR/packages/cli/$CODEGEN_TGZ"
 test -f "$CODEGEN_TARBALL"
 success "Packed @btst/codegen -> $(basename "$CODEGEN_TARBALL")"
+
+BETTER_AUTH_UI_DIR="$ROOT_DIR/../better-auth-ui"
+if [ ! -d "$BETTER_AUTH_UI_DIR" ]; then
+	error "@btst/better-auth-ui source not found at $BETTER_AUTH_UI_DIR"
+	exit 1
+fi
+cd "$BETTER_AUTH_UI_DIR"
+BETTER_AUTH_UI_TGZ=$(npm pack --quiet 2>/dev/null | tr -d '[:space:]')
+BETTER_AUTH_UI_TARBALL="$BETTER_AUTH_UI_DIR/$BETTER_AUTH_UI_TGZ"
+test -f "$BETTER_AUTH_UI_TARBALL"
+success "Packed @btst/better-auth-ui -> $(basename "$BETTER_AUTH_UI_TARBALL")"
 
 step "Creating Next.js fixture"
 mkdir -p "$TEST_DIR"
@@ -101,8 +113,8 @@ success "Initialized shadcn baseline in fixture (radix, v${SHADCN_VERSION})"
 success "Fixture created at $TEST_DIR/app"
 
 step "Installing packed tarballs"
-npm install "$STACK_TARBALL" "$CODEGEN_TARBALL" --legacy-peer-deps
-success "Installed local @btst/stack and @btst/codegen"
+npm install "$STACK_TARBALL" "$CODEGEN_TARBALL" "$BETTER_AUTH_UI_TARBALL" --legacy-peer-deps
+success "Installed local @btst/stack, @btst/codegen, and @btst/better-auth-ui"
 
 step "Running btst init (first pass)"
 npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins all --skip-install 2>&1 | tee "$TEST_DIR/init-first.log"
@@ -114,8 +126,16 @@ success "First init run completed"
 
 step "Installing runtime deps needed for generated files"
 STACK_PEERS=$(node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("node_modules/@btst/stack/package.json","utf8"));process.stdout.write(Object.keys(p.peerDependencies||{}).join(" "));')
-npm install @btst/adapter-memory $STACK_PEERS --legacy-peer-deps
-success "Installed runtime deps (adapter + @btst/stack peers)"
+BETTER_AUTH_UI_PEERS=$(node -e '
+const fs=require("fs");
+const p=JSON.parse(fs.readFileSync("node_modules/@btst/better-auth-ui/package.json","utf8"));
+const skip=new Set(["react","react-dom","tailwindcss","@btst/stack","@btst/yar","better-auth","@tanstack/react-query"]);
+const optionalPrefixes=["@triplit","@instantdb","@daveyplate"];
+const keys=Object.keys(p.peerDependencies||{}).filter(d=>!skip.has(d)&&!optionalPrefixes.some(pre=>d.startsWith(pre)));
+process.stdout.write(keys.join(" "));
+')
+npm install @btst/adapter-memory better-auth $STACK_PEERS $BETTER_AUTH_UI_PEERS --legacy-peer-deps
+success "Installed runtime deps (adapter + better-auth + @btst/stack and @btst/better-auth-ui peers)"
 
 step "Asserting generated files and patches"
 test -f "lib/stack.ts"
@@ -127,6 +147,11 @@ test -f "app/pages/layout.tsx"
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("import { stack } from \"@btst/stack\"")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("mediaBackendPlugin({ storageAdapter: undefined as any })")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");process.exit(s.includes("@btst/stack/plugins/ui-builder/css")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");process.exit(s.includes("@btst/better-auth-ui/css")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.tsx","utf8");process.exit(s.includes("authClientPlugin")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.tsx","utf8");process.exit(s.includes("accountClientPlugin")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.tsx","utf8");process.exit(s.includes("organizationClientPlugin")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.tsx","utf8");process.exit(s.includes("@btst/better-auth-ui/client")?0:1)'
 success "Generation + patch checks passed"
 
 step "Idempotency check (second pass)"
