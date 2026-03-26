@@ -31,15 +31,24 @@ jobs:
       
       - run: pnpm install
 
-      - name: Copy README to package
-        run: cp README.md packages/stack/README.md
+      - name: Copy README files to published packages
+        run: |
+          cp README.md packages/stack/README.md
+          cp README.md packages/cli/README.md
 
-      - name: Typecheck
+      - name: Typecheck @btst/stack
         working-directory: packages/stack
         run: pnpm typecheck
 
-      - name: Build packages
-        run: pnpm build --filter "@btst/stack" --force
+      - name: Typecheck @btst/codegen
+        working-directory: packages/cli
+        run: pnpm typecheck
+
+      - name: Build @btst/stack
+        run: pnpm --filter "@btst/stack" build --force
+
+      - name: Build @btst/codegen
+        run: pnpm --filter "@btst/codegen" build --force
 
       - name: Verify tag matches package version
         working-directory: packages/stack
@@ -59,6 +68,16 @@ jobs:
       - name: Publish to npm
         working-directory: packages/stack
         run: npm publish --access public --provenance
+
+      - name: Publish @btst/codegen to npm
+        working-directory: packages/cli
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if npm view "@btst/codegen@$PKG_VERSION" version >/dev/null 2>&1; then
+            echo "@btst/codegen@$PKG_VERSION is already published; skipping."
+            exit 0
+          fi
+          npm publish --access public --provenance
 
       - name: Upload npm logs on failure
         if: failure()

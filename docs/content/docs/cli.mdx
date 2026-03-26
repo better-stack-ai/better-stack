@@ -1,13 +1,61 @@
 ---
 title: CLI
-description: Generate database schemas and migrations using the BTST CLI.
+description: Scaffold projects and run schema generation/migrations with BTST CLIs.
 ---
 
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
 
 
-The BTST CLI (`@btst/cli`) helps you generate database schemas and migrations from your plugin `dbSchema` exports.
+BTST has two CLI packages:
+
+- `@btst/codegen` owns `init` scaffolding (`npx @btst/codegen init`)
+- `@btst/cli` owns low-level DB schema generation and migrations
+
+`@btst/codegen generate` and `@btst/codegen migrate` are passthrough entrypoints to the existing `@btst/cli` flow.
+
+## Init (Codegen)
+
+Use `init` to scaffold BTST into an existing Next.js (App Router), React Router v7, or TanStack Start project:
+
+```bash
+npx @btst/codegen init
+```
+
+Common flags:
+
+| Flag | Description |
+|------|-------------|
+| `--framework` | `nextjs`, `react-router`, or `tanstack` |
+| `--adapter` | `memory`, `prisma`, `drizzle`, `kysely`, or `mongodb` |
+| `--plugins` | Comma-separated plugin keys: `blog`, `ai-chat`, `cms`, `form-builder`, `ui-builder`, `kanban`, `comments`, `media`, `route-docs`, `open-api` (or `all`) |
+| `--cwd` | Target directory |
+| `--skip-install` | Skip package installation step |
+| `--yes` | Non-interactive defaults (useful in CI) |
+
+`init` scaffolds and patches:
+
+- `lib/stack.ts` (or framework equivalent)
+- `lib/stack-client.tsx`
+- `lib/query-client.ts`
+- API catch-all route and pages catch-all route
+- Global CSS imports (including plugin CSS)
+- Root layout with `QueryClientProvider` where possible
+
+If root layout patching is not safe for your file shape, the command prints manual patch instructions instead of applying a destructive rewrite.
+
+Generated plugin config entries in `lib/stack.ts` and `lib/stack-client.tsx` use camelCase config keys (for example `aiChat`, `uiBuilder`, `formBuilder`) even though plugin selection flags use kebab-case names.
+
+## Generate and Migrate via Codegen
+
+If you prefer one command surface, these delegate to `@btst/cli`:
+
+```bash
+npx @btst/codegen generate --orm=prisma --config=lib/stack.ts --output=schema.prisma
+npx @btst/codegen migrate --config=lib/stack.ts --database-url=postgres://...
+```
+
+When a delegated command fails, fix the underlying issue and run the equivalent `npx @btst/cli ...` command directly.
 
 ## About Better DB
 

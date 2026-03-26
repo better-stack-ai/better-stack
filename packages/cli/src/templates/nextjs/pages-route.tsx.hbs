@@ -1,0 +1,27 @@
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
+import { normalizePath } from "@btst/stack/client"
+import { notFound } from "next/navigation"
+import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
+import { getStackClient } from "{{alias}}lib/stack-client"
+
+export default async function BtstPagesRoute({
+	params,
+}: {
+	params: Promise<{ all?: string[] }>
+}) {
+	const pathParams = await params
+	const path = normalizePath(pathParams?.all)
+	const queryClient = getOrCreateQueryClient()
+	const stackClient = getStackClient(queryClient)
+	const route = stackClient.router.getRoute(path)
+
+	if (route?.loader) {
+		await route.loader()
+	}
+
+	return (
+		<HydrationBoundary state={dehydrate(queryClient)}>
+			{route?.PageComponent ? <route.PageComponent /> : notFound()}
+		</HydrationBoundary>
+	)
+}

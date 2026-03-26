@@ -1,0 +1,138 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { patchCssImports } from "../css-patcher";
+import { patchLayoutWithQueryClientProvider } from "../layout-patcher";
+
+async function makeTempProject(name: string): Promise<string> {
+	const dir = join(tmpdir(), `btst-cli-${name}-${Date.now()}`);
+	await mkdir(dir, { recursive: true });
+	return dir;
+}
+
+describe("patchers", () => {
+	it("returns early when no imports are requested", async () => {
+		const cwd = await makeTempProject("css-empty-imports");
+		const result = await patchCssImports(cwd, "src/styles/globals.css", []);
+		expect(result).toEqual({ updated: false, added: [] });
+	});
+
+	it("patches css imports idempotently", async () => {
+		const cwd = await makeTempProject("css-patch");
+		await mkdir(join(cwd, "app"), { recursive: true });
+		const cssPath = join(cwd, "app/globals.css");
+		await writeFile(cssPath, '@import "tailwindcss";\n');
+
+		await patchCssImports(cwd, "app/globals.css", [
+			"test/base.css",
+			"test/plugin.css",
+		]);
+		const first = await readFile(cssPath, "utf8");
+		expect(first).toContain('@import "test/base.css";');
+
+		await patchCssImports(cwd, "app/globals.css", [
+			"test/base.css",
+			"test/plugin.css",
+		]);
+		const second = await readFile(cssPath, "utf8");
+		expect(second.match(/test\/base\.css/g)?.length).toBe(1);
+	});
+
+	it("does not throw when css file is missing", async () => {
+		const cwd = await makeTempProject("css-missing-file");
+		const result = await patchCssImports(cwd, "app/globals.css", [
+			"test/plugin.css",
+		]);
+		expect(result).toEqual({ updated: false, added: [] });
+	});
+
+	it("appends imports when file contains only import lines", async () => {
+		const cwd = await makeTempProject("css-import-only");
+		await mkdir(join(cwd, "app"), { recursive: true });
+		const cssPath = join(cwd, "app/globals.css");
+		await writeFile(cssPath, '@import "tailwindcss";\n@import "foo.css";');
+
+		await patchCssImports(cwd, "app/globals.css", ["test/plugin.css"]);
+		const next = await readFile(cssPath, "utf8");
+
+		expect(next).toBe(
+			'@import "tailwindcss";\n@import "foo.css";\n@import "test/plugin.css";',
+		);
+	});
+
+	it("keeps blank lines inside import block when inserting imports", async () => {
+		const cwd = await makeTempProject("css-import-gaps");
+		await mkdir(join(cwd, "app"), { recursive: true });
+		const cssPath = join(cwd, "app/globals.css");
+		await writeFile(cssPath, '@import "a.css";\n\n@import "b.css";\n');
+
+		await patchCssImports(cwd, "app/globals.css", ["test/plugin.css"]);
+		const next = await readFile(cssPath, "utf8");
+
+		expect(next).toBe(
+			'@import "a.css";\n\n@import "b.css";\n@import "test/plugin.css";',
+		);
+	});
+
+	it("inserts after the last import across comment separators", async () => {
+		const cwd = await makeTempProject("css-import-comment-separator");
+		await mkdir(join(cwd, "app"), { recursive: true });
+		const cssPath = join(cwd, "app/globals.css");
+		await writeFile(
+			cssPath,
+			'@import "a.css";\n/* plugin imports */\n@import "b.css";\nbody { color: red; }\n',
+		);
+
+		await patchCssImports(cwd, "app/globals.css", ["test/plugin.css"]);
+		const next = await readFile(cssPath, "utf8");
+
+		expect(next).toBe(
+			'@import "a.css";\n/* plugin imports */\n@import "b.css";\n@import "test/plugin.css";\nbody { color: red; }\n',
+		);
+	});
+
+	it("inserts after the last import even with at-rules between import groups", async () => {
+		const cwd = await makeTempProject("css-import-theme-separator");
+		await mkdir(join(cwd, "app"), { recursive: true });
+		const cssPath = join(cwd, "app/globals.css");
+		await writeFile(
+			cssPath,
+			'@import "a.css";\n@theme {\n\t--color-brand: oklch(62% 0.19 275);\n}\n@import "b.css";\n',
+		);
+
+		await patchCssImports(cwd, "app/globals.css", ["test/plugin.css"]);
+		const next = await readFile(cssPath, "utf8");
+
+		expect(next).toBe(
+			'@import "a.css";\n@theme {\n\t--color-brand: oklch(62% 0.19 275);\n}\n@import "b.css";\n@import "test/plugin.css";\n',
+		);
+	});
+
+	it("patches layout with QueryClientProvider", async () => {
+		const cwd = await makeTempProject("layout-patch");
+		await mkdir(join(cwd, "app"), { recursive: true });
+		const layoutPath = join(cwd, "app/layout.tsx");
+		await writeFile(
+			layoutPath,
+			`export default function RootLayout({ children }: { children: React.ReactNode }) {
+	return (
+		<html>
+			<body>{children}</body>
+		</html>
+	)
+}
+`,
+		);
+
+		const result = await patchLayoutWithQueryClientProvider(
+			cwd,
+			"app/layout.tsx",
+			"@/",
+		);
+		expect(result.updated).toBe(true);
+		const next = await readFile(layoutPath, "utf8");
+		expect(next).toContain("QueryClientProvider");
+		expect(next).toContain("getOrCreateQueryClient");
+	});
+});

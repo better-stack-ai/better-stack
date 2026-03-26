@@ -133,6 +133,18 @@ Components are copied into `src/components/btst/{plugin}/client/` — all relati
 
 ---
 
+## AI Agent Skills
+
+If you're using an AI coding agent (Cursor, Claude Code, VS Code, OpenAI Codex etc.) you can install the BTST integration skill so your agent understands the plugin system, adapter setup, and wiring patterns out of the box:
+
+```bash
+npx skills@latest add better-stack-ai/better-stack/.agents/skills/btst-integration
+```
+
+Or manually copy [`skills/btst-integration/SKILL.md`](./.agents/skills/btst-integration/SKILL.md) into your project's agent skills directory.
+
+---
+
 ## Examples
 
 * [Next.js App Router](./examples/nextjs)

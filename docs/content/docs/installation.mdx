@@ -8,6 +8,18 @@ import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
 
 
+## AI Agent Skills
+
+If you're using an AI coding agent (Cursor, Claude Code, VS Code, OpenAI Codex etc.) you can install the BTST integration skill so your agent understands the plugin system, adapter setup, and wiring patterns out of the box:
+
+```bash
+npx skills@latest add better-stack-ai/better-stack/.agents/skills/btst-integration
+```
+
+Or manually copy the [`SKILL.md`](https://github.com/better-stack-ai/better-stack/blob/main/.agents/skills/btst-integration/SKILL.md) file into your project's agent skills directory.
+
+---
+
 ## Prerequisites
 
 In order to use BTST, your application must meet the following requirements:
@@ -337,7 +349,9 @@ In order to use BTST, your application must meet the following requirements:
 </Tabs>
 
     <Callout type="info">
-      See the [CLI documentation](/cli) to learn more about generating database schemas and migrations.
+      See the [CLI documentation](/cli) for both:
+      - `npx @btst/codegen init` project scaffolding
+      - `@btst/cli` schema generation and migration commands.
     </Callout>
   </Step>
 
