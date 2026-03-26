@@ -19,6 +19,9 @@ export async function renderTemplate(
 		join(__dirname, "..", "templates"),
 		join(__dirname, "..", "src", "templates"),
 		join(__dirname, "src", "templates"),
+		// When bundled into dist/shared/, go up two levels to reach package root src/templates
+		join(__dirname, "..", "..", "src", "templates"),
+		join(__dirname, "..", "..", "templates"),
 	];
 	let source: string | null = null;
 

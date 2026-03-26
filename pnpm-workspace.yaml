@@ -1,6 +1,7 @@
 packages:
   - packages/**
   - docs
+  - playground
   - examples/*
   - e2e
 
