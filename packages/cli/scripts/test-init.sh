@@ -12,6 +12,7 @@ PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
 ROOT_DIR="$(cd "$PACKAGE_DIR/../.." && pwd)"
 TEST_DIR="/tmp/test-btst-init-$(date +%s)"
 TEST_PASSED=false
+SHADCN_VERSION="4.0.5"
 
 cleanup() {
 	if [ "$TEST_PASSED" = true ]; then
@@ -90,8 +91,13 @@ npx --yes create-next-app@latest app \
 cd "$TEST_DIR/app"
 echo "legacy-peer-deps=true" > .npmrc
 step "Initializing shadcn Next.js baseline"
-npx --yes shadcn@latest init -t next -y > "$TEST_DIR/shadcn-init.log" 2>&1
-success "Initialized shadcn baseline in fixture"
+npx --yes "shadcn@${SHADCN_VERSION}" init --defaults --force --base radix > "$TEST_DIR/shadcn-init.log" 2>&1
+if ! node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");const hasColorInput=s.includes("--color-input: var(--input);");const hasInputToken=s.includes("--input:");process.exit(hasColorInput&&hasInputToken?0:1)'; then
+	error "Shadcn baseline is missing required Tailwind tokens (--color-input / --input)"
+	error "See shadcn init log: $TEST_DIR/shadcn-init.log"
+	exit 1
+fi
+success "Initialized shadcn baseline in fixture (radix, v${SHADCN_VERSION})"
 success "Fixture created at $TEST_DIR/app"
 
 step "Installing packed tarballs"
