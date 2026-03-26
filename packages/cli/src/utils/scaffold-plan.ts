@@ -122,7 +122,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
 \t\t\t\t\t\tqueryClient,
-\t\t\t\t\t\tnavigate: (path) => router.push(path),
+\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
 \t\t\t\t\t\tLink: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
 \t\t\t\t\t},`;
 				}
@@ -130,7 +130,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 					return `\t\t\t\t\t${m.configKey}: {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t\tnavigate: (path) => router.push(path),
+\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
 \t\t\t\t\t\tLink: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
 \t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in app/pages/layout.tsx")
@@ -141,7 +141,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 					return `\t\t\t\t\t${m.configKey}: {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t\tnavigate: (path) => router.push(path),
+\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
 \t\t\t\t\t\tLink: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
 \t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement kanban.uploadImage override in app/pages/layout.tsx")
@@ -154,14 +154,14 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 					return `\t\t\t\t\t${m.configKey}: {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t\tnavigate: (path) => router.push(path),
+\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
 \t\t\t\t\t\tLink: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
 \t\t\t\t\t},`;
 				}
 				return `\t\t\t\t\t${m.configKey}: {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t\tnavigate: (path) => router.push(path),
+\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
 \t\t\t\t\t\tLink: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
 \t\t\t\t\t},`;
 			})

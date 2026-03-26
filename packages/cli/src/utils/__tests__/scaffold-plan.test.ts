@@ -26,7 +26,7 @@ describe("scaffold plan", () => {
 			'import { StackProvider } from "@btst/stack/context"',
 		);
 		expect(plan.files[5]?.content).toContain(
-			"navigate: (path) => router.push(path)",
+			"navigate: (path: string) => router.push(path)",
 		);
 		expect(plan.files[5]?.content).toContain(
 			'Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />',
