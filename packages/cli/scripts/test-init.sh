@@ -103,8 +103,8 @@ success "Initialized shadcn baseline in fixture (radix, v${SHADCN_VERSION})"
 success "Fixture created at $TEST_DIR/app"
 
 step "Installing packed tarballs"
-npm install "$STACK_TARBALL" "$CODEGEN_TARBALL" @btst/better-auth-ui --legacy-peer-deps
-success "Installed local @btst/stack and @btst/codegen, and @btst/better-auth-ui from npm"
+npm install "$STACK_TARBALL" "$CODEGEN_TARBALL" --legacy-peer-deps
+success "Installed local @btst/stack and @btst/codegen"
 
 step "Running btst init (first pass)"
 npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins all --skip-install 2>&1 | tee "$TEST_DIR/init-first.log"
@@ -124,8 +124,8 @@ const optionalPrefixes=["@triplit","@instantdb","@daveyplate"];
 const keys=Object.keys(p.peerDependencies||{}).filter(d=>!skip.has(d)&&!optionalPrefixes.some(pre=>d.startsWith(pre)));
 process.stdout.write(keys.join(" "));
 ')
-npm install @btst/adapter-memory better-auth $STACK_PEERS $BETTER_AUTH_UI_PEERS --legacy-peer-deps
-success "Installed runtime deps (adapter + better-auth + @btst/stack and @btst/better-auth-ui peers)"
+npm install @btst/adapter-memory @btst/better-auth-ui better-auth $STACK_PEERS $BETTER_AUTH_UI_PEERS --legacy-peer-deps
+success "Installed runtime deps (adapter + @btst/better-auth-ui + better-auth + @btst/stack and @btst/better-auth-ui peers)"
 
 step "Asserting generated files and patches"
 test -f "lib/stack.ts"

@@ -274,6 +274,7 @@ export function createInitCommand() {
 				cwd,
 				packageManager,
 				adapter,
+				plugins: selectedPlugins,
 				skipInstall: rawOptions.skipInstall,
 			});
 

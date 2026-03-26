@@ -16,6 +16,8 @@ export interface PluginMeta {
 	clientImportPath: string;
 	clientSymbol: string;
 	configKey: string;
+	/** Additional npm packages that must be installed when this plugin is selected. */
+	extraPackages?: string[];
 }
 
 export const ADAPTERS: readonly AdapterMeta[] = [
@@ -136,6 +138,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/better-auth-ui/client",
 		clientSymbol: "authClientPlugin",
 		configKey: "auth",
+		extraPackages: ["@btst/better-auth-ui", "better-auth"],
 	},
 ];
 
