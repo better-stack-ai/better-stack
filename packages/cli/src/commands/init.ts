@@ -203,7 +203,15 @@ export function createInitCommand() {
 			const packageManager = await detectPackageManager(cwd);
 			const adapter = await detectOrSelectAdapter(rawOptions);
 			const alias = await detectAlias(cwd);
-			const selectedPlugins = await selectPlugins(rawOptions);
+			const rawSelectedPlugins = await selectPlugins(rawOptions);
+
+			// ui-builder is a CMS sub-plugin — it has no standalone registration.
+			// Always ensure cms is present when ui-builder is selected.
+			const selectedPlugins: PluginKey[] =
+				rawSelectedPlugins.includes("ui-builder") &&
+				!rawSelectedPlugins.includes("cms")
+					? ["cms", ...rawSelectedPlugins]
+					: rawSelectedPlugins;
 
 			let cssFile = await detectCssFile(cwd, framework);
 			if (!cssFile) {

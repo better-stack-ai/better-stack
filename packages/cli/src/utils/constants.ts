@@ -94,7 +94,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 	},
 	{
 		key: "ui-builder",
-		label: "UI Builder",
+		label: "UI Builder (requires CMS — CMS will be added automatically)",
 		cssImport: "@btst/stack/plugins/ui-builder/css",
 		backendImportPath: "@btst/stack/plugins/ui-builder",
 		backendSymbol: "UI_BUILDER_CONTENT_TYPE",

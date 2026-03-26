@@ -118,6 +118,34 @@ describe("scaffold plan", () => {
 		expect(stackFile?.content).not.toContain("UI_BUILDER_CONTENT_TYPE");
 	});
 
+	it("wires ui-builder correctly when cms is auto-injected (as init.ts does)", async () => {
+		// The CLI normalises ["ui-builder"] → ["cms", "ui-builder"] before calling
+		// buildScaffoldPlan, so cms is always present when ui-builder is selected.
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["cms", "ui-builder"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+
+		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
+		const stackClientFile = plan.files.find((file) =>
+			file.path.endsWith("stack-client.tsx"),
+		);
+
+		// cms backend must be registered with UI_BUILDER_CONTENT_TYPE
+		expect(stackFile?.content).toContain(
+			"cms: cmsBackendPlugin({ contentTypes: [UI_BUILDER_CONTENT_TYPE] }),",
+		);
+		// ui-builder client plugin must be registered
+		expect(stackClientFile?.content).toContain(
+			"uiBuilder: uiBuilderClientPlugin({",
+		);
+		// cms client plugin must also be registered
+		expect(stackClientFile?.content).toContain("cms: cmsClientPlugin({");
+	});
+
 	it("wires ui-builder content type into cms backend config", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
