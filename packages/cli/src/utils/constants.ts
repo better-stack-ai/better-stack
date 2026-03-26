@@ -13,8 +13,8 @@ export interface PluginMeta {
 	cssImport?: string;
 	backendImportPath?: string;
 	backendSymbol?: string;
-	clientImportPath: string;
-	clientSymbol: string;
+	clientImportPath?: string;
+	clientSymbol?: string;
 	configKey: string;
 	/** Additional npm packages that must be installed when this plugin is selected. */
 	extraPackages?: string[];
@@ -139,6 +139,21 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientSymbol: "authClientPlugin",
 		configKey: "auth",
 		extraPackages: ["@btst/better-auth-ui", "better-auth"],
+	},
+	{
+		key: "route-docs",
+		label: "Route Docs",
+		cssImport: "@btst/stack/plugins/route-docs/css",
+		clientImportPath: "@btst/stack/plugins/route-docs/client",
+		clientSymbol: "routeDocsClientPlugin",
+		configKey: "routeDocs",
+	},
+	{
+		key: "open-api",
+		label: "OpenAPI",
+		backendImportPath: "@btst/stack/plugins/open-api/api",
+		backendSymbol: "openApiBackendPlugin",
+		configKey: "openApi",
 	},
 ];
 

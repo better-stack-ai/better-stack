@@ -11,7 +11,9 @@ export type PluginKey =
 	| "kanban"
 	| "comments"
 	| "media"
-	| "better-auth-ui";
+	| "better-auth-ui"
+	| "route-docs"
+	| "open-api";
 
 export type PackageManager = "pnpm" | "npm" | "yarn";
 

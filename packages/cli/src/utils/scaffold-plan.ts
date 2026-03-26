@@ -75,7 +75,12 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 			(m.key !== "ui-builder" || hasCms),
 	);
 
-	const clientMetas = metas.filter((m) => m.key !== "ui-builder" || hasCms);
+	const clientMetas = metas.filter(
+		(m) =>
+			(m.key !== "ui-builder" || hasCms) &&
+			Boolean(m.clientImportPath) &&
+			Boolean(m.clientSymbol),
+	);
 
 	return {
 		backendImports: backendMetas
@@ -91,6 +96,9 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 			.join("\n"),
 		backendEntries: metas
 			.map((m) => {
+				if (!m.backendSymbol) {
+					return "";
+				}
 				if (m.key === "better-auth-ui") {
 					return "";
 				}
@@ -118,6 +126,9 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 			.join("\n"),
 		clientEntries: clientMetas
 			.map((m) => {
+				if (m.key === "route-docs") {
+					return `\t\t\t${m.configKey}: ${m.clientSymbol}({\n\t\t\t\tqueryClient,\n\t\t\t\tsiteBasePath: "/pages",\n\t\t\t}),`;
+				}
 				if (m.key === "better-auth-ui") {
 					const siteBase = "/pages";
 					return `\t\t\tauth: authClientPlugin({
@@ -145,6 +156,9 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 			.join("\n"),
 		pagesLayoutOverrides: clientMetas
 			.map((m) => {
+				if (m.key === "route-docs") {
+					return "";
+				}
 				if (m.key === "better-auth-ui") {
 					return `\t\t\t\t\tauth: {
 \t\t\t\t\t\tauthClient: undefined as any,
