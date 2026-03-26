@@ -66,8 +66,11 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 	);
 	const hasUiBuilder = selectedPlugins.includes("ui-builder");
 
+	const hasCms = selectedPlugins.includes("cms");
+
 	return {
 		backendImports: metas
+			.filter((m) => m.key !== "ui-builder" || hasCms)
 			.map((m) => `import { ${m.backendSymbol} } from "${m.backendImportPath}"`)
 			.join("\n"),
 		clientImports: metas
@@ -123,7 +126,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 \t\t\t\t\t\tapiBasePath: "/api/data",
 \t\t\t\t\t\tqueryClient,
 \t\t\t\t\t\tnavigate: (path: string) => router.push(path),
-\t\t\t\t\t\tLink: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
 \t\t\t\t\t},`;
 				}
 				if (m.key === "blog") {
@@ -131,7 +134,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
 \t\t\t\t\t\tnavigate: (path: string) => router.push(path),
-\t\t\t\t\t\tLink: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
 \t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in app/pages/layout.tsx")
 \t\t\t\t\t\t},
@@ -142,7 +145,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
 \t\t\t\t\t\tnavigate: (path: string) => router.push(path),
-\t\t\t\t\t\tLink: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
 \t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement kanban.uploadImage override in app/pages/layout.tsx")
 \t\t\t\t\t\t},
@@ -155,14 +158,14 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
 \t\t\t\t\t\tnavigate: (path: string) => router.push(path),
-\t\t\t\t\t\tLink: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
 \t\t\t\t\t},`;
 				}
 				return `\t\t\t\t\t${m.configKey}: {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
 \t\t\t\t\t\tnavigate: (path: string) => router.push(path),
-\t\t\t\t\t\tLink: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
 \t\t\t\t\t},`;
 			})
 			.join("\n"),

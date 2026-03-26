@@ -29,7 +29,7 @@ describe("scaffold plan", () => {
 			"navigate: (path: string) => router.push(path)",
 		);
 		expect(plan.files[5]?.content).toContain(
-			'Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />',
+			'Link: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />',
 		);
 		expect(plan.pagesLayoutPath).toBe("app/pages/layout.tsx");
 	});
@@ -114,6 +114,7 @@ describe("scaffold plan", () => {
 
 		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
 		expect(stackFile?.content).not.toContain("uiBuilder:");
+		expect(stackFile?.content).not.toContain("UI_BUILDER_CONTENT_TYPE");
 	});
 
 	it("wires ui-builder content type into cms backend config", async () => {
