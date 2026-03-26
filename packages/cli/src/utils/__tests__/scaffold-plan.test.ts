@@ -136,7 +136,7 @@ describe("scaffold plan", () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
 			adapter: "memory",
-			plugins: ["ai-chat", "ui-builder", "form-builder"],
+			plugins: ["ai-chat", "cms", "ui-builder", "form-builder"],
 			alias: "@/",
 			cssFile: "app/globals.css",
 		});

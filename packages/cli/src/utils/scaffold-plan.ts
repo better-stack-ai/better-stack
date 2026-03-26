@@ -74,6 +74,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 			.map((m) => `import { ${m.backendSymbol} } from "${m.backendImportPath}"`)
 			.join("\n"),
 		clientImports: metas
+			.filter((m) => m.key !== "ui-builder" || hasCms)
 			.map((m) => `import { ${m.clientSymbol} } from "${m.clientImportPath}"`)
 			.join("\n"),
 		backendEntries: metas
@@ -101,6 +102,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 			.filter(Boolean)
 			.join("\n"),
 		clientEntries: metas
+			.filter((m) => m.key !== "ui-builder" || hasCms)
 			.map((m) => {
 				const siteBase = "/pages";
 				return `\t\t\t${m.configKey}: ${m.clientSymbol}({
@@ -113,6 +115,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 			})
 			.join("\n"),
 		pagesLayoutOverrides: metas
+			.filter((m) => m.key !== "ui-builder" || hasCms)
 			.map((m) => {
 				if (m.key === "comments") {
 					return `\t\t\t\t\t${m.configKey}: {
