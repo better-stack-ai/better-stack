@@ -79,16 +79,6 @@ CODEGEN_TARBALL="$ROOT_DIR/packages/cli/$CODEGEN_TGZ"
 test -f "$CODEGEN_TARBALL"
 success "Packed @btst/codegen -> $(basename "$CODEGEN_TARBALL")"
 
-BETTER_AUTH_UI_DIR="$ROOT_DIR/../better-auth-ui"
-if [ ! -d "$BETTER_AUTH_UI_DIR" ]; then
-	error "@btst/better-auth-ui source not found at $BETTER_AUTH_UI_DIR"
-	exit 1
-fi
-cd "$BETTER_AUTH_UI_DIR"
-BETTER_AUTH_UI_TGZ=$(npm pack --quiet 2>/dev/null | tr -d '[:space:]')
-BETTER_AUTH_UI_TARBALL="$BETTER_AUTH_UI_DIR/$BETTER_AUTH_UI_TGZ"
-test -f "$BETTER_AUTH_UI_TARBALL"
-success "Packed @btst/better-auth-ui -> $(basename "$BETTER_AUTH_UI_TARBALL")"
 
 step "Creating Next.js fixture"
 mkdir -p "$TEST_DIR"
@@ -113,8 +103,8 @@ success "Initialized shadcn baseline in fixture (radix, v${SHADCN_VERSION})"
 success "Fixture created at $TEST_DIR/app"
 
 step "Installing packed tarballs"
-npm install "$STACK_TARBALL" "$CODEGEN_TARBALL" "$BETTER_AUTH_UI_TARBALL" --legacy-peer-deps
-success "Installed local @btst/stack, @btst/codegen, and @btst/better-auth-ui"
+npm install "$STACK_TARBALL" "$CODEGEN_TARBALL" @btst/better-auth-ui --legacy-peer-deps
+success "Installed local @btst/stack and @btst/codegen, and @btst/better-auth-ui from npm"
 
 step "Running btst init (first pass)"
 npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins all --skip-install 2>&1 | tee "$TEST_DIR/init-first.log"
