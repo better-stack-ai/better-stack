@@ -92,15 +92,19 @@ export async function action({ request }: ActionFunctionArgs) {
 **TanStack Start** (`src/routes/api/data/$.ts`):
 
 ```ts
-import { myStack } from "~/lib/stack"
-import { createAPIFileRoute } from "@tanstack/start/api"
+import { createFileRoute } from "@tanstack/react-router"
+import { handler } from "~/lib/stack"
 
-export const APIRoute = createAPIFileRoute("/api/data/$")({
-  GET: ({ request }) => myStack.handler(request),
-  POST: ({ request }) => myStack.handler(request),
-  PUT: ({ request }) => myStack.handler(request),
-  PATCH: ({ request }) => myStack.handler(request),
-  DELETE: ({ request }) => myStack.handler(request),
+export const Route = createFileRoute("/api/data/$")({
+  server: {
+    handlers: {
+      GET: async ({ request }) => handler(request),
+      POST: async ({ request }) => handler(request),
+      PUT: async ({ request }) => handler(request),
+      PATCH: async ({ request }) => handler(request),
+      DELETE: async ({ request }) => handler(request),
+    },
+  },
 })
 ```
 
