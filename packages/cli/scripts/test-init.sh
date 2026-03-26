@@ -116,6 +116,9 @@ success "First init run completed"
 
 step "Installing runtime deps needed for generated files"
 STACK_PEERS=$(node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("node_modules/@btst/stack/package.json","utf8"));process.stdout.write(Object.keys(p.peerDependencies||{}).join(" "));')
+# Install adapter, @btst/better-auth-ui, better-auth, and @btst/stack peers first so
+# @btst/better-auth-ui/package.json is present for peer resolution in the next step.
+npm install @btst/adapter-memory @btst/better-auth-ui better-auth $STACK_PEERS --legacy-peer-deps
 BETTER_AUTH_UI_PEERS=$(node -e '
 const fs=require("fs");
 const p=JSON.parse(fs.readFileSync("node_modules/@btst/better-auth-ui/package.json","utf8"));
@@ -124,7 +127,9 @@ const optionalPrefixes=["@triplit","@instantdb","@daveyplate"];
 const keys=Object.keys(p.peerDependencies||{}).filter(d=>!skip.has(d)&&!optionalPrefixes.some(pre=>d.startsWith(pre)));
 process.stdout.write(keys.join(" "));
 ')
-npm install @btst/adapter-memory @btst/better-auth-ui better-auth $STACK_PEERS $BETTER_AUTH_UI_PEERS --legacy-peer-deps
+if [ -n "$BETTER_AUTH_UI_PEERS" ]; then
+	npm install $BETTER_AUTH_UI_PEERS --legacy-peer-deps
+fi
 success "Installed runtime deps (adapter + @btst/better-auth-ui + better-auth + @btst/stack and @btst/better-auth-ui peers)"
 
 step "Asserting generated files and patches"
