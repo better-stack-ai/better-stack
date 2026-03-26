@@ -236,4 +236,26 @@ describe("scaffold plan", () => {
 		);
 		expect(pagesRouteFile?.content).not.toContain("new QueryClient()");
 	});
+
+	it("uses shared query client utility in tanstack pages route template", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "tanstack",
+			adapter: "memory",
+			plugins: ["blog"],
+			alias: "@/",
+			cssFile: "src/styles/app.css",
+		});
+
+		const pagesRouteFile = plan.files.find((file) =>
+			file.path.endsWith("routes/pages/$.tsx"),
+		);
+		expect(pagesRouteFile).toBeDefined();
+		expect(pagesRouteFile?.content).toContain(
+			'import { getOrCreateQueryClient } from "@/lib/query-client"',
+		);
+		expect(pagesRouteFile?.content).toContain(
+			"const queryClient = getOrCreateQueryClient()",
+		);
+		expect(pagesRouteFile?.content).not.toContain("context.queryClient");
+	});
 });
