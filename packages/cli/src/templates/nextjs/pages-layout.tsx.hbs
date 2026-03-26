@@ -10,6 +10,20 @@ import { useRouter } from "next/navigation"
 {{/if}}
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 
+{{#if pagesLayoutOverrides}}
+function getBaseURL() {
+	if (typeof window !== "undefined") {
+		return window.location.origin
+	}
+
+	if (typeof process !== "undefined") {
+		return process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || "http://localhost:3000"
+	}
+
+	return "http://localhost:3000"
+}
+{{/if}}
+
 export default function BtstPagesLayout({
 	children,
 }: {
@@ -20,7 +34,7 @@ export default function BtstPagesLayout({
 {{/if}}
 	const queryClient = getOrCreateQueryClient()
 {{#if pagesLayoutOverrides}}
-	const baseURL = window.location.origin
+	const baseURL = getBaseURL()
 	return (
 		<QueryClientProvider client={queryClient}>
 			<StackProvider
