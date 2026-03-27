@@ -268,8 +268,12 @@ export function PlaygroundClient({ plugins }: PlaygroundClientProps) {
 
 // Derive routes from the current plugin selection before generating
 function getRoutesForSelection(selected: PluginKey[]): string[] {
-	const withRouteDocs = selected.includes("route-docs")
-		? selected
-		: [...selected, "route-docs" as PluginKey];
+	const selectedPlugins: PluginKey[] =
+		selected.includes("ui-builder") && !selected.includes("cms")
+			? ["cms", ...selected]
+			: selected;
+	const withRouteDocs = selectedPlugins.includes("route-docs")
+		? selectedPlugins
+		: [...selectedPlugins, "route-docs" as PluginKey];
 	return withRouteDocs.flatMap((pluginKey) => PLUGIN_ROUTES[pluginKey] ?? []);
 }
