@@ -43,6 +43,49 @@ export function getStoredContext(): ClientStackContext | null {
 }
 
 /**
+ * A registered route entry
+ */
+export interface RegisteredRoute {
+	/** The route path pattern (e.g., "/blog/:slug") */
+	path: string;
+	/** The plugin this route belongs to (e.g., "blog") */
+	plugin: string;
+	/** The route key within the plugin (e.g., "detail") */
+	key: string;
+}
+
+/**
+ * Returns all registered client route paths from the stored ClientStackContext.
+ * The context is populated when `createStackClient` is called (i.e. on first render).
+ * Returns an empty array if called before the stack client has been initialised.
+ */
+export function getRegisteredRoutes(): RegisteredRoute[] {
+	if (!moduleStoredContext) return [];
+	const result: RegisteredRoute[] = [];
+	for (const [pluginKey, plugin] of Object.entries(
+		moduleStoredContext.plugins,
+	)) {
+		if (pluginKey === "routeDocs" || plugin.name === "route-docs") continue;
+		try {
+			const routes = plugin.routes(moduleStoredContext);
+			for (const [routeKey, route] of Object.entries(routes)) {
+				const path = (route as any)?.path;
+				if (path) {
+					result.push({
+						path,
+						plugin: plugin.name || pluginKey,
+						key: routeKey,
+					});
+				}
+			}
+		} catch {
+			// silently skip plugins whose routes() throws during introspection
+		}
+	}
+	return result;
+}
+
+/**
  * Generate the route docs schema from the stored context
  * This can be called from both server and client
  */

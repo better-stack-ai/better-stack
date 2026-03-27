@@ -15,6 +15,7 @@ import {
 	ADAPTERS,
 	DEFAULT_PLUGIN_SELECTION,
 	PLUGINS,
+	PLUGIN_ROUTES,
 } from "../utils/constants";
 import { detectAlias } from "../utils/detect-alias";
 import { detectCssFile } from "../utils/detect-css-file";
@@ -346,12 +347,20 @@ export function createInitCommand() {
 						? "yes"
 						: "manual action may be needed";
 
+			const scaffoldedRoutes = selectedPlugins.flatMap(
+				(p) => PLUGIN_ROUTES[p] ?? [],
+			);
+			const routesList =
+				scaffoldedRoutes.length > 0
+					? `\nAvailable routes:\n${scaffoldedRoutes.map((r) => `  ${r}`).join("\n")}\n`
+					: "";
+
 			outro(`BTST init complete.
 Files written: ${writeResult.written.length}
 Files skipped: ${writeResult.skipped.length}
 CSS updated: ${cssPatch.updated ? "yes" : "no"}
 Layout patched: ${layoutStatus}
-
+${routesList}
 Next steps:
 - Verify routes under /pages/*
 - Run your build

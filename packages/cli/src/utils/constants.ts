@@ -158,3 +158,45 @@ export const PLUGINS: readonly PluginMeta[] = [
 ];
 
 export const DEFAULT_PLUGIN_SELECTION: PluginKey[] = [];
+
+/**
+ * Maps each plugin key to the list of /pages/* route paths it registers.
+ * Paths are verified against each plugin's client/plugin.tsx createRoute() calls.
+ * All page routes are prefixed with /pages (matching siteBasePath="/pages").
+ * Non-page routes (API-only plugins) are listed separately.
+ */
+export const PLUGIN_ROUTES: Record<PluginKey, string[]> = {
+	blog: [
+		"/pages/blog",
+		"/pages/blog/drafts",
+		"/pages/blog/new",
+		"/pages/blog/:slug/edit",
+		"/pages/blog/tag/:tagSlug",
+		"/pages/blog/:slug",
+	],
+	"ai-chat": ["/pages/chat", "/pages/chat/:id"],
+	cms: [
+		"/pages/cms",
+		"/pages/cms/:typeSlug",
+		"/pages/cms/:typeSlug/new",
+		"/pages/cms/:typeSlug/:id",
+	],
+	"form-builder": [
+		"/pages/forms",
+		"/pages/forms/new",
+		"/pages/forms/:id/edit",
+		"/pages/forms/:id/submissions",
+	],
+	"ui-builder": [
+		"/pages/ui-builder",
+		"/pages/ui-builder/new",
+		"/pages/ui-builder/:id/edit",
+	],
+	kanban: ["/pages/kanban", "/pages/kanban/new", "/pages/kanban/:boardId"],
+	comments: ["/pages/comments/moderation", "/pages/comments"],
+	media: ["/pages/media"],
+	"route-docs": ["/pages/route-docs"],
+	/** open-api registers an API route, not a page route */
+	"open-api": ["/api/data/reference"],
+	"better-auth-ui": ["/pages/auth", "/pages/account/settings", "/pages/org"],
+};
