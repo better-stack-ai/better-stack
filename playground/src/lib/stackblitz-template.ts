@@ -92,6 +92,21 @@ if (existsSync(uiSrc)) {
   await mkdir(uiDest, { recursive: true });
   await cp(uiSrc, uiDest, { recursive: true });
   console.log(\`[copy-stack-src] copied \${uiSrc} → \${uiDest}\`);
+} else {
+  console.log(\`[copy-stack-src] \${uiSrc} not found, skipping\`);
+}
+
+// When running inside the monorepo, workspace-built dist/plugins/ has
+// @workspace/ui imports already inlined by postbuild.cjs. Overlay these
+// files onto the npm-installed ones so plugin CSS stays self-contained.
+// In StackBlitz/WebContainers this path won't exist, so this is a no-op.
+const workspacePluginsDist = "../../packages/stack/dist/plugins";
+const npmPluginsDist = "node_modules/@btst/stack/dist/plugins";
+if (existsSync(workspacePluginsDist)) {
+  await cp(workspacePluginsDist, npmPluginsDist, { recursive: true });
+  console.log(
+    \`[copy-stack-src] overlaid \${workspacePluginsDist} → \${npmPluginsDist}\`,
+  );
 }
 `,
 		},
