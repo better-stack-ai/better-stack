@@ -28,8 +28,11 @@ export function buildProjectFiles(
 					version: "0.0.0",
 					private: true,
 					scripts: {
-						dev: "next dev",
-						build: "next build",
+						// copy-stack-src.mjs must run before next dev/build so Tailwind's
+						// WASM oxide scanner can find @btst/stack source outside node_modules.
+						// See: https://github.com/tailwindlabs/tailwindcss/issues/18418
+						dev: "node copy-stack-src.mjs && next dev",
+						build: "node copy-stack-src.mjs && next build",
 						start: "next start",
 					},
 					dependencies: {
@@ -37,22 +40,67 @@ export function buildProjectFiles(
 						"@btst/adapter-memory": "latest",
 						"@tanstack/react-query": "^5.0.0",
 						next: "15.3.4",
-						react: "^19.0.0",
-						"react-dom": "^19.0.0",
+						react: "19.2.4",
+						"react-dom": "19.2.4",
 					},
 					devDependencies: {
-						"@tailwindcss/postcss": "^4.1.10",
-						"@types/node": "^24.0.0",
-						"@types/react": "^19.0.0",
-						"@types/react-dom": "^19.0.0",
-						postcss: "^8.5.0",
-						tailwindcss: "^4.1.10",
-						typescript: "^5.8.0",
+						"@tailwindcss/postcss": "^4",
+						"@types/node": "^20",
+						"@types/react": "^19",
+						"@types/react-dom": "^19",
+						postcss: "^8",
+						tailwindcss: "^4",
+						typescript: "^5",
+					},
+					stackblitz: {
+						installDependencies: false,
+						startCommand: "pnpm install && pnpm dev",
 					},
 				},
 				null,
 				2,
 			),
+		},
+
+		// ── copy-stack-src.mjs ───────────────────────────────────────────────────
+		// Tailwind's WASM oxide scanner cannot traverse node_modules inside
+		// WebContainers (https://github.com/tailwindlabs/tailwindcss/issues/18418).
+		// This script copies @btst/stack/src outside node_modules so Tailwind
+		// can scan it. Mirrors the same script used in the demo projects.
+		"copy-stack-src.mjs": {
+			content: `#!/usr/bin/env node
+import { cp, mkdir, rm } from "fs/promises";
+import { existsSync } from "fs";
+
+const src = "node_modules/@btst/stack/src";
+const dest = "app/.btst-stack-src";
+const uiSrc = "node_modules/@btst/stack/dist/packages/ui";
+const uiDest = "app/.btst-stack-ui";
+
+if (!existsSync(src)) {
+  console.log("[copy-stack-src] node_modules/@btst/stack/src not found, skipping");
+  process.exit(0);
+}
+
+await rm(dest, { recursive: true, force: true });
+await mkdir(dest, { recursive: true });
+await cp(src, dest, { recursive: true });
+console.log(\`[copy-stack-src] copied \${src} → \${dest}\`);
+
+if (existsSync(uiSrc)) {
+  await rm(uiDest, { recursive: true, force: true });
+  await mkdir(uiDest, { recursive: true });
+  await cp(uiSrc, uiDest, { recursive: true });
+  console.log(\`[copy-stack-src] copied \${uiSrc} → \${uiDest}\`);
+}
+`,
+		},
+
+		// ── .npmrc ──────────────────────────────────────────────────────────────
+		// Needed in StackBlitz WebContainers: prevents native module build
+		// failures and engine version mismatch errors during npm install.
+		".npmrc": {
+			content: `legacy-peer-deps=true\nengine-strict=false\n`,
 		},
 
 		// ── next.config.ts ───────────────────────────────────────────────────────
@@ -116,7 +164,13 @@ export default config
 		// ── app/globals.css ──────────────────────────────────────────────────────
 		"app/globals.css": {
 			content: `@import "tailwindcss";
-${cssImportLines ? `\n${cssImportLines}\n` : ""}`,
+${cssImportLines ? `\n${cssImportLines}\n` : ""}
+/* WebContainers: Tailwind's WASM scanner can't traverse node_modules        */
+/* (https://github.com/tailwindlabs/tailwindcss/issues/18418).               */
+/* copy-stack-src.mjs copies @btst/stack source here before dev/build runs. */
+@source "./.btst-stack-src/**/*.{ts,tsx}";
+@source "./.btst-stack-ui/**/*.{ts,tsx}";
+`,
 		},
 
 		// ── app/layout.tsx ───────────────────────────────────────────────────────
