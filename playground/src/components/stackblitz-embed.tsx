@@ -56,111 +56,116 @@ export function StackBlitzEmbed({
 
 		log("Starting embed — loading SDK...");
 
-		import("@stackblitz/sdk").then((mod) => {
-			if (cancelled || !containerRef.current) return;
+		void import("@stackblitz/sdk")
+			.then((mod) => {
+				if (cancelled || !containerRef.current) return;
 
-			container.innerHTML = "";
+				container.innerHTML = "";
 
-			// Create a fresh target for the SDK to replace with its iframe.
-			// Never pass containerRef.current itself — the SDK replaces the target
-			// element in the DOM, which would break React's reconciliation.
-			const target = document.createElement("div");
-			container.appendChild(target);
+				// Create a fresh target for the SDK to replace with its iframe.
+				// Never pass containerRef.current itself — the SDK replaces the target
+				// element in the DOM, which would break React's reconciliation.
+				const target = document.createElement("div");
+				container.appendChild(target);
 
-			log("SDK loaded — calling embedProject", {
-				template: project.template,
-				fileCount: Object.keys(project.files ?? {}).length,
-				embedOptions,
-			});
-
-			mod.default
-				.embedProject(target, project, embedOptions)
-				.then((vm) => {
-					if (cancelled) return;
-					vmRef.current = vm;
-					log(
-						"VM connected ✓ — WebContainers booting, starting diagnostics...",
-					);
-					if (previewPathRef.current) {
-						vm.preview
-							.setUrl(previewPathRef.current)
-							.then(() =>
-								log(
-									"Applied initial preview path request:",
-									previewPathRef.current,
-								),
-							)
-							.catch((e) => log("Initial preview path set failed:", e));
-					}
-
-					// Snapshot deps to confirm package.json was parsed correctly.
-					vm.getDependencies()
-						.then((deps) => log("Resolved dependencies:", deps))
-						.catch((e) => log("getDependencies failed:", e));
-
-					// Poll preview URL until the dev server is up (or we give up).
-					// NOTE: SDK_GET_PREVIEW_URL_FAILURE is thrown when COEP prevents the
-					// SDK from reading the cross-origin preview iframe URL. This does NOT
-					// mean the VM died — continue polling through it.
-					let attempts = 0;
-					const maxAttempts = 60; // 5 min — Next.js install takes a while
-					const pollInterval = setInterval(async () => {
-						if (cancelled) {
-							clearInterval(pollInterval);
-							return;
-						}
-						attempts++;
-						try {
-							const url = await vm.preview.getUrl();
-							log(
-								`Preview poll #${attempts}: url=${url ?? "null (server not ready yet)"}`,
-							);
-							if (url) {
-								clearInterval(pollInterval);
-								log("Dev server is up ✓", { url });
-							} else if (attempts >= maxAttempts) {
-								clearInterval(pollInterval);
-								log(
-									`Dev server never came up after ${maxAttempts} polls — likely crashed.`,
-								);
-								vm.getFsSnapshot()
-									.then((files) => {
-										const paths = Object.keys(files ?? {});
-										log("FS snapshot on crash:", {
-											totalFiles: paths.length,
-											hasNodeModules: paths.some((p) =>
-												p.startsWith("node_modules/"),
-											),
-											hasNextDir: paths.some((p) => p.startsWith(".next/")),
-											samplePaths: paths.slice(0, 20),
-										});
-									})
-									.catch((e) => log("getFsSnapshot failed:", e));
-							}
-						} catch (e: unknown) {
-							const msg = e instanceof Error ? e.message : String(e);
-							if (msg.includes("SDK_GET_PREVIEW_URL_FAILURE")) {
-								// COEP restricts reading cross-origin preview URL — VM is alive.
-								log(
-									`Preview poll #${attempts}: COEP blocks preview URL read (VM still alive)`,
-								);
-							} else {
-								clearInterval(pollInterval);
-								log(
-									"Preview poll threw unexpected error — VM may have died:",
-									e,
-								);
-							}
-						}
-					}, 5_000);
-				})
-				.catch((err: unknown) => {
-					if (cancelled) return;
-					// VM timeout during boot is common — the iframe still renders.
-					// Log it anyway so we can distinguish timeout from a real error.
-					log("embedProject rejected (VM timeout or boot failure):", err);
+				log("SDK loaded — calling embedProject", {
+					template: project.template,
+					fileCount: Object.keys(project.files ?? {}).length,
+					embedOptions,
 				});
-		});
+
+				mod.default
+					.embedProject(target, project, embedOptions)
+					.then((vm) => {
+						if (cancelled) return;
+						vmRef.current = vm;
+						log(
+							"VM connected ✓ — WebContainers booting, starting diagnostics...",
+						);
+						if (previewPathRef.current) {
+							vm.preview
+								.setUrl(previewPathRef.current)
+								.then(() =>
+									log(
+										"Applied initial preview path request:",
+										previewPathRef.current,
+									),
+								)
+								.catch((e) => log("Initial preview path set failed:", e));
+						}
+
+						// Snapshot deps to confirm package.json was parsed correctly.
+						vm.getDependencies()
+							.then((deps) => log("Resolved dependencies:", deps))
+							.catch((e) => log("getDependencies failed:", e));
+
+						// Poll preview URL until the dev server is up (or we give up).
+						// NOTE: SDK_GET_PREVIEW_URL_FAILURE is thrown when COEP prevents the
+						// SDK from reading the cross-origin preview iframe URL. This does NOT
+						// mean the VM died — continue polling through it.
+						let attempts = 0;
+						const maxAttempts = 60; // 5 min — Next.js install takes a while
+						const pollInterval = setInterval(async () => {
+							if (cancelled) {
+								clearInterval(pollInterval);
+								return;
+							}
+							attempts++;
+							try {
+								const url = await vm.preview.getUrl();
+								log(
+									`Preview poll #${attempts}: url=${url ?? "null (server not ready yet)"}`,
+								);
+								if (url) {
+									clearInterval(pollInterval);
+									log("Dev server is up ✓", { url });
+								} else if (attempts >= maxAttempts) {
+									clearInterval(pollInterval);
+									log(
+										`Dev server never came up after ${maxAttempts} polls — likely crashed.`,
+									);
+									vm.getFsSnapshot()
+										.then((files) => {
+											const paths = Object.keys(files ?? {});
+											log("FS snapshot on crash:", {
+												totalFiles: paths.length,
+												hasNodeModules: paths.some((p) =>
+													p.startsWith("node_modules/"),
+												),
+												hasNextDir: paths.some((p) => p.startsWith(".next/")),
+												samplePaths: paths.slice(0, 20),
+											});
+										})
+										.catch((e) => log("getFsSnapshot failed:", e));
+								}
+							} catch (e: unknown) {
+								const msg = e instanceof Error ? e.message : String(e);
+								if (msg.includes("SDK_GET_PREVIEW_URL_FAILURE")) {
+									// COEP restricts reading cross-origin preview URL — VM is alive.
+									log(
+										`Preview poll #${attempts}: COEP blocks preview URL read (VM still alive)`,
+									);
+								} else {
+									clearInterval(pollInterval);
+									log(
+										"Preview poll threw unexpected error — VM may have died:",
+										e,
+									);
+								}
+							}
+						}, 5_000);
+					})
+					.catch((err: unknown) => {
+						if (cancelled) return;
+						// VM timeout during boot is common — the iframe still renders.
+						// Log it anyway so we can distinguish timeout from a real error.
+						log("embedProject rejected (VM timeout or boot failure):", err);
+					});
+			})
+			.catch((err: unknown) => {
+				if (cancelled) return;
+				log("Failed to load StackBlitz SDK:", err);
+			});
 
 		return () => {
 			cancelled = true;
@@ -185,11 +190,18 @@ export function StackBlitzEmbed({
 
 	const handleOpenInStackBlitz = useCallback(() => {
 		if (!projectRef.current) return;
-		import("@stackblitz/sdk").then((mod) => {
-			mod.default.openProject(projectRef.current!, {
-				openFile: "app/page.tsx",
+		void import("@stackblitz/sdk")
+			.then((mod) => {
+				mod.default.openProject(projectRef.current!, {
+					openFile: "app/page.tsx",
+				});
+			})
+			.catch((err: unknown) => {
+				console.error(
+					`[StackBlitz ${new Date().toISOString()}] Failed to load SDK`,
+					err,
+				);
 			});
-		});
 	}, []);
 
 	return (
