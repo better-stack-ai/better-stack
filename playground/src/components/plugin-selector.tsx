@@ -41,8 +41,9 @@ export function PluginSelector({
 	return (
 		<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
 			{plugins.map((plugin) => {
-				const isSelected = selected.includes(plugin.key as PluginKey);
 				const isRouteDocs = plugin.key === "route-docs";
+				const isSelected =
+					isRouteDocs || selected.includes(plugin.key as PluginKey);
 				return (
 					<button
 						key={plugin.key}
@@ -54,9 +55,11 @@ export function PluginSelector({
 							isSelected
 								? "border-blue-500 bg-blue-50 dark:bg-blue-950/40 dark:border-blue-400"
 								: "border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600",
-							disabled || isRouteDocs
+							disabled
 								? "opacity-60 cursor-not-allowed"
-								: "cursor-pointer",
+								: isRouteDocs
+									? "cursor-default"
+									: "cursor-pointer",
 						]
 							.filter(Boolean)
 							.join(" ")}

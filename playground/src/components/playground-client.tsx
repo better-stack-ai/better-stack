@@ -6,6 +6,7 @@ import type {
 	PluginKey,
 	FileWritePlanItem,
 } from "@btst/codegen/lib";
+import { PLUGIN_ROUTES } from "@btst/codegen/lib";
 import { generateProject } from "@/app/actions";
 import { PluginSelector } from "./plugin-selector";
 import { RouteList } from "./route-list";
@@ -21,6 +22,7 @@ interface GeneratedState {
 	files: FileWritePlanItem[];
 	routes: string[];
 	cssImports: string[];
+	extraPackages: string[];
 }
 
 export function PlaygroundClient({ plugins }: PlaygroundClientProps) {
@@ -31,6 +33,9 @@ export function PlaygroundClient({ plugins }: PlaygroundClientProps) {
 		null,
 	);
 	const [isPending, startTransition] = useTransition();
+	const selectedCount = selected.includes("route-docs")
+		? selected.length
+		: selected.length + 1;
 
 	const handleLaunch = useCallback(() => {
 		startTransition(async () => {
@@ -81,7 +86,7 @@ export function PlaygroundClient({ plugins }: PlaygroundClientProps) {
 									<div>
 										<h2 className="font-semibold text-base">Select plugins</h2>
 										<p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-											{selected.length} selected · route-docs always included
+											{selectedCount} selected · route-docs always included
 										</p>
 									</div>
 									<div className="flex items-center gap-2">
@@ -122,7 +127,7 @@ export function PlaygroundClient({ plugins }: PlaygroundClientProps) {
 								<h2 className="font-semibold text-base mb-3">
 									Available routes
 								</h2>
-								<RouteList routes={getRoutesForSelection(selected, plugins)} />
+								<RouteList routes={getRoutesForSelection(selected)} />
 							</div>
 
 							{/* Launch button */}
@@ -228,6 +233,7 @@ export function PlaygroundClient({ plugins }: PlaygroundClientProps) {
 								<StackBlitzEmbed
 									generatedFiles={generated.files}
 									cssImports={generated.cssImports}
+									extraPackages={generated.extraPackages}
 									previewPath={activePreviewRoute}
 								/>
 							)}
@@ -261,48 +267,9 @@ export function PlaygroundClient({ plugins }: PlaygroundClientProps) {
 }
 
 // Derive routes from the current plugin selection before generating
-function getRoutesForSelection(
-	selected: PluginKey[],
-	plugins: readonly PluginMeta[],
-): string[] {
-	// Inline the route map here so it works client-side without the server action
-	const ROUTES: Record<string, string[]> = {
-		blog: [
-			"/pages/blog",
-			"/pages/blog/drafts",
-			"/pages/blog/new",
-			"/pages/blog/:slug/edit",
-			"/pages/blog/tag/:tagSlug",
-			"/pages/blog/:slug",
-		],
-		"ai-chat": ["/pages/chat", "/pages/chat/:id"],
-		cms: [
-			"/pages/cms",
-			"/pages/cms/:typeSlug",
-			"/pages/cms/:typeSlug/new",
-			"/pages/cms/:typeSlug/:id",
-		],
-		"form-builder": [
-			"/pages/forms",
-			"/pages/forms/new",
-			"/pages/forms/:id/edit",
-			"/pages/forms/:id/submissions",
-		],
-		"ui-builder": [
-			"/pages/ui-builder",
-			"/pages/ui-builder/new",
-			"/pages/ui-builder/:id/edit",
-		],
-		kanban: ["/pages/kanban", "/pages/kanban/new", "/pages/kanban/:boardId"],
-		comments: ["/pages/comments/moderation", "/pages/comments"],
-		media: ["/pages/media"],
-		"route-docs": ["/pages/route-docs"],
-		"open-api": ["/api/data/reference"],
-		"better-auth-ui": ["/pages/auth", "/pages/account/settings", "/pages/org"],
-	};
-
+function getRoutesForSelection(selected: PluginKey[]): string[] {
 	const withRouteDocs = selected.includes("route-docs")
 		? selected
 		: [...selected, "route-docs" as PluginKey];
-	return withRouteDocs.flatMap((p) => ROUTES[p] ?? []);
+	return withRouteDocs.flatMap((pluginKey) => PLUGIN_ROUTES[pluginKey] ?? []);
 }

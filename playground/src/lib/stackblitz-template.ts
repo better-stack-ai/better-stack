@@ -16,8 +16,26 @@ export type ProjectFiles = Record<string, ProjectFile>;
 export function buildProjectFiles(
 	generatedFiles: FileWritePlanItem[],
 	cssImports: string[],
+	extraPackages: string[] = [],
 ): ProjectFiles {
 	const cssImportLines = cssImports.map((c) => `@import "${c}";`).join("\n");
+	const baseDependencies: Record<string, string> = {
+		"@btst/stack": "latest",
+		"@btst/adapter-memory": "latest",
+		"@tanstack/react-query": "^5.0.0",
+		next: "15.3.4",
+		react: "19.2.4",
+		"react-dom": "19.2.4",
+	};
+	const pluginDependencies = Object.fromEntries(
+		Array.from(new Set(extraPackages)).map((pkgName) => [pkgName, "latest"]),
+	);
+	const dependencies = Object.fromEntries(
+		Object.entries({
+			...baseDependencies,
+			...pluginDependencies,
+		}).sort(([left], [right]) => left.localeCompare(right)),
+	);
 
 	const files: ProjectFiles = {
 		// ── package.json ────────────────────────────────────────────────────────
@@ -35,14 +53,7 @@ export function buildProjectFiles(
 						build: "node copy-stack-src.mjs && next build",
 						start: "next start",
 					},
-					dependencies: {
-						"@btst/stack": "latest",
-						"@btst/adapter-memory": "latest",
-						"@tanstack/react-query": "^5.0.0",
-						next: "15.3.4",
-						react: "19.2.4",
-						"react-dom": "19.2.4",
-					},
+					dependencies,
 					devDependencies: {
 						"@tailwindcss/postcss": "^4",
 						"@types/node": "^20",

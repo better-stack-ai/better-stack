@@ -7,6 +7,7 @@ export interface GenerateResult {
 	files: FileWritePlanItem[];
 	routes: string[];
 	cssImports: string[];
+	extraPackages: string[];
 }
 
 export async function generateProject(
@@ -38,10 +39,18 @@ export async function generateProject(
 		.filter((c): c is string => Boolean(c));
 
 	const routes = withRouteDocs.flatMap((p) => PLUGIN_ROUTES[p] ?? []);
+	const extraPackages = Array.from(
+		new Set(
+			PLUGINS.filter((p) => withRouteDocs.includes(p.key as PluginKey)).flatMap(
+				(p) => p.extraPackages ?? [],
+			),
+		),
+	);
 
 	return {
 		files: plan.files,
 		routes,
 		cssImports,
+		extraPackages,
 	};
 }
