@@ -5,6 +5,6 @@ export {
 	generateSchema,
 	getStoredContext,
 	getRegisteredRoutes,
-	useRegisteredRoutes,
 	type RegisteredRoute,
 } from "./plugin";
+export { useRegisteredRoutes } from "./hooks";

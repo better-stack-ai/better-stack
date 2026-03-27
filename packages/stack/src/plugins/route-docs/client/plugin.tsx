@@ -1,4 +1,4 @@
-import { lazy, useEffect, useState } from "react";
+import { lazy } from "react";
 import { defineClientPlugin } from "@btst/stack/plugins/client";
 import { createRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
@@ -83,20 +83,6 @@ export function getRegisteredRoutes(): RegisteredRoute[] {
 		}
 	}
 	return result;
-}
-
-/**
- * React hook that returns all registered client route paths.
- * Updates whenever the component mounts (after client hydration).
- */
-export function useRegisteredRoutes(): RegisteredRoute[] {
-	const [routes, setRoutes] = useState<RegisteredRoute[]>(() =>
-		getRegisteredRoutes(),
-	);
-	useEffect(() => {
-		setRoutes(getRegisteredRoutes());
-	}, []);
-	return routes;
 }
 
 /**
