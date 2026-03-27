@@ -27,22 +27,34 @@ export function PlaygroundClient({ plugins }: PlaygroundClientProps) {
 	const [selected, setSelected] = useState<PluginKey[]>(["blog"]);
 	const [view, setView] = useState<View>("configure");
 	const [generated, setGenerated] = useState<GeneratedState | null>(null);
+	const [activePreviewRoute, setActivePreviewRoute] = useState<string | null>(
+		null,
+	);
 	const [isPending, startTransition] = useTransition();
 
 	const handleLaunch = useCallback(() => {
 		startTransition(async () => {
 			const result = await generateProject(selected);
 			setGenerated(result);
+			const firstPageRoute = result.routes.find((route) =>
+				route.startsWith("/pages/"),
+			);
+			setActivePreviewRoute(firstPageRoute ?? null);
 			setView("preview");
 		});
 	}, [selected]);
 
 	const handleBack = useCallback(() => {
 		setView("configure");
+		setActivePreviewRoute(null);
 	}, []);
 
 	// Preview routes are either from the generated state or derived from selection
 	const previewRoutes = generated?.routes ?? [];
+	const handlePreviewRouteClick = useCallback((route: string) => {
+		if (!route.startsWith("/pages/")) return;
+		setActivePreviewRoute(route);
+	}, []);
 
 	return (
 		<div className="flex flex-col gap-6">
@@ -216,6 +228,7 @@ export function PlaygroundClient({ plugins }: PlaygroundClientProps) {
 								<StackBlitzEmbed
 									generatedFiles={generated.files}
 									cssImports={generated.cssImports}
+									previewPath={activePreviewRoute}
 								/>
 							)}
 						</div>
@@ -223,7 +236,11 @@ export function PlaygroundClient({ plugins }: PlaygroundClientProps) {
 						{/* Route list sidebar */}
 						<div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 overflow-auto">
 							<h3 className="font-semibold text-sm mb-3">Available routes</h3>
-							<RouteList routes={previewRoutes} />
+							<RouteList
+								routes={previewRoutes}
+								onPageRouteClick={handlePreviewRouteClick}
+								activePageRoute={activePreviewRoute}
+							/>
 							<div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
 								<p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">
 									Navigate inside the preview to:

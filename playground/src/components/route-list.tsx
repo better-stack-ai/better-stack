@@ -2,6 +2,8 @@
 
 interface RouteListProps {
 	routes: string[];
+	onPageRouteClick?: (route: string) => void;
+	activePageRoute?: string | null;
 }
 
 const ROUTE_ICONS: Record<string, string> = {
@@ -29,7 +31,11 @@ function isApiRoute(route: string): boolean {
 	return route.startsWith("/api/");
 }
 
-export function RouteList({ routes }: RouteListProps) {
+export function RouteList({
+	routes,
+	onPageRouteClick,
+	activePageRoute,
+}: RouteListProps) {
 	if (routes.length === 0) {
 		return (
 			<p className="text-sm text-zinc-500 dark:text-zinc-400 italic">
@@ -52,9 +58,22 @@ export function RouteList({ routes }: RouteListProps) {
 						{pageRoutes.map((route) => (
 							<li key={route} className="flex items-center gap-2">
 								<span className="text-base leading-none">{getIcon(route)}</span>
-								<code className="text-sm text-zinc-700 dark:text-zinc-300 font-mono">
-									{route}
-								</code>
+								{onPageRouteClick ? (
+									<button
+										type="button"
+										onClick={() => onPageRouteClick(route)}
+										className="text-left text-sm font-mono text-blue-600 dark:text-blue-400 hover:underline transition-colors"
+										aria-current={
+											activePageRoute === route ? "page" : undefined
+										}
+									>
+										{route}
+									</button>
+								) : (
+									<code className="text-sm text-zinc-700 dark:text-zinc-300 font-mono">
+										{route}
+									</code>
+								)}
 							</li>
 						))}
 					</ul>

@@ -8,6 +8,7 @@ import { buildProjectFiles, toSdkFiles } from "@/lib/stackblitz-template";
 interface StackBlitzEmbedProps {
 	generatedFiles: FileWritePlanItem[];
 	cssImports: string[];
+	previewPath?: string | null;
 }
 
 const EMBED_HEIGHT = 700;
@@ -15,9 +16,16 @@ const EMBED_HEIGHT = 700;
 export function StackBlitzEmbed({
 	generatedFiles,
 	cssImports,
+	previewPath,
 }: StackBlitzEmbedProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const projectRef = useRef<Project | null>(null);
+	const vmRef = useRef<import("@stackblitz/sdk").VM | null>(null);
+	const previewPathRef = useRef<string | null | undefined>(previewPath);
+
+	useEffect(() => {
+		previewPathRef.current = previewPath;
+	}, [previewPath]);
 
 	useEffect(() => {
 		const container = containerRef.current;
@@ -69,9 +77,21 @@ export function StackBlitzEmbed({
 				.embedProject(target, project, embedOptions)
 				.then((vm) => {
 					if (cancelled) return;
+					vmRef.current = vm;
 					log(
 						"VM connected ✓ — WebContainers booting, starting diagnostics...",
 					);
+					if (previewPathRef.current) {
+						vm.preview
+							.setUrl(previewPathRef.current)
+							.then(() =>
+								log(
+									"Applied initial preview path request:",
+									previewPathRef.current,
+								),
+							)
+							.catch((e) => log("Initial preview path set failed:", e));
+					}
 
 					// Snapshot deps to confirm package.json was parsed correctly.
 					vm.getDependencies()
@@ -144,10 +164,24 @@ export function StackBlitzEmbed({
 
 		return () => {
 			cancelled = true;
+			vmRef.current = null;
 			container.innerHTML = "";
 			log("Embed unmounted / deps changed — cleaned up.");
 		};
 	}, [generatedFiles, cssImports]);
+
+	useEffect(() => {
+		if (!previewPath || !vmRef.current) return;
+		const vm = vmRef.current;
+		vm.preview
+			.setUrl(previewPath)
+			.catch((e) =>
+				console.log(
+					`[StackBlitz ${new Date().toISOString()}] Failed to set preview URL`,
+					{ previewPath, error: e },
+				),
+			);
+	}, [previewPath]);
 
 	const handleOpenInStackBlitz = useCallback(() => {
 		if (!projectRef.current) return;
