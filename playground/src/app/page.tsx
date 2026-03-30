@@ -1,5 +1,5 @@
 import { PlaygroundClient } from "@/components/playground-client";
-import { PLUGINS } from "@btst/codegen/lib";
+import { PLUGINS, PLUGIN_ROUTES } from "@btst/codegen/lib";
 
 export default function PlaygroundPage() {
 	return (
@@ -42,7 +42,7 @@ export default function PlaygroundPage() {
 
 			{/* Main */}
 			<main className="flex-1 max-w-screen-2xl mx-auto w-full px-4 py-6">
-				<PlaygroundClient plugins={PLUGINS} />
+				<PlaygroundClient plugins={PLUGINS} pluginRoutes={PLUGIN_ROUTES} />
 			</main>
 
 			{/* Footer */}

@@ -6,14 +6,14 @@ import type {
 	PluginKey,
 	FileWritePlanItem,
 } from "@btst/codegen/lib";
-import { PLUGIN_ROUTES } from "@btst/codegen/lib";
 import { generateProject } from "@/app/actions";
 import { PluginSelector } from "./plugin-selector";
-import { RouteList } from "./route-list";
+import { RouteDrawer } from "./route-drawer";
 import { StackBlitzEmbed } from "./stackblitz-embed";
 
 interface PlaygroundClientProps {
 	plugins: readonly PluginMeta[];
+	pluginRoutes: Record<PluginKey, string[]>;
 }
 
 type View = "configure" | "preview";
@@ -25,7 +25,10 @@ interface GeneratedState {
 	extraPackages: string[];
 }
 
-export function PlaygroundClient({ plugins }: PlaygroundClientProps) {
+export function PlaygroundClient({
+	plugins,
+	pluginRoutes,
+}: PlaygroundClientProps) {
 	const [selected, setSelected] = useState<PluginKey[]>(["blog"]);
 	const [view, setView] = useState<View>("configure");
 	const [generated, setGenerated] = useState<GeneratedState | null>(null);
@@ -77,114 +80,107 @@ export function PlaygroundClient({ plugins }: PlaygroundClientProps) {
 						</p>
 					</div>
 
-					{/* Two-column layout: selector + route preview */}
-					<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-						{/* Plugin selector */}
-						<div className="lg:col-span-2">
-							<div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
-								<div className="flex items-center justify-between mb-4">
-									<div>
-										<h2 className="font-semibold text-base">Select plugins</h2>
-										<p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-											{selectedCount} selected · route-docs always included
-										</p>
-									</div>
-									<div className="flex items-center gap-2">
-										<button
-											type="button"
-											onClick={() => setSelected([])}
-											className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
-										>
-											Clear all
-										</button>
-										<span className="text-zinc-300 dark:text-zinc-700">|</span>
-										<button
-											type="button"
-											onClick={() =>
-												setSelected(
-													plugins
-														.filter((p) => p.key !== "route-docs")
-														.map((p) => p.key as PluginKey),
-												)
-											}
-											className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
-										>
-											Select all
-										</button>
-									</div>
+					{/* Plugin selector */}
+					<div className="max-w-3xl mx-auto w-full">
+						<div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+							<div className="flex items-center justify-between mb-4">
+								<div>
+									<h2 className="font-semibold text-base">Select plugins</h2>
+									<p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+										{selectedCount} selected · route-docs always included
+									</p>
 								</div>
-								<PluginSelector
-									plugins={plugins}
-									selected={selected}
-									onChange={setSelected}
-								/>
+								<div className="flex items-center gap-2">
+									<button
+										type="button"
+										onClick={() => setSelected([])}
+										className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+									>
+										Clear all
+									</button>
+									<span className="text-zinc-300 dark:text-zinc-700">|</span>
+									<button
+										type="button"
+										onClick={() =>
+											setSelected(
+												plugins
+													.filter((p) => p.key !== "route-docs")
+													.map((p) => p.key as PluginKey),
+											)
+										}
+										className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+									>
+										Select all
+									</button>
+								</div>
 							</div>
+							<PluginSelector
+								plugins={plugins}
+								selected={selected}
+								onChange={setSelected}
+							/>
 						</div>
+					</div>
 
-						{/* Route preview sidebar */}
-						<div className="flex flex-col gap-4">
-							<div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 flex-1">
-								<h2 className="font-semibold text-base mb-3">
-									Available routes
-								</h2>
-								<RouteList routes={getRoutesForSelection(selected)} />
-							</div>
+					{/* Action row: routes drawer + launch button + CLI hint */}
+					<div className="max-w-3xl mx-auto w-full flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+						<RouteDrawer
+							routes={getRoutesForSelection(selected, pluginRoutes)}
+						/>
 
-							{/* Launch button */}
-							<button
-								type="button"
-								onClick={handleLaunch}
-								disabled={isPending}
-								className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 transition-colors text-sm"
-							>
-								{isPending ? (
-									<>
-										<svg
-											className="animate-spin h-4 w-4"
-											viewBox="0 0 24 24"
-											fill="none"
-										>
-											<circle
-												className="opacity-25"
-												cx="12"
-												cy="12"
-												r="10"
-												stroke="currentColor"
-												strokeWidth="4"
-											/>
-											<path
-												className="opacity-75"
-												fill="currentColor"
-												d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-											/>
-										</svg>
-										Generating project…
-									</>
-								) : (
-									<>
-										<svg
-											className="h-4 w-4"
-											viewBox="0 0 24 24"
-											fill="none"
+						<button
+							type="button"
+							onClick={handleLaunch}
+							disabled={isPending}
+							className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 transition-colors text-sm"
+						>
+							{isPending ? (
+								<>
+									<svg
+										className="animate-spin h-4 w-4"
+										viewBox="0 0 24 24"
+										fill="none"
+									>
+										<circle
+											className="opacity-25"
+											cx="12"
+											cy="12"
+											r="10"
 											stroke="currentColor"
-											strokeWidth="2"
-										>
-											<polygon points="5,3 19,12 5,21" />
-										</svg>
-										Open in Editor
-									</>
-								)}
-							</button>
+											strokeWidth="4"
+										/>
+										<path
+											className="opacity-75"
+											fill="currentColor"
+											d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+										/>
+									</svg>
+									Generating project…
+								</>
+							) : (
+								<>
+									<svg
+										className="h-4 w-4"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="2"
+									>
+										<polygon points="5,3 19,12 5,21" />
+									</svg>
+									Open in Editor
+								</>
+							)}
+						</button>
 
-							{/* CLI hint */}
-							<div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
-								<p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2">
-									Or scaffold locally with the CLI:
-								</p>
-								<code className="block text-xs bg-zinc-100 dark:bg-zinc-800 rounded-lg px-3 py-2 font-mono text-zinc-700 dark:text-zinc-300 break-all">
-									npx @btst/codegen@latest init
-								</code>
-							</div>
+						{/* CLI hint */}
+						<div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3 flex items-center gap-2 shrink-0">
+							<span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 whitespace-nowrap hidden sm:inline">
+								CLI:
+							</span>
+							<code className="text-xs bg-zinc-100 dark:bg-zinc-800 rounded-lg px-2 py-1 font-mono text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
+								npx @btst/codegen@latest init
+							</code>
 						</div>
 					</div>
 				</>
@@ -199,6 +195,24 @@ export function PlaygroundClient({ plugins }: PlaygroundClientProps) {
 							</p>
 						</div>
 						<div className="flex items-center gap-3">
+							<RouteDrawer
+								routes={previewRoutes}
+								onPageRouteClick={handlePreviewRouteClick}
+								activePageRoute={activePreviewRoute}
+								footer={
+									<>
+										<p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">
+											Navigate inside the preview to:
+										</p>
+										<code className="text-xs font-mono text-blue-600 dark:text-blue-400">
+											/pages/route-docs
+										</code>
+										<p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+											to see all routes live.
+										</p>
+									</>
+								}
+							/>
 							<button
 								type="button"
 								onClick={handleBack}
@@ -222,43 +236,16 @@ export function PlaygroundClient({ plugins }: PlaygroundClientProps) {
 						</div>
 					</div>
 
-					{/* Embed + route list */}
-					<div
-						className="grid grid-cols-1 lg:grid-cols-4 gap-4"
-						style={{ minHeight: 680 }}
-					>
-						{/* StackBlitz embed */}
-						<div className="lg:col-span-3" style={{ minHeight: 680 }}>
-							{generated && (
-								<StackBlitzEmbed
-									generatedFiles={generated.files}
-									cssImports={generated.cssImports}
-									extraPackages={generated.extraPackages}
-									previewPath={activePreviewRoute}
-								/>
-							)}
-						</div>
-
-						{/* Route list sidebar */}
-						<div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 overflow-auto">
-							<h3 className="font-semibold text-sm mb-3">Available routes</h3>
-							<RouteList
-								routes={previewRoutes}
-								onPageRouteClick={handlePreviewRouteClick}
-								activePageRoute={activePreviewRoute}
+					{/* Embed — full width now that the route sidebar is in a drawer */}
+					<div style={{ minHeight: 680 }}>
+						{generated && (
+							<StackBlitzEmbed
+								generatedFiles={generated.files}
+								cssImports={generated.cssImports}
+								extraPackages={generated.extraPackages}
+								previewPath={activePreviewRoute}
 							/>
-							<div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-								<p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">
-									Navigate inside the preview to:
-								</p>
-								<code className="text-xs font-mono text-blue-600 dark:text-blue-400">
-									/pages/route-docs
-								</code>
-								<p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-									to see all routes live.
-								</p>
-							</div>
-						</div>
+						)}
 					</div>
 				</>
 			)}
@@ -267,7 +254,10 @@ export function PlaygroundClient({ plugins }: PlaygroundClientProps) {
 }
 
 // Derive routes from the current plugin selection before generating
-function getRoutesForSelection(selected: PluginKey[]): string[] {
+function getRoutesForSelection(
+	selected: PluginKey[],
+	pluginRoutes: Record<PluginKey, string[]>,
+): string[] {
 	const selectedPlugins: PluginKey[] =
 		selected.includes("ui-builder") && !selected.includes("cms")
 			? ["cms", ...selected]
@@ -275,5 +265,5 @@ function getRoutesForSelection(selected: PluginKey[]): string[] {
 	const withRouteDocs = selectedPlugins.includes("route-docs")
 		? selectedPlugins
 		: [...selectedPlugins, "route-docs" as PluginKey];
-	return withRouteDocs.flatMap((pluginKey) => PLUGIN_ROUTES[pluginKey] ?? []);
+	return withRouteDocs.flatMap((pluginKey) => pluginRoutes[pluginKey] ?? []);
 }
