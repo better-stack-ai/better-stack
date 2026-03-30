@@ -1,6 +1,6 @@
 {
   "name": "@btst/codegen",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "BTST project scaffolding and CLI passthrough commands.",
   "repository": {
     "type": "git",
@@ -26,12 +26,24 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./lib": {
-      "import": "./dist/lib.mjs",
-      "require": "./dist/lib.cjs"
+      "import": {
+        "types": "./dist/lib.d.ts",
+        "default": "./dist/lib.mjs"
+      },
+      "require": {
+        "types": "./dist/lib.d.cts",
+        "default": "./dist/lib.cjs"
+      }
     }
   },
   "files": [
