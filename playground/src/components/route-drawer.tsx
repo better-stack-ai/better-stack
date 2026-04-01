@@ -106,59 +106,36 @@ export function RouteDrawer({
 				</Button>
 			</DrawerTrigger>
 
-			{isDesktop ? (
-				/* Right panel on desktop — no handle bar */
-				<DrawerContent className="inset-x-auto inset-y-0 right-0 mt-0! h-full w-80 rounded-t-none rounded-l-[10px] flex-col">
-					<DrawerHeader className="flex! flex-row items-center justify-between border-b py-3">
-						<DrawerTitle className="text-sm w-fit">
-							Available routes
-						</DrawerTitle>
-						<DrawerClose asChild>
-							<Button variant="ghost" size="icon-sm" aria-label="Close">
-								<CloseIcon />
-							</Button>
-						</DrawerClose>
-					</DrawerHeader>
-					<div className="flex-1 overflow-y-auto px-5 py-4">
-						<RouteList
-							routes={routes}
-							onPageRouteClick={routeClickHandler}
-							activePageRoute={activePageRoute}
-						/>
-						{footer && (
-							<div className="mt-4 pt-4 border-t border-border">
-								{footer(handleRouteClick)}
-							</div>
-						)}
-					</div>
-				</DrawerContent>
-			) : (
-				/* Bottom sheet on mobile — handle bar rendered by DrawerContent */
-				<DrawerContent className="max-h-[85vh]">
-					<DrawerHeader className="flex! flex-row items-center justify-between border-b py-3">
-						<DrawerTitle className="text-sm w-fit">
-							Available routes
-						</DrawerTitle>
-						<DrawerClose asChild>
-							<Button variant="ghost" size="icon-sm" aria-label="Close">
-								<CloseIcon />
-							</Button>
-						</DrawerClose>
-					</DrawerHeader>
-					<div className="flex-1 overflow-y-auto px-5 py-4">
-						<RouteList
-							routes={routes}
-							onPageRouteClick={routeClickHandler}
-							activePageRoute={activePageRoute}
-						/>
-						{footer && (
-							<div className="mt-4 pt-4 border-t border-border">
-								{footer(handleRouteClick)}
-							</div>
-						)}
-					</div>
-				</DrawerContent>
-			)}
+			<DrawerContent
+				className={
+					isDesktop
+						? /* Right panel on desktop — no handle bar */
+							"inset-x-auto inset-y-0 right-0 mt-0! h-full w-80 rounded-t-none rounded-l-[10px] flex-col"
+						: /* Bottom sheet on mobile — handle bar rendered by DrawerContent */
+							"max-h-[85vh]"
+				}
+			>
+				<DrawerHeader className="flex! flex-row items-center justify-between border-b py-3">
+					<DrawerTitle className="text-sm w-fit">Available routes</DrawerTitle>
+					<DrawerClose asChild>
+						<Button variant="ghost" size="icon-sm" aria-label="Close">
+							<CloseIcon />
+						</Button>
+					</DrawerClose>
+				</DrawerHeader>
+				<div className="flex-1 overflow-y-auto px-5 py-4">
+					<RouteList
+						routes={routes}
+						onPageRouteClick={routeClickHandler}
+						activePageRoute={activePageRoute}
+					/>
+					{footer && (
+						<div className="mt-4 pt-4 border-t border-border">
+							{footer(handleRouteClick)}
+						</div>
+					)}
+				</div>
+			</DrawerContent>
 		</Drawer>
 	);
 }
