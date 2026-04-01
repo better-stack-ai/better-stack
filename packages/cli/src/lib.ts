@@ -3,8 +3,7 @@
  * Use this when consuming the CLI as a library (e.g. in the playground).
  */
 export { buildScaffoldPlan } from "./utils/scaffold-plan";
-export { PLUGINS, ADAPTERS } from "./utils/constants";
-export { PLUGIN_ROUTES } from "./utils/plugin-routes";
+export { PLUGINS, ADAPTERS, PLUGIN_ROUTES } from "./utils/constants";
 export type {
 	PluginKey,
 	Adapter,
