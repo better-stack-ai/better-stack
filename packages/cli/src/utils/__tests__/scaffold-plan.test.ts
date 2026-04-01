@@ -185,7 +185,7 @@ describe("scaffold plan", () => {
 		expect(stackClientFile?.content).not.toContain('"form-builder":');
 	});
 
-	it("renders ai-chat backend plugin with compile-safe placeholder model", async () => {
+	it("renders ai-chat backend plugin with openai model and public mode", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
 			adapter: "memory",
@@ -196,8 +196,36 @@ describe("scaffold plan", () => {
 
 		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
 		expect(stackFile?.content).toContain(
-			"aiChat: aiChatBackendPlugin({ model: undefined as any }),",
+			'aiChat: aiChatBackendPlugin({ model: openai("gpt-4o-mini"), mode: "public" as const }),',
 		);
+		expect(stackFile?.content).toContain(
+			'import { openai } from "@ai-sdk/openai"',
+		);
+
+		const pagesLayoutFile = plan.files.find((file) =>
+			file.path.endsWith("app/pages/layout.tsx"),
+		);
+		expect(pagesLayoutFile?.content).toContain(
+			'import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"',
+		);
+		expect(pagesLayoutFile?.content).toContain(
+			'import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"',
+		);
+		expect(pagesLayoutFile?.content).toContain("<PageAIContextProvider>");
+		expect(pagesLayoutFile?.content).toContain('layout="widget"');
+		expect(pagesLayoutFile?.content).toContain('mode: "public" as const,');
+		// Override key must match what usePluginOverrides("ai-chat") looks up at runtime
+		expect(pagesLayoutFile?.content).toContain('"ai-chat": {');
+		// Widget must be hidden on the chat route itself
+		expect(pagesLayoutFile?.content).toContain("usePathname");
+		expect(pagesLayoutFile?.content).toContain(
+			'pathname.startsWith("/pages/chat")',
+		);
+		// StackProvider overrides must use the plugin's runtime key ("ai-chat"), not
+		// the camelCase configKey ("aiChat"), so usePluginOverrides("ai-chat") can
+		// find the overrides at runtime.
+		expect(pagesLayoutFile?.content).toContain('"ai-chat":');
+		expect(pagesLayoutFile?.content).not.toContain("aiChat:");
 	});
 
 	it("renders cms backend plugin with compile-safe placeholder config", async () => {

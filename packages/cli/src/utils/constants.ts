@@ -71,6 +71,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/ai-chat/client",
 		clientSymbol: "aiChatClientPlugin",
 		configKey: "aiChat",
+		extraPackages: ["@ai-sdk/openai", "ai"],
 	},
 	{
 		key: "cms",

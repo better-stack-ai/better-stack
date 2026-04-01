@@ -68,6 +68,8 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 	const hasCms = selectedPlugins.includes("cms");
 	const hasBetterAuthUi = selectedPlugins.includes("better-auth-ui");
 
+	const hasAiChat = selectedPlugins.includes("ai-chat");
+
 	const backendMetas = metas.filter(
 		(m) =>
 			m.backendImportPath &&
@@ -82,10 +84,15 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 			Boolean(m.clientSymbol),
 	);
 
+	const backendImportLines = backendMetas
+		.map((m) => `import { ${m.backendSymbol} } from "${m.backendImportPath}"`)
+		.join("\n");
+
 	return {
-		backendImports: backendMetas
-			.map((m) => `import { ${m.backendSymbol} } from "${m.backendImportPath}"`)
-			.join("\n"),
+		hasAiChat,
+		backendImports: hasAiChat
+			? `${backendImportLines}\nimport { openai } from "@ai-sdk/openai"`
+			: backendImportLines,
 		clientImports: clientMetas
 			.map((m) => {
 				if (m.key === "better-auth-ui") {
@@ -103,7 +110,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 					return "";
 				}
 				if (m.key === "ai-chat") {
-					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: undefined as any }),`;
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), mode: "public" as const }),`;
 				}
 				if (m.key === "cms") {
 					const contentTypes = hasUiBuilder
@@ -189,13 +196,13 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 \t\t\t\t\t},`;
 				}
 				if (m.key === "comments") {
-					return `\t\t\t\t\t${m.configKey}: {
+					return `\t\t\t\t\t"${m.key}": {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
 \t\t\t\t\t},`;
 				}
 				if (m.key === "media") {
-					return `\t\t\t\t\t${m.configKey}: {
+					return `\t\t\t\t\t"${m.key}": {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
 \t\t\t\t\t\tqueryClient,
@@ -204,7 +211,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 \t\t\t\t\t},`;
 				}
 				if (m.key === "blog") {
-					return `\t\t\t\t\t${m.configKey}: {
+					return `\t\t\t\t\t"${m.key}": {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
 \t\t\t\t\t\tnavigate: (path: string) => router.push(path),
@@ -215,7 +222,7 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 \t\t\t\t\t},`;
 				}
 				if (m.key === "kanban") {
-					return `\t\t\t\t\t${m.configKey}: {
+					return `\t\t\t\t\t"${m.key}": {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
 \t\t\t\t\t\tnavigate: (path: string) => router.push(path),
@@ -228,14 +235,15 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 \t\t\t\t\t},`;
 				}
 				if (m.key === "ai-chat") {
-					return `\t\t\t\t\t${m.configKey}: {
+					return `\t\t\t\t\t"${m.key}": {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
+\t\t\t\t\t\tmode: "public" as const,
 \t\t\t\t\t\tnavigate: (path: string) => router.push(path),
 \t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
 \t\t\t\t\t},`;
 				}
-				return `\t\t\t\t\t${m.configKey}: {
+				return `\t\t\t\t\t"${m.key}": {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
 \t\t\t\t\t\tnavigate: (path: string) => router.push(path),
