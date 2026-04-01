@@ -18,6 +18,7 @@ export function buildProjectFiles(
 	cssImports: string[],
 	extraPackages: string[] = [],
 ): ProjectFiles {
+	const hasAiChat = extraPackages.includes("@ai-sdk/openai");
 	const cssImportLines = cssImports.map((c) => `@import "${c}";`).join("\n");
 	const baseDependencies: Record<string, string> = {
 		"@btst/stack": "latest",
@@ -135,7 +136,16 @@ if (existsSync(workspacePluginsDist)) {
 			content: `import type { NextConfig } from "next"
 
 const config: NextConfig = {
-  reactStrictMode: true,
+  reactStrictMode: true,${
+		hasAiChat
+			? `
+  env: {
+    // Exposes whether OPENAI_API_KEY is set so the pages layout can show a banner.
+    // Set OPENAI_API_KEY in your StackBlitz environment variables to enable AI chat.
+    NEXT_PUBLIC_HAS_OPENAI_KEY: process.env.OPENAI_API_KEY ? "1" : "",
+  },`
+			: ""
+	}
 }
 
 export default config

@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 interface RouteListProps {
 	routes: string[];
 	onPageRouteClick?: (route: string) => void;
@@ -38,7 +40,7 @@ export function RouteList({
 }: RouteListProps) {
 	if (routes.length === 0) {
 		return (
-			<p className="text-sm text-zinc-500 dark:text-zinc-400 italic">
+			<p className="text-sm text-muted-foreground italic">
 				Select plugins above to see available routes.
 			</p>
 		);
@@ -48,29 +50,29 @@ export function RouteList({
 	const apiRoutes = routes.filter((r) => isApiRoute(r));
 
 	return (
-		<div className="space-y-4">
+		<div className="flex flex-col gap-4">
 			{pageRoutes.length > 0 && (
 				<div>
-					<h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
+					<h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
 						Page Routes
 					</h3>
-					<ul className="space-y-1">
+					<ul className="flex flex-col gap-1">
 						{pageRoutes.map((route) => (
 							<li key={route} className="flex items-center gap-2">
 								<span className="text-base leading-none">{getIcon(route)}</span>
 								{onPageRouteClick ? (
-									<button
-										type="button"
+									<Button
+										variant="link"
+										className="h-auto p-0 font-mono text-sm"
 										onClick={() => onPageRouteClick(route)}
-										className="text-left text-sm font-mono text-blue-600 dark:text-blue-400 hover:underline transition-colors"
 										aria-current={
 											activePageRoute === route ? "page" : undefined
 										}
 									>
 										{route}
-									</button>
+									</Button>
 								) : (
-									<code className="text-sm text-zinc-700 dark:text-zinc-300 font-mono">
+									<code className="text-sm text-foreground font-mono">
 										{route}
 									</code>
 								)}
@@ -81,14 +83,14 @@ export function RouteList({
 			)}
 			{apiRoutes.length > 0 && (
 				<div>
-					<h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
+					<h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
 						API Routes
 					</h3>
-					<ul className="space-y-1">
+					<ul className="flex flex-col gap-1">
 						{apiRoutes.map((route) => (
 							<li key={route} className="flex items-center gap-2">
 								<span className="text-base leading-none">{getIcon(route)}</span>
-								<code className="text-sm text-zinc-700 dark:text-zinc-300 font-mono">
+								<code className="text-sm text-foreground font-mono">
 									{route}
 								</code>
 							</li>

@@ -4,12 +4,14 @@ import { useEffect, useRef, useCallback } from "react";
 import type { EmbedOptions, Project } from "@stackblitz/sdk";
 import type { FileWritePlanItem } from "@btst/codegen/lib";
 import { buildProjectFiles, toSdkFiles } from "@/lib/stackblitz-template";
+import { Button } from "@/components/ui/button";
 
 interface StackBlitzEmbedProps {
 	generatedFiles: FileWritePlanItem[];
 	cssImports: string[];
 	extraPackages: string[];
 	previewPath?: string | null;
+	extraButtons?: React.ReactNode;
 }
 
 const EMBED_HEIGHT = 700;
@@ -19,6 +21,7 @@ export function StackBlitzEmbed({
 	cssImports,
 	extraPackages,
 	previewPath,
+	extraButtons,
 }: StackBlitzEmbedProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const projectRef = useRef<Project | null>(null);
@@ -210,15 +213,11 @@ export function StackBlitzEmbed({
 
 	return (
 		<div className="w-full flex flex-col gap-2">
-			<div className="flex justify-end">
-				<button
-					type="button"
-					onClick={handleOpenInStackBlitz}
-					className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-				>
+			<div className="flex justify-end gap-2">
+				{extraButtons}
+				<Button variant="outline" onClick={handleOpenInStackBlitz}>
 					<svg
-						width="14"
-						height="14"
+						data-icon="inline-start"
 						viewBox="0 0 28 28"
 						fill="currentColor"
 						aria-hidden="true"
@@ -226,7 +225,7 @@ export function StackBlitzEmbed({
 						<path d="M12.747 16.273h-7.46L18.925 1.5l-3.671 10.227h7.46L9.075 26.5z" />
 					</svg>
 					Open in StackBlitz
-				</button>
+				</Button>
 			</div>
 			<div
 				ref={containerRef}

@@ -10,6 +10,15 @@ import { generateProject } from "@/app/actions";
 import { PluginSelector } from "./plugin-selector";
 import { RouteDrawer } from "./route-drawer";
 import { StackBlitzEmbed } from "./stackblitz-embed";
+import { Button } from "@/components/ui/button";
+import {
+	Card,
+	CardHeader,
+	CardTitle,
+	CardDescription,
+	CardAction,
+	CardContent,
+} from "@/components/ui/card";
 
 interface PlaygroundClientProps {
 	plugins: readonly PluginMeta[];
@@ -72,9 +81,9 @@ export function PlaygroundClient({
 					<div className="text-center pt-4 pb-2">
 						<h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-3">
 							Build a BTST project
-							<span className="text-blue-500"> in your browser</span>
+							<span className="text-primary"> in your browser</span>
 						</h1>
-						<p className="text-zinc-500 dark:text-zinc-400 max-w-xl mx-auto text-base">
+						<p className="text-muted-foreground max-w-xl mx-auto text-base">
 							Select the plugins you want, then launch a live preview powered by
 							StackBlitz WebContainers — no install required.
 						</p>
@@ -82,44 +91,46 @@ export function PlaygroundClient({
 
 					{/* Plugin selector */}
 					<div className="max-w-3xl mx-auto w-full">
-						<div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
-							<div className="flex items-center justify-between mb-4">
-								<div>
-									<h2 className="font-semibold text-base">Select plugins</h2>
-									<p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-										{selectedCount} selected · route-docs always included
-									</p>
-								</div>
-								<div className="flex items-center gap-2">
-									<button
-										type="button"
-										onClick={() => setSelected([])}
-										className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
-									>
-										Clear all
-									</button>
-									<span className="text-zinc-300 dark:text-zinc-700">|</span>
-									<button
-										type="button"
-										onClick={() =>
-											setSelected(
-												plugins
-													.filter((p) => p.key !== "route-docs")
-													.map((p) => p.key as PluginKey),
-											)
-										}
-										className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
-									>
-										Select all
-									</button>
-								</div>
-							</div>
-							<PluginSelector
-								plugins={plugins}
-								selected={selected}
-								onChange={setSelected}
-							/>
-						</div>
+						<Card>
+							<CardHeader>
+								<CardTitle>Select plugins</CardTitle>
+								<CardDescription>
+									{selectedCount} selected · route-docs always included
+								</CardDescription>
+								<CardAction>
+									<div className="flex items-center gap-1">
+										<Button
+											variant="ghost"
+											size="xs"
+											onClick={() => setSelected([])}
+										>
+											Clear all
+										</Button>
+										<span className="text-border">|</span>
+										<Button
+											variant="ghost"
+											size="xs"
+											onClick={() =>
+												setSelected(
+													plugins
+														.filter((p) => p.key !== "route-docs")
+														.map((p) => p.key as PluginKey),
+												)
+											}
+										>
+											Select all
+										</Button>
+									</div>
+								</CardAction>
+							</CardHeader>
+							<CardContent>
+								<PluginSelector
+									plugins={plugins}
+									selected={selected}
+									onChange={setSelected}
+								/>
+							</CardContent>
+						</Card>
 					</div>
 
 					{/* Action row: routes drawer + launch button + CLI hint */}
@@ -128,16 +139,17 @@ export function PlaygroundClient({
 							routes={getRoutesForSelection(selected, pluginRoutes)}
 						/>
 
-						<button
-							type="button"
+						<Button
 							onClick={handleLaunch}
 							disabled={isPending}
-							className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 transition-colors text-sm"
+							className="flex-1"
+							size="lg"
 						>
 							{isPending ? (
 								<>
 									<svg
-										className="animate-spin h-4 w-4"
+										data-icon="inline-start"
+										className="animate-spin"
 										viewBox="0 0 24 24"
 										fill="none"
 									>
@@ -160,7 +172,7 @@ export function PlaygroundClient({
 							) : (
 								<>
 									<svg
-										className="h-4 w-4"
+										data-icon="inline-start"
 										viewBox="0 0 24 24"
 										fill="none"
 										stroke="currentColor"
@@ -171,17 +183,20 @@ export function PlaygroundClient({
 									Open in Editor
 								</>
 							)}
-						</button>
+						</Button>
 
 						{/* CLI hint */}
-						<div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3 flex items-center gap-2 shrink-0">
-							<span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 whitespace-nowrap hidden sm:inline">
+						<Card
+							size="sm"
+							className="shrink-0 flex-row items-center gap-2 py-3 px-4"
+						>
+							<span className="text-xs font-medium text-muted-foreground whitespace-nowrap hidden sm:inline">
 								CLI:
 							</span>
-							<code className="text-xs bg-zinc-100 dark:bg-zinc-800 rounded-lg px-2 py-1 font-mono text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
+							<code className="text-xs bg-muted rounded-lg px-2 py-1 font-mono text-foreground whitespace-nowrap">
 								npx @btst/codegen@latest init
 							</code>
-						</div>
+						</Card>
 					</div>
 				</>
 			) : (
@@ -190,36 +205,14 @@ export function PlaygroundClient({
 					<div className="flex items-center justify-between">
 						<div>
 							<h2 className="font-semibold text-lg">Live preview</h2>
-							<p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+							<p className="text-xs text-muted-foreground mt-0.5">
 								Running in StackBlitz WebContainer · next dev
 							</p>
 						</div>
 						<div className="flex items-center gap-3">
-							<RouteDrawer
-								routes={previewRoutes}
-								onPageRouteClick={handlePreviewRouteClick}
-								activePageRoute={activePreviewRoute}
-								footer={
-									<>
-										<p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">
-											Navigate inside the preview to:
-										</p>
-										<code className="text-xs font-mono text-blue-600 dark:text-blue-400">
-											/pages/route-docs
-										</code>
-										<p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-											to see all routes live.
-										</p>
-									</>
-								}
-							/>
-							<button
-								type="button"
-								onClick={handleBack}
-								className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors"
-							>
+							<Button variant="ghost" size="sm" onClick={handleBack}>
 								<svg
-									className="h-4 w-4"
+									data-icon="inline-start"
 									viewBox="0 0 24 24"
 									fill="none"
 									stroke="currentColor"
@@ -232,7 +225,7 @@ export function PlaygroundClient({
 									/>
 								</svg>
 								Change plugins
-							</button>
+							</Button>
 						</div>
 					</div>
 
@@ -244,6 +237,30 @@ export function PlaygroundClient({
 								cssImports={generated.cssImports}
 								extraPackages={generated.extraPackages}
 								previewPath={activePreviewRoute}
+								extraButtons={
+									<RouteDrawer
+										routes={previewRoutes}
+										onPageRouteClick={handlePreviewRouteClick}
+										activePageRoute={activePreviewRoute}
+										footer={(navigate) => (
+											<>
+												<p className="text-xs text-muted-foreground mb-1">
+													Navigate inside the preview to:
+												</p>
+												<button
+													type="button"
+													onClick={() => navigate("/pages/route-docs")}
+													className="text-xs font-mono text-primary hover:underline cursor-pointer"
+												>
+													/pages/route-docs
+												</button>
+												<p className="text-xs text-muted-foreground mt-1">
+													to see all routes live.
+												</p>
+											</>
+										)}
+									/>
+								}
 							/>
 						)}
 					</div>

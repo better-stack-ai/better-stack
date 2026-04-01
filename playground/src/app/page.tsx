@@ -1,4 +1,5 @@
 import { PlaygroundClient } from "@/components/playground-client";
+import { ModeToggle } from "@/components/mode-toggle";
 import { PLUGINS, PLUGIN_ROUTES } from "@btst/codegen/lib";
 
 export default function PlaygroundPage() {
@@ -36,6 +37,7 @@ export default function PlaygroundPage() {
 						>
 							GitHub
 						</a>
+						<ModeToggle />
 					</nav>
 				</div>
 			</header>
