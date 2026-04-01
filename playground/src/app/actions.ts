@@ -1,7 +1,11 @@
 "use server";
 
 import { buildScaffoldPlan, PLUGINS, PLUGIN_ROUTES } from "@btst/codegen/lib";
-import type { PluginKey, FileWritePlanItem } from "@btst/codegen/lib";
+import type {
+	PluginKey,
+	FileWritePlanItem,
+	Framework,
+} from "@btst/codegen/lib";
 import { getEffectivePlugins } from "@/lib/plugin-selection";
 
 export interface GenerateResult {
@@ -9,19 +13,29 @@ export interface GenerateResult {
 	routes: string[];
 	cssImports: string[];
 	extraPackages: string[];
+	hasAiChat: boolean;
 }
+
+const FRAMEWORK_CONFIG: Record<Framework, { alias: string; cssFile: string }> =
+	{
+		nextjs: { alias: "@/", cssFile: "app/globals.css" },
+		"react-router": { alias: "~/", cssFile: "app/app.css" },
+		tanstack: { alias: "@/", cssFile: "src/styles/globals.css" },
+	};
 
 export async function generateProject(
 	plugins: PluginKey[],
+	framework: Framework = "nextjs",
 ): Promise<GenerateResult> {
 	const withRouteDocs = getEffectivePlugins(plugins);
+	const { alias, cssFile } = FRAMEWORK_CONFIG[framework];
 
 	const plan = await buildScaffoldPlan({
-		framework: "nextjs",
+		framework,
 		adapter: "memory",
 		plugins: withRouteDocs,
-		alias: "@/",
-		cssFile: "app/globals.css",
+		alias: alias as "@/" | "~/" | "./",
+		cssFile,
 	});
 
 	const cssImports = PLUGINS.filter((p) =>
@@ -44,5 +58,6 @@ export async function generateProject(
 		routes,
 		cssImports,
 		extraPackages,
+		hasAiChat: withRouteDocs.includes("ai-chat" as PluginKey),
 	};
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { Geist } from "next/font/google";
@@ -25,15 +26,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 			className={cn("font-sans", geist.variable)}
 		>
 			<body className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 antialiased">
-				<ThemeProvider
-					attribute="class"
-					defaultTheme="system"
-					enableSystem
-					disableTransitionOnChange
-				>
-					{children}
-					<Toaster richColors position="bottom-right" />
-				</ThemeProvider>
+				<NuqsAdapter>
+					<ThemeProvider
+						attribute="class"
+						defaultTheme="system"
+						enableSystem
+						disableTransitionOnChange
+					>
+						{children}
+						<Toaster richColors position="bottom-right" />
+					</ThemeProvider>
+				</NuqsAdapter>
 			</body>
 		</html>
 	);

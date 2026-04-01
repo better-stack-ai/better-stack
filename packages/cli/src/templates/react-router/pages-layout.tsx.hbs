@@ -1,0 +1,77 @@
+{{#if pagesLayoutOverrides}}
+import { StackProvider } from "@btst/stack/context"
+{{/if}}
+{{#if hasAiChat}}
+import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"
+import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
+{{/if}}
+import { QueryClientProvider } from "@tanstack/react-query"
+{{#if pagesLayoutOverrides}}
+import { Link as RouterLink, Outlet, useNavigate{{#if hasAiChat}}, useLocation{{/if}} } from "react-router"
+{{else}}
+import { Outlet{{#if hasAiChat}}, useLocation{{/if}} } from "react-router"
+{{/if}}
+import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
+
+{{#if pagesLayoutOverrides}}
+function getBaseURL() {
+	if (typeof window !== "undefined") {
+		return window.location.origin
+	}
+
+	if (typeof process !== "undefined") {
+		return process.env.PUBLIC_BASE_URL || process.env.BASE_URL || "http://localhost:5173"
+	}
+
+	return "http://localhost:5173"
+}
+{{/if}}
+
+export default function BtstPagesLayout() {
+{{#if pagesLayoutOverrides}}
+	const navigate = useNavigate()
+{{/if}}
+	const queryClient = getOrCreateQueryClient()
+{{#if hasAiChat}}
+	const location = useLocation()
+	const showChatWidget = !location.pathname.startsWith("/pages/chat")
+{{/if}}
+{{#if pagesLayoutOverrides}}
+	const baseURL = getBaseURL()
+	return (
+		<QueryClientProvider client={queryClient}>
+{{#if hasAiChat}}
+			<PageAIContextProvider>
+{{/if}}
+			<StackProvider
+				basePath="/pages"
+				overrides={
+					{
+{{{pagesLayoutOverrides}}}
+					}
+				}
+			>
+{{#if hasAiChat}}
+				{showChatWidget && (
+					<div className="fixed bottom-6 right-6 z-50">
+						<ChatLayout
+							apiBaseURL={baseURL}
+							apiBasePath="/api/data"
+							layout="widget"
+							widgetHeight="520px"
+							showSidebar={false}
+						/>
+					</div>
+				)}
+{{/if}}
+				<Outlet />
+			</StackProvider>
+{{#if hasAiChat}}
+			</PageAIContextProvider>
+{{/if}}
+		</QueryClientProvider>
+	)
+{{else}}
+	return <QueryClientProvider client={queryClient}><Outlet /></QueryClientProvider>
+{{/if}}
+}

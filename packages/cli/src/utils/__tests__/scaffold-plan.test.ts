@@ -68,12 +68,18 @@ describe("scaffold plan", () => {
 			expect(stackClientFile?.content).not.toContain(
 				'const baseURL = "http://localhost:3000"',
 			);
+			const layoutSuffix =
+				framework === "nextjs"
+					? "app/pages/layout.tsx"
+					: framework === "react-router"
+						? "routes/pages/_layout.tsx"
+						: "routes/pages/route.tsx";
+			const pagesLayoutFile = plan.files.find((file) =>
+				file.path.endsWith(layoutSuffix),
+			);
+			expect(pagesLayoutFile?.content).toBeDefined();
+			expect(pagesLayoutFile?.content).not.toContain("StackProvider");
 			if (framework === "nextjs") {
-				const pagesLayoutFile = plan.files.find((file) =>
-					file.path.endsWith("app/pages/layout.tsx"),
-				);
-				expect(pagesLayoutFile?.content).toBeDefined();
-				expect(pagesLayoutFile?.content).not.toContain("StackProvider");
 				expect(pagesLayoutFile?.content).not.toContain("useRouter");
 			}
 		},
@@ -387,6 +393,128 @@ describe("scaffold plan", () => {
 		expect(stackClientFile?.content).toContain("auth: authClientPlugin({");
 		expect(stackClientFile?.content).toContain(
 			"organization: organizationClientPlugin({",
+		);
+	});
+
+	it("always generates app/routes/pages/_layout.tsx for react-router regardless of plugin selection", async () => {
+		// Regression: the playground skeleton's routes.ts hard-references this file
+		// via layout("routes/pages/_layout.tsx", [...]), so it must always be present.
+		const plan = await buildScaffoldPlan({
+			framework: "react-router",
+			adapter: "memory",
+			plugins: [],
+			alias: "~/",
+			cssFile: "app/app.css",
+		});
+
+		const layoutPath = "app/routes/pages/_layout.tsx";
+		expect(plan.files.map((f) => f.path)).toContain(layoutPath);
+		expect(plan.pagesLayoutPath).toBe(layoutPath);
+	});
+
+	it("always generates src/routes/pages/route.tsx for tanstack regardless of plugin selection", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "tanstack",
+			adapter: "memory",
+			plugins: [],
+			alias: "@/",
+			cssFile: "src/styles/globals.css",
+		});
+
+		const layoutPath = "src/routes/pages/route.tsx";
+		expect(plan.files.map((f) => f.path)).toContain(layoutPath);
+		expect(plan.pagesLayoutPath).toBe(layoutPath);
+	});
+
+	it("builds expected files for react-router including pages layout", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "react-router",
+			adapter: "memory",
+			plugins: ["blog"],
+			alias: "~/",
+			cssFile: "app/app.css",
+		});
+
+		expect(plan.files.map((f) => f.path)).toEqual([
+			"app/lib/stack.ts",
+			"app/lib/stack-client.tsx",
+			"app/lib/query-client.ts",
+			"app/routes/api/data/$.ts",
+			"app/routes/pages/$.tsx",
+			"app/routes/pages/_layout.tsx",
+		]);
+		expect(plan.pagesLayoutPath).toBe("app/routes/pages/_layout.tsx");
+
+		const layoutFile = plan.files.find((f) => f.path.endsWith("_layout.tsx"));
+		expect(layoutFile?.content).toContain(
+			'import { StackProvider } from "@btst/stack/context"',
+		);
+		expect(layoutFile?.content).toContain("navigate(path)");
+		expect(layoutFile?.content).toContain("RouterLink");
+		expect(layoutFile?.content).not.toContain("router.push");
+		expect(layoutFile?.content).not.toContain("router.replace");
+		expect(layoutFile?.content).not.toContain("router.refresh");
+	});
+
+	it("builds expected files for tanstack including pages layout", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "tanstack",
+			adapter: "memory",
+			plugins: ["blog"],
+			alias: "@/",
+			cssFile: "src/styles/globals.css",
+		});
+
+		expect(plan.files.map((f) => f.path)).toEqual([
+			"src/lib/stack.ts",
+			"src/lib/stack-client.tsx",
+			"src/lib/query-client.ts",
+			"src/routes/api/data/$.ts",
+			"src/routes/pages/$.tsx",
+			"src/routes/pages/route.tsx",
+		]);
+		expect(plan.pagesLayoutPath).toBe("src/routes/pages/route.tsx");
+
+		const layoutFile = plan.files.find((f) => f.path.endsWith("route.tsx"));
+		expect(layoutFile?.content).toContain(
+			'import { StackProvider } from "@btst/stack/context"',
+		);
+		expect(layoutFile?.content).toContain("navigate({ to: path })");
+		expect(layoutFile?.content).toContain("RouterLink");
+		expect(layoutFile?.content).toContain('createFileRoute("/pages")');
+		expect(layoutFile?.content).not.toContain("router.push");
+		expect(layoutFile?.content).not.toContain("router.replace");
+	});
+
+	it("uses window.location.reload for onSessionChange in react-router better-auth-ui", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "react-router",
+			adapter: "memory",
+			plugins: ["better-auth-ui"],
+			alias: "~/",
+			cssFile: "app/app.css",
+		});
+
+		const layoutFile = plan.files.find((f) => f.path.endsWith("_layout.tsx"));
+		expect(layoutFile?.content).toContain("window.location.reload()");
+		expect(layoutFile?.content).not.toContain("router.refresh()");
+		expect(layoutFile?.content).toContain("navigate(path, { replace: true })");
+	});
+
+	it("uses window.location.reload for onSessionChange in tanstack better-auth-ui", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "tanstack",
+			adapter: "memory",
+			plugins: ["better-auth-ui"],
+			alias: "@/",
+			cssFile: "src/styles/globals.css",
+		});
+
+		const layoutFile = plan.files.find((f) => f.path.endsWith("route.tsx"));
+		expect(layoutFile?.content).toContain("window.location.reload()");
+		expect(layoutFile?.content).not.toContain("router.refresh()");
+		expect(layoutFile?.content).toContain(
+			"navigate({ to: path, replace: true })",
 		);
 	});
 

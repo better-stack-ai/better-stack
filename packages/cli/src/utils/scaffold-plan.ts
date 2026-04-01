@@ -38,7 +38,7 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 			queryClientPath: "app/lib/query-client.ts",
 			apiRoutePath: "app/routes/api/data/$.ts",
 			pageRoutePath: "app/routes/pages/$.tsx",
-			pagesLayoutPath: undefined,
+			pagesLayoutPath: "app/routes/pages/_layout.tsx",
 			layoutPatchTarget: "app/root.tsx",
 		};
 	}
@@ -49,7 +49,7 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 		queryClientPath: "src/lib/query-client.ts",
 		apiRoutePath: "src/routes/api/data/$.ts",
 		pageRoutePath: "src/routes/pages/$.tsx",
-		pagesLayoutPath: undefined,
+		pagesLayoutPath: "src/routes/pages/route.tsx",
 		layoutPatchTarget: "src/routes/__root.tsx",
 	};
 }
@@ -60,7 +60,38 @@ function getPublicSiteURLVar(framework: Framework) {
 	return "VITE_PUBLIC_SITE_URL";
 }
 
-function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
+function getNavigateExpr(framework: Framework): string {
+	if (framework === "nextjs") return "router.push(path)";
+	if (framework === "react-router") return "navigate(path)";
+	return "navigate({ to: path })";
+}
+
+function getReplaceExpr(framework: Framework): string {
+	if (framework === "nextjs") return "router.replace(path)";
+	if (framework === "react-router") return "navigate(path, { replace: true })";
+	return "navigate({ to: path, replace: true })";
+}
+
+function getSessionChangeExpr(framework: Framework): string {
+	if (framework === "nextjs") return "router.refresh()";
+	return "window.location.reload()";
+}
+
+function getLinkJsx(framework: Framework): string {
+	if (framework === "nextjs") return '<Link href={href || "#"} {...props} />';
+	return '<RouterLink to={href || to || "#"} {...props} />';
+}
+
+function getPagesLayoutFilePath(framework: Framework): string {
+	if (framework === "nextjs") return "app/pages/layout.tsx";
+	if (framework === "react-router") return "app/routes/pages/_layout.tsx";
+	return "src/routes/pages/route.tsx";
+}
+
+function buildPluginTemplateContext(
+	selectedPlugins: PluginKey[],
+	framework: Framework,
+) {
 	const metas = PLUGINS.filter((plugin) =>
 		selectedPlugins.includes(plugin.key),
 	);
@@ -166,31 +197,40 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 				if (m.key === "route-docs") {
 					return "";
 				}
+				const nav = getNavigateExpr(framework);
+				const rep = getReplaceExpr(framework);
+				const ses = getSessionChangeExpr(framework);
+				const link = getLinkJsx(framework);
+				const layoutFile = getPagesLayoutFilePath(framework);
+				const linkPropDestructure =
+					framework === "nextjs"
+						? "{ href, ...props }"
+						: "{ href, to, ...props }";
 				if (m.key === "better-auth-ui") {
 					return `\t\t\t\t\tauth: {
 \t\t\t\t\t\tauthClient: undefined as any,
-\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
-\t\t\t\t\t\treplace: (path: string) => router.replace(path),
-\t\t\t\t\t\tonSessionChange: () => router.refresh(),
-\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tnavigate: (path: string) => ${nav},
+\t\t\t\t\t\treplace: (path: string) => ${rep},
+\t\t\t\t\t\tonSessionChange: () => ${ses},
+\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
 \t\t\t\t\t\tbasePath: "/pages/auth",
 \t\t\t\t\t\tredirectTo: "/pages/account/settings",
 \t\t\t\t\t},
 \t\t\t\t\taccount: {
 \t\t\t\t\t\tauthClient: undefined as any,
-\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
-\t\t\t\t\t\treplace: (path: string) => router.replace(path),
-\t\t\t\t\t\tonSessionChange: () => router.refresh(),
-\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tnavigate: (path: string) => ${nav},
+\t\t\t\t\t\treplace: (path: string) => ${rep},
+\t\t\t\t\t\tonSessionChange: () => ${ses},
+\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
 \t\t\t\t\t\tbasePath: "/pages/account",
 \t\t\t\t\t\taccount: { fields: ["image", "name"] },
 \t\t\t\t\t},
 \t\t\t\t\torganization: {
 \t\t\t\t\t\tauthClient: undefined as any,
-\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
-\t\t\t\t\t\treplace: (path: string) => router.replace(path),
-\t\t\t\t\t\tonSessionChange: () => router.refresh(),
-\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tnavigate: (path: string) => ${nav},
+\t\t\t\t\t\treplace: (path: string) => ${rep},
+\t\t\t\t\t\tonSessionChange: () => ${ses},
+\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
 \t\t\t\t\t\tbasePath: "/pages/org",
 \t\t\t\t\t\torganization: { basePath: "/pages/org" },
 \t\t\t\t\t},`;
@@ -206,18 +246,18 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
 \t\t\t\t\t\tqueryClient,
-\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
-\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tnavigate: (path: string) => ${nav},
+\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
 \t\t\t\t\t},`;
 				}
 				if (m.key === "blog") {
 					return `\t\t\t\t\t"${m.key}": {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
-\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tnavigate: (path: string) => ${nav},
+\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
 \t\t\t\t\t\tuploadImage: async () => {
-\t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in app/pages/layout.tsx")
+\t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in ${layoutFile}")
 \t\t\t\t\t\t},
 \t\t\t\t\t},`;
 				}
@@ -225,10 +265,10 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 					return `\t\t\t\t\t"${m.key}": {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
-\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tnavigate: (path: string) => ${nav},
+\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
 \t\t\t\t\t\tuploadImage: async () => {
-\t\t\t\t\t\t\tthrow new Error("TODO: implement kanban.uploadImage override in app/pages/layout.tsx")
+\t\t\t\t\t\t\tthrow new Error("TODO: implement kanban.uploadImage override in ${layoutFile}")
 \t\t\t\t\t\t},
 \t\t\t\t\t\tresolveUser: async () => null,
 \t\t\t\t\t\tsearchUsers: async () => [],
@@ -239,15 +279,15 @@ function buildPluginTemplateContext(selectedPlugins: PluginKey[]) {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
 \t\t\t\t\t\tmode: "public" as const,
-\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
-\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tnavigate: (path: string) => ${nav},
+\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
 \t\t\t\t\t},`;
 				}
 				return `\t\t\t\t\t"${m.key}": {
 \t\t\t\t\t\tapiBaseURL: baseURL,
 \t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t\tnavigate: (path: string) => router.push(path),
-\t\t\t\t\t\tLink: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />,
+\t\t\t\t\t\tnavigate: (path: string) => ${nav},
+\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
 \t\t\t\t\t},`;
 			})
 			.filter(Boolean)
@@ -315,7 +355,10 @@ export async function buildScaffoldPlan(
 	input: BuildScaffoldPlanInput,
 ): Promise<ScaffoldPlan> {
 	const frameworkPaths = getFrameworkPaths(input.framework, input.cssFile);
-	const pluginContext = buildPluginTemplateContext(input.plugins);
+	const pluginContext = buildPluginTemplateContext(
+		input.plugins,
+		input.framework,
+	);
 	const adapterContext = buildAdapterTemplateContext(input.adapter);
 
 	const sharedContext = {
@@ -367,11 +410,11 @@ export async function buildScaffoldPlan(
 		},
 	];
 
-	if (frameworkPaths.pagesLayoutPath && input.framework === "nextjs") {
+	if (frameworkPaths.pagesLayoutPath) {
 		files.push({
 			path: frameworkPaths.pagesLayoutPath,
 			content: await renderTemplate(
-				"nextjs/pages-layout.tsx.hbs",
+				`${input.framework}/pages-layout.tsx.hbs`,
 				sharedContext,
 			),
 			description: "BTST pages layout wrapper",

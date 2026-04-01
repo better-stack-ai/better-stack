@@ -1,10 +1,17 @@
 "use client";
 
-import { useState, useTransition, useCallback } from "react";
+import { useState, useTransition, useCallback, useEffect } from "react";
+import {
+	useQueryState,
+	parseAsArrayOf,
+	parseAsString,
+	parseAsStringEnum,
+} from "nuqs";
 import type {
 	PluginMeta,
 	PluginKey,
 	FileWritePlanItem,
+	Framework,
 } from "@btst/codegen/lib";
 import { generateProject } from "@/app/actions";
 import { getEffectivePlugins } from "@/lib/plugin-selection";
@@ -20,6 +27,7 @@ import {
 	CardAction,
 	CardContent,
 } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface PlaygroundClientProps {
 	plugins: readonly PluginMeta[];
@@ -33,14 +41,39 @@ interface GeneratedState {
 	routes: string[];
 	cssImports: string[];
 	extraPackages: string[];
+	hasAiChat: boolean;
 }
+
+const FRAMEWORKS: { key: Framework; label: string; devServer: string }[] = [
+	{ key: "nextjs", label: "Next.js", devServer: "next dev" },
+	{ key: "react-router", label: "React Router", devServer: "react-router dev" },
+	{ key: "tanstack", label: "TanStack Start", devServer: "vite dev" },
+];
 
 export function PlaygroundClient({
 	plugins,
 	pluginRoutes,
 }: PlaygroundClientProps) {
-	const [selected, setSelected] = useState<PluginKey[]>(["blog"]);
-	const [view, setView] = useState<View>("configure");
+	const [selectedRaw, setSelectedRaw] = useQueryState(
+		"plugins",
+		parseAsArrayOf(parseAsString).withDefault(["blog"]),
+	);
+	const selected = selectedRaw as PluginKey[];
+	const setSelected = (keys: PluginKey[]) => setSelectedRaw(keys);
+
+	const [framework, setFramework] = useQueryState(
+		"framework",
+		parseAsStringEnum<Framework>([
+			"nextjs",
+			"react-router",
+			"tanstack",
+		]).withDefault("nextjs"),
+	);
+
+	const [view, setView] = useQueryState(
+		"view",
+		parseAsStringEnum<View>(["configure", "preview"]).withDefault("configure"),
+	);
 	const [generated, setGenerated] = useState<GeneratedState | null>(null);
 	const [activePreviewRoute, setActivePreviewRoute] = useState<string | null>(
 		null,
@@ -48,9 +81,12 @@ export function PlaygroundClient({
 	const [isPending, startTransition] = useTransition();
 	const selectedCount = getEffectivePlugins(selected).length;
 
+	const activeFramework =
+		FRAMEWORKS.find((f) => f.key === framework) ?? FRAMEWORKS[0]!;
+
 	const handleLaunch = useCallback(() => {
 		startTransition(async () => {
-			const result = await generateProject(selected);
+			const result = await generateProject(selected, framework);
 			setGenerated(result);
 			const firstPageRoute = result.routes.find((route) =>
 				route.startsWith("/pages/"),
@@ -58,11 +94,27 @@ export function PlaygroundClient({
 			setActivePreviewRoute(firstPageRoute ?? null);
 			setView("preview");
 		});
-	}, [selected]);
+	}, [selected, framework]);
 
 	const handleBack = useCallback(() => {
 		setView("configure");
 		setActivePreviewRoute(null);
+	}, []);
+
+	// On refresh/share: if view=preview but no generated data yet, re-run generation
+	useEffect(() => {
+		if (view === "preview" && !generated && !isPending) {
+			startTransition(async () => {
+				const result = await generateProject(selected, framework);
+				setGenerated(result);
+				const firstPageRoute = result.routes.find((route) =>
+					route.startsWith("/pages/"),
+				);
+				setActivePreviewRoute((prev) => prev ?? firstPageRoute ?? null);
+			});
+		}
+		// Only run on mount — selected/framework come from the URL and are stable at this point
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	// Preview routes are either from the generated state or derived from selection
@@ -86,6 +138,32 @@ export function PlaygroundClient({
 							Select the plugins you want, then launch a live preview powered by
 							StackBlitz WebContainers — no install required.
 						</p>
+					</div>
+
+					{/* Framework selector */}
+					<div className="max-w-3xl mx-auto w-full">
+						<div className="flex items-center gap-2">
+							<span className="text-xs font-medium text-muted-foreground shrink-0">
+								Framework
+							</span>
+							<div className="flex gap-1 p-1 bg-muted rounded-lg">
+								{FRAMEWORKS.map((fw) => (
+									<button
+										key={fw.key}
+										type="button"
+										onClick={() => setFramework(fw.key)}
+										className={cn(
+											"px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+											framework === fw.key
+												? "bg-background text-foreground shadow-xs"
+												: "text-muted-foreground hover:text-foreground",
+										)}
+									>
+										{fw.label}
+									</button>
+								))}
+							</div>
+						</div>
 					</div>
 
 					{/* Plugin selector */}
@@ -193,7 +271,9 @@ export function PlaygroundClient({
 								CLI:
 							</span>
 							<code className="text-xs bg-muted rounded-lg px-2 py-1 font-mono text-foreground whitespace-nowrap">
-								npx @btst/codegen@latest init
+								{framework === "nextjs"
+									? "npx @btst/codegen@latest init"
+									: `npx @btst/codegen@latest init --framework ${framework}`}
 							</code>
 						</Card>
 					</div>
@@ -203,9 +283,14 @@ export function PlaygroundClient({
 					{/* Preview header */}
 					<div className="flex items-center justify-between">
 						<div>
-							<h2 className="font-semibold text-lg">Live preview</h2>
+							<h2 className="font-semibold text-lg">
+								Live preview
+								<span className="ml-2 text-xs font-normal text-muted-foreground">
+									{activeFramework.label}
+								</span>
+							</h2>
 							<p className="text-xs text-muted-foreground mt-0.5">
-								Running in StackBlitz WebContainer · next dev
+								Running in StackBlitz WebContainer · {activeFramework.devServer}
 							</p>
 						</div>
 						<div className="flex items-center gap-3">
@@ -232,9 +317,11 @@ export function PlaygroundClient({
 					<div style={{ minHeight: 680 }}>
 						{generated && (
 							<StackBlitzEmbed
+								framework={framework}
 								generatedFiles={generated.files}
 								cssImports={generated.cssImports}
 								extraPackages={generated.extraPackages}
+								hasAiChat={generated.hasAiChat}
 								previewPath={activePreviewRoute}
 								extraButtons={
 									<RouteDrawer
