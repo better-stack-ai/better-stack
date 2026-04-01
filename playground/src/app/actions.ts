@@ -2,6 +2,7 @@
 
 import { buildScaffoldPlan, PLUGINS, PLUGIN_ROUTES } from "@btst/codegen/lib";
 import type { PluginKey, FileWritePlanItem } from "@btst/codegen/lib";
+import { getEffectivePlugins } from "@/lib/plugin-selection";
 
 export interface GenerateResult {
 	files: FileWritePlanItem[];
@@ -13,16 +14,7 @@ export interface GenerateResult {
 export async function generateProject(
 	plugins: PluginKey[],
 ): Promise<GenerateResult> {
-	// ui-builder requires cms
-	const selectedPlugins: PluginKey[] =
-		plugins.includes("ui-builder") && !plugins.includes("cms")
-			? ["cms", ...plugins]
-			: plugins;
-
-	// Always include route-docs so users can see all available routes
-	const withRouteDocs: PluginKey[] = selectedPlugins.includes("route-docs")
-		? selectedPlugins
-		: [...selectedPlugins, "route-docs"];
+	const withRouteDocs = getEffectivePlugins(plugins);
 
 	const plan = await buildScaffoldPlan({
 		framework: "nextjs",

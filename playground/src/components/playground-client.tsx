@@ -7,6 +7,7 @@ import type {
 	FileWritePlanItem,
 } from "@btst/codegen/lib";
 import { generateProject } from "@/app/actions";
+import { getEffectivePlugins } from "@/lib/plugin-selection";
 import { PluginSelector } from "./plugin-selector";
 import { RouteDrawer } from "./route-drawer";
 import { StackBlitzEmbed } from "./stackblitz-embed";
@@ -45,9 +46,7 @@ export function PlaygroundClient({
 		null,
 	);
 	const [isPending, startTransition] = useTransition();
-	const selectedCount = selected.includes("route-docs")
-		? selected.length
-		: selected.length + 1;
+	const selectedCount = getEffectivePlugins(selected).length;
 
 	const handleLaunch = useCallback(() => {
 		startTransition(async () => {
@@ -275,12 +274,7 @@ function getRoutesForSelection(
 	selected: PluginKey[],
 	pluginRoutes: Record<PluginKey, string[]>,
 ): string[] {
-	const selectedPlugins: PluginKey[] =
-		selected.includes("ui-builder") && !selected.includes("cms")
-			? ["cms", ...selected]
-			: selected;
-	const withRouteDocs = selectedPlugins.includes("route-docs")
-		? selectedPlugins
-		: [...selectedPlugins, "route-docs" as PluginKey];
-	return withRouteDocs.flatMap((pluginKey) => pluginRoutes[pluginKey] ?? []);
+	return getEffectivePlugins(selected).flatMap(
+		(pluginKey) => pluginRoutes[pluginKey] ?? [],
+	);
 }
