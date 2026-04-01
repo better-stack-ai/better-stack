@@ -116,9 +116,17 @@ success "First init run completed"
 
 step "Installing runtime deps needed for generated files"
 STACK_PEERS=$(node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("node_modules/@btst/stack/package.json","utf8"));process.stdout.write(Object.keys(p.peerDependencies||{}).join(" "));')
-# Install adapter, @btst/better-auth-ui, better-auth, and @btst/stack peers first so
-# @btst/better-auth-ui/package.json is present for peer resolution in the next step.
-npm install @btst/adapter-memory @btst/better-auth-ui better-auth $STACK_PEERS --legacy-peer-deps
+# Collect extraPackages from all selected plugins via @btst/codegen — mirrors what
+# installInitDependencies() in package-installer.ts does at runtime.
+PLUGIN_EXTRA_PACKAGES=$(node -e '
+const { PLUGINS } = require("./node_modules/@btst/codegen/dist/lib.cjs");
+const extras = PLUGINS.flatMap(p => p.extraPackages || []);
+process.stdout.write([...new Set(extras)].join(" "));
+')
+# Install adapter, plugin extras (includes @btst/better-auth-ui, better-auth, and any
+# plugin-specific deps like @ai-sdk/openai + ai), and @btst/stack peers.
+# @btst/better-auth-ui must be present before the next step for peer resolution.
+npm install @btst/adapter-memory $PLUGIN_EXTRA_PACKAGES $STACK_PEERS --legacy-peer-deps
 BETTER_AUTH_UI_PEERS=$(node -e '
 const fs=require("fs");
 const p=JSON.parse(fs.readFileSync("node_modules/@btst/better-auth-ui/package.json","utf8"));
@@ -130,7 +138,7 @@ process.stdout.write(keys.join(" "));
 if [ -n "$BETTER_AUTH_UI_PEERS" ]; then
 	npm install $BETTER_AUTH_UI_PEERS --legacy-peer-deps
 fi
-success "Installed runtime deps (adapter + @btst/better-auth-ui + better-auth + @btst/stack and @btst/better-auth-ui peers)"
+success "Installed runtime deps (adapter + plugin extras + @btst/stack and @btst/better-auth-ui peers)"
 
 step "Asserting generated files and patches"
 test -f "lib/stack.ts"
