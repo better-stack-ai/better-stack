@@ -11,6 +11,10 @@ import { QueryClientProvider } from "@tanstack/react-query"
 {{#if pagesLayoutOverrides}}
 import Link from "next/link"
 import { useRouter{{#if hasAiChat}}, usePathname{{/if}} } from "next/navigation"
+{{else}}
+{{#if hasAiChat}}
+import { usePathname } from "next/navigation"
+{{/if}}
 {{/if}}
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 
