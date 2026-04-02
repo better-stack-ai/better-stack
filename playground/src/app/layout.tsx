@@ -1,4 +1,4 @@
-import Metadata from "next";
+import { type Metadata } from "next";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import type { ReactNode } from "react";
 import "./globals.css";

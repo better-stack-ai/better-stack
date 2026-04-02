@@ -18,6 +18,8 @@ export interface PluginMeta {
 	configKey: string;
 	/** Additional npm packages that must be installed when this plugin is selected. */
 	extraPackages?: string[];
+	/** Whether this plugin has sample seed data available for the playground. */
+	hasSeedData?: boolean;
 }
 
 export const ADAPTERS: readonly AdapterMeta[] = [
@@ -61,6 +63,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/blog/client",
 		clientSymbol: "blogClientPlugin",
 		configKey: "blog",
+		hasSeedData: true,
 	},
 	{
 		key: "ai-chat",
@@ -82,6 +85,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/cms/client",
 		clientSymbol: "cmsClientPlugin",
 		configKey: "cms",
+		hasSeedData: true,
 	},
 	{
 		key: "form-builder",
@@ -92,6 +96,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/form-builder/client",
 		clientSymbol: "formBuilderClientPlugin",
 		configKey: "formBuilder",
+		hasSeedData: true,
 	},
 	{
 		key: "ui-builder",
@@ -102,6 +107,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/ui-builder/client",
 		clientSymbol: "uiBuilderClientPlugin",
 		configKey: "uiBuilder",
+		hasSeedData: true,
 	},
 	{
 		key: "kanban",
@@ -112,6 +118,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/kanban/client",
 		clientSymbol: "kanbanClientPlugin",
 		configKey: "kanban",
+		hasSeedData: true,
 	},
 	{
 		key: "comments",

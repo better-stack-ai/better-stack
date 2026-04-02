@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback } from "react";
 import type { EmbedOptions, Project } from "@stackblitz/sdk";
 import type { FileWritePlanItem, Framework } from "@btst/codegen/lib";
 import { buildProjectFiles, toSdkFiles } from "@/lib/stackblitz-template";
+import type { SeedRouteFile } from "@/lib/seed-templates";
 import { Button } from "@/components/ui/button";
 
 const OPEN_FILE: Record<Framework, string> = {
@@ -20,6 +21,8 @@ interface StackBlitzEmbedProps {
 	hasAiChat?: boolean;
 	previewPath?: string | null;
 	extraButtons?: React.ReactNode;
+	seedRouteFiles?: SeedRouteFile[];
+	seedRunnerScript?: string | null;
 }
 
 const EMBED_HEIGHT = 700;
@@ -32,6 +35,8 @@ export function StackBlitzEmbed({
 	hasAiChat = false,
 	previewPath,
 	extraButtons,
+	seedRouteFiles = [],
+	seedRunnerScript = null,
 }: StackBlitzEmbedProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const projectRef = useRef<Project | null>(null);
@@ -61,6 +66,8 @@ export function StackBlitzEmbed({
 					cssImports,
 					extraPackages,
 					hasAiChat,
+					seedRouteFiles,
+					seedRunnerScript,
 				),
 			),
 		};
@@ -203,7 +210,15 @@ export function StackBlitzEmbed({
 			container.innerHTML = "";
 			log("Embed unmounted / deps changed — cleaned up.");
 		};
-	}, [framework, generatedFiles, cssImports, extraPackages, hasAiChat]);
+	}, [
+		framework,
+		generatedFiles,
+		cssImports,
+		extraPackages,
+		hasAiChat,
+		seedRouteFiles,
+		seedRunnerScript,
+	]);
 
 	useEffect(() => {
 		if (!previewPath || !vmRef.current) return;
@@ -231,6 +246,7 @@ export function StackBlitzEmbed({
 					err,
 				);
 			});
+		// projectRef is a stable ref — framework is the only reactive dep here
 	}, [framework]);
 
 	return (

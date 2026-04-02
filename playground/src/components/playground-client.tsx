@@ -28,6 +28,7 @@ import {
 	CardContent,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import type { SeedRouteFile } from "@/lib/seed-templates";
 
 interface PlaygroundClientProps {
 	plugins: readonly PluginMeta[];
@@ -42,6 +43,8 @@ interface GeneratedState {
 	cssImports: string[];
 	extraPackages: string[];
 	hasAiChat: boolean;
+	seedRouteFiles: SeedRouteFile[];
+	seedRunnerScript: string | null;
 }
 
 const FRAMEWORKS: { key: Framework; label: string; devServer: string }[] = [
@@ -59,7 +62,6 @@ export function PlaygroundClient({
 		parseAsArrayOf(parseAsString).withDefault(["blog"]),
 	);
 	const selected = selectedRaw as PluginKey[];
-	const setSelected = (keys: PluginKey[]) => setSelectedRaw(keys);
 
 	const [framework, setFramework] = useQueryState(
 		"framework",
@@ -69,6 +71,12 @@ export function PlaygroundClient({
 			"tanstack",
 		]).withDefault("nextjs"),
 	);
+
+	const [seededRaw, setSeededRaw] = useQueryState(
+		"seeds",
+		parseAsArrayOf(parseAsString).withDefault([]),
+	);
+	const seededPlugins = seededRaw as PluginKey[];
 
 	const [view, setView] = useQueryState(
 		"view",
@@ -84,9 +92,47 @@ export function PlaygroundClient({
 	const activeFramework =
 		FRAMEWORKS.find((f) => f.key === framework) ?? FRAMEWORKS[0]!;
 
+	// Set of plugin keys that have seed data available
+	const seedableKeys = new Set(
+		plugins.filter((p) => p.hasSeedData).map((p) => p.key as PluginKey),
+	);
+
+	// When selection changes, auto-add/remove seedable plugins from seededPlugins
+	const setSelected = useCallback(
+		(keys: PluginKey[]) => {
+			setSelectedRaw(keys);
+			// Auto-add newly selected seedable plugins; auto-remove deselected ones
+			const effectiveKeys = getEffectivePlugins(keys);
+			setSeededRaw((prev) => {
+				const current = (prev ?? []) as PluginKey[];
+				// Remove any seeded plugins that are no longer selected
+				const stillSeeded = current.filter((k) => effectiveKeys.includes(k));
+				// Add newly selected seedable plugins (default on)
+				const newlySelected = effectiveKeys.filter(
+					(k) => seedableKeys.has(k) && !current.includes(k),
+				);
+				return [...stillSeeded, ...newlySelected];
+			});
+		},
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[seedableKeys],
+	);
+
+	// Initialize seeded defaults for the initial selection on first render
+	useEffect(() => {
+		setSeededRaw((prev) => {
+			const current = (prev ?? []) as PluginKey[];
+			if (current.length > 0) return current; // already initialized
+			const effective = getEffectivePlugins(selected);
+			return effective.filter((k) => seedableKeys.has(k));
+		});
+		// Only on mount
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
 	const handleLaunch = useCallback(() => {
 		startTransition(async () => {
-			const result = await generateProject(selected, framework);
+			const result = await generateProject(selected, framework, seededPlugins);
 			setGenerated(result);
 			const firstPageRoute = result.routes.find((route) =>
 				route.startsWith("/pages/"),
@@ -94,7 +140,7 @@ export function PlaygroundClient({
 			setActivePreviewRoute(firstPageRoute ?? null);
 			setView("preview");
 		});
-	}, [selected, framework]);
+	}, [selected, framework, seededPlugins]);
 
 	const handleBack = useCallback(() => {
 		setView("configure");
@@ -105,7 +151,11 @@ export function PlaygroundClient({
 	useEffect(() => {
 		if (view === "preview" && !generated && !isPending) {
 			startTransition(async () => {
-				const result = await generateProject(selected, framework);
+				const result = await generateProject(
+					selected,
+					framework,
+					seededPlugins,
+				);
 				setGenerated(result);
 				const firstPageRoute = result.routes.find((route) =>
 					route.startsWith("/pages/"),
@@ -205,6 +255,8 @@ export function PlaygroundClient({
 									plugins={plugins}
 									selected={selected}
 									onChange={setSelected}
+									seededPlugins={seededPlugins}
+									onSeedChange={(keys) => setSeededRaw(keys)}
 								/>
 							</CardContent>
 						</Card>
@@ -323,6 +375,8 @@ export function PlaygroundClient({
 								extraPackages={generated.extraPackages}
 								hasAiChat={generated.hasAiChat}
 								previewPath={activePreviewRoute}
+								seedRouteFiles={generated.seedRouteFiles}
+								seedRunnerScript={generated.seedRunnerScript}
 								extraButtons={
 									<RouteDrawer
 										routes={previewRoutes}

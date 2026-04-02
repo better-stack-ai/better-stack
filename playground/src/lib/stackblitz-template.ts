@@ -1,4 +1,5 @@
 import type { FileWritePlanItem, Framework } from "@btst/codegen/lib";
+import type { SeedRouteFile } from "./seed-templates";
 
 export interface ProjectFile {
 	content: string;
@@ -18,6 +19,8 @@ function buildNextjsProjectFiles(
 	cssImports: string[],
 	extraPackages: string[] = [],
 	hasAiChat = false,
+	seedFiles: SeedRouteFile[] = [],
+	seedRunnerScript: string | null = null,
 ): ProjectFiles {
 	const cssImportLines = cssImports.map((c) => `@import "${c}";`).join("\n");
 	const baseDependencies: Record<string, string> = {
@@ -51,7 +54,11 @@ function buildNextjsProjectFiles(
 						// copy-stack-src.mjs must run before next dev/build so Tailwind's
 						// WASM oxide scanner can find @btst/stack source outside node_modules.
 						// See: https://github.com/tailwindlabs/tailwindcss/issues/18418
-						dev: "node copy-stack-src.mjs && next dev",
+						// When seeds are enabled, seed-runner.mjs starts in background and
+						// polls the dev server until ready, then calls /api/seed-* routes.
+						dev: seedRunnerScript
+							? "node copy-stack-src.mjs; node seed-runner.mjs & next dev"
+							: "node copy-stack-src.mjs && next dev",
 						build: "node copy-stack-src.mjs && next build",
 						start: "next start",
 					},
@@ -268,6 +275,15 @@ export default function Home() {
 		files[file.path] = { content: file.content };
 	}
 
+	// Merge seed route files
+	for (const file of seedFiles) {
+		files[file.path] = { content: file.content };
+	}
+
+	if (seedRunnerScript) {
+		files["seed-runner.mjs"] = { content: seedRunnerScript };
+	}
+
 	return files;
 }
 
@@ -402,6 +418,8 @@ function buildReactRouterProjectFiles(
 	generatedFiles: FileWritePlanItem[],
 	cssImports: string[],
 	extraPackages: string[] = [],
+	seedFiles: SeedRouteFile[] = [],
+	seedRunnerScript: string | null = null,
 ): ProjectFiles {
 	const cssImportLines = cssImports.map((c) => `@import "${c}";`).join("\n");
 	const pluginDependencies = Object.fromEntries(
@@ -433,7 +451,9 @@ function buildReactRouterProjectFiles(
 					private: true,
 					type: "module",
 					scripts: {
-						dev: "node copy-stack-src.mjs && NODE_OPTIONS='--experimental-loader ./css-noop-loader.mjs' react-router dev",
+						dev: seedRunnerScript
+							? "node copy-stack-src.mjs; node seed-runner.mjs & NODE_OPTIONS='--experimental-loader ./css-noop-loader.mjs' react-router dev"
+							: "node copy-stack-src.mjs && NODE_OPTIONS='--experimental-loader ./css-noop-loader.mjs' react-router dev",
 						build:
 							"node copy-stack-src.mjs && NODE_OPTIONS='--experimental-loader ./css-noop-loader.mjs' react-router build",
 						start: "react-router-serve ./build/server/index.js",
@@ -639,16 +659,30 @@ export function ErrorBoundary({ error }: { error: unknown }) {
 		},
 
 		"app/routes.ts": {
-			content: `import { type RouteConfig, index, layout, route } from "@react-router/dev/routes"
+			content: (() => {
+				const seedRouteEntries = seedFiles
+					.map((f) => {
+						// e.g. "app/routes/api/seed/blog.ts" → "routes/api/seed/blog.ts"
+						const routeFile = f.path.replace(/^app\//, "");
+						// e.g. "api/seed-blog" from "routes/api/seed/blog.ts"
+						const pluginKey = routeFile.replace(
+							/^routes\/api\/seed\/(.+)\.ts$/,
+							"$1",
+						);
+						return `  route("api/seed-${pluginKey}", "${routeFile}"),`;
+					})
+					.join("\n");
+				return `import { type RouteConfig, index, layout, route } from "@react-router/dev/routes"
 
 export default [
   index("routes/home.tsx"),
   layout("routes/pages/_layout.tsx", [
     route("pages/*", "routes/pages/$.tsx"),
   ]),
-  route("api/data/*", "routes/api/data/$.ts"),
+  route("api/data/*", "routes/api/data/$.ts"),${seedRouteEntries ? `\n${seedRouteEntries}` : ""}
 ] satisfies RouteConfig
-`,
+`;
+			})(),
 		},
 
 		"app/routes/home.tsx": {
@@ -682,6 +716,14 @@ export default function Home() {
 		files[file.path] = { content: file.content };
 	}
 
+	for (const file of seedFiles) {
+		files[file.path] = { content: file.content };
+	}
+
+	if (seedRunnerScript) {
+		files["seed-runner.mjs"] = { content: seedRunnerScript };
+	}
+
 	return files;
 }
 
@@ -691,6 +733,8 @@ function buildTanstackProjectFiles(
 	generatedFiles: FileWritePlanItem[],
 	cssImports: string[],
 	extraPackages: string[] = [],
+	seedFiles: SeedRouteFile[] = [],
+	seedRunnerScript: string | null = null,
 ): ProjectFiles {
 	const cssImportLines = cssImports.map((c) => `@import "${c}";`).join("\n");
 	const pluginDependencies = Object.fromEntries(
@@ -725,7 +769,9 @@ function buildTanstackProjectFiles(
 					private: true,
 					type: "module",
 					scripts: {
-						dev: "node copy-stack-src.mjs && NODE_OPTIONS='--experimental-loader ./css-noop-loader.mjs' vite dev",
+						dev: seedRunnerScript
+							? "node copy-stack-src.mjs; node seed-runner.mjs & NODE_OPTIONS='--experimental-loader ./css-noop-loader.mjs' vite dev"
+							: "node copy-stack-src.mjs && NODE_OPTIONS='--experimental-loader ./css-noop-loader.mjs' vite dev",
 						build:
 							"node copy-stack-src.mjs && NODE_OPTIONS='--experimental-loader ./css-noop-loader.mjs' vite build",
 						start:
@@ -988,6 +1034,14 @@ function Home() {
 		files[file.path] = { content: file.content };
 	}
 
+	for (const file of seedFiles) {
+		files[file.path] = { content: file.content };
+	}
+
+	if (seedRunnerScript) {
+		files["seed-runner.mjs"] = { content: seedRunnerScript };
+	}
+
 	return files;
 }
 
@@ -1006,22 +1060,34 @@ export function buildProjectFiles(
 	cssImports: string[],
 	extraPackages: string[] = [],
 	hasAiChat = false,
+	seedFiles: SeedRouteFile[] = [],
+	seedRunnerScript: string | null = null,
 ): ProjectFiles {
 	if (framework === "react-router") {
 		return buildReactRouterProjectFiles(
 			generatedFiles,
 			cssImports,
 			extraPackages,
+			seedFiles,
+			seedRunnerScript,
 		);
 	}
 	if (framework === "tanstack") {
-		return buildTanstackProjectFiles(generatedFiles, cssImports, extraPackages);
+		return buildTanstackProjectFiles(
+			generatedFiles,
+			cssImports,
+			extraPackages,
+			seedFiles,
+			seedRunnerScript,
+		);
 	}
 	return buildNextjsProjectFiles(
 		generatedFiles,
 		cssImports,
 		extraPackages,
 		hasAiChat,
+		seedFiles,
+		seedRunnerScript,
 	);
 }
 
