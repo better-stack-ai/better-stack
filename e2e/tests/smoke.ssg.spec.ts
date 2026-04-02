@@ -129,18 +129,15 @@ test.describe("SSG Blog Pages", () => {
 
 		// Create a post directly via the API (faster than the form UI).
 		// The blog API is at /api/data/posts (basePath="/api/data", plugin="blog").
-		const createRes = await request.post(
-			"http://localhost:3003/api/data/posts",
-			{
-				data: {
-					title,
-					slug,
-					excerpt: "Revalidation test",
-					content: "Content for revalidation test.",
-					published: true,
-				},
+		const createRes = await request.post("/api/data/posts", {
+			data: {
+				title,
+				slug,
+				excerpt: "Revalidation test",
+				content: "Content for revalidation test.",
+				published: true,
 			},
-		);
+		});
 		expect(createRes.ok()).toBeTruthy();
 
 		// The onPostCreated hook calls revalidatePath("/pages/ssg-blog"), which

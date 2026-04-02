@@ -197,7 +197,12 @@ android/
 .turbo
 
 playwright-report/
+playwright-report-codegen/
 test-results/
+test-results-codegen/
+codegen-projects/nextjs/
+codegen-projects/tanstack/
+codegen-projects/react-router/
 
 state.txt
 

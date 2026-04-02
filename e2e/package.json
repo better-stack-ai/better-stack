@@ -9,7 +9,11 @@
     "e2e:smoke:nextjs": "BTST_FRAMEWORK=nextjs playwright test",
     "e2e:smoke:tanstack": "BTST_FRAMEWORK=tanstack playwright test",
     "e2e:smoke:react-router": "BTST_FRAMEWORK=react-router playwright test",
-    "e2e:ui": "playwright test --ui"
+    "e2e:ui": "playwright test --ui",
+    "codegen:e2e": "playwright test --config playwright.codegen.config.ts",
+    "codegen:e2e:nextjs": "BTST_FRAMEWORK=nextjs playwright test --config playwright.codegen.config.ts",
+    "codegen:e2e:tanstack": "BTST_FRAMEWORK=tanstack playwright test --config playwright.codegen.config.ts",
+    "codegen:e2e:react-router": "BTST_FRAMEWORK=react-router playwright test --config playwright.codegen.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.2",

@@ -15,5 +15,10 @@
     "noErrorTruncation": true,
     "types": ["node"]
   },
-  "exclude": ["**/dist/**", "**/node_modules/**", "playground"]
+  "exclude": [
+    "**/dist/**",
+    "**/node_modules/**",
+    "playground",
+    "scripts/codegen/patches/**"
+  ]
 }
