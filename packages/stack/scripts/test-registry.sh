@@ -323,30 +323,63 @@ console.log('package.json updated with tiptap overrides');
     # npm dependencies (e.g. `remend`, `react-markdown`) go undetected.
     # This page re-exports from each plugin's top-level page wrapper, which
     # causes TypeScript to follow the full import chain for every plugin.
+    #
+    # Imports are generated dynamically: if a plugin's shadcn install failed
+    # (e.g. because an external registryDependency URL was unreachable), its
+    # key file will be absent and we skip that import with a warning rather
+    # than letting the build fail with a confusing "module not found" error.
     mkdir -p src/app/btst-smoke-test
-    cat > src/app/btst-smoke-test/page.tsx << 'SMOKE_EOF'
-"use client";
-// Smoke-test page: forces TypeScript to compile all installed btst plugin
-// components so that missing npm dependencies are caught at build time.
-// Named imports ensure the full dependency chain is type-checked.
-import { HomePageComponent } from "@/components/btst/blog/client/components/pages/home-page";
-import { ChatPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-page";
-import { DashboardPageComponent } from "@/components/btst/cms/client/components/pages/dashboard-page";
-import { FormListPageComponent } from "@/components/btst/form-builder/client/components/pages/form-list-page";
-import { BoardsListPageComponent } from "@/components/btst/kanban/client/components/pages/boards-list-page";
-import { ModerationPageComponent } from "@/components/btst/comments/client/components/pages/moderation-page";
-import { PageListPage } from "@/components/btst/ui-builder/client/components/pages/page-list-page";
-import { LibraryPageComponent } from "@/components/btst/media/client/components/pages/library-page";
 
-// Suppress unused-import warnings while still forcing TS to resolve everything.
-void [HomePageComponent, ChatPageComponent, DashboardPageComponent,
-      FormListPageComponent, BoardsListPageComponent, ModerationPageComponent, PageListPage,
-      LibraryPageComponent];
+    # Returns "KeyFile|ExportName|ImportPath" for each plugin (bash 3.x compatible)
+    get_plugin_smoke_info() {
+        case "$1" in
+            blog)         echo "client/components/pages/home-page.tsx|HomePageComponent|@/components/btst/blog/client/components/pages/home-page" ;;
+            ai-chat)      echo "client/components/pages/chat-page.tsx|ChatPageComponent|@/components/btst/ai-chat/client/components/pages/chat-page" ;;
+            cms)          echo "client/components/pages/dashboard-page.tsx|DashboardPageComponent|@/components/btst/cms/client/components/pages/dashboard-page" ;;
+            form-builder) echo "client/components/pages/form-list-page.tsx|FormListPageComponent|@/components/btst/form-builder/client/components/pages/form-list-page" ;;
+            kanban)       echo "client/components/pages/boards-list-page.tsx|BoardsListPageComponent|@/components/btst/kanban/client/components/pages/boards-list-page" ;;
+            comments)     echo "client/components/pages/moderation-page.tsx|ModerationPageComponent|@/components/btst/comments/client/components/pages/moderation-page" ;;
+            ui-builder)   echo "client/components/pages/page-list-page.tsx|PageListPage|@/components/btst/ui-builder/client/components/pages/page-list-page" ;;
+            media)        echo "client/components/pages/library-page.tsx|LibraryPageComponent|@/components/btst/media/client/components/pages/library-page" ;;
+        esac
+    }
 
-export default function SmokeTestPage() {
-  return <div data-testid="btst-smoke-test">Registry smoke test — all plugin imports resolved.</div>;
-}
-SMOKE_EOF
+    SMOKE_IMPORTS=""
+    SMOKE_VOID_ENTRIES=""
+    SMOKE_MISSING=()
+
+    for PLUGIN in "${PLUGIN_NAMES[@]}"; do
+        IFS='|' read -r KEY_FILE EXPORT_NAME IMPORT_PATH <<< "$(get_plugin_smoke_info "$PLUGIN")"
+        FULL_PATH="src/components/btst/${PLUGIN}/${KEY_FILE}"
+        if [ -f "$FULL_PATH" ]; then
+            SMOKE_IMPORTS="${SMOKE_IMPORTS}import { ${EXPORT_NAME} } from \"${IMPORT_PATH}\";\n"
+            SMOKE_VOID_ENTRIES="${SMOKE_VOID_ENTRIES}${EXPORT_NAME}, "
+        else
+            warn "Smoke import skipped — file not installed: ${FULL_PATH}"
+            SMOKE_MISSING+=("$PLUGIN")
+        fi
+    done
+
+    if [ ${#SMOKE_MISSING[@]} -gt 0 ]; then
+        warn "Plugins missing from smoke test (install failed earlier): ${SMOKE_MISSING[*]}"
+    fi
+
+    # Write the smoke-test page with only the imports that are actually present
+    {
+        echo '"use client";'
+        echo '// Smoke-test page: forces TypeScript to compile all installed btst plugin'
+        echo '// components so that missing npm dependencies are caught at build time.'
+        echo '// Named imports ensure the full dependency chain is type-checked.'
+        echo '// (Imports are omitted for plugins whose shadcn install failed.)'
+        printf "%b" "$SMOKE_IMPORTS"
+        echo ""
+        echo "// Suppress unused-import warnings while still forcing TS to resolve everything."
+        echo "void [${SMOKE_VOID_ENTRIES% , }];"
+        echo ""
+        echo "export default function SmokeTestPage() {"
+        echo "  return <div data-testid=\"btst-smoke-test\">Registry smoke test — all plugin imports resolved.</div>;"
+        echo "}"
+    } > src/app/btst-smoke-test/page.tsx
     success "Smoke-import page created at src/app/btst-smoke-test/page.tsx"
 
     # ------------------------------------------------------------------
