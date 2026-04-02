@@ -30,14 +30,8 @@
       "api-reference",
       "standalone-components",
       "shadcn-registry",
-      "---[Play]Demos---",
-      "demos/index",
-      "demos/blog",
-      "demos/ai-chat",
-      "demos/cms",
-      "demos/form-builder",
-      "demos/kanban",
-      "demos/ui-builder"
+      "---[Play]Playground---",
+      "[Try the Playground](https://www.better-stack.ai/playground)"
     ]
   }
   
