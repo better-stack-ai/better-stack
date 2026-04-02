@@ -345,7 +345,9 @@ export function createInitCommand() {
 					? `yes (generated ${plan.pagesLayoutPath ?? "app/pages/layout.tsx"})`
 					: layoutPatch.updated
 						? "yes"
-						: "manual action may be needed";
+						: layoutPatch.warning
+							? "manual action may be needed"
+							: "yes (already patched)";
 
 			const scaffoldedRoutes = selectedPlugins.flatMap(
 				(p) => PLUGIN_ROUTES[p] ?? [],

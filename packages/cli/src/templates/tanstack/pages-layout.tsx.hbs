@@ -4,7 +4,6 @@ import { Link as RouterLink } from "@tanstack/react-router"
 import { StackProvider } from "@btst/stack/context"
 {{/if}}
 {{#if hasAiChat}}
-import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 {{/if}}
 import { QueryClientProvider } from "@tanstack/react-query"
@@ -41,9 +40,6 @@ function BtstPagesLayout() {
 	const baseURL = getBaseURL()
 	return (
 		<QueryClientProvider client={queryClient}>
-{{#if hasAiChat}}
-			<PageAIContextProvider>
-{{/if}}
 			<StackProvider
 				basePath="/pages"
 				overrides={
@@ -67,9 +63,6 @@ function BtstPagesLayout() {
 {{/if}}
 				<Outlet />
 			</StackProvider>
-{{#if hasAiChat}}
-			</PageAIContextProvider>
-{{/if}}
 		</QueryClientProvider>
 	)
 {{else}}

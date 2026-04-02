@@ -16,6 +16,7 @@ export async function collectPrerequisiteWarnings(
 		"app/globals.css",
 		"src/app/globals.css",
 		"src/styles/globals.css",
+		"src/styles.css",
 		"app/app.css",
 	]) {
 		try {

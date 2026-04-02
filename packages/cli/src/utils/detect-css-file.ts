@@ -5,7 +5,7 @@ import { exists } from "./exists";
 const CSS_CANDIDATES: Record<Framework, string[]> = {
 	nextjs: ["app/globals.css", "src/app/globals.css"],
 	"react-router": ["app/app.css", "src/app.css"],
-	tanstack: ["src/styles/globals.css", "src/app.css"],
+	tanstack: ["src/styles/globals.css", "src/styles.css", "src/app.css"],
 };
 
 export async function detectCssFile(

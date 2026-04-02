@@ -12,10 +12,13 @@ function createManualInstructions(
 		`1) Add imports:`,
 		`   import { QueryClientProvider } from "@tanstack/react-query"`,
 		`   import { getOrCreateQueryClient } from "${queryClientImportPath}"`,
+		`   import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"`,
 		"2) Inside your root component, create:",
 		"   const queryClient = getOrCreateQueryClient()",
 		"3) Wrap your returned layout JSX with:",
 		"   <QueryClientProvider client={queryClient}>...</QueryClientProvider>",
+		"4) Add PageAIContextProvider outside QueryClientProvider (at body/root level):",
+		"   <PageAIContextProvider>...</PageAIContextProvider>",
 	].join("\n");
 }
 
@@ -94,10 +97,16 @@ export async function patchLayoutWithQueryClientProvider(
 				);
 			}
 
+			// Strip outer parentheses from the expression text to avoid
+			// double-wrapping when the original return was `return (\n  <JSX />\n)`.
+			let expressionText = expression.getText().trim();
+			if (expressionText.startsWith("(") && expressionText.endsWith(")")) {
+				expressionText = expressionText.slice(1, -1).trim();
+			}
 			returnStatement.replaceWithText(
 				`return (
 		<QueryClientProvider client={queryClient}>
-			${expression.getText()}
+			${expressionText}
 		</QueryClientProvider>
 	)`,
 			);
