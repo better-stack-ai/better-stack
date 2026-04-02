@@ -9,7 +9,7 @@ export function seedRoutePath(
 	const name = pluginKey; // e.g. "blog", "kanban"
 	if (framework === "nextjs") return `app/api/seed-${name}/route.ts`;
 	if (framework === "react-router") return `app/routes/api/seed/${name}.ts`;
-	return `src/routes/api/seed/${name}.ts`;
+	return `src/routes/api/seed-${name}.ts`;
 }
 
 export function seedApiPath(pluginKey: PluginKey): string {
