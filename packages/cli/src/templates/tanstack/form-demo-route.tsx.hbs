@@ -1,0 +1,69 @@
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router"
+import { useState } from "react"
+import { QueryClientProvider } from "@tanstack/react-query"
+import { StackProvider } from "@btst/stack/context"
+import { FormRenderer } from "@btst/stack/plugins/form-builder/client/components"
+import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
+import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
+
+export const Route = createFileRoute("/form-demo/$slug")({
+	component: FormDemoPage,
+})
+
+const getBaseURL = () =>
+	typeof window !== "undefined"
+		? window.location.origin
+		: process.env.{{publicSiteURLVar}} || process.env.BASE_URL || "http://localhost:3000"
+
+type PluginOverrides = {
+	"form-builder": FormBuilderPluginOverrides
+}
+
+/**
+ * Public form demo page — renders any published form by slug.
+ * Access at: /form-demo/<form-slug>
+ */
+function FormDemoPage() {
+	const { slug } = Route.useParams()
+	const navigate = useNavigate()
+	const [queryClient] = useState(() => getOrCreateQueryClient())
+	const baseURL = getBaseURL()
+
+	return (
+		<QueryClientProvider client={queryClient}>
+			<StackProvider<PluginOverrides>
+				basePath=""
+				overrides={
+				{
+					"form-builder": {
+						apiBaseURL: baseURL,
+						apiBasePath: "/api/data",
+						navigate: (path) => navigate({ to: path }),
+						refresh: () => window.location.reload(),
+						Link: ({ href, to, ...props }) => (
+							<Link to={href || to || "#"} {...props} />
+						),
+					},
+				}
+				}
+			>
+				<main className="container mx-auto px-4 py-8">
+					<div className="max-w-2xl mx-auto">
+						<div className="bg-card rounded-lg border p-6 shadow-sm">
+							<FormRenderer
+								slug={slug}
+								onSuccess={(submission) => {
+									console.log("Form submitted:", submission)
+								}}
+								onError={(error) => {
+									console.error("Form error:", error)
+								}}
+								className="space-y-6"
+							/>
+						</div>
+					</div>
+				</main>
+			</StackProvider>
+		</QueryClientProvider>
+	)
+}

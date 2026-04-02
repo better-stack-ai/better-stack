@@ -139,23 +139,16 @@ if (existsSync(workspacePluginsDist)) {
 		},
 
 		// ── next.config.ts ───────────────────────────────────────────────────────
+		// Minimal fallback — the CLI (btst init) generates a richer version when
+		// ai-chat or media plugins are selected, which merges on top of this via
+		// generatedFiles. Without this fallback, projects without ai-chat/media
+		// would have no next.config.ts at all.
 		"next.config.ts": {
 			content: `import type { NextConfig } from "next"
 
-const config: NextConfig = {
-  reactStrictMode: true,${
-		hasAiChat
-			? `
-  env: {
-    // Exposes whether OPENAI_API_KEY is set so the pages layout can show a banner.
-    // Set OPENAI_API_KEY in your StackBlitz environment variables to enable AI chat.
-    NEXT_PUBLIC_HAS_OPENAI_KEY: process.env.OPENAI_API_KEY ? "1" : "",
-  },`
-			: ""
-	}
-}
+const nextConfig: NextConfig = {}
 
-export default config
+export default nextConfig
 `,
 		},
 

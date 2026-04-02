@@ -41,8 +41,6 @@ export default function BtstPagesLayout({
 {{/if}}
 	const queryClient = getOrCreateQueryClient()
 {{#if hasAiChat}}
-	// Add to your next.config.ts to enable the API key banner:
-	// env: { NEXT_PUBLIC_HAS_OPENAI_KEY: process.env.OPENAI_API_KEY ? "1" : "" }
 	const hasApiKey = typeof process !== "undefined" && !!process.env.NEXT_PUBLIC_HAS_OPENAI_KEY
 	const pathname = usePathname()
 	const showChatWidget = !pathname.startsWith("/pages/chat")

@@ -1,0 +1,36 @@
+diff --git a/components/navbar.tsx b/components/navbar.tsx
+index 8b5b457..4afd00c 100644
+--- a/components/navbar.tsx
++++ b/components/navbar.tsx
+@@ -1,17 +1,17 @@
+-"use client"
++"use client";
+ 
+-import Link from "next/link"
+-import { MenuIcon } from "lucide-react"
+-import { ModeToggle } from "./mode-toggle"
+-import { Button } from "@/components/ui/button"
++import Link from "next/link";
++import { MenuIcon } from "lucide-react";
++import { ModeToggle } from "./mode-toggle";
++import { Button } from "@/components/ui/button";
+ import {
+ 	DropdownMenu,
+ 	DropdownMenuContent,
+ 	DropdownMenuItem,
+ 	DropdownMenuTrigger,
+-} from "@/components/ui/dropdown-menu"
++} from "@/components/ui/dropdown-menu";
+ 
+-const navLinks = [{ href: "/pages/route-docs", label: "Available Routes" }]
++const navLinks = [{ href: "/pages/route-docs", label: "Available Routes" }];
+ 
+ export function Navbar() {
+ 	return (
+@@ -59,5 +59,5 @@ export function Navbar() {
+ 				</div>
+ 			</div>
+ 		</nav>
+-	)
++	);
+ }

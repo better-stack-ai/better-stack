@@ -417,6 +417,9 @@ test.describe("CMS Plugin", () => {
 
 		await page.goto("/pages/cms/product/new", { waitUntil: "networkidle" });
 
+		//wait 3 seconds
+		await page.waitForTimeout(3000);
+
 		// Type in the name field
 		await page.locator('input[name="name"]').fill("My Test Product Name");
 

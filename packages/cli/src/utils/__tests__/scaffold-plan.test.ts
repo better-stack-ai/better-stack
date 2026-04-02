@@ -12,24 +12,43 @@ describe("scaffold plan", () => {
 			cssFile: "app/globals.css",
 		});
 
-		expect(plan.files.map((file) => file.path)).toEqual([
-			"lib/stack.ts",
-			"lib/stack-client.tsx",
-			"lib/query-client.ts",
-			"app/api/data/[[...all]]/route.ts",
-			"app/pages/[[...all]]/page.tsx",
-			"app/pages/layout.tsx",
-		]);
-		expect(plan.files[0]?.content).toContain("blogBackendPlugin()");
-		expect(plan.files[1]?.content).toContain("blogClientPlugin");
-		expect(plan.files[1]?.content).toContain("const baseURL = getBaseURL()");
-		expect(plan.files[5]?.content).toContain(
+		const paths = plan.files.map((file) => file.path);
+		// Core BTST files are always present
+		expect(paths).toEqual(
+			expect.arrayContaining([
+				"lib/stack.ts",
+				"lib/stack-client.tsx",
+				"lib/query-client.ts",
+				"app/api/data/[[...all]]/route.ts",
+				"app/pages/[[...all]]/page.tsx",
+				"app/pages/layout.tsx",
+			]),
+		);
+		// Navbar + mode-toggle generated for all frameworks
+		expect(paths).toContain("components/navbar.tsx");
+		expect(paths).toContain("components/mode-toggle.tsx");
+		// Blog triggers sitemap + SSG pages
+		expect(paths).toContain("app/sitemap.ts");
+		expect(paths).toContain("app/pages/ssg-blog/page.tsx");
+		expect(paths).toContain("app/pages/ssg-blog/[slug]/page.tsx");
+
+		const stackFile = plan.files.find((f) => f.path === "lib/stack.ts");
+		expect(stackFile?.content).toContain("blogBackendPlugin()");
+		const stackClientFile = plan.files.find(
+			(f) => f.path === "lib/stack-client.tsx",
+		);
+		expect(stackClientFile?.content).toContain("blogClientPlugin");
+		expect(stackClientFile?.content).toContain("const baseURL = getBaseURL()");
+		const pagesLayoutFile = plan.files.find(
+			(f) => f.path === "app/pages/layout.tsx",
+		);
+		expect(pagesLayoutFile?.content).toContain(
 			'import { StackProvider } from "@btst/stack/context"',
 		);
-		expect(plan.files[5]?.content).toContain(
+		expect(pagesLayoutFile?.content).toContain(
 			"navigate: (path: string) => router.push(path)",
 		);
-		expect(plan.files[5]?.content).toContain(
+		expect(pagesLayoutFile?.content).toContain(
 			'Link: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />',
 		);
 		expect(plan.pagesLayoutPath).toBe("app/pages/layout.tsx");
@@ -433,14 +452,22 @@ describe("scaffold plan", () => {
 			cssFile: "app/app.css",
 		});
 
-		expect(plan.files.map((f) => f.path)).toEqual([
-			"app/lib/stack.ts",
-			"app/lib/stack-client.tsx",
-			"app/lib/query-client.ts",
-			"app/routes/api/data/$.ts",
-			"app/routes/pages/$.tsx",
-			"app/routes/pages/_layout.tsx",
-		]);
+		const paths = plan.files.map((f) => f.path);
+		expect(paths).toEqual(
+			expect.arrayContaining([
+				"app/lib/stack.ts",
+				"app/lib/stack-client.tsx",
+				"app/lib/query-client.ts",
+				"app/routes/api/data/$.ts",
+				"app/routes/pages/$.tsx",
+				"app/routes/pages/_layout.tsx",
+			]),
+		);
+		// Navbar + mode-toggle for react-router
+		expect(paths).toContain("app/components/navbar.tsx");
+		expect(paths).toContain("app/components/mode-toggle.tsx");
+		// Blog triggers sitemap
+		expect(paths).toContain("app/routes/sitemap.xml.ts");
 		expect(plan.pagesLayoutPath).toBe("app/routes/pages/_layout.tsx");
 
 		const layoutFile = plan.files.find((f) => f.path.endsWith("_layout.tsx"));
@@ -463,14 +490,22 @@ describe("scaffold plan", () => {
 			cssFile: "src/styles/globals.css",
 		});
 
-		expect(plan.files.map((f) => f.path)).toEqual([
-			"src/lib/stack.ts",
-			"src/lib/stack-client.tsx",
-			"src/lib/query-client.ts",
-			"src/routes/api/data/$.ts",
-			"src/routes/pages/$.tsx",
-			"src/routes/pages/route.tsx",
-		]);
+		const paths = plan.files.map((f) => f.path);
+		expect(paths).toEqual(
+			expect.arrayContaining([
+				"src/lib/stack.ts",
+				"src/lib/stack-client.tsx",
+				"src/lib/query-client.ts",
+				"src/routes/api/data/$.ts",
+				"src/routes/pages/$.tsx",
+				"src/routes/pages/route.tsx",
+			]),
+		);
+		// Navbar + mode-toggle for tanstack
+		expect(paths).toContain("src/components/navbar.tsx");
+		expect(paths).toContain("src/components/mode-toggle.tsx");
+		// Blog triggers sitemap
+		expect(paths).toContain("src/routes/sitemap[.]xml.ts");
 		expect(plan.pagesLayoutPath).toBe("src/routes/pages/route.tsx");
 
 		const layoutFile = plan.files.find((f) => f.path.endsWith("route.tsx"));
@@ -519,5 +554,406 @@ describe("scaffold plan", () => {
 	it("includes better-auth-ui in the PLUGINS registry", () => {
 		const allKeys = PLUGINS.map((p) => p.key);
 		expect(allKeys).toContain("better-auth-ui");
+	});
+
+	// ── New template tests (Phase 2) ────────────────────────────────────────
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"always emits navbar and mode-toggle for %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: [],
+				alias: "@/",
+				cssFile:
+					framework === "nextjs" ? "app/globals.css" : "src/styles/globals.css",
+			});
+			const paths = plan.files.map((f) => f.path);
+			const componentDir =
+				framework === "react-router"
+					? "app/components"
+					: framework === "tanstack"
+						? "src/components"
+						: "components";
+			expect(paths).toContain(`${componentDir}/navbar.tsx`);
+			expect(paths).toContain(`${componentDir}/mode-toggle.tsx`);
+
+			const navbar = plan.files.find((f) => f.path.endsWith("navbar.tsx"));
+			expect(navbar?.content).toContain("export function Navbar()");
+			expect(navbar?.content).toContain("ModeToggle");
+			const modeToggle = plan.files.find((f) =>
+				f.path.endsWith("mode-toggle.tsx"),
+			);
+			expect(modeToggle?.content).toContain("export function ModeToggle()");
+			expect(modeToggle?.content).toContain("useTheme");
+		},
+	);
+
+	it("emits sitemap.ts for nextjs when blog plugin selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["blog"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const paths = plan.files.map((f) => f.path);
+		expect(paths).toContain("app/sitemap.ts");
+		const sitemap = plan.files.find((f) => f.path === "app/sitemap.ts");
+		expect(sitemap?.content).toContain("lib.generateSitemap()");
+		expect(sitemap?.content).toContain("MetadataRoute.Sitemap");
+	});
+
+	it("emits sitemap.ts for nextjs when cms plugin selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["cms"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		expect(plan.files.map((f) => f.path)).toContain("app/sitemap.ts");
+	});
+
+	it("does NOT emit sitemap for nextjs when no blog/cms/kanban plugins selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["ai-chat"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		expect(plan.files.map((f) => f.path)).not.toContain("app/sitemap.ts");
+	});
+
+	it("emits sitemap.xml.ts for react-router when cms plugin selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "react-router",
+			adapter: "memory",
+			plugins: ["cms"],
+			alias: "~/",
+			cssFile: "app/app.css",
+		});
+		const paths = plan.files.map((f) => f.path);
+		expect(paths).toContain("app/routes/sitemap.xml.ts");
+		const sitemap = plan.files.find(
+			(f) => f.path === "app/routes/sitemap.xml.ts",
+		);
+		expect(sitemap?.content).toContain("sitemapEntryToXmlString");
+		expect(sitemap?.content).toContain("application/xml");
+	});
+
+	it("emits sitemap.xml.ts for tanstack when kanban plugin selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "tanstack",
+			adapter: "memory",
+			plugins: ["kanban"],
+			alias: "@/",
+			cssFile: "src/styles/globals.css",
+		});
+		const paths = plan.files.map((f) => f.path);
+		expect(paths).toContain("src/routes/sitemap[.]xml.ts");
+		const sitemap = plan.files.find(
+			(f) => f.path === "src/routes/sitemap[.]xml.ts",
+		);
+		expect(sitemap?.content).toContain("createFileRoute");
+		expect(sitemap?.content).toContain("sitemapEntryToXmlString");
+	});
+
+	it("emits next.config.ts for nextjs when ai-chat selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["ai-chat"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const paths = plan.files.map((f) => f.path);
+		expect(paths).toContain("next.config.ts");
+		const config = plan.files.find((f) => f.path === "next.config.ts");
+		expect(config?.content).toContain("NEXT_PUBLIC_HAS_OPENAI_KEY");
+		expect(config?.content).not.toContain("remotePatterns");
+	});
+
+	it("emits next.config.ts with images when media selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["media"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const config = plan.files.find((f) => f.path === "next.config.ts");
+		expect(config?.content).toContain("remotePatterns");
+		expect(config?.content).not.toContain("NEXT_PUBLIC_HAS_OPENAI_KEY");
+	});
+
+	it("emits next.config.ts with both env and images when ai-chat + media selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["ai-chat", "media"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const config = plan.files.find((f) => f.path === "next.config.ts");
+		expect(config?.content).toContain("NEXT_PUBLIC_HAS_OPENAI_KEY");
+		expect(config?.content).toContain("remotePatterns");
+	});
+
+	it("does NOT emit next.config.ts for nextjs when no ai-chat or media selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["blog"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		expect(plan.files.map((f) => f.path)).not.toContain("next.config.ts");
+	});
+
+	it("does NOT emit next.config.ts for react-router or tanstack", async () => {
+		for (const framework of ["react-router", "tanstack"] as const) {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["ai-chat", "media"],
+				alias: "@/",
+				cssFile: "src/styles/globals.css",
+			});
+			expect(plan.files.map((f) => f.path)).not.toContain("next.config.ts");
+		}
+	});
+
+	it("emits generateMetadata export in nextjs pages-route", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: [],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const pagesRoute = plan.files.find(
+			(f) => f.path === "app/pages/[[...all]]/page.tsx",
+		);
+		expect(pagesRoute?.content).toContain("generateMetadata");
+		expect(pagesRoute?.content).toContain("metaElementsToObject");
+	});
+
+	it("emits SSG pages for nextjs when blog selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["blog"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const paths = plan.files.map((f) => f.path);
+		expect(paths).toContain("app/pages/ssg-blog/page.tsx");
+		expect(paths).toContain("app/pages/ssg-blog/[slug]/page.tsx");
+
+		const blogList = plan.files.find(
+			(f) => f.path === "app/pages/ssg-blog/page.tsx",
+		);
+		expect(blogList?.content).toContain("generateStaticParams");
+		expect(blogList?.content).toContain("prefetchForRoute");
+		expect(blogList?.content).toContain("revalidate = 3600");
+	});
+
+	it("emits SSG CMS page for nextjs when cms selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["cms"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const paths = plan.files.map((f) => f.path);
+		expect(paths).toContain("app/pages/ssg-cms/[typeSlug]/page.tsx");
+		expect(paths).not.toContain("app/pages/ssg-blog/page.tsx");
+	});
+
+	it("emits SSG forms page for nextjs when form-builder selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["form-builder"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		expect(plan.files.map((f) => f.path)).toContain(
+			"app/pages/ssg-forms/page.tsx",
+		);
+	});
+
+	it("emits SSG kanban page for nextjs when kanban selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["kanban"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		expect(plan.files.map((f) => f.path)).toContain(
+			"app/pages/ssg-kanban/page.tsx",
+		);
+	});
+
+	it("does NOT emit SSG pages for react-router or tanstack", async () => {
+		for (const framework of ["react-router", "tanstack"] as const) {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["blog", "cms", "form-builder", "kanban"],
+				alias: "@/",
+				cssFile: "src/styles/globals.css",
+			});
+			const paths = plan.files.map((f) => f.path);
+			expect(paths.some((p) => p.includes("ssg-"))).toBe(false);
+		}
+	});
+
+	it("emits public-chat page for nextjs when ai-chat selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["ai-chat"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const paths = plan.files.map((f) => f.path);
+		expect(paths).toContain("app/public-chat/page.tsx");
+		const page = plan.files.find((f) => f.path === "app/public-chat/page.tsx");
+		expect(page?.content).toContain("ChatLayout");
+		expect(page?.content).toContain('"ai-chat"');
+	});
+
+	it("emits public-chat route for react-router when ai-chat selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "react-router",
+			adapter: "memory",
+			plugins: ["ai-chat"],
+			alias: "~/",
+			cssFile: "app/app.css",
+		});
+		const paths = plan.files.map((f) => f.path);
+		expect(paths).toContain("app/routes/public-chat.tsx");
+		const route = plan.files.find(
+			(f) => f.path === "app/routes/public-chat.tsx",
+		);
+		expect(route?.content).toContain("ChatLayout");
+	});
+
+	it("emits public-chat route for tanstack when ai-chat selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "tanstack",
+			adapter: "memory",
+			plugins: ["ai-chat"],
+			alias: "@/",
+			cssFile: "src/styles/globals.css",
+		});
+		const paths = plan.files.map((f) => f.path);
+		expect(paths).toContain("src/routes/public-chat.tsx");
+		const route = plan.files.find(
+			(f) => f.path === "src/routes/public-chat.tsx",
+		);
+		expect(route?.content).toContain("createFileRoute");
+		expect(route?.content).toContain("ChatLayout");
+	});
+
+	it("does NOT emit public-chat routes when ai-chat not selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["blog"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		expect(plan.files.map((f) => f.path)).not.toContain(
+			"app/public-chat/page.tsx",
+		);
+	});
+
+	it("emits form-demo page for nextjs when form-builder selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["form-builder"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const paths = plan.files.map((f) => f.path);
+		expect(paths).toContain("app/form-demo/[slug]/page.tsx");
+		const page = plan.files.find(
+			(f) => f.path === "app/form-demo/[slug]/page.tsx",
+		);
+		expect(page?.content).toContain("FormRenderer");
+	});
+
+	it("emits form-demo route for react-router when form-builder selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "react-router",
+			adapter: "memory",
+			plugins: ["form-builder"],
+			alias: "~/",
+			cssFile: "app/app.css",
+		});
+		expect(plan.files.map((f) => f.path)).toContain("app/routes/form-demo.tsx");
+	});
+
+	it("emits form-demo route for tanstack when form-builder selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "tanstack",
+			adapter: "memory",
+			plugins: ["form-builder"],
+			alias: "@/",
+			cssFile: "src/styles/globals.css",
+		});
+		expect(plan.files.map((f) => f.path)).toContain(
+			"src/routes/form-demo.$slug.tsx",
+		);
+	});
+
+	it("emits preview pages for nextjs when ui-builder selected (with cms)", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["cms", "ui-builder"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const paths = plan.files.map((f) => f.path);
+		expect(paths).toContain("app/preview/[slug]/page.tsx");
+		expect(paths).toContain("app/preview/[slug]/client.tsx");
+		const client = plan.files.find(
+			(f) => f.path === "app/preview/[slug]/client.tsx",
+		);
+		expect(client?.content).toContain("PageRenderer");
+		expect(client?.content).toContain("defaultComponentRegistry");
+	});
+
+	it("emits preview route for react-router when ui-builder selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "react-router",
+			adapter: "memory",
+			plugins: ["cms", "ui-builder"],
+			alias: "~/",
+			cssFile: "app/app.css",
+		});
+		expect(plan.files.map((f) => f.path)).toContain("app/routes/preview.tsx");
+	});
+
+	it("emits preview route for tanstack when ui-builder selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "tanstack",
+			adapter: "memory",
+			plugins: ["cms", "ui-builder"],
+			alias: "@/",
+			cssFile: "src/styles/globals.css",
+		});
+		expect(plan.files.map((f) => f.path)).toContain(
+			"src/routes/preview.$slug.tsx",
+		);
 	});
 });

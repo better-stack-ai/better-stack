@@ -98,8 +98,12 @@ function buildPluginTemplateContext(
 	const hasUiBuilder = selectedPlugins.includes("ui-builder");
 	const hasCms = selectedPlugins.includes("cms");
 	const hasBetterAuthUi = selectedPlugins.includes("better-auth-ui");
-
 	const hasAiChat = selectedPlugins.includes("ai-chat");
+	const hasMedia = selectedPlugins.includes("media");
+	const hasFormBuilder = selectedPlugins.includes("form-builder");
+	const hasBlog = selectedPlugins.includes("blog");
+	const hasKanban = selectedPlugins.includes("kanban");
+	const hasSitemap = hasBlog || hasCms || hasKanban;
 
 	const backendMetas = metas.filter(
 		(m) =>
@@ -121,6 +125,13 @@ function buildPluginTemplateContext(
 
 	return {
 		hasAiChat,
+		hasMedia,
+		hasFormBuilder,
+		hasUiBuilder,
+		hasBlog,
+		hasCms,
+		hasKanban,
+		hasSitemap,
 		backendImports: hasAiChat
 			? `${backendImportLines}\nimport { openai } from "@ai-sdk/openai"`
 			: backendImportLines,
@@ -419,6 +430,220 @@ export async function buildScaffoldPlan(
 			),
 			description: "BTST pages layout wrapper",
 		});
+	}
+
+	// ── Derived paths ─────────────────────────────────────────────────────────
+	const prefix =
+		input.framework === "nextjs" && input.cssFile.startsWith("src/")
+			? "src/"
+			: "";
+	const componentDir =
+		input.framework === "react-router"
+			? "app/components/"
+			: input.framework === "tanstack"
+				? "src/components/"
+				: `${prefix}components/`;
+
+	// ── Navbar + mode toggle (always, all frameworks) ─────────────────────────
+	files.push({
+		path: `${componentDir}navbar.tsx`,
+		content: await renderTemplate(
+			`${input.framework}/components/navbar.tsx.hbs`,
+			sharedContext,
+		),
+		description: "App navbar component",
+	});
+	files.push({
+		path: `${componentDir}mode-toggle.tsx`,
+		content: await renderTemplate(
+			"shared/components/mode-toggle.tsx.hbs",
+			sharedContext,
+		),
+		description: "Dark mode toggle component",
+	});
+
+	// ── Sitemap (blog / cms / kanban) ─────────────────────────────────────────
+	if (pluginContext.hasSitemap) {
+		const sitemapPath =
+			input.framework === "react-router"
+				? "app/routes/sitemap.xml.ts"
+				: input.framework === "tanstack"
+					? "src/routes/sitemap[.]xml.ts"
+					: `${prefix}app/sitemap.ts`;
+		const sitemapTemplate =
+			input.framework === "nextjs"
+				? "nextjs/sitemap.ts.hbs"
+				: `${input.framework}/sitemap.xml.ts.hbs`;
+		files.push({
+			path: sitemapPath,
+			content: await renderTemplate(sitemapTemplate, sharedContext),
+			description: "Sitemap route",
+		});
+	}
+
+	// ── Next.js config (ai-chat / media) ─────────────────────────────────────
+	if (
+		input.framework === "nextjs" &&
+		(pluginContext.hasAiChat || pluginContext.hasMedia)
+	) {
+		files.push({
+			path: "next.config.ts",
+			content: await renderTemplate("nextjs/next-config.ts.hbs", sharedContext),
+			description: "Next.js configuration with BTST-required fields",
+		});
+	}
+
+	// ── SSG pages (Next.js only) ──────────────────────────────────────────────
+	if (input.framework === "nextjs") {
+		if (pluginContext.hasBlog) {
+			files.push({
+				path: `${prefix}app/pages/ssg-blog/page.tsx`,
+				content: await renderTemplate(
+					"nextjs/ssg-blog-list.tsx.hbs",
+					sharedContext,
+				),
+				description: "SSG Blog list page",
+			});
+			files.push({
+				path: `${prefix}app/pages/ssg-blog/[slug]/page.tsx`,
+				content: await renderTemplate(
+					"nextjs/ssg-blog-post.tsx.hbs",
+					sharedContext,
+				),
+				description: "SSG Blog post page",
+			});
+		}
+		if (pluginContext.hasCms) {
+			files.push({
+				path: `${prefix}app/pages/ssg-cms/[typeSlug]/page.tsx`,
+				content: await renderTemplate("nextjs/ssg-cms.tsx.hbs", sharedContext),
+				description: "SSG CMS content list page",
+			});
+		}
+		if (pluginContext.hasFormBuilder) {
+			files.push({
+				path: `${prefix}app/pages/ssg-forms/page.tsx`,
+				content: await renderTemplate(
+					"nextjs/ssg-forms.tsx.hbs",
+					sharedContext,
+				),
+				description: "SSG Forms list page",
+			});
+		}
+		if (pluginContext.hasKanban) {
+			files.push({
+				path: `${prefix}app/pages/ssg-kanban/page.tsx`,
+				content: await renderTemplate(
+					"nextjs/ssg-kanban.tsx.hbs",
+					sharedContext,
+				),
+				description: "SSG Kanban boards page",
+			});
+		}
+	}
+
+	// ── Public chat page (ai-chat, all frameworks) ────────────────────────────
+	if (pluginContext.hasAiChat) {
+		if (input.framework === "nextjs") {
+			files.push({
+				path: `${prefix}app/public-chat/page.tsx`,
+				content: await renderTemplate(
+					"nextjs/public-chat-page.tsx.hbs",
+					sharedContext,
+				),
+				description: "Public AI chat page",
+			});
+		} else if (input.framework === "react-router") {
+			files.push({
+				path: "app/routes/public-chat.tsx",
+				content: await renderTemplate(
+					"react-router/public-chat-route.tsx.hbs",
+					sharedContext,
+				),
+				description: "Public AI chat route",
+			});
+		} else {
+			files.push({
+				path: "src/routes/public-chat.tsx",
+				content: await renderTemplate(
+					"tanstack/public-chat-route.tsx.hbs",
+					sharedContext,
+				),
+				description: "Public AI chat route",
+			});
+		}
+	}
+
+	// ── Form demo page (form-builder, all frameworks) ─────────────────────────
+	if (pluginContext.hasFormBuilder) {
+		if (input.framework === "nextjs") {
+			files.push({
+				path: `${prefix}app/form-demo/[slug]/page.tsx`,
+				content: await renderTemplate(
+					"nextjs/form-demo-page.tsx.hbs",
+					sharedContext,
+				),
+				description: "Public form demo page",
+			});
+		} else if (input.framework === "react-router") {
+			files.push({
+				path: "app/routes/form-demo.tsx",
+				content: await renderTemplate(
+					"react-router/form-demo-route.tsx.hbs",
+					sharedContext,
+				),
+				description: "Public form demo route",
+			});
+		} else {
+			files.push({
+				path: "src/routes/form-demo.$slug.tsx",
+				content: await renderTemplate(
+					"tanstack/form-demo-route.tsx.hbs",
+					sharedContext,
+				),
+				description: "Public form demo route",
+			});
+		}
+	}
+
+	// ── Preview page / UI builder renderer (ui-builder, all frameworks) ───────
+	if (pluginContext.hasUiBuilder) {
+		if (input.framework === "nextjs") {
+			files.push({
+				path: `${prefix}app/preview/[slug]/page.tsx`,
+				content: await renderTemplate(
+					"nextjs/preview-page.tsx.hbs",
+					sharedContext,
+				),
+				description: "UI Builder public page renderer (server wrapper)",
+			});
+			files.push({
+				path: `${prefix}app/preview/[slug]/client.tsx`,
+				content: await renderTemplate(
+					"nextjs/preview-client.tsx.hbs",
+					sharedContext,
+				),
+				description: "UI Builder public page renderer (client component)",
+			});
+		} else if (input.framework === "react-router") {
+			files.push({
+				path: "app/routes/preview.tsx",
+				content: await renderTemplate(
+					"react-router/preview-route.tsx.hbs",
+					sharedContext,
+				),
+				description: "UI Builder public page renderer route",
+			});
+		} else {
+			files.push({
+				path: "src/routes/preview.$slug.tsx",
+				content: await renderTemplate(
+					"tanstack/preview-route.tsx.hbs",
+					sharedContext,
+				),
+				description: "UI Builder public page renderer route",
+			});
+		}
 	}
 
 	return {

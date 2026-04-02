@@ -2,14 +2,22 @@
 # setup-nextjs.sh — Scaffold and configure the Next.js codegen project
 #
 # Usage (from monorepo root):
-#   bash scripts/codegen/setup-nextjs.sh
+#   bash scripts/codegen/setup-nextjs.sh [--baseline-only]
 #
-# What it does:
+# Flags:
+#   --baseline-only   Stop after btst init + git baseline commit.
+#                     Use this to regenerate .patch files:
+#                       1. bash scripts/codegen/setup-nextjs.sh --baseline-only
+#                       2. Apply desired changes to codegen-projects/nextjs
+#                       3. cd codegen-projects/nextjs && git diff > ../../scripts/codegen/patches/nextjs/NN-name.patch
+#                       4. Run: node scripts/codegen/generate-patches-nextjs.mjs
+#
+# What it does (full run):
 #   1. Creates codegen-projects/nextjs/ via `shadcn init -t next --name nextjs`
 #   2. Removes .git so the workspace git config tracks the files
 #   3. Builds the local CLI and runs `btst init` with an explicit plugin list
-#   4. Applies patches from scripts/codegen/patches/nextjs/
-#   5. Adds shadcn UI components needed by the patches
+#   4. Adds shadcn UI components needed by the E2E overlay
+#   5. Applies surgical .patch files from scripts/codegen/patches/nextjs/
 #   6. Patches package.json (name, start:e2e, workspace deps)
 #   7. Creates .env and public/uploads/
 #   8. Runs pnpm install from the monorepo root
@@ -33,6 +41,14 @@ DEST="$ROOT_DIR/codegen-projects/nextjs"
 PATCHES="$SCRIPT_DIR/patches/nextjs"
 CLI_BIN="$ROOT_DIR/packages/cli/dist/index.cjs"
 
+# Parse flags
+BASELINE_ONLY=false
+for arg in "$@"; do
+  case $arg in
+    --baseline-only) BASELINE_ONLY=true ;;
+  esac
+done
+
 # ── Prerequisites ────────────────────────────────────────────────────────────
 
 step "Checking prerequisites"
@@ -49,17 +65,10 @@ if [ -d "$DEST" ]; then
 fi
 
 # ── Step 1: Scaffold with shadcn ─────────────────────────────────────────────
-# shadcn -t next creates a NEW Next.js project in a subdirectory named after --name.
-# We run it from codegen-projects/ so it creates codegen-projects/nextjs/.
 
 step "Scaffolding Next.js project with shadcn init -t next"
 mkdir -p "$ROOT_DIR/codegen-projects"
 cd "$ROOT_DIR/codegen-projects"
-# --no-monorepo: skip the monorepo prompt (we're already in one)
-# --base radix:  use Radix UI (skips the component library selection prompt)
-# --preset nova: use the Nova preset with Lucide + Geist (skips preset selection)
-# --name nextjs: creates the project in a nextjs/ subdirectory
-# --yes:         accept all remaining defaults
 pnpm dlx shadcn@latest init -t next --no-monorepo --base radix --preset nova --name nextjs --yes
 success "shadcn scaffold complete → $DEST"
 
@@ -67,7 +76,6 @@ success "shadcn scaffold complete → $DEST"
 
 step "Removing .git and pnpm-lock.yaml from scaffolded project"
 rm -rf "$DEST/.git"
-# Remove the project-level lockfile; the workspace root lockfile manages all deps
 rm -f "$DEST/pnpm-lock.yaml"
 success ".git and pnpm-lock.yaml removed"
 
@@ -80,8 +88,6 @@ success "CLI built → $CLI_BIN"
 
 step "Running btst init (explicit plugin list, skip install)"
 cd "$DEST"
-# --plugins all would include better-auth-ui; use explicit list instead.
-# --yes alone selects zero plugins (DEFAULT_PLUGIN_SELECTION=[]).
 node "$CLI_BIN" init \
   --yes \
   --framework nextjs \
@@ -90,112 +96,64 @@ node "$CLI_BIN" init \
   --skip-install
 success "btst init complete"
 
-# ── Step 4: Apply patches ─────────────────────────────────────────────────────
-
-step "Applying patches from scripts/codegen/patches/nextjs/"
-cd "$DEST"
-
-# Detect whether shadcn created src/ layout
-if [ -f "src/app/globals.css" ]; then
-  warn "Detected src/ layout — adjusting patch targets"
-  APP_DIR="src/app"
-  LIB_DIR="src/lib"
-  COMPONENTS_DIR="src/components"
-else
-  APP_DIR="app"
-  LIB_DIR="lib"
-  COMPONENTS_DIR="components"
-fi
-
-# lib/ — overwrite generated stack files; add todos plugin, auth stacks, etc.
-cp -r "$PATCHES/lib/." "$DEST/$LIB_DIR/"
-success "Patched lib/"
-
-# app/layout.tsx — root layout with PageAIContextProvider, ThemeProvider, Navbar, Toaster
-cp "$PATCHES/app/layout.tsx" "$DEST/$APP_DIR/layout.tsx"
-success "Patched app/layout.tsx"
-
-# app/pages/layout.tsx — full-featured pages layout
-cp "$PATCHES/app/pages/layout.tsx" "$DEST/$APP_DIR/pages/layout.tsx"
-success "Patched app/pages/layout.tsx"
-
-# app/pages/[[...all]]/page.tsx — SSR page route with headers() and generateMetadata
-mkdir -p "$DEST/$APP_DIR/pages/[[...all]]"
-cp "$PATCHES/app/pages/[[...all]]/page.tsx" "$DEST/$APP_DIR/pages/[[...all]]/page.tsx"
-success "Patched app/pages/[[...all]]/page.tsx"
-
-# SSG pages
-mkdir -p "$DEST/$APP_DIR/pages/ssg-blog/[slug]"
-mkdir -p "$DEST/$APP_DIR/pages/ssg-cms/[typeSlug]"
-mkdir -p "$DEST/$APP_DIR/pages/ssg-forms"
-mkdir -p "$DEST/$APP_DIR/pages/ssg-kanban"
-cp "$PATCHES/app/pages/ssg-blog/page.tsx"           "$DEST/$APP_DIR/pages/ssg-blog/page.tsx"
-cp "$PATCHES/app/pages/ssg-blog/[slug]/page.tsx"    "$DEST/$APP_DIR/pages/ssg-blog/[slug]/page.tsx"
-cp "$PATCHES/app/pages/ssg-cms/[typeSlug]/page.tsx" "$DEST/$APP_DIR/pages/ssg-cms/[typeSlug]/page.tsx"
-cp "$PATCHES/app/pages/ssg-forms/page.tsx"          "$DEST/$APP_DIR/pages/ssg-forms/page.tsx"
-cp "$PATCHES/app/pages/ssg-kanban/page.tsx"         "$DEST/$APP_DIR/pages/ssg-kanban/page.tsx"
-success "Patched SSG pages"
-
-# API routes
-mkdir -p "$DEST/$APP_DIR/api/public-chat/[[...all]]"
-mkdir -p "$DEST/$APP_DIR/api/example-auth/[[...all]]"
-cp "$PATCHES/app/api/public-chat/[[...all]]/route.ts"   "$DEST/$APP_DIR/api/public-chat/[[...all]]/route.ts"
-cp "$PATCHES/app/api/example-auth/[[...all]]/route.ts"  "$DEST/$APP_DIR/api/example-auth/[[...all]]/route.ts"
-success "Patched API routes"
-
-# Public chat page
-mkdir -p "$DEST/$APP_DIR/public-chat"
-cp "$PATCHES/app/public-chat/page.tsx" "$DEST/$APP_DIR/public-chat/page.tsx"
-success "Patched /public-chat page"
-
-# Sitemap (for smoke.blog.spec.ts sitemap test)
-cp "$PATCHES/app/sitemap.ts" "$DEST/$APP_DIR/sitemap.ts"
-success "Patched app/sitemap.ts"
-
-# CMS hooks example page (for smoke.cms.spec.ts CMS Hooks Example tests)
-mkdir -p "$DEST/$APP_DIR/cms-example"
-cp "$PATCHES/app/cms-example/page.tsx" "$DEST/$APP_DIR/cms-example/page.tsx"
-success "Patched app/cms-example/page.tsx"
-
-# Directory pages (for smoke.relations-cms.spec.ts CMS Directory Pages tests)
-mkdir -p "$DEST/$APP_DIR/directory/[id]"
-mkdir -p "$DEST/$APP_DIR/directory/category/[categoryId]"
-cp "$PATCHES/app/directory/page.tsx"                              "$DEST/$APP_DIR/directory/page.tsx"
-cp "$PATCHES/app/directory/[id]/page.tsx"                         "$DEST/$APP_DIR/directory/[id]/page.tsx"
-cp "$PATCHES/app/directory/category/[categoryId]/page.tsx"        "$DEST/$APP_DIR/directory/category/[categoryId]/page.tsx"
-success "Patched app/directory/ pages"
-
-# Form demo page (for smoke.form-builder.spec.ts Public Form Submission tests)
-mkdir -p "$DEST/$APP_DIR/form-demo/[slug]"
-cp "$PATCHES/app/form-demo/[slug]/page.tsx" "$DEST/$APP_DIR/form-demo/[slug]/page.tsx"
-success "Patched app/form-demo/ page"
-
-# Preview pages (for smoke.ui-builder.spec.ts Public Page Rendering tests)
-mkdir -p "$DEST/$APP_DIR/preview/[slug]"
-cp "$PATCHES/app/preview/[slug]/page.tsx"   "$DEST/$APP_DIR/preview/[slug]/page.tsx"
-cp "$PATCHES/app/preview/[slug]/client.tsx" "$DEST/$APP_DIR/preview/[slug]/client.tsx"
-success "Patched app/preview/ pages"
-
-# Components
-mkdir -p "$DEST/$COMPONENTS_DIR/ui"
-cp "$PATCHES/components/navbar.tsx"      "$DEST/$COMPONENTS_DIR/navbar.tsx"
-cp "$PATCHES/components/mode-toggle.tsx" "$DEST/$COMPONENTS_DIR/mode-toggle.tsx"
-cp "$PATCHES/components/ui/empty.tsx"    "$DEST/$COMPONENTS_DIR/ui/empty.tsx"
-cp "$PATCHES/components/ui/field.tsx"    "$DEST/$COMPONENTS_DIR/ui/field.tsx"
-cp "$PATCHES/components/ui/item.tsx"     "$DEST/$COMPONENTS_DIR/ui/item.tsx"
-success "Patched components"
-
-# next.config.ts — remove any existing next.config.* files then add patched version
-rm -f "$DEST/next.config.js" "$DEST/next.config.mjs" "$DEST/next.config.ts"
-cp "$PATCHES/next.config.ts" "$DEST/next.config.ts"
-success "Patched next.config.ts"
-
-# ── Step 5: Add shadcn UI components ──────────────────────────────────────────
+# ── Step 4: Add shadcn UI components ──────────────────────────────────────────
+# These are needed by the E2E overlay patches (todo plugin UI, etc.)
 
 step "Adding shadcn UI components (checkbox, label, skeleton, input, sonner, dropdown-menu, separator)"
 cd "$DEST"
 pnpm dlx shadcn@latest add checkbox label skeleton input sonner dropdown-menu separator --yes --overwrite
 success "shadcn components added"
+
+# ── Step 5 (baseline-only): Init git baseline for patch regeneration ──────────
+
+if [ "$BASELINE_ONLY" = true ]; then
+  step "--baseline-only: initialising git baseline commit"
+  cd "$DEST"
+  git init -b main
+  git config user.email "dev@btst.ai"
+  git config user.name "BTST Dev"
+  git add -A
+  git commit -m "baseline: shadcn init + btst init output"
+  success "Git baseline committed at $DEST"
+  echo ""
+  echo "  Next steps to regenerate patches:"
+  echo "    1. Apply desired changes to codegen-projects/nextjs"
+  echo "    2. node scripts/codegen/generate-patches-nextjs.mjs"
+  echo ""
+  exit 0
+fi
+
+# ── Step 5: Apply surgical patches ────────────────────────────────────────────
+
+step "Applying E2E overlay patches from scripts/codegen/patches/nextjs/"
+cd "$DEST"
+
+# Detect whether shadcn created src/ layout and adjust patch targets accordingly
+if [ -f "src/app/globals.css" ]; then
+  warn "Detected src/ layout — patches assume non-src layout; manual adjustment may be needed"
+fi
+
+PATCH_COUNT=0
+for patch_file in "$PATCHES"/*.patch; do
+  if [ -f "$patch_file" ]; then
+    patch_name="$(basename "$patch_file")"
+    if patch -p1 --dry-run --silent < "$patch_file" 2>/dev/null; then
+      patch -p1 < "$patch_file"
+      success "Applied $patch_name"
+      PATCH_COUNT=$((PATCH_COUNT + 1))
+    else
+      # Try with fuzz factor for patches that don't apply cleanly
+      if patch -p1 -F 3 --dry-run --silent < "$patch_file" 2>/dev/null; then
+        patch -p1 -F 3 < "$patch_file"
+        warn "Applied $patch_name (with fuzz — shadcn output may have changed)"
+        PATCH_COUNT=$((PATCH_COUNT + 1))
+      else
+        die "Failed to apply patch: $patch_name. Run with --baseline-only to regenerate patches."
+      fi
+    fi
+  fi
+done
+success "$PATCH_COUNT patches applied"
 
 # ── Step 6: Patch package.json ────────────────────────────────────────────────
 
@@ -213,7 +171,6 @@ pkg.scripts = pkg.scripts || {};
 pkg.scripts["start:e2e"] = "rm -rf .next && next build && NODE_ENV=test next start -p 3006";
 
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
-// @btst/stack is in the workspace; adapters are published npm packages.
 const btstDeps = {
   "@btst/stack": "workspace:*",
   "@btst/adapter-memory": "^2.1.1",
@@ -238,11 +195,13 @@ pkg.dependencies = {
   ...extraDeps,
 };
 
-// Point any @btst/* already present to workspace
+// Point @btst/* packages that ARE in the workspace to workspace:*
+// Adapter packages are published to npm, not in the workspace.
+const WORKSPACE_BTST_PKGS = new Set(["@btst/stack"]);
 for (const section of ["dependencies", "devDependencies"]) {
   if (!pkg[section]) continue;
   for (const [key] of Object.entries(pkg[section])) {
-    if (key.startsWith("@btst/")) {
+    if (key.startsWith("@btst/") && WORKSPACE_BTST_PKGS.has(key)) {
       pkg[section][key] = "workspace:*";
     }
   }
@@ -256,7 +215,6 @@ success "package.json patched"
 # ── Step 7: Create .env ───────────────────────────────────────────────────────
 
 step "Creating .env (preserves existing OPENAI_API_KEY if present)"
-# Only write the base vars; keep any OPENAI_API_KEY the user set before running
 EXISTING_OPENAI_KEY="${OPENAI_API_KEY:-}"
 cat > "$DEST/.env" <<ENVFILE
 NEXT_PUBLIC_BASE_URL=http://localhost:3006
@@ -281,7 +239,6 @@ success "public/uploads/ created"
 
 step "Running pnpm install from monorepo root"
 cd "$ROOT_DIR"
-# --no-frozen-lockfile: the codegen project adds new deps not in the existing lockfile
 pnpm install --no-frozen-lockfile
 success "pnpm install complete"
 
@@ -295,4 +252,7 @@ echo "    pnpm -F e2e codegen:e2e:nextjs"
 echo ""
 echo "  To start the project manually:"
 echo "    pnpm -F nextjs dev"
+echo ""
+echo "  To regenerate patches after changes:"
+echo "    node scripts/codegen/generate-patches-nextjs.mjs"
 echo ""
