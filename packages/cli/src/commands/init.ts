@@ -277,6 +277,7 @@ export function createInitCommand() {
 							cwd,
 							plan.layoutPatchTarget,
 							alias,
+							selectedPlugins.includes("ai-chat"),
 						);
 
 			await installInitDependencies({

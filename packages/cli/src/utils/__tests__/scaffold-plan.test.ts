@@ -211,13 +211,11 @@ describe("scaffold plan", () => {
 		const pagesLayoutFile = plan.files.find((file) =>
 			file.path.endsWith("app/pages/layout.tsx"),
 		);
-		expect(pagesLayoutFile?.content).toContain(
-			'import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"',
-		);
+		// PageAIContextProvider belongs in the root layout, not the pages layout
+		expect(pagesLayoutFile?.content).not.toContain("PageAIContextProvider");
 		expect(pagesLayoutFile?.content).toContain(
 			'import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"',
 		);
-		expect(pagesLayoutFile?.content).toContain("<PageAIContextProvider>");
 		expect(pagesLayoutFile?.content).toContain('layout="widget"');
 		expect(pagesLayoutFile?.content).toContain('mode: "public" as const,');
 		// Override key must match what usePluginOverrides("ai-chat") looks up at runtime
