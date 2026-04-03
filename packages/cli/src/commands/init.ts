@@ -203,14 +203,16 @@ export function createInitCommand() {
 
 			const packageManager = await detectPackageManager(cwd);
 			const adapter = await detectOrSelectAdapter(rawOptions);
-			const alias = await detectAlias(cwd);
+			const shadcnConfig = await detectShadcnConfig(cwd);
+			const alias = shadcnConfig?.alias ?? (await detectAlias(cwd));
 			const rawSelectedPlugins = await selectPlugins(rawOptions);
 
 			// ui-builder is a CMS sub-plugin — it has no standalone registration.
 			// Always ensure cms is present when ui-builder is selected.
 			const selectedPlugins = normalizePlugins(rawSelectedPlugins);
 
-			let cssFile = await detectCssFile(cwd, framework);
+			let cssFile =
+				shadcnConfig?.cssFile ?? (await detectCssFile(cwd, framework));
 			if (!cssFile) {
 				cssFile = rawOptions.yes
 					? framework === "nextjs"
