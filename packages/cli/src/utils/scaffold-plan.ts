@@ -646,10 +646,24 @@ export async function buildScaffoldPlan(
 		}
 	}
 
+	const cssImports = PLUGINS.filter((p) => input.plugins.includes(p.key))
+		.map((p) => p.cssImport)
+		.filter((c): c is string => Boolean(c));
+
+	const extraPackages = Array.from(
+		new Set(
+			PLUGINS.filter((p) => input.plugins.includes(p.key)).flatMap(
+				(p) => p.extraPackages ?? [],
+			),
+		),
+	);
+
 	return {
 		files,
 		layoutPatchTarget: frameworkPaths.layoutPatchTarget,
 		cssPatchTarget: input.cssFile,
 		pagesLayoutPath: frameworkPaths.pagesLayoutPath,
+		cssImports,
+		extraPackages,
 	};
 }

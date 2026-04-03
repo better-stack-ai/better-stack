@@ -1,6 +1,6 @@
 "use server";
 
-import { buildScaffoldPlan, PLUGINS, PLUGIN_ROUTES } from "@btst/codegen/lib";
+import { buildScaffoldPlan, PLUGIN_ROUTES } from "@btst/codegen/lib";
 import type {
 	PluginKey,
 	FileWritePlanItem,
@@ -12,7 +12,7 @@ import {
 	buildSeedRunnerScript,
 	seedApiPath,
 	type SeedRouteFile,
-} from "@/lib/seed-templates";
+} from "@btst/codegen/lib";
 
 export interface GenerateResult {
 	files: FileWritePlanItem[];
@@ -50,20 +50,7 @@ export async function generateProject(
 		cssFile,
 	});
 
-	const cssImports = PLUGINS.filter((p) =>
-		withRouteDocs.includes(p.key as PluginKey),
-	)
-		.map((p) => p.cssImport)
-		.filter((c): c is string => Boolean(c));
-
 	const routes = withRouteDocs.flatMap((p) => PLUGIN_ROUTES[p] ?? []);
-	const extraPackages = Array.from(
-		new Set(
-			PLUGINS.filter((p) => withRouteDocs.includes(p.key as PluginKey)).flatMap(
-				(p) => p.extraPackages ?? [],
-			),
-		),
-	);
 
 	// Only seed plugins that are actually selected (after effective plugin resolution)
 	const effectiveSeeded = seededPlugins.filter((k) =>
@@ -89,8 +76,8 @@ export async function generateProject(
 	return {
 		files: plan.files,
 		routes,
-		cssImports,
-		extraPackages,
+		cssImports: plan.cssImports,
+		extraPackages: plan.extraPackages,
 		hasAiChat: withRouteDocs.includes("ai-chat" as PluginKey),
 		seedRouteFiles,
 		seedRunnerScript,

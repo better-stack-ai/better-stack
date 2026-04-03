@@ -956,4 +956,42 @@ describe("scaffold plan", () => {
 			"src/routes/preview.$slug.tsx",
 		);
 	});
+
+	it("returns cssImports for selected plugins", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["blog", "ai-chat"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		expect(plan.cssImports).toContain("@btst/stack/plugins/blog/css");
+		expect(plan.cssImports).toContain("@btst/stack/plugins/ai-chat/css");
+		expect(plan.cssImports.every((c) => !c.includes("open-api"))).toBe(true);
+	});
+
+	it("returns extraPackages for ai-chat and deduplicates them", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["ai-chat"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		expect(plan.extraPackages).toContain("@ai-sdk/openai");
+		expect(plan.extraPackages).toContain("ai");
+		expect(plan.extraPackages.length).toBe(new Set(plan.extraPackages).size);
+	});
+
+	it("returns empty cssImports and extraPackages when no plugins selected", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: [],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		expect(plan.cssImports).toEqual([]);
+		expect(plan.extraPackages).toEqual([]);
+	});
 });

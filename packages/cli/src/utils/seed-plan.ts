@@ -1,4 +1,4 @@
-import type { PluginKey, Framework } from "@btst/codegen/lib";
+import type { PluginKey, Framework } from "../types";
 
 // ── Seed route file paths per framework ─────────────────────────────────────
 

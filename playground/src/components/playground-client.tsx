@@ -28,7 +28,7 @@ import {
 	CardContent,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import type { SeedRouteFile } from "@/lib/seed-templates";
+import type { SeedRouteFile } from "@btst/codegen/lib";
 
 interface PlaygroundClientProps {
 	plugins: readonly PluginMeta[];

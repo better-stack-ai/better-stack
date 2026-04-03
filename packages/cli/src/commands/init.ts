@@ -208,11 +208,7 @@ export function createInitCommand() {
 
 			// ui-builder is a CMS sub-plugin — it has no standalone registration.
 			// Always ensure cms is present when ui-builder is selected.
-			const selectedPlugins: PluginKey[] =
-				rawSelectedPlugins.includes("ui-builder") &&
-				!rawSelectedPlugins.includes("cms")
-					? ["cms", ...rawSelectedPlugins]
-					: rawSelectedPlugins;
+			const selectedPlugins = normalizePlugins(rawSelectedPlugins);
 
 			let cssFile = await detectCssFile(cwd, framework);
 			if (!cssFile) {
@@ -260,15 +256,10 @@ export function createInitCommand() {
 				plan.files,
 				conflictPolicy,
 			);
-			const cssImports = PLUGINS.filter((plugin) =>
-				selectedPlugins.includes(plugin.key),
-			)
-				.map((plugin) => plugin.cssImport)
-				.filter((cssImport): cssImport is string => Boolean(cssImport));
 			const cssPatch = await patchCssImports(
 				cwd,
 				plan.cssPatchTarget,
-				cssImports,
+				plan.cssImports,
 			);
 			const layoutPatch =
 				framework === "nextjs"
