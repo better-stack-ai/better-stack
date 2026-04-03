@@ -2,17 +2,37 @@
 # setup-tanstack.sh — Scaffold and configure the TanStack Start codegen project
 #
 # Usage (from monorepo root):
-#   bash scripts/codegen/setup-tanstack.sh
+#   bash scripts/codegen/setup-tanstack.sh [--baseline-only]
+#
+# Flags:
+#   --baseline-only   Stop after btst init + git baseline commit.
+#                     Use this to regenerate .patch files:
+#                       1. bash scripts/codegen/setup-tanstack.sh --baseline-only
+#                       2. Apply desired changes to codegen-projects/tanstack
+#                       3. node scripts/codegen/generate-patches-tanstack.mjs
+#
+# What it does (full run):
+#   1. Creates codegen-projects/tanstack/ via `shadcn init -t start`
+#   2. Removes .git so the workspace git config tracks the files
+#   3. Builds the local CLI and runs `btst init` with an explicit plugin list
+#   4. Adds shadcn UI components needed by the E2E overlay
+#   5. Removes btst-init-generated files that will be completely replaced by patches
+#   6. Applies surgical .patch files from scripts/codegen/patches/tanstack/
+#   7. Patches package.json (name, start:e2e, workspace deps)
+#   8. Creates .env and public/uploads/
+#   9. Runs pnpm install from the monorepo root
 
 set -euo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
 NC='\033[0m'
 
 step()    { echo -e "\n${BLUE}== $1 ==${NC}"; }
 success() { echo -e "${GREEN}✓ $1${NC}"; }
+warn()    { echo -e "${YELLOW}⚠ $1${NC}"; }
 die()     { echo -e "${RED}✗ $1${NC}"; exit 1; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,26 +41,52 @@ DEST="$ROOT_DIR/codegen-projects/tanstack"
 PATCHES="$SCRIPT_DIR/patches/tanstack"
 CLI_BIN="$ROOT_DIR/packages/cli/dist/index.cjs"
 
+# Parse flags
+BASELINE_ONLY=false
+for arg in "$@"; do
+  case $arg in
+    --baseline-only) BASELINE_ONLY=true ;;
+  esac
+done
+
+# ── Prerequisites ────────────────────────────────────────────────────────────
+
+step "Checking prerequisites"
+command -v pnpm >/dev/null 2>&1 || die "pnpm not found"
+command -v node >/dev/null 2>&1 || die "node not found"
+NODE_VERSION=$(node --version | cut -d. -f1 | tr -d 'v')
+[ "$NODE_VERSION" -ge 22 ] || warn "Node.js v22+ recommended (current: $(node --version))"
+success "Prerequisites OK"
+
+# ── Guard: already exists ────────────────────────────────────────────────────
+
 if [ -d "$DEST" ]; then
   die "codegen-projects/tanstack already exists. Run 'bash scripts/codegen/cleanup.sh tanstack' first."
 fi
 
-step "Scaffolding TanStack Start project with shadcn init -t start"
-mkdir -p "$DEST"
-cd "$DEST"
-pnpm dlx shadcn@latest init -t start --yes
-success "shadcn scaffold complete"
+# ── Step 1: Scaffold with shadcn ─────────────────────────────────────────────
 
-step "Removing .git"
+step "Scaffolding TanStack Start project with shadcn init -t start"
+mkdir -p "$ROOT_DIR/codegen-projects"
+cd "$ROOT_DIR/codegen-projects"
+pnpm dlx shadcn@latest init -t start --no-monorepo --base radix --preset nova --name tanstack --yes
+success "shadcn scaffold complete → $DEST"
+
+# ── Step 2: Remove .git and lock file ────────────────────────────────────────
+
+step "Removing .git and pnpm-lock.yaml from scaffolded project"
 rm -rf "$DEST/.git"
-success ".git removed"
+rm -f "$DEST/pnpm-lock.yaml"
+success ".git and pnpm-lock.yaml removed"
+
+# ── Step 3: Build local CLI and run btst init ─────────────────────────────────
 
 step "Building local @btst/codegen CLI"
 cd "$ROOT_DIR"
 pnpm --filter @btst/codegen build
-success "CLI built"
+success "CLI built → $CLI_BIN"
 
-step "Running btst init"
+step "Running btst init (explicit plugin list, skip install)"
 cd "$DEST"
 node "$CLI_BIN" init \
   --yes \
@@ -50,63 +96,170 @@ node "$CLI_BIN" init \
   --skip-install
 success "btst init complete"
 
-step "Applying patches from scripts/codegen/patches/tanstack/"
-if [ -d "$PATCHES" ]; then
-  cp -r "$PATCHES/." "$DEST/"
-  success "Patches applied"
-else
-  die "Patch directory not found: $PATCHES — run after creating patches/tanstack/"
+# ── Step 4: Add shadcn UI components ──────────────────────────────────────────
+# These are needed by the E2E overlay patches (todo plugin UI, etc.)
+
+step "Adding shadcn UI components (checkbox, label, skeleton, input, sonner, dropdown-menu, separator)"
+cd "$DEST"
+pnpm dlx shadcn@latest add checkbox label skeleton input sonner dropdown-menu separator empty field item --yes --overwrite
+success "shadcn components added"
+
+# ── Step 5 (baseline-only): Init git baseline for patch regeneration ──────────
+
+if [ "$BASELINE_ONLY" = true ]; then
+  step "--baseline-only: initialising git baseline commit"
+  cd "$DEST"
+  git init -b main
+  git config user.email "dev@btst.ai"
+  git config user.name "BTST Dev"
+  git add -A
+  git commit -m "baseline: shadcn init + btst init output"
+  success "Git baseline committed at $DEST"
+  echo ""
+  echo "  Next steps to regenerate patches:"
+  echo "    1. Apply desired changes to codegen-projects/tanstack"
+  echo "    2. node scripts/codegen/generate-patches-tanstack.mjs"
+  echo ""
+  exit 0
 fi
 
-step "Adding shadcn UI components"
+# ── Step 5: Remove files that will be completely replaced by E2E patches ──────
+# These files are generated by shadcn init or btst init but our E2E overlay
+# replaces them entirely. Deleting them first lets us apply "new file" patches.
+
+step "Removing files to be replaced by E2E overlay patches"
 cd "$DEST"
-pnpm dlx shadcn@latest add checkbox label skeleton input sonner dropdown-menu separator --yes --overwrite
-success "shadcn components added"
+rm -f "src/routes/__root.tsx" \
+      "src/lib/stack.ts" \
+      "src/lib/stack-client.tsx" \
+      "src/routes/pages/route.tsx" \
+      "src/router.tsx"
+success "Replaced-file stubs removed"
+
+# ── Step 6: Apply surgical patches ────────────────────────────────────────────
+
+step "Applying E2E overlay patches from scripts/codegen/patches/tanstack/"
+cd "$DEST"
+
+PATCH_COUNT=0
+for patch_file in "$PATCHES"/*.patch; do
+  if [ -f "$patch_file" ]; then
+    patch_name="$(basename "$patch_file")"
+    if patch -p1 --dry-run --silent < "$patch_file" 2>/dev/null; then
+      patch -p1 < "$patch_file"
+      success "Applied $patch_name"
+      PATCH_COUNT=$((PATCH_COUNT + 1))
+    else
+      # Try with fuzz factor for patches that don't apply cleanly
+      if patch -p1 -F 3 --dry-run --silent < "$patch_file" 2>/dev/null; then
+        patch -p1 -F 3 < "$patch_file"
+        warn "Applied $patch_name (with fuzz — shadcn output may have changed)"
+        PATCH_COUNT=$((PATCH_COUNT + 1))
+      else
+        die "Failed to apply patch: $patch_name. Run with --baseline-only to regenerate patches."
+      fi
+    fi
+  fi
+done
+success "$PATCH_COUNT patches applied"
+
+# ── Step 7: Patch package.json ────────────────────────────────────────────────
 
 step "Patching package.json"
 cd "$DEST"
 node - <<'PATCH_SCRIPT'
 const fs = require("fs");
 const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+
+// Set workspace package name (used by pnpm -F tanstack)
 pkg.name = "tanstack";
+
+// E2E start script: builds TanStack then starts in production on port 3007
 pkg.scripts = pkg.scripts || {};
-pkg.scripts["start:e2e"] = "vite build && NODE_ENV=test vite preview --port 3007 --host 127.0.0.1";
-for (const section of ["dependencies", "devDependencies"]) {
-  if (!pkg[section]) continue;
-  for (const [key] of Object.entries(pkg[section])) {
-    if (key.startsWith("@btst/")) pkg[section][key] = "workspace:*";
-  }
-}
+pkg.scripts["start:e2e"] = "rm -rf .output && rm -rf .nitro && rm -rf .tanstack && NODE_OPTIONS=--max-old-space-size=8192 vite build && NODE_ENV=test PORT=3007 node .output/server/index.mjs";
+
+// btst init --skip-install doesn't add packages to package.json, so add them manually.
+const btstDeps = {
+  "@btst/stack": "workspace:*",
+  "@btst/adapter-memory": "^2.1.1",
+};
+
+// Ensure required runtime deps
+const extraDeps = {
+  "@ai-sdk/openai": "^2.0.68",
+  "ai": "^5.0.94",
+  "@tanstack/react-query": "^5.90.2",
+  "@tanstack/react-query-devtools": "^5.90.2",
+  "next-themes": "^0.4.6",
+  "sonner": "^2.0.7",
+  "lucide-react": "^0.545.0",
+  "zod": "^4.2.0",
+};
+
 const deps = pkg.dependencies || {};
 pkg.dependencies = {
   ...deps,
-  "next-themes": deps["next-themes"] || "^0.4.6",
-  "sonner": deps["sonner"] || "^2.0.7",
-  "lucide-react": deps["lucide-react"] || "^0.545.0",
+  ...btstDeps,
+  ...extraDeps,
 };
+
+// Point @btst/* packages that ARE in the workspace to workspace:*
+// Adapter packages are published to npm, not in the workspace.
+const WORKSPACE_BTST_PKGS = new Set(["@btst/stack"]);
+for (const section of ["dependencies", "devDependencies"]) {
+  if (!pkg[section]) continue;
+  for (const [key] of Object.entries(pkg[section])) {
+    if (key.startsWith("@btst/") && WORKSPACE_BTST_PKGS.has(key)) {
+      pkg[section][key] = "workspace:*";
+    }
+  }
+}
+
 fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
 console.log("package.json patched");
 PATCH_SCRIPT
 success "package.json patched"
 
-step "Creating .env"
-cat > "$DEST/.env" <<'ENVFILE'
-VITE_PUBLIC_SITE_URL=http://localhost:3007
-BASE_URL=http://localhost:3007
-# OPENAI_API_KEY=your-key-here
-ENVFILE
-success ".env created"
+# ── Step 8: Create .env ───────────────────────────────────────────────────────
 
-step "Creating public/uploads/"
+step "Creating .env (preserves existing OPENAI_API_KEY if present)"
+EXISTING_OPENAI_KEY="${OPENAI_API_KEY:-}"
+cat > "$DEST/.env" <<ENVFILE
+BASE_URL=http://localhost:3007
+VITE_BASE_URL=http://localhost:3007
+ENVFILE
+if [ -n "$EXISTING_OPENAI_KEY" ]; then
+  echo "OPENAI_API_KEY=$EXISTING_OPENAI_KEY" >> "$DEST/.env"
+  success ".env created (with OPENAI_API_KEY)"
+else
+  echo "# OPENAI_API_KEY=your-key-here" >> "$DEST/.env"
+  success ".env created (no OPENAI_API_KEY — set it to enable AI/WealthReview tests)"
+fi
+
+# ── Step 9: Create public/uploads/ ───────────────────────────────────────────
+
+step "Creating public/uploads/ for local media storage"
 mkdir -p "$DEST/public/uploads"
 success "public/uploads/ created"
 
+# ── Step 10: Install from workspace root ──────────────────────────────────────
+
 step "Running pnpm install from monorepo root"
 cd "$ROOT_DIR"
-pnpm install
+pnpm install --no-frozen-lockfile
 success "pnpm install complete"
 
+# ── Done ──────────────────────────────────────────────────────────────────────
+
+echo ""
 success "codegen-projects/tanstack is ready!"
 echo ""
 echo "  To run E2E tests:"
 echo "    pnpm -F e2e codegen:e2e:tanstack"
+echo ""
+echo "  To start the project manually:"
+echo "    pnpm -F tanstack dev"
+echo ""
+echo "  To regenerate patches after changes:"
+echo "    node scripts/codegen/generate-patches-tanstack.mjs"
+echo ""

@@ -20,6 +20,10 @@ const reactRouterEnv =
 type Framework = "nextjs" | "tanstack" | "react-router";
 const framework = process.env.BTST_FRAMEWORK as Framework | undefined;
 
+// SSG tests only apply to Next.js (generateStaticParams). React Router and
+// TanStack Start do not have SSG support, so smoke.ssg.spec.ts is excluded.
+const NEXTJS_ONLY_PATTERNS = ["**/*.ssg.spec.ts"];
+
 const ALL_TEST_PATTERNS = [
 	"**/*.todos.spec.ts",
 	"**/*.auth-blog.spec.ts",
@@ -37,6 +41,11 @@ const ALL_TEST_PATTERNS = [
 	"**/*.wealthreview.spec.ts",
 	"**/*.media.spec.ts",
 ];
+
+// React Router and TanStack share the same pattern set, minus SSG tests
+const NON_NEXTJS_TEST_PATTERNS = ALL_TEST_PATTERNS.filter(
+	(p) => !NEXTJS_ONLY_PATTERNS.includes(p),
+);
 
 const allWebServers = [
 	{
@@ -114,7 +123,7 @@ const allProjects = [
 			fullyParallel: false,
 			workers: 1,
 			use: { baseURL: "http://localhost:3007" },
-			testMatch: ALL_TEST_PATTERNS,
+			testMatch: NON_NEXTJS_TEST_PATTERNS,
 		},
 	},
 	{
@@ -124,7 +133,7 @@ const allProjects = [
 			fullyParallel: false,
 			workers: 1,
 			use: { baseURL: "http://localhost:3008" },
-			testMatch: ALL_TEST_PATTERNS,
+			testMatch: NON_NEXTJS_TEST_PATTERNS,
 		},
 	},
 ];

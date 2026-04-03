@@ -101,7 +101,7 @@ success "btst init complete"
 
 step "Adding shadcn UI components (checkbox, label, skeleton, input, sonner, dropdown-menu, separator)"
 cd "$DEST"
-pnpm dlx shadcn@latest add checkbox label skeleton input sonner dropdown-menu separator --yes --overwrite
+pnpm dlx shadcn@latest add checkbox label skeleton input sonner dropdown-menu separator empty field item --yes --overwrite
 success "shadcn components added"
 
 # ── Step 5 (baseline-only): Init git baseline for patch regeneration ──────────

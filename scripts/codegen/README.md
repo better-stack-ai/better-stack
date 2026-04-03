@@ -28,10 +28,33 @@ pnpm -F nextjs dev
 pnpm -F e2e codegen:e2e:nextjs
 ```
 
+## Quick start (React Router)
+
+```bash
+bash scripts/codegen/setup-react-router.sh
+
+pnpm -F react-router dev
+
+# Run E2E tests (builds + starts on port 3008, skips smoke.ssg.spec.ts)
+pnpm -F e2e codegen:e2e:react-router
+```
+
+## Quick start (TanStack Start)
+
+```bash
+bash scripts/codegen/setup-tanstack.sh
+
+pnpm -F tanstack dev
+
+# Run E2E tests (builds + starts on port 3007, skips smoke.ssg.spec.ts)
+pnpm -F e2e codegen:e2e:tanstack
+```
+
 ---
 
-## What setup-nextjs.sh does
+## What each setup script does
 
+**Next.js** (`setup-nextjs.sh`):
 1. `shadcn init -t next --preset nova` — scaffolds a fresh Next.js app
 2. `btst init` — runs the BTST CLI to generate all plugin files
 3. `pnpm dlx shadcn add checkbox label skeleton …` — adds extra UI components
@@ -39,15 +62,31 @@ pnpm -F e2e codegen:e2e:nextjs
 5. Patches `package.json` (workspace deps, `start:e2e` script)
 6. `pnpm install`
 
+**React Router** (`setup-react-router.sh`):
+1. `shadcn init -t react-router --preset nova` — scaffolds React Router app
+2. `btst init --framework react-router` — generates all plugin files
+3. `pnpm dlx shadcn add …` — adds extra UI components
+4. Removes files that will be completely replaced by E2E patches (`app/root.tsx`, `app/lib/stack.ts`, `app/lib/stack-client.tsx`, `app/routes/pages/_layout.tsx`, `app/routes.ts`)
+5. `patch -p1` for each `.patch` file in `scripts/codegen/patches/react-router/`
+6. Patches `package.json` — starts on port 3008 via `react-router-serve`
+7. `pnpm install`
+
+**TanStack Start** (`setup-tanstack.sh`):
+1. `shadcn init -t start --preset nova` — scaffolds TanStack Start app
+2. `btst init --framework tanstack` — generates all plugin files
+3. `pnpm dlx shadcn add …` — adds extra UI components
+4. Removes files that will be completely replaced by E2E patches (`src/routes/__root.tsx`, `src/lib/stack.ts`, `src/lib/stack-client.tsx`, `src/routes/pages/route.tsx`)
+5. `patch -p1` for each `.patch` file in `scripts/codegen/patches/tanstack/`
+6. Patches `package.json` — starts on port 3007 via `node .output/server/index.mjs`
+7. `pnpm install`
+
 ---
 
 ## Patch files
 
-`scripts/codegen/patches/nextjs/` contains **one `.patch` file per modified file**. These patches are the source of truth for the E2E overlay — what they add on top of `btst init` output is exactly what the tests depend on.
+Each framework has its own `patches/<framework>/` directory. Patch filenames use `--` as a path separator.
 
-**The patches are committed to git and should not change often.** They represent stable E2E-specific additions (custom todo plugin, separate auth stacks, CMS schemas, demo pages, etc.).
-
-Patch filenames use `--` as a path separator:
+### Next.js patches (`patches/nextjs/`)
 
 | Patch file | What it patches |
 |---|---|
@@ -70,12 +109,55 @@ Patch filenames use `--` as a path separator:
 | `components--navbar.tsx.patch` | App navbar |
 | `components--mode-toggle.tsx.patch` | Dark-mode toggle |
 
+### React Router patches (`patches/react-router/`)
+
+| Patch file | What it patches |
+|---|---|
+| `app--root.tsx.patch` | Root layout with `PageAIContextProvider`, `Navbar`, `Toaster` |
+| `app--routes.ts.patch` | Full route config including cms-example, directory, auth/public-chat API |
+| `app--lib--stack.ts.patch` | Full stack with todo plugin, AI/WealthReview tools |
+| `app--lib--stack-client.tsx.patch` | Full client with todo plugin, VITE_BASE_URL support |
+| `app--routes--pages--_layout.tsx.patch` | Full StackProvider overrides layout |
+| `app--lib--stack-auth.ts.patch` | Separate auth stack |
+| `app--lib--stack-public-chat.ts.patch` | Separate public-mode chat stack |
+| `app--lib--cms-schemas.ts.patch` | CMS content type definitions |
+| `app--lib--mock-users.ts.patch` | Kanban user mocks |
+| `app--lib--adapters-build-check.ts.patch` | Adapter re-export |
+| `app--lib--query-client.ts.patch` | Shared QueryClient factory |
+| `app--lib--plugins--todo--*.patch` | Full custom todo plugin (8 files) |
+| `app--routes--cms-example.tsx.patch` | CMS hooks demo page |
+| `app--routes--directory--*.patch` | CMS relations demo pages (3 files) |
+| `app--routes--api--example-auth--$.ts.patch` | Auth stack API route |
+| `app--routes--api--public-chat--$.ts.patch` | Public chat API route |
+| `app--components--ui--empty.tsx.patch` | Empty-state component (used by todo) |
+| `app--components--ui--field.tsx.patch` | Form field component (used by todo) |
+| `app--components--ui--item.tsx.patch` | List item component (used by todo) |
+
+### TanStack Start patches (`patches/tanstack/`)
+
+Same logical set as React Router but with `src/` path prefix, `@/` import alias, and TanStack-specific route patterns (`createFileRoute`):
+
+| Patch file | Key difference from React Router |
+|---|---|
+| `src--routes--__root.tsx.patch` | TanStack root with `createRootRouteWithContext` |
+| `src--lib--stack.ts.patch` | Identical to RR but openApi title says "TanStack API" |
+| `src--routes--pages--route.tsx.patch` | Uses `createFileRoute('/pages')` and router context |
+| `src--routes--api--example-auth--$.ts.patch` | Uses `createFileRoute` with `server.handlers` |
+| `src--routes--directory--index.tsx.patch` | Uses `createFileRoute('/directory/')` |
+| `src--routes--directory--$id.tsx.patch` | Uses `createFileRoute('/directory/$id')` |
+| `src--routes--directory--category--$categoryId.tsx.patch` | TanStack params pattern |
+| `src--lib--plugins--todo--client--components.tsx.patch` | Uses `@/` alias (not `~/`) |
+| `src--components--ui--*.patch` | Uses `@/` alias (not `~/`) |
+
 ---
 
 ## Cleanup
 
 ```bash
 bash scripts/codegen/cleanup.sh nextjs
+bash scripts/codegen/cleanup.sh react-router
+bash scripts/codegen/cleanup.sh tanstack
+bash scripts/codegen/cleanup.sh all    # removes all three
 ```
 
 ---
@@ -94,35 +176,63 @@ Edit the `.patch` file directly in your editor. The unified diff format is human
 **Method B — Regeneration workflow** (safer for larger changes)
 
 ```bash
-# 1. Create a fresh baseline (shadcn + btst init, committed to git)
+# Next.js
 bash scripts/codegen/cleanup.sh nextjs
 bash scripts/codegen/setup-nextjs.sh --baseline-only
-
-# 2. Edit files in codegen-projects/nextjs/ to the desired state
-#    e.g. vim codegen-projects/nextjs/lib/stack.ts
-
-# 3. Regenerate all patches from the delta (one .patch per changed file)
+# Edit files in codegen-projects/nextjs/
 node scripts/codegen/generate-patches-nextjs.mjs
 
-# 4. Verify patches apply cleanly, then commit the updated .patch files
+# React Router
+bash scripts/codegen/cleanup.sh react-router
+bash scripts/codegen/setup-react-router.sh --baseline-only
+# Edit files in codegen-projects/react-router/
+node scripts/codegen/generate-patches-react-router.mjs
+
+# TanStack
+bash scripts/codegen/cleanup.sh tanstack
+bash scripts/codegen/setup-tanstack.sh --baseline-only
+# Edit files in codegen-projects/tanstack/
+node scripts/codegen/generate-patches-tanstack.mjs
 ```
 
 **Single-file quick update** (after `--baseline-only`):
 
 ```bash
+# Next.js
 cd codegen-projects/nextjs
-# Make your edit, then:
 git diff lib/stack.ts > ../../scripts/codegen/patches/nextjs/lib--stack.ts.patch
+
+# React Router
+cd codegen-projects/react-router
+git diff app/lib/stack.ts > ../../scripts/codegen/patches/react-router/app--lib--stack.ts.patch
+
+# TanStack
+cd codegen-projects/tanstack
+git diff src/lib/stack.ts > ../../scripts/codegen/patches/tanstack/src--lib--stack.ts.patch
 ```
+
+---
+
+## Framework differences quick reference
+
+| Concern | Next.js | React Router | TanStack |
+|---|---|---|---|
+| Port | 3006 | 3008 | 3007 |
+| Root layout file | `app/layout.tsx` | `app/root.tsx` | `src/routes/__root.tsx` |
+| Import alias | `@/` | `~/` | `@/` |
+| API route pattern | `export const GET = handler` | `export function loader()` | `createFileRoute` + `server.handlers` |
+| Pages layout | `app/pages/layout.tsx` | `app/routes/pages/_layout.tsx` | `src/routes/pages/route.tsx` |
+| Route registration | File-system | `app/routes.ts` (explicit) | File-system |
+| SSG support | Yes (`generateStaticParams`) | No | No |
 
 ---
 
 ## Adding a new patched file
 
-1. Run `--baseline-only` to get a baseline
-2. Add/edit the file in `codegen-projects/nextjs/`
-3. Run `generate-patches-nextjs.mjs` — it will create a new `.patch` file automatically
-4. Add the new file path to the `FILES` array in `generate-patches-nextjs.mjs`
+1. Run `--baseline-only` to get a baseline for the framework
+2. Add/edit the file in `codegen-projects/<framework>/`
+3. Run the appropriate `generate-patches-<framework>.mjs` — it will create a new `.patch` file
+4. Add the new file path to the `FILES` array in the generator script
 5. Commit both the new `.patch` file and the updated generator
 
 ---

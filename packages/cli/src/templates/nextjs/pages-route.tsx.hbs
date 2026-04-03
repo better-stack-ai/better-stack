@@ -42,5 +42,8 @@ export async function generateMetadata({
 	if (!route?.meta) {
 		return {}
 	}
+	if (route?.loader) {
+		await route.loader()
+	}
 	return metaElementsToObject(route.meta()) satisfies Metadata
 }

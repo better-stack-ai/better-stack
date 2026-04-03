@@ -1,0 +1,74 @@
+diff --git a/src/lib/stack-public-chat.ts b/src/lib/stack-public-chat.ts
+new file mode 100644
+index 0000000..0000001
+--- /dev/null
++++ b/src/lib/stack-public-chat.ts
+@@ -0,0 +1,68 @@
++import { createMemoryAdapter } from "./adapters-build-check"
++import { stack } from "@btst/stack"
++import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
++import { openai } from "@ai-sdk/openai"
++
++/**
++ * AI Chat backend plugin configured for PUBLIC mode
++ *
++ * This demonstrates a public chatbot configuration:
++ * - No authentication required
++ * - Conversations are NOT persisted to database
++ * - Rate limiting can be implemented via hooks
++ */
++
++const rateLimits = new Map<string, { count: number; resetAt: number }>()
++const RATE_LIMIT = 20
++const RATE_WINDOW_MS = 60 * 1000
++
++function checkRateLimit(ip: string): boolean {
++    const now = Date.now()
++    const record = rateLimits.get(ip)
++
++    if (!record || now > record.resetAt) {
++        rateLimits.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS })
++        return true
++    }
++
++    if (record.count >= RATE_LIMIT) {
++        console.log(`[Rate Limit] Blocked: ${ip} exceeded ${RATE_LIMIT} requests`)
++        return false
++    }
++
++    record.count++
++    return true
++}
++
++const { handler, dbSchema } = stack({
++    basePath: "/api/public-chat",
++    plugins: {
++        aiChat: aiChatBackendPlugin({
++            model: openai("gpt-4o"),
++            mode: "public",
++            systemPrompt:
++                "You are a helpful customer support assistant. Be concise and friendly.",
++            hooks: {
++                onBeforeChat: async (messages, ctx) => {
++                    const ip =
++                        ctx.headers?.get("x-forwarded-for") ||
++                        ctx.headers?.get("x-real-ip") ||
++                        "unknown"
++                    console.log(`[Public Chat] Request from IP: ${ip}`)
++
++                    const allowed = checkRateLimit(ip)
++                    if (!allowed) {
++                        console.log(`[Public Chat] Rate limit exceeded for ${ip}`)
++                        throw new Error("Rate limit exceeded")
++                    }
++
++                    console.log(`[Public Chat] Processing ${messages.length} message(s)`)
++                },
++            },
++        }),
++    },
++    adapter: (db) => createMemoryAdapter(db)({}),
++})
++
++export { handler, dbSchema }
++

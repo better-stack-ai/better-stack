@@ -18,18 +18,26 @@ on:
       - 'scripts/codegen/**'
       - 'e2e/**'
       - '.github/workflows/codegen-e2e.yml'
+      - 'scripts/codegen/patches/react-router/**'
+      - 'scripts/codegen/patches/tanstack/**'
 
 jobs:
-  codegen-e2e-nextjs:
-    name: Codegen E2E (nextjs)
+  codegen-e2e:
+    name: Codegen E2E (${{ matrix.framework }})
     runs-on: ubuntu-latest
     concurrency:
-      group: codegen-e2e-nextjs-${{ github.ref }}
+      group: codegen-e2e-${{ matrix.framework }}-${{ github.ref }}
       cancel-in-progress: true
     permissions:
       contents: read
     env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       NODE_OPTIONS: --max-old-space-size=8192
+
+    strategy:
+      fail-fast: false
+      matrix:
+        framework: [nextjs, react-router, tanstack]
 
     steps:
       - name: Checkout
@@ -50,33 +58,27 @@ jobs:
       - name: Build workspace
         run: pnpm -w build
 
-      # Creates codegen-projects/nextjs/ from scratch:
-      #   1. shadcn init (Next.js + Nova preset)
+      # Creates codegen-projects/${{ matrix.framework }}/ from scratch:
+      #   1. shadcn init (framework + Nova preset)
       #   2. btst init (all plugins, memory adapter)
       #   3. pnpm dlx shadcn add (extra UI components)
-      #   4. Apply .patch files from scripts/codegen/patches/nextjs/
+      #   4. Apply .patch files from scripts/codegen/patches/${{ matrix.framework }}/
       #   5. pnpm install
-      - name: Set up Next.js codegen project from scratch
-        run: bash scripts/codegen/setup-nextjs.sh
+      - name: Set up ${{ matrix.framework }} codegen project from scratch
+        run: bash scripts/codegen/setup-${{ matrix.framework }}.sh
         timeout-minutes: 20
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Install Playwright browsers
         run: cd e2e && pnpm exec playwright install --with-deps
 
-      # The E2E config (playwright.codegen.config.ts) starts the Next.js server
-      # via `pnpm -F nextjs run start:e2e` (builds + starts on port 3006).
-      - name: Run codegen E2E tests (nextjs)
-        run: pnpm -F e2e codegen:e2e:nextjs
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      - name: Run codegen E2E tests (${{ matrix.framework }})
+        run: pnpm -F e2e codegen:e2e:${{ matrix.framework }}
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-codegen-nextjs
+          name: playwright-report-codegen-${{ matrix.framework }}
           path: e2e/playwright-report-codegen
           if-no-files-found: ignore
 
@@ -84,6 +86,6 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: traces-codegen-nextjs
+          name: traces-codegen-${{ matrix.framework }}
           path: test-results-codegen/**/*.zip
           if-no-files-found: ignore
