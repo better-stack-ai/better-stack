@@ -222,18 +222,28 @@ success "package.json patched"
 
 # ── Step 8: Create .env ───────────────────────────────────────────────────────
 
-step "Creating .env (preserves existing OPENAI_API_KEY if present)"
-EXISTING_OPENAI_KEY="${OPENAI_API_KEY:-}"
+step "Creating .env"
 cat > "$DEST/.env" <<ENVFILE
 BASE_URL=http://localhost:3007
 VITE_BASE_URL=http://localhost:3007
 ENVFILE
-if [ -n "$EXISTING_OPENAI_KEY" ]; then
-  echo "OPENAI_API_KEY=$EXISTING_OPENAI_KEY" >> "$DEST/.env"
-  success ".env created (with OPENAI_API_KEY)"
+
+# Merge any additional vars from .env.common (skips keys already present in .env)
+ENV_COMMON="$SCRIPT_DIR/.env.common"
+if [ -f "$ENV_COMMON" ]; then
+  MERGED=0
+  while IFS= read -r line || [ -n "$line" ]; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "${line// }" ]] && continue
+    key="${line%%=*}"
+    if ! grep -q "^${key}=" "$DEST/.env"; then
+      echo "$line" >> "$DEST/.env"
+      MERGED=$((MERGED + 1))
+    fi
+  done < "$ENV_COMMON"
+  success ".env created (merged $MERGED var(s) from .env.common)"
 else
-  echo "# OPENAI_API_KEY=your-key-here" >> "$DEST/.env"
-  success ".env created (no OPENAI_API_KEY — set it to enable AI/WealthReview tests)"
+  success ".env created (no .env.common found)"
 fi
 
 # ── Step 9: Create public/uploads/ ───────────────────────────────────────────
