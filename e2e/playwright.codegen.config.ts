@@ -53,7 +53,7 @@ const allWebServers = [
 		config: {
 			command: "pnpm -F nextjs run start:e2e",
 			port: 3006,
-			reuseExistingServer: true,
+			reuseExistingServer: false,
 			timeout: 300_000,
 			stdout: "pipe" as const,
 			stderr: "pipe" as const,
@@ -90,7 +90,7 @@ const allWebServers = [
 		config: {
 			command: "pnpm -F react-router run start:e2e",
 			port: 3008,
-			reuseExistingServer: true,
+			reuseExistingServer: false,
 			timeout: 300_000,
 			stdout: "pipe" as const,
 			stderr: "pipe" as const,

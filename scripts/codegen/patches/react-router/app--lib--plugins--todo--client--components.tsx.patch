@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000..0000001
 --- /dev/null
 +++ b/app/lib/plugins/todo/client/components.tsx
-@@ -0,0 +1,224 @@
+@@ -0,0 +1,225 @@
 +import { useCreateTodo, useDeleteTodo, useTodos, useToggleTodo } from "./hooks"
 +import type { TodosPluginOverrides } from "./overrides"
 +import type { Todo } from "../types"
@@ -145,7 +145,7 @@ index 0000000..0000001
 +
 +export function AddTodoPage() {
 +    const createTodoMutation = useCreateTodo()
-+    const { Link } = usePluginOverrides<TodosPluginOverrides>("todos")
++    const { Link, navigate } = usePluginOverrides<TodosPluginOverrides>("todos")
 +    const basePath = useBasePath()
 +
 +    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -157,6 +157,7 @@ index 0000000..0000001
 +        try {
 +            await createTodoMutation.mutateAsync({ title })
 +            toast.success("Todo has been added")
++            navigate?.(basePath + "/todos")
 +        } catch (error) {
 +            toast.error("Error adding todo")
 +            console.error(error)

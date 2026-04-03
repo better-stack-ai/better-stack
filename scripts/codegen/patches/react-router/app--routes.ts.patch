@@ -12,7 +12,7 @@ index 0000000..0000001
 +        route("pages/*", "routes/pages/$.tsx"),
 +    ]),
 +    route("form-demo/:slug", "routes/form-demo.tsx"),
-+    route("preview", "routes/preview.tsx"),
++    route("preview/:slug", "routes/preview.tsx"),
 +    route("public-chat", "routes/public-chat.tsx"),
 +    route("cms-example", "routes/cms-example.tsx"),
 +    route("directory", "routes/directory/index.tsx"),

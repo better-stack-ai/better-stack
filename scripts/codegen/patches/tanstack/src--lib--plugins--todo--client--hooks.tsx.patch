@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000..0000001
 --- /dev/null
 +++ b/src/lib/plugins/todo/client/hooks.tsx
-@@ -0,0 +1,128 @@
+@@ -0,0 +1,129 @@
 +import { createApiClient } from "@btst/stack/plugins/client"
 +import {
 +    useMutation,
@@ -26,6 +26,7 @@ index 0000000..0000001
 +            })
 +            return response.data
 +        },
++        refetchOnMount: "always",
 +    })
 +}
 +

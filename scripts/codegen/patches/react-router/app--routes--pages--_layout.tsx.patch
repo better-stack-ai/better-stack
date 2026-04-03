@@ -3,21 +3,24 @@ new file mode 100644
 index 0000000..0000001
 --- /dev/null
 +++ b/app/routes/pages/_layout.tsx
-@@ -0,0 +1,264 @@
+@@ -0,0 +1,290 @@
 +import { useCallback, useMemo, useState } from "react"
-+import { Outlet, Link, useNavigate } from "react-router"
++import { Outlet, Link, useNavigate, useRevalidator } from "react-router"
 +import { StackProvider } from "@btst/stack/context"
 +import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 +import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
 +import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 +import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 +import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
++import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client"
++import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
 +import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
 +import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
 +import { CommentThread } from "@btst/stack/plugins/comments/client/components"
 +import { uploadAsset, type MediaPluginOverrides } from "@btst/stack/plugins/media/client"
 +import { MediaPicker, ImageInputField } from "@btst/stack/plugins/media/client/components"
 +import { Button } from "../../components/ui/button"
++import type { TodosPluginOverrides } from "../../lib/plugins/todo/client/overrides"
 +import { resolveUser, searchUsers } from "../../lib/mock-users"
 +import { getOrCreateQueryClient } from "../../lib/query-client"
 +
@@ -31,6 +34,8 @@ index 0000000..0000001
 +
 +// Define the shape of all plugin overrides
 +type PluginOverrides = {
++    todos: TodosPluginOverrides
++    "ui-builder": UIBuilderPluginOverrides
 +    blog: BlogPluginOverrides
 +    "ai-chat": AiChatPluginOverrides
 +    cms: CMSPluginOverrides
@@ -43,6 +48,7 @@ index 0000000..0000001
 +export default function Layout() {
 +    const baseURL = getBaseURL()
 +    const navigate = useNavigate()
++    const { revalidate } = useRevalidator()
 +    const [queryClient] = useState(() => getOrCreateQueryClient())
 +    const mediaClientConfig = useMemo(
 +        () => ({
@@ -75,6 +81,26 @@ index 0000000..0000001
 +        <StackProvider<PluginOverrides>
 +            basePath="/pages"
 +            overrides={{
++                todos: {
++                    Link: ({ href, children, className, ...props }) => (
++                        <Link to={href || ""} className={className} {...props}>
++                            {children}
++                        </Link>
++                    ),
++                    navigate: (href) => navigate(href),
++                },
++                "ui-builder": {
++                    apiBaseURL: baseURL,
++                    apiBasePath: "/api/data",
++                    navigate: (href) => navigate(href),
++                    refresh: () => revalidate(),
++                    Link: ({ href, children, className, ...props }) => (
++                        <Link to={href || ""} className={className} {...props}>
++                            {children}
++                        </Link>
++                    ),
++                    componentRegistry: defaultComponentRegistry,
++                },
 +                blog: {
 +                    apiBaseURL: baseURL,
 +                    apiBasePath: "/api/data",

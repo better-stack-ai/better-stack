@@ -1,0 +1,33 @@
+diff --git a/src/routes/pages/$.tsx b/src/routes/pages/$.tsx
+index 0000000..0000001 100644
+--- a/src/routes/pages/$.tsx
++++ b/src/routes/pages/$.tsx
+@@ -1,15 +1,13 @@
+ import { createFileRoute, notFound } from "@tanstack/react-router"
+ import { normalizePath } from "@btst/stack/client"
+ import { getStackClient } from "@/lib/stack-client"
+-import { getOrCreateQueryClient } from "@/lib/query-client"
+ 
+ export const Route = createFileRoute("/pages/$")({
+ 	ssr: true,
+ 	component: BtstPagesRoute,
+-	loader: async ({ params }) => {
+-		const queryClient = getOrCreateQueryClient()
++	loader: async ({ params, context }) => {
+ 		const routePath = normalizePath(params._splat)
+-		const route = getStackClient(queryClient).router.getRoute(routePath)
++		const route = getStackClient(context.queryClient).router.getRoute(routePath)
+ 		if (!route) throw notFound()
+ 		if (route.loader) await route.loader()
+ 		return { meta: route.meta?.() }
+@@ -24,8 +22,8 @@
+ 
+ function BtstPagesRoute() {
+ 	const params = Route.useParams()
+-	const queryClient = getOrCreateQueryClient()
++	const context = Route.useRouteContext()
+ 	const routePath = normalizePath(params._splat)
+-	const route = getStackClient(queryClient).router.getRoute(routePath)
++	const route = getStackClient(context.queryClient).router.getRoute(routePath)
+ 	return route?.PageComponent ? <route.PageComponent /> : <div>Route not found</div>
+ }

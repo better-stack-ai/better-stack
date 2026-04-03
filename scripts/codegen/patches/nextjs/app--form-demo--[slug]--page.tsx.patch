@@ -1,0 +1,48 @@
+diff --git a/app/form-demo/[slug]/page.tsx b/app/form-demo/[slug]/page.tsx
+index 0000000..0000001 100644
+--- a/app/form-demo/[slug]/page.tsx
++++ b/app/form-demo/[slug]/page.tsx
+@@ -8,6 +8,7 @@
+ import { FormRenderer } from "@btst/stack/plugins/form-builder/client/components"
+ import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
+ import { getOrCreateQueryClient } from "@/lib/query-client"
++import { Loader2, AlertCircle } from "lucide-react"
+ 
+ const getBaseURL = () =>
+ 	typeof window !== "undefined"
+@@ -56,6 +57,8 @@
+ 								onError={(error) => {
+ 									console.error("Form error:", error)
+ 								}}
++								LoadingComponent={FormLoadingState}
++								ErrorComponent={FormErrorState}
+ 								className="space-y-6"
+ 							/>
+ 						</div>
+@@ -65,3 +68,26 @@
+ 		</QueryClientProvider>
+ 	)
+ }
++
++function FormLoadingState() {
++	return (
++		<div className="flex flex-col items-center justify-center py-12 gap-4">
++			<Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
++			<p className="text-muted-foreground">Loading form...</p>
++		</div>
++	)
++}
++
++function FormErrorState({ error }: { error: Error }) {
++	return (
++		<div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
++			<AlertCircle className="h-12 w-12 text-destructive" />
++			<div>
++				<h3 className="font-semibold text-lg">Form not found</h3>
++				<p className="text-muted-foreground">
++					{error.message || "The form you're looking for doesn't exist or is no longer available."}
++				</p>
++			</div>
++		</div>
++	)
++}
