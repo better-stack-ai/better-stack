@@ -18,7 +18,7 @@ function isRealConsoleError(text: string): boolean {
 // Helper: open media picker popover in the page
 async function openMediaPicker(page: Page) {
 	const triggerBtn = page.locator('[data-testid="open-media-picker"]').first();
-	await expect(triggerBtn).toBeVisible({ timeout: 10000 });
+	await expect(triggerBtn).toBeVisible({ timeout: 30000 });
 	await triggerBtn.click();
 	// Wait for the popover content to appear (Media Library header)
 	await expect(page.getByText("Media Library")).toBeVisible({ timeout: 5000 });
@@ -48,13 +48,13 @@ async function uploadInMediaPicker(page: Page) {
 	// The uploaded asset should appear in the grid
 	await expect(
 		page.locator('[data-testid="media-asset-item"]').first(),
-	).toBeVisible({ timeout: 15000 });
+	).toBeVisible({ timeout: 30000 });
 }
 
 // Helper: select first asset and confirm
 async function selectFirstAsset(page: Page) {
 	const firstAsset = page.locator('[data-testid="media-asset-item"]').first();
-	await expect(firstAsset).toBeVisible({ timeout: 10000 });
+	await expect(firstAsset).toBeVisible({ timeout: 30000 });
 	await firstAsset.click();
 	// Click the Select button in the footer (targeted by testid to avoid ambiguity)
 	const selectBtn = page.locator('[data-testid="media-select-button"]');
@@ -75,7 +75,7 @@ async function openBlogEditorMediaPicker(page: Page) {
 	const trigger = page.locator(
 		'[data-testid="image-picker-trigger"] [data-testid="open-media-picker"]',
 	);
-	await expect(trigger).toBeVisible({ timeout: 10000 });
+	await expect(trigger).toBeVisible({ timeout: 30000 });
 	await trigger.evaluate((element) =>
 		element.scrollIntoView({ block: "center", inline: "nearest" }),
 	);
@@ -98,7 +98,7 @@ test.describe("Media Plugin — direct upload via MediaPicker", () => {
 
 		// ImageInputField renders a "Browse Media" button (open-media-picker) when no image is set
 		const trigger = page.locator('[data-testid="open-media-picker"]').first();
-		await expect(trigger).toBeVisible({ timeout: 10000 });
+		await expect(trigger).toBeVisible({ timeout: 30000 });
 
 		expect(errors, `Console errors: \n${errors.join("\n")}`).toEqual([]);
 	});
@@ -116,7 +116,7 @@ test.describe("Media Plugin — direct upload via MediaPicker", () => {
 
 		// ImageInputField renders a "Browse Media" button (open-media-picker) when no image is set
 		const trigger = page.locator('[data-testid="open-media-picker"]').first();
-		await expect(trigger).toBeVisible({ timeout: 10000 });
+		await expect(trigger).toBeVisible({ timeout: 30000 });
 
 		expect(errors, `Console errors: \n${errors.join("\n")}`).toEqual([]);
 	});
@@ -159,7 +159,7 @@ test.describe("Media Plugin — direct upload via MediaPicker", () => {
 
 		// After selection the image preview should appear
 		const imagePreview = page.locator('[data-testid="image-preview"]');
-		await expect(imagePreview).toBeVisible({ timeout: 10000 });
+		await expect(imagePreview).toBeVisible({ timeout: 30000 });
 
 		// The preview src should be a real URL (from the local storage adapter), not a mock placeholder
 		const previewSrc = await imagePreview.getAttribute("src");
@@ -168,7 +168,7 @@ test.describe("Media Plugin — direct upload via MediaPicker", () => {
 
 		// Submit the form
 		await page.locator('button[type="submit"]').click();
-		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 15000 });
+		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 30000 });
 
 		expect(errors, `Console errors: \n${errors.join("\n")}`).toEqual([]);
 	});
@@ -201,7 +201,7 @@ test.describe("Media Plugin — direct upload via MediaPicker", () => {
 		// Crepe renders `![](url)` as <img> under `.milkdown-custom`; the image
 		// node is not always a descendant of `[contenteditable]` (node views).
 		const editorImages = page.locator(".milkdown-custom img");
-		await expect(editorImages.first()).toBeVisible({ timeout: 15000 });
+		await expect(editorImages.first()).toBeVisible({ timeout: 30000 });
 
 		// The image src should be a real URL (not a placeholder)
 		const imgSrc = await editorImages.first().getAttribute("src");
@@ -253,14 +253,14 @@ test.describe("Media Plugin — direct upload via MediaPicker", () => {
 
 		// The previously uploaded asset should be visible in the Browse grid
 		const assetItem = page.locator('[data-testid="media-asset-item"]').first();
-		await expect(assetItem).toBeVisible({ timeout: 10000 });
+		await expect(assetItem).toBeVisible({ timeout: 30000 });
 
 		// Select it
 		await selectFirstAsset(page);
 
 		// Preview should appear
 		const imagePreview = page.locator('[data-testid="image-preview"]');
-		await expect(imagePreview).toBeVisible({ timeout: 10000 });
+		await expect(imagePreview).toBeVisible({ timeout: 30000 });
 
 		const previewSrc = await imagePreview.getAttribute("src");
 		expect(previewSrc).toBeTruthy();

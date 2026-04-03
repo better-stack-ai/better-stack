@@ -25,7 +25,7 @@ test.describe("SSG Blog Pages", () => {
 
 		// Should render the blog home page component
 		await expect(page.locator('[data-testid="home-page"]')).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 		await expect(page).toHaveTitle(/Blog/i);
 
@@ -55,7 +55,7 @@ test.describe("SSG Blog Pages", () => {
 		// Create a published post via the regular (SSR) admin pages
 		await page.goto("/pages/blog/new", { waitUntil: "networkidle" });
 		await expect(page.locator('[data-testid="new-post-page"]')).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Click then fill — mirrors the pattern used in the working blog smoke tests
@@ -108,7 +108,7 @@ test.describe("SSG Blog Pages", () => {
 		// immediately and expect fresh content.
 		await page.goto(`/pages/ssg-blog/${slug}`, { waitUntil: "networkidle" });
 		await expect(page.locator('[data-testid="post-page"]')).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 		await expect(page).toHaveTitle(new RegExp(title, "i"));
 

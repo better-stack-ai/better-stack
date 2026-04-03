@@ -3,7 +3,7 @@ new file mode 100644
 index 0000000..0000001
 --- /dev/null
 +++ b/src/lib/plugins/todo/client/client.tsx
-@@ -0,0 +1,161 @@
+@@ -0,0 +1,172 @@
 +import {
 +    createApiClient,
 +    defineClientPlugin,
@@ -13,6 +13,17 @@ index 0000000..0000001
 +import type { TodosApiRouter } from "../api/backend"
 +import { lazy } from "react"
 +import { Todo } from "../types"
++
++// Stable lazy references at module scope — must NOT be created inside route
++// handlers or component bodies, otherwise React sees a new component type on
++// every render and cannot hydrate the SSR-rendered HTML, causing the form's
++// onSubmit handler to never attach and native GET submissions to fire instead.
++const TodosListPageLazy = lazy(() =>
++    import("./components").then((m) => ({ default: m.TodosListPage })),
++)
++const AddTodoPageLazy = lazy(() =>
++    import("./components").then((m) => ({ default: m.AddTodoPage })),
++)
 +
 +/**
 + * Configuration for todos client plugin
@@ -127,27 +138,15 @@ index 0000000..0000001
 +        name: "todos",
 +
 +        routes: () => ({
-+            todos: createRoute("/todos", () => {
-+                const TodosListPage = lazy(() =>
-+                    import("./components").then((m) => ({ default: m.TodosListPage })),
-+                )
-+
-+                return {
-+                    PageComponent: TodosListPage,
-+                    loader: todosLoader(config),
-+                    meta: createTodosMeta(config, "/todos"),
-+                }
-+            }),
-+            addTodo: createRoute("/todos/add", () => {
-+                const AddTodoPage = lazy(() =>
-+                    import("./components").then((m) => ({ default: m.AddTodoPage })),
-+                )
-+
-+                return {
-+                    PageComponent: AddTodoPage,
-+                    meta: createAddTodoMeta(config, "/todos/add"),
-+                }
-+            }),
++            todos: createRoute("/todos", () => ({
++                PageComponent: TodosListPageLazy,
++                loader: todosLoader(config),
++                meta: createTodosMeta(config, "/todos"),
++            })),
++            addTodo: createRoute("/todos/add", () => ({
++                PageComponent: AddTodoPageLazy,
++                meta: createAddTodoMeta(config, "/todos/add"),
++            })),
 +        }),
 +        sitemap: async () => {
 +            return [
@@ -164,4 +163,3 @@ index 0000000..0000001
 +            ]
 +        },
 +    })
-+

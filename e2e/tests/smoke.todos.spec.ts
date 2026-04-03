@@ -31,6 +31,7 @@ test("add todo page renders", async ({ page }) => {
 	expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual([]);
 	await page.fill('[data-test-id="add-todo-title-input"]', "Test Todo");
 	await page.click('[data-test-id="add-todo-submit"]');
+	await page.waitForLoadState("networkidle"); // wait for POST to commit before triggering SSR navigation
 	// go back to list page
 	await page.goto("/pages/todos", { waitUntil: "networkidle" });
 	await expect(page.locator('[data-test-id="todos-list-page"]')).toBeVisible();

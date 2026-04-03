@@ -70,7 +70,7 @@ test.describe("AI Chat Plugin - Public Mode", () => {
 
 		// Verify user message appears
 		await expect(page.getByText("Hello from public chat!")).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Verify AI response appears

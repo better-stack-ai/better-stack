@@ -28,18 +28,20 @@ const ALL_TEST_PATTERNS = [
 	"**/*.todos.spec.ts",
 	"**/*.auth-blog.spec.ts",
 	"**/*.blog.spec.ts",
-	"**/*.chat.spec.ts",
-	"**/*.public-chat.spec.ts",
+	// CMS and media run before chat/AI specs so the server is not under
+	// streaming-response load when form-submit redirects are checked.
 	"**/*.cms.spec.ts",
 	"**/*.relations-cms.spec.ts",
 	"**/*.form-builder.spec.ts",
+	"**/*.media.spec.ts",
+	"**/*.chat.spec.ts",
+	"**/*.public-chat.spec.ts",
 	"**/*.ui-builder.spec.ts",
 	"**/*.kanban.spec.ts",
 	"**/*.comments.spec.ts",
 	"**/*.ssg.spec.ts",
 	"**/*.page-context.spec.ts",
 	"**/*.wealthreview.spec.ts",
-	"**/*.media.spec.ts",
 ];
 
 // React Router and TanStack share the same pattern set, minus SSG tests
@@ -148,7 +150,7 @@ const projects = framework
 
 export default defineConfig({
 	testDir: "./tests",
-	timeout: 90_000,
+	timeout: 120_000,
 	forbidOnly: !!process.env.CI,
 	outputDir: "../test-results-codegen",
 	reporter: [
@@ -156,15 +158,15 @@ export default defineConfig({
 		["html", { open: "never", outputFolder: "playwright-report-codegen" }],
 	],
 	expect: {
-		timeout: 10_000,
+		timeout: 30_000,
 	},
 	retries: process.env["CI"] ? 2 : 0,
 	use: {
 		trace: "retain-on-failure",
 		video: "retain-on-failure",
 		screenshot: "only-on-failure",
-		actionTimeout: 15_000,
-		navigationTimeout: 30_000,
+		actionTimeout: 30_000,
+		navigationTimeout: 60_000,
 		baseURL: "http://localhost:3006",
 		viewport: { width: 1280, height: 900 },
 	},

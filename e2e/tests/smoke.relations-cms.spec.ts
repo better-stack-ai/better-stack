@@ -604,7 +604,7 @@ test.describe("CMS Inverse Relations Panel Prefill", () => {
 
 		// Wait for the page to load
 		await expect(page.locator("h1")).toContainText("Edit Resource", {
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Scroll down to find the inverse relations panel
@@ -631,7 +631,7 @@ test.describe("CMS Inverse Relations Panel Prefill", () => {
 
 		// Wait for the comment form to load
 		await expect(page.locator("h1")).toContainText("New Comment", {
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// The resourceId field should be pre-filled with the resource
@@ -707,7 +707,7 @@ test.describe("CMS Inverse Relations Panel Prefill", () => {
 
 		// Wait for the form to load
 		await expect(page.locator("h1")).toContainText("New Comment", {
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Scroll to see the Resource Id field
@@ -742,7 +742,7 @@ test.describe("CMS Inverse Relations Panel Prefill", () => {
 
 		// Wait for navigation back to the comment list (successful creation)
 		await page.waitForURL(/\/pages\/cms\/comment(?!\/new)/, {
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Verify the comment was created by checking the API

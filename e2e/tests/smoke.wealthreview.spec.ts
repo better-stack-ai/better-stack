@@ -109,11 +109,11 @@ test.describe("WealthReview AI Demo", () => {
 			page
 				.locator('[data-testid="kanban-board"]')
 				.or(page.getByText("Advisor Review Queue")),
-		).toBeVisible({ timeout: 15000 });
+		).toBeVisible({ timeout: 30000 });
 
 		// The advisor review board should have appeared
 		await expect(page.getByText("Advisor Review Queue")).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 	});
 
@@ -153,7 +153,7 @@ test.describe("WealthReview AI Demo", () => {
 		// Navigate to Kanban and click into the Advisor Review Queue board
 		await page.goto("/pages/kanban");
 		await expect(page.getByText("Advisor Review Queue")).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Click through to the board detail so we can see columns and cards
@@ -161,7 +161,7 @@ test.describe("WealthReview AI Demo", () => {
 
 		// The Escalated column header should be visible on the board detail page
 		await expect(page.getByText("Escalated").first()).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// The AML-flagged card title should contain "ESCALATED"
@@ -201,6 +201,6 @@ test.describe("WealthReview AI Demo", () => {
 		// The CMS dashboard should show the Client Profile content type
 		await expect(
 			page.getByText("Client Profile").or(page.getByText("client-profile")),
-		).toBeVisible({ timeout: 15000 });
+		).toBeVisible({ timeout: 30000 });
 	});
 });

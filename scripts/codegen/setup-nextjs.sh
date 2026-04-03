@@ -168,7 +168,7 @@ pkg.name = "nextjs";
 
 // E2E start script: builds Next.js then starts in production on port 3006
 pkg.scripts = pkg.scripts || {};
-pkg.scripts["start:e2e"] = "rm -rf .next && next build && NODE_ENV=test next start -p 3006";
+pkg.scripts["start:e2e"] = "rm -rf .next && next build && NODE_ENV=test NODE_OPTIONS='--max-old-space-size=4096' next start -p 3006";
 
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {

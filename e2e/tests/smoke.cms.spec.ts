@@ -84,7 +84,7 @@ test.describe("CMS Hooks Example", () => {
 		await page.locator('button[type="submit"]').click();
 
 		// Wait for redirect to list page (indicates success)
-		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 10000 });
+		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 30000 });
 
 		// Now navigate to the cms-example page
 		await page.goto("/cms-example", { waitUntil: "networkidle" });
@@ -147,7 +147,7 @@ test.describe("CMS Hooks Example", () => {
 
 		// Should show the Load More button since we have more than PAGE_SIZE items
 		const loadMoreButton = page.locator('[data-testid="load-more-button"]');
-		await expect(loadMoreButton).toBeVisible({ timeout: 10000 });
+		await expect(loadMoreButton).toBeVisible({ timeout: 30000 });
 
 		// Get initial count
 		const initialShowingText = await page
@@ -166,7 +166,7 @@ test.describe("CMS Hooks Example", () => {
 				return currentCount > prevCount;
 			},
 			initialCount,
-			{ timeout: 10000 },
+			{ timeout: 30000 },
 		);
 
 		// Verify more items are now shown
@@ -276,7 +276,7 @@ test.describe("CMS Plugin", () => {
 		await submitButton.click();
 
 		// Should redirect to list page on success
-		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 10000 });
+		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 30000 });
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
 			[],
@@ -308,7 +308,7 @@ test.describe("CMS Plugin", () => {
 		await page.locator('button[type="submit"]').click();
 
 		// Wait for redirect to list page on success
-		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 10000 });
+		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 30000 });
 		await expect(page.locator('[data-testid="cms-list-page"]')).toBeVisible();
 
 		// Click edit button on our item (find row with our slug)
@@ -351,7 +351,7 @@ test.describe("CMS Plugin", () => {
 		await page.locator('button[type="submit"]').click();
 
 		// Wait for redirect to list page on success
-		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 10000 });
+		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 30000 });
 		await expect(page.locator('[data-testid="cms-list-page"]')).toBeVisible();
 
 		// Click delete button on our item
@@ -360,7 +360,7 @@ test.describe("CMS Plugin", () => {
 		await row.locator("button:has(svg.lucide-trash-2)").click();
 
 		// Item should no longer be visible after deletion
-		await expect(row).not.toBeVisible({ timeout: 10000 });
+		await expect(row).not.toBeVisible({ timeout: 30000 });
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
 			[],
@@ -468,7 +468,7 @@ test.describe("CMS Plugin", () => {
 /** Open the MediaPicker popover via the `open-media-picker` trigger. */
 async function openMediaPicker(page: Page) {
 	const triggerBtn = page.locator('[data-testid="open-media-picker"]').first();
-	await expect(triggerBtn).toBeVisible({ timeout: 10000 });
+	await expect(triggerBtn).toBeVisible({ timeout: 30000 });
 	await triggerBtn.click();
 	await expect(page.getByText("Media Library")).toBeVisible({ timeout: 5000 });
 }
@@ -490,7 +490,7 @@ async function uploadInMediaPicker(page: Page) {
 	await page.getByRole("tab", { name: /browse/i }).click();
 	await expect(
 		page.locator('[data-testid="media-asset-item"]').first(),
-	).toBeVisible({ timeout: 15000 });
+	).toBeVisible({ timeout: 30000 });
 }
 
 /** Click the first asset in the Browse grid, then confirm selection. */
@@ -544,7 +544,7 @@ test.describe("CMS Image Upload", () => {
 
 		// After selection the image preview should appear
 		const imagePreview = page.locator('[data-testid="image-preview"]');
-		await expect(imagePreview).toBeVisible({ timeout: 10000 });
+		await expect(imagePreview).toBeVisible({ timeout: 30000 });
 
 		// The preview should show a real URL (not a mock placeholder)
 		const previewSrc = await imagePreview.getAttribute("src");
@@ -573,7 +573,7 @@ test.describe("CMS Image Upload", () => {
 
 		// Wait for preview
 		const imagePreview = page.locator('[data-testid="image-preview"]');
-		await expect(imagePreview).toBeVisible({ timeout: 10000 });
+		await expect(imagePreview).toBeVisible({ timeout: 30000 });
 
 		// Click remove button
 		await page.locator('[data-testid="remove-image-button"]').click();
@@ -619,13 +619,13 @@ test.describe("CMS Image Upload", () => {
 
 		// Wait for preview
 		const imagePreview = page.locator('[data-testid="image-preview"]');
-		await expect(imagePreview).toBeVisible({ timeout: 10000 });
+		await expect(imagePreview).toBeVisible({ timeout: 30000 });
 
 		// Submit the form
 		await page.locator('button[type="submit"]').click();
 
 		// Should redirect to list page on success
-		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 10000 });
+		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 30000 });
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
 			[],
@@ -662,13 +662,13 @@ test.describe("CMS Image Upload", () => {
 
 		// Wait for preview
 		let imagePreview = page.locator('[data-testid="image-preview"]');
-		await expect(imagePreview).toBeVisible({ timeout: 10000 });
+		await expect(imagePreview).toBeVisible({ timeout: 30000 });
 
 		// Submit to create
 		await page.locator('button[type="submit"]').click();
 
 		// Wait for redirect to list page on success
-		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 10000 });
+		await page.waitForURL(/\/pages\/cms\/product$/, { timeout: 30000 });
 		await expect(page.locator('[data-testid="cms-list-page"]')).toBeVisible();
 
 		// Click edit button on our item
@@ -678,7 +678,7 @@ test.describe("CMS Image Upload", () => {
 
 		// On edit page, image preview should still be visible (loaded from DB)
 		imagePreview = page.locator('[data-testid="image-preview"]');
-		await expect(imagePreview).toBeVisible({ timeout: 10000 });
+		await expect(imagePreview).toBeVisible({ timeout: 30000 });
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
 			[],
