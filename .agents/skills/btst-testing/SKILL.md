@@ -67,16 +67,11 @@ Use `vi.mock` for external modules that don't exist in the test environment (e.g
 
 ## E2E tests (Playwright)
 
-### Two E2E setups
+### E2E setup
 
-There are two Playwright configurations in `e2e/`:
+Playwright configuration lives in `e2e/playwright.codegen.config.ts`, command `pnpm codegen:e2e`. It starts the `codegen-projects/` apps (ports 3006–3008) and tests the CLI codegen output — accurately reflecting what a real `btst init` user gets.
 
-| Config | Command | Servers | Purpose |
-|---|---|---|---|
-| `playwright.config.ts` | `pnpm e2e:smoke` | `examples/` projects (ports 3003–3005) | Legacy — will be retired |
-| `playwright.codegen.config.ts` | `pnpm codegen:e2e` | `codegen-projects/` (ports 3006–3008) | **Primary** — tests the CLI codegen output |
-
-**Use the codegen config** for all new work. The codegen projects are built from scratch via `scripts/codegen/setup-*.sh` and accurately reflect what a real `btst init` user gets.
+The codegen projects are built from scratch via `scripts/codegen/setup-*.sh`.
 
 ### Location and naming
 
@@ -89,11 +84,18 @@ Examples: `smoke.chat.spec.ts`, `smoke.blog.spec.ts`
 The `codegen-projects/` directory is **not committed** — build it from scratch:
 
 ```bash
-# Next.js (currently the only fully set-up codegen project)
+# Set up a specific framework
 bash scripts/codegen/setup-nextjs.sh
+bash scripts/codegen/setup-react-router.sh
+bash scripts/codegen/setup-tanstack.sh
+
+# Or set up all frameworks at once
+bash scripts/codegen/setup.sh
 
 # Cleanup when you want a fresh start
 bash scripts/codegen/cleanup.sh nextjs
+bash scripts/codegen/cleanup.sh react-router
+bash scripts/codegen/cleanup.sh tanstack
 ```
 
 See `scripts/codegen/README.md` for full details.
@@ -101,30 +103,27 @@ See `scripts/codegen/README.md` for full details.
 ### Run commands
 
 ```bash
-# Codegen E2E — Next.js (primary)
 cd e2e
+
+# Run all codegen E2E tests
+pnpm codegen:e2e
+
+# Target a specific framework
 pnpm codegen:e2e:nextjs
+pnpm codegen:e2e:tanstack
+pnpm codegen:e2e:react-router
 
-# Specific test file against codegen project
+# Specific test file
 pnpm codegen:e2e:nextjs -- tests/smoke.blog.spec.ts
-
-# Legacy example-project E2E (all frameworks)
-pnpm e2e:smoke
-pnpm e2e:smoke:nextjs
-pnpm e2e:smoke:tanstack
-pnpm e2e:smoke:react-router
 ```
 
 ### Playwright projects and ports
 
-| Project | Config | Port |
-|---|---|---|
-| `nextjs:codegen` | `playwright.codegen.config.ts` | 3006 |
-| `tanstack:codegen` | `playwright.codegen.config.ts` | 3007 |
-| `react-router:codegen` | `playwright.codegen.config.ts` | 3008 |
-| `nextjs:memory` | `playwright.config.ts` (legacy) | 3003 |
-| `tanstack:memory` | `playwright.config.ts` (legacy) | 3004 |
-| `react-router:memory` | `playwright.config.ts` (legacy) | 3005 |
+| Project | Port |
+|---|---|
+| `nextjs:codegen` | 3006 |
+| `tanstack:codegen` | 3007 |
+| `react-router:codegen` | 3008 |
 
 Set `BTST_FRAMEWORK=nextjs|tanstack|react-router` to start only one server.
 
@@ -158,11 +157,7 @@ test.beforeEach(async () => {
 ### Environment variables
 
 ```bash
-# For codegen E2E — env is loaded from codegen-projects/nextjs/.env
-# (set automatically by playwright.codegen.config.ts)
-
-# For legacy E2E — load manually if needed
-export $(cat ../examples/nextjs/.env | xargs)
+# Env is loaded from codegen-projects/nextjs/.env automatically by playwright.codegen.config.ts
 ```
 
 For CI, the codegen workflow (`.github/workflows/codegen-e2e.yml`) builds the codegen project from scratch and passes `OPENAI_API_KEY` from secrets.

@@ -59,27 +59,27 @@ The `postbuild.cjs` script auto-discovers and copies them — no manual registra
 }
 ```
 
-## Updating all three example apps
+## Updating all three codegen projects
 
 When adding a new plugin or changing plugin config, update ALL three:
 
-**Next.js** (`examples/nextjs/`)
-- `lib/stack.tsx` — backend plugin registration
+**Next.js** (`codegen-projects/nextjs/`)
+- `lib/stack.ts` — backend plugin registration
 - `lib/stack-client.tsx` — client plugin registration
-- `app/pages/[[...all]]/layout.tsx` — override configuration
+- `app/pages/layout.tsx` — override configuration
 - `app/globals.css` — `@import "@btst/stack/plugins/{name}/css";`
 
-**React Router** (`examples/react-router/`)
-- `app/lib/stack.tsx`
+**React Router** (`codegen-projects/react-router/`)
+- `app/lib/stack.ts`
 - `app/lib/stack-client.tsx`
 - `app/routes/pages/_layout.tsx`
 - `app/app.css`
 
-**TanStack** (`examples/tanstack/`)
-- `src/lib/stack.tsx`
+**TanStack** (`codegen-projects/tanstack/`)
+- `src/lib/stack.ts`
 - `src/lib/stack-client.tsx`
 - `src/routes/pages/route.tsx`
-- `src/styles/app.css`
+- `src/styles.css`
 
 ### Override type registration (in each layout)
 
@@ -119,6 +119,6 @@ pnpm turbo clean && pnpm build
 ## Gotchas
 
 - **Missing `typesVersions`** — always add alongside `exports`; TypeScript won't resolve the new path otherwise.
-- **Build cache** — run `pnpm turbo clean` if changes aren't reflected in examples after `pnpm build`.
+- **Build cache** — run `pnpm turbo clean` if changes aren't reflected in codegen projects after `pnpm build`.
 - **CSS not loading** — ensure `"./plugins/{name}/css"` entry exists in `package.json` exports; `postbuild.cjs` handles the rest automatically.
 - **`@workspace/ui` sub-path components** — if a new component imports from a directory (not a single file), add it to `EXTERNAL_REGISTRY_COMPONENTS` in `build-registry.ts`.
