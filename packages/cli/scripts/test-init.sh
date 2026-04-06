@@ -100,6 +100,11 @@ if ! node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","
 	exit 1
 fi
 success "Initialized shadcn baseline in fixture (radix, v${SHADCN_VERSION})"
+
+# shadcn init generates mode-toggle.tsx (needs dropdown-menu) and sonner.tsx.
+# next build type-checks all .tsx files, so missing components cause build failures.
+npx --yes "shadcn@${SHADCN_VERSION}" add dropdown-menu --yes > /dev/null 2>&1
+success "Added shadcn dropdown-menu (required by generated mode-toggle.tsx)"
 success "Fixture created at $TEST_DIR/app"
 
 step "Installing packed tarballs"
