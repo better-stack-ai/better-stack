@@ -5,11 +5,7 @@
   "description": "End-to-end tests(Playwright)",
   "scripts": {
     "e2e:install": "playwright install --with-deps",
-    "e2e:smoke": "playwright test",
-    "e2e:smoke:nextjs": "BTST_FRAMEWORK=nextjs playwright test",
-    "e2e:smoke:tanstack": "BTST_FRAMEWORK=tanstack playwright test",
-    "e2e:smoke:react-router": "BTST_FRAMEWORK=react-router playwright test",
-    "e2e:ui": "playwright test --ui",
+    "e2e:ui": "playwright test --config playwright.codegen.config.ts --ui",
     "codegen:e2e": "playwright test --config playwright.codegen.config.ts",
     "codegen:e2e:nextjs": "BTST_FRAMEWORK=nextjs playwright test --config playwright.codegen.config.ts",
     "codegen:e2e:tanstack": "BTST_FRAMEWORK=tanstack playwright test --config playwright.codegen.config.ts",
