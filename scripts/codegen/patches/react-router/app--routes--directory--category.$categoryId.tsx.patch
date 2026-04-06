@@ -1,9 +1,9 @@
 diff --git a/app/routes/directory/category.$categoryId.tsx b/app/routes/directory/category.$categoryId.tsx
 new file mode 100644
-index 0000000..0000001
+index 0000000..787e8cc
 --- /dev/null
 +++ b/app/routes/directory/category.$categoryId.tsx
-@@ -0,0 +1,180 @@
+@@ -0,0 +1,179 @@
 +import {
 +    useContentItem,
 +    useContentByRelation,
@@ -183,4 +183,3 @@ index 0000000..0000001
 +        </StackProvider>
 +    )
 +}
-+

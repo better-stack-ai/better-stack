@@ -1,9 +1,9 @@
 diff --git a/app/routes/api/example-auth/$.ts b/app/routes/api/example-auth/$.ts
 new file mode 100644
-index 0000000..0000001
+index 0000000..4f7f3db
 --- /dev/null
 +++ b/app/routes/api/example-auth/$.ts
-@@ -0,0 +1,11 @@
+@@ -0,0 +1,10 @@
 +import type { Route } from "./+types/$"
 +import { handler } from "~/lib/stack-auth"
 +
@@ -14,4 +14,3 @@ index 0000000..0000001
 +export function action({ request }: Route.ActionArgs) {
 +    return handler(request)
 +}
-+

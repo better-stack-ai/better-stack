@@ -1,9 +1,9 @@
 diff --git a/src/routes/directory/category/$categoryId.tsx b/src/routes/directory/category/$categoryId.tsx
 new file mode 100644
-index 0000000..0000001
+index 0000000..5c46326
 --- /dev/null
 +++ b/src/routes/directory/category/$categoryId.tsx
-@@ -0,0 +1,183 @@
+@@ -0,0 +1,182 @@
 +import {
 +    useContentItem,
 +    useContentByRelation,
@@ -186,4 +186,3 @@ index 0000000..0000001
 +        </QueryClientProvider>
 +    )
 +}
-+

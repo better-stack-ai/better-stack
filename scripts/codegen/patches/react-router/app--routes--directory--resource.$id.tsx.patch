@@ -1,9 +1,9 @@
 diff --git a/app/routes/directory/resource.$id.tsx b/app/routes/directory/resource.$id.tsx
 new file mode 100644
-index 0000000..0000001
+index 0000000..3beb5d4
 --- /dev/null
 +++ b/app/routes/directory/resource.$id.tsx
-@@ -0,0 +1,169 @@
+@@ -0,0 +1,168 @@
 +import { useContentItemPopulated } from "@btst/stack/plugins/cms/client/hooks"
 +import { StackProvider } from "@btst/stack/context"
 +import { Link, useNavigate, useParams } from "react-router"
@@ -172,4 +172,3 @@ index 0000000..0000001
 +        </StackProvider>
 +    )
 +}
-+

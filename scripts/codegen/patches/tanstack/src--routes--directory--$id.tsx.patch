@@ -1,9 +1,9 @@
 diff --git a/src/routes/directory/$id.tsx b/src/routes/directory/$id.tsx
 new file mode 100644
-index 0000000..0000001
+index 0000000..7fbb2cf
 --- /dev/null
 +++ b/src/routes/directory/$id.tsx
-@@ -0,0 +1,169 @@
+@@ -0,0 +1,168 @@
 +import { useContentItemPopulated } from "@btst/stack/plugins/cms/client/hooks"
 +import { StackProvider } from "@btst/stack/context"
 +import { QueryClientProvider } from "@tanstack/react-query"
@@ -172,4 +172,3 @@ index 0000000..0000001
 +        </QueryClientProvider>
 +    )
 +}
-+

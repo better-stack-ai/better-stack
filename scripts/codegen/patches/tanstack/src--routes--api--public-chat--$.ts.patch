@@ -1,9 +1,9 @@
 diff --git a/src/routes/api/public-chat/$.ts b/src/routes/api/public-chat/$.ts
 new file mode 100644
-index 0000000..0000001
+index 0000000..c5c525f
 --- /dev/null
 +++ b/src/routes/api/public-chat/$.ts
-@@ -0,0 +1,25 @@
+@@ -0,0 +1,24 @@
 +import { createFileRoute } from "@tanstack/react-router"
 +import { handler } from "@/lib/stack-public-chat"
 +
@@ -28,4 +28,3 @@ index 0000000..0000001
 +        },
 +    },
 +})
-+
