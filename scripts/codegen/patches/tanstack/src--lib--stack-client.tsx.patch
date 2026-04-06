@@ -1,156 +1,198 @@
 diff --git a/src/lib/stack-client.tsx b/src/lib/stack-client.tsx
-new file mode 100644
-index 0000000..0000001
---- /dev/null
+index de49b52..c641a41 100644
+--- a/src/lib/stack-client.tsx
 +++ b/src/lib/stack-client.tsx
-@@ -0,0 +1,150 @@
-+import { createStackClient } from "@btst/stack/client"
-+import { todosClientPlugin } from "@/lib/plugins/todo/client/client"
-+import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
-+import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
-+import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
-+import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
+@@ -1,94 +1,149 @@
+-import { createStackClient } from "@btst/stack/client"
+-import { QueryClient } from "@tanstack/react-query"
+-import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+-import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
+-import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
+-import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
+-import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client"
+-import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
+-import { commentsClientPlugin } from "@btst/stack/plugins/comments/client"
+-import { mediaClientPlugin } from "@btst/stack/plugins/media/client"
+-import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
++import { createStackClient } from "@btst/stack/client";
++import { todosClientPlugin } from "@/lib/plugins/todo/client/client";
++import { blogClientPlugin } from "@btst/stack/plugins/blog/client";
++import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client";
++import { cmsClientPlugin } from "@btst/stack/plugins/cms/client";
++import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client";
 +import {
-+    uiBuilderClientPlugin,
-+    defaultComponentRegistry,
-+} from "@btst/stack/plugins/ui-builder/client"
-+import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
-+import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
-+import { commentsClientPlugin } from "@btst/stack/plugins/comments/client"
-+import { mediaClientPlugin } from "@btst/stack/plugins/media/client"
-+import { QueryClient } from "@tanstack/react-query"
-+
++	uiBuilderClientPlugin,
++	defaultComponentRegistry,
++} from "@btst/stack/plugins/ui-builder/client";
++import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client";
++import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client";
++import { commentsClientPlugin } from "@btst/stack/plugins/comments/client";
++import { mediaClientPlugin } from "@btst/stack/plugins/media/client";
++import { QueryClient } from "@tanstack/react-query";
+ 
+-export function getStackClient(queryClient: QueryClient) {
+-	const baseURL = getBaseURL()
 +// Get base URL function - works on both server and client
 +// On server: uses process.env.BASE_URL
 +// On client: uses import.meta.env.VITE_BASE_URL or falls back to window.location.origin
 +const getBaseURL = () =>
-+    typeof window !== "undefined"
-+        ? (import.meta.env.VITE_BASE_URL || window.location.origin)
-+        : (process.env.BASE_URL || "http://localhost:3007")
++	typeof window !== "undefined"
++		? import.meta.env.VITE_BASE_URL || window.location.origin
++		: process.env.BASE_URL || "http://localhost:3007";
 +
 +// Create the client library with plugins
 +export const getStackClient = (queryClient: QueryClient) => {
-+    const baseURL = getBaseURL()
-+    return createStackClient({
-+        plugins: {
-+            todos: todosClientPlugin({
-+                queryClient: queryClient,
-+                apiBaseURL: baseURL,
-+                apiBasePath: "/api/data",
-+                siteBaseURL: baseURL,
-+                siteBasePath: "/pages",
-+            }),
-+            blog: blogClientPlugin({
-+                apiBaseURL: baseURL,
-+                apiBasePath: "/api/data",
-+                siteBaseURL: baseURL,
-+                siteBasePath: "/pages",
-+                queryClient: queryClient,
-+                seo: {
-+                    siteName: "BTST Blog",
-+                    author: "BTST Team",
-+                    twitterHandle: "@olliethedev",
-+                    locale: "en_US",
-+                    defaultImage: `${baseURL}/og-image.png`,
-+                },
-+                hooks: {
-+                    beforeLoadPosts: async (filter, context) => {
-+                        console.log(
-+                            `[${context.isSSR ? "SSR" : "CSR"}] beforeLoadPosts:`,
-+                            filter.published ? "published" : "drafts",
-+                            { filter },
-+                        )
-+                    },
-+                    afterLoadPosts: async (posts, filter, context) => {
-+                        console.log(
-+                            `[${context.isSSR ? "SSR" : "CSR"}] afterLoadPosts:`,
-+                            posts?.length || 0,
-+                            "posts loaded",
-+                        )
-+                    },
-+                    beforeLoadPost: async (slug, context) => {
-+                        console.log(
-+                            `[${context.isSSR ? "SSR" : "CSR"}] beforeLoadPost:`,
-+                            slug,
-+                        )
-+                    },
-+                    afterLoadPost: async (post, slug, context) => {
-+                        console.log(
-+                            `[${context.isSSR ? "SSR" : "CSR"}] afterLoadPost:`,
-+                            slug,
-+                            post?.title || "not found",
-+                        )
-+                    },
-+                    onLoadError: async (error, context) => {
-+                        console.log(
-+                            `[${context.isSSR ? "SSR" : "CSR"}] Load error:`,
-+                            error.message,
-+                        )
-+                    },
-+                },
-+            }),
-+            aiChat: aiChatClientPlugin({
-+                apiBaseURL: baseURL,
-+                apiBasePath: "/api/data",
-+                siteBaseURL: baseURL,
-+                siteBasePath: "/pages",
-+                queryClient: queryClient,
-+                mode: "authenticated",
-+            }),
-+            cms: cmsClientPlugin({
-+                apiBaseURL: baseURL,
-+                apiBasePath: "/api/data",
-+                siteBaseURL: baseURL,
-+                siteBasePath: "/pages",
-+                queryClient: queryClient,
-+            }),
-+            "form-builder": formBuilderClientPlugin({
-+                apiBaseURL: baseURL,
-+                apiBasePath: "/api/data",
-+                siteBaseURL: baseURL,
-+                siteBasePath: "/pages",
-+                queryClient: queryClient,
-+            }),
-+            "ui-builder": uiBuilderClientPlugin({
-+                apiBaseURL: baseURL,
-+                apiBasePath: "/api/data",
-+                siteBaseURL: baseURL,
-+                siteBasePath: "/pages",
-+                queryClient: queryClient,
-+                componentRegistry: defaultComponentRegistry,
-+            }),
-+            routeDocs: routeDocsClientPlugin({
-+                queryClient: queryClient,
-+                title: "Client Route Documentation",
-+                description: "Documentation for all client routes in this application",
-+                siteBasePath: "/pages",
-+            }),
-+            kanban: kanbanClientPlugin({
-+                apiBaseURL: baseURL,
-+                apiBasePath: "/api/data",
-+                siteBaseURL: baseURL,
-+                siteBasePath: "/pages",
-+                queryClient: queryClient,
-+                seo: {
-+                    siteName: "BTST Kanban",
-+                    description: "Manage your projects with kanban boards",
-+                },
-+            }),
-+            comments: commentsClientPlugin({
-+                apiBaseURL: baseURL,
-+                apiBasePath: "/api/data",
-+                siteBaseURL: baseURL,
-+                siteBasePath: "/pages",
-+                queryClient: queryClient,
-+            }),
-+            media: mediaClientPlugin({
-+                apiBaseURL: baseURL,
-+                apiBasePath: "/api/data",
-+                siteBaseURL: baseURL,
-+                siteBasePath: "/pages",
-+                queryClient: queryClient,
-+            }),
-+        },
-+    })
-+}
-+
++	const baseURL = getBaseURL();
+ 	return createStackClient({
+ 		plugins: {
++			todos: todosClientPlugin({
++				queryClient: queryClient,
++				apiBaseURL: baseURL,
++				apiBasePath: "/api/data",
++				siteBaseURL: baseURL,
++				siteBasePath: "/pages",
++			}),
+ 			blog: blogClientPlugin({
+ 				apiBaseURL: baseURL,
+ 				apiBasePath: "/api/data",
+ 				siteBaseURL: baseURL,
+ 				siteBasePath: "/pages",
+-				queryClient,
++				queryClient: queryClient,
++				seo: {
++					siteName: "BTST Blog",
++					author: "BTST Team",
++					twitterHandle: "@olliethedev",
++					locale: "en_US",
++					defaultImage: `${baseURL}/og-image.png`,
++				},
++				hooks: {
++					beforeLoadPosts: async (filter, context) => {
++						console.log(
++							`[${context.isSSR ? "SSR" : "CSR"}] beforeLoadPosts:`,
++							filter.published ? "published" : "drafts",
++							{ filter },
++						);
++					},
++					afterLoadPosts: async (posts, filter, context) => {
++						console.log(
++							`[${context.isSSR ? "SSR" : "CSR"}] afterLoadPosts:`,
++							posts?.length || 0,
++							"posts loaded",
++						);
++					},
++					beforeLoadPost: async (slug, context) => {
++						console.log(
++							`[${context.isSSR ? "SSR" : "CSR"}] beforeLoadPost:`,
++							slug,
++						);
++					},
++					afterLoadPost: async (post, slug, context) => {
++						console.log(
++							`[${context.isSSR ? "SSR" : "CSR"}] afterLoadPost:`,
++							slug,
++							post?.title || "not found",
++						);
++					},
++					onLoadError: async (error, context) => {
++						console.log(
++							`[${context.isSSR ? "SSR" : "CSR"}] Load error:`,
++							error.message,
++						);
++					},
++				},
+ 			}),
+ 			aiChat: aiChatClientPlugin({
+ 				apiBaseURL: baseURL,
+ 				apiBasePath: "/api/data",
+ 				siteBaseURL: baseURL,
+ 				siteBasePath: "/pages",
+-				queryClient,
++				queryClient: queryClient,
++				mode: "authenticated",
+ 			}),
+ 			cms: cmsClientPlugin({
+ 				apiBaseURL: baseURL,
+ 				apiBasePath: "/api/data",
+ 				siteBaseURL: baseURL,
+ 				siteBasePath: "/pages",
+-				queryClient,
++				queryClient: queryClient,
+ 			}),
+-			formBuilder: formBuilderClientPlugin({
++			"form-builder": formBuilderClientPlugin({
+ 				apiBaseURL: baseURL,
+ 				apiBasePath: "/api/data",
+ 				siteBaseURL: baseURL,
+ 				siteBasePath: "/pages",
+-				queryClient,
++				queryClient: queryClient,
+ 			}),
+-			uiBuilder: uiBuilderClientPlugin({
++			"ui-builder": uiBuilderClientPlugin({
+ 				apiBaseURL: baseURL,
+ 				apiBasePath: "/api/data",
+ 				siteBaseURL: baseURL,
+ 				siteBasePath: "/pages",
+-				queryClient,
++				queryClient: queryClient,
++				componentRegistry: defaultComponentRegistry,
++			}),
++			routeDocs: routeDocsClientPlugin({
++				queryClient: queryClient,
++				title: "Client Route Documentation",
++				description: "Documentation for all client routes in this application",
++				siteBasePath: "/pages",
+ 			}),
+ 			kanban: kanbanClientPlugin({
+ 				apiBaseURL: baseURL,
+ 				apiBasePath: "/api/data",
+ 				siteBaseURL: baseURL,
+ 				siteBasePath: "/pages",
+-				queryClient,
++				queryClient: queryClient,
++				seo: {
++					siteName: "BTST Kanban",
++					description: "Manage your projects with kanban boards",
++				},
+ 			}),
+ 			comments: commentsClientPlugin({
+ 				apiBaseURL: baseURL,
+ 				apiBasePath: "/api/data",
+ 				siteBaseURL: baseURL,
+ 				siteBasePath: "/pages",
+-				queryClient,
++				queryClient: queryClient,
+ 			}),
+ 			media: mediaClientPlugin({
+ 				apiBaseURL: baseURL,
+ 				apiBasePath: "/api/data",
+ 				siteBaseURL: baseURL,
+ 				siteBasePath: "/pages",
+-				queryClient,
+-			}),
+-			routeDocs: routeDocsClientPlugin({
+-				queryClient,
+-				siteBasePath: "/pages",
++				queryClient: queryClient,
+ 			}),
+ 		},
+-	})
+-}
+-function getBaseURL() {
+-	if (typeof window !== "undefined") {
+-		return window.location.origin
+-	}
+-
+-	if (typeof process !== "undefined") {
+-		const env = process.env
+-		if (env.BTST_SITE_URL) return env.BTST_SITE_URL
+-		if (env.VITE_PUBLIC_SITE_URL) return env.VITE_PUBLIC_SITE_URL
+-		if (env.BASE_URL) return env.BASE_URL
+-		if (env.VERCEL_URL) return `https://${env.VERCEL_URL}`
+-	}
+-
+-	return "http://localhost:3000"
+-}
++	});
++};

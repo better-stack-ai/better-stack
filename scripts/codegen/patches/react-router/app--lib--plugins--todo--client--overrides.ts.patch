@@ -1,10 +1,10 @@
 diff --git a/app/lib/plugins/todo/client/overrides.ts b/app/lib/plugins/todo/client/overrides.ts
 new file mode 100644
-index 0000000..0000001
+index 0000000..125c079
 --- /dev/null
 +++ b/app/lib/plugins/todo/client/overrides.ts
-@@ -0,0 +1,26 @@
-+import type { ComponentType, ReactNode } from "react"
+@@ -0,0 +1,25 @@
++import type { ComponentType, ReactNode } from "react";
 +
 +/**
 + * Overridable components and functions for the Todos plugin
@@ -13,20 +13,19 @@ index 0000000..0000001
 + * to customize the behavior for their framework (React Router, TanStack, etc.)
 + */
 +export interface TodosPluginOverrides {
-+    /**
-+     * Link component for navigation
-+     * Must accept href and children props at minimum
-+     */
-+    Link: ComponentType<{
-+        href: string
-+        children: ReactNode
-+        className?: string
-+    }>
++	/**
++	 * Link component for navigation
++	 * Must accept href and children props at minimum
++	 */
++	Link: ComponentType<{
++		href: string;
++		children: ReactNode;
++		className?: string;
++	}>;
 +
-+    /**
-+     * Optional: Navigation function for programmatic navigation
-+     * Useful for redirects after actions
-+     */
-+    navigate?: (path: string) => void | Promise<void>
++	/**
++	 * Optional: Navigation function for programmatic navigation
++	 * Useful for redirects after actions
++	 */
++	navigate?: (path: string) => void | Promise<void>;
 +}
-+

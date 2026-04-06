@@ -1,9 +1,9 @@
 diff --git a/app/lib/cms-schemas.ts b/app/lib/cms-schemas.ts
 new file mode 100644
-index 0000000..0000001
+index 0000000..3e172b1
 --- /dev/null
 +++ b/app/lib/cms-schemas.ts
-@@ -0,0 +1,190 @@
+@@ -0,0 +1,189 @@
 +/**
 + * CMS Content Type Schemas
 + *
@@ -12,163 +12,163 @@ index 0000000..0000001
 + * - Server-side: stack.ts for backend validation
 + * - Client-side: components for type-safe hooks
 + */
-+import { z } from "zod"
++import { z } from "zod";
 +
 +// ========== Product Schema ==========
 +export const ProductSchema = z.object({
-+    name: z.string().min(1).meta({
-+        description: "Product display name",
-+        placeholder: "Enter product name...",
-+    }),
-+    description: z.string().meta({
-+        description: "Full product description",
-+        placeholder: "Describe this product...",
-+        fieldType: "textarea",
-+    }),
-+    price: z.coerce.number().min(0).meta({ placeholder: "0.00" }),
-+    image: z.string().optional().meta({
-+        description: "Product image URL",
-+        fieldType: "file",
-+    }),
-+    featured: z.boolean().default(false).meta({
-+        description: "Show on homepage featured section",
-+    }),
-+    category: z.enum(["Electronics", "Clothing", "Home", "Sports"]),
-+})
++	name: z.string().min(1).meta({
++		description: "Product display name",
++		placeholder: "Enter product name...",
++	}),
++	description: z.string().meta({
++		description: "Full product description",
++		placeholder: "Describe this product...",
++		fieldType: "textarea",
++	}),
++	price: z.coerce.number().min(0).meta({ placeholder: "0.00" }),
++	image: z.string().optional().meta({
++		description: "Product image URL",
++		fieldType: "file",
++	}),
++	featured: z.boolean().default(false).meta({
++		description: "Show on homepage featured section",
++	}),
++	category: z.enum(["Electronics", "Clothing", "Home", "Sports"]),
++});
 +
 +// ========== Testimonial Schema ==========
 +export const TestimonialSchema = z.object({
-+    author: z.string().min(1).meta({ placeholder: "Customer name" }),
-+    company: z
-+        .string()
-+        .optional()
-+        .meta({ placeholder: "Company name (optional)" }),
-+    quote: z.string().meta({
-+        description: "Customer testimonial text",
-+        placeholder: "What did they say about us?",
-+        fieldType: "textarea",
-+    }),
-+    rating: z.coerce.number().min(1).max(5).meta({
-+        description: "Rating out of 5 stars",
-+    }),
-+})
++	author: z.string().min(1).meta({ placeholder: "Customer name" }),
++	company: z
++		.string()
++		.optional()
++		.meta({ placeholder: "Company name (optional)" }),
++	quote: z.string().meta({
++		description: "Customer testimonial text",
++		placeholder: "What did they say about us?",
++		fieldType: "textarea",
++	}),
++	rating: z.coerce.number().min(1).max(5).meta({
++		description: "Rating out of 5 stars",
++	}),
++});
 +
 +// ========== Category Schema (for directory relationships) ==========
 +export const CategorySchema = z.object({
-+    name: z.string().min(1).meta({
-+        description: "Category name",
-+        placeholder: "Enter category name...",
-+    }),
-+    description: z.string().optional().meta({
-+        description: "Optional category description",
-+        placeholder: "Describe this category...",
-+        fieldType: "textarea",
-+    }),
-+    color: z.string().optional().meta({
-+        description: "Category color (hex code)",
-+        placeholder: "#3b82f6",
-+    }),
-+})
++	name: z.string().min(1).meta({
++		description: "Category name",
++		placeholder: "Enter category name...",
++	}),
++	description: z.string().optional().meta({
++		description: "Optional category description",
++		placeholder: "Describe this category...",
++		fieldType: "textarea",
++	}),
++	color: z.string().optional().meta({
++		description: "Category color (hex code)",
++		placeholder: "#3b82f6",
++	}),
++});
 +
 +// ========== Resource Schema (directory listing with relations) ==========
 +export const ResourceSchema = z.object({
-+    name: z.string().min(1).meta({
-+        description: "Resource name",
-+        placeholder: "Enter resource name...",
-+    }),
-+    description: z.string().meta({
-+        description: "Full resource description",
-+        placeholder: "Describe this resource...",
-+        fieldType: "textarea",
-+    }),
-+    website: z.string().url().optional().meta({
-+        description: "Website URL",
-+        placeholder: "https://example.com",
-+    }),
-+    logo: z.string().optional().meta({
-+        description: "Resource logo",
-+        fieldType: "file",
-+    }),
-+    // Relation field - manyToMany with categories
-+    categoryIds: z
-+        .array(z.object({ id: z.string() }))
-+        .default([])
-+        .meta({
-+            fieldType: "relation",
-+            relation: {
-+                type: "manyToMany",
-+                targetType: "category",
-+                displayField: "name",
-+                creatable: true,
-+            },
-+        }),
-+})
++	name: z.string().min(1).meta({
++		description: "Resource name",
++		placeholder: "Enter resource name...",
++	}),
++	description: z.string().meta({
++		description: "Full resource description",
++		placeholder: "Describe this resource...",
++		fieldType: "textarea",
++	}),
++	website: z.string().url().optional().meta({
++		description: "Website URL",
++		placeholder: "https://example.com",
++	}),
++	logo: z.string().optional().meta({
++		description: "Resource logo",
++		fieldType: "file",
++	}),
++	// Relation field - manyToMany with categories
++	categoryIds: z
++		.array(z.object({ id: z.string() }))
++		.default([])
++		.meta({
++			fieldType: "relation",
++			relation: {
++				type: "manyToMany",
++				targetType: "category",
++				displayField: "name",
++				creatable: true,
++			},
++		}),
++});
 +
 +// ========== Comment Schema (one-to-many: Comment belongs to Resource) ==========
 +export const CommentSchema = z.object({
-+    author: z.string().min(1).meta({
-+        description: "Comment author name",
-+        placeholder: "Your name...",
-+    }),
-+    content: z.string().min(1).meta({
-+        description: "Comment content",
-+        placeholder: "Write your comment...",
-+        fieldType: "textarea",
-+    }),
-+    resourceId: z
-+        .object({ id: z.string() })
-+        .optional()
-+        .meta({
-+            fieldType: "relation",
-+            relation: {
-+                type: "belongsTo",
-+                targetType: "resource",
-+                displayField: "name",
-+            },
-+        }),
-+})
++	author: z.string().min(1).meta({
++		description: "Comment author name",
++		placeholder: "Your name...",
++	}),
++	content: z.string().min(1).meta({
++		description: "Comment content",
++		placeholder: "Write your comment...",
++		fieldType: "textarea",
++	}),
++	resourceId: z
++		.object({ id: z.string() })
++		.optional()
++		.meta({
++			fieldType: "relation",
++			relation: {
++				type: "belongsTo",
++				targetType: "resource",
++				displayField: "name",
++			},
++		}),
++});
 +
 +// ========== Client Profile Schema (WealthReview Demo) ==========
 +export const ClientProfileSchema = z.object({
-+    clientName: z.string().min(1).meta({ description: "Client full name" }),
-+    age: z.coerce.number().min(18).max(120).meta({ description: "Client age" }),
-+    riskTolerance: z.enum(["conservative", "moderate", "aggressive"]).meta({
-+        description: "Risk tolerance level",
-+    }),
-+    totalAssets: z.coerce.number().min(0).optional().meta({
-+        description: "Total declared assets (CAD)",
-+    }),
-+    windfallAmount: z.coerce.number().min(0).optional().meta({
-+        description: "Incoming windfall amount, if applicable (CAD)",
-+    }),
-+    lifeEvents: z.string().optional().meta({
-+        description: "Upcoming or recent life events (comma-separated)",
-+        fieldType: "textarea",
-+    }),
-+    recommendation: z.string().meta({
-+        description: "AI-generated advisor recommendation",
-+        fieldType: "textarea",
-+    }),
-+    amlFlag: z.boolean().default(false).meta({
-+        description: "AML escalation flag — requires compliance review if true",
-+    }),
-+    amlReason: z.string().optional().meta({
-+        description: "Reason for AML flag, if applicable",
-+        fieldType: "textarea",
-+    }),
-+    confidenceScore: z.coerce.number().min(0).max(100).meta({
-+        description: "AI confidence score (0–100)",
-+    }),
-+})
++	clientName: z.string().min(1).meta({ description: "Client full name" }),
++	age: z.coerce.number().min(18).max(120).meta({ description: "Client age" }),
++	riskTolerance: z.enum(["conservative", "moderate", "aggressive"]).meta({
++		description: "Risk tolerance level",
++	}),
++	totalAssets: z.coerce.number().min(0).optional().meta({
++		description: "Total declared assets (CAD)",
++	}),
++	windfallAmount: z.coerce.number().min(0).optional().meta({
++		description: "Incoming windfall amount, if applicable (CAD)",
++	}),
++	lifeEvents: z.string().optional().meta({
++		description: "Upcoming or recent life events (comma-separated)",
++		fieldType: "textarea",
++	}),
++	recommendation: z.string().meta({
++		description: "AI-generated advisor recommendation",
++		fieldType: "textarea",
++	}),
++	amlFlag: z.boolean().default(false).meta({
++		description: "AML escalation flag — requires compliance review if true",
++	}),
++	amlReason: z.string().optional().meta({
++		description: "Reason for AML flag, if applicable",
++		fieldType: "textarea",
++	}),
++	confidenceScore: z.coerce.number().min(0).max(100).meta({
++		description: "AI confidence score (0–100)",
++	}),
++});
 +
 +// ========== Type Exports ==========
 +
-+export type ProductData = z.infer<typeof ProductSchema>
-+export type TestimonialData = z.infer<typeof TestimonialSchema>
-+export type CategoryData = z.infer<typeof CategorySchema>
-+export type ResourceData = z.infer<typeof ResourceSchema>
-+export type CommentData = z.infer<typeof CommentSchema>
-+export type ClientProfileData = z.infer<typeof ClientProfileSchema>
++export type ProductData = z.infer<typeof ProductSchema>;
++export type TestimonialData = z.infer<typeof TestimonialSchema>;
++export type CategoryData = z.infer<typeof CategorySchema>;
++export type ResourceData = z.infer<typeof ResourceSchema>;
++export type CommentData = z.infer<typeof CommentSchema>;
++export type ClientProfileData = z.infer<typeof ClientProfileSchema>;
 +
 +/**
 + * Type map for all CMS content types.
@@ -186,11 +186,10 @@ index 0000000..0000001
 + * ```
 + */
 +export type CMSTypes = {
-+    product: ProductData
-+    testimonial: TestimonialData
-+    category: CategoryData
-+    resource: ResourceData
-+    comment: CommentData
-+    "client-profile": ClientProfileData
-+}
-+
++	product: ProductData;
++	testimonial: TestimonialData;
++	category: CategoryData;
++	resource: ResourceData;
++	comment: CommentData;
++	"client-profile": ClientProfileData;
++};

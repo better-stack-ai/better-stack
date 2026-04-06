@@ -1,21 +1,21 @@
 diff --git a/src/lib/plugins/todo/api/getters.ts b/src/lib/plugins/todo/api/getters.ts
 new file mode 100644
-index 0000000..0000001
+index 0000000..1092148
 --- /dev/null
 +++ b/src/lib/plugins/todo/api/getters.ts
-@@ -0,0 +1,28 @@
-+import type { Adapter } from "@btst/stack/plugins/api"
-+import type { Todo } from "../types"
+@@ -0,0 +1,27 @@
++import type { Adapter } from "@btst/stack/plugins/api";
++import type { Todo } from "../types";
 +
 +/**
 + * Retrieve all todos, sorted newest-first.
 + * Pure DB function — no HTTP context. Safe for server-side use.
 + */
 +export async function listTodos(adapter: Adapter): Promise<Todo[]> {
-+    return adapter.findMany<Todo>({
-+        model: "todo",
-+        sortBy: { field: "createdAt", direction: "desc" },
-+    }) as Promise<Todo[]>
++	return adapter.findMany<Todo>({
++		model: "todo",
++		sortBy: { field: "createdAt", direction: "desc" },
++	}) as Promise<Todo[]>;
 +}
 +
 +/**
@@ -23,12 +23,11 @@ index 0000000..0000001
 + * Returns null if the todo does not exist.
 + */
 +export async function getTodoById(
-+    adapter: Adapter,
-+    id: string,
++	adapter: Adapter,
++	id: string,
 +): Promise<Todo | null> {
-+    return adapter.findOne<Todo>({
-+        model: "todo",
-+        where: [{ field: "id", value: id, operator: "eq" }],
-+    })
++	return adapter.findOne<Todo>({
++		model: "todo",
++		where: [{ field: "id", value: id, operator: "eq" }],
++	});
 +}
-+

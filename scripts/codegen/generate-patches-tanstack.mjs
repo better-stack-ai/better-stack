@@ -230,16 +230,19 @@ for (const rel of FILES) {
 		continue;
 	}
 
+	// Escape $ so shell doesn't expand e.g. $id as a variable
+	const shellRel = rel.replace(/\$/g, "\\$");
+
 	const content = readFileSync(srcPath, "utf8");
 	writeFile(rel, content);
-	exec(`git add "${rel}"`);
+	exec(`git add "${shellRel}"`);
 
-	const diff = exec(`git diff --cached HEAD -- "${rel}"`);
+	const diff = exec(`git diff --cached HEAD -- "${shellRel}"`);
 
 	if (!diff.trim()) {
 		// File is identical to CLI baseline — no patch needed
-		exec(`git restore --staged "${rel}"`);
-		exec(`git checkout HEAD -- "${rel}"`);
+		exec(`git restore --staged "${shellRel}"`);
+		exec(`git checkout HEAD -- "${shellRel}"`);
 		console.log(`  [no change] ${rel}`);
 		skipped++;
 		continue;

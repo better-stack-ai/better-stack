@@ -1,13 +1,12 @@
 diff --git a/app/lib/plugins/todo/types.ts b/app/lib/plugins/todo/types.ts
 new file mode 100644
-index 0000000..0000001
+index 0000000..ab80970
 --- /dev/null
 +++ b/app/lib/plugins/todo/types.ts
-@@ -0,0 +1,7 @@
+@@ -0,0 +1,6 @@
 +export type Todo = {
-+    id: string
-+    title: string
-+    completed: boolean
-+    createdAt: Date
-+}
-+
++	id: string;
++	title: string;
++	completed: boolean;
++	createdAt: Date;
++};
