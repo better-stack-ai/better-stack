@@ -859,7 +859,7 @@ Before opening a pull request for a new plugin, verify every item:
 - [ ] Unit tests added at `packages/stack/src/plugins/your-plugin/__tests__/`
 - [ ] E2E smoke test added at `e2e/tests/smoke.your-plugin.spec.ts`
 - [ ] `pnpm test` passes (unit tests)
-- [ ] `pnpm e2e:smoke -- tests/smoke.your-plugin.spec.ts` passes
+- [ ] `cd e2e && pnpm codegen:e2e:nextjs -- tests/smoke.your-plugin.spec.ts` passes
 
 **Documentation**
 
