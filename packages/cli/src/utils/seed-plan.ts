@@ -191,6 +191,7 @@ export async function GET() {
     const result = await (async () => {${body}    })()
     return NextResponse.json(result ?? { ok: true })
   } catch (err) {
+    seeded = false
     console.error("[seed] ${pluginKey} failed:", err)
     return NextResponse.json({ ok: false }, { status: 500 })
   }
@@ -215,6 +216,7 @@ export async function loader() {
     const result = await (async () => {${body}    })()
     return data(result ?? { ok: true })
   } catch (err) {
+    seeded = false
     console.error("[seed] ${pluginKey} failed:", err)
     return data({ ok: false }, { status: 500 })
   }
@@ -240,6 +242,7 @@ export const Route = createAPIFileRoute("/api/seed-${pluginKey}")({
       const result = await (async () => {${body}      })()
       return Response.json(result ?? { ok: true })
     } catch (err) {
+      seeded = false
       console.error("[seed] ${pluginKey} failed:", err)
       return Response.json({ ok: false }, { status: 500 })
     }
@@ -329,11 +332,25 @@ export function buildSeedRunnerScript(
 const BASE = "http://localhost:${port}"
 const SEEDS = [${seedPaths}]
 
-async function waitForServer(maxAttempts = 90, delay = 3000) {
+// Fetch with a timeout signal so we don't hang indefinitely in WebContainers.
+async function fetchWithTimeout(url, timeoutMs = 90000) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// Poll until the dev server responds to a request.
+// WebContainers: Next.js starts listening quickly but on-demand compilation
+// means the first request can take 15-35 s before a response arrives.
+async function waitForServer(maxAttempts = 60, delay = 5000) {
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise((r) => setTimeout(r, delay))
     try {
-      await fetch(\`\${BASE}/\`)
+      await fetchWithTimeout(\`\${BASE}/\`, 60000)
       return true
     } catch {}
   }
@@ -347,11 +364,13 @@ async function main() {
     console.log("[seed] Dev server never became ready — giving up")
     return
   }
+  console.log("[seed] Dev server ready — seeding data...")
   for (const route of SEEDS) {
     try {
-      const res = await fetch(\`\${BASE}\${route}\`)
+      // Each seed route triggers on-demand compilation; allow up to 120 s per call.
+      const res = await fetchWithTimeout(\`\${BASE}\${route}\`, 120000)
       const data = await res.json()
-      console.log(\`[seed] \${route}: \`, data)
+      console.log(\`[seed] \${route}:\`, data)
     } catch (err) {
       console.error(\`[seed] \${route} failed:\`, err.message)
     }

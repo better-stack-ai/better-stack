@@ -150,12 +150,17 @@ export function PlaygroundClient({
 	// On refresh/share: if view=preview but no generated data yet, re-run generation
 	useEffect(() => {
 		if (view === "preview" && !generated && !isPending) {
+			// seededPlugins may be stale here (still [] before the init effect's state
+			// update propagates), because both effects run after the same render.
+			// Derive seeds from the URL value directly; fall back to seeding all
+			// seedable selected plugins so shared/refreshed links include seed data.
+			const effectiveKeys = getEffectivePlugins(selected);
+			const seeds =
+				(seededRaw as PluginKey[]).length > 0
+					? (seededRaw as PluginKey[])
+					: effectiveKeys.filter((k) => seedableKeys.has(k));
 			startTransition(async () => {
-				const result = await generateProject(
-					selected,
-					framework,
-					seededPlugins,
-				);
+				const result = await generateProject(selected, framework, seeds);
 				setGenerated(result);
 				const firstPageRoute = result.routes.find((route) =>
 					route.startsWith("/pages/"),
