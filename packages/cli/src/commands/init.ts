@@ -20,6 +20,8 @@ import {
 import { detectAlias } from "../utils/detect-alias";
 import { detectCssFile } from "../utils/detect-css-file";
 import { detectFramework } from "../utils/detect-framework";
+import { detectShadcnConfig } from "../utils/detect-shadcn-config";
+import { normalizePlugins } from "../utils/normalize-plugins";
 import { detectPackageManager } from "../utils/detect-package-manager";
 import { detectProjectShape } from "../utils/detect-project-shape";
 import { writePlannedFiles, type ConflictPolicy } from "../utils/file-writer";
