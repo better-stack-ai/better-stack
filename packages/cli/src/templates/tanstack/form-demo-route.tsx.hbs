@@ -5,6 +5,7 @@ import { StackProvider } from "@btst/stack/context"
 import { FormRenderer } from "@btst/stack/plugins/form-builder/client/components"
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
+import { Loader2, AlertCircle } from "lucide-react"
 
 export const Route = createFileRoute("/form-demo/$slug")({
 	component: FormDemoPage,
@@ -58,6 +59,8 @@ function FormDemoPage() {
 								onError={(error) => {
 									console.error("Form error:", error)
 								}}
+								LoadingComponent={FormLoadingState}
+								ErrorComponent={FormErrorState}
 								className="space-y-6"
 							/>
 						</div>
@@ -65,5 +68,28 @@ function FormDemoPage() {
 				</main>
 			</StackProvider>
 		</QueryClientProvider>
+	)
+}
+
+function FormLoadingState() {
+	return (
+		<div className="flex flex-col items-center justify-center py-12 gap-4">
+			<Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+			<p className="text-muted-foreground">Loading form...</p>
+		</div>
+	)
+}
+
+function FormErrorState({ error }: { error: Error }) {
+	return (
+		<div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
+			<AlertCircle className="h-12 w-12 text-destructive" />
+			<div>
+				<h3 className="font-semibold text-lg">Form not found</h3>
+				<p className="text-muted-foreground">
+					{error.message || "The form you're looking for doesn't exist or is no longer available."}
+				</p>
+			</div>
+		</div>
 	)
 }
