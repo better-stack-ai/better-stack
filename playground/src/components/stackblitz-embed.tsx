@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import type { EmbedOptions, Project } from "@stackblitz/sdk";
-import type { FileWritePlanItem, Framework } from "@btst/codegen/lib";
+import type { FileWritePlanItem, Framework } from "@btst/codegen/meta";
 import { buildProjectFiles, toSdkFiles } from "@/lib/stackblitz-template";
-import type { SeedRouteFile } from "@btst/codegen/lib";
+import type { SeedRouteFile } from "@btst/codegen/meta";
 import { Button } from "@/components/ui/button";
 
 const OPEN_FILE: Record<Framework, string> = {

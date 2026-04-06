@@ -1,7 +1,7 @@
 "use client";
 
-import type { PluginMeta } from "@btst/codegen/lib";
-import type { PluginKey } from "@btst/codegen/lib";
+import type { PluginMeta } from "@btst/codegen/meta";
+import type { PluginKey } from "@btst/codegen/meta";
 
 interface PluginSelectorProps {
 	plugins: readonly PluginMeta[];

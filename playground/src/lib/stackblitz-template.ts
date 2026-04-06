@@ -1,5 +1,5 @@
-import type { FileWritePlanItem, Framework } from "@btst/codegen/lib";
-import type { SeedRouteFile } from "@btst/codegen/lib";
+import type { FileWritePlanItem, Framework } from "@btst/codegen/meta";
+import type { SeedRouteFile } from "@btst/codegen/meta";
 
 export interface ProjectFile {
 	content: string;

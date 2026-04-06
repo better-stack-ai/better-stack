@@ -44,6 +44,16 @@
         "types": "./dist/lib.d.cts",
         "default": "./dist/lib.cjs"
       }
+    },
+    "./meta": {
+      "import": {
+        "types": "./dist/meta.d.ts",
+        "default": "./dist/meta.mjs"
+      },
+      "require": {
+        "types": "./dist/meta.d.cts",
+        "default": "./dist/meta.cjs"
+      }
     }
   },
   "files": [

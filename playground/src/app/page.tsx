@@ -1,6 +1,6 @@
 import { PlaygroundClient } from "@/components/playground-client";
 import { ModeToggle } from "@/components/mode-toggle";
-import { PLUGINS, PLUGIN_ROUTES } from "@btst/codegen/lib";
+import { PLUGINS, PLUGIN_ROUTES } from "@btst/codegen/meta";
 
 export default function PlaygroundPage() {
 	return (

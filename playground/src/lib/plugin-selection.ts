@@ -1,5 +1,5 @@
-import { normalizePlugins } from "@btst/codegen/lib";
-import type { PluginKey } from "@btst/codegen/lib";
+import { normalizePlugins } from "@btst/codegen/meta";
+import type { PluginKey } from "@btst/codegen/meta";
 
 /**
  * Applies auto-inclusion rules to a raw plugin selection:

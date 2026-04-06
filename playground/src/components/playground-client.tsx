@@ -12,7 +12,7 @@ import type {
 	PluginKey,
 	FileWritePlanItem,
 	Framework,
-} from "@btst/codegen/lib";
+} from "@btst/codegen/meta";
 import { generateProject } from "@/app/actions";
 import { getEffectivePlugins } from "@/lib/plugin-selection";
 import { PluginSelector } from "./plugin-selector";
@@ -28,7 +28,7 @@ import {
 	CardContent,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import type { SeedRouteFile } from "@btst/codegen/lib";
+import type { SeedRouteFile } from "@btst/codegen/meta";
 
 interface PlaygroundClientProps {
 	plugins: readonly PluginMeta[];
