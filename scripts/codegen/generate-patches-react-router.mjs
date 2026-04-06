@@ -216,10 +216,8 @@ const FILES = [
 	"app/routes/api/example-auth/$.ts",
 	"app/routes/api/public-chat/$.ts",
 
-	// UI primitives used by the todo plugin
-	"app/components/ui/empty.tsx",
-	"app/components/ui/field.tsx",
-	"app/components/ui/item.tsx",
+	// Note: app/components/ui/empty.tsx, field.tsx, item.tsx are installed by
+	// `shadcn add` in Step 4 — no patch needed (shadcn content is already correct).
 ];
 
 // ── Wipe existing .patch files ────────────────────────────────────────────────
