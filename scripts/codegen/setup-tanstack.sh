@@ -232,6 +232,12 @@ else
   success ".env created (no .env.common found)"
 fi
 
+# Derive VITE_HAS_OPENAI_KEY from OPENAI_API_KEY so the pages layout banner works
+if grep -q "^OPENAI_API_KEY=." "$DEST/.env" && ! grep -q "^VITE_HAS_OPENAI_KEY=" "$DEST/.env"; then
+  echo "VITE_HAS_OPENAI_KEY=1" >> "$DEST/.env"
+  success "VITE_HAS_OPENAI_KEY=1 added to .env"
+fi
+
 # ── Step 8: Create public/uploads/ ───────────────────────────────────────────
 
 step "Creating public/uploads/ for local media storage"

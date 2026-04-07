@@ -32,6 +32,7 @@ export default function BtstPagesLayout() {
 {{/if}}
 	const queryClient = getOrCreateQueryClient()
 {{#if hasAiChat}}
+	const hasApiKey = !!import.meta.env.VITE_HAS_OPENAI_KEY
 	const location = useLocation()
 	const showChatWidget = !location.pathname.startsWith("/pages/chat")
 {{/if}}
@@ -47,6 +48,14 @@ export default function BtstPagesLayout() {
 					}
 				}
 			>
+{{#if hasAiChat}}
+				{!hasApiKey && (
+					<div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-sm text-amber-800">
+						Add <code className="font-mono">OPENAI_API_KEY</code> to{" "}
+						<code className="font-mono">.env</code> to enable AI chat.
+					</div>
+				)}
+{{/if}}
 {{#if hasAiChat}}
 				{showChatWidget && (
 					<div className="fixed bottom-6 right-6 z-50">
