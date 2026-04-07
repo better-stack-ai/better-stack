@@ -232,6 +232,7 @@ const FILES = [
 	"app/directory/[id]/page.tsx",
 	"app/directory/category/[categoryId]/page.tsx",
 	"app/api/example-auth/[[...all]]/route.ts",
+	"app/api/public-chat/[[...all]]/route.ts",
 
 	// UI primitives used by the todo plugin
 	"components/ui/empty.tsx",

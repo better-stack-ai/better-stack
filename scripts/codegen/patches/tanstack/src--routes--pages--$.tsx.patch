@@ -1,6 +1,8 @@
+diff --git a/src/routes/pages/$.tsx b/src/routes/pages/$.tsx
+index c6aace8..e785b9c 100644
 --- a/src/routes/pages/$.tsx
 +++ b/src/routes/pages/$.tsx
-@@ -1,12 +1,11 @@
+@@ -1,13 +1,12 @@
  import { createFileRoute, notFound } from "@tanstack/react-router"
  import { normalizePath } from "@btst/stack/client"
  import { getStackClient } from "@/lib/stack-client"
@@ -15,7 +17,8 @@
 +		const queryClient = context.queryClient
  		const routePath = normalizePath(params._splat)
  		const route = getStackClient(queryClient).router.getRoute(routePath)
-@@ -24,8 +23,8 @@
+ 		if (!route) throw notFound()
+@@ -24,7 +23,7 @@ export const Route = createFileRoute("/pages/$")({
  
  function BtstPagesRoute() {
  	const params = Route.useParams()

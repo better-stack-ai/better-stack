@@ -1,8 +1,8 @@
 diff --git a/src/routes/pages/route.tsx b/src/routes/pages/route.tsx
-index 81ce8d2..db5a6aa 100644
+index 7764e8f..75d8072 100644
 --- a/src/routes/pages/route.tsx
 +++ b/src/routes/pages/route.tsx
-@@ -1,110 +1,356 @@
+@@ -1,117 +1,320 @@
 -import { createFileRoute, Outlet, useNavigate, useLocation } from "@tanstack/react-router"
 -import { Link as RouterLink } from "@tanstack/react-router"
 -import { StackProvider } from "@btst/stack/context"
@@ -40,7 +40,10 @@ index 81ce8d2..db5a6aa 100644
 +import type { TodosPluginOverrides } from "../../lib/plugins/todo/client/overrides";
 +import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client";
 +import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client";
-+
+ 
+-export const Route = createFileRoute("/pages")({
+-	component: BtstPagesLayout,
+-})
 +// Get base URL function - works on both server and client
 +// On server: uses process.env.BASE_URL
 +// On client: uses import.meta.env.VITE_BASE_URL or falls back to window.location.origin
@@ -48,7 +51,39 @@ index 81ce8d2..db5a6aa 100644
 +	typeof window !== "undefined"
 +		? import.meta.env.VITE_BASE_URL || window.location.origin
 +		: process.env.BASE_URL || "http://localhost:3007";
-+
+ 
+-function getBaseURL() {
+-	if (typeof window !== "undefined") {
+-		return window.location.origin
+-	}
+-
+-	if (typeof process !== "undefined") {
+-		return process.env.VITE_BASE_URL || process.env.BASE_URL || "http://localhost:3000"
+-	}
+-
+-	return "http://localhost:3000"
+-}
+-
+-function BtstPagesLayout() {
+-	const navigate = useNavigate()
+-	const queryClient = getOrCreateQueryClient()
+-	const hasApiKey = !!import.meta.env.VITE_HAS_OPENAI_KEY
+-	const location = useLocation()
+-	const showChatWidget = !location.pathname.startsWith("/pages/chat")
+-	const baseURL = getBaseURL()
+-	return (
+-		<QueryClientProvider client={queryClient}>
+-			<StackProvider
+-				basePath="/pages"
+-				overrides={
+-					{
+-					"blog": {
+-						apiBaseURL: baseURL,
+-						apiBasePath: "/api/data",
+-						navigate: (path: string) => navigate({ to: path }),
+-						Link: ({ href, to, ...props }: any) => <RouterLink to={href || to || "#"} {...props} />,
+-						uploadImage: async () => {
+-							throw new Error("TODO: implement blog.uploadImage override in src/routes/pages/route.tsx")
 +// Define the shape of all plugin overrides
 +type PluginOverrides = {
 +	todos: TodosPluginOverrides;
@@ -61,20 +96,11 @@ index 81ce8d2..db5a6aa 100644
 +	comments: CommentsPluginOverrides;
 +	media: MediaPluginOverrides;
 +};
- 
- export const Route = createFileRoute("/pages")({
--	component: BtstPagesLayout,
--})
 +	component: Layout,
 +	notFoundComponent: () => {
 +		return <p>This page doesn't exist!</p>;
 +	},
 +});
- 
--function getBaseURL() {
--	if (typeof window !== "undefined") {
--		return window.location.origin
--	}
 +function Layout() {
 +	const router = useRouter();
 +	const routeContext = Route.useRouteContext();
@@ -87,10 +113,6 @@ index 81ce8d2..db5a6aa 100644
 +		}),
 +		[baseURL],
 +	);
- 
--	if (typeof process !== "undefined") {
--		return process.env.VITE_BASE_URL || process.env.BASE_URL || "http://localhost:3000"
--	}
 +	const uploadImage = useCallback(
 +		async (file: File) => {
 +			const asset = await uploadAsset(mediaClientConfig, { file });
@@ -98,9 +120,6 @@ index 81ce8d2..db5a6aa 100644
 +		},
 +		[mediaClientConfig],
 +	);
- 
--	return "http://localhost:3000"
--}
 +	// For chat file attachments we embed as a data URL so OpenAI can read the
 +	// content directly — a local /uploads/... path is not reachable from OpenAI's servers.
 +	const uploadFileForChat = useCallback(
@@ -113,30 +132,9 @@ index 81ce8d2..db5a6aa 100644
 +			}),
 +		[],
 +	);
- 
--function BtstPagesLayout() {
--	const navigate = useNavigate()
--	const queryClient = getOrCreateQueryClient()
--	const location = useLocation()
--	const showChatWidget = !location.pathname.startsWith("/pages/chat")
--	const baseURL = getBaseURL()
- 	return (
--		<QueryClientProvider client={queryClient}>
--			<StackProvider
 +		<QueryClientProvider client={routeContext.queryClient}>
 +			<ReactQueryDevtools initialIsOpen={false} />
 +			<StackProvider<PluginOverrides>
- 				basePath="/pages"
--				overrides={
--					{
--					"blog": {
--						apiBaseURL: baseURL,
--						apiBasePath: "/api/data",
--						navigate: (path: string) => navigate({ to: path }),
--						Link: ({ href, to, ...props }: any) => <RouterLink to={href || to || "#"} {...props} />,
--						uploadImage: async () => {
--							throw new Error("TODO: implement blog.uploadImage override in src/routes/pages/route.tsx")
--						},
 +				overrides={{
 +					todos: {
 +						Link: ({ href, children, className, ...props }) => (
@@ -145,14 +143,7 @@ index 81ce8d2..db5a6aa 100644
 +							</Link>
 +						),
 +						navigate: (href) => router.navigate({ href }),
- 					},
--					"ai-chat": {
 +					"ui-builder": {
- 						apiBaseURL: baseURL,
- 						apiBasePath: "/api/data",
--						mode: "public" as const,
--						navigate: (path: string) => navigate({ to: path }),
--						Link: ({ href, to, ...props }: any) => <RouterLink to={href || to || "#"} {...props} />,
 +						navigate: (href) => router.navigate({ href }),
 +						refresh: () => router.invalidate(),
 +						Link: ({ href, children, className, ...props }) => (
@@ -161,13 +152,7 @@ index 81ce8d2..db5a6aa 100644
 +							</Link>
 +						),
 +						componentRegistry: defaultComponentRegistry,
- 					},
--					"cms": {
 +					blog: {
- 						apiBaseURL: baseURL,
- 						apiBasePath: "/api/data",
--						navigate: (path: string) => navigate({ to: path }),
--						Link: ({ href, to, ...props }: any) => <RouterLink to={href || to || "#"} {...props} />,
 +						navigate: (href) => router.navigate({ href }),
 +						uploadImage,
 +						imagePicker: ImagePicker,
@@ -183,7 +168,8 @@ index 81ce8d2..db5a6aa 100644
 +								routeName,
 +								context.path,
 +							);
-+						},
+ 						},
+-					},
 +						onRouteError: async (routeName, error, context) => {
 +							console.log(
 +								`[${context.isSSR ? "SSR" : "CSR"}] onRouteError: Route error:`,
@@ -242,14 +228,20 @@ index 81ce8d2..db5a6aa 100644
 +								className="mt-8 pt-8 border-t"
 +							/>
 +						),
- 					},
--					"form-builder": {
-+					"ai-chat": {
-+						mode: "authenticated",
- 						apiBaseURL: baseURL,
- 						apiBasePath: "/api/data",
+ 					"ai-chat": {
+-						apiBaseURL: baseURL,
+-						apiBasePath: "/api/data",
+-						mode: "public" as const,
 -						navigate: (path: string) => navigate({ to: path }),
 -						Link: ({ href, to, ...props }: any) => <RouterLink to={href || to || "#"} {...props} />,
+-					},
+-					"cms": {
+-						apiBaseURL: baseURL,
+-						apiBasePath: "/api/data",
+-						navigate: (path: string) => navigate({ to: path }),
+-						Link: ({ href, to, ...props }: any) => <RouterLink to={href || to || "#"} {...props} />,
+-					},
++						mode: "authenticated",
 +						navigate: (href) => router.navigate({ href }),
 +						uploadFile: uploadFileForChat,
 +						Link: ({ href, children, className, ...props }) => (
@@ -264,13 +256,7 @@ index 81ce8d2..db5a6aa 100644
 +								context.path,
 +							);
 +						},
- 					},
--					"ui-builder": {
 +					cms: {
- 						apiBaseURL: baseURL,
- 						apiBasePath: "/api/data",
--						navigate: (path: string) => navigate({ to: path }),
--						Link: ({ href, to, ...props }: any) => <RouterLink to={href || to || "#"} {...props} />,
 +						navigate: (href) => router.navigate({ href }),
 +						uploadImage,
 +						imagePicker: ImagePicker,
@@ -287,11 +273,21 @@ index 81ce8d2..db5a6aa 100644
 +								context.path,
 +							);
 +						},
- 					},
+ 					"form-builder": {
+-						apiBaseURL: baseURL,
+-						apiBasePath: "/api/data",
+-						navigate: (path: string) => navigate({ to: path }),
+-						Link: ({ href, to, ...props }: any) => <RouterLink to={href || to || "#"} {...props} />,
+-					},
+-					"ui-builder": {
+-						apiBaseURL: baseURL,
+-						apiBasePath: "/api/data",
+-						navigate: (path: string) => navigate({ to: path }),
+-						Link: ({ href, to, ...props }: any) => <RouterLink to={href || to || "#"} {...props} />,
+-					},
 -					"kanban": {
-+					"form-builder": {
- 						apiBaseURL: baseURL,
- 						apiBasePath: "/api/data",
+-						apiBaseURL: baseURL,
+-						apiBasePath: "/api/data",
 -						navigate: (path: string) => navigate({ to: path }),
 -						Link: ({ href, to, ...props }: any) => <RouterLink to={href || to || "#"} {...props} />,
 -						uploadImage: async () => {
@@ -308,21 +304,27 @@ index 81ce8d2..db5a6aa 100644
 +								routeName,
 +								context.path,
 +							);
-+						},
+ 						},
+-						resolveUser: async () => null,
+-						searchUsers: async () => [],
+-					},
+-					"comments": {
+-						apiBaseURL: baseURL,
+-						apiBasePath: "/api/data",
+-					},
+-					"media": {
+-						apiBaseURL: baseURL,
+-						apiBasePath: "/api/data",
+-						queryClient,
+-						navigate: (path: string) => navigate({ to: path }),
+-						Link: ({ href, to, ...props }: any) => <RouterLink to={href || to || "#"} {...props} />,
 +						onRouteError: async (routeName, error, context) => {
 +							console.log(
 +								`[${context.isSSR ? "SSR" : "CSR"}] Form Builder error:`,
 +								routeName,
 +								error.message,
 +							);
- 						},
--						resolveUser: async () => null,
--						searchUsers: async () => [],
- 					},
--					"comments": {
 +					kanban: {
- 						apiBaseURL: baseURL,
- 						apiBasePath: "/api/data",
 +						navigate: (href) => router.navigate({ href }),
 +						Link: ({ href, children, className, ...props }) => (
 +							<Link to={href} className={className} {...props}>
@@ -352,14 +354,7 @@ index 81ce8d2..db5a6aa 100644
 +								context.path,
 +							);
 +						},
- 					},
--					"media": {
 +					comments: {
- 						apiBaseURL: baseURL,
- 						apiBasePath: "/api/data",
--						queryClient,
--						navigate: (path: string) => navigate({ to: path }),
--						Link: ({ href, to, ...props }: any) => <RouterLink to={href || to || "#"} {...props} />,
 +						currentUserId: "olliethedev",
 +						defaultCommentPageSize: 5,
 +						resourceLinks: {
@@ -377,9 +372,6 @@ index 81ce8d2..db5a6aa 100644
 +							);
 +							return true;
 +						},
- 					},
--					}
--				}
 +					media: {
 +						...mediaClientConfig,
 +						queryClient: routeContext.queryClient,
@@ -389,9 +381,16 @@ index 81ce8d2..db5a6aa 100644
 +								{children}
 +							</Link>
 +						),
-+					},
-+				}}
- 			>
+ 					},
+-					}
+-				}
+-			>
+-				{!hasApiKey && (
+-					<div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-sm text-amber-800">
+-						Add <code className="font-mono">OPENAI_API_KEY</code> to{" "}
+-						<code className="font-mono">.env</code> to enable AI chat.
+-					</div>
+-				)}
 -				{showChatWidget && (
 -					<div className="fixed bottom-6 right-6 z-50">
 -						<ChatLayout
@@ -403,7 +402,12 @@ index 81ce8d2..db5a6aa 100644
 -						/>
 -					</div>
 -				)}
- 				<Outlet />
+-				<Outlet />
+-			</StackProvider>
+-		</QueryClientProvider>
+-	)
+-}
++				}}
 +				{/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}
 +				<div className="fixed bottom-6 right-6 z-50" data-testid="chat-widget">
 +					<ChatLayout
@@ -414,11 +418,7 @@ index 81ce8d2..db5a6aa 100644
 +						showSidebar={false}
 +					/>
 +				</div>
- 			</StackProvider>
- 		</QueryClientProvider>
--	)
 +	);
- }
 +
 +const ImagePicker = ({ onSelect }: { onSelect: (url: string) => void }) => {
 +	return (
