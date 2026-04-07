@@ -229,25 +229,175 @@ function tanstackRoute(
 	alias: string,
 	body: string,
 ): string {
-	return `import { createAPIFileRoute } from "@tanstack/react-start/api"
+	return `import { createFileRoute } from "@tanstack/react-router"
 import { myStack } from "${alias}lib/stack"
 
 let seeded = false
 
-export const Route = createAPIFileRoute("/api/seed-${pluginKey}")({
-  GET: async () => {
-    if (seeded) return Response.json({ ok: true, skipped: true })
-    seeded = true
-    try {
-      const result = await (async () => {${body}      })()
-      return Response.json(result ?? { ok: true })
-    } catch (err) {
-      seeded = false
-      console.error("[seed] ${pluginKey} failed:", err)
-      return Response.json({ ok: false }, { status: 500 })
-    }
+export const Route = createFileRoute("/api/seed-${pluginKey}")({
+  server: {
+    handlers: {
+      GET: async () => {
+        if (seeded) return Response.json({ ok: true, skipped: true })
+        seeded = true
+        try {
+          const result = await (async () => {${body}          })()
+          return Response.json(result ?? { ok: true })
+        } catch (err) {
+          seeded = false
+          console.error("[seed] ${pluginKey} failed:", err)
+          return Response.json({ ok: false }, { status: 500 })
+        }
+      },
+    },
   },
 })
+`;
+}
+
+// ── Vite configureServer seed plugin (React Router & TanStack Start) ─────────
+
+/**
+ * Generate the inline code for a Vite plugin object that seeds data when the
+ * dev server starts listening. The plugin is inserted directly into the
+ * generated vite.config.ts so no background processes or timers are needed.
+ *
+ * Uses `server.middlewares` to gate every request behind the seed promise,
+ * guaranteeing seeds are present before the first response is sent.
+ * This is more reliable in WebContainers than the background seed-runner
+ * approach because it does not depend on setTimeout or shell `&` backgrounding.
+ */
+export function buildViteConfigSeedPlugin(
+	pluginKeys: PluginKey[],
+	/** "@/" for TanStack Start, "~/" for React Router */
+	alias: string,
+): string | null {
+	const seedableKeys = pluginKeys.filter((k) => k in SEED_BODIES);
+	if (seedableKeys.length === 0) return null;
+
+	const seedBlocks = seedableKeys
+		.map((key) => `      await (async () => {${SEED_BODIES[key]!}      })()`)
+		.join("\n\n");
+
+	const stackPath = `${alias}lib/stack`;
+
+	return `{
+  name: "btst-seed",
+  configureServer(server) {
+    // Kick off seeding as soon as the HTTP server is listening, then block
+    // every dev-server request behind the promise so seeds are always in
+    // place before the first response is sent.
+    const seedReady = (async () => {
+      await new Promise<void>((resolve) => {
+        if (server.httpServer?.listening) resolve()
+        else server.httpServer?.once("listening", () => resolve())
+      })
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mod: any = await server.ssrLoadModule("${stackPath}")
+        const { myStack } = mod
+${seedBlocks}
+        console.log("[seed] Seeding complete")
+      } catch (err) {
+        console.error("[seed] Seeding failed:", err)
+      }
+    })()
+    return () => {
+      server.middlewares.use((_req, _res, next) => {
+        void seedReady.finally(next)
+      })
+    }
+  },
+}`;
+}
+
+// ── TanStack Start Nitro server plugin seed file ─────────────────────────────
+
+/**
+ * Generate a Nitro server plugin file (`src/server/seed.ts`) that seeds data
+ * at startup within Nitro's own environment.
+ *
+ * Unlike the Vite configureServer approach (which uses the deprecated
+ * ssrLoadModule shim — broken in Vite 7 + Nitro) or the seed-runner.mjs
+ * approach (which requires shell `&` backgrounding — unreliable in
+ * WebContainers), this plugin runs directly inside Nitro's process and shares
+ * the exact same module instances as API route handlers. Seeds written here are
+ * immediately visible to all subsequent requests.
+ *
+ * Wire it up by passing `{ config: { plugins: ['./src/server/seed.ts'] } }` to
+ * the `nitro()` Vite plugin in the generated vite.config.ts.
+ */
+export function buildTanstackNitroSeedPlugin(
+	pluginKeys: PluginKey[],
+	/** "@/" for TanStack Start */
+	alias: string,
+): string | null {
+	const seedableKeys = pluginKeys.filter((k) => k in SEED_BODIES);
+	if (seedableKeys.length === 0) return null;
+
+	const seedBlocks = seedableKeys
+		.map((key) => `    await (async () => {${SEED_BODIES[key]!}    })()`)
+		.join("\n\n");
+
+	const stackPath = `${alias}lib/stack`;
+
+	return `import { myStack } from "${stackPath}"
+
+let seeded = false
+
+// Nitro server plugin — runs at Nitro startup within its own environment,
+// sharing the same module instances as API request handlers.
+export default async function () {
+  if (seeded) return
+  seeded = true
+  try {
+${seedBlocks}
+    console.log("[seed] Seeding complete")
+  } catch (err) {
+    seeded = false
+    console.error("[seed] Seeding failed:", err)
+  }
+}
+`;
+}
+
+// ── Next.js instrumentation.ts seed file ─────────────────────────────────────
+
+/**
+ * Generate instrumentation.ts for Next.js that seeds data at server startup.
+ *
+ * Unlike the background seed-runner approach (which relies on shell `&`
+ * backgrounding and setTimeout polling), this integrates with Next.js's native
+ * instrumentation hook. Next.js awaits `register()` before accepting the first
+ * request, so seeds are guaranteed to be present when the app becomes live.
+ *
+ * This is critical for StackBlitz WebContainers where setTimeout delays in
+ * background processes are not honoured, causing the seed runner to exhaust
+ * all retry attempts before the dev server even starts.
+ */
+export function buildNextjsInstrumentationFile(
+	pluginKeys: PluginKey[],
+): string | null {
+	const seedableKeys = pluginKeys.filter((k) => k in SEED_BODIES);
+	if (seedableKeys.length === 0) return null;
+
+	const seedBlocks = seedableKeys
+		.map((key) => {
+			const body = SEED_BODIES[key]!;
+			return `    // Seed ${key}\n    await (async () => {${body}    })()`;
+		})
+		.join("\n\n");
+
+	return `export async function register() {
+  if (process.env.NEXT_RUNTIME !== 'nodejs') return
+  try {
+    const { myStack } = await import('@/lib/stack')
+${seedBlocks}
+    console.log('[seed] Seeding complete')
+  } catch (err) {
+    console.error('[seed] Seeding failed:', err)
+  }
+}
 `;
 }
 

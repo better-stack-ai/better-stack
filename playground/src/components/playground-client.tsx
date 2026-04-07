@@ -45,6 +45,7 @@ interface GeneratedState {
 	hasAiChat: boolean;
 	seedRouteFiles: SeedRouteFile[];
 	seedRunnerScript: string | null;
+	seedPluginCode: string | null;
 }
 
 const FRAMEWORKS: { key: Framework; label: string; devServer: string }[] = [
@@ -382,6 +383,7 @@ export function PlaygroundClient({
 								previewPath={activePreviewRoute}
 								seedRouteFiles={generated.seedRouteFiles}
 								seedRunnerScript={generated.seedRunnerScript}
+								seedPluginCode={generated.seedPluginCode}
 								extraButtons={
 									<RouteDrawer
 										routes={previewRoutes}

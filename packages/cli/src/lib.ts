@@ -8,6 +8,9 @@ export {
 	buildSeedRouteFile,
 	buildSeedRouteFiles,
 	buildSeedRunnerScript,
+	buildNextjsInstrumentationFile,
+	buildTanstackNitroSeedPlugin,
+	buildViteConfigSeedPlugin,
 	seedApiPath,
 	seedRoutePath,
 } from "./utils/seed-plan";

@@ -1,6 +1,10 @@
 "use server";
 
-import { buildScaffoldPlan, PLUGIN_ROUTES } from "@btst/codegen/lib";
+import {
+	buildScaffoldPlan,
+	buildSeedRouteFiles,
+	PLUGIN_ROUTES,
+} from "@btst/codegen/lib";
 import type {
 	PluginKey,
 	FileWritePlanItem,
@@ -8,8 +12,8 @@ import type {
 } from "@btst/codegen/lib";
 import { getEffectivePlugins } from "@/lib/plugin-selection";
 import {
-	buildSeedRouteFiles,
-	buildSeedRunnerScript,
+	buildNextjsInstrumentationFile,
+	buildViteConfigSeedPlugin,
 	seedApiPath,
 	type SeedRouteFile,
 } from "@btst/codegen/lib";
@@ -22,6 +26,7 @@ export interface GenerateResult {
 	hasAiChat: boolean;
 	seedRouteFiles: SeedRouteFile[];
 	seedRunnerScript: string | null;
+	seedPluginCode: string | null;
 	seedRoutes: string[];
 }
 
@@ -57,15 +62,75 @@ export async function generateProject(
 		withRouteDocs.includes(k),
 	);
 
-	const seedRouteFiles =
-		effectiveSeeded.length > 0
-			? buildSeedRouteFiles(effectiveSeeded, framework)
-			: [];
+	// Per-framework seed strategy:
+	//  • Next.js       → instrumentation.ts (awaited before first request)
+	//  • React Router  → Vite configureServer plugin (ssrLoadModule loads in the
+	//                    same "ssr" environment as request handlers — shared state)
+	//  • TanStack Start → seed API routes + Vite configureServer plugin that calls
+	//                    them via HTTP. ssrLoadModule breaks in Vite 7 + Nitro, and
+	//                    Nitro server plugins run in an isolated context. HTTP calls
+	//                    to the seed routes go through Nitro's request pipeline,
+	//                    which IS the same module context as other API routes.
+	let seedRouteFiles: SeedRouteFile[] = [];
+	let seedRunnerScript: string | null = null;
+	let seedPluginCode: string | null = null;
 
-	const seedRunnerScript =
-		seedRouteFiles.length > 0
-			? buildSeedRunnerScript(effectiveSeeded, port)
-			: null;
+	if (effectiveSeeded.length > 0) {
+		if (framework === "nextjs") {
+			const instrContent = buildNextjsInstrumentationFile(effectiveSeeded);
+			if (instrContent) {
+				seedRouteFiles = [
+					{ path: "instrumentation.ts", content: instrContent },
+				];
+			}
+		} else if (framework === "tanstack") {
+			// Generate seed API routes so they run inside Nitro's request pipeline.
+			// Then add a Vite configureServer plugin that calls them via HTTP after
+			// the server starts. This avoids ssrLoadModule (broken in Vite 7 + Nitro)
+			// and avoids background processes (`&` is unreliable in WebContainers).
+			seedRouteFiles = buildSeedRouteFiles(effectiveSeeded, framework);
+			if (seedRouteFiles.length > 0) {
+				const seedPaths = seedRouteFiles
+					.map((f) => {
+						const m = f.path.match(/seed-([^/]+)\.ts$/);
+						return m ? `"/api/seed-${m[1]}"` : null;
+					})
+					.filter(Boolean)
+					.join(", ");
+				seedPluginCode = `{
+  name: "btst-seed",
+  configureServer(server) {
+    const SEEDS = [${seedPaths}]
+    const BASE = "http://localhost:${port}"
+    async function trySeed(path) {
+      for (let i = 0; i < 60; i++) {
+        try {
+          const res = await fetch(BASE + path)
+          if (res.ok) { const d = await res.json(); console.log("[seed]", path, d); return }
+        } catch {}
+        await new Promise(r => setTimeout(r, 1000))
+      }
+      console.error("[seed] timed out:", path)
+    }
+    ;(async () => {
+      await new Promise(resolve => {
+        if (server.httpServer?.listening) resolve(undefined)
+        else server.httpServer?.once("listening", () => resolve(undefined))
+      })
+      try {
+        for (const path of SEEDS) { await trySeed(path) }
+        console.log("[seed] Seeding complete")
+      } catch (err) { console.error("[seed] Seeding failed:", err) }
+    })()
+  },
+}`;
+			}
+		} else {
+			// React Router: inject a Vite configureServer plugin that seeds via
+			// ssrLoadModule once the HTTP server starts listening.
+			seedPluginCode = buildViteConfigSeedPlugin(effectiveSeeded, alias);
+		}
+	}
 
 	const seedRoutes = seedRouteFiles.map((f) =>
 		seedApiPath(
@@ -81,6 +146,7 @@ export async function generateProject(
 		hasAiChat: withRouteDocs.includes("ai-chat" as PluginKey),
 		seedRouteFiles,
 		seedRunnerScript,
+		seedPluginCode,
 		seedRoutes,
 	};
 }

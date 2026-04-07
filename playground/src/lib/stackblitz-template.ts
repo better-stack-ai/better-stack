@@ -413,6 +413,7 @@ function buildReactRouterProjectFiles(
 	extraPackages: string[] = [],
 	seedFiles: SeedRouteFile[] = [],
 	seedRunnerScript: string | null = null,
+	seedPluginCode: string | null = null,
 ): ProjectFiles {
 	const cssImportLines = cssImports.map((c) => `@import "${c}";`).join("\n");
 	const pluginDependencies = Object.fromEntries(
@@ -528,7 +529,7 @@ if (existsSync(uiSrc)) {
 import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from "vite"
 import tsconfigPaths from "vite-tsconfig-paths"
-
+${seedPluginCode ? `\nconst btstSeedPlugin = ${seedPluginCode}\n` : ""}
 export default defineConfig({
   plugins: [
     tailwindcss(),
@@ -545,7 +546,7 @@ export default defineConfig({
           return { code: "" }
         }
       },
-    },
+    },${seedPluginCode ? "\n    btstSeedPlugin," : ""}
   ],
   ssr: {
     // Bundle @btst/* and highlight.js through Vite so the plugin above can
@@ -728,6 +729,7 @@ function buildTanstackProjectFiles(
 	extraPackages: string[] = [],
 	seedFiles: SeedRouteFile[] = [],
 	seedRunnerScript: string | null = null,
+	seedPluginCode: string | null = null,
 ): ProjectFiles {
 	const cssImportLines = cssImports.map((c) => `@import "${c}";`).join("\n");
 	const pluginDependencies = Object.fromEntries(
@@ -777,7 +779,7 @@ function buildTanstackProjectFiles(
 						"@types/react": "^19",
 						"@types/react-dom": "^19",
 						"@vitejs/plugin-react": "^5.0.0",
-						nitro: "3.0.1-alpha.0",
+						nitro: "latest",
 						typescript: "^5",
 						vite: "^7.0.0",
 						"vite-tsconfig-paths": "^5.0.0",
@@ -841,14 +843,14 @@ import tsConfigPaths from "vite-tsconfig-paths"
 import { tanstackStart } from "@tanstack/react-start/plugin/vite"
 import viteReact from "@vitejs/plugin-react"
 import { nitro } from "nitro/vite"
-
+${seedPluginCode ? `\nconst btstSeedPlugin = ${seedPluginCode}\n` : ""}
 export default defineConfig({
   server: { port: 3000 },
   plugins: [
+    nitro(),
     tsConfigPaths(),
     tanstackStart(),
     viteReact(),
-    nitro({ config: { preset: "node-server" } }),
     {
       // WebContainers: Node's ESM loader cannot handle .css imports inside SSR
       // bundles (ERR_UNKNOWN_FILE_EXTENSION). Return an empty module for every
@@ -860,7 +862,7 @@ export default defineConfig({
           return { code: "" }
         }
       },
-    },
+    },${seedPluginCode ? "\n    btstSeedPlugin," : ""}
   ],
   ssr: {
     // Bundle @btst/* and highlight.js through Vite so the plugin above can
@@ -1055,6 +1057,7 @@ export function buildProjectFiles(
 	hasAiChat = false,
 	seedFiles: SeedRouteFile[] = [],
 	seedRunnerScript: string | null = null,
+	seedPluginCode: string | null = null,
 ): ProjectFiles {
 	if (framework === "react-router") {
 		return buildReactRouterProjectFiles(
@@ -1063,6 +1066,7 @@ export function buildProjectFiles(
 			extraPackages,
 			seedFiles,
 			seedRunnerScript,
+			seedPluginCode,
 		);
 	}
 	if (framework === "tanstack") {
@@ -1072,6 +1076,7 @@ export function buildProjectFiles(
 			extraPackages,
 			seedFiles,
 			seedRunnerScript,
+			seedPluginCode,
 		);
 	}
 	return buildNextjsProjectFiles(

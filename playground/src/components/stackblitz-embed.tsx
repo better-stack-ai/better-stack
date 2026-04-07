@@ -23,6 +23,7 @@ interface StackBlitzEmbedProps {
 	extraButtons?: React.ReactNode;
 	seedRouteFiles?: SeedRouteFile[];
 	seedRunnerScript?: string | null;
+	seedPluginCode?: string | null;
 }
 
 const EMBED_HEIGHT = 700;
@@ -37,6 +38,7 @@ export function StackBlitzEmbed({
 	extraButtons,
 	seedRouteFiles = [],
 	seedRunnerScript = null,
+	seedPluginCode = null,
 }: StackBlitzEmbedProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const projectRef = useRef<Project | null>(null);
@@ -68,6 +70,7 @@ export function StackBlitzEmbed({
 					hasAiChat,
 					seedRouteFiles,
 					seedRunnerScript,
+					seedPluginCode,
 				),
 			),
 		};
@@ -218,6 +221,7 @@ export function StackBlitzEmbed({
 		hasAiChat,
 		seedRouteFiles,
 		seedRunnerScript,
+		seedPluginCode,
 	]);
 
 	useEffect(() => {
