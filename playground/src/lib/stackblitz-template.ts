@@ -138,6 +138,11 @@ if (existsSync(workspacePluginsDist)) {
 			content: `legacy-peer-deps=true\nengine-strict=false\n`,
 		},
 
+		// ── .env ─────────────────────────────────────────────────────────────────
+		".env": {
+			content: `# Uncomment and add your OpenAI API key to enable AI chat.\n# OPENAI_API_KEY=sk-...\n`,
+		},
+
 		// ── next.config.ts ───────────────────────────────────────────────────────
 		// Minimal fallback — the CLI (btst init) generates a richer version when
 		// ai-chat or media plugins are selected, which merges on top of this via
@@ -507,6 +512,11 @@ if (existsSync(uiSrc)) {
 			content: `legacy-peer-deps=true\nengine-strict=false\n`,
 		},
 
+		// ── .env ─────────────────────────────────────────────────────────────────
+		".env": {
+			content: `# Uncomment and add your OpenAI API key to enable AI chat.\n# OPENAI_API_KEY=sk-...\n`,
+		},
+
 		// ── css-noop-loader.mjs ──────────────────────────────────────────────────
 		// WebContainers runs a WASI-based Node.js that cannot register Vite's
 		// internal ESM hooks, so CSS imports from SSR-evaluated node_modules (e.g.
@@ -827,6 +837,11 @@ if (existsSync(uiSrc)) {
 
 		".npmrc": {
 			content: `legacy-peer-deps=true\nengine-strict=false\n`,
+		},
+
+		// ── .env ─────────────────────────────────────────────────────────────────
+		".env": {
+			content: `# Uncomment and add your OpenAI API key to enable AI chat.\n# OPENAI_API_KEY=sk-...\n`,
 		},
 
 		"css-noop-loader.mjs": {
