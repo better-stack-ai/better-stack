@@ -56,12 +56,14 @@ describe("seed-plan", () => {
 		expect(file?.content).toContain("return data(");
 	});
 
-	it("tanstack route uses createAPIFileRoute with correct path and GET handler", () => {
+	it("tanstack route uses createFileRoute with correct path and GET handler", () => {
 		const file = buildSeedRouteFile("blog", "tanstack");
-		expect(file?.content).toContain("createAPIFileRoute");
+		expect(file?.content).toContain("createFileRoute");
 		expect(file?.content).toContain('"/api/seed-blog"');
 		expect(file?.content).toContain("GET: async ()");
 		expect(file?.content).toContain('import { myStack } from "@/lib/stack"');
+		expect(file?.content).toContain("server:");
+		expect(file?.content).toContain("handlers:");
 	});
 
 	// ── buildSeedRouteFiles ──────────────────────────────────────────────────
