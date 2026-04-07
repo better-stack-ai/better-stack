@@ -63,7 +63,8 @@
       "!**/test-results/**",
       "!**/.btst-stack-src/**",
       "!**/.btst-stack-ui/**",
-      "!**/packages/stack/registry/**"
+      "!**/packages/stack/registry/**",
+      "!**/codegen-projects/**"
     ]
   }
 }
