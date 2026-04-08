@@ -132,9 +132,13 @@ function buildPluginTemplateContext(
 		hasCms,
 		hasKanban,
 		hasSitemap,
-		backendImports: hasAiChat
-			? `${backendImportLines}\nimport { openai } from "@ai-sdk/openai"`
-			: backendImportLines,
+		backendImports: [
+			backendImportLines,
+			hasAiChat ? `import { openai } from "@ai-sdk/openai"` : "",
+			hasCms ? `import { z } from "zod"` : "",
+		]
+			.filter(Boolean)
+			.join("\n"),
 		clientImports: clientMetas
 			.map((m) => {
 				if (m.key === "better-auth-ui") {
@@ -155,9 +159,20 @@ function buildPluginTemplateContext(
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), mode: "public" as const }),`;
 				}
 				if (m.key === "cms") {
+					const articleType = `{
+				name: "Article",
+				slug: "article",
+				schema: z.object({
+					title: z.string(),
+					summary: z.string(),
+					body: z.string(),
+					publishedAt: z.string(),
+					published: z.boolean(),
+				}),
+			}`;
 					const contentTypes = hasUiBuilder
-						? "[UI_BUILDER_CONTENT_TYPE]"
-						: "[]";
+						? `[${articleType}, UI_BUILDER_CONTENT_TYPE]`
+						: `[${articleType}]`;
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ contentTypes: ${contentTypes} }),`;
 				}
 				if (m.key === "comments") {

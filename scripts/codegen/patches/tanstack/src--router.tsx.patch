@@ -1,10 +1,8 @@
 diff --git a/src/router.tsx b/src/router.tsx
-index d91c337..0f26237 100644
+index e69de29..0f26237 100644
 --- a/src/router.tsx
 +++ b/src/router.tsx
-@@ -1,20 +1,51 @@
--import { createRouter as createTanStackRouter } from "@tanstack/react-router"
--import { routeTree } from "./routeTree.gen"
+@@ -0,0 +1,51 @@
 +// src/router.tsx
 +import { createRouter } from "@tanstack/react-router";
 +import { routeTree } from "./routeTree.gen";
@@ -14,10 +12,8 @@ index d91c337..0f26237 100644
 +export interface MyRouterContext {
 +	queryClient: QueryClient;
 +}
- 
- export function getRouter() {
--  const router = createTanStackRouter({
--    routeTree,
++
++export function getRouter() {
 +	const queryClient = new QueryClient({
 +		defaultOptions: {
 +			queries: {
@@ -44,25 +40,17 @@ index d91c337..0f26237 100644
 +		},
 +		notFoundMode: "root",
 +	});
- 
--    scrollRestoration: true,
--    defaultPreload: "intent",
--    defaultPreloadStaleTime: 0,
--  })
++
 +	setupRouterSsrQueryIntegration({
 +		router,
 +		queryClient,
 +	});
- 
--  return router
++
 +	return router;
- }
- 
- declare module "@tanstack/react-router" {
--  interface Register {
--    router: ReturnType<typeof getRouter>
--  }
++}
++
++declare module "@tanstack/react-router" {
 +	interface Register {
 +		router: ReturnType<typeof getRouter>;
 +	}
- }
++}

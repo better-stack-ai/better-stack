@@ -1,8 +1,8 @@
 diff --git a/lib/stack.ts b/lib/stack.ts
-index 044fee5..50643a0 100644
+index a5e1352..50643a0 100644
 --- a/lib/stack.ts
 +++ b/lib/stack.ts
-@@ -1,39 +1,432 @@
+@@ -1,50 +1,432 @@
 -import { stack } from "@btst/stack"
 -import { createMemoryAdapter } from "@btst/adapter-memory"
 -import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
@@ -15,6 +15,7 @@ index 044fee5..50643a0 100644
 -import { mediaBackendPlugin } from "@btst/stack/plugins/media/api"
 -import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
 -import { openai } from "@ai-sdk/openai"
+-import { z } from "zod"
 -// Next.js evaluates lib/stack.ts in multiple bundle contexts (API routes + page bundle)
 -// that share the same process. Pin to globalThis so both contexts reference the same
 -// in-memory store.
@@ -229,7 +230,17 @@ index 044fee5..50643a0 100644
  		plugins: {
 -		blog: blogBackendPlugin(),
 -		aiChat: aiChatBackendPlugin({ model: openai("gpt-4o-mini"), mode: "public" as const }),
--		cms: cmsBackendPlugin({ contentTypes: [UI_BUILDER_CONTENT_TYPE] }),
+-		cms: cmsBackendPlugin({ contentTypes: [{
+-				name: "Article",
+-				slug: "article",
+-				schema: z.object({
+-					title: z.string(),
+-					summary: z.string(),
+-					body: z.string(),
+-					publishedAt: z.string(),
+-					published: z.boolean(),
+-				}),
+-			}, UI_BUILDER_CONTENT_TYPE] }),
 -		formBuilder: formBuilderBackendPlugin(),
 -		kanban: kanbanBackendPlugin(),
 -		comments: commentsBackendPlugin({ allowPosting: false }),

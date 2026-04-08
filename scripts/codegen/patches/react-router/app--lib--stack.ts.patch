@@ -1,8 +1,8 @@
 diff --git a/app/lib/stack.ts b/app/lib/stack.ts
-index 043a7c5..792c92a 100644
+index 09916d8..792c92a 100644
 --- a/app/lib/stack.ts
 +++ b/app/lib/stack.ts
-@@ -1,28 +1,366 @@
+@@ -1,39 +1,366 @@
 -import { stack } from "@btst/stack"
 -import { createMemoryAdapter } from "@btst/adapter-memory"
 -import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
@@ -15,6 +15,7 @@ index 043a7c5..792c92a 100644
 -import { mediaBackendPlugin } from "@btst/stack/plugins/media/api"
 -import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
 -import { openai } from "@ai-sdk/openai"
+-import { z } from "zod"
 -export const myStack = stack({
 +import { createMemoryAdapter } from "./adapters-build-check";
 +import { stack } from "@btst/stack";
@@ -221,7 +222,17 @@ index 043a7c5..792c92a 100644
  	plugins: {
 -		blog: blogBackendPlugin(),
 -		aiChat: aiChatBackendPlugin({ model: openai("gpt-4o-mini"), mode: "public" as const }),
--		cms: cmsBackendPlugin({ contentTypes: [UI_BUILDER_CONTENT_TYPE] }),
+-		cms: cmsBackendPlugin({ contentTypes: [{
+-				name: "Article",
+-				slug: "article",
+-				schema: z.object({
+-					title: z.string(),
+-					summary: z.string(),
+-					body: z.string(),
+-					publishedAt: z.string(),
+-					published: z.boolean(),
+-				}),
+-			}, UI_BUILDER_CONTENT_TYPE] }),
 -		formBuilder: formBuilderBackendPlugin(),
 -		kanban: kanbanBackendPlugin(),
 -		comments: commentsBackendPlugin({ allowPosting: false }),

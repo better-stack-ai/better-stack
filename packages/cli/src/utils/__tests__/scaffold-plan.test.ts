@@ -159,10 +159,10 @@ describe("scaffold plan", () => {
 			file.path.endsWith("stack-client.tsx"),
 		);
 
-		// cms backend must be registered with UI_BUILDER_CONTENT_TYPE
-		expect(stackFile?.content).toContain(
-			"cms: cmsBackendPlugin({ contentTypes: [UI_BUILDER_CONTENT_TYPE] }),",
-		);
+		// cms backend must be registered with article type and UI_BUILDER_CONTENT_TYPE
+		expect(stackFile?.content).toContain("cms: cmsBackendPlugin({");
+		expect(stackFile?.content).toContain('slug: "article"');
+		expect(stackFile?.content).toContain("UI_BUILDER_CONTENT_TYPE");
 		// ui-builder client plugin must be registered
 		expect(stackClientFile?.content).toContain(
 			"uiBuilder: uiBuilderClientPlugin({",
@@ -181,9 +181,9 @@ describe("scaffold plan", () => {
 		});
 
 		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
-		expect(stackFile?.content).toContain(
-			"cms: cmsBackendPlugin({ contentTypes: [UI_BUILDER_CONTENT_TYPE] }),",
-		);
+		expect(stackFile?.content).toContain("cms: cmsBackendPlugin({");
+		expect(stackFile?.content).toContain('slug: "article"');
+		expect(stackFile?.content).toContain("UI_BUILDER_CONTENT_TYPE");
 	});
 
 	it("uses camelCase config keys for client plugins", async () => {
@@ -251,7 +251,7 @@ describe("scaffold plan", () => {
 		expect(pagesLayoutFile?.content).not.toContain("aiChat:");
 	});
 
-	it("renders cms backend plugin with compile-safe placeholder config", async () => {
+	it("renders cms backend plugin with default article content type", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
 			adapter: "memory",
@@ -261,9 +261,11 @@ describe("scaffold plan", () => {
 		});
 
 		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
-		expect(stackFile?.content).toContain(
-			"cms: cmsBackendPlugin({ contentTypes: [] }),",
-		);
+		expect(stackFile?.content).toContain("cms: cmsBackendPlugin({");
+		expect(stackFile?.content).toContain('slug: "article"');
+		expect(stackFile?.content).toContain('import { z } from "zod"');
+		// Without ui-builder, UI_BUILDER_CONTENT_TYPE should not appear
+		expect(stackFile?.content).not.toContain("UI_BUILDER_CONTENT_TYPE");
 	});
 
 	it("renders comments backend plugin with compile-safe placeholder config", async () => {
