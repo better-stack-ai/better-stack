@@ -6,7 +6,6 @@ export const AssetListQuerySchema = z.object({
 	query: z.string().optional(),
 	offset: z.coerce.number().int().min(0).optional(),
 	limit: z.coerce.number().int().min(1).max(100).optional(),
-	tenantId: z.string().optional(),
 });
 
 export const createAssetSchema = z.object({
@@ -18,7 +17,6 @@ export const createAssetSchema = z.object({
 	url: z.httpUrl(),
 	folderId: z.string().optional(),
 	alt: z.string().optional(),
-	tenantId: z.string().optional(),
 });
 
 export const updateAssetSchema = z.object({
@@ -29,7 +27,6 @@ export const updateAssetSchema = z.object({
 export const createFolderSchema = z.object({
 	name: z.string().min(1),
 	parentId: z.string().optional(),
-	tenantId: z.string().optional(),
 });
 
 export const uploadTokenRequestSchema = z.object({
@@ -37,5 +34,4 @@ export const uploadTokenRequestSchema = z.object({
 	mimeType: z.string().min(1),
 	size: z.number().int().positive(),
 	folderId: z.string().optional(),
-	tenantId: z.string().optional(),
 });
