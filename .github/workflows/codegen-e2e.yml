@@ -15,6 +15,7 @@ on:
     paths:
       - 'packages/cli/**'
       - 'packages/stack/**'
+      - 'packages/ui/**'
       - 'scripts/codegen/**'
       - 'e2e/**'
       - '.github/workflows/codegen-e2e.yml'
