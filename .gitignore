@@ -201,6 +201,7 @@ playwright-report/
 playwright-report-codegen/
 test-results/
 test-results-codegen/
+codegen-projects/
 
 state.txt
 
