@@ -2,7 +2,7 @@ diff --git a/lib/stack-client.tsx b/lib/stack-client.tsx
 index 185e715..6374ced 100644
 --- a/lib/stack-client.tsx
 +++ b/lib/stack-client.tsx
-@@ -1,94 +1,198 @@
+@@ -1,93 +1,198 @@
 -import { createStackClient } from "@btst/stack/client"
 -import { QueryClient } from "@tanstack/react-query"
 -import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
@@ -233,13 +233,12 @@ index 185e715..6374ced 100644
 -		return window.location.origin
 -	}
 -
--	if (typeof process !== "undefined") {
--		const env = process.env
--		if (env.BTST_SITE_URL) return env.BTST_SITE_URL
--		if (env.NEXT_PUBLIC_SITE_URL) return env.NEXT_PUBLIC_SITE_URL
--		if (env.BASE_URL) return env.BASE_URL
--		if (env.VERCEL_URL) return `https://${env.VERCEL_URL}`
--	}
+-	// Use literal process.env.XXX so bundlers (Vite define, Next.js, etc.)
+-	// can statically replace these at build/transform time.
+-	if (process.env.BTST_SITE_URL) return process.env.BTST_SITE_URL
+-	if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL
+-	if (process.env.BASE_URL) return process.env.BASE_URL
+-	if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
 -
 -	return "http://localhost:3000"
 -}
