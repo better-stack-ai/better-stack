@@ -31,6 +31,8 @@ function buildNextjsProjectFiles(
 		react: "19.2.4",
 		"react-dom": "19.2.4",
 		"tw-animate-css": "latest",
+		zod: "^4.2.0",
+		"lucide-react": "^0.522.0",
 	};
 	const pluginDependencies = Object.fromEntries(
 		Array.from(new Set(extraPackages)).map((pkgName) => [pkgName, "latest"]),
@@ -452,6 +454,8 @@ function buildReactRouterProjectFiles(
 		"react-dom": "^19.0.0",
 		"react-router": "^7.0.0",
 		"tw-animate-css": "latest",
+		zod: "^4.2.0",
+		"lucide-react": "^0.522.0",
 	};
 	const dependencies = Object.fromEntries(
 		Object.entries({ ...baseDependencies, ...pluginDependencies }).sort(
@@ -693,6 +697,7 @@ export function ErrorBoundary({ error }: { error: unknown }) {
 
 		"app/routes.ts": {
 			content: (() => {
+				const generatedPaths = new Set(generatedFiles.map((f) => f.path));
 				const seedRouteEntries = seedFiles
 					.map((f) => {
 						// React Router seed files use flat dot notation:
@@ -705,13 +710,25 @@ export function ErrorBoundary({ error }: { error: unknown }) {
 					})
 					.filter(Boolean)
 					.join("\n");
+				const pluginRouteEntries = [
+					generatedPaths.has("app/routes/form-demo.tsx") &&
+						`  route("form-demo/:slug", "routes/form-demo.tsx"),`,
+					generatedPaths.has("app/routes/preview.tsx") &&
+						`  route("preview/:slug", "routes/preview.tsx"),`,
+					generatedPaths.has("app/routes/public-chat.tsx") &&
+						`  route("public-chat", "routes/public-chat.tsx"),`,
+					generatedPaths.has("app/routes/sitemap.xml.ts") &&
+						`  route("sitemap.xml", "routes/sitemap.xml.ts"),`,
+				]
+					.filter(Boolean)
+					.join("\n");
 				return `import { type RouteConfig, index, layout, route } from "@react-router/dev/routes"
 
 export default [
   index("routes/home.tsx"),
   layout("routes/pages/_layout.tsx", [
     route("pages/*", "routes/pages/$.tsx"),
-  ]),
+  ]),${pluginRouteEntries ? `\n${pluginRouteEntries}` : ""}
   route("api/data/*", "routes/api/data/$.ts"),${seedRouteEntries ? `\n${seedRouteEntries}` : ""}
 ] satisfies RouteConfig
 `;
@@ -788,6 +805,8 @@ function buildTanstackProjectFiles(
 		"react-dom": "^19.0.0",
 		tailwindcss: "^4",
 		"tw-animate-css": "latest",
+		zod: "^4.2.0",
+		"lucide-react": "^0.522.0",
 	};
 	const dependencies = Object.fromEntries(
 		Object.entries({ ...baseDependencies, ...pluginDependencies }).sort(
