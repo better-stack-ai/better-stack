@@ -4,6 +4,9 @@ const config = {
 	basePath: "/playground",
 	assetPrefix: "/playground",
 	serverExternalPackages: ["handlebars", "@btst/codegen"],
+	outputFileTracingIncludes: {
+		"**": ["../packages/cli/src/templates/**/*.hbs"],
+	},
 	async headers() {
 		return [
 			{
