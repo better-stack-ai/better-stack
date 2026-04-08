@@ -3,7 +3,10 @@ const config = {
 	reactStrictMode: true,
 	basePath: "/playground",
 	assetPrefix: "/playground",
-	serverExternalPackages: ["handlebars"],
+	serverExternalPackages: ["handlebars", "@btst/codegen"],
+	outputFileTracingIncludes: {
+		"**": ["../packages/cli/src/templates/**/*.hbs"],
+	},
 	async headers() {
 		return [
 			{
