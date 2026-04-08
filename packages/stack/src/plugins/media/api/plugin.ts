@@ -389,6 +389,9 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						if (!folder) {
 							throw ctx.error(404, { message: "Folder not found" });
 						}
+						if (tenantId !== undefined && folder.tenantId !== tenantId) {
+							throw ctx.error(404, { message: "Folder not found" });
+						}
 					}
 
 					const asset = await createAsset(adapter, { ...ctx.body, tenantId });
@@ -419,6 +422,14 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						headers: ctx.headers,
 					};
 
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
+
+					if (tenantId !== undefined && existing.tenantId !== tenantId) {
+						throw ctx.error(404, { message: "Asset not found" });
+					}
+
 					if (hooks?.onBeforeUpdateAsset) {
 						await runHookWithShim(
 							() => hooks.onBeforeUpdateAsset!(existing, ctx.body, context),
@@ -430,6 +441,9 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					if (ctx.body.folderId != null) {
 						const folder = await getFolderById(adapter, ctx.body.folderId);
 						if (!folder) {
+							throw ctx.error(404, { message: "Folder not found" });
+						}
+						if (tenantId !== undefined && folder.tenantId !== tenantId) {
 							throw ctx.error(404, { message: "Folder not found" });
 						}
 					}
@@ -454,8 +468,16 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						headers: ctx.headers,
 					};
 
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
+
 					const asset = await getAssetById(adapter, ctx.params.id);
 					if (!asset) {
+						throw ctx.error(404, { message: "Asset not found" });
+					}
+
+					if (tenantId !== undefined && asset.tenantId !== tenantId) {
 						throw ctx.error(404, { message: "Asset not found" });
 					}
 
@@ -560,15 +582,23 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					method: "DELETE",
 				},
 				async (ctx) => {
+					const context: MediaApiContext = {
+						params: ctx.params,
+						headers: ctx.headers,
+					};
+
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
+
 					const folder = await getFolderById(adapter, ctx.params.id);
 					if (!folder) {
 						throw ctx.error(404, { message: "Folder not found" });
 					}
 
-					const context: MediaApiContext = {
-						params: ctx.params,
-						headers: ctx.headers,
-					};
+					if (tenantId !== undefined && folder.tenantId !== tenantId) {
+						throw ctx.error(404, { message: "Folder not found" });
+					}
 
 					if (hooks?.onBeforeDeleteFolder) {
 						await runHookWithShim(
@@ -707,6 +737,9 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						if (!folder) {
 							throw ctx.error(404, { message: "Folder not found" });
 						}
+						if (tenantId !== undefined && folder.tenantId !== tenantId) {
+							throw ctx.error(404, { message: "Folder not found" });
+						}
 					}
 
 					const { url } = await storageAdapter.upload(buffer, {
@@ -769,12 +802,12 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						headers: ctx.headers,
 					};
 
-					// Resolve tenant for hook side-effects (e.g. auth checks). The token
-					// response does not embed tenantId — the follow-up POST /media/assets
+					// Resolve tenant for auth checks and folder ownership validation.
+					// The token response does not embed tenantId — the follow-up POST /media/assets
 					// call tags the asset automatically via resolveTenantId.
-					if (resolveTenantId) {
-						await resolveTenantId(context);
-					}
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
 
 					if (hooks?.onBeforeUpload) {
 						await runHookWithShim(
@@ -807,6 +840,9 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 							throw ctx.error(404, {
 								message: "Folder not found",
 							});
+						}
+						if (tenantId !== undefined && folder.tenantId !== tenantId) {
+							throw ctx.error(404, { message: "Folder not found" });
 						}
 						folderId = folder.id;
 					}
