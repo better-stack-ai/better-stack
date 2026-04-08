@@ -19,7 +19,7 @@
     {
       "path": "btst/media/types.ts",
       "type": "registry:lib",
-      "content": "export type Asset = {\n\tid: string;\n\tfilename: string;\n\toriginalName: string;\n\tmimeType: string;\n\tsize: number;\n\turl: string;\n\tfolderId?: string;\n\talt?: string;\n\tcreatedAt: Date;\n};\n\nexport type Folder = {\n\tid: string;\n\tname: string;\n\tparentId?: string;\n\tcreatedAt: Date;\n};\n\nexport interface SerializedAsset extends Omit<Asset, \"createdAt\"> {\n\tcreatedAt: string;\n}\n\nexport interface SerializedFolder extends Omit<Folder, \"createdAt\"> {\n\tcreatedAt: string;\n}\n",
+      "content": "export type Asset = {\n\tid: string;\n\tfilename: string;\n\toriginalName: string;\n\tmimeType: string;\n\tsize: number;\n\turl: string;\n\tfolderId?: string;\n\talt?: string;\n\ttenantId?: string | null;\n\tcreatedAt: Date;\n};\n\nexport type Folder = {\n\tid: string;\n\tname: string;\n\tparentId?: string;\n\ttenantId?: string | null;\n\tcreatedAt: Date;\n};\n\nexport interface SerializedAsset extends Omit<Asset, \"createdAt\"> {\n\tcreatedAt: string;\n}\n\nexport interface SerializedFolder extends Omit<Folder, \"createdAt\"> {\n\tcreatedAt: string;\n}\n",
       "target": "src/components/btst/media/types.ts"
     },
     {
