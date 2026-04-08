@@ -1,10 +1,10 @@
 name: Codegen E2E Tests
 
 # Tests the btst init CLI codegen experience from scratch:
-#   shadcn init → btst init → apply E2E patches → build → run Playwright
+#   shadcn init → btst init → copy E2E overlay files → build → run Playwright
 #
 # The codegen-projects/ directory is never committed — it is always built
-# fresh from scripts/codegen/setup-nextjs.sh in each CI run.
+# fresh from scripts/codegen/setup-{framework}.sh in each CI run.
 
 on:
   push:
@@ -19,8 +19,6 @@ on:
       - 'scripts/codegen/**'
       - 'e2e/**'
       - '.github/workflows/codegen-e2e.yml'
-      - 'scripts/codegen/patches/react-router/**'
-      - 'scripts/codegen/patches/tanstack/**'
 
 jobs:
   codegen-e2e:
@@ -63,7 +61,7 @@ jobs:
       #   1. shadcn init (framework + Nova preset)
       #   2. btst init (all plugins, memory adapter)
       #   3. pnpm dlx shadcn add (extra UI components)
-      #   4. Apply .patch files from scripts/codegen/patches/${{ matrix.framework }}/
+      #   4. Copy E2E overlay files from scripts/codegen/files/${{ matrix.framework }}/
       #   5. pnpm install
       - name: Set up ${{ matrix.framework }} codegen project from scratch
         run: bash scripts/codegen/setup-${{ matrix.framework }}.sh

@@ -2,25 +2,20 @@
 # setup-nextjs.sh — Scaffold and configure the Next.js codegen project
 #
 # Usage (from monorepo root):
-#   bash scripts/codegen/setup-nextjs.sh [--baseline-only]
+#   bash scripts/codegen/setup-nextjs.sh
 #
-# Flags:
-#   --baseline-only   Stop after btst init + git baseline commit.
-#                     Use this to regenerate .patch files:
-#                       1. bash scripts/codegen/setup-nextjs.sh --baseline-only
-#                       2. Apply desired changes to codegen-projects/nextjs
-#                       3. cd codegen-projects/nextjs && git diff > ../../scripts/codegen/patches/nextjs/NN-name.patch
-#                       4. Run: node scripts/codegen/generate-patches-nextjs.mjs
-#
-# What it does (full run):
+# What it does:
 #   1. Creates codegen-projects/nextjs/ via `shadcn init -t next --name nextjs`
 #   2. Removes .git so the workspace git config tracks the files
 #   3. Builds the local CLI and runs `btst init` with an explicit plugin list
 #   4. Adds shadcn UI components needed by the E2E overlay
-#   5. Applies surgical .patch files from scripts/codegen/patches/nextjs/
+#   5. Copies E2E overlay files from scripts/codegen/files/nextjs/ (overwrites)
 #   6. Patches package.json (name, start:e2e, workspace deps)
 #   7. Creates .env and public/uploads/
 #   8. Runs pnpm install from the monorepo root
+#
+# To update E2E overlay files after editing the codegen project:
+#   bash scripts/codegen/update-files-nextjs.sh
 
 set -euo pipefail
 
@@ -38,16 +33,7 @@ die()     { echo -e "${RED}✗ $1${NC}"; exit 1; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DEST="$ROOT_DIR/codegen-projects/nextjs"
-PATCHES="$SCRIPT_DIR/patches/nextjs"
 CLI_BIN="$ROOT_DIR/packages/cli/dist/index.cjs"
-
-# Parse flags
-BASELINE_ONLY=false
-for arg in "$@"; do
-  case $arg in
-    --baseline-only) BASELINE_ONLY=true ;;
-  esac
-done
 
 # ── Prerequisites ────────────────────────────────────────────────────────────
 
@@ -104,56 +90,21 @@ cd "$DEST"
 pnpm dlx shadcn@latest add checkbox label skeleton input sonner dropdown-menu separator empty field item --yes --overwrite
 success "shadcn components added"
 
-# ── Step 5 (baseline-only): Init git baseline for patch regeneration ──────────
+# ── Step 5: Copy E2E overlay files ────────────────────────────────────────────
 
-if [ "$BASELINE_ONLY" = true ]; then
-  step "--baseline-only: initialising git baseline commit"
-  cd "$DEST"
-  git init -b main
-  git config user.email "dev@btst.ai"
-  git config user.name "BTST Dev"
-  git add -A
-  git commit -m "baseline: shadcn init + btst init output"
-  success "Git baseline committed at $DEST"
-  echo ""
-  echo "  Next steps to regenerate patches:"
-  echo "    1. Apply desired changes to codegen-projects/nextjs"
-  echo "    2. node scripts/codegen/generate-patches-nextjs.mjs"
-  echo ""
-  exit 0
-fi
-
-# ── Step 5: Apply surgical patches ────────────────────────────────────────────
-
-step "Applying E2E overlay patches from scripts/codegen/patches/nextjs/"
+step "Copying E2E overlay files from scripts/codegen/files/nextjs/"
 cd "$DEST"
-
-# Detect whether shadcn created src/ layout and adjust patch targets accordingly
-if [ -f "src/app/globals.css" ]; then
-  warn "Detected src/ layout — patches assume non-src layout; manual adjustment may be needed"
-fi
-
-PATCH_COUNT=0
-for patch_file in "$PATCHES"/*.patch; do
-  if [ -f "$patch_file" ]; then
-    patch_name="$(basename "$patch_file")"
-    if patch -p1 --dry-run --silent < "$patch_file" 2>/dev/null; then
-      patch -p1 < "$patch_file"
-      success "Applied $patch_name"
-      PATCH_COUNT=$((PATCH_COUNT + 1))
-    else
-      # Try with fuzz factor for patches that don't apply cleanly
-      if patch -p1 -F 3 --dry-run --silent < "$patch_file" 2>/dev/null; then
-        patch -p1 -F 3 < "$patch_file"
-        warn "Applied $patch_name (with fuzz — shadcn output may have changed)"
-        PATCH_COUNT=$((PATCH_COUNT + 1))
-      else
-        die "Failed to apply patch: $patch_name. Run with --baseline-only to regenerate patches."
-      fi
-    fi
-  fi
-done
-success "$PATCH_COUNT patches applied"
+FILES_DIR="$SCRIPT_DIR/files/nextjs"
+FILE_COUNT=0
+while IFS= read -r -d '' src_file; do
+  relative="${src_file#$FILES_DIR/}"
+  dest_file="$DEST/$relative"
+  mkdir -p "$(dirname "$dest_file")"
+  cp "$src_file" "$dest_file"
+  success "Copied $relative"
+  FILE_COUNT=$((FILE_COUNT + 1))
+done < <(find "$FILES_DIR" -type f -print0)
+success "$FILE_COUNT files copied"
 
 # ── Step 6: Patch package.json ────────────────────────────────────────────────
 

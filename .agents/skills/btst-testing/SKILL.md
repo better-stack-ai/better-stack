@@ -98,7 +98,7 @@ bash scripts/codegen/cleanup.sh react-router
 bash scripts/codegen/cleanup.sh tanstack
 ```
 
-See `scripts/codegen/README.md` for full details.
+See `scripts/codegen/README.md` for full details on the E2E overlay file system and update workflow.
 
 ### Run commands
 

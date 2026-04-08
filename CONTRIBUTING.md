@@ -88,7 +88,7 @@ pnpm -F e2e codegen:e2e:nextjs
 bash scripts/codegen/cleanup.sh nextjs
 ```
 
-See `scripts/codegen/README.md` for detailed instructions on the patch workflow and troubleshooting.
+See `scripts/codegen/README.md` for detailed instructions on the E2E overlay file workflow and troubleshooting.
 
 ### New plugins
 
@@ -618,13 +618,13 @@ When a new first-party plugin is added, update the CLI constants so `btst init` 
 
 **`packages/cli/src/utils/constants.ts`** — add a `PluginMeta` entry to the `PLUGINS` array with the plugin's import paths, symbols, and config key.
 
-Then register it in the codegen project overlays:
+Then register it in the codegen project overlay files:
 
-**`scripts/codegen/patches/nextjs/lib--stack.ts.patch`** — add the backend plugin registration (following the unified diff format of the existing patch).
+**`scripts/codegen/files/nextjs/lib/stack.ts`** — add the backend plugin registration.
 
-**`scripts/codegen/patches/nextjs/lib--stack-client.tsx.patch`** — add the client plugin registration.
+**`scripts/codegen/files/nextjs/lib/stack-client.tsx`** — add the client plugin registration.
 
-**`scripts/codegen/patches/nextjs/app--pages--layout.tsx.patch`** — add the `StackProvider` override entry.
+**`scripts/codegen/files/nextjs/app/pages/layout.tsx`** — add the `StackProvider` override entry.
 
 Add the plugin CSS to `app/globals.css` if it ships styles:
 
@@ -849,9 +849,9 @@ Before opening a pull request for a new plugin, verify every item:
 **CLI and codegen project**
 
 - [ ] `packages/cli/src/utils/constants.ts` — `PLUGINS` array updated with new plugin entry
-- [ ] `scripts/codegen/patches/nextjs/lib--stack.ts.patch` — backend plugin registered
-- [ ] `scripts/codegen/patches/nextjs/lib--stack-client.tsx.patch` — client plugin registered
-- [ ] `scripts/codegen/patches/nextjs/app--pages--layout.tsx.patch` — StackProvider overrides added
+- [ ] `scripts/codegen/files/nextjs/lib/stack.ts` — backend plugin registered
+- [ ] `scripts/codegen/files/nextjs/lib/stack-client.tsx` — client plugin registered
+- [ ] `scripts/codegen/files/nextjs/app/pages/layout.tsx` — StackProvider overrides added
 - [ ] Codegen project rebuilt and E2E passes: `bash scripts/codegen/setup-nextjs.sh && pnpm -F e2e codegen:e2e:nextjs`
 
 **Tests**
@@ -873,5 +873,5 @@ Before opening a pull request for a new plugin, verify every item:
 
 | Complexity | Plugin | Source |
 |------------|--------|--------|
-| Simple (CRUD) | Todo plugin | [`scripts/codegen/patches/nextjs/`](scripts/codegen/patches/nextjs/) — the `lib--plugins--todo--*.patch` files |
+| Simple (CRUD) | Todo plugin | [`scripts/codegen/files/nextjs/lib/plugins/todo/`](scripts/codegen/files/nextjs/lib/plugins/todo/) |
 | Full-featured | Blog plugin | [`packages/stack/src/plugins/blog/`](packages/stack/src/plugins/blog/) |
