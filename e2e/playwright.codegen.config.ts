@@ -74,7 +74,7 @@ const allWebServers = [
 		config: {
 			command: "pnpm -F tanstack run start:e2e",
 			port: 3007,
-			reuseExistingServer: true,
+			reuseExistingServer: false,
 			timeout: 300_000,
 			stdout: "pipe" as const,
 			stderr: "pipe" as const,
