@@ -75,24 +75,24 @@ export function ViewOptions({ markdownUrl, githubUrl }: ViewOptionsProps) {
       ? [
           {
             label: 'View on GitHub',
-            icon: <SiGithub className="size-4" />,
+            icon: <span className="size-4"><SiGithub /></span>,
             href: githubUrl,
           },
         ]
       : []),
     {
       label: 'Open in ChatGPT',
-      icon: <SiOpenai className="size-4" />,
+      icon: <span className="size-4"><SiOpenai /></span>,
       href: `https://chatgpt.com/?q=${encodeURIComponent(`Read this documentation and help me understand it:\n\n${typeof window !== 'undefined' ? window.location.origin : ''}${markdownUrl}`)}`,
     },
     {
       label: 'Open in Claude',
-      icon: <SiClaude className="size-4" />,
+      icon: <span className="size-4"><SiClaude /></span>,
       href: `https://claude.ai/new?q=${encodeURIComponent(`Read this documentation and help me understand it:\n\n${typeof window !== 'undefined' ? window.location.origin : ''}${markdownUrl}`)}`,
     },
     {
       label: 'Open in Copilot',
-      icon: <VscCopilot className="size-4" />,
+      icon: <span className="size-4"><VscCopilot /></span>,
       href: `https://copilot.microsoft.com/?q=${encodeURIComponent(`Read this documentation and help me understand it:\n\n${typeof window !== 'undefined' ? window.location.origin : ''}${markdownUrl}`)}`,
     },
   ];
