@@ -15,10 +15,13 @@ import {
 	ADAPTERS,
 	DEFAULT_PLUGIN_SELECTION,
 	PLUGINS,
+	PLUGIN_ROUTES,
 } from "../utils/constants";
 import { detectAlias } from "../utils/detect-alias";
 import { detectCssFile } from "../utils/detect-css-file";
 import { detectFramework } from "../utils/detect-framework";
+import { detectShadcnConfig } from "../utils/detect-shadcn-config";
+import { normalizePlugins } from "../utils/normalize-plugins";
 import { detectPackageManager } from "../utils/detect-package-manager";
 import { detectProjectShape } from "../utils/detect-project-shape";
 import { writePlannedFiles, type ConflictPolicy } from "../utils/file-writer";
@@ -202,18 +205,16 @@ export function createInitCommand() {
 
 			const packageManager = await detectPackageManager(cwd);
 			const adapter = await detectOrSelectAdapter(rawOptions);
-			const alias = await detectAlias(cwd);
+			const shadcnConfig = await detectShadcnConfig(cwd);
+			const alias = shadcnConfig?.alias ?? (await detectAlias(cwd));
 			const rawSelectedPlugins = await selectPlugins(rawOptions);
 
 			// ui-builder is a CMS sub-plugin — it has no standalone registration.
 			// Always ensure cms is present when ui-builder is selected.
-			const selectedPlugins: PluginKey[] =
-				rawSelectedPlugins.includes("ui-builder") &&
-				!rawSelectedPlugins.includes("cms")
-					? ["cms", ...rawSelectedPlugins]
-					: rawSelectedPlugins;
+			const selectedPlugins = normalizePlugins(rawSelectedPlugins);
 
-			let cssFile = await detectCssFile(cwd, framework);
+			let cssFile =
+				shadcnConfig?.cssFile ?? (await detectCssFile(cwd, framework));
 			if (!cssFile) {
 				cssFile = rawOptions.yes
 					? framework === "nextjs"
@@ -259,15 +260,10 @@ export function createInitCommand() {
 				plan.files,
 				conflictPolicy,
 			);
-			const cssImports = PLUGINS.filter((plugin) =>
-				selectedPlugins.includes(plugin.key),
-			)
-				.map((plugin) => plugin.cssImport)
-				.filter((cssImport): cssImport is string => Boolean(cssImport));
 			const cssPatch = await patchCssImports(
 				cwd,
 				plan.cssPatchTarget,
-				cssImports,
+				plan.cssImports,
 			);
 			const layoutPatch =
 				framework === "nextjs"
@@ -276,6 +272,7 @@ export function createInitCommand() {
 							cwd,
 							plan.layoutPatchTarget,
 							alias,
+							selectedPlugins.includes("ai-chat"),
 						);
 
 			await installInitDependencies({
@@ -344,14 +341,24 @@ export function createInitCommand() {
 					? `yes (generated ${plan.pagesLayoutPath ?? "app/pages/layout.tsx"})`
 					: layoutPatch.updated
 						? "yes"
-						: "manual action may be needed";
+						: layoutPatch.warning
+							? "manual action may be needed"
+							: "yes (already patched)";
+
+			const scaffoldedRoutes = selectedPlugins.flatMap(
+				(p) => PLUGIN_ROUTES[p] ?? [],
+			);
+			const routesList =
+				scaffoldedRoutes.length > 0
+					? `\nAvailable routes:\n${scaffoldedRoutes.map((r) => `  ${r}`).join("\n")}\n`
+					: "";
 
 			outro(`BTST init complete.
 Files written: ${writeResult.written.length}
 Files skipped: ${writeResult.skipped.length}
 CSS updated: ${cssPatch.updated ? "yes" : "no"}
 Layout patched: ${layoutStatus}
-
+${routesList}
 Next steps:
 - Verify routes under /pages/*
 - Run your build

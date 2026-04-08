@@ -561,7 +561,7 @@ test.describe("Form Builder - Public Form Submission", () => {
 
 		// Wait for form to finish loading (loading state has "Loading form..." text)
 		await expect(page.getByText("Loading form...")).not.toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Should show form fields

@@ -11,12 +11,29 @@ description: Patterns for writing BTST client plugins inside the monorepo, inclu
 src/plugins/{name}/
   client/
     plugin.tsx           ← defineClientPlugin entry
+    hooks.ts             ← "use client" React hooks only
     components/
       pages/
         my-page.tsx      ← wrapper: ComposedRoute + lazy import
         my-page.internal.tsx  ← actual UI: useSuspenseQuery
   query-keys.ts          ← React Query key factory
 ```
+
+## Server/client module boundary
+
+`client/plugin.tsx` must stay import-safe on the server. Next.js (including SSG build)
+can execute `createStackClient()` on the server, which calls each `*ClientPlugin()`
+factory. If that module is marked `"use client"` or imports a client-only module, build
+can fail with "Attempted to call ... from the server".
+
+Rules:
+
+- Do **not** add `"use client"` to `client/plugin.tsx`.
+- Keep `client/plugin.tsx` free of React hooks (`useState`, `useEffect`, etc.).
+- Put hook utilities in a separate client-only module (`client/hooks.ts`) with
+  `"use client"`, and re-export them from `client/index.ts`.
+- UI components can remain client components as needed; only the plugin factory entry
+  must stay server-import-safe.
 
 ## Route anatomy
 
@@ -110,6 +127,7 @@ type PluginOverrides = {
 - **Next.js Link href undefined** — use `href={href || "#"}` pattern.
 - **Suspense errors not caught** — add `if (error && !isFetching) throw error` in every suspense hook.
 - **Missing ComposedRoute wrapper** — without it, errors crash the entire app instead of hitting ErrorBoundary.
+- **Client directive on `client/plugin.tsx`** — can break SSG/SSR when plugin factories are invoked server-side.
 
 ## Full code patterns
 

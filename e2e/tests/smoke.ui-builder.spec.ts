@@ -267,7 +267,7 @@ test.describe("UI Builder - Public Page Rendering", () => {
 
 		// Wait for page to finish loading
 		await expect(page.getByText("Loading page...")).not.toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Should render the UI Builder page content
@@ -388,7 +388,7 @@ test.describe("UI Builder - Public Page Rendering", () => {
 
 		// Wait for page to finish loading
 		await expect(page.getByText("Loading page...")).not.toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Should render all components

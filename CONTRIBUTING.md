@@ -70,17 +70,25 @@ pnpm dev   # preview the docs site locally
 
 Edit the relevant `.mdx` file under `docs/content/docs/plugins/` and open a PR. No build step is required for doc-only changes — just verify `pnpm dev` renders correctly.
 
-### Example app improvements
+### Local development and testing
 
-The three example apps live in `examples/nextjs/`, `examples/react-router/`, and `examples/tanstack/`. Each is a self-contained Next.js / React Router / TanStack app that demos all built-in plugins.
-
-To run an example locally:
+The monorepo uses **codegen projects** as the primary development and testing environment. These projects are built from scratch by the `btst init` CLI and are never committed to git.
 
 ```bash
-cd examples/nextjs    # or react-router, tanstack
-pnpm install
-pnpm dev
+# Build the Next.js codegen project (takes ~2–3 min)
+bash scripts/codegen/setup-nextjs.sh
+
+# Start the dev server for browsing and debugging
+pnpm -F nextjs dev
+
+# Run E2E tests against it
+pnpm -F e2e codegen:e2e:nextjs
+
+# Clean up when done or to start fresh
+bash scripts/codegen/cleanup.sh nextjs
 ```
+
+See `scripts/codegen/README.md` for detailed instructions on the E2E overlay file workflow and troubleshooting.
 
 ### New plugins
 
@@ -604,31 +612,32 @@ entries: [
 
 ---
 
-### 8. Register in example apps
+### 8. Register the plugin in the CLI and codegen project
 
-All three example apps must be updated when a new first-party plugin is added:
+When a new first-party plugin is added, update the CLI constants so `btst init` knows about it:
 
-| App | Files to update |
-|-----|----------------|
-| `examples/nextjs/` | `lib/stack.tsx`, `lib/stack-client.tsx`, `app/pages/[[...all]]/layout.tsx`, `app/globals.css` |
-| `examples/react-router/` | `app/lib/stack.tsx`, `app/lib/stack-client.tsx`, `app/routes/pages/_layout.tsx`, `app/app.css` |
-| `examples/tanstack/` | `src/lib/stack.tsx`, `src/lib/stack-client.tsx`, `src/routes/pages/route.tsx`, `src/styles/app.css` |
+**`packages/cli/src/utils/constants.ts`** — add a `PluginMeta` entry to the `PLUGINS` array with the plugin's import paths, symbols, and config key.
 
-In each layout file, add your plugin's overrides type:
+Then register it in the codegen project overlay files:
 
-```typescript
-import type { MyPluginOverrides } from "@btst/stack/plugins/your-plugin/client"
+**`scripts/codegen/files/nextjs/lib/stack.ts`** — add the backend plugin registration.
 
-type PluginOverrides = {
-  blog: BlogPluginOverrides,
-  "your-plugin": MyPluginOverrides,  // add your plugin here
-}
-```
+**`scripts/codegen/files/nextjs/lib/stack-client.tsx`** — add the client plugin registration.
 
-In each CSS file:
+**`scripts/codegen/files/nextjs/app/pages/layout.tsx`** — add the `StackProvider` override entry.
+
+Add the plugin CSS to `app/globals.css` if it ships styles:
 
 ```css
 @import "@btst/stack/plugins/your-plugin/css";
+```
+
+To apply and test your changes:
+
+```bash
+bash scripts/codegen/cleanup.sh nextjs
+bash scripts/codegen/setup-nextjs.sh
+pnpm -F e2e codegen:e2e:nextjs
 ```
 
 ---
@@ -709,35 +718,20 @@ test.describe("Your Plugin", () => {
 })
 ```
 
-Run the full E2E suite (starts all three example apps):
+Run the E2E suite against the codegen project (primary):
 
 ```bash
+# Build the codegen project first (one-time)
+bash scripts/codegen/setup-nextjs.sh
+
 cd e2e
-export $(cat ../examples/nextjs/.env | xargs)
-pnpm e2e:smoke
+pnpm codegen:e2e:nextjs
+
+# Run a single test file
+pnpm codegen:e2e:nextjs -- tests/smoke.your-plugin.spec.ts
 ```
 
-Run against a single framework only (starts only that framework's server — faster):
-
-```bash
-pnpm e2e:smoke:nextjs
-pnpm e2e:smoke:tanstack
-pnpm e2e:smoke:react-router
-```
-
-Run a single test file:
-
-```bash
-pnpm e2e:smoke -- tests/smoke.your-plugin.spec.ts
-```
-
-Run against a specific Playwright project:
-
-```bash
-pnpm e2e:smoke -- --project="nextjs:memory"
-```
-
-Tests run against three Playwright projects: `nextjs:memory` (port 3003), `tanstack:memory` (3004), `react-router:memory` (3005). In CI, each framework runs as a separate parallel job via a matrix strategy.
+Tests run against `nextjs:codegen` (port 3006). CI runs the full suite via `.github/workflows/codegen-e2e.yml`, which builds the codegen project from scratch on every run.
 
 ---
 
@@ -852,18 +846,20 @@ Before opening a pull request for a new plugin, verify every item:
 - [ ] `pnpm typecheck` passes
 - [ ] `pnpm lint` passes
 
-**Example apps**
+**CLI and codegen project**
 
-- [ ] `examples/nextjs/` — stack, stack-client, layout, CSS updated
-- [ ] `examples/react-router/` — stack, stack-client, layout, CSS updated
-- [ ] `examples/tanstack/` — stack, stack-client, layout, CSS updated
+- [ ] `packages/cli/src/utils/constants.ts` — `PLUGINS` array updated with new plugin entry
+- [ ] `scripts/codegen/files/nextjs/lib/stack.ts` — backend plugin registered
+- [ ] `scripts/codegen/files/nextjs/lib/stack-client.tsx` — client plugin registered
+- [ ] `scripts/codegen/files/nextjs/app/pages/layout.tsx` — StackProvider overrides added
+- [ ] Codegen project rebuilt and E2E passes: `bash scripts/codegen/setup-nextjs.sh && pnpm -F e2e codegen:e2e:nextjs`
 
 **Tests**
 
 - [ ] Unit tests added at `packages/stack/src/plugins/your-plugin/__tests__/`
 - [ ] E2E smoke test added at `e2e/tests/smoke.your-plugin.spec.ts`
 - [ ] `pnpm test` passes (unit tests)
-- [ ] `pnpm e2e:smoke -- tests/smoke.your-plugin.spec.ts` passes
+- [ ] `cd e2e && pnpm codegen:e2e:nextjs -- tests/smoke.your-plugin.spec.ts` passes
 
 **Documentation**
 
@@ -877,5 +873,5 @@ Before opening a pull request for a new plugin, verify every item:
 
 | Complexity | Plugin | Source |
 |------------|--------|--------|
-| Simple (CRUD) | Todo plugin | [`examples/nextjs/lib/plugins/todo/`](examples/nextjs/lib/plugins/todo/) |
+| Simple (CRUD) | Todo plugin | [`scripts/codegen/files/nextjs/lib/plugins/todo/`](scripts/codegen/files/nextjs/lib/plugins/todo/) |
 | Full-featured | Blog plugin | [`packages/stack/src/plugins/blog/`](packages/stack/src/plugins/blog/) |

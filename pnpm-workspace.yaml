@@ -1,8 +1,9 @@
 packages:
   - packages/**
   - docs
-  - examples/*
+  - playground
   - e2e
+  - codegen-projects/*
 
 catalog:
   '@better-fetch/fetch': ^1.1.18

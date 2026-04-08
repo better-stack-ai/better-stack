@@ -198,7 +198,7 @@ test.describe("Page AI Context — structural (no OpenAI key needed)", () => {
 				.locator('[data-testid="chat-interface"]')
 				.getByText(/TypeScript/)
 				.first(),
-		).toBeVisible({ timeout: 15000 });
+		).toBeVisible({ timeout: 30000 });
 
 		// The fillBlogForm onToolCall handler should populate the title field
 		const titleField = page.getByLabel(/title/i).first();

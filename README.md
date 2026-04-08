@@ -145,11 +145,13 @@ Or manually copy [`skills/btst-integration/SKILL.md`](./.agents/skills/btst-inte
 
 ---
 
-## Examples
+## Live Demo
 
-* [Next.js App Router](./examples/nextjs)
-* [React Router](./examples/react-router)
-* [TanStack Router](./examples/tanstack)
+Try the interactive playground:
+
+* [Next.js](https://www.better-stack.ai/playground?plugins=blog,ai-chat,comments&framework=nextjs&view=preview)
+* [React Router](https://www.better-stack.ai/playground?plugins=blog,ai-chat,comments&framework=react-router&view=preview)
+* [TanStack Router](https://www.better-stack.ai/playground?plugins=blog,ai-chat,comments&framework=tanstack&view=preview)
 
 ---
 

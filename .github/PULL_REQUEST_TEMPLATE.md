@@ -19,7 +19,7 @@
 - [ ] `pnpm lint` passes
 - [ ] Tests added or updated (unit and/or E2E)
 - [ ] Docs updated (`docs/content/docs/`) if consumer-facing types or behavior changed
-- [ ] All three example apps updated if a plugin was added or changed
+- [ ] All three codegen-projects create successfully and pass E2E tests
 - [ ] New plugin: submission checklist in [CONTRIBUTING.md](../CONTRIBUTING.md#submission-checklist) completed
 
 ## Screenshots

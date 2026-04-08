@@ -5,24 +5,38 @@ import { Project, SyntaxKind } from "ts-morph";
 function createManualInstructions(
 	layoutPath: string,
 	queryClientImportPath: string,
+	hasAiChat = false,
 ) {
-	return [
+	const steps = [
 		`Could not automatically patch ${layoutPath}.`,
 		"Please apply this manually:",
 		`1) Add imports:`,
 		`   import { QueryClientProvider } from "@tanstack/react-query"`,
 		`   import { getOrCreateQueryClient } from "${queryClientImportPath}"`,
+		...(hasAiChat
+			? [
+					`   import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"`,
+				]
+			: []),
 		"2) Inside your root component, create:",
 		"   const queryClient = getOrCreateQueryClient()",
 		"3) Wrap your returned layout JSX with:",
 		"   <QueryClientProvider client={queryClient}>...</QueryClientProvider>",
-	].join("\n");
+		...(hasAiChat
+			? [
+					"4) Add PageAIContextProvider at body/root level (outside QueryClientProvider):",
+					"   <PageAIContextProvider>...</PageAIContextProvider>",
+				]
+			: []),
+	];
+	return steps.join("\n");
 }
 
 export async function patchLayoutWithQueryClientProvider(
 	cwd: string,
 	layoutPath: string,
 	aliasPrefix: string,
+	hasAiChat = false,
 ): Promise<{ updated: boolean; warning?: string }> {
 	const fullPath = join(cwd, layoutPath);
 	const queryClientImportPath = `${aliasPrefix}lib/query-client`;
@@ -33,7 +47,11 @@ export async function patchLayoutWithQueryClientProvider(
 	} catch {
 		return {
 			updated: false,
-			warning: createManualInstructions(layoutPath, queryClientImportPath),
+			warning: createManualInstructions(
+				layoutPath,
+				queryClientImportPath,
+				hasAiChat,
+			),
 		};
 	}
 
@@ -94,10 +112,16 @@ export async function patchLayoutWithQueryClientProvider(
 				);
 			}
 
+			// Strip outer parentheses from the expression text to avoid
+			// double-wrapping when the original return was `return (\n  <JSX />\n)`.
+			let expressionText = expression.getText().trim();
+			if (expressionText.startsWith("(") && expressionText.endsWith(")")) {
+				expressionText = expressionText.slice(1, -1).trim();
+			}
 			returnStatement.replaceWithText(
 				`return (
 		<QueryClientProvider client={queryClient}>
-			${expression.getText()}
+			${expressionText}
 		</QueryClientProvider>
 	)`,
 			);
@@ -108,8 +132,54 @@ export async function patchLayoutWithQueryClientProvider(
 		if (!didPatch) {
 			return {
 				updated: false,
-				warning: createManualInstructions(layoutPath, queryClientImportPath),
+				warning: createManualInstructions(
+					layoutPath,
+					queryClientImportPath,
+					hasAiChat,
+				),
 			};
+		}
+
+		if (hasAiChat) {
+			sourceFile.addImportDeclaration({
+				moduleSpecifier: "@btst/stack/plugins/ai-chat/client/context",
+				namedImports: ["PageAIContextProvider"],
+			});
+
+			// Find the patched function again and wrap its return with PageAIContextProvider
+			const allFunctions = [
+				...sourceFile.getFunctions(),
+				...sourceFile
+					.getVariableDeclarations()
+					.map((decl) => decl.getInitializerIfKind(SyntaxKind.ArrowFunction))
+					.filter((node): node is NonNullable<typeof node> => Boolean(node)),
+			];
+
+			for (const fn of allFunctions) {
+				const body = fn.getBody();
+				if (!body || !body.isKind(SyntaxKind.Block)) continue;
+				const returnStatement = body
+					.getStatements()
+					.filter((s) => s.isKind(SyntaxKind.ReturnStatement))
+					.at(-1);
+				if (!returnStatement) continue;
+				const expression = returnStatement.getExpression();
+				if (!expression) continue;
+				if (!expression.getText().includes("QueryClientProvider")) continue;
+
+				let expressionText = expression.getText().trim();
+				if (expressionText.startsWith("(") && expressionText.endsWith(")")) {
+					expressionText = expressionText.slice(1, -1).trim();
+				}
+				returnStatement.replaceWithText(
+					`return (
+	<PageAIContextProvider>
+		${expressionText}
+	</PageAIContextProvider>
+)`,
+				);
+				break;
+			}
 		}
 
 		await sourceFile.save();
@@ -117,7 +187,11 @@ export async function patchLayoutWithQueryClientProvider(
 	} catch {
 		return {
 			updated: false,
-			warning: createManualInstructions(layoutPath, queryClientImportPath),
+			warning: createManualInstructions(
+				layoutPath,
+				queryClientImportPath,
+				hasAiChat,
+			),
 		};
 	}
 }

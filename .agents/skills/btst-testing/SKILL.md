@@ -67,41 +67,76 @@ Use `vi.mock` for external modules that don't exist in the test environment (e.g
 
 ## E2E tests (Playwright)
 
+### E2E setup
+
+Playwright configuration lives in `e2e/playwright.codegen.config.ts`, command `pnpm codegen:e2e`. It starts the `codegen-projects/` apps (ports 3006–3008) and tests the CLI codegen output — accurately reflecting what a real `btst init` user gets.
+
+The codegen projects are built from scratch via `scripts/codegen/setup-*.sh`.
+
 ### Location and naming
 
 Tests live in `e2e/tests/`. Naming convention: `smoke.{feature}.spec.ts`
 
 Examples: `smoke.chat.spec.ts`, `smoke.blog.spec.ts`
 
+### Setting up codegen projects (required before running codegen E2E)
+
+The `codegen-projects/` directory is **not committed** — build it from scratch:
+
+```bash
+# Set up a specific framework
+bash scripts/codegen/setup-nextjs.sh
+bash scripts/codegen/setup-react-router.sh
+bash scripts/codegen/setup-tanstack.sh
+
+# Or set up all frameworks at once
+bash scripts/codegen/setup.sh
+
+# Cleanup when you want a fresh start
+bash scripts/codegen/cleanup.sh nextjs
+bash scripts/codegen/cleanup.sh react-router
+bash scripts/codegen/cleanup.sh tanstack
+```
+
+See `scripts/codegen/README.md` for full details on the E2E overlay file system and update workflow.
+
 ### Run commands
 
 ```bash
-# All frameworks (starts all 3 servers)
 cd e2e
-export $(cat ../examples/nextjs/.env | xargs)
-pnpm e2e:smoke
 
-# Single framework only
-pnpm e2e:smoke:nextjs
-pnpm e2e:smoke:tanstack
-pnpm e2e:smoke:react-router
+# Run all codegen E2E tests
+pnpm codegen:e2e
+
+# Target a specific framework
+pnpm codegen:e2e:nextjs
+pnpm codegen:e2e:tanstack
+pnpm codegen:e2e:react-router
 
 # Specific test file
-pnpm e2e:smoke -- tests/smoke.chat.spec.ts
-
-# Specific Playwright project
-pnpm e2e:smoke -- --project="nextjs:memory"
+pnpm codegen:e2e:nextjs -- tests/smoke.blog.spec.ts
 ```
 
 ### Playwright projects and ports
 
 | Project | Port |
 |---|---|
-| `nextjs:memory` | 3003 |
-| `tanstack:memory` | 3004 |
-| `react-router:memory` | 3005 |
+| `nextjs:codegen` | 3006 |
+| `tanstack:codegen` | 3007 |
+| `react-router:codegen` | 3008 |
 
-Defined in `playwright.config.ts`. By default all three servers start. Set `BTST_FRAMEWORK=nextjs|tanstack|react-router` to start only one — or use the per-framework scripts above. CI uses a matrix to run each in a separate parallel job.
+Set `BTST_FRAMEWORK=nextjs|tanstack|react-router` to start only one server.
+
+### In-memory state between test runs
+
+The in-memory adapter keeps data alive for the lifetime of the server process. If you re-run tests against an already-running server, earlier test data will still be present and can cause failures.
+
+To reset: kill the server and let `reuseExistingServer: true` restart it, or rebuild with `start:e2e`:
+
+```bash
+kill $(lsof -ti:3006)
+pnpm -F nextjs run start:e2e   # rebuilds .next and starts fresh
+```
 
 ### API key guard pattern
 
@@ -122,7 +157,7 @@ test.beforeEach(async () => {
 ### Environment variables
 
 ```bash
-export $(cat ../examples/nextjs/.env | xargs)
+# Env is loaded from codegen-projects/nextjs/.env automatically by playwright.codegen.config.ts
 ```
 
-For CI, the workflow uses a matrix — each framework job sets `BTST_FRAMEWORK` and only starts its own server.
+For CI, the codegen workflow (`.github/workflows/codegen-e2e.yml`) builds the codegen project from scratch and passes `OPENAI_API_KEY` from secrets.

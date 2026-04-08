@@ -1,0 +1,22 @@
+import type { NextConfig } from "next"
+
+const nextConfig: NextConfig = {
+{{#if hasAiChat}}
+	env: {
+		// Expose whether an OpenAI key is set so the pages layout can show a banner.
+		NEXT_PUBLIC_HAS_OPENAI_KEY: process.env.OPENAI_API_KEY ? "1" : "",
+	},
+{{/if}}
+{{#if hasMedia}}
+	images: {
+		remotePatterns: [
+			{
+				protocol: "https",
+				hostname: "*",
+			},
+		],
+	},
+{{/if}}
+}
+
+export default nextConfig

@@ -1,0 +1,90 @@
+name: Codegen E2E Tests
+
+# Tests the btst init CLI codegen experience from scratch:
+#   shadcn init → btst init → copy E2E overlay files → build → run Playwright
+#
+# The codegen-projects/ directory is never committed — it is always built
+# fresh from scripts/codegen/setup-{framework}.sh in each CI run.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'packages/cli/**'
+      - 'packages/stack/**'
+      - 'packages/ui/**'
+      - 'scripts/codegen/**'
+      - 'e2e/**'
+      - '.github/workflows/codegen-e2e.yml'
+
+jobs:
+  codegen-e2e:
+    name: Codegen E2E (${{ matrix.framework }})
+    runs-on: ubuntu-latest
+    concurrency:
+      group: codegen-e2e-${{ matrix.framework }}-${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      NODE_OPTIONS: --max-old-space-size=8192
+
+    strategy:
+      fail-fast: false
+      matrix:
+        framework: [nextjs, react-router, tanstack]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install monorepo dependencies
+        run: pnpm install
+
+      - name: Build workspace
+        run: pnpm -w build
+
+      # Creates codegen-projects/${{ matrix.framework }}/ from scratch:
+      #   1. shadcn init (framework + Nova preset)
+      #   2. btst init (all plugins, memory adapter)
+      #   3. pnpm dlx shadcn add (extra UI components)
+      #   4. Copy E2E overlay files from scripts/codegen/files/${{ matrix.framework }}/
+      #   5. pnpm install
+      - name: Set up ${{ matrix.framework }} codegen project from scratch
+        run: bash scripts/codegen/setup-${{ matrix.framework }}.sh
+        timeout-minutes: 20
+
+      - name: Install Playwright browsers
+        run: cd e2e && pnpm exec playwright install --with-deps
+
+      - name: Run codegen E2E tests (${{ matrix.framework }})
+        run: pnpm -F e2e codegen:e2e:${{ matrix.framework }}
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-codegen-${{ matrix.framework }}
+          path: e2e/playwright-report-codegen
+          if-no-files-found: ignore
+
+      - name: Upload failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: traces-codegen-${{ matrix.framework }}
+          path: test-results-codegen/**/*.zip
+          if-no-files-found: ignore

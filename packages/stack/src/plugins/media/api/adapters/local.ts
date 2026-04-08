@@ -1,6 +1,6 @@
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import * as crypto from "node:crypto";
+import * as fs from "fs/promises";
+import * as path from "path";
+import * as crypto from "crypto";
 import type { DirectStorageAdapter, UploadOptions } from "../storage-adapter";
 
 export interface LocalStorageAdapterOptions {

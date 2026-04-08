@@ -1066,7 +1066,7 @@ export const getStackClient = (queryClient: QueryClient) => {
 
 Whether you're building a plugin inside your project or as a standalone npm package, the code and patterns are identical. The only difference is packaging—standalone plugins are built and published to npm, while in-project plugins are imported directly.
 
-Here's a complete example based on the [Todo Plugin](https://github.com/better-stack-ai/better-stack/tree/main/examples/nextjs/lib/plugins/todo):
+Here's a complete example based on the Todo Plugin (found at `lib/plugins/todo/` after running `bash scripts/codegen/setup-nextjs.sh`):
 
 **File: `lib/plugins/todo/schema.ts`**
 ```typescript
@@ -1442,7 +1442,7 @@ useRegisterPageAIContext(post ? {
 
 A basic CRUD plugin demonstrating core concepts:
 
-**Source Code:** [Todo Plugin](https://github.com/better-stack-ai/better-stack/tree/main/examples/nextjs/lib/plugins/todo)
+**Source Code:** `lib/plugins/todo/` in the generated Next.js project (run `bash scripts/codegen/setup-nextjs.sh`)
 
 Features:
 - Basic CRUD operations

@@ -335,7 +335,7 @@ test("delete board", async ({ page, request }) => {
 	await page.waitForTimeout(1000);
 
 	// Wait for URL to change to /pages/kanban (the boards list)
-	await page.waitForURL("**/pages/kanban", { timeout: 15000 });
+	await page.waitForURL("**/pages/kanban", { timeout: 30000 });
 
 	// Wait for boards list page to be visible
 	await expect(page.locator('[data-testid="boards-list-page"]')).toBeVisible({

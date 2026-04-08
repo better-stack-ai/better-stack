@@ -18,6 +18,8 @@ export interface PluginMeta {
 	configKey: string;
 	/** Additional npm packages that must be installed when this plugin is selected. */
 	extraPackages?: string[];
+	/** Whether this plugin has sample seed data available for the playground. */
+	hasSeedData?: boolean;
 }
 
 export const ADAPTERS: readonly AdapterMeta[] = [
@@ -61,6 +63,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/blog/client",
 		clientSymbol: "blogClientPlugin",
 		configKey: "blog",
+		hasSeedData: true,
 	},
 	{
 		key: "ai-chat",
@@ -71,6 +74,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/ai-chat/client",
 		clientSymbol: "aiChatClientPlugin",
 		configKey: "aiChat",
+		extraPackages: ["@ai-sdk/openai", "ai"],
 	},
 	{
 		key: "cms",
@@ -81,6 +85,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/cms/client",
 		clientSymbol: "cmsClientPlugin",
 		configKey: "cms",
+		hasSeedData: true,
 	},
 	{
 		key: "form-builder",
@@ -91,6 +96,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/form-builder/client",
 		clientSymbol: "formBuilderClientPlugin",
 		configKey: "formBuilder",
+		hasSeedData: true,
 	},
 	{
 		key: "ui-builder",
@@ -101,6 +107,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/ui-builder/client",
 		clientSymbol: "uiBuilderClientPlugin",
 		configKey: "uiBuilder",
+		hasSeedData: true,
 	},
 	{
 		key: "kanban",
@@ -111,6 +118,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/kanban/client",
 		clientSymbol: "kanbanClientPlugin",
 		configKey: "kanban",
+		hasSeedData: true,
 	},
 	{
 		key: "comments",
@@ -130,6 +138,10 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/media/client",
 		clientSymbol: "mediaClientPlugin",
 		configKey: "media",
+		// @vercel/blob is needed at runtime for the vercel-blob upload mode.
+		// Without it installed, Next.js/webpack fails to resolve the dynamic import
+		// even though the code path is never reached when using other storage adapters.
+		extraPackages: ["@vercel/blob"],
 	},
 	{
 		key: "better-auth-ui",
@@ -158,3 +170,45 @@ export const PLUGINS: readonly PluginMeta[] = [
 ];
 
 export const DEFAULT_PLUGIN_SELECTION: PluginKey[] = [];
+
+/**
+ * Maps each plugin key to the list of /pages/* route paths it registers.
+ * Paths are verified against each plugin's client/plugin.tsx createRoute() calls.
+ * All page routes are prefixed with /pages (matching siteBasePath="/pages").
+ * Non-page routes (API-only plugins) are listed separately.
+ */
+export const PLUGIN_ROUTES: Record<PluginKey, string[]> = {
+	blog: [
+		"/pages/blog",
+		"/pages/blog/drafts",
+		"/pages/blog/new",
+		"/pages/blog/:slug/edit",
+		"/pages/blog/tag/:tagSlug",
+		"/pages/blog/:slug",
+	],
+	"ai-chat": ["/pages/chat", "/pages/chat/:id"],
+	cms: [
+		"/pages/cms",
+		"/pages/cms/:typeSlug",
+		"/pages/cms/:typeSlug/new",
+		"/pages/cms/:typeSlug/:id",
+	],
+	"form-builder": [
+		"/pages/forms",
+		"/pages/forms/new",
+		"/pages/forms/:id/edit",
+		"/pages/forms/:id/submissions",
+	],
+	"ui-builder": [
+		"/pages/ui-builder",
+		"/pages/ui-builder/new",
+		"/pages/ui-builder/:id/edit",
+	],
+	kanban: ["/pages/kanban", "/pages/kanban/new", "/pages/kanban/:boardId"],
+	comments: ["/pages/comments/moderation", "/pages/comments"],
+	media: ["/pages/media"],
+	"route-docs": ["/pages/route-docs"],
+	/** open-api registers an API route, not a page route */
+	"open-api": ["/api/data/reference"],
+	"better-auth-ui": ["/pages/auth", "/pages/account/settings", "/pages/org"],
+};

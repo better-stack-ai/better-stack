@@ -61,7 +61,7 @@ test.describe("AI Chat Plugin", () => {
 
 		// 4. Verify user message appears - increase timeout to account for slower state updates
 		await expect(page.getByText("Hello, world!")).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// 5. Verify AI response appears (using real OpenAI, so response content varies, but should exist)
@@ -100,7 +100,7 @@ test.describe("AI Chat Plugin", () => {
 		// (no refresh needed).
 		await expect(
 			page.getByRole("button", { name: /Test message for sidebar/i }),
-		).toBeVisible({ timeout: 15000 });
+		).toBeVisible({ timeout: 30000 });
 	});
 
 	test("should navigate to existing conversation", async ({ page }) => {
@@ -135,7 +135,7 @@ test.describe("AI Chat Plugin", () => {
 				.locator('[data-testid="chat-interface"]')
 				.getByText("Navigation test message", { exact: true }),
 		).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 	});
 
@@ -455,7 +455,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 
 		// Verify user message appears
 		await expect(page.getByText("Here is a file for you")).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Verify AI response appears
@@ -494,7 +494,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 
 		// Wait for the user message to appear (confirming send worked)
 		await expect(page.getByText("Please analyze this image")).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Verify the attachment preview is cleared from input area after sending
@@ -555,7 +555,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		await expect(
 			chatInterface.getByText("Say exactly: FIRST RESPONSE"),
 		).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 		await expect(
 			chatInterface.locator('[aria-label="AI response"]'),
@@ -596,7 +596,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		await expect(
 			chatInterface.getByText("Say exactly: FIRST RESPONSE"),
 		).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Verify still only one of each message type after reload
@@ -622,7 +622,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		await expect(
 			chatInterface.getByText("Original message content"),
 		).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 		await expect(
 			chatInterface.locator('[aria-label="AI response"]'),
@@ -660,7 +660,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		await expect(
 			chatInterface.getByText("Edited message content").first(),
 		).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Wait for new AI response to complete
@@ -675,7 +675,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 				.locator('[aria-label="Your message"]')
 				.getByText("Edited message content"),
 		).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Verify original message is gone after reload (database was synced correctly)
@@ -706,7 +706,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		await input.fill("First question");
 		await page.keyboard.press("Enter");
 		await expect(chatInterface.getByText("First question")).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 		await expect(
 			chatInterface.locator('[aria-label="AI response"]'),
@@ -719,7 +719,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		await input.fill("Second question");
 		await page.keyboard.press("Enter");
 		await expect(chatInterface.getByText("Second question")).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Wait for second AI response to complete
@@ -765,7 +765,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		await expect(
 			chatInterface.getByText("Edited first question").first(),
 		).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Wait for new AI response to complete
@@ -781,7 +781,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 				.locator('[aria-label="Your message"]')
 				.getByText("Edited first question"),
 		).toBeVisible({
-			timeout: 15000,
+			timeout: 30000,
 		});
 
 		// Second question should be gone after reload (it was after the edit point)

@@ -34,16 +34,6 @@
   },
   "overrides": [
     {
-      "includes": ["**/examples/svelte-kit-example/**"],
-      "linter": {
-        "rules": {
-          "correctness": {
-            "noUnusedImports": "off"
-          }
-        }
-      }
-    },
-    {
       "includes": ["**/*.json"],
       "formatter": {
         "indentStyle": "space",
@@ -68,13 +58,13 @@
       "!**/playwright-report",
       "!**/.output",
       "!**/.tmp",
-      "!**/examples/**",
       "!**/packages/ui/**",
       "!**/docs/**",
       "!**/test-results/**",
       "!**/.btst-stack-src/**",
       "!**/.btst-stack-ui/**",
-      "!**/packages/stack/registry/**"
+      "!**/packages/stack/registry/**",
+      "!**/codegen-projects/**"
     ]
   }
 }

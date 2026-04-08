@@ -39,4 +39,6 @@ export interface ScaffoldPlan {
 	layoutPatchTarget: string;
 	cssPatchTarget: string;
 	pagesLayoutPath?: string;
+	cssImports: string[];
+	extraPackages: string[];
 }

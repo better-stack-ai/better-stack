@@ -4,7 +4,7 @@ export default defineBuildConfig({
 	declaration: true,
 	clean: true,
 	outDir: "dist",
-	entries: ["./src/index.ts"],
+	entries: ["./src/index.ts", "./src/lib.ts", "./src/meta.ts"],
 	rollup: {
 		emitCJS: true,
 		esbuild: {
