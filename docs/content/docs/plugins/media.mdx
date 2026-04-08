@@ -376,6 +376,71 @@ export function ProductImageField({
 }
 ```
 
+## Multi-tenancy
+
+The media plugin has first-class support for scoping assets and folders to a tenant — a user, organisation, or any other entity that should see only its own media. This is completely opt-in: if you do not configure `resolveTenantId`, the plugin behaves exactly as before.
+
+### How it works
+
+Assets and folders each carry an optional `tenantId` column. The `resolveTenantId` hook is called on every HTTP request and returns the tenant identifier for that request. The plugin then:
+
+- **Filters** `GET /media/assets` and `GET /media/folders` to the resolved tenant.
+- **Tags** newly created assets and folders with the resolved tenant on `POST /media/assets`, `POST /media/upload`, `POST /media/upload/token`, and `POST /media/folders`.
+- **Guards** `PATCH /media/assets/:id`, `DELETE /media/assets/:id`, and `DELETE /media/folders/:id` — if the resolved `tenantId` does not match the resource's `tenantId`, the endpoint returns **404** (not 403, to avoid leaking that the ID exists).
+- **Guards `folderId` assignments** — supplying a `folderId` that belongs to a different tenant is rejected with 404 on all create and upload endpoints.
+
+Returning `null` or `undefined` from `resolveTenantId` disables scoping for that request, which is useful for super-admin routes.
+
+### Configuration
+
+```ts title="lib/stack.ts"
+import { stack } from "@btst/stack"
+import { mediaBackendPlugin, s3Adapter } from "@btst/stack/plugins/media/api"
+import { getSession } from "@/lib/auth"
+
+const { handler, dbSchema } = stack({
+  basePath: "/api/data",
+  plugins: {
+    media: mediaBackendPlugin({
+      storageAdapter: s3Adapter({ /* ... */ }),
+      resolveTenantId: async (context) => {
+        const session = await getSession(context.headers as Headers)
+        if (!session) throw new Error("Unauthorized")
+        // Return the business profile ID as the tenant key.
+        return session.user.activeProfileId ?? null
+      },
+    }),
+  },
+  adapter: (db) => createPrismaAdapter(prisma, db),
+})
+```
+
+When `resolveTenantId` throws, the request is rejected exactly like any other hook error. Use this to enforce authentication before any media operation is allowed.
+
+### Get-or-create folders per tenant
+
+A common pattern in workflow automation is to find a tenant's folder by name, creating it if it does not exist yet. Use `getFolderByName` from the server-side `api` factory:
+
+```ts
+import { stack } from "@btst/stack"
+
+const { api } = stack({ /* ... */ })
+
+async function getOrCreateProfileFolder(profileId: string) {
+  const name = `blog-gen-${profileId}`
+  const existing = await api.media.getFolderByName(name, null, profileId)
+
+  if (existing) return existing
+
+  return api.media.createFolder(adapter, {
+    name,
+    tenantId: profileId,
+  })
+}
+```
+
+`getFolderByName(name, parentId?, tenantId?)` scopes the lookup to a name, an optional parent folder, and an optional tenant. Pass `null` for `parentId` to search only root-level folders.
+
 ## API Reference
 
 ### Backend (`@btst/stack/plugins/media/api`)
@@ -549,10 +614,11 @@ Like other BTST plugins, the Media plugin supports two server-side access patter
 
 | Function | Description |
 | --- | --- |
-| `listAssets(params?)` | List assets with pagination, search, MIME filtering, and folder filtering |
+| `listAssets(params?)` | List assets with pagination, search, MIME filtering, folder filtering, and optional tenant scoping |
 | `getAssetById(id)` | Fetch a single asset by ID |
-| `listFolders(params?)` | List folders, optionally scoped to a parent folder |
+| `listFolders(params?)` | List folders, optionally scoped to a parent folder and/or tenant |
 | `getFolderById(id)` | Fetch a single folder by ID |
+| `getFolderByName(name, parentId?, tenantId?)` | Find a folder by name, optionally scoped to a parent and/or tenant. Returns `null` if not found. |
 
 **Available direct mutations:**
 
