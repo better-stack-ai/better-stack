@@ -220,7 +220,24 @@ ${SHARED_THEME_CSS}
 
 		// ── app/layout.tsx ───────────────────────────────────────────────────────
 		"app/layout.tsx": {
-			content: `import "./globals.css"
+			content: hasAiChat
+				? `import "./globals.css"
+import type { ReactNode } from "react"
+import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"
+
+export const metadata = { title: "BTST Playground" }
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <PageAIContextProvider>{children}</PageAIContextProvider>
+      </body>
+    </html>
+  )
+}
+`
+				: `import "./globals.css"
 import type { ReactNode } from "react"
 
 export const metadata = { title: "BTST Playground" }
@@ -416,6 +433,7 @@ function buildReactRouterProjectFiles(
 	generatedFiles: FileWritePlanItem[],
 	cssImports: string[],
 	extraPackages: string[] = [],
+	hasAiChat = false,
 	seedFiles: SeedRouteFile[] = [],
 	seedRunnerScript: string | null = null,
 	seedPluginCode: string | null = null,
@@ -629,7 +647,7 @@ ${SHARED_THEME_CSS}
 		"app/root.tsx": {
 			content: `import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router"
 import "./app.css"
-
+${hasAiChat ? `import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"\n` : ""}
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -640,7 +658,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        {children}
+        ${
+					hasAiChat
+						? `<PageAIContextProvider>
+          {children}
+        </PageAIContextProvider>`
+						: `{children}`
+				}
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -739,6 +763,7 @@ function buildTanstackProjectFiles(
 	generatedFiles: FileWritePlanItem[],
 	cssImports: string[],
 	extraPackages: string[] = [],
+	hasAiChat = false,
 	seedFiles: SeedRouteFile[] = [],
 	seedRunnerScript: string | null = null,
 	seedPluginCode: string | null = null,
@@ -987,7 +1012,7 @@ declare module "@tanstack/react-router" {
 			content: `import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from "@tanstack/react-router"
 import globalsCss from "@/styles/globals.css?url"
 import type { MyRouterContext } from "@/router"
-
+${hasAiChat ? `import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"\n` : ""}
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   head: () => ({
     meta: [{ charSet: "utf-8" }, { name: "viewport", content: "width=device-width, initial-scale=1" }],
@@ -1003,7 +1028,13 @@ function RootComponent() {
         <HeadContent />
       </head>
       <body>
-        <Outlet />
+        ${
+					hasAiChat
+						? `<PageAIContextProvider>
+          <Outlet />
+        </PageAIContextProvider>`
+						: `<Outlet />`
+				}
         <Scripts />
       </body>
     </html>
@@ -1083,6 +1114,7 @@ export function buildProjectFiles(
 			generatedFiles,
 			cssImports,
 			extraPackages,
+			hasAiChat,
 			seedFiles,
 			seedRunnerScript,
 			seedPluginCode,
@@ -1093,6 +1125,7 @@ export function buildProjectFiles(
 			generatedFiles,
 			cssImports,
 			extraPackages,
+			hasAiChat,
 			seedFiles,
 			seedRunnerScript,
 			seedPluginCode,

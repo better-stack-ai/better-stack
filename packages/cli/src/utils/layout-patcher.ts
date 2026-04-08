@@ -140,6 +140,48 @@ export async function patchLayoutWithQueryClientProvider(
 			};
 		}
 
+		if (hasAiChat) {
+			sourceFile.addImportDeclaration({
+				moduleSpecifier: "@btst/stack/plugins/ai-chat/client/context",
+				namedImports: ["PageAIContextProvider"],
+			});
+
+			// Find the patched function again and wrap its return with PageAIContextProvider
+			const allFunctions = [
+				...sourceFile.getFunctions(),
+				...sourceFile
+					.getVariableDeclarations()
+					.map((decl) => decl.getInitializerIfKind(SyntaxKind.ArrowFunction))
+					.filter((node): node is NonNullable<typeof node> => Boolean(node)),
+			];
+
+			for (const fn of allFunctions) {
+				const body = fn.getBody();
+				if (!body || !body.isKind(SyntaxKind.Block)) continue;
+				const returnStatement = body
+					.getStatements()
+					.filter((s) => s.isKind(SyntaxKind.ReturnStatement))
+					.at(-1);
+				if (!returnStatement) continue;
+				const expression = returnStatement.getExpression();
+				if (!expression) continue;
+				if (!expression.getText().includes("QueryClientProvider")) continue;
+
+				let expressionText = expression.getText().trim();
+				if (expressionText.startsWith("(") && expressionText.endsWith(")")) {
+					expressionText = expressionText.slice(1, -1).trim();
+				}
+				returnStatement.replaceWithText(
+					`return (
+	<PageAIContextProvider>
+		${expressionText}
+	</PageAIContextProvider>
+)`,
+				);
+				break;
+			}
+		}
+
 		await sourceFile.save();
 		return { updated: true };
 	} catch {

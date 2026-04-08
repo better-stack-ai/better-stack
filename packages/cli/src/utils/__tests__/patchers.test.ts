@@ -135,4 +135,37 @@ describe("patchers", () => {
 		expect(next).toContain("QueryClientProvider");
 		expect(next).toContain("getOrCreateQueryClient");
 	});
+
+	it("patches layout with PageAIContextProvider when hasAiChat=true", async () => {
+		const cwd = await makeTempProject("layout-patch-ai-chat");
+		await mkdir(join(cwd, "app"), { recursive: true });
+		const layoutPath = join(cwd, "app/layout.tsx");
+		await writeFile(
+			layoutPath,
+			`export default function RootLayout({ children }: { children: React.ReactNode }) {
+	return (
+		<html>
+			<body>{children}</body>
+		</html>
+	)
+}
+`,
+		);
+
+		const result = await patchLayoutWithQueryClientProvider(
+			cwd,
+			"app/layout.tsx",
+			"@/",
+			true,
+		);
+		expect(result.updated).toBe(true);
+		const next = await readFile(layoutPath, "utf8");
+		expect(next).toContain("QueryClientProvider");
+		expect(next).toContain("getOrCreateQueryClient");
+		expect(next).toContain("PageAIContextProvider");
+		// PageAIContextProvider must appear before QueryClientProvider in the JSX
+		expect(next.indexOf("PageAIContextProvider")).toBeLessThan(
+			next.lastIndexOf("QueryClientProvider"),
+		);
+	});
 });
