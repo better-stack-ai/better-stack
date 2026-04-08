@@ -1,8 +1,8 @@
 diff --git a/src/routes/__root.tsx b/src/routes/__root.tsx
-index 0d5e777..bce608f 100644
+index 12351c7..bce608f 100644
 --- a/src/routes/__root.tsx
 +++ b/src/routes/__root.tsx
-@@ -1,59 +1,129 @@
+@@ -1,62 +1,129 @@
 -import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
 -import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools"
 -import { TanStackDevtools } from "@tanstack/react-devtools"
@@ -24,7 +24,7 @@ index 0d5e777..bce608f 100644
 +import { ThemeProvider } from "next-themes";
 +import { Navbar } from "@/components/navbar";
 +import { Toaster } from "sonner";
-+import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context";
+ import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context";
  
 -export const Route = createRootRoute({
 -  head: () => ({
@@ -118,29 +118,31 @@ index 0d5e777..bce608f 100644
 -function RootDocument({ children }: { children: React.ReactNode }) {
 -    const queryClient = getOrCreateQueryClient()
 -  return (
+-    	<PageAIContextProvider>
 -    		<QueryClientProvider client={queryClient}>
--    			<html lang="en">
--          <head>
--            <HeadContent />
--          </head>
--          <body>
--            {children}
--            <TanStackDevtools
--              config={{
--                position: "bottom-right",
--              }}
--              plugins={[
--                {
--                  name: "Tanstack Router",
--                  render: <TanStackRouterDevtoolsPanel />,
--                },
--              ]}
--            />
--            <Scripts />
--          </body>
--        </html>
--    		</QueryClientProvider>
--    	)
+-        			<html lang="en">
+-              <head>
+-                <HeadContent />
+-              </head>
+-              <body>
+-                {children}
+-                <TanStackDevtools
+-                  config={{
+-                    position: "bottom-right",
+-                  }}
+-                  plugins={[
+-                    {
+-                      name: "Tanstack Router",
+-                      render: <TanStackRouterDevtoolsPanel />,
+-                    },
+-                  ]}
+-                />
+-                <Scripts />
+-              </body>
+-            </html>
+-        		</QueryClientProvider>
+-    	</PageAIContextProvider>
+-    )
 +function RootComponent() {
 +	return (
 +		<RootDocument>

@@ -5,3 +5,4 @@
 # React Router
 /.react-router/
 /build/
+*.orig

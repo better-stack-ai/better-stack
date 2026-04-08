@@ -1,8 +1,8 @@
 diff --git a/app/root.tsx b/app/root.tsx
-index d5a0d25..a804206 100644
+index 09d783c..a804206 100644
 --- a/app/root.tsx
 +++ b/app/root.tsx
-@@ -1,67 +1,113 @@
+@@ -1,70 +1,113 @@
  import {
 -  Links,
 -  Meta,
@@ -32,8 +32,8 @@ index d5a0d25..a804206 100644
 +import { ThemeProvider } from "next-themes";
 +import { Navbar } from "./components/navbar";
 +import { Toaster } from "sonner";
-+import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context";
-+
+ import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context";
+ 
 +export const links: Route.LinksFunction = () => [
 +	{ rel: "preconnect", href: "https://fonts.googleapis.com" },
 +	{
@@ -46,26 +46,28 @@ index d5a0d25..a804206 100644
 +		href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
 +	},
 +];
- 
++
  export function Layout({ children }: { children: React.ReactNode }) {
 -    const queryClient = getOrCreateQueryClient()
 -  return (
+-    	<PageAIContextProvider>
 -    		<QueryClientProvider client={queryClient}>
--    			<html lang="en">
--          <head>
--            <meta charSet="utf-8" />
--            <meta name="viewport" content="width=device-width, initial-scale=1" />
--            <Meta />
--            <Links />
--          </head>
--          <body>
--            {children}
--            <ScrollRestoration />
--            <Scripts />
--          </body>
--        </html>
--    		</QueryClientProvider>
--    	)
+-        			<html lang="en">
+-              <head>
+-                <meta charSet="utf-8" />
+-                <meta name="viewport" content="width=device-width, initial-scale=1" />
+-                <Meta />
+-                <Links />
+-              </head>
+-              <body>
+-                {children}
+-                <ScrollRestoration />
+-                <Scripts />
+-              </body>
+-            </html>
+-        		</QueryClientProvider>
+-    	</PageAIContextProvider>
+-    )
 +	return (
 +		<html lang="en" suppressHydrationWarning>
 +			<head>
