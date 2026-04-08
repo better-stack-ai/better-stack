@@ -501,7 +501,6 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					method: "GET",
 					query: z.object({
 						parentId: z.string().optional(),
-						tenantId: z.string().optional(),
 					}),
 				},
 				async (ctx) => {
@@ -837,6 +836,13 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					}
 
 					const context: MediaApiContext = { headers: ctx.headers };
+
+					// Resolve tenant for hook side-effects (e.g. auth checks). The token
+					// response does not embed tenantId — the follow-up POST /media/assets
+					// call tags the asset automatically via resolveTenantId.
+					if (resolveTenantId) {
+						await resolveTenantId(context);
+					}
 
 					if (!ctx.request) {
 						throw ctx.error(400, {
