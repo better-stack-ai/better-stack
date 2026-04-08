@@ -3,7 +3,7 @@ const config = {
 	reactStrictMode: true,
 	basePath: "/playground",
 	assetPrefix: "/playground",
-	serverExternalPackages: ["handlebars"],
+	serverExternalPackages: ["handlebars", "@btst/codegen"],
 	async headers() {
 		return [
 			{
