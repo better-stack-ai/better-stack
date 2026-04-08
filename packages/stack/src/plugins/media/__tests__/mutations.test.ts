@@ -59,6 +59,21 @@ describe("media mutations", () => {
 			expect(asset.alt).toBe("A beautiful photo");
 		});
 
+		it("persists tenantId when provided", async () => {
+			const asset = await createAsset(adapter, {
+				...assetInput,
+				tenantId: "profile-abc",
+			});
+
+			expect(asset.tenantId).toBe("profile-abc");
+		});
+
+		it("leaves tenantId absent when not provided", async () => {
+			const asset = await createAsset(adapter, assetInput);
+
+			expect(asset.tenantId == null).toBe(true);
+		});
+
 		it("creates multiple independent assets", async () => {
 			await createAsset(adapter, {
 				...assetInput,
@@ -192,6 +207,21 @@ describe("media mutations", () => {
 			expect(folder.name).toBe("Uploads");
 			expect(folder.parentId).toBeUndefined();
 			expect(folder.createdAt).toBeInstanceOf(Date);
+		});
+
+		it("persists tenantId when provided", async () => {
+			const folder = await createFolder(adapter, {
+				name: "Tenant Folder",
+				tenantId: "profile-xyz",
+			});
+
+			expect(folder.tenantId).toBe("profile-xyz");
+		});
+
+		it("leaves tenantId absent when not provided", async () => {
+			const folder = await createFolder(adapter, { name: "No Tenant" });
+
+			expect(folder.tenantId == null).toBe(true);
 		});
 
 		it("creates a nested folder with parentId", async () => {

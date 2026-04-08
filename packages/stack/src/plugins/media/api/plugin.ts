@@ -15,6 +15,7 @@ import {
 	getAssetById,
 	listFolders,
 	getFolderById,
+	getFolderByName,
 } from "./getters";
 import {
 	createAsset,
@@ -187,6 +188,26 @@ export interface MediaBackendConfig {
 	 * Optional lifecycle hooks for the media backend plugin.
 	 */
 	hooks?: MediaBackendHooks;
+
+	/**
+	 * Optional function to resolve a tenant ID from the incoming request context.
+	 *
+	 * When provided, all asset and folder list/create operations through the HTTP
+	 * API are automatically scoped to the returned tenant ID:
+	 * - GET /media/assets  →  filters results to the resolved tenant
+	 * - POST /media/assets →  tags the created asset with the resolved tenant
+	 * - POST /media/upload →  tags the uploaded asset with the resolved tenant
+	 * - GET /media/folders →  filters results to the resolved tenant
+	 * - POST /media/folders → tags the created folder with the resolved tenant
+	 *
+	 * When absent, no tenant filtering is applied (existing behaviour).
+	 *
+	 * Returning `null` or `undefined` means "no tenant" for this request —
+	 * the operation proceeds without tenant scoping (useful for super-admin routes).
+	 */
+	resolveTenantId?: (
+		context: MediaApiContext,
+	) => Promise<string | null | undefined> | string | null | undefined;
 }
 
 /**
@@ -222,6 +243,11 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 			listFolders: (params?: Parameters<typeof listFolders>[1]) =>
 				listFolders(adapter, params),
 			getFolderById: (id: string) => getFolderById(adapter, id),
+			getFolderByName: (
+				name: string,
+				parentId?: string | null,
+				tenantId?: string,
+			) => getFolderByName(adapter, name, parentId, tenantId),
 		}),
 
 		routes: (adapter: Adapter) => {
@@ -231,6 +257,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 				allowedMimeTypes,
 				allowedUrlPrefixes,
 				hooks,
+				resolveTenantId,
 			} = config;
 
 			function validateMimeType(mimeType: string, ctx: { error: Function }) {
@@ -261,6 +288,10 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					const { query, headers } = ctx;
 					const context: MediaApiContext = { query, headers };
 
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
+
 					if (hooks?.onBeforeListAssets) {
 						await runHookWithShim(
 							() => hooks.onBeforeListAssets!(query, context),
@@ -269,7 +300,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						);
 					}
 
-					return listAssets(adapter, query);
+					return listAssets(adapter, { ...query, tenantId });
 				},
 			);
 
@@ -284,6 +315,10 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						body: ctx.body,
 						headers: ctx.headers,
 					};
+
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
 
 					if (hooks?.onBeforeUpload) {
 						await runHookWithShim(
@@ -356,7 +391,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						}
 					}
 
-					const asset = await createAsset(adapter, ctx.body);
+					const asset = await createAsset(adapter, { ...ctx.body, tenantId });
 
 					if (hooks?.onAfterUpload) {
 						await hooks.onAfterUpload(asset, context);
@@ -466,6 +501,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					method: "GET",
 					query: z.object({
 						parentId: z.string().optional(),
+						tenantId: z.string().optional(),
 					}),
 				},
 				async (ctx) => {
@@ -475,6 +511,10 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						headers: ctx.headers,
 					};
 
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
+
 					if (hooks?.onBeforeListFolders) {
 						await runHookWithShim(
 							() => hooks.onBeforeListFolders!(filter, context),
@@ -483,7 +523,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						);
 					}
 
-					return listFolders(adapter, filter);
+					return listFolders(adapter, { ...filter, tenantId });
 				},
 			);
 
@@ -499,6 +539,10 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						headers: ctx.headers,
 					};
 
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
+
 					if (hooks?.onBeforeCreateFolder) {
 						await runHookWithShim(
 							() => hooks.onBeforeCreateFolder!(ctx.body, context),
@@ -507,7 +551,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						);
 					}
 
-					return createFolder(adapter, ctx.body);
+					return createFolder(adapter, { ...ctx.body, tenantId });
 				},
 			);
 
@@ -625,6 +669,10 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 
 					const context: MediaApiContext = { headers: ctx.headers };
 
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
+
 					if (hooks?.onBeforeUpload) {
 						await runHookWithShim(
 							() =>
@@ -680,6 +728,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 							size: file.size,
 							url,
 							folderId,
+							tenantId,
 						});
 					} catch (err) {
 						try {
@@ -720,6 +769,13 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						body: ctx.body,
 						headers: ctx.headers,
 					};
+
+					// Resolve tenant for hook side-effects (e.g. auth checks). The token
+					// response does not embed tenantId — the follow-up POST /media/assets
+					// call tags the asset automatically via resolveTenantId.
+					if (resolveTenantId) {
+						await resolveTenantId(context);
+					}
 
 					if (hooks?.onBeforeUpload) {
 						await runHookWithShim(

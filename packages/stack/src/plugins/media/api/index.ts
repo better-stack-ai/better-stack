@@ -5,6 +5,7 @@ export {
 	getAssetById,
 	listFolders,
 	getFolderById,
+	getFolderByName,
 	type AssetListParams,
 	type AssetListResult,
 	type FolderListParams,

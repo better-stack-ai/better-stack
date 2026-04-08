@@ -7,6 +7,7 @@ export type Asset = {
 	url: string;
 	folderId?: string;
 	alt?: string;
+	tenantId?: string | null;
 	createdAt: Date;
 };
 
@@ -14,6 +15,7 @@ export type Folder = {
 	id: string;
 	name: string;
 	parentId?: string;
+	tenantId?: string | null;
 	createdAt: Date;
 };
 
