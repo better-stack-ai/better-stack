@@ -1,0 +1,53 @@
+"use client"
+
+import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
+import { StackProvider } from "@btst/stack/context"
+import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
+import { QueryClientProvider } from "@tanstack/react-query"
+import { getOrCreateQueryClient } from "@/lib/query-client"
+
+const getBaseURL = () =>
+	typeof window !== "undefined"
+		? window.location.origin
+		: process.env.NEXT_PUBLIC_SITE_URL || process.env.BASE_URL || "http://localhost:3000"
+
+type PluginOverrides = {
+	"ai-chat": AiChatPluginOverrides
+}
+
+/**
+ * Public Chat Page — AI chat in public mode (no login required).
+ * Renders a full-screen chat interface using the ai-chat plugin.
+ */
+export default function PublicChatPage() {
+	const queryClient = getOrCreateQueryClient()
+	const baseURL = getBaseURL()
+
+	return (
+		<QueryClientProvider client={queryClient}>
+			<StackProvider<PluginOverrides>
+				basePath=""
+				overrides={
+				{
+					"ai-chat": {
+						mode: "public",
+						apiBaseURL: baseURL,
+						apiBasePath: "/api/data",
+						navigate: () => {},
+					},
+				}
+				}
+			>
+				<div className="min-h-screen bg-background">
+					<main className="h-screen">
+						<ChatLayout
+							apiBaseURL={baseURL}
+							apiBasePath="/api/data"
+							showSidebar={false}
+						/>
+					</main>
+				</div>
+			</StackProvider>
+		</QueryClientProvider>
+	)
+}

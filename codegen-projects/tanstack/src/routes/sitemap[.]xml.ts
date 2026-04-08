@@ -1,0 +1,23 @@
+import { createFileRoute } from "@tanstack/react-router"
+import { QueryClient } from "@tanstack/react-query"
+import { getStackClient } from "@/lib/stack-client"
+import { sitemapEntryToXmlString } from "@btst/stack/client"
+
+export const Route = createFileRoute("/sitemap.xml")({
+	server: {
+		handlers: {
+			GET: async () => {
+				const queryClient = new QueryClient()
+				const lib = getStackClient(queryClient)
+				const entries = await lib.generateSitemap()
+				const xml = sitemapEntryToXmlString(entries)
+				return new Response(xml, {
+					headers: {
+						"Content-Type": "application/xml; charset=utf-8",
+						"Cache-Control": "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400",
+					},
+				})
+			},
+		},
+	},
+})

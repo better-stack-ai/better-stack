@@ -1,0 +1,83 @@
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router"
+import { useState } from "react"
+import { QueryClientProvider } from "@tanstack/react-query"
+import { StackProvider } from "@btst/stack/context"
+import {
+	PageRenderer,
+	defaultComponentRegistry,
+} from "@btst/stack/plugins/ui-builder/client"
+import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client"
+import { getOrCreateQueryClient } from "@/lib/query-client"
+
+export const Route = createFileRoute("/preview/$slug")({
+	component: PreviewPage,
+})
+
+const getBaseURL = () =>
+	typeof window !== "undefined"
+		? window.location.origin
+		: process.env.VITE_PUBLIC_SITE_URL || process.env.BASE_URL || "http://localhost:3000"
+
+type PluginOverrides = {
+	"ui-builder": UIBuilderPluginOverrides
+}
+
+/**
+ * Renders a published UI Builder page by slug.
+ * Access at: /preview/<page-slug>
+ */
+function PreviewPage() {
+	const { slug } = Route.useParams()
+	const navigate = useNavigate()
+	const [queryClient] = useState(() => getOrCreateQueryClient())
+	const baseURL = getBaseURL()
+
+	return (
+		<QueryClientProvider client={queryClient}>
+			<StackProvider<PluginOverrides>
+				basePath="/preview"
+				overrides={
+				{
+					"ui-builder": {
+						apiBaseURL: baseURL,
+						apiBasePath: "/api/data",
+						componentRegistry: defaultComponentRegistry,
+						navigate: (path) => navigate({ to: path }),
+						refresh: () => window.location.reload(),
+						Link: ({ href, to, ...props }) => (
+							<Link to={href || to || "#"} {...props} />
+						),
+					},
+				}
+				}
+			>
+				<div className="min-h-screen">
+					<PageRenderer
+						slug={slug}
+						componentRegistry={defaultComponentRegistry}
+						className="w-full"
+						NotFoundComponent={() => (
+							<div className="flex flex-col items-center justify-center min-h-[400px] text-center p-8">
+								<h1 className="text-2xl font-bold mb-2">Page Not Found</h1>
+								<p className="text-muted-foreground mb-4">
+									The page &ldquo;{slug}&rdquo; does not exist.
+								</p>
+								<Link to="/pages/ui-builder" className="text-primary hover:underline">
+									Go to UI Builder
+								</Link>
+							</div>
+						)}
+						ErrorComponent={({ error }) => (
+							<div className="flex flex-col items-center justify-center min-h-[400px] text-center p-8">
+								<h1 className="text-2xl font-bold text-destructive mb-2">Error</h1>
+								<p className="text-muted-foreground">
+									{error instanceof Error ? error.message : String(error)}
+								</p>
+							</div>
+						)}
+					/>
+				</div>
+			</StackProvider>
+		</QueryClientProvider>
+	)
+}
