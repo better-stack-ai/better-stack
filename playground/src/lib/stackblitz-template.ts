@@ -583,6 +583,9 @@ export default defineConfig({
   },
   define: {
     "import.meta.env.VITE_BASE_URL": JSON.stringify("http://localhost:5173"),
+    // Expose the base URL to SSR code (process.env.BASE_URL is checked by
+    // the generated stack-client.tsx getBaseURL() on the server side).
+    "process.env.BASE_URL": JSON.stringify("http://localhost:5173"),
     // No OPENAI_API_KEY in WebContainers — banner will prompt users to add it.
     "import.meta.env.VITE_HAS_OPENAI_KEY": JSON.stringify(""),
   },
@@ -692,15 +695,15 @@ export function ErrorBoundary({ error }: { error: unknown }) {
 			content: (() => {
 				const seedRouteEntries = seedFiles
 					.map((f) => {
-						// e.g. "app/routes/api/seed/blog.ts" → "routes/api/seed/blog.ts"
+						// React Router seed files use flat dot notation:
+						// "app/routes/api.seed-blog.ts" → route file "routes/api.seed-blog.ts"
 						const routeFile = f.path.replace(/^app\//, "");
-						// e.g. "api/seed-blog" from "routes/api/seed/blog.ts"
-						const pluginKey = routeFile.replace(
-							/^routes\/api\/seed\/(.+)\.ts$/,
-							"$1",
-						);
+						const m = routeFile.match(/routes\/api\.seed-(.+)\.ts$/);
+						if (!m) return null;
+						const pluginKey = m[1];
 						return `  route("api/seed-${pluginKey}", "${routeFile}"),`;
 					})
+					.filter(Boolean)
 					.join("\n");
 				return `import { type RouteConfig, index, layout, route } from "@react-router/dev/routes"
 

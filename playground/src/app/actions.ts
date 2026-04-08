@@ -1,21 +1,18 @@
 "use server";
 
-import {
-	buildScaffoldPlan,
-	buildSeedRouteFiles,
-	PLUGIN_ROUTES,
-} from "@btst/codegen/lib";
+import { getEffectivePlugins } from "@/lib/plugin-selection";
 import type {
 	PluginKey,
 	FileWritePlanItem,
 	Framework,
+	SeedRouteFile,
 } from "@btst/codegen/lib";
-import { getEffectivePlugins } from "@/lib/plugin-selection";
 import {
 	buildNextjsInstrumentationFile,
-	buildViteConfigSeedPlugin,
+	buildSeedRouteFiles,
 	seedApiPath,
-	type SeedRouteFile,
+	buildScaffoldPlan,
+	PLUGIN_ROUTES,
 } from "@btst/codegen/lib";
 
 export interface GenerateResult {
@@ -63,14 +60,15 @@ export async function generateProject(
 	);
 
 	// Per-framework seed strategy:
-	//  • Next.js       → instrumentation.ts (awaited before first request)
-	//  • React Router  → Vite configureServer plugin (ssrLoadModule loads in the
-	//                    same "ssr" environment as request handlers — shared state)
+	//  • Next.js        → instrumentation.ts (awaited before first request)
+	//  • React Router   → seed API routes + Vite configureServer plugin that calls
+	//                     them via HTTP. ssrLoadModule with the ~/ alias is broken
+	//                     in Vite 7 + React Router WebContainers environment.
 	//  • TanStack Start → seed API routes + Vite configureServer plugin that calls
-	//                    them via HTTP. ssrLoadModule breaks in Vite 7 + Nitro, and
-	//                    Nitro server plugins run in an isolated context. HTTP calls
-	//                    to the seed routes go through Nitro's request pipeline,
-	//                    which IS the same module context as other API routes.
+	//                     them via HTTP. ssrLoadModule breaks in Vite 7 + Nitro, and
+	//                     Nitro server plugins run in an isolated context. HTTP calls
+	//                     to the seed routes go through the request pipeline, which
+	//                     IS the same module context as other API routes.
 	let seedRouteFiles: SeedRouteFile[] = [];
 	let seedRunnerScript: string | null = null;
 	let seedPluginCode: string | null = null;
@@ -125,10 +123,47 @@ export async function generateProject(
   },
 }`;
 			}
-		} else {
-			// React Router: inject a Vite configureServer plugin that seeds via
-			// ssrLoadModule once the HTTP server starts listening.
-			seedPluginCode = buildViteConfigSeedPlugin(effectiveSeeded, alias);
+		} else if (framework === "react-router") {
+			// Same HTTP-based approach as TanStack: generate seed API routes and
+			// call them via HTTP once the server starts. ssrLoadModule with the ~/
+			// alias is broken in Vite 7 + React Router WebContainers environment.
+			seedRouteFiles = buildSeedRouteFiles(effectiveSeeded, framework);
+			if (seedRouteFiles.length > 0) {
+				const seedPaths = seedRouteFiles
+					.map((f) => {
+						const m = f.path.match(/api\.seed-([^.]+)\.ts$/);
+						return m ? `"/api/seed-${m[1]}"` : null;
+					})
+					.filter(Boolean)
+					.join(", ");
+				seedPluginCode = `{
+  name: "btst-seed",
+  configureServer(server) {
+    const SEEDS = [${seedPaths}]
+    const BASE = "http://localhost:${port}"
+    async function trySeed(path) {
+      for (let i = 0; i < 60; i++) {
+        try {
+          const res = await fetch(BASE + path)
+          if (res.ok) { const d = await res.json(); console.log("[seed]", path, d); return }
+        } catch {}
+        await new Promise(r => setTimeout(r, 1000))
+      }
+      console.error("[seed] timed out:", path)
+    }
+    ;(async () => {
+      await new Promise(resolve => {
+        if (server.httpServer?.listening) resolve(undefined)
+        else server.httpServer?.once("listening", () => resolve(undefined))
+      })
+      try {
+        for (const path of SEEDS) { await trySeed(path) }
+        console.log("[seed] Seeding complete")
+      } catch (err) { console.error("[seed] Seeding failed:", err) }
+    })()
+  },
+}`;
+			}
 		}
 	}
 

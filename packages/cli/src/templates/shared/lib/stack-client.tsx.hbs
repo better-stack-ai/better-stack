@@ -24,13 +24,12 @@ function getBaseURL() {
 		return window.location.origin
 	}
 
-	if (typeof process !== "undefined") {
-		const env = process.env
-		if (env.BTST_SITE_URL) return env.BTST_SITE_URL
-		if (env.{{publicSiteURLVar}}) return env.{{publicSiteURLVar}}
-		if (env.BASE_URL) return env.BASE_URL
-		if (env.VERCEL_URL) return `https://${env.VERCEL_URL}`
-	}
+	// Use literal process.env.XXX so bundlers (Vite define, Next.js, etc.)
+	// can statically replace these at build/transform time.
+	if (process.env.BTST_SITE_URL) return process.env.BTST_SITE_URL
+	if (process.env.{{publicSiteURLVar}}) return process.env.{{publicSiteURLVar}}
+	if (process.env.BASE_URL) return process.env.BASE_URL
+	if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
 
 	return "http://localhost:3000"
 }
