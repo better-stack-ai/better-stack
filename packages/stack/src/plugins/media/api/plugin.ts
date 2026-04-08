@@ -572,6 +572,16 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						);
 					}
 
+					if (ctx.body.parentId) {
+						const folder = await getFolderById(adapter, ctx.body.parentId);
+						if (!folder) {
+							throw ctx.error(404, { message: "Folder not found" });
+						}
+						if (tenantId !== undefined && folder.tenantId !== tenantId) {
+							throw ctx.error(404, { message: "Folder not found" });
+						}
+					}
+
 					return createFolder(adapter, { ...ctx.body, tenantId });
 				},
 			);
