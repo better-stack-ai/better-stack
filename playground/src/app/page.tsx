@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { PlaygroundClient } from "@/components/playground-client";
 import { ModeToggle } from "@/components/mode-toggle";
 import { PLUGINS, PLUGIN_ROUTES } from "@btst/codegen/meta";
@@ -44,7 +45,9 @@ export default function PlaygroundPage() {
 
 			{/* Main */}
 			<main className="flex-1 max-w-screen-2xl mx-auto w-full px-4 py-6">
-				<PlaygroundClient plugins={PLUGINS} pluginRoutes={PLUGIN_ROUTES} />
+				<Suspense>
+					<PlaygroundClient plugins={PLUGINS} pluginRoutes={PLUGIN_ROUTES} />
+				</Suspense>
 			</main>
 
 			{/* Footer */}
