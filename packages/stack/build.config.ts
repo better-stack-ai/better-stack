@@ -117,6 +117,7 @@ export default defineBuildConfig({
 		"./src/plugins/comments/query-keys.ts",
 		// media plugin entries
 		"./src/plugins/media/api/index.ts",
+		"./src/plugins/media/api/adapters/local.ts",
 		"./src/plugins/media/api/adapters/s3.ts",
 		"./src/plugins/media/api/adapters/vercel-blob.ts",
 		"./src/plugins/media/client/index.ts",

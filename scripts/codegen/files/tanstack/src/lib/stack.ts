@@ -11,10 +11,8 @@ import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
 import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api";
 import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api";
-import {
-	mediaBackendPlugin,
-	localAdapter,
-} from "@btst/stack/plugins/media/api";
+import { mediaBackendPlugin } from "@btst/stack/plugins/media/api";
+import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local";
 import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder";
 import { openai } from "@ai-sdk/openai";
 import { tool } from "ai";

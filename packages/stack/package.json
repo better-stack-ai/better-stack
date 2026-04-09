@@ -1,6 +1,6 @@
 {
   "name": "@btst/stack",
-  "version": "2.11.0",
+  "version": "2.11.1",
   "description": "A composable, plugin-based library for building full-stack applications.",
   "repository": {
     "type": "git",
@@ -424,6 +424,16 @@
         "default": "./dist/plugins/media/api/index.cjs"
       }
     },
+    "./plugins/media/api/adapters/local": {
+      "import": {
+        "types": "./dist/plugins/media/api/adapters/local.d.ts",
+        "default": "./dist/plugins/media/api/adapters/local.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/media/api/adapters/local.d.cts",
+        "default": "./dist/plugins/media/api/adapters/local.cjs"
+      }
+    },
     "./plugins/media/api/adapters/s3": {
       "import": {
         "types": "./dist/plugins/media/api/adapters/s3.d.ts",
@@ -683,6 +693,9 @@
       ],
       "plugins/media/api": [
         "./dist/plugins/media/api/index.d.ts"
+      ],
+      "plugins/media/api/adapters/local": [
+        "./dist/plugins/media/api/adapters/local.d.ts"
       ],
       "plugins/media/api/adapters/s3": [
         "./dist/plugins/media/api/adapters/s3.d.ts"

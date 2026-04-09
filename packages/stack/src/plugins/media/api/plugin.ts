@@ -240,6 +240,10 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 			listAssets: (params?: Parameters<typeof listAssets>[1]) =>
 				listAssets(adapter, params),
 			getAssetById: (id: string) => getAssetById(adapter, id),
+			createAsset: (input: Parameters<typeof createAsset>[1]) =>
+				createAsset(adapter, input),
+			updateAsset: (id: string, input: Parameters<typeof updateAsset>[2]) =>
+				updateAsset(adapter, id, input),
 			listFolders: (params?: Parameters<typeof listFolders>[1]) =>
 				listFolders(adapter, params),
 			getFolderById: (id: string) => getFolderById(adapter, id),
@@ -248,6 +252,8 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 				parentId?: string | null,
 				tenantId?: string,
 			) => getFolderByName(adapter, name, parentId, tenantId),
+			createFolder: (input: Parameters<typeof createFolder>[1]) =>
+				createFolder(adapter, input),
 		}),
 
 		routes: (adapter: Adapter) => {

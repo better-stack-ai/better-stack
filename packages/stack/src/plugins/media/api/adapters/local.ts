@@ -66,7 +66,16 @@ export function localAdapter(
 			if (!encodedFilename) return;
 			const filename = decodeURIComponent(encodedFilename);
 
-			const filePath = path.join(uploadDir, filename);
+			const resolvedUploadDir = path.resolve(uploadDir);
+			const filePath = path.join(resolvedUploadDir, filename);
+
+			// Guard against path traversal: reject any path that escapes uploadDir.
+			if (!filePath.startsWith(resolvedUploadDir + path.sep)) {
+				throw new Error(
+					`Refusing to delete file outside upload directory: ${filePath}`,
+				);
+			}
+
 			try {
 				await fs.unlink(filePath);
 			} catch (err: unknown) {
