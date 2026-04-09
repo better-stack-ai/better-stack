@@ -26,11 +26,6 @@ export { serializeAsset, serializeFolder } from "./serializers";
 
 export { MEDIA_QUERY_KEYS, assetListDiscriminator } from "./query-key-defs";
 
-export {
-	localAdapter,
-	type LocalStorageAdapterOptions,
-} from "./adapters/local";
-
 export type {
 	StorageAdapter,
 	DirectStorageAdapter,
