@@ -331,7 +331,14 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							);
 						}
 
-						const { tags, slug: rawSlug, ...postData } = ctx.body;
+						// Destructure and discard createdAt/updatedAt — timestamps are always server-generated
+						const {
+							tags,
+							slug: rawSlug,
+							createdAt: _ca,
+							updatedAt: _ua,
+							...postData
+						} = ctx.body;
 
 						// Always slugify to ensure URL-safe slug, whether provided or generated from title
 						const slug = slugify(rawSlug || postData.title);
@@ -348,6 +355,8 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							...postData,
 							slug,
 							tags: tags ?? [],
+							createdAt: new Date(),
+							updatedAt: new Date(),
 						});
 
 						if (hooks?.onPostCreated) {
@@ -386,7 +395,14 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							);
 						}
 
-						const { tags, slug: rawSlug, ...restPostData } = ctx.body;
+						// Destructure and discard createdAt/updatedAt — timestamps are always server-generated
+						const {
+							tags,
+							slug: rawSlug,
+							createdAt: _ca,
+							updatedAt: _ua,
+							...restPostData
+						} = ctx.body;
 
 						// Sanitize slug if provided to ensure it's URL-safe
 						const slugified = rawSlug ? slugify(rawSlug) : undefined;
