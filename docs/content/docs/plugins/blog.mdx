@@ -585,18 +585,18 @@ You can import the hooks from `"@btst/stack/plugins/blog/client/hooks"` to use i
 
 ## Server-side Data Access
 
-The blog plugin exposes standalone getter functions for server-side and SSG use cases. These bypass the HTTP layer entirely and query the database directly.
+The blog plugin exposes standalone getter and mutation functions for server-side use cases. These bypass the HTTP layer entirely and query the database directly — no authorization hooks are called, so the caller is responsible for any access-control checks.
 
 ### Two patterns
 
 **Pattern 1 — via `stack().api` (recommended for runtime server code)**
 
-After calling `stack()`, the returned object includes a fully-typed `api` namespace. Getters are pre-bound to the adapter:
+After calling `stack()`, the returned object includes a fully-typed `api` namespace. Getters and mutations are pre-bound to the adapter:
 
 ```ts title="app/lib/stack.ts"
 import { myStack } from "./stack"; // your stack() instance
 
-// In a Server Component, generateStaticParams, etc.
+// Getters — read-only
 const result = await myStack.api.blog.getAllPosts({ published: true });
 // result.items  — Post[]
 // result.total  — total count before pagination
@@ -605,21 +605,44 @@ const result = await myStack.api.blog.getAllPosts({ published: true });
 
 const post = await myStack.api.blog.getPostBySlug("hello-world");
 const tags = await myStack.api.blog.getAllTags();
+
+// Mutations — write operations (no auth hooks are called)
+const newPost = await myStack.api.blog.createPost({
+  title: "Hello World",
+  slug: "hello-world",
+  content: "...",
+  excerpt: "...",
+});
+await myStack.api.blog.updatePost(newPost.id, { published: true });
+await myStack.api.blog.deletePost(newPost.id);
 ```
 
 **Pattern 2 — direct import (SSG, build-time, or custom adapter)**
 
-Import getters directly and pass any `Adapter`:
+Import getters and mutations directly and pass any `Adapter`:
 
 ```ts
-import { getAllPosts, getPostBySlug, getAllTags } from "@btst/stack/plugins/blog/api";
+import { getAllPosts, createPost, updatePost, deletePost } from "@btst/stack/plugins/blog/api";
 
 // e.g. in Next.js generateStaticParams
 export async function generateStaticParams() {
   const { items } = await getAllPosts(myAdapter, { published: true });
   return items.map((p) => ({ slug: p.slug }));
 }
+
+// e.g. seeding or scripting
+const post = await createPost(myAdapter, {
+  title: "Seeded Post",
+  slug: "seeded-post",
+  content: "Content here",
+  excerpt: "Short excerpt",
+});
+await updatePost(myAdapter, post.id, { published: true });
 ```
+
+<Callout type="warn">
+**No authorization hooks are called** when using `stack().api.*` or direct imports. These functions hit the database directly. Always perform your own access-control checks before calling them from user-facing code.
+</Callout>
 
 ### Available getters
 
@@ -636,6 +659,22 @@ export async function generateStaticParams() {
 ### `PostListResult`
 
 <AutoTypeTable path="../packages/stack/src/plugins/blog/api/getters.ts" name="PostListResult" />
+
+### Available mutations
+
+| Function | Returns | Description |
+|---|---|---|
+| `createPost(adapter, input)` | `Post` | Create a new post with optional tag associations |
+| `updatePost(adapter, id, input)` | `Post \| null` | Update a post and reconcile its tags; `null` if not found |
+| `deletePost(adapter, id)` | `void` | Delete a post by ID |
+
+### `CreatePostInput`
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/mutations.ts" name="CreatePostInput" />
+
+### `UpdatePostInput`
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/mutations.ts" name="UpdatePostInput" />
 
 ## Static Site Generation (SSG)
 
