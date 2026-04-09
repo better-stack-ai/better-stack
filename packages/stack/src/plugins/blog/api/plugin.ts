@@ -7,6 +7,13 @@ import type { Post, PostWithPostTag, Tag } from "../types";
 import { slugify } from "../utils";
 import { createPostSchema, updatePostSchema } from "../schemas";
 import { getAllPosts, getPostBySlug, getAllTags } from "./getters";
+import {
+	createPost as createPostMutation,
+	updatePost as updatePostMutation,
+	deletePost as deletePostMutation,
+	type CreatePostInput,
+	type UpdatePostInput,
+} from "./mutations";
 import { BLOG_QUERY_KEYS } from "./query-key-defs";
 import { serializePost, serializeTag } from "./serializers";
 import type { QueryClient } from "@tanstack/react-query";
@@ -260,85 +267,15 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 			getPostBySlug: (slug: string) => getPostBySlug(adapter, slug),
 			getAllTags: () => getAllTags(adapter),
 			prefetchForRoute: createBlogPrefetchForRoute(adapter),
+			// Mutations
+			createPost: (input: CreatePostInput) =>
+				createPostMutation(adapter, input),
+			updatePost: (id: string, input: UpdatePostInput) =>
+				updatePostMutation(adapter, id, input),
+			deletePost: (id: string) => deletePostMutation(adapter, id),
 		}),
 
 		routes: (adapter: Adapter) => {
-			const findOrCreateTags = async (
-				tagInputs: Array<
-					{ name: string } | { id: string; name: string; slug: string }
-				>,
-			): Promise<Tag[]> => {
-				if (tagInputs.length === 0) return [];
-
-				const normalizeTagName = (name: string): string => {
-					return name.trim();
-				};
-
-				const tagsWithIds: Tag[] = [];
-				const tagsToFindOrCreate: Array<{ name: string }> = [];
-
-				for (const tagInput of tagInputs) {
-					if ("id" in tagInput && tagInput.id) {
-						tagsWithIds.push({
-							id: tagInput.id,
-							name: normalizeTagName(tagInput.name),
-							slug: tagInput.slug,
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						} as Tag);
-					} else {
-						tagsToFindOrCreate.push({ name: normalizeTagName(tagInput.name) });
-					}
-				}
-
-				if (tagsToFindOrCreate.length === 0) {
-					return tagsWithIds;
-				}
-
-				const allTags = await adapter.findMany<Tag>({
-					model: "tag",
-				});
-				const tagMapBySlug = new Map<string, Tag>();
-				for (const tag of allTags) {
-					tagMapBySlug.set(tag.slug, tag);
-				}
-
-				const tagSlugs = tagsToFindOrCreate.map((tag) => slugify(tag.name));
-				const foundTags: Tag[] = [];
-
-				for (const slug of tagSlugs) {
-					const tag = tagMapBySlug.get(slug);
-					if (tag) {
-						foundTags.push(tag);
-					}
-				}
-
-				const existingSlugs = new Set([
-					...tagsWithIds.map((tag) => tag.slug),
-					...foundTags.map((tag) => tag.slug),
-				]);
-				const tagsToCreate = tagsToFindOrCreate.filter(
-					(tag) => !existingSlugs.has(slugify(tag.name)),
-				);
-
-				const createdTags: Tag[] = [];
-				for (const tag of tagsToCreate) {
-					const normalizedName = normalizeTagName(tag.name);
-					const newTag = await adapter.create<Tag>({
-						model: "tag",
-						data: {
-							name: normalizedName,
-							slug: slugify(normalizedName),
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						},
-					});
-					createdTags.push(newTag);
-				}
-
-				return [...tagsWithIds, ...foundTags, ...createdTags];
-			};
-
 			const listPosts = createEndpoint(
 				"/posts",
 				{
@@ -394,11 +331,17 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							);
 						}
 
-						const { tags, ...postData } = ctx.body;
-						const tagNames = tags || [];
+						// Destructure and discard createdAt/updatedAt — timestamps are always server-generated
+						const {
+							tags,
+							slug: rawSlug,
+							createdAt: _ca,
+							updatedAt: _ua,
+							...postData
+						} = ctx.body;
 
 						// Always slugify to ensure URL-safe slug, whether provided or generated from title
-						const slug = slugify(postData.slug || postData.title);
+						const slug = slugify(rawSlug || postData.title);
 
 						// Validate that slugification produced a non-empty result
 						if (!slug) {
@@ -408,36 +351,13 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							});
 						}
 
-						const newPost = await adapter.create<Post>({
-							model: "post",
-							data: {
-								...postData,
-								slug,
-								tags: [],
-								createdAt: new Date(),
-								updatedAt: new Date(),
-							},
+						const newPost = await createPostMutation(adapter, {
+							...postData,
+							slug,
+							tags: tags ?? [],
+							createdAt: new Date(),
+							updatedAt: new Date(),
 						});
-
-						if (tagNames.length > 0) {
-							const createdTags = await findOrCreateTags(tagNames);
-
-							await adapter.transaction(async (tx) => {
-								for (const tag of createdTags) {
-									await tx.create<{ postId: string; tagId: string }>({
-										model: "postTag",
-										data: {
-											postId: newPost.id,
-											tagId: tag.id,
-										},
-									});
-								}
-							});
-
-							newPost.tags = createdTags.map((tag) => ({ ...tag }));
-						} else {
-							newPost.tags = [];
-						}
 
 						if (hooks?.onPostCreated) {
 							await hooks.onPostCreated(newPost, context);
@@ -475,8 +395,14 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							);
 						}
 
-						const { tags, slug: rawSlug, ...restPostData } = ctx.body;
-						const tagNames = tags || [];
+						// Destructure and discard createdAt/updatedAt — timestamps are always server-generated
+						const {
+							tags,
+							slug: rawSlug,
+							createdAt: _ca,
+							updatedAt: _ua,
+							...restPostData
+						} = ctx.body;
 
 						// Sanitize slug if provided to ensure it's URL-safe
 						const slugified = rawSlug ? slugify(rawSlug) : undefined;
@@ -489,79 +415,15 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							});
 						}
 
-						const postData = {
+						const updated = await updatePostMutation(adapter, ctx.params.id, {
 							...restPostData,
 							...(slugified ? { slug: slugified } : {}),
-						};
-
-						const updated = await adapter.transaction(async (tx) => {
-							const existingPostTags = await tx.findMany<{
-								postId: string;
-								tagId: string;
-							}>({
-								model: "postTag",
-								where: [
-									{
-										field: "postId",
-										value: ctx.params.id,
-										operator: "eq" as const,
-									},
-								],
-							});
-
-							const updatedPost = await tx.update<Post>({
-								model: "post",
-								where: [{ field: "id", value: ctx.params.id }],
-								update: {
-									...postData,
-									updatedAt: new Date(),
-								},
-							});
-
-							if (!updatedPost) {
-								throw ctx.error(404, {
-									message: "Post not found",
-								});
-							}
-
-							for (const postTag of existingPostTags) {
-								await tx.delete<{ postId: string; tagId: string }>({
-									model: "postTag",
-									where: [
-										{
-											field: "postId",
-											value: postTag.postId,
-											operator: "eq" as const,
-										},
-										{
-											field: "tagId",
-											value: postTag.tagId,
-											operator: "eq" as const,
-										},
-									],
-								});
-							}
-
-							if (tagNames.length > 0) {
-								const createdTags = await findOrCreateTags(tagNames);
-
-								for (const tag of createdTags) {
-									await tx.create<{ postId: string; tagId: string }>({
-										model: "postTag",
-										data: {
-											postId: ctx.params.id,
-											tagId: tag.id,
-										},
-									});
-								}
-
-								updatedPost.tags = createdTags.map((tag) => ({ ...tag }));
-							} else {
-								updatedPost.tags = [];
-							}
-
-							return updatedPost;
+							tags: tags ?? [],
 						});
+
+						if (!updated) {
+							throw ctx.error(404, { message: "Post not found" });
+						}
 
 						if (hooks?.onPostUpdated) {
 							await hooks.onPostUpdated(updated, context);
@@ -597,10 +459,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 							);
 						}
 
-						await adapter.delete<Post>({
-							model: "post",
-							where: [{ field: "id", value: ctx.params.id }],
-						});
+						await deletePostMutation(adapter, ctx.params.id);
 
 						// Lifecycle hook
 						if (hooks?.onPostDeleted) {
