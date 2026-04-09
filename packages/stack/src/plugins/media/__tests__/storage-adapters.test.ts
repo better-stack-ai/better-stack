@@ -145,6 +145,17 @@ describe("localAdapter", () => {
 		const adapter = localAdapter();
 		expect(adapter.type).toBe("local");
 	});
+
+	it("throws when a URL contains a path traversal sequence", async () => {
+		const uploadDir = await makeTmpDir();
+		const adapter = localAdapter({ uploadDir, publicPath: "/uploads" });
+
+		// Simulate a tampered URL that would resolve outside uploadDir after decoding.
+		const maliciousUrl = "/uploads/..%2F..%2Fetc%2Fpasswd";
+		await expect(adapter.delete(maliciousUrl)).rejects.toThrow(
+			"Refusing to delete file outside upload directory",
+		);
+	});
 });
 
 // ── S3 adapter ────────────────────────────────────────────────────────────────
