@@ -185,17 +185,8 @@ export async function updatePost(
 	input: UpdatePostInput,
 ): Promise<Post | null> {
 	const { tags: tagInputs, ...postData } = input;
-	const tagList = tagInputs ?? [];
 
 	return adapter.transaction(async (tx) => {
-		const existingPostTags = await tx.findMany<{
-			postId: string;
-			tagId: string;
-		}>({
-			model: "postTag",
-			where: [{ field: "postId", value: id, operator: "eq" as const }],
-		});
-
 		const updatedPost = await tx.update<Post>({
 			model: "post",
 			where: [{ field: "id", value: id }],
@@ -207,40 +198,70 @@ export async function updatePost(
 
 		if (!updatedPost) return null;
 
-		for (const postTag of existingPostTags) {
-			await tx.delete<{ postId: string; tagId: string }>({
+		if (tagInputs !== undefined) {
+			const existingPostTags = await tx.findMany<{
+				postId: string;
+				tagId: string;
+			}>({
 				model: "postTag",
-				where: [
-					{
-						field: "postId",
-						value: postTag.postId,
-						operator: "eq" as const,
-					},
-					{
-						field: "tagId",
-						value: postTag.tagId,
-						operator: "eq" as const,
-					},
-				],
+				where: [{ field: "postId", value: id, operator: "eq" as const }],
 			});
-		}
 
-		if (tagList.length > 0) {
-			const resolvedTags = await findOrCreateTags(adapter, tagList);
-
-			for (const tag of resolvedTags) {
-				await tx.create<{ postId: string; tagId: string }>({
+			for (const postTag of existingPostTags) {
+				await tx.delete<{ postId: string; tagId: string }>({
 					model: "postTag",
-					data: {
-						postId: id,
-						tagId: tag.id,
-					},
+					where: [
+						{
+							field: "postId",
+							value: postTag.postId,
+							operator: "eq" as const,
+						},
+						{
+							field: "tagId",
+							value: postTag.tagId,
+							operator: "eq" as const,
+						},
+					],
 				});
 			}
 
-			updatedPost.tags = resolvedTags.map((tag) => ({ ...tag }));
+			if (tagInputs.length > 0) {
+				const resolvedTags = await findOrCreateTags(adapter, tagInputs);
+
+				for (const tag of resolvedTags) {
+					await tx.create<{ postId: string; tagId: string }>({
+						model: "postTag",
+						data: {
+							postId: id,
+							tagId: tag.id,
+						},
+					});
+				}
+
+				updatedPost.tags = resolvedTags.map((tag) => ({ ...tag }));
+			} else {
+				updatedPost.tags = [];
+			}
 		} else {
-			updatedPost.tags = [];
+			const existingPostTags = await tx.findMany<{
+				postId: string;
+				tagId: string;
+			}>({
+				model: "postTag",
+				where: [{ field: "postId", value: id, operator: "eq" as const }],
+			});
+
+			if (existingPostTags.length > 0) {
+				const tagIds = existingPostTags.map((pt) => pt.tagId);
+				const tags = await tx.findMany<Tag>({
+					model: "tag",
+				});
+				updatedPost.tags = tags
+					.filter((tag) => tagIds.includes(tag.id))
+					.map((tag) => ({ ...tag }));
+			} else {
+				updatedPost.tags = [];
+			}
 		}
 
 		return updatedPost;
