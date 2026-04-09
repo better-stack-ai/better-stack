@@ -226,7 +226,7 @@ export async function updatePost(
 			}
 
 			if (tagInputs.length > 0) {
-				const resolvedTags = await findOrCreateTags(adapter, tagInputs);
+				const resolvedTags = await findOrCreateTags(tx, tagInputs);
 
 				for (const tag of resolvedTags) {
 					await tx.create<{ postId: string; tagId: string }>({
