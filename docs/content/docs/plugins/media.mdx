@@ -36,7 +36,8 @@ Import and register the media backend plugin in your `stack.ts` file:
 
 ```ts title="lib/stack.ts"
 import { stack } from "@btst/stack"
-import { mediaBackendPlugin, localAdapter } from "@btst/stack/plugins/media/api"
+import { mediaBackendPlugin } from "@btst/stack/plugins/media/api"
+import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local"
 
 const { handler, dbSchema } = stack({
   basePath: "/api/data",
@@ -395,7 +396,8 @@ Returning `null` or `undefined` from `resolveTenantId` disables scoping for that
 
 ```ts title="lib/stack.ts"
 import { stack } from "@btst/stack"
-import { mediaBackendPlugin, s3Adapter } from "@btst/stack/plugins/media/api"
+import { mediaBackendPlugin } from "@btst/stack/plugins/media/api"
+import { s3Adapter } from "@btst/stack/plugins/media/api/adapters/s3"
 import { getSession } from "@/lib/auth"
 
 const { handler, dbSchema } = stack({
@@ -464,7 +466,8 @@ Customize backend behavior with optional lifecycle hooks for uploads, listing, f
 **Example usage:**
 
 ```ts
-import { mediaBackendPlugin, localAdapter } from "@btst/stack/plugins/media/api"
+import { mediaBackendPlugin } from "@btst/stack/plugins/media/api"
+import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local"
 
 mediaBackendPlugin({
   storageAdapter: localAdapter(),
