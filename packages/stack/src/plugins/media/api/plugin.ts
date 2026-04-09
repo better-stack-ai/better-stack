@@ -15,6 +15,7 @@ import {
 	getAssetById,
 	listFolders,
 	getFolderById,
+	getFolderByName,
 } from "./getters";
 import {
 	createAsset,
@@ -187,6 +188,26 @@ export interface MediaBackendConfig {
 	 * Optional lifecycle hooks for the media backend plugin.
 	 */
 	hooks?: MediaBackendHooks;
+
+	/**
+	 * Optional function to resolve a tenant ID from the incoming request context.
+	 *
+	 * When provided, all asset and folder list/create operations through the HTTP
+	 * API are automatically scoped to the returned tenant ID:
+	 * - GET /media/assets  →  filters results to the resolved tenant
+	 * - POST /media/assets →  tags the created asset with the resolved tenant
+	 * - POST /media/upload →  tags the uploaded asset with the resolved tenant
+	 * - GET /media/folders →  filters results to the resolved tenant
+	 * - POST /media/folders → tags the created folder with the resolved tenant
+	 *
+	 * When absent, no tenant filtering is applied (existing behaviour).
+	 *
+	 * Returning `null` or `undefined` means "no tenant" for this request —
+	 * the operation proceeds without tenant scoping (useful for super-admin routes).
+	 */
+	resolveTenantId?: (
+		context: MediaApiContext,
+	) => Promise<string | null | undefined> | string | null | undefined;
 }
 
 /**
@@ -222,6 +243,11 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 			listFolders: (params?: Parameters<typeof listFolders>[1]) =>
 				listFolders(adapter, params),
 			getFolderById: (id: string) => getFolderById(adapter, id),
+			getFolderByName: (
+				name: string,
+				parentId?: string | null,
+				tenantId?: string,
+			) => getFolderByName(adapter, name, parentId, tenantId),
 		}),
 
 		routes: (adapter: Adapter) => {
@@ -231,6 +257,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 				allowedMimeTypes,
 				allowedUrlPrefixes,
 				hooks,
+				resolveTenantId,
 			} = config;
 
 			function validateMimeType(mimeType: string, ctx: { error: Function }) {
@@ -261,6 +288,10 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					const { query, headers } = ctx;
 					const context: MediaApiContext = { query, headers };
 
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
+
 					if (hooks?.onBeforeListAssets) {
 						await runHookWithShim(
 							() => hooks.onBeforeListAssets!(query, context),
@@ -269,7 +300,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						);
 					}
 
-					return listAssets(adapter, query);
+					return listAssets(adapter, { ...query, tenantId });
 				},
 			);
 
@@ -284,6 +315,10 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						body: ctx.body,
 						headers: ctx.headers,
 					};
+
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
 
 					if (hooks?.onBeforeUpload) {
 						await runHookWithShim(
@@ -354,9 +389,12 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						if (!folder) {
 							throw ctx.error(404, { message: "Folder not found" });
 						}
+						if (tenantId !== undefined && folder.tenantId !== tenantId) {
+							throw ctx.error(404, { message: "Folder not found" });
+						}
 					}
 
-					const asset = await createAsset(adapter, ctx.body);
+					const asset = await createAsset(adapter, { ...ctx.body, tenantId });
 
 					if (hooks?.onAfterUpload) {
 						await hooks.onAfterUpload(asset, context);
@@ -384,6 +422,14 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						headers: ctx.headers,
 					};
 
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
+
+					if (tenantId !== undefined && existing.tenantId !== tenantId) {
+						throw ctx.error(404, { message: "Asset not found" });
+					}
+
 					if (hooks?.onBeforeUpdateAsset) {
 						await runHookWithShim(
 							() => hooks.onBeforeUpdateAsset!(existing, ctx.body, context),
@@ -395,6 +441,9 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					if (ctx.body.folderId != null) {
 						const folder = await getFolderById(adapter, ctx.body.folderId);
 						if (!folder) {
+							throw ctx.error(404, { message: "Folder not found" });
+						}
+						if (tenantId !== undefined && folder.tenantId !== tenantId) {
 							throw ctx.error(404, { message: "Folder not found" });
 						}
 					}
@@ -419,8 +468,16 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						headers: ctx.headers,
 					};
 
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
+
 					const asset = await getAssetById(adapter, ctx.params.id);
 					if (!asset) {
+						throw ctx.error(404, { message: "Asset not found" });
+					}
+
+					if (tenantId !== undefined && asset.tenantId !== tenantId) {
 						throw ctx.error(404, { message: "Asset not found" });
 					}
 
@@ -475,6 +532,10 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						headers: ctx.headers,
 					};
 
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
+
 					if (hooks?.onBeforeListFolders) {
 						await runHookWithShim(
 							() => hooks.onBeforeListFolders!(filter, context),
@@ -483,7 +544,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						);
 					}
 
-					return listFolders(adapter, filter);
+					return listFolders(adapter, { ...filter, tenantId });
 				},
 			);
 
@@ -499,6 +560,10 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						headers: ctx.headers,
 					};
 
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
+
 					if (hooks?.onBeforeCreateFolder) {
 						await runHookWithShim(
 							() => hooks.onBeforeCreateFolder!(ctx.body, context),
@@ -507,7 +572,17 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						);
 					}
 
-					return createFolder(adapter, ctx.body);
+					if (ctx.body.parentId) {
+						const folder = await getFolderById(adapter, ctx.body.parentId);
+						if (!folder) {
+							throw ctx.error(404, { message: "Folder not found" });
+						}
+						if (tenantId !== undefined && folder.tenantId !== tenantId) {
+							throw ctx.error(404, { message: "Folder not found" });
+						}
+					}
+
+					return createFolder(adapter, { ...ctx.body, tenantId });
 				},
 			);
 
@@ -517,15 +592,23 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					method: "DELETE",
 				},
 				async (ctx) => {
+					const context: MediaApiContext = {
+						params: ctx.params,
+						headers: ctx.headers,
+					};
+
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
+
 					const folder = await getFolderById(adapter, ctx.params.id);
 					if (!folder) {
 						throw ctx.error(404, { message: "Folder not found" });
 					}
 
-					const context: MediaApiContext = {
-						params: ctx.params,
-						headers: ctx.headers,
-					};
+					if (tenantId !== undefined && folder.tenantId !== tenantId) {
+						throw ctx.error(404, { message: "Folder not found" });
+					}
 
 					if (hooks?.onBeforeDeleteFolder) {
 						await runHookWithShim(
@@ -625,6 +708,10 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 
 					const context: MediaApiContext = { headers: ctx.headers };
 
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
+
 					if (hooks?.onBeforeUpload) {
 						await runHookWithShim(
 							() =>
@@ -660,6 +747,9 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						if (!folder) {
 							throw ctx.error(404, { message: "Folder not found" });
 						}
+						if (tenantId !== undefined && folder.tenantId !== tenantId) {
+							throw ctx.error(404, { message: "Folder not found" });
+						}
 					}
 
 					const { url } = await storageAdapter.upload(buffer, {
@@ -680,6 +770,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 							size: file.size,
 							url,
 							folderId,
+							tenantId,
 						});
 					} catch (err) {
 						try {
@@ -721,6 +812,13 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						headers: ctx.headers,
 					};
 
+					// Resolve tenant for auth checks and folder ownership validation.
+					// The token response does not embed tenantId — the follow-up POST /media/assets
+					// call tags the asset automatically via resolveTenantId.
+					const tenantId = resolveTenantId
+						? ((await resolveTenantId(context)) ?? undefined)
+						: undefined;
+
 					if (hooks?.onBeforeUpload) {
 						await runHookWithShim(
 							() =>
@@ -753,6 +851,9 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 								message: "Folder not found",
 							});
 						}
+						if (tenantId !== undefined && folder.tenantId !== tenantId) {
+							throw ctx.error(404, { message: "Folder not found" });
+						}
 						folderId = folder.id;
 					}
 					const filename = sanitizeS3KeySegment(ctx.body.filename);
@@ -781,6 +882,13 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					}
 
 					const context: MediaApiContext = { headers: ctx.headers };
+
+					// Resolve tenant for hook side-effects (e.g. auth checks). The token
+					// response does not embed tenantId — the follow-up POST /media/assets
+					// call tags the asset automatically via resolveTenantId.
+					if (resolveTenantId) {
+						await resolveTenantId(context);
+					}
 
 					if (!ctx.request) {
 						throw ctx.error(400, {

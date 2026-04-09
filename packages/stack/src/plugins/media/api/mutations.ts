@@ -12,6 +12,7 @@ export interface CreateAssetInput {
 	url: string;
 	folderId?: string;
 	alt?: string;
+	tenantId?: string;
 }
 
 /**
@@ -28,6 +29,7 @@ export interface UpdateAssetInput {
 export interface CreateFolderInput {
 	name: string;
 	parentId?: string;
+	tenantId?: string;
 }
 
 /**
@@ -51,6 +53,7 @@ export async function createAsset(
 			url: input.url,
 			folderId: input.folderId,
 			alt: input.alt,
+			tenantId: input.tenantId,
 			createdAt: new Date(),
 		},
 	});
@@ -114,6 +117,7 @@ export async function createFolder(
 		data: {
 			name: input.name,
 			parentId: input.parentId,
+			tenantId: input.tenantId,
 			createdAt: new Date(),
 		},
 	});

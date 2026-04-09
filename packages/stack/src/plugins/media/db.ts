@@ -40,6 +40,10 @@ export const mediaSchema = createDbPlugin("media", {
 				type: "string",
 				required: false,
 			},
+			tenantId: {
+				type: "string",
+				required: false,
+			},
 			createdAt: {
 				type: "date",
 				defaultValue: () => new Date(),
@@ -60,6 +64,10 @@ export const mediaSchema = createDbPlugin("media", {
 					model: "mediaFolder",
 					field: "id",
 				},
+			},
+			tenantId: {
+				type: "string",
+				required: false,
 			},
 			createdAt: {
 				type: "date",

@@ -8,6 +8,7 @@ import {
 	getAssetById,
 	listFolders,
 	getFolderById,
+	getFolderByName,
 } from "../api/getters";
 
 const createTestAdapter = (): Adapter => {
@@ -162,6 +163,30 @@ describe("media getters", () => {
 			expect(photoResult.items[0]!.filename).toBe("holiday-photo.jpg");
 		});
 
+		it("filters assets by tenantId", async () => {
+			await adapter.create({
+				model: "mediaAsset",
+				data: makeAsset({
+					filename: "tenant-a.jpg",
+					url: "https://example.com/a.jpg",
+				}),
+			});
+			const assetB = await adapter.create<{ id: string }>({
+				model: "mediaAsset",
+				data: {
+					...makeAsset({
+						filename: "tenant-b.jpg",
+						url: "https://example.com/b.jpg",
+					}),
+					tenantId: "tenant-b",
+				},
+			});
+
+			const result = await listAssets(adapter, { tenantId: "tenant-b" });
+			expect(result.items).toHaveLength(1);
+			expect(result.items[0]!.id).toBe(assetB.id);
+		});
+
 		it("paginates results with limit and offset", async () => {
 			for (let i = 0; i < 5; i++) {
 				await adapter.create({
@@ -231,6 +256,24 @@ describe("media getters", () => {
 			expect(result[1]!.name).toBe("Zeta");
 		});
 
+		it("filters folders by tenantId", async () => {
+			await adapter.create({
+				model: "mediaFolder",
+				data: makeFolder({ name: "No Tenant" }),
+			});
+			const tenantFolder = await adapter.create<{ id: string }>({
+				model: "mediaFolder",
+				data: {
+					...makeFolder({ name: "Tenant Folder" }),
+					tenantId: "tenant-x",
+				},
+			});
+
+			const result = await listFolders(adapter, { tenantId: "tenant-x" });
+			expect(result).toHaveLength(1);
+			expect(result[0]!.id).toBe(tenantFolder.id);
+		});
+
 		it("filters folders by parentId", async () => {
 			const root = await adapter.create<{ id: string }>({
 				model: "mediaFolder",
@@ -269,6 +312,118 @@ describe("media getters", () => {
 			const result = await getFolderById(adapter, created.id);
 			expect(result).not.toBeNull();
 			expect(result!.name).toBe("Test Folder");
+		});
+	});
+
+	// ── getFolderByName ───────────────────────────────────────────────────────
+
+	describe("getFolderByName", () => {
+		it("returns null when no folder exists", async () => {
+			const result = await getFolderByName(adapter, "nonexistent");
+			expect(result).toBeNull();
+		});
+
+		it("finds a root-level folder by name with no parentId constraint", async () => {
+			await adapter.create({
+				model: "mediaFolder",
+				data: makeFolder({ name: "blog-gen-profile-1" }),
+			});
+
+			const result = await getFolderByName(adapter, "blog-gen-profile-1");
+			expect(result).not.toBeNull();
+			expect(result!.name).toBe("blog-gen-profile-1");
+		});
+
+		it("returns null when name matches but parentId does not", async () => {
+			const parent = await adapter.create<{ id: string }>({
+				model: "mediaFolder",
+				data: makeFolder({ name: "Parent" }),
+			});
+			await adapter.create({
+				model: "mediaFolder",
+				data: makeFolder({ name: "Child", parentId: parent.id }),
+			});
+
+			// Search for "Child" scoped to a different (non-existent) parent.
+			const result = await getFolderByName(adapter, "Child", "wrong-parent-id");
+			expect(result).toBeNull();
+		});
+
+		it("scopes lookup to root-level folders when parentId is null", async () => {
+			// Explicitly store parentId as null (mirrors how SQL adapters persist root folders).
+			const rootFolder = await adapter.create<{ id: string }>({
+				model: "mediaFolder",
+				data: { ...makeFolder({ name: "Images" }), parentId: null },
+			});
+			// A nested folder with the same name.
+			await adapter.create({
+				model: "mediaFolder",
+				data: makeFolder({ name: "Images", parentId: rootFolder.id }),
+			});
+
+			// Only the root-level "Images" (parentId = null) should be returned.
+			const result = await getFolderByName(adapter, "Images", null);
+			expect(result).not.toBeNull();
+			expect(result!.id).toBe(rootFolder.id);
+		});
+
+		it("finds a child folder scoped to the correct parentId", async () => {
+			const parentA = await adapter.create<{ id: string }>({
+				model: "mediaFolder",
+				data: makeFolder({ name: "Parent A" }),
+			});
+			const parentB = await adapter.create<{ id: string }>({
+				model: "mediaFolder",
+				data: makeFolder({ name: "Parent B" }),
+			});
+			const childOfA = await adapter.create<{ id: string }>({
+				model: "mediaFolder",
+				data: makeFolder({ name: "Child", parentId: parentA.id }),
+			});
+			await adapter.create({
+				model: "mediaFolder",
+				data: makeFolder({ name: "Child", parentId: parentB.id }),
+			});
+
+			const result = await getFolderByName(adapter, "Child", parentA.id);
+			expect(result).not.toBeNull();
+			expect(result!.id).toBe(childOfA.id);
+		});
+
+		it("filters by tenantId when provided", async () => {
+			await adapter.create({
+				model: "mediaFolder",
+				data: { ...makeFolder({ name: "blog-gen-abc" }), tenantId: "tenant-1" },
+			});
+			const folderT2 = await adapter.create<{ id: string }>({
+				model: "mediaFolder",
+				data: { ...makeFolder({ name: "blog-gen-abc" }), tenantId: "tenant-2" },
+			});
+
+			// Same name, different tenant — should only return the matching one.
+			const result = await getFolderByName(
+				adapter,
+				"blog-gen-abc",
+				undefined,
+				"tenant-2",
+			);
+			expect(result).not.toBeNull();
+			expect(result!.id).toBe(folderT2.id);
+		});
+
+		it("returns null when tenantId does not match", async () => {
+			await adapter.create({
+				model: "mediaFolder",
+				data: { ...makeFolder({ name: "blog-gen-xyz" }), tenantId: "tenant-1" },
+			});
+
+			const result = await getFolderByName(
+				adapter,
+				"blog-gen-xyz",
+				undefined,
+				"tenant-999",
+			);
+			expect(result).toBeNull();
 		});
 	});
 });

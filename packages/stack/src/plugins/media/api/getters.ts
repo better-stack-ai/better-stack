@@ -10,6 +10,7 @@ export interface AssetListParams {
 	query?: string;
 	offset?: number;
 	limit?: number;
+	tenantId?: string;
 }
 
 /**
@@ -27,6 +28,7 @@ export interface AssetListResult {
  */
 export interface FolderListParams {
 	parentId?: string | null;
+	tenantId?: string;
 }
 
 /**
@@ -60,6 +62,14 @@ export async function listAssets(
 		whereConditions.push({
 			field: "mimeType",
 			value: query.mimeType,
+			operator: "eq" as const,
+		});
+	}
+
+	if (query.tenantId !== undefined) {
+		whereConditions.push({
+			field: "tenantId",
+			value: query.tenantId,
 			operator: "eq" as const,
 		});
 	}
@@ -136,22 +146,31 @@ export async function listFolders(
 	adapter: Adapter,
 	params?: FolderListParams,
 ): Promise<Folder[]> {
-	// Only add a where clause when parentId is explicitly provided as a string.
-	// Passing undefined (or no params) returns all folders unfiltered.
-	const where =
-		params?.parentId !== undefined
-			? [
-					{
-						field: "parentId",
-						value: params.parentId,
-						operator: "eq" as const,
-					},
-				]
-			: undefined;
+	const whereConditions: Array<{
+		field: string;
+		value: string | null;
+		operator: "eq";
+	}> = [];
+
+	if (params?.parentId !== undefined) {
+		whereConditions.push({
+			field: "parentId",
+			value: params.parentId,
+			operator: "eq" as const,
+		});
+	}
+
+	if (params?.tenantId !== undefined) {
+		whereConditions.push({
+			field: "tenantId",
+			value: params.tenantId,
+			operator: "eq" as const,
+		});
+	}
 
 	return adapter.findMany<Folder>({
 		model: "mediaFolder",
-		where,
+		where: whereConditions.length > 0 ? whereConditions : undefined,
 		sortBy: { field: "name", direction: "asc" },
 	});
 }
@@ -171,4 +190,36 @@ export async function getFolderById(
 		model: "mediaFolder",
 		where: [{ field: "id", value: id, operator: "eq" as const }],
 	});
+}
+
+/**
+ * Find a single folder by name, optionally scoped to a specific parent and/or tenant.
+ * Pass `null` for `parentId` to search only root-level folders.
+ * Pass `undefined` for `parentId` to search regardless of parent.
+ * Returns `null` if no matching folder is found.
+ *
+ * Pure DB function — no hooks, no HTTP context.
+ * The caller is responsible for any access-control checks.
+ */
+export async function getFolderByName(
+	adapter: Adapter,
+	name: string,
+	parentId?: string | null,
+	tenantId?: string,
+): Promise<Folder | null> {
+	const where: Array<{
+		field: string;
+		value: string | null;
+		operator: "eq";
+	}> = [{ field: "name", value: name, operator: "eq" as const }];
+
+	if (parentId !== undefined) {
+		where.push({ field: "parentId", value: parentId, operator: "eq" as const });
+	}
+
+	if (tenantId !== undefined) {
+		where.push({ field: "tenantId", value: tenantId, operator: "eq" as const });
+	}
+
+	return adapter.findOne<Folder>({ model: "mediaFolder", where });
 }
