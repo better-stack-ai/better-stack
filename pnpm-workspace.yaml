@@ -6,8 +6,8 @@ packages:
   - codegen-projects/*
 
 catalog:
-  '@better-fetch/fetch': ^1.1.18
-  better-call: 1.3.2
+  '@better-fetch/fetch': ^1.1.21
+  better-call: 1.3.5
   tsx: ^4.21.0
   typescript: ^5.6.3
   unbuild: 3.6.1
