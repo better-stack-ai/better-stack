@@ -35,7 +35,7 @@ export const ADAPTERS: readonly AdapterMeta[] = [
 		label: "Prisma",
 		packageName: "@btst/adapter-prisma",
 		ormForGenerate: "prisma",
-		extraPackages: ["@prisma/adapter-pg"],
+		extraPackages: ["@prisma/adapter-pg", "pg"],
 	},
 	{
 		key: "drizzle",
