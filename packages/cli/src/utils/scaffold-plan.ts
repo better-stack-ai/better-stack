@@ -322,7 +322,7 @@ function buildPluginTemplateContext(
 	};
 }
 
-function buildAdapterTemplateContext(adapter: Adapter) {
+function buildAdapterTemplateContext(adapter: Adapter, stackPath: string) {
 	const meta = ADAPTERS.find((item) => item.key === adapter);
 	if (!meta) {
 		throw new Error(`Unsupported adapter: ${adapter}`);
@@ -337,9 +337,11 @@ function buildAdapterTemplateContext(adapter: Adapter) {
 	}
 
 	if (adapter === "prisma") {
+		const depth = stackPath.split("/").length - 1;
+		const prismaClientPath = `${"../".repeat(depth)}generated/prisma/client`;
 		return {
 			adapterImport: `import { createPrismaAdapter } from "${meta.packageName}"
-import { PrismaClient } from "../generated/prisma/client"
+import { PrismaClient } from "${prismaClientPath}"
 import { PrismaPg } from "@prisma/adapter-pg"`,
 			adapterSetup: `const pgAdapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! })
 const prisma = new PrismaClient({ adapter: pgAdapter })
@@ -387,7 +389,10 @@ export async function buildScaffoldPlan(
 		input.plugins,
 		input.framework,
 	);
-	const adapterContext = buildAdapterTemplateContext(input.adapter);
+	const adapterContext = buildAdapterTemplateContext(
+		input.adapter,
+		frameworkPaths.stackPath,
+	);
 
 	const sharedContext = {
 		alias: input.alias,
