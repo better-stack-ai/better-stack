@@ -339,13 +339,15 @@ function buildAdapterTemplateContext(adapter: Adapter) {
 	if (adapter === "prisma") {
 		return {
 			adapterImport: `import { createPrismaAdapter } from "${meta.packageName}"
-import { PrismaClient } from "@prisma/client"`,
-			adapterSetup: `const prisma = new PrismaClient()
+import { PrismaClient } from "../generated/prisma/client"
+import { PrismaPg } from "@prisma/adapter-pg"`,
+			adapterSetup: `const pgAdapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! })
+const prisma = new PrismaClient({ adapter: pgAdapter })
 
-const provider = process.env.BTST_PRISMA_PROVIDER ?? "postgresql"
+const provider = (process.env.BTST_PRISMA_PROVIDER ?? "postgresql") as "postgresql" | "sqlite" | "cockroachdb" | "mysql" | "sqlserver" | "mongodb"
 `,
 			adapterStackLine:
-				"adapter: (db) => createPrismaAdapter(prisma, db, { provider }),",
+				"adapter: (db) => createPrismaAdapter(prisma, db, { provider })({}),",
 		};
 	}
 
@@ -402,6 +404,20 @@ export async function buildScaffoldPlan(
 			content: await renderTemplate("shared/lib/stack.ts.hbs", sharedContext),
 			description: "BTST backend stack configuration",
 		},
+		...(input.adapter === "prisma"
+			? [
+					{
+						path: "prisma/schema.prisma",
+						content: `generator client {\n  provider = "prisma-client"\n  output   = "../generated/prisma"\n}\n\ndatasource db {\n  provider = "postgresql"\n}\n`,
+						description: "Prisma schema with explicit client output path",
+					},
+					{
+						path: "prisma.config.ts",
+						content: `import { defineConfig } from 'prisma/config'\n\nexport default defineConfig({\n  schema: 'prisma/schema.prisma',\n  datasource: {\n    url: process.env.DATABASE_URL ?? '',\n  },\n})\n`,
+						description: "Prisma configuration file",
+					},
+				]
+			: []),
 		{
 			path: frameworkPaths.stackClientPath,
 			content: await renderTemplate(
