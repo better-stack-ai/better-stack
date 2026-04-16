@@ -1315,10 +1315,10 @@ export async function generateStaticParams() {
 
 ### Server-side mutation — `createContentItem`
 
-In addition to read-only getters, the CMS plugin exposes a **mutation function** for creating content items directly from server-side code.
+In addition to read-only getters, the CMS plugin exposes a **mutation function** for creating content items directly from server-side code. This is the recommended path for seeds, imports, and scheduled jobs.
 
 <Callout type="warn">
-**`createContentItem` bypasses authorization hooks and Zod schema validation.** Hooks such as `onBeforeCreate` and `onAfterCreate` are **not** called, and the data payload is stored as-is without running the content type's schema validation. The caller is responsible for providing valid, relation-free data and for any access-control checks. For relation fields or schema validation, use the HTTP endpoint instead.
+**`createContentItem` bypasses authorization hooks and Zod schema validation.** Hooks such as `onBeforeCreate` and `onAfterCreate` are **not** called, and the data payload is stored as-is without running the content type's schema validation. The caller is responsible for providing valid data and for any access-control checks. Inline `_new` relation creation is not supported — pre-create related items and pass their IDs. For schema validation or inline `_new` creation, use the HTTP endpoint instead.
 </Callout>
 
 **Via `myStack.api.cms`:**
@@ -1346,6 +1346,52 @@ await createCMSContentItem(myStack.adapter, "client-profile", {
   slug: `intake-${Date.now()}`,
   data: { clientName: "Sarah Chen", age: 34, amlFlag: false },
 })
+```
+
+#### `syncRelations` option
+
+By default, `createContentItem` only writes the item's JSON payload — it does **not** populate the `contentRelation` junction table. This is a no-op for content types without relations, but for content types with `belongsTo` / `hasMany` / `manyToMany` fields it means:
+
+- The admin UI's "Related Items" / inverse-relations panel will not discover the item.
+- `useContentByRelation`, `getContentByRelation`, and `*/populated` endpoints will not return it.
+- Only the JSON `{ id: "..." }` reference on the item itself is persisted.
+
+Pass `{ syncRelations: true }` to also persist relation fields into the junction table — the same behavior the HTTP `POST /content/:typeSlug` route provides, minus inline `_new` creation.
+
+```ts
+await myStack.api.cms.createContentItem(
+  "study-reference",
+  {
+    slug: "bpc157-ref-gwyer-2019",
+    data: {
+      compoundId: { id: bpc157.id },          // belongsTo
+      categoryIds: [{ id: catPeptides.id }],  // manyToMany
+      author: "Gwyer, D. et al.",
+      year: 2019,
+      title: "BPC-157 promotes angiogenesis…",
+      quote: "…",
+      relevance: "Mechanism of Action",
+    },
+  },
+  { syncRelations: true },
+)
+```
+
+<Callout type="info">
+Enable `syncRelations: true` whenever the content type has relation fields — especially in seed scripts. Without it, seeded items appear correctly on their own detail page but are invisible to inverse-relation queries, so the admin "Related Items" panel and any `by-relation` filter will silently show zero results.
+</Callout>
+
+The same option is available on the direct import:
+
+```ts
+import { createCMSContentItem } from "@btst/stack/plugins/cms/api"
+
+await createCMSContentItem(
+  myStack.adapter,
+  "study-reference",
+  { slug: "…", data: { compoundId: { id: bpc157.id }, /* … */ } },
+  { syncRelations: true },
+)
 ```
 
 Throws if:

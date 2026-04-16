@@ -5,6 +5,8 @@ export interface AdapterMeta {
 	label: string;
 	packageName: string;
 	ormForGenerate?: "prisma" | "drizzle" | "kysely";
+	/** Additional npm packages that must be installed when this adapter is selected. */
+	extraPackages?: string[];
 }
 
 export interface PluginMeta {
@@ -33,6 +35,7 @@ export const ADAPTERS: readonly AdapterMeta[] = [
 		label: "Prisma",
 		packageName: "@btst/adapter-prisma",
 		ormForGenerate: "prisma",
+		extraPackages: ["@prisma/adapter-pg", "pg"],
 	},
 	{
 		key: "drizzle",

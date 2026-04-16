@@ -39,6 +39,7 @@ export async function installInitDependencies(input: {
 		"@btst/yar",
 		"@tanstack/react-query",
 		adapterMeta.packageName,
+		...(adapterMeta.extraPackages ?? []),
 		...pluginExtraPackages,
 	];
 	const { command, args } = getInstallCommand(input.packageManager, packages);

@@ -31,6 +31,7 @@ import { installInitDependencies } from "../utils/package-installer";
 import {
 	adapterNeedsGenerate,
 	getGenerateHintForAdapter,
+	getOutputForAdapter,
 	runCliPassthrough,
 } from "../utils/passthrough";
 import { buildScaffoldPlan } from "../utils/scaffold-plan";
@@ -321,8 +322,13 @@ export function createInitCommand() {
 						const orm = ADAPTERS.find(
 							(item) => item.key === adapter,
 						)?.ormForGenerate;
+						const outputPath = getOutputForAdapter(adapter);
 						const args = orm
-							? [`--orm=${orm}`, `--config=${stackPath}`]
+							? [
+									`--orm=${orm}`,
+									`--config=${stackPath}`,
+									...(outputPath ? [`--output=${outputPath}`] : []),
+								]
 							: [`--config=${stackPath}`];
 						const exitCode = await runCliPassthrough({
 							cwd,

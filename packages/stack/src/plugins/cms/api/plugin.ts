@@ -15,7 +15,6 @@ import type {
 	CMSBackendConfig,
 	CMSHookContext,
 	SerializedContentItemWithType,
-	RelationConfig,
 	RelationValue,
 	InverseRelation,
 } from "../types";
@@ -31,6 +30,12 @@ import {
 	serializeContentItemWithType,
 } from "./getters";
 import { createCMSContentItem } from "./mutations";
+import {
+	extractRelationFields,
+	isExistingRelationValue,
+	isNewRelationValue,
+	syncRelations,
+} from "./relations";
 import type { QueryClient } from "@tanstack/react-query";
 import { CMS_QUERY_KEYS } from "./query-key-defs";
 import { runHookWithShim } from "../../utils";
@@ -145,67 +150,9 @@ function getContentTypeZodSchema(contentType: ContentType): z.ZodTypeAny {
 }
 
 // ========== Relation Helpers ==========
-
-interface JsonSchemaProperty {
-	fieldType?: string;
-	relation?: RelationConfig;
-	type?: string;
-	items?: JsonSchemaProperty;
-	[key: string]: unknown;
-}
-
-interface JsonSchemaWithProperties {
-	properties?: Record<string, JsonSchemaProperty>;
-	[key: string]: unknown;
-}
-
-/**
- * Extract relation field configurations from a content type's JSON Schema
- */
-function extractRelationFields(
-	contentType: ContentType,
-): Record<string, RelationConfig> {
-	const jsonSchema = JSON.parse(
-		contentType.jsonSchema,
-	) as JsonSchemaWithProperties;
-	const properties = jsonSchema.properties || {};
-	const relationFields: Record<string, RelationConfig> = {};
-
-	for (const [fieldName, fieldSchema] of Object.entries(properties)) {
-		if (fieldSchema.fieldType === "relation" && fieldSchema.relation) {
-			relationFields[fieldName] = fieldSchema.relation;
-		}
-	}
-
-	return relationFields;
-}
-
-/**
- * Check if a value is a "new" relation item (to be created)
- */
-function isNewRelationValue(
-	value: unknown,
-): value is { _new: true; data: Record<string, unknown> } {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		"_new" in value &&
-		(value as { _new: unknown })._new === true &&
-		"data" in value
-	);
-}
-
-/**
- * Check if a value is an existing relation reference
- */
-function isExistingRelationValue(value: unknown): value is { id: string } {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		"id" in value &&
-		typeof (value as { id: unknown }).id === "string"
-	);
-}
+// `extractRelationFields`, `isNewRelationValue`, `isExistingRelationValue`,
+// and `syncRelations` live in ./relations so both this HTTP route module
+// and the programmatic mutations helper can share them.
 
 /**
  * Process relation fields in content data:
@@ -361,44 +308,6 @@ async function createRelatedItem(
 	});
 
 	return item;
-}
-
-/**
- * Sync relations in the junction table for a content item.
- *
- * Only updates relations for fields explicitly present in relationIds.
- * Fields not in relationIds are left unchanged - this preserves existing
- * relations during partial updates.
- */
-async function syncRelations(
-	adapter: Adapter,
-	sourceId: string,
-	relationIds: Record<string, string[]>,
-): Promise<void> {
-	// Only sync fields that are explicitly included in relationIds
-	for (const [fieldName, targetIds] of Object.entries(relationIds)) {
-		// Delete existing relations for this specific field only
-		await adapter.delete({
-			model: "contentRelation",
-			where: [
-				{ field: "sourceId", value: sourceId, operator: "eq" as const },
-				{ field: "fieldName", value: fieldName, operator: "eq" as const },
-			],
-		});
-
-		// Create new relations for this field
-		for (const targetId of targetIds) {
-			await adapter.create<ContentRelation>({
-				model: "contentRelation",
-				data: {
-					sourceId,
-					targetId,
-					fieldName,
-					createdAt: new Date(),
-				},
-			});
-		}
-	}
 }
 
 /**
@@ -575,9 +484,10 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 			createContentItem: async (
 				typeSlug: string,
 				input: Parameters<typeof createCMSContentItem>[2],
+				options?: Parameters<typeof createCMSContentItem>[3],
 			) => {
 				await ensureSynced(adapter);
-				return createCMSContentItem(adapter, typeSlug, input);
+				return createCMSContentItem(adapter, typeSlug, input, options);
 			},
 		}),
 

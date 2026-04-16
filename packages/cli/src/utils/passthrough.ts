@@ -7,6 +7,15 @@ export function adapterNeedsGenerate(adapter: Adapter): boolean {
 	return Boolean(ADAPTERS.find((item) => item.key === adapter)?.ormForGenerate);
 }
 
+export function getOutputForAdapter(adapter: Adapter): string | null {
+	const meta = ADAPTERS.find((item) => item.key === adapter);
+	if (!meta?.ormForGenerate) return null;
+
+	if (meta.ormForGenerate === "prisma") return "prisma/schema.prisma";
+	if (meta.ormForGenerate === "drizzle") return "src/db/schema.ts";
+	return "migrations/schema.sql";
+}
+
 export function getGenerateHintForAdapter(
 	adapter: Adapter,
 	configPath: string,
@@ -14,12 +23,8 @@ export function getGenerateHintForAdapter(
 	const meta = ADAPTERS.find((item) => item.key === adapter);
 	if (!meta?.ormForGenerate) return null;
 
-	const output =
-		meta.ormForGenerate === "prisma"
-			? "schema.prisma"
-			: meta.ormForGenerate === "drizzle"
-				? "src/db/schema.ts"
-				: "migrations/schema.sql";
+	const output = getOutputForAdapter(adapter);
+	if (!output) return null;
 
 	return `npx @btst/codegen generate --orm=${meta.ormForGenerate} --config=${configPath} --output=${output}`;
 }
