@@ -15,5 +15,6 @@ export {
 export {
 	createCMSContentItem,
 	type CreateCMSContentItemInput,
+	type CreateCMSContentItemOptions,
 } from "./mutations";
 export { CMS_QUERY_KEYS } from "./query-key-defs";
