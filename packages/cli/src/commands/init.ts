@@ -31,6 +31,7 @@ import { installInitDependencies } from "../utils/package-installer";
 import {
 	adapterNeedsGenerate,
 	getGenerateHintForAdapter,
+	getOutputForAdapter,
 	runCliPassthrough,
 } from "../utils/passthrough";
 import { buildScaffoldPlan } from "../utils/scaffold-plan";
