@@ -94,12 +94,24 @@ export function fieldsToJSONSchema(
 }
 
 /**
- * Helper to parse JSON Schema properties into fields (recursive)
+ * Helper to parse JSON Schema properties into fields (recursive).
+ *
+ * Step assignment is read from two possible sources, in order:
+ *  1. `prop.stepGroup` on the property itself (the format the visual
+ *     FormBuilder writes on save).
+ *  2. `stepGroupMap[fieldName]` at the schema root (the format produced by
+ *     `zodToFormSchema(schema, { steps, stepGroupMap })` — see
+ *     `packages/ui/src/lib/schema-converter.ts`).
+ *
+ * Without (2), Zod-seeded multi-step forms render every field on step 0 in the
+ * admin canvas — the other step tabs look empty even though the runtime
+ * `<FormRenderer>` / `SteppedAutoForm` show all fields correctly.
  */
 function propertiesToFields(
   properties: Record<string, JSONSchemaProperty>,
   requiredSet: Set<string>,
-  components: FormBuilderComponentDefinition[]
+  components: FormBuilderComponentDefinition[],
+  stepGroupMap?: Record<string, number>
 ): FormBuilderField[] {
   const fields: FormBuilderField[] = [];
 
@@ -116,10 +128,14 @@ function propertiesToFields(
       }
     }
 
+    // Resolve step assignment: per-property `stepGroup` wins, then fall back
+    // to the root-level `stepGroupMap` so Zod-converted schemas work.
+    const resolvedStepGroup =
+      prop.stepGroup !== undefined ? prop.stepGroup : stepGroupMap?.[key];
+
     if (field) {
-      // Extract stepGroup from the property if present
-      if (prop.stepGroup !== undefined) {
-        field.stepGroup = prop.stepGroup;
+      if (resolvedStepGroup !== undefined) {
+        field.stepGroup = resolvedStepGroup;
       }
 
       // Handle nested object fields
@@ -148,7 +164,7 @@ function propertiesToFields(
           required: isRequired,
         },
         // Include stepGroup even for fallback fields
-        ...(prop.stepGroup !== undefined ? { stepGroup: prop.stepGroup } : {}),
+        ...(resolvedStepGroup !== undefined ? { stepGroup: resolvedStepGroup } : {}),
       });
     }
   }
@@ -165,7 +181,13 @@ export interface ParsedSchema {
 }
 
 /**
- * Convert JSON Schema to internal fields and extract steps
+ * Convert JSON Schema to internal fields and extract steps.
+ *
+ * Accepts both flavours of multi-step encoding:
+ *  - Per-property `stepGroup` (FormBuilder's canonical save format)
+ *  - Root-level `stepGroupMap` (what `zodToFormSchema()` produces)
+ *
+ * The visual builder always normalises to per-property `stepGroup` on save.
  */
 export function jsonSchemaToFieldsAndSteps(
   schema: JSONSchema | null | undefined,
@@ -176,7 +198,12 @@ export function jsonSchemaToFieldsAndSteps(
   }
 
   const requiredSet = new Set(schema.required || []);
-  const fields = propertiesToFields(schema.properties, requiredSet, components);
+  const fields = propertiesToFields(
+    schema.properties,
+    requiredSet,
+    components,
+    schema.stepGroupMap
+  );
   const steps = schema.steps || [];
 
   return { fields, steps };

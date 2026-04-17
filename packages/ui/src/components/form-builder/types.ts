@@ -47,6 +47,14 @@ export interface JSONSchema {
   $schema?: string;
   /** Step definitions for multi-step forms (stored in schema meta) */
   steps?: FormStep[];
+  /**
+   * Optional root-level field-name → step-index map. This is the format produced
+   * by `zodToFormSchema(schema, { steps, stepGroupMap })` and consumed by
+   * `SteppedAutoForm`. The visual FormBuilder writes per-property `stepGroup`
+   * instead, but we accept both on read so a Zod-seeded form opens with its
+   * fields correctly assigned to their steps.
+   */
+  stepGroupMap?: Record<string, number>;
   additionalProperties?: boolean;
 }
 
