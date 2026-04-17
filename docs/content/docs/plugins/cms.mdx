@@ -276,6 +276,48 @@ cms: {
 
 The built-in file component will use your `uploadImage` function to upload files and store the returned URL.
 
+### Repeating Groups (Arrays of Objects)
+
+You can model repeating sub-records — variants, line items, blend components, FAQ entries, etc. — with `z.array(z.object({...}))`. The admin renders each item as a sub-form inside an accordion with **Add** and **Remove** buttons, and `useFieldArray` from react-hook-form drives the row state.
+
+`.meta()` placeholders, `fieldType` overrides, and custom `fieldComponents` (including `"file"` and `"relation"`) are propagated **into the array items**, so you can build rich nested forms without writing a custom field component.
+
+```ts
+const ProductSchema = z.object({
+  name: z.string().min(1),
+  variants: z
+    .array(
+      z.object({
+        sku: z.string().meta({ placeholder: "SKU-001" }),
+        price: z.coerce.number().min(0).meta({ placeholder: "0.00" }),
+        notes: z.string().optional().meta({ fieldType: "textarea" }),
+        // Nested file uploads work when `uploadImage` is provided in overrides.
+        image: z.string().optional().meta({ fieldType: "file" }),
+        // Nested belongsTo relations render the searchable picker inside the row.
+        categoryId: z
+          .object({ id: z.string() })
+          .optional()
+          .meta({
+            fieldType: "relation",
+            relation: {
+              type: "belongsTo",
+              targetType: "category",
+              displayField: "name",
+            },
+          }),
+      }),
+    )
+    .default([])
+    .meta({ description: "Product variants" }),
+});
+```
+
+A few rules worth remembering:
+
+- New rows are created with `append({})` — fields with no default render empty until the user fills them in.
+- Inside item objects, do **not** name properties using reserved `FieldConfigItem` keys (`label`, `description`, `inputProps`, `fieldType`, `renderParent`, `order`). The admin will warn and skip those properties to avoid clobbering the array's own metadata.
+- Validation, defaults, and required-vs-optional behavior follow the inner Zod schema as usual.
+
 ## Admin Routes
 
 The CMS plugin provides these admin routes:

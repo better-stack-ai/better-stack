@@ -398,27 +398,59 @@ export function buildFieldConfigFromJsonSchema(
 			}
 		}
 
+		// Reserved FieldConfigItem property names that should not be overwritten by nested field configs.
+		// If a nested field has the same name as a reserved property (e.g., a field named "description"),
+		// we skip it to prevent overwriting the parent's config (like its help text).
+		const reservedProps = new Set([
+			"description",
+			"label",
+			"inputProps",
+			"fieldType",
+			"renderParent",
+			"order",
+		]);
+
 		// Handle nested object properties recursively
 		if (value.properties) {
 			const nestedConfig = buildFieldConfigFromJsonSchema(
 				{ properties: value.properties } as Record<string, unknown>,
 				fieldComponents,
 			);
-			// Reserved FieldConfigItem property names that should not be overwritten by nested field configs.
-			// If a nested field has the same name as a reserved property (e.g., a field named "description"),
-			// we skip it to prevent overwriting the parent's config (like its help text).
-			const reservedProps = new Set(['description', 'label', 'inputProps', 'fieldType', 'renderParent', 'order']);
-			
+
 			// Merge nested config, but skip keys that match reserved property names
 			for (const [nestedKey, nestedValue] of Object.entries(nestedConfig)) {
 				if (!reservedProps.has(nestedKey)) {
 					config[nestedKey] = nestedValue;
 				} else {
-          console.warn(
-            `Field "${key}" has a nested field named "${nestedKey}" which conflicts with a reserved FieldConfigItem property. ` +
-            `The nested field's config will not be accessible at the parent level.`
-          );
-        }
+					console.warn(
+						`Field "${key}" has a nested field named "${nestedKey}" which conflicts with a reserved FieldConfigItem property. ` +
+							`The nested field's config will not be accessible at the parent level.`,
+					);
+				}
+			}
+		}
+
+		// Handle array items recursively — for `z.array(z.object({...}))` shapes
+		// the array's items.properties carry per-item field metadata (placeholder,
+		// fieldType, relation config, etc.) that AutoFormArray needs to forward
+		// to its inner AutoFormObject. Mirror the nested-object merge so per-item
+		// configs end up at `fieldConfig[arrayKey][itemPropertyKey]`.
+		const items = value.items as JsonSchemaProperty | undefined;
+		if (items?.properties) {
+			const itemConfig = buildFieldConfigFromJsonSchema(
+				{ properties: items.properties } as Record<string, unknown>,
+				fieldComponents,
+			);
+
+			for (const [itemKey, itemValue] of Object.entries(itemConfig)) {
+				if (!reservedProps.has(itemKey)) {
+					config[itemKey] = itemValue;
+				} else {
+					console.warn(
+						`Array field "${key}" has an item property named "${itemKey}" which conflicts with a reserved FieldConfigItem property. ` +
+							`The item field's config will not be accessible inside array items.`,
+					);
+				}
 			}
 		}
 

@@ -63,63 +63,109 @@ function buildFieldConfigFromJsonSchema(
 		isRequired?: boolean;
 	}>,
 ): FieldConfig<Record<string, unknown>> {
-	// Get base config from shared utility (handles fieldType from JSON Schema)
+	// Get base config from shared utility (handles fieldType from JSON Schema,
+	// including per-item configs for arrays of objects).
 	const baseConfig = buildFieldConfigBase(jsonSchema, fieldComponents);
 
-	// Apply CMS-specific handling for special fieldTypes ONLY if no custom component exists
-	// Custom fieldComponents take priority - don't override if user provided one
-	const properties = jsonSchema.properties as Record<
-		string,
-		JsonSchemaProperty
-	>;
+	const properties = jsonSchema.properties as
+		| Record<string, JsonSchemaProperty>
+		| undefined;
 
 	if (!properties) return baseConfig;
 
-	for (const [key, prop] of Object.entries(properties)) {
-		// Handle "file" fieldType when there's NO custom component for "file"
-		if (prop.fieldType === "file" && !fieldComponents?.["file"]) {
-			// Use CMSFileUpload as the default file component
-			if (!uploadImage && !imageInputField) {
-				// Show a clear error message if neither uploadImage nor imageInputField is provided
-				baseConfig[key] = {
-					...baseConfig[key],
-					fieldType: () => (
-						<div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
-							File upload requires an <code>uploadImage</code> or{" "}
-							<code>imageInputField</code> function in CMS overrides.
-						</div>
-					),
-				};
-			} else {
-				baseConfig[key] = {
-					...baseConfig[key],
-					fieldType: (props: AutoFormInputComponentProps) => (
-						<CMSFileUpload
-							{...props}
-							uploadImage={uploadImage ?? (() => Promise.resolve(""))}
-							imageInputField={imageInputField}
-							imagePicker={imagePicker}
-						/>
+	// Recursively walk the JSON Schema properties and inject CMS-specific custom
+	// components (file upload, relation picker) for any field with a matching
+	// fieldType, regardless of nesting depth. Targets:
+	//   - top-level fields
+	//   - properties of nested object fields
+	//   - properties of array items (e.g. `components: z.array(z.object({...}))`)
+	//
+	// `targetConfig` is the FieldConfigObject slot to mutate for the property at
+	// `key`. The recursion mirrors how AutoFormObject + AutoFormArray look up
+	// per-property configs: nested object/array per-item configs live as keys
+	// alongside their parent's meta on the same FieldConfigObject.
+	const injectCustomFieldTypes = (
+		props: Record<string, JsonSchemaProperty>,
+		targetConfig: Record<string, unknown>,
+	) => {
+		for (const [key, prop] of Object.entries(props)) {
+			// Ensure a slot exists so we can mutate it whether or not the base
+			// helper produced an entry for this key.
+			const existing =
+				(targetConfig[key] as Record<string, unknown> | undefined) ?? {};
+
+			let updated = existing;
+
+			// Handle "file" fieldType when there's NO custom component for "file"
+			if (prop.fieldType === "file" && !fieldComponents?.["file"]) {
+				if (!uploadImage && !imageInputField) {
+					updated = {
+						...updated,
+						fieldType: () => (
+							<div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
+								File upload requires an <code>uploadImage</code> or{" "}
+								<code>imageInputField</code> function in CMS overrides.
+							</div>
+						),
+					};
+				} else {
+					updated = {
+						...updated,
+						fieldType: (componentProps: AutoFormInputComponentProps) => (
+							<CMSFileUpload
+								{...componentProps}
+								uploadImage={uploadImage ?? (() => Promise.resolve(""))}
+								imageInputField={imageInputField}
+								imagePicker={imagePicker}
+							/>
+						),
+					};
+				}
+			}
+
+			// Handle "relation" fieldType when there's NO custom component for "relation"
+			if (
+				prop.fieldType === "relation" &&
+				prop.relation &&
+				!fieldComponents?.["relation"]
+			) {
+				const relationConfig = prop.relation;
+				updated = {
+					...updated,
+					fieldType: (componentProps: AutoFormInputComponentProps) => (
+						<RelationField {...componentProps} relation={relationConfig} />
 					),
 				};
 			}
-		}
 
-		// Handle "relation" fieldType when there's NO custom component for "relation"
-		if (
-			prop.fieldType === "relation" &&
-			prop.relation &&
-			!fieldComponents?.["relation"]
-		) {
-			const relationConfig = prop.relation;
-			baseConfig[key] = {
-				...baseConfig[key],
-				fieldType: (props: AutoFormInputComponentProps) => (
-					<RelationField {...props} relation={relationConfig} />
-				),
-			};
+			// Recurse into nested objects — their per-property configs live as
+			// keys on the same parent FieldConfigObject.
+			if (prop.properties) {
+				injectCustomFieldTypes(
+					prop.properties as Record<string, JsonSchemaProperty>,
+					updated,
+				);
+			}
+
+			// Recurse into array items — same convention as nested objects.
+			const items = prop.items as JsonSchemaProperty | undefined;
+			if (items?.properties) {
+				injectCustomFieldTypes(
+					items.properties as Record<string, JsonSchemaProperty>,
+					updated,
+				);
+			}
+
+			if (Object.keys(updated).length > 0) {
+				targetConfig[key] = updated;
+			}
 		}
-	}
+	};
+
+	injectCustomFieldTypes(
+		properties,
+		baseConfig as unknown as Record<string, unknown>,
+	);
 
 	return baseConfig;
 }
