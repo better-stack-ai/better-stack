@@ -140,6 +140,7 @@
     "./components/auto-form/helpers": "./src/components/auto-form/helpers.tsx",
     "./components/form-builder": "./src/components/form-builder/index.tsx",
     "./components/form-builder/types": "./src/components/form-builder/types.ts",
+    "./components/form-builder/schema-utils": "./src/components/form-builder/schema-utils.ts",
     "./components/ui-builder": "./src/components/ui-builder/index.tsx",
     "./components/ui-builder/types": "./src/components/ui-builder/types.ts",
     "./components/ui-builder/server-layer-renderer": "./src/components/ui-builder/server-layer-renderer.tsx",
