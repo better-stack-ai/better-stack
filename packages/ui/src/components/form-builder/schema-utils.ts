@@ -5,6 +5,7 @@ import type {
   JSONSchema,
   JSONSchemaProperty,
 } from "./types";
+import { beautifyObjectName } from "../auto-form/helpers";
 
 /**
  * Helper to convert fields to JSON Schema properties (recursive)
@@ -152,13 +153,15 @@ function propertiesToFields(
 
       fields.push(field);
     } else {
-      // Fallback: create a generic text field for unknown types
+      // Fallback: create a generic text field for unknown types.
+      // Label resolution mirrors `getLabel` in `./components/index.tsx` so the
+      // admin canvas always shows a humanised label for unknown shapes too.
       console.warn(`Could not parse JSON Schema property: ${key}`, prop);
       fields.push({
         id: key,
         type: "text",
         props: {
-          label: prop.title || key,
+          label: prop.label || prop.title || beautifyObjectName(key),
           description: prop.description,
           placeholder: prop.placeholder,
           required: isRequired,

@@ -39,6 +39,7 @@ import {
   arrayValidationSchema,
   DEFAULT_VALUE_SCHEMAS,
 } from "../validation-schemas";
+import { beautifyObjectName } from "../../auto-form/helpers";
 
 /**
  * Helper to convert a value to a number, handling empty strings and undefined
@@ -70,10 +71,20 @@ function getPlaceholder(prop: JSONSchemaProperty): string | undefined {
 }
 
 /**
- * Helper to extract label from JSONSchemaProperty
+ * Helper to extract a display label from a JSONSchemaProperty.
+ *
+ * Resolution order:
+ *  1. Explicit `prop.label` (set via the visual builder's edit dialog).
+ *  2. Standard JSON Schema `prop.title`.
+ *  3. Humanised field key — `beautifyObjectName("primaryGoal")` → `"Primary Goal"`.
+ *
+ * The humanised key fallback matches what `AutoForm` renders on the public
+ * form (see `auto-form/fields/object.tsx`), so a Zod-seeded form whose
+ * properties only carry a `description` (no `label`/`title`) reads the same
+ * in the admin canvas as it does to end users.
  */
 function getLabel(prop: JSONSchemaProperty, key: string): string {
-  return prop.label || prop.title || key;
+  return prop.label || prop.title || beautifyObjectName(key);
 }
 
 /**

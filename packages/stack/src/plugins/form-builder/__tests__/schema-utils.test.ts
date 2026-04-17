@@ -107,6 +107,93 @@ describe("jsonSchemaToFieldsAndSteps", () => {
 		});
 	});
 
+	describe("label resolution", () => {
+		// Label resolution must mirror what `AutoForm` shows on the public form,
+		// so a Zod-seeded schema (whose properties only carry `description`,
+		// not `label`/`title`) reads identically in the admin canvas.
+		// See `auto-form/fields/object.tsx` → `beautifyObjectName(name)`.
+
+		it("uses an explicit `label` when present", () => {
+			const schema: JSONSchema = {
+				type: "object",
+				properties: {
+					primaryGoal: {
+						type: "string",
+						label: "What's your main focus?",
+					},
+				},
+			};
+
+			const { fields } = jsonSchemaToFieldsAndSteps(schema, defaultComponents);
+			expect(fields[0]?.props.label).toBe("What's your main focus?");
+		});
+
+		it("falls back to JSON Schema `title` when `label` is absent", () => {
+			const schema: JSONSchema = {
+				type: "object",
+				properties: {
+					primaryGoal: {
+						type: "string",
+						title: "Primary Goal (titled)",
+					},
+				},
+			};
+
+			const { fields } = jsonSchemaToFieldsAndSteps(schema, defaultComponents);
+			expect(fields[0]?.props.label).toBe("Primary Goal (titled)");
+		});
+
+		it("humanises the field key when no `label` or `title` is present", () => {
+			// This is the regression: previously the admin showed the raw key
+			// (`primaryGoal`) when no label/title was set, while the public form
+			// showed `Primary Goal`. Now both paths agree.
+			const schema: JSONSchema = {
+				type: "object",
+				properties: {
+					primaryGoal: { type: "string" },
+					riskTolerance: {
+						type: "string",
+						enum: ["low", "moderate", "high"],
+					},
+					noInjections: { type: "boolean", fieldType: "switch" },
+					email: { type: "string", format: "email" },
+					age: { type: "number" },
+					notes: { type: "string", fieldType: "textarea" },
+				},
+			};
+
+			const { fields } = jsonSchemaToFieldsAndSteps(schema, defaultComponents);
+			const labels = Object.fromEntries(
+				fields.map((f) => [f.id, f.props.label]),
+			);
+
+			expect(labels).toEqual({
+				primaryGoal: "Primary Goal",
+				riskTolerance: "Risk Tolerance",
+				noInjections: "No Injections",
+				email: "Email",
+				age: "Age",
+				notes: "Notes",
+			});
+		});
+
+		it("humanises the field key in the unknown-field-type fallback", () => {
+			// When no component matches, propertiesToFields creates a generic
+			// text field. That branch must humanise the key too.
+			const schema: JSONSchema = {
+				type: "object",
+				properties: {
+					mysteriousField: {
+						// no `type` — falls through to the generic text fallback
+					} as JSONSchema["properties"][string],
+				},
+			};
+
+			const { fields } = jsonSchemaToFieldsAndSteps(schema, defaultComponents);
+			expect(fields[0]?.props.label).toBe("Mysterious Field");
+		});
+	});
+
 	describe("multi-step: Path A — per-property stepGroup", () => {
 		// Canonical format written by the visual FormBuilder when saving.
 		const schema: JSONSchema = {
