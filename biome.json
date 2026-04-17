@@ -64,7 +64,8 @@
       "!**/.btst-stack-src/**",
       "!**/.btst-stack-ui/**",
       "!**/packages/stack/registry/**",
-      "!**/codegen-projects/**"
+      "!**/codegen-projects/**",
+      "!**/playwright-report-codegen/trace/**"
     ]
   }
 }
