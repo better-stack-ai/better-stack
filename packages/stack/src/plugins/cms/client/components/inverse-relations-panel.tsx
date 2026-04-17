@@ -95,6 +95,19 @@ export function InverseRelationsPanel({
 		return null;
 	}
 
+	// When a single source content type has multiple belongsTo fields pointing
+	// at this target type (e.g. StackSynergy has both compoundAId and
+	// compoundBId → compound), the section title alone ("Stack Synergy") is
+	// ambiguous — two cards would render with identical headings. Mark those
+	// relations so we can disambiguate them by field name.
+	const sourceTypeCounts = new Map<string, number>();
+	for (const rel of inverseRelations) {
+		sourceTypeCounts.set(
+			rel.sourceType,
+			(sourceTypeCounts.get(rel.sourceType) ?? 0) + 1,
+		);
+	}
+
 	return (
 		<div className="space-y-4">
 			<h3 className="text-lg font-semibold">Related Items</h3>
@@ -109,10 +122,30 @@ export function InverseRelationsPanel({
 					Link={Link}
 					client={client}
 					headers={headers}
+					ambiguous={(sourceTypeCounts.get(relation.sourceType) ?? 0) > 1}
 				/>
 			))}
 		</div>
 	);
+}
+
+/**
+ * Turn a relation field name like `compoundAId` / `categoryIds` into a
+ * friendlier label like `Compound A` / `Category` for display in the
+ * inverse-relations panel when two sections would otherwise share a title.
+ *
+ * Strips a trailing `Id` or `Ids`, splits camelCase boundaries, and
+ * title-cases the result. Leaves unrecognised shapes as-is so we never
+ * produce an empty string.
+ */
+function humanizeFieldName(fieldName: string): string {
+	const stripped = fieldName.replace(/Ids?$/, "") || fieldName;
+	const words = stripped
+		.replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+		.replace(/[_-]+/g, " ")
+		.trim()
+		.split(/\s+/);
+	return words.map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w)).join(" ");
 }
 
 interface InverseRelationSectionProps {
@@ -128,6 +161,12 @@ interface InverseRelationSectionProps {
 	}>;
 	client: ReturnType<typeof createApiClient<CMSApiRouter>>;
 	headers?: HeadersInit;
+	/**
+	 * True when another inverse relation from the same `sourceType` is also
+	 * being rendered — in which case the field-name suffix is shown so the
+	 * user can tell the two cards apart.
+	 */
+	ambiguous: boolean;
 }
 
 function InverseRelationSection({
@@ -139,6 +178,7 @@ function InverseRelationSection({
 	Link,
 	client,
 	headers,
+	ambiguous,
 }: InverseRelationSectionProps) {
 	const [isExpanded, setIsExpanded] = useState(true);
 	const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
@@ -205,6 +245,7 @@ function InverseRelationSection({
 	};
 
 	const LinkComponent = Link ?? "a";
+	const fieldLabel = ambiguous ? humanizeFieldName(relation.fieldName) : null;
 
 	return (
 		<Card>
@@ -220,7 +261,13 @@ function InverseRelationSection({
 						) : (
 							<ChevronRight className="h-4 w-4" />
 						)}
-						{relation.sourceTypeName} ({total})
+						<span>{relation.sourceTypeName}</span>
+						{fieldLabel && (
+							<span className="font-normal text-muted-foreground">
+								· {fieldLabel}
+							</span>
+						)}
+						<span className="font-normal text-muted-foreground">({total})</span>
 					</CardTitle>
 				</button>
 			</CardHeader>
@@ -269,6 +316,7 @@ function InverseRelationSection({
 						>
 							<Plus className="h-4 w-4 mr-2" />
 							Add {relation.sourceTypeName}
+							{fieldLabel ? ` (${fieldLabel})` : ""}
 						</Button>
 					</div>
 				</CardContent>

@@ -1,6 +1,6 @@
 {
   "name": "@btst/stack",
-  "version": "2.11.4",
+  "version": "2.11.6",
   "description": "A composable, plugin-based library for building full-stack applications.",
   "repository": {
     "type": "git",
@@ -125,6 +125,16 @@
       "require": {
         "types": "./dist/plugins/blog/client/index.d.cts",
         "default": "./dist/plugins/blog/client/index.cjs"
+      }
+    },
+    "./plugins/blog/client/components": {
+      "import": {
+        "types": "./dist/plugins/blog/client/components/index.d.ts",
+        "default": "./dist/plugins/blog/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/blog/client/components/index.d.cts",
+        "default": "./dist/plugins/blog/client/components/index.cjs"
       }
     },
     "./plugins/blog/client/hooks": {
@@ -606,6 +616,9 @@
       ],
       "plugins/blog/client": [
         "./dist/plugins/blog/client/index.d.ts"
+      ],
+      "plugins/blog/client/components": [
+        "./dist/plugins/blog/client/components/index.d.ts"
       ],
       "plugins/blog/client/hooks": [
         "./dist/plugins/blog/client/hooks/index.d.ts"
