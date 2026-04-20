@@ -1,6 +1,6 @@
 "use client";
 
-import { usePluginOverrides, useBasePath } from "@btst/stack/context";
+import { usePluginOverrides } from "@btst/stack/context";
 import { formatDate } from "date-fns";
 import {
 	useSuspensePost,
@@ -12,11 +12,10 @@ import { MarkdownContent } from "../shared/markdown-content";
 import { PageHeader } from "../shared/page-header";
 import { PageWrapper } from "../shared/page-wrapper";
 import type { BlogPluginOverrides } from "../../overrides";
-import { DefaultImage, DefaultLink } from "../shared/defaults";
+import { DefaultImage } from "../shared/defaults";
 import { BLOG_LOCALIZATION } from "../../localization";
 import { PostNavigation } from "../shared/post-navigation";
 import { RecentPostsCarousel } from "../shared/recent-posts-carousel";
-import { Badge } from "@workspace/ui/components/badge";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { OnThisPage, OnThisPageSelect } from "../shared/on-this-page";
 import type { SerializedPost } from "../../../types";
@@ -24,6 +23,7 @@ import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/con
 import { WhenVisible } from "@workspace/ui/components/when-visible";
 import { PostNavigationSkeleton } from "../loading/post-navigation-skeleton";
 import { RecentPostsCarouselSkeleton } from "../loading/recent-posts-carousel-skeleton";
+import { CollapsibleTagList } from "../shared/collapsible-tag-list";
 
 // Internal component with actual page content
 export function PostPage({ slug }: { slug: string }) {
@@ -151,29 +151,12 @@ export function PostPage({ slug }: { slug: string }) {
 }
 
 function PostHeaderTop({ post }: { post: SerializedPost }) {
-	const { Link } = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", {
-		Link: DefaultLink,
-	});
-	const basePath = useBasePath();
 	return (
 		<div className="flex flex-row items-center justify-center gap-2 flex-wrap mt-8">
 			<span className="font-light text-muted-foreground text-sm">
 				{formatDate(post.createdAt, "MMMM d, yyyy")}
 			</span>
-			{post.tags && post.tags.length > 0 && (
-				<>
-					{post.tags.map((tag) => (
-						<Link key={tag.id} href={`${basePath}/blog/tag/${tag.slug}`}>
-							<Badge variant="secondary" className="text-xs">
-								{tag.name}
-							</Badge>
-						</Link>
-					))}
-				</>
-			)}
+			<CollapsibleTagList tags={post.tags ?? []} />
 		</div>
 	);
 }
