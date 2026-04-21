@@ -77,15 +77,17 @@ async function testLoadMoreComments(
 	const thread = page.locator('[data-testid="comment-thread"]');
 	await expect(thread).toBeVisible({ timeout: 8000 });
 
-	// First page of comments should be visible (comments are asc-sorted by date)
-	for (let i = 1; i <= pageSize; i++) {
+	// First page of comments should be visible. CommentThread defaults to
+	// `sort: "desc"` (newest first), and comments are created sequentially
+	// 1..totalCount, so the highest-numbered comments appear on page 1.
+	for (let i = totalCount; i > totalCount - pageSize; i--) {
 		await expect(
 			page.getByText(`${bodyPrefix} ${i}`, { exact: true }),
 		).toBeVisible({ timeout: 5000 });
 	}
 
-	// Comments beyond the first page must NOT be visible yet
-	for (let i = pageSize + 1; i <= totalCount; i++) {
+	// Older comments (those that fall on subsequent pages) must NOT be visible yet
+	for (let i = totalCount - pageSize; i >= 1; i--) {
 		await expect(
 			page.getByText(`${bodyPrefix} ${i}`, { exact: true }),
 		).not.toBeVisible();

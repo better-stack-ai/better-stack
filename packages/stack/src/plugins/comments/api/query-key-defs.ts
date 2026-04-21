@@ -71,6 +71,7 @@ export interface CommentsThreadDiscriminator {
 	parentId: string | null | undefined;
 	status: string | undefined;
 	currentUserId: string | undefined;
+	sort: string | undefined;
 	limit: number;
 }
 
@@ -80,6 +81,7 @@ export function commentsThreadDiscriminator(params?: {
 	parentId?: string | null;
 	status?: string;
 	currentUserId?: string;
+	sort?: string;
 	limit?: number;
 }): CommentsThreadDiscriminator {
 	return {
@@ -88,6 +90,7 @@ export function commentsThreadDiscriminator(params?: {
 		parentId: params?.parentId,
 		status: params?.status,
 		currentUserId: params?.currentUserId,
+		sort: params?.sort,
 		limit: params?.limit ?? 20,
 	};
 }
@@ -128,7 +131,7 @@ export const COMMENTS_QUERY_KEYS = {
 
 	/**
 	 * Key for the infinite thread query (top-level comments, load-more).
-	 * Full key: ["commentsThread", "list", { resourceId, resourceType, parentId, status, currentUserId, limit }]
+	 * Full key: ["commentsThread", "list", { resourceId, resourceType, parentId, status, currentUserId, sort, limit }]
 	 * Offset is excluded — it is driven by `pageParam`, not baked into the key.
 	 */
 	commentsThread: (params?: {
@@ -137,6 +140,7 @@ export const COMMENTS_QUERY_KEYS = {
 		parentId?: string | null;
 		status?: string;
 		currentUserId?: string;
+		sort?: string;
 		limit?: number;
 	}) =>
 		["commentsThread", "list", commentsThreadDiscriminator(params)] as const,
