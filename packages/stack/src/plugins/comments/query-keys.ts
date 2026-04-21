@@ -142,6 +142,7 @@ function createCommentsThreadQueries(
 			parentId?: string | null;
 			status?: "pending" | "approved" | "spam";
 			currentUserId?: string;
+			sort?: "asc" | "desc";
 			limit?: number;
 		}) => ({
 			// Offset is excluded from the key — it is driven by pageParam.
@@ -162,6 +163,7 @@ function createCommentsThreadQueries(
 						// The server resolves the caller's identity server-side via the
 						// resolveCurrentUserId hook. It is still included in the queryKey
 						// above for client-side cache segregation.
+						sort: params?.sort,
 						limit: params?.limit ?? 20,
 						offset: pageParam ?? 0,
 					},

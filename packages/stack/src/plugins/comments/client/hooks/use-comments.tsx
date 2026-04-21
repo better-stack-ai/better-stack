@@ -164,6 +164,11 @@ export function useInfiniteComments(
 		parentId?: string | null;
 		status?: "pending" | "approved" | "spam";
 		currentUserId?: string;
+		/**
+		 * Sort direction by `createdAt`. Default: `"asc"` (oldest first) — matches
+		 * the server-side default. Pass `"desc"` for newest-first threads.
+		 */
+		sort?: "asc" | "desc";
 		pageSize?: number;
 	},
 	options?: { enabled?: boolean },
@@ -178,6 +183,7 @@ export function useInfiniteComments(
 		parentId: params.parentId ?? null,
 		status: params.status,
 		currentUserId: params.currentUserId,
+		sort: params.sort,
 		limit: pageSize,
 	});
 
@@ -266,6 +272,17 @@ export function usePostComment(
 		 * `nextOffset` from `lastPage.limit` instead of a hardcoded fallback.
 		 */
 		pageSize?: number;
+		/**
+		 * Sort direction of the surrounding infinite thread.
+		 * - `"asc"` (default): newest comments belong on the LAST page → optimistic
+		 *   item is appended to `pages[last].items`.
+		 * - `"desc"`: newest comments belong on the FIRST page → optimistic item
+		 *   is prepended to `pages[0].items`.
+		 *
+		 * Must match the `sort` passed to `useInfiniteComments` so the optimistic
+		 * item appears in the same position the server will place it.
+		 */
+		sort?: "asc" | "desc";
 	},
 ) {
 	const queryClient = useQueryClient();
@@ -350,6 +367,7 @@ export function usePostComment(
 				const previous =
 					queryClient.getQueryData<InfiniteData<CommentListResult>>(listKey);
 
+				const isDesc = params.sort === "desc";
 				queryClient.setQueryData<InfiniteData<CommentListResult>>(
 					listKey,
 					(old) => {
@@ -366,16 +384,21 @@ export function usePostComment(
 								pageParams: [0],
 							};
 						}
-						const lastIdx = old.pages.length - 1;
+						// For asc (oldest-first) threads the new comment lives at the end →
+						// append to the last page. For desc (newest-first) threads it lives
+						// at the top → prepend to the first page.
+						const targetIdx = isDesc ? 0 : old.pages.length - 1;
 						return {
 							...old,
 							// Increment `total` on every page so the header count (which reads
 							// pages[0].total) stays in sync even after multiple pages are loaded.
 							pages: old.pages.map((page, idx) =>
-								idx === lastIdx
+								idx === targetIdx
 									? {
 											...page,
-											items: [...page.items, optimistic],
+											items: isDesc
+												? [optimistic, ...page.items]
+												: [...page.items, optimistic],
 											total: page.total + 1,
 										}
 									: { ...page, total: page.total + 1 },

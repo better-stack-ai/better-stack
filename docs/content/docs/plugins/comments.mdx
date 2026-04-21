@@ -274,6 +274,7 @@ import { CommentThread } from "@btst/stack/plugins/comments/client/components"
 | `currentUserId` | `string` | — | Authenticated user ID — enables edit/delete/pending badge |
 | `loginHref` | `string` | — | Login page URL shown to unauthenticated users |
 | `pageSize` | `number` | — | Comments per page. Falls back to `defaultCommentPageSize` from overrides, then 100. A "Load more" button appears when there are additional pages. |
+| `sort` | `"asc" \| "desc"` | — | Sort direction for top-level comments by `createdAt`. Defaults to `defaultCommentSort` from overrides, then `"desc"` (newest first). Replies inside each thread always render chronologically and are unaffected. |
 | `components.Input` | `ComponentType` | — | Custom input component (default: `<textarea>`) |
 | `components.Renderer` | `ComponentType` | — | Custom renderer for comment body (default: `<p>`) |
 
@@ -528,6 +529,7 @@ Configure the comments plugin behavior from your layout:
 | `currentUserId` | `string \| (() => string \| undefined \| Promise<string \| undefined>)` | Authenticated user's ID — used by the User Comments page. Supports async functions for session-based resolution. |
 | `loginHref` | `string` | Login route used by comment UIs when user is unauthenticated. |
 | `defaultCommentPageSize` | `number` | Default number of top-level comments per page for all `CommentThread` instances. Overridden per-instance by the `pageSize` prop. Defaults to `100` when not set. |
+| `defaultCommentSort` | `"asc" \| "desc"` | Default sort direction for top-level comments in all `CommentThread` instances. Overridden per-instance by the `sort` prop. Defaults to `"desc"` (newest first). |
 | `allowPosting` | `boolean` | Hide/show comment form and reply actions globally in `CommentThread` instances (defaults to `true`). |
 | `allowEditing` | `boolean` | Hide/show edit affordances globally in `CommentThread` instances (defaults to `true`). |
 | `resourceLinks` | `Record<string, (id: string) => string>` | Per-resource-type URL builders for linking comments back to their resource on the User Comments page (e.g. `{ "blog-post": (slug) => "/pages/blog/" + slug }`). The plugin appends `#comments` automatically so the page scrolls to the thread. |

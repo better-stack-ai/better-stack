@@ -98,6 +98,17 @@ export interface CommentThreadProps {
 	 * Defaults to true.
 	 */
 	allowEditing?: boolean;
+	/**
+	 * Sort direction for top-level comments by `createdAt`.
+	 * - `"desc"` (default): newest first.
+	 * - `"asc"`: oldest first.
+	 *
+	 * Replies inside each thread always render chronologically (oldest → newest)
+	 * and are unaffected by this prop.
+	 *
+	 * Overrides the global `defaultCommentSort` from `CommentsPluginOverrides`.
+	 */
+	sort?: "asc" | "desc";
 }
 
 const DEFAULT_RENDERER: ComponentType<CommentRendererProps> = ({ body }) => (
@@ -325,6 +336,7 @@ function CommentThreadInner({
 	pageSize: pageSizeProp,
 	allowPosting: allowPostingProp,
 	allowEditing: allowEditingProp,
+	sort: sortProp,
 }: CommentThreadProps) {
 	const overrides = usePluginOverrides<
 		CommentsPluginOverrides,
@@ -334,6 +346,7 @@ function CommentThreadInner({
 		pageSizeProp ?? overrides.defaultCommentPageSize ?? DEFAULT_PAGE_SIZE;
 	const allowPosting = allowPostingProp ?? overrides.allowPosting ?? true;
 	const allowEditing = allowEditingProp ?? overrides.allowEditing ?? true;
+	const sort = sortProp ?? overrides.defaultCommentSort ?? "desc";
 	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
 	const [replyingTo, setReplyingTo] = useState<string | null>(null);
 	const [expandedReplies, setExpandedReplies] = useState<Set<string>>(
@@ -357,6 +370,7 @@ function CommentThreadInner({
 		status: "approved",
 		parentId: null,
 		currentUserId,
+		sort,
 		pageSize,
 	});
 
@@ -366,6 +380,7 @@ function CommentThreadInner({
 		currentUserId,
 		infiniteKey: threadQueryKey,
 		pageSize,
+		sort,
 	});
 
 	const handlePost = async (body: string) => {

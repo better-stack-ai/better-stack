@@ -76,6 +76,16 @@ export interface CommentsPluginOverrides {
 	defaultCommentPageSize?: number;
 
 	/**
+	 * Default sort direction (by `createdAt`) for top-level comments in
+	 * `CommentThread`.
+	 * - `"desc"` (default): newest comments first.
+	 * - `"asc"`: oldest comments first.
+	 *
+	 * Can be overridden per-instance via the `sort` prop on `CommentThread`.
+	 */
+	defaultCommentSort?: "asc" | "desc";
+
+	/**
 	 * When false, the comment form and reply buttons are hidden in all
 	 * `CommentThread` instances. Users can still read existing comments.
 	 * Defaults to true.
