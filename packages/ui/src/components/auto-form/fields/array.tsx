@@ -47,6 +47,8 @@ function getPrimitiveDefault(itemSchema: z.ZodType): unknown {
   switch (getBaseType(base)) {
     case "ZodBoolean":
       return false;
+    case "ZodNumber":
+      return 0;
     default:
       return "";
   }
