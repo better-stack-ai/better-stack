@@ -18,7 +18,7 @@ import type {
 	RelationValue,
 	InverseRelation,
 } from "../types";
-import { listContentQuerySchema } from "../schemas";
+import { createListContentQuerySchema } from "../schemas";
 import { slugify } from "../utils";
 import {
 	getAllContentTypes,
@@ -492,6 +492,20 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 		}),
 
 		routes: (adapter: Adapter) => {
+			// Build pagination schemas once — honours config.maxPageSize
+			const listContentQuerySchema = createListContentQuerySchema(
+				config.maxPageSize,
+			);
+			const paginationQuerySchema = z.object({
+				limit: z.coerce
+					.number()
+					.min(1)
+					.max(config.maxPageSize ?? 1000)
+					.optional()
+					.default(20),
+				offset: z.coerce.number().min(0).optional().default(0),
+			});
+
 			// Helper to get content type by slug
 			const getContentType = async (
 				slug: string,
@@ -525,10 +539,10 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 						sortBy: { field: "name", direction: "asc" },
 					});
 
-					// Get item counts for each content type
+					// Get item counts for each content type via adapter.count() (avoids N+1 scan)
 					const typesWithCounts = await Promise.all(
 						contentTypes.map(async (ct) => {
-							const items = await adapter.findMany<ContentItem>({
+							const itemCount: number = await adapter.count({
 								model: "contentItem",
 								where: [
 									{
@@ -540,7 +554,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 							});
 							return {
 								...serializeContentType(ct),
-								itemCount: items.length,
+								itemCount,
 							};
 						}),
 					);
@@ -964,12 +978,12 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 				{
 					method: "GET",
 					params: z.object({ typeSlug: z.string() }),
-					query: z.object({
-						field: z.string(),
-						targetId: z.string(),
-						limit: z.coerce.number().min(1).max(100).optional().default(20),
-						offset: z.coerce.number().min(0).optional().default(0),
-					}),
+					query: z
+						.object({
+							field: z.string(),
+							targetId: z.string(),
+						})
+						.merge(paginationQuerySchema),
 				},
 				async (ctx) => {
 					const { typeSlug } = ctx.params;
@@ -1144,12 +1158,12 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 						slug: z.string(),
 						sourceType: z.string(),
 					}),
-					query: z.object({
-						itemId: z.string(),
-						fieldName: z.string(),
-						limit: z.coerce.number().min(1).max(100).optional().default(20),
-						offset: z.coerce.number().min(0).optional().default(0),
-					}),
+					query: z
+						.object({
+							itemId: z.string(),
+							fieldName: z.string(),
+						})
+						.merge(paginationQuerySchema),
 				},
 				async (ctx) => {
 					const { slug, sourceType } = ctx.params;
