@@ -303,4 +303,14 @@ export interface CMSBackendConfig {
 	contentTypes: ContentTypeConfig[];
 	/** Optional hooks for customizing behavior */
 	hooks?: CMSBackendHooks;
+	/**
+	 * Maximum number of items that can be requested in a single page.
+	 * Applied to all list endpoints (`/content/:typeSlug`, by-relation, and inverse-relation).
+	 *
+	 * Raise this when your content types have many items and you need to fetch
+	 * large pages (e.g. for SSG, CSV export, or programmatic access).
+	 *
+	 * @default 1000
+	 */
+	maxPageSize?: number;
 }

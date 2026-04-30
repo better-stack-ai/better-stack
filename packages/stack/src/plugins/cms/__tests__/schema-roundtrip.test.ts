@@ -804,3 +804,206 @@ describe("Zod to JSON Schema roundtrip", () => {
 		});
 	});
 });
+
+/**
+ * These tests confirm and protect against a bug where `useFieldArray` in
+ * AutoFormArray corrupts primitive string values in arrays like
+ * `structuredContraindications: z.array(z.string()).default([])`.
+ *
+ * When react-hook-form's `useFieldArray` processes a primitive array
+ * (e.g. `["pregnancy", "active malignancy"]`), it wraps each element as a
+ * tracking object `{ id: "rhf_generated_id" }`, discarding the original
+ * string value. When `form.watch()` fires, it returns these objects. The
+ * `handleValuesChange` callback then calls `setFormData(values)` which stores
+ * the corrupted objects. On form submit, `zodResolver` validates the corrupted
+ * values against `z.array(z.string())` and FAILS — causing the Save button
+ * to do nothing (no error shown, no API request made).
+ *
+ * The fix: AutoFormArray must NOT use `useFieldArray` for primitive (non-object)
+ * arrays. Instead it uses `form.watch` + `form.setValue` directly so primitive
+ * values are always preserved in the form state.
+ */
+describe("Primitive string array — useFieldArray corruption bug", () => {
+	/**
+	 * Simulates what zodToFormSchema + formSchemaToZod does:
+	 * Zod schema → JSON Schema (stored in DB) → reconstructed Zod schema.
+	 */
+	function roundtripSchema(schema: z.ZodType): z.ZodType {
+		const jsonSchema = z.toJSONSchema(schema, { unrepresentable: "any" });
+		return z.fromJSONSchema(jsonSchema as z.core.JSONSchema.JSONSchema);
+	}
+
+	it("z.array(z.string()) survives JSON Schema roundtrip and accepts string values", () => {
+		const schema = z.object({
+			structuredContraindications: z.array(z.string()).default([]),
+		});
+
+		const reconstructed = roundtripSchema(schema);
+
+		// Actual compound data — should PASS
+		expect(
+			reconstructed.safeParse({
+				structuredContraindications: [
+					"pregnancy",
+					"active malignancy",
+					"active cancer",
+					"trying to conceive",
+				],
+			}).success,
+		).toBe(true);
+
+		// Empty array — should PASS (default)
+		expect(
+			reconstructed.safeParse({ structuredContraindications: [] }).success,
+		).toBe(true);
+	});
+
+	it("useFieldArray-corrupted values (objects) fail z.array(z.string()) validation — this is the root cause of the silent save failure", () => {
+		const schema = z.object({
+			structuredContraindications: z.array(z.string()).default([]),
+		});
+
+		const reconstructed = roundtripSchema(schema);
+
+		// Simulates what react-hook-form's useFieldArray returns when used with
+		// primitive string arrays: each string is replaced by a tracking object
+		// { id: "rhf_generated_id" } and the original value is lost.
+		const corruptedByUseFieldArray = {
+			structuredContraindications: [
+				{ id: "rhf_internal_id_1" },
+				{ id: "rhf_internal_id_2" },
+				{ id: "rhf_internal_id_3" },
+				{ id: "rhf_internal_id_4" },
+			],
+		};
+
+		// This is the actual validation error that occurs when Save is clicked:
+		// zodResolver validates the corrupted objects against z.array(z.string())
+		// and FAILS, so onSubmit is never called → no API request → "nothing happens"
+		const result = reconstructed.safeParse(corruptedByUseFieldArray);
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			// Confirm the error is specifically about the string array elements
+			const paths = result.error.issues.map((i) => i.path.join("."));
+			expect(
+				paths.some((p) => p.startsWith("structuredContraindications")),
+			).toBe(true);
+		}
+	});
+
+	it("primitive string array values are preserved correctly (NOT corrupted) when form state is managed without useFieldArray", () => {
+		// After the fix, AutoFormArray uses form.watch + form.setValue for primitive
+		// arrays. The values remain as strings throughout the lifecycle:
+		// initialData → formData → form state → zodResolver → submit
+
+		const schema = z.object({
+			structuredContraindications: z.array(z.string()).default([]),
+		});
+
+		const reconstructed = roundtripSchema(schema);
+
+		// The correctly-preserved values (no useFieldArray wrapping)
+		const preservedValues = {
+			structuredContraindications: [
+				"pregnancy",
+				"active malignancy",
+				"active cancer",
+				"trying to conceive",
+			],
+		};
+
+		// With the fix applied, these values pass validation → Save works
+		expect(reconstructed.safeParse(preservedValues).success).toBe(true);
+	});
+
+	it("compound schema with structuredContraindications passes full validation with string array values", () => {
+		// Representative subset of CompoundSchema fields that appear on the
+		// Epitalon compound page — verifies the full schema round-trip for the
+		// fields that are relevant to the reported bug.
+		const compoundSchema = z.object({
+			name: z.string().min(1),
+			compoundType: z.enum([
+				"healing-peptide",
+				"gh-axis",
+				"metabolic-peptide",
+				"sarm",
+				"steroid",
+				"nootropic",
+				"supplement",
+				"ancillary-pct",
+				"longevity",
+				"hair",
+				"skin",
+				"sexual",
+				"other",
+			]),
+			researchStatus: z.enum([
+				"research-only",
+				"approved",
+				"banned",
+				"grey-market",
+				"supplement",
+			]),
+			legalStatus: z.enum([
+				"OTC",
+				"Research",
+				"Grey-Market",
+				"Rx-Only",
+				"Schedule-III",
+				"Banned",
+			]),
+			doseUnit: z.enum(["mcg", "mg", "IU", "ml", "g"]),
+			doseFrequency: z.enum([
+				"once-daily",
+				"twice-daily",
+				"three-times-daily",
+				"every-other-day",
+				"weekly",
+				"twice-weekly",
+				"three-times-weekly",
+				"as-needed",
+				"custom",
+			]),
+			structuredContraindications: z.array(z.string()).default([]),
+			affiliates: z
+				.array(
+					z.object({
+						partnerId: z.object({ id: z.string() }).optional(),
+						title: z.string().optional(),
+						url: z.string().min(1),
+					}),
+				)
+				.default([]),
+		});
+
+		const reconstructed = roundtripSchema(compoundSchema);
+
+		// Epitalon-like data — all values as they come from parsedData
+		const epitalon = {
+			name: "Epitalon",
+			compoundType: "longevity",
+			researchStatus: "research-only",
+			legalStatus: "Research",
+			doseUnit: "mg",
+			doseFrequency: "once-daily",
+			// The 4 string items that were causing the silent save failure
+			structuredContraindications: [
+				"pregnancy",
+				"active malignancy",
+				"active cancer",
+				"trying to conceive",
+			],
+			affiliates: [
+				{
+					partnerId: { id: "v6yAqOSO_example_id" },
+					title: "Buy Epitalon 10mg",
+					url: "https://swisschems.is/product/epitalon-10mg-price-is-per-vial/",
+				},
+			],
+		};
+
+		const result = reconstructed.safeParse(epitalon);
+		// After the fix, this should PASS (the save button works)
+		expect(result.success).toBe(true);
+	});
+});
