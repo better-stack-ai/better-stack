@@ -324,7 +324,9 @@ function PrimitiveArrayRow({
               onChange={(ev) =>
                 field.onChange(
                   inputType === "number"
-                    ? ev.target.valueAsNumber
+                    ? Number.isNaN(ev.target.valueAsNumber)
+                      ? undefined
+                      : ev.target.valueAsNumber
                     : ev.target.value,
                 )
               }
