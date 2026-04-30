@@ -319,7 +319,13 @@ function PrimitiveArrayRow({
                   ? ""
                   : String(field.value)
               }
-              onChange={(ev) => field.onChange(ev.target.value)}
+              onChange={(ev) =>
+                field.onChange(
+                  inputType === "number"
+                    ? ev.target.valueAsNumber
+                    : ev.target.value,
+                )
+              }
             />
           </FormControl>
           <FormMessage />
