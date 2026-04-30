@@ -500,7 +500,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 				limit: z.coerce
 					.number()
 					.min(1)
-					.max(config.maxPageSize ?? 1000)
+					.max(config.maxPageSize ?? DEFAULT_MAX_PAGE_SIZE)
 					.optional()
 					.default(20),
 				offset: z.coerce.number().min(0).optional().default(0),
