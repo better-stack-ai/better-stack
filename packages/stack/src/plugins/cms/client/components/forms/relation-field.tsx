@@ -110,15 +110,21 @@ export function RelationField({
 			.filter((id) => id.length > 0 && !loadedIds.has(id));
 	}, [availableItems, normalizedValue]);
 
-	const hydrationQueries = useQueries({
+	const hydrationResult = useQueries({
 		queries: missingDetailIds.map((id) => ({
 			...cmsQueries.cmsContent.detail(relation.targetType, id),
 			...RELATION_DETAIL_QUERY_OPTS,
 			enabled: Boolean(relation.targetType && id),
 		})),
+		combine: (results) => ({
+			data: results.map(
+				(r) => r.data as SerializedContentItemWithType | null | undefined,
+			),
+			isHydrating: results.some((r) => r.isFetching),
+		}),
 	});
 
-	const isHydratingLabels = hydrationQueries.some((q) => q.isFetching);
+	const isHydratingLabels = hydrationResult.isHydrating;
 
 	const itemById = useMemo(() => {
 		const m = new Map<string, SerializedContentItemWithType>();
@@ -126,16 +132,13 @@ export function RelationField({
 			m.set(it.id, it as SerializedContentItemWithType);
 		}
 		for (let i = 0; i < missingDetailIds.length; i++) {
-			const row = hydrationQueries[i]?.data as
-				| SerializedContentItemWithType
-				| null
-				| undefined;
+			const row = hydrationResult.data[i];
 			if (row?.id) {
 				m.set(row.id, row);
 			}
 		}
 		return m;
-	}, [availableItems, missingDetailIds, hydrationQueries]);
+	}, [availableItems, missingDetailIds, hydrationResult.data]);
 
 	// Convert normalized value to Option[] for MultipleSelector
 	const selectedOptions: Option[] = normalizedValue.map((v) => {
@@ -159,10 +162,7 @@ export function RelationField({
 		];
 		const seen = new Set(merged.map((x) => x.id));
 		for (let i = 0; i < missingDetailIds.length; i++) {
-			const row = hydrationQueries[i]?.data as
-				| SerializedContentItemWithType
-				| null
-				| undefined;
+			const row = hydrationResult.data[i];
 			if (row?.id && !seen.has(row.id)) {
 				merged.push(row);
 				seen.add(row.id);
@@ -179,7 +179,7 @@ export function RelationField({
 		});
 	}, [
 		availableItems,
-		hydrationQueries,
+		hydrationResult.data,
 		missingDetailIds,
 		relation.displayField,
 	]);
