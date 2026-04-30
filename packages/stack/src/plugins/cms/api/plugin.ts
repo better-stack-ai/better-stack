@@ -18,7 +18,10 @@ import type {
 	RelationValue,
 	InverseRelation,
 } from "../types";
-import { createListContentQuerySchema } from "../schemas";
+import {
+	createListContentQuerySchema,
+	DEFAULT_MAX_PAGE_SIZE,
+} from "../schemas";
 import { slugify } from "../utils";
 import {
 	getAllContentTypes,
