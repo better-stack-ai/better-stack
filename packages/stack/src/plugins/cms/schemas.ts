@@ -1,13 +1,33 @@
 import { z } from "zod";
 
+/** Default upper bound for a single page when no maxPageSize is configured. */
+export const DEFAULT_MAX_PAGE_SIZE = 1000;
+
 /**
- * Schema for listing content items with pagination
+ * Factory that creates the list-content query schema with a configurable
+ * upper bound on the `limit` parameter.
+ *
+ * Use this inside the backend plugin factory (where `config.maxPageSize` is
+ * available) so the cap is set at registration time rather than hardcoded.
  */
-export const listContentQuerySchema = z.object({
-	slug: z.string().optional(),
-	limit: z.coerce.number().min(1).max(100).optional().default(20),
-	offset: z.coerce.number().min(0).optional().default(0),
-});
+export function createListContentQuerySchema(
+	maxPageSize = DEFAULT_MAX_PAGE_SIZE,
+) {
+	return z.object({
+		slug: z.string().optional(),
+		limit: z.coerce.number().min(1).max(maxPageSize).optional().default(20),
+		offset: z.coerce.number().min(0).optional().default(0),
+	});
+}
+
+/**
+ * Schema for listing content items with pagination.
+ * Uses the default maxPageSize (1000).
+ *
+ * @deprecated Prefer {@link createListContentQuerySchema} inside plugin
+ * factories so consumers can configure the upper bound via `maxPageSize`.
+ */
+export const listContentQuerySchema = createListContentQuerySchema();
 
 /**
  * Schema for creating a content item

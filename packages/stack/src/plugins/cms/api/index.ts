@@ -18,3 +18,4 @@ export {
 	type CreateCMSContentItemOptions,
 } from "./mutations";
 export { CMS_QUERY_KEYS } from "./query-key-defs";
+export { createCMSQueryKeys } from "../query-keys";

@@ -1,6 +1,6 @@
 "use client";
 import { Form } from "@workspace/ui/components/form";
-import React from "react";
+import React, { useState } from "react";
 import type {
   DefaultValues,
   FormState,
@@ -77,10 +77,21 @@ function AutoForm<SchemaType extends ZodObjectOrWrapped>({
     values: valuesProp as any,
   });
 
+  const [schemaSubmitError, setSchemaSubmitError] = useState<string | null>(null);
+
   function onSubmit(values: Record<string, unknown>) {
+    setSchemaSubmitError(null);
     const parsedValues = formSchema.safeParse(values);
     if (parsedValues.success) {
       onSubmitProp?.(parsedValues.data as z.infer<SchemaType>, form as any);
+    } else {
+      const message = parsedValues.error.issues
+        .map(
+          (issue) =>
+            `${issue.path.length ? `${issue.path.join(".")}: ` : ""}${issue.message}`,
+        )
+        .join(" · ");
+      setSchemaSubmitError(message);
     }
   }
 
@@ -106,7 +117,7 @@ function AutoForm<SchemaType extends ZodObjectOrWrapped>({
       <Form {...form}>
         <form
           onSubmit={(e) => {
-            form.handleSubmit(onSubmit)(e);
+            form.handleSubmit(onSubmit, () => setSchemaSubmitError(null))(e);
           }}
           className={cn("space-y-5", className)}
         >
@@ -116,6 +127,15 @@ function AutoForm<SchemaType extends ZodObjectOrWrapped>({
             dependencies={dependencies as any}
             fieldConfig={fieldConfig as any}
           />
+
+          {schemaSubmitError ? (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
+            >
+              {schemaSubmitError}
+            </div>
+          ) : null}
 
           {renderChildren}
         </form>
