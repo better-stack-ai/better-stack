@@ -389,13 +389,9 @@ export function buildFieldConfigFromJsonSchema(
 			) {
 				config.fieldType = fieldType;
 			}
-			// 3. Unknown custom type without a component - log warning and skip
-			else {
-				console.warn(
-					`CMS: Unknown fieldType "${fieldType}" for field "${key}". ` +
-						`Provide a component via fieldComponents override or use a built-in type.`,
-				);
-			}
+			// 3. Unknown custom type — no component registered here; a higher-level
+			// wrapper (e.g. the CMS content-form) is expected to inject it via
+			// injectCustomFieldTypes. No warning needed; this is by design.
 		}
 
 		// Reserved FieldConfigItem property names that should not be overwritten by nested field configs.

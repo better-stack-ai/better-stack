@@ -253,11 +253,16 @@ export default function AutoFormObject<
               const defaultValue = fieldConfigItem.inputProps?.defaultValue;
               const value = field.value ?? defaultValue ?? "";
 
+              // Destructure defaultValue out of inputProps so it isn't spread
+              // alongside value — having both makes React warn about a mixed
+              // controlled/uncontrolled input.
+              const { defaultValue: _omitDV, ...safeInputProps } =
+                (fieldConfigItem.inputProps ?? {}) as Record<string, unknown>;
               const fieldProps = {
                 ...zodToHtmlInputProps(item),
                 ...field,
-                ...fieldConfigItem.inputProps,
-                disabled: fieldConfigItem.inputProps?.disabled || isDisabled,
+                ...safeInputProps,
+                disabled: (safeInputProps.disabled as boolean | undefined) || isDisabled,
                 ref: undefined,
                 value: value,
               };

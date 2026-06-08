@@ -293,6 +293,52 @@ describe("mediaBackendPlugin create-asset URL validation", () => {
 			"https://cdn.example.com/uploads/photo.jpg",
 		);
 	});
+
+	it("allows any HTTP(S) URL when protocol prefixes are explicitly configured", async () => {
+		const backend = createVercelBlobBackend({
+			allowedUrlPrefixes: ["https://", "http://"],
+		});
+
+		const response = await backend.handler(
+			new Request("http://localhost/api/media/assets", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(
+					createAssetRequestBody(
+						"https://images.example.net/affiliate/photo.jpg",
+					),
+				),
+			}),
+		);
+
+		expect(response.status).toBe(200);
+
+		const assets = await backend.api.media.listAssets();
+		expect(assets.items).toHaveLength(1);
+		expect(assets.items[0]?.url).toBe(
+			"https://images.example.net/affiliate/photo.jpg",
+		);
+
+		const httpResponse = await backend.handler(
+			new Request("http://localhost/api/media/assets", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(
+					createAssetRequestBody(
+						"http://images.example.net/affiliate/photo.jpg",
+					),
+				),
+			}),
+		);
+
+		expect(httpResponse.status).toBe(200);
+
+		const updatedAssets = await backend.api.media.listAssets();
+		expect(updatedAssets.items).toHaveLength(2);
+		expect(
+			updatedAssets.items.some((asset) => asset.url.startsWith("http://")),
+		).toBe(true);
+	});
 });
 
 describe("mediaBackendPlugin S3 URL validation", () => {

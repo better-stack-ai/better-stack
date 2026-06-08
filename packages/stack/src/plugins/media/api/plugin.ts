@@ -41,7 +41,19 @@ function sanitizeS3KeySegment(s: string): string {
 }
 
 function matchesUrlPrefix(url: string, prefix: string): boolean {
-	const normalizedPrefix = `${prefix.replace(/\/+$/, "")}/`;
+	const trimmedPrefix = prefix.trim();
+	if (!trimmedPrefix) return false;
+
+	if (/^[a-z][a-z\d+.-]*:\/\//i.test(trimmedPrefix)) {
+		if (trimmedPrefix.endsWith("://")) {
+			return url.startsWith(trimmedPrefix);
+		}
+
+		const normalizedPrefix = trimmedPrefix.replace(/\/+$/, "");
+		return url === normalizedPrefix || url.startsWith(`${normalizedPrefix}/`);
+	}
+
+	const normalizedPrefix = `${trimmedPrefix.replace(/\/+$/, "")}/`;
 	return url.startsWith(normalizedPrefix);
 }
 
