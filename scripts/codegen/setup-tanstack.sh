@@ -137,6 +137,13 @@ const extraDeps = {
   "sonner": "^2.0.7",
   "lucide-react": "^0.545.0",
   "zod": "^4.2.0",
+  // Required by the vite.config.ts overlay so the build emits a runnable
+  // .output/server/index.mjs Node server (nitro) and the other plugins the
+  // overlay imports are guaranteed present regardless of template drift.
+  "nitro": "latest",
+  "@tailwindcss/vite": "^4.2.1",
+  "vite-tsconfig-paths": "^5.1.4",
+  "@vitejs/plugin-react": "^5.2.0",
 };
 
 const deps = pkg.dependencies || {};

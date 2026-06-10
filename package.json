@@ -30,7 +30,7 @@
     "vitest": "catalog:"
   },
   "resolutions": {
-    "zod": "^4.2.0",
+    "zod": "4.4.3",
     "miniflare>zod": "^3.25.1",
     "vinxi>zod": "^3.24.3",
     "react": "19.2.7",

@@ -36,4 +36,7 @@ supportedArchitectures:
 overrides:
   esbuild@<=0.24.2: '>=0.25.0'
   miniflare>zod: ^3.25.1
-  zod: ^4.2.0
+  # Exact pin: zod brands its minor version into its types ($ZodType _zod.version),
+  # so two coexisting 4.x resolutions (e.g. 4.2.x and 4.4.x) fail to typecheck
+  # against each other in fresh codegen-project installs.
+  zod: 4.4.3
