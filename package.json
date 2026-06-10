@@ -33,9 +33,6 @@
     "zod": "^4.2.0",
     "miniflare>zod": "^3.25.1",
     "vinxi>zod": "^3.24.3",
-    "@tanstack/router-generator>zod": "^3.25.1",
-    "@tanstack/router-plugin>zod": "^3.25.1",
-    "@tanstack/start-plugin-core>zod": "^3.25.1",
     "react": "^19.2.0",
     "@tanstack/react-query": "^5.90.2",
     "sonner": "^2.0.7"

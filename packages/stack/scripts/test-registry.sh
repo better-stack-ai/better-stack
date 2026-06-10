@@ -259,13 +259,17 @@ console.log('tsconfig.json patched');
     fi
 
     # ------------------------------------------------------------------
-    step "7b — Pinning tiptap packages to 3.20.1"
+    step "7b — Pinning tiptap packages to 3.20.1 and react-day-picker to v9"
     # ------------------------------------------------------------------
     # Must run AFTER all `shadcn add` calls so that tiptap packages are already
     # present as direct dependencies — setting npm overrides for packages that
     # are not yet direct deps and then having shadcn add them afterwards causes
     # EOVERRIDE, which silently aborts the shadcn install and leaves plugin
     # files (boards-list-page, page-list-page, …) unwritten.
+    #
+    # react-day-picker is pinned to ^9 because shadcn's calendar.tsx still uses
+    # deprecated v8 ClassNames keys (e.g. `table`) that were removed from the
+    # ClassNames type in react-day-picker v10, breaking `next build` type checks.
     node -e "
 const fs = require('fs');
 const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
@@ -294,10 +298,13 @@ for (const p of pkgs) {
   if (pkg.dependencies?.[p]) pkg.dependencies[p] = V;
   pkg.overrides[p] = V;
 }
+const RDP = '^9.13.2';
+if (pkg.dependencies?.['react-day-picker']) pkg.dependencies['react-day-picker'] = RDP;
+pkg.overrides['react-day-picker'] = RDP;
 fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
-console.log('package.json updated with tiptap overrides');
+console.log('package.json updated with tiptap + react-day-picker overrides');
 "
-    success "Tiptap overrides written (npm install runs in step 8)"
+    success "Tiptap and react-day-picker overrides written (npm install runs in step 8)"
 
     # ------------------------------------------------------------------
     step "7c — Patching external registry files with known type errors"
