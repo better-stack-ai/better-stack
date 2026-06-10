@@ -221,8 +221,10 @@ export function formSchemaToZod(jsonSchema: FormJsonSchema): z.ZodType {
   // 2. z.fromJSONSchema creates strict ZodObjects that reject unknown keys with
   //    an 'unrecognized_keys' error. This breaks form save when parsedData
   //    contains fields added to the Zod schema after the content type was last
-  //    synced to the DB. Apply passthrough() to match the default z.object()
-  //    behaviour (strip unknown keys silently rather than rejecting them).
+  //    synced to the DB. Apply passthrough() so unknown keys are preserved
+  //    rather than rejected. We deliberately do NOT use strip() here: stripping
+  //    would silently drop values for fields that exist in the live Zod schema
+  //    but not yet in the stale stored JSON schema, losing data on save.
   if (schema && typeof (schema as z.ZodObject<z.ZodRawShape>).passthrough === "function") {
     schema = (schema as z.ZodObject<z.ZodRawShape>).passthrough();
   }

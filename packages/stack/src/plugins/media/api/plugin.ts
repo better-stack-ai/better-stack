@@ -193,6 +193,15 @@ export interface MediaBackendConfig {
 	 * Provide this option only when you need to override the automatic default (e.g. to allow
 	 * assets from a CDN in front of your storage that uses a different domain). When using
 	 * `localAdapter`, setting `allowedUrlPrefixes` explicitly opts `POST /media/assets` back in.
+	 *
+	 * @remarks
+	 * Protocol-only prefixes such as `"https://"` (and especially `"http://"`) disable
+	 * origin-based restrictions entirely — any URL with that scheme will be accepted.
+	 * Only use them when you intentionally want to allow assets from arbitrary hosts:
+	 * `"http://"` URLs will be blocked as mixed content on HTTPS pages, and if your
+	 * `onAfterUpload` hook fetches asset URLs server-side, accepting arbitrary hosts
+	 * can expose an SSRF surface. Prefer full origin prefixes like
+	 * `"https://cdn.example.com"` whenever possible.
 	 */
 	allowedUrlPrefixes?: string[];
 
