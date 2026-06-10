@@ -6,7 +6,7 @@ import {
 import type { QueryClient } from "@tanstack/react-query";
 import type { TodosApiRouter } from "../api/backend";
 import { lazy } from "react";
-import { Todo } from "../types";
+import type { Todo } from "../types";
 
 /**
  * Configuration for todos client plugin

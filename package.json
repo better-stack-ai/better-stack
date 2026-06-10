@@ -30,19 +30,21 @@
     "vitest": "catalog:"
   },
   "resolutions": {
-    "zod": "^4.2.0",
+    "zod": "4.4.3",
     "miniflare>zod": "^3.25.1",
     "vinxi>zod": "^3.24.3",
     "@tanstack/router-generator>zod": "^3.25.1",
     "@tanstack/router-plugin>zod": "^3.25.1",
     "@tanstack/start-plugin-core>zod": "^3.25.1",
-    "react": "^19.2.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
     "@tanstack/react-query": "^5.90.2",
     "sonner": "^2.0.7"
   },
   "pnpm": {
     "overrides": {
-      "react": "^19.2.0",
+      "react": "19.2.7",
+      "react-dom": "19.2.7",
       "@tanstack/react-query": "^5.90.2",
       "sonner": "^2.0.7"
     }

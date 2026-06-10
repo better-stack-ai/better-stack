@@ -6,7 +6,7 @@ import {
 import type { QueryClient } from "@tanstack/react-query";
 import type { TodosApiRouter } from "../api/backend";
 import { lazy } from "react";
-import { Todo } from "../types";
+import type { Todo } from "../types";
 
 // Stable lazy references at module scope — must NOT be created inside route
 // handlers or component bodies, otherwise React sees a new component type on

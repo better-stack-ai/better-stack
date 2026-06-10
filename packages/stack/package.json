@@ -1,6 +1,6 @@
 {
   "name": "@btst/stack",
-  "version": "2.12.1",
+  "version": "2.12.2",
   "description": "A composable, plugin-based library for building full-stack applications.",
   "repository": {
     "type": "git",
@@ -823,8 +823,8 @@
     "ai": "^5.0.94",
     "better-call": "catalog:",
     "knip": "^5.61.2",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "react-error-boundary": "^4.1.2",
     "rollup-plugin-preserve-directives": "0.4.0",
     "rollup-plugin-visualizer": "^5.12.0",

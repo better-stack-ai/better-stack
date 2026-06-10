@@ -217,12 +217,23 @@ function attachStepsMetadata(
 export function formSchemaToZod(jsonSchema: FormJsonSchema): z.ZodType {
   // 1. Create base schema from JSON Schema
   let schema = z.fromJSONSchema(jsonSchema as z.core.JSONSchema.JSONSchema);
+
+  // 2. z.fromJSONSchema creates strict ZodObjects that reject unknown keys with
+  //    an 'unrecognized_keys' error. This breaks form save when parsedData
+  //    contains fields added to the Zod schema after the content type was last
+  //    synced to the DB. Apply passthrough() so unknown keys are preserved
+  //    rather than rejected. We deliberately do NOT use strip() here: stripping
+  //    would silently drop values for fields that exist in the live Zod schema
+  //    but not yet in the stale stored JSON schema, losing data on save.
+  if (schema && typeof (schema as z.ZodObject<z.ZodRawShape>).passthrough === "function") {
+    schema = (schema as z.ZodObject<z.ZodRawShape>).passthrough();
+  }
   
-  // 2. Add date constraint validations
+  // 3. Add date constraint validations
   const dateFieldsWithConstraints = findDateFieldsWithConstraints(jsonSchema);
   schema = addDateValidations(schema, dateFieldsWithConstraints);
   
-  // 3. Re-attach steps metadata so SteppedAutoForm can extract it
+  // 4. Re-attach steps metadata so SteppedAutoForm can extract it
   schema = attachStepsMetadata(schema, jsonSchema);
   
   return schema;

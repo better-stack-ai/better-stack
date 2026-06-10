@@ -60,7 +60,13 @@ test.describe("AI Chat Plugin", () => {
 		await page.keyboard.press("Enter");
 
 		// 4. Verify user message appears - increase timeout to account for slower state updates
-		await expect(page.getByText("Hello, world!")).toBeVisible({
+		// Scope to the chat interface: once the assistant responds, the sidebar also
+		// shows a conversation titled "Hello, world!" (and the in-memory adapter keeps
+		// conversations from previous retries), so an unscoped getByText violates
+		// strict mode.
+		await expect(
+			page.locator('[data-testid="chat-interface"]').getByText("Hello, world!"),
+		).toBeVisible({
 			timeout: 30000,
 		});
 

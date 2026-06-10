@@ -18,6 +18,7 @@ export function UrlTab({
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
+		e.stopPropagation();
 		setError(null);
 		const trimmed = url.trim();
 		if (!trimmed) return;
@@ -43,7 +44,10 @@ export function UrlTab({
 			<form onSubmit={handleSubmit} className="flex flex-col gap-2">
 				<div className="flex flex-col gap-2 sm:flex-row">
 					<Input
-						type="url"
+						type="text"
+						inputMode="url"
+						autoCapitalize="none"
+						autoCorrect="off"
 						value={url}
 						onChange={(e) => setUrl(e.target.value)}
 						placeholder="https://example.com/image.png"
