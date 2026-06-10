@@ -36,6 +36,11 @@ supportedArchitectures:
 overrides:
   esbuild@<=0.24.2: '>=0.25.0'
   miniflare>zod: ^3.25.1
+  # The pinned TanStack Start 1.167.x toolchain (see setup-tanstack.sh) still
+  # uses the zod v3 API internally; scoped overrides win over the global pin.
+  '@tanstack/router-generator>zod': ^3.25.1
+  '@tanstack/router-plugin>zod': ^3.25.1
+  '@tanstack/start-plugin-core>zod': ^3.25.1
   # Exact pin: zod brands its minor version into its types ($ZodType _zod.version),
   # so two coexisting 4.x resolutions (e.g. 4.2.x and 4.4.x) fail to typecheck
   # against each other in fresh codegen-project installs.
