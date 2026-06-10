@@ -124,7 +124,7 @@ pkg.scripts["start:e2e"] = "rm -rf .next && next build && NODE_ENV=test NODE_OPT
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {
   "@btst/stack": "workspace:*",
-  "@btst/adapter-memory": "^2.1.1",
+  "@btst/adapter-memory": "^2.2.2",
 };
 
 // Ensure required runtime deps
