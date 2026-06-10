@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-router";
 
 import globalsCss from "@/styles.css?url";
-import { MyRouterContext } from "@/router";
+import type { MyRouterContext } from "@/router";
 import { ThemeProvider } from "next-themes";
 import { Navbar } from "@/components/navbar";
 import { Toaster } from "sonner";
