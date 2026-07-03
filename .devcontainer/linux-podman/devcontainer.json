@@ -1,0 +1,89 @@
+{
+  // ─── To reuse this in another project ────────────────────────────────────────
+  // 1. Copy .devcontainer/ into the new repo
+  // 2. Update "name" and "postCreateCommand"
+  // 3. Everything else (Dockerfile, mounts, runArgs) is project-agnostic
+  // ─────────────────────────────────────────────────────────────────────────────
+  "name": "better-stack",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "args": {
+      "USERNAME": "dev",
+      "USER_UID": "1000",
+      "USER_GID": "1000"
+    }
+  },
+
+  // Podman-specific flags only — no volume paths here (those are in "mounts")
+  // --userns=keep-id: rootless Podman maps your UID into the container so file ownership matches
+  // --network=host:   shares host network stack (localhost = host)
+  "runArgs": ["--userns=keep-id", "--network=host"],
+
+  // ${localEnv:HOME}            → /home/<you> on any Linux machine
+  // ${localEnv:XDG_RUNTIME_DIR} → /run/user/<uid>, where the Podman socket lives
+  "mounts": [
+    // Podman socket → docker CLI inside the container talks to host Podman (no daemon needed).
+    // Mounted at the SAME path as on the host so docker-out-of-docker path forwarding works.
+    {
+      "source": "${localEnv:XDG_RUNTIME_DIR}/podman/podman.sock",
+      "target": "${localEnv:XDG_RUNTIME_DIR}/podman/podman.sock",
+      "type": "bind"
+    },
+    // pnpm content-addressable store → packages survive image rebuilds
+    {
+      "source": "${localEnv:HOME}/.local/share/pnpm",
+      "target": "/home/dev/.local/share/pnpm",
+      "type": "bind"
+    },
+    // Playwright browser cache → Chromium download survives rebuilds
+    {
+      "source": "${localEnv:HOME}/.cache/ms-playwright",
+      "target": "/home/dev/.cache/ms-playwright",
+      "type": "bind"
+    },
+    // SSH keys (read-only) → git push/pull over SSH works inside the container
+    {
+      "source": "${localEnv:HOME}/.ssh",
+      "target": "/home/dev/.ssh",
+      "type": "bind",
+      "readonly": true
+    },
+    // gh CLI auth token → survives container rebuilds without re-authenticating
+    {
+      "source": "${localEnv:HOME}/.config/gh",
+      "target": "/home/dev/.config/gh",
+      "type": "bind"
+    }
+  ],
+
+  "containerEnv": {
+    // Point at the socket's real host path (mounted 1:1 above) so any path the
+    // CLI forwards to sibling containers resolves identically on the host.
+    "DOCKER_HOST": "unix://${localEnv:XDG_RUNTIME_DIR}/podman/podman.sock"
+  },
+
+  // Mount the workspace at its REAL host path (not /workspaces/...) so any
+  // project-relative paths forwarded to sibling containers resolve on the HOST.
+  "workspaceMount": "source=${localWorkspaceFolder},target=${localWorkspaceFolder},type=bind,consistency=cached",
+  "workspaceFolder": "${localWorkspaceFolder}",
+
+  // reshim: regenerates mise shims to point to this container's mise binary
+  // store-dir: pins pnpm store so it never falls back to a project-local .pnpm-store/
+  "postCreateCommand": "mise reshim && pnpm config set store-dir /home/dev/.local/share/pnpm/store && pnpm install",
+
+  // NOTE: No "forwardPorts" here on purpose. This container runs with
+  // --network=host (see runArgs), so it already shares the host's network
+  // namespace and every dev server (docs site, codegen project on 3006, etc.)
+  // is directly reachable on the host.
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["biomejs.biome", "ms-playwright.playwright"],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "biomejs.biome",
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}

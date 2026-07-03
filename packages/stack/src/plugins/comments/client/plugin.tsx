@@ -5,7 +5,7 @@ import {
 	createApiClient,
 	isConnectionError,
 } from "@btst/stack/plugins/client";
-import { createRoute } from "@btst/yar";
+import { defineRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
 import type { CommentsApiRouter } from "../api";
 import { createCommentsQueryKeys } from "../query-keys";
@@ -251,8 +251,8 @@ export const commentsClientPlugin = (config: CommentsClientConfig) =>
 		name: "comments",
 
 		routes: () => ({
-			moderation: createRoute("/comments/moderation", () => ({
-				PageComponent: ModerationPageComponent,
+			moderation: defineRoute("/comments/moderation", {
+				page: ModerationPageComponent,
 				loader: createModerationLoader(config),
 				meta: createCommentsRouteMeta(
 					config,
@@ -260,9 +260,9 @@ export const commentsClientPlugin = (config: CommentsClientConfig) =>
 					"Comment Moderation",
 					"Review and manage comments across all resources.",
 				),
-			})),
-			userComments: createRoute("/comments", () => ({
-				PageComponent: UserCommentsPageComponent,
+			}),
+			userComments: defineRoute("/comments", {
+				page: UserCommentsPageComponent,
 				loader: createUserCommentsLoader(config),
 				meta: createCommentsRouteMeta(
 					config,
@@ -270,6 +270,6 @@ export const commentsClientPlugin = (config: CommentsClientConfig) =>
 					"User Comments",
 					"View and manage your comments across resources.",
 				),
-			})),
+			}),
 		}),
 	});

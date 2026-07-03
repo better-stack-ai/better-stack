@@ -38,8 +38,13 @@ export function RouteRenderer({
 	onError: (error: Error, info: ErrorInfo) => void;
 	props?: any;
 }) {
-	// Resolve route on the client where components are available
-	const route = router.getRoute(path);
+	// Resolve route on the client where components are available.
+	// Memoized so PageComponent keeps a stable identity across re-renders:
+	// getRoute() invokes the route handler, which produces new component
+	// references each call. Without the memo, React would treat every parent
+	// re-render as a component type change and remount the whole subtree
+	// (losing state and re-triggering Suspense).
+	const route = React.useMemo(() => router.getRoute(path), [router, path]);
 
 	return (
 		<ComposedRoute
@@ -65,7 +70,10 @@ export function RouteRenderer({
  * @param LoadingComponent - Component to show during suspense
  * @param onNotFound - Optional callback when route is not found
  * @param NotFoundComponent - Optional component to show for 404s
- * @param props - Additional props to pass to the page component
+ * @param props - Additional props to pass to the page component. For routes
+ *   created with `defineRoute`, these are merged after the route context, so
+ *   a prop named `params` or `query` intentionally takes precedence over the
+ *   router-extracted values. Only pass trusted, framework-controlled values.
  * @param onError - Error handler callback for the error boundary
  */
 export function ComposedRoute({

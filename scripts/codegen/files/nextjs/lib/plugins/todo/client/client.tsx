@@ -1,12 +1,22 @@
 import {
 	createApiClient,
 	defineClientPlugin,
-	createRoute,
+	defineRoute,
 } from "@btst/stack/plugins/client";
 import type { QueryClient } from "@tanstack/react-query";
 import type { TodosApiRouter } from "../api/backend";
 import { lazy } from "react";
 import type { Todo } from "../types";
+
+// Stable lazy references at module scope — must NOT be created inside route
+// handlers or component bodies, otherwise React sees a new component type on
+// every render and cannot hydrate the SSR-rendered HTML.
+const TodosListPage = lazy(() =>
+	import("./components").then((m) => ({ default: m.TodosListPage })),
+);
+const AddTodoPage = lazy(() =>
+	import("./components").then((m) => ({ default: m.AddTodoPage })),
+);
 
 /**
  * Configuration for todos client plugin
@@ -122,26 +132,14 @@ export const todosClientPlugin = (config: TodosClientConfig) =>
 		name: "todos",
 
 		routes: () => ({
-			todos: createRoute("/todos", () => {
-				const TodosListPage = lazy(() =>
-					import("./components").then((m) => ({ default: m.TodosListPage })),
-				);
-
-				return {
-					PageComponent: TodosListPage,
-					loader: todosLoader(config),
-					meta: createTodosMeta(config, "/todos"),
-				};
+			todos: defineRoute("/todos", {
+				page: TodosListPage,
+				loader: todosLoader(config),
+				meta: createTodosMeta(config, "/todos"),
 			}),
-			addTodo: createRoute("/todos/add", () => {
-				const AddTodoPage = lazy(() =>
-					import("./components").then((m) => ({ default: m.AddTodoPage })),
-				);
-
-				return {
-					PageComponent: AddTodoPage,
-					meta: createAddTodoMeta(config, "/todos/add"),
-				};
+			addTodo: defineRoute("/todos/add", {
+				page: AddTodoPage,
+				meta: createAddTodoMeta(config, "/todos/add"),
 			}),
 		}),
 		sitemap: async () => {

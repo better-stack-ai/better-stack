@@ -6,7 +6,7 @@ import {
 	isConnectionError,
 	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
-import { createRoute } from "@btst/yar";
+import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import { createSanitizedSSRLoaderError } from "../../utils";
@@ -140,9 +140,9 @@ export interface FormBuilderClientConfig {
 		/** Replaces the new form page */
 		newForm?: ComponentType;
 		/** Replaces the form editor page */
-		editForm?: ComponentType<{ id: string }>;
+		editForm?: ComponentType<{ params: { id: string } }>;
 		/** Replaces the form submissions page */
-		submissions?: ComponentType<{ formId: string }>;
+		submissions?: ComponentType<{ params: { id: string } }>;
 	};
 }
 
@@ -516,47 +516,39 @@ export const formBuilderClientPlugin = (config: FormBuilderClientConfig) =>
 	defineClientPlugin({
 		name: "form-builder",
 
-		routes: () => ({
-			formList: createRoute("/forms", () => {
-				const CustomFormList = config.pageComponents?.formList;
-				return {
-					PageComponent: CustomFormList ?? (() => <FormListPageComponent />),
-					loader: createFormListLoader(config),
-					meta: createFormListMeta(),
-				};
-			}),
+		routes: () =>
+			defineRoutes(
+				{
+					formList: defineRoute("/forms", {
+						page: FormListPageComponent,
+						loader: createFormListLoader(config),
+						meta: createFormListMeta(),
+					}),
 
-			newForm: createRoute("/forms/new", () => {
-				const CustomNewForm = config.pageComponents?.newForm;
-				return {
-					PageComponent: CustomNewForm ?? (() => <FormBuilderPageComponent />),
-					loader: createFormBuilderLoader(undefined, config),
-					meta: createFormBuilderMeta(undefined, config),
-				};
-			}),
+					newForm: defineRoute("/forms/new", {
+						page: () => <FormBuilderPageComponent />,
+						loader: createFormBuilderLoader(undefined, config),
+						meta: createFormBuilderMeta(undefined, config),
+					}),
 
-			editForm: createRoute("/forms/:id/edit", ({ params }) => {
-				const CustomEditForm = config.pageComponents?.editForm;
-				return {
-					PageComponent: CustomEditForm
-						? () => <CustomEditForm id={params.id} />
-						: () => <FormBuilderPageComponent id={params.id} />,
-					loader: createFormBuilderLoader(params.id, config),
-					meta: createFormBuilderMeta(params.id, config),
-				};
-			}),
+					editForm: defineRoute("/forms/:id/edit", {
+						page: ({ params }) => <FormBuilderPageComponent id={params.id} />,
+						loader: ({ params }) =>
+							createFormBuilderLoader(params.id, config)(),
+						meta: ({ params }) => createFormBuilderMeta(params.id, config)(),
+					}),
 
-			submissions: createRoute("/forms/:id/submissions", ({ params }) => {
-				const CustomSubmissions = config.pageComponents?.submissions;
-				return {
-					PageComponent: CustomSubmissions
-						? () => <CustomSubmissions formId={params.id} />
-						: () => <SubmissionsPageComponent formId={params.id} />,
-					loader: createSubmissionsLoader(params.id, config),
-					meta: createSubmissionsMeta(params.id, config),
-				};
-			}),
-		}),
+					submissions: defineRoute("/forms/:id/submissions", {
+						page: ({ params }) => (
+							<SubmissionsPageComponent formId={params.id} />
+						),
+						loader: ({ params }) =>
+							createSubmissionsLoader(params.id, config)(),
+						meta: ({ params }) => createSubmissionsMeta(params.id, config)(),
+					}),
+				},
+				{ pages: config.pageComponents },
+			),
 
 		sitemap: async () => {
 			// Form Builder admin pages should NOT be in sitemap
