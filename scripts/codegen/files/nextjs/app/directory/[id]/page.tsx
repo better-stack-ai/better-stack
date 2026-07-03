@@ -2,6 +2,7 @@
 
 import { useContentItemPopulated } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
+import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useState } from "react";

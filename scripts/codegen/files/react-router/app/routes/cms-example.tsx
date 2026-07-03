@@ -3,6 +3,7 @@ import {
 	useContent,
 } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
+import { reactRouter } from "@btst/stack/react-router";
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import type { CMSTypes } from "../lib/cms-schemas";
 
