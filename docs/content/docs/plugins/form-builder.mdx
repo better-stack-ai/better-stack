@@ -206,7 +206,7 @@ Admin routes are automatically set to `noindex` for SEO. Don't include them in y
 
 ### Page Component Overrides
 
-You can replace any built-in admin page with your own React component using the optional `pageComponents` field in `formBuilderClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided, so this is fully backward-compatible.
+You can replace any built-in admin page with your own React component using the optional `pageComponents` field in `formBuilderClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided. Overrides for parameterized routes receive the route context (`{ params }`) as props.
 
 ```tsx
 formBuilderClientPlugin({
@@ -216,10 +216,10 @@ formBuilderClientPlugin({
     formList: MyCustomFormList,
     // Replace the new form page
     newForm: MyCustomNewForm,
-    // Replace the form editor page — receives id as a prop
-    editForm: ({ id }) => <MyCustomFormEditor id={id} />,
-    // Replace the form submissions page — receives formId as a prop
-    submissions: ({ formId }) => <MyCustomSubmissions formId={formId} />,
+    // Replace the form editor page — receives the route context as props
+    editForm: ({ params }) => <MyCustomFormEditor id={params.id} />,
+    // Replace the form submissions page — receives the route context as props
+    submissions: ({ params }) => <MyCustomSubmissions formId={params.id} />,
   },
 })
 ```
@@ -890,8 +890,9 @@ formBuilderClientPlugin({
   apiBasePath: "/api/data",
   queryClient,
   pageComponents: {
-    formList: FormListPageComponent,   // replaces the form list page
-    editForm: EditFormPageComponent,   // replaces the form editor page
+    formList: FormListPageComponent, // replaces the form list page
+    // Param routes receive the route context ({ params }) as props
+    editForm: ({ params }) => <EditFormPageComponent id={params.id} />,
     // newForm, submissions — omit to keep built-in defaults
   },
 })

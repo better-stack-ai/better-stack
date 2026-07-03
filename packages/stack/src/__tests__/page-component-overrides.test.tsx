@@ -1,47 +1,55 @@
 import { describe, it, expect } from "vitest";
 import { defineClientPlugin } from "../plugins/client";
-import type { ComponentType } from "react";
-import { createRoute } from "@btst/yar";
+import type { ComponentType, ReactElement } from "react";
+import { defineRoute, defineRoutes } from "@btst/yar";
 
 /**
  * Default page components used by the mock plugin factory.
  * These stand in for the real plugin page components (e.g. HomePageComponent).
  */
-const DefaultListComponent: ComponentType = () => <div>Default List</div>;
+const DefaultListComponent = () => <div>Default List</div>;
 const DefaultDetailComponent: ComponentType<{ id: string }> = ({ id }) => (
 	<div>Default Detail {id}</div>
 );
 
 /**
+ * Renders a bound page component (context injected as props) and returns the
+ * produced element for inspection, without needing a DOM.
+ */
+function renderBound(
+	Component: ComponentType<Record<string, unknown>> | undefined,
+): ReactElement<Record<string, unknown>> | null {
+	if (!Component) return null;
+	return (
+		Component as (
+			props: Record<string, unknown>,
+		) => ReactElement<Record<string, unknown>>
+	)({});
+}
+
+/**
  * Lightweight mock plugin factory that mirrors the real plugin pattern:
- * - Accepts a config with an optional `pageComponents` field
- * - Falls back to built-in components when no override is provided
- * - For param routes, extracts the override before the handler closure
+ * - Declares routes with defineRoute
+ * - Applies the optional `pageComponents` config via defineRoutes' pages option
  */
 function createTestPlugin(config: {
 	pageComponents?: {
 		list?: ComponentType;
-		detail?: ComponentType<{ id: string }>;
+		detail?: ComponentType<{ params: { id: string } }>;
 	};
 }) {
 	return defineClientPlugin({
 		name: "test",
-		routes: () => ({
-			list: createRoute("/items", () => {
-				const CustomList = config.pageComponents?.list;
-				return {
-					PageComponent: CustomList ?? DefaultListComponent,
-				};
-			}),
-			detail: createRoute("/items/:id", ({ params }) => {
-				const CustomDetail = config.pageComponents?.detail;
-				return {
-					PageComponent: CustomDetail
-						? () => <CustomDetail id={params.id} />
-						: () => <DefaultDetailComponent id={params.id} />,
-				};
-			}),
-		}),
+		routes: () =>
+			defineRoutes(
+				{
+					list: defineRoute("/items", { page: DefaultListComponent }),
+					detail: defineRoute("/items/:id", {
+						page: ({ params }) => <DefaultDetailComponent id={params.id} />,
+					}),
+				},
+				{ pages: config.pageComponents },
+			),
 	});
 }
 
@@ -52,7 +60,8 @@ describe("pageComponents overrides", () => {
 			const routes = plugin.routes();
 			const routeData = routes.list();
 
-			expect(routeData.PageComponent).toBe(DefaultListComponent);
+			const element = renderBound(routeData.PageComponent);
+			expect(element?.type).toBe(DefaultListComponent);
 		});
 
 		it("uses the default component wrapper for a param route", () => {
@@ -60,14 +69,12 @@ describe("pageComponents overrides", () => {
 			const routes = plugin.routes();
 			const routeData = routes.detail({ params: { id: "42" } });
 
-			// Should be an inline wrapper, not the custom component
 			expect(routeData.PageComponent).toBeDefined();
 			expect(typeof routeData.PageComponent).toBe("function");
-			// Verify it is NOT the custom component (no override was given)
-			const CustomDetail: ComponentType<{ id: string }> = () => (
-				<div>Custom</div>
-			);
-			expect(routeData.PageComponent).not.toBe(CustomDetail);
+
+			// The default page receives the route context and forwards params.id
+			const element = renderBound(routeData.PageComponent);
+			expect(element?.props.params).toEqual({ id: "42" });
 		});
 	});
 
@@ -81,8 +88,9 @@ describe("pageComponents overrides", () => {
 			const routes = plugin.routes();
 			const routeData = routes.list();
 
-			expect(routeData.PageComponent).toBe(CustomList);
-			expect(routeData.PageComponent).not.toBe(DefaultListComponent);
+			const element = renderBound(routeData.PageComponent);
+			expect(element?.type).toBe(CustomList);
+			expect(element?.type).not.toBe(DefaultListComponent);
 		});
 
 		it("leaves other routes using their defaults when only one is overridden", () => {
@@ -94,19 +102,21 @@ describe("pageComponents overrides", () => {
 			const routes = plugin.routes();
 
 			// list uses custom
-			expect(routes.list().PageComponent).toBe(CustomList);
+			const listElement = renderBound(routes.list().PageComponent);
+			expect(listElement?.type).toBe(CustomList);
 
-			// detail still uses a wrapper (no override)
+			// detail still uses its default wrapper (no override)
 			const detailData = routes.detail({ params: { id: "1" } });
-			expect(detailData.PageComponent).not.toBe(CustomList);
+			const detailElement = renderBound(detailData.PageComponent);
+			expect(detailElement?.type).not.toBe(CustomList);
 		});
 	});
 
 	describe("custom component replaces default (param route)", () => {
-		it("uses the override wrapper for a param route", () => {
-			const CustomDetail: ComponentType<{ id: string }> = ({ id }) => (
-				<div>Custom Detail {id}</div>
-			);
+		it("passes the route context to the override as props", () => {
+			const CustomDetail: ComponentType<{ params: { id: string } }> = ({
+				params,
+			}) => <div>Custom Detail {params.id}</div>;
 
 			const plugin = createTestPlugin({
 				pageComponents: { detail: CustomDetail },
@@ -114,34 +124,30 @@ describe("pageComponents overrides", () => {
 			const routes = plugin.routes();
 			const routeData = routes.detail({ params: { id: "42" } });
 
-			// Should be an inline wrapper (not the raw CustomDetail directly)
-			expect(routeData.PageComponent).toBeDefined();
-			expect(typeof routeData.PageComponent).toBe("function");
-			// Should NOT be the default
-			expect(routeData.PageComponent).not.toBe(DefaultDetailComponent);
+			const element = renderBound(routeData.PageComponent);
+			expect(element?.type).toBe(CustomDetail);
+			expect(element?.props.params).toEqual({ id: "42" });
 		});
 
 		it("produces a different PageComponent than when no override is given", () => {
-			const CustomDetail: ComponentType<{ id: string }> = ({ id }) => (
-				<div>Custom Detail {id}</div>
-			);
+			const CustomDetail: ComponentType<{ params: { id: string } }> = ({
+				params,
+			}) => <div>Custom Detail {params.id}</div>;
 
 			const defaultPlugin = createTestPlugin({});
 			const overridePlugin = createTestPlugin({
 				pageComponents: { detail: CustomDetail },
 			});
 
-			const defaultRouteData = defaultPlugin
-				.routes()
-				.detail({ params: { id: "1" } });
-			const overrideRouteData = overridePlugin
-				.routes()
-				.detail({ params: { id: "1" } });
-
-			// The wrapped component should be a different function reference
-			expect(overrideRouteData.PageComponent).not.toBe(
-				defaultRouteData.PageComponent,
+			const defaultElement = renderBound(
+				defaultPlugin.routes().detail({ params: { id: "1" } }).PageComponent,
 			);
+			const overrideElement = renderBound(
+				overridePlugin.routes().detail({ params: { id: "1" } }).PageComponent,
+			);
+
+			expect(overrideElement?.type).toBe(CustomDetail);
+			expect(defaultElement?.type).not.toBe(CustomDetail);
 		});
 	});
 });

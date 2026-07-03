@@ -10,6 +10,66 @@ This page documents breaking changes between major versions and provides migrati
 
 ---
 
+## v2 → v3: Declarative routes and the `pageComponents` contract
+
+BTST v3 adopts the declarative `defineRoute` / `defineRoutes` helpers from `@btst/yar` 1.3+ for all plugin routes, and stabilizes page component identity across re-renders (no more subtree remounts or Suspense re-triggers on parent renders).
+
+<Callout type="info">
+  The only consumer-facing change is the props passed to `pageComponents` overrides on parameterized routes. Overrides for routes without params, and all other plugin config, are unchanged.
+</Callout>
+
+### `pageComponents` overrides now receive the route context
+
+Overrides for parameterized routes used to receive specific named props (e.g. `slug`, `boardId`, `conversationId`). They now receive the route context — `{ params }` — instead:
+
+```diff
+blogClientPlugin({
+  // ... other config
+  pageComponents: {
+    posts: MyCustomPostsPage,          // unchanged (no params)
+-   post: ({ slug }) => <MyCustomPostPage slug={slug} />,
++   post: ({ params }) => <MyCustomPostPage slug={params.slug} />,
+-   tag: ({ tagSlug }) => <MyCustomTagPage tagSlug={tagSlug} />,
++   tag: ({ params }) => <MyCustomTagPage tagSlug={params.tagSlug} />,
+  },
+})
+```
+
+Renamed props per plugin:
+
+| Plugin | Override | Old props | New props |
+|--------|----------|-----------|-----------|
+| Blog | `post`, `editPost` | `{ slug }` | `{ params: { slug } }` |
+| Blog | `tag` | `{ tagSlug }` | `{ params: { tagSlug } }` |
+| CMS | `contentList`, `newContent` | `{ typeSlug }` | `{ params: { typeSlug } }` |
+| CMS | `editContent` | `{ typeSlug, id }` | `{ params: { typeSlug, id } }` |
+| Form Builder | `editForm` | `{ id }` | `{ params: { id } }` |
+| Form Builder | `submissions` | `{ formId }` | `{ params: { id } }` |
+| UI Builder | `editPage` | `{ id }` | `{ params: { id } }` |
+| Kanban | `board` | `{ boardId }` | `{ params: { boardId } }` |
+| AI Chat | `chatConversation` | `{ conversationId }` | `{ params: { id } }` |
+
+### Custom plugins: `defineRoute` is the recommended route helper
+
+`createRoute` is still exported and fully supported, but plugin routes are simpler with `defineRoute`:
+
+```diff
+- todos: createRoute("/todos", () => ({
+-   PageComponent: TodosListPage,
+-   loader: todosLoader(config),
+-   meta: createTodosMeta(config, "/todos"),
+- })),
++ todos: defineRoute("/todos", {
++   page: TodosListPage,
++   loader: todosLoader(config),
++   meta: createTodosMeta(config, "/todos"),
++ }),
+```
+
+`defineRoute`, `defineRoutes`, and the `RouteContext` / `RouteDef` types are re-exported from `@btst/stack/plugins/client`.
+
+---
+
 ## v1 → v2: Rebranding to BTST
 
 BTST v2 introduces a rebranding from "Better Stack" to "BTST". This guide covers all the changes you need to make to upgrade your project.

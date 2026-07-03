@@ -4,7 +4,7 @@ import {
 	isConnectionError,
 	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
-import { createRoute } from "@btst/yar";
+import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { KanbanApiRouter } from "../api";
@@ -92,7 +92,7 @@ export interface KanbanClientConfig {
 		/** Replaces the new board page */
 		newBoard?: ComponentType;
 		/** Replaces the board detail page */
-		board?: ComponentType<{ boardId: string }>;
+		board?: ComponentType<{ params: { boardId: string } }>;
 	};
 }
 
@@ -420,34 +420,29 @@ export const kanbanClientPlugin = (config: KanbanClientConfig) =>
 	defineClientPlugin({
 		name: "kanban",
 
-		routes: () => ({
-			boards: createRoute("/kanban", () => {
-				const CustomBoards = config.pageComponents?.boards;
-				return {
-					PageComponent: CustomBoards ?? (() => <BoardsListPageComponent />),
-					loader: createBoardsLoader(config),
-					meta: createBoardsListMeta(config),
-				};
-			}),
-			newBoard: createRoute("/kanban/new", () => {
-				const CustomNewBoard = config.pageComponents?.newBoard;
-				return {
-					PageComponent: CustomNewBoard ?? NewBoardPageComponent,
-					loader: createNewBoardLoader(config),
-					meta: createNewBoardMeta(config),
-				};
-			}),
-			board: createRoute("/kanban/:boardId", ({ params: { boardId } }) => {
-				const CustomBoard = config.pageComponents?.board;
-				return {
-					PageComponent: CustomBoard
-						? () => <CustomBoard boardId={boardId} />
-						: () => <BoardPageComponent boardId={boardId} />,
-					loader: createBoardLoader(boardId, config),
-					meta: createBoardMeta(boardId, config),
-				};
-			}),
-		}),
+		routes: () =>
+			defineRoutes(
+				{
+					boards: defineRoute("/kanban", {
+						page: BoardsListPageComponent,
+						loader: createBoardsLoader(config),
+						meta: createBoardsListMeta(config),
+					}),
+					newBoard: defineRoute("/kanban/new", {
+						page: NewBoardPageComponent,
+						loader: createNewBoardLoader(config),
+						meta: createNewBoardMeta(config),
+					}),
+					board: defineRoute("/kanban/:boardId", {
+						page: ({ params }) => (
+							<BoardPageComponent boardId={params.boardId} />
+						),
+						loader: ({ params }) => createBoardLoader(params.boardId, config)(),
+						meta: ({ params }) => createBoardMeta(params.boardId, config)(),
+					}),
+				},
+				{ pages: config.pageComponents },
+			),
 
 		sitemap: async () => {
 			const origin = `${config.siteBaseURL}${config.siteBasePath}`;

@@ -4,7 +4,7 @@ import {
 	isConnectionError,
 	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
-import { createRoute } from "@btst/yar";
+import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import { createSanitizedSSRLoaderError } from "../../utils";
@@ -91,6 +91,7 @@ export interface BlogClientConfig {
 	 * Optional page component overrides.
 	 * Replace any plugin page with a custom React component.
 	 * The built-in component is used as the fallback when not provided.
+	 * Every override receives the route context (`params`, `query`) as props.
 	 */
 	pageComponents?: {
 		/** Replaces the published posts list page */
@@ -100,11 +101,11 @@ export interface BlogClientConfig {
 		/** Replaces the new post page */
 		newPost?: ComponentType;
 		/** Replaces the single post page */
-		post?: ComponentType<{ slug: string }>;
+		post?: ComponentType<{ params: { slug: string } }>;
 		/** Replaces the edit post page */
-		editPost?: ComponentType<{ slug: string }>;
+		editPost?: ComponentType<{ params: { slug: string } }>;
 		/** Replaces the tag posts page */
-		tag?: ComponentType<{ tagSlug: string }>;
+		tag?: ComponentType<{ params: { tagSlug: string } }>;
 	};
 }
 
@@ -728,64 +729,47 @@ export const blogClientPlugin = (config: BlogClientConfig) =>
 	defineClientPlugin({
 		name: "blog",
 
-		routes: () => ({
-			posts: createRoute("/blog", () => {
-				const CustomPosts = config.pageComponents?.posts;
-				return {
-					PageComponent:
-						CustomPosts ?? (() => <HomePageComponent published={true} />),
-					loader: createPostsLoader(true, config),
-					meta: createPostsListMeta(true, config),
-				};
-			}),
-			drafts: createRoute("/blog/drafts", () => {
-				const CustomDrafts = config.pageComponents?.drafts;
-				return {
-					PageComponent:
-						CustomDrafts ?? (() => <HomePageComponent published={false} />),
-					loader: createPostsLoader(false, config),
-					meta: createPostsListMeta(false, config),
-				};
-			}),
-			newPost: createRoute("/blog/new", () => {
-				const CustomNewPost = config.pageComponents?.newPost;
-				return {
-					PageComponent: CustomNewPost ?? NewPostPageComponent,
-					loader: createNewPostLoader(config),
-					meta: createNewPostMeta(config),
-				};
-			}),
-			editPost: createRoute("/blog/:slug/edit", ({ params: { slug } }) => {
-				const CustomEditPost = config.pageComponents?.editPost;
-				return {
-					PageComponent: CustomEditPost
-						? () => <CustomEditPost slug={slug} />
-						: () => <EditPostPageComponent slug={slug} />,
-					loader: createPostLoader(slug, config, `/blog/${slug}/edit`),
-					meta: createEditPostMeta(slug, config),
-				};
-			}),
-			tag: createRoute("/blog/tag/:tagSlug", ({ params: { tagSlug } }) => {
-				const CustomTag = config.pageComponents?.tag;
-				return {
-					PageComponent: CustomTag
-						? () => <CustomTag tagSlug={tagSlug} />
-						: () => <TagPageComponent tagSlug={tagSlug} />,
-					loader: createTagLoader(tagSlug, config),
-					meta: createTagMeta(tagSlug, config),
-				};
-			}),
-			post: createRoute("/blog/:slug", ({ params: { slug } }) => {
-				const CustomPost = config.pageComponents?.post;
-				return {
-					PageComponent: CustomPost
-						? () => <CustomPost slug={slug} />
-						: () => <PostPageComponent slug={slug} />,
-					loader: createPostLoader(slug, config),
-					meta: createPostMeta(slug, config),
-				};
-			}),
-		}),
+		routes: () =>
+			defineRoutes(
+				{
+					posts: defineRoute("/blog", {
+						page: () => <HomePageComponent published={true} />,
+						loader: createPostsLoader(true, config),
+						meta: createPostsListMeta(true, config),
+					}),
+					drafts: defineRoute("/blog/drafts", {
+						page: () => <HomePageComponent published={false} />,
+						loader: createPostsLoader(false, config),
+						meta: createPostsListMeta(false, config),
+					}),
+					newPost: defineRoute("/blog/new", {
+						page: NewPostPageComponent,
+						loader: createNewPostLoader(config),
+						meta: createNewPostMeta(config),
+					}),
+					editPost: defineRoute("/blog/:slug/edit", {
+						page: ({ params }) => <EditPostPageComponent slug={params.slug} />,
+						loader: ({ params }) =>
+							createPostLoader(
+								params.slug,
+								config,
+								`/blog/${params.slug}/edit`,
+							)(),
+						meta: ({ params }) => createEditPostMeta(params.slug, config)(),
+					}),
+					tag: defineRoute("/blog/tag/:tagSlug", {
+						page: ({ params }) => <TagPageComponent tagSlug={params.tagSlug} />,
+						loader: ({ params }) => createTagLoader(params.tagSlug, config)(),
+						meta: ({ params }) => createTagMeta(params.tagSlug, config)(),
+					}),
+					post: defineRoute("/blog/:slug", {
+						page: ({ params }) => <PostPageComponent slug={params.slug} />,
+						loader: ({ params }) => createPostLoader(params.slug, config)(),
+						meta: ({ params }) => createPostMeta(params.slug, config)(),
+					}),
+				},
+				{ pages: config.pageComponents },
+			),
 
 		sitemap: async () => {
 			const origin = `${config.siteBaseURL}${config.siteBasePath}`;

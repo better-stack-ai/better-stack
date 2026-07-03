@@ -6,7 +6,7 @@ import {
 	isConnectionError,
 	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
-import { createRoute } from "@btst/yar";
+import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { CMSApiRouter } from "../../cms/api";
@@ -63,7 +63,7 @@ export interface UIBuilderClientConfig {
 		/** Replaces the new page builder page */
 		newPage?: ComponentType;
 		/** Replaces the edit page builder page */
-		editPage?: ComponentType<{ id: string }>;
+		editPage?: ComponentType<{ params: { id: string } }>;
 	};
 }
 
@@ -334,36 +334,30 @@ export const uiBuilderClientPlugin = (config: UIBuilderClientConfig) =>
 	defineClientPlugin({
 		name: "ui-builder",
 
-		routes: () => ({
-			pageList: createRoute("/ui-builder", () => {
-				const CustomPageList = config.pageComponents?.pageList;
-				return {
-					PageComponent: CustomPageList ?? (() => <PageListPageComponent />),
-					loader: createPageListLoader(config),
-					meta: createPageListMeta(),
-				};
-			}),
+		routes: () =>
+			defineRoutes(
+				{
+					pageList: defineRoute("/ui-builder", {
+						page: PageListPageComponent,
+						loader: createPageListLoader(config),
+						meta: createPageListMeta(),
+					}),
 
-			newPage: createRoute("/ui-builder/new", () => {
-				const CustomNewPage = config.pageComponents?.newPage;
-				return {
-					PageComponent: CustomNewPage ?? (() => <PageBuilderPageComponent />),
-					loader: createPageBuilderLoader(undefined, config),
-					meta: createPageBuilderMeta(undefined, config),
-				};
-			}),
+					newPage: defineRoute("/ui-builder/new", {
+						page: () => <PageBuilderPageComponent />,
+						loader: createPageBuilderLoader(undefined, config),
+						meta: createPageBuilderMeta(undefined, config),
+					}),
 
-			editPage: createRoute("/ui-builder/:id/edit", ({ params }) => {
-				const CustomEditPage = config.pageComponents?.editPage;
-				return {
-					PageComponent: CustomEditPage
-						? () => <CustomEditPage id={params.id} />
-						: () => <PageBuilderPageComponent id={params.id} />,
-					loader: createPageBuilderLoader(params.id, config),
-					meta: createPageBuilderMeta(params.id, config),
-				};
-			}),
-		}),
+					editPage: defineRoute("/ui-builder/:id/edit", {
+						page: ({ params }) => <PageBuilderPageComponent id={params.id} />,
+						loader: ({ params }) =>
+							createPageBuilderLoader(params.id, config)(),
+						meta: ({ params }) => createPageBuilderMeta(params.id, config)(),
+					}),
+				},
+				{ pages: config.pageComponents },
+			),
 
 		sitemap: async () => {
 			// UI Builder admin pages should NOT be in sitemap

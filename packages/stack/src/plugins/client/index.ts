@@ -27,8 +27,13 @@ export {
 } from "../utils";
 
 // Re-export Yar types needed for plugins
-export type { Route } from "@btst/yar";
-export { createRoute, createRouter } from "@btst/yar";
+export type { Route, RouteContext, RouteDef } from "@btst/yar";
+export {
+	createRoute,
+	createRouter,
+	defineRoute,
+	defineRoutes,
+} from "@btst/yar";
 
 export { createClient } from "better-call/client";
 

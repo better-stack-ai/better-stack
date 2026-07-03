@@ -335,7 +335,7 @@ Admin routes are automatically set to `noindex` for SEO. Don't include them in y
 
 ### Page Component Overrides
 
-You can replace any built-in admin page with your own React component using the optional `pageComponents` field in `cmsClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided, so this is fully backward-compatible.
+You can replace any built-in admin page with your own React component using the optional `pageComponents` field in `cmsClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided. Overrides for parameterized routes receive the route context (`{ params }`) as props.
 
 ```tsx
 cmsClientPlugin({
@@ -343,13 +343,15 @@ cmsClientPlugin({
   pageComponents: {
     // Replace the CMS dashboard page
     dashboard: MyCustomDashboard,
-    // Replace the content list page — receives typeSlug as a prop
-    contentList: ({ typeSlug }) => <MyCustomContentList typeSlug={typeSlug} />,
-    // Replace the new content page — receives typeSlug as a prop
-    newContent: ({ typeSlug }) => <MyCustomNewContent typeSlug={typeSlug} />,
-    // Replace the edit content page — receives typeSlug and id as props
-    editContent: ({ typeSlug, id }) => (
-      <MyCustomEditContent typeSlug={typeSlug} id={id} />
+    // Replace the content list page — receives the route context as props
+    contentList: ({ params }) => (
+      <MyCustomContentList typeSlug={params.typeSlug} />
+    ),
+    // Replace the new content page — receives the route context as props
+    newContent: ({ params }) => <MyCustomNewContent typeSlug={params.typeSlug} />,
+    // Replace the edit content page — receives the route context as props
+    editContent: ({ params }) => (
+      <MyCustomEditContent typeSlug={params.typeSlug} id={params.id} />
     ),
   },
 })
@@ -1570,7 +1572,10 @@ cmsClientPlugin({
   queryClient,
   pageComponents: {
     dashboard: DashboardPageComponent,          // replaces the CMS dashboard page
-    contentList: ContentListPageComponent,      // replaces the content list page
+    // Param routes receive the route context ({ params }) as props
+    contentList: ({ params }) => (
+      <ContentListPageComponent typeSlug={params.typeSlug} />
+    ),
     // newContent, editContent — omit to keep built-in defaults
   },
 })

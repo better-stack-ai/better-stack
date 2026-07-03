@@ -1,7 +1,7 @@
 import {
 	createApiClient,
 	defineClientPlugin,
-	createRoute,
+	defineRoute,
 } from "@btst/stack/plugins/client";
 import type { QueryClient } from "@tanstack/react-query";
 import type { TodosApiRouter } from "../api/backend";
@@ -132,15 +132,15 @@ export const todosClientPlugin = (config: TodosClientConfig) =>
 		name: "todos",
 
 		routes: () => ({
-			todos: createRoute("/todos", () => ({
-				PageComponent: TodosListPageLazy,
+			todos: defineRoute("/todos", {
+				page: TodosListPageLazy,
 				loader: todosLoader(config),
 				meta: createTodosMeta(config, "/todos"),
-			})),
-			addTodo: createRoute("/todos/add", () => ({
-				PageComponent: AddTodoPageLazy,
+			}),
+			addTodo: defineRoute("/todos/add", {
+				page: AddTodoPageLazy,
 				meta: createAddTodoMeta(config, "/todos/add"),
-			})),
+			}),
 		}),
 		sitemap: async () => {
 			return [

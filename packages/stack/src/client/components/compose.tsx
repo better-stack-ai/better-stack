@@ -38,8 +38,13 @@ export function RouteRenderer({
 	onError: (error: Error, info: ErrorInfo) => void;
 	props?: any;
 }) {
-	// Resolve route on the client where components are available
-	const route = router.getRoute(path);
+	// Resolve route on the client where components are available.
+	// Memoized so PageComponent keeps a stable identity across re-renders:
+	// getRoute() invokes the route handler, which produces new component
+	// references each call. Without the memo, React would treat every parent
+	// re-render as a component type change and remount the whole subtree
+	// (losing state and re-triggering Suspense).
+	const route = React.useMemo(() => router.getRoute(path), [router, path]);
 
 	return (
 		<ComposedRoute

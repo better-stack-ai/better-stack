@@ -378,7 +378,7 @@ The AI Chat plugin automatically creates the following pages (mounted at your co
 
 ### Page Component Overrides
 
-You can replace any built-in page with your own React component using the optional `pageComponents` field in `aiChatClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided, so this is fully backward-compatible.
+You can replace any built-in page with your own React component using the optional `pageComponents` field in `aiChatClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided. Overrides for parameterized routes receive the route context (`{ params }`) as props.
 
 ```tsx
 aiChatClientPlugin({
@@ -387,9 +387,9 @@ aiChatClientPlugin({
     // Replace the chat home page
     chat: MyCustomChatPage,
     // Replace the conversation page (authenticated mode only)
-    // receives conversationId as a prop
-    chatConversation: ({ conversationId }) => (
-      <MyCustomConversationPage conversationId={conversationId} />
+    // receives the route context as props
+    chatConversation: ({ params }) => (
+      <MyCustomConversationPage conversationId={params.id} />
     ),
   },
 })
@@ -1326,8 +1326,11 @@ aiChatClientPlugin({
   apiBasePath: "/api/data",
   queryClient,
   pageComponents: {
-    chat: ChatPageComponent,                          // replaces the chat home page
-    chatConversation: ChatConversationPageComponent,  // replaces the conversation page
+    chat: ChatPageComponent, // replaces the chat home page
+    // Param routes receive the route context ({ params }) as props
+    chatConversation: ({ params }) => (
+      <ChatConversationPageComponent conversationId={params.id} />
+    ),
   },
 })
 ```

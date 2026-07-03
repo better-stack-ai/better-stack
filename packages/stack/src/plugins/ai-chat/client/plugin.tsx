@@ -3,7 +3,7 @@ import {
 	createApiClient,
 	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
-import { createRoute } from "@btst/yar";
+import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { AiChatApiRouter } from "../api";
@@ -96,7 +96,7 @@ export interface AiChatClientConfig {
 		/** Replaces the chat home page */
 		chat?: ComponentType;
 		/** Replaces the conversation page (authenticated mode only) */
-		chatConversation?: ComponentType<{ conversationId: string }>;
+		chatConversation?: ComponentType<{ params: { id: string } }>;
 	};
 }
 
@@ -392,25 +392,24 @@ export const aiChatClientPlugin = (config: AiChatClientConfig) => {
 		return defineClientPlugin({
 			name: "ai-chat",
 
-			routes: () => ({
-				// Chat home - simple chat interface without history
-				chat: createRoute("/chat", () => {
-					const CustomChat = config.pageComponents?.chat;
-					return {
-						PageComponent:
-							CustomChat ??
-							(() => (
+			routes: () =>
+				defineRoutes(
+					{
+						// Chat home - simple chat interface without history
+						chat: defineRoute("/chat", {
+							page: () => (
 								<ChatLayout
 									apiBaseURL={config.apiBaseURL}
 									apiBasePath={config.apiBasePath}
 									showSidebar={false}
 								/>
-							)),
-						loader: createConversationsLoader(config),
-						meta: createChatHomeMeta(config),
-					};
-				}),
-			}),
+							),
+							loader: createConversationsLoader(config),
+							meta: createChatHomeMeta(config),
+						}),
+					},
+					{ pages: config.pageComponents },
+				),
 
 			sitemap: async () => [],
 		});
@@ -420,42 +419,37 @@ export const aiChatClientPlugin = (config: AiChatClientConfig) => {
 	return defineClientPlugin({
 		name: "ai-chat",
 
-		routes: () => ({
-			// Chat home - new conversation or list
-			chat: createRoute("/chat", () => {
-				const CustomChat = config.pageComponents?.chat;
-				return {
-					PageComponent:
-						CustomChat ??
-						(() => (
+		routes: () =>
+			defineRoutes(
+				{
+					// Chat home - new conversation or list
+					chat: defineRoute("/chat", {
+						page: () => (
 							<ChatLayout
 								apiBaseURL={config.apiBaseURL}
 								apiBasePath={config.apiBasePath}
 							/>
-						)),
-					loader: createConversationsLoader(config),
-					meta: createChatHomeMeta(config),
-				};
-			}),
+						),
+						loader: createConversationsLoader(config),
+						meta: createChatHomeMeta(config),
+					}),
 
-			// Existing conversation
-			chatConversation: createRoute("/chat/:id", ({ params }) => {
-				const CustomConversation = config.pageComponents?.chatConversation;
-				return {
-					PageComponent: CustomConversation
-						? () => <CustomConversation conversationId={params.id} />
-						: () => (
-								<ChatLayout
-									apiBaseURL={config.apiBaseURL}
-									apiBasePath={config.apiBasePath}
-									conversationId={params.id}
-								/>
-							),
-					loader: createConversationLoader(params.id, config),
-					meta: createConversationMeta(params.id, config),
-				};
-			}),
-		}),
+					// Existing conversation
+					chatConversation: defineRoute("/chat/:id", {
+						page: ({ params }) => (
+							<ChatLayout
+								apiBaseURL={config.apiBaseURL}
+								apiBasePath={config.apiBasePath}
+								conversationId={params.id}
+							/>
+						),
+						loader: ({ params }) =>
+							createConversationLoader(params.id, config)(),
+						meta: ({ params }) => createConversationMeta(params.id, config)(),
+					}),
+				},
+				{ pages: config.pageComponents },
+			),
 
 		// Chat pages typically shouldn't be in sitemap, but we provide the option
 		sitemap: async () => {

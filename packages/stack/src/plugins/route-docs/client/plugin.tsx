@@ -1,6 +1,6 @@
 import { lazy } from "react";
 import { defineClientPlugin } from "@btst/stack/plugins/client";
-import { createRoute } from "@btst/yar";
+import { defineRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
 import type { ClientStackContext } from "../../../types";
 import {
@@ -204,20 +204,18 @@ export const routeDocsClientPlugin = (config: RouteDocsClientConfig) => {
 			moduleStoredContext = context || null;
 
 			return {
-				docs: createRoute("/route-docs", () => {
-					return {
-						PageComponent: () => (
-							<DocsPageComponent
-								title={config.title}
-								description={config.description}
-								siteBasePath={config.siteBasePath || "/pages"}
-							/>
-						),
-						LoadingComponent: () => <DocsPageSkeleton />,
-						ErrorComponent: () => <DocsErrorComponent />,
-						loader: createRouteDocsLoader(config),
-						meta: createDocsMeta(config),
-					};
+				docs: defineRoute("/route-docs", {
+					page: () => (
+						<DocsPageComponent
+							title={config.title}
+							description={config.description}
+							siteBasePath={config.siteBasePath || "/pages"}
+						/>
+					),
+					loading: DocsPageSkeleton,
+					error: DocsErrorComponent,
+					loader: createRouteDocsLoader(config),
+					meta: createDocsMeta(config),
 				}),
 			};
 		},

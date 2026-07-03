@@ -126,6 +126,8 @@ Or install a single plugin's UI directly:
 
 After the install, most plugins let you import your ejected components and pass them to the client plugin via `pageComponents`. Any key you omit falls back to the built-in default, so you only need to override the pages you actually want to change.
 
+Overrides for parameterized routes receive the route context (`{ params }`) as props, so wrap the ejected component in a small adapter that maps `params` to its expected props.
+
 ### Blog
 
 ```tsx title="lib/stack-client.tsx"
@@ -140,8 +142,8 @@ blogClientPlugin({
   siteBasePath: "/pages",
   queryClient,
   pageComponents: {
-    posts: HomePageComponent,    // published posts list
-    post: PostPageComponent,     // single post detail
+    posts: HomePageComponent, // published posts list
+    post: ({ params }) => <PostPageComponent slug={params.slug} />, // single post detail
     // drafts | newPost | editPost | tag — omit to keep defaults
   },
 })
@@ -159,8 +161,11 @@ aiChatClientPlugin({
   apiBasePath: "/api/data",
   queryClient,
   pageComponents: {
-    chat: ChatPageComponent,                         // chat home page
-    chatConversation: ChatConversationPageComponent, // conversation page (authenticated mode)
+    chat: ChatPageComponent, // chat home page
+    // conversation page (authenticated mode)
+    chatConversation: ({ params }) => (
+      <ChatConversationPageComponent conversationId={params.id} />
+    ),
   },
 })
 ```
@@ -177,8 +182,11 @@ cmsClientPlugin({
   apiBasePath: "/api/data",
   queryClient,
   pageComponents: {
-    dashboard: DashboardPageComponent,      // CMS dashboard
-    contentList: ContentListPageComponent,  // content list per type
+    dashboard: DashboardPageComponent, // CMS dashboard
+    // content list per type
+    contentList: ({ params }) => (
+      <ContentListPageComponent typeSlug={params.typeSlug} />
+    ),
     // newContent | editContent — omit to keep defaults
   },
 })
@@ -197,7 +205,7 @@ formBuilderClientPlugin({
   queryClient,
   pageComponents: {
     formList: FormListPageComponent, // form list page
-    editForm: EditFormPageComponent, // form editor
+    editForm: ({ params }) => <EditFormPageComponent id={params.id} />, // form editor
     // newForm | submissions — omit to keep defaults
   },
 })
@@ -216,7 +224,7 @@ uiBuilderClientPlugin({
   queryClient,
   pageComponents: {
     pageList: PageListPageComponent, // page list
-    editPage: EditPagePageComponent, // page builder editor
+    editPage: ({ params }) => <EditPagePageComponent id={params.id} />, // page builder editor
     // newPage — omit to keep default
   },
 })
@@ -235,7 +243,7 @@ kanbanClientPlugin({
   queryClient,
   pageComponents: {
     boards: BoardsPageComponent, // boards list
-    board: BoardPageComponent,   // board detail
+    board: ({ params }) => <BoardPageComponent boardId={params.boardId} />, // board detail
     // newBoard — omit to keep default
   },
 })

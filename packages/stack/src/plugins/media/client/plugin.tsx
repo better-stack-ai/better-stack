@@ -3,7 +3,7 @@ import {
 	createApiClient,
 	isConnectionError,
 } from "@btst/stack/plugins/client";
-import { createRoute } from "@btst/yar";
+import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import { LibraryPageComponent } from "./components/pages/library-page";
@@ -81,16 +81,17 @@ export const mediaClientPlugin = (config: MediaClientConfig) =>
 	defineClientPlugin({
 		name: "media",
 
-		routes: () => ({
-			library: createRoute("/media", () => {
-				const CustomLibrary = config.pageComponents?.library;
-				return {
-					PageComponent: CustomLibrary ?? LibraryPageComponent,
-					loader: createMediaLibraryLoader(config),
-					meta: createMediaLibraryMeta(config),
-				};
-			}),
-		}),
+		routes: () =>
+			defineRoutes(
+				{
+					library: defineRoute("/media", {
+						page: LibraryPageComponent,
+						loader: createMediaLibraryLoader(config),
+						meta: createMediaLibraryMeta(config),
+					}),
+				},
+				{ pages: config.pageComponents },
+			),
 	});
 
 function createMediaLibraryLoader(config: MediaClientConfig) {
