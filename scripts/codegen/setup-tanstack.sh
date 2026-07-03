@@ -106,6 +106,16 @@ while IFS= read -r -d '' src_file; do
 done < <(find "$FILES_DIR" -type f -print0)
 success "$FILE_COUNT files copied"
 
+# Pin Tailwind's content scanning to src/ so the client and SSR builds produce
+# byte-identical CSS. Without an explicit source(), Tailwind auto-detects
+# candidates per Vite environment, and the SSR build (run by nitro from a
+# different root) emits a differently-hashed styles-*.css URL that 404s at
+# runtime. See https://github.com/TanStack/router/issues/4959
+step "Pinning Tailwind source() for deterministic client/SSR CSS hashes"
+sed -i 's|^@import "tailwindcss";$|@import "tailwindcss" source("./");|' "$DEST/src/styles.css"
+grep -q 'tailwindcss" source' "$DEST/src/styles.css" || die "Failed to patch tailwind source() in src/styles.css"
+success "Tailwind source() pinned"
+
 # ── Step 6: Patch package.json ────────────────────────────────────────────────
 
 step "Patching package.json"
