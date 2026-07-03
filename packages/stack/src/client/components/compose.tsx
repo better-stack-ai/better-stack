@@ -70,7 +70,10 @@ export function RouteRenderer({
  * @param LoadingComponent - Component to show during suspense
  * @param onNotFound - Optional callback when route is not found
  * @param NotFoundComponent - Optional component to show for 404s
- * @param props - Additional props to pass to the page component
+ * @param props - Additional props to pass to the page component. For routes
+ *   created with `defineRoute`, these are merged after the route context, so
+ *   a prop named `params` or `query` intentionally takes precedence over the
+ *   router-extracted values. Only pass trusted, framework-controlled values.
  * @param onError - Error handler callback for the error boundary
  */
 export function ComposedRoute({
