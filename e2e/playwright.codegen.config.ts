@@ -160,7 +160,7 @@ export default defineConfig({
 	expect: {
 		timeout: 30_000,
 	},
-	retries: process.env["CI"] ? 2 : 0,
+	retries: process.env["CI"] ? 1 : 0,
 	use: {
 		trace: "retain-on-failure",
 		video: "retain-on-failure",
