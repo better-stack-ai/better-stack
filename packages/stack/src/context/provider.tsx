@@ -1,5 +1,11 @@
 "use client";
 import { createContext, useContext, type ReactNode } from "react";
+import type {
+	StackApiConfig,
+	StackRouter,
+	StackRouterConfig,
+	WithOptionalRouterOverrides,
+} from "./router";
 
 /**
  * Context value that provides plugin-specific overrides
@@ -14,9 +20,80 @@ interface StackContextValue<TPluginOverrides extends Record<string, any>> {
 	 * The base path where the client router is mounted.
 	 */
 	basePath: string;
+	/**
+	 * Resolved top-level router (static preset fields merged with the
+	 * preset's `useRouter` hook result).
+	 */
+	router?: StackRouter;
+	/**
+	 * Top-level API config applied to all plugins.
+	 */
+	api?: StackApiConfig;
 }
 
 const StackContext = createContext<StackContextValue<any> | null>(null);
+
+/**
+ * The `overrides` prop shape for `StackProvider`: per plugin, the fields
+ * managed by the top-level `router` / `api` props become optional, and
+ * plugin blocks whose remaining fields are all optional can be omitted
+ * entirely.
+ */
+export type StackProviderOverrides<
+	TPluginOverrides extends Record<string, any>,
+> = {
+	[K in keyof TPluginOverrides]?: WithOptionalRouterOverrides<
+		TPluginOverrides[K]
+	>;
+};
+
+/** Removes keys whose value is `undefined` so they don't clobber lower layers in spreads. */
+function stripUndefined<T extends Record<string, any>>(obj: T): Partial<T> {
+	const result: Record<string, any> = {};
+	for (const key of Object.keys(obj)) {
+		if (obj[key] !== undefined) {
+			result[key] = obj[key];
+		}
+	}
+	return result as Partial<T>;
+}
+
+function resolveStaticRouter(
+	router: StackRouterConfig | undefined,
+): StackRouter | undefined {
+	if (!router) return undefined;
+	const { useRouter: _useRouter, ...staticFields } = router;
+	return stripUndefined(staticFields);
+}
+
+/**
+ * Internal component that evaluates the router preset's `useRouter` hook.
+ * Rendered only when the hook exists, so the hook itself is always called
+ * unconditionally within this component.
+ */
+function RouterBridge({
+	useRouter,
+	staticRouter,
+	value,
+	children,
+}: {
+	useRouter: () => StackRouter;
+	staticRouter: StackRouter | undefined;
+	value: Omit<StackContextValue<any>, "router">;
+	children?: ReactNode;
+}) {
+	const hookRouter = useRouter();
+	const router: StackRouter = {
+		...staticRouter,
+		...stripUndefined(hookRouter),
+	};
+
+	return (
+		<StackContext.Provider value={{ ...value, router }}>
+			{children}
+		</StackContext.Provider>
+	);
+}
 
 /**
  * Provider component for BTST context
@@ -46,6 +123,26 @@ const StackContext = createContext<StackContextValue<any> | null>(null);
  *   {children}
  * </StackProvider>
  * ```
+ *
+ * With a framework router preset, the shared `Link`/`navigate`/`refresh`/
+ * `Image` wiring and API config move to the top level and per-plugin
+ * overrides only carry genuinely plugin-specific values:
+ *
+ * @example
+ * ```tsx
+ * import { nextRouter } from "@btst/stack/next";
+ *
+ * <StackProvider<MyPluginOverrides>
+ *   basePath="/pages"
+ *   router={nextRouter()}
+ *   api={{ baseURL, basePath: "/api/data" }}
+ *   overrides={{
+ *     blog: { uploadImage },
+ *   }}
+ * >
+ *   {children}
+ * </StackProvider>
+ * ```
  */
 export function StackProvider<
 	TPluginOverrides extends Record<string, any> = Record<string, any>,
@@ -53,18 +150,38 @@ export function StackProvider<
 	children,
 	overrides,
 	basePath,
+	router,
+	api,
 }: {
 	children?: ReactNode;
-	overrides: TPluginOverrides;
+	overrides?: StackProviderOverrides<TPluginOverrides>;
 	basePath: string;
+	router?: StackRouterConfig;
+	api?: StackApiConfig;
 }) {
-	const value: StackContextValue<TPluginOverrides> = {
-		overrides,
+	const staticRouter = resolveStaticRouter(router);
+	const value: Omit<StackContextValue<any>, "router"> = {
+		overrides: overrides ?? {},
 		basePath,
+		api,
 	};
 
+	if (router?.useRouter) {
+		return (
+			<RouterBridge
+				useRouter={router.useRouter}
+				staticRouter={staticRouter}
+				value={value}
+			>
+				{children}
+			</RouterBridge>
+		);
+	}
+
 	return (
-		<StackContext.Provider value={value}>{children}</StackContext.Provider>
+		<StackContext.Provider value={{ ...value, router: staticRouter }}>
+			{children}
+		</StackContext.Provider>
 	);
 }
 
@@ -138,11 +255,33 @@ export function usePluginOverrides<
 
 	const pluginOverrides = context.overrides[pluginName];
 
-	// If defaults are provided, merge them with plugin overrides
-	// This ensures default properties exist even if plugin is partially configured
-	const overrides = defaultValues
-		? { ...defaultValues, ...pluginOverrides }
-		: pluginOverrides;
+	// Resolution order (lowest to highest precedence):
+	// hook defaults -> top-level router/api -> per-plugin overrides
+	const { router, api } = context;
+	if (!router && !api) {
+		// No top-level router/api configured — behave exactly as before
+		const overrides = defaultValues
+			? { ...defaultValues, ...pluginOverrides }
+			: pluginOverrides;
+		return overrides as OverridesResult<TOverrides, TDefaults>;
+	}
+
+	const routerApiLayer = stripUndefined({
+		Link: router?.Link,
+		Image: router?.Image,
+		navigate: router?.navigate,
+		refresh: router?.refresh,
+		getSearchParams: router?.getSearchParams,
+		setSearchParams: router?.setSearchParams,
+		apiBaseURL: api?.baseURL,
+		apiBasePath: api?.basePath,
+	});
+
+	const overrides = {
+		...defaultValues,
+		...routerApiLayer,
+		...pluginOverrides,
+	};
 
 	return overrides as OverridesResult<TOverrides, TDefaults>;
 }

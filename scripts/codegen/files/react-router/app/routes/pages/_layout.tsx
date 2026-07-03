@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
-import { Outlet, Link, useNavigate, useRevalidator } from "react-router";
+import { Outlet } from "react-router";
 import { StackProvider } from "@btst/stack/context";
+import { reactRouter } from "@btst/stack/react-router";
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client";
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
@@ -47,8 +48,6 @@ type PluginOverrides = {
 
 export default function Layout() {
 	const baseURL = getBaseURL();
-	const navigate = useNavigate();
-	const { revalidate } = useRevalidator();
 	const [queryClient] = useState(() => getOrCreateQueryClient());
 	const mediaClientConfig = useMemo(
 		() => ({
@@ -83,91 +82,19 @@ export default function Layout() {
 	return (
 		<StackProvider<PluginOverrides>
 			basePath="/pages"
+			router={reactRouter()}
+			api={{ baseURL, basePath: "/api/data" }}
 			overrides={{
-				todos: {
-					Link: ({ href, children, className, ...props }) => (
-						<Link to={href || ""} className={className} {...props}>
-							{children}
-						</Link>
-					),
-					navigate: (href) => navigate(href),
-				},
+				// Only genuinely plugin-specific overrides remain — the shared
+				// Link/navigate/refresh and API wiring come from the top-level
+				// `router` and `api` props above.
 				"ui-builder": {
-					apiBaseURL: baseURL,
-					apiBasePath: "/api/data",
-					navigate: (href) => navigate(href),
-					refresh: () => revalidate(),
-					Link: ({ href, children, className, ...props }) => (
-						<Link to={href || ""} className={className} {...props}>
-							{children}
-						</Link>
-					),
 					componentRegistry: defaultComponentRegistry,
 				},
 				blog: {
-					apiBaseURL: baseURL,
-					apiBasePath: "/api/data",
-					navigate: (href) => navigate(href),
 					uploadImage,
 					imagePicker: ImagePicker,
 					imageInputField: ImageInputField,
-					Link: ({ href, children, className, ...props }) => (
-						<Link to={href || ""} className={className} {...props}>
-							{children}
-						</Link>
-					),
-					onRouteRender: async (routeName, context) => {
-						console.log(
-							`[${context.isSSR ? "SSR" : "CSR"}] onRouteRender: Route rendered:`,
-							routeName,
-							context.path,
-						);
-					},
-					onRouteError: async (routeName, error, context) => {
-						console.log(
-							`[${context.isSSR ? "SSR" : "CSR"}] onRouteError: Route error:`,
-							routeName,
-							error.message,
-							context.path,
-						);
-					},
-					onBeforePostsPageRendered: (context) => {
-						console.log(
-							`[${context.isSSR ? "SSR" : "CSR"}] onBeforePostsPageRendered: checking access for`,
-							context.path,
-						);
-						return true;
-					},
-					onBeforeDraftsPageRendered: (context) => {
-						console.log(
-							`[${context.isSSR ? "SSR" : "CSR"}] onBeforeDraftsPageRendered: checking auth for`,
-							context.path,
-						);
-						return true;
-					},
-					onBeforeNewPostPageRendered: (context) => {
-						console.log(
-							`[${context.isSSR ? "SSR" : "CSR"}] onBeforeNewPostPageRendered: checking permissions for`,
-							context.path,
-						);
-						return true;
-					},
-					onBeforeEditPostPageRendered: (slug, context) => {
-						console.log(
-							`[${context.isSSR ? "SSR" : "CSR"}] onBeforeEditPostPageRendered: checking permissions for`,
-							slug,
-							context.path,
-						);
-						return true;
-					},
-					onBeforePostPageRendered: (slug, context) => {
-						console.log(
-							`[${context.isSSR ? "SSR" : "CSR"}] onBeforePostPageRendered: checking access for`,
-							slug,
-							context.path,
-						);
-						return true;
-					},
 					// Wire comments into the bottom of each blog post
 					postBottomSlot: (post) => (
 						<CommentThread
@@ -184,76 +111,14 @@ export default function Layout() {
 				},
 				"ai-chat": {
 					mode: "authenticated",
-					apiBaseURL: baseURL,
-					apiBasePath: "/api/data",
-					navigate: (href) => navigate(href),
 					uploadFile: uploadFileForChat,
-					Link: ({ href, children, className, ...props }) => (
-						<Link to={href || ""} className={className} {...props}>
-							{children}
-						</Link>
-					),
-					onRouteRender: async (routeName, context) => {
-						console.log(
-							`[${context.isSSR ? "SSR" : "CSR"}] AI Chat route:`,
-							routeName,
-							context.path,
-						);
-					},
 				},
 				cms: {
-					apiBaseURL: baseURL,
-					apiBasePath: "/api/data",
-					navigate: (href) => navigate(href),
 					uploadImage,
 					imagePicker: ImagePicker,
 					imageInputField: ImageInputField,
-					Link: ({ href, children, className, ...props }) => (
-						<Link to={href || ""} className={className} {...props}>
-							{children}
-						</Link>
-					),
-					onRouteRender: async (routeName, context) => {
-						console.log(
-							`[${context.isSSR ? "SSR" : "CSR"}] CMS route:`,
-							routeName,
-							context.path,
-						);
-					},
-				},
-				"form-builder": {
-					apiBaseURL: baseURL,
-					apiBasePath: "/api/data",
-					navigate: (href) => navigate(href),
-					Link: ({ href, children, className, ...props }) => (
-						<Link to={href || ""} className={className} {...props}>
-							{children}
-						</Link>
-					),
-					onRouteRender: async (routeName, context) => {
-						console.log(
-							`[${context.isSSR ? "SSR" : "CSR"}] Form Builder route:`,
-							routeName,
-							context.path,
-						);
-					},
-					onRouteError: async (routeName, error, context) => {
-						console.log(
-							`[${context.isSSR ? "SSR" : "CSR"}] Form Builder error:`,
-							routeName,
-							error.message,
-						);
-					},
 				},
 				kanban: {
-					apiBaseURL: baseURL,
-					apiBasePath: "/api/data",
-					navigate: (href) => navigate(href),
-					Link: ({ href, children, className, ...props }) => (
-						<Link to={href || ""} className={className} {...props}>
-							{children}
-						</Link>
-					),
 					uploadImage,
 					imagePicker: ImagePicker,
 					resolveUser,
@@ -270,44 +135,17 @@ export default function Layout() {
 							loginHref="/login"
 						/>
 					),
-					onRouteRender: async (routeName, context) => {
-						console.log(
-							`[${context.isSSR ? "SSR" : "CSR"}] Kanban route:`,
-							routeName,
-							context.path,
-						);
-					},
 				},
 				comments: {
-					apiBaseURL: baseURL,
-					apiBasePath: "/api/data",
 					currentUserId: "olliethedev",
 					defaultCommentPageSize: 5,
 					resourceLinks: {
 						"blog-post": (slug) => `/pages/blog/${slug}`,
 					},
-					onBeforeModerationPageRendered: (context) => {
-						console.log(
-							`[${context.isSSR ? "SSR" : "CSR"}] onBeforeModerationPageRendered`,
-						);
-						return true;
-					},
-					onBeforeUserCommentsPageRendered: (context) => {
-						console.log(
-							`[${context.isSSR ? "SSR" : "CSR"}] onBeforeUserCommentsPageRendered`,
-						);
-						return true;
-					},
 				},
 				media: {
 					...mediaClientConfig,
 					queryClient,
-					navigate: (href) => navigate(href),
-					Link: ({ href, children, className, ...props }) => (
-						<Link to={href || ""} className={className} {...props}>
-							{children}
-						</Link>
-					),
 				},
 			}}
 		>

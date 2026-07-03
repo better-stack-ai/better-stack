@@ -5,10 +5,9 @@ import {
 	useContent,
 } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
+import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import Link from "next/link";
 import Image from "next/image";
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import { getOrCreateQueryClient } from "@/lib/query-client";
@@ -27,35 +26,6 @@ async function mockUploadFile(file: File): Promise<string> {
 		return "https://placehold.co/400/png";
 	}
 	return "https://example-files.online-convert.com/document/txt/example.txt";
-}
-
-// Shared Next.js Image wrapper
-function NextImageWrapper(props: React.ImgHTMLAttributes<HTMLImageElement>) {
-	const { alt = "", src = "", width, height, ...rest } = props;
-
-	if (!width || !height) {
-		return (
-			<span className="block relative w-full h-full">
-				<Image
-					alt={alt}
-					src={typeof src === "string" ? src : ""}
-					fill
-					sizes="400px"
-					{...rest}
-				/>
-			</span>
-		);
-	}
-
-	return (
-		<Image
-			alt={alt}
-			src={typeof src === "string" ? src : ""}
-			width={width as number}
-			height={height as number}
-			{...rest}
-		/>
-	);
 }
 
 type PluginOverrides = {
@@ -240,7 +210,6 @@ function CMSExampleContent() {
 }
 
 export default function CMSExamplePage() {
-	const router = useRouter();
 	const [queryClient] = useState(() => getOrCreateQueryClient());
 	const baseURL = getBaseURL();
 
@@ -248,17 +217,11 @@ export default function CMSExamplePage() {
 		<QueryClientProvider client={queryClient}>
 			<StackProvider<PluginOverrides>
 				basePath="/cms-example"
+				router={nextRouter()}
+				api={{ baseURL, basePath: "/api/data" }}
 				overrides={{
 					cms: {
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
-						navigate: (path) => router.push(path),
-						refresh: () => router.refresh(),
 						uploadImage: mockUploadFile,
-						Link: ({ href, ...props }) => (
-							<Link href={href || "#"} {...props} />
-						),
-						Image: NextImageWrapper,
 					},
 				}}
 			>

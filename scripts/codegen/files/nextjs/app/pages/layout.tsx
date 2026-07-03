@@ -1,14 +1,12 @@
 "use client";
 import React, { useState } from "react";
 import { StackProvider } from "@btst/stack/context";
+import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import Link from "next/link";
-import Image from "next/image";
-import { useRouter } from "next/navigation";
 import type { TodosPluginOverrides } from "@/lib/plugins/todo/client/overrides";
 import { getOrCreateQueryClient } from "@/lib/query-client";
-import { BlogPluginOverrides } from "@btst/stack/plugins/blog/client";
+import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client";
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
@@ -37,37 +35,6 @@ const getBaseURL = () =>
 		? process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
 		: process.env.BASE_URL || "http://localhost:3000";
 
-// Shared Next.js Image wrapper for plugins
-// Handles both cases: with explicit dimensions or using fill mode
-function NextImageWrapper(props: React.ImgHTMLAttributes<HTMLImageElement>) {
-	const { alt = "", src = "", width, height, ...rest } = props;
-
-	// Use fill mode if width or height are not provided
-	if (!width || !height) {
-		return (
-			<span className="block relative w-full h-full">
-				<Image
-					alt={alt}
-					src={typeof src === "string" ? src : ""}
-					fill
-					sizes="400px"
-					{...rest}
-				/>
-			</span>
-		);
-	}
-
-	return (
-		<Image
-			alt={alt}
-			src={typeof src === "string" ? src : ""}
-			width={width as number}
-			height={height as number}
-			{...rest}
-		/>
-	);
-}
-
 // Define the shape of all plugin overrides
 type PluginOverrides = {
 	todos: TodosPluginOverrides;
@@ -86,7 +53,6 @@ export default function ExampleLayout({
 }: {
 	children: React.ReactNode;
 }) {
-	const router = useRouter();
 	// fresh instance to avoid stale client cache overriding hydrated data
 	const [queryClient] = useState(() => getOrCreateQueryClient());
 	const baseURL = getBaseURL();
@@ -125,22 +91,16 @@ export default function ExampleLayout({
 			<ReactQueryDevtools initialIsOpen={false} />
 			<StackProvider<PluginOverrides>
 				basePath="/pages"
+				router={nextRouter()}
+				api={{ baseURL, basePath: "/api/data" }}
 				overrides={{
-					todos: {
-						Link: (props: React.ComponentProps<typeof Link>) => {
-							return <Link data-testid="link" {...props} />;
-						},
-						navigate: (path) => router.push(path),
-					},
+					// Only genuinely plugin-specific overrides remain — the shared
+					// Link/navigate/refresh/Image and API wiring come from the
+					// top-level `router` and `api` props above.
 					blog: {
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
-						navigate: (path) => router.push(path),
-						refresh: () => router.refresh(),
 						uploadImage,
 						imagePicker: ImagePicker,
 						imageInputField: ImageInputField,
-						Image: NextImageWrapper,
 						// Wire comments into the bottom of each blog post
 						postBottomSlot: (post) => (
 							<CommentThread
@@ -154,71 +114,10 @@ export default function ExampleLayout({
 								className="mt-8 pt-8 border-t"
 							/>
 						),
-						// Lifecycle Hooks - called during route rendering
-						onRouteRender: async (routeName, context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] onRouteRender: Route rendered:`,
-								routeName,
-								context.path,
-							);
-						},
-						onRouteError: async (routeName, error, context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] onRouteError: Route error:`,
-								routeName,
-								error.message,
-								context.path,
-							);
-						},
-						onBeforePostsPageRendered: (context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] onBeforePostsPageRendered: checking access for`,
-								context.path,
-							);
-							return true;
-						},
-						onBeforeDraftsPageRendered: (context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] onBeforeDraftsPageRendered: checking auth for`,
-								context.path,
-							);
-							return true;
-						},
-						onBeforeNewPostPageRendered: (context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] onBeforeNewPostPageRendered: checking permissions for`,
-								context.path,
-							);
-							return true;
-						},
-						onBeforeEditPostPageRendered: (slug, context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] onBeforeEditPostPageRendered: checking permissions for`,
-								slug,
-								context.path,
-							);
-							return true;
-						},
-						onBeforePostPageRendered: (slug, context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] onBeforePostPageRendered: checking access for`,
-								slug,
-								context.path,
-							);
-							return true;
-						},
 					},
 					"ai-chat": {
 						mode: "authenticated", // Full chat with conversation history
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
-						navigate: (path) => router.push(path),
-						refresh: () => router.refresh(),
 						uploadFile: uploadFileForChat,
-						Link: ({ href, ...props }) => (
-							<Link href={href || "#"} {...props} />
-						),
-						Image: NextImageWrapper,
 						chatSuggestions: [
 							"Hi, I'm Sarah, 34. I'm getting married next year and I just inherited $50,000 from my grandmother. I have no debt and about $30k in savings. I'm wondering if my current moderate-risk portfolio still makes sense.",
 							"Hi, I run a small import business and want to invest $200,000. The money came from overseas sales across multiple countries over the past few months. I'd like to move it into Canadian equities right away.",
@@ -226,93 +125,16 @@ export default function ExampleLayout({
 							"I'm approaching retirement in the next few years — what should I be thinking about?",
 							"How is my risk tolerance assessed?",
 						],
-						// Lifecycle hooks
-						onRouteRender: async (routeName, context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] AI Chat route:`,
-								routeName,
-								context.path,
-							);
-						},
-						onRouteError: async (routeName, error, context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] AI Chat error:`,
-								routeName,
-								error.message,
-							);
-						},
 					},
 					cms: {
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
-						navigate: (path) => router.push(path),
-						refresh: () => router.refresh(),
 						uploadImage,
 						imagePicker: ImagePicker,
 						imageInputField: ImageInputField,
-						Link: ({ href, ...props }) => (
-							<Link href={href || "#"} {...props} />
-						),
-						Image: NextImageWrapper,
-						// Lifecycle hooks
-						onRouteRender: async (routeName, context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] CMS route:`,
-								routeName,
-								context.path,
-							);
-						},
-						onRouteError: async (routeName, error, context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] CMS error:`,
-								routeName,
-								error.message,
-							);
-						},
-					},
-					"form-builder": {
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
-						navigate: (path) => router.push(path),
-						refresh: () => router.refresh(),
-						Link: ({ href, ...props }) => (
-							<Link href={href || "#"} {...props} />
-						),
-						// Lifecycle hooks
-						onRouteRender: async (routeName, context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] Form Builder route:`,
-								routeName,
-								context.path,
-							);
-						},
-						onRouteError: async (routeName, error, context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] Form Builder error:`,
-								routeName,
-								error.message,
-							);
-						},
 					},
 					"ui-builder": {
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
-						navigate: (path) => router.push(path),
-						refresh: () => router.refresh(),
-						Link: ({ href, ...props }) => (
-							<Link href={href || "#"} {...props} />
-						),
 						componentRegistry: defaultComponentRegistry,
 					},
 					kanban: {
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
-						navigate: (path) => router.push(path),
-						refresh: () => router.refresh(),
-						Link: ({ href, ...props }) => (
-							<Link href={href || "#"} {...props} />
-						),
-
 						uploadImage,
 						imagePicker: ImagePicker,
 						// User resolution for assignees
@@ -330,65 +152,18 @@ export default function ExampleLayout({
 								loginHref="/login"
 							/>
 						),
-						// Lifecycle hooks
-						onRouteRender: async (routeName, context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] Kanban route:`,
-								routeName,
-								context.path,
-							);
-						},
-						onRouteError: async (routeName, error, context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] Kanban error:`,
-								routeName,
-								error.message,
-							);
-						},
-						onBeforeBoardsPageRendered: (context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] onBeforeBoardsPageRendered`,
-							);
-							return true;
-						},
-						onBeforeBoardPageRendered: (boardId, context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] onBeforeBoardPageRendered:`,
-								boardId,
-							);
-							return true;
-						},
 					},
 					comments: {
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
 						// In production: derive from your auth session
 						currentUserId: "olliethedev",
 						defaultCommentPageSize: 5,
 						resourceLinks: {
 							"blog-post": (slug) => `/pages/blog/${slug}`,
 						},
-						onBeforeModerationPageRendered: (context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] onBeforeModerationPageRendered`,
-							);
-							return true; // In production: check admin role
-						},
-						onBeforeUserCommentsPageRendered: (context) => {
-							console.log(
-								`[${context.isSSR ? "SSR" : "CSR"}] onBeforeUserCommentsPageRendered`,
-							);
-							return true; // In production: check authenticated session
-						},
 					},
 					media: {
 						...mediaClientConfig,
 						queryClient,
-						navigate: (path) => router.push(path),
-						Link: ({ href, ...props }) => (
-							<Link href={href || "#"} {...props} />
-						),
-						Image: NextImageWrapper,
 					},
 				}}
 			>

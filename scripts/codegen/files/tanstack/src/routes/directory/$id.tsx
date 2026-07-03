@@ -1,12 +1,8 @@
 import { useContentItemPopulated } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
+import { tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
-import {
-	Link,
-	useRouter,
-	createFileRoute,
-	useParams,
-} from "@tanstack/react-router";
+import { Link, createFileRoute, useParams } from "@tanstack/react-router";
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import type { CMSTypes } from "@/lib/cms-schemas";
 import { ArrowLeft, ExternalLink } from "lucide-react";
@@ -149,7 +145,6 @@ function ResourceDetailContent({ id }: { id: string }) {
 }
 
 function ResourceDetailPage() {
-	const router = useRouter();
 	const context = Route.useRouteContext();
 	const { id } = useParams({ from: "/directory/$id" });
 	const baseURL = getBaseURL();
@@ -158,18 +153,8 @@ function ResourceDetailPage() {
 		<QueryClientProvider client={context.queryClient}>
 			<StackProvider<PluginOverrides>
 				basePath="/directory"
-				overrides={{
-					cms: {
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
-						navigate: (href) => router.navigate({ href }),
-						Link: ({ href, children, className, ...props }) => (
-							<Link to={href} className={className} {...props}>
-								{children}
-							</Link>
-						),
-					},
-				}}
+				router={tanstackRouter()}
+				api={{ baseURL, basePath: "/api/data" }}
 			>
 				<ResourceDetailContent id={id} />
 			</StackProvider>

@@ -1,6 +1,7 @@
 import { useContentItemPopulated } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
-import { Link, useNavigate, useParams } from "react-router";
+import { reactRouter } from "@btst/stack/react-router";
+import { Link, useParams } from "react-router";
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import type { CMSTypes } from "../../lib/cms-schemas";
 import { ArrowLeft, ExternalLink } from "lucide-react";
@@ -146,7 +147,6 @@ function ResourceDetailContent({ id }: { id: string }) {
 }
 
 export default function ResourceDetailPage() {
-	const navigate = useNavigate();
 	const params = useParams();
 	const baseURL = getBaseURL();
 	const id = params.id as string;
@@ -154,18 +154,8 @@ export default function ResourceDetailPage() {
 	return (
 		<StackProvider<PluginOverrides>
 			basePath="/directory"
-			overrides={{
-				cms: {
-					apiBaseURL: baseURL,
-					apiBasePath: "/api/data",
-					navigate: (path) => navigate(path),
-					Link: ({ href, children, className, ...props }) => (
-						<Link to={href || ""} className={className} {...props}>
-							{children}
-						</Link>
-					),
-				},
-			}}
+			router={reactRouter()}
+			api={{ baseURL, basePath: "/api/data" }}
 		>
 			<ResourceDetailContent id={id} />
 		</StackProvider>

@@ -3,7 +3,7 @@ import {
 	useContent,
 } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
-import { Link, useNavigate } from "react-router";
+import { reactRouter } from "@btst/stack/react-router";
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import type { CMSTypes } from "../lib/cms-schemas";
 
@@ -185,23 +185,16 @@ function CMSExampleContent() {
 }
 
 export default function CMSExamplePage() {
-	const navigate = useNavigate();
 	const baseURL = getBaseURL();
 
 	return (
 		<StackProvider<PluginOverrides>
 			basePath="/cms-example"
+			router={reactRouter()}
+			api={{ baseURL, basePath: "/api/data" }}
 			overrides={{
 				cms: {
-					apiBaseURL: baseURL,
-					apiBasePath: "/api/data",
-					navigate: (href) => navigate(href),
 					uploadImage: mockUploadFile,
-					Link: ({ href, children, className, ...props }) => (
-						<Link to={href || ""} className={className} {...props}>
-							{children}
-						</Link>
-					),
 				},
 			}}
 		>

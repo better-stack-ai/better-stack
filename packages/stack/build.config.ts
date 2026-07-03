@@ -49,6 +49,13 @@ export default defineBuildConfig({
 		"@vercel/blob/client",
 		"@aws-sdk/client-s3",
 		"@aws-sdk/s3-request-presigner",
+		// optional peerDependencies (framework router presets)
+		"next",
+		"next/link",
+		"next/image",
+		"next/navigation",
+		"react-router",
+		"@tanstack/react-router",
 		// test/build-time deps kept external
 		"vitest",
 		"@vitest/runner",
@@ -66,6 +73,10 @@ export default defineBuildConfig({
 		"./src/client/index.ts",
 		"./src/context/index.ts",
 		"./src/client/components/index.tsx",
+		// framework router presets
+		"./src/next/index.tsx",
+		"./src/react-router/index.tsx",
+		"./src/tanstack/index.tsx",
 		// plugin development entries
 		"./src/plugins/api/index.ts",
 		"./src/plugins/client/index.ts",

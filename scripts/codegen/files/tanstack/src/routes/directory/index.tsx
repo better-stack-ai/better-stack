@@ -1,7 +1,8 @@
 import { useContent } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
+import { tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Link, useRouter, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import type { CMSTypes } from "@/lib/cms-schemas";
@@ -167,7 +168,6 @@ function DirectoryContent() {
 }
 
 function DirectoryPage() {
-	const router = useRouter();
 	const context = Route.useRouteContext();
 	const baseURL = getBaseURL();
 
@@ -175,18 +175,8 @@ function DirectoryPage() {
 		<QueryClientProvider client={context.queryClient}>
 			<StackProvider<PluginOverrides>
 				basePath="/directory"
-				overrides={{
-					cms: {
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
-						navigate: (href) => router.navigate({ href }),
-						Link: ({ href, children, className, ...props }) => (
-							<Link to={href} className={className} {...props}>
-								{children}
-							</Link>
-						),
-					},
-				}}
+				router={tanstackRouter()}
+				api={{ baseURL, basePath: "/api/data" }}
 			>
 				<DirectoryContent />
 			</StackProvider>

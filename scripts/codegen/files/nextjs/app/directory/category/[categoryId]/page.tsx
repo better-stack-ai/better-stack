@@ -5,8 +5,9 @@ import {
 	useContentByRelation,
 } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
+import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { useRouter, useParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
@@ -160,7 +161,6 @@ function CategoryContent({ categoryId }: { categoryId: string }) {
 }
 
 export default function CategoryPage() {
-	const router = useRouter();
 	const params = useParams();
 	const [queryClient] = useState(() => getOrCreateQueryClient());
 	const baseURL = getBaseURL();
@@ -171,17 +171,8 @@ export default function CategoryPage() {
 		<QueryClientProvider client={queryClient}>
 			<StackProvider<PluginOverrides>
 				basePath="/directory"
-				overrides={{
-					cms: {
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
-						navigate: (path) => router.push(path),
-						refresh: () => router.refresh(),
-						Link: ({ href, ...props }) => (
-							<Link href={href || "#"} {...props} />
-						),
-					},
-				}}
+				router={nextRouter()}
+				api={{ baseURL, basePath: "/api/data" }}
 			>
 				<CategoryContent categoryId={categoryId} />
 			</StackProvider>
