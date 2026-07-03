@@ -87,6 +87,36 @@
         "default": "./dist/context/index.cjs"
       }
     },
+    "./next": {
+      "import": {
+        "types": "./dist/next/index.d.ts",
+        "default": "./dist/next/index.mjs"
+      },
+      "require": {
+        "types": "./dist/next/index.d.cts",
+        "default": "./dist/next/index.cjs"
+      }
+    },
+    "./react-router": {
+      "import": {
+        "types": "./dist/react-router/index.d.ts",
+        "default": "./dist/react-router/index.mjs"
+      },
+      "require": {
+        "types": "./dist/react-router/index.d.cts",
+        "default": "./dist/react-router/index.cjs"
+      }
+    },
+    "./tanstack": {
+      "import": {
+        "types": "./dist/tanstack/index.d.ts",
+        "default": "./dist/tanstack/index.mjs"
+      },
+      "require": {
+        "types": "./dist/tanstack/index.d.cts",
+        "default": "./dist/tanstack/index.cjs"
+      }
+    },
     "./plugins/api": {
       "import": {
         "types": "./dist/plugins/api/index.d.ts",
@@ -605,6 +635,15 @@
       "context": [
         "./dist/context/index.d.ts"
       ],
+      "next": [
+        "./dist/next/index.d.ts"
+      ],
+      "react-router": [
+        "./dist/react-router/index.d.ts"
+      ],
+      "tanstack": [
+        "./dist/tanstack/index.d.ts"
+      ],
       "plugins/api": [
         "./dist/plugins/api/index.d.ts"
       ],
@@ -774,6 +813,7 @@
     "@radix-ui/react-switch": ">=1.1.0",
     "@tailwindcss/typography": ">=0.5.0",
     "@tanstack/react-query": "^5.0.0",
+    "@tanstack/react-router": ">=1.0.0",
     "@vercel/blob": ">=0.14.0",
     "ai": ">=5.0.0",
     "better-call": ">=1.3.5",
@@ -784,9 +824,11 @@
     "highlight.js": ">=11.9.0",
     "katex": ">=0.16.0",
     "lucide-react": ">=0.469.0",
+    "next": ">=15.0.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0",
     "react-error-boundary": ">=4.0.0",
+    "react-router": ">=7.0.0",
     "react-hook-form": ">=7.55.0",
     "react-markdown": ">=9.1.0",
     "rehype-highlight": ">=7.0.0",
@@ -808,6 +850,15 @@
     },
     "@aws-sdk/s3-request-presigner": {
       "optional": true
+    },
+    "next": {
+      "optional": true
+    },
+    "react-router": {
+      "optional": true
+    },
+    "@tanstack/react-router": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -816,16 +867,20 @@
     "@aws-sdk/s3-request-presigner": "^3.1011.0",
     "@btst/adapter-memory": "2.2.2",
     "@btst/yar": "1.3.0",
+    "@tanstack/react-router": "1.168.10",
     "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "@types/slug": "^5.0.9",
     "@vercel/blob": "^0.27.3",
     "@workspace/ui": "workspace:*",
     "ai": "^5.0.94",
     "better-call": "catalog:",
     "knip": "^5.61.2",
+    "next": "16.0.10",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-error-boundary": "^4.1.2",
+    "react-router": "^7.13.1",
     "rollup-plugin-preserve-directives": "0.4.0",
     "rollup-plugin-visualizer": "^5.12.0",
     "tsx": "catalog:",

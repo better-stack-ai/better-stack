@@ -1,6 +1,7 @@
 import { useContent } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
-import { Link, useNavigate } from "react-router";
+import { reactRouter } from "@btst/stack/react-router";
+import { Link } from "react-router";
 import { useState, useMemo } from "react";
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import type { CMSTypes } from "../../lib/cms-schemas";
@@ -170,24 +171,13 @@ function DirectoryContent() {
 }
 
 export default function DirectoryPage() {
-	const navigate = useNavigate();
 	const baseURL = getBaseURL();
 
 	return (
 		<StackProvider<PluginOverrides>
 			basePath="/directory"
-			overrides={{
-				cms: {
-					apiBaseURL: baseURL,
-					apiBasePath: "/api/data",
-					navigate: (path) => navigate(path),
-					Link: ({ href, children, className, ...props }) => (
-						<Link to={href || ""} className={className} {...props}>
-							{children}
-						</Link>
-					),
-				},
-			}}
+			router={reactRouter()}
+			api={{ baseURL, basePath: "/api/data" }}
 		>
 			<DirectoryContent />
 		</StackProvider>

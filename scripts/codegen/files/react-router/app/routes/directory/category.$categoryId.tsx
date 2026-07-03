@@ -3,7 +3,8 @@ import {
 	useContentByRelation,
 } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
-import { Link, useNavigate, useParams } from "react-router";
+import { reactRouter } from "@btst/stack/react-router";
+import { Link, useParams } from "react-router";
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import type { CMSTypes } from "../../lib/cms-schemas";
 import { ArrowLeft } from "lucide-react";
@@ -152,7 +153,6 @@ function CategoryContent({ categoryId }: { categoryId: string }) {
 }
 
 export default function CategoryPage() {
-	const navigate = useNavigate();
 	const params = useParams();
 	const baseURL = getBaseURL();
 	const categoryId = params.categoryId as string;
@@ -160,18 +160,8 @@ export default function CategoryPage() {
 	return (
 		<StackProvider<PluginOverrides>
 			basePath="/directory"
-			overrides={{
-				cms: {
-					apiBaseURL: baseURL,
-					apiBasePath: "/api/data",
-					navigate: (path) => navigate(path),
-					Link: ({ href, children, className, ...props }) => (
-						<Link to={href || ""} className={className} {...props}>
-							{children}
-						</Link>
-					),
-				},
-			}}
+			router={reactRouter()}
+			api={{ baseURL, basePath: "/api/data" }}
 		>
 			<CategoryContent categoryId={categoryId} />
 		</StackProvider>

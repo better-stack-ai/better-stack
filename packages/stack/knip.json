@@ -6,6 +6,9 @@
     "src/client/index.ts",
     "src/context/index.ts",
     "src/client/components/index.tsx",
+    "src/next/index.tsx",
+    "src/react-router/index.tsx",
+    "src/tanstack/index.tsx",
     "src/plugins/api/index.ts",
     "src/plugins/client/index.ts",
     "src/plugins/blog/api/index.ts",
@@ -76,6 +79,9 @@
     "@tailwindcss/typography",
     "@aws-sdk/client-s3",
     "@aws-sdk/s3-request-presigner",
-    "@vercel/blob"
+    "@vercel/blob",
+    "next",
+    "react-router",
+    "@tanstack/react-router"
   ]
 }

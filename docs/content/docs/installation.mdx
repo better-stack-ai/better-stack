@@ -644,16 +644,15 @@ In order to use BTST, your application must meet the following requirements:
   <Step>
     ### Set Up Layout Provider
 
-    Wrap your BTST pages with the `StackProvider` to enable framework-specific overrides:
+    Wrap your BTST pages with the `StackProvider`. The framework router preset (`router` prop) wires `Link`, `Image`, `navigate`, and `refresh` for every plugin at once, and the `api` prop sets `apiBaseURL`/`apiBasePath` for all plugins. The `overrides` prop is then only needed for genuinely plugin-specific values:
 
     <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
       <Tab value="next-js">
         ```tsx title="app/pages/[[...all]]/layout.tsx"
+        "use client"
         import { StackProvider } from "@btst/stack/context"
+        import { nextRouter } from "@btst/stack/next"
         import type { ExamplePluginOverrides } from "@btst/stack/plugins/example/client"
-        import Link from "next/link"
-        import Image from "next/image"
-        import { useRouter } from "next/navigation"
 
         // Define the shape of all plugin overrides for type safety
         type PluginOverrides = {
@@ -661,18 +660,20 @@ In order to use BTST, your application must meet the following requirements:
           // Add other plugins here
         }
 
+        const getBaseURL = () =>
+          typeof window !== "undefined"
+            ? window.location.origin
+            : process.env.BASE_URL || "http://localhost:3000"
+
         export default function Layout({ children }) {
-          const router = useRouter()
-          
           return (
             <StackProvider<PluginOverrides>
               basePath="/pages"
+              router={nextRouter()}
+              api={{ baseURL: getBaseURL(), basePath: "/api/data" }}
               overrides={{
                 example: {
-                  Link: (props) => <Link {...props} />,
-                  Image: (props) => <Image {...props} />,
-                  navigate: (path) => router.push(path),
-                  // Add other plugin overrides here
+                  // Only plugin-specific overrides needed here
                 }
                 // Add other plugins here
               }}
@@ -686,8 +687,9 @@ In order to use BTST, your application must meet the following requirements:
 
       <Tab value="react-router">
         ```tsx title="app/routes/pages/_layout.tsx"
-        import { Outlet, Link, useNavigate } from "react-router"
+        import { Outlet } from "react-router"
         import { StackProvider } from "@btst/stack/context"
+        import { reactRouter } from "@btst/stack/react-router"
         import type { ExamplePluginOverrides } from "@btst/stack/plugins/example/client"
 
         // Define the shape of all plugin overrides
@@ -696,21 +698,20 @@ In order to use BTST, your application must meet the following requirements:
           // Add other plugins here
         }
 
+        const getBaseURL = () =>
+          typeof window !== "undefined"
+            ? window.location.origin
+            : process.env.BASE_URL || "http://localhost:3000"
+
         export default function Layout() {
-          const navigate = useNavigate()
-          
           return (
             <StackProvider<PluginOverrides>
               basePath="/pages"
+              router={reactRouter()}
+              api={{ baseURL: getBaseURL(), basePath: "/api/data" }}
               overrides={{
                 example: {
-                  navigate: (href) => navigate(href),
-                  Link: ({ href, children, className, ...props }) => (
-                    <Link to={href || ""} className={className} {...props}>
-                      {children}
-                    </Link>
-                  )
-                  // Add other plugin overrides here
+                  // Only plugin-specific overrides needed here
                 }
                 // Add other plugins here
               }}
@@ -725,9 +726,10 @@ In order to use BTST, your application must meet the following requirements:
       <Tab value="tanstack">
         ```tsx title="src/routes/pages/route.tsx"
         import { StackProvider } from "@btst/stack/context"
+        import { tanstackRouter } from "@btst/stack/tanstack"
         import { QueryClientProvider } from "@tanstack/react-query"
         import type { ExamplePluginOverrides } from "@btst/stack/plugins/example/client"
-        import { Link, useRouter, Outlet, createFileRoute } from "@tanstack/react-router"
+        import { Outlet, createFileRoute } from "@tanstack/react-router"
 
         // Define the shape of all plugin overrides
         type PluginOverrides = {
@@ -735,27 +737,27 @@ In order to use BTST, your application must meet the following requirements:
           // Add other plugins here
         }
 
+        const getBaseURL = () =>
+          typeof window !== "undefined"
+            ? window.location.origin
+            : process.env.BASE_URL || "http://localhost:3000"
+
         export const Route = createFileRoute('/pages')({
           component: Layout
         })
 
         function Layout() {
-          const router = useRouter()
           const context = Route.useRouteContext()
 
           return (
             <QueryClientProvider client={context.queryClient}>
               <StackProvider<PluginOverrides>
                 basePath="/pages"
+                router={tanstackRouter()}
+                api={{ baseURL: getBaseURL(), basePath: "/api/data" }}
                 overrides={{
                   example: {
-                    navigate: (href) => router.navigate({ href }),
-                    Link: ({ href, children, className, ...props }) => (
-                      <Link to={href} className={className} {...props}>
-                        {children}
-                      </Link>
-                    )
-                    // Add other plugin overrides here
+                    // Only plugin-specific overrides needed here
                   }
                   // Add other plugins here
                 }}
@@ -771,7 +773,8 @@ In order to use BTST, your application must meet the following requirements:
 
     <Callout type="info">
       **Understanding Overrides:**
-      - **Purpose**: Injects framework-specific components via React Context. Plugin components access these overrides through `usePluginOverrides()` hook, allowing them to use your framework's `Link`, `Image`, and navigation without tight coupling and to avoid breaking the client/server boundary in frameworks like Next.js. 
+      - **Purpose**: Injects framework-specific components via React Context. Plugin components access these overrides through `usePluginOverrides()` hook, allowing them to use your framework's `Link`, `Image`, and navigation without tight coupling and to avoid breaking the client/server boundary in frameworks like Next.js.
+      - **Resolution order**: per-plugin `overrides` → top-level `router`/`api` → plugin defaults. Per-plugin `Link`/`navigate`/`Image`/`apiBaseURL` values always take precedence over the router preset, so you can still override framework wiring for a single plugin as an escape hatch.
       - **Type Safety**: Each plugin exports its override type (e.g., `ExamplePluginOverrides`)
     </Callout>
   </Step>
