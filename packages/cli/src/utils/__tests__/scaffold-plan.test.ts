@@ -315,7 +315,7 @@ describe("scaffold plan", () => {
 			'import { getOrCreateQueryClient } from "@/lib/query-client"',
 		);
 		expect(pagesRouteFile?.content).toContain(
-			"const queryClient = getOrCreateQueryClient()",
+			"getQueryClient: getOrCreateQueryClient",
 		);
 		expect(pagesRouteFile?.content).not.toContain("new QueryClient()");
 	});
@@ -337,7 +337,7 @@ describe("scaffold plan", () => {
 			'import { getOrCreateQueryClient } from "@/lib/query-client"',
 		);
 		expect(pagesRouteFile?.content).toContain(
-			"const queryClient = getOrCreateQueryClient()",
+			"getQueryClient: getOrCreateQueryClient",
 		);
 		expect(pagesRouteFile?.content).not.toContain("context.queryClient");
 	});
@@ -740,7 +740,7 @@ describe("scaffold plan", () => {
 			(f) => f.path === "app/pages/[[...all]]/page.tsx",
 		);
 		expect(pagesRoute?.content).toContain("generateMetadata");
-		expect(pagesRoute?.content).toContain("metaElementsToObject");
+		expect(pagesRoute?.content).toContain("createNextPage");
 	});
 
 	it("emits SSG pages for nextjs when blog selected", async () => {
