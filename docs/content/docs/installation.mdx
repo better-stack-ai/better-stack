@@ -376,7 +376,11 @@ In order to use BTST, your application must meet the following requirements:
         import { toReactRouterHandlers } from "@btst/stack/react-router"
         import { handler } from "~/lib/stack"
 
-        export const { loader, action } = toReactRouterHandlers(handler)
+        // React Router's build can't strip destructured exports from route
+        // modules, so assign loader/action individually.
+        const handlers = toReactRouterHandlers(handler)
+        export const loader = handlers.loader
+        export const action = handlers.action
         ```
       </Tab>
 
