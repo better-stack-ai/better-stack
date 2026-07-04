@@ -3,7 +3,7 @@ import {
 	dehydrate,
 	useQueryClient,
 } from "@tanstack/react-query";
-import type { QueryClient } from "@tanstack/react-query";
+import type { DehydrateOptions, QueryClient } from "@tanstack/react-query";
 import type { ComponentType, ReactNode } from "react";
 import { useLoaderData, useRouteError } from "react-router";
 import { normalizePath } from "../client/path-utils";
@@ -29,8 +29,21 @@ export interface CreateReactRouterPageOptions {
 	getQueryClient: () => QueryClient;
 	/** Rendered when no route matches. Defaults to a "Route not found" div. */
 	NotFound?: ComponentType;
+	/**
+	 * Rendered when the route errors. Defaults to a `<pre>` with the
+	 * stringified error — provide your own component for a production-safe
+	 * error UI (use `useRouteError()` from react-router to read the error).
+	 */
+	ErrorBoundary?: ComponentType;
 	/** Wraps the rendered page (inside the `HydrationBoundary`). */
 	wrapPage?: (page: ReactNode) => ReactNode;
+	/**
+	 * Options passed to `dehydrate()`. Defaults to dehydrating failed queries
+	 * in addition to the React Query defaults, so the client does not refetch
+	 * queries that errored during SSR. Override e.g. to sanitize error
+	 * payloads before they are serialized into the HTML.
+	 */
+	dehydrateOptions?: DehydrateOptions;
 }
 
 /**
@@ -52,7 +65,14 @@ export interface CreateReactRouterPageOptions {
  * ```
  */
 export function createReactRouterPage(options: CreateReactRouterPageOptions) {
-	const { getStackClient, getQueryClient, NotFound, wrapPage } = options;
+	const {
+		getStackClient,
+		getQueryClient,
+		NotFound,
+		ErrorBoundary: CustomErrorBoundary,
+		wrapPage,
+		dehydrateOptions = stackDehydrateOptions,
+	} = options;
 
 	async function loader({ params }: ReactRouterPageLoaderArgs) {
 		const queryClient = getQueryClient();
@@ -65,7 +85,7 @@ export function createReactRouterPage(options: CreateReactRouterPageOptions) {
 
 		return {
 			path,
-			dehydratedState: dehydrate(queryClient, stackDehydrateOptions),
+			dehydratedState: dehydrate(queryClient, dehydrateOptions),
 			meta: await route?.meta?.(),
 		};
 	}
@@ -96,10 +116,15 @@ export function createReactRouterPage(options: CreateReactRouterPageOptions) {
 		);
 	}
 
-	function ErrorBoundary() {
+	function DefaultErrorBoundary() {
 		const error = useRouteError();
 		return <pre>{String(error)}</pre>;
 	}
 
-	return { loader, meta, Component, ErrorBoundary };
+	return {
+		loader,
+		meta,
+		Component,
+		ErrorBoundary: CustomErrorBoundary ?? DefaultErrorBoundary,
+	};
 }

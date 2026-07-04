@@ -1,5 +1,5 @@
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
-import type { QueryClient } from "@tanstack/react-query";
+import type { DehydrateOptions, QueryClient } from "@tanstack/react-query";
 import type { Metadata } from "next";
 import { notFound as nextNotFound } from "next/navigation";
 import type { ReactNode } from "react";
@@ -26,6 +26,13 @@ export interface CreateNextPageOptions {
 	notFound?: () => never;
 	/** Wraps the rendered page (inside the `HydrationBoundary`). */
 	wrapPage?: (page: ReactNode) => ReactNode;
+	/**
+	 * Options passed to `dehydrate()`. Defaults to dehydrating failed queries
+	 * in addition to the React Query defaults, so the client does not refetch
+	 * queries that errored during SSR. Override e.g. to sanitize error
+	 * payloads before they are serialized into the HTML.
+	 */
+	dehydrateOptions?: DehydrateOptions;
 }
 
 /**
@@ -53,6 +60,7 @@ export function createNextPage(options: CreateNextPageOptions) {
 		getQueryClient,
 		notFound = nextNotFound,
 		wrapPage,
+		dehydrateOptions = stackDehydrateOptions,
 	} = options;
 
 	async function Page({ params }: NextPageProps) {
@@ -68,7 +76,7 @@ export function createNextPage(options: CreateNextPageOptions) {
 		const page = route?.PageComponent ? <route.PageComponent /> : notFound();
 
 		return (
-			<HydrationBoundary state={dehydrate(queryClient, stackDehydrateOptions)}>
+			<HydrationBoundary state={dehydrate(queryClient, dehydrateOptions)}>
 				{wrapPage ? wrapPage(page) : page}
 			</HydrationBoundary>
 		);
@@ -82,7 +90,10 @@ export function createNextPage(options: CreateNextPageOptions) {
 		const queryClient = getQueryClient();
 		const route = getStackClient(queryClient).router.getRoute(path);
 
-		if (!route?.meta) {
+		if (!route) {
+			return notFound();
+		}
+		if (!route.meta) {
 			return {};
 		}
 		if (route.loader) {

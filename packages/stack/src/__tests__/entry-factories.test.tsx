@@ -151,6 +151,22 @@ describe("createNextPage", () => {
 		expect(metadata).toEqual({});
 		expect(loader).not.toHaveBeenCalled();
 	});
+
+	it("generateMetadata calls notFound when no route matches", async () => {
+		const notFound = vi.fn(() => {
+			throw new Error("NEXT_NOT_FOUND_TEST");
+		});
+		const page = createNextPage({
+			getStackClient: makeStackClient({}),
+			getQueryClient: makeQueryClient,
+			notFound: notFound as unknown as () => never,
+		});
+
+		await expect(
+			page.generateMetadata({ params: params(["missing"]) }),
+		).rejects.toThrow("NEXT_NOT_FOUND_TEST");
+		expect(notFound).toHaveBeenCalledOnce();
+	});
 });
 
 describe("createReactRouterPage", () => {
@@ -204,6 +220,32 @@ describe("createReactRouterPage", () => {
 			(q) => q.state.status === "error",
 		);
 		expect(errored).toBeDefined();
+	});
+
+	it("supports custom ErrorBoundary and dehydrateOptions overrides", async () => {
+		const queryClient = makeQueryClient();
+		const CustomErrorBoundary = () => <div>custom error</div>;
+		const page = createReactRouterPage({
+			getStackClient: makeStackClient({
+				"/broken": {
+					loader: async () => {
+						await queryClient.prefetchQuery({
+							queryKey: ["broken"],
+							queryFn: async () => {
+								throw new Error("boom");
+							},
+						});
+					},
+				},
+			}),
+			getQueryClient: () => queryClient,
+			ErrorBoundary: CustomErrorBoundary,
+			dehydrateOptions: { shouldDehydrateQuery: () => false },
+		});
+
+		expect(page.ErrorBoundary).toBe(CustomErrorBoundary);
+		const data = await page.loader({ params: { "*": "broken" } });
+		expect(data.dehydratedState.queries).toHaveLength(0);
 	});
 });
 
