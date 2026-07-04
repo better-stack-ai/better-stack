@@ -6,6 +6,7 @@ description: Learn how to install and configure BTST in your project.
 import { Steps, Step } from "fumadocs-ui/components/steps";
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
+import { Accordions, Accordion } from "fumadocs-ui/components/accordion";
 
 
 ## AI Agent Skills
@@ -358,61 +359,39 @@ In order to use BTST, your application must meet the following requirements:
   <Step>
     ### Create API Route
 
-    Create a catch-all API route to handle BTST requests. The route will handle requests for the path `/api/data/*`. If you use a different path make sure to update the `basePath` in the `stack` config to match your chosen path.
+    Create a catch-all API route to handle BTST requests. The `toNextRouteHandlers` / `toReactRouterHandlers` / `toTanStackHandlers` helpers from the framework entry points wire your stack `handler` to every HTTP method the route needs. The route will handle requests for the path `/api/data/*`. If you use a different path make sure to update the `basePath` in the `stack` config to match your chosen path.
 
     <Tabs  groupId="frameworks" items={["next-js", "react-router", "tanstack", "nodejs"]} persist>
       <Tab value="next-js">
         ```ts title="app/api/data/[[...all]]/route.ts"
+        import { toNextRouteHandlers } from "@btst/stack/next"
         import { handler } from "@/lib/stack"
 
-        export const GET = handler
-        export const POST = handler
-        export const PUT = handler
-        export const PATCH = handler
-        export const DELETE = handler
+        export const { GET, POST, PUT, PATCH, DELETE } = toNextRouteHandlers(handler)
         ```
       </Tab>
 
       <Tab value="react-router">
-        ```ts title="app/routes/api/data/route.ts"
+        ```ts title="app/routes/api/data/$.ts"
+        import { toReactRouterHandlers } from "@btst/stack/react-router"
         import { handler } from "~/lib/stack"
-        import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node"
 
-        export async function loader({ request }: LoaderFunctionArgs) {
-          return handler(request)
-        }
-
-        export async function action({ request }: ActionFunctionArgs) {
-          return handler(request)
-        }
+        // React Router's build can't strip destructured exports from route
+        // modules, so assign loader/action individually.
+        const handlers = toReactRouterHandlers(handler)
+        export const loader = handlers.loader
+        export const action = handlers.action
         ```
       </Tab>
 
       <Tab value="tanstack">
         ```ts title="src/routes/api/data/$.ts"
-        import { createFileRoute } from '@tanstack/react-router'
-        import { handler } from '@/lib/stack'
+        import { createFileRoute } from "@tanstack/react-router"
+        import { toTanStackHandlers } from "@btst/stack/tanstack"
+        import { handler } from "@/lib/stack"
 
-        export const Route = createFileRoute('/api/data/$')({
-          server: {
-            handlers: {
-              GET: async ({ request }) => {
-                return handler(request)
-              },
-              POST: async ({ request }) => {
-                return handler(request)
-              },
-              PUT: async ({ request }) => {
-                return handler(request)
-              },
-              PATCH: async ({ request }) => {
-                return handler(request)
-              },
-              DELETE: async ({ request }) => {
-                return handler(request)
-              },
-            },
-          },
+        export const Route = createFileRoute("/api/data/$")({
+          server: { handlers: toTanStackHandlers(handler) },
         })
         ```
       </Tab>
@@ -455,6 +434,60 @@ In order to use BTST, your application must meet the following requirements:
         ```
       </Tab>
     </Tabs>
+
+    <Accordions type="single">
+      <Accordion title="Advanced: hand-written API route">
+        The helpers only wire your `handler` to each HTTP method — hand-writing the glue remains fully supported if you need custom behavior (auth wrappers, logging, filtering methods):
+
+        <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
+          <Tab value="next-js">
+            ```ts title="app/api/data/[[...all]]/route.ts"
+            import { handler } from "@/lib/stack"
+
+            export const GET = handler
+            export const POST = handler
+            export const PUT = handler
+            export const PATCH = handler
+            export const DELETE = handler
+            ```
+          </Tab>
+
+          <Tab value="react-router">
+            ```ts title="app/routes/api/data/$.ts"
+            import type { Route } from "./+types/$"
+            import { handler } from "~/lib/stack"
+
+            export function loader({ request }: Route.LoaderArgs) {
+              return handler(request)
+            }
+
+            export function action({ request }: Route.ActionArgs) {
+              return handler(request)
+            }
+            ```
+          </Tab>
+
+          <Tab value="tanstack">
+            ```ts title="src/routes/api/data/$.ts"
+            import { createFileRoute } from '@tanstack/react-router'
+            import { handler } from '@/lib/stack'
+
+            export const Route = createFileRoute('/api/data/$')({
+              server: {
+                handlers: {
+                  GET: async ({ request }) => handler(request),
+                  POST: async ({ request }) => handler(request),
+                  PUT: async ({ request }) => handler(request),
+                  PATCH: async ({ request }) => handler(request),
+                  DELETE: async ({ request }) => handler(request),
+                },
+              },
+            })
+            ```
+          </Tab>
+        </Tabs>
+      </Accordion>
+    </Accordions>
   </Step>
 
 
@@ -782,161 +815,212 @@ In order to use BTST, your application must meet the following requirements:
   <Step>
     ### Set Up Page Handler
 
-    Create a catch-all route to handle BTST pages defined in your plugins. This enables server-side rendering, metadata generation and automatic route handling.
+    Create a catch-all route to handle BTST pages defined in your plugins. The page factories from the framework entry points own the invariant plumbing once: server-side prefetching via `route.loader()`, React Query dehydration (including failed queries, so the client doesn't refetch on errors), loader-before-meta ordering for SEO metadata, and 404 handling via your framework's mechanism.
 
     <Tabs  groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist >
       <Tab value="next-js">
         ```tsx title="app/pages/[[...all]]/page.tsx"
-        import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
-        import { notFound } from "next/navigation"
+        import { createNextPage } from "@btst/stack/next"
         import { getOrCreateQueryClient } from "@/lib/query-client"
         import { getStackClient } from "@/lib/stack-client"
-        import { metaElementsToObject, normalizePath } from "@btst/stack/client"
-        import { Metadata } from "next"
 
-        export default async function Page({ params }: { params: Promise<{ all: string[] }> }) {
-          const pathParams = await params
-          const path = normalizePath(pathParams?.all)
-          
-          const queryClient = getOrCreateQueryClient()
-          const stackClient = getStackClient(queryClient)
-          const route = stackClient.router.getRoute(path)
-          
-          // Prefetch data server-side if the route has a loader
-          if (route?.loader) await route.loader()
-          
-          // Serialize React Query cache for client hydration
-          const dehydratedState = dehydrate(queryClient)
-          
-          return (
-            <HydrationBoundary state={dehydratedState}>
-              {route && route.PageComponent ? <route.PageComponent /> : notFound()}
-            </HydrationBoundary>
-          )
-        }
+        export const dynamic = "force-dynamic"
 
-        export async function generateMetadata({ params }: { params: Promise<{ all: string[] }> }) {
-          const pathParams = await params
-          const path = normalizePath(pathParams?.all)
-          
-          const queryClient = getOrCreateQueryClient()
-          const stackClient = getStackClient(queryClient)
-          const route = stackClient.router.getRoute(path)
-          
-          if (!route) return notFound()
-          if (route?.loader) await route.loader()
-          
-          // Convert plugin meta elements to Next.js Metadata format
-          return route.meta ? metaElementsToObject(route.meta()) satisfies Metadata : { title: "No meta" }
-        }
+        const page = createNextPage({ getStackClient, getQueryClient: getOrCreateQueryClient })
+        export default page.Page
+        export const generateMetadata = page.generateMetadata
         ```
       </Tab>
 
       <Tab value="react-router">
-        ```tsx title="app/routes/pages/index.tsx"
-        import type { Route } from "./+types/index"
-        import { useLoaderData } from "react-router"
-        import { dehydrate, HydrationBoundary, QueryClient, useQueryClient } from "@tanstack/react-query"
+        ```tsx title="app/routes/pages/$.tsx"
+        import { createReactRouterPage } from "@btst/stack/react-router"
+        import { getOrCreateQueryClient } from "~/lib/query-client"
         import { getStackClient } from "~/lib/stack-client"
-        import { normalizePath } from "@btst/stack/client"
 
-        export async function loader({ params }: Route.LoaderArgs) {
-          const path = normalizePath(params["*"])
-          
-          // Create QueryClient for this request with consistent config
-          const queryClient = new QueryClient({
-            defaultOptions: { queries: { staleTime: 1000 * 60 * 5, refetchOnMount: false, retry: false } }
-          })
-          const stackClient = getStackClient(queryClient)
-          const route = stackClient.router.getRoute(path)
-          
-          if (route?.loader) await route.loader()
-          
-          // Include errors so client doesn't refetch on error
-          const dehydratedState = dehydrate(queryClient)
-          
-          return { path, dehydratedState, meta: route?.meta?.() }
-        }
-
-        export function meta({ loaderData }: Route.MetaArgs) {
-          return loaderData.meta
-        }
-
-        export default function PagesIndex() {
-          const { path, dehydratedState } = useLoaderData<typeof loader>()
-          const queryClient = useQueryClient()
-          const route = getStackClient(queryClient).router.getRoute(path)
-          const Page = route && route.PageComponent ? <route.PageComponent /> : <div>Route not found</div>
-          
-          return dehydratedState ? (
-            <HydrationBoundary state={dehydratedState}>{Page}</HydrationBoundary>
-          ) : Page
-        }
+        const page = createReactRouterPage({ getStackClient, getQueryClient: getOrCreateQueryClient })
+        export const loader = page.loader
+        export const meta = page.meta
+        export const ErrorBoundary = page.ErrorBoundary
+        export default page.Component
         ```
       </Tab>
 
       <Tab value="tanstack">
         ```tsx title="src/routes/pages/$.tsx"
-        import { createFileRoute, notFound } from "@tanstack/react-router"
+        import { createFileRoute } from "@tanstack/react-router"
+        import { createTanStackPageOptions } from "@btst/stack/tanstack"
         import { getStackClient } from "@/lib/stack-client"
-        import { normalizePath } from "@btst/stack/client"
 
-        export const Route = createFileRoute("/pages/$")({
-          ssr: true,
-          component: Page,
-          loader: async ({ params, context }) => {
-            const routePath = normalizePath(params._splat)
-            const stackClient = getStackClient(context.queryClient)
-            const route = stackClient.router.getRoute(routePath)
-            
-            if (!route) throw notFound()
-            if (route?.loader) await route.loader()
-            
-            return { meta: await route?.meta?.() }
-          },
-          head: ({ loaderData }) => {
-            return loaderData?.meta && Array.isArray(loaderData.meta) 
-              ? { meta: loaderData.meta } 
-              : { meta: [{ title: "No Meta" }], title: "No Meta" }
-          },
-          notFoundComponent: () => <p>This page doesn't exist!</p>
-        })
-
-        function Page() {
-          const context = Route.useRouteContext()
-          const { _splat } = Route.useParams()
-          const routePath = normalizePath(_splat)
-          const route = getStackClient(context.queryClient).router.getRoute(routePath)
-          
-          return route && route.PageComponent ? <route.PageComponent /> : <div>Route not found</div>
-        }
+        export const Route = createFileRoute("/pages/$")(
+          createTanStackPageOptions({ getStackClient }),
+        )
         ```
       </Tab>
     </Tabs>
 
     <Callout type="info">
-      
-    **How it works:**
-    
-    `stackClient.router.getRoute(path)` matches the URL to a plugin route and returns a route object:
-    
-    ```typescript
-    route = {
-      PageComponent: React.ComponentType,     // The page to render
-      loader?: () => Promise<void>,           // Prefetches React Query data
-      meta?: () => MetadataElements,          // Returns SEO metadata
-      ErrorComponent?: React.ComponentType,   // Standalone error components
-      LoadingComponent?: React.ComponentType  // Standalone loading components
-    }
-    ```
-    
-    **Key steps:**
-    - **Server-side data loading**: Call `route.loader()` before rendering to prefetch data into React Query cache
-    - **Hydration**: Use `dehydrate()` to serialize prefetched data for the client (not required with TanStack Start)
-    - **Error handling**: Configure your query client with `shouldDehydrateQuery` to include failed queries in dehydration, preventing client-side refetching on errors
-    - **Metadata generation**: Use `route.meta()` with framework-specific meta functions for SEO
-    - **404 handling**: Return `notFound()` or your framework's equivalent function when routes don't exist
+      **How it works:**
+
+      The factory matches the URL to a plugin route via `stackClient.router.getRoute(path)`, prefetches data server-side with `route.loader()`, renders the route's `PageComponent` with instant hydration on the client, and generates SEO metadata from `route.meta()` (running the loader first, so meta can read prefetched data).
+
+      **Escape hatches:**
+      - `createNextPage` accepts `notFound` (replaces `notFound()` from `next/navigation`), `wrapPage`, and `dehydrateOptions`
+      - `createReactRouterPage` accepts `NotFound` (component rendered when no route matches), `ErrorBoundary` (production-safe error UI), `wrapPage`, and `dehydrateOptions`
+      - `createTanStackPageOptions` accepts `getQueryClient` (defaults to the router context's `queryClient`); spread extra route options like `notFoundComponent` alongside it
+      - Hand-writing the route file remains fully supported — see below
     </Callout>
+
+    <Accordions type="single">
+      <Accordion title="Advanced: hand-written page handler">
+        `stackClient.router.getRoute(path)` matches the URL to a plugin route and returns a route object:
+
+        ```typescript
+        route = {
+          PageComponent: React.ComponentType,     // The page to render
+          loader?: () => Promise<void>,           // Prefetches React Query data
+          meta?: () => MetadataElements,          // Returns SEO metadata
+          ErrorComponent?: React.ComponentType,   // Standalone error components
+          LoadingComponent?: React.ComponentType  // Standalone loading components
+        }
+        ```
+
+        If you need behavior the factories don't cover, write the catch-all route yourself:
+
+        <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
+          <Tab value="next-js">
+            ```tsx title="app/pages/[[...all]]/page.tsx"
+            import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
+            import { notFound } from "next/navigation"
+            import { getOrCreateQueryClient } from "@/lib/query-client"
+            import { getStackClient } from "@/lib/stack-client"
+            import { metaElementsToObject, normalizePath } from "@btst/stack/client"
+            import { Metadata } from "next"
+
+            export default async function Page({ params }: { params: Promise<{ all: string[] }> }) {
+              const pathParams = await params
+              const path = normalizePath(pathParams?.all)
+              
+              const queryClient = getOrCreateQueryClient()
+              const stackClient = getStackClient(queryClient)
+              const route = stackClient.router.getRoute(path)
+              
+              // Prefetch data server-side if the route has a loader
+              if (route?.loader) await route.loader()
+              
+              // Serialize React Query cache for client hydration
+              const dehydratedState = dehydrate(queryClient)
+              
+              return (
+                <HydrationBoundary state={dehydratedState}>
+                  {route && route.PageComponent ? <route.PageComponent /> : notFound()}
+                </HydrationBoundary>
+              )
+            }
+
+            export async function generateMetadata({ params }: { params: Promise<{ all: string[] }> }) {
+              const pathParams = await params
+              const path = normalizePath(pathParams?.all)
+              
+              const queryClient = getOrCreateQueryClient()
+              const stackClient = getStackClient(queryClient)
+              const route = stackClient.router.getRoute(path)
+              
+              if (!route) return notFound()
+              if (route?.loader) await route.loader()
+              
+              // Convert plugin meta elements to Next.js Metadata format
+              return route.meta ? metaElementsToObject(route.meta()) satisfies Metadata : { title: "No meta" }
+            }
+            ```
+          </Tab>
+
+          <Tab value="react-router">
+            ```tsx title="app/routes/pages/$.tsx"
+            import type { Route } from "./+types/$"
+            import { useLoaderData } from "react-router"
+            import { dehydrate, HydrationBoundary, useQueryClient } from "@tanstack/react-query"
+            import { getOrCreateQueryClient } from "~/lib/query-client"
+            import { getStackClient } from "~/lib/stack-client"
+            import { normalizePath } from "@btst/stack/client"
+
+            export async function loader({ params }: Route.LoaderArgs) {
+              const queryClient = getOrCreateQueryClient()
+              const path = normalizePath(params["*"])
+              const route = getStackClient(queryClient).router.getRoute(path)
+              
+              if (route?.loader) await route.loader()
+              
+              // Include errors so client doesn't refetch on error
+              const dehydratedState = dehydrate(queryClient)
+              
+              return { path, dehydratedState, meta: route?.meta?.() }
+            }
+
+            export function meta({ loaderData }: Route.MetaArgs) {
+              return loaderData.meta
+            }
+
+            export default function PagesIndex() {
+              const { path, dehydratedState } = useLoaderData<typeof loader>()
+              const queryClient = useQueryClient()
+              const route = getStackClient(queryClient).router.getRoute(path)
+              const Page = route && route.PageComponent ? <route.PageComponent /> : <div>Route not found</div>
+              
+              return dehydratedState ? (
+                <HydrationBoundary state={dehydratedState}>{Page}</HydrationBoundary>
+              ) : Page
+            }
+            ```
+          </Tab>
+
+          <Tab value="tanstack">
+            ```tsx title="src/routes/pages/$.tsx"
+            import { createFileRoute, notFound } from "@tanstack/react-router"
+            import { getStackClient } from "@/lib/stack-client"
+            import { normalizePath } from "@btst/stack/client"
+
+            export const Route = createFileRoute("/pages/$")({
+              ssr: true,
+              component: Page,
+              loader: async ({ params, context }) => {
+                const routePath = normalizePath(params._splat)
+                const stackClient = getStackClient(context.queryClient)
+                const route = stackClient.router.getRoute(routePath)
+                
+                if (!route) throw notFound()
+                if (route?.loader) await route.loader()
+                
+                return { meta: await route?.meta?.() }
+              },
+              head: ({ loaderData }) => {
+                return loaderData?.meta && Array.isArray(loaderData.meta) 
+                  ? { meta: loaderData.meta } 
+                  : { meta: [{ title: "No Meta" }], title: "No Meta" }
+              },
+              notFoundComponent: () => <p>This page doesn't exist!</p>
+            })
+
+            function Page() {
+              const context = Route.useRouteContext()
+              const { _splat } = Route.useParams()
+              const routePath = normalizePath(_splat)
+              const route = getStackClient(context.queryClient).router.getRoute(routePath)
+              
+              return route && route.PageComponent ? <route.PageComponent /> : <div>Route not found</div>
+            }
+            ```
+          </Tab>
+        </Tabs>
+
+        **Key steps to get right by hand:**
+        - **Server-side data loading**: Call `route.loader()` before rendering to prefetch data into React Query cache
+        - **Hydration**: Use `dehydrate()` to serialize prefetched data for the client (not required with TanStack Start)
+        - **Error handling**: Configure your query client with `shouldDehydrateQuery` to include failed queries in dehydration, preventing client-side refetching on errors
+        - **Metadata generation**: Use `route.meta()` with framework-specific meta functions for SEO
+        - **404 handling**: Return `notFound()` or your framework's equivalent function when routes don't exist
+      </Accordion>
+    </Accordions>
 
   </Step>
 
