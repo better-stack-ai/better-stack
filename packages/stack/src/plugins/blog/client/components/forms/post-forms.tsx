@@ -40,7 +40,7 @@ import {
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
-import { lazy, memo, Suspense, useEffect, useState } from "react";
+import { lazy, memo, Suspense, useEffect, useRef, useState } from "react";
 import {
 	type FieldPath,
 	type FieldValues,
@@ -64,13 +64,27 @@ import { TagsMultiSelect } from "./tags-multiselect";
 
 /**
  * Applies server-side field validation errors (from `StackError.errors`)
- * onto react-hook-form field state.
+ * onto react-hook-form field state, and clears previously applied server
+ * errors that are no longer present (e.g. after a resubmit fails on
+ * different fields).
  */
 function useServerFieldErrors<T extends FieldValues>(
 	form: UseFormReturn<T>,
 	fieldErrors: Record<string, string | string[]>,
 ) {
+	const appliedFieldsRef = useRef<string[]>([]);
+
 	useEffect(() => {
+		// Clear stale server errors from fields that are no longer failing
+		for (const field of appliedFieldsRef.current) {
+			if (field in fieldErrors) continue;
+			const { error } = form.getFieldState(field as FieldPath<T>);
+			if (error?.type === "server") {
+				form.clearErrors(field as FieldPath<T>);
+			}
+		}
+		appliedFieldsRef.current = Object.keys(fieldErrors);
+
 		for (const [field, message] of Object.entries(fieldErrors)) {
 			form.setError(field as FieldPath<T>, {
 				type: "server",
