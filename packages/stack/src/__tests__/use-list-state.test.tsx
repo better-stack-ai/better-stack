@@ -13,8 +13,8 @@ const schema = {
 	filter: { type: "string" as const, default: "", history: "replace" as const },
 };
 
-function createMockRouter() {
-	let params = new URLSearchParams();
+function createMockRouter(initial = "") {
+	let params = new URLSearchParams(initial);
 	const setSearchParams = vi.fn(
 		(next: URLSearchParams, opts?: { replace?: boolean }) => {
 			params = new URLSearchParams(next.toString());
@@ -184,6 +184,33 @@ describe("useListState", () => {
 		expect(nextParams.toString()).toBe("tab=spam&folder=photos");
 		expect(capturedA.state).toEqual({ tab: "spam", page: 1, filter: "" });
 		expect(capturedB.state).toEqual({ folder: "photos" });
+	});
+
+	it("treats state-identical updates as no-ops even when the URL holds explicit defaults", async () => {
+		// URL contains `tab=pending` (the default) explicitly: serializing the
+		// same state would drop it and change the query string without changing
+		// state. That must not create a history entry.
+		const router = createMockRouter("tab=pending&page=3");
+		let captured: any;
+
+		function Probe() {
+			const [state, setState] = useListState("comments-moderation", schema);
+			captured = { state, setState };
+			return null;
+		}
+		await act(async () => {
+			root.render(
+				<StackProvider basePath="/pages" router={router}>
+					<Probe />
+				</StackProvider>,
+			);
+		});
+
+		await act(async () => {
+			captured.setState({ page: 3 });
+		});
+
+		expect(router.setSearchParams).not.toHaveBeenCalled();
 	});
 
 	it("does not push history when the update is a no-op", async () => {

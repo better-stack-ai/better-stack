@@ -54,6 +54,15 @@ interface PendingUpdate {
 // only runs in client event handlers, never during SSR.
 let pendingQueue: PendingUpdate[] | null = null;
 
+function searchParamsEqual(a: URLSearchParams, b: URLSearchParams): boolean {
+	const sorted = (params: URLSearchParams) => {
+		const copy = new URLSearchParams(params.toString());
+		copy.sort();
+		return copy.toString();
+	};
+	return sorted(a) === sorted(b);
+}
+
 function enqueueListStateUpdate(update: PendingUpdate): void {
 	if (pendingQueue) {
 		pendingQueue.push(update);
@@ -71,15 +80,25 @@ function enqueueListStateUpdate(update: PendingUpdate): void {
 
 		let params = currentParams;
 		let replace = true;
+		let changed = false;
 		for (const entry of queue) {
-			const nextState = {
-				...parseListStateFromSearchParams(
-					entry.namespace,
-					entry.schema,
-					params,
-				),
-				...entry.patch,
-			};
+			const prevState = parseListStateFromSearchParams(
+				entry.namespace,
+				entry.schema,
+				params,
+			);
+			const nextState = { ...prevState, ...entry.patch };
+			// Compare parsed states, not serialized strings: the URL may hold an
+			// explicit default (`?tab=pending`) or differ only in param order, and
+			// such state-identical updates must not touch history.
+			if (
+				Object.keys(entry.schema).every((key) =>
+					Object.is(prevState[key], nextState[key]),
+				)
+			) {
+				continue;
+			}
+			changed = true;
 			params = serializeListStateToSearchParams(
 				entry.namespace,
 				entry.schema,
@@ -99,9 +118,10 @@ function enqueueListStateUpdate(update: PendingUpdate): void {
 			}
 		}
 
-		// No-op updates (merged state already matches the URL) must not create
-		// history entries.
-		if (params.toString() === currentParams.toString()) return;
+		// Also skip when later entries reverted earlier ones back to the URL's
+		// current state (net no-op across the batch). Compare order-insensitively:
+		// serialization may reorder params without changing state.
+		if (!changed || searchParamsEqual(params, currentParams)) return;
 		first.setSearchParams(params, { replace });
 		for (const entry of queue) entry.onFlushed();
 	});
