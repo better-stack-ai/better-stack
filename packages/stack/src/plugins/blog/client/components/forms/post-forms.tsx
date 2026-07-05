@@ -19,8 +19,11 @@ import { Input } from "@workspace/ui/components/input";
 
 import { Switch } from "@workspace/ui/components/switch";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { useSuspensePost, useDeletePost } from "../../hooks/blog-hooks";
-import { blog } from "../../hooks/blog-resource";
+import {
+	useSuspensePost,
+	useDeletePost,
+	usePostForm,
+} from "../../hooks/blog-hooks";
 import { slugify } from "../../../utils";
 import type { SerializedPost } from "../../../types";
 import {
@@ -375,10 +378,7 @@ const AddPostFormComponent = ({
 
 	type AddPostFormValues = z.input<typeof schema>;
 
-	const resourceForm = blog.posts.useForm<
-		AddPostFormValues,
-		SerializedPost | null
-	>({
+	const resourceForm = usePostForm<AddPostFormValues>({
 		action: "create",
 		successMessage: localization.BLOG_FORMS_TOAST_CREATE_SUCCESS,
 		toCreateVars: (data) => ({
@@ -493,10 +493,7 @@ const EditPostFormComponent = ({
 
 	type EditPostFormValues = z.input<typeof schema>;
 
-	const resourceForm = blog.posts.useForm<
-		EditPostFormValues,
-		SerializedPost | null
-	>({
+	const resourceForm = usePostForm<EditPostFormValues>({
 		action: "edit",
 		// Record comes from the suspense hook above — skips useForm's own fetch
 		record: post,

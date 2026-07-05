@@ -2,6 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import { z } from "zod";
+import type {
+	ResourceFormConfig,
+	ResourceFormResult,
+} from "@btst/stack/plugins/client/hooks";
 import type { SerializedPost, SerializedTag } from "../../types";
 import type { createPostSchema, updatePostSchema } from "../../schemas";
 import { useDebounce } from "./use-debounce";
@@ -214,6 +218,21 @@ export function useSuspenseTags(): {
 		tags: data ?? [],
 		refetch,
 	};
+}
+
+/**
+ * Form lifecycle hook for creating/editing posts, built on the core
+ * resource `useForm`: submits the right mutation, awaits invalidation,
+ * notifies, redirects, and maps server validation issues to `fieldErrors`.
+ */
+export function usePostForm<TValues>(
+	config: ResourceFormConfig<
+		TValues,
+		SerializedPost | null,
+		SerializedPost | null
+	>,
+): ResourceFormResult<TValues, SerializedPost | null, SerializedPost | null> {
+	return blog.posts.useForm<TValues, SerializedPost | null>(config);
 }
 
 /** Create a new post */
