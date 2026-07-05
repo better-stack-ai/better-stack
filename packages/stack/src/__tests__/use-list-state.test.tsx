@@ -147,6 +147,45 @@ describe("useListState", () => {
 		expect(nextParams.toString()).toBe("page=3");
 	});
 
+	it("coalesces updates from multiple hook instances in one event", async () => {
+		const router = createMockRouter();
+		let capturedA: any;
+		let capturedB: any;
+
+		function ProbeA() {
+			const [state, setState] = useListState("comments-moderation", schema);
+			capturedA = { state, setState };
+			return null;
+		}
+		function ProbeB() {
+			const [state, setState] = useListState("media-library", {
+				folder: { type: "string" as const, default: "root" },
+			});
+			capturedB = { state, setState };
+			return null;
+		}
+
+		await act(async () => {
+			root.render(
+				<StackProvider basePath="/pages" router={router}>
+					<ProbeA />
+					<ProbeB />
+				</StackProvider>,
+			);
+		});
+
+		await act(async () => {
+			capturedA.setState({ tab: "spam" });
+			capturedB.setState({ folder: "photos" });
+		});
+
+		expect(router.setSearchParams).toHaveBeenCalledTimes(1);
+		const [nextParams] = router.setSearchParams.mock.calls[0]!;
+		expect(nextParams.toString()).toBe("tab=spam&folder=photos");
+		expect(capturedA.state).toEqual({ tab: "spam", page: 1, filter: "" });
+		expect(capturedB.state).toEqual({ folder: "photos" });
+	});
+
 	it("does not push history when the update is a no-op", async () => {
 		let captured: any;
 		const router = await renderHook((value) => {

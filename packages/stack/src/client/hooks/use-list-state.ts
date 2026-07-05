@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useStackOrNull } from "../../context/provider";
 import type { InferListState, ListStateSchema } from "../../shared/list-state";
 import {
@@ -30,6 +30,82 @@ export type SetListState<S extends ListStateSchema> = (
 		| ((prev: InferListState<S>) => Partial<InferListState<S>>),
 	options?: SetListStateOptions,
 ) => void;
+
+interface PendingUpdate {
+	namespace: string;
+	schema: ListStateSchema;
+	patch: Record<string, unknown>;
+	explicitReplace: boolean | undefined;
+	getSearchParams: () => URLSearchParams;
+	setSearchParams: (
+		next: URLSearchParams,
+		opts?: { replace?: boolean },
+	) => void;
+	onFlushed: () => void;
+}
+
+// Same-tick updates from ALL useListState instances are coalesced into one
+// `setSearchParams` call. Router bindings commit URL changes asynchronously
+// (Next.js `router.push`, React Router `navigate`), so a second update in the
+// same event would read a stale URL and drop what the first one wrote — and
+// each call would add its own history entry, breaking
+// one-back-press-undoes-one-action semantics. The URL is a per-window
+// singleton, so a module-level queue is the correct batching scope; `setState`
+// only runs in client event handlers, never during SSR.
+let pendingQueue: PendingUpdate[] | null = null;
+
+function enqueueListStateUpdate(update: PendingUpdate): void {
+	if (pendingQueue) {
+		pendingQueue.push(update);
+		return;
+	}
+
+	pendingQueue = [update];
+	queueMicrotask(() => {
+		const queue = pendingQueue;
+		pendingQueue = null;
+		if (!queue || queue.length === 0) return;
+
+		const first = queue[0]!;
+		const currentParams = first.getSearchParams();
+
+		let params = currentParams;
+		let replace = true;
+		for (const entry of queue) {
+			const nextState = {
+				...parseListStateFromSearchParams(
+					entry.namespace,
+					entry.schema,
+					params,
+				),
+				...entry.patch,
+			};
+			params = serializeListStateToSearchParams(
+				entry.namespace,
+				entry.schema,
+				nextState as InferListState<ListStateSchema>,
+				params,
+			);
+			// A single push among the batched updates makes the whole flush a
+			// push, so the combined action stays one back-press away.
+			if (
+				!resolveListStateHistoryMode(
+					entry.schema,
+					entry.patch as Partial<InferListState<ListStateSchema>>,
+					entry.explicitReplace,
+				)
+			) {
+				replace = false;
+			}
+		}
+
+		// No-op updates (merged state already matches the URL) must not create
+		// history entries.
+		if (params.toString() === currentParams.toString()) return;
+		first.setSearchParams(params, { replace });
+		for (const entry of queue) entry.onFlushed();
+	});
+}
 
 /**
  * Sync list UI state (filters, tabs, pagination) with URL search params.
@@ -78,73 +154,36 @@ export function useListState<S extends ListStateSchema>(
 		getSearchParams?.() ?? new URLSearchParams(),
 	);
 
-	// Updates issued in the same tick are coalesced into a single
-	// `setSearchParams` call. Router bindings commit URL changes
-	// asynchronously (Next.js `router.push`, React Router `navigate`), so
-	// consecutive `setState` calls in one event would otherwise read a stale
-	// URL and drop earlier patches — and each call would add its own history
-	// entry, breaking one-back-press-undoes-one-action semantics.
-	const pendingRef = useRef<{
-		patch: Partial<InferListState<S>>;
-		explicitReplace: boolean | undefined;
-	} | null>(null);
-
 	const setState = useCallback<SetListState<S>>(
 		(updates, options) => {
 			if (!setSearchParams || !getSearchParams) return;
 
-			const currentState = parseListStateFromSearchParams(
+			// Base state = URL state + patches already queued this tick, so
+			// functional updaters see the values earlier calls just set.
+			let baseState = parseListStateFromSearchParams(
 				namespace,
 				schema,
 				getSearchParams(),
 			);
-			const pending = pendingRef.current;
-			const baseState = pending
-				? { ...currentState, ...pending.patch }
-				: currentState;
+			if (pendingQueue) {
+				for (const entry of pendingQueue) {
+					if (entry.namespace === namespace) {
+						baseState = { ...baseState, ...entry.patch };
+					}
+				}
+			}
 			const patch =
 				typeof updates === "function" ? updates(baseState) : updates;
 			if (!patch || Object.keys(patch).length === 0) return;
 
-			if (pending) {
-				pending.patch = { ...pending.patch, ...patch };
-				if (options?.replace !== undefined) {
-					pending.explicitReplace = options.replace;
-				}
-				return;
-			}
-
-			pendingRef.current = {
+			enqueueListStateUpdate({
+				namespace,
+				schema,
 				patch: { ...patch },
 				explicitReplace: options?.replace,
-			};
-
-			queueMicrotask(() => {
-				const flushed = pendingRef.current;
-				pendingRef.current = null;
-				if (!flushed) return;
-
-				const currentParams = getSearchParams();
-				const nextState = {
-					...parseListStateFromSearchParams(namespace, schema, currentParams),
-					...flushed.patch,
-				};
-				const replace = resolveListStateHistoryMode(
-					schema,
-					flushed.patch,
-					flushed.explicitReplace,
-				);
-				const nextParams = serializeListStateToSearchParams(
-					namespace,
-					schema,
-					nextState,
-					currentParams,
-				);
-				// No-op updates (merged state already matches the URL) must not
-				// create history entries.
-				if (nextParams.toString() === currentParams.toString()) return;
-				setSearchParams(nextParams, { replace });
-				bumpUrlVersion((v) => v + 1);
+				getSearchParams,
+				setSearchParams,
+				onFlushed: () => bumpUrlVersion((v) => v + 1),
 			});
 		},
 		[namespace, schema, setSearchParams, getSearchParams],
