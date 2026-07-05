@@ -5,6 +5,14 @@ import type {
 	DbPlugin,
 } from "@btst/db";
 import type { Endpoint, Router } from "better-call";
+import type { StackServerAuthProvider } from "./shared/auth-types";
+
+export type {
+	CanParams,
+	StackAuthProvider,
+	StackIdentity,
+	StackServerAuthProvider,
+} from "./shared/auth-types";
 
 /**
  * Context passed to backend plugins during route creation
@@ -17,6 +25,8 @@ export interface StackContext {
 	basePath: string;
 	/** The database adapter */
 	adapter: Adapter;
+	/** The server-side auth provider, when configured on `stack()` */
+	auth?: StackServerAuthProvider;
 }
 
 /**
@@ -134,6 +144,13 @@ export interface BackendLibConfig<
 	dbSchema?: DatabaseDefinition;
 	plugins: TPlugins;
 	adapter: (db: DatabaseDefinition) => Adapter;
+	/**
+	 * Optional server-side auth provider. When set, `stack()` resolves the
+	 * request identity lazily and at most once per request; plugin lifecycle
+	 * hooks and route handlers can read it via `getRequestIdentity(headers)`
+	 * from `@btst/stack/api`. When omitted, behavior is unchanged.
+	 */
+	auth?: StackServerAuthProvider;
 }
 
 /**

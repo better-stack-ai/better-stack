@@ -1,8 +1,11 @@
 "use client";
 
-import React, { Suspense, type ErrorInfo } from "react";
+import React, { Suspense, useEffect, type ErrorInfo } from "react";
 import { type FallbackProps } from "react-error-boundary";
 import type { createRouter } from "@btst/yar";
+import { useAuthContext, useCan } from "../../context/auth";
+import { useStackOrNull } from "../../context/provider";
+import type { CanParams } from "../../shared/auth-types";
 import { ErrorBoundary } from "./error-boundary";
 
 /**
@@ -61,6 +64,65 @@ export function RouteRenderer({
 }
 
 /**
+ * Route-level permission gate used by `ComposedRoute` when a `permission`
+ * is declared.
+ *
+ * - Without an auth provider on `StackProvider`, renders children unchanged.
+ * - While the identity/permission check is pending, renders the route's
+ *   `LoadingComponent` so gated content never flashes.
+ * - On deny: unauthenticated users are redirected to the provider's
+ *   `loginPath` (via the top-level router's `navigate`, falling back to
+ *   `window.location.assign`); authenticated users get an `Unauthorized`
+ *   error thrown into the route's ErrorBoundary.
+ */
+function RouteGuard({
+	permission,
+	LoadingComponent,
+	children,
+}: {
+	permission: CanParams;
+	LoadingComponent?: React.ComponentType;
+	children: React.ReactNode;
+}) {
+	const auth = useAuthContext();
+	const stack = useStackOrNull();
+	const { can, isPending } = useCan(permission);
+
+	const identity = auth?.identity ?? null;
+	const loginPath = auth?.provider.loginPath;
+	const navigate = stack?.router?.navigate;
+
+	const shouldRedirect =
+		!!auth && !isPending && !can && !identity && !!loginPath;
+
+	useEffect(() => {
+		if (!shouldRedirect || !loginPath) return;
+		if (navigate) {
+			void navigate(loginPath);
+		} else if (typeof window !== "undefined") {
+			window.location.assign(loginPath);
+		}
+	}, [shouldRedirect, loginPath, navigate]);
+
+	// No auth provider configured: gating is disabled, behave exactly as before.
+	if (!auth) {
+		return <>{children}</>;
+	}
+
+	if (isPending || shouldRedirect) {
+		return LoadingComponent ? <LoadingComponent /> : null;
+	}
+
+	if (can) {
+		return <>{children}</>;
+	}
+
+	throw new Error(
+		`Unauthorized: cannot ${permission.action} ${permission.resource}`,
+	);
+}
+
+/**
  * Renders a route with Suspense and ErrorBoundary wrappers.
  * Handles loading states, error boundaries, and not-found scenarios for a single route.
  *
@@ -75,6 +137,9 @@ export function RouteRenderer({
  *   a prop named `params` or `query` intentionally takes precedence over the
  *   router-extracted values. Only pass trusted, framework-controlled values.
  * @param onError - Error handler callback for the error boundary
+ * @param permission - Optional route-level permission requirement (e.g.
+ *   `{ resource: "blog:draft", action: "read" }`). Only enforced when an
+ *   auth provider is configured on `StackProvider`; see `RouteGuard`.
  */
 export function ComposedRoute({
 	path,
@@ -85,6 +150,7 @@ export function ComposedRoute({
 	NotFoundComponent,
 	props,
 	onError,
+	permission,
 }: {
 	path: string;
 	PageComponent: React.ComponentType<any>;
@@ -94,9 +160,16 @@ export function ComposedRoute({
 	NotFoundComponent?: React.ComponentType<{ message: string }>;
 	props?: any;
 	onError: (error: Error, info: ErrorInfo) => void;
+	permission?: CanParams;
 }) {
 	if (PageComponent) {
-		const content = <PageComponent {...props} />;
+		const content = permission ? (
+			<RouteGuard permission={permission} LoadingComponent={LoadingComponent}>
+				<PageComponent {...props} />
+			</RouteGuard>
+		) : (
+			<PageComponent {...props} />
+		);
 		// Always provide the same fallback on server and client — using
 		// `typeof window !== "undefined"` here would produce a different JSX tree
 		// on each side, shifting React's useId() counter and causing hydration
