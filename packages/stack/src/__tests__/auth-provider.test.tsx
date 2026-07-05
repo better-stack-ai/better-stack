@@ -189,6 +189,41 @@ describe("useCan", () => {
 		expect(captured).toEqual({ can: false, isPending: false });
 	});
 
+	it("does not return a stale result after the identity changes", async () => {
+		// First identity resolves to an admin whose can() allows; after
+		// refetch() the identity switches to a user whose can() never
+		// resolves — the hook must report pending, never the admin's `true`.
+		let currentUser = { id: "admin" };
+		const neverResolves = new Promise<boolean>(() => {});
+		const auth = provider({
+			getIdentity: () => currentUser,
+			can: ({ identity }) => (identity?.id === "admin" ? true : neverResolves),
+		});
+
+		let capturedCan: any;
+		let capturedIdentity: any;
+		function Probe() {
+			capturedCan = useCan({ resource: "blog:post", action: "delete" });
+			capturedIdentity = useIdentity();
+			return null;
+		}
+		await render(
+			<Providers auth={auth}>
+				<Probe />
+			</Providers>,
+		);
+
+		expect(capturedCan).toEqual({ can: true, isPending: false });
+
+		currentUser = { id: "viewer" };
+		await act(async () => {
+			await capturedIdentity.refetch();
+		});
+
+		expect(capturedIdentity.identity).toEqual({ id: "viewer" });
+		expect(capturedCan).toEqual({ can: false, isPending: true });
+	});
+
 	it("denies when can() throws", async () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		let captured: any;

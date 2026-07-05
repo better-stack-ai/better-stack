@@ -117,9 +117,14 @@ function RouteGuard({
 		return <>{children}</>;
 	}
 
-	throw new Error(
-		`Unauthorized: cannot ${permission.action} ${permission.resource}`,
-	);
+	// Keep the thrown message generic — ErrorComponents commonly render
+	// error.message to end-users; the resource/action detail is dev-only.
+	if (process.env.NODE_ENV !== "production") {
+		console.warn(
+			`[btst/auth] RouteGuard denied: cannot ${permission.action} ${permission.resource}`,
+		);
+	}
+	throw new Error("Unauthorized");
 }
 
 /**

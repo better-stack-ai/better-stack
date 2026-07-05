@@ -4,6 +4,7 @@ import {
 	useCallback,
 	useContext,
 	useEffect,
+	useRef,
 	useState,
 	type ReactNode,
 } from "react";
@@ -113,6 +114,19 @@ export function useIdentity(): {
 type CanState = { can: boolean; isPending: boolean };
 
 /**
+ * A resolved `can()` result together with the inputs it was computed for.
+ * `useCan` only trusts it while those inputs are still current, so a change
+ * in identity (login/logout/user switch) or check parameters immediately
+ * reads as pending instead of momentarily returning the previous user's
+ * permission.
+ */
+type ResolvedCan = {
+	can: boolean;
+	forIdentity: StackIdentity | null;
+	forKey: string;
+};
+
+/**
  * Checks whether the current user can perform `action` on `resource` using
  * the auth provider's `can()` function.
  *
@@ -137,40 +151,50 @@ export function useCan(params: CanParams): CanState {
 	const identityPending = auth?.isPending ?? false;
 
 	const { resource, action, params: extraParams } = params;
-	// Serialize extra params so plain-object literals don't retrigger the
-	// effect on every render.
+	// Serialized only for change detection: plain-object literals must not
+	// retrigger the effect on every render. The original object (via ref) is
+	// what gets passed to can(), so non-JSON-safe values survive intact.
 	const extraParamsKey = extraParams ? JSON.stringify(extraParams) : "";
+	const extraParamsRef = useRef(extraParams);
+	extraParamsRef.current = extraParams;
 
-	const [state, setState] = useState<CanState>({
-		can: false,
-		isPending: true,
-	});
+	const checkKey = `${resource}\u0000${action}\u0000${extraParamsKey}`;
+
+	const [resolved, setResolved] = useState<ResolvedCan | null>(null);
 
 	useEffect(() => {
 		if (!canFn || identityPending) return;
 
 		let cancelled = false;
-		setState({ can: false, isPending: true });
 
 		void (async () => {
 			try {
+				const currentParams = extraParamsRef.current;
 				const allowed = await canFn({
 					resource,
 					action,
-					...(extraParamsKey ? { params: JSON.parse(extraParamsKey) } : {}),
+					...(currentParams ? { params: currentParams } : {}),
 					identity,
 				});
-				if (!cancelled) setState({ can: allowed, isPending: false });
+				if (!cancelled) {
+					setResolved({
+						can: allowed,
+						forIdentity: identity,
+						forKey: checkKey,
+					});
+				}
 			} catch (error) {
 				console.error("[btst/auth] can() failed:", error);
-				if (!cancelled) setState({ can: false, isPending: false });
+				if (!cancelled) {
+					setResolved({ can: false, forIdentity: identity, forKey: checkKey });
+				}
 			}
 		})();
 
 		return () => {
 			cancelled = true;
 		};
-	}, [canFn, identity, identityPending, resource, action, extraParamsKey]);
+	}, [canFn, identity, identityPending, resource, action, checkKey]);
 
 	// No provider or no can() function: always allowed, never pending.
 	if (!auth || !canFn) {
@@ -181,7 +205,17 @@ export function useCan(params: CanParams): CanState {
 		return { can: false, isPending: true };
 	}
 
-	return state;
+	// Only trust a result computed for the current identity and inputs;
+	// anything else (including right after an identity change) is pending.
+	if (
+		!resolved ||
+		resolved.forIdentity !== identity ||
+		resolved.forKey !== checkKey
+	) {
+		return { can: false, isPending: true };
+	}
+
+	return { can: resolved.can, isPending: false };
 }
 
 /**
