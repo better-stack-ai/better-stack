@@ -19,13 +19,10 @@ import { Input } from "@workspace/ui/components/input";
 
 import { Switch } from "@workspace/ui/components/switch";
 import { Textarea } from "@workspace/ui/components/textarea";
-import {
-	useCreatePost,
-	useSuspensePost,
-	useUpdatePost,
-	useDeletePost,
-} from "../../hooks/blog-hooks";
+import { useSuspensePost, useDeletePost } from "../../hooks/blog-hooks";
+import { blog } from "../../hooks/blog-resource";
 import { slugify } from "../../../utils";
+import type { SerializedPost } from "../../../types";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -40,14 +37,14 @@ import {
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
-import { lazy, memo, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, memo, Suspense, useEffect, useState } from "react";
 import {
 	type FieldPath,
+	type FieldValues,
 	type SubmitHandler,
 	type UseFormReturn,
 	useForm,
 } from "react-hook-form";
-import { toast } from "sonner";
 import { z } from "zod";
 import { FeaturedImageField } from "./image-field";
 
@@ -57,10 +54,28 @@ const MarkdownEditor = lazy(() =>
 	})),
 );
 import { BLOG_LOCALIZATION } from "../../localization";
-import { usePluginOverrides } from "@btst/stack/context";
+import { useNotify, usePluginOverrides } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
 import { EmptyList } from "../shared/empty-list";
 import { TagsMultiSelect } from "./tags-multiselect";
+
+/**
+ * Applies server-side field validation errors (from `StackError.errors`)
+ * onto react-hook-form field state.
+ */
+function useServerFieldErrors<T extends FieldValues>(
+	form: UseFormReturn<T>,
+	fieldErrors: Record<string, string | string[]>,
+) {
+	useEffect(() => {
+		for (const [field, message] of Object.entries(fieldErrors)) {
+			form.setError(field as FieldPath<T>, {
+				type: "server",
+				message: Array.isArray(message) ? message.join(", ") : message,
+			});
+		}
+	}, [fieldErrors, form]);
+}
 
 type CommonPostFormValues = {
 	title: string;
@@ -358,33 +373,33 @@ const AddPostFormComponent = ({
 
 	const schema = CustomPostCreateSchema;
 
-	const {
-		mutateAsync: createPost,
-		isPending: isCreatingPost,
-		error: createPostError,
-	} = useCreatePost();
-
 	type AddPostFormValues = z.input<typeof schema>;
-	const onSubmit = async (data: AddPostFormValues) => {
-		// Auto-generate slug from title if not provided
-		const slug = data.slug || slugify(data.title);
 
-		// Wait for mutation to complete, including refresh
-		const createdPost = await createPost({
+	const resourceForm = blog.posts.useForm<
+		AddPostFormValues,
+		SerializedPost | null
+	>({
+		action: "create",
+		successMessage: localization.BLOG_FORMS_TOAST_CREATE_SUCCESS,
+		toCreateVars: (data) => ({
 			title: data.title,
 			content: data.content,
 			excerpt: data.excerpt ?? "",
-			slug,
+			// Auto-generate slug from title if not provided
+			slug: data.slug || slugify(data.title),
 			published: data.published ?? false,
 			publishedAt: data.published ? new Date() : undefined,
 			image: data.image,
 			tags: data.tags || [],
-		});
+		}),
+		onSuccess: (createdPost) => {
+			// Navigate only after mutation (including invalidation) completes
+			onSuccess({ published: createdPost?.published ?? false });
+		},
+	});
 
-		toast.success(localization.BLOG_FORMS_TOAST_CREATE_SUCCESS);
-
-		// Navigate only after mutation completes
-		onSuccess({ published: createdPost?.published ?? false });
+	const onSubmit = async (data: AddPostFormValues) => {
+		await resourceForm.submit(data);
 	};
 
 	// For compatibility with resolver types that require certain required fields,
@@ -402,6 +417,10 @@ const AddPostFormComponent = ({
 		},
 	});
 
+	// Server-side Zod validation failures land on the matching form fields
+	useServerFieldErrors(form, resourceForm.fieldErrors);
+	const hasFieldErrors = Object.keys(resourceForm.fieldErrors).length > 0;
+
 	// Expose form instance to parent for AI context integration
 	useEffect(() => {
 		onFormReady?.(form);
@@ -413,13 +432,13 @@ const AddPostFormComponent = ({
 			form={form}
 			onSubmit={onSubmit}
 			submitLabel={
-				isCreatingPost
+				resourceForm.isSubmitting
 					? localization.BLOG_FORMS_SUBMIT_CREATE_PENDING
 					: localization.BLOG_FORMS_SUBMIT_CREATE_IDLE
 			}
 			onCancel={onClose}
-			disabled={isCreatingPost || featuredImageUploading}
-			errorMessage={createPostError?.message}
+			disabled={resourceForm.isSubmitting || featuredImageUploading}
+			errorMessage={hasFieldErrors ? undefined : resourceForm.error?.message}
 			setFeaturedImageUploading={setFeaturedImageUploading}
 		/>
 	);
@@ -468,72 +487,85 @@ const EditPostFormComponent = ({
 	// const { uploadImage } = useBlogContext()
 
 	const { post } = useSuspensePost(postSlug);
-
-	const initialData = useMemo(() => {
-		if (!post) return {};
-		return {
-			title: post.title,
-			content: post.content,
-			excerpt: post.excerpt,
-			slug: post.slug,
-			published: post.published,
-			image: post.image || "",
-			tags: post.tags.map((tag) => ({
-				id: tag.id,
-				name: tag.name,
-				slug: tag.slug,
-			})),
-		};
-	}, [post]);
+	const notify = useNotify();
 
 	const schema = CustomPostUpdateSchema;
 
-	const {
-		mutateAsync: updatePost,
-		isPending: isUpdatingPost,
-		error: updatePostError,
-	} = useUpdatePost();
-
-	const { mutateAsync: deletePost, isPending: isDeletingPost } =
-		useDeletePost();
-
 	type EditPostFormValues = z.input<typeof schema>;
-	const onSubmit = async (data: EditPostFormValues) => {
-		// Wait for mutation to complete, including refresh
-		const updatedPost = await updatePost({
-			id: post!.id,
+
+	const resourceForm = blog.posts.useForm<
+		EditPostFormValues,
+		SerializedPost | null
+	>({
+		action: "edit",
+		// Record comes from the suspense hook above — skips useForm's own fetch
+		record: post,
+		successMessage: localization.BLOG_FORMS_TOAST_UPDATE_SUCCESS,
+		defaults: (record) =>
+			(record
+				? {
+						title: record.title,
+						content: record.content,
+						excerpt: record.excerpt,
+						slug: record.slug,
+						published: record.published,
+						image: record.image || "",
+						tags: record.tags.map((tag) => ({
+							id: tag.id,
+							name: tag.name,
+							slug: tag.slug,
+						})),
+					}
+				: {}) as EditPostFormValues,
+		toUpdateVars: (data, record) => ({
+			id: (record as SerializedPost).id,
 			data: {
-				id: post!.id,
+				id: (record as SerializedPost).id,
 				title: data.title,
 				content: data.content,
 				excerpt: data.excerpt ?? "",
 				slug: data.slug,
 				published: data.published ?? false,
 				publishedAt:
-					data.published && !post?.published
+					data.published && !record?.published
 						? new Date()
-						: post?.publishedAt
-							? new Date(post.publishedAt)
+						: record?.publishedAt
+							? new Date(record.publishedAt)
 							: undefined,
 				image: data.image,
 				tags: data.tags || [],
 			},
-		});
+		}),
+		onSuccess: (updatedPost) => {
+			// Navigate only after mutation (including invalidation) completes
+			onSuccess({
+				slug: updatedPost?.slug ?? "",
+				published: updatedPost?.published ?? false,
+			});
+		},
+	});
 
-		toast.success(localization.BLOG_FORMS_TOAST_UPDATE_SUCCESS);
+	const { mutateAsync: deletePost, isPending: isDeletingPost } =
+		useDeletePost();
 
-		// Navigate only after mutation completes
-		onSuccess({
-			slug: updatedPost?.slug ?? "",
-			published: updatedPost?.published ?? false,
-		});
+	const onSubmit = async (data: EditPostFormValues) => {
+		await resourceForm.submit(data);
 	};
 
 	const handleDelete = async () => {
 		if (!post?.id) return;
 
-		await deletePost({ id: post.id });
-		toast.success(localization.BLOG_FORMS_TOAST_DELETE_SUCCESS);
+		try {
+			await deletePost({ id: post.id });
+		} catch (error) {
+			notify.error(
+				error instanceof Error
+					? error.message
+					: localization.BLOG_FORMS_TOAST_DELETE_FAILURE,
+			);
+			return;
+		}
+		notify.success(localization.BLOG_FORMS_TOAST_DELETE_SUCCESS);
 		setDeleteDialogOpen(false);
 
 		// Call onDelete callback if provided, otherwise use onClose
@@ -555,8 +587,12 @@ const EditPostFormComponent = ({
 			image: "",
 			tags: [],
 		},
-		values: initialData as z.input<typeof schema>,
+		values: resourceForm.defaultValues as z.input<typeof schema>,
 	});
+
+	// Server-side Zod validation failures land on the matching form fields
+	useServerFieldErrors(form, resourceForm.fieldErrors);
+	const hasFieldErrors = Object.keys(resourceForm.fieldErrors).length > 0;
 
 	// Expose form instance to parent for AI context integration
 	useEffect(() => {
@@ -574,13 +610,13 @@ const EditPostFormComponent = ({
 				form={form}
 				onSubmit={onSubmit}
 				submitLabel={
-					isUpdatingPost
+					resourceForm.isSubmitting
 						? localization.BLOG_FORMS_SUBMIT_UPDATE_PENDING
 						: localization.BLOG_FORMS_SUBMIT_UPDATE_IDLE
 				}
 				onCancel={onClose}
-				disabled={isUpdatingPost || featuredImageUploading}
-				errorMessage={updatePostError?.message}
+				disabled={resourceForm.isSubmitting || featuredImageUploading}
+				errorMessage={hasFieldErrors ? undefined : resourceForm.error?.message}
 				setFeaturedImageUploading={setFeaturedImageUploading}
 				initialSlugTouched={!!post?.slug}
 			/>
@@ -591,7 +627,9 @@ const EditPostFormComponent = ({
 							variant="destructive"
 							type="button"
 							disabled={
-								isUpdatingPost || featuredImageUploading || isDeletingPost
+								resourceForm.isSubmitting ||
+								featuredImageUploading ||
+								isDeletingPost
 							}
 							className="mt-4"
 						>

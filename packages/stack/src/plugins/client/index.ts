@@ -26,6 +26,36 @@ export {
 	SSR_LOADER_ERROR_MESSAGE,
 } from "../utils";
 
+// Shared error contract + React Query config for data plugins
+export {
+	isErrorResponse,
+	SHARED_QUERY_CONFIG,
+	toError,
+} from "./resource/errors";
+export type { StackError } from "./resource/errors";
+
+// Resource declaration types + server-safe query-key factory
+export {
+	buildQueryKey,
+	createResourceQueryKeys,
+	resolvePageSize,
+	runResourceMutation,
+	runResourceQuery,
+} from "./resource/queries";
+export type {
+	ResourceClient,
+	ResourceDef,
+	ResourceMutationDef,
+	ResourceMutationResult,
+	ResourceMutationVars,
+	ResourceQueryArgs,
+	ResourceQueryData,
+	ResourceQueryDef,
+	ResourceQueryEntry,
+	ResourceQueryKeys,
+	ResourcesDeclaration,
+} from "./resource/queries";
+
 // Re-export Yar types needed for plugins
 export type { Route, RouteContext, RouteDef } from "@btst/yar";
 export {

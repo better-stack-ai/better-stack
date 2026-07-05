@@ -1,37 +1,11 @@
 "use client";
 
-import { createApiClient } from "@btst/stack/plugins/client";
-import {
-	useInfiniteQuery,
-	useMutation,
-	useQuery,
-	useQueryClient,
-	useSuspenseInfiniteQuery,
-	useSuspenseQuery,
-	type InfiniteData,
-} from "@tanstack/react-query";
-import type { SerializedPost, SerializedTag } from "../../types";
-import type { BlogApiRouter } from "../../api/plugin";
-import { useDebounce } from "./use-debounce";
 import { useEffect, useRef } from "react";
 import { z } from "zod";
-import { createPostSchema, updatePostSchema } from "../../schemas";
-import { createBlogQueryKeys } from "../../query-keys";
-import { usePluginOverrides } from "@btst/stack/context";
-import type { BlogPluginOverrides } from "../overrides";
-
-/**
- * Shared React Query configuration for all blog queries
- * Prevents automatic refetching to avoid hydration mismatches in SSR
- */
-const SHARED_QUERY_CONFIG = {
-	retry: false,
-	refetchOnWindowFocus: false,
-	refetchOnMount: false,
-	refetchOnReconnect: false,
-	staleTime: 1000 * 60 * 5, // 5 minutes
-	gcTime: 1000 * 60 * 10, // 10 minutes
-} as const;
+import type { SerializedPost, SerializedTag } from "../../types";
+import type { createPostSchema, updatePostSchema } from "../../schemas";
+import { useDebounce } from "./use-debounce";
+import { blog } from "./blog-resource";
 
 /**
  * Options for the usePosts hook
@@ -132,31 +106,7 @@ export type PostUpdateInput = z.infer<typeof updatePostSchema>;
  * Hook for fetching paginated posts with load more functionality
  */
 export function usePosts(options: UsePostsOptions = {}): UsePostsResult {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<BlogPluginOverrides>("blog");
-	const client = createApiClient<BlogApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const {
-		tag,
-		tagSlug,
-		limit = 10,
-		enabled = true,
-		query,
-		published,
-	} = options;
-	const queries = createBlogQueryKeys(client, headers);
-
-	const queryParams = {
-		tag,
-		tagSlug,
-		limit,
-		query,
-		published,
-	};
-
-	const basePosts = queries.posts.list(queryParams);
+	const { tagSlug, limit = 10, enabled = true, query, published } = options;
 
 	const {
 		data,
@@ -166,21 +116,11 @@ export function usePosts(options: UsePostsOptions = {}): UsePostsResult {
 		hasNextPage,
 		isFetchingNextPage,
 		refetch,
-	} = useInfiniteQuery({
-		...basePosts,
-		...SHARED_QUERY_CONFIG,
-		initialPageParam: 0,
-		getNextPageParam: (lastPage, allPages) => {
-			const posts = lastPage as SerializedPost[];
-			if (posts.length < limit) return undefined;
-			return allPages.length * limit;
-		},
-		enabled: enabled && !!client,
+	} = blog.posts.list.useInfinite([{ tagSlug, limit, query, published }], {
+		enabled,
 	});
 
-	const posts = ((
-		data as InfiniteData<SerializedPost[], number> | undefined
-	)?.pages?.flat() ?? []) as SerializedPost[];
+	const posts = data?.pages?.flat() ?? [];
 
 	return {
 		posts,
@@ -201,51 +141,12 @@ export function useSuspensePosts(options: UsePostsOptions = {}): {
 	isLoadingMore: boolean;
 	refetch: () => Promise<unknown>;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<BlogPluginOverrides>("blog");
-	const client = createApiClient<BlogApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const {
-		tag,
-		tagSlug,
-		limit = 10,
-		enabled = true,
-		query,
-		published,
-	} = options;
-	const queries = createBlogQueryKeys(client, headers);
+	const { tagSlug, limit = 10, query, published } = options;
 
-	const queryParams = { tag, tagSlug, limit, query, published };
-	const basePosts = queries.posts.list(queryParams);
+	const { data, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
+		blog.posts.list.useSuspenseInfinite([{ tagSlug, limit, query, published }]);
 
-	const {
-		data,
-		fetchNextPage,
-		hasNextPage,
-		isFetchingNextPage,
-		refetch,
-		error,
-		isFetching,
-	} = useSuspenseInfiniteQuery({
-		...basePosts,
-		...SHARED_QUERY_CONFIG,
-		initialPageParam: 0,
-		getNextPageParam: (lastPage, allPages) => {
-			const posts = lastPage as SerializedPost[];
-			if (posts.length < limit) return undefined;
-			return allPages.length * limit;
-		},
-	});
-
-	// Manually throw errors for Error Boundaries (per React Query Suspense docs)
-	// useSuspenseQuery only throws errors if there's no data, but we want to throw always
-	if (error && !isFetching) {
-		throw error;
-	}
-
-	const posts = (data.pages?.flat() ?? []) as SerializedPost[];
+	const posts = data.pages?.flat() ?? [];
 
 	return {
 		posts,
@@ -260,25 +161,10 @@ export function useSuspensePosts(options: UsePostsOptions = {}): {
  * Hook for fetching a single post by slug
  */
 export function usePost(slug?: string): UsePostResult {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<BlogPluginOverrides>("blog");
-	const client = createApiClient<BlogApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createBlogQueryKeys(client, headers);
-
-	const basePost = queries.posts.detail(slug ?? "");
-	const { data, isLoading, error, refetch } = useQuery<
-		SerializedPost | null,
-		Error,
-		SerializedPost | null,
-		typeof basePost.queryKey
-	>({
-		...basePost,
-		...SHARED_QUERY_CONFIG,
-		enabled: !!client && !!slug,
-	});
+	const { data, isLoading, error, refetch } = blog.posts.detail.use(
+		[slug ?? ""],
+		{ enabled: !!slug },
+	);
 
 	return {
 		post: data || null,
@@ -293,29 +179,7 @@ export function useSuspensePost(slug: string): {
 	post: SerializedPost | null;
 	refetch: () => Promise<unknown>;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<BlogPluginOverrides>("blog");
-	const client = createApiClient<BlogApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createBlogQueryKeys(client, headers);
-	const basePost = queries.posts.detail(slug);
-	const { data, refetch, error, isFetching } = useSuspenseQuery<
-		SerializedPost | null,
-		Error,
-		SerializedPost | null,
-		typeof basePost.queryKey
-	>({
-		...basePost,
-		...SHARED_QUERY_CONFIG,
-	});
-
-	// Manually throw errors for Error Boundaries (per React Query Suspense docs)
-	// useSuspenseQuery only throws errors if there's no data, but we want to throw always
-	if (error && !isFetching) {
-		throw error;
-	}
+	const { data, refetch } = blog.posts.detail.useSuspense([slug]);
 
 	return { post: data || null, refetch };
 }
@@ -329,24 +193,7 @@ export function useTags(): {
 	error: Error | null;
 	refetch: () => void;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<BlogPluginOverrides>("blog");
-	const client = createApiClient<BlogApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createBlogQueryKeys(client, headers);
-	const baseTags = queries.tags.list();
-	const { data, isLoading, error, refetch } = useQuery<
-		SerializedTag[] | null,
-		Error,
-		SerializedTag[] | null,
-		typeof baseTags.queryKey
-	>({
-		...baseTags,
-		...SHARED_QUERY_CONFIG,
-		enabled: !!client,
-	});
+	const { data, isLoading, error, refetch } = blog.tags.list.use([]);
 
 	return {
 		tags: data ?? [],
@@ -361,29 +208,7 @@ export function useSuspenseTags(): {
 	tags: SerializedTag[];
 	refetch: () => Promise<unknown>;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<BlogPluginOverrides>("blog");
-	const client = createApiClient<BlogApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createBlogQueryKeys(client, headers);
-	const baseTags = queries.tags.list();
-	const { data, refetch, error, isFetching } = useSuspenseQuery<
-		SerializedTag[] | null,
-		Error,
-		SerializedTag[] | null,
-		typeof baseTags.queryKey
-	>({
-		...baseTags,
-		...SHARED_QUERY_CONFIG,
-	});
-
-	// Manually throw errors for Error Boundaries (per React Query Suspense docs)
-	// useSuspenseQuery only throws errors if there's no data, but we want to throw always
-	if (error && !isFetching) {
-		throw error;
-	}
+	const { data, refetch } = blog.tags.list.useSuspense([]);
 
 	return {
 		tags: data ?? [],
@@ -393,133 +218,17 @@ export function useSuspenseTags(): {
 
 /** Create a new post */
 export function useCreatePost() {
-	const { refresh, apiBaseURL, apiBasePath } =
-		usePluginOverrides<BlogPluginOverrides>("blog");
-	const client = createApiClient<BlogApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queryClient = useQueryClient();
-	const queries = createBlogQueryKeys(client);
-
-	return useMutation<SerializedPost | null, Error, PostCreateInput>({
-		mutationKey: [...queries.posts._def, "create"],
-		mutationFn: async (postData: PostCreateInput) => {
-			const response = await client("@post/posts", {
-				method: "POST",
-				body: postData,
-			});
-			return response.data as SerializedPost | null;
-		},
-		onSuccess: async (created) => {
-			// Update detail cache if available
-			if (created?.slug) {
-				queryClient.setQueryData(
-					queries.posts.detail(created.slug).queryKey,
-					created,
-				);
-			}
-			// Invalidate lists scoped to posts and drafts - wait for completion
-			await queryClient.invalidateQueries({
-				queryKey: queries.posts.list._def,
-			});
-			await queryClient.invalidateQueries({
-				queryKey: queries.drafts.list._def,
-			});
-			// Refresh server-side cache (Next.js router cache)
-			if (refresh) {
-				await refresh();
-			}
-		},
-	});
+	return blog.posts.create.use();
 }
 
 /** Update an existing post by id */
 export function useUpdatePost() {
-	const { refresh, apiBaseURL, apiBasePath } =
-		usePluginOverrides<BlogPluginOverrides>("blog");
-
-	const client = createApiClient<BlogApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-
-	const queryClient = useQueryClient();
-	const queries = createBlogQueryKeys(client);
-
-	return useMutation<
-		SerializedPost | null,
-		Error,
-		{ id: string; data: PostUpdateInput }
-	>({
-		mutationKey: [...queries.posts._def, "update"],
-		mutationFn: async ({ id, data }: { id: string; data: PostUpdateInput }) => {
-			const response = await client(`@put/posts/:id`, {
-				method: "PUT",
-				params: { id },
-				body: data,
-			});
-			return response.data as SerializedPost | null;
-		},
-		onSuccess: async (updated) => {
-			// Update detail cache if available
-			if (updated?.slug) {
-				queryClient.setQueryData(
-					queries.posts.detail(updated.slug).queryKey,
-					updated,
-				);
-			}
-			// Invalidate lists scoped to posts and drafts - wait for completion
-			await queryClient.invalidateQueries({
-				queryKey: queries.posts.list._def,
-			});
-			await queryClient.invalidateQueries({
-				queryKey: queries.drafts.list._def,
-			});
-			// Refresh server-side cache (Next.js router cache)
-			if (refresh) {
-				await refresh();
-			}
-		},
-	});
+	return blog.posts.update.use();
 }
 
 /** Delete a post by id */
 export function useDeletePost() {
-	const { refresh, apiBaseURL, apiBasePath } =
-		usePluginOverrides<BlogPluginOverrides>("blog");
-
-	const client = createApiClient<BlogApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-
-	const queryClient = useQueryClient();
-	const queries = createBlogQueryKeys(client);
-
-	return useMutation<{ success: boolean }, Error, { id: string }>({
-		mutationKey: [...queries.posts._def, "delete"],
-		mutationFn: async ({ id }: { id: string }) => {
-			const response = await client(`@delete/posts/:id`, {
-				method: "DELETE",
-				params: { id },
-			});
-			return response.data as { success: boolean };
-		},
-		onSuccess: async () => {
-			// Invalidate all post lists and detail caches - wait for completion
-			await queryClient.invalidateQueries({
-				queryKey: queries.posts._def,
-			});
-			await queryClient.invalidateQueries({
-				queryKey: queries.drafts.list._def,
-			});
-			// Refresh server-side cache (Next.js router cache)
-			if (refresh) {
-				await refresh();
-			}
-		},
-	});
+	return blog.posts.delete.use();
 }
 
 /**
@@ -610,28 +319,13 @@ export function useNextPreviousPosts(
 	createdAt: string | Date,
 	options: UseNextPreviousPostsOptions = {},
 ): UseNextPreviousPostsResult {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<BlogPluginOverrides>("blog");
-	const client = createApiClient<BlogApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createBlogQueryKeys(client, headers);
-
 	const dateValue =
 		typeof createdAt === "string" ? new Date(createdAt) : createdAt;
-	const baseQuery = queries.posts.nextPrevious(dateValue);
 
-	const { data, isLoading, error, refetch } = useQuery<
-		{ previous: SerializedPost | null; next: SerializedPost | null },
-		Error,
-		{ previous: SerializedPost | null; next: SerializedPost | null },
-		typeof baseQuery.queryKey
-	>({
-		...baseQuery,
-		...SHARED_QUERY_CONFIG,
-		enabled: (options.enabled ?? true) && !!client,
-	});
+	const { data, isLoading, error, refetch } = blog.posts.nextPrevious.use(
+		[dateValue],
+		{ enabled: options.enabled ?? true },
+	);
 
 	return {
 		previousPost: data?.previous ?? null,
@@ -675,29 +369,10 @@ export interface UseRecentPostsResult {
 export function useRecentPosts(
 	options: UseRecentPostsOptions = {},
 ): UseRecentPostsResult {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<BlogPluginOverrides>("blog");
-	const client = createApiClient<BlogApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createBlogQueryKeys(client, headers);
-
-	const baseQuery = queries.posts.recent({
-		limit: options.limit ?? 5,
-		excludeSlug: options.excludeSlug,
-	});
-
-	const { data, isLoading, error, refetch } = useQuery<
-		SerializedPost[],
-		Error,
-		SerializedPost[],
-		typeof baseQuery.queryKey
-	>({
-		...baseQuery,
-		...SHARED_QUERY_CONFIG,
-		enabled: (options.enabled ?? true) && !!client,
-	});
+	const { data, isLoading, error, refetch } = blog.posts.recent.use(
+		[{ limit: options.limit ?? 5, excludeSlug: options.excludeSlug }],
+		{ enabled: options.enabled ?? true },
+	);
 
 	return {
 		recentPosts: data ?? [],
