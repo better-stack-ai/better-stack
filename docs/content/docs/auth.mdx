@@ -1,0 +1,158 @@
+---
+title: Auth Provider
+description: Centralized identity and permissions across client and backend with one optional auth provider
+---
+
+BTST has an optional auth provider contract: define identity resolution and permission checks once, and every plugin consumes them through shared hooks and components. Without a provider configured, everything behaves exactly as before — identity is `null`, all permission checks pass, and `<CanAccess>` renders its children.
+
+## Client provider
+
+Pass an auth provider to `StackProvider`:
+
+```tsx
+import { StackProvider, type StackAuthProvider } from "@btst/stack/context";
+
+const authProvider: StackAuthProvider = {
+  // Resolve the current user (null when unauthenticated)
+  getIdentity: async () => {
+    const session = await getSession();
+    return session?.user ?? null;
+  },
+  // Optional: permission check. Omit to allow everything.
+  can: ({ resource, action, identity }) => {
+    if (!identity) return false;
+    return checkPermission(identity, resource, action); // e.g. "blog:post", "delete"
+  },
+  // Optional: where to send unauthenticated users on gated routes
+  loginPath: "/login",
+};
+
+<StackProvider basePath="/pages" auth={authProvider} /* router, api, overrides */>
+  {children}
+</StackProvider>;
+```
+
+<AutoTypeTable path="../packages/stack/src/shared/auth-types.ts" name="StackAuthProvider" />
+
+### better-auth example
+
+```tsx
+import { createAuthClient } from "better-auth/react";
+import type { StackAuthProvider } from "@btst/stack/context";
+
+const authClient = createAuthClient();
+
+const authProvider: StackAuthProvider = {
+  getIdentity: async () => {
+    const { data } = await authClient.getSession();
+    return data?.user ?? null;
+  },
+  can: async ({ resource, action, identity }) => {
+    if (!identity) return false;
+    // Map resource/action onto your better-auth roles or permissions
+    return identity.role === "admin" || action === "read";
+  },
+  loginPath: "/login",
+};
+```
+
+## `useIdentity()` and `useCan()`
+
+```tsx
+import { useCan, useIdentity } from "@btst/stack/context";
+
+function Toolbar() {
+  const { identity, isPending } = useIdentity();
+  const { can: canDelete } = useCan({ resource: "blog:post", action: "delete" });
+
+  if (isPending) return null;
+  return (
+    <div>
+      {identity ? `Signed in as ${identity.name}` : "Anonymous"}
+      {canDelete && <DeleteButton />}
+    </div>
+  );
+}
+```
+
+- `useIdentity()` returns `{ identity, isPending, refetch }`. Call `refetch()` after login/logout.
+- `useCan({ resource, action, params })` returns `{ can, isPending }`. Without a provider (or without a `can` function) it resolves to `{ can: true, isPending: false }` immediately.
+
+## `<CanAccess>` — element-level gating
+
+Wrap permission-sensitive UI. Children render when `can()` allows, `fallback` (default `null`) otherwise:
+
+```tsx
+import { CanAccess } from "@btst/stack/context";
+
+<CanAccess resource="blog:post" action="delete" fallback={null}>
+  <DeletePostButton />
+</CanAccess>;
+```
+
+While the check is pending, the optional `loading` node (default `null`) renders instead — gated UI never flashes. Without an auth provider configured, `<CanAccess>` always renders its children.
+
+## Route gating
+
+`ComposedRoute` (the wrapper every plugin page uses) accepts an optional `permission`:
+
+```tsx
+<ComposedRoute
+  path="/blog/drafts"
+  PageComponent={DraftsPage}
+  LoadingComponent={PostsLoading}
+  ErrorComponent={DefaultError}
+  onError={console.error}
+  permission={{ resource: "blog:draft", action: "read" }}
+/>
+```
+
+When an auth provider is configured and `can()` denies access:
+
+- **Unauthenticated** users are redirected to the provider's `loginPath` (via the top-level `router`'s `navigate`, falling back to `window.location.assign`), with the route's `LoadingComponent` shown in the meantime.
+- **Authenticated** users get an `Unauthorized` error thrown into the route's ErrorBoundary.
+
+Without a provider, `permission` is ignored and the route renders as before. Existing `onBefore*PageRendered` callbacks keep working unchanged alongside the provider.
+
+## Server-side identity
+
+Pass a server auth provider to `stack()`. The identity is resolved lazily and **at most once per request**, no matter how many hooks read it:
+
+```ts
+import { stack, getRequestIdentity } from "@btst/stack/api";
+import type { StackServerAuthProvider } from "@btst/stack/api";
+import { auth } from "@/lib/auth"; // better-auth server instance
+
+const serverAuthProvider: StackServerAuthProvider = {
+  getIdentity: async ({ headers }) => {
+    const session = await auth.api.getSession({ headers });
+    return session?.user ?? null;
+  },
+};
+
+export const myStack = stack({
+  basePath: "/api/data",
+  adapter: memoryAdapter,
+  auth: serverAuthProvider,
+  plugins: {
+    blog: blogBackendPlugin({
+      hooks: {
+        onBeforeCreatePost: async (data, ctx) => {
+          const identity = await getRequestIdentity(ctx.headers);
+          if (!identity) throw new Error("Unauthorized");
+        },
+      },
+    }),
+  },
+});
+```
+
+`getRequestIdentity(headers)` returns `null` when no auth provider is configured, outside a request handled by `stack().handler`, or when the user is unauthenticated — so hooks written against it are safe in all setups.
+
+<AutoTypeTable path="../packages/stack/src/shared/auth-types.ts" name="StackServerAuthProvider" />
+
+## Types
+
+<AutoTypeTable path="../packages/stack/src/shared/auth-types.ts" name="StackIdentity" />
+
+<AutoTypeTable path="../packages/stack/src/shared/auth-types.ts" name="CanParams" />

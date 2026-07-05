@@ -1,5 +1,7 @@
 "use client";
 import { createContext, useContext, type ReactNode } from "react";
+import type { StackAuthProvider } from "../shared/auth-types";
+import { StackAuthBoundary } from "./auth";
 import type {
 	StackApiConfig,
 	StackRouter,
@@ -152,12 +154,20 @@ export function StackProvider<
 	basePath,
 	router,
 	api,
+	auth,
 }: {
 	children?: ReactNode;
 	overrides?: StackProviderOverrides<TPluginOverrides>;
 	basePath: string;
 	router?: StackRouterConfig;
 	api?: StackApiConfig;
+	/**
+	 * Optional auth provider. When set, `useIdentity()` / `useCan()` and
+	 * `<CanAccess>` resolve identity and permissions through it. When omitted,
+	 * behavior is identical to before: identity is `null` and all permission
+	 * checks pass.
+	 */
+	auth?: StackAuthProvider;
 }) {
 	const staticRouter = resolveStaticRouter(router);
 	const value: Omit<StackContextValue<any>, "router"> = {
@@ -166,6 +176,12 @@ export function StackProvider<
 		api,
 	};
 
+	const content = auth ? (
+		<StackAuthBoundary provider={auth}>{children}</StackAuthBoundary>
+	) : (
+		children
+	);
+
 	if (router?.useRouter) {
 		return (
 			<RouterBridge
@@ -173,14 +189,14 @@ export function StackProvider<
 				staticRouter={staticRouter}
 				value={value}
 			>
-				{children}
+				{content}
 			</RouterBridge>
 		);
 	}
 
 	return (
 		<StackContext.Provider value={{ ...value, router: staticRouter }}>
-			{children}
+			{content}
 		</StackContext.Provider>
 	);
 }
@@ -212,6 +228,19 @@ export function useStack<
 	}
 
 	return context;
+}
+
+/**
+ * Like `useStack`, but returns `null` instead of throwing when rendered
+ * outside a `StackProvider`.
+ *
+ * @internal Used by core components (e.g. route gating) that must not change
+ * behavior for consumers rendering outside the provider.
+ */
+export function useStackOrNull<
+	TPluginOverrides extends Record<string, any> = Record<string, any>,
+>() {
+	return useContext(StackContext) as StackContextValue<TPluginOverrides> | null;
 }
 
 // Helper type: merge TOverrides with TDefaults, making defaulted properties required
