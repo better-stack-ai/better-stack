@@ -114,4 +114,24 @@ describe("useListState", () => {
 			{ replace: false },
 		);
 	});
+
+	it("preserves prior URL fields when batched in one event", async () => {
+		let captured: any;
+		const router = await renderHook((value) => {
+			captured = value;
+		});
+
+		await act(async () => {
+			captured.setState({ tab: "spam" });
+			captured.setState({ page: 3 });
+		});
+
+		const lastCall =
+			router.setSearchParams.mock.calls[
+				router.setSearchParams.mock.calls.length - 1
+			];
+		expect(lastCall).toBeDefined();
+		const [nextParams] = lastCall!;
+		expect(nextParams.toString()).toBe("tab=spam&page=3");
+	});
 });

@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useStackOrNull } from "../../context/provider";
 import type { InferListState, ListStateSchema } from "../../shared/list-state";
 import {
@@ -68,41 +68,47 @@ export function useListState<S extends ListStateSchema>(
 		return () => window.removeEventListener("popstate", onPopState);
 	}, []);
 
-	const searchParams = useMemo(() => {
-		void urlVersion;
-		return getSearchParams?.() ?? new URLSearchParams();
-	}, [getSearchParams, urlVersion]);
-
-	const state = useMemo(
-		() => parseListStateFromSearchParams(namespace, schema, searchParams),
-		[namespace, schema, searchParams],
+	// Read search params on every render so router-driven URL changes are picked
+	// up even when `getSearchParams` is referentially stable. `urlVersion` covers
+	// back/forward when the parent does not re-render.
+	void urlVersion;
+	const state = parseListStateFromSearchParams(
+		namespace,
+		schema,
+		getSearchParams?.() ?? new URLSearchParams(),
 	);
 
 	const setState = useCallback<SetListState<S>>(
 		(updates, options) => {
-			const patch = typeof updates === "function" ? updates(state) : updates;
+			if (!setSearchParams || !getSearchParams) return;
+
+			const currentParams = getSearchParams();
+			const currentState = parseListStateFromSearchParams(
+				namespace,
+				schema,
+				currentParams,
+			);
+			const patch =
+				typeof updates === "function" ? updates(currentState) : updates;
 			if (!patch || Object.keys(patch).length === 0) return;
 
-			const nextState = { ...state, ...patch };
+			const nextState = { ...currentState, ...patch };
 			const replace = resolveListStateHistoryMode(
 				schema,
 				patch,
 				options?.replace,
 			);
 
-			if (setSearchParams && getSearchParams) {
-				const current = getSearchParams();
-				const nextParams = serializeListStateToSearchParams(
-					namespace,
-					schema,
-					nextState,
-					current,
-				);
-				setSearchParams(nextParams, { replace });
-				bumpUrlVersion((v) => v + 1);
-			}
+			const nextParams = serializeListStateToSearchParams(
+				namespace,
+				schema,
+				nextState,
+				currentParams,
+			);
+			setSearchParams(nextParams, { replace });
+			bumpUrlVersion((v) => v + 1);
 		},
-		[namespace, schema, state, setSearchParams, getSearchParams],
+		[namespace, schema, setSearchParams, getSearchParams],
 	);
 
 	return [state, setState];
