@@ -186,6 +186,41 @@ describe("useListState", () => {
 		expect(capturedB.state).toEqual({ folder: "photos" });
 	});
 
+	it("re-renders sibling instances that did not call setState", async () => {
+		const router = createMockRouter();
+		let capturedA: any;
+		let capturedB: any;
+
+		// Two instances of the same list state (e.g. a toolbar and a pager
+		// rendered in separate subtrees). Only A updates; B must still see it.
+		function ProbeA() {
+			const [state, setState] = useListState("comments-moderation", schema);
+			capturedA = { state, setState };
+			return null;
+		}
+		function ProbeB() {
+			const [state] = useListState("comments-moderation", schema);
+			capturedB = { state };
+			return null;
+		}
+
+		await act(async () => {
+			root.render(
+				<StackProvider basePath="/pages" router={router}>
+					<ProbeA />
+					<ProbeB />
+				</StackProvider>,
+			);
+		});
+
+		await act(async () => {
+			capturedA.setState({ page: 5 });
+		});
+
+		expect(capturedA.state.page).toBe(5);
+		expect(capturedB.state.page).toBe(5);
+	});
+
 	it("treats state-identical updates as no-ops even when the URL holds explicit defaults", async () => {
 		// URL contains `tab=pending` (the default) explicitly: serializing the
 		// same state would drop it and change the query string without changing

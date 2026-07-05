@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { useStackOrNull } from "../../context/provider";
 import type { InferListState, ListStateSchema } from "../../shared/list-state";
 import {
@@ -41,7 +41,39 @@ interface PendingUpdate {
 		next: URLSearchParams,
 		opts?: { replace?: boolean },
 	) => void;
-	onFlushed: () => void;
+}
+
+// All useListState instances subscribe to this module-level store so that a
+// URL flush triggered by ANY instance re-renders every mounted hook — not just
+// the ones that called setState. Needed because router bindings may commit URL
+// changes without re-rendering unrelated subtrees (e.g. the Next.js preset).
+let urlVersion = 0;
+const urlListeners = new Set<() => void>();
+
+function notifyUrlChanged(): void {
+	urlVersion++;
+	for (const listener of urlListeners) listener();
+}
+
+function subscribeToUrl(listener: () => void): () => void {
+	if (urlListeners.size === 0 && typeof window !== "undefined") {
+		window.addEventListener("popstate", notifyUrlChanged);
+	}
+	urlListeners.add(listener);
+	return () => {
+		urlListeners.delete(listener);
+		if (urlListeners.size === 0 && typeof window !== "undefined") {
+			window.removeEventListener("popstate", notifyUrlChanged);
+		}
+	};
+}
+
+function getUrlVersion(): number {
+	return urlVersion;
+}
+
+function getServerUrlVersion(): number {
+	return 0;
 }
 
 // Same-tick updates from ALL useListState instances are coalesced into one
@@ -123,7 +155,7 @@ function enqueueListStateUpdate(update: PendingUpdate): void {
 		// serialization may reorder params without changing state.
 		if (!changed || searchParamsEqual(params, currentParams)) return;
 		first.setSearchParams(params, { replace });
-		for (const entry of queue) entry.onFlushed();
+		notifyUrlChanged();
 	});
 }
 
@@ -155,19 +187,11 @@ export function useListState<S extends ListStateSchema>(
 	const getSearchParams = router?.getSearchParams;
 	const setSearchParams = router?.setSearchParams;
 
-	const [urlVersion, bumpUrlVersion] = useState(0);
-
-	useEffect(() => {
-		if (typeof window === "undefined") return;
-		const onPopState = () => bumpUrlVersion((v) => v + 1);
-		window.addEventListener("popstate", onPopState);
-		return () => window.removeEventListener("popstate", onPopState);
-	}, []);
-
-	// Read search params on every render so router-driven URL changes are picked
-	// up even when `getSearchParams` is referentially stable. `urlVersion` covers
-	// back/forward when the parent does not re-render.
-	void urlVersion;
+	// Every instance re-renders whenever any instance flushes a URL update (or
+	// on back/forward), so siblings sharing query keys never serve stale state.
+	// Search params are re-read on every render, so router-driven changes are
+	// also picked up even when `getSearchParams` is referentially stable.
+	useSyncExternalStore(subscribeToUrl, getUrlVersion, getServerUrlVersion);
 	const state = parseListStateFromSearchParams(
 		namespace,
 		schema,
@@ -203,7 +227,6 @@ export function useListState<S extends ListStateSchema>(
 				explicitReplace: options?.replace,
 				getSearchParams,
 				setSearchParams,
-				onFlushed: () => bumpUrlVersion((v) => v + 1),
 			});
 		},
 		[namespace, schema, setSearchParams, getSearchParams],
