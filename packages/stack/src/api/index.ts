@@ -32,9 +32,16 @@ function registerIdentityResolver(
 ): void {
 	let cached: Promise<StackIdentity | null> | undefined;
 	identityResolvers.set(request.headers, () => {
-		cached ??= Promise.resolve(
-			auth.getIdentity({ headers: request.headers, request }),
-		).then((identity) => identity ?? null);
+		// Mirror the client-side StackAuthBoundary: a failing getIdentity is
+		// treated as unauthenticated (null) rather than rejecting, so hooks
+		// written without try/catch can't fail the whole request.
+		cached ??= Promise.resolve()
+			.then(() => auth.getIdentity({ headers: request.headers, request }))
+			.then((identity) => identity ?? null)
+			.catch((error) => {
+				console.error("[btst/auth] getIdentity() failed:", error);
+				return null;
+			});
 		return cached;
 	});
 }

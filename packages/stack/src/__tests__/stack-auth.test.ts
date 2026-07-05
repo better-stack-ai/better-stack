@@ -69,6 +69,37 @@ describe("stack() server-side identity resolution", () => {
 		expect(getIdentity).toHaveBeenCalledTimes(2);
 	});
 
+	it("treats getIdentity failures as unauthenticated instead of rejecting", async () => {
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		const backend = makeStack({
+			getIdentity: () => Promise.reject(new Error("session lookup failed")),
+		});
+
+		const body = await callWhoami(backend);
+
+		expect(body.first).toBeNull();
+		expect(body.second).toBeNull();
+		expect(consoleError).toHaveBeenCalledOnce();
+		consoleError.mockRestore();
+	});
+
+	it("treats synchronously throwing getIdentity as unauthenticated", async () => {
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		const backend = makeStack({
+			getIdentity: () => {
+				throw new Error("boom");
+			},
+		});
+
+		const body = await callWhoami(backend);
+		expect(body.first).toBeNull();
+		consoleError.mockRestore();
+	});
+
 	it("normalizes undefined identities to null", async () => {
 		const backend = makeStack({
 			getIdentity: () => undefined as any,
