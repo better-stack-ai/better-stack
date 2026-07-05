@@ -106,3 +106,23 @@ type Sitemap = Array<SitemapEntry>;
 ### useBasePath
 
 <AutoTypeTable path="../packages/stack/src/context/provider.tsx" name="useBasePath" />
+
+### useNotify
+
+<AutoTypeTable path="../packages/stack/src/shared/notify-types.ts" name="StackNotifyProvider" />
+
+Notifications are configured via the `notify` prop on `StackProvider`. Without an override, `useNotify()` routes to sonner toasts.
+
+### useTranslate
+
+<AutoTypeTable path="../packages/stack/src/shared/i18n-types.ts" name="StackI18nProvider" />
+
+Without an `i18n` provider, `useTranslate()` returns the English default with `{{param}}` interpolation.
+
+### useListState
+
+URL-synced list state (filters, tabs, pagination) via the router's `getSearchParams` / `setSearchParams` contract. Export path: `@btst/stack/client`.
+
+For SSR loaders, read initial state with `parseListStateFromSearchParams(namespace, schema, requestSearchParams)`.
+
+<AutoTypeTable path="../packages/stack/src/shared/list-state.ts" name="ListStateField" />
