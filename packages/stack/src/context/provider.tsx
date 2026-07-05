@@ -1,7 +1,11 @@
 "use client";
 import { createContext, useContext, type ReactNode } from "react";
 import type { StackAuthProvider } from "../shared/auth-types";
+import type { StackI18nProvider } from "../shared/i18n-types";
+import type { StackNotifyProvider } from "../shared/notify-types";
 import { StackAuthBoundary } from "./auth";
+import { StackI18nBoundary } from "./i18n";
+import { StackNotifyBoundary } from "./notify";
 import type {
 	StackApiConfig,
 	StackRouter,
@@ -155,6 +159,8 @@ export function StackProvider<
 	router,
 	api,
 	auth,
+	notify,
+	i18n,
 }: {
 	children?: ReactNode;
 	overrides?: StackProviderOverrides<TPluginOverrides>;
@@ -168,6 +174,16 @@ export function StackProvider<
 	 * checks pass.
 	 */
 	auth?: StackAuthProvider;
+	/**
+	 * Optional notification provider. When omitted, sonner toasts are used via
+	 * `useNotify()`.
+	 */
+	notify?: StackNotifyProvider;
+	/**
+	 * Optional i18n provider. When omitted, `useTranslate()` returns English
+	 * defaults with `{{param}}` interpolation.
+	 */
+	i18n?: StackI18nProvider;
 }) {
 	const staticRouter = resolveStaticRouter(router);
 	const value: Omit<StackContextValue<any>, "router"> = {
@@ -182,22 +198,24 @@ export function StackProvider<
 		children
 	);
 
-	if (router?.useRouter) {
-		return (
-			<RouterBridge
-				useRouter={router.useRouter}
-				staticRouter={staticRouter}
-				value={value}
-			>
-				{content}
-			</RouterBridge>
-		);
-	}
-
-	return (
+	const stackTree = router?.useRouter ? (
+		<RouterBridge
+			useRouter={router.useRouter}
+			staticRouter={staticRouter}
+			value={value}
+		>
+			{content}
+		</RouterBridge>
+	) : (
 		<StackContext.Provider value={{ ...value, router: staticRouter }}>
 			{content}
 		</StackContext.Provider>
+	);
+
+	return (
+		<StackNotifyBoundary notify={notify}>
+			<StackI18nBoundary i18n={i18n}>{stackTree}</StackI18nBoundary>
+		</StackNotifyBoundary>
 	);
 }
 
