@@ -115,7 +115,7 @@ describe("useListState", () => {
 		);
 	});
 
-	it("preserves prior URL fields when batched in one event", async () => {
+	it("coalesces same-event updates into a single history entry", async () => {
 		let captured: any;
 		const router = await renderHook((value) => {
 			captured = value;
@@ -126,12 +126,37 @@ describe("useListState", () => {
 			captured.setState({ page: 3 });
 		});
 
-		const lastCall =
-			router.setSearchParams.mock.calls[
-				router.setSearchParams.mock.calls.length - 1
-			];
-		expect(lastCall).toBeDefined();
-		const [nextParams] = lastCall!;
+		expect(router.setSearchParams).toHaveBeenCalledTimes(1);
+		const [nextParams] = router.setSearchParams.mock.calls[0]!;
 		expect(nextParams.toString()).toBe("tab=spam&page=3");
+	});
+
+	it("merges pending patches into functional updaters within one event", async () => {
+		let captured: any;
+		const router = await renderHook((value) => {
+			captured = value;
+		});
+
+		await act(async () => {
+			captured.setState({ page: 2 });
+			captured.setState((prev: any) => ({ page: prev.page + 1 }));
+		});
+
+		expect(router.setSearchParams).toHaveBeenCalledTimes(1);
+		const [nextParams] = router.setSearchParams.mock.calls[0]!;
+		expect(nextParams.toString()).toBe("page=3");
+	});
+
+	it("does not push history when the update is a no-op", async () => {
+		let captured: any;
+		const router = await renderHook((value) => {
+			captured = value;
+		});
+
+		await act(async () => {
+			captured.setState({ tab: "pending", page: 1 });
+		});
+
+		expect(router.setSearchParams).not.toHaveBeenCalled();
 	});
 });

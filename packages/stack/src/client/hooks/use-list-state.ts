@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useStackOrNull } from "../../context/provider";
 import type { InferListState, ListStateSchema } from "../../shared/list-state";
 import {
@@ -78,35 +78,74 @@ export function useListState<S extends ListStateSchema>(
 		getSearchParams?.() ?? new URLSearchParams(),
 	);
 
+	// Updates issued in the same tick are coalesced into a single
+	// `setSearchParams` call. Router bindings commit URL changes
+	// asynchronously (Next.js `router.push`, React Router `navigate`), so
+	// consecutive `setState` calls in one event would otherwise read a stale
+	// URL and drop earlier patches — and each call would add its own history
+	// entry, breaking one-back-press-undoes-one-action semantics.
+	const pendingRef = useRef<{
+		patch: Partial<InferListState<S>>;
+		explicitReplace: boolean | undefined;
+	} | null>(null);
+
 	const setState = useCallback<SetListState<S>>(
 		(updates, options) => {
 			if (!setSearchParams || !getSearchParams) return;
 
-			const currentParams = getSearchParams();
 			const currentState = parseListStateFromSearchParams(
 				namespace,
 				schema,
-				currentParams,
+				getSearchParams(),
 			);
+			const pending = pendingRef.current;
+			const baseState = pending
+				? { ...currentState, ...pending.patch }
+				: currentState;
 			const patch =
-				typeof updates === "function" ? updates(currentState) : updates;
+				typeof updates === "function" ? updates(baseState) : updates;
 			if (!patch || Object.keys(patch).length === 0) return;
 
-			const nextState = { ...currentState, ...patch };
-			const replace = resolveListStateHistoryMode(
-				schema,
-				patch,
-				options?.replace,
-			);
+			if (pending) {
+				pending.patch = { ...pending.patch, ...patch };
+				if (options?.replace !== undefined) {
+					pending.explicitReplace = options.replace;
+				}
+				return;
+			}
 
-			const nextParams = serializeListStateToSearchParams(
-				namespace,
-				schema,
-				nextState,
-				currentParams,
-			);
-			setSearchParams(nextParams, { replace });
-			bumpUrlVersion((v) => v + 1);
+			pendingRef.current = {
+				patch: { ...patch },
+				explicitReplace: options?.replace,
+			};
+
+			queueMicrotask(() => {
+				const flushed = pendingRef.current;
+				pendingRef.current = null;
+				if (!flushed) return;
+
+				const currentParams = getSearchParams();
+				const nextState = {
+					...parseListStateFromSearchParams(namespace, schema, currentParams),
+					...flushed.patch,
+				};
+				const replace = resolveListStateHistoryMode(
+					schema,
+					flushed.patch,
+					flushed.explicitReplace,
+				);
+				const nextParams = serializeListStateToSearchParams(
+					namespace,
+					schema,
+					nextState,
+					currentParams,
+				);
+				// No-op updates (merged state already matches the URL) must not
+				// create history entries.
+				if (nextParams.toString() === currentParams.toString()) return;
+				setSearchParams(nextParams, { replace });
+				bumpUrlVersion((v) => v + 1);
+			});
 		},
 		[namespace, schema, setSearchParams, getSearchParams],
 	);
