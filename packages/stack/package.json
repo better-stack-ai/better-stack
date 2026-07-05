@@ -137,6 +137,16 @@
         "default": "./dist/plugins/client/index.cjs"
       }
     },
+    "./plugins/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/client/hooks/index.d.ts",
+        "default": "./dist/plugins/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/client/hooks/index.d.cts",
+        "default": "./dist/plugins/client/hooks/index.cjs"
+      }
+    },
     "./plugins/blog/api": {
       "import": {
         "types": "./dist/plugins/blog/api/index.d.ts",
@@ -649,6 +659,9 @@
       ],
       "plugins/client": [
         "./dist/plugins/client/index.d.ts"
+      ],
+      "plugins/client/hooks": [
+        "./dist/plugins/client/hooks/index.d.ts"
       ],
       "plugins/blog/api": [
         "./dist/plugins/blog/api/index.d.ts"

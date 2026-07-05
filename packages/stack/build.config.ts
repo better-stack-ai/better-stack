@@ -80,6 +80,7 @@ export default defineBuildConfig({
 		// plugin development entries
 		"./src/plugins/api/index.ts",
 		"./src/plugins/client/index.ts",
+		"./src/plugins/client/hooks/index.tsx",
 		// blog plugin entries
 		"./src/plugins/blog/api/index.ts",
 		"./src/plugins/blog/client/index.ts",

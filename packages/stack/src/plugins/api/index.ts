@@ -26,7 +26,10 @@ export type {
 
 // Re-export Better Call functions needed for plugins
 export type { Endpoint, Router } from "better-call";
-export { createEndpoint, createRouter } from "better-call";
+export { createRouter } from "better-call";
+// Wrapped createEndpoint that preserves Zod validation issues in 400 responses
+export { createEndpoint } from "./create-endpoint";
+export type { SerializedValidationIssue } from "./create-endpoint";
 export { createDbPlugin } from "@btst/db";
 
 /**
