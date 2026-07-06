@@ -333,6 +333,37 @@ describe("SearchInput list state (useListState)", () => {
 			expect.objectContaining({ query: "typescript" }),
 		);
 	});
+
+	it("opening the modal seeds the input from ?q= and does not clear the URL", async () => {
+		const router = createMockRouter("q=hello");
+
+		await render(
+			<StackProvider basePath="/pages" router={router} overrides={{ blog: {} }}>
+				<SearchInput />
+			</StackProvider>,
+		);
+
+		const trigger = container.querySelector(
+			'[data-testid="search-button"]',
+		) as HTMLButtonElement;
+		await act(async () => {
+			trigger.click();
+		});
+
+		const input = document.querySelector(
+			'[data-testid="search-input"]',
+		) as HTMLInputElement;
+		expect(input).toBeTruthy();
+		expect(input.value).toBe("hello");
+
+		// Let the debounce settle: the persisted query must survive the open.
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 650));
+		});
+
+		expect(router.setSearchParams).not.toHaveBeenCalled();
+		expect(router.getSearchParams().get("q")).toBe("hello");
+	});
 });
 
 describe("blog i18n precedence (useTranslate + overrides.localization)", () => {

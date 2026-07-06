@@ -32,6 +32,11 @@ export interface SearchModalProps<T = SearchResult> {
 	groupTitle?: string;
 	className?: string;
 	triggerClassName?: string;
+	/**
+	 * Query the input is seeded with when the dialog opens (e.g. an
+	 * externally persisted `?q=` value), so opening the modal never clears it.
+	 */
+	initialQuery?: string;
 }
 
 export function SearchModal<T extends SearchResult>({
@@ -45,6 +50,7 @@ export function SearchModal<T extends SearchResult>({
 	isLoading = false,
 	className,
 	triggerClassName,
+	initialQuery = "",
 }: SearchModalProps<T>) {
 	const t = useTranslate();
 	const resolvedPlaceholder =
@@ -53,8 +59,29 @@ export function SearchModal<T extends SearchResult>({
 		emptyMessage ?? t("blog.search.empty", "No results found.");
 	const resolvedButtonText = buttonText ?? t("blog.search.button", "Search");
 	const [open, setOpen] = React.useState(false);
-	const [query, setQuery] = React.useState("");
+	const [query, setQuery] = React.useState(initialQuery);
 	const [results, setResults] = React.useState<T[]>([]);
+
+	// Tracks the last query passed to searchFn so externally persisted state
+	// (e.g. a `?q=` URL param) is not cleared by the seed value on open.
+	const lastSentQueryRef = React.useRef(initialQuery);
+	// Latest seed value without retriggering the open handler.
+	const initialQueryRef = React.useRef(initialQuery);
+	initialQueryRef.current = initialQuery;
+
+	// Seed the input in the same event that opens the dialog, so the first
+	// open render (and its effects) already sees the persisted query and never
+	// clears it back through searchFn.
+	const openRef = React.useRef(open);
+	openRef.current = open;
+	const handleOpenChange = React.useCallback((nextOpen: boolean) => {
+		if (nextOpen && !openRef.current) {
+			const seed = initialQueryRef.current;
+			setQuery(seed);
+			lastSentQueryRef.current = seed;
+		}
+		setOpen(nextOpen);
+	}, []);
 
 	// Only debounce if not using external results
 	const shouldDebounce = externalResults === undefined;
@@ -70,19 +97,17 @@ export function SearchModal<T extends SearchResult>({
 			if (e.key === cleanShortcut && (e.metaKey || e.ctrlKey)) {
 				e.preventDefault();
 
-				setOpen((open) => !open);
+				handleOpenChange(!openRef.current);
 			}
 		};
 
 		document.addEventListener("keydown", down);
 		return () => document.removeEventListener("keydown", down);
-	}, [keyboardShortcut]);
+	}, [keyboardShortcut, handleOpenChange]);
 
 	React.useEffect(() => {
 		if (!open) {
-			setQuery("");
 			setResults([]);
-			return;
 		}
 	}, [open]);
 
@@ -93,11 +118,20 @@ export function SearchModal<T extends SearchResult>({
 	const hasExternalResults = externalResults !== undefined;
 	React.useEffect(() => {
 		if (!open) return;
-		const searchResults = searchFn(debouncedQuery);
-		if (!hasExternalResults) {
-			setResults(searchResults);
+
+		if (hasExternalResults) {
+			// External mode: only notify once the debounce settled on a value the
+			// parent hasn't seen, so opening the modal never overwrites the
+			// persisted query with the transient empty/seed value.
+			if (debouncedQuery !== query) return;
+			if (debouncedQuery === lastSentQueryRef.current) return;
+			lastSentQueryRef.current = debouncedQuery;
+			searchFn(debouncedQuery);
+			return;
 		}
-	}, [debouncedQuery, open, searchFn, hasExternalResults]);
+
+		setResults(searchFn(debouncedQuery));
+	}, [debouncedQuery, query, open, searchFn, hasExternalResults]);
 
 	// Sync externally-provided (async) results into the list.
 	React.useEffect(() => {
@@ -130,7 +164,7 @@ export function SearchModal<T extends SearchResult>({
 				data-testid="search-button"
 				type="button"
 				className={buttonClasses}
-				onClick={() => setOpen(true)}
+				onClick={() => handleOpenChange(true)}
 			>
 				<span className="flex grow items-center">
 					<SearchIcon
@@ -151,7 +185,7 @@ export function SearchModal<T extends SearchResult>({
 			<CommandDialog
 				data-testid="search-modal"
 				open={open}
-				onOpenChange={setOpen}
+				onOpenChange={handleOpenChange}
 				className={className}
 			>
 				<CommandInput

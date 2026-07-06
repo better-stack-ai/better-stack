@@ -142,6 +142,7 @@ export function SearchInput({
 			placeholder={placeholder}
 			buttonText={buttonText}
 			emptyMessage={emptyMessage}
+			initialQuery={currentQuery}
 			searchFn={handleSearch}
 			renderResult={renderBlogResult}
 			results={formattedResults}

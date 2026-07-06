@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { useStackOrNull } from "../../context/provider";
 import type { InferListState, ListStateSchema } from "../../shared/list-state";
 import {
@@ -186,21 +186,34 @@ export function useListState<S extends ListStateSchema>(
 	const router = stack?.router;
 	const getSearchParams = router?.getSearchParams;
 	const setSearchParams = router?.setSearchParams;
+	const hasUrlBinding = !!getSearchParams && !!setSearchParams;
 
 	// Every instance re-renders whenever any instance flushes a URL update (or
 	// on back/forward), so siblings sharing query keys never serve stale state.
 	// Search params are re-read on every render, so router-driven changes are
 	// also picked up even when `getSearchParams` is referentially stable.
 	useSyncExternalStore(subscribeToUrl, getUrlVersion, getServerUrlVersion);
-	const state = parseListStateFromSearchParams(
+	const urlState = parseListStateFromSearchParams(
 		namespace,
 		schema,
 		getSearchParams?.() ?? new URLSearchParams(),
 	);
 
+	// Without router search-param bindings (no StackProvider router, or a
+	// custom router missing getSearchParams/setSearchParams) the hook degrades
+	// to plain local state instead of silently dropping updates.
+	const [localState, setLocalState] = useState<InferListState<S>>(urlState);
+
 	const setState = useCallback<SetListState<S>>(
 		(updates, options) => {
-			if (!setSearchParams || !getSearchParams) return;
+			if (!setSearchParams || !getSearchParams) {
+				setLocalState((prev) => {
+					const patch = typeof updates === "function" ? updates(prev) : updates;
+					if (!patch || Object.keys(patch).length === 0) return prev;
+					return { ...prev, ...patch };
+				});
+				return;
+			}
 
 			// Base state = URL state + patches already queued this tick, so
 			// functional updaters see the values earlier calls just set.
@@ -232,5 +245,5 @@ export function useListState<S extends ListStateSchema>(
 		[namespace, schema, setSearchParams, getSearchParams],
 	);
 
-	return [state, setState];
+	return [hasUrlBinding ? urlState : localState, setState];
 }

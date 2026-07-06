@@ -260,4 +260,56 @@ describe("useListState", () => {
 
 		expect(router.setSearchParams).not.toHaveBeenCalled();
 	});
+
+	it("falls back to local state without router search-param bindings", async () => {
+		let captured: any;
+
+		function Probe() {
+			const [state, setState] = useListState("comments-moderation", schema);
+			captured = { state, setState };
+			return null;
+		}
+
+		// StackProvider without getSearchParams/setSearchParams on the router.
+		await act(async () => {
+			root.render(
+				<StackProvider basePath="/pages" router={{}}>
+					<Probe />
+				</StackProvider>,
+			);
+		});
+
+		expect(captured.state).toEqual({ tab: "pending", page: 1, filter: "" });
+
+		await act(async () => {
+			captured.setState({ tab: "spam", page: 3 });
+		});
+		expect(captured.state).toEqual({ tab: "spam", page: 3, filter: "" });
+
+		await act(async () => {
+			captured.setState((prev: any) => ({ page: prev.page + 1 }));
+		});
+		expect(captured.state).toEqual({ tab: "spam", page: 4, filter: "" });
+	});
+
+	it("falls back to local state without a StackProvider", async () => {
+		let captured: any;
+
+		function Probe() {
+			const [state, setState] = useListState("comments-moderation", schema);
+			captured = { state, setState };
+			return null;
+		}
+
+		await act(async () => {
+			root.render(<Probe />);
+		});
+
+		expect(captured.state).toEqual({ tab: "pending", page: 1, filter: "" });
+
+		await act(async () => {
+			captured.setState({ filter: "abc" });
+		});
+		expect(captured.state).toEqual({ tab: "pending", page: 1, filter: "abc" });
+	});
 });
