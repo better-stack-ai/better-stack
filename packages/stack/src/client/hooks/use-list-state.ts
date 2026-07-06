@@ -186,7 +186,7 @@ export function useListState<S extends ListStateSchema>(
 	const router = stack?.router;
 	const getSearchParams = router?.getSearchParams;
 	const setSearchParams = router?.setSearchParams;
-	const hasUrlBinding = !!getSearchParams && !!setSearchParams;
+	const hasWriteBinding = !!getSearchParams && !!setSearchParams;
 
 	// Every instance re-renders whenever any instance flushes a URL update (or
 	// on back/forward), so siblings sharing query keys never serve stale state.
@@ -199,18 +199,26 @@ export function useListState<S extends ListStateSchema>(
 		getSearchParams?.() ?? new URLSearchParams(),
 	);
 
-	// Without router search-param bindings (no StackProvider router, or a
-	// custom router missing getSearchParams/setSearchParams) the hook degrades
-	// to plain local state instead of silently dropping updates.
-	const [localState, setLocalState] = useState<InferListState<S>>(urlState);
+	// Without a URL write binding (no StackProvider router, or a custom router
+	// missing getSearchParams/setSearchParams) the hook degrades to local
+	// state instead of silently dropping updates. Local patches overlay the
+	// URL state so a read-only `getSearchParams` binding still drives reads
+	// (back/forward, external URL changes) exactly as before.
+	const [localPatch, setLocalPatch] = useState<Partial<InferListState<S>>>({});
 
 	const setState = useCallback<SetListState<S>>(
 		(updates, options) => {
 			if (!setSearchParams || !getSearchParams) {
-				setLocalState((prev) => {
+				setLocalPatch((prevPatch) => {
+					const urlBase = parseListStateFromSearchParams(
+						namespace,
+						schema,
+						getSearchParams?.() ?? new URLSearchParams(),
+					);
+					const prev = { ...urlBase, ...prevPatch };
 					const patch = typeof updates === "function" ? updates(prev) : updates;
-					if (!patch || Object.keys(patch).length === 0) return prev;
-					return { ...prev, ...patch };
+					if (!patch || Object.keys(patch).length === 0) return prevPatch;
+					return { ...prevPatch, ...patch };
 				});
 				return;
 			}
@@ -245,5 +253,8 @@ export function useListState<S extends ListStateSchema>(
 		[namespace, schema, setSearchParams, getSearchParams],
 	);
 
-	return [hasUrlBinding ? urlState : localState, setState];
+	return [
+		hasWriteBinding ? urlState : { ...urlState, ...localPatch },
+		setState,
+	];
 }
