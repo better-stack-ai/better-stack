@@ -86,19 +86,24 @@ export function SearchModal<T extends SearchResult>({
 		}
 	}, [open]);
 
+	// Notify the parent of query changes. Deliberately NOT keyed on
+	// `externalResults`: searchFn may update URL-synced state, and re-invoking
+	// it whenever results change identity can restart an in-flight router
+	// navigation on every render (infinite loop on React Router/Next.js).
+	const hasExternalResults = externalResults !== undefined;
 	React.useEffect(() => {
 		if (!open) return;
-
-		// Always call searchFn to notify parent component of the search query
 		const searchResults = searchFn(debouncedQuery);
-
-		// If external results are provided, use them; otherwise use searchFn results
-		if (externalResults !== undefined) {
-			setResults(externalResults);
-		} else {
+		if (!hasExternalResults) {
 			setResults(searchResults);
 		}
-	}, [debouncedQuery, open, searchFn, externalResults]);
+	}, [debouncedQuery, open, searchFn, hasExternalResults]);
+
+	// Sync externally-provided (async) results into the list.
+	React.useEffect(() => {
+		if (!open || externalResults === undefined) return;
+		setResults(externalResults);
+	}, [open, externalResults]);
 
 	// Base button classes for better readability
 	const buttonClasses = [
