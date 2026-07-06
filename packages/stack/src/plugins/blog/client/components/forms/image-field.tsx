@@ -10,7 +10,6 @@ import { Input } from "@workspace/ui/components/input";
 import { usePluginOverrides } from "@btst/stack/context";
 import { Loader2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
-import { toast } from "sonner";
 import type { BlogPluginOverrides } from "../../overrides";
 import { BLOG_LOCALIZATION } from "../../localization";
 
@@ -27,6 +26,7 @@ export function FeaturedImageField({
 }) {
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [isUploading, setIsUploading] = useState(false);
+	const notify = useNotify();
 
 	const {
 		uploadImage,
@@ -73,12 +73,12 @@ export function FeaturedImageField({
 		if (!file) return;
 
 		if (!file.type.startsWith("image/")) {
-			toast.error(localization.BLOG_FORMS_FEATURED_IMAGE_ERROR_NOT_IMAGE);
+			notify.error(localization.BLOG_FORMS_FEATURED_IMAGE_ERROR_NOT_IMAGE);
 			return;
 		}
 
 		if (file.size > 4 * 1024 * 1024) {
-			toast.error(localization.BLOG_FORMS_FEATURED_IMAGE_ERROR_TOO_LARGE);
+			notify.error(localization.BLOG_FORMS_FEATURED_IMAGE_ERROR_TOO_LARGE);
 			return;
 		}
 
@@ -87,11 +87,10 @@ export function FeaturedImageField({
 			setFeaturedImageUploading(true);
 			const url = await uploadImage(file);
 			onChange(url);
-			toast.success(localization.BLOG_FORMS_FEATURED_IMAGE_TOAST_SUCCESS);
+			notify.success(localization.BLOG_FORMS_FEATURED_IMAGE_TOAST_SUCCESS);
 		} catch (error) {
-			toast.error(localization.BLOG_FORMS_FEATURED_IMAGE_TOAST_FAILURE);
 			console.error("Failed to upload image:", error);
-			toast.error(localization.BLOG_FORMS_FEATURED_IMAGE_TOAST_FAILURE);
+			notify.error(localization.BLOG_FORMS_FEATURED_IMAGE_TOAST_FAILURE);
 		} finally {
 			setIsUploading(false);
 			setFeaturedImageUploading(false);
