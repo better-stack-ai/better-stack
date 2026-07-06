@@ -1,0 +1,116 @@
+---
+title: i18n Keys
+description: Translation key conventions and the reference catalog of plugin i18n keys
+---
+
+Plugins render every user-visible string through `useTranslate()` from `@btst/stack/context`:
+
+```tsx
+const t = useTranslate();
+
+t("blog.forms.titleLabel", "Title");
+t("blog.list.tagPageTitle", "{{tag}} Posts", { tag: tag.name });
+```
+
+Without an `i18n` provider on `StackProvider`, `t()` returns the English default (with `{{param}}` interpolation), so apps with no provider behave exactly as before. With a provider, your `translate(key, defaultValue, params)` implementation decides what to render.
+
+## Key conventions
+
+- Keys are namespaced `<plugin>.<area>.<name>`, e.g. `blog.forms.titleLabel`. Areas group related UI (`common`, `list`, `card`, `post`, `forms`, `search`, ...).
+- The second argument is always a **string literal** English default, so the key catalog can be regenerated mechanically:
+
+```bash
+pnpm exec tsx packages/stack/scripts/extract-i18n-keys.ts
+```
+
+- Parameters use `{{param}}` interpolation in the default value.
+- Plugins that support a legacy per-plugin `localization` override object resolve it with higher precedence than `t()`:
+
+```tsx
+localization?.BLOG_FORMS_TITLE_LABEL ?? t("blog.forms.titleLabel", "Title");
+```
+
+An app-provided `localization` override wins byte-for-byte; otherwise the string goes through the i18n provider.
+
+## Blog
+
+| Key | Default |
+| --- | --- |
+| `blog.card.draftBadge` | Draft |
+| `blog.common.genericErrorMessage` | An unexpected error occurred. |
+| `blog.common.genericErrorTitle` | Something went wrong |
+| `blog.common.pageNotFoundDescription` | The page you are looking for does not exist. |
+| `blog.common.pageNotFoundTitle` | Not Found |
+| `blog.common.tagsShowAll` | Show all tags |
+| `blog.common.tagsShowLess` | Show fewer tags |
+| `blog.forms.cancelButton` | Cancel |
+| `blog.forms.contentLabel` | Content |
+| `blog.forms.deleteButton` | Delete Post |
+| `blog.forms.deleteDialogCancel` | Cancel |
+| `blog.forms.deleteDialogConfirm` | Delete |
+| `blog.forms.deleteDialogDescription` | Are you sure you want to delete this post? This action cannot be undone. |
+| `blog.forms.deleteDialogTitle` | Delete Post |
+| `blog.forms.deletePending` | Deleting... |
+| `blog.forms.editorPlaceholder` | Write something... |
+| `blog.forms.excerptLabel` | Excerpt |
+| `blog.forms.excerptPlaceholder` | Brief summary of your post... |
+| `blog.forms.featuredImageErrorNotImage` | Please select an image file |
+| `blog.forms.featuredImageErrorTooLarge` | Image size must be less than 4MB |
+| `blog.forms.featuredImageInputPlaceholder` | Image URL or upload below... |
+| `blog.forms.featuredImageLabel` | Image |
+| `blog.forms.featuredImagePreviewAlt` | Featured image preview |
+| `blog.forms.featuredImageRequiredAsterisk` | &nbsp;* |
+| `blog.forms.featuredImageToastFailure` | Failed to upload image |
+| `blog.forms.featuredImageToastSuccess` | Image uploaded successfully |
+| `blog.forms.featuredImageUploadButton` | Upload |
+| `blog.forms.featuredImageUploadingButton` | Uploading... |
+| `blog.forms.featuredImageUploadingText` | Uploading image... |
+| `blog.forms.publishedDescription` | Toggle to publish immediately |
+| `blog.forms.publishedLabel` | Published |
+| `blog.forms.requiredAsterisk` | &nbsp;* |
+| `blog.forms.slugLabel` | Slug |
+| `blog.forms.slugPlaceholder` | url-friendly-slug |
+| `blog.forms.submitCreateIdle` | Create Post |
+| `blog.forms.submitCreatePending` | Creating... |
+| `blog.forms.submitUpdateIdle` | Update Post |
+| `blog.forms.submitUpdatePending` | Updating... |
+| `blog.forms.tagsLabel` | Tags |
+| `blog.forms.tagsPlaceholder` | Enter your post tags... |
+| `blog.forms.tagsSearchPlaceholder` | Search or create tags... |
+| `blog.forms.titleLabel` | Title |
+| `blog.forms.titlePlaceholder` | Enter your post title... |
+| `blog.forms.toastCreateSuccess` | Post created successfully |
+| `blog.forms.toastDeleteFailure` | Failed to delete post |
+| `blog.forms.toastDeleteSuccess` | Post deleted successfully |
+| `blog.forms.toastUpdateSuccess` | Post updated successfully |
+| `blog.forms.validation.contentRequired` | Content is required |
+| `blog.forms.validation.excerptRequired` | Excerpt is required |
+| `blog.forms.validation.slugRequired` | Slug is required |
+| `blog.forms.validation.titleRequired` | Title is required |
+| `blog.list.draftsTitle` | Draft Posts |
+| `blog.list.empty` | There are no posts here yet. |
+| `blog.list.loadMore` | Load more posts |
+| `blog.list.loadingMore` | Loading more... |
+| `blog.list.searchButton` | Search Posts |
+| `blog.list.searchEmpty` | No blog posts found. |
+| `blog.list.searchPlaceholder` | Search Blog Posts... |
+| `blog.list.tagNotFound` | Tag not found |
+| `blog.list.tagNotFoundDescription` | The tag you are looking for does not exist. |
+| `blog.list.tagPageDescription` | Browse all posts with this tag |
+| `blog.list.tagPageTitle` | \{\{tag\}\} Posts |
+| `blog.list.title` | Blog Posts |
+| `blog.post.addDescription` | Create a new blog post. |
+| `blog.post.addTitle` | Add New Post |
+| `blog.post.editDescription` | Update your blog post. |
+| `blog.post.editTitle` | Edit Post |
+| `blog.post.keepReading` | Keep Reading |
+| `blog.post.next` | Next |
+| `blog.post.onThisPage` | In This Post |
+| `blog.post.previous` | Previous |
+| `blog.post.viewAll` | View all |
+| `blog.search.button` | Search |
+| `blog.search.empty` | No results found. |
+| `blog.search.placeholder` | Type to search... |
+| `blog.search.searching` | Searching... |
+
+Other plugins adopt the same convention as their phase-2 sweeps land.

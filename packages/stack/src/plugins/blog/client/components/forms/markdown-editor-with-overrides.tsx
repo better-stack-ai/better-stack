@@ -1,8 +1,7 @@
 "use client";
 import { useCallback, useRef } from "react";
-import { usePluginOverrides } from "@btst/stack/context";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
-import { BLOG_LOCALIZATION } from "../../localization";
 import { MarkdownEditor, type MarkdownEditorProps } from "./markdown-editor";
 
 type MarkdownEditorWithOverridesProps = Omit<
@@ -16,14 +15,12 @@ type MarkdownEditorWithOverridesProps = Omit<
 export function MarkdownEditorWithOverrides(
 	props: MarkdownEditorWithOverridesProps,
 ) {
+	const t = useTranslate();
 	const {
 		uploadImage,
 		imagePicker: ImagePickerTrigger,
 		localization,
-	} = usePluginOverrides<BlogPluginOverrides, Partial<BlogPluginOverrides>>(
-		"blog",
-		{ localization: BLOG_LOCALIZATION },
-	);
+	} = usePluginOverrides<BlogPluginOverrides>("blog");
 
 	const insertImageRef = useRef<((url: string) => void) | null>(null);
 	// Holds the Crepe-image-block `setUrl` callback while the picker is open.
@@ -64,7 +61,10 @@ export function MarkdownEditorWithOverrides(
 			<MarkdownEditor
 				{...props}
 				uploadImage={uploadImage}
-				placeholder={localization?.BLOG_FORMS_EDITOR_PLACEHOLDER}
+				placeholder={
+					localization?.BLOG_FORMS_EDITOR_PLACEHOLDER ??
+					t("blog.forms.editorPlaceholder", "Write something...")
+				}
 				insertImageRef={insertImageRef}
 				openMediaPickerForImageBlock={
 					ImagePickerTrigger ? openMediaPickerForImageBlock : undefined

@@ -2,9 +2,8 @@
 
 import { useEffect, useState, useMemo, useRef } from "react";
 import { cn, slugify } from "../../../utils";
-import { usePluginOverrides } from "@btst/stack/context";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
-import { BLOG_LOCALIZATION } from "../../localization";
 import {
 	Select,
 	SelectContent,
@@ -26,12 +25,8 @@ interface OnThisPageProps {
 }
 
 export function OnThisPage({ markdown, className }: OnThisPageProps) {
-	const { localization } = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", {
-		localization: BLOG_LOCALIZATION,
-	});
+	const t = useTranslate();
+	const { localization } = usePluginOverrides<BlogPluginOverrides>("blog");
 	const headings = useMemo(() => extractHeadings(markdown), [markdown]);
 	const activeId = useActiveHeading(headings);
 
@@ -66,7 +61,8 @@ export function OnThisPage({ markdown, className }: OnThisPageProps) {
 				<div className="flex flex-col gap-1 p-2 pt-0 text-sm">
 					<p className="flex items-center gap-2 font-semibold text-muted-foreground sticky top-0 h-6 text-xs">
 						<TextAlignStart className="w-3 h-3" />{" "}
-						{localization.BLOG_POST_ON_THIS_PAGE}
+						{localization?.BLOG_POST_ON_THIS_PAGE ??
+							t("blog.post.onThisPage", "In This Post")}
 					</p>
 					{headings.map(({ id, text, level }) => {
 						const paddingLeft =
@@ -110,12 +106,8 @@ export function OnThisPage({ markdown, className }: OnThisPageProps) {
 }
 
 export function OnThisPageSelect({ markdown, className }: OnThisPageProps) {
-	const { localization } = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", {
-		localization: BLOG_LOCALIZATION,
-	});
+	const t = useTranslate();
+	const { localization } = usePluginOverrides<BlogPluginOverrides>("blog");
 	const headings = useMemo(() => extractHeadings(markdown), [markdown]);
 	const initialValue = useMemo(() => headings[0]?.id ?? "", [headings]);
 	const activeId = useActiveHeading(headings);
@@ -146,7 +138,12 @@ export function OnThisPageSelect({ markdown, className }: OnThisPageProps) {
 		>
 			<Select value={value} onValueChange={handleValueChange}>
 				<SelectTrigger className="w-full">
-					<SelectValue placeholder={localization.BLOG_POST_ON_THIS_PAGE} />
+					<SelectValue
+						placeholder={
+							localization?.BLOG_POST_ON_THIS_PAGE ??
+							t("blog.post.onThisPage", "In This Post")
+						}
+					/>
 				</SelectTrigger>
 				<SelectContent>
 					{headings.map(({ id, text, level }) => {

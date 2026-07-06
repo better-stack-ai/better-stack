@@ -1,6 +1,7 @@
 import MultipleSelector, {
 	type Option,
 } from "@workspace/ui/components/multi-select";
+import { useTranslate } from "@btst/stack/context";
 import { useTags } from "../../hooks/blog-hooks";
 import type { SerializedTag } from "../../../types";
 
@@ -15,6 +16,7 @@ export function TagsMultiSelect({
 	) => void;
 	placeholder?: string;
 }) {
+	const t = useTranslate();
 	const { tags } = useTags();
 
 	const tagMap = new Map<string, SerializedTag>();
@@ -69,7 +71,10 @@ export function TagsMultiSelect({
 		<MultipleSelector
 			value={selectedOptions}
 			onChange={handleChange}
-			placeholder={placeholder ?? "Search or create tags..."}
+			placeholder={
+				placeholder ??
+				t("blog.forms.tagsSearchPlaceholder", "Search or create tags...")
+			}
 			options={options}
 			creatable={true}
 			hidePlaceholderWhenSelected={true}

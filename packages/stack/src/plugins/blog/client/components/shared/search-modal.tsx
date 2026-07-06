@@ -2,6 +2,7 @@
 
 import { SearchIcon } from "lucide-react";
 import * as React from "react";
+import { useTranslate } from "@btst/stack/context";
 import { useDebounce } from "../../hooks/use-debounce";
 
 import {
@@ -34,9 +35,9 @@ export interface SearchModalProps<T = SearchResult> {
 }
 
 export function SearchModal<T extends SearchResult>({
-	placeholder = "Type to search...",
-	emptyMessage = "No results found.",
-	buttonText = "Search",
+	placeholder,
+	emptyMessage,
+	buttonText,
 	keyboardShortcut = "⌘K",
 	searchFn,
 	renderResult,
@@ -45,6 +46,12 @@ export function SearchModal<T extends SearchResult>({
 	className,
 	triggerClassName,
 }: SearchModalProps<T>) {
+	const t = useTranslate();
+	const resolvedPlaceholder =
+		placeholder ?? t("blog.search.placeholder", "Type to search...");
+	const resolvedEmptyMessage =
+		emptyMessage ?? t("blog.search.empty", "No results found.");
+	const resolvedButtonText = buttonText ?? t("blog.search.button", "Search");
 	const [open, setOpen] = React.useState(false);
 	const [query, setQuery] = React.useState("");
 	const [results, setResults] = React.useState<T[]>([]);
@@ -108,7 +115,9 @@ export function SearchModal<T extends SearchResult>({
 
 	// Determine what to show based on state
 	const showEmpty = debouncedQuery && !isLoading && results.length === 0;
-	const currentEmptyMessage = isLoading ? "Searching..." : emptyMessage;
+	const currentEmptyMessage = isLoading
+		? t("blog.search.searching", "Searching...")
+		: resolvedEmptyMessage;
 
 	return (
 		<>
@@ -125,7 +134,7 @@ export function SearchModal<T extends SearchResult>({
 						aria-hidden="true"
 					/>
 					<span className="font-normal text-muted-foreground">
-						{buttonText}
+						{resolvedButtonText}
 					</span>
 				</span>
 				{keyboardShortcut && (
@@ -142,7 +151,7 @@ export function SearchModal<T extends SearchResult>({
 			>
 				<CommandInput
 					data-testid="search-input"
-					placeholder={placeholder}
+					placeholder={resolvedPlaceholder}
 					value={query}
 					onValueChange={setQuery}
 				/>
