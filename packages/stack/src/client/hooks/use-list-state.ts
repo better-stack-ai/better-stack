@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { useStackOrNull } from "../../context/provider";
 import type { InferListState, ListStateSchema } from "../../shared/list-state";
 import {
@@ -186,21 +186,42 @@ export function useListState<S extends ListStateSchema>(
 	const router = stack?.router;
 	const getSearchParams = router?.getSearchParams;
 	const setSearchParams = router?.setSearchParams;
+	const hasWriteBinding = !!getSearchParams && !!setSearchParams;
 
 	// Every instance re-renders whenever any instance flushes a URL update (or
 	// on back/forward), so siblings sharing query keys never serve stale state.
 	// Search params are re-read on every render, so router-driven changes are
 	// also picked up even when `getSearchParams` is referentially stable.
 	useSyncExternalStore(subscribeToUrl, getUrlVersion, getServerUrlVersion);
-	const state = parseListStateFromSearchParams(
+	const urlState = parseListStateFromSearchParams(
 		namespace,
 		schema,
 		getSearchParams?.() ?? new URLSearchParams(),
 	);
 
+	// Without a URL write binding (no StackProvider router, or a custom router
+	// missing getSearchParams/setSearchParams) the hook degrades to local
+	// state instead of silently dropping updates. Local patches overlay the
+	// URL state so a read-only `getSearchParams` binding still drives reads
+	// (back/forward, external URL changes) exactly as before.
+	const [localPatch, setLocalPatch] = useState<Partial<InferListState<S>>>({});
+
 	const setState = useCallback<SetListState<S>>(
 		(updates, options) => {
-			if (!setSearchParams || !getSearchParams) return;
+			if (!setSearchParams || !getSearchParams) {
+				setLocalPatch((prevPatch) => {
+					const urlBase = parseListStateFromSearchParams(
+						namespace,
+						schema,
+						getSearchParams?.() ?? new URLSearchParams(),
+					);
+					const prev = { ...urlBase, ...prevPatch };
+					const patch = typeof updates === "function" ? updates(prev) : updates;
+					if (!patch || Object.keys(patch).length === 0) return prevPatch;
+					return { ...prevPatch, ...patch };
+				});
+				return;
+			}
 
 			// Base state = URL state + patches already queued this tick, so
 			// functional updaters see the values earlier calls just set.
@@ -232,5 +253,8 @@ export function useListState<S extends ListStateSchema>(
 		[namespace, schema, setSearchParams, getSearchParams],
 	);
 
-	return [state, setState];
+	return [
+		hasWriteBinding ? urlState : { ...urlState, ...localPatch },
+		setState,
+	];
 }

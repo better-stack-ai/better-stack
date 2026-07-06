@@ -1,10 +1,13 @@
 "use client";
 
-import { usePluginOverrides, useBasePath } from "@btst/stack/context";
+import {
+	usePluginOverrides,
+	useBasePath,
+	useTranslate,
+} from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
 import { DefaultLink } from "./defaults";
 import { Badge } from "@workspace/ui/components/badge";
-import { BLOG_LOCALIZATION } from "../../localization";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import type { SerializedTag } from "../../../types";
@@ -20,15 +23,21 @@ export function CollapsibleTagList({
 	tags,
 	maxVisible = MAX_VISIBLE_TAGS,
 }: CollapsibleTagListProps) {
+	const t = useTranslate();
 	const { Link, localization } = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
 	>("blog", {
 		Link: DefaultLink,
-		localization: BLOG_LOCALIZATION,
 	});
 	const basePath = useBasePath();
 	const [showAll, setShowAll] = useState(false);
+	const showLessLabel =
+		localization?.BLOG_TAGS_SHOW_LESS ??
+		t("blog.common.tagsShowLess", "Show fewer tags");
+	const showAllLabel =
+		localization?.BLOG_TAGS_SHOW_ALL ??
+		t("blog.common.tagsShowAll", "Show all tags");
 
 	if (!tags || tags.length === 0) {
 		return null;
@@ -52,16 +61,8 @@ export function CollapsibleTagList({
 						type="button"
 						onClick={() => setShowAll((prev) => !prev)}
 						aria-expanded={showAll}
-						aria-label={
-							showAll
-								? localization.BLOG_TAGS_SHOW_LESS
-								: localization.BLOG_TAGS_SHOW_ALL
-						}
-						title={
-							showAll
-								? localization.BLOG_TAGS_SHOW_LESS
-								: localization.BLOG_TAGS_SHOW_ALL
-						}
+						aria-label={showAll ? showLessLabel : showAllLabel}
+						title={showAll ? showLessLabel : showAllLabel}
 					>
 						{showAll ? (
 							<ChevronUp aria-hidden="true" />

@@ -2,6 +2,7 @@
 
 import { SearchIcon } from "lucide-react";
 import * as React from "react";
+import { useTranslate } from "@btst/stack/context";
 import { useDebounce } from "../../hooks/use-debounce";
 
 import {
@@ -31,12 +32,17 @@ export interface SearchModalProps<T = SearchResult> {
 	groupTitle?: string;
 	className?: string;
 	triggerClassName?: string;
+	/**
+	 * Query the input is seeded with when the dialog opens (e.g. an
+	 * externally persisted `?q=` value), so opening the modal never clears it.
+	 */
+	initialQuery?: string;
 }
 
 export function SearchModal<T extends SearchResult>({
-	placeholder = "Type to search...",
-	emptyMessage = "No results found.",
-	buttonText = "Search",
+	placeholder,
+	emptyMessage,
+	buttonText,
 	keyboardShortcut = "⌘K",
 	searchFn,
 	renderResult,
@@ -44,10 +50,38 @@ export function SearchModal<T extends SearchResult>({
 	isLoading = false,
 	className,
 	triggerClassName,
+	initialQuery = "",
 }: SearchModalProps<T>) {
+	const t = useTranslate();
+	const resolvedPlaceholder =
+		placeholder ?? t("blog.search.placeholder", "Type to search...");
+	const resolvedEmptyMessage =
+		emptyMessage ?? t("blog.search.empty", "No results found.");
+	const resolvedButtonText = buttonText ?? t("blog.search.button", "Search");
 	const [open, setOpen] = React.useState(false);
-	const [query, setQuery] = React.useState("");
+	const [query, setQuery] = React.useState(initialQuery);
 	const [results, setResults] = React.useState<T[]>([]);
+
+	// Tracks the last query passed to searchFn so externally persisted state
+	// (e.g. a `?q=` URL param) is not cleared by the seed value on open.
+	const lastSentQueryRef = React.useRef(initialQuery);
+	// Latest seed value without retriggering the open handler.
+	const initialQueryRef = React.useRef(initialQuery);
+	initialQueryRef.current = initialQuery;
+
+	// Seed the input in the same event that opens the dialog, so the first
+	// open render (and its effects) already sees the persisted query and never
+	// clears it back through searchFn.
+	const openRef = React.useRef(open);
+	openRef.current = open;
+	const handleOpenChange = React.useCallback((nextOpen: boolean) => {
+		if (nextOpen && !openRef.current) {
+			const seed = initialQueryRef.current;
+			setQuery(seed);
+			lastSentQueryRef.current = seed;
+		}
+		setOpen(nextOpen);
+	}, []);
 
 	// Only debounce if not using external results
 	const shouldDebounce = externalResults === undefined;
@@ -63,35 +97,47 @@ export function SearchModal<T extends SearchResult>({
 			if (e.key === cleanShortcut && (e.metaKey || e.ctrlKey)) {
 				e.preventDefault();
 
-				setOpen((open) => !open);
+				handleOpenChange(!openRef.current);
 			}
 		};
 
 		document.addEventListener("keydown", down);
 		return () => document.removeEventListener("keydown", down);
-	}, [keyboardShortcut]);
+	}, [keyboardShortcut, handleOpenChange]);
 
 	React.useEffect(() => {
 		if (!open) {
-			setQuery("");
 			setResults([]);
-			return;
 		}
 	}, [open]);
 
+	// Notify the parent of query changes. Deliberately NOT keyed on
+	// `externalResults`: searchFn may update URL-synced state, and re-invoking
+	// it whenever results change identity can restart an in-flight router
+	// navigation on every render (infinite loop on React Router/Next.js).
+	const hasExternalResults = externalResults !== undefined;
 	React.useEffect(() => {
 		if (!open) return;
 
-		// Always call searchFn to notify parent component of the search query
-		const searchResults = searchFn(debouncedQuery);
-
-		// If external results are provided, use them; otherwise use searchFn results
-		if (externalResults !== undefined) {
-			setResults(externalResults);
-		} else {
-			setResults(searchResults);
+		if (hasExternalResults) {
+			// External mode: only notify once the debounce settled on a value the
+			// parent hasn't seen, so opening the modal never overwrites the
+			// persisted query with the transient empty/seed value.
+			if (debouncedQuery !== query) return;
+			if (debouncedQuery === lastSentQueryRef.current) return;
+			lastSentQueryRef.current = debouncedQuery;
+			searchFn(debouncedQuery);
+			return;
 		}
-	}, [debouncedQuery, open, searchFn, externalResults]);
+
+		setResults(searchFn(debouncedQuery));
+	}, [debouncedQuery, query, open, searchFn, hasExternalResults]);
+
+	// Sync externally-provided (async) results into the list.
+	React.useEffect(() => {
+		if (!open || externalResults === undefined) return;
+		setResults(externalResults);
+	}, [open, externalResults]);
 
 	// Base button classes for better readability
 	const buttonClasses = [
@@ -108,7 +154,9 @@ export function SearchModal<T extends SearchResult>({
 
 	// Determine what to show based on state
 	const showEmpty = debouncedQuery && !isLoading && results.length === 0;
-	const currentEmptyMessage = isLoading ? "Searching..." : emptyMessage;
+	const currentEmptyMessage = isLoading
+		? t("blog.search.searching", "Searching...")
+		: resolvedEmptyMessage;
 
 	return (
 		<>
@@ -116,7 +164,7 @@ export function SearchModal<T extends SearchResult>({
 				data-testid="search-button"
 				type="button"
 				className={buttonClasses}
-				onClick={() => setOpen(true)}
+				onClick={() => handleOpenChange(true)}
 			>
 				<span className="flex grow items-center">
 					<SearchIcon
@@ -125,7 +173,7 @@ export function SearchModal<T extends SearchResult>({
 						aria-hidden="true"
 					/>
 					<span className="font-normal text-muted-foreground">
-						{buttonText}
+						{resolvedButtonText}
 					</span>
 				</span>
 				{keyboardShortcut && (
@@ -137,12 +185,12 @@ export function SearchModal<T extends SearchResult>({
 			<CommandDialog
 				data-testid="search-modal"
 				open={open}
-				onOpenChange={setOpen}
+				onOpenChange={handleOpenChange}
 				className={className}
 			>
 				<CommandInput
 					data-testid="search-input"
-					placeholder={placeholder}
+					placeholder={resolvedPlaceholder}
 					value={query}
 					onValueChange={setQuery}
 				/>

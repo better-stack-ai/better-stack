@@ -1,6 +1,10 @@
 "use client";
 
-import { useBasePath, usePluginOverrides } from "@btst/stack/context";
+import {
+	useBasePath,
+	usePluginOverrides,
+	useTranslate,
+} from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
 import type { SerializedPost } from "../../../types";
 import {
@@ -12,20 +16,19 @@ import {
 } from "@workspace/ui/components/carousel";
 import { PostCard as DefaultPostCard } from "./post-card";
 import { DefaultLink } from "./defaults";
-import { BLOG_LOCALIZATION } from "../../localization";
 
 interface RecentPostsCarouselProps {
 	posts: SerializedPost[];
 }
 
 export function RecentPostsCarousel({ posts }: RecentPostsCarouselProps) {
+	const t = useTranslate();
 	const { PostCard, Link, localization } = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
 	>("blog", {
 		PostCard: DefaultPostCard,
 		Link: DefaultLink,
-		localization: BLOG_LOCALIZATION,
 	});
 	const PostCardComponent = PostCard || DefaultPostCard;
 	const basePath = useBasePath();
@@ -36,13 +39,15 @@ export function RecentPostsCarousel({ posts }: RecentPostsCarouselProps) {
 					<div className="mt-4 py-4 w-full text-start border-t">
 						<div className="mt-4 flex items-center justify-between">
 							<h2 className="text-xl font-semibold">
-								{localization.BLOG_POST_KEEP_READING}
+								{localization?.BLOG_POST_KEEP_READING ??
+									t("blog.post.keepReading", "Keep Reading")}
 							</h2>
 							<Link
 								href={`${basePath}/blog`}
 								className="text-sm text-muted-foreground hover:text-foreground transition-colors"
 							>
-								{localization.BLOG_POST_VIEW_ALL}
+								{localization?.BLOG_POST_VIEW_ALL ??
+									t("blog.post.viewAll", "View all")}
 							</Link>
 						</div>
 					</div>

@@ -1,19 +1,8 @@
 import { throttle } from "../../utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-export function useDebounce<T>(value: T, delay?: number): T {
-	const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-	useEffect(() => {
-		const timer = setTimeout(() => setDebouncedValue(value), delay || 500);
-
-		return () => {
-			clearTimeout(timer);
-		};
-	}, [value, delay]);
-
-	return debouncedValue;
-}
+// Re-export the shared core hook — never copy it into a plugin.
+export { useDebounce } from "@btst/stack/plugins/client/hooks";
 
 export function useThrottle<T>(value: T, wait?: number): T {
 	const [throttledValue, setThrottledValue] = useState<T>(value);
