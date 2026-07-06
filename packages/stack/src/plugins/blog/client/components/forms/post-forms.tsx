@@ -65,6 +65,7 @@ const MarkdownEditor = lazy(() =>
 	})),
 );
 import {
+	CanAccess,
 	useNotify,
 	usePluginOverrides,
 	useTranslate,
@@ -715,59 +716,64 @@ const EditPostFormComponent = ({
 				setFeaturedImageUploading={setFeaturedImageUploading}
 				initialSlugTouched={!!post?.slug}
 			/>
-			<div className="w-full">
-				<AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-					<AlertDialogTrigger asChild>
-						<Button
-							variant="destructive"
-							type="button"
-							disabled={
-								resourceForm.isSubmitting ||
-								featuredImageUploading ||
-								isDeletingPost
-							}
-							className="mt-4"
-						>
-							{localization?.BLOG_FORMS_DELETE_BUTTON ??
-								t("blog.forms.deleteButton", "Delete Post")}
-						</Button>
-					</AlertDialogTrigger>
-					<AlertDialogContent>
-						<AlertDialogHeader>
-							<AlertDialogTitle>
-								{localization?.BLOG_FORMS_DELETE_DIALOG_TITLE ??
-									t("blog.forms.deleteDialogTitle", "Delete Post")}
-							</AlertDialogTitle>
-							<AlertDialogDescription>
-								{localization?.BLOG_FORMS_DELETE_DIALOG_DESCRIPTION ??
-									t(
-										"blog.forms.deleteDialogDescription",
-										"Are you sure you want to delete this post? This action cannot be undone.",
-									)}
-							</AlertDialogDescription>
-						</AlertDialogHeader>
-						<AlertDialogFooter>
-							<AlertDialogCancel disabled={isDeletingPost}>
-								{localization?.BLOG_FORMS_DELETE_DIALOG_CANCEL ??
-									t("blog.forms.deleteDialogCancel", "Cancel")}
-							</AlertDialogCancel>
-							<AlertDialogAction
-								onClick={(e) => {
-									e.preventDefault();
-									void handleDelete();
-								}}
-								disabled={isDeletingPost}
+			<CanAccess resource="blog:post" action="delete" params={{ id: post.id }}>
+				<div className="w-full">
+					<AlertDialog
+						open={deleteDialogOpen}
+						onOpenChange={setDeleteDialogOpen}
+					>
+						<AlertDialogTrigger asChild>
+							<Button
+								variant="destructive"
+								type="button"
+								disabled={
+									resourceForm.isSubmitting ||
+									featuredImageUploading ||
+									isDeletingPost
+								}
+								className="mt-4"
 							>
-								{isDeletingPost
-									? (localization?.BLOG_FORMS_DELETE_PENDING ??
-										t("blog.forms.deletePending", "Deleting..."))
-									: (localization?.BLOG_FORMS_DELETE_DIALOG_CONFIRM ??
-										t("blog.forms.deleteDialogConfirm", "Delete"))}
-							</AlertDialogAction>
-						</AlertDialogFooter>
-					</AlertDialogContent>
-				</AlertDialog>
-			</div>
+								{localization?.BLOG_FORMS_DELETE_BUTTON ??
+									t("blog.forms.deleteButton", "Delete Post")}
+							</Button>
+						</AlertDialogTrigger>
+						<AlertDialogContent>
+							<AlertDialogHeader>
+								<AlertDialogTitle>
+									{localization?.BLOG_FORMS_DELETE_DIALOG_TITLE ??
+										t("blog.forms.deleteDialogTitle", "Delete Post")}
+								</AlertDialogTitle>
+								<AlertDialogDescription>
+									{localization?.BLOG_FORMS_DELETE_DIALOG_DESCRIPTION ??
+										t(
+											"blog.forms.deleteDialogDescription",
+											"Are you sure you want to delete this post? This action cannot be undone.",
+										)}
+								</AlertDialogDescription>
+							</AlertDialogHeader>
+							<AlertDialogFooter>
+								<AlertDialogCancel disabled={isDeletingPost}>
+									{localization?.BLOG_FORMS_DELETE_DIALOG_CANCEL ??
+										t("blog.forms.deleteDialogCancel", "Cancel")}
+								</AlertDialogCancel>
+								<AlertDialogAction
+									onClick={(e) => {
+										e.preventDefault();
+										void handleDelete();
+									}}
+									disabled={isDeletingPost}
+								>
+									{isDeletingPost
+										? (localization?.BLOG_FORMS_DELETE_PENDING ??
+											t("blog.forms.deletePending", "Deleting..."))
+										: (localization?.BLOG_FORMS_DELETE_DIALOG_CONFIRM ??
+											t("blog.forms.deleteDialogConfirm", "Delete"))}
+								</AlertDialogAction>
+							</AlertDialogFooter>
+						</AlertDialogContent>
+					</AlertDialog>
+				</div>
+			</CanAccess>
 		</>
 	);
 };
