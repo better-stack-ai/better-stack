@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, type ComponentType } from "react";
-import { usePluginOverrides } from "@btst/stack/context";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import { SteppedAutoForm } from "@workspace/ui/components/auto-form/stepped-auto-form";
 import { buildFieldConfigFromJsonSchema } from "@workspace/ui/components/auto-form/helpers";
 import { formSchemaToZod } from "@workspace/ui/lib/schema-converter";
@@ -11,7 +11,6 @@ import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-
 
 import { useFormBySlug, useSubmitForm } from "../../hooks/form-builder-hooks";
 import type { FormBuilderPluginOverrides } from "../../overrides";
-import { FORM_BUILDER_LOCALIZATION } from "../../localization";
 import type { SerializedFormSubmission } from "../../../types";
 
 export interface FormRendererProps {
@@ -51,29 +50,44 @@ function DefaultLoadingComponent() {
 }
 
 function DefaultErrorComponent({ error }: { error: Error }) {
+	const t = useTranslate();
+	const { localization } =
+		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
+
 	return (
 		<div className="flex flex-col items-center justify-center py-8 text-center">
 			<div className="rounded-full bg-destructive/10 p-3 mb-4">
 				<AlertCircle className="h-6 w-6 text-destructive" />
 			</div>
 			<h3 className="text-lg font-medium text-foreground mb-2">
-				Failed to load form
+				{localization?.FORM_BUILDER_RENDERER_LOAD_FAILED ??
+					t("formBuilder.renderer.loadFailed", "Failed to load form")}
 			</h3>
 			<p className="text-sm text-muted-foreground max-w-sm">
-				{error.message || "An unexpected error occurred"}
+				{error.message ||
+					(localization?.FORM_BUILDER_RENDERER_UNEXPECTED_ERROR ??
+						t(
+							"formBuilder.renderer.unexpectedError",
+							"An unexpected error occurred",
+						))}
 			</p>
 		</div>
 	);
 }
 
 function DefaultSuccessComponent({ message }: { message: React.ReactNode }) {
+	const t = useTranslate();
+	const { localization } =
+		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
+
 	return (
 		<div className="flex flex-col items-center justify-center py-8 text-center">
 			<div className="rounded-full bg-green-100 dark:bg-green-900 p-3 mb-4">
 				<CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
 			</div>
 			<h3 className="text-lg font-medium text-foreground mb-2">
-				Form Submitted
+				{localization?.FORM_BUILDER_RENDERER_SUBMITTED_TITLE ??
+					t("formBuilder.renderer.submittedTitle", "Form Submitted")}
 			</h3>
 			<p className="text-sm text-muted-foreground max-w-sm">{message}</p>
 		</div>
@@ -109,15 +123,9 @@ export function FormRenderer({
 	ErrorComponent = DefaultErrorComponent,
 	className,
 }: FormRendererProps) {
+	const t = useTranslate();
 	const { fieldComponents: overrideFieldComponents, localization } =
-		usePluginOverrides<
-			FormBuilderPluginOverrides,
-			Partial<FormBuilderPluginOverrides>
-		>("form-builder", {
-			localization: FORM_BUILDER_LOCALIZATION,
-		});
-
-	const loc = localization || FORM_BUILDER_LOCALIZATION;
+		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
 
 	const { form, isLoading, error } = useFormBySlug(slug);
 	const submitMutation = useSubmitForm(slug);
@@ -164,7 +172,8 @@ export function FormRenderer({
 			const message =
 				propSuccessMessage ||
 				result.form.successMessage ||
-				"Thank you for your submission!";
+				(localization?.FORM_BUILDER_RENDERER_THANK_YOU ??
+					t("formBuilder.renderer.thankYou", "Thank you for your submission!"));
 			setFinalSuccessMessage(message as string);
 			setSubmitted(true);
 
@@ -203,7 +212,14 @@ export function FormRenderer({
 	if (!form) {
 		return (
 			<div className={className}>
-				<ErrorComponent error={new Error("Form not found")} />
+				<ErrorComponent
+					error={
+						new Error(
+							localization?.FORM_BUILDER_RENDERER_NOT_FOUND ??
+								t("formBuilder.renderer.notFound", "Form not found"),
+						)
+					}
+				/>
 			</div>
 		);
 	}
@@ -213,7 +229,15 @@ export function FormRenderer({
 		return (
 			<div className={className}>
 				<ErrorComponent
-					error={new Error("This form is not currently accepting submissions")}
+					error={
+						new Error(
+							localization?.FORM_BUILDER_RENDERER_INACTIVE ??
+								t(
+									"formBuilder.renderer.inactive",
+									"This form is not currently accepting submissions",
+								),
+						)
+					}
 				/>
 			</div>
 		);
@@ -223,7 +247,17 @@ export function FormRenderer({
 	if (!zodSchema) {
 		return (
 			<div className={className}>
-				<ErrorComponent error={new Error("Failed to parse form schema")} />
+				<ErrorComponent
+					error={
+						new Error(
+							localization?.FORM_BUILDER_RENDERER_SCHEMA_ERROR ??
+								t(
+									"formBuilder.renderer.schemaError",
+									"Failed to parse form schema",
+								),
+						)
+					}
+				/>
 			</div>
 		);
 	}
@@ -246,7 +280,11 @@ export function FormRenderer({
 				fieldConfig={fieldConfig}
 				onSubmit={(values) => handleSubmit(values as Record<string, unknown>)}
 				isSubmitting={submitMutation.isPending}
-				submitButtonText={submitButtonText || loc.FORM_BUILDER_BUTTON_SUBMIT}
+				submitButtonText={
+					submitButtonText ||
+					(localization?.FORM_BUILDER_BUTTON_SUBMIT ??
+						t("formBuilder.common.buttonSubmit", "Submit"))
+				}
 			/>
 		</div>
 	);

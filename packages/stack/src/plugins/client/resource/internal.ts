@@ -101,8 +101,9 @@ export function useResourceMutationForDef(
 				});
 			}
 
-			// Refresh server-side cache (e.g. Next.js router cache)
-			if (refresh) {
+			// Refresh server-side cache (e.g. Next.js router cache) unless the
+			// mutation opts out (public mutations whose success UI is client state)
+			if (refresh && def.refresh !== false) {
 				await refresh();
 			}
 		},

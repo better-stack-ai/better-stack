@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { usePluginOverrides, useBasePath } from "@btst/stack/context";
+import {
+	useNotify,
+	usePluginOverrides,
+	useBasePath,
+	useTranslate,
+} from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -13,17 +18,11 @@ import {
 	SelectValue,
 } from "@workspace/ui/components/select";
 import { ArrowLeft, Save } from "lucide-react";
-import { toast } from "sonner";
 import { FormBuilder } from "@workspace/ui/components/form-builder";
 import type { JSONSchema } from "@workspace/ui/components/form-builder/types";
 
-import {
-	useSuspenseFormById,
-	useCreateForm,
-	useUpdateForm,
-} from "../../hooks/form-builder-hooks";
+import { useSuspenseFormById, useFormBuilderForm } from "../../hooks";
 import type { FormBuilderPluginOverrides } from "../../overrides";
-import { FORM_BUILDER_LOCALIZATION } from "../../localization";
 import { slugify } from "../../../utils";
 import type { SerializedForm } from "../../../types";
 
@@ -65,22 +64,23 @@ interface FormBuilderPageContentProps {
 	existingForm?: SerializedForm | null;
 }
 
+interface FormBuilderFormValues {
+	name: string;
+	slug: string;
+	status: "active" | "inactive" | "archived";
+	schema: string;
+}
+
 function FormBuilderPageContent({
 	id,
 	existingForm,
 }: FormBuilderPageContentProps) {
-	const { navigate, Link, localization } = usePluginOverrides<
-		FormBuilderPluginOverrides,
-		Partial<FormBuilderPluginOverrides>
-	>("form-builder", {
-		localization: FORM_BUILDER_LOCALIZATION,
-	});
+	const t = useTranslate();
+	const notify = useNotify();
+	const { Link, localization } =
+		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
 	const basePath = useBasePath();
 
-	const createMutation = useCreateForm();
-	const updateMutation = useUpdateForm();
-
-	const loc = localization || FORM_BUILDER_LOCALIZATION;
 	const LinkComponent = Link || "a";
 
 	// Form state
@@ -113,54 +113,87 @@ function FormBuilderPageContent({
 		setSchema(newSchema);
 	}, []);
 
+	// Core resource form: submits the right mutation, awaits invalidation,
+	// notifies success/error via useNotify(), redirects after create, and
+	// exposes server validation issues as fieldErrors for inline display.
+	const resourceForm = useFormBuilderForm<FormBuilderFormValues>({
+		action: id ? "edit" : "create",
+		record: id ? (existingForm ?? null) : null,
+		successMessage: (_result, action) =>
+			action === "create"
+				? (localization?.FORM_BUILDER_TOAST_CREATE_SUCCESS ??
+					t("formBuilder.toasts.createSuccess", "Form created successfully"))
+				: (localization?.FORM_BUILDER_TOAST_UPDATE_SUCCESS ??
+					t("formBuilder.toasts.updateSuccess", "Form updated successfully")),
+		errorMessage: (error) =>
+			error.statusCode === 409
+				? (localization?.FORM_BUILDER_TOAST_DUPLICATE_SLUG ??
+					t(
+						"formBuilder.toasts.duplicateSlug",
+						"A form with this slug already exists",
+					))
+				: (localization?.FORM_BUILDER_TOAST_ERROR ??
+					t(
+						"formBuilder.toasts.error",
+						"An error occurred. Please try again.",
+					)),
+		toCreateVars: (values) => values,
+		toUpdateVars: (values) => ({
+			id: id ?? "",
+			data: {
+				name: values.name,
+				schema: values.schema,
+				status: values.status,
+			},
+		}),
+		redirect: (result, action) =>
+			action === "create" && result
+				? `${basePath}/forms/${result.id}/edit`
+				: false,
+	});
+
 	const handleSave = async () => {
 		if (!name.trim()) {
-			toast.error("Name is required");
+			notify.error(
+				localization?.FORM_BUILDER_TOAST_NAME_REQUIRED ??
+					t("formBuilder.toasts.nameRequired", "Name is required"),
+			);
 			return;
 		}
 		if (!slug.trim()) {
-			toast.error("Slug is required");
+			notify.error(
+				localization?.FORM_BUILDER_TOAST_SLUG_REQUIRED ??
+					t("formBuilder.toasts.slugRequired", "Slug is required"),
+			);
 			return;
 		}
 		if (!schema) {
-			toast.error("Please add at least one field to the form");
+			notify.error(
+				localization?.FORM_BUILDER_TOAST_SCHEMA_REQUIRED ??
+					t(
+						"formBuilder.toasts.schemaRequired",
+						"Please add at least one field to the form",
+					),
+			);
 			return;
 		}
 
-		try {
-			const schemaStr = JSON.stringify(schema);
-
-			if (id) {
-				await updateMutation.mutateAsync({
-					id,
-					data: {
-						name,
-						schema: schemaStr,
-						status,
-					},
-				});
-				toast.success(loc.FORM_BUILDER_TOAST_UPDATE_SUCCESS);
-			} else {
-				const newForm = await createMutation.mutateAsync({
-					name,
-					slug,
-					schema: schemaStr,
-					status,
-				});
-				toast.success(loc.FORM_BUILDER_TOAST_CREATE_SUCCESS);
-				navigate?.(`${basePath}/forms/${newForm.id}/edit`);
-			}
-		} catch (error) {
-			const message = error instanceof Error ? error.message : "Unknown error";
-			if (message.includes("slug already exists")) {
-				toast.error(loc.FORM_BUILDER_TOAST_DUPLICATE_SLUG);
-			} else {
-				toast.error(loc.FORM_BUILDER_TOAST_ERROR);
-			}
-		}
+		// resourceForm.submit never throws: success notifies + redirects via
+		// the config above; errors land on resourceForm.fieldErrors or notify.
+		await resourceForm.submit({
+			name,
+			slug,
+			status,
+			schema: JSON.stringify(schema),
+		});
 	};
 
-	const isSaving = createMutation.isPending || updateMutation.isPending;
+	const isSaving = resourceForm.isSubmitting;
+	const fieldError = (field: string): string | undefined => {
+		const error = resourceForm.fieldErrors[field];
+		if (!error) return undefined;
+		return Array.isArray(error) ? error[0] : error;
+	};
 
 	return (
 		<div className="flex h-full flex-col" data-testid="form-builder-page">
@@ -174,20 +207,28 @@ function FormBuilderPageContent({
 
 				<div className="flex flex-col gap-1">
 					<Label htmlFor="form-name" className="text-xs text-muted-foreground">
-						{loc.FORM_BUILDER_LABEL_NAME}
+						{localization?.FORM_BUILDER_LABEL_NAME ??
+							t("formBuilder.common.labelName", "Name")}
 					</Label>
 					<Input
 						id="form-name"
 						value={name}
 						onChange={(e) => setName(e.target.value)}
-						placeholder={loc.FORM_BUILDER_EDITOR_NAME_PLACEHOLDER}
+						placeholder={
+							localization?.FORM_BUILDER_EDITOR_NAME_PLACEHOLDER ??
+							t("formBuilder.editor.namePlaceholder", "Enter form name")
+						}
 						className="h-8 w-48"
 					/>
+					{fieldError("name") && (
+						<p className="text-xs text-destructive">{fieldError("name")}</p>
+					)}
 				</div>
 
 				<div className="flex flex-col gap-1">
 					<Label htmlFor="form-slug" className="text-xs text-muted-foreground">
-						{loc.FORM_BUILDER_LABEL_SLUG}
+						{localization?.FORM_BUILDER_LABEL_SLUG ??
+							t("formBuilder.common.labelSlug", "Slug")}
 					</Label>
 					<Input
 						id="form-slug"
@@ -196,10 +237,16 @@ function FormBuilderPageContent({
 							setSlug(e.target.value);
 							setAutoSlug(false);
 						}}
-						placeholder={loc.FORM_BUILDER_EDITOR_SLUG_PLACEHOLDER}
+						placeholder={
+							localization?.FORM_BUILDER_EDITOR_SLUG_PLACEHOLDER ??
+							t("formBuilder.editor.slugPlaceholder", "enter-form-slug")
+						}
 						className="h-8 w-48 font-mono text-sm"
 						disabled={!!id}
 					/>
+					{fieldError("slug") && (
+						<p className="text-xs text-destructive">{fieldError("slug")}</p>
+					)}
 				</div>
 
 				<div className="flex flex-col gap-1">
@@ -207,7 +254,8 @@ function FormBuilderPageContent({
 						htmlFor="form-status"
 						className="text-xs text-muted-foreground"
 					>
-						{loc.FORM_BUILDER_LABEL_STATUS}
+						{localization?.FORM_BUILDER_LABEL_STATUS ??
+							t("formBuilder.common.labelStatus", "Status")}
 					</Label>
 					<Select
 						value={status}
@@ -218,13 +266,16 @@ function FormBuilderPageContent({
 						</SelectTrigger>
 						<SelectContent>
 							<SelectItem value="active">
-								{loc.FORM_BUILDER_STATUS_ACTIVE}
+								{localization?.FORM_BUILDER_STATUS_ACTIVE ??
+									t("formBuilder.common.statusActive", "Active")}
 							</SelectItem>
 							<SelectItem value="inactive">
-								{loc.FORM_BUILDER_STATUS_INACTIVE}
+								{localization?.FORM_BUILDER_STATUS_INACTIVE ??
+									t("formBuilder.common.statusInactive", "Inactive")}
 							</SelectItem>
 							<SelectItem value="archived">
-								{loc.FORM_BUILDER_STATUS_ARCHIVED}
+								{localization?.FORM_BUILDER_STATUS_ARCHIVED ??
+									t("formBuilder.common.statusArchived", "Archived")}
 							</SelectItem>
 						</SelectContent>
 					</Select>
@@ -234,10 +285,13 @@ function FormBuilderPageContent({
 					<Button onClick={handleSave} disabled={isSaving}>
 						<Save className="mr-2 h-4 w-4" />
 						{isSaving
-							? loc.FORM_BUILDER_STATUS_SAVING
+							? (localization?.FORM_BUILDER_STATUS_SAVING ??
+								t("formBuilder.common.statusSaving", "Saving..."))
 							: id
-								? loc.FORM_BUILDER_BUTTON_SAVE
-								: loc.FORM_BUILDER_BUTTON_CREATE}
+								? (localization?.FORM_BUILDER_BUTTON_SAVE ??
+									t("formBuilder.common.buttonSave", "Save"))
+								: (localization?.FORM_BUILDER_BUTTON_CREATE ??
+									t("formBuilder.common.buttonCreate", "Create"))}
 					</Button>
 				</div>
 			</div>

@@ -104,6 +104,12 @@ export interface ResourceMutationDef<TVars = any, TResult = unknown> {
 		query?: string;
 		args: (result: TResult) => readonly unknown[] | null;
 	};
+	/**
+	 * Whether to call the router `refresh` override after success (default
+	 * `true`). Set `false` for mutations that must not reload server-rendered
+	 * state — e.g. public submissions whose success UI lives in client state.
+	 */
+	refresh?: boolean;
 }
 
 /** Declaration for one resource: its queries and (optionally) mutations. */

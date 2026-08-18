@@ -44,6 +44,64 @@ test.describe("Form Builder Plugin - Admin Pages", () => {
 		);
 	});
 
+	test("search filters the forms list and syncs the URL", async ({
+		page,
+		request,
+	}) => {
+		const errors: string[] = [];
+		page.on("console", (msg) => {
+			if (msg.type() === "error") errors.push(msg.text());
+		});
+
+		// Create one form that matches the search and one that doesn't
+		const targetSlug = `search-target-form-${testRunId}`;
+		const otherSlug = `search-other-form-${testRunId}`;
+		const schema = JSON.stringify({
+			type: "object",
+			properties: { name: { type: "string" } },
+		});
+		for (const [slug, name] of [
+			[targetSlug, `Searchable Form ${testRunId}`],
+			[otherSlug, `Unrelated Form ${testRunId}`],
+		]) {
+			const response = await request.post("/api/data/forms", {
+				headers: { "content-type": "application/json" },
+				data: { name, slug, schema, status: "active" },
+			});
+			expect(
+				response.ok(),
+				`Form creation failed with status ${response.status()}`,
+			).toBe(true);
+		}
+
+		await page.goto("/pages/forms", { waitUntil: "networkidle" });
+		await expect(page.locator('[data-testid="form-list-page"]')).toBeVisible();
+
+		// Type into the search box; the query is debounced into the URL
+		await page
+			.locator('[data-testid="form-builder-list-search"]')
+			.fill(targetSlug);
+		await expect(page).toHaveURL(new RegExp(`q=${targetSlug}`), {
+			timeout: 10000,
+		});
+
+		// Only the matching form remains in the table
+		await expect(page.locator(`tr:has-text("${targetSlug}")`)).toBeVisible({
+			timeout: 30000,
+		});
+		await expect(page.locator(`tr:has-text("${otherSlug}")`)).not.toBeVisible();
+
+		// Clearing the search restores the full list
+		await page.locator('[data-testid="form-builder-list-search"]').fill("");
+		await expect(page.locator(`tr:has-text("${otherSlug}")`)).toBeVisible({
+			timeout: 30000,
+		});
+
+		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
+			[],
+		);
+	});
+
 	test("new form page renders with form builder", async ({ page }) => {
 		const errors: string[] = [];
 		page.on("console", (msg) => {

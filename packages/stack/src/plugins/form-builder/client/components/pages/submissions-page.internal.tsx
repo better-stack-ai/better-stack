@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { usePluginOverrides, useBasePath } from "@btst/stack/context";
+import {
+	CanAccess,
+	useNotify,
+	usePluginOverrides,
+	useBasePath,
+	useTranslate,
+} from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import {
 	Table,
@@ -28,15 +34,13 @@ import {
 	DialogTitle,
 } from "@workspace/ui/components/dialog";
 import { ArrowLeft, Trash2, Eye } from "lucide-react";
-import { toast } from "sonner";
 
 import {
 	useSuspenseFormById,
 	useSuspenseSubmissions,
 	useDeleteSubmission,
-} from "../../hooks/form-builder-hooks";
+} from "../../hooks";
 import type { FormBuilderPluginOverrides } from "../../overrides";
-import { FORM_BUILDER_LOCALIZATION } from "../../localization";
 import type { SerializedFormSubmissionWithData } from "../../../types";
 import { PageWrapper } from "../shared/page-wrapper";
 import { EmptyState } from "../shared/empty-state";
@@ -47,16 +51,14 @@ export interface SubmissionsPageProps {
 }
 
 export function SubmissionsPage({ formId }: SubmissionsPageProps) {
-	const { navigate, Link, localization } = usePluginOverrides<
-		FormBuilderPluginOverrides,
-		Partial<FormBuilderPluginOverrides>
-	>("form-builder", {
-		localization: FORM_BUILDER_LOCALIZATION,
-	});
+	const t = useTranslate();
+	const notify = useNotify();
+	const { Link, localization } =
+		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
 	const basePath = useBasePath();
 
 	const { form } = useSuspenseFormById(formId);
-	const { submissions, total, hasMore, isLoadingMore, loadMore, refetch } =
+	const { submissions, total, hasMore, isLoadingMore, loadMore } =
 		useSuspenseSubmissions(formId);
 	const deleteMutation = useDeleteSubmission(formId);
 
@@ -64,7 +66,6 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 	const [viewSubmission, setViewSubmission] =
 		useState<SerializedFormSubmissionWithData | null>(null);
 
-	const loc = localization || FORM_BUILDER_LOCALIZATION;
 	const LinkComponent = Link || "a";
 
 	const handleDelete = async () => {
@@ -72,12 +73,21 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 
 		try {
 			await deleteMutation.mutateAsync(deleteId);
-			toast.success(loc.FORM_BUILDER_TOAST_SUBMISSION_DELETED);
-			setDeleteId(null);
-			await refetch();
-		} catch (error) {
-			toast.error(loc.FORM_BUILDER_TOAST_ERROR);
+		} catch {
+			notify.error(
+				localization?.FORM_BUILDER_TOAST_ERROR ??
+					t("formBuilder.toasts.error", "An error occurred. Please try again."),
+			);
+			return;
 		}
+		notify.success(
+			localization?.FORM_BUILDER_TOAST_SUBMISSION_DELETED ??
+				t(
+					"formBuilder.toasts.submissionDeleted",
+					"Submission deleted successfully",
+				),
+		);
+		setDeleteId(null);
 	};
 
 	const formatSubmissionData = (data: Record<string, unknown>) => {
@@ -104,18 +114,30 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 					</Button>
 					<div>
 						<h1 className="text-2xl font-bold">
-							{form?.name || loc.FORM_BUILDER_SUBMISSIONS_TITLE}
+							{form?.name ||
+								(localization?.FORM_BUILDER_SUBMISSIONS_TITLE ??
+									t("formBuilder.submissions.title", "Submissions"))}
 						</h1>
 						<p className="text-muted-foreground">
-							{loc.FORM_BUILDER_SUBMISSIONS_SUBTITLE}
+							{localization?.FORM_BUILDER_SUBMISSIONS_SUBTITLE ??
+								t("formBuilder.submissions.subtitle", "View form submissions")}
 						</p>
 					</div>
 				</div>
 
 				{submissions.length === 0 ? (
 					<EmptyState
-						title={loc.FORM_BUILDER_SUBMISSIONS_EMPTY}
-						description={loc.FORM_BUILDER_SUBMISSIONS_EMPTY_DESCRIPTION}
+						title={
+							localization?.FORM_BUILDER_SUBMISSIONS_EMPTY ??
+							t("formBuilder.submissions.empty", "No submissions yet")
+						}
+						description={
+							localization?.FORM_BUILDER_SUBMISSIONS_EMPTY_DESCRIPTION ??
+							t(
+								"formBuilder.submissions.emptyDescription",
+								"Submissions will appear here when users submit this form.",
+							)
+						}
 					/>
 				) : (
 					<>
@@ -124,19 +146,30 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 								<TableHeader>
 									<TableRow>
 										<TableHead className="w-24">
-											{loc.FORM_BUILDER_SUBMISSIONS_COLUMN_ID}
+											{localization?.FORM_BUILDER_SUBMISSIONS_COLUMN_ID ??
+												t("formBuilder.submissions.columnId", "ID")}
 										</TableHead>
 										<TableHead>
-											{loc.FORM_BUILDER_SUBMISSIONS_COLUMN_DATA}
+											{localization?.FORM_BUILDER_SUBMISSIONS_COLUMN_DATA ??
+												t("formBuilder.submissions.columnData", "Data")}
 										</TableHead>
 										<TableHead>
-											{loc.FORM_BUILDER_SUBMISSIONS_COLUMN_SUBMITTED_AT}
+											{localization?.FORM_BUILDER_SUBMISSIONS_COLUMN_SUBMITTED_AT ??
+												t(
+													"formBuilder.submissions.columnSubmittedAt",
+													"Submitted",
+												)}
 										</TableHead>
 										<TableHead>
-											{loc.FORM_BUILDER_SUBMISSIONS_COLUMN_IP_ADDRESS}
+											{localization?.FORM_BUILDER_SUBMISSIONS_COLUMN_IP_ADDRESS ??
+												t(
+													"formBuilder.submissions.columnIpAddress",
+													"IP Address",
+												)}
 										</TableHead>
 										<TableHead className="w-24">
-											{loc.FORM_BUILDER_SUBMISSIONS_COLUMN_ACTIONS}
+											{localization?.FORM_BUILDER_SUBMISSIONS_COLUMN_ACTIONS ??
+												t("formBuilder.submissions.columnActions", "Actions")}
 										</TableHead>
 									</TableRow>
 								</TableHeader>
@@ -163,17 +196,32 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 														onClick={() => setViewSubmission(sub)}
 													>
 														<Eye className="h-4 w-4" />
-														<span className="sr-only">View</span>
+														<span className="sr-only">
+															{localization?.FORM_BUILDER_SUBMISSIONS_ACTION_VIEW ??
+																t("formBuilder.submissions.actionView", "View")}
+														</span>
 													</Button>
-													<Button
-														variant="ghost"
-														size="icon"
-														className="text-destructive"
-														onClick={() => setDeleteId(sub.id)}
+													<CanAccess
+														resource="form-builder:submission"
+														action="delete"
+														params={{ formId, id: sub.id }}
 													>
-														<Trash2 className="h-4 w-4" />
-														<span className="sr-only">Delete</span>
-													</Button>
+														<Button
+															variant="ghost"
+															size="icon"
+															className="text-destructive"
+															onClick={() => setDeleteId(sub.id)}
+														>
+															<Trash2 className="h-4 w-4" />
+															<span className="sr-only">
+																{localization?.FORM_BUILDER_SUBMISSIONS_ACTION_DELETE ??
+																	t(
+																		"formBuilder.submissions.actionDelete",
+																		"Delete",
+																	)}
+															</span>
+														</Button>
+													</CanAccess>
 												</div>
 											</TableCell>
 										</TableRow>
@@ -188,6 +236,20 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 							hasMore={hasMore}
 							isLoadingMore={isLoadingMore}
 							onLoadMore={loadMore}
+							labels={{
+								showing:
+									localization?.FORM_BUILDER_LIST_PAGINATION_SHOWING ??
+									t(
+										"formBuilder.list.paginationShowing",
+										"Showing {count} of {total}",
+									),
+								next:
+									localization?.FORM_BUILDER_LIST_PAGINATION_NEXT ??
+									t("formBuilder.list.paginationNext", "Load More"),
+								loading:
+									localization?.FORM_BUILDER_STATUS_LOADING ??
+									t("formBuilder.common.statusLoading", "Loading..."),
+							}}
 						/>
 					</>
 				)}
@@ -200,36 +262,57 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 			>
 				<DialogContent className="max-w-2xl max-h-[80vh] overflow-auto">
 					<DialogHeader>
-						<DialogTitle>Submission Details</DialogTitle>
+						<DialogTitle>
+							{localization?.FORM_BUILDER_SUBMISSIONS_DETAILS_TITLE ??
+								t("formBuilder.submissions.detailsTitle", "Submission Details")}
+						</DialogTitle>
 					</DialogHeader>
 					{viewSubmission && (
 						<div className="space-y-4">
 							<div className="grid grid-cols-2 gap-4 text-sm">
 								<div>
-									<span className="text-muted-foreground">ID:</span>
+									<span className="text-muted-foreground">
+										{localization?.FORM_BUILDER_SUBMISSIONS_FIELD_ID ??
+											t("formBuilder.submissions.fieldId", "ID:")}
+									</span>
 									<p className="font-mono truncate">{viewSubmission.id}</p>
 								</div>
 								<div>
-									<span className="text-muted-foreground">Submitted:</span>
+									<span className="text-muted-foreground">
+										{localization?.FORM_BUILDER_SUBMISSIONS_FIELD_SUBMITTED ??
+											t("formBuilder.submissions.fieldSubmitted", "Submitted:")}
+									</span>
 									<p className="truncate">
 										{new Date(viewSubmission.submittedAt).toLocaleString()}
 									</p>
 								</div>
 								<div>
-									<span className="text-muted-foreground">IP Address:</span>
+									<span className="text-muted-foreground">
+										{localization?.FORM_BUILDER_SUBMISSIONS_FIELD_IP ??
+											t("formBuilder.submissions.fieldIp", "IP Address:")}
+									</span>
 									<p className="font-mono truncate">
 										{viewSubmission.ipAddress || "-"}
 									</p>
 								</div>
 								<div>
-									<span className="text-muted-foreground">User Agent:</span>
+									<span className="text-muted-foreground">
+										{localization?.FORM_BUILDER_SUBMISSIONS_FIELD_USER_AGENT ??
+											t(
+												"formBuilder.submissions.fieldUserAgent",
+												"User Agent:",
+											)}
+									</span>
 									<p className="text-xs truncate">
 										{viewSubmission.userAgent || "-"}
 									</p>
 								</div>
 							</div>
 							<div>
-								<span className="text-muted-foreground text-sm">Data:</span>
+								<span className="text-muted-foreground text-sm">
+									{localization?.FORM_BUILDER_SUBMISSIONS_FIELD_DATA ??
+										t("formBuilder.submissions.fieldData", "Data:")}
+								</span>
 								<pre className="mt-2 p-4 bg-muted rounded-lg text-sm overflow-auto">
 									{JSON.stringify(viewSubmission.parsedData, null, 2)}
 								</pre>
@@ -243,22 +326,32 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 			<AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Delete Submission</AlertDialogTitle>
+						<AlertDialogTitle>
+							{localization?.FORM_BUILDER_SUBMISSIONS_DELETE_TITLE ??
+								t("formBuilder.submissions.deleteTitle", "Delete Submission")}
+						</AlertDialogTitle>
 						<AlertDialogDescription>
-							{loc.FORM_BUILDER_SUBMISSIONS_DELETE_CONFIRM}
+							{localization?.FORM_BUILDER_SUBMISSIONS_DELETE_CONFIRM ??
+								t(
+									"formBuilder.submissions.deleteConfirm",
+									"Are you sure you want to delete this submission?",
+								)}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>
-							{loc.FORM_BUILDER_BUTTON_CANCEL}
+							{localization?.FORM_BUILDER_BUTTON_CANCEL ??
+								t("formBuilder.common.buttonCancel", "Cancel")}
 						</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={handleDelete}
 							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
 						>
 							{deleteMutation.isPending
-								? loc.FORM_BUILDER_STATUS_DELETING
-								: loc.FORM_BUILDER_BUTTON_DELETE}
+								? (localization?.FORM_BUILDER_STATUS_DELETING ??
+									t("formBuilder.common.statusDeleting", "Deleting..."))
+								: (localization?.FORM_BUILDER_BUTTON_DELETE ??
+									t("formBuilder.common.buttonDelete", "Delete"))}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

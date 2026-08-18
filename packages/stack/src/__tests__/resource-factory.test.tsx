@@ -102,6 +102,15 @@ const resources = {
 				select: (data: any) => data as { success: boolean },
 				invalidates: ["items"],
 			},
+			// Public-style mutation: success UI is client state, so it must not
+			// trigger the router refresh (a full reload on public pages)
+			submit: {
+				path: "@post/items/:id/submit",
+				method: "POST" as const,
+				input: (vars: { id: string }) => ({ params: { id: vars.id } }),
+				select: (data: any) => data as { success: boolean },
+				refresh: false,
+			},
 		},
 	},
 } satisfies ResourcesDeclaration;
@@ -514,6 +523,24 @@ describe("createResource hooks", () => {
 
 		expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true);
 		expect(queryClient.getQueryState(detailKey)?.isInvalidated).toBe(true);
+	});
+
+	it("mutations with refresh: false skip the router refresh", async () => {
+		fetchMock.mockResolvedValue(jsonResponse({ success: true }));
+
+		let captured: any;
+		function Probe() {
+			captured = items.items.submit.use();
+			return null;
+		}
+		await render(<Probe />);
+
+		await act(async () => {
+			await captured.mutateAsync({ id: "7" });
+		});
+
+		expect(captured.isSuccess).toBe(true);
+		expect(refresh).not.toHaveBeenCalled();
 	});
 
 	it("mutations reject with a normalized StackError", async () => {

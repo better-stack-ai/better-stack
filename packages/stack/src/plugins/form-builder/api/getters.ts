@@ -1,4 +1,5 @@
 import type { DBAdapter as Adapter } from "@btst/db";
+import { DEFAULT_MAX_PAGE_SIZE } from "../schemas";
 import type {
 	Form,
 	FormSubmission,
@@ -60,8 +61,17 @@ export function serializeFormSubmissionWithData(
 	};
 }
 
+/** Case-insensitive match of a search term against a form's name and slug. */
+function formMatchesSearch(form: SerializedForm, searchLower: string): boolean {
+	return (
+		form.name.toLowerCase().includes(searchLower) ||
+		form.slug.toLowerCase().includes(searchLower)
+	);
+}
+
 /**
- * Retrieve all forms with optional status filter and pagination.
+ * Retrieve all forms with optional status filter, pagination, and free-text
+ * search.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
  *
  * @remarks **Security:** Authorization hooks (e.g. `onBeforeListForms`) are NOT
@@ -69,11 +79,17 @@ export function serializeFormSubmissionWithData(
  * invoking this function.
  *
  * @param adapter - The database adapter
- * @param params - Optional filter/pagination parameters
+ * @param params - Optional filter/pagination parameters. `search` matches
+ * case-insensitively against form names and slugs.
  */
 export async function getAllForms(
 	adapter: Adapter,
-	params?: { status?: string; limit?: number; offset?: number },
+	params?: {
+		status?: string;
+		limit?: number;
+		offset?: number;
+		search?: string;
+	},
 ): Promise<{
 	items: SerializedForm[];
 	total: number;
@@ -94,23 +110,54 @@ export async function getAllForms(
 		});
 	}
 
+	// Free-text search stays in-memory (the adapter contract only exposes
+	// equality filters here); when searching, pagination happens after the
+	// in-memory pass so `total` reflects the filtered set. The DB scan is
+	// capped at DEFAULT_MAX_PAGE_SIZE to bound memory use; forms beyond the
+	// cap are not searched.
+	const search = params?.search?.trim();
+	const needsInMemoryFilter = !!search;
+
 	// TODO: remove cast once @btst/db types expose adapter.count()
-	const total: number = await adapter.count({
-		model: "form",
-		where: whereConditions.length > 0 ? whereConditions : undefined,
-	});
+	const dbTotal: number | undefined = !needsInMemoryFilter
+		? await adapter.count({
+				model: "form",
+				where: whereConditions.length > 0 ? whereConditions : undefined,
+			})
+		: undefined;
 
 	const forms = await adapter.findMany<Form>({
 		model: "form",
 		where: whereConditions.length > 0 ? whereConditions : undefined,
-		limit: params?.limit,
-		offset: params?.offset,
+		limit: !needsInMemoryFilter ? params?.limit : DEFAULT_MAX_PAGE_SIZE,
+		offset: !needsInMemoryFilter ? params?.offset : undefined,
 		sortBy: { field: "createdAt", direction: "desc" },
 	});
 
+	let result = forms.map(serializeForm);
+
+	if (needsInMemoryFilter) {
+		const searchLower = search.toLowerCase();
+		result = result.filter((form) => formMatchesSearch(form, searchLower));
+
+		const total = result.length;
+		const offset = params?.offset ?? 0;
+		const limit = params?.limit;
+		result = result.slice(
+			offset,
+			limit !== undefined ? offset + limit : undefined,
+		);
+		return {
+			items: result,
+			total,
+			limit: params?.limit,
+			offset: params?.offset,
+		};
+	}
+
 	return {
-		items: forms.map(serializeForm),
-		total,
+		items: result,
+		total: dbTotal ?? result.length,
 		limit: params?.limit,
 		offset: params?.offset,
 	};
