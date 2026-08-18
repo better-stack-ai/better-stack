@@ -595,14 +595,19 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 				},
 				async (ctx) => {
 					const { typeSlug } = ctx.params;
-					const { slug, limit, offset } = ctx.query;
+					const { slug, search, limit, offset } = ctx.query;
 
 					const contentType = await getContentType(typeSlug);
 					if (!contentType) {
 						throw ctx.error(404, { message: "Content type not found" });
 					}
 
-					return getAllContentItems(adapter, typeSlug, { slug, limit, offset });
+					return getAllContentItems(adapter, typeSlug, {
+						slug,
+						search,
+						limit,
+						offset,
+					});
 				},
 			);
 
@@ -680,9 +685,12 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					const zodSchema = getContentTypeZodSchema(contentType);
 					const validation = zodSchema.safeParse(dataWithResolvedRelations);
 					if (!validation.success) {
+						// `issues` matches the shape better-call emits for body
+						// validation errors, so clients get field-level errors
+						// (StackError.errors) for inline form display.
 						throw ctx.error(400, {
 							message: "Validation failed",
-							errors: validation.error.issues,
+							issues: validation.error.issues,
 						});
 					}
 
@@ -837,9 +845,10 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 						const zodSchema = getContentTypeZodSchema(contentType);
 						const validation = zodSchema.safeParse(mergedData);
 						if (!validation.success) {
+							// See the create endpoint: `issues` → StackError.errors
 							throw ctx.error(400, {
 								message: "Validation failed",
-								errors: validation.error.issues,
+								issues: validation.error.issues,
 							});
 						}
 						validatedData = validation.data as Record<string, unknown>;

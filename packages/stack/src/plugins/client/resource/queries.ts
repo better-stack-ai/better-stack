@@ -30,8 +30,10 @@ export interface ResourceQueryDef<
 	TArgs extends readonly unknown[] = readonly any[],
 	TData = unknown,
 > {
-	/** better-call endpoint path, e.g. `"/posts"` */
+	/** better-call endpoint path, e.g. `"/posts"` or `"/content/:typeSlug"` */
 	path: string;
+	/** Maps hook args to the endpoint path params (for `:param` segments) */
+	params?: (...args: TArgs) => Record<string, string>;
 	/** Maps hook args to the HTTP query object */
 	query?: (...args: TArgs) => Record<string, unknown> | undefined;
 	/**
@@ -54,6 +56,17 @@ export interface ResourceQueryDef<
 	 * (default 10). A function form derives it from the hook args.
 	 */
 	pageSize?: number | ((...args: TArgs) => number);
+	/**
+	 * Custom `getNextPageParam` for infinite queries whose pages are not
+	 * plain item arrays (e.g. `{ items, total }` envelopes). Overrides the
+	 * default page-size heuristic. Return `undefined` when there is no
+	 * next page.
+	 */
+	nextPageParam?: (
+		lastPage: TData,
+		allPages: TData[],
+		...args: TArgs
+	) => unknown | undefined;
 	/** When true, skip fetching and resolve `null` (e.g. missing id) */
 	skip?: (...args: TArgs) => boolean;
 }
@@ -107,11 +120,13 @@ export type ResourceQueryArgs<TDef> = TDef extends {
 	query: (...args: infer A) => any;
 }
 	? A
-	: TDef extends { key: (...args: infer A) => any }
+	: TDef extends { params: (...args: infer A) => any }
 		? A
-		: TDef extends { select: (data: any, ...args: infer A) => any }
+		: TDef extends { key: (...args: infer A) => any }
 			? A
-			: [];
+			: TDef extends { select: (data: any, ...args: infer A) => any }
+				? A
+				: [];
 
 /** Extracts the (per-page, for infinite queries) data type from a query declaration. */
 export type ResourceQueryData<TDef> = TDef extends {
@@ -197,9 +212,11 @@ export async function runResourceQuery(
 	const query = def.infinite
 		? { ...baseQuery, [def.offsetParam ?? "offset"]: pageParam ?? 0 }
 		: baseQuery;
+	const params = def.params?.(...args);
 
 	const response = await client(def.path, {
 		method: "GET",
+		...(params !== undefined ? { params } : {}),
 		...(query !== undefined ? { query } : {}),
 		...(headers !== undefined ? { headers } : {}),
 	});

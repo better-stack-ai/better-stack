@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import {
 	ChevronDown,
 	ChevronRight,
@@ -16,12 +15,23 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@workspace/ui/components/card";
-import { createApiClient } from "@btst/stack/plugins/client";
-import { usePluginOverrides, useBasePath } from "@btst/stack/context";
-import { useDeleteContent } from "../hooks";
+import {
+	CanAccess,
+	usePluginOverrides,
+	useBasePath,
+	useTranslate,
+	type TranslateFn,
+} from "@btst/stack/context";
+import {
+	useDeleteContent,
+	useInverseRelations,
+	useInverseRelationItems,
+} from "../hooks";
 import type { CMSPluginOverrides } from "../overrides";
-import type { CMSApiRouter } from "../../api";
-import type { SerializedContentItemWithType } from "../../types";
+import type {
+	InverseRelation,
+	SerializedContentItemWithType,
+} from "../../types";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -32,13 +42,6 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog";
-
-interface InverseRelation {
-	sourceType: string;
-	sourceTypeName: string;
-	fieldName: string;
-	count: number;
-}
 
 interface InverseRelationsPanelProps {
 	contentTypeSlug: string;
@@ -53,31 +56,16 @@ export function InverseRelationsPanel({
 	contentTypeSlug,
 	itemId,
 }: InverseRelationsPanelProps) {
-	const { apiBaseURL, apiBasePath, headers, navigate, Link } =
+	const t = useTranslate();
+	const { navigate, Link, localization } =
 		usePluginOverrides<CMSPluginOverrides>("cms");
 	const basePath = useBasePath();
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
 
 	// Fetch inverse relations metadata
-	const { data: inverseRelationsData, isLoading } = useQuery({
-		queryKey: ["cmsInverseRelations", contentTypeSlug, itemId],
-		queryFn: async () => {
-			const response = await client("/content-types/:slug/inverse-relations", {
-				method: "GET",
-				params: { slug: contentTypeSlug },
-				query: { itemId },
-				headers,
-			});
-			return (
-				(response as { data?: { inverseRelations: InverseRelation[] } }).data
-					?.inverseRelations ?? []
-			);
-		},
-		staleTime: 1000 * 60 * 5,
-	});
+	const { inverseRelations, isLoading } = useInverseRelations(
+		contentTypeSlug,
+		itemId,
+	);
 
 	if (isLoading) {
 		return (
@@ -88,8 +76,6 @@ export function InverseRelationsPanel({
 			</Card>
 		);
 	}
-
-	const inverseRelations = inverseRelationsData ?? [];
 
 	if (inverseRelations.length === 0) {
 		return null;
@@ -110,7 +96,10 @@ export function InverseRelationsPanel({
 
 	return (
 		<div className="space-y-4">
-			<h3 className="text-lg font-semibold">Related Items</h3>
+			<h3 className="text-lg font-semibold">
+				{localization?.CMS_RELATED_ITEMS_TITLE ??
+					t("cms.relations.relatedItemsTitle", "Related Items")}
+			</h3>
 			{inverseRelations.map((relation) => (
 				<InverseRelationSection
 					key={`${relation.sourceType}-${relation.fieldName}`}
@@ -120,8 +109,8 @@ export function InverseRelationsPanel({
 					basePath={basePath}
 					navigate={navigate}
 					Link={Link}
-					client={client}
-					headers={headers}
+					localization={localization}
+					t={t}
 					ambiguous={(sourceTypeCounts.get(relation.sourceType) ?? 0) > 1}
 				/>
 			))}
@@ -153,14 +142,14 @@ interface InverseRelationSectionProps {
 	contentTypeSlug: string;
 	itemId: string;
 	basePath: string;
-	navigate: (path: string) => void;
+	navigate: (path: string) => void | Promise<void>;
 	Link?: React.ComponentType<{
 		href?: string;
 		children?: React.ReactNode;
 		className?: string;
 	}>;
-	client: ReturnType<typeof createApiClient<CMSApiRouter>>;
-	headers?: HeadersInit;
+	localization: CMSPluginOverrides["localization"];
+	t: TranslateFn;
 	/**
 	 * True when another inverse relation from the same `sourceType` is also
 	 * being rendered — in which case the field-name suffix is shown so the
@@ -176,8 +165,8 @@ function InverseRelationSection({
 	basePath,
 	navigate,
 	Link,
-	client,
-	headers,
+	localization,
+	t,
 	ambiguous,
 }: InverseRelationSectionProps) {
 	const [isExpanded, setIsExpanded] = useState(true);
@@ -186,38 +175,21 @@ function InverseRelationSection({
 	const deleteContent = useDeleteContent(relation.sourceType);
 
 	// Fetch items for this inverse relation
-	const { data: itemsData, refetch } = useQuery({
-		queryKey: [
-			"cmsInverseRelationItems",
+	const {
+		items,
+		total: fetchedTotal,
+		refetch,
+	} = useInverseRelationItems(
+		{
 			contentTypeSlug,
-			relation.sourceType,
+			sourceType: relation.sourceType,
 			itemId,
-			relation.fieldName,
-		],
-		queryFn: async () => {
-			const response = await client(
-				"/content-types/:slug/inverse-relations/:sourceType",
-				{
-					method: "GET",
-					params: { slug: contentTypeSlug, sourceType: relation.sourceType },
-					query: { itemId, fieldName: relation.fieldName },
-					headers,
-				},
-			);
-			return (
-				(
-					response as {
-						data?: { items: SerializedContentItemWithType[]; total: number };
-					}
-				).data ?? { items: [], total: 0 }
-			);
+			fieldName: relation.fieldName,
 		},
-		staleTime: 1000 * 60 * 5,
-		enabled: isExpanded,
-	});
+		{ enabled: isExpanded },
+	);
 
-	const items = itemsData?.items ?? [];
-	const total = itemsData?.total ?? relation.count;
+	const total = fetchedTotal || relation.count;
 
 	const handleDelete = async () => {
 		if (deleteItemId) {
@@ -225,12 +197,16 @@ function InverseRelationSection({
 			try {
 				await deleteContent.mutateAsync(deleteItemId);
 				setDeleteItemId(null);
-				refetch();
+				void refetch();
 			} catch (error) {
 				const message =
 					error instanceof Error
 						? error.message
-						: "Failed to delete item. Please try again.";
+						: (localization?.CMS_RELATED_DELETE_ERROR ??
+							t(
+								"cms.relations.relatedDeleteError",
+								"Failed to delete item. Please try again.",
+							));
 				setDeleteError(message);
 			}
 		}
@@ -241,7 +217,7 @@ function InverseRelationSection({
 		// Navigate to create page with query param to pre-fill the relation.
 		// ContentEditorPage reads prefill_* query params and passes them to ContentForm as initialData.
 		const createUrl = `${basePath}/cms/${relation.sourceType}/new?prefill_${relation.fieldName}=${itemId}`;
-		navigate(createUrl);
+		void navigate(createUrl);
 	};
 
 	const LinkComponent = Link ?? "a";
@@ -275,11 +251,20 @@ function InverseRelationSection({
 				<CardContent className="pt-0">
 					{items.length === 0 ? (
 						<p className="text-sm text-muted-foreground py-2">
-							No {relation.sourceTypeName.toLowerCase()} items yet.
+							{(
+								localization?.CMS_RELATED_EMPTY ??
+								t(
+									"cms.relations.relatedEmpty",
+									"No {sourceTypeName} items yet.",
+								)
+							).replace(
+								"{sourceTypeName}",
+								relation.sourceTypeName.toLowerCase(),
+							)}
 						</p>
 					) : (
 						<ul className="space-y-2">
-							{items.map((item) => {
+							{items.map((item: SerializedContentItemWithType) => {
 								const displayValue = getDisplayValue(item);
 								const editUrl = `${basePath}/cms/${relation.sourceType}/${item.id}`;
 								return (
@@ -294,30 +279,45 @@ function InverseRelationSection({
 											<span className="truncate">{displayValue}</span>
 											<ExternalLink className="h-3 w-3 opacity-50" />
 										</LinkComponent>
-										<Button
-											variant="ghost"
-											size="icon"
-											className="h-7 w-7 text-muted-foreground hover:text-destructive"
-											onClick={() => setDeleteItemId(item.id)}
+										<CanAccess
+											resource="cms:content"
+											action="delete"
+											params={{ typeSlug: relation.sourceType, id: item.id }}
 										>
-											<Trash2 className="h-3.5 w-3.5" />
-										</Button>
+											<Button
+												variant="ghost"
+												size="icon"
+												className="h-7 w-7 text-muted-foreground hover:text-destructive"
+												onClick={() => setDeleteItemId(item.id)}
+											>
+												<Trash2 className="h-3.5 w-3.5" />
+											</Button>
+										</CanAccess>
 									</li>
 								);
 							})}
 						</ul>
 					)}
 					<div className="mt-3 pt-3 border-t">
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={handleAddNew}
-							className="w-full"
+						<CanAccess
+							resource="cms:content"
+							action="create"
+							params={{ typeSlug: relation.sourceType }}
 						>
-							<Plus className="h-4 w-4 mr-2" />
-							Add {relation.sourceTypeName}
-							{fieldLabel ? ` (${fieldLabel})` : ""}
-						</Button>
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={handleAddNew}
+								className="w-full"
+							>
+								<Plus className="h-4 w-4 mr-2" />
+								{(
+									localization?.CMS_RELATED_ADD ??
+									t("cms.relations.relatedAdd", "Add {sourceTypeName}")
+								).replace("{sourceTypeName}", relation.sourceTypeName)}
+								{fieldLabel ? ` (${fieldLabel})` : ""}
+							</Button>
+						</CanAccess>
 					</div>
 				</CardContent>
 			)}
@@ -335,23 +335,41 @@ function InverseRelationSection({
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
-							Delete {relation.sourceTypeName}?
+							{(
+								localization?.CMS_RELATED_DELETE_TITLE ??
+								t(
+									"cms.relations.relatedDeleteTitle",
+									"Delete {sourceTypeName}?",
+								)
+							).replace("{sourceTypeName}", relation.sourceTypeName)}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							This action cannot be undone. This will permanently delete this{" "}
-							{relation.sourceTypeName.toLowerCase()}.
+							{(
+								localization?.CMS_RELATED_DELETE_DESCRIPTION ??
+								t(
+									"cms.relations.relatedDeleteDescription",
+									"This action cannot be undone. This will permanently delete this {sourceTypeName}.",
+								)
+							).replace(
+								"{sourceTypeName}",
+								relation.sourceTypeName.toLowerCase(),
+							)}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					{deleteError && (
 						<p className="text-sm text-destructive">{deleteError}</p>
 					)}
 					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogCancel>
+							{localization?.CMS_BUTTON_CANCEL ??
+								t("cms.common.cancel", "Cancel")}
+						</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={handleDelete}
 							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
 						>
-							Delete
+							{localization?.CMS_BUTTON_DELETE ??
+								t("cms.common.delete", "Delete")}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

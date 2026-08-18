@@ -23,6 +23,14 @@ export const CMS_COMMON = {
 	CMS_ERROR_GENERIC: "Something went wrong",
 	CMS_ERROR_NOT_FOUND: "Not found",
 	CMS_ERROR_VALIDATION: "Please fix the errors above",
+	CMS_ERROR_TYPE_NOT_FOUND_DESCRIPTION: "Content type not found",
+	CMS_ERROR_ITEM_NOT_FOUND_DESCRIPTION: "Content item not found",
+
+	// 404 page
+	CMS_404_TITLE: "Page not found",
+	CMS_404_DESCRIPTION:
+		"The page you're looking for doesn't exist or has been moved.",
+	CMS_404_BACK: "Back to CMS",
 
 	// Attribution
 	CMS_ATTRIBUTION: "Powered by BTST",

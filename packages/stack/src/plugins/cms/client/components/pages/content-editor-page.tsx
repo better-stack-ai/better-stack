@@ -35,6 +35,15 @@ export function ContentEditorPageComponent({
 			ErrorComponent={DefaultError}
 			LoadingComponent={EditorSkeleton}
 			NotFoundComponent={NotFoundPage}
+			permission={
+				isNew
+					? { resource: "cms:content", action: "create", params: { typeSlug } }
+					: {
+							resource: "cms:content",
+							action: "update",
+							params: { typeSlug, id },
+						}
+			}
 			props={{ typeSlug, id }}
 			onError={(error) => {
 				if (onRouteError) {

@@ -1,69 +1,28 @@
 "use client";
 
-import {
-	useQuery,
-	useMutation,
-	useQueryClient,
-	useSuspenseQuery,
-	useInfiniteQuery,
-	useSuspenseInfiniteQuery,
-	type InfiniteData,
-} from "@tanstack/react-query";
-import { createApiClient } from "@btst/stack/plugins/client";
-import { usePluginOverrides } from "@btst/stack/context";
-import type { CMSApiRouter } from "../../api";
+import type {
+	ResourceFormConfig,
+	ResourceFormResult,
+} from "@btst/stack/plugins/client/hooks";
 import type {
 	SerializedContentType,
 	SerializedContentItemWithType,
 	PaginatedContentItems,
+	InverseRelation,
 } from "../../types";
-import type { CMSPluginOverrides } from "../overrides";
-import { createCMSQueryKeys } from "../../query-keys";
+import { cms } from "./cms-resource";
 
-// Type guard for better-call error responses
-function isErrorResponse(
-	response: unknown,
-): response is { error: unknown; data?: never } {
-	if (typeof response !== "object" || response === null) {
-		return false;
-	}
-	const obj = response as Record<string, unknown>;
-	return "error" in obj && obj.error !== null && obj.error !== undefined;
+/** Flattens infinite-query pages of `{ items, total }` envelopes. */
+function flattenPages<TData>(pages: PaginatedContentItems[] | undefined): {
+	items: SerializedContentItemWithType<TData>[];
+	total: number;
+} {
+	const items = (pages?.flatMap((page) =>
+		Array.isArray(page?.items) ? page.items : [],
+	) ?? []) as SerializedContentItemWithType<TData>[];
+	const total = pages?.[0]?.total ?? 0;
+	return { items, total };
 }
-
-// Helper to convert error to a proper Error object with meaningful message
-function toError(error: unknown): Error {
-	if (error instanceof Error) {
-		return error;
-	}
-
-	if (typeof error === "object" && error !== null) {
-		const errorObj = error as Record<string, unknown>;
-		const message =
-			(typeof errorObj.message === "string" ? errorObj.message : null) ||
-			(typeof errorObj.error === "string" ? errorObj.error : null) ||
-			JSON.stringify(error);
-
-		const err = new Error(message);
-		Object.assign(err, error);
-		return err;
-	}
-
-	return new Error(String(error));
-}
-
-/**
- * Shared React Query configuration for all CMS queries
- * Prevents automatic refetching to avoid hydration mismatches in SSR
- */
-const SHARED_QUERY_CONFIG = {
-	retry: false,
-	refetchOnWindowFocus: false,
-	refetchOnMount: false,
-	refetchOnReconnect: false,
-	staleTime: 1000 * 60 * 5, // 5 minutes
-	gcTime: 1000 * 60 * 10, // 10 minutes
-} as const;
 
 // ========== Content Types Hooks ==========
 
@@ -78,19 +37,7 @@ export interface UseContentTypesResult {
  * Hook for fetching all content types
  */
 export function useContentTypes(): UseContentTypesResult {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createCMSQueryKeys(client, headers);
-	const baseQuery = queries.cmsTypes.list();
-
-	const { data, isLoading, error, refetch } = useQuery({
-		...baseQuery,
-		...SHARED_QUERY_CONFIG,
-	});
+	const { data, isLoading, error, refetch } = cms.cmsTypes.list.use([]);
 
 	return {
 		contentTypes: data ?? [],
@@ -107,23 +54,7 @@ export function useSuspenseContentTypes(): {
 	contentTypes: (SerializedContentType & { itemCount: number })[];
 	refetch: () => Promise<unknown>;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createCMSQueryKeys(client, headers);
-	const baseQuery = queries.cmsTypes.list();
-
-	const { data, refetch, error, isFetching } = useSuspenseQuery({
-		...baseQuery,
-		...SHARED_QUERY_CONFIG,
-	});
-
-	if (error && !isFetching) {
-		throw error;
-	}
+	const { data, refetch } = cms.cmsTypes.list.useSuspense([]);
 
 	return {
 		contentTypes: data ?? [],
@@ -140,18 +71,7 @@ export function useContentType(slug: string): {
 	error: Error | null;
 	refetch: () => void;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createCMSQueryKeys(client, headers);
-	const baseQuery = queries.cmsTypes.detail(slug);
-
-	const { data, isLoading, error, refetch } = useQuery({
-		...baseQuery,
-		...SHARED_QUERY_CONFIG,
+	const { data, isLoading, error, refetch } = cms.cmsTypes.detail.use([slug], {
 		enabled: !!slug,
 	});
 
@@ -170,6 +90,8 @@ export interface UseContentOptions {
 	limit?: number;
 	/** Whether to enable the query (default: true) */
 	enabled?: boolean;
+	/** Free-text search across item slugs and data values */
+	search?: string;
 }
 
 /**
@@ -227,16 +149,7 @@ export function useContent<
 	typeSlug: TSlug & string,
 	options: UseContentOptions = {},
 ): UseContentResult<TMap[TSlug]> {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createCMSQueryKeys(client, headers);
-	const { limit = 10, enabled = true } = options;
-
-	const baseQuery = queries.cmsContent.list({ typeSlug, limit, offset: 0 });
+	const { limit = 10, enabled = true, search } = options;
 
 	const {
 		data,
@@ -246,54 +159,11 @@ export function useContent<
 		hasNextPage,
 		isFetchingNextPage,
 		refetch,
-	} = useInfiniteQuery({
-		queryKey: baseQuery.queryKey,
-		queryFn: async ({ pageParam = 0 }) => {
-			const response: unknown = await client("/content/:typeSlug", {
-				method: "GET",
-				params: { typeSlug },
-				query: { limit, offset: pageParam },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown }).data as PaginatedContentItems<
-				TMap[TSlug]
-			>;
-		},
-		...SHARED_QUERY_CONFIG,
-		initialPageParam: 0,
-		getNextPageParam: (lastPage, allPages) => {
-			// Defensive check: ensure lastPage exists and has expected structure
-			if (!lastPage || typeof lastPage !== "object") return undefined;
-			const items = (lastPage as PaginatedContentItems)?.items;
-			// If no items or fewer items than limit, we've reached the end
-			if (!Array.isArray(items) || items.length < limit) return undefined;
-			// Calculate total items loaded so far
-			const loadedCount = (allPages || []).reduce(
-				(sum, page) =>
-					sum +
-					(Array.isArray((page as PaginatedContentItems)?.items)
-						? (page as PaginatedContentItems).items.length
-						: 0),
-				0,
-			);
-			const total = (lastPage as PaginatedContentItems)?.total ?? 0;
-			// Check if we've loaded all items
-			if (loadedCount >= total) return undefined;
-			return loadedCount;
-		},
+	} = cms.cmsContent.list.useInfinite([{ typeSlug, limit, search }], {
 		enabled: enabled && !!typeSlug,
 	});
 
-	const pages = (
-		data as InfiniteData<PaginatedContentItems<TMap[TSlug]>, number> | undefined
-	)?.pages;
-	const items = (pages?.flatMap((page) =>
-		Array.isArray(page?.items) ? page.items : [],
-	) ?? []) as SerializedContentItemWithType<TMap[TSlug]>[];
-	const total = pages?.[0]?.total ?? 0;
+	const { items, total } = flattenPages<TMap[TSlug]>(data?.pages);
 
 	return {
 		items,
@@ -330,75 +200,12 @@ export function useSuspenseContent<
 	isLoadingMore: boolean;
 	refetch: () => Promise<unknown>;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createCMSQueryKeys(client, headers);
-	const { limit = 10 } = options;
+	const { limit = 10, search } = options;
 
-	const baseQuery = queries.cmsContent.list({ typeSlug, limit, offset: 0 });
+	const { data, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
+		cms.cmsContent.list.useSuspenseInfinite([{ typeSlug, limit, search }]);
 
-	const {
-		data,
-		fetchNextPage,
-		hasNextPage,
-		isFetchingNextPage,
-		refetch,
-		error,
-		isFetching,
-	} = useSuspenseInfiniteQuery({
-		queryKey: baseQuery.queryKey,
-		queryFn: async ({ pageParam = 0 }) => {
-			const response: unknown = await client("/content/:typeSlug", {
-				method: "GET",
-				params: { typeSlug },
-				query: { limit, offset: pageParam },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown }).data as PaginatedContentItems<
-				TMap[TSlug]
-			>;
-		},
-		...SHARED_QUERY_CONFIG,
-		initialPageParam: 0,
-		getNextPageParam: (lastPage, allPages) => {
-			// Defensive check: ensure lastPage exists and has expected structure
-			if (!lastPage || typeof lastPage !== "object") return undefined;
-			const items = (lastPage as PaginatedContentItems)?.items;
-			// If no items or fewer items than limit, we've reached the end
-			if (!Array.isArray(items) || items.length < limit) return undefined;
-			// Calculate total items loaded so far
-			const loadedCount = (allPages || []).reduce(
-				(sum, page) =>
-					sum +
-					(Array.isArray((page as PaginatedContentItems)?.items)
-						? (page as PaginatedContentItems).items.length
-						: 0),
-				0,
-			);
-			const total = (lastPage as PaginatedContentItems)?.total ?? 0;
-			// Check if we've loaded all items
-			if (loadedCount >= total) return undefined;
-			return loadedCount;
-		},
-	});
-
-	// Manually throw errors for Error Boundaries (per React Query Suspense docs)
-	if (error && !isFetching) {
-		throw error;
-	}
-
-	const pages = data.pages as PaginatedContentItems<TMap[TSlug]>[];
-	const items = (pages?.flatMap((page) =>
-		Array.isArray(page?.items) ? page.items : [],
-	) ?? []) as SerializedContentItemWithType<TMap[TSlug]>[];
-	const total = pages?.[0]?.total ?? 0;
+	const { items, total } = flattenPages<TMap[TSlug]>(data.pages);
 
 	return {
 		items,
@@ -438,23 +245,13 @@ export function useContentItem<
 	error: Error | null;
 	refetch: () => void;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createCMSQueryKeys(client, headers);
-	const baseQuery = queries.cmsContent.detail(typeSlug, id);
-
-	const { data, isLoading, error, refetch } = useQuery({
-		...baseQuery,
-		...SHARED_QUERY_CONFIG,
-		enabled: !!typeSlug && !!id,
-	});
+	const { data, isLoading, error, refetch } = cms.cmsContent.detail.use(
+		[typeSlug, id],
+		{ enabled: !!typeSlug && !!id },
+	);
 
 	return {
-		item: (data as SerializedContentItemWithType<TMap[TSlug]>) ?? null,
+		item: (data as SerializedContentItemWithType<TMap[TSlug]> | null) ?? null,
 		isLoading,
 		error,
 		refetch,
@@ -480,26 +277,10 @@ export function useSuspenseContentItem<
 	item: SerializedContentItemWithType<TMap[TSlug]> | null;
 	refetch: () => Promise<unknown>;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createCMSQueryKeys(client, headers);
-	const baseQuery = queries.cmsContent.detail(typeSlug, id);
-
-	const { data, refetch, error, isFetching } = useSuspenseQuery({
-		...baseQuery,
-		...SHARED_QUERY_CONFIG,
-	});
-
-	if (error && !isFetching) {
-		throw error;
-	}
+	const { data, refetch } = cms.cmsContent.detail.useSuspense([typeSlug, id]);
 
 	return {
-		item: (data as SerializedContentItemWithType<TMap[TSlug]>) ?? null,
+		item: (data as SerializedContentItemWithType<TMap[TSlug]> | null) ?? null,
 		refetch,
 	};
 }
@@ -532,23 +313,13 @@ export function useContentItemBySlug<
 	error: Error | null;
 	refetch: () => void;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createCMSQueryKeys(client, headers);
-	const baseQuery = queries.cmsContent.bySlug(typeSlug, slug);
-
-	const { data, isLoading, error, refetch } = useQuery({
-		...baseQuery,
-		...SHARED_QUERY_CONFIG,
-		enabled: !!typeSlug && !!slug,
-	});
+	const { data, isLoading, error, refetch } = cms.cmsContent.bySlug.use(
+		[typeSlug, slug],
+		{ enabled: !!typeSlug && !!slug },
+	);
 
 	return {
-		item: (data as SerializedContentItemWithType<TMap[TSlug]>) ?? null,
+		item: (data as SerializedContentItemWithType<TMap[TSlug]> | null) ?? null,
 		isLoading,
 		error,
 		refetch,
@@ -577,48 +348,23 @@ export function useContentItemBySlug<
 export function useCreateContent<TData = Record<string, unknown>>(
 	typeSlug: string,
 ) {
-	const { refresh, apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queryClient = useQueryClient();
-	const queries = createCMSQueryKeys(client, headers);
+	const mutation = cms.cmsContent.create.use();
 
-	return useMutation<
-		SerializedContentItemWithType<TData>,
-		Error,
-		{ slug: string; data: TData }
-	>({
-		mutationKey: [...queries.cmsContent._def, typeSlug, "create"],
-		mutationFn: async (data) => {
-			const response: unknown = await client("@post/content/:typeSlug", {
-				method: "POST",
-				params: { typeSlug },
-				body: data as { slug: string; data: Record<string, unknown> },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown })
-				.data as SerializedContentItemWithType<TData>;
-		},
-		onSuccess: async () => {
-			await queryClient.invalidateQueries({
-				queryKey: queries.cmsContent.list._def,
-				refetchType: "all",
-			});
-			await queryClient.invalidateQueries({
-				queryKey: queries.cmsTypes.list._def,
-				refetchType: "all",
-			});
-			if (refresh) {
-				await refresh();
-			}
-		},
-	});
+	return {
+		...mutation,
+		mutate: (vars: { slug: string; data: TData }) =>
+			mutation.mutate({
+				typeSlug,
+				slug: vars.slug,
+				data: vars.data as Record<string, unknown>,
+			}),
+		mutateAsync: async (vars: { slug: string; data: TData }) =>
+			(await mutation.mutateAsync({
+				typeSlug,
+				slug: vars.slug,
+				data: vars.data as Record<string, unknown>,
+			})) as SerializedContentItemWithType<TData>,
+	};
 }
 
 /**
@@ -640,90 +386,64 @@ export function useCreateContent<TData = Record<string, unknown>>(
 export function useUpdateContent<TData = Record<string, unknown>>(
 	typeSlug: string,
 ) {
-	const { refresh, apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queryClient = useQueryClient();
-	const queries = createCMSQueryKeys(client, headers);
+	const mutation = cms.cmsContent.update.use();
 
-	return useMutation<
-		SerializedContentItemWithType<TData>,
-		Error,
-		{ id: string; data: { slug?: string; data?: TData } }
-	>({
-		mutationKey: [...queries.cmsContent._def, typeSlug, "update"],
-		mutationFn: async ({ id, data }) => {
-			const response: unknown = await client("@put/content/:typeSlug/:id", {
-				method: "PUT",
-				params: { typeSlug, id },
-				body: data as { slug?: string; data?: Record<string, unknown> },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown })
-				.data as SerializedContentItemWithType<TData>;
-		},
-		onSuccess: async (updated) => {
-			if (updated) {
-				queryClient.setQueryData(
-					queries.cmsContent.detail(typeSlug, updated.id).queryKey,
-					updated,
-				);
-			}
-			await queryClient.invalidateQueries({
-				queryKey: queries.cmsContent.list._def,
-				refetchType: "all",
-			});
-			if (refresh) {
-				await refresh();
-			}
-		},
+	const toVars = (vars: {
+		id: string;
+		data: { slug?: string; data?: TData };
+	}) => ({
+		typeSlug,
+		id: vars.id,
+		data: vars.data as { slug?: string; data?: Record<string, unknown> },
 	});
+
+	return {
+		...mutation,
+		mutate: (vars: { id: string; data: { slug?: string; data?: TData } }) =>
+			mutation.mutate(toVars(vars)),
+		mutateAsync: async (vars: {
+			id: string;
+			data: { slug?: string; data?: TData };
+		}) =>
+			(await mutation.mutateAsync(
+				toVars(vars),
+			)) as SerializedContentItemWithType<TData>,
+	};
 }
 
 /**
  * Hook for deleting a content item
  */
 export function useDeleteContent(typeSlug: string) {
-	const { refresh, apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queryClient = useQueryClient();
-	const queries = createCMSQueryKeys(client, headers);
+	const mutation = cms.cmsContent.delete.use();
 
-	return useMutation<{ success: boolean }, Error, string>({
-		mutationKey: [...queries.cmsContent._def, typeSlug, "delete"],
-		mutationFn: async (id) => {
-			const response: unknown = await client("@delete/content/:typeSlug/:id", {
-				method: "DELETE",
-				params: { typeSlug, id },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown }).data as { success: boolean };
-		},
-		onSuccess: async () => {
-			await queryClient.invalidateQueries({
-				queryKey: queries.cmsContent._def,
-			});
-			await queryClient.invalidateQueries({
-				queryKey: queries.cmsTypes.list._def,
-			});
-			if (refresh) {
-				await refresh();
-			}
-		},
-	});
+	return {
+		...mutation,
+		mutate: (id: string) => mutation.mutate({ typeSlug, id }),
+		mutateAsync: (id: string) => mutation.mutateAsync({ typeSlug, id }),
+	};
+}
+
+/**
+ * Form lifecycle hook for creating/editing content items, built on the core
+ * resource `useForm`: submits the right mutation, awaits invalidation,
+ * notifies via `useNotify()`, redirects, and maps server validation issues
+ * to `fieldErrors`.
+ */
+export function useContentItemForm<TValues>(
+	config: ResourceFormConfig<
+		TValues,
+		SerializedContentItemWithType | null,
+		SerializedContentItemWithType | null
+	>,
+): ResourceFormResult<
+	TValues,
+	SerializedContentItemWithType | null,
+	SerializedContentItemWithType | null
+> {
+	return cms.cmsContent.useForm<TValues, SerializedContentItemWithType | null>(
+		config,
+	);
 }
 
 // ========== Relation Hooks ==========
@@ -768,37 +488,13 @@ export function useContentItemPopulated<
 	error: Error | null;
 	refetch: () => void;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-
-	const { data, isLoading, error, refetch } = useQuery({
-		queryKey: ["cmsContent", typeSlug, id, "populated"],
-		queryFn: async () => {
-			const response: unknown = await client(
-				"/content/:typeSlug/:id/populated",
-				{
-					method: "GET",
-					params: { typeSlug, id },
-					headers,
-				},
-			);
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown }).data as ContentItemWithRelations<
-				TMap[TSlug]
-			>;
-		},
-		...SHARED_QUERY_CONFIG,
-		enabled: !!typeSlug && !!id,
-	});
+	const { data, isLoading, error, refetch } = cms.cmsContent.populated.use(
+		[typeSlug, id],
+		{ enabled: !!typeSlug && !!id },
+	);
 
 	return {
-		item: data ?? null,
+		item: (data as ContentItemWithRelations<TMap[TSlug]> | null) ?? null,
 		isLoading,
 		error,
 		refetch,
@@ -821,40 +517,13 @@ export function useSuspenseContentItemPopulated<
 	item: ContentItemWithRelations<TMap[TSlug]> | null;
 	refetch: () => Promise<unknown>;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-
-	const { data, refetch, error, isFetching } = useSuspenseQuery({
-		queryKey: ["cmsContent", typeSlug, id, "populated"],
-		queryFn: async () => {
-			const response: unknown = await client(
-				"/content/:typeSlug/:id/populated",
-				{
-					method: "GET",
-					params: { typeSlug, id },
-					headers,
-				},
-			);
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown }).data as ContentItemWithRelations<
-				TMap[TSlug]
-			>;
-		},
-		...SHARED_QUERY_CONFIG,
-	});
-
-	if (error && !isFetching) {
-		throw error;
-	}
+	const { data, refetch } = cms.cmsContent.populated.useSuspense([
+		typeSlug,
+		id,
+	]);
 
 	return {
-		item: data ?? null,
+		item: (data as ContentItemWithRelations<TMap[TSlug]> | null) ?? null,
 		refetch,
 	};
 }
@@ -903,12 +572,6 @@ export function useContentByRelation<
 	isLoadingMore: boolean;
 	refetch: () => void;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
 	const { limit = 20, enabled = true } = options;
 
 	const {
@@ -919,50 +582,12 @@ export function useContentByRelation<
 		hasNextPage,
 		isFetchingNextPage,
 		refetch,
-	} = useInfiniteQuery({
-		queryKey: ["cmsContent", typeSlug, "by-relation", fieldName, targetId],
-		queryFn: async ({ pageParam = 0 }) => {
-			const response: unknown = await client("/content/:typeSlug/by-relation", {
-				method: "GET",
-				params: { typeSlug },
-				query: { field: fieldName, targetId, limit, offset: pageParam },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown }).data as PaginatedContentItems<
-				TMap[TSlug]
-			>;
-		},
-		...SHARED_QUERY_CONFIG,
-		initialPageParam: 0,
-		getNextPageParam: (lastPage, allPages) => {
-			if (!lastPage || typeof lastPage !== "object") return undefined;
-			const items = (lastPage as PaginatedContentItems)?.items;
-			if (!Array.isArray(items) || items.length < limit) return undefined;
-			const loadedCount = (allPages || []).reduce(
-				(sum, page) =>
-					sum +
-					(Array.isArray((page as PaginatedContentItems)?.items)
-						? (page as PaginatedContentItems).items.length
-						: 0),
-				0,
-			);
-			const total = (lastPage as PaginatedContentItems)?.total ?? 0;
-			if (loadedCount >= total) return undefined;
-			return loadedCount;
-		},
-		enabled: enabled && !!typeSlug && !!fieldName && !!targetId,
-	});
+	} = cms.cmsContent.byRelation.useInfinite(
+		[{ typeSlug, field: fieldName, targetId, limit }],
+		{ enabled: enabled && !!typeSlug && !!fieldName && !!targetId },
+	);
 
-	const pages = (
-		data as InfiniteData<PaginatedContentItems<TMap[TSlug]>, number> | undefined
-	)?.pages;
-	const items = (pages?.flatMap((page) =>
-		Array.isArray(page?.items) ? page.items : [],
-	) ?? []) as SerializedContentItemWithType<TMap[TSlug]>[];
-	const total = pages?.[0]?.total ?? 0;
+	const { items, total } = flattenPages<TMap[TSlug]>(data?.pages);
 
 	return {
 		items,
@@ -998,67 +623,14 @@ export function useSuspenseContentByRelation<
 	isLoadingMore: boolean;
 	refetch: () => Promise<unknown>;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-	const client = createApiClient<CMSApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
 	const { limit = 20 } = options;
 
-	const {
-		data,
-		fetchNextPage,
-		hasNextPage,
-		isFetchingNextPage,
-		refetch,
-		error,
-		isFetching,
-	} = useSuspenseInfiniteQuery({
-		queryKey: ["cmsContent", typeSlug, "by-relation", fieldName, targetId],
-		queryFn: async ({ pageParam = 0 }) => {
-			const response: unknown = await client("/content/:typeSlug/by-relation", {
-				method: "GET",
-				params: { typeSlug },
-				query: { field: fieldName, targetId, limit, offset: pageParam },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown }).data as PaginatedContentItems<
-				TMap[TSlug]
-			>;
-		},
-		...SHARED_QUERY_CONFIG,
-		initialPageParam: 0,
-		getNextPageParam: (lastPage, allPages) => {
-			if (!lastPage || typeof lastPage !== "object") return undefined;
-			const items = (lastPage as PaginatedContentItems)?.items;
-			if (!Array.isArray(items) || items.length < limit) return undefined;
-			const loadedCount = (allPages || []).reduce(
-				(sum, page) =>
-					sum +
-					(Array.isArray((page as PaginatedContentItems)?.items)
-						? (page as PaginatedContentItems).items.length
-						: 0),
-				0,
-			);
-			const total = (lastPage as PaginatedContentItems)?.total ?? 0;
-			if (loadedCount >= total) return undefined;
-			return loadedCount;
-		},
-	});
+	const { data, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
+		cms.cmsContent.byRelation.useSuspenseInfinite([
+			{ typeSlug, field: fieldName, targetId, limit },
+		]);
 
-	if (error && !isFetching) {
-		throw error;
-	}
-
-	const pages = data.pages as PaginatedContentItems<TMap[TSlug]>[];
-	const items = (pages?.flatMap((page) =>
-		Array.isArray(page?.items) ? page.items : [],
-	) ?? []) as SerializedContentItemWithType<TMap[TSlug]>[];
-	const total = pages?.[0]?.total ?? 0;
+	const { items, total } = flattenPages<TMap[TSlug]>(data.pages);
 
 	return {
 		items,
@@ -1066,6 +638,75 @@ export function useSuspenseContentByRelation<
 		loadMore: fetchNextPage,
 		hasMore: !!hasNextPage,
 		isLoadingMore: isFetchingNextPage,
+		refetch,
+	};
+}
+
+// ========== Inverse Relation Hooks ==========
+
+/**
+ * Hook for fetching the inverse relations of a content item — the content
+ * types with belongsTo fields pointing at it, with per-field counts.
+ */
+export function useInverseRelations(
+	contentTypeSlug: string,
+	itemId: string,
+): {
+	inverseRelations: InverseRelation[];
+	isLoading: boolean;
+	error: Error | null;
+	refetch: () => void;
+} {
+	const { data, isLoading, error, refetch } = cms.cmsTypes.inverseRelations.use(
+		[{ slug: contentTypeSlug, itemId }],
+		{ enabled: !!contentTypeSlug && !!itemId },
+	);
+
+	return {
+		inverseRelations: data ?? [],
+		isLoading,
+		error,
+		refetch,
+	};
+}
+
+/**
+ * Hook for listing the items behind one inverse relation (e.g. all comments
+ * whose `resourceId` points at this resource).
+ */
+export function useInverseRelationItems(
+	params: {
+		contentTypeSlug: string;
+		sourceType: string;
+		itemId: string;
+		fieldName: string;
+	},
+	options: { enabled?: boolean } = {},
+): {
+	items: SerializedContentItemWithType[];
+	total: number;
+	isLoading: boolean;
+	error: Error | null;
+	refetch: () => void;
+} {
+	const { data, isLoading, error, refetch } =
+		cms.cmsTypes.inverseRelationItems.use(
+			[
+				{
+					slug: params.contentTypeSlug,
+					sourceType: params.sourceType,
+					itemId: params.itemId,
+					fieldName: params.fieldName,
+				},
+			],
+			{ enabled: options.enabled ?? true },
+		);
+
+	return {
+		items: data?.items ?? [],
+		total: data?.total ?? 0,
+		isLoading,
+		error,
 		refetch,
 	};
 }

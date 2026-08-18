@@ -5,4 +5,9 @@ export const CMS_EDITOR = {
 	CMS_EDITOR_SLUG_MANUAL: "Manually set",
 	CMS_EDITOR_DELETE_CONFIRM: "Are you sure you want to delete this item?",
 	CMS_EDITOR_UNSAVED_CHANGES: "You have unsaved changes",
+	CMS_EDITOR_SLUG_PLACEHOLDER: "Enter slug...",
+	CMS_EDITOR_SLUG_PLACEHOLDER_AUTO: "Auto-generated from {field}",
+	CMS_EDITOR_SLUG_REQUIRED: "Slug is required",
+	CMS_EDITOR_FILE_INVALID_TYPE: "Please select an image file",
+	CMS_EDITOR_FILE_UPLOAD_FAILED: "Failed to upload image",
 };
