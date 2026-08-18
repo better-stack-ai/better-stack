@@ -2,8 +2,7 @@
 
 import { useState, useCallback, useMemo } from "react";
 import { usePluginOverrides, useTranslate } from "@btst/stack/context";
-import { useCreateContent } from "../../hooks";
-import { cms } from "../../hooks/cms-resource";
+import { useCreateContent, useContentOptions } from "../../hooks";
 import type { SerializedContentItemWithType } from "../../../types";
 import type { CMSPluginOverrides } from "../../overrides";
 import MultipleSelector from "@workspace/ui/components/multi-select";
@@ -85,16 +84,10 @@ export function RelationField({
 		[displayField],
 	);
 
-	const select = cms.cmsContent.useSelect<SerializedContentItemWithType>({
-		query: "options",
-		searchArgs: (search) => [{ typeSlug: relation.targetType, search }],
-		getOptionValue: (item) => item.id,
-		getOptionLabel,
+	const select = useContentOptions({
+		targetType: relation.targetType,
 		value: normalizedValue.map((v) => v.id),
-		// Selected ids missing from the options page get their labels via the
-		// detail query (typeSlug, id)
-		preload: { args: (value) => [relation.targetType, value] },
-		enabled: !!relation.targetType,
+		getOptionLabel,
 	});
 
 	const options: Option[] = select.options.map((option) => ({

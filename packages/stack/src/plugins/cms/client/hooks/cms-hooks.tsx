@@ -3,6 +3,7 @@
 import type {
 	ResourceFormConfig,
 	ResourceFormResult,
+	ResourceSelectResult,
 } from "@btst/stack/plugins/client/hooks";
 import type {
 	SerializedContentType,
@@ -447,6 +448,34 @@ export function useContentItemForm<TValues>(
 }
 
 // ========== Relation Hooks ==========
+
+/**
+ * Select-input options for content items of a target type, built on the core
+ * resource `useSelect`: debounced server-side search over the `options`
+ * query, with selected ids missing from the current results preloaded via
+ * the `detail` query (typeSlug, id) so their labels resolve.
+ *
+ * Used by the relation picker (`RelationField`).
+ */
+export function useContentOptions(config: {
+	/** Content type slug to search within */
+	targetType: string;
+	/** Currently selected item ids — preloaded when missing from options */
+	value: string[];
+	getOptionLabel: (item: SerializedContentItemWithType) => string;
+}): ResourceSelectResult<SerializedContentItemWithType> {
+	const { targetType, value, getOptionLabel } = config;
+
+	return cms.cmsContent.useSelect<SerializedContentItemWithType>({
+		query: "options",
+		searchArgs: (search) => [{ typeSlug: targetType, search }],
+		getOptionValue: (item) => item.id,
+		getOptionLabel,
+		value,
+		preload: { args: (id) => [targetType, id] },
+		enabled: !!targetType,
+	});
+}
 
 /**
  * Content item with populated relations
