@@ -164,7 +164,9 @@ export const formBuilderResources = {
 				select: (data: any) => data as { success: boolean },
 				invalidates: ["forms"],
 			},
-			// Public form submission — no cache invalidation needed
+			// Public form submission — no cache invalidation, and no router
+			// refresh: the success screen is client state in FormRenderer and a
+			// refresh (full reload on public pages) would wipe it.
 			submit: {
 				path: "@post/forms/:slug/submit",
 				method: "POST" as const,
@@ -176,6 +178,7 @@ export const formBuilderResources = {
 					data as SerializedFormSubmission & {
 						form: { successMessage?: string; redirectUrl?: string };
 					},
+				refresh: false,
 			},
 		},
 	},
