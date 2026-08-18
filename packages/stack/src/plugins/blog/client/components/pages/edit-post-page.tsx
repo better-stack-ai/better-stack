@@ -25,6 +25,7 @@ export function EditPostPageComponent({ slug }: { slug: string }) {
 			ErrorComponent={DefaultError}
 			LoadingComponent={FormLoading}
 			NotFoundComponent={NotFoundPage}
+			permission={{ resource: "blog:post", action: "update" }}
 			props={{ slug }}
 			onError={(error) => {
 				if (onRouteError) {

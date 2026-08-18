@@ -1,11 +1,14 @@
 "use client";
 
-import { useBasePath, usePluginOverrides } from "@btst/stack/context";
+import {
+	useBasePath,
+	usePluginOverrides,
+	useTranslate,
+} from "@btst/stack/context";
 import { AddPostForm } from "../forms/post-forms";
 import { PageHeader } from "../shared/page-header";
 import { PageWrapper } from "../shared/page-wrapper";
 import type { BlogPluginOverrides } from "../../overrides";
-import { BLOG_LOCALIZATION } from "../../localization";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
 import { useRef, useCallback } from "react";
@@ -14,12 +17,8 @@ import { createFillBlogFormHandler } from "./fill-blog-form-handler";
 
 // Internal component with actual page content
 export function NewPostPage() {
-	const overrides = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", {
-		localization: BLOG_LOCALIZATION,
-	});
+	const t = useTranslate();
+	const overrides = usePluginOverrides<BlogPluginOverrides>("blog");
 	const { localization, navigate } = overrides;
 	const basePath = useBasePath();
 
@@ -79,8 +78,14 @@ export function NewPostPage() {
 	return (
 		<PageWrapper className="gap-6" testId="new-post-page">
 			<PageHeader
-				title={localization.BLOG_POST_ADD_TITLE}
-				description={localization.BLOG_POST_ADD_DESCRIPTION}
+				title={
+					localization?.BLOG_POST_ADD_TITLE ??
+					t("blog.post.addTitle", "Add New Post")
+				}
+				description={
+					localization?.BLOG_POST_ADD_DESCRIPTION ??
+					t("blog.post.addDescription", "Create a new blog post.")
+				}
 			/>
 			<AddPostForm
 				onClose={handleClose}

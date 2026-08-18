@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { notFound, useParams, useRouteContext } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { normalizePath } from "../client/path-utils";
 import type { GetStackClient } from "../shared/entry-factories";
 
@@ -57,8 +58,15 @@ export function createTanStackPageOptions(options: CreateTanStackPageOptions) {
 		const params = useParams({ strict: false }) as { _splat?: string };
 		const context = useRouteContext({ strict: false });
 		const routePath = normalizePath(params._splat);
-		const route = getStackClient(resolveQueryClient(context)).router.getRoute(
-			routePath,
+		const queryClient = resolveQueryClient(context);
+		// Memoized so PageComponent keeps a stable identity across re-renders:
+		// getRoute() invokes the route handler, which produces new component
+		// references each call. Without the memo, any router state change that
+		// re-renders this component (e.g. a search-param update) would remount
+		// the whole page subtree, losing component state such as open dialogs.
+		const route = useMemo(
+			() => getStackClient(queryClient).router.getRoute(routePath),
+			[queryClient, routePath],
 		);
 		return route?.PageComponent ? (
 			<route.PageComponent />

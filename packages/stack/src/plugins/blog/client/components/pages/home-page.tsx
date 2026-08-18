@@ -27,6 +27,9 @@ export function HomePageComponent({
 			ErrorComponent={DefaultError}
 			LoadingComponent={PostsLoading}
 			NotFoundComponent={NotFoundPage}
+			permission={
+				published ? undefined : { resource: "blog:draft", action: "read" }
+			}
 			props={{ published }}
 			onError={(error) => {
 				if (onRouteError) {

@@ -6,19 +6,14 @@ import { PostsList } from "../shared/posts-list";
 import { TagsList } from "../shared/tags-list";
 
 import { useSuspensePosts } from "../../hooks/blog-hooks";
-import { BLOG_LOCALIZATION } from "../../localization";
-import { usePluginOverrides } from "@btst/stack/context";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 
 // Internal component with actual page content
 export function HomePage({ published }: { published: boolean }) {
-	const overrides = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", {
-		localization: BLOG_LOCALIZATION,
-	});
+	const t = useTranslate();
+	const overrides = usePluginOverrides<BlogPluginOverrides>("blog");
 	const { localization } = overrides;
 
 	// Call lifecycle hooks
@@ -47,8 +42,10 @@ export function HomePage({ published }: { published: boolean }) {
 				<PageHeader
 					title={
 						published
-							? localization.BLOG_LIST_TITLE
-							: localization.BLOG_LIST_DRAFTS_TITLE
+							? (localization?.BLOG_LIST_TITLE ??
+								t("blog.list.title", "Blog Posts"))
+							: (localization?.BLOG_LIST_DRAFTS_TITLE ??
+								t("blog.list.draftsTitle", "Draft Posts"))
 					}
 					childrenBottom={<TagsList />}
 				/>

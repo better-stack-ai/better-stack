@@ -23,6 +23,7 @@ export function NewPostPageComponent() {
 			ErrorComponent={DefaultError}
 			LoadingComponent={FormLoading}
 			NotFoundComponent={NotFoundPage}
+			permission={{ resource: "blog:post", action: "create" }}
 			onError={(error) => {
 				if (onRouteError) {
 					onRouteError("newPost", error, {

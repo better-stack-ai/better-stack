@@ -27,6 +27,7 @@
       "databases/adapters",
       "---[BookOpenCheck]Concepts---",
       "auth",
+      "i18n",
       "cli",
       "api-reference",
       "standalone-components",

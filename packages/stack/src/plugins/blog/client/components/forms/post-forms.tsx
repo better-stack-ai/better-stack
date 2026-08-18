@@ -40,7 +40,15 @@ import {
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
-import { lazy, memo, Suspense, useEffect, useRef, useState } from "react";
+import {
+	lazy,
+	memo,
+	Suspense,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import {
 	type FieldPath,
 	type FieldValues,
@@ -56,8 +64,13 @@ const MarkdownEditor = lazy(() =>
 		default: module.MarkdownEditorWithOverrides,
 	})),
 );
-import { BLOG_LOCALIZATION } from "../../localization";
-import { useNotify, usePluginOverrides } from "@btst/stack/context";
+import {
+	CanAccess,
+	useNotify,
+	usePluginOverrides,
+	useTranslate,
+	type TranslateFn,
+} from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
 import { EmptyList } from "../shared/empty-list";
 import { TagsMultiSelect } from "./tags-multiselect";
@@ -123,13 +136,12 @@ function PostFormBody<T extends CommonPostFormValues>({
 	setFeaturedImageUploading: (uploading: boolean) => void;
 	initialSlugTouched?: boolean;
 }) {
-	const { localization } = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", {
-		localization: BLOG_LOCALIZATION,
-	});
+	const t = useTranslate();
+	const { localization } = usePluginOverrides<BlogPluginOverrides>("blog");
 	const [slugTouched, setSlugTouched] = useState(initialSlugTouched);
+	const requiredAsterisk =
+		localization?.BLOG_FORMS_REQUIRED_ASTERISK ??
+		t("blog.forms.requiredAsterisk", " *");
 	const nameTitle = "title" as FieldPath<T>;
 	const nameSlug = "slug" as FieldPath<T>;
 	const nameExcerpt = "excerpt" as FieldPath<T>;
@@ -152,14 +164,16 @@ function PostFormBody<T extends CommonPostFormValues>({
 					render={({ field }) => (
 						<FormItem>
 							<FormLabel>
-								{localization.BLOG_FORMS_TITLE_LABEL}
-								<span className="text-destructive">
-									{localization.BLOG_FORMS_REQUIRED_ASTERISK}
-								</span>
+								{localization?.BLOG_FORMS_TITLE_LABEL ??
+									t("blog.forms.titleLabel", "Title")}
+								<span className="text-destructive">{requiredAsterisk}</span>
 							</FormLabel>
 							<FormControl>
 								<Input
-									placeholder={localization.BLOG_FORMS_TITLE_PLACEHOLDER}
+									placeholder={
+										localization?.BLOG_FORMS_TITLE_PLACEHOLDER ??
+										t("blog.forms.titlePlaceholder", "Enter your post title...")
+									}
 									{...field}
 									value={String(field.value ?? "")}
 									onChange={(e) => {
@@ -188,10 +202,16 @@ function PostFormBody<T extends CommonPostFormValues>({
 
 						return (
 							<FormItem>
-								<FormLabel>{localization.BLOG_FORMS_SLUG_LABEL}</FormLabel>
+								<FormLabel>
+									{localization?.BLOG_FORMS_SLUG_LABEL ??
+										t("blog.forms.slugLabel", "Slug")}
+								</FormLabel>
 								<FormControl>
 									<Input
-										placeholder={localization.BLOG_FORMS_SLUG_PLACEHOLDER}
+										placeholder={
+											localization?.BLOG_FORMS_SLUG_PLACEHOLDER ??
+											t("blog.forms.slugPlaceholder", "url-friendly-slug")
+										}
 										{...field}
 										value={currentSlug}
 										onChange={(e) => {
@@ -217,14 +237,19 @@ function PostFormBody<T extends CommonPostFormValues>({
 					render={({ field }) => (
 						<FormItem className="flex flex-col">
 							<FormLabel>
-								{localization.BLOG_FORMS_EXCERPT_LABEL}
-								<span className="text-destructive">
-									{localization.BLOG_FORMS_REQUIRED_ASTERISK}
-								</span>
+								{localization?.BLOG_FORMS_EXCERPT_LABEL ??
+									t("blog.forms.excerptLabel", "Excerpt")}
+								<span className="text-destructive">{requiredAsterisk}</span>
 							</FormLabel>
 							<FormControl>
 								<Textarea
-									placeholder={localization.BLOG_FORMS_EXCERPT_PLACEHOLDER}
+									placeholder={
+										localization?.BLOG_FORMS_EXCERPT_PLACEHOLDER ??
+										t(
+											"blog.forms.excerptPlaceholder",
+											"Brief summary of your post...",
+										)
+									}
 									className="min-h-20"
 									value={String(field.value ?? "")}
 									onChange={field.onChange}
@@ -254,12 +279,18 @@ function PostFormBody<T extends CommonPostFormValues>({
 					name={nameTags}
 					render={({ field }) => (
 						<FormItem className="flex flex-col">
-							<FormLabel>{localization.BLOG_FORMS_TAGS_LABEL}</FormLabel>
+							<FormLabel>
+								{localization?.BLOG_FORMS_TAGS_LABEL ??
+									t("blog.forms.tagsLabel", "Tags")}
+							</FormLabel>
 							<FormControl>
 								<TagsMultiSelect
 									value={Array.isArray(field.value) ? field.value : []}
 									onChange={field.onChange}
-									placeholder={localization.BLOG_FORMS_TAGS_PLACEHOLDER}
+									placeholder={
+										localization?.BLOG_FORMS_TAGS_PLACEHOLDER ??
+										t("blog.forms.tagsPlaceholder", "Enter your post tags...")
+									}
 								/>
 							</FormControl>
 							<FormDescription />
@@ -274,10 +305,9 @@ function PostFormBody<T extends CommonPostFormValues>({
 					render={({ field }) => (
 						<FormItem className="flex flex-col">
 							<FormLabel>
-								{localization.BLOG_FORMS_CONTENT_LABEL}
-								<span className="text-destructive">
-									{localization.BLOG_FORMS_REQUIRED_ASTERISK}
-								</span>
+								{localization?.BLOG_FORMS_CONTENT_LABEL ??
+									t("blog.forms.contentLabel", "Content")}
+								<span className="text-destructive">{requiredAsterisk}</span>
 							</FormLabel>
 							<FormControl>
 								<Suspense
@@ -308,9 +338,16 @@ function PostFormBody<T extends CommonPostFormValues>({
 					render={({ field }) => (
 						<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
 							<div className="space-y-0.5">
-								<FormLabel>{localization.BLOG_FORMS_PUBLISHED_LABEL}</FormLabel>
+								<FormLabel>
+									{localization?.BLOG_FORMS_PUBLISHED_LABEL ??
+										t("blog.forms.publishedLabel", "Published")}
+								</FormLabel>
 								<FormDescription>
-									{localization.BLOG_FORMS_PUBLISHED_DESCRIPTION}
+									{localization?.BLOG_FORMS_PUBLISHED_DESCRIPTION ??
+										t(
+											"blog.forms.publishedDescription",
+											"Toggle to publish immediately",
+										)}
 								</FormDescription>
 							</div>
 							<FormControl>
@@ -333,7 +370,8 @@ function PostFormBody<T extends CommonPostFormValues>({
 						disabled={disabled}
 						type="button"
 					>
-						{localization.BLOG_FORMS_CANCEL_BUTTON}
+						{localization?.BLOG_FORMS_CANCEL_BUTTON ??
+							t("blog.forms.cancelButton", "Cancel")}
 					</Button>
 				</div>
 			</form>
@@ -353,6 +391,33 @@ const CustomPostUpdateSchema = PostUpdateSchema.omit({
 	updatedAt: true,
 	publishedAt: true,
 });
+
+/**
+ * Required-field validators with translatable messages for the client-side
+ * resolver. Server-side validation (`schemas.ts`) is unchanged.
+ */
+function localizedRequiredFields(t: TranslateFn) {
+	return {
+		title: z
+			.string()
+			.min(1, t("blog.forms.validation.titleRequired", "Title is required")),
+		content: z
+			.string()
+			.min(
+				1,
+				t("blog.forms.validation.contentRequired", "Content is required"),
+			),
+		excerpt: z
+			.string()
+			.min(
+				1,
+				t("blog.forms.validation.excerptRequired", "Excerpt is required"),
+			),
+		slug: z
+			.string()
+			.min(1, t("blog.forms.validation.slugRequired", "Slug is required")),
+	};
+}
 
 type AddPostFormProps = {
 	onClose: () => void;
@@ -379,22 +444,24 @@ const AddPostFormComponent = ({
 	onFormReady,
 }: AddPostFormProps) => {
 	const [featuredImageUploading, setFeaturedImageUploading] = useState(false);
-	const { localization } = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", {
-		localization: BLOG_LOCALIZATION,
-	});
+	const t = useTranslate();
+	const { localization } = usePluginOverrides<BlogPluginOverrides>("blog");
 
-	// const { uploadImage } = useBlogContext()
-
-	const schema = CustomPostCreateSchema;
+	const schema = useMemo(() => {
+		const required = localizedRequiredFields(t);
+		return CustomPostCreateSchema.extend({
+			...required,
+			slug: required.slug.optional(),
+		});
+	}, [t]);
 
 	type AddPostFormValues = z.input<typeof schema>;
 
 	const resourceForm = usePostForm<AddPostFormValues>({
 		action: "create",
-		successMessage: localization.BLOG_FORMS_TOAST_CREATE_SUCCESS,
+		successMessage:
+			localization?.BLOG_FORMS_TOAST_CREATE_SUCCESS ??
+			t("blog.forms.toastCreateSuccess", "Post created successfully"),
 		toCreateVars: (data) => ({
 			title: data.title,
 			content: data.content,
@@ -447,8 +514,10 @@ const AddPostFormComponent = ({
 			onSubmit={onSubmit}
 			submitLabel={
 				resourceForm.isSubmitting
-					? localization.BLOG_FORMS_SUBMIT_CREATE_PENDING
-					: localization.BLOG_FORMS_SUBMIT_CREATE_IDLE
+					? (localization?.BLOG_FORMS_SUBMIT_CREATE_PENDING ??
+						t("blog.forms.submitCreatePending", "Creating..."))
+					: (localization?.BLOG_FORMS_SUBMIT_CREATE_IDLE ??
+						t("blog.forms.submitCreateIdle", "Create Post"))
 			}
 			onCancel={onClose}
 			disabled={resourceForm.isSubmitting || featuredImageUploading}
@@ -492,18 +561,16 @@ const EditPostFormComponent = ({
 }: EditPostFormProps) => {
 	const [featuredImageUploading, setFeaturedImageUploading] = useState(false);
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-	const { localization } = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", {
-		localization: BLOG_LOCALIZATION,
-	});
-	// const { uploadImage } = useBlogContext()
+	const t = useTranslate();
+	const { localization } = usePluginOverrides<BlogPluginOverrides>("blog");
 
 	const { post } = useSuspensePost(postSlug);
 	const notify = useNotify();
 
-	const schema = CustomPostUpdateSchema;
+	const schema = useMemo(
+		() => CustomPostUpdateSchema.extend(localizedRequiredFields(t)),
+		[t],
+	);
 
 	type EditPostFormValues = z.input<typeof schema>;
 
@@ -511,7 +578,9 @@ const EditPostFormComponent = ({
 		action: "edit",
 		// Record comes from the suspense hook above — skips useForm's own fetch
 		record: post,
-		successMessage: localization.BLOG_FORMS_TOAST_UPDATE_SUCCESS,
+		successMessage:
+			localization?.BLOG_FORMS_TOAST_UPDATE_SUCCESS ??
+			t("blog.forms.toastUpdateSuccess", "Post updated successfully"),
 		defaults: (record) =>
 			(record
 				? {
@@ -572,11 +641,15 @@ const EditPostFormComponent = ({
 			notify.error(
 				error instanceof Error
 					? error.message
-					: localization.BLOG_FORMS_TOAST_DELETE_FAILURE,
+					: (localization?.BLOG_FORMS_TOAST_DELETE_FAILURE ??
+							t("blog.forms.toastDeleteFailure", "Failed to delete post")),
 			);
 			return;
 		}
-		notify.success(localization.BLOG_FORMS_TOAST_DELETE_SUCCESS);
+		notify.success(
+			localization?.BLOG_FORMS_TOAST_DELETE_SUCCESS ??
+				t("blog.forms.toastDeleteSuccess", "Post deleted successfully"),
+		);
 		setDeleteDialogOpen(false);
 
 		// Call onDelete callback if provided, otherwise use onClose
@@ -612,7 +685,17 @@ const EditPostFormComponent = ({
 	}, []);
 
 	if (!post) {
-		return <EmptyList message={localization.BLOG_PAGE_NOT_FOUND_DESCRIPTION} />;
+		return (
+			<EmptyList
+				message={
+					localization?.BLOG_PAGE_NOT_FOUND_DESCRIPTION ??
+					t(
+						"blog.common.pageNotFoundDescription",
+						"The page you are looking for does not exist.",
+					)
+				}
+			/>
+		);
 	}
 
 	return (
@@ -622,8 +705,10 @@ const EditPostFormComponent = ({
 				onSubmit={onSubmit}
 				submitLabel={
 					resourceForm.isSubmitting
-						? localization.BLOG_FORMS_SUBMIT_UPDATE_PENDING
-						: localization.BLOG_FORMS_SUBMIT_UPDATE_IDLE
+						? (localization?.BLOG_FORMS_SUBMIT_UPDATE_PENDING ??
+							t("blog.forms.submitUpdatePending", "Updating..."))
+						: (localization?.BLOG_FORMS_SUBMIT_UPDATE_IDLE ??
+							t("blog.forms.submitUpdateIdle", "Update Post"))
 				}
 				onCancel={onClose}
 				disabled={resourceForm.isSubmitting || featuredImageUploading}
@@ -631,50 +716,64 @@ const EditPostFormComponent = ({
 				setFeaturedImageUploading={setFeaturedImageUploading}
 				initialSlugTouched={!!post?.slug}
 			/>
-			<div className="w-full">
-				<AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-					<AlertDialogTrigger asChild>
-						<Button
-							variant="destructive"
-							type="button"
-							disabled={
-								resourceForm.isSubmitting ||
-								featuredImageUploading ||
-								isDeletingPost
-							}
-							className="mt-4"
-						>
-							{localization.BLOG_FORMS_DELETE_BUTTON}
-						</Button>
-					</AlertDialogTrigger>
-					<AlertDialogContent>
-						<AlertDialogHeader>
-							<AlertDialogTitle>
-								{localization.BLOG_FORMS_DELETE_DIALOG_TITLE}
-							</AlertDialogTitle>
-							<AlertDialogDescription>
-								{localization.BLOG_FORMS_DELETE_DIALOG_DESCRIPTION}
-							</AlertDialogDescription>
-						</AlertDialogHeader>
-						<AlertDialogFooter>
-							<AlertDialogCancel disabled={isDeletingPost}>
-								{localization.BLOG_FORMS_DELETE_DIALOG_CANCEL}
-							</AlertDialogCancel>
-							<AlertDialogAction
-								onClick={(e) => {
-									e.preventDefault();
-									void handleDelete();
-								}}
-								disabled={isDeletingPost}
+			<CanAccess resource="blog:post" action="delete" params={{ id: post.id }}>
+				<div className="w-full">
+					<AlertDialog
+						open={deleteDialogOpen}
+						onOpenChange={setDeleteDialogOpen}
+					>
+						<AlertDialogTrigger asChild>
+							<Button
+								variant="destructive"
+								type="button"
+								disabled={
+									resourceForm.isSubmitting ||
+									featuredImageUploading ||
+									isDeletingPost
+								}
+								className="mt-4"
 							>
-								{isDeletingPost
-									? localization.BLOG_FORMS_DELETE_PENDING
-									: localization.BLOG_FORMS_DELETE_DIALOG_CONFIRM}
-							</AlertDialogAction>
-						</AlertDialogFooter>
-					</AlertDialogContent>
-				</AlertDialog>
-			</div>
+								{localization?.BLOG_FORMS_DELETE_BUTTON ??
+									t("blog.forms.deleteButton", "Delete Post")}
+							</Button>
+						</AlertDialogTrigger>
+						<AlertDialogContent>
+							<AlertDialogHeader>
+								<AlertDialogTitle>
+									{localization?.BLOG_FORMS_DELETE_DIALOG_TITLE ??
+										t("blog.forms.deleteDialogTitle", "Delete Post")}
+								</AlertDialogTitle>
+								<AlertDialogDescription>
+									{localization?.BLOG_FORMS_DELETE_DIALOG_DESCRIPTION ??
+										t(
+											"blog.forms.deleteDialogDescription",
+											"Are you sure you want to delete this post? This action cannot be undone.",
+										)}
+								</AlertDialogDescription>
+							</AlertDialogHeader>
+							<AlertDialogFooter>
+								<AlertDialogCancel disabled={isDeletingPost}>
+									{localization?.BLOG_FORMS_DELETE_DIALOG_CANCEL ??
+										t("blog.forms.deleteDialogCancel", "Cancel")}
+								</AlertDialogCancel>
+								<AlertDialogAction
+									onClick={(e) => {
+										e.preventDefault();
+										void handleDelete();
+									}}
+									disabled={isDeletingPost}
+								>
+									{isDeletingPost
+										? (localization?.BLOG_FORMS_DELETE_PENDING ??
+											t("blog.forms.deletePending", "Deleting..."))
+										: (localization?.BLOG_FORMS_DELETE_DIALOG_CONFIRM ??
+											t("blog.forms.deleteDialogConfirm", "Delete"))}
+								</AlertDialogAction>
+							</AlertDialogFooter>
+						</AlertDialogContent>
+					</AlertDialog>
+				</div>
+			</CanAccess>
 		</>
 	);
 };

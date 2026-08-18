@@ -1,6 +1,10 @@
 "use client";
 
-import { usePluginOverrides, useBasePath } from "@btst/stack/context";
+import {
+	usePluginOverrides,
+	useBasePath,
+	useTranslate,
+} from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { BlogPluginOverrides } from "../../overrides";
@@ -16,6 +20,7 @@ export function PostNavigation({
 	previousPost,
 	nextPost,
 }: PostNavigationProps) {
+	const t = useTranslate();
 	const { Link } = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
@@ -46,7 +51,7 @@ export function PostNavigation({
 										<ChevronLeft className="h-4 w-4 shrink-0" />
 										<div className="flex flex-col items-start min-w-0 flex-1">
 											<span className="text-xs text-muted-foreground">
-												Previous
+												{t("blog.post.previous", "Previous")}
 											</span>
 											<div className="font-semibold line-clamp-2 text-sm leading-tight transition-colors text-start">
 												{previousPost.title}
@@ -72,7 +77,7 @@ export function PostNavigation({
 									<div className="flex items-center gap-2 w-full min-w-0">
 										<div className="flex flex-col items-end min-w-0 flex-1">
 											<span className="text-xs text-muted-foreground">
-												Next
+												{t("blog.post.next", "Next")}
 											</span>
 											<div className="font-semibold line-clamp-2 text-sm leading-tight transition-colors text-start">
 												{nextPost.title}

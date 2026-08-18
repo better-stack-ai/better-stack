@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 import type { DehydrateOptions, QueryClient } from "@tanstack/react-query";
 import type { ComponentType, ReactNode } from "react";
+import { useMemo } from "react";
 import { useLoaderData, useRouteError } from "react-router";
 import { normalizePath } from "../client/path-utils";
 import {
@@ -100,7 +101,15 @@ export function createReactRouterPage(options: CreateReactRouterPageOptions) {
 	function Component() {
 		const data = useLoaderData<typeof loader>();
 		const queryClient = useQueryClient();
-		const route = getStackClient(queryClient).router.getRoute(data.path);
+		// Memoized so PageComponent keeps a stable identity across re-renders:
+		// getRoute() invokes the route handler, which produces new component
+		// references each call. Without the memo, any router state change that
+		// re-renders this component (e.g. a search-param update) would remount
+		// the whole page subtree, losing component state such as open dialogs.
+		const route = useMemo(
+			() => getStackClient(queryClient).router.getRoute(data.path),
+			[queryClient, data.path],
+		);
 		const page = route?.PageComponent ? (
 			<route.PageComponent />
 		) : NotFound ? (

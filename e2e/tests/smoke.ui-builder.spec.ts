@@ -128,8 +128,11 @@ test.describe("UI Builder Plugin - Admin Pages", () => {
 			timeout: 10000,
 		});
 
-		// Wait for first toast to disappear before proceeding
-		await expect(page.locator("text=/saved/i")).not.toBeVisible({
+		// Wait for the toast(s) to disappear before proceeding. Use .first()
+		// like the visibility check above: the UI Builder embeds its own
+		// sonner Toaster, so the same toast can render twice (strict mode).
+		// All copies share one store and dismiss together.
+		await expect(page.locator("text=/saved/i").first()).not.toBeVisible({
 			timeout: 10000,
 		});
 

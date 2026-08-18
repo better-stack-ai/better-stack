@@ -260,4 +260,94 @@ describe("useListState", () => {
 
 		expect(router.setSearchParams).not.toHaveBeenCalled();
 	});
+
+	it("falls back to local state without router search-param bindings", async () => {
+		let captured: any;
+
+		function Probe() {
+			const [state, setState] = useListState("comments-moderation", schema);
+			captured = { state, setState };
+			return null;
+		}
+
+		// StackProvider without getSearchParams/setSearchParams on the router.
+		await act(async () => {
+			root.render(
+				<StackProvider basePath="/pages" router={{}}>
+					<Probe />
+				</StackProvider>,
+			);
+		});
+
+		expect(captured.state).toEqual({ tab: "pending", page: 1, filter: "" });
+
+		await act(async () => {
+			captured.setState({ tab: "spam", page: 3 });
+		});
+		expect(captured.state).toEqual({ tab: "spam", page: 3, filter: "" });
+
+		await act(async () => {
+			captured.setState((prev: any) => ({ page: prev.page + 1 }));
+		});
+		expect(captured.state).toEqual({ tab: "spam", page: 4, filter: "" });
+	});
+
+	it("still reads the URL when the router binding is read-only", async () => {
+		// Router exposes getSearchParams but no setSearchParams.
+		let params = new URLSearchParams("tab=spam&page=2");
+		const router = {
+			getSearchParams: () => new URLSearchParams(params.toString()),
+		};
+		let captured: any;
+
+		function Probe() {
+			const [state, setState] = useListState("comments-moderation", schema);
+			captured = { state, setState };
+			return null;
+		}
+		await act(async () => {
+			root.render(
+				<StackProvider basePath="/pages" router={router}>
+					<Probe />
+				</StackProvider>,
+			);
+		});
+
+		// URL-driven reads work as before
+		expect(captured.state).toEqual({ tab: "spam", page: 2, filter: "" });
+
+		// Writes land in the local overlay instead of being dropped
+		await act(async () => {
+			captured.setState({ filter: "abc" });
+		});
+		expect(captured.state).toEqual({ tab: "spam", page: 2, filter: "abc" });
+
+		// External URL changes (e.g. back/forward) still flow into state
+		params = new URLSearchParams("tab=pending&page=7");
+		await act(async () => {
+			window.dispatchEvent(new PopStateEvent("popstate"));
+		});
+		expect(captured.state).toEqual({ tab: "pending", page: 7, filter: "abc" });
+	});
+
+	it("falls back to local state without a StackProvider", async () => {
+		let captured: any;
+
+		function Probe() {
+			const [state, setState] = useListState("comments-moderation", schema);
+			captured = { state, setState };
+			return null;
+		}
+
+		await act(async () => {
+			root.render(<Probe />);
+		});
+
+		expect(captured.state).toEqual({ tab: "pending", page: 1, filter: "" });
+
+		await act(async () => {
+			captured.setState({ filter: "abc" });
+		});
+		expect(captured.state).toEqual({ tab: "pending", page: 1, filter: "abc" });
+	});
 });
