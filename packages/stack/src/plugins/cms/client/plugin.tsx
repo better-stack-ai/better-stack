@@ -246,11 +246,7 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 			const queries = createCMSQueryKeys(client, headers);
 			const limit = 20;
 			const typesQuery = queries.cmsTypes.list();
-			const listQuery = queries.cmsContent.list({
-				typeSlug,
-				limit,
-				offset: 0,
-			});
+			const listQuery = queries.cmsContent.list({ typeSlug, limit });
 
 			try {
 				// Before hook - authorization check
@@ -266,24 +262,7 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 
 				// Prefetch content list using infinite query (matches useSuspenseInfiniteQuery in hooks)
 				await queryClient.prefetchInfiniteQuery({
-					queryKey: listQuery.queryKey,
-					queryFn: async ({ pageParam = 0 }) => {
-						const response: unknown = await client("/content/:typeSlug", {
-							method: "GET",
-							params: { typeSlug },
-							query: { limit, offset: pageParam },
-							headers,
-						});
-						if (
-							typeof response === "object" &&
-							response !== null &&
-							"error" in response &&
-							response.error
-						) {
-							throw new Error(String(response.error));
-						}
-						return (response as { data?: unknown }).data;
-					},
+					...listQuery,
 					initialPageParam: 0,
 				});
 

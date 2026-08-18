@@ -7,18 +7,21 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@workspace/ui/components/card";
-import { usePluginOverrides, useBasePath } from "@btst/stack/context";
+import {
+	usePluginOverrides,
+	useBasePath,
+	useTranslate,
+} from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
 import { useSuspenseContentTypes } from "../../hooks";
 import { EmptyState } from "../shared/empty-state";
 import { PageWrapper } from "../shared/page-wrapper";
-import { CMS_LOCALIZATION } from "../../localization";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 
 export function DashboardPage() {
+	const t = useTranslate();
 	const overrides = usePluginOverrides<CMSPluginOverrides>("cms");
-	const { navigate } = overrides;
-	const localization = { ...CMS_LOCALIZATION, ...overrides.localization };
+	const { navigate, localization } = overrides;
 	const basePath = useBasePath();
 
 	// Call lifecycle hooks for authorization
@@ -38,21 +41,32 @@ export function DashboardPage() {
 	});
 	const { contentTypes } = useSuspenseContentTypes();
 
+	const title =
+		localization?.CMS_DASHBOARD_TITLE ?? t("cms.dashboard.title", "Content");
+	const subtitle =
+		localization?.CMS_DASHBOARD_SUBTITLE ??
+		t("cms.dashboard.subtitle", "Manage your content types");
+
 	if (contentTypes.length === 0) {
 		return (
 			<PageWrapper testId="cms-dashboard-page">
 				<div className="w-full max-w-5xl space-y-6">
 					<div>
-						<h1 className="text-2xl font-bold tracking-tight">
-							{localization.CMS_DASHBOARD_TITLE}
-						</h1>
-						<p className="text-muted-foreground">
-							{localization.CMS_DASHBOARD_SUBTITLE}
-						</p>
+						<h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+						<p className="text-muted-foreground">{subtitle}</p>
 					</div>
 					<EmptyState
-						title={localization.CMS_DASHBOARD_NO_TYPES}
-						description={localization.CMS_DASHBOARD_NO_TYPES_DESCRIPTION}
+						title={
+							localization?.CMS_DASHBOARD_NO_TYPES ??
+							t("cms.dashboard.noTypes", "No content types configured")
+						}
+						description={
+							localization?.CMS_DASHBOARD_NO_TYPES_DESCRIPTION ??
+							t(
+								"cms.dashboard.noTypesDescription",
+								"Add content types to your CMS configuration to get started.",
+							)
+						}
 					/>
 				</div>
 			</PageWrapper>
@@ -60,24 +74,28 @@ export function DashboardPage() {
 	}
 
 	const formatItemCount = (count: number) => {
-		if (count === 0) return localization.CMS_DASHBOARD_ITEMS_COUNT_ZERO;
-		if (count === 1) return localization.CMS_DASHBOARD_ITEMS_COUNT_ONE;
-		return localization.CMS_DASHBOARD_ITEMS_COUNT.replace(
-			"{count}",
-			String(count),
-		);
+		if (count === 0)
+			return (
+				localization?.CMS_DASHBOARD_ITEMS_COUNT_ZERO ??
+				t("cms.dashboard.itemsCountZero", "No items")
+			);
+		if (count === 1)
+			return (
+				localization?.CMS_DASHBOARD_ITEMS_COUNT_ONE ??
+				t("cms.dashboard.itemsCountOne", "1 item")
+			);
+		return (
+			localization?.CMS_DASHBOARD_ITEMS_COUNT ??
+			t("cms.dashboard.itemsCount", "{count} items")
+		).replace("{count}", String(count));
 	};
 
 	return (
 		<PageWrapper testId="cms-dashboard-page">
 			<div className="w-full max-w-5xl space-y-6">
 				<div>
-					<h1 className="text-2xl font-bold tracking-tight">
-						{localization.CMS_DASHBOARD_TITLE}
-					</h1>
-					<p className="text-muted-foreground">
-						{localization.CMS_DASHBOARD_SUBTITLE}
-					</p>
+					<h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+					<p className="text-muted-foreground">{subtitle}</p>
 				</div>
 
 				<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

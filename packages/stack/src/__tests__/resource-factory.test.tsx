@@ -52,6 +52,37 @@ const resources = {
 				key: () => ["all"],
 				select: (data: any): Item[] => data ?? [],
 			},
+			// Envelope pages ({ items, total }) with a custom nextPageParam
+			paged: {
+				path: "/paged/:scope",
+				params: (_params?: ListParams & { scope?: string }) => ({
+					scope: _params?.scope ?? "default",
+				}),
+				query: (params?: ListParams & { scope?: string }) => ({
+					limit: params?.limit ?? 10,
+				}),
+				key: (params?: ListParams & { scope?: string }) => [
+					{ scope: params?.scope ?? "default", limit: params?.limit ?? 10 },
+				],
+				select: (data: any): { items: Item[]; total: number } => data,
+				infinite: true,
+				pageSize: (params?: ListParams & { scope?: string }) =>
+					params?.limit ?? 10,
+				nextPageParam: (
+					lastPage: { items: Item[]; total: number },
+					allPages: { items: Item[]; total: number }[],
+					params?: ListParams & { scope?: string },
+				) => {
+					const limit = params?.limit ?? 10;
+					if ((lastPage?.items?.length ?? 0) < limit) return undefined;
+					const loaded = allPages.reduce(
+						(sum, page) => sum + (page?.items?.length ?? 0),
+						0,
+					);
+					if (loaded >= (lastPage?.total ?? 0)) return undefined;
+					return loaded;
+				},
+			},
 		},
 		mutations: {
 			create: {
@@ -141,6 +172,19 @@ describe("createResourceQueryKeys", () => {
 		expect(client).toHaveBeenLastCalledWith("/items", {
 			method: "GET",
 			query: { q: undefined, limit: 5, offset: 0 },
+		});
+	});
+
+	it("passes declared path params to the client", async () => {
+		client.mockResolvedValue({ data: { items: [], total: 0 } });
+		const keys = createResourceQueryKeys(client, resources);
+
+		await keys.items.paged({ scope: "mine", limit: 5 }).queryFn();
+
+		expect(client).toHaveBeenCalledWith("/paged/:scope", {
+			method: "GET",
+			params: { scope: "mine" },
+			query: { limit: 5, offset: 0 },
 		});
 	});
 
@@ -366,6 +410,53 @@ describe("createResource hooks", () => {
 		// Second page is short (1 < 2) — no further pages
 		expect(captured.hasNextPage).toBe(false);
 		expect(String(fetchMock.mock.calls[1]?.[0])).toContain("offset=2");
+	});
+
+	it("useInfinite() honors a custom nextPageParam for envelope pages", async () => {
+		// total 4 with limit 2: page 2 is full (2 items) so the default
+		// page-size heuristic would keep paging — the custom nextPageParam
+		// must stop because loaded (4) >= total (4).
+		const page1 = {
+			items: [
+				{ id: "a0", name: "a0" },
+				{ id: "a1", name: "a1" },
+			],
+			total: 4,
+		};
+		const page2 = {
+			items: [
+				{ id: "b0", name: "b0" },
+				{ id: "b1", name: "b1" },
+			],
+			total: 4,
+		};
+		fetchMock.mockImplementation(async (input: any) => {
+			const url = String(input);
+			return url.includes("offset=2")
+				? jsonResponse(page2)
+				: jsonResponse(page1);
+		});
+
+		let captured: any;
+		function Probe() {
+			captured = items.items.paged.useInfinite([{ limit: 2 }]);
+			return null;
+		}
+		await render(<Probe />);
+		await waitFor(() => captured.isSuccess);
+
+		// Envelope survives (not flattened) and total is available
+		expect(captured.data.pages[0]).toEqual(page1);
+		expect(captured.hasNextPage).toBe(true);
+
+		await act(async () => {
+			await captured.fetchNextPage();
+		});
+		await waitFor(() => captured.data.pages.length === 2);
+
+		expect(String(fetchMock.mock.calls[1]?.[0])).toContain("offset=2");
+		// 4 items loaded >= total 4 — custom nextPageParam reports no more pages
+		expect(captured.hasNextPage).toBe(false);
 	});
 
 	it("mutations invalidate declared targets, seed detail data and refresh", async () => {

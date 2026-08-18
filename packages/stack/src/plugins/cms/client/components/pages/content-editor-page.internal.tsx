@@ -3,20 +3,22 @@
 import { useState, useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
-import { usePluginOverrides, useBasePath } from "@btst/stack/context";
+import {
+	usePluginOverrides,
+	useBasePath,
+	useTranslate,
+} from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
 import {
 	useSuspenseContentTypes,
 	useContentItem,
-	useCreateContent,
-	useUpdateContent,
+	useContentItemForm,
 } from "../../hooks";
 import { ContentForm } from "../forms/content-form";
 import { InverseRelationsPanel } from "../inverse-relations-panel";
 import { EmptyState } from "../shared/empty-state";
 import { PageWrapper } from "../shared/page-wrapper";
 import { EditorSkeleton } from "../loading/editor-skeleton";
-import { CMS_LOCALIZATION } from "../../localization";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 
 /**
@@ -131,9 +133,9 @@ interface ContentEditorPageProps {
 }
 
 export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
+	const t = useTranslate();
 	const overrides = usePluginOverrides<CMSPluginOverrides>("cms");
-	const { navigate } = overrides;
-	const localization = { ...CMS_LOCALIZATION, ...overrides.localization };
+	const { navigate, localization } = overrides;
 	const basePath = useBasePath();
 
 	// Parse prefill query parameters for pre-populating fields when creating new items
@@ -166,16 +168,49 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 	// This avoids conditional hook calls which violate React's Rules of Hooks
 	const { item, isLoading: isLoadingItem } = useContentItem(typeSlug, id ?? "");
 
-	const createContent = useCreateContent(typeSlug);
-	const updateContent = useUpdateContent(typeSlug);
+	// Core resource form: submits the right mutation, awaits invalidation,
+	// notifies success/error via useNotify(), and exposes server validation
+	// issues as fieldErrors for inline display.
+	const resourceForm = useContentItemForm<{
+		slug: string;
+		data: Record<string, unknown>;
+	}>({
+		action: isEditing ? "edit" : "create",
+		record: isEditing ? item : null,
+		successMessage: (_result, action) =>
+			action === "create"
+				? (localization?.CMS_TOAST_CREATE_SUCCESS ??
+					t("cms.toasts.createSuccess", "Item created successfully"))
+				: (localization?.CMS_TOAST_UPDATE_SUCCESS ??
+					t("cms.toasts.updateSuccess", "Item updated successfully")),
+		toCreateVars: (values) => ({
+			typeSlug,
+			slug: values.slug,
+			data: values.data,
+		}),
+		toUpdateVars: (values) => ({
+			typeSlug,
+			id: id ?? "",
+			data: { slug: values.slug, data: values.data },
+		}),
+		onSuccess: () => {
+			navigate(`${basePath}/cms/${typeSlug}`);
+		},
+	});
 
 	if (!contentType) {
 		return (
 			<PageWrapper testId="cms-editor-page">
 				<div className="w-full max-w-2xl">
 					<EmptyState
-						title={localization.CMS_ERROR_NOT_FOUND}
-						description="Content type not found"
+						title={
+							localization?.CMS_ERROR_NOT_FOUND ??
+							t("cms.common.notFound", "Not found")
+						}
+						description={
+							localization?.CMS_ERROR_TYPE_NOT_FOUND_DESCRIPTION ??
+							t("cms.common.typeNotFoundDescription", "Content type not found")
+						}
 					/>
 				</div>
 			</PageWrapper>
@@ -198,29 +233,40 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 			<PageWrapper testId="cms-editor-page">
 				<div className="w-full max-w-2xl">
 					<EmptyState
-						title={localization.CMS_ERROR_NOT_FOUND}
-						description="Content item not found"
+						title={
+							localization?.CMS_ERROR_NOT_FOUND ??
+							t("cms.common.notFound", "Not found")
+						}
+						description={
+							localization?.CMS_ERROR_ITEM_NOT_FOUND_DESCRIPTION ??
+							t("cms.common.itemNotFoundDescription", "Content item not found")
+						}
 					/>
 				</div>
 			</PageWrapper>
 		);
 	}
 
+	// resourceForm.submit never throws: success notifies + navigates via the
+	// config above; errors land on resourceForm.error / fieldErrors.
 	const handleSubmit = async (data: {
 		slug: string;
 		data: Record<string, unknown>;
 	}) => {
-		if (isEditing && id) {
-			await updateContent.mutateAsync({ id, data });
-		} else {
-			await createContent.mutateAsync(data);
-		}
-		navigate(`${basePath}/cms/${typeSlug}`);
+		await resourceForm.submit(data);
 	};
 
+	const hasFieldErrors = Object.keys(resourceForm.fieldErrors).length > 0;
+
 	const title = isEditing
-		? localization.CMS_EDITOR_TITLE_EDIT.replace("{typeName}", contentType.name)
-		: localization.CMS_EDITOR_TITLE_NEW.replace("{typeName}", contentType.name);
+		? (
+				localization?.CMS_EDITOR_TITLE_EDIT ??
+				t("cms.editor.titleEdit", "Edit {typeName}")
+			).replace("{typeName}", contentType.name)
+		: (
+				localization?.CMS_EDITOR_TITLE_NEW ??
+				t("cms.editor.titleNew", "New {typeName}")
+			).replace("{typeName}", contentType.name);
 
 	return (
 		<PageWrapper testId="cms-editor-page">
@@ -253,6 +299,11 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 					isEditing={isEditing}
 					onSubmit={handleSubmit}
 					onCancel={() => navigate(`${basePath}/cms/${typeSlug}`)}
+					fieldErrors={resourceForm.fieldErrors}
+					errorMessage={
+						hasFieldErrors ? undefined : resourceForm.error?.message
+					}
+					isSubmitting={resourceForm.isSubmitting}
 				/>
 
 				{/* Show inverse relations panel when editing (not creating) */}

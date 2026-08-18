@@ -147,6 +147,106 @@ describe("cms getters", () => {
 			expect(result.items).toHaveLength(1);
 			expect(result.items[0]!.slug).toBe("first");
 		});
+
+		describe("search", () => {
+			const seedSearchItems = async () => {
+				const ct = (await adapter.create({
+					model: "contentType",
+					data: {
+						name: "Post",
+						slug: "post",
+						jsonSchema: SIMPLE_SCHEMA,
+						autoFormVersion: 2,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+				})) as any;
+
+				const seed = [
+					{ slug: "typescript-tips", data: { title: "TypeScript Tips" } },
+					{ slug: "rust-basics", data: { title: "Getting Started" } },
+					{
+						slug: "misc",
+						data: {
+							title: "Other",
+							tags: ["rust", "systems"],
+							meta: { author: "Ferris" },
+						},
+					},
+				];
+				for (const item of seed) {
+					await adapter.create({
+						model: "contentItem",
+						data: {
+							contentTypeId: ct.id,
+							slug: item.slug,
+							data: JSON.stringify(item.data),
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						},
+					});
+				}
+			};
+
+			it("matches items by slug, case-insensitively", async () => {
+				await seedSearchItems();
+
+				const result = await getAllContentItems(adapter, "post", {
+					search: "TYPESCRIPT",
+				});
+				expect(result.items.map((i) => i.slug)).toEqual(["typescript-tips"]);
+				expect(result.total).toBe(1);
+			});
+
+			it("matches items by data values, including arrays and nested objects", async () => {
+				await seedSearchItems();
+
+				const byValue = await getAllContentItems(adapter, "post", {
+					search: "getting started",
+				});
+				expect(byValue.items.map((i) => i.slug)).toEqual(["rust-basics"]);
+
+				const byArray = await getAllContentItems(adapter, "post", {
+					search: "systems",
+				});
+				expect(byArray.items.map((i) => i.slug)).toEqual(["misc"]);
+
+				const byNested = await getAllContentItems(adapter, "post", {
+					search: "ferris",
+				});
+				expect(byNested.items.map((i) => i.slug)).toEqual(["misc"]);
+			});
+
+			it("returns the filtered total and paginates search results", async () => {
+				await seedSearchItems();
+
+				const page1 = await getAllContentItems(adapter, "post", {
+					search: "rust",
+					limit: 1,
+					offset: 0,
+				});
+				expect(page1.total).toBe(2);
+				expect(page1.items).toHaveLength(1);
+
+				const page2 = await getAllContentItems(adapter, "post", {
+					search: "rust",
+					limit: 1,
+					offset: 1,
+				});
+				expect(page2.total).toBe(2);
+				expect(page2.items).toHaveLength(1);
+				expect(page2.items[0]!.slug).not.toBe(page1.items[0]!.slug);
+			});
+
+			it("ignores a whitespace-only search", async () => {
+				await seedSearchItems();
+
+				const result = await getAllContentItems(adapter, "post", {
+					search: "   ",
+				});
+				expect(result.total).toBe(3);
+			});
+		});
 	});
 
 	describe("getContentItemBySlug", () => {

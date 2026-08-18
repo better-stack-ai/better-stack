@@ -8,21 +8,29 @@ export interface ContentListDiscriminator {
 	typeSlug: string;
 	limit: number;
 	offset: number;
+	search: string | undefined;
 }
 
 /**
  * Builds the discriminator object used as the cache key for the content list.
- * Mirrors the params object used in createContentQueries.list so both paths stay in sync.
+ * Mirrors the params object used in the cmsContent.list resource declaration
+ * so both paths stay in sync. An empty/whitespace search term is normalized
+ * to `undefined` so it hashes identically to "no search".
  */
 export function contentListDiscriminator(params: {
 	typeSlug: string;
 	limit?: number;
 	offset?: number;
+	search?: string;
 }): ContentListDiscriminator {
 	return {
 		typeSlug: params.typeSlug,
 		limit: params.limit ?? 20,
 		offset: params.offset ?? 0,
+		search:
+			params.search !== undefined && params.search.trim() === ""
+				? undefined
+				: params.search,
 	};
 }
 
@@ -36,12 +44,13 @@ export const CMS_QUERY_KEYS = {
 
 	/**
 	 * Key for the cmsContent.list({ typeSlug, limit, offset }) query.
-	 * Full key: ["cmsContent", "list", { typeSlug, limit, offset }]
+	 * Full key: ["cmsContent", "list", { typeSlug, limit, offset, search }]
 	 */
 	contentList: (params: {
 		typeSlug: string;
 		limit?: number;
 		offset?: number;
+		search?: string;
 	}) => ["cmsContent", "list", contentListDiscriminator(params)] as const,
 
 	/**

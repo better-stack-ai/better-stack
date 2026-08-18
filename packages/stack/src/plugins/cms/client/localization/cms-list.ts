@@ -11,4 +11,7 @@ export const CMS_LIST = {
 	CMS_LIST_PAGINATION_SHOWING: "Showing {from}-{to} of {total}",
 	CMS_LIST_PAGINATION_PREVIOUS: "Previous",
 	CMS_LIST_PAGINATION_NEXT: "Next",
+	CMS_LIST_SEARCH_PLACEHOLDER: "Search items...",
+	CMS_LIST_SEARCH_EMPTY: "No items match your search",
+	CMS_LIST_SEARCH_EMPTY_DESCRIPTION: "Try a different search term.",
 };

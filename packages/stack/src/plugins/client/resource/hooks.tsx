@@ -166,6 +166,9 @@ function createQueryHooks(
 		return {
 			initialPageParam: 0,
 			getNextPageParam: (lastPage: unknown, allPages: unknown[]) => {
+				if (def.nextPageParam) {
+					return def.nextPageParam(lastPage, allPages, ...args);
+				}
 				const items = (lastPage as unknown[]) ?? [];
 				if (items.length < pageSize) return undefined;
 				return allPages.length * pageSize;
