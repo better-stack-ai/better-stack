@@ -8,6 +8,7 @@ export interface FormsListDiscriminator {
 	status?: "active" | "inactive" | "archived";
 	limit: number;
 	offset: number;
+	search: string | undefined;
 }
 
 export interface SubmissionsListDiscriminator {
@@ -18,17 +19,24 @@ export interface SubmissionsListDiscriminator {
 
 /**
  * Builds the discriminator object for the forms list query key.
- * Mirrors the params object used in createFormsQueries.list.
+ * Mirrors the params object used in the forms.list resource declaration
+ * so both paths stay in sync. An empty/whitespace search term is normalized
+ * to `undefined` so it hashes identically to "no search".
  */
 export function formsListDiscriminator(params?: {
 	status?: "active" | "inactive" | "archived";
 	limit?: number;
 	offset?: number;
+	search?: string;
 }): FormsListDiscriminator {
 	return {
 		status: params?.status,
 		limit: params?.limit ?? 20,
 		offset: params?.offset ?? 0,
+		search:
+			params?.search !== undefined && params.search.trim() === ""
+				? undefined
+				: params?.search,
 	};
 }
 
@@ -58,6 +66,7 @@ export const FORM_QUERY_KEYS = {
 		status?: "active" | "inactive" | "archived";
 		limit?: number;
 		offset?: number;
+		search?: string;
 	}) => ["forms", "list", "list", formsListDiscriminator(params)] as const,
 
 	/**

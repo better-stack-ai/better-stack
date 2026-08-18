@@ -174,7 +174,7 @@ export const formBuilderBackendPlugin = (
 					query: listFormsQuerySchema,
 				},
 				async (ctx) => {
-					const { status, limit, offset } = ctx.query;
+					const { status, limit, offset, search } = ctx.query;
 					const context = createContext(ctx.headers);
 
 					if (config.hooks?.onBeforeListForms) {
@@ -185,7 +185,7 @@ export const formBuilderBackendPlugin = (
 						);
 					}
 
-					return getAllForms(adapter, { status, limit, offset });
+					return getAllForms(adapter, { status, limit, offset, search });
 				},
 			);
 

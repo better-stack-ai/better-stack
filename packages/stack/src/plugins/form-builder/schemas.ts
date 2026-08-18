@@ -1,12 +1,19 @@
 import { z } from "zod";
 
 /**
- * Schema for listing forms with pagination
+ * Cap on the DB scan when free-text search forces the in-memory filter in
+ * `getAllForms`, bounding server memory use.
+ */
+export const DEFAULT_MAX_PAGE_SIZE = 1000;
+
+/**
+ * Schema for listing forms with pagination and free-text search
  */
 export const listFormsQuerySchema = z.object({
 	status: z.enum(["active", "inactive", "archived"]).optional(),
 	limit: z.coerce.number().min(1).max(100).optional().default(20),
 	offset: z.coerce.number().min(0).optional().default(0),
+	search: z.string().max(200).optional(),
 });
 
 /**

@@ -1,9 +1,12 @@
 "use client";
 
-import { lazy, Suspense } from "react";
-import { FormListSkeleton } from "../loading/form-list-skeleton";
-import { ErrorBoundary } from "react-error-boundary";
+import { lazy } from "react";
+import { usePluginOverrides } from "@btst/stack/context";
+import type { FormBuilderPluginOverrides } from "../../overrides";
+import { ComposedRoute } from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
+import { FormListSkeleton } from "../loading/form-list-skeleton";
+import { NotFoundPage } from "./404-page";
 
 const FormListPage = lazy(() =>
 	import("./form-list-page.internal").then((m) => ({
@@ -12,11 +15,24 @@ const FormListPage = lazy(() =>
 );
 
 export function FormListPageComponent() {
+	const { onRouteError } =
+		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
+
 	return (
-		<ErrorBoundary FallbackComponent={DefaultError}>
-			<Suspense fallback={<FormListSkeleton />}>
-				<FormListPage />
-			</Suspense>
-		</ErrorBoundary>
+		<ComposedRoute
+			path="/forms"
+			PageComponent={FormListPage}
+			ErrorComponent={DefaultError}
+			LoadingComponent={FormListSkeleton}
+			NotFoundComponent={NotFoundPage}
+			onError={(error) => {
+				if (onRouteError) {
+					onRouteError("formList", error, {
+						path: "/forms",
+						isSSR: typeof window === "undefined",
+					});
+				}
+			}}
+		/>
 	);
 }

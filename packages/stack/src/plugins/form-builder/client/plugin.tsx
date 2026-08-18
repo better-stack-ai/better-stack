@@ -167,7 +167,7 @@ function createFormListLoader(config: FormBuilderClientConfig) {
 			});
 			const queries = createFormBuilderQueryKeys(client, headers);
 			const limit = 20;
-			const listQuery = queries.forms.list({ limit, offset: 0 });
+			const listQuery = queries.forms.list({ limit });
 
 			try {
 				// Before hook - authorization check
@@ -178,25 +178,9 @@ function createFormListLoader(config: FormBuilderClientConfig) {
 					);
 				}
 
-				// Prefetch forms using infinite query
+				// Prefetch forms using infinite query (matches useSuspenseInfiniteQuery in hooks)
 				await queryClient.prefetchInfiniteQuery({
-					queryKey: listQuery.queryKey,
-					queryFn: async ({ pageParam = 0 }) => {
-						const response: unknown = await client("/forms", {
-							method: "GET",
-							query: { limit, offset: pageParam },
-							headers,
-						});
-						if (
-							typeof response === "object" &&
-							response !== null &&
-							"error" in response &&
-							response.error
-						) {
-							throw new Error(String(response.error));
-						}
-						return (response as { data?: unknown }).data;
-					},
+					...listQuery,
 					initialPageParam: 0,
 				});
 
@@ -347,11 +331,7 @@ function createSubmissionsLoader(
 			const queries = createFormBuilderQueryKeys(client, headers);
 			const limit = 20;
 			const formQuery = queries.forms.byId(formId);
-			const submissionsQuery = queries.formSubmissions.list({
-				formId,
-				limit,
-				offset: 0,
-			});
+			const submissionsQuery = queries.formSubmissions.list({ formId, limit });
 
 			try {
 				// Before hook - authorization check
@@ -365,27 +345,7 @@ function createSubmissionsLoader(
 				// Prefetch form and submissions
 				await queryClient.prefetchQuery(formQuery);
 				await queryClient.prefetchInfiniteQuery({
-					queryKey: submissionsQuery.queryKey,
-					queryFn: async ({ pageParam = 0 }) => {
-						const response: unknown = await client(
-							"/forms/:formId/submissions",
-							{
-								method: "GET",
-								params: { formId },
-								query: { limit, offset: pageParam },
-								headers,
-							},
-						);
-						if (
-							typeof response === "object" &&
-							response !== null &&
-							"error" in response &&
-							response.error
-						) {
-							throw new Error(String(response.error));
-						}
-						return (response as { data?: unknown }).data;
-					},
+					...submissionsQuery,
 					initialPageParam: 0,
 				});
 
