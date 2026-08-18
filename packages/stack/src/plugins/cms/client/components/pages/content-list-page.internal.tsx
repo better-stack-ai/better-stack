@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, ArrowLeft, Pencil, Trash2, Loader2, Search } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
@@ -79,9 +79,22 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 	// Local input state debounced into the URL-synced query, so the list
 	// query (and URL) only update after the user pauses typing.
 	const [searchInput, setSearchInput] = useState(search);
+
+	// External `q` changes (hydration after SSR-empty search params,
+	// back/forward navigation) re-seed the input instead of being clobbered
+	// by the debounced write below, which only reflects user edits.
+	const lastSyncedSearch = useRef(search);
+	useEffect(() => {
+		if (search !== lastSyncedSearch.current) {
+			lastSyncedSearch.current = search;
+			setSearchInput(search);
+		}
+	}, [search]);
+
 	useEffect(() => {
 		if (searchInput === search) return;
 		const timeout = setTimeout(() => {
+			lastSyncedSearch.current = searchInput;
 			setListState({ q: searchInput });
 		}, SEARCH_DEBOUNCE_MS);
 		return () => clearTimeout(timeout);

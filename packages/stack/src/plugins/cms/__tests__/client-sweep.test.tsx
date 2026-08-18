@@ -426,6 +426,46 @@ describe("ContentListPage search (useListState)", () => {
 			expect.objectContaining({ search: "rust", enabled: true }),
 		);
 	});
+
+	it("re-seeds the input from external URL changes instead of clobbering them", async () => {
+		const router = createMockRouter();
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={router}
+				overrides={{ cms: cmsOverrides }}
+			>
+				<ContentListPage typeSlug="post" />
+			</StackProvider>,
+		);
+
+		const input = container.querySelector(
+			'[data-testid="cms-list-search"]',
+		) as HTMLInputElement;
+		expect(input.value).toBe("");
+
+		// Simulate back/forward: `?q=ext` appears without this component
+		// writing it (popstate is how useListState observes such changes)
+		await act(async () => {
+			router.setSearchParams(new URLSearchParams("q=ext"));
+			window.dispatchEvent(new PopStateEvent("popstate"));
+		});
+		router.setSearchParams.mockClear();
+
+		expect(input.value).toBe("ext");
+		expect(hooks.useContent).toHaveBeenLastCalledWith(
+			"post",
+			expect.objectContaining({ search: "ext", enabled: true }),
+		);
+
+		// Wait out the debounce window: the stale (empty) input must not be
+		// written back over the externally-set query
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 400));
+		});
+		expect(router.setSearchParams).not.toHaveBeenCalled();
+	});
 });
 
 describe("cms i18n precedence (useTranslate + overrides.localization)", () => {

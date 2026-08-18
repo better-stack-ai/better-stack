@@ -1,4 +1,5 @@
 import type { DBAdapter as Adapter } from "@btst/db";
+import { DEFAULT_MAX_PAGE_SIZE } from "../schemas";
 import type {
 	ContentType,
 	ContentItem,
@@ -198,6 +199,8 @@ export async function getAllContentItems(
 	// string, so the adapter cannot match individual field values. All other
 	// filters above are pushed to DB; when searching, pagination happens
 	// after the in-memory pass so `total` reflects the filtered set.
+	// The DB scan is capped at DEFAULT_MAX_PAGE_SIZE to bound memory use;
+	// items beyond the cap are not searched.
 	const search = params?.search?.trim();
 	const needsInMemoryFilter = !!search;
 
@@ -212,7 +215,7 @@ export async function getAllContentItems(
 	const items = await adapter.findMany<ContentItemWithType>({
 		model: "contentItem",
 		where: whereConditions,
-		limit: !needsInMemoryFilter ? params?.limit : undefined,
+		limit: !needsInMemoryFilter ? params?.limit : DEFAULT_MAX_PAGE_SIZE,
 		offset: !needsInMemoryFilter ? params?.offset : undefined,
 		sortBy: { field: "createdAt", direction: "desc" },
 		join: { contentType: true },

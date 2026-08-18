@@ -15,7 +15,7 @@ export function createListContentQuerySchema(
 ) {
 	return z.object({
 		slug: z.string().optional(),
-		search: z.string().optional(),
+		search: z.string().max(200).optional(),
 		limit: z.coerce.number().min(1).max(maxPageSize).optional().default(20),
 		offset: z.coerce.number().min(0).optional().default(0),
 	});
