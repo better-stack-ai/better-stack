@@ -27,8 +27,9 @@ import {
 	AvatarImage,
 } from "@workspace/ui/components/avatar";
 import { Trash2, ExternalLink, LogIn, MessageSquareOff } from "lucide-react";
-import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import { useNotify, useTranslate } from "@btst/stack/context";
+import { useListState, type ListStateSchema } from "@btst/stack/client";
 import type { CommentsPluginOverrides } from "../../overrides";
 import { PaginationControls } from "@workspace/ui/components/pagination-controls";
 import type { SerializedComment, CommentStatus } from "../../../types";
@@ -36,13 +37,16 @@ import {
 	useSuspenseComments,
 	useDeleteComment,
 } from "../../hooks/use-comments";
-import {
-	COMMENTS_LOCALIZATION,
-	type CommentsLocalization,
-} from "../../localization";
+import type { CommentsLocalization } from "../../localization";
 import { getInitials, useResolvedCurrentUserId } from "../../utils";
 
 const PAGE_LIMIT = 20;
+
+// URL-synced pagination: the page number survives reloads and is undoable
+// with the back button (discrete changes default to push history).
+const LIST_STATE_SCHEMA = {
+	page: { type: "number", default: 1 },
+} as const satisfies ListStateSchema;
 
 interface UserCommentsPageProps {
 	apiBaseURL: string;
@@ -50,33 +54,37 @@ interface UserCommentsPageProps {
 	headers?: HeadersInit;
 	currentUserId?: CommentsPluginOverrides["currentUserId"];
 	resourceLinks?: CommentsPluginOverrides["resourceLinks"];
-	localization?: CommentsLocalization;
+	localization?: Partial<CommentsLocalization>;
 }
 
 function StatusBadge({
 	status,
-	loc,
+	localization,
 }: {
 	status: CommentStatus;
-	loc: CommentsLocalization;
+	localization?: Partial<CommentsLocalization>;
 }) {
+	const t = useTranslate();
 	if (status === "approved") {
 		return (
 			<Badge variant="outline" className="text-green-700 border-green-300">
-				{loc.COMMENTS_MY_STATUS_APPROVED}
+				{localization?.COMMENTS_MY_STATUS_APPROVED ??
+					t("comments.my.statusApproved", "Approved")}
 			</Badge>
 		);
 	}
 	if (status === "pending") {
 		return (
 			<Badge variant="outline" className="text-yellow-700 border-yellow-300">
-				{loc.COMMENTS_MY_STATUS_PENDING}
+				{localization?.COMMENTS_MY_STATUS_PENDING ??
+					t("comments.my.statusPending", "Pending")}
 			</Badge>
 		);
 	}
 	return (
 		<Badge variant="outline" className="text-red-700 border-red-300">
-			{loc.COMMENTS_MY_STATUS_SPAM}
+			{localization?.COMMENTS_MY_STATUS_SPAM ??
+				t("comments.my.statusSpam", "Spam")}
 		</Badge>
 	);
 }
@@ -89,9 +97,9 @@ export function UserCommentsPage({
 	headers,
 	currentUserId: currentUserIdProp,
 	resourceLinks,
-	localization: localizationProp,
+	localization,
 }: UserCommentsPageProps) {
-	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
+	const t = useTranslate();
 	const resolvedUserId = useResolvedCurrentUserId(currentUserIdProp);
 
 	if (!resolvedUserId) {
@@ -101,9 +109,16 @@ export function UserCommentsPage({
 				data-testid="my-comments-login-prompt"
 			>
 				<LogIn className="h-10 w-10 text-muted-foreground" />
-				<p className="text-lg font-medium">{loc.COMMENTS_MY_LOGIN_TITLE}</p>
+				<p className="text-lg font-medium">
+					{localization?.COMMENTS_MY_LOGIN_TITLE ??
+						t("comments.my.loginTitle", "Please log in to view your comments")}
+				</p>
 				<p className="text-sm text-muted-foreground">
-					{loc.COMMENTS_MY_LOGIN_DESCRIPTION}
+					{localization?.COMMENTS_MY_LOGIN_DESCRIPTION ??
+						t(
+							"comments.my.loginDescription",
+							"You need to be logged in to see your comment history.",
+						)}
 				</p>
 			</div>
 		);
@@ -116,7 +131,7 @@ export function UserCommentsPage({
 			headers={headers}
 			currentUserId={resolvedUserId}
 			resourceLinks={resourceLinks}
-			loc={loc}
+			localization={localization}
 		/>
 	);
 }
@@ -129,16 +144,25 @@ function UserCommentsList({
 	headers,
 	currentUserId,
 	resourceLinks,
-	loc,
+	localization,
 }: {
 	apiBaseURL: string;
 	apiBasePath: string;
 	headers?: HeadersInit;
 	currentUserId: string;
 	resourceLinks?: CommentsPluginOverrides["resourceLinks"];
-	loc: CommentsLocalization;
+	localization?: Partial<CommentsLocalization>;
 }) {
-	const [page, setPage] = useState(1);
+	const t = useTranslate();
+	const notify = useNotify();
+
+	const [listState, setListState] = useListState(
+		"comments-my",
+		LIST_STATE_SCHEMA,
+	);
+	// Clamp the URL-sourced page so a mangled URL cannot produce an invalid query.
+	const page = Math.max(1, Math.floor(listState.page) || 1);
+
 	const [deleteId, setDeleteId] = useState<string | null>(null);
 
 	const config = { apiBaseURL, apiBasePath, headers };
@@ -159,10 +183,16 @@ function UserCommentsList({
 		if (!deleteId) return;
 		try {
 			await deleteMutation.mutateAsync(deleteId);
-			toast.success(loc.COMMENTS_MY_TOAST_DELETED);
+			notify.success(
+				localization?.COMMENTS_MY_TOAST_DELETED ??
+					t("comments.my.toastDeleted", "Comment deleted"),
+			);
 			refetch();
 		} catch {
-			toast.error(loc.COMMENTS_MY_TOAST_DELETE_ERROR);
+			notify.error(
+				localization?.COMMENTS_MY_TOAST_DELETE_ERROR ??
+					t("comments.my.toastDeleteError", "Failed to delete comment"),
+			);
 		} finally {
 			setDeleteId(null);
 		}
@@ -175,9 +205,16 @@ function UserCommentsList({
 				data-testid="my-comments-empty"
 			>
 				<MessageSquareOff className="h-10 w-10 text-muted-foreground" />
-				<p className="text-lg font-medium">{loc.COMMENTS_MY_EMPTY_TITLE}</p>
+				<p className="text-lg font-medium">
+					{localization?.COMMENTS_MY_EMPTY_TITLE ??
+						t("comments.my.emptyTitle", "No comments yet")}
+				</p>
 				<p className="text-sm text-muted-foreground">
-					{loc.COMMENTS_MY_EMPTY_DESCRIPTION}
+					{localization?.COMMENTS_MY_EMPTY_DESCRIPTION ??
+						t(
+							"comments.my.emptyDescription",
+							"Comments you post will appear here.",
+						)}
 				</p>
 			</div>
 		);
@@ -187,10 +224,15 @@ function UserCommentsList({
 		<div data-testid="my-comments-page" className="space-y-4">
 			<div>
 				<h1 className="text-2xl font-bold tracking-tight">
-					{loc.COMMENTS_MY_PAGE_TITLE}
+					{localization?.COMMENTS_MY_PAGE_TITLE ??
+						t("comments.my.pageTitle", "My Comments")}
 				</h1>
 				<p className="text-sm text-muted-foreground mt-1">
-					{total} {loc.COMMENTS_MY_COL_COMMENT.toLowerCase()}
+					{total}{" "}
+					{(
+						localization?.COMMENTS_MY_COL_COMMENT ??
+						t("comments.my.colComment", "Comment")
+					).toLowerCase()}
 					{total !== 1 ? "s" : ""}
 				</p>
 			</div>
@@ -203,15 +245,21 @@ function UserCommentsList({
 					<TableHeader>
 						<TableRow>
 							<TableHead className="w-10" />
-							<TableHead>{loc.COMMENTS_MY_COL_COMMENT}</TableHead>
+							<TableHead>
+								{localization?.COMMENTS_MY_COL_COMMENT ??
+									t("comments.my.colComment", "Comment")}
+							</TableHead>
 							<TableHead className="hidden sm:table-cell w-32">
-								{loc.COMMENTS_MY_COL_RESOURCE}
+								{localization?.COMMENTS_MY_COL_RESOURCE ??
+									t("comments.my.colResource", "Resource")}
 							</TableHead>
 							<TableHead className="w-28">
-								{loc.COMMENTS_MY_COL_STATUS}
+								{localization?.COMMENTS_MY_COL_STATUS ??
+									t("comments.my.colStatus", "Status")}
 							</TableHead>
 							<TableHead className="hidden md:table-cell w-36">
-								{loc.COMMENTS_MY_COL_DATE}
+								{localization?.COMMENTS_MY_COL_DATE ??
+									t("comments.my.colDate", "Date")}
 							</TableHead>
 							<TableHead className="w-16" />
 						</TableRow>
@@ -222,7 +270,7 @@ function UserCommentsList({
 								key={comment.id}
 								comment={comment}
 								resourceLinks={resourceLinks}
-								loc={loc}
+								localization={localization}
 								onDelete={() => setDeleteId(comment.id)}
 								isDeleting={deleteMutation.isPending && deleteId === comment.id}
 							/>
@@ -237,7 +285,7 @@ function UserCommentsList({
 					limit={PAGE_LIMIT}
 					offset={offset}
 					onPageChange={(p) => {
-						setPage(p);
+						setListState({ page: p });
 						window.scrollTo({ top: 0, behavior: "smooth" });
 					}}
 				/>
@@ -249,20 +297,29 @@ function UserCommentsList({
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>{loc.COMMENTS_MY_DELETE_TITLE}</AlertDialogTitle>
+						<AlertDialogTitle>
+							{localization?.COMMENTS_MY_DELETE_TITLE ??
+								t("comments.my.deleteTitle", "Delete comment?")}
+						</AlertDialogTitle>
 						<AlertDialogDescription>
-							{loc.COMMENTS_MY_DELETE_DESCRIPTION}
+							{localization?.COMMENTS_MY_DELETE_DESCRIPTION ??
+								t(
+									"comments.my.deleteDescription",
+									"This action cannot be undone. The comment will be permanently removed.",
+								)}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>
-							{loc.COMMENTS_MY_DELETE_CANCEL}
+							{localization?.COMMENTS_MY_DELETE_CANCEL ??
+								t("comments.my.deleteCancel", "Cancel")}
 						</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={handleDelete}
 							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
 						>
-							{loc.COMMENTS_MY_DELETE_CONFIRM}
+							{localization?.COMMENTS_MY_DELETE_CONFIRM ??
+								t("comments.my.deleteConfirm", "Delete")}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
@@ -276,16 +333,17 @@ function UserCommentsList({
 function CommentRow({
 	comment,
 	resourceLinks,
-	loc,
+	localization,
 	onDelete,
 	isDeleting,
 }: {
 	comment: SerializedComment;
 	resourceLinks?: CommentsPluginOverrides["resourceLinks"];
-	loc: CommentsLocalization;
+	localization?: Partial<CommentsLocalization>;
 	onDelete: () => void;
 	isDeleting: boolean;
 }) {
+	const t = useTranslate();
 	const resourceUrlBase = resourceLinks?.[comment.resourceType]?.(
 		comment.resourceId,
 	);
@@ -313,7 +371,8 @@ function CommentRow({
 				<p className="text-sm line-clamp-2">{comment.body}</p>
 				{comment.parentId && (
 					<span className="text-xs text-muted-foreground mt-0.5 block">
-						{loc.COMMENTS_MY_REPLY_INDICATOR}
+						{localization?.COMMENTS_MY_REPLY_INDICATOR ??
+							t("comments.my.replyIndicator", "↩ Reply")}
 					</span>
 				)}
 			</TableCell>
@@ -330,7 +389,8 @@ function CommentRow({
 							target="_blank"
 							rel="noopener noreferrer"
 						>
-							{loc.COMMENTS_MY_VIEW_LINK}
+							{localization?.COMMENTS_MY_VIEW_LINK ??
+								t("comments.my.viewLink", "View")}
 							<ExternalLink className="h-3 w-3" />
 						</a>
 					) : (
@@ -342,7 +402,7 @@ function CommentRow({
 			</TableCell>
 
 			<TableCell>
-				<StatusBadge status={comment.status} loc={loc} />
+				<StatusBadge status={comment.status} localization={localization} />
 			</TableCell>
 
 			<TableCell className="hidden md:table-cell text-xs text-muted-foreground">
@@ -359,7 +419,10 @@ function CommentRow({
 					data-testid="my-comment-delete-button"
 				>
 					<Trash2 className="h-4 w-4" />
-					<span className="sr-only">{loc.COMMENTS_MY_DELETE_BUTTON_SR}</span>
+					<span className="sr-only">
+						{localization?.COMMENTS_MY_DELETE_BUTTON_SR ??
+							t("comments.my.deleteButtonSr", "Delete comment")}
+					</span>
 				</Button>
 			</TableCell>
 		</TableRow>

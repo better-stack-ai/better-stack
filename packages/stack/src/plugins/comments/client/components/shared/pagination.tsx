@@ -1,8 +1,7 @@
 "use client";
 
-import { usePluginOverrides } from "@btst/stack/context";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../../overrides";
-import { COMMENTS_LOCALIZATION } from "../../localization";
 import { PaginationControls } from "@workspace/ui/components/pagination-controls";
 
 interface PaginationProps {
@@ -22,9 +21,9 @@ export function Pagination({
 	limit,
 	offset,
 }: PaginationProps) {
-	const { localization: customLocalization } =
+	const t = useTranslate();
+	const { localization } =
 		usePluginOverrides<CommentsPluginOverrides>("comments");
-	const localization = { ...COMMENTS_LOCALIZATION, ...customLocalization };
 
 	return (
 		<PaginationControls
@@ -35,9 +34,18 @@ export function Pagination({
 			limit={limit}
 			offset={offset}
 			labels={{
-				previous: localization.COMMENTS_MODERATION_PAGINATION_PREVIOUS,
-				next: localization.COMMENTS_MODERATION_PAGINATION_NEXT,
-				showing: localization.COMMENTS_MODERATION_PAGINATION_SHOWING,
+				previous:
+					localization?.COMMENTS_MODERATION_PAGINATION_PREVIOUS ??
+					t("comments.moderation.paginationPrevious", "Previous"),
+				next:
+					localization?.COMMENTS_MODERATION_PAGINATION_NEXT ??
+					t("comments.moderation.paginationNext", "Next"),
+				showing:
+					localization?.COMMENTS_MODERATION_PAGINATION_SHOWING ??
+					t(
+						"comments.moderation.paginationShowing",
+						"Showing {from}–{to} of {total}",
+					),
 			}}
 		/>
 	);
