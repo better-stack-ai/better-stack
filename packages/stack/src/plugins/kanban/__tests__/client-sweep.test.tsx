@@ -10,6 +10,7 @@ import {
 import { BoardForm } from "../client/components/forms/board-form";
 import { ColumnForm } from "../client/components/forms/column-form";
 import { TaskForm } from "../client/components/forms/task-form";
+import { BoardPage } from "../client/components/pages/board-page.internal";
 import { BoardsListPage } from "../client/components/pages/boards-list-page.internal";
 import type {
 	SerializedBoard,
@@ -21,9 +22,12 @@ import type {
 
 const hooks = vi.hoisted(() => ({
 	useSuspenseBoards: vi.fn(),
+	useSuspenseBoard: vi.fn(),
 	useBoardForm: vi.fn(),
 	useColumnForm: vi.fn(),
 	useTaskForm: vi.fn(),
+	useBoardMutations: vi.fn(),
+	useColumnMutations: vi.fn(),
 	useTaskMutations: vi.fn(),
 	useSearchUsers: vi.fn(),
 }));
@@ -103,11 +107,27 @@ beforeEach(() => {
 		error: null,
 		isFetching: false,
 	});
+	hooks.useSuspenseBoard.mockReturnValue({
+		data: { ...board, columns: [] },
+		error: null,
+		isFetching: false,
+		refetch: vi.fn(),
+	});
 	hooks.useBoardForm.mockReturnValue({ ...formResult });
 	hooks.useColumnForm.mockReturnValue({ ...formResult });
 	hooks.useTaskForm.mockReturnValue({ ...formResult });
+	hooks.useBoardMutations.mockReturnValue({
+		deleteBoard: vi.fn(),
+		isDeleting: false,
+	});
+	hooks.useColumnMutations.mockReturnValue({
+		deleteColumn: vi.fn(),
+		reorderColumns: vi.fn(),
+	});
 	hooks.useTaskMutations.mockReturnValue({
+		deleteTask: vi.fn(),
 		moveTask: vi.fn().mockResolvedValue(task),
+		reorderTasks: vi.fn(),
 		isMoving: false,
 	});
 	hooks.useSearchUsers.mockReturnValue({ data: [] });
@@ -189,6 +209,27 @@ describe("Kanban permissions", () => {
 				action: "create",
 			}),
 		);
+	});
+
+	it("hides an empty board actions menu when every action is denied", async () => {
+		const can = vi.fn(
+			(_request: { resource: string; action: string }) => false,
+		);
+		const auth: StackAuthProvider = {
+			getIdentity: () => ({ id: "user-1" }),
+			can,
+		};
+
+		await render(<BoardPage boardId={board.id} />, { auth });
+		await waitFor(() =>
+			can.mock.calls.some(
+				([request]) =>
+					request.resource === "kanban:board" && request.action === "delete",
+			),
+		);
+
+		expect(texts()).not.toContain("Actions");
+		expect(texts()).not.toContain("Add Column");
 	});
 });
 

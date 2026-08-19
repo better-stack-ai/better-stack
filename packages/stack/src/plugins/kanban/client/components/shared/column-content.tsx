@@ -7,6 +7,7 @@ import { Badge } from "@workspace/ui/components/badge";
 import * as Kanban from "@workspace/ui/components/kanban";
 import {
 	CanAccess,
+	useCan,
 	usePluginOverrides,
 	useTranslate,
 } from "@btst/stack/context";
@@ -45,6 +46,26 @@ function ColumnContentComponent({
 	const t = useTranslate();
 	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
 	const hasTasks = column.tasks && column.tasks.length > 0;
+	const { can: canUpdateColumn, isPending: isCheckingUpdateColumn } = useCan({
+		resource: "kanban:column",
+		action: "update",
+		params: { id: column.id, boardId },
+	});
+	const { can: canCreateTask, isPending: isCheckingCreateTask } = useCan({
+		resource: "kanban:task",
+		action: "create",
+		params: { boardId, columnId: column.id },
+	});
+	const { can: canDeleteColumn, isPending: isCheckingDeleteColumn } = useCan({
+		resource: "kanban:column",
+		action: "delete",
+		params: { id: column.id, boardId },
+	});
+	const showUpdateColumn = !isCheckingUpdateColumn && canUpdateColumn;
+	const showCreateTask = !isCheckingCreateTask && canCreateTask;
+	const showDeleteColumn = !isCheckingDeleteColumn && canDeleteColumn;
+	const hasColumnActions =
+		showUpdateColumn || showCreateTask || showDeleteColumn;
 
 	return (
 		<Kanban.Column key={column.id} value={column.id}>
@@ -62,51 +83,44 @@ function ColumnContentComponent({
 						{column.tasks?.length || 0}
 					</Badge>
 				</div>
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" size="icon">
-							<MoreVertical className="h-4 w-4" />
-						</Button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<CanAccess
-							resource="kanban:column"
-							action="update"
-							params={{ id: column.id, boardId }}
-						>
-							<DropdownMenuItem onClick={onEditColumn}>
-								<Pencil className="mr-2 h-4 w-4" />
-								{localization?.editColumn ??
-									t("kanban.list.editColumn", "Edit Column")}
-							</DropdownMenuItem>
-						</CanAccess>
-						<CanAccess
-							resource="kanban:task"
-							action="create"
-							params={{ boardId, columnId: column.id }}
-						>
-							<DropdownMenuItem onClick={onAddTask}>
-								<Plus className="mr-2 h-4 w-4" />
-								{localization?.addTask ?? t("kanban.list.addTask", "Add Task")}
-							</DropdownMenuItem>
-						</CanAccess>
-						<DropdownMenuSeparator />
-						<CanAccess
-							resource="kanban:column"
-							action="delete"
-							params={{ id: column.id, boardId }}
-						>
-							<DropdownMenuItem
-								onClick={onDeleteColumn}
-								className="text-red-600 focus:text-red-600"
-							>
-								<Trash2 className="mr-2 h-4 w-4" />
-								{localization?.deleteColumn ??
-									t("kanban.forms.deleteColumn", "Delete Column")}
-							</DropdownMenuItem>
-						</CanAccess>
-					</DropdownMenuContent>
-				</DropdownMenu>
+				{hasColumnActions && (
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button variant="ghost" size="icon">
+								<MoreVertical className="h-4 w-4" />
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							{showUpdateColumn && (
+								<DropdownMenuItem onClick={onEditColumn}>
+									<Pencil className="mr-2 h-4 w-4" />
+									{localization?.editColumn ??
+										t("kanban.list.editColumn", "Edit Column")}
+								</DropdownMenuItem>
+							)}
+							{showCreateTask && (
+								<DropdownMenuItem onClick={onAddTask}>
+									<Plus className="mr-2 h-4 w-4" />
+									{localization?.addTask ??
+										t("kanban.list.addTask", "Add Task")}
+								</DropdownMenuItem>
+							)}
+							{showDeleteColumn && (showUpdateColumn || showCreateTask) && (
+								<DropdownMenuSeparator />
+							)}
+							{showDeleteColumn && (
+								<DropdownMenuItem
+									onClick={onDeleteColumn}
+									className="text-red-600 focus:text-red-600"
+								>
+									<Trash2 className="mr-2 h-4 w-4" />
+									{localization?.deleteColumn ??
+										t("kanban.forms.deleteColumn", "Delete Column")}
+								</DropdownMenuItem>
+							)}
+						</DropdownMenuContent>
+					</DropdownMenu>
+				)}
 			</div>
 			<div className="p-0.5 space-y-2">
 				{hasTasks ? (

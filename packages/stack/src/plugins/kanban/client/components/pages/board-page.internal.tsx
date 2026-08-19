@@ -99,6 +99,26 @@ export function BoardPage({ boardId }: BoardPageProps) {
 		action: "update",
 		params: { boardId },
 	});
+	const { can: canCreateColumn, isPending: isCheckingCreateColumn } = useCan({
+		resource: "kanban:column",
+		action: "create",
+		params: { boardId },
+	});
+	const { can: canUpdateBoard, isPending: isCheckingUpdateBoard } = useCan({
+		resource: "kanban:board",
+		action: "update",
+		params: { id: boardId },
+	});
+	const { can: canDeleteBoard, isPending: isCheckingDeleteBoard } = useCan({
+		resource: "kanban:board",
+		action: "delete",
+		params: { id: boardId },
+	});
+	const showCreateColumn = !isCheckingCreateColumn && canCreateColumn;
+	const showUpdateBoard = !isCheckingUpdateBoard && canUpdateBoard;
+	const showDeleteBoard = !isCheckingDeleteBoard && canDeleteBoard;
+	const hasBoardActions =
+		showCreateColumn || showUpdateBoard || showDeleteBoard;
 
 	const [modalState, setModalState] = useState<ModalState>({ type: "none" });
 
@@ -351,57 +371,49 @@ export function BoardPage({ boardId }: BoardPageProps) {
 						)}
 					</div>
 				</div>
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button variant="outline">
-							<Settings className="mr-2 h-4 w-4" />
-							{localization?.actions ?? t("kanban.common.actions", "Actions")}
-						</Button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<CanAccess
-							resource="kanban:column"
-							action="create"
-							params={{ boardId }}
-						>
-							<DropdownMenuItem
-								onClick={() => setModalState({ type: "addColumn" })}
-							>
-								<Plus className="mr-2 h-4 w-4" />
-								{localization?.addColumn ??
-									t("kanban.list.addColumn", "Add Column")}
-							</DropdownMenuItem>
-						</CanAccess>
-						<CanAccess
-							resource="kanban:board"
-							action="update"
-							params={{ id: boardId }}
-						>
-							<DropdownMenuItem
-								onClick={() => setModalState({ type: "editBoard" })}
-							>
-								<Pencil className="mr-2 h-4 w-4" />
-								{localization?.editBoard ??
-									t("kanban.list.editBoard", "Edit Board")}
-							</DropdownMenuItem>
-						</CanAccess>
-						<DropdownMenuSeparator />
-						<CanAccess
-							resource="kanban:board"
-							action="delete"
-							params={{ id: boardId }}
-						>
-							<DropdownMenuItem
-								onClick={() => setModalState({ type: "deleteBoard" })}
-								className="text-red-600 focus:text-red-600"
-							>
-								<Trash2 className="mr-2 h-4 w-4" />
-								{localization?.deleteBoard ??
-									t("kanban.forms.deleteBoard", "Delete Board")}
-							</DropdownMenuItem>
-						</CanAccess>
-					</DropdownMenuContent>
-				</DropdownMenu>
+				{hasBoardActions && (
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button variant="outline">
+								<Settings className="mr-2 h-4 w-4" />
+								{localization?.actions ?? t("kanban.common.actions", "Actions")}
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							{showCreateColumn && (
+								<DropdownMenuItem
+									onClick={() => setModalState({ type: "addColumn" })}
+								>
+									<Plus className="mr-2 h-4 w-4" />
+									{localization?.addColumn ??
+										t("kanban.list.addColumn", "Add Column")}
+								</DropdownMenuItem>
+							)}
+							{showUpdateBoard && (
+								<DropdownMenuItem
+									onClick={() => setModalState({ type: "editBoard" })}
+								>
+									<Pencil className="mr-2 h-4 w-4" />
+									{localization?.editBoard ??
+										t("kanban.list.editBoard", "Edit Board")}
+								</DropdownMenuItem>
+							)}
+							{showDeleteBoard && (showCreateColumn || showUpdateBoard) && (
+								<DropdownMenuSeparator />
+							)}
+							{showDeleteBoard && (
+								<DropdownMenuItem
+									onClick={() => setModalState({ type: "deleteBoard" })}
+									className="text-red-600 focus:text-red-600"
+								>
+									<Trash2 className="mr-2 h-4 w-4" />
+									{localization?.deleteBoard ??
+										t("kanban.forms.deleteBoard", "Delete Board")}
+								</DropdownMenuItem>
+							)}
+						</DropdownMenuContent>
+					</DropdownMenu>
+				)}
 			</div>
 
 			{orderedColumns.length > 0 ? (
