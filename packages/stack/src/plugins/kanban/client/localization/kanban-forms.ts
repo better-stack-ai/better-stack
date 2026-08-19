@@ -23,6 +23,11 @@ export interface KanbanFormsLocalization {
 	taskPriority: string;
 	taskColumn: string;
 	taskAssignee: string;
+	selectPriority: string;
+	selectColumn: string;
+	selectAssignee: string;
+	noUsersFound: string;
+	taskMovePartialError: string;
 	createTask: string;
 	updateTask: string;
 	deleteTask: string;
@@ -59,6 +64,12 @@ export const defaultKanbanFormsLocalization: KanbanFormsLocalization = {
 	taskPriority: "Priority",
 	taskColumn: "Column",
 	taskAssignee: "Assignee",
+	selectPriority: "Select priority",
+	selectColumn: "Select column",
+	selectAssignee: "Select assignee",
+	noUsersFound: "No users found",
+	taskMovePartialError:
+		"Task properties were saved, but moving to the new column failed: {{message}}. You can try dragging the task to the desired column.",
 	createTask: "Create Task",
 	updateTask: "Update Task",
 	deleteTask: "Delete Task",

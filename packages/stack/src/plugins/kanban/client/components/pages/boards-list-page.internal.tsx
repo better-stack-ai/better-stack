@@ -10,21 +10,29 @@ import {
 	CardTitle,
 } from "@workspace/ui/components/card";
 import { useSuspenseBoards } from "../../hooks/kanban-hooks";
-import { usePluginOverrides } from "@btst/stack/context";
+import {
+	CanAccess,
+	usePluginOverrides,
+	useTranslate,
+} from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
 import { EmptyState } from "../shared/empty-state";
 import { PageWrapper } from "../shared/page-wrapper";
 import { format } from "date-fns";
 
 export function BoardsListPage() {
+	const t = useTranslate();
 	const { data: boards, error, isFetching } = useSuspenseBoards();
 
 	// Suspense hooks only throw on initial fetch, not refetch failures
 	if (error && !isFetching) {
 		throw error;
 	}
-	const { Link: OverrideLink, navigate: overrideNavigate } =
-		usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const {
+		Link: OverrideLink,
+		navigate: overrideNavigate,
+		localization,
+	} = usePluginOverrides<KanbanPluginOverrides>("kanban");
 	const Link = OverrideLink || "a";
 	const navigate =
 		overrideNavigate ||
@@ -41,16 +49,20 @@ export function BoardsListPage() {
 			<div className="w-full flex items-center justify-between mb-8">
 				<div>
 					<h1 className="text-3xl font-bold" data-testid="page-header">
-						Kanban Boards
+						{localization?.kanbanBoards ??
+							t("kanban.list.kanbanBoards", "Kanban Boards")}
 					</h1>
 					<p className="text-muted-foreground mt-1">
-						Manage your projects and tasks
+						{localization?.manageProjects ??
+							t("kanban.list.manageProjects", "Manage your projects and tasks")}
 					</p>
 				</div>
-				<Button onClick={handleNewBoard}>
-					<Plus className="mr-2 h-4 w-4" />
-					New Board
-				</Button>
+				<CanAccess resource="kanban:board" action="create">
+					<Button onClick={handleNewBoard}>
+						<Plus className="mr-2 h-4 w-4" />
+						{localization?.newBoard ?? t("kanban.list.newBoard", "New Board")}
+					</Button>
+				</CanAccess>
 			</div>
 
 			{boards.length > 0 ? (
@@ -74,7 +86,13 @@ export function BoardsListPage() {
 								</CardHeader>
 								<CardContent>
 									<div className="flex items-center justify-between text-sm text-muted-foreground">
-										<span>{board.columns?.length || 0} columns</span>
+										<span>
+											{localization?.columnsCount
+												? `${board.columns?.length || 0} ${localization.columnsCount}`
+												: t("kanban.list.columnsCount", "{{count}} columns", {
+														count: board.columns?.length || 0,
+													})}
+										</span>
 										<span>
 											{format(new Date(board.createdAt), "MMM d, yyyy")}
 										</span>
@@ -86,13 +104,25 @@ export function BoardsListPage() {
 				</div>
 			) : (
 				<EmptyState
-					title="No boards yet"
-					description="Create your first kanban board to start organizing your tasks."
+					title={
+						localization?.noBoards ??
+						t("kanban.common.noBoards", "No boards yet")
+					}
+					description={
+						localization?.noBoardsDescription ??
+						t(
+							"kanban.list.noBoardsDescription",
+							"Create your first kanban board to start organizing your tasks.",
+						)
+					}
 					action={
-						<Button onClick={handleNewBoard}>
-							<Plus className="mr-2 h-4 w-4" />
-							Create Board
-						</Button>
+						<CanAccess resource="kanban:board" action="create">
+							<Button onClick={handleNewBoard}>
+								<Plus className="mr-2 h-4 w-4" />
+								{localization?.createBoard ??
+									t("kanban.forms.createBoard", "Create Board")}
+							</Button>
+						</CanAccess>
 					}
 				/>
 			)}

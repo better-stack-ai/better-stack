@@ -8,14 +8,18 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@workspace/ui/components/card";
-import { usePluginOverrides } from "@btst/stack/context";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
 import { BoardForm } from "../forms/board-form";
 import { PageWrapper } from "../shared/page-wrapper";
 
 export function NewBoardPage() {
-	const { Link: OverrideLink, navigate: overrideNavigate } =
-		usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const t = useTranslate();
+	const {
+		Link: OverrideLink,
+		navigate: overrideNavigate,
+		localization,
+	} = usePluginOverrides<KanbanPluginOverrides>("kanban");
 	const navigate =
 		overrideNavigate ||
 		((path: string) => {
@@ -38,19 +42,31 @@ export function NewBoardPage() {
 				</Link>
 				<div>
 					<h1 className="text-3xl font-bold" data-testid="page-header">
-						Create New Board
+						{localization?.createNewBoard ??
+							t("kanban.list.createNewBoard", "Create New Board")}
 					</h1>
 					<p className="text-muted-foreground mt-1">
-						Set up a new kanban board for your project
+						{localization?.createNewBoardDescription ??
+							t(
+								"kanban.list.createNewBoardDescription",
+								"Set up a new kanban board for your project",
+							)}
 					</p>
 				</div>
 			</div>
 
 			<Card className="max-w-2xl">
 				<CardHeader>
-					<CardTitle>Board Details</CardTitle>
+					<CardTitle>
+						{localization?.boardDetails ??
+							t("kanban.list.boardDetails", "Board Details")}
+					</CardTitle>
 					<CardDescription>
-						Enter the details for your new kanban board.
+						{localization?.boardDetailsDescription ??
+							t(
+								"kanban.list.boardDetailsDescription",
+								"Enter the details for your new kanban board.",
+							)}
 					</CardDescription>
 				</CardHeader>
 				<CardContent>

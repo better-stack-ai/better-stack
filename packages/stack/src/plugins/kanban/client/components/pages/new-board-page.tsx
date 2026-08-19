@@ -16,6 +16,7 @@ export function NewBoardPageComponent() {
 	return (
 		<ComposedRoute
 			path="/kanban/new"
+			permission={{ resource: "kanban:board", action: "create" }}
 			PageComponent={NewBoardPage}
 			ErrorComponent={DefaultError}
 			LoadingComponent={BoardsListSkeleton}

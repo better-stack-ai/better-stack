@@ -311,6 +311,39 @@ The kanban plugin automatically creates the following pages (mounted at your con
 - `/kanban/new` - Create new board page
 - `/kanban/:boardId` - Board detail page with kanban view
 
+### Client permissions
+
+Pass an [`auth` provider](/auth) to `StackProvider` to gate Kanban routes and controls. Without an auth provider (or without `auth.can`), every check is allowed, preserving the default behavior.
+
+| UI | Resource | Action | Params |
+|---|---|---|---|
+| Boards route | `kanban:board` | `read` | — |
+| New board route and buttons | `kanban:board` | `create` | — |
+| Board route | `kanban:board` | `read` | `{ id: boardId }` |
+| Edit/delete board | `kanban:board` | `update` / `delete` | `{ id: boardId }` |
+| Create column | `kanban:column` | `create` | `{ boardId }` |
+| Edit/delete column | `kanban:column` | `update` / `delete` | `{ id, boardId }` |
+| Create task | `kanban:task` | `create` | `{ boardId, columnId }` |
+| Edit/delete task | `kanban:task` | `update` / `delete` | `{ id, boardId, columnId }` |
+| Drag columns/tasks | `kanban:column` / `kanban:task` | `update` | `{ boardId }` |
+
+Denied task cards stay visible, but cannot be opened for editing. A denied board-level update check disables the corresponding drag handle.
+
+```tsx title="app/pages/[[...all]]/layout.tsx"
+<StackProvider
+  auth={{
+    getIdentity: () => getCurrentUser(),
+    can: async ({ resource, action, params, identity }) => {
+      if (!identity) return false
+      return authorizeKanban({ resource, action, params, userId: identity.id })
+    },
+  }}
+  // ...router and overrides
+>
+  {children}
+</StackProvider>
+```
+
 ### Page Component Overrides
 
 You can replace any built-in page with your own React component using the optional `pageComponents` field in `kanbanClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided. Overrides for parameterized routes receive the route context (`{ params }`) as props.
@@ -485,6 +518,26 @@ When a task has an assignee:
 - **Task Form**: Displays a searchable dropdown to select/change assignee
 
 When no assignee is set, the task card shows "Unassigned" with a placeholder icon.
+
+<Callout type="info">
+`useResolveUser` and `useSearchUsers` intentionally remain callback-backed hooks. Assignees come from your application's user directory rather than a Kanban HTTP endpoint, so these hooks do not use the resource factory's HTTP-backed `useSelect` helper.
+</Callout>
+
+## Localization
+
+All built-in Kanban component copy is routed through the `i18n` provider on `StackProvider`. Translation keys use the `kanban.*` namespace, for example `kanban.list.kanbanBoards`, `kanban.forms.createTask`, and `kanban.common.unassigned`.
+
+```tsx
+<StackProvider
+  i18n={{
+    translate: (key, defaultValue, params) =>
+      i18next.t(key, { defaultValue, ...params }),
+  }}
+  // ...
+/>
+```
+
+The existing camel-case `overrides.kanban.localization` fields remain supported and take precedence over `i18n`, so current consumers can migrate incrementally.
 
 ## API Reference
 
@@ -730,8 +783,11 @@ Import hooks from `@btst/stack/plugins/kanban/client/hooks` to use in your compo
 import { 
   useBoards,
   useBoard,
+  useBoardForm,
   useBoardMutations,
+  useColumnForm,
   useColumnMutations,
+  useTaskForm,
   useTaskMutations,
   useResolveUser,
   useSearchUsers,
@@ -751,6 +807,29 @@ const { createColumn, updateColumn, deleteColumn } = useColumnMutations()
 
 // Task mutations (includes assigneeId support)
 const { createTask, updateTask, deleteTask, moveTask } = useTaskMutations()
+
+// Resource form lifecycles choose create/update, await cache invalidation,
+// and expose normalized server validation issues through fieldErrors.
+const boardForm = useBoardForm({
+  action: board ? "edit" : "create",
+  record: board ?? null,
+  toCreateVars: (values) => values,
+  toUpdateVars: (values) => ({ id: board.id, data: values }),
+})
+
+const columnForm = useColumnForm({
+  action: column ? "edit" : "create",
+  record: column ?? null,
+  toCreateVars: (values) => ({ ...values, boardId }),
+  toUpdateVars: (values) => ({ id: column.id, data: values }),
+})
+
+const taskForm = useTaskForm({
+  action: task ? "edit" : "create",
+  record: task ?? null,
+  toCreateVars: (values) => values,
+  toUpdateVars: (values) => ({ id: task.id, data: values }),
+})
 
 // Resolve user info (with caching)
 const { data: user, isLoading } = useResolveUser(assigneeId)

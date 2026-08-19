@@ -69,32 +69,11 @@ test("create task in column", async ({ page, request }) => {
 	await page.goto(`/pages/kanban/${board.id}`, { waitUntil: "networkidle" });
 	await expect(page.locator('[data-testid="board-page"]')).toBeVisible();
 
-	// Find the "To Do" column and click "Add Task" button within it
-	// The "Add Task" button should be in the column dropdown menu or as a direct action
+	// Find the "To Do" column and click its direct "Add Task" action.
 	const toDoColumn = page.locator('[data-slot="kanban-column"]').first();
 	await expect(toDoColumn).toBeVisible();
 
-	// Click the column options and select "Add Task"
-	const columnMenuButton = toDoColumn
-		.locator("button")
-		.filter({ has: page.locator("svg") })
-		.first();
-	await columnMenuButton.click();
-
-	// Look for Add Task in menu or click directly if there's an add button
-	const addTaskButton = page.getByRole("menuitem", { name: /add task/i });
-	const addTaskVisible = await addTaskButton.isVisible().catch(() => false);
-
-	if (addTaskVisible) {
-		await addTaskButton.click();
-	} else {
-		// Close the menu and look for an alternative add task button
-		await page.keyboard.press("Escape");
-		const directAddButton = toDoColumn.getByRole("button", {
-			name: /add task/i,
-		});
-		await directAddButton.click();
-	}
+	await toDoColumn.getByRole("button", { name: /add task/i }).click();
 
 	// Wait for the task form dialog to appear
 	const dialog = page.locator('div[role="dialog"][data-slot="dialog-content"]');
@@ -180,6 +159,51 @@ test("edit task", async ({ page, request }) => {
 		timeout: 5000,
 	});
 	await expect(page.getByText("Urgent")).toBeVisible();
+
+	expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual([]);
+});
+
+test("edit task into another column", async ({ page, request }) => {
+	const errors: string[] = [];
+	page.on("console", (msg) => {
+		if (msg.type() === "error") errors.push(msg.text());
+	});
+
+	const board = await createBoard(request, {
+		name: "Move Task Test Board",
+		description: "Board for moving a task through the edit form",
+	});
+	const sourceColumn = board.columns[0];
+	const targetColumn = board.columns[1];
+
+	await createTask(request, {
+		title: "Task to Move in Form",
+		priority: "MEDIUM",
+		columnId: sourceColumn.id,
+	});
+
+	await page.goto(`/pages/kanban/${board.id}`, { waitUntil: "networkidle" });
+	await expect(page.locator('[data-testid="board-page"]')).toBeVisible();
+	await page.getByText("Task to Move in Form").click();
+
+	const dialog = page.locator('div[role="dialog"][data-slot="dialog-content"]');
+	await expect(dialog).toBeVisible({ timeout: 5000 });
+
+	// Priority is the first select and Column is the second.
+	await dialog.locator('[data-slot="select-trigger"]').nth(1).click();
+	await page
+		.getByRole("option", { name: targetColumn.title, exact: true })
+		.click();
+	await page.getByRole("button", { name: /update task/i }).click();
+
+	await expect(dialog).not.toBeVisible({ timeout: 5000 });
+	const columns = page.locator('[data-slot="kanban-column"]');
+	await expect(
+		columns.nth(1).getByText("Task to Move in Form", { exact: true }),
+	).toBeVisible({ timeout: 5000 });
+	await expect(
+		columns.nth(0).getByText("Task to Move in Form", { exact: true }),
+	).toHaveCount(0);
 
 	expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual([]);
 });
