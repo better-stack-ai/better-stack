@@ -8,11 +8,20 @@ import {
 	useSuspenseQuery,
 	type InfiniteData,
 } from "@tanstack/react-query";
-import { createApiClient } from "@btst/stack/plugins/client";
-import { createCommentsQueryKeys } from "../../query-keys";
+import {
+	createApiClient,
+	runResourceMutation,
+} from "@btst/stack/plugins/client";
+import { commentsResources, createCommentsQueryKeys } from "../../query-keys";
 import type { CommentsApiRouter } from "../../api";
 import type { SerializedComment, CommentListResult } from "../../types";
-import { toError } from "../utils";
+
+// HTTP mappings for all comment mutations live in the resource declaration;
+// the hooks below own the cache behavior (optimistic updates, invalidation)
+// because they take an explicit client config — required by the embeddable
+// `CommentThread` — and therefore cannot use the overrides-bound
+// `createResource` mutation hooks.
+const commentMutations = commentsResources.comments.mutations;
 
 interface CommentsClientConfig {
 	apiBaseURL: string;
@@ -318,27 +327,23 @@ export function usePostComment(
 		!!params.infiniteKey && (parentId ?? null) === null;
 
 	return useMutation({
-		mutationFn: async (input: {
+		mutationFn: (input: {
 			body: string;
 			parentId?: string | null;
 			limit?: number;
 			offset?: number;
-		}) => {
-			const response = await client("@post/comments", {
-				method: "POST",
-				body: {
+		}) =>
+			runResourceMutation(
+				client,
+				commentMutations.create,
+				{
 					resourceId: params.resourceId,
 					resourceType: params.resourceType,
 					parentId: input.parentId ?? null,
 					body: input.body,
 				},
-				headers: config.headers,
-			});
-
-			const data = (response as { data?: unknown }).data;
-			if (!data) throw toError((response as { error?: unknown }).error);
-			return data as SerializedComment;
-		},
+				config.headers,
+			) as Promise<SerializedComment>,
 		onMutate: async (input) => {
 			const listKey = getListKey(input.parentId, input.offset, input.limit);
 			await queryClient.cancelQueries({ queryKey: listKey });
@@ -505,17 +510,13 @@ export function useUpdateComment(config: CommentsClientConfig) {
 	const queries = createCommentsQueryKeys(client, config.headers);
 
 	return useMutation({
-		mutationFn: async (input: { id: string; body: string }) => {
-			const response = await client("@patch/comments/:id", {
-				method: "PATCH",
-				params: { id: input.id },
-				body: { body: input.body },
-				headers: config.headers,
-			});
-			const data = (response as { data?: unknown }).data;
-			if (!data) throw toError((response as { error?: unknown }).error);
-			return data as SerializedComment;
-		},
+		mutationFn: (input: { id: string; body: string }) =>
+			runResourceMutation(
+				client,
+				commentMutations.update,
+				input,
+				config.headers,
+			) as Promise<SerializedComment>,
 		onSettled: () => {
 			queryClient.invalidateQueries({
 				queryKey: queries.comments.list._def,
@@ -535,17 +536,13 @@ export function useApproveComment(config: CommentsClientConfig) {
 	const queries = createCommentsQueryKeys(client, config.headers);
 
 	return useMutation({
-		mutationFn: async (id: string) => {
-			const response = await client("@patch/comments/:id/status", {
-				method: "PATCH",
-				params: { id },
-				body: { status: "approved" },
-				headers: config.headers,
-			});
-			const data = (response as { data?: unknown }).data;
-			if (!data) throw toError((response as { error?: unknown }).error);
-			return data as SerializedComment;
-		},
+		mutationFn: (id: string) =>
+			runResourceMutation(
+				client,
+				commentMutations.updateStatus,
+				{ id, status: "approved" },
+				config.headers,
+			) as Promise<SerializedComment>,
 		onSettled: () => {
 			queryClient.invalidateQueries({
 				queryKey: queries.comments.list._def,
@@ -568,20 +565,16 @@ export function useUpdateCommentStatus(config: CommentsClientConfig) {
 	const queries = createCommentsQueryKeys(client, config.headers);
 
 	return useMutation({
-		mutationFn: async (input: {
+		mutationFn: (input: {
 			id: string;
 			status: "pending" | "approved" | "spam";
-		}) => {
-			const response = await client("@patch/comments/:id/status", {
-				method: "PATCH",
-				params: { id: input.id },
-				body: { status: input.status },
-				headers: config.headers,
-			});
-			const data = (response as { data?: unknown }).data;
-			if (!data) throw toError((response as { error?: unknown }).error);
-			return data as SerializedComment;
-		},
+		}) =>
+			runResourceMutation(
+				client,
+				commentMutations.updateStatus,
+				input,
+				config.headers,
+			) as Promise<SerializedComment>,
 		onSettled: () => {
 			queryClient.invalidateQueries({
 				queryKey: queries.comments.list._def,
@@ -604,16 +597,13 @@ export function useDeleteComment(config: CommentsClientConfig) {
 	const queries = createCommentsQueryKeys(client, config.headers);
 
 	return useMutation({
-		mutationFn: async (id: string) => {
-			const response = await client("@delete/comments/:id", {
-				method: "DELETE",
-				params: { id },
-				headers: config.headers,
-			});
-			const data = (response as { data?: unknown }).data;
-			if (!data) throw toError((response as { error?: unknown }).error);
-			return data as { success: boolean };
-		},
+		mutationFn: (id: string) =>
+			runResourceMutation(
+				client,
+				commentMutations.delete,
+				id,
+				config.headers,
+			) as Promise<{ success: boolean }>,
 		onSettled: () => {
 			queryClient.invalidateQueries({
 				queryKey: queries.comments.list._def,
@@ -698,17 +688,13 @@ export function useToggleLike(
 	}
 
 	return useMutation({
-		mutationFn: async (input: { commentId: string; authorId: string }) => {
-			const response = await client("@post/comments/:id/like", {
-				method: "POST",
-				params: { id: input.commentId },
-				body: { authorId: input.authorId },
-				headers: config.headers,
-			});
-			const data = (response as { data?: unknown }).data;
-			if (!data) throw toError((response as { error?: unknown }).error);
-			return data as { likes: number; isLiked: boolean };
-		},
+		mutationFn: (input: { commentId: string; authorId: string }) =>
+			runResourceMutation(
+				client,
+				commentMutations.like,
+				input,
+				config.headers,
+			) as Promise<{ likes: number; isLiked: boolean }>,
 		onMutate: async (input) => {
 			await queryClient.cancelQueries({ queryKey: listKey });
 

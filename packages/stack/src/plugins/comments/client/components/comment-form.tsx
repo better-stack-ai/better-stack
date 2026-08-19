@@ -3,10 +3,9 @@
 import { useState, type ComponentType } from "react";
 import { Button } from "@workspace/ui/components/button";
 import { Textarea } from "@workspace/ui/components/textarea";
-import {
-	COMMENTS_LOCALIZATION,
-	type CommentsLocalization,
-} from "../localization";
+import { useTranslate } from "@btst/stack/context";
+import type { StackError } from "@btst/stack/plugins/client";
+import type { CommentsLocalization } from "../localization";
 
 export interface CommentFormProps {
 	/** Current user's ID — required to post */
@@ -39,14 +38,17 @@ export function CommentForm({
 	onSubmit,
 	onCancel,
 	InputComponent,
-	localization: localizationProp,
+	localization,
 }: CommentFormProps) {
-	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
+	const t = useTranslate();
 	const [body, setBody] = useState(initialBody);
 	const [isPending, setIsPending] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	const resolvedSubmitLabel = submitLabel ?? loc.COMMENTS_FORM_POST_COMMENT;
+	const resolvedSubmitLabel =
+		submitLabel ??
+		localization?.COMMENTS_FORM_POST_COMMENT ??
+		t("comments.form.postComment", "Post comment");
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -57,8 +59,16 @@ export function CommentForm({
 			await onSubmit(body.trim());
 			setBody("");
 		} catch (err) {
+			// Server-side Zod failures arrive as a StackError with a field-error
+			// map — surface the `body` message inline instead of the generic one.
+			const bodyError = (err as StackError)?.errors?.body;
+			const bodyMessage = Array.isArray(bodyError) ? bodyError[0] : bodyError;
 			setError(
-				err instanceof Error ? err.message : loc.COMMENTS_FORM_SUBMIT_ERROR,
+				bodyMessage ??
+					(err instanceof Error && err.message
+						? err.message
+						: (localization?.COMMENTS_FORM_SUBMIT_ERROR ??
+							t("comments.form.submitError", "Failed to submit comment"))),
 			);
 		} finally {
 			setIsPending(false);
@@ -76,20 +86,33 @@ export function CommentForm({
 					value={body}
 					onChange={setBody}
 					disabled={isPending}
-					placeholder={loc.COMMENTS_FORM_PLACEHOLDER}
+					placeholder={
+						localization?.COMMENTS_FORM_PLACEHOLDER ??
+						t("comments.form.placeholder", "Write a comment…")
+					}
 				/>
 			) : (
 				<Textarea
 					value={body}
 					onChange={(e) => setBody(e.target.value)}
-					placeholder={loc.COMMENTS_FORM_PLACEHOLDER}
+					placeholder={
+						localization?.COMMENTS_FORM_PLACEHOLDER ??
+						t("comments.form.placeholder", "Write a comment…")
+					}
 					disabled={isPending}
 					rows={3}
 					className="resize-none"
 				/>
 			)}
 
-			{error && <p className="text-sm text-destructive">{error}</p>}
+			{error && (
+				<p
+					className="text-sm text-destructive"
+					data-testid="comment-form-error"
+				>
+					{error}
+				</p>
+			)}
 
 			<div className="flex gap-2 justify-end">
 				{onCancel && (
@@ -100,11 +123,15 @@ export function CommentForm({
 						onClick={onCancel}
 						disabled={isPending}
 					>
-						{loc.COMMENTS_FORM_CANCEL}
+						{localization?.COMMENTS_FORM_CANCEL ??
+							t("comments.form.cancel", "Cancel")}
 					</Button>
 				)}
 				<Button type="submit" size="sm" disabled={isPending || !body.trim()}>
-					{isPending ? loc.COMMENTS_FORM_POSTING : resolvedSubmitLabel}
+					{isPending
+						? (localization?.COMMENTS_FORM_POSTING ??
+							t("comments.form.posting", "Posting…"))
+						: resolvedSubmitLabel}
 				</Button>
 			</div>
 		</form>

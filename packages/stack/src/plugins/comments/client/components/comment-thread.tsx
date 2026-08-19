@@ -31,11 +31,8 @@ import {
 	useDeleteComment,
 	useToggleLike,
 } from "../hooks/use-comments";
-import {
-	COMMENTS_LOCALIZATION,
-	type CommentsLocalization,
-} from "../localization";
-import { usePluginOverrides } from "@btst/stack/context";
+import type { CommentsLocalization } from "../localization";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../overrides";
 
 /** Custom input component props */
@@ -126,7 +123,7 @@ function CommentCard({
 	resourceType,
 	headers,
 	components,
-	loc,
+	localization,
 	infiniteKey,
 	onReplyClick,
 	allowPosting,
@@ -140,7 +137,7 @@ function CommentCard({
 	resourceType: string;
 	headers?: HeadersInit;
 	components?: CommentComponents;
-	loc: CommentsLocalization;
+	localization?: Partial<CommentsLocalization>;
 	/** Infinite thread query key — pass for top-level comments so like optimistic
 	 *  updates target the correct InfiniteData cache entry. */
 	infiniteKey?: readonly unknown[];
@@ -148,6 +145,7 @@ function CommentCard({
 	allowPosting: boolean;
 	allowEditing: boolean;
 }) {
+	const t = useTranslate();
 	const [isEditing, setIsEditing] = useState(false);
 	const Renderer = components?.Renderer ?? DEFAULT_RENDERER;
 
@@ -173,7 +171,10 @@ function CommentCard({
 	};
 
 	const handleDelete = async () => {
-		if (!window.confirm(loc.COMMENTS_DELETE_CONFIRM)) return;
+		const confirmMessage =
+			localization?.COMMENTS_DELETE_CONFIRM ??
+			t("comments.thread.deleteConfirm", "Delete this comment?");
+		if (!window.confirm(confirmMessage)) return;
 		await deleteMutation.mutateAsync(comment.id);
 	};
 
@@ -215,7 +216,8 @@ function CommentCard({
 					</span>
 					{comment.editedAt && (
 						<span className="text-xs text-muted-foreground italic">
-							{loc.COMMENTS_EDITED_BADGE}
+							{localization?.COMMENTS_EDITED_BADGE ??
+								t("comments.thread.editedBadge", "(edited)")}
 						</span>
 					)}
 					{isPending && isOwn && (
@@ -224,7 +226,8 @@ function CommentCard({
 							className="text-xs"
 							data-testid="pending-badge"
 						>
-							{loc.COMMENTS_PENDING_BADGE}
+							{localization?.COMMENTS_PENDING_BADGE ??
+								t("comments.thread.pendingBadge", "Pending approval")}
 						</Badge>
 					)}
 				</div>
@@ -233,9 +236,12 @@ function CommentCard({
 					<CommentForm
 						authorId={currentUserId ?? ""}
 						initialBody={comment.body}
-						submitLabel={loc.COMMENTS_SAVE_EDIT}
+						submitLabel={
+							localization?.COMMENTS_SAVE_EDIT ??
+							t("comments.thread.saveEdit", "Save")
+						}
 						InputComponent={components?.Input}
-						localization={loc}
+						localization={localization}
 						onSubmit={handleEdit}
 						onCancel={() => setIsEditing(false)}
 					/>
@@ -253,8 +259,10 @@ function CommentCard({
 								onClick={handleLike}
 								aria-label={
 									comment.isLikedByCurrentUser
-										? loc.COMMENTS_UNLIKE_ARIA
-										: loc.COMMENTS_LIKE_ARIA
+										? (localization?.COMMENTS_UNLIKE_ARIA ??
+											t("comments.thread.unlikeAria", "Unlike"))
+										: (localization?.COMMENTS_LIKE_ARIA ??
+											t("comments.thread.likeAria", "Like"))
 								}
 								data-testid="like-button"
 							>
@@ -279,7 +287,8 @@ function CommentCard({
 									data-testid="reply-button"
 								>
 									<MessageSquare className="h-3.5 w-3.5 mr-1" />
-									{loc.COMMENTS_REPLY_BUTTON}
+									{localization?.COMMENTS_REPLY_BUTTON ??
+										t("comments.thread.replyButton", "Reply")}
 								</Button>
 							)}
 
@@ -294,7 +303,8 @@ function CommentCard({
 										data-testid="edit-button"
 									>
 										<Pencil className="h-3.5 w-3.5 mr-1" />
-										{loc.COMMENTS_EDIT_BUTTON}
+										{localization?.COMMENTS_EDIT_BUTTON ??
+											t("comments.thread.editButton", "Edit")}
 									</Button>
 								)}
 								<Button
@@ -306,7 +316,8 @@ function CommentCard({
 									data-testid="delete-button"
 								>
 									<X className="h-3.5 w-3.5 mr-1" />
-									{loc.COMMENTS_DELETE_BUTTON}
+									{localization?.COMMENTS_DELETE_BUTTON ??
+										t("comments.thread.deleteButton", "Delete")}
 								</Button>
 							</>
 						)}
@@ -338,6 +349,7 @@ function CommentThreadInner({
 	allowEditing: allowEditingProp,
 	sort: sortProp,
 }: CommentThreadProps) {
+	const t = useTranslate();
 	const overrides = usePluginOverrides<
 		CommentsPluginOverrides,
 		Partial<CommentsPluginOverrides>
@@ -347,7 +359,9 @@ function CommentThreadInner({
 	const allowPosting = allowPostingProp ?? overrides.allowPosting ?? true;
 	const allowEditing = allowEditingProp ?? overrides.allowEditing ?? true;
 	const sort = sortProp ?? overrides.defaultCommentSort ?? "desc";
-	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
+	// Per-instance prop wins over the plugin-level override strings; missing
+	// keys fall through to `t()` inside each child component.
+	const localization = { ...overrides.localization, ...localizationProp };
 	const [replyingTo, setReplyingTo] = useState<string | null>(null);
 	const [expandedReplies, setExpandedReplies] = useState<Set<string>>(
 		new Set(),
@@ -408,7 +422,12 @@ function CommentThreadInner({
 			<div className="flex items-center gap-2 mb-4">
 				<MessageSquare className="h-5 w-5 text-muted-foreground" />
 				<h3 className="font-semibold text-sm">
-					{total === 0 ? loc.COMMENTS_TITLE : `${total} ${loc.COMMENTS_TITLE}`}
+					{(() => {
+						const title =
+							localization?.COMMENTS_TITLE ??
+							t("comments.thread.title", "Comments");
+						return total === 0 ? title : `${total} ${title}`;
+					})()}
 				</h3>
 			</div>
 
@@ -440,7 +459,7 @@ function CommentThreadInner({
 								resourceType={resourceType}
 								headers={headers}
 								components={components}
-								loc={loc}
+								localization={localization}
 								infiniteKey={threadQueryKey}
 								onReplyClick={(parentId) => {
 									setReplyingTo(replyingTo === parentId ? null : parentId);
@@ -459,7 +478,7 @@ function CommentThreadInner({
 								currentUserId={currentUserId}
 								headers={headers}
 								components={components}
-								loc={loc}
+								localization={localization}
 								expanded={expandedReplies.has(comment.id)}
 								replyCount={comment.replyCount}
 								onToggle={() => {
@@ -492,9 +511,12 @@ function CommentThreadInner({
 									<CommentForm
 										authorId={currentUserId}
 										parentId={comment.id}
-										submitLabel={loc.COMMENTS_FORM_POST_REPLY}
+										submitLabel={
+											localization?.COMMENTS_FORM_POST_REPLY ??
+											t("comments.form.postReply", "Post reply")
+										}
 										InputComponent={components?.Input}
-										localization={loc}
+										localization={localization}
 										onSubmit={(body) => handleReply(body, comment.id)}
 										onCancel={() => setReplyingTo(null)}
 									/>
@@ -507,7 +529,8 @@ function CommentThreadInner({
 
 			{!isLoading && comments.length === 0 && (
 				<p className="text-sm text-muted-foreground py-4 text-center">
-					{loc.COMMENTS_EMPTY}
+					{localization?.COMMENTS_EMPTY ??
+						t("comments.thread.empty", "Be the first to comment.")}
 				</p>
 			)}
 
@@ -520,7 +543,11 @@ function CommentThreadInner({
 						disabled={isLoadingMore}
 						data-testid="load-more-comments"
 					>
-						{isLoadingMore ? loc.COMMENTS_LOADING_MORE : loc.COMMENTS_LOAD_MORE}
+						{isLoadingMore
+							? (localization?.COMMENTS_LOADING_MORE ??
+								t("comments.thread.loadingMore", "Loading…"))
+							: (localization?.COMMENTS_LOAD_MORE ??
+								t("comments.thread.loadMore", "Load more comments"))}
 					</Button>
 				</div>
 			)}
@@ -533,9 +560,12 @@ function CommentThreadInner({
 						<div data-testid="comment-form-wrapper">
 							<CommentForm
 								authorId={currentUserId}
-								submitLabel={loc.COMMENTS_FORM_POST_COMMENT}
+								submitLabel={
+									localization?.COMMENTS_FORM_POST_COMMENT ??
+									t("comments.form.postComment", "Post comment")
+								}
 								InputComponent={components?.Input}
-								localization={loc}
+								localization={localization}
 								onSubmit={handlePost}
 							/>
 						</div>
@@ -546,7 +576,11 @@ function CommentThreadInner({
 						>
 							<LogIn className="h-6 w-6 text-muted-foreground" />
 							<p className="text-sm text-muted-foreground">
-								{loc.COMMENTS_LOGIN_PROMPT}
+								{localization?.COMMENTS_LOGIN_PROMPT ??
+									t(
+										"comments.thread.loginPrompt",
+										"Please sign in to leave a comment.",
+									)}
 							</p>
 							{loginHref && (
 								<a
@@ -554,7 +588,8 @@ function CommentThreadInner({
 									className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4"
 									data-testid="login-link"
 								>
-									{loc.COMMENTS_LOGIN_LINK}
+									{localization?.COMMENTS_LOGIN_LINK ??
+										t("comments.thread.loginLink", "Sign in")}
 								</a>
 							)}
 						</div>
@@ -576,7 +611,7 @@ function RepliesSection({
 	currentUserId,
 	headers,
 	components,
-	loc,
+	localization,
 	expanded,
 	replyCount,
 	onToggle,
@@ -591,7 +626,7 @@ function RepliesSection({
 	currentUserId?: string;
 	headers?: HeadersInit;
 	components?: CommentComponents;
-	loc: CommentsLocalization;
+	localization?: Partial<CommentsLocalization>;
 	expanded: boolean;
 	/** Pre-computed from the parent comment — avoids an extra fetch on mount. */
 	replyCount: number;
@@ -599,6 +634,7 @@ function RepliesSection({
 	onOffsetChange: (offset: number) => void;
 	allowEditing: boolean;
 }) {
+	const t = useTranslate();
 	const config = { apiBaseURL, apiBasePath, headers };
 	const [replyOffset, setReplyOffset] = useState(0);
 	const [loadedReplies, setLoadedReplies] = useState<SerializedComment[]>([]);
@@ -692,8 +728,15 @@ function RepliesSection({
 					<ChevronDown className="h-3 w-3 mr-1" />
 				)}
 				{expanded
-					? loc.COMMENTS_HIDE_REPLIES
-					: `${displayCount} ${displayCount === 1 ? loc.COMMENTS_REPLIES_SINGULAR : loc.COMMENTS_REPLIES_PLURAL}`}
+					? (localization?.COMMENTS_HIDE_REPLIES ??
+						t("comments.thread.hideReplies", "Hide replies"))
+					: `${displayCount} ${
+							displayCount === 1
+								? (localization?.COMMENTS_REPLIES_SINGULAR ??
+									t("comments.thread.repliesSingular", "reply"))
+								: (localization?.COMMENTS_REPLIES_PLURAL ??
+									t("comments.thread.repliesPlural", "replies"))
+						}`}
 			</Button>
 			{expanded && (
 				<div
@@ -711,7 +754,7 @@ function RepliesSection({
 							resourceType={resourceType}
 							headers={headers}
 							components={components}
-							loc={loc}
+							localization={localization}
 							onReplyClick={() => {}} // No nested replies in v1
 							allowPosting={false}
 							allowEditing={allowEditing}
@@ -730,8 +773,10 @@ function RepliesSection({
 								data-testid="load-more-replies"
 							>
 								{isFetchingReplies
-									? loc.COMMENTS_LOADING_MORE
-									: loc.COMMENTS_LOAD_MORE}
+									? (localization?.COMMENTS_LOADING_MORE ??
+										t("comments.thread.loadingMore", "Loading…"))
+									: (localization?.COMMENTS_LOAD_MORE ??
+										t("comments.thread.loadMore", "Load more comments"))}
 							</Button>
 						</div>
 					)}

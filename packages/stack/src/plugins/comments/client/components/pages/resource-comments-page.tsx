@@ -4,7 +4,6 @@ import { lazy } from "react";
 import { ComposedRoute } from "@btst/stack/client/components";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../../overrides";
-import { COMMENTS_LOCALIZATION } from "../../localization";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { PageWrapper } from "../shared/page-wrapper";
 import { useResolvedCurrentUserId } from "../../utils";
@@ -57,7 +56,6 @@ function ResourceCommentsPageWrapper({
 	resourceType: string;
 }) {
 	const overrides = usePluginOverrides<CommentsPluginOverrides>("comments");
-	const loc = { ...COMMENTS_LOCALIZATION, ...overrides.localization };
 	const resolvedUserId = useResolvedCurrentUserId(overrides.currentUserId);
 
 	useRouteLifecycle({
@@ -90,7 +88,7 @@ function ResourceCommentsPageWrapper({
 				headers={overrides.headers as HeadersInit | undefined}
 				currentUserId={resolvedUserId}
 				loginHref={overrides.loginHref}
-				localization={loc}
+				localization={overrides.localization}
 			/>
 		</PageWrapper>
 	);

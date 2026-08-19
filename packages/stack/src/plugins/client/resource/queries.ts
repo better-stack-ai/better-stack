@@ -237,11 +237,17 @@ export async function runResourceQuery(
 
 /**
  * Executes a mutation declaration: fetch → error-check → unwrap.
+ *
+ * `headers` supports plugins whose public hooks take an explicit client
+ * config (e.g. embeddable components) instead of resolving it from
+ * `usePluginOverrides` — same as the `headers` parameter on
+ * `createResourceQueryKeys`.
  */
 export async function runResourceMutation(
 	client: ResourceClient,
 	def: ResourceMutationDef<any, any>,
 	vars: unknown,
+	headers?: HeadersInit,
 ): Promise<unknown> {
 	const { body, params, query } = def.input
 		? def.input(vars)
@@ -252,6 +258,7 @@ export async function runResourceMutation(
 		...(body !== undefined ? { body } : {}),
 		...(params !== undefined ? { params } : {}),
 		...(query !== undefined ? { query } : {}),
+		...(headers !== undefined ? { headers } : {}),
 	});
 
 	if (isErrorResponse(response)) {
