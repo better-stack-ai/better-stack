@@ -315,6 +315,10 @@ The kanban plugin automatically creates the following pages (mounted at your con
 
 Pass an [`auth` provider](/auth) to `StackProvider` to gate Kanban routes and controls. Without an auth provider (or without `auth.can`), every check is allowed, preserving the default behavior.
 
+<Callout type="warning">
+These client checks control presentation and navigation only. Enforce the same authorization policy on your server endpoints; users can still invoke Kanban API mutations directly without the gated controls.
+</Callout>
+
 | UI | Resource | Action | Params |
 |---|---|---|---|
 | Boards route | `kanban:board` | `read` | — |
