@@ -10,25 +10,54 @@ import type { SerializedTask } from "../../../types";
 import { getPriorityConfig } from "../../../utils";
 import { useResolveUser } from "../../hooks/kanban-hooks";
 import { UserAvatar } from "./user-avatar";
+import { useCan, usePluginOverrides, useTranslate } from "@btst/stack/context";
+import type { KanbanPluginOverrides } from "../../overrides";
 
 interface TaskCardProps {
+	boardId: string;
+	columnId: string;
 	task: SerializedTask;
+	canMove: boolean;
 	onClick: () => void;
 }
 
-function TaskCardComponent({ task, onClick }: TaskCardProps) {
+function TaskCardComponent({
+	boardId,
+	columnId,
+	task,
+	canMove,
+	onClick,
+}: TaskCardProps) {
+	const t = useTranslate();
+	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { can: canEdit, isPending: isCheckingEdit } = useCan({
+		resource: "kanban:task",
+		action: "update",
+		params: { id: task.id, boardId, columnId },
+	});
 	const priorityConfig = getPriorityConfig(task.priority);
 	const { data: assignee } = useResolveUser(task.assigneeId);
+	const priorityLabels = {
+		LOW: localization?.priorityLow ?? t("kanban.common.priorityLow", "Low"),
+		MEDIUM:
+			localization?.priorityMedium ??
+			t("kanban.common.priorityMedium", "Medium"),
+		HIGH: localization?.priorityHigh ?? t("kanban.common.priorityHigh", "High"),
+		URGENT:
+			localization?.priorityUrgent ??
+			t("kanban.common.priorityUrgent", "Urgent"),
+	};
+	const editable = !isCheckingEdit && canEdit;
 
 	return (
 		<Kanban.Item value={task.id} asChild>
 			<div
-				className="rounded-md border bg-card p-3 shadow-xs cursor-pointer hover:shadow-md transition-shadow"
-				onClick={onClick}
+				className={`rounded-md border bg-card p-3 shadow-xs transition-shadow ${editable ? "cursor-pointer hover:shadow-md" : "cursor-default"}`}
+				onClick={editable ? onClick : undefined}
 			>
 				<div className="flex flex-col gap-2">
 					<div className="flex items-center gap-2">
-						<Kanban.ItemHandle asChild>
+						<Kanban.ItemHandle asChild disabled={!canMove}>
 							<Button
 								variant="ghost"
 								size="icon"
@@ -39,7 +68,7 @@ function TaskCardComponent({ task, onClick }: TaskCardProps) {
 							</Button>
 						</Kanban.ItemHandle>
 						<span
-							className="line-clamp-1 font-medium text-base flex-1 text-left cursor-pointer hover:text-primary"
+							className={`line-clamp-1 font-medium text-base flex-1 text-left ${editable ? "cursor-pointer hover:text-primary" : "cursor-default"}`}
 							title={task.title}
 						>
 							{task.title}
@@ -48,7 +77,7 @@ function TaskCardComponent({ task, onClick }: TaskCardProps) {
 							variant={priorityConfig.variant}
 							className={`pointer-events-none h-5 rounded-sm px-1.5 text-[11px] capitalize ${priorityConfig.className}`}
 						>
-							{priorityConfig.label}
+							{priorityLabels[task.priority] ?? priorityConfig.label}
 						</Badge>
 					</div>
 
@@ -57,13 +86,18 @@ function TaskCardComponent({ task, onClick }: TaskCardProps) {
 							<div className="flex items-center gap-1.5">
 								<UserAvatar user={assignee ?? null} size="sm" />
 								<span className="line-clamp-1">
-									{assignee?.name || "Assigned"}
+									{assignee?.name ||
+										(localization?.assigned ??
+											t("kanban.common.assigned", "Assigned"))}
 								</span>
 							</div>
 						) : (
 							<div className="flex items-center gap-1.5">
 								<UserAvatar user={null} size="sm" />
-								<span className="line-clamp-1">Unassigned</span>
+								<span className="line-clamp-1">
+									{localization?.unassigned ??
+										t("kanban.common.unassigned", "Unassigned")}
+								</span>
 							</div>
 						)}
 						<time className="tabular-nums">

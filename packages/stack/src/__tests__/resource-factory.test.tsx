@@ -313,6 +313,7 @@ describe("createResource hooks", () => {
 						"test-plugin": {
 							apiBaseURL: "http://test.local",
 							apiBasePath: "/api/data",
+							headers: { "x-resource-test": "forwarded" },
 							refresh,
 						},
 					}}
@@ -491,6 +492,7 @@ describe("createResource hooks", () => {
 		const [url, init] = fetchMock.mock.calls[0] as [unknown, RequestInit];
 		expect(String(url)).toContain("/api/data/items");
 		expect(init.method).toBe("POST");
+		expect(new Headers(init.headers).get("x-resource-test")).toBe("forwarded");
 
 		// Detail cache seeded from the result
 		expect(queryClient.getQueryData(["items", "detail", "42"])).toEqual(

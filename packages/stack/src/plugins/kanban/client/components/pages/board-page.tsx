@@ -20,6 +20,11 @@ export function BoardPageComponent({ boardId }: BoardPageComponentProps) {
 	return (
 		<ComposedRoute
 			path={`/kanban/${boardId}`}
+			permission={{
+				resource: "kanban:board",
+				action: "read",
+				params: { id: boardId },
+			}}
 			PageComponent={BoardPage}
 			ErrorComponent={DefaultError}
 			LoadingComponent={BoardSkeleton}

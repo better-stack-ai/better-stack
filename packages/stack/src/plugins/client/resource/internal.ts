@@ -66,7 +66,7 @@ export function useResourceMutationForDef(
 	def: ResourceMutationDef<any, any> | undefined,
 ): UseMutationResult<unknown, Error, unknown> {
 	const queryClient = useQueryClient();
-	const { client, refresh } = context;
+	const { client, headers, refresh } = context;
 
 	return useMutation<unknown, Error, unknown>({
 		mutationKey: [resourceName, mutationName],
@@ -76,7 +76,7 @@ export function useResourceMutationForDef(
 					`Resource "${resourceName}" has no "${mutationName}" mutation declared`,
 				);
 			}
-			return runResourceMutation(client, def, vars);
+			return runResourceMutation(client, def, vars, headers);
 		},
 		onSuccess: async (result) => {
 			if (!def) return;

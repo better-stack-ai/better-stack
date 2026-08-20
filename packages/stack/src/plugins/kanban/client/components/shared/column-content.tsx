@@ -6,6 +6,13 @@ import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import * as Kanban from "@workspace/ui/components/kanban";
 import {
+	CanAccess,
+	useCan,
+	usePluginOverrides,
+	useTranslate,
+} from "@btst/stack/context";
+import type { KanbanPluginOverrides } from "../../overrides";
+import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -16,7 +23,10 @@ import { TaskCard } from "./task-card";
 import type { SerializedColumn, SerializedTask } from "../../../types";
 
 interface ColumnContentProps {
+	boardId: string;
 	column: SerializedColumn & { tasks: SerializedTask[] };
+	canMoveColumn: boolean;
+	canMoveTasks: boolean;
 	onAddTask: () => void;
 	onEditTask: (taskId: string) => void;
 	onEditColumn: () => void;
@@ -24,18 +34,43 @@ interface ColumnContentProps {
 }
 
 function ColumnContentComponent({
+	boardId,
 	column,
+	canMoveColumn,
+	canMoveTasks,
 	onAddTask,
 	onEditTask,
 	onEditColumn,
 	onDeleteColumn,
 }: ColumnContentProps) {
+	const t = useTranslate();
+	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
 	const hasTasks = column.tasks && column.tasks.length > 0;
+	const { can: canUpdateColumn, isPending: isCheckingUpdateColumn } = useCan({
+		resource: "kanban:column",
+		action: "update",
+		params: { id: column.id, boardId },
+	});
+	const { can: canCreateTask, isPending: isCheckingCreateTask } = useCan({
+		resource: "kanban:task",
+		action: "create",
+		params: { boardId, columnId: column.id },
+	});
+	const { can: canDeleteColumn, isPending: isCheckingDeleteColumn } = useCan({
+		resource: "kanban:column",
+		action: "delete",
+		params: { id: column.id, boardId },
+	});
+	const showUpdateColumn = !isCheckingUpdateColumn && canUpdateColumn;
+	const showCreateTask = !isCheckingCreateTask && canCreateTask;
+	const showDeleteColumn = !isCheckingDeleteColumn && canDeleteColumn;
+	const hasColumnActions =
+		showUpdateColumn || showCreateTask || showDeleteColumn;
 
 	return (
 		<Kanban.Column key={column.id} value={column.id}>
 			<div className="flex items-center">
-				<Kanban.ColumnHandle asChild>
+				<Kanban.ColumnHandle asChild disabled={!canMoveColumn}>
 					<Button variant="ghost" size="icon">
 						<GripVertical className="h-4 w-4" />
 					</Button>
@@ -48,38 +83,54 @@ function ColumnContentComponent({
 						{column.tasks?.length || 0}
 					</Badge>
 				</div>
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" size="icon">
-							<MoreVertical className="h-4 w-4" />
-						</Button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<DropdownMenuItem onClick={onEditColumn}>
-							<Pencil className="mr-2 h-4 w-4" />
-							Edit Column
-						</DropdownMenuItem>
-						<DropdownMenuItem onClick={onAddTask}>
-							<Plus className="mr-2 h-4 w-4" />
-							Add Task
-						</DropdownMenuItem>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem
-							onClick={onDeleteColumn}
-							className="text-red-600 focus:text-red-600"
-						>
-							<Trash2 className="mr-2 h-4 w-4" />
-							Delete Column
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
+				{hasColumnActions && (
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button variant="ghost" size="icon">
+								<MoreVertical className="h-4 w-4" />
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							{showUpdateColumn && (
+								<DropdownMenuItem onClick={onEditColumn}>
+									<Pencil className="mr-2 h-4 w-4" />
+									{localization?.editColumn ??
+										t("kanban.list.editColumn", "Edit Column")}
+								</DropdownMenuItem>
+							)}
+							{showCreateTask && (
+								<DropdownMenuItem onClick={onAddTask}>
+									<Plus className="mr-2 h-4 w-4" />
+									{localization?.addTask ??
+										t("kanban.list.addTask", "Add Task")}
+								</DropdownMenuItem>
+							)}
+							{showDeleteColumn && (showUpdateColumn || showCreateTask) && (
+								<DropdownMenuSeparator />
+							)}
+							{showDeleteColumn && (
+								<DropdownMenuItem
+									onClick={onDeleteColumn}
+									className="text-red-600 focus:text-red-600"
+								>
+									<Trash2 className="mr-2 h-4 w-4" />
+									{localization?.deleteColumn ??
+										t("kanban.forms.deleteColumn", "Delete Column")}
+								</DropdownMenuItem>
+							)}
+						</DropdownMenuContent>
+					</DropdownMenu>
+				)}
 			</div>
 			<div className="p-0.5 space-y-2">
 				{hasTasks ? (
 					column.tasks.map((task) => (
 						<TaskCard
 							key={task.id}
+							boardId={boardId}
+							columnId={column.id}
 							task={task}
+							canMove={canMoveTasks}
 							onClick={() => onEditTask(task.id)}
 						/>
 					))
@@ -89,15 +140,28 @@ function ColumnContentComponent({
 							<Plus className="h-5 w-5 text-muted-foreground" />
 						</div>
 						<div className="space-y-1 mb-2 md:space-y-2 md:mb-4">
-							<p className="text-sm text-muted-foreground">No tasks yet</p>
+							<p className="text-sm text-muted-foreground">
+								{localization?.noTasks ??
+									t("kanban.common.noTasks", "No tasks yet")}
+							</p>
 							<p className="text-xs text-muted-foreground">
-								Add a task to get started
+								{localization?.noTasksDescription ??
+									t(
+										"kanban.list.noTasksDescription",
+										"Add a task to get started",
+									)}
 							</p>
 						</div>
-						<Button onClick={onAddTask} size="sm">
-							<Plus className="mr-2 h-4 w-4" />
-							Add Task
-						</Button>
+						<CanAccess
+							resource="kanban:task"
+							action="create"
+							params={{ boardId, columnId: column.id }}
+						>
+							<Button onClick={onAddTask} size="sm">
+								<Plus className="mr-2 h-4 w-4" />
+								{localization?.addTask ?? t("kanban.list.addTask", "Add Task")}
+							</Button>
+						</CanAccess>
 					</div>
 				)}
 			</div>

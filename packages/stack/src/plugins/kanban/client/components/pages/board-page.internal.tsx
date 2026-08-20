@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { ArrowLeft, Plus, Settings, Trash2, Pencil } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@workspace/ui/components/button";
 import {
 	DropdownMenu,
@@ -34,7 +33,13 @@ import {
 	useColumnMutations,
 	useTaskMutations,
 } from "../../hooks/kanban-hooks";
-import { usePluginOverrides } from "@btst/stack/context";
+import {
+	CanAccess,
+	useCan,
+	useNotify,
+	usePluginOverrides,
+	useTranslate,
+} from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
 import { KanbanBoard } from "../shared/kanban-board";
 import { ColumnForm } from "../forms/column-form";
@@ -59,6 +64,8 @@ type ModalState =
 	| { type: "editTask"; columnId: string; taskId: string };
 
 export function BoardPage({ boardId }: BoardPageProps) {
+	const t = useTranslate();
+	const notify = useNotify();
 	const { data: board, error, refetch, isFetching } = useSuspenseBoard(boardId);
 
 	// Suspense hooks only throw on initial fetch, not refetch failures
@@ -70,6 +77,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 		Link: OverrideLink,
 		navigate: overrideNavigate,
 		taskDetailBottomSlot,
+		localization,
 	} = usePluginOverrides<KanbanPluginOverrides>("kanban");
 	const navigate =
 		overrideNavigate ||
@@ -81,6 +89,36 @@ export function BoardPage({ boardId }: BoardPageProps) {
 	const { deleteBoard, isDeleting } = useBoardMutations();
 	const { deleteColumn, reorderColumns } = useColumnMutations();
 	const { deleteTask, moveTask, reorderTasks } = useTaskMutations();
+	const { can: canMoveColumns, isPending: isCheckingColumnMove } = useCan({
+		resource: "kanban:column",
+		action: "update",
+		params: { boardId },
+	});
+	const { can: canMoveTasks, isPending: isCheckingTaskMove } = useCan({
+		resource: "kanban:task",
+		action: "update",
+		params: { boardId },
+	});
+	const { can: canCreateColumn, isPending: isCheckingCreateColumn } = useCan({
+		resource: "kanban:column",
+		action: "create",
+		params: { boardId },
+	});
+	const { can: canUpdateBoard, isPending: isCheckingUpdateBoard } = useCan({
+		resource: "kanban:board",
+		action: "update",
+		params: { id: boardId },
+	});
+	const { can: canDeleteBoard, isPending: isCheckingDeleteBoard } = useCan({
+		resource: "kanban:board",
+		action: "delete",
+		params: { id: boardId },
+	});
+	const showCreateColumn = !isCheckingCreateColumn && canCreateColumn;
+	const showUpdateBoard = !isCheckingUpdateBoard && canUpdateBoard;
+	const showDeleteBoard = !isCheckingDeleteBoard && canDeleteBoard;
+	const hasBoardActions =
+		showCreateColumn || showUpdateBoard || showDeleteBoard;
 
 	const [modalState, setModalState] = useState<ModalState>({ type: "none" });
 
@@ -139,10 +177,21 @@ export function BoardPage({ boardId }: BoardPageProps) {
 			}
 		} catch (error) {
 			const message =
-				error instanceof Error ? error.message : "Failed to delete board";
-			toast.error(message);
+				error instanceof Error
+					? error.message
+					: (localization?.deleteBoardError ??
+						t("kanban.common.deleteBoardError", "Failed to delete board"));
+			notify.error(message);
 		}
-	}, [deleteBoard, boardId, navigate, closeModal]);
+	}, [
+		deleteBoard,
+		boardId,
+		navigate,
+		closeModal,
+		localization?.deleteBoardError,
+		notify,
+		t,
+	]);
 
 	const handleKanbanChange = useCallback(
 		async (newData: Record<string, SerializedTask[]>) => {
@@ -250,7 +299,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 				// may have already updated the state, and reverting would incorrectly
 				// undo that operation too. The server is the source of truth.
 				refetch();
-				// Re-throw so error boundaries or toast handlers can catch it
+				// Re-throw so the caller's error handling can surface it
 				throw error;
 			}
 		},
@@ -278,12 +327,22 @@ export function BoardPage({ boardId }: BoardPageProps) {
 	if (!board) {
 		return (
 			<EmptyState
-				title="Board not found"
-				description="The board you're looking for doesn't exist or you don't have access to it."
+				title={
+					localization?.boardNotFound ??
+					t("kanban.list.boardNotFound", "Board not found")
+				}
+				description={
+					localization?.boardNotFoundDescription ??
+					t(
+						"kanban.list.boardNotFoundDescription",
+						"The board you're looking for doesn't exist or you don't have access to it.",
+					)
+				}
 				action={
 					<Button onClick={() => navigate("/pages/kanban")}>
 						<ArrowLeft className="mr-2 h-4 w-4" />
-						Back to Boards
+						{localization?.backToBoards ??
+							t("kanban.common.backToBoards", "Back to Boards")}
 					</Button>
 				}
 			/>
@@ -312,42 +371,58 @@ export function BoardPage({ boardId }: BoardPageProps) {
 						)}
 					</div>
 				</div>
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button variant="outline">
-							<Settings className="mr-2 h-4 w-4" />
-							Actions
-						</Button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<DropdownMenuItem
-							onClick={() => setModalState({ type: "addColumn" })}
-						>
-							<Plus className="mr-2 h-4 w-4" />
-							Add Column
-						</DropdownMenuItem>
-						<DropdownMenuItem
-							onClick={() => setModalState({ type: "editBoard" })}
-						>
-							<Pencil className="mr-2 h-4 w-4" />
-							Edit Board
-						</DropdownMenuItem>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem
-							onClick={() => setModalState({ type: "deleteBoard" })}
-							className="text-red-600 focus:text-red-600"
-						>
-							<Trash2 className="mr-2 h-4 w-4" />
-							Delete Board
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
+				{hasBoardActions && (
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button variant="outline">
+								<Settings className="mr-2 h-4 w-4" />
+								{localization?.actions ?? t("kanban.common.actions", "Actions")}
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							{showCreateColumn && (
+								<DropdownMenuItem
+									onClick={() => setModalState({ type: "addColumn" })}
+								>
+									<Plus className="mr-2 h-4 w-4" />
+									{localization?.addColumn ??
+										t("kanban.list.addColumn", "Add Column")}
+								</DropdownMenuItem>
+							)}
+							{showUpdateBoard && (
+								<DropdownMenuItem
+									onClick={() => setModalState({ type: "editBoard" })}
+								>
+									<Pencil className="mr-2 h-4 w-4" />
+									{localization?.editBoard ??
+										t("kanban.list.editBoard", "Edit Board")}
+								</DropdownMenuItem>
+							)}
+							{showDeleteBoard && (showCreateColumn || showUpdateBoard) && (
+								<DropdownMenuSeparator />
+							)}
+							{showDeleteBoard && (
+								<DropdownMenuItem
+									onClick={() => setModalState({ type: "deleteBoard" })}
+									className="text-red-600 focus:text-red-600"
+								>
+									<Trash2 className="mr-2 h-4 w-4" />
+									{localization?.deleteBoard ??
+										t("kanban.forms.deleteBoard", "Delete Board")}
+								</DropdownMenuItem>
+							)}
+						</DropdownMenuContent>
+					</DropdownMenu>
+				)}
 			</div>
 
 			{orderedColumns.length > 0 ? (
 				<KanbanBoard
+					boardId={boardId}
 					columns={orderedColumns}
 					kanbanState={kanbanState}
+					canMoveColumns={!isCheckingColumnMove && canMoveColumns}
+					canMoveTasks={!isCheckingTaskMove && canMoveTasks}
 					onKanbanChange={handleKanbanChange}
 					onAddTask={(columnId) => setModalState({ type: "addTask", columnId })}
 					onEditTask={(columnId, taskId) =>
@@ -362,13 +437,29 @@ export function BoardPage({ boardId }: BoardPageProps) {
 				/>
 			) : (
 				<EmptyState
-					title="No columns yet"
-					description="Create your first column to start organizing tasks."
+					title={
+						localization?.noColumns ??
+						t("kanban.common.noColumns", "No columns yet")
+					}
+					description={
+						localization?.noColumnsDescription ??
+						t(
+							"kanban.list.noColumnsDescription",
+							"Create your first column to start organizing tasks.",
+						)
+					}
 					action={
-						<Button onClick={() => setModalState({ type: "addColumn" })}>
-							<Plus className="mr-2 h-4 w-4" />
-							Add Column
-						</Button>
+						<CanAccess
+							resource="kanban:column"
+							action="create"
+							params={{ boardId }}
+						>
+							<Button onClick={() => setModalState({ type: "addColumn" })}>
+								<Plus className="mr-2 h-4 w-4" />
+								{localization?.addColumn ??
+									t("kanban.list.addColumn", "Add Column")}
+							</Button>
+						</CanAccess>
 					}
 				/>
 			)}
@@ -380,18 +471,22 @@ export function BoardPage({ boardId }: BoardPageProps) {
 			>
 				<DialogContent>
 					<DialogHeader>
-						<DialogTitle>Add Column</DialogTitle>
+						<DialogTitle>
+							{localization?.addColumn ??
+								t("kanban.list.addColumn", "Add Column")}
+						</DialogTitle>
 						<DialogDescription>
-							Add a new column to this board.
+							{localization?.addColumnDescription ??
+								t(
+									"kanban.list.addColumnDescription",
+									"Add a new column to this board.",
+								)}
 						</DialogDescription>
 					</DialogHeader>
 					<ColumnForm
 						boardId={boardId}
 						onClose={closeModal}
-						onSuccess={() => {
-							closeModal();
-							refetch();
-						}}
+						onSuccess={closeModal}
 					/>
 				</DialogContent>
 			</Dialog>
@@ -403,8 +498,17 @@ export function BoardPage({ boardId }: BoardPageProps) {
 			>
 				<DialogContent>
 					<DialogHeader>
-						<DialogTitle>Edit Column</DialogTitle>
-						<DialogDescription>Update the column details.</DialogDescription>
+						<DialogTitle>
+							{localization?.editColumn ??
+								t("kanban.list.editColumn", "Edit Column")}
+						</DialogTitle>
+						<DialogDescription>
+							{localization?.editColumnDescription ??
+								t(
+									"kanban.list.editColumnDescription",
+									"Update the column details.",
+								)}
+						</DialogDescription>
 					</DialogHeader>
 					{modalState.type === "editColumn" && (
 						<ColumnForm
@@ -412,10 +516,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 							columnId={modalState.columnId}
 							column={board.columns?.find((c) => c.id === modalState.columnId)}
 							onClose={closeModal}
-							onSuccess={() => {
-								closeModal();
-								refetch();
-							}}
+							onSuccess={closeModal}
 						/>
 					)}
 				</DialogContent>
@@ -428,33 +529,44 @@ export function BoardPage({ boardId }: BoardPageProps) {
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Delete Column</AlertDialogTitle>
+						<AlertDialogTitle>
+							{localization?.deleteColumn ??
+								t("kanban.forms.deleteColumn", "Delete Column")}
+						</AlertDialogTitle>
 						<AlertDialogDescription>
-							Are you sure you want to delete this column? All tasks in this
-							column will be permanently removed.
+							{localization?.deleteColumnConfirm ??
+								t(
+									"kanban.forms.deleteColumnConfirm",
+									"Are you sure you want to delete this column? All tasks in this column will be permanently removed.",
+								)}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogCancel>
+							{localization?.cancel ?? t("kanban.common.cancel", "Cancel")}
+						</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={async () => {
 								if (modalState.type === "deleteColumn") {
 									try {
 										await deleteColumn(modalState.columnId);
 										closeModal();
-										refetch();
 									} catch (error) {
 										const message =
 											error instanceof Error
 												? error.message
-												: "Failed to delete column";
-										toast.error(message);
+												: (localization?.deleteColumnError ??
+													t(
+														"kanban.common.deleteColumnError",
+														"Failed to delete column",
+													));
+										notify.error(message);
 									}
 								}
 							}}
 							className="bg-red-600 hover:bg-red-700"
 						>
-							Delete
+							{localization?.delete ?? t("kanban.common.delete", "Delete")}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
@@ -467,16 +579,19 @@ export function BoardPage({ boardId }: BoardPageProps) {
 			>
 				<DialogContent>
 					<DialogHeader>
-						<DialogTitle>Edit Board</DialogTitle>
-						<DialogDescription>Update board details.</DialogDescription>
+						<DialogTitle>
+							{localization?.editBoard ??
+								t("kanban.list.editBoard", "Edit Board")}
+						</DialogTitle>
+						<DialogDescription>
+							{localization?.editBoardDescription ??
+								t("kanban.list.editBoardDescription", "Update board details.")}
+						</DialogDescription>
 					</DialogHeader>
 					<BoardForm
 						board={board}
 						onClose={closeModal}
-						onSuccess={() => {
-							closeModal();
-							refetch();
-						}}
+						onSuccess={closeModal}
 					/>
 				</DialogContent>
 			</Dialog>
@@ -488,20 +603,31 @@ export function BoardPage({ boardId }: BoardPageProps) {
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Delete Board</AlertDialogTitle>
+						<AlertDialogTitle>
+							{localization?.deleteBoard ??
+								t("kanban.forms.deleteBoard", "Delete Board")}
+						</AlertDialogTitle>
 						<AlertDialogDescription>
-							Are you sure you want to delete this board? This action cannot be
-							undone. All columns and tasks will be permanently removed.
+							{localization?.deleteBoardConfirm ??
+								t(
+									"kanban.forms.deleteBoardConfirm",
+									"Are you sure you want to delete this board? This action cannot be undone. All columns and tasks will be permanently removed.",
+								)}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogCancel>
+							{localization?.cancel ?? t("kanban.common.cancel", "Cancel")}
+						</AlertDialogCancel>
 						<Button
 							onClick={handleDeleteBoard}
 							disabled={isDeleting}
 							className="bg-red-600 hover:bg-red-700"
 						>
-							{isDeleting ? "Deleting..." : "Delete"}
+							{isDeleting
+								? (localization?.deleting ??
+									t("kanban.common.deleting", "Deleting..."))
+								: (localization?.delete ?? t("kanban.common.delete", "Delete"))}
 						</Button>
 					</AlertDialogFooter>
 				</AlertDialogContent>
@@ -514,8 +640,13 @@ export function BoardPage({ boardId }: BoardPageProps) {
 			>
 				<DialogContent className="max-w-3xl! max-h-screen overflow-y-auto">
 					<DialogHeader>
-						<DialogTitle>Add Task</DialogTitle>
-						<DialogDescription>Create a new task.</DialogDescription>
+						<DialogTitle>
+							{localization?.addTask ?? t("kanban.list.addTask", "Add Task")}
+						</DialogTitle>
+						<DialogDescription>
+							{localization?.addTaskDescription ??
+								t("kanban.list.addTaskDescription", "Create a new task.")}
+						</DialogDescription>
 					</DialogHeader>
 					{modalState.type === "addTask" && (
 						<TaskForm
@@ -523,10 +654,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 							boardId={boardId}
 							columns={board.columns || []}
 							onClose={closeModal}
-							onSuccess={() => {
-								closeModal();
-								refetch();
-							}}
+							onSuccess={closeModal}
 						/>
 					)}
 				</DialogContent>
@@ -539,8 +667,13 @@ export function BoardPage({ boardId }: BoardPageProps) {
 			>
 				<DialogContent className="max-w-3xl! max-h-screen overflow-y-auto">
 					<DialogHeader>
-						<DialogTitle>Edit Task</DialogTitle>
-						<DialogDescription>Update task details.</DialogDescription>
+						<DialogTitle>
+							{localization?.editTask ?? t("kanban.list.editTask", "Edit Task")}
+						</DialogTitle>
+						<DialogDescription>
+							{localization?.editTaskDescription ??
+								t("kanban.list.editTaskDescription", "Update task details.")}
+						</DialogDescription>
 					</DialogHeader>
 					{modalState.type === "editTask" && (
 						<>
@@ -553,21 +686,21 @@ export function BoardPage({ boardId }: BoardPageProps) {
 									?.tasks?.find((t) => t.id === modalState.taskId)}
 								columns={board.columns || []}
 								onClose={closeModal}
-								onSuccess={() => {
-									closeModal();
-									refetch();
-								}}
+								onSuccess={closeModal}
 								onDelete={async () => {
 									try {
 										await deleteTask(modalState.taskId);
 										closeModal();
-										refetch();
 									} catch (error) {
 										const message =
 											error instanceof Error
 												? error.message
-												: "Failed to delete task";
-										toast.error(message);
+												: (localization?.deleteTaskError ??
+													t(
+														"kanban.common.deleteTaskError",
+														"Failed to delete task",
+													));
+										notify.error(message);
 									}
 								}}
 							/>

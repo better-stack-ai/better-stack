@@ -5,7 +5,9 @@ import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { Label } from "@workspace/ui/components/label";
-import { useBoardMutations } from "../../hooks/kanban-hooks";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
+import { useBoardForm } from "../../hooks/kanban-hooks";
+import type { KanbanPluginOverrides } from "../../overrides";
 import type { SerializedBoard } from "../../../types";
 
 interface BoardFormProps {
@@ -14,93 +16,138 @@ interface BoardFormProps {
 	onSuccess: (boardId: string) => void;
 }
 
+interface BoardFormValues {
+	name: string;
+	description: string;
+}
+
+function firstError(error: string | string[] | undefined): string | undefined {
+	return Array.isArray(error) ? error[0] : error;
+}
+
 export function BoardForm({ board, onClose, onSuccess }: BoardFormProps) {
+	const t = useTranslate();
+	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
 	const isEditing = !!board;
-	const { createBoard, updateBoard, isCreating, isUpdating } =
-		useBoardMutations();
 
 	const [name, setName] = useState(board?.name || "");
 	const [description, setDescription] = useState(board?.description || "");
-	const [error, setError] = useState<string | null>(null);
+	const [nameError, setNameError] = useState<string | null>(null);
 
-	const isPending = isCreating || isUpdating;
+	const resourceForm = useBoardForm<BoardFormValues>({
+		action: isEditing ? "edit" : "create",
+		record: board ?? null,
+		toCreateVars: (values) => values,
+		toUpdateVars: (values) => ({ id: board?.id ?? "", data: values }),
+		onSuccess: (savedBoard) => onSuccess(savedBoard.id),
+	});
 
-	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		setError(null);
+	const serverNameError = firstError(resourceForm.fieldErrors.name);
+	const serverDescriptionError = firstError(
+		resourceForm.fieldErrors.description,
+	);
+	const topLevelError =
+		resourceForm.error && Object.keys(resourceForm.fieldErrors).length === 0
+			? resourceForm.error.message
+			: null;
+
+	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		resourceForm.clearErrors();
+		setNameError(null);
 
 		if (!name.trim()) {
-			setError("Name is required");
+			setNameError(
+				localization?.nameRequired ??
+					t("kanban.forms.nameRequired", "Name is required"),
+			);
 			return;
 		}
 
-		try {
-			if (isEditing && board) {
-				await updateBoard(board.id, { name, description });
-				onSuccess(board.id);
-			} else {
-				const newBoard = await createBoard({ name, description });
-				if (newBoard?.id) {
-					onSuccess(newBoard.id);
-				}
-			}
-		} catch (err) {
-			setError(err instanceof Error ? err.message : "An error occurred");
-		}
+		await resourceForm.submit({ name, description });
 	};
 
 	return (
 		<form onSubmit={handleSubmit} className="space-y-4 overflow-x-hidden">
 			<div className="space-y-2">
-				<Label htmlFor="name">Name *</Label>
+				<Label htmlFor="name">
+					{localization?.boardName ?? t("kanban.forms.boardName", "Name")} *
+				</Label>
 				<Input
 					id="name"
 					value={name}
-					onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-						setName(e.target.value)
+					onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+						setName(event.target.value);
+						setNameError(null);
+					}}
+					placeholder={
+						localization?.boardNamePlaceholder ??
+						t("kanban.forms.boardNamePlaceholder", "e.g., Project Alpha")
 					}
-					placeholder="e.g., Project Alpha"
-					disabled={isPending}
+					disabled={resourceForm.isSubmitting}
+					aria-invalid={!!(nameError || serverNameError)}
 				/>
+				{(nameError || serverNameError) && (
+					<p className="text-sm text-destructive">
+						{nameError || serverNameError}
+					</p>
+				)}
 			</div>
 
 			<div className="space-y-2">
-				<Label htmlFor="description">Description</Label>
+				<Label htmlFor="description">
+					{localization?.boardDescription ??
+						t("kanban.forms.boardDescription", "Description")}
+				</Label>
 				<Textarea
 					id="description"
 					value={description}
-					onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-						setDescription(e.target.value)
+					onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) =>
+						setDescription(event.target.value)
 					}
-					placeholder="Describe your board..."
-					disabled={isPending}
+					placeholder={
+						localization?.boardDescriptionPlaceholder ??
+						t(
+							"kanban.forms.boardDescriptionPlaceholder",
+							"Describe your board...",
+						)
+					}
+					disabled={resourceForm.isSubmitting}
 					rows={3}
+					aria-invalid={!!serverDescriptionError}
 				/>
+				{serverDescriptionError && (
+					<p className="text-sm text-destructive">{serverDescriptionError}</p>
+				)}
 			</div>
 
-			{error && (
+			{topLevelError && (
 				<div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
-					{error}
+					{topLevelError}
 				</div>
 			)}
 
 			<div className="flex gap-2 pt-2">
-				<Button type="submit" disabled={isPending}>
-					{isPending
+				<Button type="submit" disabled={resourceForm.isSubmitting}>
+					{resourceForm.isSubmitting
 						? isEditing
-							? "Updating..."
-							: "Creating..."
+							? (localization?.updating ??
+								t("kanban.common.updating", "Updating..."))
+							: (localization?.creating ??
+								t("kanban.common.creating", "Creating..."))
 						: isEditing
-							? "Update Board"
-							: "Create Board"}
+							? (localization?.updateBoard ??
+								t("kanban.forms.updateBoard", "Update Board"))
+							: (localization?.createBoard ??
+								t("kanban.forms.createBoard", "Create Board"))}
 				</Button>
 				<Button
 					type="button"
 					variant="outline"
 					onClick={onClose}
-					disabled={isPending}
+					disabled={resourceForm.isSubmitting}
 				>
-					Cancel
+					{localization?.cancel ?? t("kanban.common.cancel", "Cancel")}
 				</Button>
 			</div>
 		</form>

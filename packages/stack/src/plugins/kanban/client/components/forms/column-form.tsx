@@ -4,7 +4,9 @@ import { useState } from "react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
-import { useColumnMutations } from "../../hooks/kanban-hooks";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
+import { useColumnForm } from "../../hooks/kanban-hooks";
+import type { KanbanPluginOverrides } from "../../overrides";
 import type { SerializedColumn } from "../../../types";
 
 interface ColumnFormProps {
@@ -15,6 +17,14 @@ interface ColumnFormProps {
 	onSuccess: () => void;
 }
 
+interface ColumnFormValues {
+	title: string;
+}
+
+function firstError(error: string | string[] | undefined): string | undefined {
+	return Array.isArray(error) ? error[0] : error;
+}
+
 export function ColumnForm({
 	boardId,
 	columnId,
@@ -22,74 +32,97 @@ export function ColumnForm({
 	onClose,
 	onSuccess,
 }: ColumnFormProps) {
+	const t = useTranslate();
+	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
 	const isEditing = !!columnId;
-	const { createColumn, updateColumn, isCreating, isUpdating } =
-		useColumnMutations();
-
 	const [title, setTitle] = useState(column?.title || "");
-	const [error, setError] = useState<string | null>(null);
+	const [titleError, setTitleError] = useState<string | null>(null);
 
-	const isPending = isCreating || isUpdating;
+	const resourceForm = useColumnForm<ColumnFormValues>({
+		action: isEditing ? "edit" : "create",
+		record: column ?? null,
+		toCreateVars: (values) => ({ ...values, boardId }),
+		toUpdateVars: (values) => ({ id: columnId ?? "", data: values }),
+		onSuccess,
+	});
 
-	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		setError(null);
+	const serverTitleError = firstError(resourceForm.fieldErrors.title);
+	const topLevelError =
+		resourceForm.error && Object.keys(resourceForm.fieldErrors).length === 0
+			? resourceForm.error.message
+			: null;
+
+	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		resourceForm.clearErrors();
+		setTitleError(null);
 
 		if (!title.trim()) {
-			setError("Title is required");
+			setTitleError(
+				localization?.titleRequired ??
+					t("kanban.forms.titleRequired", "Title is required"),
+			);
 			return;
 		}
 
-		try {
-			if (isEditing && columnId) {
-				await updateColumn(columnId, { title });
-			} else {
-				await createColumn({ title, boardId });
-			}
-			onSuccess();
-		} catch (err) {
-			setError(err instanceof Error ? err.message : "An error occurred");
-		}
+		await resourceForm.submit({ title });
 	};
 
 	return (
 		<form onSubmit={handleSubmit} className="space-y-4">
 			<div className="space-y-2">
-				<Label htmlFor="title">Title *</Label>
+				<Label htmlFor="title">
+					{localization?.columnTitle ?? t("kanban.forms.columnTitle", "Title")}{" "}
+					*
+				</Label>
 				<Input
 					id="title"
 					value={title}
-					onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-						setTitle(e.target.value)
+					onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+						setTitle(event.target.value);
+						setTitleError(null);
+					}}
+					placeholder={
+						localization?.columnTitlePlaceholder ??
+						t("kanban.forms.columnTitlePlaceholder", "e.g., To Do")
 					}
-					placeholder="e.g., To Do"
-					disabled={isPending}
+					disabled={resourceForm.isSubmitting}
+					aria-invalid={!!(titleError || serverTitleError)}
 				/>
+				{(titleError || serverTitleError) && (
+					<p className="text-sm text-destructive">
+						{titleError || serverTitleError}
+					</p>
+				)}
 			</div>
 
-			{error && (
+			{topLevelError && (
 				<div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
-					{error}
+					{topLevelError}
 				</div>
 			)}
 
 			<div className="flex gap-2 pt-2">
-				<Button type="submit" disabled={isPending}>
-					{isPending
+				<Button type="submit" disabled={resourceForm.isSubmitting}>
+					{resourceForm.isSubmitting
 						? isEditing
-							? "Updating..."
-							: "Creating..."
+							? (localization?.updating ??
+								t("kanban.common.updating", "Updating..."))
+							: (localization?.creating ??
+								t("kanban.common.creating", "Creating..."))
 						: isEditing
-							? "Update Column"
-							: "Create Column"}
+							? (localization?.updateColumn ??
+								t("kanban.forms.updateColumn", "Update Column"))
+							: (localization?.createColumn ??
+								t("kanban.forms.createColumn", "Create Column"))}
 				</Button>
 				<Button
 					type="button"
 					variant="outline"
 					onClick={onClose}
-					disabled={isPending}
+					disabled={resourceForm.isSubmitting}
 				>
-					Cancel
+					{localization?.cancel ?? t("kanban.common.cancel", "Cancel")}
 				</Button>
 			</div>
 		</form>

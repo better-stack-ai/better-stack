@@ -11,6 +11,8 @@ export interface KanbanCommonLocalization {
 	// Status
 	loading: string;
 	saving: string;
+	creating: string;
+	updating: string;
 	deleting: string;
 	// Labels
 	board: string;
@@ -28,9 +30,19 @@ export interface KanbanCommonLocalization {
 	noBoards: string;
 	noColumns: string;
 	noTasks: string;
+	assigned: string;
+	unassigned: string;
+	// Generic UI
+	pageNotFound: string;
+	pageNotFoundDescription: string;
+	unexpectedError: string;
+	tryAgain: string;
 	// Errors
 	errorGeneric: string;
 	errorNotFound: string;
+	deleteBoardError: string;
+	deleteColumnError: string;
+	deleteTaskError: string;
 }
 
 export const defaultKanbanCommonLocalization: KanbanCommonLocalization = {
@@ -46,6 +58,8 @@ export const defaultKanbanCommonLocalization: KanbanCommonLocalization = {
 	// Status
 	loading: "Loading...",
 	saving: "Saving...",
+	creating: "Creating...",
+	updating: "Updating...",
 	deleting: "Deleting...",
 	// Labels
 	board: "Board",
@@ -63,7 +77,17 @@ export const defaultKanbanCommonLocalization: KanbanCommonLocalization = {
 	noBoards: "No boards yet",
 	noColumns: "No columns yet",
 	noTasks: "No tasks yet",
+	assigned: "Assigned",
+	unassigned: "Unassigned",
+	// Generic UI
+	pageNotFound: "Page Not Found",
+	pageNotFoundDescription: "The page you're looking for doesn't exist.",
+	unexpectedError: "An unexpected error occurred. Please try again.",
+	tryAgain: "Try Again",
 	// Errors
 	errorGeneric: "Something went wrong",
 	errorNotFound: "Not found",
+	deleteBoardError: "Failed to delete board",
+	deleteColumnError: "Failed to delete column",
+	deleteTaskError: "Failed to delete task",
 };

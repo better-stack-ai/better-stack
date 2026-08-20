@@ -7,7 +7,8 @@ import {
 	AvatarImage,
 	AvatarFallback,
 } from "@workspace/ui/components/avatar";
-import type { KanbanUser } from "../../overrides";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
+import type { KanbanPluginOverrides, KanbanUser } from "../../overrides";
 
 interface UserAvatarProps {
 	user: KanbanUser | null;
@@ -37,10 +38,19 @@ function UserAvatarComponent({
 	size = "sm",
 	className,
 }: UserAvatarProps) {
+	const t = useTranslate();
+	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
 	// No user - show placeholder icon
 	if (!user) {
 		return (
-			<Avatar size={size} className={className} title="Unassigned">
+			<Avatar
+				size={size}
+				className={className}
+				title={
+					localization?.unassigned ??
+					t("kanban.common.unassigned", "Unassigned")
+				}
+			>
 				<AvatarFallback>
 					<User className="size-3 group-data-[size=default]/avatar:size-4 group-data-[size=lg]/avatar:size-5" />
 				</AvatarFallback>
