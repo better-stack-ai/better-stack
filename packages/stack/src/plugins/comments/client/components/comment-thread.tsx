@@ -860,7 +860,8 @@ export function CommentThread(props: CommentThreadProps) {
 		CommentsPluginOverrides,
 		Partial<CommentsPluginOverrides>
 	>("comments", {});
-	const currentUserId = useResolvedCurrentUserId(props.currentUserId);
+	const { currentUserId, isPending: isIdentityPending } =
+		useResolvedCurrentUserId(props.currentUserId ?? overrides.currentUserId);
 	const resolvedProps: ResolvedCommentThreadProps = {
 		...props,
 		apiBaseURL: props.apiBaseURL ?? overrides.apiBaseURL ?? "",
@@ -873,7 +874,11 @@ export function CommentThread(props: CommentThreadProps) {
 	return (
 		<div id="comments" className={props.className}>
 			<WhenVisible fallback={<CommentThreadSkeleton />} rootMargin="300px">
-				<CommentThreadInner {...resolvedProps} />
+				{isIdentityPending ? (
+					<CommentThreadSkeleton />
+				) : (
+					<CommentThreadInner {...resolvedProps} />
+				)}
 			</WhenVisible>
 		</div>
 	);

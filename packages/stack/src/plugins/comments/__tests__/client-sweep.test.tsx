@@ -494,6 +494,60 @@ describe("CommentThread provider defaults", () => {
 		);
 	});
 
+	it("keeps the plugin identity override above the provider identity", async () => {
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={{ getIdentity: () => ({ id: "provider-user" }) }}
+				overrides={{
+					comments: {
+						...commentsOverrides,
+						currentUserId: "plugin-user",
+					},
+				}}
+			>
+				<CommentThread resourceId="post-1" resourceType="blog-post" />
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		expect(hooks.useInfiniteComments).toHaveBeenLastCalledWith(
+			expect.anything(),
+			expect.objectContaining({ currentUserId: "plugin-user" }),
+		);
+	});
+
+	it("waits for the provider identity before mounting the thread", async () => {
+		let resolveIdentity: (identity: { id: string }) => void = () => {};
+		const identity = new Promise<{ id: string }>((resolve) => {
+			resolveIdentity = resolve;
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={{ getIdentity: () => identity }}
+			>
+				<CommentThread resourceId="post-1" resourceType="blog-post" />
+			</StackProvider>,
+		);
+
+		expect(hooks.useInfiniteComments).not.toHaveBeenCalled();
+		expect(container.querySelector('[data-testid="login-link"]')).toBeNull();
+
+		await act(async () => {
+			resolveIdentity({ id: "provider-user" });
+			await identity;
+		});
+
+		expect(hooks.useInfiniteComments).toHaveBeenLastCalledWith(
+			expect.anything(),
+			expect.objectContaining({ currentUserId: "provider-user" }),
+		);
+	});
+
 	it("uses the top-level auth login path when unauthenticated", async () => {
 		await render(
 			<StackProvider

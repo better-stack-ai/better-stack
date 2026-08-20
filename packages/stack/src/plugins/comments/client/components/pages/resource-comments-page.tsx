@@ -56,7 +56,8 @@ function ResourceCommentsPageWrapper({
 	resourceType: string;
 }) {
 	const overrides = usePluginOverrides<CommentsPluginOverrides>("comments");
-	const resolvedUserId = useResolvedCurrentUserId(overrides.currentUserId);
+	const { currentUserId: resolvedUserId, isPending: isIdentityPending } =
+		useResolvedCurrentUserId(overrides.currentUserId);
 
 	useRouteLifecycle({
 		routeName: "resourceComments",
@@ -77,6 +78,13 @@ function ResourceCommentsPageWrapper({
 			return true;
 		},
 	});
+	if (isIdentityPending) {
+		return (
+			<PageWrapper>
+				<ResourceCommentsSkeleton />
+			</PageWrapper>
+		);
+	}
 
 	return (
 		<PageWrapper>

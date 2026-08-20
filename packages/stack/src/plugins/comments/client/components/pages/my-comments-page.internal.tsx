@@ -100,7 +100,20 @@ export function UserCommentsPage({
 	localization,
 }: UserCommentsPageProps) {
 	const t = useTranslate();
-	const resolvedUserId = useResolvedCurrentUserId(currentUserIdProp);
+	const { currentUserId: resolvedUserId, isPending: isIdentityPending } =
+		useResolvedCurrentUserId(currentUserIdProp);
+
+	if (isIdentityPending) {
+		return (
+			<div
+				className="space-y-3 py-20 animate-pulse"
+				data-testid="my-comments-identity-loading"
+			>
+				<div className="h-6 w-48 mx-auto rounded bg-muted" />
+				<div className="h-4 w-64 mx-auto rounded bg-muted" />
+			</div>
+		);
+	}
 
 	if (!resolvedUserId) {
 		return (
