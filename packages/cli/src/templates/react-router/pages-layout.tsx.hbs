@@ -1,18 +1,12 @@
-{{#if pagesLayoutOverrides}}
 import { StackProvider } from "@btst/stack/context"
-{{/if}}
+import { reactRouter } from "@btst/stack/react-router"
 {{#if hasAiChat}}
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 {{/if}}
 import { QueryClientProvider } from "@tanstack/react-query"
-{{#if pagesLayoutOverrides}}
-import { Link as RouterLink, Outlet, useNavigate{{#if hasAiChat}}, useLocation{{/if}} } from "react-router"
-{{else}}
-import { Outlet{{#if hasAiChat}}, useLocation{{/if}} } from "react-router"
-{{/if}}
+import { Outlet{{#if hasBetterAuthUi}}, useNavigate{{/if}}{{#if hasAiChat}}, useLocation{{/if}} } from "react-router"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 
-{{#if pagesLayoutOverrides}}
 function getBaseURL() {
 	if (typeof window !== "undefined") {
 		return window.location.origin
@@ -24,10 +18,9 @@ function getBaseURL() {
 
 	return "http://localhost:5173"
 }
-{{/if}}
 
 export default function BtstPagesLayout() {
-{{#if pagesLayoutOverrides}}
+{{#if hasBetterAuthUi}}
 	const navigate = useNavigate()
 {{/if}}
 	const queryClient = getOrCreateQueryClient()
@@ -36,17 +29,21 @@ export default function BtstPagesLayout() {
 	const location = useLocation()
 	const showChatWidget = !location.pathname.startsWith("/pages/chat")
 {{/if}}
-{{#if pagesLayoutOverrides}}
 	const baseURL = getBaseURL()
+
 	return (
 		<QueryClientProvider client={queryClient}>
 			<StackProvider
 				basePath="/pages"
+				router={reactRouter()}
+				api={{{providerApiLiteral}}}
+{{#if pagesLayoutOverrides}}
 				overrides={
 					{
 {{{pagesLayoutOverrides}}}
 					}
 				}
+{{/if}}
 			>
 {{#if hasAiChat}}
 				{!hasApiKey && (
@@ -55,8 +52,6 @@ export default function BtstPagesLayout() {
 						<code className="font-mono">.env</code> to enable AI chat.
 					</div>
 				)}
-{{/if}}
-{{#if hasAiChat}}
 				{showChatWidget && (
 					<div className="fixed bottom-6 right-6 z-50">
 						<ChatLayout
@@ -73,7 +68,4 @@ export default function BtstPagesLayout() {
 			</StackProvider>
 		</QueryClientProvider>
 	)
-{{else}}
-	return <QueryClientProvider client={queryClient}><Outlet /></QueryClientProvider>
-{{/if}}
 }

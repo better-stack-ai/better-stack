@@ -54,7 +54,8 @@ export interface CommentsPluginOverrides {
 	 * Can be a static string or an async function (useful when the user ID must
 	 * be resolved from a session cookie at render time).
 	 *
-	 * When absent both pages show a "Please log in" prompt.
+	 * When absent, defaults to the identity from the top-level auth provider.
+	 * Without either value both pages show a "Please log in" prompt.
 	 */
 	currentUserId?:
 		| string
@@ -64,7 +65,8 @@ export interface CommentsPluginOverrides {
 	 * URL to redirect unauthenticated users to when they try to post a comment.
 	 *
 	 * Forwarded to every embedded `CommentThread` (including the one on the
-	 * per-resource admin comments view). When absent no login link is shown.
+	 * per-resource admin comments view). When absent, defaults to the top-level
+	 * auth provider's `loginPath`.
 	 */
 	loginHref?: string;
 

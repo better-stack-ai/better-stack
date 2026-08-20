@@ -1,8 +1,6 @@
-import { createFileRoute, Outlet{{#if pagesLayoutOverrides}}, useNavigate{{/if}}{{#if hasAiChat}}, useLocation{{/if}} } from "@tanstack/react-router"
-{{#if pagesLayoutOverrides}}
-import { Link as RouterLink } from "@tanstack/react-router"
+import { createFileRoute, Outlet{{#if hasBetterAuthUi}}, useNavigate{{/if}}{{#if hasAiChat}}, useLocation{{/if}} } from "@tanstack/react-router"
 import { StackProvider } from "@btst/stack/context"
-{{/if}}
+import { tanstackRouter } from "@btst/stack/tanstack"
 {{#if hasAiChat}}
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 {{/if}}
@@ -13,7 +11,6 @@ export const Route = createFileRoute("/pages")({
 	component: BtstPagesLayout,
 })
 
-{{#if pagesLayoutOverrides}}
 function getBaseURL() {
 	if (typeof window !== "undefined") {
 		return window.location.origin
@@ -25,10 +22,9 @@ function getBaseURL() {
 
 	return "http://localhost:3000"
 }
-{{/if}}
 
 function BtstPagesLayout() {
-{{#if pagesLayoutOverrides}}
+{{#if hasBetterAuthUi}}
 	const navigate = useNavigate()
 {{/if}}
 	const queryClient = getOrCreateQueryClient()
@@ -37,17 +33,21 @@ function BtstPagesLayout() {
 	const location = useLocation()
 	const showChatWidget = !location.pathname.startsWith("/pages/chat")
 {{/if}}
-{{#if pagesLayoutOverrides}}
 	const baseURL = getBaseURL()
+
 	return (
 		<QueryClientProvider client={queryClient}>
 			<StackProvider
 				basePath="/pages"
+				router={tanstackRouter()}
+				api={{{providerApiLiteral}}}
+{{#if pagesLayoutOverrides}}
 				overrides={
 					{
 {{{pagesLayoutOverrides}}}
 					}
 				}
+{{/if}}
 			>
 {{#if hasAiChat}}
 				{!hasApiKey && (
@@ -56,8 +56,6 @@ function BtstPagesLayout() {
 						<code className="font-mono">.env</code> to enable AI chat.
 					</div>
 				)}
-{{/if}}
-{{#if hasAiChat}}
 				{showChatWidget && (
 					<div className="fixed bottom-6 right-6 z-50">
 						<ChatLayout
@@ -74,7 +72,4 @@ function BtstPagesLayout() {
 			</StackProvider>
 		</QueryClientProvider>
 	)
-{{else}}
-	return <QueryClientProvider client={queryClient}><Outlet /></QueryClientProvider>
-{{/if}}
 }

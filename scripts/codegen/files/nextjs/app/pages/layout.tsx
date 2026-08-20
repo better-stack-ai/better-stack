@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { StackProvider } from "@btst/stack/context";
+import { StackProvider, type StackAuthProvider } from "@btst/stack/context";
 import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
@@ -48,6 +48,11 @@ type PluginOverrides = {
 	media: MediaPluginOverrides;
 };
 
+const authProvider = {
+	getIdentity: () => ({ id: "olliethedev", name: "Ollie" }),
+	loginPath: "/login",
+} satisfies StackAuthProvider;
+
 export default function ExampleLayout({
 	children,
 }: {
@@ -93,6 +98,7 @@ export default function ExampleLayout({
 				basePath="/pages"
 				router={nextRouter()}
 				api={{ baseURL, basePath: "/api/data" }}
+				auth={authProvider}
 				overrides={{
 					// Only genuinely plugin-specific overrides remain — the shared
 					// Link/navigate/refresh/Image and API wiring come from the
@@ -106,11 +112,6 @@ export default function ExampleLayout({
 							<CommentThread
 								resourceId={post.slug}
 								resourceType="blog-post"
-								apiBaseURL={baseURL}
-								apiBasePath="/api/data"
-								currentUserId="olliethedev" // In production: pass session?.user?.id
-								headers={{ "x-user-id": "olliethedev" }} // In production: omit (cookies sent automatically)
-								loginHref="/login"
 								className="mt-8 pt-8 border-t"
 							/>
 						),
@@ -142,27 +143,17 @@ export default function ExampleLayout({
 						searchUsers,
 						// Wire comments into the bottom of each task detail dialog
 						taskDetailBottomSlot: (task) => (
-							<CommentThread
-								resourceId={task.id}
-								resourceType="kanban-task"
-								apiBaseURL={baseURL}
-								apiBasePath="/api/data"
-								currentUserId="olliethedev" // In production: pass session?.user?.id
-								headers={{ "x-user-id": "olliethedev" }} // In production: omit (cookies sent automatically)
-								loginHref="/login"
-							/>
+							<CommentThread resourceId={task.id} resourceType="kanban-task" />
 						),
 					},
 					comments: {
-						// In production: derive from your auth session
-						currentUserId: "olliethedev",
 						defaultCommentPageSize: 5,
 						resourceLinks: {
 							"blog-post": (slug) => `/pages/blog/${slug}`,
 						},
 					},
 					media: {
-						...mediaClientConfig,
+						uploadMode: "direct",
 						queryClient,
 					},
 				}}

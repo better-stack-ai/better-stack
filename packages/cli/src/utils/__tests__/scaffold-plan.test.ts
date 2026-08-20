@@ -46,11 +46,16 @@ describe("scaffold plan", () => {
 			'import { StackProvider } from "@btst/stack/context"',
 		);
 		expect(pagesLayoutFile?.content).toContain(
-			"navigate: (path: string) => router.push(path)",
+			'import { nextRouter } from "@btst/stack/next"',
 		);
+		expect(pagesLayoutFile?.content).toContain("router={nextRouter()}");
 		expect(pagesLayoutFile?.content).toContain(
-			'Link: ({ href, ...props }: any) => <Link href={href || "#"} {...props} />',
+			'api={{ baseURL, basePath: "/api/data" }}',
 		);
+		expect(pagesLayoutFile?.content).not.toContain("navigate: (path");
+		expect(pagesLayoutFile?.content).not.toContain("Link: (");
+		expect(pagesLayoutFile?.content).not.toContain("apiBaseURL:");
+		expect(pagesLayoutFile?.content).not.toContain("apiBasePath:");
 		expect(plan.pagesLayoutPath).toBe("app/pages/layout.tsx");
 	});
 
@@ -67,7 +72,7 @@ describe("scaffold plan", () => {
 	});
 
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
-		"does not emit baseURL declarations when no plugins are selected (%s)",
+		"emits the provider shell without client plugin entries (%s)",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
 				framework,
@@ -97,10 +102,17 @@ describe("scaffold plan", () => {
 				file.path.endsWith(layoutSuffix),
 			);
 			expect(pagesLayoutFile?.content).toBeDefined();
-			expect(pagesLayoutFile?.content).not.toContain("StackProvider");
-			if (framework === "nextjs") {
-				expect(pagesLayoutFile?.content).not.toContain("useRouter");
-			}
+			expect(pagesLayoutFile?.content).toContain("StackProvider");
+			expect(pagesLayoutFile?.content).toContain(
+				'api={{ baseURL, basePath: "/api/data" }}',
+			);
+			const routerFactory =
+				framework === "nextjs"
+					? "nextRouter()"
+					: framework === "react-router"
+						? "reactRouter()"
+						: "tanstackRouter()";
+			expect(pagesLayoutFile?.content).toContain(`router={${routerFactory}}`);
 		},
 	);
 
@@ -476,8 +488,15 @@ describe("scaffold plan", () => {
 		expect(layoutFile?.content).toContain(
 			'import { StackProvider } from "@btst/stack/context"',
 		);
-		expect(layoutFile?.content).toContain("navigate(path)");
-		expect(layoutFile?.content).toContain("RouterLink");
+		expect(layoutFile?.content).toContain(
+			'import { reactRouter } from "@btst/stack/react-router"',
+		);
+		expect(layoutFile?.content).toContain("router={reactRouter()}");
+		expect(layoutFile?.content).toContain(
+			'api={{ baseURL, basePath: "/api/data" }}',
+		);
+		expect(layoutFile?.content).not.toContain("navigate: (path");
+		expect(layoutFile?.content).not.toContain("RouterLink");
 		expect(layoutFile?.content).not.toContain("router.push");
 		expect(layoutFile?.content).not.toContain("router.replace");
 		expect(layoutFile?.content).not.toContain("router.refresh");
@@ -514,8 +533,15 @@ describe("scaffold plan", () => {
 		expect(layoutFile?.content).toContain(
 			'import { StackProvider } from "@btst/stack/context"',
 		);
-		expect(layoutFile?.content).toContain("navigate({ to: path })");
-		expect(layoutFile?.content).toContain("RouterLink");
+		expect(layoutFile?.content).toContain(
+			'import { tanstackRouter } from "@btst/stack/tanstack"',
+		);
+		expect(layoutFile?.content).toContain("router={tanstackRouter()}");
+		expect(layoutFile?.content).toContain(
+			'api={{ baseURL, basePath: "/api/data" }}',
+		);
+		expect(layoutFile?.content).not.toContain("navigate: (path");
+		expect(layoutFile?.content).not.toContain("RouterLink");
 		expect(layoutFile?.content).toContain('createFileRoute("/pages")');
 		expect(layoutFile?.content).not.toContain("router.push");
 		expect(layoutFile?.content).not.toContain("router.replace");
@@ -557,6 +583,79 @@ describe("scaffold plan", () => {
 		const allKeys = PLUGINS.map((p) => p.key);
 		expect(allKeys).toContain("better-auth-ui");
 	});
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"uses entry factories and shared provider wiring in every %s scaffold",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: [
+					"blog",
+					"ai-chat",
+					"cms",
+					"form-builder",
+					"ui-builder",
+					"kanban",
+					"comments",
+					"media",
+				],
+				alias: framework === "react-router" ? "~/" : "@/",
+				cssFile:
+					framework === "nextjs" ? "app/globals.css" : "src/styles/globals.css",
+			});
+
+			const routerFactory =
+				framework === "nextjs"
+					? "nextRouter()"
+					: framework === "react-router"
+						? "reactRouter()"
+						: "tanstackRouter()";
+			const pageFactory =
+				framework === "nextjs"
+					? "createNextPage"
+					: framework === "react-router"
+						? "createReactRouterPage"
+						: "createTanStackPageOptions";
+			const apiFactory =
+				framework === "nextjs"
+					? "toNextRouteHandlers"
+					: framework === "react-router"
+						? "toReactRouterHandlers"
+						: "toTanStackHandlers";
+
+			const pageRoute = plan.files.find(
+				(file) =>
+					file.path.includes("routes/pages/$.tsx") ||
+					file.path.includes("app/pages/[[...all]]/page.tsx"),
+			);
+			const apiRoute = plan.files.find(
+				(file) =>
+					file.path.includes("api/data") &&
+					(file.path.endsWith("route.ts") || file.path.endsWith("$.ts")),
+			);
+			expect(pageRoute?.content).toContain(pageFactory);
+			expect(pageRoute?.content).not.toContain(".router.getRoute(");
+			expect(apiRoute?.content).toContain(apiFactory);
+
+			const providerFiles = plan.files.filter((file) =>
+				file.content.includes("<StackProvider"),
+			);
+			expect(providerFiles.length).toBeGreaterThan(0);
+			for (const file of providerFiles) {
+				expect(file.content, file.path).toContain(`router={${routerFactory}}`);
+				expect(file.content, file.path).toContain(
+					'api={{ baseURL, basePath: "/api/data" }}',
+				);
+				expect(file.content, file.path).not.toContain("apiBaseURL: baseURL");
+				expect(file.content, file.path).not.toContain(
+					'apiBasePath: "/api/data"',
+				);
+				expect(file.content, file.path).not.toContain("navigate: (path");
+				expect(file.content, file.path).not.toContain("Link: (");
+			}
+		},
+	);
 
 	// ── New template tests (Phase 2) ────────────────────────────────────────
 

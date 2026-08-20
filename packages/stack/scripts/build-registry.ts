@@ -67,6 +67,12 @@ const EXTERNAL_REGISTRY_COMPONENTS: Record<string, string> = {
 // them external lets consumers and this monorepo sync from upstream cleanly.
 const EXTERNAL_ONLY_REGISTRY_COMPONENTS = new Set(["ui-builder"]);
 
+// Single-file workspace components can still depend on sibling components via
+// relative imports, which the @workspace/ui import scanner cannot discover.
+const EMBEDDED_COMPONENT_DEPENDENCIES: Record<string, string[]> = {
+	"page-wrapper": ["page-layout", "stack-attribution"],
+};
+
 // ---------------------------------------------------------------------------
 // Standard shadcn component names
 // These go into registryDependencies, not as embedded files.
@@ -873,6 +879,11 @@ async function resolveWorkspaceUiDeps(
 			pendingComponents.delete(comp);
 			if (processedComponents.has(comp)) continue;
 			processedComponents.add(comp);
+			for (const dependency of EMBEDDED_COMPONENT_DEPENDENCIES[comp] ?? []) {
+				if (!processedComponents.has(dependency)) {
+					pendingComponents.add(dependency);
+				}
+			}
 
 			// Deep path (e.g. "auto-form/stepped-auto-form"):
 			// - The top-level name (e.g. "auto-form") may be an external registry item.

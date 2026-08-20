@@ -60,12 +60,6 @@ function getPublicSiteURLVar(framework: Framework) {
 	return "VITE_PUBLIC_SITE_URL";
 }
 
-function getNavigateExpr(framework: Framework): string {
-	if (framework === "nextjs") return "router.push(path)";
-	if (framework === "react-router") return "navigate(path)";
-	return "navigate({ to: path })";
-}
-
 function getReplaceExpr(framework: Framework): string {
 	if (framework === "nextjs") return "router.replace(path)";
 	if (framework === "react-router") return "navigate(path, { replace: true })";
@@ -75,11 +69,6 @@ function getReplaceExpr(framework: Framework): string {
 function getSessionChangeExpr(framework: Framework): string {
 	if (framework === "nextjs") return "router.refresh()";
 	return "window.location.reload()";
-}
-
-function getLinkJsx(framework: Framework): string {
-	if (framework === "nextjs") return '<Link href={href || "#"} {...props} />';
-	return '<RouterLink to={href || to || "#"} {...props} />';
 }
 
 function getPagesLayoutFilePath(framework: Framework): string {
@@ -223,65 +212,42 @@ function buildPluginTemplateContext(
 				if (m.key === "route-docs") {
 					return "";
 				}
-				const nav = getNavigateExpr(framework);
 				const rep = getReplaceExpr(framework);
 				const ses = getSessionChangeExpr(framework);
-				const link = getLinkJsx(framework);
 				const layoutFile = getPagesLayoutFilePath(framework);
-				const linkPropDestructure =
-					framework === "nextjs"
-						? "{ href, ...props }"
-						: "{ href, to, ...props }";
 				if (m.key === "better-auth-ui") {
 					return `\t\t\t\t\tauth: {
 \t\t\t\t\t\tauthClient: undefined as any,
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
 \t\t\t\t\t\treplace: (path: string) => ${rep},
 \t\t\t\t\t\tonSessionChange: () => ${ses},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
 \t\t\t\t\t\tbasePath: "/pages/auth",
 \t\t\t\t\t\tredirectTo: "/pages/account/settings",
 \t\t\t\t\t},
 \t\t\t\t\taccount: {
 \t\t\t\t\t\tauthClient: undefined as any,
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
 \t\t\t\t\t\treplace: (path: string) => ${rep},
 \t\t\t\t\t\tonSessionChange: () => ${ses},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
 \t\t\t\t\t\tbasePath: "/pages/account",
 \t\t\t\t\t\taccount: { fields: ["image", "name"] },
 \t\t\t\t\t},
 \t\t\t\t\torganization: {
 \t\t\t\t\t\tauthClient: undefined as any,
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
 \t\t\t\t\t\treplace: (path: string) => ${rep},
 \t\t\t\t\t\tonSessionChange: () => ${ses},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
 \t\t\t\t\t\tbasePath: "/pages/org",
 \t\t\t\t\t\torganization: { basePath: "/pages/org" },
 \t\t\t\t\t},`;
 				}
 				if (m.key === "comments") {
-					return `\t\t\t\t\t"${m.key}": {
-\t\t\t\t\t\tapiBaseURL: baseURL,
-\t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t},`;
+					return "";
 				}
 				if (m.key === "media") {
 					return `\t\t\t\t\t"${m.key}": {
-\t\t\t\t\t\tapiBaseURL: baseURL,
-\t\t\t\t\t\tapiBasePath: "/api/data",
 \t\t\t\t\t\tqueryClient,
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
 \t\t\t\t\t},`;
 				}
 				if (m.key === "blog") {
 					return `\t\t\t\t\t"${m.key}": {
-\t\t\t\t\t\tapiBaseURL: baseURL,
-\t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
 \t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in ${layoutFile}")
 \t\t\t\t\t\t},
@@ -289,10 +255,6 @@ function buildPluginTemplateContext(
 				}
 				if (m.key === "kanban") {
 					return `\t\t\t\t\t"${m.key}": {
-\t\t\t\t\t\tapiBaseURL: baseURL,
-\t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
 \t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement kanban.uploadImage override in ${layoutFile}")
 \t\t\t\t\t\t},
@@ -302,19 +264,10 @@ function buildPluginTemplateContext(
 				}
 				if (m.key === "ai-chat") {
 					return `\t\t\t\t\t"${m.key}": {
-\t\t\t\t\t\tapiBaseURL: baseURL,
-\t\t\t\t\t\tapiBasePath: "/api/data",
 \t\t\t\t\t\tmode: "public" as const,
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
 \t\t\t\t\t},`;
 				}
-				return `\t\t\t\t\t"${m.key}": {
-\t\t\t\t\t\tapiBaseURL: baseURL,
-\t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
-\t\t\t\t\t},`;
+				return "";
 			})
 			.filter(Boolean)
 			.join("\n"),
@@ -396,6 +349,7 @@ export async function buildScaffoldPlan(
 
 	const sharedContext = {
 		alias: input.alias,
+		providerApiLiteral: '{{ baseURL, basePath: "/api/data" }}',
 		publicSiteURLVar: getPublicSiteURLVar(input.framework),
 		useGlobalSingleton:
 			input.framework === "nextjs" && input.adapter === "memory",

@@ -690,8 +690,8 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 // ─── My Comments Page ────────────────────────────────────────────────────────
 //
 // The example app's onBeforePost returns authorId "olliethedev" for every POST,
-// and the layout wires currentUserId: "olliethedev".  All tests in this block
-// rely on that fixture so they can verify comments appear on the my-comments page.
+// and its top-level client auth provider resolves the same identity. All tests
+// in this block rely on that fixture to verify the my-comments page.
 
 test.describe("My Comments Page", () => {
 	const AUTHOR_ID = "olliethedev";
