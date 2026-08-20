@@ -74,7 +74,8 @@ export async function listAssets(
 		});
 	}
 
-	const needsInMemoryFilter = !!query.query;
+	const searchQuery = query.query?.trim() || undefined;
+	const needsInMemoryFilter = !!searchQuery;
 	const dbWhere = whereConditions.length > 0 ? whereConditions : undefined;
 
 	const dbTotal: number | undefined = !needsInMemoryFilter
@@ -83,14 +84,16 @@ export async function listAssets(
 
 	let assets = await adapter.findMany<Asset>({
 		model: "mediaAsset",
-		limit: !needsInMemoryFilter ? query.limit : undefined,
+		// Adapters do not expose portable substring search. Bound the fallback
+		// scan to the newest 1,000 rows so a search cannot load an entire table.
+		limit: needsInMemoryFilter ? 1000 : query.limit,
 		offset: !needsInMemoryFilter ? query.offset : undefined,
 		where: dbWhere,
 		sortBy: { field: "createdAt", direction: "desc" },
 	});
 
-	if (query.query) {
-		const searchLower = query.query.toLowerCase();
+	if (searchQuery) {
+		const searchLower = searchQuery.toLowerCase();
 		assets = assets.filter(
 			(asset) =>
 				asset.filename.toLowerCase().includes(searchLower) ||

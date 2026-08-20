@@ -1,84 +1,28 @@
 "use client";
-import {
-	useInfiniteQuery,
-	useQuery,
-	useMutation,
-	useQueryClient,
-} from "@tanstack/react-query";
-import { usePluginOverrides } from "@btst/stack/context";
-import { createApiClient } from "@btst/stack/plugins/client";
-import type { MediaApiRouter } from "../../api/plugin";
-import type { MediaPluginOverrides } from "../overrides";
-import { createMediaQueryKeys } from "../../query-keys";
+
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ResourceFormResult } from "@btst/stack/plugins/client/hooks";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { AssetListParams } from "../../api/getters";
+import type { RegisterAssetInput } from "../../query-keys";
 import type { SerializedAsset, SerializedFolder } from "../../types";
+import type { MediaPluginOverrides } from "../overrides";
 import { uploadAsset } from "../upload";
+import { media } from "./media-resource";
 
-function useMediaConfig() {
-	return usePluginOverrides<MediaPluginOverrides>("media");
+/** Infinite-scroll list of assets, optionally filtered by folder, MIME type, or search. */
+export function useAssets(params: AssetListParams = {}) {
+	return media.mediaAssets.list.useInfinite([params]);
 }
 
-function useMediaApiClient() {
-	const { apiBaseURL, apiBasePath, headers } = useMediaConfig();
-	const client = createApiClient<MediaApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	return { client, headers };
-}
-
-/**
- * Infinite-scroll list of assets, optionally filtered by folder / MIME type / search.
- */
-export function useAssets(params?: AssetListParams) {
-	const { client, headers } = useMediaApiClient();
-	const queries = createMediaQueryKeys(client, headers);
-	const { queryClient } = useMediaConfig();
-
-	const limit = params?.limit ?? 20;
-
-	return useInfiniteQuery(
-		{
-			...queries.mediaAssets.list(params),
-			initialPageParam: 0,
-			refetchOnMount: "always",
-			getNextPageParam: (
-				lastPage: {
-					items: SerializedAsset[];
-					total: number;
-					limit?: number;
-					offset?: number;
-				},
-				_allPages: any[],
-				lastPageParam: number,
-			) => {
-				const offset = (lastPage.offset ?? 0) + lastPage.items.length;
-				return offset < lastPage.total ? offset : undefined;
-			},
-		},
-		queryClient,
-	);
-}
-
-/**
- * List of folders, optionally filtered by parentId.
- * Pass `null` for root-level folders, `undefined` for all folders.
- */
+/** Pass `null` for root-level folders and `undefined` for all folders. */
 export function useFolders(parentId?: string | null) {
-	const { client, headers } = useMediaApiClient();
-	const queries = createMediaQueryKeys(client, headers);
-	const { queryClient } = useMediaConfig();
-
-	return useQuery(
-		{
-			...queries.mediaFolders.list(parentId),
-		},
-		queryClient,
-	);
+	return media.mediaFolders.list.use([parentId]);
 }
 
 /**
- * Upload an asset — adapter-aware. Handles direct, S3, and Vercel Blob flows.
+ * Upload an asset through the configured direct, S3, or Vercel Blob transport.
+ * This remains custom because the resource factory models JSON requests only.
  */
 export function useUploadAsset() {
 	const {
@@ -87,203 +31,132 @@ export function useUploadAsset() {
 		headers,
 		uploadMode = "direct",
 		imageCompression,
-		queryClient: qc,
-	} = useMediaConfig();
-	const reactQueryClient = useQueryClient(qc);
+	} = usePluginOverrides<MediaPluginOverrides>("media");
+	// Resource-generated asset queries use the nearest QueryClientProvider.
+	// Keep the custom upload transport on that same cache.
+	const queryClient = useQueryClient();
 
-	return useMutation(
-		{
-			mutationFn: async ({
-				file,
-				folderId,
-			}: {
-				file: File;
-				folderId?: string;
-			}): Promise<SerializedAsset> =>
-				uploadAsset(
-					{
-						apiBaseURL,
-						apiBasePath,
-						headers,
-						uploadMode,
-						imageCompression,
-					},
-					{ file, folderId },
-				),
-			onSuccess: () => {
-				reactQueryClient.invalidateQueries({ queryKey: ["mediaAssets"] });
-			},
+	return useMutation({
+		mutationFn: async ({
+			file,
+			folderId,
+		}: {
+			file: File;
+			folderId?: string;
+		}): Promise<SerializedAsset> =>
+			uploadAsset(
+				{
+					apiBaseURL,
+					apiBasePath,
+					headers,
+					uploadMode,
+					imageCompression,
+				},
+				{ file, folderId },
+			),
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({
+				queryKey: ["mediaAssets", "list"],
+				// Browse unmounts while the Upload tab is active, and resource
+				// queries intentionally disable refetch-on-mount. Refresh inactive
+				// list variants so the uploaded asset is present when Browse remounts.
+				refetchType: "all",
+			});
 		},
-		qc,
-	);
+	});
 }
 
-/**
- * Register an asset URL directly (for when the URL already exists).
- */
+/** Register an already-hosted asset URL. */
 export function useRegisterAsset() {
-	const {
-		apiBaseURL,
-		apiBasePath,
-		headers,
-		queryClient: qc,
-	} = useMediaConfig();
-	const reactQueryClient = useQueryClient(qc);
-
-	return useMutation(
-		{
-			mutationFn: async (input: {
-				url: string;
-				filename: string;
-				mimeType?: string;
-				size?: number;
-				folderId?: string;
-			}): Promise<SerializedAsset> => {
-				const base = `${apiBaseURL}${apiBasePath}`;
-				const headersObj = new Headers(headers as HeadersInit | undefined);
-				const res = await fetch(`${base}/media/assets`, {
-					method: "POST",
-					headers: {
-						...Object.fromEntries(headersObj.entries()),
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						filename: input.filename,
-						originalName: input.filename,
-						mimeType: input.mimeType ?? "application/octet-stream",
-						size: input.size ?? 0,
-						url: input.url,
-						folderId: input.folderId,
-					}),
-				});
-				if (!res.ok) {
-					const err = await res
-						.json()
-						.catch(() => ({ message: res.statusText }));
-					throw new Error(err.message ?? "Failed to register asset");
-				}
-				return res.json();
-			},
-			onSuccess: () => {
-				reactQueryClient.invalidateQueries({ queryKey: ["mediaAssets"] });
-			},
-		},
-		qc,
-	);
+	return media.mediaAssets.create.use();
 }
 
-/**
- * Delete an asset by ID.
- */
+/** Delete an asset by ID. */
 export function useDeleteAsset() {
-	const {
-		apiBaseURL,
-		apiBasePath,
-		headers,
-		queryClient: qc,
-	} = useMediaConfig();
-	const reactQueryClient = useQueryClient(qc);
-
-	return useMutation(
-		{
-			mutationFn: async (id: string) => {
-				const base = `${apiBaseURL}${apiBasePath}`;
-				const headersObj = new Headers(headers as HeadersInit | undefined);
-				const res = await fetch(`${base}/media/assets/${id}`, {
-					method: "DELETE",
-					headers: headersObj,
-				});
-				if (!res.ok) {
-					const err = await res
-						.json()
-						.catch(() => ({ message: res.statusText }));
-					throw new Error(err.message ?? "Delete failed");
-				}
-			},
-			onSuccess: () => {
-				reactQueryClient.invalidateQueries({ queryKey: ["mediaAssets"] });
-			},
-		},
-		qc,
-	);
+	return media.mediaAssets.delete.use();
 }
 
-/**
- * Create a new folder.
- */
+/** Create a new folder. */
 export function useCreateFolder() {
-	const {
-		apiBaseURL,
-		apiBasePath,
-		headers,
-		queryClient: qc,
-	} = useMediaConfig();
-	const reactQueryClient = useQueryClient(qc);
-
-	return useMutation(
-		{
-			mutationFn: async (input: {
-				name: string;
-				parentId?: string;
-			}): Promise<SerializedFolder> => {
-				const base = `${apiBaseURL}${apiBasePath}`;
-				const headersObj = new Headers(headers as HeadersInit | undefined);
-				const res = await fetch(`${base}/media/folders`, {
-					method: "POST",
-					headers: {
-						...Object.fromEntries(headersObj.entries()),
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify(input),
-				});
-				if (!res.ok) {
-					const err = await res
-						.json()
-						.catch(() => ({ message: res.statusText }));
-					throw new Error(err.message ?? "Failed to create folder");
-				}
-				return res.json();
-			},
-			onSuccess: () => {
-				reactQueryClient.invalidateQueries({ queryKey: ["mediaFolders"] });
-			},
-		},
-		qc,
-	);
+	return media.mediaFolders.create.use();
 }
 
-/**
- * Delete a folder by ID.
- */
+/** Delete a folder by ID. */
 export function useDeleteFolder() {
-	const {
-		apiBaseURL,
-		apiBasePath,
-		headers,
-		queryClient: qc,
-	} = useMediaConfig();
-	const reactQueryClient = useQueryClient(qc);
+	return media.mediaFolders.delete.use();
+}
 
-	return useMutation(
-		{
-			mutationFn: async (id: string) => {
-				const base = `${apiBaseURL}${apiBasePath}`;
-				const headersObj = new Headers(headers as HeadersInit | undefined);
-				const res = await fetch(`${base}/media/folders/${id}`, {
-					method: "DELETE",
-					headers: headersObj,
-				});
-				if (!res.ok) {
-					const err = await res
-						.json()
-						.catch(() => ({ message: res.statusText }));
-					throw new Error(err.message ?? "Failed to delete folder");
-				}
-			},
-			onSuccess: () => {
-				reactQueryClient.invalidateQueries({ queryKey: ["mediaFolders"] });
-			},
-		},
-		qc,
-	);
+export interface RegisterAssetFormValues {
+	url: string;
+}
+
+export interface UseRegisterAssetFormOptions {
+	folderId?: string;
+	onSuccess?: (asset: SerializedAsset) => void | Promise<void>;
+}
+
+function filenameFromUrl(url: string): string {
+	try {
+		const filename = new URL(url).pathname.split("/").filter(Boolean).pop();
+		return filename ? decodeURIComponent(filename) : "asset";
+	} catch {
+		return "asset";
+	}
+}
+
+/** Form lifecycle for registering a hosted asset URL. */
+export function useRegisterAssetForm(
+	options: UseRegisterAssetFormOptions = {},
+): ResourceFormResult<RegisterAssetFormValues, null, SerializedAsset> {
+	const t = useTranslate();
+	return media.mediaAssets.useForm<
+		RegisterAssetFormValues,
+		SerializedAsset,
+		null
+	>({
+		action: "create",
+		defaults: { url: "" },
+		toCreateVars: (values): RegisterAssetInput => ({
+			url: values.url.trim(),
+			filename: filenameFromUrl(values.url.trim()),
+			folderId: options.folderId,
+		}),
+		successMessage: t("media.toasts.registerSuccess", "Asset added"),
+		errorMessage: (error) =>
+			error.message || t("media.toasts.registerError", "Failed to add asset"),
+		onSuccess: options.onSuccess,
+	});
+}
+
+export interface CreateFolderFormValues {
+	name: string;
+}
+
+export interface UseCreateFolderFormOptions {
+	parentId?: string;
+	onSuccess?: (folder: SerializedFolder) => void | Promise<void>;
+}
+
+/** Form lifecycle for creating a media folder. */
+export function useCreateFolderForm(
+	options: UseCreateFolderFormOptions = {},
+): ResourceFormResult<CreateFolderFormValues, null, SerializedFolder> {
+	const t = useTranslate();
+	return media.mediaFolders.useForm<
+		CreateFolderFormValues,
+		SerializedFolder,
+		null
+	>({
+		action: "create",
+		defaults: { name: "" },
+		toCreateVars: (values) => ({
+			name: values.name.trim(),
+			parentId: options.parentId,
+		}),
+		successMessage: t("media.toasts.folderCreateSuccess", "Folder created"),
+		errorMessage: (error) =>
+			error.message ||
+			t("media.toasts.folderCreateError", "Failed to create folder"),
+		onSuccess: options.onSuccess,
+	});
 }

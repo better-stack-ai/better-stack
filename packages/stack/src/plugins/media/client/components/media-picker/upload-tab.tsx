@@ -5,6 +5,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Loader2, Upload } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import { matchesAccept } from "./utils";
+import { useCan, useNotify, useTranslate } from "@btst/stack/context";
 
 export function UploadTab({
 	folderId,
@@ -15,6 +16,12 @@ export function UploadTab({
 	accept?: string[];
 	onUploaded: (asset: SerializedAsset) => void;
 }) {
+	const t = useTranslate();
+	const notify = useNotify();
+	const { can: canCreate } = useCan({
+		resource: "media:asset",
+		action: "create",
+	});
 	const [dragging, setDragging] = useState(false);
 	const [uploading, setUploading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -25,6 +32,7 @@ export function UploadTab({
 
 	const handleFiles = useCallback(
 		async (files: FileList | File[]) => {
+			if (!canCreate) return;
 			const fileArr = Array.from(files);
 			if (fileArr.length === 0) return;
 			setError(null);
@@ -32,7 +40,15 @@ export function UploadTab({
 			try {
 				for (const file of fileArr) {
 					if (accept && !matchesAccept(file.type, accept)) {
-						setError(`File type ${file.type} is not accepted.`);
+						setError(
+							t(
+								"media.upload.invalidType",
+								"File type {{type}} is not accepted.",
+								{
+									type: file.type,
+								},
+							),
+						);
 						continue;
 					}
 					const asset = await uploadAsset({
@@ -40,20 +56,32 @@ export function UploadTab({
 						folderId: folderId ?? undefined,
 					});
 					onUploaded(asset);
+					notify.success(
+						t("media.toasts.uploadSuccess", "Uploaded {{filename}}", {
+							filename: file.name,
+						}),
+					);
 				}
 			} catch (err) {
-				setError(err instanceof Error ? err.message : "Upload failed");
+				setError(
+					err instanceof Error
+						? err.message
+						: t("media.toasts.uploadError", "Upload failed"),
+				);
 			} finally {
 				setUploading(false);
 			}
 		},
-		[accept, folderId, uploadAsset, onUploaded],
+		[accept, canCreate, folderId, notify, onUploaded, t, uploadAsset],
 	);
+
+	if (!canCreate) return null;
 
 	return (
 		<div className="flex h-full flex-col gap-3">
 			<div
 				onDragOver={(e) => {
+					if (!canCreate) return;
 					e.preventDefault();
 					setDragging(true);
 				}}
@@ -71,15 +99,19 @@ export function UploadTab({
 				{uploading ? (
 					<>
 						<Loader2 className="size-8 animate-spin text-muted-foreground" />
-						<p className="text-sm text-muted-foreground">Uploading…</p>
+						<p className="text-sm text-muted-foreground">
+							{t("media.upload.uploading", "Uploading…")}
+						</p>
 					</>
 				) : (
 					<>
 						<Upload className="size-8 text-muted-foreground" />
 						<div className="text-center">
-							<p className="text-sm font-medium">Drop files here</p>
+							<p className="text-sm font-medium">
+								{t("media.upload.dropHere", "Drop files here")}
+							</p>
 							<p className="text-xs text-muted-foreground">
-								or click to browse
+								{t("media.upload.orBrowse", "or click to browse")}
 							</p>
 						</div>
 						<Button
@@ -88,7 +120,7 @@ export function UploadTab({
 							size="sm"
 							onClick={() => fileInputRef.current?.click()}
 						>
-							Choose files
+							{t("media.upload.chooseFiles", "Choose files")}
 						</Button>
 					</>
 				)}

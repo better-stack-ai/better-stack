@@ -98,6 +98,7 @@ export function useResourceMutationForDef(
 			for (const target of def.invalidates ?? []) {
 				await queryClient.invalidateQueries({
 					queryKey: invalidateTargetToKey(target),
+					refetchType: def.refetchType,
 				});
 			}
 

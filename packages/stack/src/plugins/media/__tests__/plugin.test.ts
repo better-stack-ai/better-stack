@@ -723,6 +723,36 @@ describe("mediaBackendPlugin hook denial behavior", () => {
 	});
 });
 
+describe("mediaBackendPlugin list query normalization", () => {
+	it("decodes the root-folder sentinel before hooks and filtering", async () => {
+		const onBeforeListFolders = vi.fn();
+		const backend = createBackend({ hooks: { onBeforeListFolders } });
+		const root = await createFolderViaApi(backend, { name: "Root" });
+		await createFolderViaApi(backend, { name: "Child", parentId: root.id });
+
+		const response = await backend.handler(
+			createJsonRequest("/api/media/folders?parentId=__root__", "GET"),
+		);
+		const folders = (await response.json()) as Array<{ name: string }>;
+
+		expect(response.ok).toBe(true);
+		expect(folders.map((folder) => folder.name)).toEqual(["Root"]);
+		expect(onBeforeListFolders).toHaveBeenCalledWith(
+			{ parentId: null },
+			expect.any(Object),
+		);
+	});
+
+	it("rejects asset searches longer than 200 characters", async () => {
+		const backend = createBackend();
+		const response = await backend.handler(
+			createJsonRequest(`/api/media/assets?query=${"a".repeat(201)}`, "GET"),
+		);
+
+		expect(response.status).toBe(400);
+	});
+});
+
 describe("mediaBackendPlugin folder deletion route", () => {
 	it("returns 409 when a descendant folder contains assets", async () => {
 		const backend = createBackend({

@@ -32,6 +32,7 @@ export function LibraryPageComponent() {
 	return (
 		<ComposedRoute
 			path="/media"
+			permission={{ resource: "media:asset", action: "read" }}
 			PageComponent={LibraryPage}
 			ErrorComponent={LibraryError}
 			LoadingComponent={LibraryLoading}

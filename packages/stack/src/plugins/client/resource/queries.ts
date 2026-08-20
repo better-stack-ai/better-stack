@@ -95,6 +95,12 @@ export interface ResourceMutationDef<TVars = any, TResult = unknown> {
 	 */
 	invalidates?: readonly string[];
 	/**
+	 * Which matching queries to refetch during invalidation. Defaults to
+	 * React Query's `"active"`; use `"all"` when an inactive view must be
+	 * refreshed before it remounts.
+	 */
+	refetchType?: "active" | "inactive" | "all" | "none";
+	/**
 	 * Seed a query cache entry from the mutation result (e.g. the detail
 	 * entry for a created/updated record). `args` returns the key args for
 	 * the target query, or `null` to skip seeding.

@@ -3,10 +3,14 @@ import type { SerializedAsset } from "../../../types";
 import { cn } from "@workspace/ui/lib/utils";
 import { File, Check, Copy, Trash2 } from "lucide-react";
 import { isImage, formatBytes } from "./utils";
-import { usePluginOverrides } from "@btst/stack/context";
+import {
+	useCan,
+	useNotify,
+	usePluginOverrides,
+	useTranslate,
+} from "@btst/stack/context";
 import type { MediaPluginOverrides } from "../../overrides";
 import { AssetPreviewButton } from "./asset-preview-button";
-import { toast } from "sonner";
 
 export function AssetCard({
 	asset,
@@ -21,7 +25,14 @@ export function AssetCard({
 	onDelete?: (id: string) => void | Promise<void>;
 	apiBaseURL?: string;
 }) {
+	const t = useTranslate();
+	const notify = useNotify();
 	const { mutateAsync: deleteAsset } = useDeleteAsset();
+	const { can: canDelete } = useCan({
+		resource: "media:asset",
+		action: "delete",
+		params: { id: asset.id },
+	});
 	const { Image: ImageComponent } = usePluginOverrides<
 		MediaPluginOverrides,
 		Partial<MediaPluginOverrides>
@@ -29,25 +40,45 @@ export function AssetCard({
 	const imageAsset = isImage(asset.mimeType);
 	const selectable = typeof onToggle === "function";
 
-	const copyUrl = () => {
+	const copyUrl = async () => {
 		let fullUrl: string;
 		try {
 			fullUrl = new URL(asset.url, apiBaseURL).href;
 		} catch {
 			fullUrl = asset.url;
 		}
-		navigator.clipboard
-			.writeText(fullUrl)
-			.then(() => toast.success("URL copied"));
+		try {
+			await navigator.clipboard.writeText(fullUrl);
+			notify.success(t("media.toasts.copySuccess", "URL copied"));
+		} catch {
+			notify.error(t("media.toasts.copyError", "Failed to copy URL"));
+		}
 	};
 
-	const handleDelete = () => {
+	const handleDelete = async () => {
+		if (!canDelete) return;
 		if (onDelete) {
-			return onDelete(asset.id);
+			await onDelete(asset.id);
+			return;
 		}
 
-		if (confirm(`Delete "${asset.originalName}"?`)) {
-			return deleteAsset(asset.id).catch(console.error);
+		if (
+			confirm(
+				t("media.assets.deleteNamedConfirm", 'Delete "{{filename}}"?', {
+					filename: asset.originalName,
+				}),
+			)
+		) {
+			try {
+				await deleteAsset(asset.id);
+				notify.success(t("media.toasts.deleteSuccess", "Asset deleted"));
+			} catch (error) {
+				notify.error(
+					error instanceof Error
+						? error.message
+						: t("media.toasts.deleteError", "Delete failed"),
+				);
+			}
 		}
 	};
 
@@ -117,10 +148,10 @@ export function AssetCard({
 				{apiBaseURL ? (
 					<button
 						type="button"
-						title="Copy URL"
+						title={t("media.actions.copyUrl", "Copy URL")}
 						onClick={(e) => {
 							e.stopPropagation();
-							copyUrl();
+							void copyUrl();
 						}}
 						className="rounded bg-background/80 p-0.5 shadow hover:bg-background"
 					>
@@ -133,17 +164,19 @@ export function AssetCard({
 						className="rounded bg-background/80 p-0.5 shadow hover:bg-background"
 					/>
 				) : null}
-				<button
-					type="button"
-					title="Delete"
-					onClick={(e) => {
-						e.stopPropagation();
-						void handleDelete();
-					}}
-					className="rounded bg-destructive/80 p-0.5 text-white hover:bg-destructive"
-				>
-					<Trash2 className="size-3" />
-				</button>
+				{canDelete ? (
+					<button
+						type="button"
+						title={t("media.actions.delete", "Delete")}
+						onClick={(e) => {
+							e.stopPropagation();
+							void handleDelete();
+						}}
+						className="rounded bg-destructive/80 p-0.5 text-white hover:bg-destructive"
+					>
+						<Trash2 className="size-3" />
+					</button>
+				) : null}
 			</div>
 		</div>
 	);

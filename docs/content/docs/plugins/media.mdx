@@ -316,6 +316,8 @@ Your media plugin is now configured and ready to use. Here is a quick reference 
 | `MediaPicker` | Embed the full media browser in your own forms and editors |
 | `ImageInputField` | Drop-in image field with preview, change, and remove actions |
 | `uploadAsset()` | Imperative upload helper for editors and non-React callbacks |
+| `useRegisterAssetForm()` | URL registration lifecycle with inline server field errors |
+| `useCreateFolderForm()` | Folder form lifecycle with notification and invalidation handling |
 
 ## Common Patterns
 
@@ -376,6 +378,67 @@ export function ProductImageField({
   return <ImageInputField value={value} onChange={onChange} />
 }
 ```
+
+### Building custom media forms
+
+The form hooks use the same resource declaration as the built-in UI. They map server validation issues to `fieldErrors`, send success and non-field error feedback through the configured `notify` provider, and invalidate only the affected media list caches.
+
+```tsx title="components/register-media-url.tsx"
+import { useState } from "react"
+import { useRegisterAssetForm } from "@btst/stack/plugins/media/client/hooks"
+
+export function RegisterMediaUrl({ folderId }: { folderId?: string }) {
+  const form = useRegisterAssetForm({ folderId })
+  const [url, setUrl] = useState("")
+
+  return (
+    <form onSubmit={(event) => {
+      event.preventDefault()
+      void form.submit({ url })
+    }}>
+      <input
+        value={url}
+        onChange={(event) => {
+          setUrl(event.target.value)
+          form.clearErrors()
+        }}
+      />
+      {form.fieldErrors.url && <p>{form.fieldErrors.url}</p>}
+      <button disabled={form.isSubmitting}>Add asset</button>
+    </form>
+  )
+}
+```
+
+`useCreateFolderForm({ parentId, onSuccess })` provides the same lifecycle for `{ name }` folder forms.
+
+### Standalone library URL state
+
+The built-in `/media` route keeps its current folder and search in the URL:
+
+- `folder=<id>` is pushed to history when the user changes folders.
+- `q=<term>` is replaced after a 300 ms debounce while the user types.
+- Empty/default values are removed from the query string.
+
+The embedded `MediaPicker` intentionally keeps this state local, so opening a picker inside another form does not change the host page URL.
+
+### Permissions
+
+When `StackProvider` has an auth provider with `can()`, the Media UI checks these permissions:
+
+| Resource | Action | Controls |
+| --- | --- | --- |
+| `media:asset` | `read` | Standalone `/media` route |
+| `media:asset` | `create` | Upload, URL registration, and drag/drop |
+| `media:asset` | `delete` | Asset delete action (`params.id` is supplied) |
+| `media:folder` | `create` | New folder form |
+| `media:folder` | `delete` | Folder delete action (`params.id` is supplied) |
+
+Without an auth provider, all controls remain available for backward compatibility. Client checks only control presentation; continue using backend hooks such as `onBeforeUpload`, `onBeforeDelete`, and `onBeforeListAssets` as the security boundary.
+
+### Translation and notifications
+
+Built-in Media UI strings go through the `StackProvider` i18n provider under `media.*` keys. Action feedback goes through the `notify` provider instead of importing a toast library directly. With neither provider configured, the existing English copy and default notifications are used.
 
 ## Multi-tenancy
 
@@ -605,6 +668,37 @@ The Media plugin exposes React Query-powered hooks for reading and mutating asse
 #### useDeleteFolder
 
 <AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="useDeleteFolder" />
+
+#### useRegisterAssetForm
+
+<AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="useRegisterAssetForm" />
+
+#### UseRegisterAssetFormOptions
+
+<AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="UseRegisterAssetFormOptions" />
+
+#### useCreateFolderForm
+
+<AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="useCreateFolderForm" />
+
+#### UseCreateFolderFormOptions
+
+<AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="UseCreateFolderFormOptions" />
+
+### Query keys (`@btst/stack/plugins/media/query-keys`)
+
+`mediaResources` is the shared declaration used by client hooks and SSR query factories. `createMediaQueryKeys(client, headers?)` returns these corrected v3 cache prefixes:
+
+- Asset lists: `["mediaAssets", "list", discriminator]`
+- Folder lists: `["mediaFolders", "list", "all" | "root" | parentId]`
+
+`useFolders(undefined)` lists all folders, while `useFolders(null)` lists only root folders. The two calls intentionally have distinct cache keys and HTTP semantics.
+
+Asset search trims whitespace and accepts at most 200 characters. Because BTST adapters do not expose a portable substring operator, the backend searches within the newest 1,000 matching-scope assets before applying result pagination.
+
+Asset uploads, URL registration, and deletes also refetch inactive asset-list variants. This keeps the Browse tab current when it remounts after an Upload or URL action.
+
+The picker deliberately uses the infinite asset resource directly instead of the core `useSelect` helper: its folder tree, MIME filtering, thumbnails, multi-selection, and paginated grid need the richer Media-specific UI state.
 
 ## Server-side Data Access
 

@@ -1,5 +1,5 @@
 "use client";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
 	Popover,
 	PopoverContent,
@@ -19,7 +19,7 @@ import { BrowseTab } from "./browse-tab";
 import { UploadTab } from "./upload-tab";
 import { UrlTab } from "./url-tab";
 import type { MediaPluginOverrides } from "../../overrides";
-import { usePluginOverrides } from "@btst/stack/context";
+import { useCan, usePluginOverrides, useTranslate } from "@btst/stack/context";
 
 export interface MediaPickerProps {
 	/**
@@ -62,12 +62,23 @@ export function MediaPicker({
 	multiple = false,
 	accept,
 }: MediaPickerProps) {
+	const t = useTranslate();
+	const { can: canCreate, isPending: isCreatePermissionPending } = useCan({
+		resource: "media:asset",
+		action: "create",
+	});
 	const [open, setOpen] = useState(false);
 	const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 	const [selectedAssets, setSelectedAssets] = useState<SerializedAsset[]>([]);
 	const [activeTab, setActiveTab] = useState<"browse" | "upload" | "url">(
 		"browse",
 	);
+
+	useEffect(() => {
+		if (!isCreatePermissionPending && !canCreate && activeTab !== "browse") {
+			setActiveTab("browse");
+		}
+	}, [activeTab, canCreate, isCreatePermissionPending]);
 
 	const handleClose = () => {
 		setOpen(false);
@@ -97,6 +108,7 @@ export function MediaPicker({
 	};
 
 	const handleUploaded = (asset: SerializedAsset) => {
+		if (!canCreate) return;
 		if (multiple) {
 			setSelectedAssets((prev) => [...prev, asset]);
 		} else {
@@ -106,6 +118,7 @@ export function MediaPicker({
 	};
 
 	const handleUrlRegistered = (asset: SerializedAsset) => {
+		if (!canCreate) return;
 		// Close the popover first, then notify parent — same deferral as handleConfirm.
 		const toSelect = asset;
 		handleClose();
@@ -134,9 +147,12 @@ export function MediaPicker({
 				<div className="flex h-full flex-col overflow-hidden rounded-md">
 					{/* Header */}
 					<div className="flex items-center justify-between border-b px-3 py-2">
-						<span className="text-sm font-semibold">Media Library</span>
+						<span className="text-sm font-semibold">
+							{t("media.picker.title", "Media Library")}
+						</span>
 						<button
 							type="button"
+							aria-label={t("media.actions.close", "Close")}
 							onClick={handleClose}
 							className="rounded p-0.5 hover:bg-muted"
 						>
@@ -161,28 +177,34 @@ export function MediaPicker({
 								onValueChange={(v) => setActiveTab(v as any)}
 								className="flex flex-1 flex-col min-h-0"
 							>
-								<TabsList className="grid h-auto w-full shrink-0 grid-cols-3 md:flex md:w-fit">
+								<TabsList
+									className={`grid h-auto w-full shrink-0 ${canCreate ? "grid-cols-3" : "grid-cols-1"} md:flex md:w-fit`}
+								>
 									<TabsTrigger
 										value="browse"
 										className="h-8 px-2 text-xs md:h-6 md:px-3"
 									>
 										<Image className="mr-1 size-3" />
-										Browse
+										{t("media.tabs.browse", "Browse")}
 									</TabsTrigger>
-									<TabsTrigger
-										value="upload"
-										className="h-8 px-2 text-xs md:h-6 md:px-3"
-									>
-										<Upload className="mr-1 size-3" />
-										Upload
-									</TabsTrigger>
-									<TabsTrigger
-										value="url"
-										className="h-8 px-2 text-xs md:h-6 md:px-3"
-									>
-										<Link className="mr-1 size-3" />
-										URL
-									</TabsTrigger>
+									{canCreate ? (
+										<TabsTrigger
+											value="upload"
+											className="h-8 px-2 text-xs md:h-6 md:px-3"
+										>
+											<Upload className="mr-1 size-3" />
+											{t("media.tabs.upload", "Upload")}
+										</TabsTrigger>
+									) : null}
+									{canCreate ? (
+										<TabsTrigger
+											value="url"
+											className="h-8 px-2 text-xs md:h-6 md:px-3"
+										>
+											<Link className="mr-1 size-3" />
+											{t("media.tabs.url", "URL")}
+										</TabsTrigger>
+									) : null}
 								</TabsList>
 
 								<div className="mt-2 min-h-0 flex-1">
@@ -197,25 +219,29 @@ export function MediaPicker({
 											onToggle={handleToggleAsset}
 										/>
 									</TabsContent>
-									<TabsContent
-										value="upload"
-										className="m-0 h-full min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
-									>
-										<UploadTab
-											folderId={selectedFolder}
-											accept={accept}
-											onUploaded={handleUploaded}
-										/>
-									</TabsContent>
-									<TabsContent
-										value="url"
-										className="m-0 h-full min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
-									>
-										<UrlTab
-											folderId={selectedFolder}
-											onRegistered={handleUrlRegistered}
-										/>
-									</TabsContent>
+									{canCreate ? (
+										<TabsContent
+											value="upload"
+											className="m-0 h-full min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
+										>
+											<UploadTab
+												folderId={selectedFolder}
+												accept={accept}
+												onUploaded={handleUploaded}
+											/>
+										</TabsContent>
+									) : null}
+									{canCreate ? (
+										<TabsContent
+											value="url"
+											className="m-0 h-full min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
+										>
+											<UrlTab
+												folderId={selectedFolder}
+												onRegistered={handleUrlRegistered}
+											/>
+										</TabsContent>
+									) : null}
 								</div>
 							</Tabs>
 						</div>
@@ -225,8 +251,10 @@ export function MediaPicker({
 					<div className="flex flex-col gap-2 border-t px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
 						<span className="text-xs text-muted-foreground">
 							{selectedAssets.length > 0
-								? `${selectedAssets.length} selected`
-								: "Click a file to select it"}
+								? t("media.picker.selected", "{{count}} selected", {
+										count: selectedAssets.length,
+									})
+								: t("media.picker.selectHint", "Click a file to select it")}
 						</span>
 						<div className="flex w-full gap-2 sm:w-auto">
 							<Button
@@ -236,7 +264,7 @@ export function MediaPicker({
 								onClick={handleClose}
 								className="flex-1 sm:flex-none"
 							>
-								Cancel
+								{t("media.actions.cancel", "Cancel")}
 							</Button>
 							<Button
 								type="button"
@@ -247,8 +275,10 @@ export function MediaPicker({
 								className="flex-1 sm:flex-none"
 							>
 								{multiple
-									? `Select ${selectedAssets.length > 0 ? `(${selectedAssets.length})` : ""}`
-									: "Select"}
+									? t("media.actions.selectMany", "Select ({{count}})", {
+											count: selectedAssets.length,
+										})
+									: t("media.actions.select", "Select")}
 							</Button>
 						</div>
 					</div>
@@ -272,6 +302,7 @@ export function ImageInputField({
 	value: string;
 	onChange: (v: string) => void;
 }) {
+	const t = useTranslate();
 	const { Image: ImageComponent } = usePluginOverrides<
 		MediaPluginOverrides,
 		Partial<MediaPluginOverrides>
@@ -283,7 +314,7 @@ export function ImageInputField({
 				{ImageComponent ? (
 					<ImageComponent
 						src={value}
-						alt="Featured image preview"
+						alt={t("media.image.previewAlt", "Featured image preview")}
 						className="h-auto w-full max-w-xs rounded-md border object-cover"
 						width={400}
 						height={300}
@@ -292,7 +323,7 @@ export function ImageInputField({
 				) : (
 					<img
 						src={value}
-						alt="Featured image preview"
+						alt={t("media.image.previewAlt", "Featured image preview")}
 						className="h-auto w-full max-w-xs rounded-md border object-cover"
 						data-testid="image-preview"
 					/>
@@ -306,7 +337,7 @@ export function ImageInputField({
 								type="button"
 								data-testid="open-media-picker"
 							>
-								Change Image
+								{t("media.image.change", "Change Image")}
 							</Button>
 						}
 						accept={["image/*"]}
@@ -319,7 +350,7 @@ export function ImageInputField({
 						data-testid="remove-image-button"
 						onClick={() => onChange("")}
 					>
-						Remove
+						{t("media.image.remove", "Remove")}
 					</Button>
 				</div>
 			</div>
@@ -336,7 +367,7 @@ export function ImageInputField({
 						type="button"
 						data-testid="open-media-picker"
 					>
-						Browse Media
+						{t("media.image.browse", "Browse Media")}
 					</Button>
 				}
 				accept={["image/*"]}
