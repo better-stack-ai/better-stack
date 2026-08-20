@@ -11,7 +11,7 @@ import { formBuilderClientPlugin } from "../plugins/form-builder/client";
 import type { FormBuilderApiRouter } from "../plugins/form-builder/api";
 import { createFormBuilderQueryKeys } from "../plugins/form-builder/query-keys";
 import { uiBuilderClientPlugin } from "../plugins/ui-builder/client";
-import { UI_BUILDER_TYPE_SLUG } from "../plugins/ui-builder";
+import { createUIBuilderQueryKeys } from "../plugins/ui-builder/query-keys";
 import { commentsClientPlugin } from "../plugins/comments/client";
 import type { CommentsApiRouter } from "../plugins/comments/api";
 import { createCommentsQueryKeys } from "../plugins/comments/query-keys";
@@ -178,15 +178,10 @@ describe("client plugin SSR loaders", () => {
 			baseURL: API_BASE_URL,
 			basePath: API_BASE_PATH,
 		});
-		const queries = createCMSQueryKeys(client, TEST_HEADERS);
-		const listQuery = queries.cmsContent.list({
-			typeSlug: UI_BUILDER_TYPE_SLUG,
-			limit: 20,
-			offset: 0,
-		});
-		const uiBuilderQueryKey = [...listQuery.queryKey, "ui-builder"] as const;
+		const queries = createUIBuilderQueryKeys(client, TEST_HEADERS);
+		const listQuery = queries.cmsContent.list({ limit: 10, offset: 0 });
 
-		expect(getErrorMessage(queryClient, uiBuilderQueryKey)).toBe(
+		expect(getErrorMessage(queryClient, listQuery.queryKey)).toBe(
 			SSR_LOADER_ERROR_MESSAGE,
 		);
 	});

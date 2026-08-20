@@ -13,6 +13,7 @@ interface PaginationProps {
 		showing?: string;
 		previous?: string;
 		next?: string;
+		loading?: string;
 	};
 }
 
@@ -27,6 +28,7 @@ export function Pagination({
 	const {
 		showing: showingLabel = "Showing {count} of {total}",
 		next = "Load More",
+		loading = "Loading...",
 	} = labels;
 
 	const showingText = showingLabel
@@ -43,7 +45,7 @@ export function Pagination({
 					onClick={onLoadMore}
 					disabled={isLoadingMore}
 				>
-					{isLoadingMore ? "Loading..." : next}
+					{isLoadingMore ? loading : next}
 					<ChevronRight className="ml-2 h-4 w-4" />
 				</Button>
 			)}

@@ -361,6 +361,16 @@
         "default": "./dist/plugins/ui-builder/client/hooks/index.cjs"
       }
     },
+    "./plugins/ui-builder/query-keys": {
+      "import": {
+        "types": "./dist/plugins/ui-builder/query-keys.d.ts",
+        "default": "./dist/plugins/ui-builder/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ui-builder/query-keys.d.cts",
+        "default": "./dist/plugins/ui-builder/query-keys.cjs"
+      }
+    },
     "./plugins/ui-builder/css": "./dist/plugins/ui-builder/style.css",
     "./plugins/open-api/api": {
       "import": {
@@ -725,6 +735,9 @@
       ],
       "plugins/ui-builder/client/hooks": [
         "./dist/plugins/ui-builder/client/hooks/index.d.ts"
+      ],
+      "plugins/ui-builder/query-keys": [
+        "./dist/plugins/ui-builder/query-keys.d.ts"
       ],
       "plugins/open-api/api": [
         "./dist/plugins/open-api/api/index.d.ts"

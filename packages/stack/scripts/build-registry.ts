@@ -62,6 +62,11 @@ const EXTERNAL_REGISTRY_COMPONENTS: Record<string, string> = {
 		"https://raw.githubusercontent.com/olliethedev/ui-builder/refs/heads/main/registry/block-registry.json",
 };
 
+// These registry items are the sole source of truth for every component and
+// lib subpath under their top-level name. Do not embed local copies: keeping
+// them external lets consumers and this monorepo sync from upstream cleanly.
+const EXTERNAL_ONLY_REGISTRY_COMPONENTS = new Set(["ui-builder"]);
+
 // ---------------------------------------------------------------------------
 // Standard shadcn component names
 // These go into registryDependencies, not as embedded files.
@@ -886,6 +891,10 @@ async function resolveWorkspaceUiDeps(
 					);
 				}
 
+				if (EXTERNAL_ONLY_REGISTRY_COMPONENTS.has(topLevel)) {
+					continue;
+				}
+
 				// Also try to embed the specific deep file from the workspace
 				const file = await loadWorkspaceUiComponent(comp);
 				if (file) {
@@ -987,6 +996,18 @@ async function resolveWorkspaceUiDeps(
 			pendingLibs.delete(lib);
 			if (processedLibs.has(lib)) continue;
 			processedLibs.add(lib);
+
+			const topLevel = lib.split("/")[0]!;
+			if (EXTERNAL_ONLY_REGISTRY_COMPONENTS.has(topLevel)) {
+				const registryUrl = EXTERNAL_REGISTRY_COMPONENTS[topLevel];
+				if (registryUrl) {
+					shadcnDeps.add(registryUrl);
+					console.log(
+						`  ext   @workspace/ui/lib/${topLevel} → external registry URL`,
+					);
+				}
+				continue;
+			}
 
 			const file = await loadWorkspaceUiLib(lib);
 			if (file) {
@@ -1145,6 +1166,19 @@ async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 	for (const f of extraFiles) {
 		registryFiles.push(f);
 		console.log(`  add   ${f.target} (${f.type}) [from @workspace/ui]`);
+	}
+
+	if (pluginName === "ui-builder") {
+		const embeddedUpstreamFile = registryFiles.find(
+			(file) =>
+				file.target?.startsWith("src/components/ui/ui-builder/") ||
+				file.target?.startsWith("src/lib/ui-builder/"),
+		);
+		if (embeddedUpstreamFile) {
+			throw new Error(
+				`UI Builder registry must not embed upstream source: ${embeddedUpstreamFile.target}`,
+			);
+		}
 	}
 
 	// ---- Assemble the registry item ----------------------------------------

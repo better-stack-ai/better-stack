@@ -4,6 +4,7 @@ import type {
 	FunctionRegistry,
 } from "@workspace/ui/components/ui-builder/types";
 import type { UIBuilderClientHooks } from "../types";
+import type { UIBuilderLocalizationOverrides } from "./localization";
 
 /**
  * Context passed to lifecycle hooks
@@ -71,6 +72,9 @@ export interface UIBuilderPluginOverrides {
 	 * in the preview modal and layer renderer.
 	 */
 	functionRegistry?: FunctionRegistry;
+
+	/** Localization overrides for built-in UI Builder plugin pages. */
+	localization?: UIBuilderLocalizationOverrides;
 
 	/**
 	 * Base path for UI Builder admin pages (default: /pages/ui-builder)

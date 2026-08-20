@@ -115,6 +115,7 @@ export default defineBuildConfig({
 		"./src/plugins/ui-builder/client/index.ts",
 		"./src/plugins/ui-builder/client/components/index.ts",
 		"./src/plugins/ui-builder/client/hooks/index.tsx",
+		"./src/plugins/ui-builder/query-keys.ts",
 		// kanban plugin entries
 		"./src/plugins/kanban/api/index.ts",
 		"./src/plugins/kanban/client/index.ts",

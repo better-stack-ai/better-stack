@@ -47,17 +47,21 @@ export {
 	useCreateUIBuilderPage,
 	useUpdateUIBuilderPage,
 	useDeleteUIBuilderPage,
+	useUIBuilderPageForm,
 	// Types
 	type UseUIBuilderPagesOptions,
 	type UseUIBuilderPagesResult,
 	type CreateUIBuilderPageInput,
 	type UpdateUIBuilderPageInput,
+	type UIBuilderPageFormValues,
+	type UIBuilderPageUpdateValues,
 } from "./hooks/ui-builder-hooks";
 
 // Localization
 export {
 	uiBuilderLocalization,
 	type UIBuilderLocalization,
+	type UIBuilderLocalizationOverrides,
 } from "./localization";
 
 // Re-export types

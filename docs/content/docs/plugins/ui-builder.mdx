@@ -207,6 +207,20 @@ The UI Builder plugin provides these admin routes:
 | `/ui-builder/new` | Create a new page with the visual builder |
 | `/ui-builder/:id/edit` | Edit an existing page |
 
+When `StackProvider` has an `auth` provider, the built-in routes and actions use
+these permission checks:
+
+| UI | Permission |
+|----|------------|
+| Page list route | `ui-builder:page` / `read` |
+| New-page route and create buttons | `ui-builder:page` / `create` |
+| Edit route and action | `ui-builder:page` / `update` with `{ id }` |
+| Delete action | `ui-builder:page` / `delete` with `{ id }` |
+
+Without an auth provider, permission gates remain disabled for backward
+compatibility. These client checks control visibility and navigation only;
+continue enforcing authorization in the CMS backend.
+
 <Callout type="warn">
 Admin routes are automatically set to `noindex` for SEO. Don't include them in your public sitemap.
 </Callout>
@@ -680,6 +694,17 @@ Access UI Builder data with React Query hooks:
 | `useCreateUIBuilderPage()` | Create mutation | React Query mutation |
 | `useUpdateUIBuilderPage()` | Update mutation | React Query mutation |
 | `useDeleteUIBuilderPage()` | Delete mutation | React Query mutation |
+| `useUIBuilderPageForm(config)` | Create/edit lifecycle | `{ submit, isSubmitting, fieldErrors, error }` |
+
+`useUIBuilderPageForm` uses the shared resource-form lifecycle: it selects the
+create or update mutation, awaits cache invalidation, sends messages through the
+`notify` provider, redirects through the router adapter, and exposes structured
+server validation errors through `fieldErrors`.
+
+For SSR loaders or custom cache prefetching, import
+`createUIBuilderQueryKeys` from
+`@btst/stack/plugins/ui-builder/query-keys`. Its keys intentionally match the
+underlying CMS content-item keys.
 
 ### Usage Examples
 
@@ -886,6 +911,8 @@ Creates the client plugin with routes and SSR loaders.
 | `Link` | `ComponentType` | No | Link component |
 | `refresh` | `() => void` | No | Refresh function |
 | `componentRegistry` | `ComponentRegistry` | No | Custom component registry |
+| `functionRegistry` | `FunctionRegistry` | No | Functions available to UI Builder event bindings |
+| `localization` | `UIBuilderLocalizationOverrides` | No | Nested overrides for built-in page, editor, renderer, and notification copy |
 | `showAttribution` | `boolean` | No | Show BTST attribution |
 
 #### defaultComponentRegistry
@@ -1105,6 +1132,13 @@ The UI Builder plugin UI layer is distributed as a [shadcn registry](https://ui.
 The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/stack/plugins/ui-builder/client/hooks`.
 </Callout>
 
+<Callout type="info">
+The visual editor itself is installed from the upstream UI Builder shadcn
+registry. BTST's registry references that external item and does not embed or
+fork `components/ui/ui-builder` or `lib/ui-builder`, so the editor source can be
+synced from upstream independently of the BTST adapter pages.
+</Callout>
+
 <Tabs items={["npx", "pnpm", "bunx"]}>
   <Tab value="npx">
     ```bash
@@ -1132,17 +1166,17 @@ After installing, wire your custom components into the plugin via the `pageCompo
 ```tsx title="lib/stack-client.tsx"
 import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client"
 // Import your ejected (and customized) page components
-import { PageListPageComponent } from "@/components/btst/ui-builder/client/components/pages/page-list-page"
-import { EditPagePageComponent } from "@/components/btst/ui-builder/client/components/pages/edit-page-page"
+import { PageListPage } from "@/components/btst/ui-builder/client/components/pages/page-list-page"
+import { PageBuilderPage } from "@/components/btst/ui-builder/client/components/pages/page-builder-page"
 
 uiBuilderClientPlugin({
   apiBaseURL: "...",
   apiBasePath: "/api/data",
   queryClient,
   pageComponents: {
-    pageList: PageListPageComponent, // replaces the page list page
+    pageList: PageListPage, // replaces the page list page
     // Param routes receive the route context ({ params }) as props
-    editPage: ({ params }) => <EditPagePageComponent id={params.id} />,
+    editPage: ({ params }) => <PageBuilderPage id={params.id} />,
     // newPage — omit to keep built-in default
   },
 })
