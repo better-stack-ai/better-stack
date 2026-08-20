@@ -24,7 +24,11 @@ export {
 
 export { serializeAsset, serializeFolder } from "./serializers";
 
-export { MEDIA_QUERY_KEYS, assetListDiscriminator } from "./query-key-defs";
+export {
+	MEDIA_QUERY_KEYS,
+	assetListDiscriminator,
+	folderListDiscriminator,
+} from "./query-key-defs";
 
 export type {
 	StorageAdapter,

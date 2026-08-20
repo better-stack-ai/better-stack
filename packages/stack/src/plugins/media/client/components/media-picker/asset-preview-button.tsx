@@ -10,6 +10,7 @@ import {
 } from "@workspace/ui/components/dialog";
 import { Eye, X } from "lucide-react";
 import type { SerializedAsset } from "../../../types";
+import { useTranslate } from "@btst/stack/context";
 
 export function AssetPreviewButton({
 	asset,
@@ -18,14 +19,17 @@ export function AssetPreviewButton({
 	asset: SerializedAsset;
 	className: string;
 }) {
+	const t = useTranslate();
 	const [open, setOpen] = useState(false);
 
 	return (
 		<>
 			<button
 				type="button"
-				title="Preview"
-				aria-label={`Preview ${asset.originalName}`}
+				title={t("media.actions.preview", "Preview")}
+				aria-label={t("media.assets.previewLabel", "Preview {{filename}}", {
+					filename: asset.originalName,
+				})}
 				onClick={(event) => {
 					event.stopPropagation();
 					setOpen(true);
@@ -46,7 +50,7 @@ export function AssetPreviewButton({
 
 					<DialogClose
 						className="absolute right-4 top-4 z-10 rounded bg-black/60 p-2 text-white transition hover:bg-black/80"
-						aria-label="Close preview"
+						aria-label={t("media.actions.closePreview", "Close preview")}
 					>
 						<X className="size-4" />
 					</DialogClose>

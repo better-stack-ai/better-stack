@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAssets } from "../../hooks/use-media";
 import type { SerializedAsset } from "../../../types";
 import { Input } from "@workspace/ui/components/input";
@@ -6,6 +6,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Loader2, Search, X, Image } from "lucide-react";
 import { AssetCard } from "./asset-card";
 import { matchesAccept } from "./utils";
+import { useTranslate } from "@btst/stack/context";
 
 export function BrowseTab({
 	folderId,
@@ -14,7 +15,10 @@ export function BrowseTab({
 	onToggle,
 	onDelete,
 	apiBaseURL,
-	emptyMessage = "No files found",
+	emptyMessage,
+	search: controlledSearch,
+	searchQuery,
+	onSearchChange,
 }: {
 	folderId: string | null;
 	selected?: SerializedAsset[];
@@ -23,14 +27,33 @@ export function BrowseTab({
 	onDelete?: (id: string) => void | Promise<void>;
 	apiBaseURL?: string;
 	emptyMessage?: string;
+	/** Optional controlled input value used by the standalone library page. */
+	search?: string;
+	/** Debounced query value; defaults to BrowseTab's local debounce. */
+	searchQuery?: string;
+	onSearchChange?: (value: string) => void;
 }) {
-	const [search, setSearch] = useState("");
+	const t = useTranslate();
+	const [localSearch, setLocalSearch] = useState("");
 	const [debouncedSearch, setDebouncedSearch] = useState("");
 	const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const selectable = typeof onToggle === "function";
+	const search = controlledSearch ?? localSearch;
+	const effectiveQuery = searchQuery ?? debouncedSearch;
+
+	useEffect(
+		() => () => {
+			if (debounceRef.current) clearTimeout(debounceRef.current);
+		},
+		[],
+	);
 
 	const handleSearch = (v: string) => {
-		setSearch(v);
+		if (onSearchChange) {
+			onSearchChange(v);
+			return;
+		}
+		setLocalSearch(v);
 		if (debounceRef.current) clearTimeout(debounceRef.current);
 		debounceRef.current = setTimeout(() => setDebouncedSearch(v), 300);
 	};
@@ -38,7 +61,7 @@ export function BrowseTab({
 	const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
 		useAssets({
 			folderId: folderId ?? undefined,
-			query: debouncedSearch || undefined,
+			query: effectiveQuery || undefined,
 			limit: 40,
 		});
 
@@ -54,14 +77,17 @@ export function BrowseTab({
 				<Input
 					value={search}
 					onChange={(e) => handleSearch(e.target.value)}
-					placeholder="Search files…"
+					maxLength={200}
+					placeholder={t("media.assets.searchPlaceholder", "Search files…")}
 					className="h-8 pl-7 text-sm"
 				/>
 				{search && (
 					<button
 						type="button"
+						title={t("media.actions.clearSearch", "Clear search")}
 						onClick={() => {
-							setSearch("");
+							if (onSearchChange) onSearchChange("");
+							else setLocalSearch("");
 							setDebouncedSearch("");
 						}}
 						className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
@@ -78,7 +104,7 @@ export function BrowseTab({
 			) : filtered.length === 0 ? (
 				<div className="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
 					<Image className="size-8" />
-					<p>{emptyMessage}</p>
+					<p>{emptyMessage ?? t("media.assets.empty", "No files found")}</p>
 				</div>
 			) : (
 				<div className="flex-1 overflow-y-auto overscroll-contain">
@@ -105,7 +131,7 @@ export function BrowseTab({
 								{isFetchingNextPage ? (
 									<Loader2 className="mr-1 size-3 animate-spin" />
 								) : null}
-								Load more
+								{t("media.actions.loadMore", "Load more")}
 							</Button>
 						</div>
 					)}

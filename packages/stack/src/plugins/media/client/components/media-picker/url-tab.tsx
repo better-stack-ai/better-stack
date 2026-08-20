@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useRegisterAsset } from "../../hooks/use-media";
+import { useRegisterAssetForm } from "../../hooks/use-media";
 import type { SerializedAsset } from "../../../types";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
 import { Loader2, Check } from "lucide-react";
+import { useCan, useTranslate } from "@btst/stack/context";
 
 export function UrlTab({
 	folderId,
@@ -12,34 +13,41 @@ export function UrlTab({
 	folderId: string | null;
 	onRegistered: (asset: SerializedAsset) => void;
 }) {
+	const t = useTranslate();
+	const { can: canCreate } = useCan({
+		resource: "media:asset",
+		action: "create",
+	});
 	const [url, setUrl] = useState("");
-	const [error, setError] = useState<string | null>(null);
-	const { mutateAsync: registerAsset, isPending } = useRegisterAsset();
+	const form = useRegisterAssetForm({
+		folderId: folderId ?? undefined,
+		onSuccess: onRegistered,
+	});
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		e.stopPropagation();
-		setError(null);
+		if (!canCreate) return;
+		form.clearErrors();
 		const trimmed = url.trim();
 		if (!trimmed) return;
-		try {
-			const filename = trimmed.split("/").pop() ?? "asset";
-			const asset = await registerAsset({
-				url: trimmed,
-				filename,
-				folderId: folderId ?? undefined,
-			});
+		const asset = await form.submit({ url: trimmed });
+		if (asset) {
 			setUrl("");
-			onRegistered(asset);
-		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to register URL");
 		}
 	};
+
+	if (!canCreate) return null;
+
+	const urlError = form.fieldErrors.url;
 
 	return (
 		<div className="flex h-full flex-col gap-3 pt-2">
 			<p className="text-sm text-muted-foreground">
-				Paste a public URL to register it as an asset without uploading a file.
+				{t(
+					"media.url.description",
+					"Paste a public URL to register it as an asset without uploading a file.",
+				)}
 			</p>
 			<form onSubmit={handleSubmit} className="flex flex-col gap-2">
 				<div className="flex flex-col gap-2 sm:flex-row">
@@ -49,7 +57,10 @@ export function UrlTab({
 						autoCapitalize="none"
 						autoCorrect="off"
 						value={url}
-						onChange={(e) => setUrl(e.target.value)}
+						onChange={(e) => {
+							setUrl(e.target.value);
+							form.clearErrors();
+						}}
 						placeholder="https://example.com/image.png"
 						className="flex-1"
 						data-testid="media-url-input"
@@ -58,18 +69,20 @@ export function UrlTab({
 					<Button
 						type="submit"
 						size="sm"
-						disabled={isPending || !url.trim()}
+						disabled={form.isSubmitting || !url.trim()}
 						className="w-full sm:w-auto"
 					>
-						{isPending ? (
+						{form.isSubmitting ? (
 							<Loader2 className="mr-1 size-4 animate-spin" />
 						) : (
 							<Check className="mr-1 size-4" />
 						)}
-						Use URL
+						{t("media.url.use", "Use URL")}
 					</Button>
 				</div>
-				{error && <p className="text-sm text-destructive">{error}</p>}
+				{urlError ? (
+					<p className="text-sm text-destructive">{String(urlError)}</p>
+				) : null}
 			</form>
 		</div>
 	);

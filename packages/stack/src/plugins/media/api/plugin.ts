@@ -5,6 +5,7 @@ import { mediaSchema as dbSchema } from "../db";
 import type { Asset, Folder } from "../types";
 import {
 	AssetListQuerySchema,
+	FolderListQuerySchema,
 	createAssetSchema,
 	updateAssetSchema,
 	createFolderSchema,
@@ -132,7 +133,7 @@ export interface MediaBackendHooks {
 	 * Called before listing folders. Throw to deny access.
 	 */
 	onBeforeListFolders?: (
-		filter: { parentId?: string },
+		filter: { parentId?: string | null },
 		context: MediaApiContext,
 	) => Promise<void> | void;
 
@@ -548,9 +549,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 				"/media/folders",
 				{
 					method: "GET",
-					query: z.object({
-						parentId: z.string().optional(),
-					}),
+					query: FolderListQuerySchema,
 				},
 				async (ctx) => {
 					const filter = { parentId: ctx.query.parentId };

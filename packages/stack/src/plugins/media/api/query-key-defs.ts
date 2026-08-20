@@ -23,19 +23,28 @@ export function assetListDiscriminator(
 	return {
 		folderId: params?.folderId,
 		mimeType: params?.mimeType,
-		query: params?.query,
+		query: params?.query?.trim() || undefined,
 		limit: params?.limit,
 		offset: params?.offset,
 	};
 }
 
+export type FolderListDiscriminator = "all" | "root" | string;
+
+export function folderListDiscriminator(
+	parentId?: string | null,
+): FolderListDiscriminator {
+	if (parentId === undefined) return "all";
+	return parentId === null ? "root" : parentId;
+}
+
 /** Full query key builders — use these with `queryClient.setQueryData()`. */
 export const MEDIA_QUERY_KEYS = {
 	assetsList: (params?: AssetListParams) =>
-		["media", "assets", "list", assetListDiscriminator(params)] as const,
+		["mediaAssets", "list", assetListDiscriminator(params)] as const,
 
-	assetDetail: (id: string) => ["media", "assets", "detail", id] as const,
+	assetDetail: (id: string) => ["mediaAssets", "detail", id] as const,
 
 	foldersList: (parentId?: string | null) =>
-		["media", "folders", "list", parentId ?? "root"] as const,
+		["mediaFolders", "list", folderListDiscriminator(parentId)] as const,
 };

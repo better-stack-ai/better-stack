@@ -1,17 +1,25 @@
 "use client";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useDeleteAsset, useUploadAsset } from "../../hooks/use-media";
 import { Button } from "@workspace/ui/components/button";
 import { Upload, Loader2 } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
-import { toast } from "sonner";
-import { usePluginOverrides } from "@btst/stack/context";
+import {
+	CanAccess,
+	useCan,
+	useNotify,
+	usePluginOverrides,
+	useTranslate,
+} from "@btst/stack/context";
+import { useListState, type ListStateSchema } from "@btst/stack/client";
 import type { MediaPluginOverrides } from "../../overrides";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { BrowseTab } from "../media-picker/browse-tab";
 import { FolderTree } from "../media-picker/folder-tree";
 
 export function LibraryPage() {
+	const t = useTranslate();
+	const notify = useNotify();
 	const overrides = usePluginOverrides<
 		MediaPluginOverrides,
 		Partial<MediaPluginOverrides>
@@ -32,35 +40,79 @@ export function LibraryPage() {
 		},
 	});
 
-	const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+	const [{ folder, q: search }, setListState] = useListState("media-library", {
+		folder: { type: "string", default: "" },
+		q: { type: "string", default: "", history: "replace" },
+	} as const satisfies ListStateSchema);
+	const selectedFolder = folder || null;
+	const [searchInput, setSearchInput] = useState(search);
+	const lastSyncedSearch = useRef(search);
+
+	useEffect(() => {
+		if (search !== lastSyncedSearch.current) {
+			lastSyncedSearch.current = search;
+			setSearchInput(search);
+		}
+	}, [search]);
+
+	useEffect(() => {
+		if (searchInput === search) return;
+		const timeout = setTimeout(() => {
+			lastSyncedSearch.current = searchInput;
+			setListState({ q: searchInput });
+		}, 300);
+		return () => clearTimeout(timeout);
+	}, [searchInput, search, setListState]);
+
+	const setSelectedFolder = useCallback(
+		(id: string | null) => setListState({ folder: id ?? "" }),
+		[setListState],
+	);
 	const [dragging, setDragging] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const { mutateAsync: uploadAsset, isPending: isUploading } = useUploadAsset();
 	const { mutateAsync: deleteAsset } = useDeleteAsset();
 	const { apiBaseURL = "" } = overrides;
+	const { can: canCreateAsset } = useCan({
+		resource: "media:asset",
+		action: "create",
+	});
 
 	const handleUpload = useCallback(
 		async (files: FileList | File[]) => {
+			if (!canCreateAsset) return;
 			const arr = Array.from(files);
 			for (const file of arr) {
 				try {
 					await uploadAsset({ file, folderId: selectedFolder ?? undefined });
-					toast.success(`Uploaded ${file.name}`);
+					notify.success(
+						t("media.toasts.uploadSuccess", "Uploaded {{filename}}", {
+							filename: file.name,
+						}),
+					);
 				} catch (err) {
-					toast.error(err instanceof Error ? err.message : "Upload failed");
+					notify.error(
+						err instanceof Error
+							? err.message
+							: t("media.toasts.uploadError", "Upload failed"),
+					);
 				}
 			}
 		},
-		[selectedFolder, uploadAsset],
+		[canCreateAsset, notify, selectedFolder, t, uploadAsset],
 	);
 
 	const handleDelete = async (id: string) => {
-		if (!confirm("Delete this asset?")) return;
+		if (!confirm(t("media.assets.deleteConfirm", "Delete this asset?"))) return;
 		try {
 			await deleteAsset(id);
-			toast.success("Deleted");
+			notify.success(t("media.toasts.deleteSuccess", "Asset deleted"));
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : "Delete failed");
+			notify.error(
+				err instanceof Error
+					? err.message
+					: t("media.toasts.deleteError", "Delete failed"),
+			);
 		}
 	};
 
@@ -76,11 +128,13 @@ export function LibraryPage() {
 					dragging && "ring-2 ring-inset ring-ring",
 				)}
 				onDragOver={(e) => {
+					if (!canCreateAsset) return;
 					e.preventDefault();
 					setDragging(true);
 				}}
 				onDragLeave={() => setDragging(false)}
 				onDrop={(e) => {
+					if (!canCreateAsset) return;
 					e.preventDefault();
 					setDragging(false);
 					void handleUpload(e.dataTransfer.files);
@@ -88,34 +142,38 @@ export function LibraryPage() {
 			>
 				{/* Toolbar */}
 				<div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-end">
-					<Button
-						size="sm"
-						onClick={() => fileInputRef.current?.click()}
-						disabled={isUploading}
-						className="w-full sm:w-auto"
-					>
-						{isUploading ? (
-							<Loader2 className="mr-2 size-3.5 animate-spin" />
-						) : (
-							<Upload className="mr-2 size-3.5" />
-						)}
-						Upload
-					</Button>
-					<input
-						ref={fileInputRef}
-						type="file"
-						multiple
-						className="hidden"
-						onChange={(e) => e.target.files && handleUpload(e.target.files)}
-					/>
+					<CanAccess resource="media:asset" action="create">
+						<Button
+							size="sm"
+							onClick={() => fileInputRef.current?.click()}
+							disabled={isUploading}
+							className="w-full sm:w-auto"
+						>
+							{isUploading ? (
+								<Loader2 className="mr-2 size-3.5 animate-spin" />
+							) : (
+								<Upload className="mr-2 size-3.5" />
+							)}
+							{t("media.actions.upload", "Upload")}
+						</Button>
+						<input
+							ref={fileInputRef}
+							type="file"
+							multiple
+							className="hidden"
+							onChange={(e) => e.target.files && handleUpload(e.target.files)}
+						/>
+					</CanAccess>
 				</div>
 
 				{/* Drop overlay */}
-				{dragging && (
+				{dragging && canCreateAsset && (
 					<div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-background/80">
 						<div className="rounded-lg border-2 border-dashed border-ring p-8 text-center">
 							<Upload className="mx-auto mb-2 size-10 text-ring" />
-							<p className="font-medium">Drop files to upload</p>
+							<p className="font-medium">
+								{t("media.upload.dropFiles", "Drop files to upload")}
+							</p>
 						</div>
 					</div>
 				)}
@@ -123,9 +181,15 @@ export function LibraryPage() {
 				<div className="flex-1 min-h-0 p-3 sm:p-4">
 					<BrowseTab
 						folderId={selectedFolder}
+						search={searchInput}
+						searchQuery={search}
+						onSearchChange={setSearchInput}
 						onDelete={handleDelete}
 						apiBaseURL={apiBaseURL}
-						emptyMessage="No files yet. Drag & drop or click Upload."
+						emptyMessage={t(
+							"media.assets.emptyLibrary",
+							"No files yet. Drag & drop or click Upload.",
+						)}
 					/>
 				</div>
 			</div>
