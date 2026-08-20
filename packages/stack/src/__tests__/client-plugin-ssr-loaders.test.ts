@@ -15,6 +15,9 @@ import { createUIBuilderQueryKeys } from "../plugins/ui-builder/query-keys";
 import { commentsClientPlugin } from "../plugins/comments/client";
 import type { CommentsApiRouter } from "../plugins/comments/api";
 import { createCommentsQueryKeys } from "../plugins/comments/query-keys";
+import { aiChatClientPlugin } from "../plugins/ai-chat/client";
+import type { AiChatApiRouter } from "../plugins/ai-chat/api";
+import { createAiChatQueryKeys } from "../plugins/ai-chat/query-keys";
 
 const API_BASE_URL = "http://localhost:3000";
 const API_BASE_PATH = "/api/data";
@@ -320,5 +323,76 @@ describe("client plugin SSR loaders", () => {
 		expect(errorArg).toBeInstanceOf(Error);
 		expect((errorArg as Error).message).toBe(apiErrorMessage);
 		expect(contextArg).toMatchObject({ currentUserId });
+	});
+
+	it("AI Chat list loader seeds a sanitized query error when a hook throws", async () => {
+		const queryClient = new QueryClient();
+		const plugin = aiChatClientPlugin({
+			apiBaseURL: API_BASE_URL,
+			apiBasePath: API_BASE_PATH,
+			siteBaseURL: SITE_BASE_URL,
+			siteBasePath: SITE_BASE_PATH,
+			queryClient,
+			headers: TEST_HEADERS,
+			hooks: {
+				beforeLoadConversations: () => {
+					throw new Error("private loader detail");
+				},
+			},
+		});
+
+		await plugin.routes().chat().loader?.();
+
+		const client = createApiClient<AiChatApiRouter>({
+			baseURL: API_BASE_URL,
+			basePath: API_BASE_PATH,
+		});
+		const query = createAiChatQueryKeys(
+			client,
+			TEST_HEADERS,
+		).conversations.list();
+		expect(getErrorMessage(queryClient, query.queryKey)).toBe(
+			SSR_LOADER_ERROR_MESSAGE,
+		);
+	});
+
+	it("AI Chat detail loader seeds sanitized detail and list errors", async () => {
+		const queryClient = new QueryClient();
+		const id = "conv-1";
+		const plugin = aiChatClientPlugin({
+			apiBaseURL: API_BASE_URL,
+			apiBasePath: API_BASE_PATH,
+			siteBaseURL: SITE_BASE_URL,
+			siteBasePath: SITE_BASE_PATH,
+			queryClient,
+			headers: TEST_HEADERS,
+			hooks: {
+				beforeLoadConversation: () => {
+					throw new Error("private conversation detail");
+				},
+			},
+		});
+
+		const routes = plugin.routes();
+		const chatConversation = (
+			routes as unknown as {
+				chatConversation: (args: { params: { id: string } }) => {
+					loader?: () => Promise<void>;
+				};
+			}
+		).chatConversation;
+		await chatConversation({ params: { id } }).loader?.();
+
+		const client = createApiClient<AiChatApiRouter>({
+			baseURL: API_BASE_URL,
+			basePath: API_BASE_PATH,
+		});
+		const queries = createAiChatQueryKeys(client, TEST_HEADERS);
+		expect(
+			getErrorMessage(queryClient, queries.conversations.detail(id).queryKey),
+		).toBe(SSR_LOADER_ERROR_MESSAGE);
+		expect(
+			getErrorMessage(queryClient, queries.conversations.list().queryKey),
+		).toBe(SSR_LOADER_ERROR_MESSAGE);
 	});
 });

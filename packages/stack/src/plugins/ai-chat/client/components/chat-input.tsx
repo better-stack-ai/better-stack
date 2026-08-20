@@ -5,11 +5,10 @@ import { Button } from "@workspace/ui/components/button";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { Send, Paperclip, X, Loader2, FileText } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
-import { toast } from "sonner";
-import { usePluginOverrides } from "@btst/stack/context";
+import { useNotify, usePluginOverrides } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../overrides";
 import { DEFAULT_ALLOWED_FILE_TYPES, FILE_TYPE_MIME_MAP } from "../overrides";
-import { AI_CHAT_LOCALIZATION } from "../localization";
+import { useAiChatTranslation } from "../localization";
 import type { FormEvent } from "react";
 
 /** Represents an attached file with metadata */
@@ -58,7 +57,8 @@ export function ChatInput({
 		{},
 	);
 
-	const localization = { ...AI_CHAT_LOCALIZATION, ...customLocalization };
+	const notify = useNotify();
+	const tr = useAiChatTranslation(customLocalization);
 
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [internalFiles, setInternalFiles] = useState<AttachedFile[]>([]);
@@ -136,7 +136,13 @@ export function ChatInput({
 		if (!file) return;
 
 		if (file.size > MAX_FILE_SIZE) {
-			toast.error(localization.FILE_UPLOAD_ERROR_TOO_LARGE);
+			notify.error(
+				tr(
+					"FILE_UPLOAD_ERROR_TOO_LARGE",
+					"aiChat.files.tooLarge",
+					"File must be less than 10MB",
+				),
+			);
 			return;
 		}
 
@@ -146,10 +152,22 @@ export function ChatInput({
 				setIsUploading(true);
 				const url = await uploadFile(file);
 				addFile({ url, mediaType: file.type, filename: file.name });
-				toast.success(localization.FILE_UPLOAD_SUCCESS);
+				notify.success(
+					tr(
+						"FILE_UPLOAD_SUCCESS",
+						"aiChat.files.uploadSuccess",
+						"File attached",
+					),
+				);
 			} catch (error) {
 				console.error("Failed to upload file:", error);
-				toast.error(localization.FILE_UPLOAD_FAILURE);
+				notify.error(
+					tr(
+						"FILE_UPLOAD_FAILURE",
+						"aiChat.files.uploadFailure",
+						"Failed to attach file",
+					),
+				);
 			} finally {
 				setIsUploading(false);
 			}
@@ -163,7 +181,13 @@ export function ChatInput({
 				setIsUploading(false);
 			};
 			reader.onerror = () => {
-				toast.error(localization.FILE_UPLOAD_FAILURE);
+				notify.error(
+					tr(
+						"FILE_UPLOAD_FAILURE",
+						"aiChat.files.uploadFailure",
+						"Failed to attach file",
+					),
+				);
 				setIsUploading(false);
 			};
 			reader.readAsDataURL(file);
@@ -221,6 +245,11 @@ export function ChatInput({
 								type="button"
 								onClick={() => removeFile(index)}
 								className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity"
+								aria-label={tr(
+									"FILE_REMOVE",
+									"aiChat.files.remove",
+									"Remove file",
+								)}
 							>
 								<X className="h-3 w-3" />
 							</button>
@@ -248,7 +277,11 @@ export function ChatInput({
 							onClick={() => fileInputRef.current?.click()}
 							disabled={isLoading || isUploading}
 							className={cn("shrink-0", isCompact ? "h-8 w-8" : "h-9 w-9")}
-							aria-label={localization.FILE_UPLOAD_BUTTON}
+							aria-label={tr(
+								"FILE_UPLOAD_BUTTON",
+								"aiChat.files.attach",
+								"Attach file",
+							)}
 						>
 							{isUploading ? (
 								<Loader2 className="h-4 w-4 animate-spin" />
@@ -265,7 +298,14 @@ export function ChatInput({
 						value={input}
 						onChange={handleInputChange}
 						onKeyDown={handleKeyDown}
-						placeholder={placeholder || localization.CHAT_PLACEHOLDER}
+						placeholder={
+							placeholder ||
+							tr(
+								"CHAT_PLACEHOLDER",
+								"aiChat.chat.placeholder",
+								"Type a message...",
+							)
+						}
 						className={cn(
 							"resize-none pr-12 max-w-full",
 							isCompact
@@ -284,7 +324,7 @@ export function ChatInput({
 							"absolute right-2 bottom-2",
 							isCompact ? "h-7 w-7" : "h-8 w-8",
 						)}
-						aria-label={localization.CHAT_SEND_BUTTON}
+						aria-label={tr("CHAT_SEND_BUTTON", "aiChat.chat.send", "Send")}
 					>
 						<Send className={cn(isCompact ? "h-3.5 w-3.5" : "h-4 w-4")} />
 					</Button>

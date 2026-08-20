@@ -10,6 +10,12 @@ async function waitForChatReady(page: Page, timeout = 30000) {
 	).toBeVisible({ timeout });
 }
 
+async function gotoChat(page: Page) {
+	await page.goto("/pages/chat");
+	await page.waitForLoadState("networkidle");
+	await expect(page.getByPlaceholder("Type a message...")).toBeVisible();
+}
+
 const hasOpenAiKey =
 	typeof process.env.OPENAI_API_KEY === "string" &&
 	process.env.OPENAI_API_KEY.trim().length > 0;
@@ -28,7 +34,7 @@ test.skip(
 
 test.describe("AI Chat Plugin", () => {
 	test("should render chat page with sidebar", async ({ page }) => {
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		// Verify chat layout is visible
 		await expect(page.locator('[data-testid="chat-layout"]')).toBeVisible();
@@ -47,7 +53,7 @@ test.describe("AI Chat Plugin", () => {
 		page,
 	}) => {
 		// 1. Navigate to the chat page
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		// 2. Verify initial state
 		await expect(page.getByText("Start a conversation...")).toBeVisible();
@@ -57,7 +63,7 @@ test.describe("AI Chat Plugin", () => {
 		const input = page.getByPlaceholder("Type a message...");
 		await input.fill("Hello, world!");
 		// Use Enter key or find the submit button
-		await page.keyboard.press("Enter");
+		await input.press("Enter");
 
 		// 4. Verify user message appears - increase timeout to account for slower state updates
 		// Scope to the chat interface: once the assistant responds, the sidebar also
@@ -83,12 +89,12 @@ test.describe("AI Chat Plugin", () => {
 		page,
 	}) => {
 		// Navigate to the chat page
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		// Send a message to create a conversation
 		const input = page.getByPlaceholder("Type a message...");
 		await input.fill("Test message for sidebar");
-		await page.keyboard.press("Enter");
+		await input.press("Enter");
 
 		// Wait for the message to be sent and processed
 		await expect(page.getByText("Test message for sidebar")).toBeVisible({
@@ -111,11 +117,11 @@ test.describe("AI Chat Plugin", () => {
 
 	test("should navigate to existing conversation", async ({ page }) => {
 		// First create a conversation
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		const input = page.getByPlaceholder("Type a message...");
 		await input.fill("Navigation test message");
-		await page.keyboard.press("Enter");
+		await input.press("Enter");
 
 		// Wait for response
 		await expect(
@@ -145,6 +151,69 @@ test.describe("AI Chat Plugin", () => {
 		});
 	});
 
+	test("should rename and delete a conversation from the sidebar", async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width: 1280, height: 800 });
+		const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+		const initialTitle = `Manage conversation ${runId}`;
+		const renamedTitle = `Renamed conversation ${runId}`;
+
+		await gotoChat(page);
+		const input = page.getByPlaceholder("Type a message...");
+		const chatInterface = page.locator('[data-testid="chat-interface"]');
+		await input.fill(initialTitle);
+		await input.press("Enter");
+		await expect(
+			chatInterface.getByText(initialTitle, { exact: true }),
+		).toBeVisible({ timeout: 30000 });
+		await page.waitForURL(/\/pages\/chat\/[a-zA-Z0-9-]+/, {
+			timeout: 45000,
+		});
+		await waitForChatReady(page, 45000);
+		// Reload so the route-level conversationId and sidebar selection are in sync.
+		await page.reload();
+
+		const sidebar = page.locator('[data-testid="chat-sidebar"]');
+		const initialRow = sidebar
+			.locator(".group")
+			.filter({ hasText: initialTitle });
+		await expect(initialRow).toBeVisible({ timeout: 10000 });
+		await initialRow.hover();
+		await initialRow
+			.getByRole("button", { name: "Conversation actions" })
+			.click();
+		await page.getByRole("menuitem", { name: "Rename" }).click();
+
+		const renameDialog = page.getByRole("dialog");
+		const renameInput = page.getByPlaceholder("Enter conversation name");
+		await renameInput.fill(renamedTitle);
+		await page.getByRole("button", { name: "Save", exact: true }).click();
+		await expect(sidebar.getByText(renamedTitle, { exact: true })).toBeVisible({
+			timeout: 10000,
+		});
+		await expect(renameDialog).toBeHidden({ timeout: 10000 });
+		await expect(page.locator("body")).not.toHaveCSS("pointer-events", "none", {
+			timeout: 10000,
+		});
+
+		const renamedRow = sidebar
+			.locator(".group")
+			.filter({ hasText: renamedTitle });
+		await renamedRow.hover();
+		await renamedRow
+			.getByRole("button", { name: "Conversation actions" })
+			.click();
+		await page.getByRole("menuitem", { name: "Delete" }).click();
+		const alert = page.getByRole("alertdialog");
+		await alert.getByRole("button", { name: "Delete", exact: true }).click();
+
+		await page.waitForURL("/pages/chat", { timeout: 10000 });
+		await expect(sidebar.getByText(renamedTitle, { exact: true })).toHaveCount(
+			0,
+		);
+	});
+
 	test("should keep all messages in the same conversation", async ({
 		page,
 	}) => {
@@ -160,12 +229,12 @@ test.describe("AI Chat Plugin", () => {
 		const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 		const firstMessage = `First msg in conv ${runId}`;
 
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		// Send first message
 		const input = page.getByPlaceholder("Type a message...");
 		await input.fill(firstMessage);
-		await page.keyboard.press("Enter");
+		await input.press("Enter");
 
 		// Wait for first AI response
 		await expect(
@@ -179,7 +248,7 @@ test.describe("AI Chat Plugin", () => {
 
 		// Send second message
 		await input.fill("Second message in same conversation");
-		await page.keyboard.press("Enter");
+		await input.press("Enter");
 
 		// Wait for second AI response (should be 2 prose elements now)
 		await expect(
@@ -211,7 +280,7 @@ test.describe("AI Chat Plugin", () => {
 
 	test("should have new chat button in sidebar", async ({ page }) => {
 		// Navigate to the chat page
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		// Verify the "New chat" button exists in the sidebar
 		await expect(
@@ -226,10 +295,10 @@ test.describe("AI Chat Plugin", () => {
 		await page.setViewportSize({ width: 1280, height: 800 });
 
 		// Create a conversation
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 		const input = page.getByPlaceholder("Type a message...");
 		await input.fill("New chat navigation test");
-		await page.keyboard.press("Enter");
+		await input.press("Enter");
 
 		// Wait for AI response + navigation to conversation URL
 		await expect(
@@ -260,7 +329,7 @@ test.describe("AI Chat Plugin", () => {
 		// Ensure desktop layout so sidebar is visible
 		await page.setViewportSize({ width: 1280, height: 800 });
 
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		// Type a draft message but do not send it
 		const input = page.getByPlaceholder("Type a message...");
@@ -278,7 +347,7 @@ test.describe("AI Chat Plugin", () => {
 		// Set desktop viewport
 		await page.setViewportSize({ width: 1280, height: 800 });
 
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		// Find the sidebar toggle button (desktop only)
 		const toggleButton = page
@@ -298,7 +367,7 @@ test.describe("AI Chat Plugin", () => {
 		// Set mobile viewport
 		await page.setViewportSize({ width: 375, height: 667 });
 
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		// Find and click the mobile menu button
 		const menuButton = page.locator('[aria-label="Open menu"]');
@@ -320,7 +389,7 @@ test.describe("AI Chat Plugin - Widget Mode", () => {
 	}) => {
 		// This test assumes the chat interface adapts based on container/props
 		// In a real widget scenario, you'd navigate to a widget-specific route
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		// Verify the chat interface is functional
 		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
@@ -331,7 +400,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 	test("should show file upload button in authenticated mode", async ({
 		page,
 	}) => {
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		// Verify the file upload button is visible (paperclip icon)
 		await expect(
@@ -340,7 +409,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 	});
 
 	test("should upload and attach an image file", async ({ page }) => {
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		// Wait for chat interface to be fully rendered
 		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
@@ -372,7 +441,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 	});
 
 	test("should upload and attach a text file", async ({ page }) => {
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		// Wait for chat interface to be fully rendered
 		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
@@ -400,7 +469,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 	test("should remove attached file when clicking remove button", async ({
 		page,
 	}) => {
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		// Wait for chat interface to be fully rendered
 		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
@@ -433,7 +502,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 	});
 
 	test("should send message with attached file", async ({ page }) => {
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		// Wait for chat interface to be fully rendered
 		await expect(page.locator('[data-testid="chat-interface"]')).toBeVisible();
@@ -457,7 +526,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		// Type a message and send
 		const input = page.getByPlaceholder("Type a message...");
 		await input.fill("Here is a file for you");
-		await page.keyboard.press("Enter");
+		await input.press("Enter");
 
 		// Verify user message appears
 		await expect(page.getByText("Here is a file for you")).toBeVisible({
@@ -476,10 +545,11 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 	});
 
 	test("should clear attachments after sending", async ({ page }) => {
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		// Upload a test image file
 		const fileInput = page.locator('input[type="file"]');
+		await expect(fileInput).toBeAttached({ timeout: 5000 });
 		const testImageBase64 =
 			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 		await fileInput.setInputFiles({
@@ -496,7 +566,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 		// Type a message and send
 		const input = page.getByPlaceholder("Type a message...");
 		await input.fill("Please analyze this image");
-		await page.keyboard.press("Enter");
+		await input.press("Enter");
 
 		// Wait for the user message to appear (confirming send worked)
 		await expect(page.getByText("Please analyze this image")).toBeVisible({
@@ -512,9 +582,10 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 	});
 
 	test("should allow multiple image uploads", async ({ page }) => {
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		const fileInput = page.locator('input[type="file"]');
+		await expect(fileInput).toBeAttached({ timeout: 5000 });
 		const testImageBase64 =
 			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
@@ -548,14 +619,14 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 	test("should retry AI response and maintain correct message order", async ({
 		page,
 	}) => {
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		const chatInterface = page.locator('[data-testid="chat-interface"]');
 
 		// Send a message
 		const input = page.getByPlaceholder("Type a message...");
 		await input.fill("Say exactly: FIRST RESPONSE");
-		await page.keyboard.press("Enter");
+		await input.press("Enter");
 
 		// Wait for user message and AI response within chat interface
 		await expect(
@@ -615,14 +686,14 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 	});
 
 	test("should edit user message and persist correctly", async ({ page }) => {
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		const chatInterface = page.locator('[data-testid="chat-interface"]');
 
 		// Send first message
 		const input = page.getByPlaceholder("Type a message...");
 		await input.fill("Original message content");
-		await page.keyboard.press("Enter");
+		await input.press("Enter");
 
 		// Wait for user message and AI response within chat interface
 		await expect(
@@ -703,14 +774,14 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 	test("should handle edit in middle of conversation and persist correctly", async ({
 		page,
 	}) => {
-		await page.goto("/pages/chat");
+		await gotoChat(page);
 
 		const chatInterface = page.locator('[data-testid="chat-interface"]');
 		const input = page.getByPlaceholder("Type a message...");
 
 		// Send first message
 		await input.fill("First question");
-		await page.keyboard.press("Enter");
+		await input.press("Enter");
 		await expect(chatInterface.getByText("First question")).toBeVisible({
 			timeout: 30000,
 		});
@@ -723,7 +794,7 @@ test.describe("AI Chat Plugin - File Uploads", () => {
 
 		// Send second message
 		await input.fill("Second question");
-		await page.keyboard.press("Enter");
+		await input.press("Enter");
 		await expect(chatInterface.getByText("Second question")).toBeVisible({
 			timeout: 30000,
 		});

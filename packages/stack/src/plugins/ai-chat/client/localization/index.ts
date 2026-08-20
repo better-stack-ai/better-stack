@@ -1,3 +1,8 @@
+"use client";
+
+import { useCallback } from "react";
+import { useTranslate, type TranslateFn } from "@btst/stack/context";
+
 /**
  * AI Chat plugin localization strings
  */
@@ -25,6 +30,7 @@ export interface AiChatLocalization {
 	// Conversation actions
 	CONVERSATION_RENAME: string;
 	CONVERSATION_RENAME_PLACEHOLDER: string;
+	CONVERSATION_RENAME_DESCRIPTION: string;
 	CONVERSATION_RENAME_SAVE: string;
 	CONVERSATION_RENAME_CANCEL: string;
 	CONVERSATION_DELETE: string;
@@ -32,6 +38,11 @@ export interface AiChatLocalization {
 	CONVERSATION_DELETE_CONFIRM_DESCRIPTION: string;
 	CONVERSATION_DELETE_CONFIRM_BUTTON: string;
 	CONVERSATION_DELETE_CANCEL: string;
+	CONVERSATION_RENAME_SUCCESS: string;
+	CONVERSATION_RENAME_FAILURE: string;
+	CONVERSATION_DELETE_SUCCESS: string;
+	CONVERSATION_DELETE_FAILURE: string;
+	CONVERSATION_TITLE_REQUIRED: string;
 
 	// Image upload (legacy)
 	IMAGE_UPLOAD_BUTTON: string;
@@ -46,6 +57,10 @@ export interface AiChatLocalization {
 	FILE_UPLOAD_ERROR_TOO_LARGE: string;
 	FILE_UPLOAD_SUCCESS: string;
 	FILE_UPLOAD_FAILURE: string;
+	FILE_REMOVE: string;
+	FILE_FALLBACK_NAME: string;
+	IMAGE_ATTACHED_ALT: string;
+	IMAGE_GENERATED_ALT: string;
 
 	// Timestamps
 	TIME_JUST_NOW: string;
@@ -67,6 +82,26 @@ export interface AiChatLocalization {
 	A11Y_ASSISTANT_MESSAGE: string;
 	A11Y_COPY_CODE: string;
 	A11Y_CODE_COPIED: string;
+	A11Y_CONVERSATION_ACTIONS: string;
+	A11Y_CHAT_TITLE: string;
+	A11Y_CLEAR_CHAT: string;
+	A11Y_CLOSE_CHAT: string;
+	A11Y_OPEN_CHAT: string;
+	A11Y_OPEN_MENU: string;
+	A11Y_CLOSE_SIDEBAR: string;
+	A11Y_OPEN_SIDEBAR: string;
+
+	// Tool calls
+	TOOL_STATUS_RUNNING: string;
+	TOOL_STATUS_EXECUTING: string;
+	TOOL_STATUS_ERROR: string;
+	TOOL_STATUS_COMPLETE: string;
+	TOOL_STATUS_PENDING: string;
+	TOOL_INPUT: string;
+	TOOL_OUTPUT: string;
+	TOOL_ID: string;
+	TOOL_EXECUTION_FAILED: string;
+	TOOL_HANDLER_MISSING: string;
 }
 
 /**
@@ -98,6 +133,7 @@ export const AI_CHAT_LOCALIZATION: AiChatLocalization = {
 	// Conversation actions
 	CONVERSATION_RENAME: "Rename",
 	CONVERSATION_RENAME_PLACEHOLDER: "Enter conversation name",
+	CONVERSATION_RENAME_DESCRIPTION: "Enter a new title for this conversation.",
 	CONVERSATION_RENAME_SAVE: "Save",
 	CONVERSATION_RENAME_CANCEL: "Cancel",
 	CONVERSATION_DELETE: "Delete",
@@ -106,6 +142,11 @@ export const AI_CHAT_LOCALIZATION: AiChatLocalization = {
 		"Are you sure you want to delete this conversation? This action cannot be undone.",
 	CONVERSATION_DELETE_CONFIRM_BUTTON: "Delete",
 	CONVERSATION_DELETE_CANCEL: "Cancel",
+	CONVERSATION_RENAME_SUCCESS: "Conversation renamed",
+	CONVERSATION_RENAME_FAILURE: "Failed to rename conversation",
+	CONVERSATION_DELETE_SUCCESS: "Conversation deleted",
+	CONVERSATION_DELETE_FAILURE: "Failed to delete conversation",
+	CONVERSATION_TITLE_REQUIRED: "Title is required",
 
 	// Image upload (legacy)
 	IMAGE_UPLOAD_BUTTON: "Attach image",
@@ -120,6 +161,10 @@ export const AI_CHAT_LOCALIZATION: AiChatLocalization = {
 	FILE_UPLOAD_ERROR_TOO_LARGE: "File must be less than 10MB",
 	FILE_UPLOAD_SUCCESS: "File attached",
 	FILE_UPLOAD_FAILURE: "Failed to attach file",
+	FILE_REMOVE: "Remove file",
+	FILE_FALLBACK_NAME: "File",
+	IMAGE_ATTACHED_ALT: "Attached image {count}",
+	IMAGE_GENERATED_ALT: "Image {count}",
 
 	// Timestamps
 	TIME_JUST_NOW: "Just now",
@@ -141,6 +186,27 @@ export const AI_CHAT_LOCALIZATION: AiChatLocalization = {
 	A11Y_ASSISTANT_MESSAGE: "AI response",
 	A11Y_COPY_CODE: "Copy code",
 	A11Y_CODE_COPIED: "Code copied",
+	A11Y_CONVERSATION_ACTIONS: "Conversation actions",
+	A11Y_CHAT_TITLE: "AI Chat",
+	A11Y_CLEAR_CHAT: "Clear chat",
+	A11Y_CLOSE_CHAT: "Close chat",
+	A11Y_OPEN_CHAT: "Open chat",
+	A11Y_OPEN_MENU: "Open menu",
+	A11Y_CLOSE_SIDEBAR: "Close sidebar",
+	A11Y_OPEN_SIDEBAR: "Open sidebar",
+
+	// Tool calls
+	TOOL_STATUS_RUNNING: "Running...",
+	TOOL_STATUS_EXECUTING: "Executing...",
+	TOOL_STATUS_ERROR: "Error",
+	TOOL_STATUS_COMPLETE: "Complete",
+	TOOL_STATUS_PENDING: "Pending",
+	TOOL_INPUT: "Input",
+	TOOL_OUTPUT: "Output",
+	TOOL_ID: "ID: {id}",
+	TOOL_EXECUTION_FAILED: "Tool execution failed",
+	TOOL_HANDLER_MISSING:
+		'No client-side handler registered for tool "{toolName}". The page context may have changed while the response was streaming.',
 };
 
 /**
@@ -153,4 +219,48 @@ export function formatLocalized(
 	return template.replace(/\{(\w+)\}/g, (match, key) => {
 		return values[key]?.toString() ?? match;
 	});
+}
+
+/**
+ * Resolves AI Chat strings with the legacy override taking precedence over
+ * the StackProvider i18n catalog. Legacy `{name}` placeholders remain
+ * supported while catalog defaults use `{{name}}` interpolation.
+ */
+export function resolveAiChatString(
+	t: TranslateFn,
+	localization: Partial<AiChatLocalization> | undefined,
+	legacyKey: keyof AiChatLocalization,
+	key: string,
+	defaultValue: string,
+	params?: Record<string, string | number>,
+): string {
+	const legacyValue = localization?.[legacyKey];
+	if (legacyValue !== undefined) {
+		return params ? formatLocalized(legacyValue, params) : legacyValue;
+	}
+	return t(key, defaultValue, params);
+}
+
+/** Client hook for resolving AI Chat catalog strings. */
+export function useAiChatTranslation(
+	localization?: Partial<AiChatLocalization>,
+) {
+	const t = useTranslate();
+	return useCallback(
+		(
+			legacyKey: keyof AiChatLocalization,
+			key: string,
+			defaultValue: string,
+			params?: Record<string, string | number>,
+		) =>
+			resolveAiChatString(
+				t,
+				localization,
+				legacyKey,
+				key,
+				defaultValue,
+				params,
+			),
+		[t, localization],
+	);
 }

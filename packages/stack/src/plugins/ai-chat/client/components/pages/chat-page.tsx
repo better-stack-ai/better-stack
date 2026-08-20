@@ -19,7 +19,7 @@ export interface ChatPageComponentProps {
 
 // Exported wrapped component with error and loading boundaries
 export function ChatPageComponent({ conversationId }: ChatPageComponentProps) {
-	const { onRouteError } = usePluginOverrides<
+	const { mode, onRouteError } = usePluginOverrides<
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
 	>("ai-chat", {});
@@ -27,6 +27,15 @@ export function ChatPageComponent({ conversationId }: ChatPageComponentProps) {
 	return (
 		<ComposedRoute
 			path={conversationId ? `/chat/${conversationId}` : "/chat"}
+			permission={
+				mode === "public"
+					? undefined
+					: {
+							resource: "ai-chat:conversation",
+							action: "read",
+							params: conversationId ? { id: conversationId } : undefined,
+						}
+			}
 			PageComponent={ChatPage}
 			ErrorComponent={DefaultError}
 			LoadingComponent={ChatLoading}

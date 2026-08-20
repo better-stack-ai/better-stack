@@ -78,7 +78,7 @@ export function useResourceMutationForDef(
 			}
 			return runResourceMutation(client, def, vars, headers);
 		},
-		onSuccess: async (result) => {
+		onSuccess: async (result, variables) => {
 			if (!def) return;
 
 			// Seed a query cache entry (e.g. detail) from the mutation result
@@ -87,10 +87,35 @@ export function useResourceMutationForDef(
 				const targetName = def.setData.query ?? "detail";
 				const targetDef = resource.queries[targetName];
 				if (keyArgs && targetDef) {
-					queryClient.setQueryData(
-						buildQueryKey(resourceName, targetName, targetDef, keyArgs),
-						result,
+					const key = buildQueryKey(
+						resourceName,
+						targetName,
+						targetDef,
+						keyArgs,
 					);
+					queryClient.setQueryData(key, (previous) =>
+						def.setData?.updater
+							? def.setData.updater(previous, result)
+							: result,
+					);
+				}
+			}
+
+			// Remove a cache entry tied to the successful mutation variables
+			if (def.removeData) {
+				const keyArgs = def.removeData.args(result, variables);
+				const targetName = def.removeData.query ?? "detail";
+				const targetDef = resource.queries[targetName];
+				if (keyArgs && targetDef) {
+					queryClient.removeQueries({
+						queryKey: buildQueryKey(
+							resourceName,
+							targetName,
+							targetDef,
+							keyArgs,
+						),
+						exact: true,
+					});
 				}
 			}
 

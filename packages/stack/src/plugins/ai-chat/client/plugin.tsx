@@ -1,6 +1,8 @@
 import {
 	defineClientPlugin,
 	createApiClient,
+	createSanitizedSSRLoaderError,
+	isConnectionError,
 	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
@@ -9,7 +11,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { AiChatApiRouter } from "../api";
 import { createAiChatQueryKeys } from "../query-keys";
 import type { SerializedConversation, SerializedMessage } from "../types";
-import { ChatLayout } from "./components/chat-layout";
+import { ChatPageComponent } from "./components/pages/chat-page";
 import type { AiChatMode } from "./overrides";
 
 /**
@@ -171,6 +173,12 @@ function createConversationsLoader(config: AiChatClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const client = createApiClient<AiChatApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const queries = createAiChatQueryKeys(client, headers);
+			const listQuery = queries.conversations.list();
 
 			try {
 				// Before hook
@@ -180,14 +188,6 @@ function createConversationsLoader(config: AiChatClientConfig) {
 						"Load prevented by beforeLoadConversations hook",
 					);
 				}
-
-				const client = createApiClient<AiChatApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
-
-				const queries = createAiChatQueryKeys(client, headers);
-				const listQuery = queries.conversations.list();
 
 				await queryClient.prefetchQuery(listQuery);
 
@@ -213,6 +213,21 @@ function createConversationsLoader(config: AiChatClientConfig) {
 					await hooks.onLoadError(error, context);
 				}
 			} catch (error) {
+				if (isConnectionError(error)) {
+					console.warn(
+						"[btst/ai-chat] route.loader() failed — no server running at build time. " +
+							"AI Chat conversation history does not support SSG.",
+					);
+				} else {
+					const errToStore = createSanitizedSSRLoaderError();
+					await queryClient.prefetchQuery({
+						queryKey: listQuery.queryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						retry: false,
+					});
+				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
 				}
@@ -235,6 +250,13 @@ function createConversationLoader(id: string, config: AiChatClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const client = createApiClient<AiChatApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const queries = createAiChatQueryKeys(client, headers);
+			const conversationQuery = queries.conversations.detail(id);
+			const listQuery = queries.conversations.list();
 
 			try {
 				// Before hook
@@ -245,17 +267,7 @@ function createConversationLoader(id: string, config: AiChatClientConfig) {
 					);
 				}
 
-				const client = createApiClient<AiChatApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
-
-				const queries = createAiChatQueryKeys(client, headers);
-
 				// Prefetch both the conversation and the conversations list
-				const conversationQuery = queries.conversations.detail(id);
-				const listQuery = queries.conversations.list();
-
 				await Promise.all([
 					queryClient.prefetchQuery(conversationQuery),
 					queryClient.prefetchQuery(listQuery),
@@ -285,6 +297,30 @@ function createConversationLoader(id: string, config: AiChatClientConfig) {
 					await hooks.onLoadError(error, context);
 				}
 			} catch (error) {
+				if (isConnectionError(error)) {
+					console.warn(
+						"[btst/ai-chat] route.loader() failed — no server running at build time. " +
+							"AI Chat conversations do not support SSG.",
+					);
+				} else {
+					const errToStore = createSanitizedSSRLoaderError();
+					await Promise.all([
+						queryClient.prefetchQuery({
+							queryKey: conversationQuery.queryKey,
+							queryFn: () => {
+								throw errToStore;
+							},
+							retry: false,
+						}),
+						queryClient.prefetchQuery({
+							queryKey: listQuery.queryKey,
+							queryFn: () => {
+								throw errToStore;
+							},
+							retry: false,
+						}),
+					]);
+				}
 				if (hooks?.onLoadError) {
 					await hooks.onLoadError(error as Error, context);
 				}
@@ -397,13 +433,7 @@ export const aiChatClientPlugin = (config: AiChatClientConfig) => {
 					{
 						// Chat home - simple chat interface without history
 						chat: defineRoute("/chat", {
-							page: () => (
-								<ChatLayout
-									apiBaseURL={config.apiBaseURL}
-									apiBasePath={config.apiBasePath}
-									showSidebar={false}
-								/>
-							),
+							page: () => <ChatPageComponent />,
 							loader: createConversationsLoader(config),
 							meta: createChatHomeMeta(config),
 						}),
@@ -424,12 +454,7 @@ export const aiChatClientPlugin = (config: AiChatClientConfig) => {
 				{
 					// Chat home - new conversation or list
 					chat: defineRoute("/chat", {
-						page: () => (
-							<ChatLayout
-								apiBaseURL={config.apiBaseURL}
-								apiBasePath={config.apiBasePath}
-							/>
-						),
+						page: () => <ChatPageComponent />,
 						loader: createConversationsLoader(config),
 						meta: createChatHomeMeta(config),
 					}),
@@ -437,11 +462,7 @@ export const aiChatClientPlugin = (config: AiChatClientConfig) => {
 					// Existing conversation
 					chatConversation: defineRoute("/chat/:id", {
 						page: ({ params }) => (
-							<ChatLayout
-								apiBaseURL={config.apiBaseURL}
-								apiBasePath={config.apiBasePath}
-								conversationId={params.id}
-							/>
+							<ChatPageComponent conversationId={params.id} />
 						),
 						loader: ({ params }) =>
 							createConversationLoader(params.id, config)(),

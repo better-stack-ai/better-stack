@@ -48,6 +48,7 @@ async function waitForChatReady(page: Page, timeout = 60000) {
  * that React effects (including the transport setup) have time to flush.
  */
 async function waitForChatInitialized(page: Page) {
+	await page.waitForLoadState("networkidle");
 	// Prefer the semantic status attribute; fall back gracefully after 3 s.
 	const chatLocator = page.locator('[data-testid="chat-interface"]');
 	const ready = chatLocator.and(
