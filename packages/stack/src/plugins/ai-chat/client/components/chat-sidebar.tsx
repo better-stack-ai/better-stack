@@ -249,7 +249,7 @@ export function ChatSidebar({
 											</p>
 										</div>
 									</button>
-									<DropdownMenu>
+									<DropdownMenu modal={false}>
 										<DropdownMenuTrigger asChild>
 											<Button
 												variant="ghost"
