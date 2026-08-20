@@ -145,6 +145,59 @@ test.describe("AI Chat Plugin", () => {
 		});
 	});
 
+	test("should rename and delete a conversation from the sidebar", async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width: 1280, height: 800 });
+		const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+		const initialTitle = `Manage conversation ${runId}`;
+		const renamedTitle = `Renamed conversation ${runId}`;
+
+		await page.goto("/pages/chat");
+		await page.getByPlaceholder("Type a message...").fill(initialTitle);
+		await page.keyboard.press("Enter");
+		await waitForChatReady(page, 45000);
+		await page.waitForURL(/\/pages\/chat\/[a-zA-Z0-9-]+/, {
+			timeout: 10000,
+		});
+		// Reload so the route-level conversationId and sidebar selection are in sync.
+		await page.reload();
+
+		const sidebar = page.locator('[data-testid="chat-sidebar"]');
+		const initialRow = sidebar
+			.locator(".group")
+			.filter({ hasText: initialTitle });
+		await expect(initialRow).toBeVisible({ timeout: 10000 });
+		await initialRow.hover();
+		await initialRow
+			.getByRole("button", { name: "Conversation actions" })
+			.click();
+		await page.getByRole("menuitem", { name: "Rename" }).click();
+
+		const renameInput = page.getByPlaceholder("Enter conversation name");
+		await renameInput.fill(renamedTitle);
+		await page.getByRole("button", { name: "Save", exact: true }).click();
+		await expect(sidebar.getByText(renamedTitle, { exact: true })).toBeVisible({
+			timeout: 10000,
+		});
+
+		const renamedRow = sidebar
+			.locator(".group")
+			.filter({ hasText: renamedTitle });
+		await renamedRow.hover();
+		await renamedRow
+			.getByRole("button", { name: "Conversation actions" })
+			.click();
+		await page.getByRole("menuitem", { name: "Delete" }).click();
+		const alert = page.getByRole("alertdialog");
+		await alert.getByRole("button", { name: "Delete", exact: true }).click();
+
+		await page.waitForURL("/pages/chat", { timeout: 10000 });
+		await expect(sidebar.getByText(renamedTitle, { exact: true })).toHaveCount(
+			0,
+		);
+	});
+
 	test("should keep all messages in the same conversation", async ({
 		page,
 	}) => {

@@ -347,11 +347,11 @@ The AI Chat plugin supports two distinct modes:
 The AI Chat plugin provides the following API endpoints (mounted at your configured `apiBasePath`):
 
 - **POST** `/chat` - Send a message and receive streaming response
-- **GET** `/conversations` - List all conversations (authenticated mode only)
-- **GET** `/conversations/:id` - Get a conversation with messages
-- **POST** `/conversations` - Create a new conversation
-- **PUT** `/conversations/:id` - Update (rename) a conversation
-- **DELETE** `/conversations/:id` - Delete a conversation
+- **GET** `/chat/conversations` - List all conversations (authenticated mode only)
+- **GET** `/chat/conversations/:id` - Get a conversation with messages
+- **POST** `/chat/conversations` - Create a new conversation
+- **PUT** `/chat/conversations/:id` - Rename a conversation; the title is trimmed and must not be empty
+- **DELETE** `/chat/conversations/:id` - Delete a conversation
 
 ### Page Routes
 
@@ -397,7 +397,30 @@ aiChatClientPlugin({
 
 ### Adding Authorization
 
-To add authorization rules and customize behavior, you can use the lifecycle hooks defined in the API Reference section below. These hooks allow you to control access to API endpoints, add logging, and customize the plugin's behavior to fit your application's needs.
+Use the `auth` provider on `StackProvider` for client-side route and control visibility, and backend lifecycle hooks for authoritative API authorization. Authenticated mode uses this permission map:
+
+| Resource | Action | UI covered |
+| --- | --- | --- |
+| `ai-chat:conversation` | `read` | `/chat`, `/chat/:id`, and conversation history |
+| `ai-chat:conversation` | `create` | New chat and the first persisted send |
+| `ai-chat:conversation` | `update` | Continue, retry, edit, and rename; receives `{ id }` when available |
+| `ai-chat:conversation` | `delete` | Delete; receives `{ id }` |
+
+```tsx
+<StackProvider
+  auth={{
+    getIdentity: () => session?.user ?? null,
+    can: ({ resource, action, params }) =>
+      authorizeConversation(resource, action, params?.id),
+    loginPath: "/sign-in",
+  }}
+  // ...
+>
+  {children}
+</StackProvider>
+```
+
+Without an auth provider, permission checks remain permissive for backward compatibility. Public mode intentionally bypasses conversation permission gates because it is stateless; protect the public streaming endpoint with backend rate limits or `onBeforeChat` as needed.
 
 ## API Reference
 
@@ -717,6 +740,7 @@ import {
   useSuspenseConversation,
   useCreateConversation,
   useRenameConversation,
+  useRenameConversationForm,
   useDeleteConversation,
 } from "@btst/stack/plugins/ai-chat/client/hooks"
 ```
@@ -737,6 +761,12 @@ import {
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/hooks/chat-hooks.tsx" name="UseConversationResult" />
 
+### UseRenameConversationFormOptions
+
+<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/hooks/chat-hooks.tsx" name="UseRenameConversationFormOptions" />
+
+`useRenameConversationForm()` trims the submitted title, maps server validation issues to `fieldErrors.title`, sends success and non-field failures through the `StackProvider` `notify` provider, and preserves the conversation detail cache while refreshing the list.
+
 **Example usage:**
 
 ```tsx
@@ -745,6 +775,7 @@ import {
   useConversation,
   useCreateConversation,
   useRenameConversation,
+  useRenameConversationForm,
   useDeleteConversation,
 } from "@btst/stack/plugins/ai-chat/client/hooks"
 
@@ -776,6 +807,35 @@ function ConversationsList() {
   // ... render conversations
 }
 ```
+
+For a custom rename dialog, prefer the form lifecycle over calling the raw mutation directly:
+
+```tsx
+const renameForm = useRenameConversationForm({
+  conversation,
+  onSuccess: () => setOpen(false),
+})
+
+await renameForm.submit({ title })
+
+return renameForm.fieldErrors.title ? (
+  <p role="alert">{renameForm.fieldErrors.title}</p>
+) : null
+```
+
+### Query keys and resource declaration
+
+The server-safe query-key entry point exposes both the factory and the underlying declaration:
+
+```ts
+import {
+  aiChatResources,
+  createAiChatQueryKeys,
+  type AiChatQueryKeys,
+} from "@btst/stack/plugins/ai-chat/query-keys"
+```
+
+The stable keys remain `['conversations', 'list', 'all']` and `['conversations', 'detail', id]`, so existing dehydrated caches and manual invalidations continue to match.
 
 ## Model & Tools Configuration
 
@@ -988,7 +1048,7 @@ overrides={{
 ```
 
 <Callout type="info">
-In public mode, the sidebar is hidden, conversation history is not saved to the database, and only the `/chat` route is available.
+In public mode, the sidebar is hidden, conversation history is not saved to the database, only the `/chat` route is available, and client conversation permission gates are bypassed.
 </Callout>
 
 ### Local Storage Persistence
@@ -1036,9 +1096,9 @@ This pattern enables:
 - **IndexedDB** - Larger storage for long conversations
 - **External state management** - Redux, Zustand, etc.
 
-## Localization
+## Localization and notifications
 
-Customize UI strings by providing a `localization` override:
+All rendered AI Chat copy is routed through the `StackProvider` `i18n` provider with `aiChat.<area>.<name>` keys. The legacy `localization` override remains supported and takes precedence when both are configured:
 
 ```tsx
 overrides={{
@@ -1058,6 +1118,20 @@ overrides={{
 #### AiChatLocalization
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/localization/index.ts" name="AiChatLocalization" />
+
+Rename, delete, and file-upload feedback uses the shared `notify` provider. Field validation and streaming errors remain inline:
+
+```tsx
+<StackProvider
+  notify={{
+    success: (message) => myToast.success(message),
+    error: (message) => myToast.error(message),
+  }}
+  // ...
+>
+  {children}
+</StackProvider>
+```
 
 ## Server-side Data Access
 

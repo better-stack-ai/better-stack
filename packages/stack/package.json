@@ -237,6 +237,16 @@
         "default": "./dist/plugins/ai-chat/client/context/page-ai-context.cjs"
       }
     },
+    "./plugins/ai-chat/query-keys": {
+      "import": {
+        "types": "./dist/plugins/ai-chat/query-keys.d.ts",
+        "default": "./dist/plugins/ai-chat/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ai-chat/query-keys.d.cts",
+        "default": "./dist/plugins/ai-chat/query-keys.cjs"
+      }
+    },
     "./plugins/ai-chat/css": "./dist/plugins/ai-chat/style.css",
     "./plugins/blog/css": "./dist/plugins/blog/style.css",
     "./plugins/cms/api": {
@@ -699,6 +709,9 @@
       ],
       "plugins/ai-chat/client/context": [
         "./dist/plugins/ai-chat/client/context/page-ai-context.d.ts"
+      ],
+      "plugins/ai-chat/query-keys": [
+        "./dist/plugins/ai-chat/query-keys.d.ts"
       ],
       "plugins/cms/api": [
         "./dist/plugins/cms/api/index.d.ts"

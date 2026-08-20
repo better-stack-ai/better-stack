@@ -34,7 +34,7 @@ import type {
 	ToolCallProps,
 	ToolCallState,
 } from "../overrides";
-import { AI_CHAT_LOCALIZATION } from "../localization";
+import { useAiChatTranslation } from "../localization";
 import { ToolCallDisplay } from "./tool-call-display";
 
 // Import shared markdown + syntax highlighting styles (same pattern as blog plugin)
@@ -143,7 +143,7 @@ export function ChatMessage({
 		{},
 	);
 
-	const localization = { ...AI_CHAT_LOCALIZATION, ...customLocalization };
+	const tr = useAiChatTranslation(customLocalization);
 
 	// Use provided Image component or fallback to default
 	const ImageComponent = Image ?? DefaultImage;
@@ -269,8 +269,12 @@ export function ChatMessage({
 			)}
 			aria-label={
 				isUser
-					? localization.A11Y_USER_MESSAGE
-					: localization.A11Y_ASSISTANT_MESSAGE
+					? tr("A11Y_USER_MESSAGE", "aiChat.a11y.userMessage", "Your message")
+					: tr(
+							"A11Y_ASSISTANT_MESSAGE",
+							"aiChat.a11y.assistantMessage",
+							"AI response",
+						)
 			}
 		>
 			{/* Assistant Avatar */}
@@ -310,7 +314,12 @@ export function ChatMessage({
 										>
 											<FileText className="h-4 w-4 shrink-0" />
 											<span className="text-xs truncate max-w-[150px]">
-												{part.filename || "File"}
+												{part.filename ||
+													tr(
+														"FILE_FALLBACK_NAME",
+														"aiChat.files.fallbackName",
+														"File",
+													)}
 											</span>
 										</a>
 									))}
@@ -323,7 +332,15 @@ export function ChatMessage({
 										<ClickableImage
 											key={index}
 											src={part.url}
-											alt={part.filename || `Attached image ${index + 1}`}
+											alt={
+												part.filename ||
+												tr(
+													"IMAGE_ATTACHED_ALT",
+													"aiChat.images.attachedAlt",
+													"Attached image {{count}}",
+													{ count: index + 1 },
+												)
+											}
 											width={150}
 											height={150}
 											className="rounded-md"
@@ -354,7 +371,16 @@ export function ChatMessage({
 											variant="ghost"
 											onClick={handleCancelEdit}
 											className="h-7 w-7 text-primary-foreground hover:bg-primary-foreground/20"
-											title={localization.MESSAGE_CANCEL}
+											title={tr(
+												"MESSAGE_CANCEL",
+												"aiChat.messages.cancel",
+												"Cancel",
+											)}
+											aria-label={tr(
+												"MESSAGE_CANCEL",
+												"aiChat.messages.cancel",
+												"Cancel",
+											)}
 										>
 											<X className="h-4 w-4" />
 										</Button>
@@ -365,7 +391,12 @@ export function ChatMessage({
 											onClick={handleSaveEdit}
 											disabled={!editText.trim()}
 											className="h-7 w-7 text-primary-foreground hover:bg-primary-foreground/20 disabled:opacity-50"
-											title={localization.MESSAGE_SAVE}
+											title={tr("MESSAGE_SAVE", "aiChat.messages.save", "Save")}
+											aria-label={tr(
+												"MESSAGE_SAVE",
+												"aiChat.messages.save",
+												"Save",
+											)}
 										>
 											<Send className="h-4 w-4" />
 										</Button>
@@ -400,7 +431,12 @@ export function ChatMessage({
 										>
 											<FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
 											<span className="text-xs truncate max-w-[150px]">
-												{part.filename || "File"}
+												{part.filename ||
+													tr(
+														"FILE_FALLBACK_NAME",
+														"aiChat.files.fallbackName",
+														"File",
+													)}
 											</span>
 										</a>
 									))}
@@ -413,7 +449,15 @@ export function ChatMessage({
 										<ClickableImage
 											key={index}
 											src={part.url}
-											alt={part.filename || `Image ${index + 1}`}
+											alt={
+												part.filename ||
+												tr(
+													"IMAGE_GENERATED_ALT",
+													"aiChat.images.generatedAlt",
+													"Image {{count}}",
+													{ count: index + 1 },
+												)
+											}
 											width={200}
 											height={200}
 											className="rounded-md"
@@ -495,7 +539,16 @@ export function ChatMessage({
 									variant="ghost"
 									onClick={handleStartEdit}
 									className="h-7 w-7 bg-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
-									title={localization.MESSAGE_EDIT}
+									title={tr(
+										"MESSAGE_EDIT",
+										"aiChat.messages.edit",
+										"Edit message",
+									)}
+									aria-label={tr(
+										"MESSAGE_EDIT",
+										"aiChat.messages.edit",
+										"Edit message",
+									)}
 								>
 									<Pencil className="h-3.5 w-3.5" />
 								</Button>
@@ -511,8 +564,29 @@ export function ChatMessage({
 									className="h-7 w-7 bg-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
 									title={
 										copied
-											? localization.MESSAGE_COPIED
-											: localization.MESSAGE_COPY
+											? tr(
+													"MESSAGE_COPIED",
+													"aiChat.messages.copied",
+													"Copied!",
+												)
+											: tr(
+													"MESSAGE_COPY",
+													"aiChat.messages.copy",
+													"Copy message",
+												)
+									}
+									aria-label={
+										copied
+											? tr(
+													"MESSAGE_COPIED",
+													"aiChat.messages.copied",
+													"Copied!",
+												)
+											: tr(
+													"MESSAGE_COPY",
+													"aiChat.messages.copy",
+													"Copy message",
+												)
 									}
 								>
 									{copied ? (
@@ -529,7 +603,16 @@ export function ChatMessage({
 										onClick={onRetry}
 										disabled={isRetrying}
 										className="h-7 w-7 bg-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50 disabled:opacity-50"
-										title={localization.MESSAGE_RETRY}
+										title={tr(
+											"MESSAGE_RETRY",
+											"aiChat.messages.retry",
+											"Retry",
+										)}
+										aria-label={tr(
+											"MESSAGE_RETRY",
+											"aiChat.messages.retry",
+											"Retry",
+										)}
 									>
 										<RefreshCw
 											className={cn(

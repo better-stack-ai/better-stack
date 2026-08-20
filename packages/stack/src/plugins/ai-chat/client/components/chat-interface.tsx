@@ -13,9 +13,9 @@ import {
 	type UIMessage,
 } from "ai";
 import { cn } from "@workspace/ui/lib/utils";
-import { usePluginOverrides, useBasePath } from "@btst/stack/context";
+import { useCan, usePluginOverrides, useBasePath } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../overrides";
-import { AI_CHAT_LOCALIZATION } from "../localization";
+import { useAiChatTranslation } from "../localization";
 import { createApiClient } from "@btst/stack/plugins/client";
 import type { AiChatApiRouter } from "../../api/plugin";
 import { createAiChatQueryKeys } from "../../query-keys";
@@ -64,7 +64,7 @@ export function ChatInterface({
 	// Read page AI context registered by the current page
 	const pageAIContext = usePageAIContext();
 
-	const localization = { ...AI_CHAT_LOCALIZATION, ...customLocalization };
+	const tr = useAiChatTranslation(customLocalization);
 	const queryClient = useQueryClient();
 
 	const conversationsListQueryKey = useMemo(() => {
@@ -83,6 +83,14 @@ export function ChatInterface({
 	const [currentConversationId, setCurrentConversationId] = useState<
 		string | undefined
 	>(isPublicMode ? undefined : id);
+	const { can: canPersistConversation, isPending: isPermissionPending } =
+		useCan({
+			resource: "ai-chat:conversation",
+			action: currentConversationId ? "update" : "create",
+			params: currentConversationId ? { id: currentConversationId } : undefined,
+		});
+	const canWrite =
+		isPublicMode || (!isPermissionPending && canPersistConversation);
 	// Track if we've sent the first message on a new chat (to trigger navigation)
 	const isFirstMessageSentRef = useRef(false);
 	const hasNavigatedRef = useRef(false);
@@ -232,7 +240,13 @@ export function ChatInterface({
 						toolCallId: toolCall.toolCallId,
 						state: "output-error",
 						errorText:
-							err instanceof Error ? err.message : "Tool execution failed",
+							err instanceof Error
+								? err.message
+								: tr(
+										"TOOL_EXECUTION_FAILED",
+										"aiChat.tools.executionFailed",
+										"Tool execution failed",
+									),
 					});
 				}
 			} else {
@@ -244,7 +258,12 @@ export function ChatInterface({
 					tool: toolName,
 					toolCallId: toolCall.toolCallId,
 					state: "output-error",
-					errorText: `No client-side handler registered for tool "${toolName}". The page context may have changed while the response was streaming.`,
+					errorText: tr(
+						"TOOL_HANDLER_MISSING",
+						"aiChat.tools.handlerMissing",
+						'No client-side handler registered for tool "{{toolName}}". The page context may have changed while the response was streaming.',
+						{ toolName },
+					),
 				});
 			}
 		},
@@ -428,6 +447,7 @@ export function ChatInterface({
 		files?: AttachedFile[],
 	) => {
 		e.preventDefault();
+		if (!canWrite) return;
 		const text = input.trim();
 		// Allow submit if there's text OR files
 		if (!text && (!files || files.length === 0)) return;
@@ -572,7 +592,13 @@ export function ChatInterface({
 							{messages.length === 0 ? (
 								<div className="flex flex-col h-full min-h-[300px]">
 									<div className="flex-1 flex items-center justify-center text-muted-foreground mb-4">
-										<p>{localization.CHAT_EMPTY_STATE}</p>
+										<p>
+											{tr(
+												"CHAT_EMPTY_STATE",
+												"aiChat.chat.emptyState",
+												"Start a conversation...",
+											)}
+										</p>
 									</div>
 									{(() => {
 										// Merge static suggestions from overrides with dynamic ones from page context.
@@ -582,7 +608,7 @@ export function ChatInterface({
 											...pageSuggestions,
 											...(chatSuggestions ?? []),
 										];
-										return allSuggestions.length > 0 ? (
+										return canWrite && allSuggestions.length > 0 ? (
 											<div className="flex flex-wrap justify-center gap-2 pb-4 max-w-md mx-auto">
 												{allSuggestions.map((suggestion, index) => (
 													<button
@@ -612,13 +638,17 @@ export function ChatInterface({
 										onRetry={
 											// Only show retry on the last assistant message
 											m.role === "assistant" && index === messages.length - 1
-												? handleRetry
+												? canWrite
+													? handleRetry
+													: undefined
 												: undefined
 										}
 										onEdit={
 											// Allow editing user messages
 											m.role === "user"
-												? (newText) => handleEditMessage(m.id, newText)
+												? canWrite
+													? (newText) => handleEditMessage(m.id, newText)
+													: undefined
 												: undefined
 										}
 										isRetrying={isLoading && m.role === "assistant"}
@@ -629,13 +659,19 @@ export function ChatInterface({
 								messages[messages.length - 1]?.role !== "assistant" && (
 									<div className="flex items-center gap-2 text-muted-foreground text-sm py-4">
 										<div className="animate-pulse">
-											{localization.CHAT_LOADING}
+											{tr("CHAT_LOADING", "aiChat.chat.loading", "Thinking...")}
 										</div>
 									</div>
 								)}
 							{error && (
 								<div className="flex items-center gap-2 text-destructive text-sm py-4 px-3 bg-destructive/10 rounded-md">
-									<span>{localization.CHAT_ERROR}</span>
+									<span>
+										{tr(
+											"CHAT_ERROR",
+											"aiChat.chat.error",
+											"Something went wrong. Please try again.",
+										)}
+									</span>
 								</div>
 							)}
 						</div>
@@ -643,26 +679,32 @@ export function ChatInterface({
 				</div>
 			</div>
 			{/* Input Area */}
-			<div
-				className={cn(
-					"border-t bg-background p-4",
-					isWidget ? "px-3 py-3" : "px-4",
-				)}
-			>
-				<div className={cn(!isWidget && "max-w-3xl mx-auto")}>
-					<ChatInput
-						input={input}
-						handleInputChange={handleInputChange}
-						handleSubmit={handleSubmit}
-						isLoading={isLoading}
-						placeholder={localization.CHAT_PLACEHOLDER}
-						variant={isWidget ? "compact" : "default"}
-						onFilesAttached={setAttachedFiles}
-						attachedFiles={attachedFiles}
-					/>
-					{showAttribution && <StackAttribution />}
+			{canWrite && (
+				<div
+					className={cn(
+						"border-t bg-background p-4",
+						isWidget ? "px-3 py-3" : "px-4",
+					)}
+				>
+					<div className={cn(!isWidget && "max-w-3xl mx-auto")}>
+						<ChatInput
+							input={input}
+							handleInputChange={handleInputChange}
+							handleSubmit={handleSubmit}
+							isLoading={isLoading}
+							placeholder={tr(
+								"CHAT_PLACEHOLDER",
+								"aiChat.chat.placeholder",
+								"Type a message...",
+							)}
+							variant={isWidget ? "compact" : "default"}
+							onFilesAttached={setAttachedFiles}
+							attachedFiles={attachedFiles}
+						/>
+						{showAttribution && <StackAttribution />}
+					</div>
 				</div>
-			</div>
+			)}
 		</>
 	);
 }

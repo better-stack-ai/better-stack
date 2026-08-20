@@ -1,349 +1,170 @@
 "use client";
 
-import { createApiClient } from "@btst/stack/plugins/client";
-import {
-	useMutation,
-	useQuery,
-	useQueryClient,
-	useSuspenseQuery,
-} from "@tanstack/react-query";
-import type { AiChatApiRouter } from "../../api/plugin";
-import {
-	createAiChatQueryKeys,
-	type ConversationWithMessages,
+import type { ResourceFormResult } from "@btst/stack/plugins/client/hooks";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
+import type {
+	ConversationWithMessages,
+	CreateConversationInput,
+	RenameConversationInput,
 } from "../../query-keys";
 import type { SerializedConversation, SerializedMessage } from "../../types";
-import { usePluginOverrides } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../overrides";
+import { aiChat } from "./ai-chat-resource";
 
-/**
- * Shared React Query configuration for all chat queries
- * Prevents automatic refetching to avoid hydration mismatches in SSR
- */
-const SHARED_QUERY_CONFIG = {
-	retry: false,
-	refetchOnWindowFocus: false,
-	refetchOnMount: false,
-	refetchOnReconnect: false,
-	staleTime: 1000 * 60 * 5, // 5 minutes
-	gcTime: 1000 * 60 * 10, // 10 minutes
-} as const;
-
-/**
- * Options for the useConversations hook
- */
+/** Options for the useConversations hook. */
 export interface UseConversationsOptions {
-	/** Whether to enable the query (default: true) */
+	/** Whether to enable the query (default: true). */
 	enabled?: boolean;
 }
 
-/**
- * Result from the useConversations hook
- */
+/** Result from the useConversations hook. */
 export interface UseConversationsResult {
-	/** Array of conversations */
 	conversations: SerializedConversation[];
-	/** Whether the initial load is in progress */
 	isLoading: boolean;
-	/** Error if the query failed */
 	error: Error | null;
-	/** Function to refetch the conversations */
 	refetch: () => void;
 }
 
-/**
- * Hook for fetching all conversations
- */
+/** Fetch all conversations while preserving the legacy result shape. */
 export function useConversations(
 	options: UseConversationsOptions = {},
 ): UseConversationsResult {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<AiChatPluginOverrides>("ai-chat");
-	const client = createApiClient<AiChatApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const { enabled = true } = options;
-	const queries = createAiChatQueryKeys(client, headers);
-
-	const listQuery = queries.conversations.list();
-
-	const { data, isLoading, error, refetch } = useQuery<
-		SerializedConversation[],
-		Error,
-		SerializedConversation[],
-		typeof listQuery.queryKey
-	>({
-		...listQuery,
-		...SHARED_QUERY_CONFIG,
-		enabled: enabled && !!client,
+	const query = aiChat.conversations.list.use([], {
+		enabled: options.enabled ?? true,
 	});
 
 	return {
-		conversations: data ?? [],
-		isLoading,
-		error,
-		refetch,
+		conversations: query.data ?? [],
+		isLoading: query.isLoading,
+		error: query.error,
+		refetch: query.refetch,
 	};
 }
 
-/**
- * Suspense variant of useConversations
- */
+/** Suspense variant of useConversations. */
 export function useSuspenseConversations(): {
 	conversations: SerializedConversation[];
 	refetch: () => Promise<unknown>;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<AiChatPluginOverrides>("ai-chat");
-	const client = createApiClient<AiChatApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createAiChatQueryKeys(client, headers);
-	const listQuery = queries.conversations.list();
-
-	const { data, refetch, error, isFetching } = useSuspenseQuery<
-		SerializedConversation[],
-		Error,
-		SerializedConversation[],
-		typeof listQuery.queryKey
-	>({
-		...listQuery,
-		...SHARED_QUERY_CONFIG,
-	});
-
-	if (error && !isFetching) {
-		throw error;
-	}
-
+	const query = aiChat.conversations.list.useSuspense([]);
 	return {
-		conversations: data ?? [],
-		refetch,
+		conversations: query.data ?? [],
+		refetch: query.refetch,
 	};
 }
 
-/**
- * Options for the useConversation hook
- */
+/** Options for the useConversation hook. */
 export interface UseConversationOptions {
-	/** Whether to enable the query (default: true) */
+	/** Whether to enable the query (default: true). */
 	enabled?: boolean;
 }
 
-/**
- * Result from the useConversation hook
- */
+/** Result from the useConversation hook. */
 export interface UseConversationResult {
-	/** The conversation with messages, or null if not found */
 	conversation: ConversationWithMessages | null;
-	/** Whether the conversation is being loaded */
 	isLoading: boolean;
-	/** Error if the query failed */
 	error: Error | null;
-	/** Function to refetch the conversation */
 	refetch: () => void;
 }
 
-/**
- * Hook for fetching a single conversation with messages
- */
+/** Fetch a conversation and its messages while preserving the legacy shape. */
 export function useConversation(
 	id?: string,
 	options: UseConversationOptions = {},
 ): UseConversationResult {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<AiChatPluginOverrides>("ai-chat");
-	const client = createApiClient<AiChatApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const { enabled = true } = options;
-	const queries = createAiChatQueryKeys(client, headers);
-
-	const detailQuery = queries.conversations.detail(id ?? "");
-
-	const { data, isLoading, error, refetch } = useQuery<
-		ConversationWithMessages | null,
-		Error,
-		ConversationWithMessages | null,
-		typeof detailQuery.queryKey
-	>({
-		...detailQuery,
-		...SHARED_QUERY_CONFIG,
-		enabled: enabled && !!client && !!id,
+	const query = aiChat.conversations.detail.use([id ?? ""], {
+		enabled: (options.enabled ?? true) && !!id,
 	});
 
 	return {
-		conversation: data || null,
-		isLoading,
-		error,
-		refetch,
+		conversation: query.data ?? null,
+		isLoading: query.isLoading,
+		error: query.error,
+		refetch: query.refetch,
 	};
 }
 
-/**
- * Suspense variant of useConversation
- */
+/** Suspense variant of useConversation. */
 export function useSuspenseConversation(id: string): {
 	conversation: ConversationWithMessages | null;
 	refetch: () => Promise<unknown>;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<AiChatPluginOverrides>("ai-chat");
-	const client = createApiClient<AiChatApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createAiChatQueryKeys(client, headers);
-	const detailQuery = queries.conversations.detail(id);
-
-	const { data, refetch, error, isFetching } = useSuspenseQuery<
-		ConversationWithMessages | null,
-		Error,
-		ConversationWithMessages | null,
-		typeof detailQuery.queryKey
-	>({
-		...detailQuery,
-		...SHARED_QUERY_CONFIG,
-	});
-
-	if (error && !isFetching) {
-		throw error;
-	}
-
+	const query = aiChat.conversations.detail.useSuspense([id]);
 	return {
-		conversation: data || null,
-		refetch,
+		conversation: query.data ?? null,
+		refetch: query.refetch,
 	};
 }
 
-/**
- * Hook for creating a new conversation
- */
+/** Create a persisted conversation. */
 export function useCreateConversation() {
-	const { refresh, apiBaseURL, apiBasePath } =
-		usePluginOverrides<AiChatPluginOverrides>("ai-chat");
-	const client = createApiClient<AiChatApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queryClient = useQueryClient();
-	const queries = createAiChatQueryKeys(client);
-
-	return useMutation<
-		SerializedConversation | null,
-		Error,
-		{ id?: string; title?: string }
-	>({
-		mutationKey: [...queries.conversations._def, "create"],
-		mutationFn: async (data) => {
-			const response = await client("@post/chat/conversations", {
-				method: "POST",
-				body: data,
-			});
-			return response.data as SerializedConversation | null;
-		},
-		onSuccess: async (created) => {
-			// Update list cache
-			await queryClient.invalidateQueries({
-				queryKey: queries.conversations.list().queryKey,
-			});
-			// Refresh server-side cache if available
-			if (refresh) {
-				await refresh();
-			}
-		},
-	});
+	return aiChat.conversations.create.use();
 }
 
-/**
- * Hook for renaming a conversation
- */
+/** Rename a persisted conversation. */
 export function useRenameConversation() {
-	const { refresh, apiBaseURL, apiBasePath } =
-		usePluginOverrides<AiChatPluginOverrides>("ai-chat");
-	const client = createApiClient<AiChatApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queryClient = useQueryClient();
-	const queries = createAiChatQueryKeys(client);
+	return aiChat.conversations.rename.use();
+}
 
-	return useMutation<
+/** Delete a persisted conversation. */
+export function useDeleteConversation() {
+	return aiChat.conversations.delete.use();
+}
+
+export interface RenameConversationFormValues {
+	title: string;
+}
+
+export interface UseRenameConversationFormOptions {
+	conversation: SerializedConversation | null;
+	onSuccess?: (
+		conversation: SerializedConversation | null,
+	) => void | Promise<void>;
+}
+
+/** Form lifecycle for renaming a conversation, including field errors and notifications. */
+export function useRenameConversationForm(
+	options: UseRenameConversationFormOptions,
+): ResourceFormResult<
+	RenameConversationFormValues,
+	SerializedConversation,
+	SerializedConversation | null
+> {
+	const t = useTranslate();
+	const { localization } = usePluginOverrides<AiChatPluginOverrides>("ai-chat");
+
+	return aiChat.conversations.useForm<
+		RenameConversationFormValues,
 		SerializedConversation | null,
-		Error,
-		{ id: string; title: string }
+		SerializedConversation
 	>({
-		mutationKey: [...queries.conversations._def, "rename"],
-		mutationFn: async ({ id, title }) => {
-			const response = await client("@put/chat/conversations/:id", {
-				method: "PUT",
-				params: { id },
-				body: { title },
-			});
-			return response.data as SerializedConversation | null;
-		},
-		onSuccess: async (updated) => {
-			// Update detail cache if available
-			if (updated?.id) {
-				queryClient.setQueryData(
-					queries.conversations.detail(updated.id).queryKey,
-					(old: ConversationWithMessages | null | undefined) =>
-						old ? { ...old, ...updated } : null,
+		action: "edit",
+		updateMutation: "rename",
+		record: options.conversation,
+		defaults: (conversation) => ({ title: conversation?.title ?? "" }),
+		toUpdateVars: (values, conversation): RenameConversationInput => {
+			if (!conversation) {
+				throw new Error(
+					t("aiChat.errors.missingConversation", "Conversation is required"),
 				);
 			}
-			// Invalidate list
-			await queryClient.invalidateQueries({
-				queryKey: queries.conversations.list().queryKey,
-			});
-			if (refresh) {
-				await refresh();
-			}
+			return { id: conversation.id, title: values.title.trim() };
 		},
-	});
-}
-
-/**
- * Hook for deleting a conversation
- */
-export function useDeleteConversation() {
-	const { refresh, apiBaseURL, apiBasePath } =
-		usePluginOverrides<AiChatPluginOverrides>("ai-chat");
-	const client = createApiClient<AiChatApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queryClient = useQueryClient();
-	const queries = createAiChatQueryKeys(client);
-
-	return useMutation<{ success: boolean }, Error, { id: string }>({
-		mutationKey: [...queries.conversations._def, "delete"],
-		mutationFn: async ({ id }) => {
-			const response = await client("@delete/chat/conversations/:id", {
-				method: "DELETE",
-				params: { id },
-			});
-			return response.data as { success: boolean };
-		},
-		onSuccess: async (_, { id }) => {
-			// Remove from detail cache
-			queryClient.removeQueries({
-				queryKey: queries.conversations.detail(id).queryKey,
-			});
-			// Invalidate list
-			await queryClient.invalidateQueries({
-				queryKey: queries.conversations.list().queryKey,
-			});
-			if (refresh) {
-				await refresh();
-			}
-		},
+		successMessage:
+			localization?.CONVERSATION_RENAME_SUCCESS ??
+			t("aiChat.toasts.renameSuccess", "Conversation renamed"),
+		errorMessage: (error) =>
+			error.message ||
+			localization?.CONVERSATION_RENAME_FAILURE ||
+			t("aiChat.toasts.renameFailure", "Failed to rename conversation"),
+		onSuccess: options.onSuccess,
 	});
 }
 
 export type {
+	ConversationWithMessages,
+	CreateConversationInput,
+	RenameConversationInput,
 	SerializedConversation,
 	SerializedMessage,
-	ConversationWithMessages,
 };

@@ -104,12 +104,31 @@ const resources = {
 				refetchType: "all" as const,
 				refresh: false,
 			},
+			rename: {
+				path: "@put/items/:id",
+				method: "PUT" as const,
+				input: (vars: { id: string; name: string }) => ({
+					params: { id: vars.id },
+					body: { name: vars.name },
+				}),
+				select: (data: any) => data as Item,
+				setData: {
+					args: (result: Item) => [result.id],
+					updater: (previous: unknown, result: Item) => ({
+						...(previous as Record<string, unknown>),
+						...result,
+					}),
+				},
+			},
 			remove: {
 				path: "@delete/items/:id",
 				method: "DELETE" as const,
 				input: (vars: { id: string }) => ({ params: { id: vars.id } }),
 				select: (data: any) => data as { success: boolean },
 				invalidates: ["items"],
+				removeData: {
+					args: (_result, variables: { id: string }) => [variables.id],
+				},
 			},
 			// Public-style mutation: success UI is client state, so it must not
 			// trigger the router refresh (a full reload on public pages)
@@ -513,7 +532,7 @@ describe("createResource hooks", () => {
 		expect(refresh).toHaveBeenCalledTimes(1);
 	});
 
-	it("resource-level invalidation targets every query of the resource", async () => {
+	it("resource invalidation and removal clear the matching detail query", async () => {
 		fetchMock.mockResolvedValue(jsonResponse({ success: true }));
 
 		const listKey = ["items", "list", { q: undefined, limit: 10 }];
@@ -533,7 +552,34 @@ describe("createResource hooks", () => {
 		});
 
 		expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true);
-		expect(queryClient.getQueryState(detailKey)?.isInvalidated).toBe(true);
+		expect(queryClient.getQueryState(detailKey)).toBeUndefined();
+	});
+
+	it("setData updater preserves fields missing from the mutation result", async () => {
+		fetchMock.mockResolvedValue(jsonResponse({ id: "9", name: "renamed" }));
+		const detailKey = ["items", "detail", "9"];
+		queryClient.setQueryData(detailKey, {
+			id: "9",
+			name: "old",
+			messages: ["preserved"],
+		});
+
+		let captured: any;
+		function Probe() {
+			captured = items.items.rename.use();
+			return null;
+		}
+		await render(<Probe />);
+
+		await act(async () => {
+			await captured.mutateAsync({ id: "9", name: "renamed" });
+		});
+
+		expect(queryClient.getQueryData(detailKey)).toEqual({
+			id: "9",
+			name: "renamed",
+			messages: ["preserved"],
+		});
 	});
 
 	it("can refetch inactive queries during invalidation", async () => {

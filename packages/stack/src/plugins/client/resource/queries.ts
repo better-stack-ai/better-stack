@@ -109,6 +109,21 @@ export interface ResourceMutationDef<TVars = any, TResult = unknown> {
 		/** Target query name on the same resource (default `"detail"`) */
 		query?: string;
 		args: (result: TResult) => readonly unknown[] | null;
+		/**
+		 * Optionally merge the mutation result with the existing cache value.
+		 * Defaults to replacing the cached value with `result`.
+		 */
+		updater?: (previous: unknown, result: TResult) => unknown;
+	};
+	/**
+	 * Remove a query cache entry after success (e.g. the deleted record's
+	 * detail query). `args` may derive the target key from both the result and
+	 * the submitted variables, or return `null` to skip removal.
+	 */
+	removeData?: {
+		/** Target query name on the same resource (default `"detail"`) */
+		query?: string;
+		args: (result: TResult, variables: TVars) => readonly unknown[] | null;
 	};
 	/**
 	 * Whether to call the router `refresh` override after success (default
