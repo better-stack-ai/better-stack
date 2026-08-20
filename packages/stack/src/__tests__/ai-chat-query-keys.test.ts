@@ -100,4 +100,27 @@ describe("AI Chat resource declaration", () => {
 			false,
 		);
 	});
+
+	it("only merges rename results into an existing detail cache entry", () => {
+		const updater =
+			aiChatResources.conversations.mutations.rename.setData.updater;
+		const renamed = {
+			id: "conv-1",
+			title: "Renamed",
+			createdAt: new Date("2024-01-01").toISOString(),
+			updatedAt: new Date("2024-01-03").toISOString(),
+		};
+
+		expect(updater(undefined, renamed)).toBeUndefined();
+		expect(
+			updater(
+				{
+					...renamed,
+					title: "Original",
+					messages: [{ id: "message-1" }],
+				},
+				renamed,
+			),
+		).toEqual({ ...renamed, messages: [{ id: "message-1" }] });
+	});
 });

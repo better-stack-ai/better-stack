@@ -153,9 +153,8 @@ export function useRenameConversationForm(
 		successMessage:
 			localization?.CONVERSATION_RENAME_SUCCESS ??
 			t("aiChat.toasts.renameSuccess", "Conversation renamed"),
-		errorMessage: (error) =>
-			error.message ||
-			localization?.CONVERSATION_RENAME_FAILURE ||
+		errorMessage: () =>
+			localization?.CONVERSATION_RENAME_FAILURE ??
 			t("aiChat.toasts.renameFailure", "Failed to rename conversation"),
 		onSuccess: options.onSuccess,
 	});

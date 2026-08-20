@@ -63,7 +63,7 @@ export const aiChatResources = {
 					) =>
 						previous && result
 							? { ...(previous as ConversationWithMessages), ...result }
-							: null,
+							: previous,
 				},
 			},
 			delete: {

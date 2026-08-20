@@ -270,6 +270,24 @@ describe("AI Chat forms, notifications, and i18n", () => {
 		expect(notify.success).toHaveBeenCalledWith("Conversation deleted");
 		expect(notify.error).not.toHaveBeenCalled();
 	});
+
+	it("does not expose raw delete errors through notifications", async () => {
+		const notify = { success: vi.fn(), error: vi.fn() };
+		deleteConversation.mockRejectedValueOnce(
+			new Error("internal database detail"),
+		);
+		await render(<ChatSidebar />, { notify });
+
+		await openConversationMenu();
+		await act(async () => menuItem("Delete")?.click());
+		const confirm = Array.from(
+			document.querySelectorAll<HTMLButtonElement>("button"),
+		).find((button) => button.textContent === "Delete");
+		await act(async () => confirm?.click());
+
+		expect(notify.error).toHaveBeenCalledWith("Failed to delete conversation");
+		expect(notify.error).not.toHaveBeenCalledWith("internal database detail");
+	});
 });
 
 describe("AI Chat route lifecycle compatibility", () => {

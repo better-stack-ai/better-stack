@@ -145,15 +145,13 @@ export function ChatSidebar({
 				if (selectedConversation.id === currentConversationId && navigate) {
 					await navigate(`${basePath}/chat`);
 				}
-			} catch (error) {
+			} catch {
 				notify.error(
-					error instanceof Error
-						? error.message
-						: tr(
-								"CONVERSATION_DELETE_FAILURE",
-								"aiChat.toasts.deleteFailure",
-								"Failed to delete conversation",
-							),
+					tr(
+						"CONVERSATION_DELETE_FAILURE",
+						"aiChat.toasts.deleteFailure",
+						"Failed to delete conversation",
+					),
 				);
 			}
 		}
