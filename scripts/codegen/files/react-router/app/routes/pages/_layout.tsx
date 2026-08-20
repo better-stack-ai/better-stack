@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Outlet } from "react-router";
-import { StackProvider } from "@btst/stack/context";
+import { StackProvider, type StackAuthProvider } from "@btst/stack/context";
 import { reactRouter } from "@btst/stack/react-router";
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client";
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
@@ -46,6 +46,11 @@ type PluginOverrides = {
 	media: MediaPluginOverrides;
 };
 
+const authProvider = {
+	getIdentity: () => ({ id: "olliethedev", name: "Ollie" }),
+	loginPath: "/login",
+} satisfies StackAuthProvider;
+
 export default function Layout() {
 	const baseURL = getBaseURL();
 	const [queryClient] = useState(() => getOrCreateQueryClient());
@@ -84,6 +89,7 @@ export default function Layout() {
 			basePath="/pages"
 			router={reactRouter()}
 			api={{ baseURL, basePath: "/api/data" }}
+			auth={authProvider}
 			overrides={{
 				// Only genuinely plugin-specific overrides remain — the shared
 				// Link/navigate/refresh and API wiring come from the top-level
@@ -100,11 +106,6 @@ export default function Layout() {
 						<CommentThread
 							resourceId={post.slug}
 							resourceType="blog-post"
-							apiBaseURL={baseURL}
-							apiBasePath="/api/data"
-							currentUserId="olliethedev"
-							headers={{ "x-user-id": "olliethedev" }}
-							loginHref="/login"
 							className="mt-8 pt-8 border-t"
 						/>
 					),
@@ -125,26 +126,17 @@ export default function Layout() {
 					searchUsers,
 					// Wire comments into task detail dialogs
 					taskDetailBottomSlot: (task) => (
-						<CommentThread
-							resourceId={task.id}
-							resourceType="kanban-task"
-							apiBaseURL={baseURL}
-							apiBasePath="/api/data"
-							currentUserId="olliethedev"
-							headers={{ "x-user-id": "olliethedev" }}
-							loginHref="/login"
-						/>
+						<CommentThread resourceId={task.id} resourceType="kanban-task" />
 					),
 				},
 				comments: {
-					currentUserId: "olliethedev",
 					defaultCommentPageSize: 5,
 					resourceLinks: {
 						"blog-post": (slug) => `/pages/blog/${slug}`,
 					},
 				},
 				media: {
-					...mediaClientConfig,
+					uploadMode: "direct",
 					queryClient,
 				},
 			}}

@@ -35,6 +35,8 @@ interface StackContextValue<TPluginOverrides extends Record<string, any>> {
 	 * Top-level API config applied to all plugins.
 	 */
 	api?: StackApiConfig;
+	/** Top-level auth provider applied to plugin compatibility fields. */
+	auth?: StackAuthProvider;
 }
 
 const StackContext = createContext<StackContextValue<any> | null>(null);
@@ -190,6 +192,7 @@ export function StackProvider<
 		overrides: overrides ?? {},
 		basePath,
 		api,
+		auth,
 	};
 
 	const content = auth ? (
@@ -303,17 +306,17 @@ export function usePluginOverrides<
 	const pluginOverrides = context.overrides[pluginName];
 
 	// Resolution order (lowest to highest precedence):
-	// hook defaults -> top-level router/api -> per-plugin overrides
-	const { router, api } = context;
-	if (!router && !api) {
-		// No top-level router/api configured — behave exactly as before
+	// hook defaults -> top-level router/api/auth -> per-plugin overrides
+	const { router, api, auth } = context;
+	if (!router && !api && !auth) {
+		// No top-level provider config — behave exactly as before
 		const overrides = defaultValues
 			? { ...defaultValues, ...pluginOverrides }
 			: pluginOverrides;
 		return overrides as OverridesResult<TOverrides, TDefaults>;
 	}
 
-	const routerApiLayer = stripUndefined({
+	const providerLayer = stripUndefined({
 		Link: router?.Link,
 		Image: router?.Image,
 		navigate: router?.navigate,
@@ -322,11 +325,12 @@ export function usePluginOverrides<
 		setSearchParams: router?.setSearchParams,
 		apiBaseURL: api?.baseURL,
 		apiBasePath: api?.basePath,
+		loginHref: auth?.loginPath,
 	});
 
 	const overrides = {
 		...defaultValues,
-		...routerApiLayer,
+		...providerLayer,
 		...pluginOverrides,
 	};
 

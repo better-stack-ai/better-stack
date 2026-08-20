@@ -243,6 +243,7 @@ overrides={{
 ## Embedding Comments
 
 The `CommentThread` component can be embedded anywhere — below a blog post, inside a Kanban task dialog, or on a custom page.
+It uses the `api` and `auth` values from the nearest `StackProvider`.
 
 ```tsx
 import { CommentThread } from "@btst/stack/plugins/comments/client/components"
@@ -250,10 +251,6 @@ import { CommentThread } from "@btst/stack/plugins/comments/client/components"
 <CommentThread
   resourceId={post.slug}          // Unique identifier for the resource being commented on
   resourceType="blog-post"        // Namespace — avoids ID collisions across resource types
-  apiBaseURL="https://example.com"
-  apiBasePath="/api/data"
-  currentUserId={session?.user?.id}  // Own-comment affordances (edit, delete, pending badge, dedup likes)
-  loginHref="/login"              // Shows "Please log in to comment" when currentUserId is not set
   components={{
     // Optional: replace the plain textarea with a rich editor
     Input: MarkdownEditor,
@@ -269,10 +266,10 @@ import { CommentThread } from "@btst/stack/plugins/comments/client/components"
 |------|------|----------|-------------|
 | `resourceId` | `string` | ✓ | Identifier for the resource (e.g. post slug, task ID) |
 | `resourceType` | `string` | ✓ | Type of resource (`"blog-post"`, `"kanban-task"`, etc.) |
-| `apiBaseURL` | `string` | ✓ | Base URL for API requests |
-| `apiBasePath` | `string` | ✓ | Path prefix where the API is mounted |
-| `currentUserId` | `string` | — | Authenticated user ID — enables edit/delete/pending badge |
-| `loginHref` | `string` | — | Login page URL shown to unauthenticated users |
+| `apiBaseURL` | `string` | — | Explicit base URL override; defaults to `StackProvider.api.baseURL` |
+| `apiBasePath` | `string` | — | Explicit API path override; defaults to `StackProvider.api.basePath` |
+| `currentUserId` | `string` | — | Explicit identity override; defaults to `StackProvider.auth` identity |
+| `loginHref` | `string` | — | Explicit login URL override; defaults to `StackProvider.auth.loginPath` |
 | `pageSize` | `number` | — | Comments per page. Falls back to `defaultCommentPageSize` from overrides, then 100. A "Load more" button appears when there are additional pages. |
 | `sort` | `"asc" \| "desc"` | — | Sort direction for top-level comments by `createdAt`. Defaults to `defaultCommentSort` from overrides, then `"desc"` (newest first). Replies inside each thread always render chronologically and are unaffected. |
 | `components.Input` | `ComponentType` | — | Custom input component (default: `<textarea>`) |
@@ -291,10 +288,6 @@ overrides={{
       <CommentThread
         resourceId={post.slug}
         resourceType="blog-post"
-        apiBaseURL={baseURL}
-        apiBasePath="/api/data"
-        currentUserId={session?.user?.id}
-        loginHref="/login"
       />
     ),
   }
@@ -314,10 +307,6 @@ overrides={{
       <CommentThread
         resourceId={task.id}
         resourceType="kanban-task"
-        apiBaseURL={baseURL}
-        apiBasePath="/api/data"
-        currentUserId={session?.user?.id}
-        loginHref="/login"
       />
     ),
   }
@@ -451,32 +440,37 @@ The comments plugin registers a `/comments` route that shows the current user's 
 - Prev / Next pagination (20 per page)
 - Resource link column — click through to the original resource when `resourceLinks` is configured (links automatically include `#comments` so the page scrolls to the comment thread)
 - Delete button with confirmation dialog — calls `DELETE /comments/:id` (governed by `onBeforeDelete`)
-- Login prompt when `currentUserId` is not configured
+- Login prompt when the top-level auth provider resolves no identity
 
 ### Setup
 
-Configure the overrides in your layout and the security hook in your backend:
+Configure top-level API/auth once, keep only comments-specific overrides in
+your layout, and configure the security hook in your backend:
 
 ```tsx title="app/pages/layout.tsx"
-overrides={{
-  comments: {
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
+<StackProvider
+  api={{ baseURL, basePath: "/api/data" }}
+  auth={{
+    getIdentity: async () => (await getSession())?.user ?? null,
+    loginPath: "/login",
+  }}
+  overrides={{
+    comments: {
 
-    // Provide the current user's ID so the page can scope the query
-    currentUserId: session?.user?.id,
+      // Map resource types to URLs so comments link back to their resource
+      resourceLinks: {
+        "blog-post": (slug) => `/pages/blog/${slug}`,
+        "kanban-task": (id) => `/pages/kanban?task=${id}`,
+      },
 
-    // Map resource types to URLs so comments link back to their resource
-    resourceLinks: {
-      "blog-post": (slug) => `/pages/blog/${slug}`,
-      "kanban-task": (id) => `/pages/kanban?task=${id}`,
+      onBeforeUserCommentsPageRendered: (context) => {
+        if (!session?.user) throw new Error("Authentication required")
+      },
     },
-
-    onBeforeUserCommentsPageRendered: (context) => {
-      if (!session?.user) throw new Error("Authentication required")
-    },
-  }
-}}
+  }}
+>
+  {children}
+</StackProvider>
 ```
 
 ```ts title="lib/stack.ts"
@@ -522,12 +516,12 @@ Configure the comments plugin behavior from your layout:
 | Field | Type | Description |
 |-------|------|-------------|
 | `localization` | `Partial<CommentsLocalization>` | Override any UI string in the plugin. Import `COMMENTS_LOCALIZATION` from `@btst/stack/plugins/comments/client` to see all available keys. |
-| `apiBaseURL` | `string` | Base URL for API requests |
-| `apiBasePath` | `string` | Path prefix for the API |
+| `apiBaseURL` | `string` | Legacy per-plugin base URL override; prefer top-level `StackProvider.api`. |
+| `apiBasePath` | `string` | Legacy per-plugin API path override; prefer top-level `StackProvider.api`. |
 | `headers` | `Record<string, string>` | Optional headers for authenticated plugin API calls. |
 | `showAttribution` | `boolean` | Show/hide the "Powered by BTST" attribution on plugin pages (defaults to `true`). |
-| `currentUserId` | `string \| (() => string \| undefined \| Promise<string \| undefined>)` | Authenticated user's ID — used by the User Comments page. Supports async functions for session-based resolution. |
-| `loginHref` | `string` | Login route used by comment UIs when user is unauthenticated. |
+| `currentUserId` | `string \| (() => string \| undefined \| Promise<string \| undefined>)` | Legacy identity override. When omitted, comments use the top-level auth provider identity. |
+| `loginHref` | `string` | Legacy login route override. When omitted, comments use `StackProvider.auth.loginPath`. |
 | `defaultCommentPageSize` | `number` | Default number of top-level comments per page for all `CommentThread` instances. Overridden per-instance by the `pageSize` prop. Defaults to `100` when not set. |
 | `defaultCommentSort` | `"asc" \| "desc"` | Default sort direction for top-level comments in all `CommentThread` instances. Overridden per-instance by the `sort` prop. Defaults to `"desc"` (newest first). |
 | `allowPosting` | `boolean` | Hide/show comment form and reply actions globally in `CommentThread` instances (defaults to `true`). |

@@ -414,6 +414,12 @@
       "type": "registry:hook",
       "content": "import { useEffect, useState } from \"react\";\n\nexport function useDebounce<T>(value: T, delay?: number): T {\n    const [debouncedValue, setDebouncedValue] = useState<T>(value);\n\n    useEffect(() => {\n        const timer = setTimeout(() => setDebouncedValue(value), delay || 500);\n\n        return () => {\n            clearTimeout(timer);\n        };\n    }, [value, delay]);\n\n    return debouncedValue;\n}",
       "target": "src/hooks/use-debounce.ts"
+    },
+    {
+      "path": "ui/components/stack-attribution.tsx",
+      "type": "registry:component",
+      "content": "export function StackAttribution() {\n\treturn (\n\t\t<div className=\"w-full text-center\">\n\t\t\t<p className=\"flex items-center justify-center gap-1 py-2 text-gray-500 text-sm\">\n\t\t\t\tPowered by{\" \"}\n\t\t\t\t<a\n\t\t\t\t\tclassName=\"flex items-center gap-1 font-semibold underline\"\n\t\t\t\t\thref=\"https://www.better-stack.ai\"\n\t\t\t\t\ttarget=\"_blank\"\n\t\t\t\t\trel=\"noopener\"\n\t\t\t\t\taria-label=\"BTST — Composable full-stack plugin system for React frameworks\"\n\t\t\t\t\ttitle=\"BTST — Composable full-stack plugin system for React frameworks\"\n\t\t\t\t>\n\t\t\t\t\t<span className=\"cursor-pointer\">BTST</span>\n\t\t\t\t</a>\n\t\t\t</p>\n\t\t</div>\n\t);\n}\n",
+      "target": "src/components/ui/stack-attribution.tsx"
     }
   ],
   "docs": "https://better-stack.ai/docs/plugins/blog"

@@ -1,7 +1,8 @@
 import { useState } from "react"
-import { Link, useNavigate, useParams } from "react-router"
+import { Link, useParams } from "react-router"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { StackProvider } from "@btst/stack/context"
+import { reactRouter } from "@btst/stack/react-router"
 import {
 	PageRenderer,
 	defaultComponentRegistry,
@@ -27,7 +28,6 @@ type PluginOverrides = {
  */
 export default function PreviewPage() {
 	const { slug = "" } = useParams()
-	const navigate = useNavigate()
 	const [queryClient] = useState(() => getOrCreateQueryClient())
 	const baseURL = getBaseURL()
 
@@ -35,17 +35,12 @@ export default function PreviewPage() {
 		<QueryClientProvider client={queryClient}>
 			<StackProvider<PluginOverrides>
 				basePath="/preview"
+				router={reactRouter()}
+				api={{{providerApiLiteral}}}
 				overrides={
-				{
+					{
 					"ui-builder": {
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
 						componentRegistry: defaultComponentRegistry,
-						navigate: (path) => navigate(path),
-						refresh: () => window.location.reload(),
-						Link: ({ href, to, ...props }) => (
-							<Link to={href || to || "#"} {...props} />
-						),
 					},
 				}
 				}

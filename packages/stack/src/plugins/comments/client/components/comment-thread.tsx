@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { SerializedComment } from "../../types";
-import { getInitials } from "../utils";
+import { getInitials, useResolvedCurrentUserId } from "../utils";
 import { CommentForm } from "./comment-form";
 import {
 	useComments,
@@ -59,11 +59,14 @@ export interface CommentThreadProps {
 	resourceId: string;
 	/** Discriminates resources across plugins (e.g. "blog-post", "kanban-task") */
 	resourceType: string;
-	/** Base URL for API calls */
-	apiBaseURL: string;
-	/** Path where the API is mounted */
-	apiBasePath: string;
-	/** Currently authenticated user ID. Omit for read-only / unauthenticated. */
+	/** Base URL for API calls. Defaults to the top-level StackProvider API. */
+	apiBaseURL?: string;
+	/** Path where the API is mounted. Defaults to the top-level StackProvider API. */
+	apiBasePath?: string;
+	/**
+	 * Currently authenticated user ID. Defaults to the top-level StackProvider
+	 * identity. Omit for read-only / unauthenticated when no auth provider exists.
+	 */
 	currentUserId?: string;
 	/**
 	 * URL to redirect unauthenticated users to.
@@ -107,6 +110,14 @@ export interface CommentThreadProps {
 	 */
 	sort?: "asc" | "desc";
 }
+
+type ResolvedCommentThreadProps = Omit<
+	CommentThreadProps,
+	"apiBaseURL" | "apiBasePath"
+> & {
+	apiBaseURL: string;
+	apiBasePath: string;
+};
 
 const DEFAULT_RENDERER: ComponentType<CommentRendererProps> = ({ body }) => (
 	<p className="text-sm whitespace-pre-wrap wrap-break-word">{body}</p>
@@ -348,7 +359,7 @@ function CommentThreadInner({
 	allowPosting: allowPostingProp,
 	allowEditing: allowEditingProp,
 	sort: sortProp,
-}: CommentThreadProps) {
+}: ResolvedCommentThreadProps) {
 	const t = useTranslate();
 	const overrides = usePluginOverrides<
 		CommentsPluginOverrides,
@@ -792,17 +803,13 @@ function RepliesSection({
  * Embeddable threaded comment section.
  *
  * Lazy-mounts when the component scrolls into the viewport (via WhenVisible).
- * Requires `currentUserId` to allow posting; shows a "Please login" prompt otherwise.
+ * Uses the top-level StackProvider API and auth configuration by default.
  *
  * @example
  * ```tsx
  * <CommentThread
  *   resourceId={post.slug}
  *   resourceType="blog-post"
- *   apiBaseURL="https://example.com"
- *   apiBasePath="/api/data"
- *   currentUserId={session?.userId}
- *   loginHref="/login"
  * />
  * ```
  */
@@ -849,10 +856,24 @@ function CommentThreadSkeleton() {
 }
 
 export function CommentThread(props: CommentThreadProps) {
+	const overrides = usePluginOverrides<
+		CommentsPluginOverrides,
+		Partial<CommentsPluginOverrides>
+	>("comments", {});
+	const currentUserId = useResolvedCurrentUserId(props.currentUserId);
+	const resolvedProps: ResolvedCommentThreadProps = {
+		...props,
+		apiBaseURL: props.apiBaseURL ?? overrides.apiBaseURL ?? "",
+		apiBasePath: props.apiBasePath ?? overrides.apiBasePath ?? "",
+		currentUserId,
+		loginHref: props.loginHref ?? overrides.loginHref,
+		headers: props.headers ?? overrides.headers,
+	};
+
 	return (
 		<div id="comments" className={props.className}>
 			<WhenVisible fallback={<CommentThreadSkeleton />} rootMargin="300px">
-				<CommentThreadInner {...props} />
+				<CommentThreadInner {...resolvedProps} />
 			</WhenVisible>
 		</div>
 	);

@@ -1,7 +1,8 @@
 import { useState } from "react"
-import { Link, useNavigate, useParams } from "react-router"
+import { useParams } from "react-router"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { StackProvider } from "@btst/stack/context"
+import { reactRouter } from "@btst/stack/react-router"
 import { FormRenderer } from "@btst/stack/plugins/form-builder/client/components"
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
@@ -25,7 +26,6 @@ type PluginOverrides = {
  */
 export default function FormDemoPage() {
 	const { slug } = useParams()
-	const navigate = useNavigate()
 	const [queryClient] = useState(() => getOrCreateQueryClient())
 	const baseURL = getBaseURL()
 
@@ -33,19 +33,8 @@ export default function FormDemoPage() {
 		<QueryClientProvider client={queryClient}>
 			<StackProvider<PluginOverrides>
 				basePath=""
-				overrides={
-				{
-					"form-builder": {
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
-						navigate: (path) => navigate(path),
-						refresh: () => window.location.reload(),
-						Link: ({ href, to, ...props }) => (
-							<Link to={href || to || "#"} {...props} />
-						),
-					},
-				}
-				}
+				router={reactRouter()}
+				api={{{providerApiLiteral}}}
 			>
 				<main className="container mx-auto px-4 py-8">
 					<div className="max-w-2xl mx-auto">

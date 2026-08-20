@@ -1,15 +1,22 @@
 import { useState, useEffect } from "react";
+import { useIdentity } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "./overrides";
 
 /**
- * Resolves `currentUserId` from the plugin overrides, supporting both a static
- * string and a sync/async function. Returns `undefined` until resolution completes.
+ * Resolves the legacy `currentUserId` override when provided, otherwise uses
+ * the identity from the top-level Stack auth provider.
  */
 export function useResolvedCurrentUserId(
 	raw: CommentsPluginOverrides["currentUserId"],
 ): string | undefined {
+	const { identity } = useIdentity();
+	const providerUserId = identity?.id;
 	const [resolved, setResolved] = useState<string | undefined>(
-		typeof raw === "string" ? raw : undefined,
+		typeof raw === "string"
+			? raw
+			: raw === undefined
+				? providerUserId
+				: undefined,
 	);
 
 	useEffect(() => {
@@ -22,10 +29,12 @@ export function useResolvedCurrentUserId(
 						err,
 					);
 				});
+		} else if (typeof raw === "string") {
+			setResolved(raw);
 		} else {
-			setResolved(raw ?? undefined);
+			setResolved(providerUserId);
 		}
-	}, [raw]);
+	}, [providerUserId, raw]);
 
 	return resolved;
 }

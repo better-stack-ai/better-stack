@@ -14,6 +14,7 @@ import {
 import { ModerationPage } from "../client/components/pages/moderation-page.internal";
 import { UserCommentsPage } from "../client/components/pages/my-comments-page.internal";
 import { CommentForm } from "../client/components/comment-form";
+import { CommentThread } from "../client/components/comment-thread";
 import type { SerializedComment } from "../types";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -81,6 +82,19 @@ beforeEach(() => {
 		comments: [comment],
 		total: 1,
 		refetch: vi.fn(),
+	});
+	hooks.useInfiniteComments.mockReturnValue({
+		comments: [],
+		total: 0,
+		isLoading: false,
+		loadMore: vi.fn(),
+		hasMore: false,
+		isLoadingMore: false,
+		queryKey: ["comments", "infinite"],
+	});
+	hooks.usePostComment.mockReturnValue({
+		mutateAsync: vi.fn(),
+		isPending: false,
 	});
 	hooks.useUpdateCommentStatus.mockReturnValue({
 		mutateAsync: vi.fn().mockResolvedValue(comment),
@@ -328,12 +342,14 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 			error: ReturnType<typeof vi.fn>;
 		},
 		router = createMockRouter(),
+		auth?: StackAuthProvider,
 	) {
 		return render(
 			<StackProvider
 				basePath="/pages"
 				router={router}
 				notify={notify}
+				auth={auth}
 				overrides={{ comments: commentsOverrides }}
 			>
 				<UserCommentsPage {...pageProps} currentUserId={currentUserId} />
@@ -359,6 +375,33 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 		expect(hooks.useSuspenseComments).toHaveBeenLastCalledWith(
 			expect.anything(),
 			expect.objectContaining({ authorId: "user-1", offset: 20 }),
+		);
+	});
+
+	it("uses the top-level auth identity when the legacy user prop is omitted", async () => {
+		await renderUserComments(undefined, undefined, createMockRouter(), {
+			getIdentity: () => ({ id: "provider-user" }),
+		});
+		await act(async () => {});
+
+		expect(hooks.useSuspenseComments).toHaveBeenLastCalledWith(
+			expect.anything(),
+			expect.objectContaining({ authorId: "provider-user" }),
+		);
+		expect(
+			container.querySelector('[data-testid="my-comments-login-prompt"]'),
+		).toBeNull();
+	});
+
+	it("keeps the explicit legacy user prop above the provider identity", async () => {
+		await renderUserComments("legacy-user", undefined, createMockRouter(), {
+			getIdentity: () => ({ id: "provider-user" }),
+		});
+		await act(async () => {});
+
+		expect(hooks.useSuspenseComments).toHaveBeenLastCalledWith(
+			expect.anything(),
+			expect.objectContaining({ authorId: "legacy-user" }),
 		);
 	});
 
@@ -390,6 +433,84 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 		).toHaveBeenCalledWith(comment.id);
 		expect(notify.success).toHaveBeenCalledWith("Comment deleted");
 		expect(notify.error).not.toHaveBeenCalled();
+	});
+});
+
+describe("CommentThread provider defaults", () => {
+	it("uses top-level API and auth when legacy props are omitted", async () => {
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={{
+					getIdentity: () => ({ id: "provider-user" }),
+					loginPath: "/sign-in",
+				}}
+			>
+				<CommentThread resourceId="post-1" resourceType="blog-post" />
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		expect(hooks.useInfiniteComments).toHaveBeenLastCalledWith(
+			{
+				apiBaseURL: "http://provider.local",
+				apiBasePath: "/api/stack",
+				headers: undefined,
+			},
+			expect.objectContaining({ currentUserId: "provider-user" }),
+		);
+		expect(
+			container.querySelector('[data-testid="comment-form-wrapper"]'),
+		).toBeTruthy();
+	});
+
+	it("keeps explicit legacy props above provider defaults", async () => {
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={{ getIdentity: () => ({ id: "provider-user" }) }}
+			>
+				<CommentThread
+					resourceId="post-1"
+					resourceType="blog-post"
+					apiBaseURL="http://legacy.local"
+					apiBasePath="/api/legacy"
+					currentUserId="legacy-user"
+					headers={{ "x-test-user": "legacy-user" }}
+				/>
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		expect(hooks.useInfiniteComments).toHaveBeenLastCalledWith(
+			{
+				apiBaseURL: "http://legacy.local",
+				apiBasePath: "/api/legacy",
+				headers: { "x-test-user": "legacy-user" },
+			},
+			expect.objectContaining({ currentUserId: "legacy-user" }),
+		);
+	});
+
+	it("uses the top-level auth login path when unauthenticated", async () => {
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={{ getIdentity: () => null, loginPath: "/sign-in" }}
+			>
+				<CommentThread resourceId="post-1" resourceType="blog-post" />
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		expect(
+			container
+				.querySelector<HTMLAnchorElement>('[data-testid="login-link"]')
+				?.getAttribute("href"),
+		).toBe("/sign-in");
 	});
 });
 

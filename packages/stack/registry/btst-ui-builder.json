@@ -126,6 +126,18 @@
       "type": "registry:component",
       "content": "\"use client\";\n\nimport { PageLayout } from \"./page-layout\";\nimport { StackAttribution } from \"./stack-attribution\";\n\nexport interface PageWrapperProps {\n\tchildren: React.ReactNode;\n\tclassName?: string;\n\ttestId?: string;\n\t/**\n\t * Whether to show the \"Powered by BTST\" attribution.\n\t * Defaults to true.\n\t */\n\tshowAttribution?: boolean;\n}\n\n/**\n * Shared page wrapper component providing consistent layout and optional attribution\n * for plugin pages. Used by blog, CMS, and other plugins.\n *\n * @example\n * ```tsx\n * <PageWrapper testId=\"my-page\" showAttribution={false}>\n *   <div className=\"w-full max-w-5xl\">\n *     <h1>My Page</h1>\n *   </div>\n * </PageWrapper>\n * ```\n */\nexport function PageWrapper({\n\tchildren,\n\tclassName,\n\ttestId,\n\tshowAttribution = true,\n}: PageWrapperProps) {\n\treturn (\n\t\t<>\n\t\t\t<PageLayout className={className} data-testid={testId}>\n\t\t\t\t{children}\n\t\t\t</PageLayout>\n\n\t\t\t{showAttribution && <StackAttribution />}\n\t\t</>\n\t);\n}\n",
       "target": "src/components/ui/page-wrapper.tsx"
+    },
+    {
+      "path": "ui/components/page-layout.tsx",
+      "type": "registry:component",
+      "content": "\"use client\";\n\nimport { cn } from \"@/lib/utils\";\n\nexport interface PageLayoutProps {\n\tchildren: React.ReactNode;\n\tclassName?: string;\n\t\"data-testid\"?: string;\n}\n\n/**\n * Shared page layout component providing consistent container styling\n * for plugin pages. Used by blog, CMS, and other plugins.\n */\nexport function PageLayout({\n\tchildren,\n\tclassName,\n\t\"data-testid\": dataTestId,\n}: PageLayoutProps) {\n\treturn (\n\t\t<div\n\t\t\tclassName={cn(\n\t\t\t\t\"container mx-auto flex min-h-dvh flex-col items-center gap-12 px-4 py-18 lg:px-16\",\n\t\t\t\tclassName,\n\t\t\t)}\n\t\t\tdata-testid={dataTestId}\n\t\t>\n\t\t\t{children}\n\t\t</div>\n\t);\n}\n",
+      "target": "src/components/ui/page-layout.tsx"
+    },
+    {
+      "path": "ui/components/stack-attribution.tsx",
+      "type": "registry:component",
+      "content": "export function StackAttribution() {\n\treturn (\n\t\t<div className=\"w-full text-center\">\n\t\t\t<p className=\"flex items-center justify-center gap-1 py-2 text-gray-500 text-sm\">\n\t\t\t\tPowered by{\" \"}\n\t\t\t\t<a\n\t\t\t\t\tclassName=\"flex items-center gap-1 font-semibold underline\"\n\t\t\t\t\thref=\"https://www.better-stack.ai\"\n\t\t\t\t\ttarget=\"_blank\"\n\t\t\t\t\trel=\"noopener\"\n\t\t\t\t\taria-label=\"BTST — Composable full-stack plugin system for React frameworks\"\n\t\t\t\t\ttitle=\"BTST — Composable full-stack plugin system for React frameworks\"\n\t\t\t\t>\n\t\t\t\t\t<span className=\"cursor-pointer\">BTST</span>\n\t\t\t\t</a>\n\t\t\t</p>\n\t\t</div>\n\t);\n}\n",
+      "target": "src/components/ui/stack-attribution.tsx"
     }
   ],
   "docs": "https://better-stack.ai/docs/plugins/ui-builder"

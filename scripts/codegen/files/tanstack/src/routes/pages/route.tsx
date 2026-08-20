@@ -1,4 +1,4 @@
-import { StackProvider } from "@btst/stack/context";
+import { StackProvider, type StackAuthProvider } from "@btst/stack/context";
 import { tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
@@ -47,6 +47,11 @@ type PluginOverrides = {
 	media: MediaPluginOverrides;
 };
 
+const authProvider = {
+	getIdentity: () => ({ id: "olliethedev", name: "Ollie" }),
+	loginPath: "/login",
+} satisfies StackAuthProvider;
+
 export const Route = createFileRoute("/pages")({
 	component: Layout,
 	notFoundComponent: () => {
@@ -94,6 +99,7 @@ function Layout() {
 				basePath="/pages"
 				router={tanstackRouter()}
 				api={{ baseURL, basePath: "/api/data" }}
+				auth={authProvider}
 				overrides={{
 					// Only genuinely plugin-specific overrides remain — the shared
 					// Link/navigate/refresh and API wiring come from the top-level
@@ -110,11 +116,6 @@ function Layout() {
 							<CommentThread
 								resourceId={post.slug}
 								resourceType="blog-post"
-								apiBaseURL={baseURL}
-								apiBasePath="/api/data"
-								currentUserId="olliethedev"
-								headers={{ "x-user-id": "olliethedev" }}
-								loginHref="/login"
 								className="mt-8 pt-8 border-t"
 							/>
 						),
@@ -135,26 +136,17 @@ function Layout() {
 						searchUsers,
 						// Wire comments into task detail dialogs
 						taskDetailBottomSlot: (task) => (
-							<CommentThread
-								resourceId={task.id}
-								resourceType="kanban-task"
-								apiBaseURL={baseURL}
-								apiBasePath="/api/data"
-								currentUserId="olliethedev"
-								headers={{ "x-user-id": "olliethedev" }}
-								loginHref="/login"
-							/>
+							<CommentThread resourceId={task.id} resourceType="kanban-task" />
 						),
 					},
 					comments: {
-						currentUserId: "olliethedev",
 						defaultCommentPageSize: 5,
 						resourceLinks: {
 							"blog-post": (slug) => `/pages/blog/${slug}`,
 						},
 					},
 					media: {
-						...mediaClientConfig,
+						uploadMode: "direct",
 						queryClient: routeContext.queryClient,
 					},
 				}}
