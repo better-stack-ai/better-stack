@@ -95,6 +95,15 @@ const resources = {
 					args: (result: Item | null) => (result?.id ? [result.id] : null),
 				},
 			},
+			createAndRefetch: {
+				path: "@post/items",
+				method: "POST" as const,
+				input: (vars: { name: string }) => ({ body: vars }),
+				select: (data: any) => data as Item,
+				invalidates: ["items.list"],
+				refetchType: "all" as const,
+				refresh: false,
+			},
 			remove: {
 				path: "@delete/items/:id",
 				method: "DELETE" as const,
@@ -527,6 +536,29 @@ describe("createResource hooks", () => {
 		expect(queryClient.getQueryState(detailKey)?.isInvalidated).toBe(true);
 	});
 
+	it("can refetch inactive queries during invalidation", async () => {
+		fetchMock.mockResolvedValue(jsonResponse({ id: "42", name: "created" }));
+		const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+		let captured: any;
+		function Probe() {
+			captured = items.items.createAndRefetch.use();
+			return null;
+		}
+		await render(<Probe />);
+
+		await act(async () => {
+			await captured.mutateAsync({ name: "created" });
+		});
+		await waitFor(() => captured.isSuccess);
+
+		expect(invalidateSpy).toHaveBeenCalledWith({
+			queryKey: ["items", "list"],
+			refetchType: "all",
+		});
+		expect(refresh).not.toHaveBeenCalled();
+	});
+
 	it("mutations with refresh: false skip the router refresh", async () => {
 		fetchMock.mockResolvedValue(jsonResponse({ success: true }));
 
@@ -540,6 +572,7 @@ describe("createResource hooks", () => {
 		await act(async () => {
 			await captured.mutateAsync({ id: "7" });
 		});
+		await waitFor(() => captured.isSuccess);
 
 		expect(captured.isSuccess).toBe(true);
 		expect(refresh).not.toHaveBeenCalled();

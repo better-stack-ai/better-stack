@@ -89,6 +89,7 @@ export const mediaResources = {
 				}),
 				select: (data: any) => data as SerializedAsset,
 				invalidates: ["mediaAssets.list"],
+				refetchType: "all",
 				refresh: false,
 			},
 			delete: {
@@ -97,6 +98,7 @@ export const mediaResources = {
 				input: (id: string) => ({ params: { id } }),
 				select: (data: any) => data as { success: boolean },
 				invalidates: ["mediaAssets.list"],
+				refetchType: "all",
 				refresh: false,
 			},
 		},

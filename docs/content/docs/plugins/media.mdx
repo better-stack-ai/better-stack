@@ -696,6 +696,8 @@ The Media plugin exposes React Query-powered hooks for reading and mutating asse
 
 Asset search trims whitespace and accepts at most 200 characters. Because BTST adapters do not expose a portable substring operator, the backend searches within the newest 1,000 matching-scope assets before applying result pagination.
 
+Asset uploads, URL registration, and deletes also refetch inactive asset-list variants. This keeps the Browse tab current when it remounts after an Upload or URL action.
+
 The picker deliberately uses the infinite asset resource directly instead of the core `useSelect` helper: its folder tree, MIME filtering, thumbnails, multi-selection, and paginated grid need the richer Media-specific UI state.
 
 ## Server-side Data Access
