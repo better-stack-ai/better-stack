@@ -1,9 +1,11 @@
 "use client";
 
-import { lazy, Suspense } from "react";
+import { lazy } from "react";
+import { ComposedRoute } from "@btst/stack/client/components";
+import { usePluginOverrides } from "@btst/stack/context";
 import { PageListSkeleton } from "../loading/page-list-skeleton";
-import { ErrorBoundary } from "react-error-boundary";
 import { DefaultError } from "../shared/default-error";
+import type { UIBuilderPluginOverrides } from "../../overrides";
 
 const PageListPageInternal = lazy(() =>
 	import("./page-list-page.internal").then((m) => ({
@@ -12,11 +14,23 @@ const PageListPageInternal = lazy(() =>
 );
 
 export function PageListPage() {
+	const { onRouteError } =
+		usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
+
 	return (
-		<ErrorBoundary FallbackComponent={DefaultError}>
-			<Suspense fallback={<PageListSkeleton />}>
-				<PageListPageInternal />
-			</Suspense>
-		</ErrorBoundary>
+		<ComposedRoute
+			path="/ui-builder"
+			permission={{ resource: "ui-builder:page", action: "read" }}
+			PageComponent={PageListPageInternal}
+			ErrorComponent={DefaultError}
+			LoadingComponent={PageListSkeleton}
+			NotFoundComponent={() => null}
+			onError={(error) => {
+				onRouteError?.("pageList", error, {
+					path: "/ui-builder",
+					isSSR: typeof window === "undefined",
+				});
+			}}
+		/>
 	);
 }

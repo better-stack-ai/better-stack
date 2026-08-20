@@ -3,6 +3,7 @@
 import type { ComponentType, ReactNode } from "react";
 import { Suspense } from "react";
 import { ErrorBoundary } from "react-error-boundary";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import LayerRenderer from "@workspace/ui/components/ui-builder/layer-renderer";
 import type {
 	ComponentRegistry,
@@ -12,15 +13,23 @@ import type {
 import { useSuspenseUIBuilderPageBySlug } from "../hooks/ui-builder-hooks";
 import { defaultComponentRegistry } from "../registry";
 import { uiBuilderLocalization } from "../localization";
+import type { UIBuilderPluginOverrides } from "../overrides";
 
 /**
  * Default loading component for PageRenderer
  */
 function DefaultLoadingComponent(): ReactNode {
+	const t = useTranslate();
+	const { localization } =
+		usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
 	return (
 		<div className="flex items-center justify-center min-h-[200px]">
 			<div className="animate-pulse text-muted-foreground">
-				{uiBuilderLocalization.pageRenderer.loading}
+				{localization?.pageRenderer?.loading ??
+					t(
+						"uiBuilder.pageRenderer.loading",
+						uiBuilderLocalization.pageRenderer.loading,
+					)}
 			</div>
 		</div>
 	);
@@ -30,10 +39,17 @@ function DefaultLoadingComponent(): ReactNode {
  * Default error component for PageRenderer
  */
 function DefaultErrorComponent({ error }: { error: unknown }): ReactNode {
+	const t = useTranslate();
+	const { localization } =
+		usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
 	return (
 		<div className="flex flex-col items-center justify-center min-h-[200px] p-4">
 			<div className="text-destructive font-medium">
-				{uiBuilderLocalization.pageRenderer.error}
+				{localization?.pageRenderer?.error ??
+					t(
+						"uiBuilder.pageRenderer.error",
+						uiBuilderLocalization.pageRenderer.error,
+					)}
 			</div>
 			<div className="text-sm text-muted-foreground mt-2">
 				{error instanceof Error ? error.message : String(error)}
@@ -46,10 +62,17 @@ function DefaultErrorComponent({ error }: { error: unknown }): ReactNode {
  * Default not found component for PageRenderer
  */
 function DefaultNotFoundComponent(): ReactNode {
+	const t = useTranslate();
+	const { localization } =
+		usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
 	return (
 		<div className="flex items-center justify-center min-h-[200px]">
 			<div className="text-muted-foreground">
-				{uiBuilderLocalization.pageRenderer.notFound}
+				{localization?.pageRenderer?.notFound ??
+					t(
+						"uiBuilder.pageRenderer.notFound",
+						uiBuilderLocalization.pageRenderer.notFound,
+					)}
 			</div>
 		</div>
 	);
