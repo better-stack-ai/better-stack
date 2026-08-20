@@ -21,15 +21,11 @@ import { ChatSidebar } from "./chat-sidebar";
 import { ChatInterface } from "./chat-interface";
 import type { UIMessage } from "ai";
 import { usePageAIContext } from "../context/page-ai-context";
-import { usePluginOverrides } from "@btst/stack/context";
+import { usePluginOverrides, useStack } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../overrides";
 import { useAiChatTranslation } from "../localization";
 
 interface ChatLayoutBaseProps {
-	/** API base URL */
-	apiBaseURL: string;
-	/** API base path */
-	apiBasePath: string;
 	/** Current conversation ID (if viewing existing conversation) */
 	conversationId?: string;
 	/** Additional class name for the container */
@@ -81,8 +77,6 @@ export type ChatLayoutProps = ChatLayoutWidgetProps | ChatLayoutFullProps;
  */
 export function ChatLayout(props: ChatLayoutProps) {
 	const {
-		apiBaseURL,
-		apiBasePath,
 		conversationId,
 		layout = "full",
 		className,
@@ -95,6 +89,7 @@ export function ChatLayout(props: ChatLayoutProps) {
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
 	>("ai-chat", {});
+	const { api } = useStack();
 	const tr = useAiChatTranslation(localization);
 
 	// Widget-specific props — TypeScript narrows props to ChatLayoutWidgetProps here
@@ -124,7 +119,7 @@ export function ChatLayout(props: ChatLayoutProps) {
 	// Read page AI context to show badge in header
 	const pageAIContext = usePageAIContext();
 
-	const apiPath = `${apiBaseURL}${apiBasePath}/chat`;
+	const apiPath = `${api?.baseURL ?? ""}${api?.basePath ?? ""}/chat`;
 
 	// Handler for "New chat" button - increments key to force remount
 	const handleNewChat = useCallback(() => {

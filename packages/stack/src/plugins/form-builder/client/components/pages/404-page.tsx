@@ -4,17 +4,19 @@ import { Button } from "@workspace/ui/components/button";
 import {
 	usePluginOverrides,
 	useBasePath,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import type { FormBuilderPluginOverrides } from "../../overrides";
 
 export function NotFoundPage() {
 	const t = useTranslate();
-	const { Link, localization } =
+	const { localization } =
 		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
+	const { router } = useStack();
 	const basePath = useBasePath();
 
-	const LinkComponent = Link || "a";
+	const LinkComponent = router?.Link ?? "a";
 
 	return (
 		<div className="flex flex-col items-center justify-center py-12 px-4 text-center">

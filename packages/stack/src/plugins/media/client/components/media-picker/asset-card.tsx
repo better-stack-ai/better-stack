@@ -3,13 +3,7 @@ import type { SerializedAsset } from "../../../types";
 import { cn } from "@workspace/ui/lib/utils";
 import { File, Check, Copy, Trash2 } from "lucide-react";
 import { isImage, formatBytes } from "./utils";
-import {
-	useCan,
-	useNotify,
-	usePluginOverrides,
-	useTranslate,
-} from "@btst/stack/context";
-import type { MediaPluginOverrides } from "../../overrides";
+import { useCan, useNotify, useStack, useTranslate } from "@btst/stack/context";
 import { AssetPreviewButton } from "./asset-preview-button";
 
 export function AssetCard({
@@ -17,13 +11,11 @@ export function AssetCard({
 	onToggle,
 	selected = false,
 	onDelete,
-	apiBaseURL,
 }: {
 	asset: SerializedAsset;
 	selected?: boolean;
 	onToggle?: () => void;
 	onDelete?: (id: string) => void | Promise<void>;
-	apiBaseURL?: string;
 }) {
 	const t = useTranslate();
 	const notify = useNotify();
@@ -33,17 +25,15 @@ export function AssetCard({
 		action: "delete",
 		params: { id: asset.id },
 	});
-	const { Image: ImageComponent } = usePluginOverrides<
-		MediaPluginOverrides,
-		Partial<MediaPluginOverrides>
-	>("media", {});
+	const { api, router } = useStack();
+	const ImageComponent = router?.Image;
 	const imageAsset = isImage(asset.mimeType);
 	const selectable = typeof onToggle === "function";
 
 	const copyUrl = async () => {
 		let fullUrl: string;
 		try {
-			fullUrl = new URL(asset.url, apiBaseURL).href;
+			fullUrl = new URL(asset.url, api?.baseURL).href;
 		} catch {
 			fullUrl = asset.url;
 		}
@@ -145,7 +135,7 @@ export function AssetCard({
 			)}
 
 			<div className="absolute right-1 top-1 hidden gap-1 group-hover:flex">
-				{apiBaseURL ? (
+				{api?.baseURL ? (
 					<button
 						type="button"
 						title={t("media.actions.copyUrl", "Copy URL")}

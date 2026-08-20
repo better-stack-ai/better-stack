@@ -18,8 +18,7 @@ import { FolderTree } from "./folder-tree";
 import { BrowseTab } from "./browse-tab";
 import { UploadTab } from "./upload-tab";
 import { UrlTab } from "./url-tab";
-import type { MediaPluginOverrides } from "../../overrides";
-import { useCan, usePluginOverrides, useTranslate } from "@btst/stack/context";
+import { useCan, useStack, useTranslate } from "@btst/stack/context";
 
 export interface MediaPickerProps {
 	/**
@@ -44,8 +43,7 @@ export interface MediaPickerProps {
 /**
  * MediaPicker — a Popover-based media browser.
  *
- * Reads API config from the `media` plugin overrides context (set up in StackProvider).
- * Must be rendered inside a `StackProvider` that includes media overrides.
+ * Reads API and router config from `StackProvider`.
  *
  * @example
  * ```tsx
@@ -303,10 +301,8 @@ export function ImageInputField({
 	onChange: (v: string) => void;
 }) {
 	const t = useTranslate();
-	const { Image: ImageComponent } = usePluginOverrides<
-		MediaPluginOverrides,
-		Partial<MediaPluginOverrides>
-	>("media", {});
+	const { router } = useStack();
+	const ImageComponent = router?.Image;
 
 	if (value) {
 		return (

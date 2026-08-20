@@ -6,6 +6,7 @@ import {
 	useNotify,
 	usePluginOverrides,
 	useBasePath,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import { useListState, type ListStateSchema } from "@btst/stack/client";
@@ -62,8 +63,11 @@ const SEARCH_DEBOUNCE_MS = 300;
 export function FormListPage() {
 	const t = useTranslate();
 	const notify = useNotify();
-	const { navigate, Link, localization } =
+	const { localization } =
 		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
+	const { router } = useStack();
+	const navigate = router?.navigate;
+	const Link = router?.Link;
 	const basePath = useBasePath();
 
 	const [{ q: search }, setListState] = useListState(

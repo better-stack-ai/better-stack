@@ -17,7 +17,7 @@ import {
 import { BLOG_QUERY_KEYS } from "./query-key-defs";
 import { serializePost, serializeTag } from "./serializers";
 import type { QueryClient } from "@tanstack/react-query";
-import { runHookWithShim } from "../../utils";
+import { runHook } from "../../utils";
 
 /**
  * Route keys for the blog plugin — matches the keys returned by
@@ -288,7 +288,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeListPosts) {
-							await runHookWithShim(
+							await runHook(
 								() => hooks.onBeforeListPosts!(query, context),
 								ctx.error,
 								"Unauthorized: Cannot list posts",
@@ -324,7 +324,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeCreatePost) {
-							await runHookWithShim(
+							await runHook(
 								() => hooks.onBeforeCreatePost!(ctx.body, context),
 								ctx.error,
 								"Unauthorized: Cannot create post",
@@ -387,7 +387,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeUpdatePost) {
-							await runHookWithShim(
+							await runHook(
 								() =>
 									hooks.onBeforeUpdatePost!(ctx.params.id, ctx.body, context),
 								ctx.error,
@@ -452,7 +452,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 					try {
 						// Authorization hook
 						if (hooks?.onBeforeDeletePost) {
-							await runHookWithShim(
+							await runHook(
 								() => hooks.onBeforeDeletePost!(ctx.params.id, context),
 								ctx.error,
 								"Unauthorized: Cannot delete post",
@@ -489,7 +489,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeListPosts) {
-							await runHookWithShim(
+							await runHook(
 								() => hooks.onBeforeListPosts!({ published: true }, context),
 								ctx.error,
 								"Unauthorized: Cannot list posts",

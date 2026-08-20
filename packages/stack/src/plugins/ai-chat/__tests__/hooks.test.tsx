@@ -64,12 +64,10 @@ async function renderProbe() {
 			<QueryClientProvider client={queryClient}>
 				<StackProvider
 					basePath="/pages"
+					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
+					router={{ refresh }}
 					overrides={{
 						"ai-chat": {
-							apiBaseURL: "http://test.local",
-							apiBasePath: "/api/data",
-							navigate: vi.fn(),
-							refresh,
 							headers: { "x-chat-test": "forwarded" },
 						},
 					}}

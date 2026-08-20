@@ -120,11 +120,13 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
           // SSR authorization hooks
           beforeLoadPageList: async (context) => {
             const session = await getSession(context.headers)
-            return session?.user?.isAdmin === true
+            if (session?.user?.isAdmin !== true)
+              throw new Error("Admin access required")
           },
           beforeLoadPageBuilder: async (pageId, context) => {
             const session = await getSession(context.headers)
-            return session?.user?.isAdmin === true
+            if (session?.user?.isAdmin !== true)
+              throw new Error("Admin access required")
           },
           onLoadError: (error, context) => {
             redirect("/auth/sign-in")
@@ -136,13 +138,14 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
 }
 ```
 
-### 3. Configure Provider Overrides
+### 3. Configure the Provider
 
 Add UI Builder overrides to your layout:
 
 ```tsx title="app/pages/layout.tsx"
 import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
+import { nextRouter } from "@btst/stack/next"
 
 type PluginOverrides = {
   "cms": CMSPluginOverrides,
@@ -151,20 +154,10 @@ type PluginOverrides = {
 
 <StackProvider<PluginOverrides>
   basePath="/pages"
+  router={nextRouter()}
+  api={{ baseURL, basePath: "/api/data" }}
   overrides={{
-    "cms": {
-      apiBaseURL: baseURL,
-      apiBasePath: "/api/data",
-      navigate: (path) => router.push(path),
-      refresh: () => router.refresh(),
-      Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
-    },
     "ui-builder": {
-      apiBaseURL: baseURL,
-      apiBasePath: "/api/data",
-      navigate: (path) => router.push(path),
-      refresh: () => router.refresh(),
-      Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
       componentRegistry: defaultComponentRegistry,
     }
   }}

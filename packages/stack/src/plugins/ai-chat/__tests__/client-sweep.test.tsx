@@ -127,9 +127,6 @@ function overrides(
 ) {
 	return {
 		mode,
-		apiBaseURL: "http://test.local",
-		apiBasePath: "/api/data",
-		navigate: vi.fn(),
 		localization,
 	};
 }
@@ -152,6 +149,7 @@ async function render(
 			<QueryClientProvider client={queryClient}>
 				<StackProvider
 					basePath="/pages"
+					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
 					router={router()}
 					overrides={{
 						"ai-chat": overrides(options.mode, options.localization),
@@ -290,10 +288,9 @@ describe("AI Chat forms, notifications, and i18n", () => {
 	});
 });
 
-describe("AI Chat route lifecycle compatibility", () => {
-	it("runs the conversation render and legacy before-render hooks", async () => {
+describe("AI Chat route lifecycle", () => {
+	it("runs the conversation render hook", async () => {
 		const onRouteRender = vi.fn();
-		const onBeforeConversationPageRendered = vi.fn(() => true);
 		await act(async () => {
 			root.render(
 				<StackProvider
@@ -303,7 +300,6 @@ describe("AI Chat route lifecycle compatibility", () => {
 						"ai-chat": {
 							...overrides(),
 							onRouteRender,
-							onBeforeConversationPageRendered,
 						},
 					}}
 				>
@@ -313,13 +309,6 @@ describe("AI Chat route lifecycle compatibility", () => {
 			await Promise.resolve();
 		});
 
-		expect(onBeforeConversationPageRendered).toHaveBeenCalledWith(
-			"conv-1",
-			expect.objectContaining({
-				path: "/chat/conv-1",
-				params: { id: "conv-1" },
-			}),
-		);
 		expect(onRouteRender).toHaveBeenCalledWith(
 			"chatConversation",
 			expect.objectContaining({ path: "/chat/conv-1" }),

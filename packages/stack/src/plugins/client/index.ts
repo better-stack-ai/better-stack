@@ -22,7 +22,6 @@ export {
 	createApiClient,
 	createSanitizedSSRLoaderError,
 	isConnectionError,
-	runClientHookWithShim,
 	SSR_LOADER_ERROR_MESSAGE,
 } from "../utils";
 

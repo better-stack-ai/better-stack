@@ -6,12 +6,7 @@ import type { StackNotifyProvider } from "../shared/notify-types";
 import { StackAuthBoundary } from "./auth";
 import { StackI18nBoundary } from "./i18n";
 import { StackNotifyBoundary } from "./notify";
-import type {
-	StackApiConfig,
-	StackRouter,
-	StackRouterConfig,
-	WithOptionalRouterOverrides,
-} from "./router";
+import type { StackApiConfig, StackRouter, StackRouterConfig } from "./router";
 
 /**
  * Context value that provides plugin-specific overrides
@@ -35,25 +30,20 @@ interface StackContextValue<TPluginOverrides extends Record<string, any>> {
 	 * Top-level API config applied to all plugins.
 	 */
 	api?: StackApiConfig;
-	/** Top-level auth provider applied to plugin compatibility fields. */
+	/** Top-level auth provider used by identity-aware components. */
 	auth?: StackAuthProvider;
 }
 
 const StackContext = createContext<StackContextValue<any> | null>(null);
 
 /**
- * The `overrides` prop shape for `StackProvider`: per plugin, the fields
- * managed by the top-level `router` / `api` props become optional, and
- * plugin blocks whose remaining fields are all optional can be omitted
- * entirely.
+ * The `overrides` prop shape for `StackProvider`.
+ * Plugin blocks are optional; fields inside each block retain the plugin's
+ * declared requirements.
  */
 export type StackProviderOverrides<
 	TPluginOverrides extends Record<string, any>,
-> = {
-	[K in keyof TPluginOverrides]?: WithOptionalRouterOverrides<
-		TPluginOverrides[K]
-	>;
-};
+> = Partial<TPluginOverrides>;
 
 /** Removes keys whose value is `undefined` so they don't clobber lower layers in spreads. */
 function stripUndefined<T extends Record<string, any>>(obj: T): Partial<T> {
@@ -118,11 +108,9 @@ function RouterBridge({
  * };
  *
  * <StackProvider<MyPluginOverrides>
+ *   router={frameworkRouter}
+ *   api={{ baseURL, basePath: "/api/data" }}
  *   overrides={{
- *     todos: {
- *       Link: (props) => <NextLink {...props} />,
- *       navigate: (path) => router.push(path),
- *     },
  *     messages: {
  *       MarkdownRenderer: (props) => <ReactMarkdown {...props} />,
  *     }
@@ -132,9 +120,8 @@ function RouterBridge({
  * </StackProvider>
  * ```
  *
- * With a framework router preset, the shared `Link`/`navigate`/`refresh`/
- * `Image` wiring and API config move to the top level and per-plugin
- * overrides only carry genuinely plugin-specific values:
+ * Framework router and API wiring live at the top level. Per-plugin overrides
+ * carry only genuinely plugin-specific values:
  *
  * @example
  * ```tsx
@@ -301,38 +288,11 @@ export function usePluginOverrides<
 	pluginName: string,
 	defaultValues?: TDefaults,
 ): OverridesResult<TOverrides, TDefaults> {
-	const context = useStack();
-
-	const pluginOverrides = context.overrides[pluginName];
-
-	// Resolution order (lowest to highest precedence):
-	// hook defaults -> top-level router/api/auth -> per-plugin overrides
-	const { router, api, auth } = context;
-	if (!router && !api && !auth) {
-		// No top-level provider config — behave exactly as before
-		const overrides = defaultValues
-			? { ...defaultValues, ...pluginOverrides }
-			: pluginOverrides;
-		return overrides as OverridesResult<TOverrides, TDefaults>;
-	}
-
-	const providerLayer = stripUndefined({
-		Link: router?.Link,
-		Image: router?.Image,
-		navigate: router?.navigate,
-		refresh: router?.refresh,
-		getSearchParams: router?.getSearchParams,
-		setSearchParams: router?.setSearchParams,
-		apiBaseURL: api?.baseURL,
-		apiBasePath: api?.basePath,
-		loginHref: auth?.loginPath,
-	});
-
-	const overrides = {
-		...defaultValues,
-		...providerLayer,
-		...pluginOverrides,
-	};
+	const { overrides: allOverrides } = useStack();
+	const pluginOverrides = allOverrides[pluginName];
+	const overrides = defaultValues
+		? { ...defaultValues, ...pluginOverrides }
+		: (pluginOverrides ?? {});
 
 	return overrides as OverridesResult<TOverrides, TDefaults>;
 }

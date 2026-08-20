@@ -2,7 +2,6 @@ import {
 	defineClientPlugin,
 	createApiClient,
 	isConnectionError,
-	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
@@ -201,10 +200,7 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 			try {
 				// Before hook
 				if (hooks?.beforeLoadPosts) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadPosts!({ published }, context),
-						"Load prevented by beforeLoadPosts hook",
-					);
+					await hooks.beforeLoadPosts({ published }, context);
 				}
 
 				await queryClient.prefetchInfiniteQuery({
@@ -224,10 +220,7 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 				if (hooks?.afterLoadPosts) {
 					const posts =
 						queryClient.getQueryData<Post[]>(listQuery.queryKey) || null;
-					await runClientHookWithShim(
-						() => hooks.afterLoadPosts!(posts, { published }, context),
-						"Load prevented by afterLoadPosts hook",
-					);
+					await hooks.afterLoadPosts(posts, { published }, context);
 				}
 
 				// Check if there was an error after afterLoadPosts hook
@@ -291,10 +284,7 @@ function createPostLoader(
 			try {
 				// Before hook
 				if (hooks?.beforeLoadPost) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadPost!(slug, context),
-						"Load prevented by beforeLoadPost hook",
-					);
+					await hooks.beforeLoadPost(slug, context);
 				}
 
 				const client = createApiClient<BlogApiRouter>({
@@ -313,10 +303,7 @@ function createPostLoader(
 				if (hooks?.afterLoadPost) {
 					const post =
 						queryClient.getQueryData<Post>(postQuery.queryKey) || null;
-					await runClientHookWithShim(
-						() => hooks.afterLoadPost!(post, slug, context),
-						"Load prevented by afterLoadPost hook",
-					);
+					await hooks.afterLoadPost(post, slug, context);
 				}
 
 				// Check if there was an error after afterLoadPost hook
@@ -365,18 +352,12 @@ function createNewPostLoader(config: BlogClientConfig) {
 			try {
 				// Before hook
 				if (hooks?.beforeLoadNewPost) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadNewPost!(context),
-						"Load prevented by beforeLoadNewPost hook",
-					);
+					await hooks.beforeLoadNewPost(context);
 				}
 
 				// After hook
 				if (hooks?.afterLoadNewPost) {
-					await runClientHookWithShim(
-						() => hooks.afterLoadNewPost!(context),
-						"Load prevented by afterLoadNewPost hook",
-					);
+					await hooks.afterLoadNewPost(context);
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR

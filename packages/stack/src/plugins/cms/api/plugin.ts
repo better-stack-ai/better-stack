@@ -41,7 +41,7 @@ import {
 } from "./relations";
 import type { QueryClient } from "@tanstack/react-query";
 import { CMS_QUERY_KEYS } from "./query-key-defs";
-import { runHookWithShim } from "../../utils";
+import { runHook } from "../../utils";
 
 /**
  * Route keys for the CMS plugin — matches the keys returned by
@@ -715,7 +715,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					// Call before hook - may deny operation
 					const processedData = validation.data as Record<string, unknown>;
 					if (config.hooks?.onBeforeCreate) {
-						await runHookWithShim(
+						await runHook(
 							() => config.hooks!.onBeforeCreate!(processedData, context),
 							ctx.error,
 							"Create operation denied",
@@ -857,7 +857,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					// Call before hook - may deny operation
 					const processedData = validatedData;
 					if (config.hooks?.onBeforeUpdate && validatedData) {
-						await runHookWithShim(
+						await runHook(
 							() => config.hooks!.onBeforeUpdate!(id, validatedData, context),
 							ctx.error,
 							"Update operation denied",
@@ -928,7 +928,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 
 					// Call before hook
 					if (config.hooks?.onBeforeDelete) {
-						await runHookWithShim(
+						await runHook(
 							() => config.hooks!.onBeforeDelete!(id, context),
 							ctx.error,
 							"Delete operation denied",

@@ -116,10 +116,7 @@ function createMockRouter(initial = "") {
 }
 
 const mediaOverrides = () => ({
-	apiBaseURL: "http://test.local",
-	apiBasePath: "/api/data",
 	queryClient,
-	navigate: vi.fn(),
 });
 
 async function renderLibrary(
@@ -134,6 +131,7 @@ async function renderLibrary(
 		root.render(
 			<StackProvider
 				basePath="/pages"
+				api={{ baseURL: "http://test.local", basePath: "/api/data" }}
 				router={router}
 				overrides={{ media: mediaOverrides() }}
 				auth={options.auth}

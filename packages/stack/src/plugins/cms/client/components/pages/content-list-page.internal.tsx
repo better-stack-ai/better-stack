@@ -17,6 +17,7 @@ import {
 	useNotify,
 	usePluginOverrides,
 	useBasePath,
+	useStack,
 	useTranslate,
 	type TranslateFn,
 } from "@btst/stack/context";
@@ -49,7 +50,10 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 	const t = useTranslate();
 	const notify = useNotify();
 	const overrides = usePluginOverrides<CMSPluginOverrides>("cms");
-	const { navigate, Link, localization } = overrides;
+	const { localization } = overrides;
+	const { router } = useStack();
+	const navigate = router?.navigate;
+	const Link = router?.Link;
 	const basePath = useBasePath();
 
 	// Call lifecycle hooks for authorization
@@ -61,12 +65,6 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 			isSSR: typeof window === "undefined",
 		},
 		overrides,
-		beforeRenderHook: (overrides, context) => {
-			if (overrides.onBeforeListRendered) {
-				return overrides.onBeforeListRendered(typeSlug, context);
-			}
-			return true;
-		},
 	});
 
 	const limit = 20;
@@ -170,7 +168,7 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 						<Button
 							variant="ghost"
 							size="icon"
-							onClick={() => navigate(`${basePath}/cms`)}
+							onClick={() => void navigate?.(`${basePath}/cms`)}
 						>
 							<ArrowLeft className="h-4 w-4" />
 						</Button>
@@ -190,7 +188,9 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 						action="create"
 						params={{ typeSlug }}
 					>
-						<Button onClick={() => navigate(`${basePath}/cms/${typeSlug}/new`)}>
+						<Button
+							onClick={() => void navigate?.(`${basePath}/cms/${typeSlug}/new`)}
+						>
 							<Plus className="h-4 w-4 mr-2" />
 							{localization?.CMS_BUTTON_NEW_ITEM ??
 								t("cms.common.newItem", "New Item")}
@@ -250,7 +250,9 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 									params={{ typeSlug }}
 								>
 									<Button
-										onClick={() => navigate(`${basePath}/cms/${typeSlug}/new`)}
+										onClick={() =>
+											void navigate?.(`${basePath}/cms/${typeSlug}/new`)
+										}
 									>
 										<Plus className="h-4 w-4 mr-2" />
 										{localization?.CMS_BUTTON_CREATE ??
@@ -304,7 +306,7 @@ function ContentTable({
 	typeSlug: string;
 	basePath: string;
 	LinkComponent: React.ElementType;
-	navigate: (path: string) => void | Promise<void>;
+	navigate?: (path: string) => void | Promise<void>;
 	onDelete: (id: string) => void;
 	isDeleting: boolean;
 	formatDate: (dateString: string) => string;
@@ -361,7 +363,9 @@ function ContentTable({
 											variant="ghost"
 											size="icon"
 											onClick={() =>
-												navigate(`${basePath}/cms/${typeSlug}/${item.id}`)
+												void navigate?.(
+													`${basePath}/cms/${typeSlug}/${item.id}`,
+												)
 											}
 										>
 											<Pencil className="h-4 w-4" />

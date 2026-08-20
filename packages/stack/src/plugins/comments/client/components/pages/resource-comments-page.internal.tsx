@@ -16,34 +16,33 @@ import {
 } from "@workspace/ui/components/avatar";
 import { CheckCircle, ShieldOff, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { CanAccess, useNotify, useTranslate } from "@btst/stack/context";
+import {
+	CanAccess,
+	useNotify,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
 import type { CommentsLocalization } from "../../localization";
 import { getInitials } from "../../utils";
 
 interface ResourceCommentsPageProps {
 	resourceId: string;
 	resourceType: string;
-	apiBaseURL: string;
-	apiBasePath: string;
-	headers?: HeadersInit;
-	currentUserId?: string;
-	loginHref?: string;
 	localization?: Partial<CommentsLocalization>;
 }
 
 export function ResourceCommentsPage({
 	resourceId,
 	resourceType,
-	apiBaseURL,
-	apiBasePath,
-	headers,
-	currentUserId,
-	loginHref,
 	localization,
 }: ResourceCommentsPageProps) {
 	const t = useTranslate();
 	const notify = useNotify();
-	const config = { apiBaseURL, apiBasePath, headers };
+	const { api } = useStack();
+	const config = {
+		apiBaseURL: api?.baseURL ?? "",
+		apiBasePath: api?.basePath ?? "",
+	};
 
 	const {
 		comments: pendingComments,
@@ -157,11 +156,6 @@ export function ResourceCommentsPage({
 				<CommentThread
 					resourceId={resourceId}
 					resourceType={resourceType}
-					apiBaseURL={apiBaseURL}
-					apiBasePath={apiBasePath}
-					headers={headers}
-					currentUserId={currentUserId}
-					loginHref={loginHref}
 					localization={localization}
 				/>
 			</div>

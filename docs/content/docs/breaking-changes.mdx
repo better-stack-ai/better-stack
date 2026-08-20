@@ -10,12 +10,64 @@ This page documents breaking changes between major versions and provides migrati
 
 ---
 
+## v2 → v3: Single provider wiring path
+
+BTST v3 removes the per-plugin compatibility path for framework wiring. Configure router, API, and auth once on `StackProvider`; plugin overrides now contain only plugin-specific customization.
+
+```diff
+<StackProvider
+  basePath="/pages"
++ router={nextRouter()}
++ api={{ baseURL, basePath: "/api/data" }}
++ auth={{ getIdentity, loginPath: "/login", can }}
+  overrides={{
+    blog: {
+-     apiBaseURL: baseURL,
+-     apiBasePath: "/api/data",
+-     navigate: (path) => router.push(path),
+-     refresh: () => router.refresh(),
+-     Link,
+-     Image,
+      uploadImage,
+    },
+  }}
+>
+```
+
+The `Link`, `Image`, `navigate`, `refresh`, `apiBaseURL`, and `apiBasePath` fields were removed from built-in plugin override types. The `apiBaseURL` and `apiBasePath` fields on each client plugin factory remain required because SSR loaders run outside React Context.
+
+### Comments use provider API and identity
+
+`CommentThread`, `CommentCount`, moderation pages, and user-comments pages no longer accept manual API, header, identity, or login props. Render them under the configured provider:
+
+```diff
+<CommentThread
+  resourceId={post.slug}
+  resourceType="blog-post"
+- apiBaseURL={baseURL}
+- apiBasePath="/api/data"
+- currentUserId={session?.user?.id}
+- loginHref="/login"
+- headers={headers}
+/>
+```
+
+### Route authorization uses `StackProvider.auth`
+
+The `onBefore*PageRendered` override callbacks were removed. Built-in protected routes declare resource/action permissions through `ComposedRoute`; implement `auth.can` for client-side gating and keep SSR/backend checks in client loader hooks and backend lifecycle hooks.
+
+### Backend hooks deny by throwing
+
+The compatibility shim for boolean lifecycle-hook returns was removed. Returning `false` no longer denies a request; throw an `Error` from an `onBefore*` hook instead. Hooks that transform input continue to return the transformed object.
+
+---
+
 ## v2 → v3: Declarative routes and the `pageComponents` contract
 
 BTST v3 adopts the declarative `defineRoute` / `defineRoutes` helpers from `@btst/yar` 1.3+ for all plugin routes, and stabilizes page component identity across re-renders (no more subtree remounts or Suspense re-triggers on parent renders).
 
 <Callout type="info">
-  The only consumer-facing change is the props passed to `pageComponents` overrides on parameterized routes. Overrides for routes without params, and all other plugin config, are unchanged.
+  This section covers the route-definition migration. Overrides for routes without params are unchanged.
 </Callout>
 
 ### `pageComponents` overrides now receive the route context

@@ -19,25 +19,10 @@ export interface RouteContext {
 /**
  * Overridable components and functions for the Form Builder plugin
  *
- * External consumers can provide their own implementations of these
- * to customize the behavior for their framework (Next.js, React Router, etc.)
+ * External consumers can provide their own implementations to customize
+ * plugin-specific components and behavior.
  */
 export interface FormBuilderPluginOverrides {
-	/**
-	 * Link component for navigation
-	 */
-	Link?: ComponentType<React.ComponentProps<"a"> & Record<string, unknown>>;
-
-	/**
-	 * Navigation function for programmatic navigation
-	 */
-	navigate: (path: string) => void | Promise<void>;
-
-	/**
-	 * Refresh function to invalidate server-side cache (e.g., Next.js router.refresh())
-	 */
-	refresh?: () => void | Promise<void>;
-
 	/**
 	 * Custom field components for AutoForm fields.
 	 *
@@ -72,16 +57,6 @@ export interface FormBuilderPluginOverrides {
 	localization?: FormBuilderLocalization;
 
 	/**
-	 * API base URL
-	 */
-	apiBaseURL: string;
-
-	/**
-	 * API base path
-	 */
-	apiBasePath: string;
-
-	/**
 	 * Whether to show the attribution
 	 */
 	showAttribution?: boolean;
@@ -114,33 +89,4 @@ export interface FormBuilderPluginOverrides {
 		error: Error,
 		context: RouteContext,
 	) => void | Promise<void>;
-
-	/**
-	 * Called before the form list page is rendered
-	 * Return false to prevent rendering (e.g., for authorization)
-	 * @param context - Route context
-	 */
-	onBeforeFormListRendered?: (context: RouteContext) => boolean;
-
-	/**
-	 * Called before the form builder page is rendered
-	 * Return false to prevent rendering (e.g., for authorization)
-	 * @param id - The form ID (null for new forms)
-	 * @param context - Route context
-	 */
-	onBeforeFormBuilderRendered?: (
-		id: string | null,
-		context: RouteContext,
-	) => boolean;
-
-	/**
-	 * Called before the submissions page is rendered
-	 * Return false to prevent rendering (e.g., for authorization)
-	 * @param formId - The form ID
-	 * @param context - Route context
-	 */
-	onBeforeSubmissionsRendered?: (
-		formId: string,
-		context: RouteContext,
-	) => boolean;
 }

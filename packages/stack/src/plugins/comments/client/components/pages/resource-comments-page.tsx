@@ -6,7 +6,6 @@ import { usePluginOverrides } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../../overrides";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { PageWrapper } from "../shared/page-wrapper";
-import { useResolvedCurrentUserId } from "../../utils";
 
 const ResourceCommentsPageInternal = lazy(() =>
 	import("./resource-comments-page.internal").then((m) => ({
@@ -56,8 +55,6 @@ function ResourceCommentsPageWrapper({
 	resourceType: string;
 }) {
 	const overrides = usePluginOverrides<CommentsPluginOverrides>("comments");
-	const { currentUserId: resolvedUserId, isPending: isIdentityPending } =
-		useResolvedCurrentUserId(overrides.currentUserId);
 
 	useRouteLifecycle({
 		routeName: "resourceComments",
@@ -67,35 +64,12 @@ function ResourceCommentsPageWrapper({
 			isSSR: typeof window === "undefined",
 		},
 		overrides,
-		beforeRenderHook: (o, context) => {
-			if (o.onBeforeResourceCommentsRendered) {
-				return o.onBeforeResourceCommentsRendered(
-					resourceType,
-					resourceId,
-					context,
-				);
-			}
-			return true;
-		},
 	});
-	if (isIdentityPending) {
-		return (
-			<PageWrapper>
-				<ResourceCommentsSkeleton />
-			</PageWrapper>
-		);
-	}
-
 	return (
 		<PageWrapper>
 			<ResourceCommentsPageInternal
 				resourceId={resourceId}
 				resourceType={resourceType}
-				apiBaseURL={overrides.apiBaseURL}
-				apiBasePath={overrides.apiBasePath}
-				headers={overrides.headers as HeadersInit | undefined}
-				currentUserId={resolvedUserId}
-				loginHref={overrides.loginHref}
 				localization={overrides.localization}
 			/>
 		</PageWrapper>

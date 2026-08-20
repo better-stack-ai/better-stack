@@ -14,7 +14,6 @@ export function BrowseTab({
 	accept,
 	onToggle,
 	onDelete,
-	apiBaseURL,
 	emptyMessage,
 	search: controlledSearch,
 	searchQuery,
@@ -25,7 +24,6 @@ export function BrowseTab({
 	accept?: string[];
 	onToggle?: (asset: SerializedAsset) => void;
 	onDelete?: (id: string) => void | Promise<void>;
-	apiBaseURL?: string;
 	emptyMessage?: string;
 	/** Optional controlled input value used by the standalone library page. */
 	search?: string;
@@ -116,7 +114,6 @@ export function BrowseTab({
 								selected={selected.some((s) => s.id === asset.id)}
 								onToggle={selectable ? () => onToggle(asset) : undefined}
 								onDelete={onDelete}
-								apiBaseURL={apiBaseURL}
 							/>
 						))}
 					</div>

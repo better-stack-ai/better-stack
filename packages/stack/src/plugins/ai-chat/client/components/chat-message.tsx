@@ -28,7 +28,7 @@ import {
 	useEffect,
 	type ComponentType,
 } from "react";
-import { usePluginOverrides } from "@btst/stack/context";
+import { usePluginOverrides, useStack } from "@btst/stack/context";
 import type {
 	AiChatPluginOverrides,
 	ToolCallProps,
@@ -133,15 +133,14 @@ export function ChatMessage({
 }: ChatMessageProps) {
 	const isUser = message.role === "user";
 
-	const {
-		Link,
-		Image,
-		localization: customLocalization,
-		toolRenderers,
-	} = usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
-		"ai-chat",
-		{},
-	);
+	const { localization: customLocalization, toolRenderers } =
+		usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
+			"ai-chat",
+			{},
+		);
+	const { router } = useStack();
+	const Link = router?.Link;
+	const Image = router?.Image;
 
 	const tr = useAiChatTranslation(customLocalization);
 

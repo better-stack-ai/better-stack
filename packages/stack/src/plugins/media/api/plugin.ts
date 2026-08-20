@@ -31,7 +31,7 @@ import {
 	isVercelBlobAdapter,
 	type StorageAdapter,
 } from "./storage-adapter";
-import { runHookWithShim } from "../../utils";
+import { runHook } from "../../utils";
 
 /**
  * Sanitize a string for use in an S3 object key.
@@ -321,7 +321,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						: undefined;
 
 					if (hooks?.onBeforeListAssets) {
-						await runHookWithShim(
+						await runHook(
 							() => hooks.onBeforeListAssets!(query, context),
 							ctx.error,
 							"Unauthorized: Cannot list assets",
@@ -349,7 +349,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						: undefined;
 
 					if (hooks?.onBeforeUpload) {
-						await runHookWithShim(
+						await runHook(
 							() =>
 								hooks.onBeforeUpload!(
 									{
@@ -459,7 +459,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					}
 
 					if (hooks?.onBeforeUpdateAsset) {
-						await runHookWithShim(
+						await runHook(
 							() => hooks.onBeforeUpdateAsset!(existing, ctx.body, context),
 							ctx.error,
 							"Unauthorized: Cannot update asset",
@@ -510,7 +510,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					}
 
 					if (hooks?.onBeforeDelete) {
-						await runHookWithShim(
+						await runHook(
 							() => hooks.onBeforeDelete!(asset, context),
 							ctx.error,
 							"Unauthorized: Cannot delete asset",
@@ -563,7 +563,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						: undefined;
 
 					if (hooks?.onBeforeListFolders) {
-						await runHookWithShim(
+						await runHook(
 							() => hooks.onBeforeListFolders!(filter, context),
 							ctx.error,
 							"Unauthorized: Cannot list folders",
@@ -591,7 +591,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						: undefined;
 
 					if (hooks?.onBeforeCreateFolder) {
-						await runHookWithShim(
+						await runHook(
 							() => hooks.onBeforeCreateFolder!(ctx.body, context),
 							ctx.error,
 							"Unauthorized: Cannot create folder",
@@ -637,7 +637,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					}
 
 					if (hooks?.onBeforeDeleteFolder) {
-						await runHookWithShim(
+						await runHook(
 							() => hooks.onBeforeDeleteFolder!(folder, context),
 							ctx.error,
 							"Unauthorized: Cannot delete folder",
@@ -739,7 +739,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						: undefined;
 
 					if (hooks?.onBeforeUpload) {
-						await runHookWithShim(
+						await runHook(
 							() =>
 								hooks.onBeforeUpload!(
 									{
@@ -846,7 +846,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 						: undefined;
 
 					if (hooks?.onBeforeUpload) {
-						await runHookWithShim(
+						await runHook(
 							() =>
 								hooks.onBeforeUpload!(
 									{
@@ -937,7 +937,7 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 							const size = parsed.size as number | undefined;
 
 							if (hooks?.onBeforeUpload) {
-								await runHookWithShim(
+								await runHook(
 									() =>
 										hooks.onBeforeUpload!(
 											{ filename, mimeType, size },

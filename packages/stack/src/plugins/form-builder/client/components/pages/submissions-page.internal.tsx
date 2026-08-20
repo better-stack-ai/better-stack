@@ -6,6 +6,7 @@ import {
 	useNotify,
 	usePluginOverrides,
 	useBasePath,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
@@ -53,8 +54,9 @@ export interface SubmissionsPageProps {
 export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 	const t = useTranslate();
 	const notify = useNotify();
-	const { Link, localization } =
+	const { localization } =
 		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
+	const { router } = useStack();
 	const basePath = useBasePath();
 
 	const { form } = useSuspenseFormById(formId);
@@ -66,7 +68,7 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 	const [viewSubmission, setViewSubmission] =
 		useState<SerializedFormSubmissionWithData | null>(null);
 
-	const LinkComponent = Link || "a";
+	const LinkComponent = router?.Link ?? "a";
 
 	const handleDelete = async () => {
 		if (!deleteId) return;

@@ -134,7 +134,7 @@ export type Resource<TResources extends ResourcesDeclaration> = {
 };
 
 export interface CreateResourceConfig<TResources extends ResourcesDeclaration> {
-	/** Plugin name used to resolve overrides (`usePluginOverrides(plugin)`) */
+	/** Plugin name used to resolve plugin-specific request headers. */
 	plugin: string;
 	resources: TResources;
 }
@@ -236,9 +236,9 @@ function createMutationHook(
 /**
  * Generates the full hook surface for a plugin's resources.
  *
- * Hooks resolve `apiBaseURL` / `apiBasePath` / `headers` / `navigate` /
- * `refresh` from `usePluginOverrides(plugin)` at render time, so the
- * declaration can live at module scope.
+ * Hooks resolve API and router wiring from `StackProvider`, plus any
+ * plugin-specific request headers, at render time so the declaration can
+ * live at module scope.
  */
 export function createResource<const TResources extends ResourcesDeclaration>(
 	config: CreateResourceConfig<TResources>,

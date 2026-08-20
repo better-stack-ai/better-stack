@@ -3,7 +3,6 @@ import {
 	defineClientPlugin,
 	createApiClient,
 	isConnectionError,
-	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
@@ -174,10 +173,7 @@ function createDashboardLoader(config: CMSClientConfig) {
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadDashboard) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadDashboard!(context),
-						"Load prevented by beforeLoadDashboard hook",
-					);
+					await hooks.beforeLoadDashboard(context);
 				}
 
 				await queryClient.prefetchQuery(typesQuery);
@@ -251,10 +247,7 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadContentList) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadContentList!(typeSlug, context),
-						"Load prevented by beforeLoadContentList hook",
-					);
+					await hooks.beforeLoadContentList(typeSlug, context);
 				}
 
 				// Prefetch content types
@@ -343,10 +336,7 @@ function createContentEditorLoader(
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadContentEditor) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadContentEditor!(typeSlug, id, context),
-						"Load prevented by beforeLoadContentEditor hook",
-					);
+					await hooks.beforeLoadContentEditor(typeSlug, id, context);
 				}
 
 				const promises = [queryClient.prefetchQuery(typesQuery)];

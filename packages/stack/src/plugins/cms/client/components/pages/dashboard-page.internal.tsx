@@ -10,6 +10,7 @@ import {
 import {
 	usePluginOverrides,
 	useBasePath,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
@@ -21,7 +22,9 @@ import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 export function DashboardPage() {
 	const t = useTranslate();
 	const overrides = usePluginOverrides<CMSPluginOverrides>("cms");
-	const { navigate, localization } = overrides;
+	const { localization } = overrides;
+	const { router } = useStack();
+	const navigate = router?.navigate;
 	const basePath = useBasePath();
 
 	// Call lifecycle hooks for authorization
@@ -32,12 +35,6 @@ export function DashboardPage() {
 			isSSR: typeof window === "undefined",
 		},
 		overrides,
-		beforeRenderHook: (overrides, context) => {
-			if (overrides.onBeforeDashboardRendered) {
-				return overrides.onBeforeDashboardRendered(context);
-			}
-			return true;
-		},
 	});
 	const { contentTypes } = useSuspenseContentTypes();
 
@@ -103,7 +100,7 @@ export function DashboardPage() {
 						<Card
 							key={ct.id}
 							className="hover:border-primary/50 transition-colors cursor-pointer"
-							onClick={() => navigate(`${basePath}/cms/${ct.slug}`)}
+							onClick={() => void navigate?.(`${basePath}/cms/${ct.slug}`)}
 						>
 							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 								<CardTitle className="text-lg font-medium">{ct.name}</CardTitle>

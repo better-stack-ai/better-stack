@@ -107,15 +107,9 @@ describe("resource useForm", () => {
 			root.render(
 				<StackProvider
 					basePath="/pages"
+					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
+					router={{ navigate, refresh }}
 					notify={{ success: notifySuccess, error: notifyError }}
-					overrides={{
-						"test-plugin": {
-							apiBaseURL: "http://test.local",
-							apiBasePath: "/api/data",
-							navigate,
-							refresh,
-						},
-					}}
 				>
 					<QueryClientProvider client={queryClient}>
 						<Probe />

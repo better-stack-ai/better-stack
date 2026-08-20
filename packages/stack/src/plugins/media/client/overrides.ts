@@ -1,4 +1,3 @@
-import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { ImageCompressionOptions } from "./utils/image-compression";
 
@@ -18,16 +17,6 @@ export type MediaUploadMode = "direct" | "s3" | "vercel-blob";
  */
 export interface MediaPluginOverrides {
 	/**
-	 * Base URL for API calls (e.g., "http://localhost:3000").
-	 */
-	apiBaseURL: string;
-
-	/**
-	 * Path where the API is mounted (e.g., "/api/data").
-	 */
-	apiBasePath: string;
-
-	/**
 	 * React Query client — used by the MediaPicker to cache and fetch assets.
 	 */
 	queryClient: QueryClient;
@@ -42,32 +31,6 @@ export interface MediaPluginOverrides {
 	 * Optional headers to pass with API requests (e.g., for SSR auth).
 	 */
 	headers?: HeadersInit;
-
-	/**
-	 * Navigation function for programmatic navigation.
-	 */
-	navigate: (path: string) => void | Promise<void>;
-
-	/**
-	 * Link component for navigation within the media library page.
-	 */
-	Link?: ComponentType<React.ComponentProps<"a"> & Record<string, any>>;
-
-	/**
-	 * Image component for rendering asset thumbnails and previews.
-	 *
-	 * When provided, replaces the default `<img>` element in asset cards,
-	 * the media library grid, and the ImageInputField preview. Use this
-	 * to plug in Next.js `<Image>` for automatic optimisation.
-	 *
-	 * @example
-	 * ```tsx
-	 * Image: (props) => <NextImage {...props} />
-	 * ```
-	 */
-	Image?: ComponentType<
-		React.ImgHTMLAttributes<HTMLImageElement> & Record<string, any>
-	>;
 
 	/**
 	 * Client-side image compression applied before upload via the Canvas API.
@@ -100,20 +63,6 @@ export interface MediaPluginOverrides {
 		error: Error,
 		context: MediaRouteContext,
 	) => void | Promise<void>;
-
-	/**
-	 * Called before the media library page is rendered.
-	 * Return `false` to prevent rendering (e.g., redirect unauthenticated users).
-	 *
-	 * @example
-	 * ```ts
-	 * media: {
-	 *   onBeforeLibraryPageRendered: (context) => !!currentUser?.isAdmin,
-	 *   onRouteError: (routeName, error, context) => navigate("/login"),
-	 * }
-	 * ```
-	 */
-	onBeforeLibraryPageRendered?: (context: MediaRouteContext) => boolean;
 }
 
 export interface MediaRouteContext {

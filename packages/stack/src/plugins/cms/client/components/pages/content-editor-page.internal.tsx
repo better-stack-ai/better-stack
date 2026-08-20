@@ -6,6 +6,7 @@ import { Button } from "@workspace/ui/components/button";
 import {
 	usePluginOverrides,
 	useBasePath,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
@@ -135,7 +136,9 @@ interface ContentEditorPageProps {
 export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 	const t = useTranslate();
 	const overrides = usePluginOverrides<CMSPluginOverrides>("cms");
-	const { navigate, localization } = overrides;
+	const { localization } = overrides;
+	const { router } = useStack();
+	const navigate = router?.navigate;
 	const basePath = useBasePath();
 
 	// Parse prefill query parameters for pre-populating fields when creating new items
@@ -151,12 +154,6 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 			isSSR: typeof window === "undefined",
 		},
 		overrides,
-		beforeRenderHook: (overrides, context) => {
-			if (overrides.onBeforeEditorRendered) {
-				return overrides.onBeforeEditorRendered(typeSlug, id ?? null, context);
-			}
-			return true;
-		},
 	});
 
 	const { contentTypes } = useSuspenseContentTypes();
@@ -194,7 +191,7 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 			data: { slug: values.slug, data: values.data },
 		}),
 		onSuccess: () => {
-			navigate(`${basePath}/cms/${typeSlug}`);
+			void navigate?.(`${basePath}/cms/${typeSlug}`);
 		},
 	});
 
@@ -275,7 +272,7 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 					<Button
 						variant="ghost"
 						size="icon"
-						onClick={() => navigate(`${basePath}/cms/${typeSlug}`)}
+						onClick={() => void navigate?.(`${basePath}/cms/${typeSlug}`)}
 					>
 						<ArrowLeft className="h-4 w-4" />
 					</Button>
@@ -298,7 +295,7 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 					initialSlug={item?.slug}
 					isEditing={isEditing}
 					onSubmit={handleSubmit}
-					onCancel={() => navigate(`${basePath}/cms/${typeSlug}`)}
+					onCancel={() => void navigate?.(`${basePath}/cms/${typeSlug}`)}
 					fieldErrors={resourceForm.fieldErrors}
 					errorMessage={
 						hasFieldErrors ? undefined : resourceForm.error?.message

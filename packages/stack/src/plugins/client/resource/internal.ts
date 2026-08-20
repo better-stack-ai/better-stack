@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { UseMutationResult } from "@tanstack/react-query";
-import { usePluginOverrides } from "../../../context";
+import { usePluginOverrides, useStack } from "../../../context";
 import { createApiClient } from "../../utils";
 import {
 	buildQueryKey,
@@ -13,16 +13,10 @@ import {
 } from "./queries";
 
 /**
- * The override fields the resource layer needs from `usePluginOverrides`.
- * All plugins expose these — `apiBaseURL`/`apiBasePath` directly, the router
- * fields via the top-level `router` prop merge on `StackProvider`.
+ * Plugin-specific request options consumed by the resource layer.
  */
 export interface ResourceOverrides {
-	apiBaseURL: string;
-	apiBasePath: string;
 	headers?: HeadersInit;
-	navigate?: (path: string) => void | Promise<void>;
-	refresh?: () => void | Promise<void>;
 }
 
 export interface ResourceContext {
@@ -34,13 +28,18 @@ export interface ResourceContext {
 
 /** Resolves the plugin overrides and builds the better-call client. */
 export function useResourceContext(plugin: string): ResourceContext {
-	const { apiBaseURL, apiBasePath, headers, navigate, refresh } =
-		usePluginOverrides<ResourceOverrides>(plugin);
+	const { api, router } = useStack();
+	const { headers } = usePluginOverrides<ResourceOverrides>(plugin);
 	const client = createApiClient({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
+		baseURL: api?.baseURL,
+		basePath: api?.basePath,
 	});
-	return { client, headers, navigate, refresh };
+	return {
+		client,
+		headers,
+		navigate: router?.navigate,
+		refresh: router?.refresh,
+	};
 }
 
 /**

@@ -1,13 +1,8 @@
 "use client";
 
-import {
-	usePluginOverrides,
-	useBasePath,
-	useTranslate,
-} from "@btst/stack/context";
+import { useBasePath, useStack, useTranslate } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { BlogPluginOverrides } from "../../overrides";
 import { DefaultLink } from "./defaults";
 import type { SerializedPost } from "../../../types";
 
@@ -21,12 +16,8 @@ export function PostNavigation({
 	nextPost,
 }: PostNavigationProps) {
 	const t = useTranslate();
-	const { Link } = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", {
-		Link: DefaultLink,
-	});
+	const { router } = useStack();
+	const Link = router?.Link ?? DefaultLink;
 	const basePath = useBasePath();
 	const blogPath = `${basePath}/blog`;
 

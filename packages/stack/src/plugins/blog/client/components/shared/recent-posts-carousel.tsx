@@ -3,6 +3,7 @@
 import {
 	useBasePath,
 	usePluginOverrides,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
@@ -23,13 +24,14 @@ interface RecentPostsCarouselProps {
 
 export function RecentPostsCarousel({ posts }: RecentPostsCarouselProps) {
 	const t = useTranslate();
-	const { PostCard, Link, localization } = usePluginOverrides<
+	const { PostCard, localization } = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
 	>("blog", {
 		PostCard: DefaultPostCard,
-		Link: DefaultLink,
 	});
+	const { router } = useStack();
+	const Link = router?.Link ?? DefaultLink;
 	const PostCardComponent = PostCard || DefaultPostCard;
 	const basePath = useBasePath();
 	return (

@@ -99,12 +99,7 @@ describe("resource useSelect", () => {
 			root.render(
 				<StackProvider
 					basePath="/pages"
-					overrides={{
-						"test-plugin": {
-							apiBaseURL: "http://test.local",
-							apiBasePath: "/api/data",
-						},
-					}}
+					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
 				>
 					<QueryClientProvider client={queryClient}>
 						<Probe />

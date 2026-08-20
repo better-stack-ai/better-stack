@@ -112,7 +112,7 @@ When an auth provider is configured and `can()` denies access:
 - **Unauthenticated** users are redirected to the provider's `loginPath` (via the top-level `router`'s `navigate`, falling back to `window.location.assign`), with the route's `LoadingComponent` shown in the meantime.
 - **Authenticated** users get an `Unauthorized` error thrown into the route's ErrorBoundary.
 
-Without a provider, `permission` is ignored and the route renders as before. Existing `onBefore*PageRendered` callbacks keep working unchanged alongside the provider.
+Without a provider, `permission` is ignored and the route renders without client-side gating.
 
 ## Server-side identity
 

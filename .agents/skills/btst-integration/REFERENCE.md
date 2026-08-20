@@ -253,10 +253,9 @@ The pages layout must be `"use client"` and wrap `QueryClientProvider` then `Sta
 import { useState } from "react"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { StackProvider } from "@btst/stack/context"
+import { nextRouter } from "@btst/stack/next"
 import { getOrCreateQueryClient } from "@/lib/query-client"
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
 
 type PluginOverrides = {
   blog: BlogPluginOverrides
@@ -264,7 +263,6 @@ type PluginOverrides = {
 }
 
 export default function PagesLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter()
   const [queryClient] = useState(() => getOrCreateQueryClient())
   const baseURL = getBaseURL()
 
@@ -272,20 +270,14 @@ export default function PagesLayout({ children }: { children: React.ReactNode })
     <QueryClientProvider client={queryClient}>
       <StackProvider<PluginOverrides>
         basePath="/pages"
+        router={nextRouter()}
+        api={{ baseURL, basePath: "/api/data" }}
         overrides={{
           blog: {
-            apiBaseURL: baseURL,
-            apiBasePath: "/api/data",
-            navigate: (path) => router.push(path),
-            refresh: () => router.refresh(),
-            Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
-            Image: MyImageWrapper,           // optional: Next.js Image wrapper
             uploadImage: myUploadFn,         // optional: returns uploaded URL
             // lifecycle hooks (all optional):
             onRouteRender: async (routeName, ctx) => { /* analytics, logging */ },
             onRouteError: async (routeName, err, ctx) => { /* error tracking */ },
-            onBeforePostsPageRendered: (ctx) => true,   // return false to block
-            onBeforePostPageRendered: (slug, ctx) => true,
           },
         }}
       >
@@ -301,20 +293,18 @@ export default function PagesLayout({ children }: { children: React.ReactNode })
 | Prop | Required | Description |
 |---|---|---|
 | `basePath` | Yes | Must match your `/pages/*` catch-all route prefix |
-| `overrides` | Yes | Per-plugin override objects, keyed by plugin name |
+| `router` | No | Framework router preset shared by every plugin |
+| `api` | No | Client-side API base URL and path shared by every plugin |
+| `auth` | No | Identity, login path, and permission provider |
+| `overrides` | No | Plugin-specific override objects, keyed by plugin name |
 
-### Common override fields (all data plugins)
+### Top-level provider fields
 
 | Field | Description |
 |---|---|
-| `apiBaseURL` | Absolute base URL for API fetches |
-| `apiBasePath` | API prefix, e.g. `/api/data` |
-| `navigate(path)` | Framework navigation function |
-| `Link` | Framework `<Link>` component wrapper |
-| `Image` | Optional framework `<Image>` wrapper (important for Next.js) |
-| `refresh()` | Optional router refresh (Next.js: `router.refresh()`) |
-| `uploadImage(file)` | Optional — returns URL string after upload |
-| `headers` | Optional headers for per-request auth |
+| `router` | Framework `Link`, `Image`, `navigate`, and `refresh` implementation |
+| `api` | Client API `baseURL` and `basePath` |
+| `auth` | Identity, login path, and authorization checks |
 
 ### Lifecycle hooks (available on most plugins)
 
@@ -322,7 +312,6 @@ export default function PagesLayout({ children }: { children: React.ReactNode })
 |---|---|
 | `onRouteRender(routeName, ctx)` | After a plugin page renders (SSR or CSR) |
 | `onRouteError(routeName, err, ctx)` | On plugin route render error |
-| `onBefore{Page}PageRendered(ctx)` | Before a specific page renders; return `false` to block |
 
 `ctx` contains `{ isSSR: boolean, path: string }`.
 
@@ -346,8 +335,9 @@ export default function PagesLayout({ children }: { children: React.ReactNode })
 - `searchUsers(query): Promise<User[]>` — assignee search
 - `taskDetailBottomSlot: (task) => ReactNode` — inject below task detail (e.g. comments)
 
-**comments** (standalone, not via StackProvider — use `<CommentThread />` directly)
-- `currentUserId`, `resourceId`, `resourceType`, `apiBaseURL`, `apiBasePath`, `loginHref`
+**comments**
+- `resourceLinks` and comment display/editing defaults live in the plugin override.
+- `<CommentThread />` receives `resourceId` and `resourceType`; it reads API, identity, and login path from `StackProvider`.
 
 **media**
 - `queryClient` — pass the current QueryClient explicitly

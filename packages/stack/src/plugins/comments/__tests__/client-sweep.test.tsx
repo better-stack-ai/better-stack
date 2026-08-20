@@ -140,15 +140,7 @@ function createMockRouter(initial = "") {
 	};
 }
 
-const commentsOverrides = {
-	apiBaseURL: "http://test.local",
-	apiBasePath: "/api/data",
-};
-
-const pageProps = {
-	apiBaseURL: "http://test.local",
-	apiBasePath: "/api/data",
-};
+const commentsOverrides = {};
 
 function typeInto(element: HTMLElement, value: string) {
 	const proto =
@@ -177,7 +169,7 @@ describe("ModerationPage row actions (CanAccess)", () => {
 				overrides={{ comments: commentsOverrides }}
 				auth={auth}
 			>
-				<ModerationPage {...pageProps} />
+				<ModerationPage />
 			</StackProvider>,
 		);
 	}
@@ -266,7 +258,7 @@ describe("ModerationPage tab/page state (useListState)", () => {
 				router={router}
 				overrides={{ comments: commentsOverrides }}
 			>
-				<ModerationPage {...pageProps} />
+				<ModerationPage />
 			</StackProvider>,
 		);
 
@@ -287,7 +279,7 @@ describe("ModerationPage tab/page state (useListState)", () => {
 				router={router}
 				overrides={{ comments: commentsOverrides }}
 			>
-				<ModerationPage {...pageProps} />
+				<ModerationPage />
 			</StackProvider>,
 		);
 
@@ -306,7 +298,7 @@ describe("ModerationPage tab/page state (useListState)", () => {
 				router={router}
 				overrides={{ comments: commentsOverrides }}
 			>
-				<ModerationPage {...pageProps} />
+				<ModerationPage />
 			</StackProvider>,
 		);
 
@@ -336,13 +328,12 @@ describe("ModerationPage tab/page state (useListState)", () => {
 
 describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 	function renderUserComments(
-		currentUserId?: string,
+		auth?: StackAuthProvider,
 		notify?: {
 			success: ReturnType<typeof vi.fn>;
 			error: ReturnType<typeof vi.fn>;
 		},
 		router = createMockRouter(),
-		auth?: StackAuthProvider,
 	) {
 		return render(
 			<StackProvider
@@ -350,15 +341,16 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 				router={router}
 				notify={notify}
 				auth={auth}
+				api={{ baseURL: "http://test.local", basePath: "/api/data" }}
 				overrides={{ comments: commentsOverrides }}
 			>
-				<UserCommentsPage {...pageProps} currentUserId={currentUserId} />
+				<UserCommentsPage />
 			</StackProvider>,
 		);
 	}
 
 	it("shows the login prompt when no user is resolved", async () => {
-		await renderUserComments(undefined);
+		await renderUserComments();
 
 		expect(
 			container.querySelector('[data-testid="my-comments-login-prompt"]'),
@@ -370,7 +362,11 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 	it("seeds the page from the URL into the query offset", async () => {
 		const router = createMockRouter("page=2");
 
-		await renderUserComments("user-1", undefined, router);
+		await renderUserComments(
+			{ getIdentity: () => ({ id: "user-1" }) },
+			undefined,
+			router,
+		);
 
 		expect(hooks.useSuspenseComments).toHaveBeenLastCalledWith(
 			expect.anything(),
@@ -378,8 +374,8 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 		);
 	});
 
-	it("uses the top-level auth identity when the legacy user prop is omitted", async () => {
-		await renderUserComments(undefined, undefined, createMockRouter(), {
+	it("uses the top-level auth identity", async () => {
+		await renderUserComments({
 			getIdentity: () => ({ id: "provider-user" }),
 		});
 		await act(async () => {});
@@ -393,22 +389,10 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 		).toBeNull();
 	});
 
-	it("keeps the explicit legacy user prop above the provider identity", async () => {
-		await renderUserComments("legacy-user", undefined, createMockRouter(), {
-			getIdentity: () => ({ id: "provider-user" }),
-		});
-		await act(async () => {});
-
-		expect(hooks.useSuspenseComments).toHaveBeenLastCalledWith(
-			expect.anything(),
-			expect.objectContaining({ authorId: "legacy-user" }),
-		);
-	});
-
 	it("notifies success through the notify provider after deleting", async () => {
 		const notify = { success: vi.fn(), error: vi.fn() };
 
-		await renderUserComments("user-1", notify);
+		await renderUserComments({ getIdentity: () => ({ id: "user-1" }) }, notify);
 
 		const deleteButton = container.querySelector<HTMLButtonElement>(
 			'[data-testid="my-comment-delete-button"]',
@@ -436,8 +420,8 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 	});
 });
 
-describe("CommentThread provider defaults", () => {
-	it("uses top-level API and auth when legacy props are omitted", async () => {
+describe("CommentThread provider wiring", () => {
+	it("uses top-level API and auth", async () => {
 		await render(
 			<StackProvider
 				basePath="/pages"
@@ -456,66 +440,12 @@ describe("CommentThread provider defaults", () => {
 			{
 				apiBaseURL: "http://provider.local",
 				apiBasePath: "/api/stack",
-				headers: undefined,
 			},
 			expect.objectContaining({ currentUserId: "provider-user" }),
 		);
 		expect(
 			container.querySelector('[data-testid="comment-form-wrapper"]'),
 		).toBeTruthy();
-	});
-
-	it("keeps explicit legacy props above provider defaults", async () => {
-		await render(
-			<StackProvider
-				basePath="/pages"
-				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
-				auth={{ getIdentity: () => ({ id: "provider-user" }) }}
-			>
-				<CommentThread
-					resourceId="post-1"
-					resourceType="blog-post"
-					apiBaseURL="http://legacy.local"
-					apiBasePath="/api/legacy"
-					currentUserId="legacy-user"
-					headers={{ "x-test-user": "legacy-user" }}
-				/>
-			</StackProvider>,
-		);
-		await act(async () => {});
-
-		expect(hooks.useInfiniteComments).toHaveBeenLastCalledWith(
-			{
-				apiBaseURL: "http://legacy.local",
-				apiBasePath: "/api/legacy",
-				headers: { "x-test-user": "legacy-user" },
-			},
-			expect.objectContaining({ currentUserId: "legacy-user" }),
-		);
-	});
-
-	it("keeps the plugin identity override above the provider identity", async () => {
-		await render(
-			<StackProvider
-				basePath="/pages"
-				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
-				auth={{ getIdentity: () => ({ id: "provider-user" }) }}
-				overrides={{
-					comments: {
-						...commentsOverrides,
-						currentUserId: "plugin-user",
-					},
-				}}
-			>
-				<CommentThread resourceId="post-1" resourceType="blog-post" />
-			</StackProvider>,
-		);
-		await act(async () => {});
-
-		expect(hooks.useInfiniteComments).toHaveBeenLastCalledWith(
-			expect.anything(),
-			expect.objectContaining({ currentUserId: "plugin-user" }),
-		);
 	});
 
 	it("waits for the provider identity before mounting the thread", async () => {
@@ -622,7 +552,7 @@ describe("comments i18n precedence (useTranslate + localization prop)", () => {
 				router={createMockRouter()}
 				overrides={{ comments: commentsOverrides }}
 			>
-				<ModerationPage {...pageProps} />
+				<ModerationPage />
 			</StackProvider>,
 		);
 
@@ -644,7 +574,7 @@ describe("comments i18n precedence (useTranslate + localization prop)", () => {
 				overrides={{ comments: commentsOverrides }}
 				i18n={i18n}
 			>
-				<ModerationPage {...pageProps} />
+				<ModerationPage />
 			</StackProvider>,
 		);
 
@@ -664,7 +594,6 @@ describe("comments i18n precedence (useTranslate + localization prop)", () => {
 				i18n={{ translate }}
 			>
 				<ModerationPage
-					{...pageProps}
 					localization={{ COMMENTS_MODERATION_TITLE: "Custom title" }}
 				/>
 			</StackProvider>,

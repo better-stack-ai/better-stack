@@ -122,15 +122,18 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
         hooks: {
           beforeLoadFormList: async (context) => {
             const session = await getSession(context.headers)
-            return session?.user?.isAdmin === true
+            if (session?.user?.isAdmin !== true)
+              throw new Error("Admin access required")
           },
           beforeLoadFormBuilder: async (formId, context) => {
             const session = await getSession(context.headers)
-            return session?.user?.isAdmin === true
+            if (session?.user?.isAdmin !== true)
+              throw new Error("Admin access required")
           },
           beforeLoadSubmissions: async (formId, context) => {
             const session = await getSession(context.headers)
-            return session?.user?.isAdmin === true
+            if (session?.user?.isAdmin !== true)
+              throw new Error("Admin access required")
           },
           onLoadError: (error, context) => {
             redirect("/auth/sign-in")
@@ -142,12 +145,13 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
 }
 ```
 
-### 3. Configure Provider Overrides
+### 3. Configure the Provider
 
 Add Form Builder overrides to your layout:
 
 ```tsx title="app/pages/layout.tsx"
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
+import { nextRouter } from "@btst/stack/next"
 
 type PluginOverrides = {
   "form-builder": FormBuilderPluginOverrides,
@@ -155,13 +159,10 @@ type PluginOverrides = {
 
 <StackProvider<PluginOverrides>
   basePath="/pages"
+  router={nextRouter()}
+  api={{ baseURL, basePath: "/api/data" }}
   overrides={{
     "form-builder": {
-      apiBaseURL: baseURL,
-      apiBasePath: "/api/data",
-      navigate: (path) => router.push(path),
-      refresh: () => router.refresh(),
-      Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
       // Optional file upload for file fields
       uploadFile: async (file) => {
         // Your file upload logic
@@ -513,7 +514,7 @@ import { redirect } from "next/navigation"
 ```
 
 <Callout type="info">
-**Use client hooks for SSR.** These hooks run during server-side data loading and support async operations like session checks. The `onLoadError` hook is called when any `beforeLoad*` hook returns `false`, allowing you to redirect unauthorized users.
+**Use client hooks for SSR.** These hooks run during server-side data loading and support async operations like session checks. Throw from a `beforeLoad*` hook to deny access; `onLoadError` can then redirect unauthorized users.
 </Callout>
 
 ## API Endpoints
@@ -626,17 +627,17 @@ Creates the backend plugin with optional hooks configuration.
 
 | Hook | Parameters | Return | Description |
 |------|------------|--------|-------------|
-| `onBeforeListForms` | `ctx` | `boolean` | Authorization for listing forms |
-| `onBeforeFormCreated` | `data, ctx` | `data \| false` | Validate/transform before create |
+| `onBeforeListForms` | `ctx` | `void` | Authorization for listing forms; throw to deny |
+| `onBeforeFormCreated` | `data, ctx` | `data \| void` | Validate/transform before create; throw to deny |
 | `onAfterFormCreated` | `form, ctx` | `void` | Post-create lifecycle |
-| `onBeforeFormUpdated` | `id, data, ctx` | `data \| false` | Validate/transform before update |
+| `onBeforeFormUpdated` | `id, data, ctx` | `data \| void` | Validate/transform before update; throw to deny |
 | `onAfterFormUpdated` | `form, ctx` | `void` | Post-update lifecycle |
-| `onBeforeFormDeleted` | `id, ctx` | `boolean` | Authorization for delete |
+| `onBeforeFormDeleted` | `id, ctx` | `void` | Authorization for delete; throw to deny |
 | `onAfterFormDeleted` | `id, ctx` | `void` | Post-delete lifecycle |
-| `onBeforeSubmission` | `slug, data, ctx` | `data \| false` | Validate/rate limit submissions |
+| `onBeforeSubmission` | `slug, data, ctx` | `data \| void` | Validate/rate limit submissions; throw to deny |
 | `onAfterSubmission` | `submission, form, ctx` | `void` | Post-submission actions |
-| `onBeforeListSubmissions` | `formId, ctx` | `boolean` | Authorization for listing |
-| `onBeforeDeleteSubmission` | `id, ctx` | `boolean` | Authorization for delete |
+| `onBeforeListSubmissions` | `formId, ctx` | `void` | Authorization for listing; throw to deny |
+| `onBeforeSubmissionDeleted` | `id, ctx` | `void` | Authorization for delete; throw to deny |
 | `onFormError` | `error, operation, ctx` | `void` | Handle form operation errors |
 | `onSubmissionError` | `error, slug, ctx` | `void` | Handle submission errors |
 
@@ -899,4 +900,3 @@ formBuilderClientPlugin({
 ```
 
 Any key you omit falls back to the built-in default, so you can override just the pages you want to change.
-

@@ -4,7 +4,6 @@ import {
 	defineClientPlugin,
 	createApiClient,
 	isConnectionError,
-	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
@@ -90,10 +89,7 @@ function createPageListLoader(config: UIBuilderClientConfig) {
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadPageList) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadPageList!(context),
-						"Load prevented by beforeLoadPageList hook",
-					);
+					await hooks.beforeLoadPageList(context);
 				}
 
 				// Prefetch pages using infinite query
@@ -170,10 +166,7 @@ function createPageBuilderLoader(
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadPageBuilder) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadPageBuilder!(id, context),
-						"Load prevented by beforeLoadPageBuilder hook",
-					);
+					await hooks.beforeLoadPageBuilder(id, context);
 				}
 
 				// Prefetch page if editing

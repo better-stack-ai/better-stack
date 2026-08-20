@@ -242,9 +242,9 @@ function createCommentsRouteMeta(
 /**
  * Comments client plugin — registers admin moderation routes.
  *
- * The embeddable `CommentThread` and `CommentCount` components are standalone
- * and do not require this plugin to be registered. Register them manually
- * via the layout overrides pattern or use them directly in your pages.
+ * The embeddable `CommentThread` and `CommentCount` components do not require
+ * this plugin to be registered, but they must render under `StackProvider` so
+ * they can use its API and auth configuration.
  */
 export const commentsClientPlugin = (config: CommentsClientConfig) =>
 	defineClientPlugin({

@@ -8,24 +8,25 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@workspace/ui/components/card";
-import { usePluginOverrides, useTranslate } from "@btst/stack/context";
+import {
+	usePluginOverrides,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
 import { BoardForm } from "../forms/board-form";
 import { PageWrapper } from "../shared/page-wrapper";
 
 export function NewBoardPage() {
 	const t = useTranslate();
-	const {
-		Link: OverrideLink,
-		navigate: overrideNavigate,
-		localization,
-	} = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { router } = useStack();
 	const navigate =
-		overrideNavigate ||
+		router?.navigate ||
 		((path: string) => {
 			window.location.href = path;
 		});
-	const Link = OverrideLink || "a";
+	const Link = router?.Link ?? "a";
 
 	const handleSuccess = (boardId: string) => {
 		navigate(`/pages/kanban/${boardId}`);

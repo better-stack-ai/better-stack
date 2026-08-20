@@ -1,8 +1,7 @@
 "use client";
 
 import { MarkdownContent as SharedMarkdownContent } from "@workspace/ui/components/markdown-content";
-import { usePluginOverrides } from "@btst/stack/context";
-import type { BlogPluginOverrides } from "../../overrides";
+import { useStack } from "@btst/stack/context";
 import { DefaultImage, DefaultLink } from "./defaults";
 
 // Import blog-specific styles
@@ -20,13 +19,9 @@ export type MarkdownContentProps = {
  * that provides blog plugin overrides for Link and Image components.
  */
 export function MarkdownContent({ markdown, className }: MarkdownContentProps) {
-	const { Link, Image } = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", {
-		Link: DefaultLink,
-		Image: DefaultImage,
-	});
+	const { router } = useStack();
+	const Link = router?.Link ?? DefaultLink;
+	const Image = router?.Image ?? DefaultImage;
 
 	return (
 		<SharedMarkdownContent

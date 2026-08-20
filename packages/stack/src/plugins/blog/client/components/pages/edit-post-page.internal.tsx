@@ -3,6 +3,7 @@
 import {
 	useBasePath,
 	usePluginOverrides,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import { EditPostForm } from "../forms/post-forms";
@@ -19,7 +20,9 @@ import { createFillBlogFormHandler } from "./fill-blog-form-handler";
 export function EditPostPage({ slug }: { slug: string }) {
 	const t = useTranslate();
 	const overrides = usePluginOverrides<BlogPluginOverrides>("blog");
-	const { localization, navigate } = overrides;
+	const { localization } = overrides;
+	const { router } = useStack();
+	const navigate = router?.navigate;
 	const basePath = useBasePath();
 
 	// Call lifecycle hooks
@@ -31,12 +34,6 @@ export function EditPostPage({ slug }: { slug: string }) {
 			isSSR: typeof window === "undefined",
 		},
 		overrides,
-		beforeRenderHook: (overrides, context) => {
-			if (overrides.onBeforeEditPostPageRendered) {
-				return overrides.onBeforeEditPostPageRendered(slug, context);
-			}
-			return true;
-		},
 	});
 
 	// Ref to capture the form instance from EditPostForm via onFormReady callback
@@ -63,17 +60,17 @@ export function EditPostPage({ slug }: { slug: string }) {
 	});
 
 	const handleClose = () => {
-		navigate(`${basePath}/blog`);
+		void navigate?.(`${basePath}/blog`);
 	};
 
 	const handleSuccess = (post: { slug: string; published: boolean }) => {
 		// Navigate based on published status
-		navigate(`${basePath}/blog/${post.slug}`);
+		void navigate?.(`${basePath}/blog/${post.slug}`);
 	};
 
 	const handleDelete = () => {
 		// Navigate to blog list after deletion
-		navigate(`${basePath}/blog`);
+		void navigate?.(`${basePath}/blog`);
 	};
 
 	return (

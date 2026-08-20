@@ -30,7 +30,7 @@ import {
 	getKanbanColumnsByBoardId,
 } from "./mutations";
 import { KANBAN_QUERY_KEYS } from "./query-key-defs";
-import { runHookWithShim } from "../../utils";
+import { runHook } from "../../utils";
 import { serializeBoard } from "./serializers";
 import type { QueryClient } from "@tanstack/react-query";
 
@@ -347,7 +347,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeListBoards) {
-							await runHookWithShim(
+							await runHook(
 								() => hooks.onBeforeListBoards!(query, context),
 								ctx.error,
 								"Unauthorized: Cannot list boards",
@@ -381,7 +381,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeReadBoard) {
-							await runHookWithShim(
+							await runHook(
 								() => hooks.onBeforeReadBoard!(params.id, context),
 								ctx.error,
 								"Unauthorized: Cannot read board",
@@ -422,7 +422,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeCreateBoard) {
-							await runHookWithShim(
+							await runHook(
 								() => hooks.onBeforeCreateBoard!(ctx.body, context),
 								ctx.error,
 								"Unauthorized: Cannot create board",
@@ -512,7 +512,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeUpdateBoard) {
-							await runHookWithShim(
+							await runHook(
 								() =>
 									hooks.onBeforeUpdateBoard!(
 										ctx.params.id,
@@ -591,7 +591,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						}
 
 						if (hooks?.onBeforeDeleteBoard) {
-							await runHookWithShim(
+							await runHook(
 								() => hooks.onBeforeDeleteBoard!(ctx.params.id, context),
 								ctx.error,
 								"Unauthorized: Cannot delete board",
@@ -633,7 +633,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeCreateColumn) {
-							await runHookWithShim(
+							await runHook(
 								() => hooks.onBeforeCreateColumn!(ctx.body, context),
 								ctx.error,
 								"Unauthorized: Cannot create column",
@@ -692,7 +692,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeUpdateColumn) {
-							await runHookWithShim(
+							await runHook(
 								() =>
 									hooks.onBeforeUpdateColumn!(
 										ctx.params.id,
@@ -753,7 +753,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						}
 
 						if (hooks?.onBeforeDeleteColumn) {
-							await runHookWithShim(
+							await runHook(
 								() => hooks.onBeforeDeleteColumn!(ctx.params.id, context),
 								ctx.error,
 								"Unauthorized: Cannot delete column",
@@ -794,7 +794,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						for (let i = 0; i < columnIds.length; i++) {
 							const columnId = columnIds[i];
 							if (!columnId) continue;
-							await runHookWithShim(
+							await runHook(
 								() =>
 									hooks.onBeforeUpdateColumn!(
 										columnId,
@@ -853,7 +853,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeCreateTask) {
-							await runHookWithShim(
+							await runHook(
 								() => hooks.onBeforeCreateTask!(ctx.body, context),
 								ctx.error,
 								"Unauthorized: Cannot create task",
@@ -919,7 +919,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					try {
 						if (hooks?.onBeforeUpdateTask) {
-							await runHookWithShim(
+							await runHook(
 								() =>
 									hooks.onBeforeUpdateTask!(
 										ctx.params.id,
@@ -980,7 +980,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						}
 
 						if (hooks?.onBeforeDeleteTask) {
-							await runHookWithShim(
+							await runHook(
 								() => hooks.onBeforeDeleteTask!(ctx.params.id, context),
 								ctx.error,
 								"Unauthorized: Cannot delete task",
@@ -1028,7 +1028,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 					// Check authorization before moving task
 					if (hooks?.onBeforeUpdateTask) {
-						await runHookWithShim(
+						await runHook(
 							() =>
 								hooks.onBeforeUpdateTask!(
 									taskId,
@@ -1081,7 +1081,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 						for (let i = 0; i < taskIds.length; i++) {
 							const taskId = taskIds[i];
 							if (!taskId) continue;
-							await runHookWithShim(
+							await runHook(
 								() =>
 									hooks.onBeforeUpdateTask!(
 										taskId,
