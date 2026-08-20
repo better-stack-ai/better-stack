@@ -704,19 +704,13 @@ test.describe("My Comments Page", () => {
 			waitUntil: "networkidle",
 		});
 
-		// Either the list or the empty-state element must be visible
-		const hasPage = await page
-			.locator('[data-testid="my-comments-page"]')
-			.isVisible()
-			.catch(() => false);
-		const hasEmpty = await page
-			.locator('[data-testid="my-comments-empty"]')
-			.isVisible()
-			.catch(() => false);
-		expect(
-			hasPage || hasEmpty,
-			"Expected my-comments-page or my-comments-empty to be visible",
-		).toBe(true);
+		// Provider identity resolves after hydration, so wait for either valid
+		// authenticated state instead of sampling visibility immediately.
+		await expect(
+			page.locator(
+				'[data-testid="my-comments-page"], [data-testid="my-comments-empty"]',
+			),
+		).toBeVisible();
 
 		expect(errors, `Console errors detected:\n${errors.join("\n")}`).toEqual(
 			[],
