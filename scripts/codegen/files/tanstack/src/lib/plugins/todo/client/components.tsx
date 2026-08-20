@@ -1,7 +1,6 @@
 import { useCreateTodo, useDeleteTodo, useTodos, useToggleTodo } from "./hooks";
-import type { TodosPluginOverrides } from "./overrides";
 import type { Todo } from "../types";
-import { useBasePath, usePluginOverrides } from "@btst/stack/context";
+import { useBasePath, useStack } from "@btst/stack/context";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -56,7 +55,8 @@ function TodosList() {
 			toast.error("Error deleting todo");
 		},
 	});
-	const { Link } = usePluginOverrides<TodosPluginOverrides>("todos");
+	const { router } = useStack();
+	const Link = router?.Link ?? "a";
 	const basePath = useBasePath();
 
 	return (
@@ -139,7 +139,9 @@ function TodosList() {
 
 export function AddTodoPage() {
 	const createTodoMutation = useCreateTodo();
-	const { Link, navigate } = usePluginOverrides<TodosPluginOverrides>("todos");
+	const { router } = useStack();
+	const Link = router?.Link ?? "a";
+	const navigate = router?.navigate;
 	const basePath = useBasePath();
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {

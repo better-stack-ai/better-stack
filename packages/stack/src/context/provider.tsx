@@ -103,7 +103,6 @@ function RouterBridge({
  * ```tsx
  * // Define the type shape (no import of plugin values needed!)
  * type MyPluginOverrides = {
- *   todos: TodosPluginOverrides;
  *   messages: MessagesPluginOverrides;
  * };
  *
@@ -265,15 +264,14 @@ type OverridesResult<TOverrides, TDefaults> = undefined extends TDefaults
  * @example
  * ```tsx
  * // Without defaults - trusts plugin is configured
- * function TodosList() {
- *   const { navigate } = usePluginOverrides<TodosPluginOverrides>("todos");
- *   // navigate is (path: string) => void (required fields are non-nullable)
- *   navigate("/todos/add");
+ * function MessagesList() {
+ *   const { MarkdownRenderer } = usePluginOverrides<MessagesPluginOverrides>("messages");
+ *   return <MarkdownRenderer>{message.body}</MarkdownRenderer>;
  * }
  *
  * // With defaults - optional fields with defaults become required
- * function TodosList() {
- *   const { localization } = usePluginOverrides<TodosPluginOverrides, Partial<TodosPluginOverrides>>("todos", {
+ * function MessagesList() {
+ *   const { localization } = usePluginOverrides<MessagesPluginOverrides, Partial<MessagesPluginOverrides>>("messages", {
  *     localization: DEFAULT_LOCALIZATION
  *   });
  *   // localization is Localization (guaranteed to exist because we provided a default)

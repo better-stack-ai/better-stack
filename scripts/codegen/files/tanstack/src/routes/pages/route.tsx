@@ -22,7 +22,6 @@ import {
 import { Button } from "../../components/ui/button";
 import { resolveUser, searchUsers } from "../../lib/mock-users";
 import { Outlet, createFileRoute } from "@tanstack/react-router";
-import type { TodosPluginOverrides } from "../../lib/plugins/todo/client/overrides";
 import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client";
 import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client";
 
@@ -36,7 +35,6 @@ const getBaseURL = () =>
 
 // Define the shape of all plugin overrides
 type PluginOverrides = {
-	todos: TodosPluginOverrides;
 	"ui-builder": UIBuilderPluginOverrides;
 	blog: BlogPluginOverrides;
 	"ai-chat": AiChatPluginOverrides;

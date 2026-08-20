@@ -849,31 +849,16 @@ export function useToggleTodo() {
 }
 ```
 
-### Framework Overrides
+### Framework Context
 
-Define types for framework-specific components (Link, navigation):
-
-```typescript
-import type { ComponentType, ReactNode } from "react"
-
-export interface TodosPluginOverrides {
-  Link: ComponentType<{
-    href: string
-    children: ReactNode
-    className?: string
-  }>
-  navigate?: (path: string) => void | Promise<void>
-}
-```
-
-Use them in components:
+Framework-wide routing is configured once on `StackProvider`. Read it through `useStack()` in plugin components; reserve plugin overrides for plugin-specific customization:
 
 ```typescript
-import { usePluginOverrides, useBasePath } from "@btst/stack/context"
-import type { TodosPluginOverrides } from "./overrides"
+import { useBasePath, useStack } from "@btst/stack/context"
 
 function TodosList() {
-  const { Link } = usePluginOverrides<TodosPluginOverrides>("todos")
+  const { router } = useStack()
+  const Link = router?.Link ?? "a"
   const basePath = useBasePath()
   
   return (

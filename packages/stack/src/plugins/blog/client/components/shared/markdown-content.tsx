@@ -16,7 +16,7 @@ export type MarkdownContentProps = {
 /**
  * Blog-specific markdown content renderer.
  * This is a thin wrapper around the shared MarkdownContent component
- * that provides blog plugin overrides for Link and Image components.
+ * that provides the framework-wide Link and Image components.
  */
 export function MarkdownContent({ markdown, className }: MarkdownContentProps) {
 	const { router } = useStack();

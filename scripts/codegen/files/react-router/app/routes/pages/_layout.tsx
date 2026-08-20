@@ -21,7 +21,6 @@ import {
 	ImageInputField,
 } from "@btst/stack/plugins/media/client/components";
 import { Button } from "../../components/ui/button";
-import type { TodosPluginOverrides } from "../../lib/plugins/todo/client/overrides";
 import { resolveUser, searchUsers } from "../../lib/mock-users";
 import { getOrCreateQueryClient } from "../../lib/query-client";
 
@@ -35,7 +34,6 @@ const getBaseURL = () =>
 
 // Define the shape of all plugin overrides
 type PluginOverrides = {
-	todos: TodosPluginOverrides;
 	"ui-builder": UIBuilderPluginOverrides;
 	blog: BlogPluginOverrides;
 	"ai-chat": AiChatPluginOverrides;
