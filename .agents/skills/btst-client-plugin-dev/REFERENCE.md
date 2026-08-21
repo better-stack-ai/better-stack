@@ -91,26 +91,34 @@ function createMyMeta(id: string, config: MyClientConfig) {
 
 ---
 
-## Query Keys Factory (query-keys.ts)
+## Resource declaration and query keys (query-keys.ts)
 
 ```typescript
-import { mergeQueryKeys, createQueryKeys } from "@lukemorales/query-key-factory"
-import { createApiClient } from "@btst/stack/client"
-import type { MyApiRouter } from "./api/plugin"
+import {
+  createResourceQueryKeys,
+  type ResourceClient,
+  type ResourcesDeclaration,
+} from "@btst/stack/plugins/client"
 
-export function createMyQueryKeys(client: ReturnType<typeof createApiClient<MyApiRouter>>, headers?: HeadersInit) {
-  return mergeQueryKeys(
-    createQueryKeys("myPlugin", {
-      list: () => ({
-        queryKey: ["list"],
-        queryFn: async () => client.items.list({ headers }),
-      }),
-      detail: (id: string) => ({
-        queryKey: [id],
-        queryFn: async () => client.items.get(id, { headers }),
-      }),
-    })
-  )
+export const myResources = {
+  items: {
+    queries: {
+      list: {
+        path: "/items",
+        select: (data: any) => data?.items ?? [],
+      },
+      detail: {
+        path: "/items",
+        query: (id: string) => ({ id }),
+        key: (id: string) => [id],
+        select: (data: any) => data?.item ?? null,
+      },
+    },
+  },
+} satisfies ResourcesDeclaration
+
+export function createMyQueryKeys(client: ResourceClient, headers?: HeadersInit) {
+  return createResourceQueryKeys(client, myResources, headers)
 }
 ```
 
@@ -119,8 +127,24 @@ export function createMyQueryKeys(client: ReturnType<typeof createApiClient<MyAp
 ## defineClientPlugin shape (client/plugin.tsx)
 
 ```typescript
-import { defineClientPlugin, createRoute } from "@btst/stack/plugins"
+import {
+  defineClientPlugin,
+  defineRoute,
+  defineRoutes,
+} from "@btst/stack/plugins/client"
+import type { QueryClient } from "@tanstack/react-query"
 import { lazy } from "react"
+
+export interface MyClientConfig {
+  queryClient: QueryClient
+  apiBaseURL: string
+  apiBasePath: string
+  siteBaseURL: string
+  siteBasePath: string
+  headers?: HeadersInit
+  hooks?: MyClientHooks
+  seo?: MySeoConfig
+}
 
 const ListPage = lazy(() =>
   import("./components/pages/list-page").then(m => ({ default: m.ListPageComponent }))
@@ -129,29 +153,25 @@ const DetailPage = lazy(() =>
   import("./components/pages/detail-page").then(m => ({ default: m.DetailPageComponent }))
 )
 
-export const myClientPlugin = defineClientPlugin({
-  name: "my-plugin",
-  config: (overrides) => ({
-    queryClient: overrides.queryClient,
-    apiBaseURL: overrides.apiBaseURL,
-    apiBasePath: overrides.apiBasePath,
-    siteBaseURL: overrides.siteBaseURL,
-    siteBasePath: overrides.siteBasePath,
-    hooks: overrides.hooks,
-    headers: overrides.headers,
-    seo: overrides.seo,
-  }),
-  routes: (config) => ({
-    list: createRoute("/my-plugin", () => ({
-      PageComponent: () => <ListPage />,
-      loader: createListLoader(config),
-      meta: createListMeta(config),
-    })),
-    detail: createRoute("/my-plugin/:id", ({ params }) => ({
-      PageComponent: () => <DetailPage id={params.id} />,
-      loader: createDetailLoader(params.id, config),
-      meta: createDetailMeta(params.id, config),
-    })),
-  }),
-})
+export const myClientPlugin = (config: MyClientConfig) =>
+  defineClientPlugin({
+    name: "my-plugin",
+    routes: () =>
+      defineRoutes({
+        list: defineRoute("/my-plugin", {
+          page: ListPage,
+          loader: createListLoader(config),
+          meta: createListMeta(config),
+        }),
+        detail: defineRoute("/my-plugin/:id", {
+          page: ({ params }) => <DetailPage id={params.id} />,
+          loader: ({ params }) => createDetailLoader(params.id, config)(),
+          meta: ({ params }) => createDetailMeta(params.id, config)(),
+        }),
+      }),
+  })
 ```
+
+`MyClientConfig` is constructed in `getStackClient(queryClient)`. Do not
+derive it from `StackProvider` overrides: the plugin factory runs during SSR,
+while provider overrides are browser-runtime, plugin-specific customization.

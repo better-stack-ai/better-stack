@@ -104,15 +104,16 @@ Rules:
 
 ## Route anatomy
 
-Each route returns exactly three things:
+Use `defineRoute` / `defineRoutes` for new routes. The `page`, `loader`, and
+`meta` handlers on a parameterized route each receive the route context:
 
 ```typescript
-routes: (config) => ({
-  myRoute: createRoute("/path/:id", ({ params }) => ({
-    PageComponent: () => <MyPageComponent id={params.id} />,
-    loader: createMyLoader(params.id, config),   // SSR only
-    meta: createMyMeta(params.id, config),        // SEO tags
-  })),
+routes: () => defineRoutes({
+  myRoute: defineRoute("/path/:id", {
+    page: ({ params }) => <MyPageComponent id={params.id} />,
+    loader: ({ params }) => createMyLoader(params.id, config)(), // SSR only
+    meta: ({ params }) => createMyMeta(params.id, config)(),     // SEO tags
+  }),
 })
 ```
 
@@ -197,9 +198,18 @@ type PluginOverrides = {
 }
 ```
 
+The client plugin factory still receives the QueryClient, absolute site/API
+URLs, optional SSR headers, SEO, and loader hooks because loaders and metadata
+run outside React Context. Keep that factory config independent from
+`StackProvider` overrides; never add a `config(overrides)` adapter that copies
+provider fields back into the plugin.
+
 ## Gotchas
 
 - **Framework config in plugin overrides** — `Link`, `Image`, navigation, refresh, and client API paths come from the top-level `StackProvider`.
+- **Building plugin config from overrides** — plugin factory config is created
+  in `getStackClient(queryClient)`; provider overrides are browser-runtime
+  customization only.
 - **`staleTime: Infinity`** — use for data that should not auto-refetch.
 - **Next.js Link href undefined** — use `href={href || "#"}` pattern.
 - **Suspense errors not caught** — add `if (error && !isFetching) throw error` in every suspense hook.

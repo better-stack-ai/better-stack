@@ -140,10 +140,13 @@ export const getStackClient = (queryClient: QueryClient) => {
         // },
       }),
     },
-    queryClient,
   })
 }
 ```
+
+The factory fields above configure SSR loaders and metadata. Do not repeat API
+paths, router functions, or identity values in `CommentsPluginOverrides` or
+component props; browser-side Comments UI reads them from `StackProvider`.
 
 ### 3. Add CSS Import
 

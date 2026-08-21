@@ -10,101 +10,171 @@ This page documents breaking changes between major versions and provides migrati
 
 ---
 
-## v2 → v3: Single provider wiring path
+## v2 → v3: Provider-only framework integration
 
-BTST v3 removes the per-plugin compatibility path for framework wiring. Configure router, API, and auth once on `StackProvider`; plugin overrides now contain only plugin-specific customization.
+BTST v3 has one supported framework-wiring path: framework entry factories
+own the catch-all routes, while `StackProvider` owns browser-side router, API,
+and auth services. Plugin factories still own server-loader and metadata
+configuration; plugin overrides contain only plugin-specific customization.
 
-```diff
-<StackProvider
-  basePath="/pages"
-+ router={nextRouter()}
-+ api={{ baseURL, basePath: "/api/data" }}
-+ auth={{ getIdentity, loginPath: "/login", can }}
-  overrides={{
-    blog: {
--     apiBaseURL: baseURL,
--     apiBasePath: "/api/data",
--     navigate: (path) => router.push(path),
--     refresh: () => router.refresh(),
--     Link,
--     Image,
-      uploadImage,
-    },
-  }}
->
-```
-
-The `Link`, `Image`, `navigate`, `refresh`, `apiBaseURL`, and `apiBasePath` fields were removed from built-in plugin override types. The `apiBaseURL` and `apiBasePath` fields on each client plugin factory remain required because SSR loaders run outside React Context.
-
-### Comments use provider API and identity
-
-`CommentThread`, `CommentCount`, moderation pages, and user-comments pages no longer accept manual API, header, identity, or login props. Render them under the configured provider:
-
-```diff
-<CommentThread
-  resourceId={post.slug}
-  resourceType="blog-post"
-- apiBaseURL={baseURL}
-- apiBasePath="/api/data"
-- currentUserId={session?.user?.id}
-- loginHref="/login"
-- headers={headers}
-/>
-```
-
-### Route authorization uses `StackProvider.auth`
-
-The `onBefore*PageRendered` override callbacks were removed. They only controlled client rendering and were never an API authorization boundary. Built-in protected routes now declare resource/action permissions through `ComposedRoute`; implement `auth.can` once for client-side gating:
-
-```tsx
-const authProvider: StackAuthProvider = {
-  getIdentity,
-  loginPath: "/login",
-  can: ({ resource, action, identity }) => {
-    if (!identity) return false
-    if (resource === "comments:comment" && action === "moderate") {
-      return identity.role === "moderator" || identity.role === "admin"
-    }
-    return true
-  },
-}
-```
-
-For Comments, the moderation route requests `comments:comment` / `moderate`; per-resource moderation and delete controls use the same provider permissions. The user-comments page and `CommentThread` resolve the current user through `auth.getIdentity` and show their login state when no identity is available. Keep SSR checks in client loader hooks and enforce authorization again in backend lifecycle hooks.
-
-### Backend hooks deny by throwing
-
-The compatibility shim for boolean lifecycle-hook returns was removed. Returning `false` no longer denies a request; throw an `Error` from an `onBefore*` hook instead. This includes Form Builder's `onBeforeSubmission` hook:
-
-```diff
-onBeforeSubmission: async (_formSlug, data, ctx) => {
-- if (!ctx.headers.get("x-user-id")) return false
-+ if (!ctx.headers.get("x-user-id")) throw new Error("Unauthorized")
-  return data
-}
-```
-
-Hooks that transform input continue to return the transformed object.
-
----
-
-## v2 → v3: Declarative routes and the `pageComponents` contract
-
-BTST v3 adopts the declarative `defineRoute` / `defineRoutes` helpers from `@btst/yar` 1.3+ for all plugin routes, and stabilizes page component identity across re-renders (no more subtree remounts or Suspense re-triggers on parent renders).
-
-<Callout type="info">
-  This section covers the route-definition migration. Overrides for routes without params are unchanged.
+<Callout type="warn">
+  v3 removes the v2 compatibility fallbacks. Complete every step in this
+  section before upgrading.
 </Callout>
 
-### `pageComponents` overrides now receive the route context
+### 1. Replace hand-written catch-all routes with entry factories
 
-Overrides for parameterized routes used to receive specific named props (e.g. `slug`, `boardId`, `conversationId`). They now receive the route context — `{ params }` — instead:
+Replace copied API-handler and page-rendering glue with the matching framework
+entry point. For Next.js, the migration is:
+
+```diff
++ import { toNextRouteHandlers } from "@btst/stack/next"
+  import { handler } from "@/lib/stack"
+
+- export const GET = handler
+- export const POST = handler
+- export const PUT = handler
+- export const PATCH = handler
+- export const DELETE = handler
++ export const { GET, POST, PUT, PATCH, DELETE } =
++   toNextRouteHandlers(handler)
+```
+
+```diff
++ import { createNextPage } from "@btst/stack/next"
+  import { getStackClient } from "@/lib/stack-client"
+  import { getOrCreateQueryClient } from "@/lib/query-client"
+
+- export default async function Page({ params }) {
+-   // normalize the path, resolve the route, run its loader,
+-   // dehydrate React Query, render the page, and handle 404
+- }
+- export async function generateMetadata({ params }) {
+-   // resolve the route, run its loader, and convert metadata
+- }
++ const page = createNextPage({
++   getStackClient,
++   getQueryClient: getOrCreateQueryClient,
++ })
++ export default page.Page
++ export const generateMetadata = page.generateMetadata
+```
+
+Use the equivalent pair for your framework:
+
+| Framework | API factory | Page factory | Router preset |
+| --- | --- | --- | --- |
+| Next.js | `toNextRouteHandlers` | `createNextPage` | `nextRouter` |
+| React Router | `toReactRouterHandlers` | `createReactRouterPage` | `reactRouter` |
+| TanStack Router | `toTanStackHandlers` | `createTanStackPageOptions` | `tanstackRouter` |
+
+The [installation guide](/installation) has complete route files for all three
+frameworks.
+
+### 2. Move shared services to `StackProvider`
+
+Remove framework and API fields from every built-in plugin override. Configure
+them once at the top level:
+
+```diff
++ import { nextRouter } from "@btst/stack/next"
+
+  <StackProvider
+    basePath="/pages"
++   router={nextRouter()}
++   api={{ baseURL, basePath: "/api/data" }}
++   auth={{ getIdentity, loginPath: "/login", can }}
+    overrides={{
+      blog: {
+-       apiBaseURL: baseURL,
+-       apiBasePath: "/api/data",
+-       navigate: (path) => router.push(path),
+-       refresh: () => router.refresh(),
+-       Link,
+-       Image,
+        uploadImage,
+      },
+    }}
+  >
+```
+
+`Link`, `Image`, `navigate`, `refresh`, `apiBaseURL`, and
+`apiBasePath` were removed from built-in plugin override types. There is no
+per-plugin precedence or fallback in v3.
+
+Client plugin factories still require `apiBaseURL`, `apiBasePath`,
+`siteBaseURL`, `siteBasePath`, and `queryClient` where declared. Their SSR
+loaders and metadata run outside React Context:
+
+```tsx
+blogClientPlugin({
+  apiBaseURL: baseURL,
+  apiBasePath: "/api/data",
+  siteBaseURL: baseURL,
+  siteBasePath: "/pages",
+  queryClient,
+})
+```
+
+### 3. Replace render guards with `StackProvider.auth`
+
+All `onBefore*PageRendered` override callbacks were removed. Move client-side
+route decisions into one permission provider:
+
+```diff
+  <StackProvider
++   auth={{
++     getIdentity,
++     loginPath: "/login",
++     can: ({ resource, action, identity }) => {
++       if (!identity) return false
++       return authorize(identity, resource, action)
++     },
++   }}
+    overrides={{
+      blog: {
+-       onBeforeDraftsPageRendered: () => Boolean(currentUser),
+-       onBeforeNewPostPageRendered: () => currentUser?.role === "admin",
+        uploadImage,
+      },
+    }}
+  >
+```
+
+Built-in routes declare their resource/action requirements. The auth provider
+gates client navigation and controls; backend lifecycle hooks remain the
+authoritative security boundary.
+
+### 4. Remove manual API and identity component props
+
+`CommentThread` and `CommentCount` now read API and identity services from the
+nearest provider:
+
+```diff
+  <CommentThread
+    resourceId={post.slug}
+    resourceType="blog-post"
+-   apiBaseURL={baseURL}
+-   apiBasePath="/api/data"
+-   currentUserId={session?.user?.id}
+-   loginHref="/login"
+-   headers={headers}
+  />
+```
+
+Keep `headers` only in client plugin factory configuration when an SSR loader
+hook needs request headers; it is no longer a public component identity prop.
+
+### 5. Update parameterized page-component overrides
+
+Parameterized `pageComponents` now receive the declarative route context
+`{ params }` instead of named props:
 
 ```diff
 blogClientPlugin({
-  // ... other config
+  // ...server-loader and metadata config
   pageComponents: {
-    posts: MyCustomPostsPage,          // unchanged (no params)
+    posts: MyCustomPostsPage,
 -   post: ({ slug }) => <MyCustomPostPage slug={slug} />,
 +   post: ({ params }) => <MyCustomPostPage slug={params.slug} />,
 -   tag: ({ tagSlug }) => <MyCustomTagPage tagSlug={tagSlug} />,
@@ -113,10 +183,8 @@ blogClientPlugin({
 })
 ```
 
-Renamed props per plugin:
-
-| Plugin | Override | Old props | New props |
-|--------|----------|-----------|-----------|
+| Plugin | Override | v2 props | v3 props |
+| --- | --- | --- | --- |
 | Blog | `post`, `editPost` | `{ slug }` | `{ params: { slug } }` |
 | Blog | `tag` | `{ tagSlug }` | `{ params: { tagSlug } }` |
 | CMS | `contentList`, `newContent` | `{ typeSlug }` | `{ params: { typeSlug } }` |
@@ -127,27 +195,37 @@ Renamed props per plugin:
 | Kanban | `board` | `{ boardId }` | `{ params: { boardId } }` |
 | AI Chat | `chatConversation` | `{ conversationId }` | `{ params: { id } }` |
 
-### Custom plugins: `defineRoute` is the recommended route helper
+Routes without parameters keep their existing component contract. Custom
+plugins should use `defineRoute` / `defineRoutes` from
+`@btst/stack/plugins/client`.
 
-`createRoute` is still exported and fully supported, but plugin routes are simpler with `defineRoute`:
+### 6. Deny backend hooks by throwing
+
+The boolean-return compatibility shim was removed. Returning `false` no longer
+denies a request:
 
 ```diff
-- todos: createRoute("/todos", () => ({
--   PageComponent: TodosListPage,
--   loader: todosLoader(config),
--   meta: createTodosMeta(config, "/todos"),
-- })),
-+ todos: defineRoute("/todos", {
-+   page: TodosListPage,
-+   loader: todosLoader(config),
-+   meta: createTodosMeta(config, "/todos"),
-+ }),
+onBeforeSubmission: async (_formSlug, data, ctx) => {
+- if (!ctx.headers.get("x-user-id")) return false
++ if (!ctx.headers.get("x-user-id")) throw new Error("Unauthorized")
+  return data
+}
 ```
 
-`defineRoute`, `defineRoutes`, and the `RouteContext` / `RouteDef` types are re-exported from `@btst/stack/plugins/client`.
+Hooks that transform input continue to return the transformed value.
+
+### Migration checklist
+
+- Replace API and page catch-all glue with the framework entry factories.
+- Add one framework router preset and API configuration to `StackProvider`.
+- Add `StackProvider.auth` when routes or controls require identity or permissions.
+- Delete shared router/API fields and `onBefore*PageRendered` callbacks from plugin overrides.
+- Remove API, header, identity, and login props from Comments components.
+- Update parameterized `pageComponents` adapters to read `params`.
+- Change backend hook denials from boolean returns to thrown errors.
+- Run your framework build, TypeScript checks, and tests.
 
 ---
-
 ## v1 → v2: Rebranding to BTST
 
 BTST v2 introduces a rebranding from "Better Stack" to "BTST". This guide covers all the changes you need to make to upgrade your project.

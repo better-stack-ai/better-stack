@@ -283,36 +283,38 @@ mediaClientPlugin({
 })
 ```
 
-Keep your `media` overrides configured in `StackProvider` so the ejected component can resolve API config, upload mode, and hooks correctly.
+Keep the top-level `StackProvider.api` / `router` services and your
+media-specific upload mode and hooks configured so the ejected component uses
+the same runtime services as the built-in page.
 
 ## Available `pageComponents` keys
 
 The table below covers the plugins that currently support `pageComponents` overrides directly. Comments still use the direct-import pattern shown above.
 
-| Plugin | Key | Props | Description |
+| Plugin | Key | Route context passed to override | Description |
 |---|---|---|---|
 | Blog | `posts` | — | Published posts list |
 | Blog | `drafts` | — | Drafts list |
 | Blog | `newPost` | — | New post editor |
-| Blog | `post` | `{ slug: string }` | Single post detail |
-| Blog | `editPost` | `{ slug: string }` | Edit post editor |
-| Blog | `tag` | `{ tagSlug: string }` | Tag + tagged posts |
+| Blog | `post` | `{ params: { slug: string } }` | Single post detail |
+| Blog | `editPost` | `{ params: { slug: string } }` | Edit post editor |
+| Blog | `tag` | `{ params: { tagSlug: string } }` | Tag + tagged posts |
 | AI Chat | `chat` | — | Chat home page |
-| AI Chat | `chatConversation` | `{ conversationId: string }` | Conversation detail |
+| AI Chat | `chatConversation` | `{ params: { id: string } }` | Conversation detail |
 | CMS | `dashboard` | — | CMS dashboard |
-| CMS | `contentList` | `{ typeSlug: string }` | Content list per type |
-| CMS | `newContent` | `{ typeSlug: string }` | New content editor |
-| CMS | `editContent` | `{ typeSlug: string; id: string }` | Edit content editor |
+| CMS | `contentList` | `{ params: { typeSlug: string } }` | Content list per type |
+| CMS | `newContent` | `{ params: { typeSlug: string } }` | New content editor |
+| CMS | `editContent` | `{ params: { typeSlug: string; id: string } }` | Edit content editor |
 | Form Builder | `formList` | — | Form list |
 | Form Builder | `newForm` | — | New form editor |
-| Form Builder | `editForm` | `{ id: string }` | Form editor |
-| Form Builder | `submissions` | `{ formId: string }` | Form submissions |
+| Form Builder | `editForm` | `{ params: { id: string } }` | Form editor |
+| Form Builder | `submissions` | `{ params: { id: string } }` | Form submissions |
 | UI Builder | `pageList` | — | Page list |
 | UI Builder | `newPage` | — | New page builder |
-| UI Builder | `editPage` | `{ id: string }` | Page builder editor |
+| UI Builder | `editPage` | `{ params: { id: string } }` | Page builder editor |
 | Kanban | `boards` | — | Boards list |
 | Kanban | `newBoard` | — | New board |
-| Kanban | `board` | `{ boardId: string }` | Board detail |
+| Kanban | `board` | `{ params: { boardId: string } }` | Board detail |
 | Media | `library` | — | Media library page |
 
 ## What the registry installs

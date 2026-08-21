@@ -61,7 +61,8 @@ The `postbuild.cjs` script auto-discovers and copies them — no manual registra
 
 ## Updating all three codegen projects
 
-When adding a new plugin or changing plugin config, update ALL three:
+When adding a plugin, changing plugin config, or changing a framework entry
+point, update ALL three generated projects:
 
 **Next.js** (`codegen-projects/nextjs/`)
 - `lib/stack.ts` — backend plugin registration
@@ -81,6 +82,38 @@ When adding a new plugin or changing plugin config, update ALL three:
 - `src/routes/pages/route.tsx`
 - `src/styles.css`
 
+Keep generated framework routes on the v3 entry factories:
+
+| Framework | API route | Page route | Provider router |
+|---|---|---|---|
+| Next.js | `toNextRouteHandlers` | `createNextPage` | `nextRouter()` |
+| React Router | `toReactRouterHandlers` | `createReactRouterPage` | `reactRouter()` |
+| TanStack Start | `toTanStackHandlers` | `createTanStackPageOptions` | `tanstackRouter()` |
+
+Do not generate hand-written route resolution, loader/meta ordering,
+dehydration, or 404 plumbing. The entry factories own that behavior.
+
+Generated layouts must configure shared services once on `StackProvider`:
+
+```tsx
+<StackProvider<PluginOverrides>
+  basePath="/pages"
+  router={frameworkRouter()}
+  api={{ baseURL, basePath: "/api/data" }}
+  auth={authProvider}
+  overrides={{
+    blog: { uploadImage },
+  }}
+>
+  {children}
+</StackProvider>
+```
+
+Only plugin-specific values belong in `overrides`. Never generate `Link`,
+`Image`, `navigate`, `refresh`, API paths, identity, or login values inside a
+built-in plugin override. Client plugin factory fields such as `apiBaseURL`,
+`siteBaseURL`, and `queryClient` remain necessary for SSR loaders and metadata.
+
 ### Override type registration (in each layout)
 
 ```typescript
@@ -92,6 +125,9 @@ type PluginOverrides = {
   "{name}": YourPluginOverrides,  // add here
 }
 ```
+
+Register only the plugin's public override type. Do not recreate removed v2
+framework, API, guard, or identity fields in local intersection types.
 
 ## Adding shared UI components (@workspace/ui)
 
@@ -122,3 +158,6 @@ pnpm turbo clean && pnpm build
 - **Build cache** — run `pnpm turbo clean` if changes aren't reflected in codegen projects after `pnpm build`.
 - **CSS not loading** — ensure `"./plugins/{name}/css"` entry exists in `package.json` exports; `postbuild.cjs` handles the rest automatically.
 - **`@workspace/ui` sub-path components** — if a new component imports from a directory (not a single file), add it to `EXTERNAL_REGISTRY_COMPONENTS` in `build-registry.ts`.
+- **Stale v2 templates** — generated routes must use framework entry factories,
+  and generated layouts must keep shared `router`, `api`, and `auth` services at
+  the top level of `StackProvider`.

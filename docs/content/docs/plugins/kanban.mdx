@@ -101,6 +101,12 @@ export const getStackClient = (queryClient: QueryClient) => {
 - `siteBasePath`: Path where your pages are mounted (e.g., `/pages`)
 - `queryClient`: React Query client instance
 
+<Callout type="info">
+These values configure the client plugin's SSR loaders and metadata. Browser
+routing and API access come from the top-level `StackProvider.router` and
+`StackProvider.api` values below.
+</Callout>
+
 ### 3. Import Plugin CSS
 
 Add the kanban plugin CSS to your global stylesheet:
@@ -236,17 +242,10 @@ Configure top-level framework wiring and kanban-specific overrides in your `Stac
   </Tab>
 </Tabs>
 
-**Required overrides:**
-- `apiBaseURL`: Base URL for API calls
-- `apiBasePath`: Path where your API is mounted
-- `navigate`: Function for programmatic navigation
-- `resolveUser`: Function to resolve user info from ID (for assignee display)
-- `searchUsers`: Function to search/list users (for assignee picker)
-
-**Optional overrides:**
-- `Link`: Custom Link component (defaults to `<a>` tag)
-- `refresh`: Function to refresh server-side cache
-- `localization`: Custom localization strings
+The only required Kanban overrides are `resolveUser` and `searchUsers` for
+assignee display and selection. Optional overrides include `uploadImage`,
+`imagePicker`, localization, attribution, headers, route lifecycle hooks, and
+`taskDetailBottomSlot`. Router and API fields are not plugin overrides in v3.
 
 ### 5. Generate Database Schema
 
