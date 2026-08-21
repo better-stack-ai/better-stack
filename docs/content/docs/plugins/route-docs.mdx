@@ -37,32 +37,31 @@ Ensure you followed the general [framework installation guide](/installation) fi
 Import and register the Route Docs client plugin in your client configuration:
 
 ```tsx title="lib/stack-client.tsx"
-import { stackClient } from "@btst/stack/client"
-import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+import { createStackClient } from "@btst/stack/client"
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
+import type { QueryClient } from "@tanstack/react-query"
 
-const { ClientProvider, routes, ...client } = stackClient({
-  basePath: "/pages",
-  apiBasePath: "/api/data",
-  queryClient: queryClient,
-  plugins: {
-    blog: blogClientPlugin({ queryClient }),
-    // Add Route Docs plugin - it will document all other client plugins
-    routeDocs: routeDocsClientPlugin({
-      queryClient: queryClient,
-      siteBasePath: "/pages",
-      title: "Client Route Documentation",
-      description: "Documentation for all client routes in this application",
-    }),
-  },
-})
-
-export { ClientProvider, routes, client }
+export const getStackClient = (queryClient: QueryClient) =>
+  createStackClient({
+    plugins: {
+      // Keep your other client plugin entries here. Route Docs introspects them.
+      routeDocs: routeDocsClientPlugin({
+        queryClient,
+        siteBasePath: "/pages",
+        title: "Client Route Documentation",
+        description: "Documentation for all client routes in this application",
+      }),
+    },
+  })
 ```
 
 <Callout type="warn">
 The Route Docs plugin is client-only. There is no backend plugin required.
 </Callout>
+
+Render it under the standard provider-only layout from the
+[installation guide](/installation): one top-level router and API config, with
+no Route Docs override block.
 
 ## Accessing the Documentation
 
@@ -140,11 +139,21 @@ The Route Docs page exposes your application's route structure. Consider these m
 3. **Sensitive Routes** - Be aware that all registered routes will be documented
 
 ```tsx
-// Example: Only enable in development
-const plugins = {
-  blog: blogClientPlugin({ queryClient }),
-  ...(process.env.NODE_ENV === "development" && {
-    routeDocs: routeDocsClientPlugin({ queryClient }),
-  }),
-}
+// Example: only register Route Docs in development
+const routeDocs =
+  process.env.NODE_ENV === "development"
+    ? {
+        routeDocs: routeDocsClientPlugin({
+          queryClient,
+          siteBasePath: "/pages",
+        }),
+      }
+    : {}
+
+createStackClient({
+  plugins: {
+    // ...your other client plugins,
+    ...routeDocs,
+  },
+})
 ```

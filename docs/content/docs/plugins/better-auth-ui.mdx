@@ -96,7 +96,7 @@ export function getStackClient(queryClient: QueryClient) {
       // Auth plugin — sign-in, sign-up, forgot-password, magic-link, etc.
       auth: authClientPlugin({
         siteBaseURL: baseURL,
-        siteBasePath: "/p",   // prefix used in your catch-all route
+        siteBasePath: "/p",
       }),
 
       // Account plugin — settings, security, API keys, teams, organizations
@@ -123,18 +123,17 @@ Configure the plugin overrides in your catch-all layout file. The `auth` overrid
 
 <Tabs groupId="frameworks" items={["next-js"]} persist>
   <Tab value="next-js">
-    ```tsx title="app/p/[[...all]]/layout.tsx"
+    ```tsx title="app/p/layout.tsx"
     "use client"
 
-    import { StackProvider } from "@btst/stack/context"
+    import { StackProvider, type StackAuthProvider } from "@btst/stack/context"
+    import { nextRouter } from "@btst/stack/next"
     import type {
       AuthPluginOverrides,
       AccountPluginOverrides,
       OrganizationPluginOverrides,
     } from "@btst/better-auth-ui/client"
     import { authClient } from "@/lib/auth-client"
-    import Link from "next/link"
-    import { useRouter } from "next/navigation"
     import type { ReactNode } from "react"
 
     type PluginOverrides = {
@@ -143,21 +142,33 @@ Configure the plugin overrides in your catch-all layout file. The `auth` overrid
       organization: OrganizationPluginOverrides
     }
 
-    export default function PagesLayout({ children }: { children: ReactNode }) {
-      const router = useRouter()
+    const stackAuth = {
+      getIdentity: async () => {
+        const { data } = await authClient.getSession()
+        return data?.user ?? null
+      },
+      loginPath: "/p/auth/sign-in",
+      can: ({ resource, action, identity }) =>
+        Boolean(identity && authorize(identity, resource, action)),
+    } satisfies StackAuthProvider
 
-      // Shared auth configuration — spread into each plugin override
+    export default function PagesLayout({ children }: { children: ReactNode }) {
+      // Better Auth UI-specific configuration shared by its three plugins
       const authConfig = {
         authClient,
-        navigate: router.push,
-        replace: router.replace,
-        onSessionChange: () => router.refresh(),
-        Link,
       }
+
+      const baseURL =
+        typeof window !== "undefined"
+          ? window.location.origin
+          : process.env.BASE_URL || "http://localhost:3000"
 
       return (
         <StackProvider<PluginOverrides>
           basePath="/p"
+          router={nextRouter()}
+          api={{ baseURL, basePath: "/api/data" }}
+          auth={stackAuth}
           overrides={{
             auth: {
               ...authConfig,
@@ -265,6 +276,11 @@ The exact sub-paths come from the view paths constants in the library and match 
 ## Configuration Options
 
 ### Auth Plugin (`AuthPluginOverrides`)
+
+`Link`, `navigate`, and `replace` in this table are optional APIs of the
+external `@btst/better-auth-ui` package. They are not the removed built-in BTST
+override fields; the recommended setup above uses `StackProvider.router` and
+the package defaults instead.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|

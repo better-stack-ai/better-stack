@@ -783,6 +783,25 @@ import { redirect } from "next/navigation"
 })
 ```
 
+Configure `StackProvider.auth` for client navigation and controls. UI Builder
+uses `ui-builder:page` with `read`, `create`, `update`, and `delete`
+actions. Keep SSR loader checks above and backend hooks as the server-side
+authorization boundary.
+
+```tsx title="app/pages/layout.tsx"
+<StackProvider
+  auth={{
+    getIdentity: () => session?.user ?? null,
+    loginPath: "/auth/sign-in",
+    can: ({ resource, action, identity }) =>
+      Boolean(identity && canManagePages(identity, resource, action)),
+  }}
+  // router, api, and plugin-specific overrides
+>
+  {children}
+</StackProvider>
+```
+
 ### UIBuilderClientHooks
 
 | Hook | Parameters | Return | Description |
@@ -898,15 +917,18 @@ Creates the client plugin with routes and SSR loaders.
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `apiBaseURL` | `string` | Yes | Base URL for API requests |
-| `apiBasePath` | `string` | Yes | API path prefix |
-| `navigate` | `(path: string) => void` | Yes | Navigation function |
-| `Link` | `ComponentType` | No | Link component |
-| `refresh` | `() => void` | No | Refresh function |
+| `headers` | `HeadersInit` | No | Additional headers for client API calls |
 | `componentRegistry` | `ComponentRegistry` | No | Custom component registry |
 | `functionRegistry` | `FunctionRegistry` | No | Functions available to UI Builder event bindings |
 | `localization` | `UIBuilderLocalizationOverrides` | No | Nested overrides for built-in page, editor, renderer, and notification copy |
 | `showAttribution` | `boolean` | No | Show BTST attribution |
+| `siteBasePath` | `string` | No | UI Builder admin-page base path |
+| `hooks` | `UIBuilderClientHooks` | No | SSR loader hooks |
+| `onRouteRender` | `(route, context) => void` | No | Route analytics hook |
+| `onRouteError` | `(route, error, context) => void` | No | Route error hook |
+
+Router and API services are not override fields in v3. Configure them with
+`StackProvider.router` and `StackProvider.api`.
 
 #### defaultComponentRegistry
 
@@ -1165,6 +1187,8 @@ import { PageBuilderPage } from "@/components/btst/ui-builder/client/components/
 uiBuilderClientPlugin({
   apiBaseURL: "...",
   apiBasePath: "/api/data",
+  siteBaseURL: "...",
+  siteBasePath: "/pages",
   queryClient,
   pageComponents: {
     pageList: PageListPage, // replaces the page list page

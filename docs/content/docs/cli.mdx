@@ -38,13 +38,18 @@ Common flags:
 - `lib/stack.ts` (or framework equivalent)
 - `lib/stack-client.tsx`
 - `lib/query-client.ts`
-- API catch-all route and pages catch-all route
+- API and pages catch-all routes using the framework entry factories
 - Global CSS imports (including plugin CSS)
-- Root layout with `QueryClientProvider` where possible
+- Pages layout with `QueryClientProvider` and one top-level
+  `StackProvider.router` / `StackProvider.api` configuration
 
 If root layout patching is not safe for your file shape, the command prints manual patch instructions instead of applying a destructive rewrite.
 
 Generated plugin config entries in `lib/stack.ts` and `lib/stack-client.tsx` use camelCase config keys (for example `aiChat`, `uiBuilder`, `formBuilder`) even though plugin selection flags use kebab-case names.
+
+Generated v3 layouts never repeat framework router, API, or identity wiring in
+plugin overrides. Replace only the plugin-specific TODO values (for example an
+upload function or user resolver).
 
 ## Generate and Migrate via Codegen
 

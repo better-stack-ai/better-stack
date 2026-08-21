@@ -70,44 +70,35 @@ export function getOrCreateQueryClient() {
 **Next.js** (`app/api/data/[[...all]]/route.ts`):
 
 ```ts
-import { myStack } from "@/lib/stack"
+import { toNextRouteHandlers } from "@btst/stack/next"
+import { handler } from "@/lib/stack"
 
-export const { GET, POST, PUT, PATCH, DELETE } = myStack.handler
+export const { GET, POST, PUT, PATCH, DELETE } =
+  toNextRouteHandlers(handler)
 ```
 
-**React Router v7** (`app/routes/api.data.$.ts`):
+**React Router v7** (`app/routes/api/data/$.ts`):
 
 ```ts
-import { myStack } from "~/lib/stack"
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router"
+import { toReactRouterHandlers } from "@btst/stack/react-router"
+import { handler } from "~/lib/stack"
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  return myStack.handler(request)
-}
-export async function action({ request }: ActionFunctionArgs) {
-  return myStack.handler(request)
-}
+const handlers = toReactRouterHandlers(handler)
+export const loader = handlers.loader
+export const action = handlers.action
 ```
 
 **TanStack Start** (`src/routes/api/data/$.ts`):
 
 ```ts
 import { createFileRoute } from "@tanstack/react-router"
-import { handler } from "~/lib/stack"
+import { toTanStackHandlers } from "@btst/stack/tanstack"
+import { handler } from "@/lib/stack"
 
 export const Route = createFileRoute("/api/data/$")({
-  server: {
-    handlers: {
-      GET: async ({ request }) => handler(request),
-      POST: async ({ request }) => handler(request),
-      PUT: async ({ request }) => handler(request),
-      PATCH: async ({ request }) => handler(request),
-      DELETE: async ({ request }) => handler(request),
-    },
-  },
+  server: { handlers: toTanStackHandlers(handler) },
 })
 ```
-
 ---
 
 ## Pages catch-all route
@@ -115,38 +106,58 @@ export const Route = createFileRoute("/api/data/$")({
 **Next.js** (`app/pages/[[...all]]/page.tsx`):
 
 ```tsx
-import { notFound } from "next/navigation"
-import { headers } from "next/headers"
-import { HydrationBoundary, dehydrate } from "@tanstack/react-query"
-import { normalizePath } from "@btst/stack/client"
+import { createNextPage } from "@btst/stack/next"
 import { getOrCreateQueryClient } from "@/lib/query-client"
 import { getStackClient } from "@/lib/stack-client"
 
-export default async function Page({ params }: { params: Promise<{ all?: string[] }> }) {
-  const headersList = await headers()
-  const headersObj = new Headers()
-  headersList.forEach((value, key) => headersObj.set(key, value))
-
-  const queryClient = getOrCreateQueryClient()
-  const stackClient = getStackClient(queryClient, { headers: headersObj })
-  const route = stackClient.router.getRoute(normalizePath((await params).all))
-
-  if (!route) notFound()
-  if (route.loader) await route.loader()
-
-  return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <route.PageComponent />
-    </HydrationBoundary>
-  )
-}
+export const dynamic = "force-dynamic"
+const page = createNextPage({
+  getStackClient,
+  getQueryClient: getOrCreateQueryClient,
+})
+export default page.Page
+export const generateMetadata = page.generateMetadata
 ```
+
+**React Router v7** (`app/routes/pages/$.tsx`):
+
+```tsx
+import { createReactRouterPage } from "@btst/stack/react-router"
+import { getOrCreateQueryClient } from "~/lib/query-client"
+import { getStackClient } from "~/lib/stack-client"
+
+const page = createReactRouterPage({
+  getStackClient,
+  getQueryClient: getOrCreateQueryClient,
+})
+export const loader = page.loader
+export const meta = page.meta
+export const ErrorBoundary = page.ErrorBoundary
+export default page.Component
+```
+
+**TanStack Start** (`src/routes/pages/$.tsx`):
+
+```tsx
+import { createFileRoute } from "@tanstack/react-router"
+import { createTanStackPageOptions } from "@btst/stack/tanstack"
+import { getStackClient } from "@/lib/stack-client"
+
+export const Route = createFileRoute("/pages/$")(
+  createTanStackPageOptions({ getStackClient }),
+)
+```
+
+The entry factories own route matching, loader-before-meta ordering,
+dehydration, and framework 404 behavior. Do not duplicate that plumbing in
+consumer routes.
 
 ---
 
 ## getBaseURL helper
 
-A server/client-safe URL helper — required for `apiBaseURL` in every plugin config and override.
+A server/client-safe URL helper for client plugin factory configuration and the
+top-level `StackProvider.api` service.
 
 ```ts
 // Next.js
@@ -173,10 +184,7 @@ import { QueryClient } from "@tanstack/react-query"
 
 const getBaseURL = () => /* see above */
 
-export const getStackClient = (
-  queryClient: QueryClient,
-  options?: { headers?: Headers }
-) => {
+export const getStackClient = (queryClient: QueryClient) => {
   const baseURL = getBaseURL()
   return createStackClient({
     plugins: {
@@ -186,7 +194,6 @@ export const getStackClient = (
         siteBaseURL: baseURL,
         siteBasePath: "/pages",
         queryClient,
-        headers: options?.headers,   // pass for SSR auth
         seo: { siteName: "My App" }, // optional
         hooks: {                     // optional client-side loader hooks
           beforeLoadPost: async (slug, ctx) => { /* ... */ },
@@ -215,31 +222,38 @@ export const getStackClient = (
 
 ---
 
-## SSR headers forwarding (Next.js)
+## Auth wiring
 
-Pass request cookies/auth headers into the stack client during SSR so plugins can perform authenticated prefetches:
+Identity and client permissions belong on the top-level provider:
 
-```ts
-// app/pages/[[...all]]/page.tsx
-import { headers } from "next/headers"
+```tsx
+import type { StackAuthProvider } from "@btst/stack/context"
 
-export default async function Page({ params }) {
-  const headersList = await headers()
-  const headersObj = new Headers()
-  headersList.forEach((value, key) => headersObj.set(key, value))
+const authProvider = {
+  getIdentity: async () => (await getSession())?.user ?? null,
+  loginPath: "/login",
+  can: ({ resource, action, identity }) =>
+    Boolean(identity && authorize(identity, resource, action)),
+} satisfies StackAuthProvider
 
-  const queryClient = getOrCreateQueryClient()
-  const stackClient = getStackClient(queryClient, { headers: headersObj })
-  const route = stackClient.router.getRoute(normalizePath((await params).all))
-
-  if (route?.loader) await route.loader()
-  return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      {route?.PageComponent ? <route.PageComponent /> : notFound()}
-    </HydrationBoundary>
-  )
-}
+<StackProvider
+  basePath="/pages"
+  router={nextRouter()}
+  api={{ baseURL, basePath: "/api/data" }}
+  auth={authProvider}
+>
+  {children}
+</StackProvider>
 ```
+
+Configure server identity separately on `stack({ auth })` and enforce
+authorization in backend lifecycle hooks. Do not pass `currentUserId`,
+`loginHref`, request headers, API paths, or navigation functions to public
+plugin components.
+
+Optional `headers` fields declared by a client plugin belong in that plugin's
+factory config for SSR loader hooks; they are not provider overrides or
+component identity props.
 
 ---
 
@@ -248,7 +262,7 @@ export default async function Page({ params }) {
 The pages layout must be `"use client"` and wrap `QueryClientProvider` then `StackProvider`.
 
 ```tsx
-// Next.js: app/pages/layout.tsx (or app/pages/[[...all]]/layout.tsx)
+// Next.js: app/pages/layout.tsx
 "use client"
 import { useState } from "react"
 import { QueryClientProvider } from "@tanstack/react-query"

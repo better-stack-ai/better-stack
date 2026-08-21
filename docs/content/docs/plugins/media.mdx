@@ -103,7 +103,10 @@ export const getStackClient = (queryClient: QueryClient) => {
 - `queryClient`: React Query client used for prefetching and caching
 
 <Callout type="info">
-The media client plugin registers the `/media` page route and prefetches the initial asset grid and folder tree during SSR. It expects the same API base settings you use elsewhere in your BTST client setup.
+The media client plugin registers the `/media` page route and prefetches the
+initial asset grid and folder tree during SSR. Browser-side API calls and
+navigation use the top-level `StackProvider.api` and
+`StackProvider.router` values below.
 </Callout>
 
 ### 3. Import Plugin CSS
@@ -116,7 +119,7 @@ Add the media plugin CSS to your global stylesheet:
 
 This includes the built-in media library UI, picker layout, folder tree, upload states, and image previews.
 
-### 4. Add Context Overrides
+### 4. Configure the Provider
 
 Configure top-level framework wiring and media-specific overrides in your `StackProvider`:
 
@@ -125,8 +128,8 @@ Configure top-level framework wiring and media-specific overrides in your `Stack
     ```tsx title="app/pages/layout.tsx"
     import { StackProvider } from "@btst/stack/context"
     import { nextRouter } from "@btst/stack/next"
-    import { uploadAsset, type MediaPluginOverrides } from "@btst/stack/plugins/media/client"
-    import { QueryClient } from "@tanstack/react-query"
+    import type { MediaPluginOverrides } from "@btst/stack/plugins/media/client"
+    import { useQueryClient } from "@tanstack/react-query"
 
     const getBaseURL = () =>
       typeof window !== "undefined"
@@ -138,7 +141,7 @@ Configure top-level framework wiring and media-specific overrides in your `Stack
     }
 
     export default function Layout({ children }) {
-      const queryClient = new QueryClient()
+      const queryClient = useQueryClient()
       const baseURL = getBaseURL()
 
       return (
@@ -166,7 +169,7 @@ Configure top-level framework wiring and media-specific overrides in your `Stack
     import { StackProvider } from "@btst/stack/context"
     import { reactRouter } from "@btst/stack/react-router"
     import type { MediaPluginOverrides } from "@btst/stack/plugins/media/client"
-    import { QueryClient } from "@tanstack/react-query"
+    import { useQueryClient } from "@tanstack/react-query"
 
     const getBaseURL = () =>
       typeof window !== "undefined"
@@ -178,7 +181,7 @@ Configure top-level framework wiring and media-specific overrides in your `Stack
     }
 
     export default function Layout() {
-      const queryClient = new QueryClient()
+      const queryClient = useQueryClient()
       const baseURL = getBaseURL()
 
       return (
@@ -206,7 +209,7 @@ Configure top-level framework wiring and media-specific overrides in your `Stack
     import { tanstackRouter } from "@btst/stack/tanstack"
     import type { MediaPluginOverrides } from "@btst/stack/plugins/media/client"
     import { Outlet } from "@tanstack/react-router"
-    import { QueryClient } from "@tanstack/react-query"
+    import { useQueryClient } from "@tanstack/react-query"
 
     const getBaseURL = () =>
       typeof window !== "undefined"
@@ -218,7 +221,7 @@ Configure top-level framework wiring and media-specific overrides in your `Stack
     }
 
     function Layout() {
-      const queryClient = new QueryClient()
+      const queryClient = useQueryClient()
       const baseURL = getBaseURL()
 
       return (
@@ -412,6 +415,20 @@ When `StackProvider` has an auth provider with `can()`, the Media UI checks thes
 | `media:folder` | `delete` | Folder delete action (`params.id` is supplied) |
 
 Without an auth provider, all controls remain available for backward compatibility. Client checks only control presentation; continue using backend hooks such as `onBeforeUpload`, `onBeforeDelete`, and `onBeforeListAssets` as the security boundary.
+
+```tsx title="app/pages/layout.tsx"
+<StackProvider
+  auth={{
+    getIdentity: () => session?.user ?? null,
+    loginPath: "/login",
+    can: ({ resource, action, identity }) =>
+      Boolean(identity && canUseMedia(identity, resource, action)),
+  }}
+  // router, api, and media-specific overrides
+>
+  {children}
+</StackProvider>
+```
 
 ### Translation and notifications
 
@@ -804,4 +821,6 @@ mediaClientPlugin({
 })
 ```
 
-The ejected library page still relies on your `media` `StackProvider` overrides for API configuration, navigation, upload mode, and hooks.
+The ejected library page reads API and navigation services from the top-level
+`StackProvider` and media-specific upload mode, headers, and hooks from the
+`media` override.

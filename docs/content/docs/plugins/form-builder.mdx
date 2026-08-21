@@ -163,10 +163,9 @@ type PluginOverrides = {
   api={{ baseURL, basePath: "/api/data" }}
   overrides={{
     "form-builder": {
-      // Optional file upload for file fields
-      uploadFile: async (file) => {
-        // Your file upload logic
-        return "https://example.com/file.pdf"
+      // Optional custom field implementations
+      fieldComponents: {
+        file: MyFileField,
       },
       // Lifecycle hooks
       onRouteRender: async (routeName, context) => {
@@ -448,10 +447,10 @@ formBuilderBackendPlugin({
     
     // Submissions list authorization
     onBeforeListSubmissions: async (formId, ctx) => {
-      return isAdmin(ctx.headers)
+      if (!await isAdmin(ctx.headers)) throw new Error("Admin access required")
     },
-    onBeforeDeleteSubmission: async (submissionId, ctx) => {
-      return isAdmin(ctx.headers)
+    onBeforeSubmissionDeleted: async (submissionId, ctx) => {
+      if (!await isAdmin(ctx.headers)) throw new Error("Admin access required")
     },
     
     // Error handling
@@ -516,6 +515,25 @@ import { redirect } from "next/navigation"
 <Callout type="info">
 **Use client hooks for SSR.** These hooks run during server-side data loading and support async operations like session checks. Throw from a `beforeLoad*` hook to deny access; `onLoadError` can then redirect unauthorized users.
 </Callout>
+
+For client navigation and controls, configure `StackProvider.auth` once. Form
+Builder uses `form-builder:form` with `create`, `update`, and `delete`
+actions, and `form-builder:submission` with `read` and `delete` actions.
+Loader and backend hooks remain responsible for server-side enforcement.
+
+```tsx title="app/pages/layout.tsx"
+<StackProvider
+  auth={{
+    getIdentity: () => session?.user ?? null,
+    loginPath: "/auth/sign-in",
+    can: ({ resource, action, identity }) =>
+      Boolean(identity && canManageForms(identity, resource, action)),
+  }}
+  // router, api, and plugin-specific overrides
+>
+  {children}
+</StackProvider>
+```
 
 ## API Endpoints
 
@@ -651,17 +669,15 @@ Creates the client plugin with routes and SSR loaders.
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `apiBaseURL` | `string` | Yes | Base URL for API requests |
-| `apiBasePath` | `string` | Yes | API path prefix |
-| `navigate` | `(path: string) => void` | Yes | Navigation function |
-| `Link` | `ComponentType` | No | Link component |
-| `refresh` | `() => void` | No | Refresh function |
-| `uploadFile` | `(file: File) => Promise<string>` | No | File upload handler |
 | `fieldComponents` | `Record<string, ComponentType>` | No | Custom field components |
 | `localization` | `FormBuilderLocalization` | No | Custom labels |
 | `showAttribution` | `boolean` | No | Show BTST attribution |
+| `headers` | `HeadersInit` | No | Additional headers for client API calls |
 | `onRouteRender` | `(route, context) => void` | No | Lifecycle hook |
 | `onRouteError` | `(route, error, context) => void` | No | Error hook |
+
+Router and API services are not override fields in v3. Configure them with
+`StackProvider.router` and `StackProvider.api`.
 
 #### FormBuilderClientHooks
 

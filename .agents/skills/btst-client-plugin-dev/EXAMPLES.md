@@ -77,7 +77,7 @@ export function MyPage({ id }: { id: string }) {
 ## Client hooks (lifecycle) example
 
 ```typescript
-// In defineClientPlugin config:
+// In the config passed to myClientPlugin(config):
 hooks: {
   beforeLoadDetail: async (id, ctx) => {
     const session = await getSession(ctx.headers)

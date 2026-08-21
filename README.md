@@ -62,7 +62,7 @@ You keep your codebase, database, and deployment.
 
 ---
 
-## Minimal usage
+## Minimal setup (Next.js)
 
 ```ts title="lib/stack.ts"
 import { stack } from "@btst/stack"
@@ -97,7 +97,46 @@ export const getStackClient = (queryClient: QueryClient) =>
   })
 ```
 
-Now you have a working blog with API, pages, SSR, and SEO. See the [full installation guide](https://www.better-stack.ai/docs/installation) for database adapters, auth hooks, and framework-specific setup.
+Use the v3 framework entry factories for the two catch-all routes:
+
+```ts title="app/api/data/[[...all]]/route.ts"
+import { toNextRouteHandlers } from "@btst/stack/next"
+import { handler } from "@/lib/stack"
+
+export const { GET, POST, PUT, PATCH, DELETE } =
+  toNextRouteHandlers(handler)
+```
+
+```tsx title="app/pages/[[...all]]/page.tsx"
+import { createNextPage } from "@btst/stack/next"
+import { getStackClient } from "@/lib/stack-client"
+import { getOrCreateQueryClient } from "@/lib/query-client"
+
+const page = createNextPage({
+  getStackClient,
+  getQueryClient: getOrCreateQueryClient,
+})
+export default page.Page
+export const generateMetadata = page.generateMetadata
+```
+
+Wrap the pages subtree with one `StackProvider`:
+
+```tsx
+<StackProvider
+  basePath="/pages"
+  router={nextRouter()}
+  api={{ baseURL, basePath: "/api/data" }}
+  auth={authProvider}
+  overrides={{ blog: { uploadImage } }}
+>
+  {children}
+</StackProvider>
+```
+
+Router, API, and auth services belong at the top level; plugin overrides contain
+only plugin-specific customization. See the [full installation guide](https://www.better-stack.ai/docs/installation)
+for QueryClient wiring, database adapters, all three frameworks, and auth.
 
 ## Database schemas & migrations
 

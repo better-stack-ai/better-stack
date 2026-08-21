@@ -317,7 +317,24 @@ blogClientPlugin({
 
 ### Adding Authorization
 
-To add authorization rules and customize behavior, you can use the lifecycle hooks defined in the API Reference section below. These hooks allow you to control access to API endpoints, add logging, and customize the plugin's behavior to fit your application's needs.
+Configure `StackProvider.auth` once for client routes and controls. Blog checks
+`blog:draft/read`, `blog:post/create`, `blog:post/update`, and
+`blog:post/delete`. Use client loader hooks for SSR checks and backend
+lifecycle hooks for authoritative API authorization.
+
+```tsx title="app/pages/layout.tsx"
+<StackProvider
+  auth={{
+    getIdentity: () => session?.user ?? null,
+    loginPath: "/auth/sign-in",
+    can: ({ resource, action, identity }) =>
+      Boolean(identity && canManageBlog(identity, resource, action)),
+  }}
+  // router, api, and Blog-specific overrides
+>
+  {children}
+</StackProvider>
+```
 
 ## API Reference
 
