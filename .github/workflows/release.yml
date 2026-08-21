@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing Git tag to publish
+        description: Existing Git tag to publish; select the same tag as the workflow ref
         required: true
         type: string
       prerelease:
@@ -72,6 +72,11 @@ jobs:
           STACK_VERSION=$(node -p "require('./packages/stack/package.json').version")
           CODEGEN_VERSION=$(node -p "require('./packages/cli/package.json').version")
           TAG_VERSION="${RELEASE_TAG#v}"
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$GITHUB_REF" != "refs/tags/$RELEASE_TAG" ]; then
+            echo "Manual release retries must run from tag $RELEASE_TAG; current ref is $GITHUB_REF"
+            exit 1
+          fi
 
           if [ "$STACK_VERSION" != "$TAG_VERSION" ]; then
             echo "Tag version ($TAG_VERSION) does not match @btst/stack version ($STACK_VERSION)"
