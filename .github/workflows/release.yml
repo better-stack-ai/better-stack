@@ -5,7 +5,7 @@ on:
     types: [published]
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
 
 jobs:
@@ -29,7 +29,7 @@ jobs:
       - name: Update npm
         run: npm install -g npm@latest
 
-      - run: pnpm install
+      - run: pnpm install --frozen-lockfile
 
       - name: Copy README files to published packages
         run: |
@@ -50,40 +50,133 @@ jobs:
       - name: Build @btst/codegen
         run: pnpm --filter "@btst/codegen" build --force
 
-      - name: Verify tag matches package version
-        working-directory: packages/stack
+      - name: Validate release metadata
+        id: release_metadata
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          GITHUB_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          if [ -n "${{ github.event.release.tag_name }}" ]; then
-            RAW_TAG="${{ github.event.release.tag_name }}"
-          else
-            RAW_TAG="${GITHUB_REF#refs/tags/}"
-          fi
-          TAG_VERSION="${RAW_TAG#v}"
-          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
-            echo "Tag version ($TAG_VERSION) does not match package.json version ($PKG_VERSION)"
+          set -euo pipefail
+
+          STACK_VERSION=$(node -p "require('./packages/stack/package.json').version")
+          CODEGEN_VERSION=$(node -p "require('./packages/cli/package.json').version")
+          TAG_VERSION="${RELEASE_TAG#v}"
+
+          if [ "$STACK_VERSION" != "$TAG_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match @btst/stack version ($STACK_VERSION)"
             exit 1
           fi
 
-      - name: Publish to npm
+          NPM_DIST_TAG=latest
+          if [[ "$STACK_VERSION" == *-* || "$CODEGEN_VERSION" == *-* || "$GITHUB_PRERELEASE" == "true" ]]; then
+            NPM_DIST_TAG=next
+          fi
+
+          echo "stack_version=$STACK_VERSION" >> "$GITHUB_OUTPUT"
+          echo "codegen_version=$CODEGEN_VERSION" >> "$GITHUB_OUTPUT"
+          echo "npm_dist_tag=$NPM_DIST_TAG" >> "$GITHUB_OUTPUT"
+          echo "Publishing @btst/stack@$STACK_VERSION and @btst/codegen@$CODEGEN_VERSION with dist-tag '$NPM_DIST_TAG'"
+
+      - name: Publish @btst/stack to npm
         working-directory: packages/stack
-        run: npm publish --access public --provenance
+        env:
+          NPM_DIST_TAG: ${{ steps.release_metadata.outputs.npm_dist_tag }}
+          PKG_VERSION: ${{ steps.release_metadata.outputs.stack_version }}
+        run: |
+          set -euo pipefail
+
+          if npm view "@btst/stack@$PKG_VERSION" version >/dev/null 2>&1; then
+            echo "@btst/stack@$PKG_VERSION is already published; skipping."
+            exit 0
+          fi
+          npm publish --access public --provenance --tag "$NPM_DIST_TAG"
 
       - name: Publish @btst/codegen to npm
         working-directory: packages/cli
+        env:
+          NPM_DIST_TAG: ${{ steps.release_metadata.outputs.npm_dist_tag }}
+          PKG_VERSION: ${{ steps.release_metadata.outputs.codegen_version }}
         run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
+          set -euo pipefail
+
           if npm view "@btst/codegen@$PKG_VERSION" version >/dev/null 2>&1; then
             echo "@btst/codegen@$PKG_VERSION is already published; skipping."
             exit 0
           fi
-          npm publish --access public --provenance
+          npm publish --access public --provenance --tag "$NPM_DIST_TAG"
+
+      - name: Verify published packages
+        env:
+          NPM_DIST_TAG: ${{ steps.release_metadata.outputs.npm_dist_tag }}
+          STACK_VERSION: ${{ steps.release_metadata.outputs.stack_version }}
+          CODEGEN_VERSION: ${{ steps.release_metadata.outputs.codegen_version }}
+        run: |
+          set -euo pipefail
+
+          read_expected_version() {
+            local package_spec="$1"
+            local expected_version="$2"
+            local published_version=""
+
+            for attempt in {1..12}; do
+              published_version=$(npm view "$package_spec" version 2>/dev/null || true)
+              if [ "$published_version" = "$expected_version" ]; then
+                printf '%s\n' "$published_version"
+                return 0
+              fi
+              echo "Waiting for $package_spec to resolve to $expected_version (attempt $attempt/12)" >&2
+              sleep 10
+            done
+
+            echo "$package_spec resolves to ${published_version:-nothing}, expected $expected_version" >&2
+            return 1
+          }
+
+          PUBLISHED_STACK_VERSION=$(read_expected_version "@btst/stack@$NPM_DIST_TAG" "$STACK_VERSION")
+          PUBLISHED_CODEGEN_VERSION=$(read_expected_version "@btst/codegen@$NPM_DIST_TAG" "$CODEGEN_VERSION")
+          STACK_INTEGRITY=$(npm view "@btst/stack@$STACK_VERSION" dist.integrity)
+          CODEGEN_INTEGRITY=$(npm view "@btst/codegen@$CODEGEN_VERSION" dist.integrity)
+
+          if [ "$PUBLISHED_STACK_VERSION" != "$STACK_VERSION" ]; then
+            echo "@btst/stack@$NPM_DIST_TAG resolves to $PUBLISHED_STACK_VERSION, expected $STACK_VERSION"
+            exit 1
+          fi
+          if [ "$PUBLISHED_CODEGEN_VERSION" != "$CODEGEN_VERSION" ]; then
+            echo "@btst/codegen@$NPM_DIST_TAG resolves to $PUBLISHED_CODEGEN_VERSION, expected $CODEGEN_VERSION"
+            exit 1
+          fi
+          if [ -z "$STACK_INTEGRITY" ] || [ -z "$CODEGEN_INTEGRITY" ]; then
+            echo "Published package integrity metadata is missing"
+            exit 1
+          fi
+
+          LATEST_SUMMARY=""
+          if [ "$NPM_DIST_TAG" = "next" ]; then
+            STACK_LATEST_VERSION=$(npm view "@btst/stack@latest" version)
+            if [ "$STACK_LATEST_VERSION" = "$STACK_VERSION" ] || [[ "$STACK_LATEST_VERSION" == *-* ]]; then
+              echo "Prerelease publication must leave @btst/stack@latest on a stable version; found $STACK_LATEST_VERSION"
+              exit 1
+            fi
+            LATEST_SUMMARY="@btst/stack@latest remains at $STACK_LATEST_VERSION"
+          fi
+
+          {
+            echo "### npm release"
+            echo ""
+            echo "| Package | Version | Dist-tag | Integrity |"
+            echo "| --- | --- | --- | --- |"
+            echo "| @btst/stack | $STACK_VERSION | $NPM_DIST_TAG | \`$STACK_INTEGRITY\` |"
+            echo "| @btst/codegen | $CODEGEN_VERSION | $NPM_DIST_TAG | \`$CODEGEN_INTEGRITY\` |"
+            if [ -n "$LATEST_SUMMARY" ]; then
+              echo ""
+              echo "$LATEST_SUMMARY"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload npm logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: npm-debug-logs
           path: /home/runner/.npm/_logs/
           retention-days: 7
-
