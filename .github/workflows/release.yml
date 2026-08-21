@@ -3,6 +3,17 @@ name: BTST Release
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing Git tag to publish
+        required: true
+        type: string
+      prerelease:
+        description: Publish with the npm next dist-tag
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -14,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
           fetch-depth: 0
 
       - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
@@ -26,8 +37,8 @@ jobs:
           node-version: 22.22.1
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Update npm
-        run: npm install -g npm@latest
+      - name: Install npm with trusted publishing support
+        run: npm install -g npm@11.17.0
 
       - run: pnpm install --frozen-lockfile
 
@@ -53,8 +64,8 @@ jobs:
       - name: Validate release metadata
         id: release_metadata
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          GITHUB_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+          GITHUB_PRERELEASE: ${{ github.event.release.prerelease || inputs.prerelease }}
         run: |
           set -euo pipefail
 
