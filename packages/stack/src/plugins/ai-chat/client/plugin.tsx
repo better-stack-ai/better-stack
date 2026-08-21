@@ -3,7 +3,6 @@ import {
 	createApiClient,
 	createSanitizedSSRLoaderError,
 	isConnectionError,
-	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
@@ -183,10 +182,7 @@ function createConversationsLoader(config: AiChatClientConfig) {
 			try {
 				// Before hook
 				if (hooks?.beforeLoadConversations) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadConversations!(context),
-						"Load prevented by beforeLoadConversations hook",
-					);
+					await hooks.beforeLoadConversations(context);
 				}
 
 				await queryClient.prefetchQuery(listQuery);
@@ -197,10 +193,7 @@ function createConversationsLoader(config: AiChatClientConfig) {
 						queryClient.getQueryData<SerializedConversation[]>(
 							listQuery.queryKey,
 						) || null;
-					await runClientHookWithShim(
-						() => hooks.afterLoadConversations!(conversations, context),
-						"Load prevented by afterLoadConversations hook",
-					);
+					await hooks.afterLoadConversations(conversations, context);
 				}
 
 				// Check for errors
@@ -261,10 +254,7 @@ function createConversationLoader(id: string, config: AiChatClientConfig) {
 			try {
 				// Before hook
 				if (hooks?.beforeLoadConversation) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadConversation!(id, context),
-						"Load prevented by beforeLoadConversation hook",
-					);
+					await hooks.beforeLoadConversation(id, context);
 				}
 
 				// Prefetch both the conversation and the conversations list
@@ -279,10 +269,7 @@ function createConversationLoader(id: string, config: AiChatClientConfig) {
 						queryClient.getQueryData<
 							SerializedConversation & { messages: SerializedMessage[] }
 						>(conversationQuery.queryKey) || null;
-					await runClientHookWithShim(
-						() => hooks.afterLoadConversation!(conversation, id, context),
-						"Load prevented by afterLoadConversation hook",
-					);
+					await hooks.afterLoadConversation(conversation, id, context);
 				}
 
 				// Check for errors

@@ -25,15 +25,6 @@ export function HomePage({ published }: { published: boolean }) {
 			published,
 		},
 		overrides,
-		beforeRenderHook: (overrides, context) => {
-			if (published && overrides.onBeforePostsPageRendered) {
-				return overrides.onBeforePostsPageRendered(context);
-			}
-			if (!published && overrides.onBeforeDraftsPageRendered) {
-				return overrides.onBeforeDraftsPageRendered(context);
-			}
-			return true;
-		},
 	});
 
 	return (

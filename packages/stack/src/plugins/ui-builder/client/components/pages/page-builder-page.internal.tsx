@@ -5,6 +5,7 @@ import {
 	useBasePath,
 	useNotify,
 	usePluginOverrides,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
@@ -224,13 +225,13 @@ function PageBuilderPageContent({
 	const t = useTranslate();
 	const notify = useNotify();
 	const {
-		Link,
 		componentRegistry: customRegistry,
 		functionRegistry,
 		localization,
 	} = usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
+	const { router } = useStack();
 	const basePath = useBasePath();
-	const LinkComponent = Link || "a";
+	const LinkComponent = router?.Link ?? "a";
 	const componentRegistry = customRegistry || defaultComponentRegistry;
 	const localized = (
 		override: string | undefined,

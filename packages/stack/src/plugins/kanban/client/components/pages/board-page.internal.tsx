@@ -38,6 +38,7 @@ import {
 	useCan,
 	useNotify,
 	usePluginOverrides,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
@@ -73,18 +74,15 @@ export function BoardPage({ boardId }: BoardPageProps) {
 		throw error;
 	}
 
-	const {
-		Link: OverrideLink,
-		navigate: overrideNavigate,
-		taskDetailBottomSlot,
-		localization,
-	} = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { taskDetailBottomSlot, localization } =
+		usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { router } = useStack();
 	const navigate =
-		overrideNavigate ||
+		router?.navigate ||
 		((path: string) => {
 			window.location.href = path;
 		});
-	const Link = OverrideLink || "a";
+	const Link = router?.Link ?? "a";
 
 	const { deleteBoard, isDeleting } = useBoardMutations();
 	const { deleteColumn, reorderColumns } = useColumnMutations();

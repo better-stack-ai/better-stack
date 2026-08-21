@@ -4,7 +4,6 @@ import {
 	defineClientPlugin,
 	createApiClient,
 	isConnectionError,
-	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
@@ -172,10 +171,7 @@ function createFormListLoader(config: FormBuilderClientConfig) {
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadFormList) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadFormList!(context),
-						"Load prevented by beforeLoadFormList hook",
-					);
+					await hooks.beforeLoadFormList(context);
 				}
 
 				// Prefetch forms using infinite query (matches useSuspenseInfiniteQuery in hooks)
@@ -253,10 +249,7 @@ function createFormBuilderLoader(
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadFormBuilder) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadFormBuilder!(id, context),
-						"Load prevented by beforeLoadFormBuilder hook",
-					);
+					await hooks.beforeLoadFormBuilder(id, context);
 				}
 
 				// Prefetch form if editing
@@ -336,10 +329,7 @@ function createSubmissionsLoader(
 			try {
 				// Before hook - authorization check
 				if (hooks?.beforeLoadSubmissions) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadSubmissions!(formId, context),
-						"Load prevented by beforeLoadSubmissions hook",
-					);
+					await hooks.beforeLoadSubmissions(formId, context);
 				}
 
 				// Prefetch form and submissions

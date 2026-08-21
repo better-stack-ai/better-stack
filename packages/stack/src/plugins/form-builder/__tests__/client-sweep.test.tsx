@@ -165,11 +165,7 @@ function createMockRouter(initial = "") {
 	};
 }
 
-const formBuilderOverrides = {
-	navigate: vi.fn(),
-	apiBaseURL: "http://test.local",
-	apiBasePath: "/api/data",
-};
+const formBuilderOverrides = {};
 
 function typeInto(input: HTMLInputElement, value: string) {
 	const setValue = Object.getOwnPropertyDescriptor(

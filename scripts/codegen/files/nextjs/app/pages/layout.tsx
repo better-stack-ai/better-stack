@@ -4,7 +4,6 @@ import { StackProvider, type StackAuthProvider } from "@btst/stack/context";
 import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import type { TodosPluginOverrides } from "@/lib/plugins/todo/client/overrides";
 import { getOrCreateQueryClient } from "@/lib/query-client";
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client";
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
@@ -37,7 +36,6 @@ const getBaseURL = () =>
 
 // Define the shape of all plugin overrides
 type PluginOverrides = {
-	todos: TodosPluginOverrides;
 	blog: BlogPluginOverrides;
 	"ai-chat": AiChatPluginOverrides;
 	cms: CMSPluginOverrides;
@@ -162,8 +160,6 @@ export default function ExampleLayout({
 				{/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}
 				<div className="fixed bottom-6 right-6 z-50" data-testid="chat-widget">
 					<ChatLayout
-						apiBaseURL={getBaseURL()}
-						apiBasePath="/api/data"
 						layout="widget"
 						widgetHeight="520px"
 						showSidebar={false}

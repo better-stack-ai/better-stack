@@ -107,7 +107,7 @@ export const getStackClient = (queryClient: QueryClient) => {
 - `queryClient`: React Query client instance
 
 <Callout type="info">
-**Why configure API paths here?** This configuration is used by **server-side loaders** that prefetch data before your pages render. These loaders run outside of React Context, so they need direct configuration. You'll also provide `apiBaseURL` and `apiBasePath` again in the Provider overrides (Section 4) for **client-side components** that run during actual rendering.
+**Why configure API paths here?** This configuration is used by **server-side loaders** that run outside React Context. Client-side components use the top-level `StackProvider.api` configuration shown in Section 4.
 </Callout>
 
 ### 3. Import Plugin CSS
@@ -120,18 +120,16 @@ Add the blog plugin CSS to your global stylesheet:
 
 This includes all necessary styles for the blog components, markdown rendering, and editor.
 
-### 4. Add Context Overrides
+### 4. Add the Context Provider
 
-Configure framework-specific overrides in your `StackProvider`:
+Configure framework-wide router and API wiring on `StackProvider`; keep only Blog-specific values in `overrides`:
 
 <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
   <Tab value="next-js">
     ```tsx title="app/pages/[[...all]]/layout.tsx"
     import { StackProvider } from "@btst/stack/context"
+    import { nextRouter } from "@btst/stack/next"
     import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
-    import Link from "next/link"
-    import Image from "next/image"
-    import { useRouter } from "next/navigation"
 
     const getBaseURL = () => 
       typeof window !== 'undefined' 
@@ -143,25 +141,20 @@ Configure framework-specific overrides in your `StackProvider`:
     }
 
     export default function Layout({ children }) {
-      const router = useRouter()
       const baseURL = getBaseURL()
       
       return (
         <StackProvider<PluginOverrides>
           basePath="/pages"
+          router={nextRouter()}
+          api={{ baseURL, basePath: "/api/data" }}
           overrides={{
             blog: {
-              apiBaseURL: baseURL,
-              apiBasePath: "/api/data",
-              navigate: (path) => router.push(path),
-              refresh: () => router.refresh(),
               uploadImage: async (file) => {
                 // Implement your image upload logic
                 // Return the URL of the uploaded image
                 return "https://example.com/uploads/image.jpg"
               },
-              Link: (props) => <Link {...props} />,
-              Image: (props) => <Image {...props} />,
             }
           }}
         >
@@ -174,8 +167,9 @@ Configure framework-specific overrides in your `StackProvider`:
 
   <Tab value="react-router">
     ```tsx title="app/routes/pages/_layout.tsx"
-    import { Outlet, Link, useNavigate } from "react-router"
+    import { Outlet } from "react-router"
     import { StackProvider } from "@btst/stack/context"
+    import { reactRouter } from "@btst/stack/react-router"
     import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
 
     const getBaseURL = () => 
@@ -188,26 +182,19 @@ Configure framework-specific overrides in your `StackProvider`:
     }
 
     export default function Layout() {
-      const navigate = useNavigate()
       const baseURL = getBaseURL()
       
       return (
         <StackProvider<PluginOverrides>
           basePath="/pages"
+          router={reactRouter()}
+          api={{ baseURL, basePath: "/api/data" }}
           overrides={{
             blog: {
-              apiBaseURL: baseURL,
-              apiBasePath: "/api/data",
-              navigate: (href) => navigate(href),
               uploadImage: async (file) => {
                 // Implement your image upload logic
                 return "https://example.com/uploads/image.jpg"
               },
-              Link: ({ href, children, className, ...props }) => (
-                <Link to={href || ""} className={className} {...props}>
-                  {children}
-                </Link>
-              ),
             }
           }}
         >
@@ -221,8 +208,9 @@ Configure framework-specific overrides in your `StackProvider`:
   <Tab value="tanstack">
     ```tsx title="src/routes/pages/route.tsx"
     import { StackProvider } from "@btst/stack/context"
+    import { tanstackRouter } from "@btst/stack/tanstack"
     import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
-    import { Link, useRouter, Outlet } from "@tanstack/react-router"
+    import { Outlet } from "@tanstack/react-router"
 
     const getBaseURL = () => 
       typeof window !== 'undefined' 
@@ -234,26 +222,19 @@ Configure framework-specific overrides in your `StackProvider`:
     }
 
     function Layout() {
-      const router = useRouter()
       const baseURL = getBaseURL()
 
       return (
         <StackProvider<PluginOverrides>
           basePath="/pages"
+          router={tanstackRouter()}
+          api={{ baseURL, basePath: "/api/data" }}
           overrides={{
             blog: {
-              apiBaseURL: baseURL,
-              apiBasePath: "/api/data",
-              navigate: (href) => router.navigate({ href }),
               uploadImage: async (file) => {
                 // Implement your image upload logic
                 return "https://example.com/uploads/image.jpg"
               },
-              Link: ({ href, children, className, ...props }) => (
-                <Link to={href} className={className} {...props}>
-                  {children}
-                </Link>
-              ),
             }
           }}
         >
@@ -266,21 +247,11 @@ Configure framework-specific overrides in your `StackProvider`:
 </Tabs>
 
 **Required overrides:**
-- `apiBaseURL`: Base URL for API calls (used by client-side components during rendering)
-- `apiBasePath`: Path where your API is mounted
-- `navigate`: Function for programmatic navigation
 - `uploadImage`: Function to upload images and return their URL
 
 **Optional overrides:**
-- `Link`: Custom Link component (defaults to `<a>` tag)
-- `Image`: Custom Image component (useful for Next.js Image optimization)
-- `refresh`: Function to refresh server-side cache (useful for Next.js)
 - `localization`: Custom localization strings
 - `showAttribution`: Whether to show BTST attribution
-
-<Callout type="warn">
-**Why provide API paths again?** You already configured these in Section 2, but that configuration is only available to **server-side loaders**. The overrides here provide the same values to **client-side components** (like hooks, forms, and UI) via React Context. These two contexts serve different phases: loaders prefetch data server-side before rendering, while components use data during actual rendering (both SSR and CSR).
-</Callout>
 
 ### 5. Generate Database Schema
 
@@ -482,7 +453,7 @@ blog: blogClientPlugin({
 
 #### BlogPluginOverrides
 
-Configure framework-specific overrides and route lifecycle hooks. All lifecycle hooks are optional:
+Configure Blog-specific components, slots, localization, and route lifecycle hooks. All lifecycle hooks are optional:
 
 <AutoTypeTable path="../packages/stack/src/plugins/blog/client/overrides.ts" name="BlogPluginOverrides" />
 
@@ -491,20 +462,13 @@ Configure framework-specific overrides and route lifecycle hooks. All lifecycle 
 ```tsx
 overrides={{
   blog: {
-    // Required overrides
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
-    navigate: (path) => router.push(path),
     uploadImage: async (file) => {
       // Implement your image upload logic
       return "https://example.com/uploads/image.jpg"
     },
-    // Optional lifecycle hooks
-    onBeforePostsPageRendered: (context) => {
-      // Check if user can view posts list. Helpful for SPA; not needed for SSR (check auth in the loader instead).
-      // Throw to deny: throw new Error("Unauthorized")
+    onRouteRender: (routeName, context) => {
+      // Track page views
     },
-    // ... other hooks
   }
 }}
 ```
@@ -525,10 +489,6 @@ overrides={{
       <CommentThread
         resourceId={post.slug}
         resourceType="blog-post"
-        apiBaseURL={baseURL}
-        apiBasePath="/api/data"
-        currentUserId={session?.user?.id}
-        loginHref="/login"
       />
     ),
   }

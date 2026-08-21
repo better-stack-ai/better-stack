@@ -5,6 +5,7 @@ import {
 	useNotify,
 	usePluginOverrides,
 	useBasePath,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
@@ -77,11 +78,12 @@ function FormBuilderPageContent({
 }: FormBuilderPageContentProps) {
 	const t = useTranslate();
 	const notify = useNotify();
-	const { Link, localization } =
+	const { localization } =
 		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
+	const { router } = useStack();
 	const basePath = useBasePath();
 
-	const LinkComponent = Link || "a";
+	const LinkComponent = router?.Link ?? "a";
 
 	// Form state
 	const [name, setName] = useState(existingForm?.name || "");

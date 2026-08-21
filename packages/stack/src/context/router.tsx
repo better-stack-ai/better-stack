@@ -3,10 +3,8 @@ import type { ComponentType } from "react";
 /**
  * Framework routing primitives shared by all plugins.
  *
- * These are the fields that every plugin override block used to re-wire
- * individually (`Link`, `navigate`, `refresh`, `Image`). Providing them once
- * via the top-level `router` prop on `StackProvider` applies them to every
- * plugin; per-plugin overrides still take precedence.
+ * Providing these fields once via the top-level `router` prop on
+ * `StackProvider` makes them available to every plugin.
  */
 export interface StackRouter {
 	/**
@@ -58,8 +56,7 @@ export interface StackRouterConfig extends StackRouter {
 }
 
 /**
- * Top-level API config applied to all plugins.
- * Maps to the `apiBaseURL` / `apiBasePath` fields of each plugin's overrides.
+ * Top-level API config used by all plugin components.
  */
 export interface StackApiConfig {
 	/**
@@ -71,27 +68,3 @@ export interface StackApiConfig {
 	 */
 	basePath: string;
 }
-
-/**
- * Override keys that are managed by the top-level `router` / `api` props.
- */
-export type RouterManagedOverrideKeys =
-	| "Link"
-	| "Image"
-	| "navigate"
-	| "refresh"
-	| "getSearchParams"
-	| "setSearchParams"
-	| "apiBaseURL"
-	| "apiBasePath";
-
-/**
- * Makes the router/api-managed fields of a plugin overrides interface
- * optional, so consumers wiring `router` / `api` at the top level can omit
- * them per plugin without type errors.
- */
-export type WithOptionalRouterOverrides<T> = Omit<
-	T,
-	Extract<keyof T, RouterManagedOverrideKeys>
-> &
-	Partial<Pick<T, Extract<keyof T, RouterManagedOverrideKeys>>>;

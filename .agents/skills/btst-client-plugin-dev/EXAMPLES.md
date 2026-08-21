@@ -35,15 +35,16 @@ export function MyPageComponent({ id }: { id: string }) {
 
 ```typescript
 import { useSuspenseQuery } from "@tanstack/react-query"
-import { usePluginOverrides } from "@btst/stack/context"
+import { usePluginOverrides, useStack } from "@btst/stack/context"
 import { createMyQueryKeys } from "../../query-keys"
 import { createApiClient } from "@btst/stack/client"
 import type { MyApiRouter } from "../../api/plugin"
 import type { MyItem } from "../../api/types"
 
 function useMyItem(id: string) {
-  const { apiBaseURL, apiBasePath, headers, queryClient } = usePluginOverrides("my-plugin")
-  const client = createApiClient<MyApiRouter>({ baseURL: apiBaseURL, basePath: apiBasePath })
+  const { api } = useStack()
+  const { headers } = usePluginOverrides("my-plugin")
+  const client = createApiClient<MyApiRouter>({ baseURL: api?.baseURL, basePath: api?.basePath })
   const queries = createMyQueryKeys(client, headers)
 
   const { data, refetch, error, isFetching } = useSuspenseQuery({
@@ -79,8 +80,8 @@ export function MyPage({ id }: { id: string }) {
 // In defineClientPlugin config:
 hooks: {
   beforeLoadDetail: async (id, ctx) => {
-    // Return false to prevent loading (e.g. user not authorised)
-    return true
+    const session = await getSession(ctx.headers)
+    if (!session) throw new Error("Authentication required")
   },
   afterLoadDetail: async (item, id, ctx) => {
     // item is the prefetched data

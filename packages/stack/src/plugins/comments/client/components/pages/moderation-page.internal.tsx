@@ -36,7 +36,12 @@ import {
 } from "@workspace/ui/components/avatar";
 import { CheckCircle, ShieldOff, Trash2, Eye } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { CanAccess, useNotify, useTranslate } from "@btst/stack/context";
+import {
+	CanAccess,
+	useNotify,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
 import { useListState, type ListStateSchema } from "@btst/stack/client";
 import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
 import type { SerializedComment, CommentStatus } from "../../../types";
@@ -50,9 +55,6 @@ import { getInitials } from "../../utils";
 import { Pagination } from "../shared/pagination";
 
 interface ModerationPageProps {
-	apiBaseURL: string;
-	apiBasePath: string;
-	headers?: HeadersInit;
 	localization?: Partial<CommentsLocalization>;
 }
 
@@ -75,14 +77,10 @@ function StatusBadge({ status }: { status: CommentStatus }) {
 	return <Badge variant={variants[status]}>{status}</Badge>;
 }
 
-export function ModerationPage({
-	apiBaseURL,
-	apiBasePath,
-	headers,
-	localization,
-}: ModerationPageProps) {
+export function ModerationPage({ localization }: ModerationPageProps) {
 	const t = useTranslate();
 	const notify = useNotify();
+	const { api } = useStack();
 
 	const [listState, setListState] = useListState(
 		"comments-moderation",
@@ -102,7 +100,10 @@ export function ModerationPage({
 	);
 	const [deleteIds, setDeleteIds] = useState<string[]>([]);
 
-	const config = { apiBaseURL, apiBasePath, headers };
+	const config = {
+		apiBaseURL: api?.baseURL ?? "",
+		apiBasePath: api?.basePath ?? "",
+	};
 
 	const { comments, total, limit, offset, totalPages, refetch } =
 		useSuspenseModerationComments(config, {

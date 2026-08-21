@@ -65,9 +65,12 @@ Do not duplicate — the patcher and manual edits must both be idempotent.
 - **Pages route**: catch-all at `/pages/*` — resolve via `stackClient.router.getRoute(path)`, run `route.loader?.()` server-side, wrap in `HydrationBoundary`.
 - **Pages layout** (`"use client"` in Next.js): wrap in `QueryClientProvider` then `StackProvider`:
   - `basePath="/pages"` (must match your pages catch-all prefix)
-  - `overrides={{ pluginKey: { apiBaseURL, apiBasePath, navigate, Link, Image?, refresh?, uploadImage?, ...hooks } }}`
+  - `router={nextRouter()}` / `reactRouter()` / `tanstackRouter()` for framework-wide links, images, navigation, and refresh.
+  - `api={{ baseURL, basePath: "/api/data" }}` for client-side API calls.
+  - `auth={{ getIdentity, loginPath }}` when plugins need identity or permissions.
+  - `overrides={{ pluginKey: { uploadImage?, ...pluginSpecificValues } }}` only for plugin-specific customization.
   - Define a typed `PluginOverrides` interface importing `{Plugin}Overrides` from each plugin client package.
-  - See [REFERENCE.md](REFERENCE.md) for the full per-plugin override shape and lifecycle hooks.
+  - See [REFERENCE.md](REFERENCE.md) for provider wiring and per-plugin override shapes.
 - **ai-chat plugin only**: wrap the **root layout** (above `StackProvider`) with `PageAIContextProvider`:
   ```tsx
   import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"

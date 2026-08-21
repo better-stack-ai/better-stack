@@ -2,7 +2,11 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ResourceFormResult } from "@btst/stack/plugins/client/hooks";
-import { usePluginOverrides, useTranslate } from "@btst/stack/context";
+import {
+	usePluginOverrides,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
 import type { AssetListParams } from "../../api/getters";
 import type { RegisterAssetInput } from "../../query-keys";
 import type { SerializedAsset, SerializedFolder } from "../../types";
@@ -26,12 +30,11 @@ export function useFolders(parentId?: string | null) {
  */
 export function useUploadAsset() {
 	const {
-		apiBaseURL,
-		apiBasePath,
 		headers,
 		uploadMode = "direct",
 		imageCompression,
 	} = usePluginOverrides<MediaPluginOverrides>("media");
+	const { api } = useStack();
 	// Resource-generated asset queries use the nearest QueryClientProvider.
 	// Keep the custom upload transport on that same cache.
 	const queryClient = useQueryClient();
@@ -46,8 +49,8 @@ export function useUploadAsset() {
 		}): Promise<SerializedAsset> =>
 			uploadAsset(
 				{
-					apiBaseURL,
-					apiBasePath,
+					apiBaseURL: api?.baseURL ?? "",
+					apiBasePath: api?.basePath ?? "",
 					headers,
 					uploadMode,
 					imageCompression,

@@ -22,7 +22,6 @@ import {
 import { Button } from "../../components/ui/button";
 import { resolveUser, searchUsers } from "../../lib/mock-users";
 import { Outlet, createFileRoute } from "@tanstack/react-router";
-import type { TodosPluginOverrides } from "../../lib/plugins/todo/client/overrides";
 import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client";
 import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client";
 
@@ -36,7 +35,6 @@ const getBaseURL = () =>
 
 // Define the shape of all plugin overrides
 type PluginOverrides = {
-	todos: TodosPluginOverrides;
 	"ui-builder": UIBuilderPluginOverrides;
 	blog: BlogPluginOverrides;
 	"ai-chat": AiChatPluginOverrides;
@@ -155,8 +153,6 @@ function Layout() {
 				{/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}
 				<div className="fixed bottom-6 right-6 z-50" data-testid="chat-widget">
 					<ChatLayout
-						apiBaseURL={baseURL}
-						apiBasePath="/api/data"
 						layout="widget"
 						widgetHeight="520px"
 						showSidebar={false}

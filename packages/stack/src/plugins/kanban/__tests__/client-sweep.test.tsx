@@ -90,9 +90,6 @@ const formResult = {
 };
 
 const kanbanOverrides = {
-	navigate: vi.fn(),
-	apiBaseURL: "http://test.local",
-	apiBasePath: "/api/data",
 	resolveUser: vi.fn(),
 	searchUsers: vi.fn().mockResolvedValue([]),
 };

@@ -46,7 +46,7 @@ Note: 3rd party plugins may use a different state management library.
 
 **Context & Overrides**
 
-The `StackProvider` wraps your pages and injects framework-specific components via React Context. Plugin components access these overrides through `usePluginOverrides()`, allowing them to use your framework's `Link`, `Image`, and navigation without tight coupling and to avoid breaking the client/server boundary in frameworks like Next.js.
+The `StackProvider` wraps your pages and exposes framework-wide router, API, and auth services through React Context. Plugin components read router services such as `Link`, `Image`, and `navigate` through `useStack()`, while `usePluginOverrides()` is reserved for genuinely plugin-specific customization.
 
 ## Plugins
 
@@ -96,4 +96,3 @@ Framework-specific components injected into plugins at runtime:
 - **Image**: Use Next.js `Image` for automatic optimization
 - **navigate**: Programmatic navigation function for your framework
 - **apiBaseURL/apiBasePath**: Configure where your API is mounted
-

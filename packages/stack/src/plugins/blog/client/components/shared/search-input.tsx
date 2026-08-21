@@ -5,8 +5,7 @@ import { usePostSearch } from "../../hooks/blog-hooks";
 import { stripHtml, stripMarkdown } from "../../../utils";
 import { HighlightText } from "./highlight-text";
 import { SearchModal, type SearchResult } from "./search-modal";
-import type { BlogPluginOverrides } from "../../overrides";
-import { useBasePath, usePluginOverrides } from "@btst/stack/context";
+import { useBasePath, useStack } from "@btst/stack/context";
 import { useListState, type ListStateSchema } from "@btst/stack/client";
 
 // Simplified blog post search result interface
@@ -101,7 +100,8 @@ export function SearchInput({
 	buttonText,
 	emptyMessage,
 }: SearchInputProps) {
-	const { navigate } = usePluginOverrides<BlogPluginOverrides>("blog");
+	const { router } = useStack();
+	const navigate = router?.navigate;
 	const basePath = useBasePath();
 	const [{ q: currentQuery }, setListState] = useListState(
 		"blog-posts",
@@ -124,7 +124,7 @@ export function SearchInput({
 			authorName: "",
 			processedContent: stripMarkdown(stripHtml(post.content || "")),
 			processedExcerpt: stripMarkdown(stripHtml(post.excerpt || "")),
-			onClick: () => navigate(`${basePath}/blog/${post.slug}`),
+			onClick: () => void navigate?.(`${basePath}/blog/${post.slug}`),
 		}));
 	}, [searchResults, navigate, basePath]);
 

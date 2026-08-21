@@ -113,15 +113,14 @@ This includes all necessary styles for the kanban board components and drag-and-
 
 ### 4. Add Context Overrides
 
-Configure framework-specific overrides in your `StackProvider`:
+Configure top-level framework wiring and kanban-specific overrides in your `StackProvider`:
 
 <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
   <Tab value="next-js">
     ```tsx title="app/pages/[[...all]]/layout.tsx"
     import { StackProvider } from "@btst/stack/context"
+    import { nextRouter } from "@btst/stack/next"
     import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
-    import Link from "next/link"
-    import { useRouter } from "next/navigation"
     import { resolveUser, searchUsers } from "@/lib/users" // Your user resolver
 
     const getBaseURL = () => 
@@ -134,19 +133,15 @@ Configure framework-specific overrides in your `StackProvider`:
     }
 
     export default function Layout({ children }) {
-      const router = useRouter()
       const baseURL = getBaseURL()
       
       return (
         <StackProvider<PluginOverrides>
           basePath="/pages"
+          router={nextRouter()}
+          api={{ baseURL, basePath: "/api/data" }}
           overrides={{
             kanban: {
-              apiBaseURL: baseURL,
-              apiBasePath: "/api/data",
-              navigate: (path) => router.push(path),
-              refresh: () => router.refresh(),
-              Link: (props) => <Link {...props} />,
               // Required: User resolution for assignees
               resolveUser,
               searchUsers,
@@ -162,8 +157,9 @@ Configure framework-specific overrides in your `StackProvider`:
 
   <Tab value="react-router">
     ```tsx title="app/routes/pages/_layout.tsx"
-    import { Outlet, Link, useNavigate } from "react-router"
+    import { Outlet } from "react-router"
     import { StackProvider } from "@btst/stack/context"
+    import { reactRouter } from "@btst/stack/react-router"
     import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
     import { resolveUser, searchUsers } from "../lib/users" // Your user resolver
 
@@ -177,22 +173,15 @@ Configure framework-specific overrides in your `StackProvider`:
     }
 
     export default function Layout() {
-      const navigate = useNavigate()
       const baseURL = getBaseURL()
       
       return (
         <StackProvider<PluginOverrides>
           basePath="/pages"
+          router={reactRouter()}
+          api={{ baseURL, basePath: "/api/data" }}
           overrides={{
             kanban: {
-              apiBaseURL: baseURL,
-              apiBasePath: "/api/data",
-              navigate: (href) => navigate(href),
-              Link: ({ href, children, className, ...props }) => (
-                <Link to={href || ""} className={className} {...props}>
-                  {children}
-                </Link>
-              ),
               // Required: User resolution for assignees
               resolveUser,
               searchUsers,
@@ -209,8 +198,9 @@ Configure framework-specific overrides in your `StackProvider`:
   <Tab value="tanstack">
     ```tsx title="src/routes/pages/route.tsx"
     import { StackProvider } from "@btst/stack/context"
+    import { tanstackRouter } from "@btst/stack/tanstack"
     import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
-    import { Link, useRouter, Outlet } from "@tanstack/react-router"
+    import { Outlet } from "@tanstack/react-router"
     import { resolveUser, searchUsers } from "../../lib/users" // Your user resolver
 
     const getBaseURL = () => 
@@ -223,22 +213,15 @@ Configure framework-specific overrides in your `StackProvider`:
     }
 
     function Layout() {
-      const router = useRouter()
       const baseURL = getBaseURL()
 
       return (
         <StackProvider<PluginOverrides>
           basePath="/pages"
+          router={tanstackRouter()}
+          api={{ baseURL, basePath: "/api/data" }}
           overrides={{
             kanban: {
-              apiBaseURL: baseURL,
-              apiBasePath: "/api/data",
-              navigate: (href) => router.navigate({ href }),
-              Link: ({ href, children, className, ...props }) => (
-                <Link to={href} className={className} {...props}>
-                  {children}
-                </Link>
-              ),
               // Required: User resolution for assignees
               resolveUser,
               searchUsers,
@@ -708,36 +691,18 @@ Customize client-side behavior with lifecycle hooks:
 
 #### KanbanPluginOverrides
 
-Configure framework-specific overrides and route lifecycle hooks:
+Configure Kanban-specific overrides and route lifecycle hooks:
 
 ```tsx
 overrides={{
   kanban: {
-    // Required overrides
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
-    navigate: (path) => router.push(path),
-    
     // Required: User resolution for assignees
     resolveUser: (userId) => findUserById(userId),
     searchUsers: (query) => searchAllUsers(query),
     
-    // Optional overrides
-    Link: (props) => <Link {...props} />,
-    refresh: () => router.refresh(),
-    
     // Optional lifecycle hooks
     onRouteRender: async (routeName, context) => {
       console.log("Rendering route:", routeName)
-    },
-    onBeforeBoardsPageRendered: (context) => {
-      return isAuthenticated()
-    },
-    onBeforeBoardPageRendered: (boardId, context) => {
-      return canViewBoard(boardId)
-    },
-    onBeforeNewBoardPageRendered: (context) => {
-      return canCreateBoard()
     },
   }
 }}
@@ -747,9 +712,6 @@ overrides={{
 
 | Override | Type | Description |
 |----------|------|-------------|
-| `apiBaseURL` | `string` | Base URL for API calls |
-| `apiBasePath` | `string` | Path where your API is mounted |
-| `navigate` | `(path: string) => void` | Function for programmatic navigation |
 | `resolveUser` | `(userId: string) => KanbanUser \| null` | Resolve user info from ID |
 | `searchUsers` | `(query: string, boardId?: string) => KanbanUser[]` | Search/list users for picker |
 
@@ -769,10 +731,6 @@ overrides={{
       <CommentThread
         resourceId={task.id}
         resourceType="kanban-task"
-        apiBaseURL={baseURL}
-        apiBasePath="/api/data"
-        currentUserId={session?.user?.id}
-        loginHref="/login"
       />
     ),
   }

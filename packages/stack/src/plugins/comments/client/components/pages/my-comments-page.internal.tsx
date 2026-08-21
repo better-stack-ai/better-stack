@@ -28,7 +28,7 @@ import {
 } from "@workspace/ui/components/avatar";
 import { Trash2, ExternalLink, LogIn, MessageSquareOff } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { useNotify, useTranslate } from "@btst/stack/context";
+import { useNotify, useStack, useTranslate } from "@btst/stack/context";
 import { useListState, type ListStateSchema } from "@btst/stack/client";
 import type { CommentsPluginOverrides } from "../../overrides";
 import { PaginationControls } from "@workspace/ui/components/pagination-controls";
@@ -38,7 +38,7 @@ import {
 	useDeleteComment,
 } from "../../hooks/use-comments";
 import type { CommentsLocalization } from "../../localization";
-import { getInitials, useResolvedCurrentUserId } from "../../utils";
+import { getInitials, useCurrentUserId } from "../../utils";
 
 const PAGE_LIMIT = 20;
 
@@ -49,10 +49,6 @@ const LIST_STATE_SCHEMA = {
 } as const satisfies ListStateSchema;
 
 interface UserCommentsPageProps {
-	apiBaseURL: string;
-	apiBasePath: string;
-	headers?: HeadersInit;
-	currentUserId?: CommentsPluginOverrides["currentUserId"];
 	resourceLinks?: CommentsPluginOverrides["resourceLinks"];
 	localization?: Partial<CommentsLocalization>;
 }
@@ -92,16 +88,13 @@ function StatusBadge({
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export function UserCommentsPage({
-	apiBaseURL,
-	apiBasePath,
-	headers,
-	currentUserId: currentUserIdProp,
 	resourceLinks,
 	localization,
 }: UserCommentsPageProps) {
 	const t = useTranslate();
+	const { api } = useStack();
 	const { currentUserId: resolvedUserId, isPending: isIdentityPending } =
-		useResolvedCurrentUserId(currentUserIdProp);
+		useCurrentUserId();
 
 	if (isIdentityPending) {
 		return (
@@ -139,9 +132,8 @@ export function UserCommentsPage({
 
 	return (
 		<UserCommentsList
-			apiBaseURL={apiBaseURL}
-			apiBasePath={apiBasePath}
-			headers={headers}
+			apiBaseURL={api?.baseURL ?? ""}
+			apiBasePath={api?.basePath ?? ""}
 			currentUserId={resolvedUserId}
 			resourceLinks={resourceLinks}
 			localization={localization}
@@ -154,14 +146,12 @@ export function UserCommentsPage({
 function UserCommentsList({
 	apiBaseURL,
 	apiBasePath,
-	headers,
 	currentUserId,
 	resourceLinks,
 	localization,
 }: {
 	apiBaseURL: string;
 	apiBasePath: string;
-	headers?: HeadersInit;
 	currentUserId: string;
 	resourceLinks?: CommentsPluginOverrides["resourceLinks"];
 	localization?: Partial<CommentsLocalization>;
@@ -178,7 +168,7 @@ function UserCommentsList({
 
 	const [deleteId, setDeleteId] = useState<string | null>(null);
 
-	const config = { apiBaseURL, apiBasePath, headers };
+	const config = { apiBaseURL, apiBasePath };
 	const offset = (page - 1) * PAGE_LIMIT;
 
 	const { comments, total, refetch } = useSuspenseComments(config, {

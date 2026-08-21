@@ -19,6 +19,7 @@ import {
 	CanAccess,
 	usePluginOverrides,
 	useBasePath,
+	useStack,
 	useTranslate,
 	type TranslateFn,
 } from "@btst/stack/context";
@@ -57,8 +58,10 @@ export function InverseRelationsPanel({
 	itemId,
 }: InverseRelationsPanelProps) {
 	const t = useTranslate();
-	const { navigate, Link, localization } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
+	const { localization } = usePluginOverrides<CMSPluginOverrides>("cms");
+	const { router } = useStack();
+	const navigate = router?.navigate;
+	const Link = router?.Link;
 	const basePath = useBasePath();
 
 	// Fetch inverse relations metadata
@@ -142,7 +145,7 @@ interface InverseRelationSectionProps {
 	contentTypeSlug: string;
 	itemId: string;
 	basePath: string;
-	navigate: (path: string) => void | Promise<void>;
+	navigate?: (path: string) => void | Promise<void>;
 	Link?: React.ComponentType<{
 		href?: string;
 		children?: React.ReactNode;
@@ -217,7 +220,7 @@ function InverseRelationSection({
 		// Navigate to create page with query param to pre-fill the relation.
 		// ContentEditorPage reads prefill_* query params and passes them to ContentForm as initialData.
 		const createUrl = `${basePath}/cms/${relation.sourceType}/new?prefill_${relation.fieldName}=${itemId}`;
-		void navigate(createUrl);
+		void navigate?.(createUrl);
 	};
 
 	const LinkComponent = Link ?? "a";

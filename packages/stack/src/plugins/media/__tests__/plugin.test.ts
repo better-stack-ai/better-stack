@@ -700,27 +700,6 @@ describe("mediaBackendPlugin hook denial behavior", () => {
 		expect(response.status).toBe(403);
 		await expect(response.text()).resolves.toContain("No folders for you");
 	});
-
-	it("still denies access for old-style hooks that return false", async () => {
-		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-		const backend = createBackend({
-			hooks: {
-				onBeforeListAssets: (() => false) as unknown as NonNullable<
-					NonNullable<MediaBackendConfig["hooks"]>["onBeforeListAssets"]
-				>,
-			},
-		});
-
-		const response = await backend.handler(
-			createJsonRequest("/api/media/assets", "GET"),
-		);
-
-		expect(response.status).toBe(403);
-		await expect(response.text()).resolves.toContain(
-			"Unauthorized: Cannot list assets",
-		);
-		expect(warnSpy).toHaveBeenCalled();
-	});
 });
 
 describe("mediaBackendPlugin list query normalization", () => {

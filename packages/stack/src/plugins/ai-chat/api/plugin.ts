@@ -21,7 +21,7 @@ import {
 	BUILT_IN_PAGE_TOOL_ROUTE_ALLOWLIST,
 	BUILT_IN_PAGE_TOOL_SCHEMAS,
 } from "./page-tools";
-import { runHookWithShim } from "../../utils";
+import { runHook } from "../../utils";
 
 /**
  * Context passed to AI Chat API hooks
@@ -451,7 +451,7 @@ export const aiChatBackendPlugin = <
 								role: msg.role,
 								content: getMessageTextContent(msg),
 							}));
-							await runHookWithShim(
+							await runHook(
 								() => config.hooks!.onBeforeChat!(messagesForHook, context),
 								ctx.error,
 								"Unauthorized: Cannot start chat",
@@ -526,8 +526,7 @@ export const aiChatBackendPlugin = <
 
 						// Consumer hook: user-level tool authorization.
 						// Runs after the structural routeName allowlist check.
-						// A thrown Error is caught and returned as a 403 response,
-						// consistent with how onBeforeChat handles return false → 403.
+						// A thrown Error is caught and returned as a 403 response.
 						if (
 							config.hooks?.onBeforeToolsActivated &&
 							Object.keys(activePageTools).length > 0
@@ -844,7 +843,7 @@ export const aiChatBackendPlugin = <
 
 						// Authorization hook
 						if (config.hooks?.onBeforeCreateConversation) {
-							await runHookWithShim(
+							await runHook(
 								() =>
 									config.hooks!.onBeforeCreateConversation!(
 										{ id, title },
@@ -910,7 +909,7 @@ export const aiChatBackendPlugin = <
 
 						// Authorization hook
 						if (config.hooks?.onBeforeListConversations) {
-							await runHookWithShim(
+							await runHook(
 								() => config.hooks!.onBeforeListConversations!(context),
 								ctx.error,
 								"Unauthorized: Cannot list conversations",
@@ -985,7 +984,7 @@ export const aiChatBackendPlugin = <
 
 						// Authorization hook
 						if (config.hooks?.onBeforeGetConversation) {
-							await runHookWithShim(
+							await runHook(
 								() => config.hooks!.onBeforeGetConversation!(id, context),
 								ctx.error,
 								"Unauthorized: Cannot get conversation",
@@ -1106,7 +1105,7 @@ export const aiChatBackendPlugin = <
 
 						// Authorization hook
 						if (config.hooks?.onBeforeUpdateConversation) {
-							await runHookWithShim(
+							await runHook(
 								() =>
 									config.hooks!.onBeforeUpdateConversation!(
 										id,
@@ -1201,7 +1200,7 @@ export const aiChatBackendPlugin = <
 
 						// Authorization hook
 						if (config.hooks?.onBeforeDeleteConversation) {
-							await runHookWithShim(
+							await runHook(
 								() => config.hooks!.onBeforeDeleteConversation!(id, context),
 								ctx.error,
 								"Unauthorized: Cannot delete conversation",

@@ -337,12 +337,11 @@ describe("createResource hooks", () => {
 			root.render(
 				<StackProvider
 					basePath="/pages"
+					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
+					router={{ refresh }}
 					overrides={{
 						"test-plugin": {
-							apiBaseURL: "http://test.local",
-							apiBasePath: "/api/data",
 							headers: { "x-resource-test": "forwarded" },
-							refresh,
 						},
 					}}
 				>

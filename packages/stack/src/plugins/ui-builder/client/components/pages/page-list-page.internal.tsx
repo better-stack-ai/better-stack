@@ -6,6 +6,7 @@ import {
 	useBasePath,
 	useNotify,
 	usePluginOverrides,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
@@ -48,8 +49,10 @@ import { Pagination } from "../shared/pagination";
 export function PageListPage() {
 	const t = useTranslate();
 	const notify = useNotify();
-	const { navigate, Link, localization } =
+	const { localization } =
 		usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
+	const { router } = useStack();
+	const navigate = router?.navigate;
 	const basePath = useBasePath();
 	const { pages, total, hasMore, isLoadingMore, loadMore } =
 		useSuspenseUIBuilderPages();
@@ -57,7 +60,7 @@ export function PageListPage() {
 
 	const [deleteId, setDeleteId] = useState<string | null>(null);
 
-	const LinkComponent = Link || "a";
+	const LinkComponent = router?.Link ?? "a";
 
 	const handleDelete = async () => {
 		if (!deleteId) return;

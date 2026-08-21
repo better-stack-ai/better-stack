@@ -21,7 +21,6 @@ import {
 	ImageInputField,
 } from "@btst/stack/plugins/media/client/components";
 import { Button } from "../../components/ui/button";
-import type { TodosPluginOverrides } from "../../lib/plugins/todo/client/overrides";
 import { resolveUser, searchUsers } from "../../lib/mock-users";
 import { getOrCreateQueryClient } from "../../lib/query-client";
 
@@ -35,7 +34,6 @@ const getBaseURL = () =>
 
 // Define the shape of all plugin overrides
 type PluginOverrides = {
-	todos: TodosPluginOverrides;
 	"ui-builder": UIBuilderPluginOverrides;
 	blog: BlogPluginOverrides;
 	"ai-chat": AiChatPluginOverrides;
@@ -144,13 +142,7 @@ export default function Layout() {
 			<Outlet />
 			{/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}
 			<div className="fixed bottom-6 right-6 z-50" data-testid="chat-widget">
-				<ChatLayout
-					apiBaseURL={baseURL}
-					apiBasePath="/api/data"
-					layout="widget"
-					widgetHeight="520px"
-					showSidebar={false}
-				/>
+				<ChatLayout layout="widget" widgetHeight="520px" showSidebar={false} />
 			</div>
 		</StackProvider>
 	);

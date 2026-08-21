@@ -13,7 +13,12 @@ import {
 	type UIMessage,
 } from "ai";
 import { cn } from "@workspace/ui/lib/utils";
-import { useCan, usePluginOverrides, useBasePath } from "@btst/stack/context";
+import {
+	useCan,
+	usePluginOverrides,
+	useBasePath,
+	useStack,
+} from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../overrides";
 import { useAiChatTranslation } from "../localization";
 import { createApiClient } from "@btst/stack/plugins/client";
@@ -46,10 +51,7 @@ export function ChatInterface({
 	onMessagesChange,
 }: ChatInterfaceProps) {
 	const {
-		navigate,
 		localization: customLocalization,
-		apiBaseURL,
-		apiBasePath,
 		headers,
 		mode,
 		showAttribution,
@@ -58,6 +60,10 @@ export function ChatInterface({
 		"ai-chat",
 		{ showAttribution: true },
 	);
+	const { api, router } = useStack();
+	const apiBaseURL = api?.baseURL;
+	const apiBasePath = api?.basePath;
+	const navigate = router?.navigate;
 	const basePath = useBasePath();
 	const isPublicMode = mode === "public";
 

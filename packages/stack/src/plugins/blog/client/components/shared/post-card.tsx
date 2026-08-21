@@ -9,6 +9,7 @@ import {
 import {
 	useBasePath,
 	usePluginOverrides,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import { formatDate } from "date-fns";
@@ -220,13 +221,13 @@ function getGradientFromTitle(title: string) {
 
 export function PostCard({ post }: { post: SerializedPost }) {
 	const t = useTranslate();
-	const { Link, Image, localization } = usePluginOverrides<
+	const { localization } = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
-	>("blog", {
-		Link: DefaultLink,
-		Image: DefaultImage,
-	});
+	>("blog", {});
+	const { router } = useStack();
+	const Link = router?.Link ?? DefaultLink;
+	const Image = router?.Image ?? DefaultImage;
 	const basePath = useBasePath();
 	const blogPath = `${basePath}/blog/${post.slug}`;
 	const postDate = formatDate(

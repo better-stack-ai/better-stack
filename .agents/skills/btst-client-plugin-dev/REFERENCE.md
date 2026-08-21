@@ -21,8 +21,7 @@ function createMyLoader(id: string, config: MyClientConfig) {
 
       try {
         if (hooks?.beforeLoad) {
-          const canLoad = await hooks.beforeLoad(id, context)
-          if (!canLoad) throw new Error("Load prevented by beforeLoad hook")
+          await hooks.beforeLoad(id, context)
         }
 
         const client = createApiClient<MyApiRouter>({ baseURL: apiBaseURL, basePath: apiBasePath })

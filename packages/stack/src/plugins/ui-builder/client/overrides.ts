@@ -1,4 +1,3 @@
-import type { ComponentType } from "react";
 import type {
 	ComponentRegistry,
 	FunctionRegistry,
@@ -23,35 +22,10 @@ export interface RouteContext {
 /**
  * Plugin overrides interface for UI Builder
  *
- * External consumers can provide their own implementations of these
- * to customize the behavior for their framework (Next.js, React Router, etc.)
+ * External consumers can provide their own implementations to customize
+ * plugin-specific components and behavior.
  */
 export interface UIBuilderPluginOverrides {
-	/**
-	 * Link component for navigation
-	 */
-	Link?: ComponentType<React.ComponentProps<"a"> & Record<string, unknown>>;
-
-	/**
-	 * Navigation function for programmatic navigation
-	 */
-	navigate?: (path: string) => void | Promise<void>;
-
-	/**
-	 * Refresh function to invalidate server-side cache (e.g., Next.js router.refresh())
-	 */
-	refresh?: () => void | Promise<void>;
-
-	/**
-	 * API base URL
-	 */
-	apiBaseURL: string;
-
-	/**
-	 * API base path
-	 */
-	apiBasePath: string;
-
 	/**
 	 * Optional headers to pass with API requests (e.g., for SSR auth)
 	 */

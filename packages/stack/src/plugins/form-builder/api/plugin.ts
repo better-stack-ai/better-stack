@@ -32,7 +32,7 @@ import {
 } from "./getters";
 import { FORM_QUERY_KEYS } from "./query-key-defs";
 import type { QueryClient } from "@tanstack/react-query";
-import { runHookWithShim } from "../../utils";
+import { runHook } from "../../utils";
 
 /**
  * Route keys for the Form Builder plugin — matches the keys returned by
@@ -178,7 +178,7 @@ export const formBuilderBackendPlugin = (
 					const context = createContext(ctx.headers);
 
 					if (config.hooks?.onBeforeListForms) {
-						await runHookWithShim(
+						await runHook(
 							() => config.hooks!.onBeforeListForms!(context),
 							ctx.error,
 							"Access denied",
@@ -201,7 +201,7 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook for access check
 					if (config.hooks?.onBeforeGetForm) {
-						await runHookWithShim(
+						await runHook(
 							() => config.hooks!.onBeforeGetForm!(slug, context),
 							ctx.error,
 							"Access denied",
@@ -230,7 +230,7 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook for access check
 					if (config.hooks?.onBeforeGetForm) {
-						await runHookWithShim(
+						await runHook(
 							() => config.hooks!.onBeforeGetForm!(id, context),
 							ctx.error,
 							"Access denied",
@@ -301,7 +301,7 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook - may modify data or deny operation
 					if (config.hooks?.onBeforeFormCreated) {
-						const hookResult = await runHookWithShim(
+						const hookResult = await runHook(
 							() => config.hooks!.onBeforeFormCreated!(formInput, context),
 							ctx.error,
 							"Create operation denied",
@@ -412,7 +412,7 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook - may modify data or deny operation
 					if (config.hooks?.onBeforeFormUpdated) {
-						const hookResult = await runHookWithShim(
+						const hookResult = await runHook(
 							() =>
 								config.hooks!.onBeforeFormUpdated!(id, updateInput, context),
 							ctx.error,
@@ -485,7 +485,7 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook
 					if (config.hooks?.onBeforeFormDeleted) {
-						await runHookWithShim(
+						await runHook(
 							() => config.hooks!.onBeforeFormDeleted!(id, context),
 							ctx.error,
 							"Delete operation denied",
@@ -573,7 +573,7 @@ export const formBuilderBackendPlugin = (
 					}
 
 					// Call before submission hook - may modify data or deny.
-					// We call the hook directly (not via runHookWithShim) so that
+					// Call the hook directly so that
 					// onSubmissionError receives the original Error, not a wrapped HTTP error.
 					let finalData = data as Record<string, unknown>;
 					if (config.hooks?.onBeforeSubmission) {
@@ -585,10 +585,6 @@ export const formBuilderBackendPlugin = (
 								data as Record<string, unknown>,
 								submissionContext,
 							);
-							// Backward-compat: explicit false return → denial
-							if (hookResult === false) {
-								originalError = new Error("Submission rejected");
-							}
 						} catch (e) {
 							originalError =
 								e instanceof Error ? e : new Error("Submission rejected");
@@ -668,7 +664,7 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook for auth check
 					if (config.hooks?.onBeforeListSubmissions) {
-						await runHookWithShim(
+						await runHook(
 							() => config.hooks!.onBeforeListSubmissions!(formId, context),
 							ctx.error,
 							"Access denied",
@@ -691,7 +687,7 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook for access check
 					if (config.hooks?.onBeforeGetSubmission) {
-						await runHookWithShim(
+						await runHook(
 							() => config.hooks!.onBeforeGetSubmission!(subId, context),
 							ctx.error,
 							"Access denied",
@@ -733,7 +729,7 @@ export const formBuilderBackendPlugin = (
 
 					// Call before hook
 					if (config.hooks?.onBeforeSubmissionDeleted) {
-						await runHookWithShim(
+						await runHook(
 							() => config.hooks!.onBeforeSubmissionDeleted!(subId, context),
 							ctx.error,
 							"Delete operation denied",

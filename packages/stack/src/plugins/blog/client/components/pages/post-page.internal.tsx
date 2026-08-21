@@ -1,6 +1,10 @@
 "use client";
 
-import { usePluginOverrides, useTranslate } from "@btst/stack/context";
+import {
+	usePluginOverrides,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
 import { formatDate } from "date-fns";
 import {
 	useSuspensePost,
@@ -27,13 +31,10 @@ import { CollapsibleTagList } from "../shared/collapsible-tag-list";
 // Internal component with actual page content
 export function PostPage({ slug }: { slug: string }) {
 	const t = useTranslate();
-	const overrides = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", {
-		Image: DefaultImage,
-	});
-	const { Image, localization } = overrides;
+	const overrides = usePluginOverrides<BlogPluginOverrides>("blog");
+	const { localization } = overrides;
+	const { router } = useStack();
+	const Image = router?.Image ?? DefaultImage;
 
 	// Call lifecycle hooks
 	useRouteLifecycle({
@@ -44,12 +45,6 @@ export function PostPage({ slug }: { slug: string }) {
 			isSSR: typeof window === "undefined",
 		},
 		overrides,
-		beforeRenderHook: (overrides, context) => {
-			if (overrides.onBeforePostPageRendered) {
-				return overrides.onBeforePostPageRendered(slug, context);
-			}
-			return true;
-		},
 	});
 
 	const { post } = useSuspensePost(slug ?? "");

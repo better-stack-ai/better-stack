@@ -13,6 +13,7 @@ import { useSuspenseBoards } from "../../hooks/kanban-hooks";
 import {
 	CanAccess,
 	usePluginOverrides,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
@@ -28,14 +29,11 @@ export function BoardsListPage() {
 	if (error && !isFetching) {
 		throw error;
 	}
-	const {
-		Link: OverrideLink,
-		navigate: overrideNavigate,
-		localization,
-	} = usePluginOverrides<KanbanPluginOverrides>("kanban");
-	const Link = OverrideLink || "a";
+	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { router } = useStack();
+	const Link = router?.Link ?? "a";
 	const navigate =
-		overrideNavigate ||
+		router?.navigate ||
 		((path: string) => {
 			window.location.href = path;
 		});

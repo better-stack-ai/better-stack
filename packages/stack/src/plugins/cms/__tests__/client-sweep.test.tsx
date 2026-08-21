@@ -141,11 +141,7 @@ function createMockRouter(initial = "") {
 	};
 }
 
-const cmsOverrides = {
-	navigate: vi.fn(),
-	apiBaseURL: "http://test.local",
-	apiBasePath: "/api/data",
-};
+const cmsOverrides = {};
 
 // Renders CMSFileUpload the way ContentForm does: inside a react-hook-form
 // FormField so the shadcn form primitives have their context.

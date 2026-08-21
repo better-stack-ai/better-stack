@@ -115,7 +115,7 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
 - `queryClient`: React Query client instance
 
 <Callout type="info">
-**Why configure API paths here?** This configuration is used by **server-side loaders** that prefetch data before your pages render. These loaders run outside of React Context, so they need direct configuration. You'll also provide `apiBaseURL` and `apiBasePath` again in the Provider overrides (Section 4) for **client-side components** that run during actual rendering.
+**Why configure API paths here?** This configuration is used by **server-side loaders** that run outside React Context. Client-side components use the top-level `StackProvider.api` configuration shown in Section 4.
 </Callout>
 
 ### 3. Import Plugin CSS
@@ -128,9 +128,9 @@ Add the AI Chat plugin CSS to your global stylesheet:
 
 This includes all necessary styles for the chat components and markdown rendering.
 
-### 4. Add Context Overrides
+### 4. Add the Context Provider
 
-Configure framework-specific overrides in your `StackProvider`:
+Configure framework-wide router and API wiring on `StackProvider`; keep only AI Chat-specific values in `overrides`:
 
 <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
   <Tab value="next-js">
@@ -138,11 +138,9 @@ Configure framework-specific overrides in your `StackProvider`:
     "use client"
     import { useState } from "react"
     import { StackProvider } from "@btst/stack/context"
+    import { nextRouter } from "@btst/stack/next"
     import { QueryClientProvider } from "@tanstack/react-query"
     import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
-    import Link from "next/link"
-    import Image from "next/image"
-    import { useRouter } from "next/navigation"
     import { getOrCreateQueryClient } from "@/lib/query-client"
 
     const getBaseURL = () => 
@@ -155,7 +153,6 @@ Configure framework-specific overrides in your `StackProvider`:
     }
 
     export default function Layout({ children }) {
-      const router = useRouter()
       const [queryClient] = useState(() => getOrCreateQueryClient())
       const baseURL = getBaseURL()
       
@@ -163,19 +160,15 @@ Configure framework-specific overrides in your `StackProvider`:
         <QueryClientProvider client={queryClient}>
           <StackProvider<PluginOverrides>
             basePath="/pages"
+            router={nextRouter()}
+            api={{ baseURL, basePath: "/api/data" }}
             overrides={{
               "ai-chat": {
                 mode: "authenticated", // Should match backend config
-                apiBaseURL: baseURL,
-                apiBasePath: "/api/data",
-                navigate: (path) => router.push(path),
-                refresh: () => router.refresh(),
                 uploadFile: async (file) => {
                   // Implement your file upload logic
                   return "https://example.com/uploads/file.pdf"
                 },
-                Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
-                Image: (props) => <Image {...props} />,
               }
             }}
           >
@@ -190,8 +183,9 @@ Configure framework-specific overrides in your `StackProvider`:
   <Tab value="react-router">
     ```tsx title="app/routes/pages/_layout.tsx"
     import { useState } from "react"
-    import { Outlet, Link, useNavigate } from "react-router"
+    import { Outlet } from "react-router"
     import { StackProvider } from "@btst/stack/context"
+    import { reactRouter } from "@btst/stack/react-router"
     import { QueryClientProvider, QueryClient } from "@tanstack/react-query"
     import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
 
@@ -205,7 +199,6 @@ Configure framework-specific overrides in your `StackProvider`:
     }
 
     export default function Layout() {
-      const navigate = useNavigate()
       const [queryClient] = useState(() => new QueryClient())
       const baseURL = getBaseURL()
       
@@ -213,20 +206,14 @@ Configure framework-specific overrides in your `StackProvider`:
         <QueryClientProvider client={queryClient}>
           <StackProvider<PluginOverrides>
             basePath="/pages"
+            router={reactRouter()}
+            api={{ baseURL, basePath: "/api/data" }}
             overrides={{
               "ai-chat": {
                 mode: "authenticated",
-                apiBaseURL: baseURL,
-                apiBasePath: "/api/data",
-                navigate: (href) => navigate(href),
                 uploadFile: async (file) => {
                   return "https://example.com/uploads/file.pdf"
                 },
-                Link: ({ href, children, className, ...props }) => (
-                  <Link to={href || ""} className={className} {...props}>
-                    {children}
-                  </Link>
-                ),
               }
             }}
           >
@@ -242,9 +229,10 @@ Configure framework-specific overrides in your `StackProvider`:
     ```tsx title="src/routes/pages/route.tsx"
     import { useState } from "react"
     import { StackProvider } from "@btst/stack/context"
+    import { tanstackRouter } from "@btst/stack/tanstack"
     import { QueryClientProvider, QueryClient } from "@tanstack/react-query"
     import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
-    import { Link, useRouter, Outlet } from "@tanstack/react-router"
+    import { Outlet } from "@tanstack/react-router"
 
     const getBaseURL = () => 
       typeof window !== 'undefined' 
@@ -256,7 +244,6 @@ Configure framework-specific overrides in your `StackProvider`:
     }
 
     function Layout() {
-      const router = useRouter()
       const [queryClient] = useState(() => new QueryClient())
       const baseURL = getBaseURL()
 
@@ -264,20 +251,14 @@ Configure framework-specific overrides in your `StackProvider`:
         <QueryClientProvider client={queryClient}>
           <StackProvider<PluginOverrides>
             basePath="/pages"
+            router={tanstackRouter()}
+            api={{ baseURL, basePath: "/api/data" }}
             overrides={{
               "ai-chat": {
                 mode: "authenticated",
-                apiBaseURL: baseURL,
-                apiBasePath: "/api/data",
-                navigate: (href) => router.navigate({ href }),
                 uploadFile: async (file) => {
                   return "https://example.com/uploads/file.pdf"
                 },
-                Link: ({ href, children, className, ...props }) => (
-                  <Link to={href} className={className} {...props}>
-                    {children}
-                  </Link>
-                ),
               }
             }}
           >
@@ -290,25 +271,13 @@ Configure framework-specific overrides in your `StackProvider`:
   </Tab>
 </Tabs>
 
-**Required overrides:**
-- `apiBaseURL`: Base URL for API calls (used by client-side components during rendering)
-- `apiBasePath`: Path where your API is mounted
-- `navigate`: Function for programmatic navigation
-
 **Optional overrides:**
 - `mode`: Plugin mode (`"authenticated"` or `"public"`)
 - `uploadFile`: Function to upload files and return their URL
 - `allowedFileTypes`: Array of allowed file type categories (default: all types)
 - `chatSuggestions`: Array of suggested prompts shown in empty chat state
-- `Link`: Custom Link component (defaults to `<a>` tag)
-- `Image`: Custom Image component (useful for Next.js Image optimization)
-- `refresh`: Function to refresh server-side cache (useful for Next.js)
 - `localization`: Custom localization strings
 - `headers`: Headers to pass with API requests
-
-<Callout type="warn">
-**Why provide API paths again?** You already configured these in Section 2, but that configuration is only available to **server-side loaders**. The overrides here provide the same values to **client-side components** (like hooks, forms, and UI) via React Context. These two contexts serve different phases: loaders prefetch data server-side before rendering, while components use data during actual rendering (both SSR and CSR).
-</Callout>
 
 ### 5. Generate Database Schema
 
@@ -564,7 +533,7 @@ aiChat: aiChatClientPlugin({
 
 #### AiChatPluginOverrides
 
-Configure framework-specific overrides and route lifecycle hooks. All lifecycle hooks are optional:
+Configure AI Chat-specific overrides and route lifecycle hooks. All lifecycle hooks are optional:
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/overrides.ts" name="AiChatPluginOverrides" />
 
@@ -573,10 +542,6 @@ Configure framework-specific overrides and route lifecycle hooks. All lifecycle 
 ```tsx
 overrides={{
   "ai-chat": {
-    // Required overrides
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
-    navigate: (path) => router.push(path),
     // Optional overrides
     mode: "authenticated",
     uploadFile: async (file) => {
@@ -597,15 +562,6 @@ overrides={{
     toolRenderers: {
       getWeather: WeatherCard,
       searchDocs: SearchResultsRenderer,
-    },
-    // Optional lifecycle hooks
-    onBeforeChatPageRendered: (context) => {
-      // Check if user can view chat. Useful for SPA.
-      // Throw to deny: throw new Error("Unauthorized")
-    },
-    onBeforeConversationPageRendered: (id, context) => {
-      // Check if user can view this specific conversation.
-      // Throw to deny: throw new Error("Unauthorized")
     },
   }
 }}
@@ -629,8 +585,6 @@ The default widget mode manages its own open/close state and renders a floating 
 
 ```tsx
 <ChatLayout
-  apiBaseURL={baseURL}
-  apiBasePath="/api/data"
   layout="widget"
   widgetHeight="520px"
 />
@@ -643,8 +597,6 @@ Use `defaultOpen` and `showTrigger={false}` when your own UI handles opening and
 ```tsx
 {/* Rendered inside a modal/dialog that you control */}
 <ChatLayout
-  apiBaseURL={baseURL}
-  apiBasePath="/api/data"
   layout="widget"
   widgetHeight="500px"
   defaultOpen={true}
@@ -699,11 +651,9 @@ export default function ChatModal() {
     <div className="fixed inset-0 z-50 bg-black/50" onClick={() => router.back()}>
       {/* Modal card */}
       <div className="..." onClick={(e) => e.stopPropagation()}>
-        <StackProvider ...>
+        <StackProvider api={{ baseURL, basePath: "/api/data" }} ...>
           {/* Panel is pre-opened; no trigger button rendered */}
           <ChatLayout
-            apiBaseURL={baseURL}
-            apiBasePath="/api/data"
             layout="widget"
             defaultOpen={true}
             showTrigger={false}
@@ -719,8 +669,6 @@ export default function ChatModal() {
 
 ```tsx
 <ChatLayout
-  apiBaseURL={baseURL}
-  apiBasePath="/api/data"
   layout="widget"
   widgetHeight="500px"
   initialMessages={savedMessages}
@@ -933,11 +881,10 @@ function WeatherCard({ input, output, isLoading }: ToolCallProps<{ location: str
 // In your layout
 <StackProvider<PluginOverrides>
   basePath="/pages"
+  router={nextRouter()}
+  api={{ baseURL, basePath: "/api/data" }}
   overrides={{
     "ai-chat": {
-      apiBaseURL: baseURL,
-      apiBasePath: "/api/data",
-      navigate: (path) => router.push(path),
       // Custom tool renderers
       toolRenderers: {
         getWeather: WeatherCard,
@@ -1033,18 +980,17 @@ aiChat: aiChatClientPlugin({
 })
 ```
 
-### Context Overrides
+### Provider Configuration
 
 ```tsx
-overrides={{
-  "ai-chat": {
-    mode: "public",
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
-    navigate: (path) => router.push(path),
-    // No uploadFile needed in public mode typically
-  }
-}}
+<StackProvider
+  basePath="/pages"
+  router={nextRouter()}
+  api={{ baseURL, basePath: "/api/data" }}
+  overrides={{ "ai-chat": { mode: "public" } }}
+>
+  {children}
+</StackProvider>
 ```
 
 <Callout type="info">
@@ -1061,8 +1007,6 @@ By default, public mode is completely stateless - messages are lost on page refr
 import { ChatLayout, type UIMessage } from "@btst/stack/plugins/ai-chat/client";
 import { useLocalStorage } from "@/hooks/useLocalStorage"; // Your hook
 
-const baseURL = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-
 export default function PublicChat() {
   const [messages, setMessages] = useLocalStorage<UIMessage[]>(
     "public-chat-messages",
@@ -1071,8 +1015,6 @@ export default function PublicChat() {
 
   return (
     <ChatLayout
-      apiBaseURL={baseURL}
-      apiBasePath="/api/data"
       layout="widget"
       initialMessages={messages}
       onMessagesChange={setMessages}

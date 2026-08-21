@@ -10,6 +10,7 @@ import { Input } from "@workspace/ui/components/input";
 import {
 	useNotify,
 	usePluginOverrides,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import { Loader2, Upload } from "lucide-react";
@@ -34,12 +35,12 @@ export function FeaturedImageField({
 
 	const {
 		uploadImage,
-		Image,
 		localization,
 		imageInputField: ImageInput,
 	} = usePluginOverrides<BlogPluginOverrides>("blog");
+	const { router } = useStack();
 
-	const ImageComponent = Image ? Image : DefaultImage;
+	const ImageComponent = router?.Image ?? DefaultImage;
 
 	const label = (
 		<FormLabel>

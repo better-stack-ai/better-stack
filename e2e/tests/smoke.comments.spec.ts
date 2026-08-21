@@ -437,17 +437,17 @@ test.describe("Comments Plugin", () => {
 // These tests cover the business rule: a user should always see their own
 // pending (awaiting-moderation) comments and replies, even after a page
 // refresh clears the React Query cache. The fix is server-side — GET /comments
-// with `currentUserId` returns approved + own-pending in a single response.
+// resolves the authenticated identity and returns approved + own-pending in a
+// single response.
 //
 // The example app's onBeforePost hook returns authorId "olliethedev" for every
-// POST, so we use that as currentUserId in the query string to simulate the
-// logged-in user fetching their own pending content.
+// POST, so the authenticated request uses the same identity.
 
 test.describe("Own pending comments — visible after refresh (server-side fix)", () => {
 	// Shared authorId used by the example app's onBeforePost hook
-	const CURRENT_USER_ID = "olliethedev";
+	const AUTHENTICATED_USER_ID = "olliethedev";
 
-	test("own pending top-level comment is included when currentUserId matches author", async ({
+	test("own pending top-level comment is included for the authenticated author", async ({
 		request,
 	}) => {
 		const resourceId = `e2e-own-pending-${Date.now()}`;
@@ -464,8 +464,8 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		// Simulates a page-refresh fetch: status defaults to "approved" but
 		// x-user-id header authenticates the session — own pending comments must be included.
 		const response = await request.get(
-			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&currentUserId=${CURRENT_USER_ID}`,
-			{ headers: { "x-user-id": CURRENT_USER_ID } },
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}`,
+			{ headers: { "x-user-id": AUTHENTICATED_USER_ID } },
 		);
 		expect(response.ok()).toBeTruthy();
 		const body = await response.json();
@@ -473,12 +473,12 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		const found = body.items.find((c: { id: string }) => c.id === comment.id);
 		expect(
 			found,
-			"Own pending comment must appear in the response with currentUserId",
+			"Own pending comment must appear for the authenticated author",
 		).toBeDefined();
 		expect(found.status).toBe("pending");
 	});
 
-	test("pending comment is NOT returned when currentUserId is absent", async ({
+	test("pending comment is NOT returned when identity is absent", async ({
 		request,
 	}) => {
 		const resourceId = `e2e-no-pending-${Date.now()}`;
@@ -487,11 +487,11 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		const comment = await createComment(request, {
 			resourceId,
 			resourceType,
-			body: "Invisible pending comment — no currentUserId.",
+			body: "Invisible pending comment — no authenticated identity.",
 		});
 		expect(comment.status).toBe("pending");
 
-		// Fetch without currentUserId — only approved comments should be returned
+		// An unauthenticated fetch returns only approved comments.
 		const response = await request.get(
 			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}`,
 		);
@@ -501,11 +501,11 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		const found = body.items.find((c: { id: string }) => c.id === comment.id);
 		expect(
 			found,
-			"Pending comment must NOT appear without currentUserId",
+			"Pending comment must NOT appear without an authenticated identity",
 		).toBeUndefined();
 	});
 
-	test("another user's pending comment is NOT included even with currentUserId", async ({
+	test("another user's pending comment is NOT included", async ({
 		request,
 	}) => {
 		const resourceId = `e2e-other-pending-${Date.now()}`;
@@ -520,10 +520,8 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		expect(comment.status).toBe("pending");
 
 		// A different authenticated user should not see this pending comment.
-		// The query param is spoofed as the author's ID, but the server resolves
-		// currentUserId from the authenticated header (x-user-id).
 		const response = await request.get(
-			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&currentUserId=${CURRENT_USER_ID}`,
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}`,
 			{ headers: { "x-user-id": "some-other-user" } },
 		);
 		expect(response.ok()).toBeTruthy();
@@ -532,11 +530,11 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		const found = body.items.find((c: { id: string }) => c.id === comment.id);
 		expect(
 			found,
-			"Pending comment from another author must NOT appear for a different currentUserId",
+			"Pending comment from another author must NOT appear for a different identity",
 		).toBeUndefined();
 	});
 
-	test("replyCount on parent includes own pending reply when currentUserId is provided", async ({
+	test("replyCount on parent includes the authenticated user's pending reply", async ({
 		request,
 	}) => {
 		const resourceId = `e2e-replycount-${Date.now()}`;
@@ -558,10 +556,10 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 			body: "My pending reply — should increment replyCount.",
 		});
 
-		// Fetch top-level comments WITH currentUserId (x-user-id header authenticates the session)
+		// The x-user-id header authenticates the session.
 		const withUserResponse = await request.get(
-			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=null&currentUserId=${CURRENT_USER_ID}`,
-			{ headers: { "x-user-id": CURRENT_USER_ID } },
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=null`,
+			{ headers: { "x-user-id": AUTHENTICATED_USER_ID } },
 		);
 		expect(withUserResponse.ok()).toBeTruthy();
 		const withUserBody = await withUserResponse.json();
@@ -571,11 +569,11 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		expect(parentItem).toBeDefined();
 		expect(
 			parentItem.replyCount,
-			"replyCount must include own pending reply when currentUserId is provided",
+			"replyCount must include the authenticated user's pending reply",
 		).toBe(1);
 	});
 
-	test("replyCount is 0 for a pending reply when currentUserId is absent", async ({
+	test("replyCount is 0 for a pending reply when identity is absent", async ({
 		request,
 	}) => {
 		const resourceId = `e2e-replycount-nouser-${Date.now()}`;
@@ -588,15 +586,15 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		});
 		await approveComment(request, parent.id);
 
-		// Pending reply — not approved, not counted without currentUserId
+		// Pending reply — not approved, not counted without an identity.
 		await createComment(request, {
 			resourceId,
 			resourceType,
 			parentId: parent.id,
-			body: "Pending reply — invisible without currentUserId.",
+			body: "Pending reply — invisible without an authenticated identity.",
 		});
 
-		// Fetch without currentUserId
+		// Fetch without authentication.
 		const response = await request.get(
 			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=null`,
 		);
@@ -608,11 +606,11 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		expect(parentItem).toBeDefined();
 		expect(
 			parentItem.replyCount,
-			"replyCount must be 0 when reply is pending and currentUserId is absent",
+			"replyCount must be 0 when reply is pending and identity is absent",
 		).toBe(0);
 	});
 
-	test("own pending reply appears in replies list when currentUserId is provided", async ({
+	test("own pending reply appears in the authenticated replies list", async ({
 		request,
 	}) => {
 		const resourceId = `e2e-pending-reply-list-${Date.now()}`;
@@ -637,8 +635,8 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		// Simulates the RepliesSection fetch after a page refresh:
 		// x-user-id header authenticates the session — own pending reply must be included
 		const response = await request.get(
-			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=${encodeURIComponent(parent.id)}&currentUserId=${CURRENT_USER_ID}`,
-			{ headers: { "x-user-id": CURRENT_USER_ID } },
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=${encodeURIComponent(parent.id)}`,
+			{ headers: { "x-user-id": AUTHENTICATED_USER_ID } },
 		);
 		expect(response.ok()).toBeTruthy();
 		const body = await response.json();
@@ -646,12 +644,12 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		const found = body.items.find((c: { id: string }) => c.id === reply.id);
 		expect(
 			found,
-			"Own pending reply must appear in the replies list with currentUserId",
+			"Own pending reply must appear in the authenticated replies list",
 		).toBeDefined();
 		expect(found.status).toBe("pending");
 	});
 
-	test("own pending reply does NOT appear in replies list without currentUserId", async ({
+	test("own pending reply does NOT appear in an unauthenticated replies list", async ({
 		request,
 	}) => {
 		const resourceId = `e2e-pending-reply-hidden-${Date.now()}`;
@@ -668,11 +666,11 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 			resourceId,
 			resourceType,
 			parentId: parent.id,
-			body: "Pending reply — hidden without currentUserId.",
+			body: "Pending reply — hidden without an authenticated identity.",
 		});
 		expect(reply.status).toBe("pending");
 
-		// Fetch without currentUserId — only approved replies returned
+		// An unauthenticated fetch returns only approved replies.
 		const response = await request.get(
 			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=${encodeURIComponent(parent.id)}`,
 		);
@@ -682,7 +680,7 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		const found = body.items.find((c: { id: string }) => c.id === reply.id);
 		expect(
 			found,
-			"Pending reply must NOT appear in the list without currentUserId",
+			"Pending reply must NOT appear without an authenticated identity",
 		).toBeUndefined();
 	});
 });
@@ -706,19 +704,13 @@ test.describe("My Comments Page", () => {
 			waitUntil: "networkidle",
 		});
 
-		// Either the list or the empty-state element must be visible
-		const hasPage = await page
-			.locator('[data-testid="my-comments-page"]')
-			.isVisible()
-			.catch(() => false);
-		const hasEmpty = await page
-			.locator('[data-testid="my-comments-empty"]')
-			.isVisible()
-			.catch(() => false);
-		expect(
-			hasPage || hasEmpty,
-			"Expected my-comments-page or my-comments-empty to be visible",
-		).toBe(true);
+		// Provider identity resolves after hydration, so wait for either valid
+		// authenticated state instead of sampling visibility immediately.
+		await expect(
+			page.locator(
+				'[data-testid="my-comments-page"], [data-testid="my-comments-empty"]',
+			),
+		).toBeVisible();
 
 		expect(errors, `Console errors detected:\n${errors.join("\n")}`).toEqual(
 			[],

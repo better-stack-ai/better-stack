@@ -42,6 +42,7 @@ import {
 	useCan,
 	useNotify,
 	usePluginOverrides,
+	useStack,
 } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../overrides";
 import type { SerializedConversation } from "../../types";
@@ -63,10 +64,12 @@ export function ChatSidebar({
 	onNewChat,
 	className,
 }: ChatSidebarProps) {
-	const { navigate, localization: customLocalization } = usePluginOverrides<
+	const { localization: customLocalization } = usePluginOverrides<
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
 	>("ai-chat", {});
+	const { router } = useStack();
+	const navigate = router?.navigate;
 	const basePath = useBasePath();
 	const notify = useNotify();
 	const tr = useAiChatTranslation(customLocalization);
@@ -94,7 +97,7 @@ export function ChatSidebar({
 	});
 
 	const handleNewChat = () => {
-		// Always use overrides navigation when available, so consumers control routing.
+		// Use the StackProvider router when available.
 		// Also run onNewChat to support "reset chat" behavior when already on /chat.
 		if (navigate) {
 			navigate(`${basePath}/chat`);

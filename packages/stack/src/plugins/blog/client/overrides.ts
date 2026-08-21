@@ -31,34 +31,16 @@ export interface RouteContext {
 /**
  * Overridable components and functions for the Blog plugin
  *
- * External consumers can provide their own implementations of these
- * to customize the behavior for their framework (Next.js, React Router, etc.)
+ * External consumers can provide their own implementations to customize
+ * plugin-specific components and behavior.
  */
 export interface BlogPluginOverrides {
-	/**
-	 * Link component for navigation
-	 */
-	Link?: ComponentType<React.ComponentProps<"a"> & Record<string, any>>;
 	/**
 	 * Post card component for displaying a post
 	 */
 	PostCard?: ComponentType<{
 		post: SerializedPost;
 	}>;
-	/**
-	 * Navigation function for programmatic navigation
-	 */
-	navigate: (path: string) => void | Promise<void>;
-	/**
-	 * Refresh function to invalidate server-side cache (e.g., Next.js router.refresh())
-	 */
-	refresh?: () => void | Promise<void>;
-	/**
-	 * Image component for displaying images
-	 */
-	Image?: ComponentType<
-		React.ImgHTMLAttributes<HTMLImageElement> & Record<string, any>
-	>;
 	/**
 	 * Function used to upload a new image file and return its URL.
 	 * This is separate from `imagePicker`, which selects an existing asset URL.
@@ -113,14 +95,6 @@ export interface BlogPluginOverrides {
 	 */
 	localization?: BlogLocalization;
 	/**
-	 * API base URL
-	 */
-	apiBaseURL: string;
-	/**
-	 * API base path
-	 */
-	apiBasePath: string;
-	/**
 	 * Whether to show the attribution
 	 */
 	showAttribution?: boolean;
@@ -152,46 +126,6 @@ export interface BlogPluginOverrides {
 		context: RouteContext,
 	) => void | Promise<void>;
 
-	/**
-	 * Called before the posts list page is rendered
-	 * Return false to prevent rendering (e.g., for authorization)
-	 * @param context - Route context
-	 */
-	onBeforePostsPageRendered?: (context: RouteContext) => boolean;
-
-	/**
-	 * Called before a single post page is rendered
-	 * Return false to prevent rendering (e.g., for authorization)
-	 * @param slug - The post slug
-	 * @param context - Route context
-	 */
-	onBeforePostPageRendered?: (slug: string, context: RouteContext) => boolean;
-
-	/**
-	 * Called before the new post page is rendered
-	 * Return false to prevent rendering (e.g., for authorization)
-	 * @param context - Route context
-	 */
-	onBeforeNewPostPageRendered?: (context: RouteContext) => boolean;
-
-	/**
-	 * Called before the edit post page is rendered
-	 * Return false to prevent rendering (e.g., for authorization)
-	 * @param slug - The post slug being edited
-	 * @param context - Route context
-	 */
-	onBeforeEditPostPageRendered?: (
-		slug: string,
-		context: RouteContext,
-	) => boolean;
-
-	/**
-	 * Called before the drafts page is rendered
-	 * Return false to prevent rendering (e.g., for authorization)
-	 * @param context - Route context
-	 */
-	onBeforeDraftsPageRendered?: (context: RouteContext) => boolean;
-
 	// ============ Slot Overrides ============
 
 	/**
@@ -206,10 +140,6 @@ export interface BlogPluginOverrides {
 	 *     <CommentThread
 	 *       resourceId={post.slug}
 	 *       resourceType="blog-post"
-	 *       apiBaseURL={apiBaseURL}
-	 *       apiBasePath="/api/data"
-	 *       currentUserId={session?.userId}
-	 *       loginHref="/login"
 	 *     />
 	 *   ),
 	 * }

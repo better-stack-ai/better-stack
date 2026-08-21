@@ -1,6 +1,7 @@
 "use client";
 
 import { MessageSquare } from "lucide-react";
+import { useStack } from "@btst/stack/context";
 import { useCommentCount } from "../hooks/use-comments";
 
 export interface CommentCountProps {
@@ -8,9 +9,6 @@ export interface CommentCountProps {
 	resourceType: string;
 	/** Only count approved comments (default) */
 	status?: "pending" | "approved" | "spam";
-	apiBaseURL: string;
-	apiBasePath: string;
-	headers?: HeadersInit;
 	/** Optional className for the wrapper span */
 	className?: string;
 }
@@ -24,8 +22,6 @@ export interface CommentCountProps {
  * <CommentCount
  *   resourceId={post.slug}
  *   resourceType="blog-post"
- *   apiBaseURL="https://example.com"
- *   apiBasePath="/api/data"
  * />
  * ```
  */
@@ -33,13 +29,11 @@ export function CommentCount({
 	resourceId,
 	resourceType,
 	status = "approved",
-	apiBaseURL,
-	apiBasePath,
-	headers,
 	className,
 }: CommentCountProps) {
+	const { api } = useStack();
 	const { count, isLoading } = useCommentCount(
-		{ apiBaseURL, apiBasePath, headers },
+		{ apiBaseURL: api?.baseURL ?? "", apiBasePath: api?.basePath ?? "" },
 		{ resourceId, resourceType, status },
 	);
 

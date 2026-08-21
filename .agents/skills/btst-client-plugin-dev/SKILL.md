@@ -171,16 +171,26 @@ export function useMyData(id: string) {
 }
 ```
 
-## Client overrides shape
+## Provider wiring and client overrides
+
+Framework-wide values belong on `StackProvider`, not inside plugin overrides:
+
+```tsx
+<StackProvider
+  basePath="/pages"
+  router={nextRouter()}
+  api={{ baseURL, basePath: "/api/data" }}
+  auth={{ getIdentity, loginPath: "/login" }}
+  overrides={{ myPlugin: { uploadImage, localization } }}
+>
+  {children}
+</StackProvider>
+```
+
+Plugin override types contain only plugin-specific customization:
 
 ```typescript
 type PluginOverrides = {
-  apiBaseURL: string
-  apiBasePath: string        // e.g. "/api/data"
-  navigate: (path: string) => void
-  refresh?: () => void
-  Link: ComponentType<LinkProps>
-  Image?: ComponentType<ImageProps>
   uploadImage?: (file: File) => Promise<string>
   headers?: HeadersInit
   localization?: Partial<Localization>
@@ -189,7 +199,7 @@ type PluginOverrides = {
 
 ## Gotchas
 
-- **Missing `usePluginOverrides()` config** — client components crash if overrides aren't set in layout.
+- **Framework config in plugin overrides** — `Link`, `Image`, navigation, refresh, and client API paths come from the top-level `StackProvider`.
 - **`staleTime: Infinity`** — use for data that should not auto-refetch.
 - **Next.js Link href undefined** — use `href={href || "#"}` pattern.
 - **Suspense errors not caught** — add `if (error && !isFetching) throw error` in every suspense hook.

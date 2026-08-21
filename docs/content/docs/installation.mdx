@@ -806,8 +806,8 @@ In order to use BTST, your application must meet the following requirements:
 
     <Callout type="info">
       **Understanding Overrides:**
-      - **Purpose**: Injects framework-specific components via React Context. Plugin components access these overrides through `usePluginOverrides()` hook, allowing them to use your framework's `Link`, `Image`, and navigation without tight coupling and to avoid breaking the client/server boundary in frameworks like Next.js.
-      - **Resolution order**: per-plugin `overrides` → top-level `router`/`api` → plugin defaults. Per-plugin `Link`/`navigate`/`Image`/`apiBaseURL` values always take precedence over the router preset, so you can still override framework wiring for a single plugin as an escape hatch.
+      - **Framework wiring**: `router` supplies `Link`, `Image`, navigation, and refresh to every plugin; `api` supplies the client API location.
+      - **Purpose**: `overrides` contains only plugin-specific customization such as upload handlers, component slots, localization, and route analytics hooks.
       - **Type Safety**: Each plugin exports its override type (e.g., `ExamplePluginOverrides`)
     </Callout>
   </Step>
@@ -1143,4 +1143,3 @@ In order to use BTST, your application must meet the following requirements:
 
   </Step>
 </Steps>
-

@@ -18,7 +18,7 @@ export function ChatPage({ conversationId }: ChatPageProps) {
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
 	>("ai-chat", {});
-	const { apiBaseURL, apiBasePath, mode } = overrides;
+	const { mode } = overrides;
 	const routeName = conversationId ? "chatConversation" : "chat";
 	const context = useMemo(
 		() => ({
@@ -33,29 +33,12 @@ export function ChatPage({ conversationId }: ChatPageProps) {
 		routeName,
 		context,
 		overrides,
-		beforeRenderHook: (currentOverrides, routeContext) => {
-			if (conversationId && currentOverrides.onBeforeConversationPageRendered) {
-				return currentOverrides.onBeforeConversationPageRendered(
-					conversationId,
-					routeContext,
-				);
-			}
-			if (!conversationId && currentOverrides.onBeforeChatPageRendered) {
-				return currentOverrides.onBeforeChatPageRendered(routeContext);
-			}
-			return true;
-		},
 	});
 
 	// In public mode, don't show sidebar
 	const showSidebar = mode !== "public";
 
 	return (
-		<ChatLayout
-			apiBaseURL={apiBaseURL ?? ""}
-			apiBasePath={apiBasePath ?? ""}
-			conversationId={conversationId}
-			showSidebar={showSidebar}
-		/>
+		<ChatLayout conversationId={conversationId} showSidebar={showSidebar} />
 	);
 }

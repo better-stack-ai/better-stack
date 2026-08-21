@@ -165,80 +165,38 @@ export const getStackClient = (queryClient: QueryClient) => {
 </Tab>
 </Tabs>
 
-### 4. Configure Overrides
+### 4. Configure the Provider
 
-Add comments overrides to your layout file. You must also register the `CommentsPluginOverrides` type:
+Comments read API, identity, login path, and permissions from `StackProvider`. Use the plugin override only for comments-specific behavior:
 
-<Tabs items={["Next.js", "React Router", "TanStack"]}>
-<Tab value="Next.js">
 ```tsx title="app/pages/layout.tsx"
 import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
 
 type PluginOverrides = {
-  // ... existing plugins
   comments: CommentsPluginOverrides
 }
 
-// Inside your StackProvider overrides:
-overrides={{
-  comments: {
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
-
-    // Access control for admin routes
-    onBeforeModerationPageRendered: async (context) => {
-      const session = await getSession()
-      if (!session?.user?.isAdmin) throw new Error("Admin access required")
+<StackProvider<PluginOverrides>
+  basePath="/pages"
+  router={frameworkRouter}
+  api={{ baseURL, basePath: "/api/data" }}
+  auth={{
+    getIdentity: async () => (await getSession())?.user ?? null,
+    loginPath: "/login",
+    can: ({ resource, action }) =>
+      resource !== "comments:comment" || action !== "moderate" || isAdmin(),
+  }}
+  overrides={{
+    comments: {
+      resourceLinks: {
+        "blog-post": (slug) => `/pages/blog/${slug}`,
+      },
     },
-  }
-}}
+  }}
+>
+  {children}
+</StackProvider>
 ```
-</Tab>
-<Tab value="React Router">
-```tsx title="app/routes/pages/_layout.tsx"
-import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
-
-type PluginOverrides = {
-  // ... existing plugins
-  comments: CommentsPluginOverrides
-}
-
-// Inside your StackProvider overrides:
-overrides={{
-  comments: {
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
-    onBeforeModerationPageRendered: async (context) => {
-      const session = await getSession()
-      if (!session?.user?.isAdmin) throw new Error("Admin access required")
-    },
-  }
-}}
-```
-</Tab>
-<Tab value="TanStack">
-```tsx title="src/routes/pages/route.tsx"
-import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
-
-type PluginOverrides = {
-  // ... existing plugins
-  comments: CommentsPluginOverrides
-}
-
-// Inside your StackProvider overrides:
-overrides={{
-  comments: {
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
-    onBeforeModerationPageRendered: async (context) => {
-      const session = await getSession()
-      if (!session?.user?.isAdmin) throw new Error("Admin access required")
-    },
-  }
-}}
-```
-</Tab>
-</Tabs>
 
 ## Embedding Comments
 
@@ -266,10 +224,6 @@ import { CommentThread } from "@btst/stack/plugins/comments/client/components"
 |------|------|----------|-------------|
 | `resourceId` | `string` | ✓ | Identifier for the resource (e.g. post slug, task ID) |
 | `resourceType` | `string` | ✓ | Type of resource (`"blog-post"`, `"kanban-task"`, etc.) |
-| `apiBaseURL` | `string` | — | Explicit base URL override; defaults to `StackProvider.api.baseURL` |
-| `apiBasePath` | `string` | — | Explicit API path override; defaults to `StackProvider.api.basePath` |
-| `currentUserId` | `string` | — | Explicit identity override; defaults to `StackProvider.auth` identity |
-| `loginHref` | `string` | — | Explicit login URL override; defaults to `StackProvider.auth.loginPath` |
 | `pageSize` | `number` | — | Comments per page. Falls back to `defaultCommentPageSize` from overrides, then 100. A "Load more" button appears when there are additional pages. |
 | `sort` | `"asc" \| "desc"` | — | Sort direction for top-level comments by `createdAt`. Defaults to `defaultCommentSort` from overrides, then `"desc"` (newest first). Replies inside each thread always render chronologically and are unaffected. |
 | `components.Input` | `ComponentType` | — | Custom input component (default: `<textarea>`) |
@@ -323,8 +277,6 @@ import { CommentCount } from "@btst/stack/plugins/comments/client/components"
 <CommentCount
   resourceId={post.slug}
   resourceType="blog-post"
-  apiBaseURL={baseURL}
-  apiBasePath="/api/data"
 />
 ```
 
@@ -337,7 +289,7 @@ The comments plugin adds a `/comments/moderation` admin route with:
 - **Comment detail dialog** — View full body and metadata
 - **Per-row actions** — Approve, spam, delete from the table row
 
-Access is controlled by the `onBeforeModerationPageRendered` hook in `CommentsPluginOverrides`.
+Access is controlled by the `comments:comment` / `moderate` permission through `StackProvider.auth.can`.
 
 ## Backend Configuration
 
@@ -367,7 +319,7 @@ When `allowPosting` is enabled (default), **`onBeforePost` and `resolveCurrentUs
 When `allowPosting: false`, both hooks become optional because `POST /comments` is disabled.
 
 - `onBeforePost` must return `{ authorId: string }` derived from the session — `authorId` is intentionally absent from the POST body so clients can never forge authorship.
-- `resolveCurrentUserId` must return the session-verified user ID (or `null` when unauthenticated) — the `?currentUserId=…` query parameter sent by the client is completely discarded.
+- `resolveCurrentUserId` must return the session-verified user ID (or `null` when unauthenticated) — any caller-supplied `?currentUserId=…` query parameter is completely discarded.
 </Callout>
 
 ### Server-Side API (`stack.api.comments`)
@@ -463,9 +415,6 @@ your layout, and configure the security hook in your backend:
         "kanban-task": (id) => `/pages/kanban?task=${id}`,
       },
 
-      onBeforeUserCommentsPageRendered: (context) => {
-        if (!session?.user) throw new Error("Authentication required")
-      },
     },
   }}
 >
@@ -516,20 +465,12 @@ Configure the comments plugin behavior from your layout:
 | Field | Type | Description |
 |-------|------|-------------|
 | `localization` | `Partial<CommentsLocalization>` | Override any UI string in the plugin. Import `COMMENTS_LOCALIZATION` from `@btst/stack/plugins/comments/client` to see all available keys. |
-| `apiBaseURL` | `string` | Legacy per-plugin base URL override; prefer top-level `StackProvider.api`. |
-| `apiBasePath` | `string` | Legacy per-plugin API path override; prefer top-level `StackProvider.api`. |
-| `headers` | `Record<string, string>` | Optional headers for authenticated plugin API calls. |
 | `showAttribution` | `boolean` | Show/hide the "Powered by BTST" attribution on plugin pages (defaults to `true`). |
-| `currentUserId` | `string \| (() => string \| undefined \| Promise<string \| undefined>)` | Legacy identity override. When omitted, comments use the top-level auth provider identity. |
-| `loginHref` | `string` | Legacy login route override. When omitted, comments use `StackProvider.auth.loginPath`. |
 | `defaultCommentPageSize` | `number` | Default number of top-level comments per page for all `CommentThread` instances. Overridden per-instance by the `pageSize` prop. Defaults to `100` when not set. |
 | `defaultCommentSort` | `"asc" \| "desc"` | Default sort direction for top-level comments in all `CommentThread` instances. Overridden per-instance by the `sort` prop. Defaults to `"desc"` (newest first). |
 | `allowPosting` | `boolean` | Hide/show comment form and reply actions globally in `CommentThread` instances (defaults to `true`). |
 | `allowEditing` | `boolean` | Hide/show edit affordances globally in `CommentThread` instances (defaults to `true`). |
 | `resourceLinks` | `Record<string, (id: string) => string>` | Per-resource-type URL builders for linking comments back to their resource on the User Comments page (e.g. `{ "blog-post": (slug) => "/pages/blog/" + slug }`). The plugin appends `#comments` automatically so the page scrolls to the thread. |
-| `onBeforeModerationPageRendered` | hook | Called before rendering the moderation dashboard. Throw to deny access. |
-| `onBeforeResourceCommentsRendered` | hook | Called before rendering the per-resource comments admin view. Throw to deny access. |
-| `onBeforeUserCommentsPageRendered` | hook | Called before rendering the User Comments page. Throw to deny access (e.g. when no session exists). |
 | `onRouteRender` | `(routeName, context) => void \| Promise<void>` | Called when a comments route renders. |
 | `onRouteError` | `(routeName, error, context) => void \| Promise<void>` | Called when a comments route hits an error. |
 

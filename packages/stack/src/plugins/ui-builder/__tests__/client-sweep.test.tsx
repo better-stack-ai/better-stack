@@ -137,10 +137,7 @@ function createMockRouter() {
 
 function overrides() {
 	return {
-		apiBaseURL: "http://test.local",
-		apiBasePath: "/api/data",
 		queryClient,
-		navigate: vi.fn(),
 		componentRegistry: {},
 	};
 }
@@ -161,6 +158,7 @@ async function renderPage(
 		root.render(
 			<StackProvider
 				basePath="/pages"
+				api={{ baseURL: "http://test.local", basePath: "/api/data" }}
 				router={createMockRouter()}
 				overrides={{
 					"ui-builder": { ...overrides(), localization: options.localization },

@@ -629,7 +629,7 @@ test.describe("Blog Authentication - Browser SSR Flow", () => {
 		// SSR loader will:
 		// 1. Receive request without auth cookies
 		// 2. Pass empty/no cookies to API
-		// 3. API hooks reject the request (return false)
+		// 3. API hooks reject the request by throwing
 		// 4. React Query stores the 403 error
 		await page.goto("/pages/blog/drafts", { waitUntil: "networkidle" });
 

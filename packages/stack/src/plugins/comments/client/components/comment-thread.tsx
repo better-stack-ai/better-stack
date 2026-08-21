@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { SerializedComment } from "../../types";
-import { getInitials, useResolvedCurrentUserId } from "../utils";
+import { getInitials, useCurrentUserId } from "../utils";
 import { CommentForm } from "./comment-form";
 import {
 	useComments,
@@ -32,7 +32,11 @@ import {
 	useToggleLike,
 } from "../hooks/use-comments";
 import type { CommentsLocalization } from "../localization";
-import { usePluginOverrides, useTranslate } from "@btst/stack/context";
+import {
+	usePluginOverrides,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../overrides";
 
 /** Custom input component props */
@@ -59,22 +63,6 @@ export interface CommentThreadProps {
 	resourceId: string;
 	/** Discriminates resources across plugins (e.g. "blog-post", "kanban-task") */
 	resourceType: string;
-	/** Base URL for API calls. Defaults to the top-level StackProvider API. */
-	apiBaseURL?: string;
-	/** Path where the API is mounted. Defaults to the top-level StackProvider API. */
-	apiBasePath?: string;
-	/**
-	 * Currently authenticated user ID. Defaults to the top-level StackProvider
-	 * identity. Omit for read-only / unauthenticated when no auth provider exists.
-	 */
-	currentUserId?: string;
-	/**
-	 * URL to redirect unauthenticated users to.
-	 * When provided and currentUserId is absent, shows a "Please login to comment" prompt.
-	 */
-	loginHref?: string;
-	/** Optional HTTP headers for API calls (e.g. forwarding cookies) */
-	headers?: HeadersInit;
 	/** Swap in custom Input / Renderer components */
 	components?: CommentComponents;
 	/** Optional className applied to the root wrapper */
@@ -111,12 +99,11 @@ export interface CommentThreadProps {
 	sort?: "asc" | "desc";
 }
 
-type ResolvedCommentThreadProps = Omit<
-	CommentThreadProps,
-	"apiBaseURL" | "apiBasePath"
-> & {
+type ResolvedCommentThreadProps = CommentThreadProps & {
 	apiBaseURL: string;
 	apiBasePath: string;
+	currentUserId?: string;
+	loginHref?: string;
 };
 
 const DEFAULT_RENDERER: ComponentType<CommentRendererProps> = ({ body }) => (
@@ -132,7 +119,6 @@ function CommentCard({
 	apiBasePath,
 	resourceId,
 	resourceType,
-	headers,
 	components,
 	localization,
 	infiniteKey,
@@ -146,7 +132,6 @@ function CommentCard({
 	apiBasePath: string;
 	resourceId: string;
 	resourceType: string;
-	headers?: HeadersInit;
 	components?: CommentComponents;
 	localization?: Partial<CommentsLocalization>;
 	/** Infinite thread query key — pass for top-level comments so like optimistic
@@ -160,7 +145,7 @@ function CommentCard({
 	const [isEditing, setIsEditing] = useState(false);
 	const Renderer = components?.Renderer ?? DEFAULT_RENDERER;
 
-	const config = { apiBaseURL, apiBasePath, headers };
+	const config = { apiBaseURL, apiBasePath };
 
 	const updateMutation = useUpdateComment(config);
 	const deleteMutation = useDeleteComment(config);
@@ -352,7 +337,6 @@ function CommentThreadInner({
 	apiBasePath,
 	currentUserId,
 	loginHref,
-	headers,
 	components,
 	localization: localizationProp,
 	pageSize: pageSizeProp,
@@ -379,7 +363,7 @@ function CommentThreadInner({
 	);
 	const [replyOffsets, setReplyOffsets] = useState<Record<string, number>>({});
 
-	const config = { apiBaseURL, apiBasePath, headers };
+	const config = { apiBaseURL, apiBasePath };
 
 	const {
 		comments,
@@ -468,7 +452,6 @@ function CommentThreadInner({
 								apiBasePath={apiBasePath}
 								resourceId={resourceId}
 								resourceType={resourceType}
-								headers={headers}
 								components={components}
 								localization={localization}
 								infiniteKey={threadQueryKey}
@@ -487,7 +470,6 @@ function CommentThreadInner({
 								apiBaseURL={apiBaseURL}
 								apiBasePath={apiBasePath}
 								currentUserId={currentUserId}
-								headers={headers}
 								components={components}
 								localization={localization}
 								expanded={expandedReplies.has(comment.id)}
@@ -620,7 +602,6 @@ function RepliesSection({
 	apiBaseURL,
 	apiBasePath,
 	currentUserId,
-	headers,
 	components,
 	localization,
 	expanded,
@@ -635,7 +616,6 @@ function RepliesSection({
 	apiBaseURL: string;
 	apiBasePath: string;
 	currentUserId?: string;
-	headers?: HeadersInit;
 	components?: CommentComponents;
 	localization?: Partial<CommentsLocalization>;
 	expanded: boolean;
@@ -646,7 +626,7 @@ function RepliesSection({
 	allowEditing: boolean;
 }) {
 	const t = useTranslate();
-	const config = { apiBaseURL, apiBasePath, headers };
+	const config = { apiBaseURL, apiBasePath };
 	const [replyOffset, setReplyOffset] = useState(0);
 	const [loadedReplies, setLoadedReplies] = useState<SerializedComment[]>([]);
 	// Only fetch reply bodies once the section is expanded.
@@ -763,7 +743,6 @@ function RepliesSection({
 							apiBasePath={apiBasePath}
 							resourceId={resourceId}
 							resourceType={resourceType}
-							headers={headers}
 							components={components}
 							localization={localization}
 							onReplyClick={() => {}} // No nested replies in v1
@@ -803,7 +782,7 @@ function RepliesSection({
  * Embeddable threaded comment section.
  *
  * Lazy-mounts when the component scrolls into the viewport (via WhenVisible).
- * Uses the top-level StackProvider API and auth configuration by default.
+ * Uses the top-level StackProvider API and auth configuration.
  *
  * @example
  * ```tsx
@@ -856,19 +835,14 @@ function CommentThreadSkeleton() {
 }
 
 export function CommentThread(props: CommentThreadProps) {
-	const overrides = usePluginOverrides<
-		CommentsPluginOverrides,
-		Partial<CommentsPluginOverrides>
-	>("comments", {});
-	const { currentUserId, isPending: isIdentityPending } =
-		useResolvedCurrentUserId(props.currentUserId ?? overrides.currentUserId);
+	const { api, auth } = useStack();
+	const { currentUserId, isPending: isIdentityPending } = useCurrentUserId();
 	const resolvedProps: ResolvedCommentThreadProps = {
 		...props,
-		apiBaseURL: props.apiBaseURL ?? overrides.apiBaseURL ?? "",
-		apiBasePath: props.apiBasePath ?? overrides.apiBasePath ?? "",
+		apiBaseURL: api?.baseURL ?? "",
+		apiBasePath: api?.basePath ?? "",
 		currentUserId,
-		loginHref: props.loginHref ?? overrides.loginHref,
-		headers: props.headers ?? overrides.headers,
+		loginHref: auth?.loginPath,
 	};
 
 	return (

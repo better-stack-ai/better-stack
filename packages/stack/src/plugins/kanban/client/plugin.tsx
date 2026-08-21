@@ -2,7 +2,6 @@ import {
 	defineClientPlugin,
 	createApiClient,
 	isConnectionError,
-	runClientHookWithShim,
 } from "@btst/stack/plugins/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
@@ -157,10 +156,7 @@ function createBoardsLoader(config: KanbanClientConfig) {
 
 			try {
 				if (hooks?.beforeLoadBoards) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadBoards!(context),
-						"Load prevented by beforeLoadBoards hook",
-					);
+					await hooks.beforeLoadBoards(context);
 				}
 
 				const client = createApiClient<KanbanApiRouter>({
@@ -177,10 +173,7 @@ function createBoardsLoader(config: KanbanClientConfig) {
 					const boards = queryClient.getQueryData<SerializedBoardWithColumns[]>(
 						listQuery.queryKey,
 					);
-					await runClientHookWithShim(
-						() => hooks.afterLoadBoards!(boards || null, context),
-						"Load prevented by afterLoadBoards hook",
-					);
+					await hooks.afterLoadBoards(boards || null, context);
 				}
 
 				const queryState = queryClient.getQueryState(listQuery.queryKey);
@@ -223,10 +216,7 @@ function createBoardLoader(boardId: string, config: KanbanClientConfig) {
 
 			try {
 				if (hooks?.beforeLoadBoard) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadBoard!(boardId, context),
-						"Load prevented by beforeLoadBoard hook",
-					);
+					await hooks.beforeLoadBoard(boardId, context);
 				}
 
 				const client = createApiClient<KanbanApiRouter>({
@@ -242,10 +232,7 @@ function createBoardLoader(boardId: string, config: KanbanClientConfig) {
 					const board = queryClient.getQueryData<SerializedBoardWithColumns>(
 						boardQuery.queryKey,
 					);
-					await runClientHookWithShim(
-						() => hooks.afterLoadBoard!(board || null, boardId, context),
-						"Load prevented by afterLoadBoard hook",
-					);
+					await hooks.afterLoadBoard(board || null, boardId, context);
 				}
 
 				const queryState = queryClient.getQueryState(boardQuery.queryKey);
@@ -287,17 +274,11 @@ function createNewBoardLoader(config: KanbanClientConfig) {
 
 			try {
 				if (hooks?.beforeLoadNewBoard) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadNewBoard!(context),
-						"Load prevented by beforeLoadNewBoard hook",
-					);
+					await hooks.beforeLoadNewBoard(context);
 				}
 
 				if (hooks?.afterLoadNewBoard) {
-					await runClientHookWithShim(
-						() => hooks.afterLoadNewBoard!(context),
-						"Load prevented by afterLoadNewBoard hook",
-					);
+					await hooks.afterLoadNewBoard(context);
 				}
 			} catch (error) {
 				if (hooks?.onLoadError) {

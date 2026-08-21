@@ -3,6 +3,7 @@
 import {
 	usePluginOverrides,
 	useBasePath,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
@@ -24,12 +25,12 @@ export function CollapsibleTagList({
 	maxVisible = MAX_VISIBLE_TAGS,
 }: CollapsibleTagListProps) {
 	const t = useTranslate();
-	const { Link, localization } = usePluginOverrides<
+	const { localization } = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
-	>("blog", {
-		Link: DefaultLink,
-	});
+	>("blog", {});
+	const { router } = useStack();
+	const Link = router?.Link ?? DefaultLink;
 	const basePath = useBasePath();
 	const [showAll, setShowAll] = useState(false);
 	const showLessLabel =

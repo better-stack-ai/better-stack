@@ -166,12 +166,13 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
 }
 ```
 
-### 4. Configure Provider Overrides
+### 4. Configure the Provider
 
-Add CMS overrides to your layout:
+Configure framework-wide router/API wiring at the top level and keep only CMS-specific values in its override:
 
 ```tsx title="app/pages/layout.tsx"
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
+import { nextRouter } from "@btst/stack/next"
 
 type PluginOverrides = {
   cms: CMSPluginOverrides,
@@ -179,17 +180,14 @@ type PluginOverrides = {
 
 <StackProvider<PluginOverrides>
   basePath="/pages"
+  router={nextRouter()}
+  api={{ baseURL, basePath: "/api/data" }}
   overrides={{
     cms: {
-      apiBaseURL: baseURL,
-      apiBasePath: "/api/data",
-      navigate: (path) => router.push(path),
-      refresh: () => router.refresh(),
       uploadImage: async (file) => {
         // Your image upload logic
         return "https://example.com/image.png"
       },
-      Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
     }
   }}
 >
@@ -638,7 +636,7 @@ The CMS plugin exposes these REST endpoints:
 
 ## Authorization & Lifecycle Hooks
 
-The CMS plugin provides two levels of hooks for authorization:
+Use loader hooks for SSR authorization and the top-level auth provider for client-side route permissions:
 
 ### Client Hooks (SSR Authorization)
 
@@ -657,15 +655,18 @@ cms: cmsClientPlugin({
   hooks: {
     beforeLoadDashboard: async (context) => {
       const session = await getSession(context.headers)
-      return session?.user?.isAdmin === true
+      if (session?.user?.isAdmin !== true)
+        throw new Error("Admin access required")
     },
     beforeLoadContentList: async (typeSlug, context) => {
       const session = await getSession(context.headers)
-      return session?.user?.isAdmin === true
+      if (session?.user?.isAdmin !== true)
+        throw new Error("Admin access required")
     },
     beforeLoadContentEditor: async (typeSlug, id, context) => {
       const session = await getSession(context.headers)
-      return session?.user?.isAdmin === true
+      if (session?.user?.isAdmin !== true)
+        throw new Error("Admin access required")
     },
     onLoadError: (error, context) => {
       // Redirect to login on authorization failure
@@ -676,38 +677,28 @@ cms: cmsClientPlugin({
 ```
 
 <Callout type="info">
-**Use client hooks for SSR.** These hooks run during server-side data loading and support async operations like session checks. The `onLoadError` hook is called when any `beforeLoad*` hook returns `false`, allowing you to redirect unauthorized users.
+**Use client hooks for SSR.** These hooks run during server-side data loading and support async operations like session checks. Throw from a `beforeLoad*` hook to deny access; `onLoadError` can then redirect unauthorized users.
 </Callout>
 
-### Override Hooks (Client-Side)
+### Auth Provider (Client-Side)
 
-Use lifecycle hooks in `StackProvider` overrides for **synchronous** client-side checks (SPA navigation):
+Built-in CMS routes declare their required resource/action permission. Supply `auth.can` once on `StackProvider` to enforce those gates during client navigation:
 
 ```tsx title="app/pages/layout.tsx"
-cms: {
-  // ...required overrides
-  onBeforeDashboardRendered: (context) => {
-    // Sync check - runs during component render
-    if (user?.isAdmin !== true) throw new Error("Admin access required")
-  },
-  onBeforeListRendered: (typeSlug, context) => {
-    // Throw to deny: throw new Error("Unauthorized")
-  },
-  onBeforeEditorRendered: (typeSlug, id, context) => {
-    // id is null for new items
-    // Throw to deny: throw new Error("Unauthorized")
-  },
-  onRouteRender: (routeName, context) => {
-    // Track page views
-  },
-  onRouteError: (routeName, error, context) => {
-    // Log errors
-  },
-}
+<StackProvider
+  auth={{
+    getIdentity: () => session?.user ?? null,
+    can: ({ resource, action }) => canUser(session?.user, resource, action),
+    loginPath: "/auth/sign-in",
+  }}
+  // router, api, overrides, ...
+>
+  {children}
+</StackProvider>
 ```
 
-<Callout type="warn">
-**Override hooks are synchronous.** They run during component render and cannot await async operations. For SSR authorization with session checks, use the client hooks above.
+<Callout type="info">
+Use `onRouteRender` and `onRouteError` override hooks for analytics and error reporting. Authorization belongs in loader/backend hooks and `StackProvider.auth`.
 </Callout>
 
 ## Custom Field Components
@@ -1233,14 +1224,15 @@ cms: cmsClientPlugin({
   hooks: {
     beforeLoadDashboard: async (context) => {
       const session = await getSession(context.headers)
-      return session?.user?.isAdmin === true
+      if (session?.user?.isAdmin !== true)
+        throw new Error("Admin access required")
     },
     beforeLoadContentList: async (typeSlug, context) => {
       // Check per-content-type permissions
-      return isAdmin(context.headers)
+      if (!await isAdmin(context.headers)) throw new Error("Unauthorized")
     },
     beforeLoadContentEditor: async (typeSlug, id, context) => {
-      return isAdmin(context.headers)
+      if (!await isAdmin(context.headers)) throw new Error("Unauthorized")
     },
     onLoadError(error, context) {
       // Redirect on auth failure
@@ -1256,7 +1248,7 @@ cms: cmsClientPlugin({
 
 #### CMSPluginOverrides
 
-Configure framework-specific overrides and route lifecycle hooks:
+Configure CMS-specific overrides and route lifecycle hooks:
 
 <AutoTypeTable path="../packages/stack/src/plugins/cms/client/overrides.ts" name="CMSPluginOverrides" />
 

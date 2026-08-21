@@ -19,7 +19,7 @@ import {
 	deleteComment,
 	toggleCommentLike,
 } from "./mutations";
-import { runHookWithShim } from "../../utils";
+import { runHook } from "../../utils";
 
 /**
  * Context passed to comments API hooks
@@ -286,7 +286,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 									"Forbidden: authorId filter requires onBeforeListByAuthor hook",
 							});
 						}
-						await runHookWithShim(
+						await runHook(
 							() =>
 								options.onBeforeListByAuthor!(
 									ctx.query.authorId!,
@@ -304,13 +304,13 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 								message: "Forbidden: status filter requires authorization",
 							});
 						}
-						await runHookWithShim(
+						await runHook(
 							() => options.onBeforeList!(ctx.query, context),
 							ctx.error,
 							"Forbidden: Cannot list comments with this status filter",
 						);
 					} else if (options?.onBeforeList && !ctx.query.authorId) {
-						await runHookWithShim(
+						await runHook(
 							() => options.onBeforeList!(ctx.query, context),
 							ctx.error,
 							"Forbidden: Cannot list comments",
@@ -352,7 +352,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 						headers: ctx.headers,
 					};
 
-					const { authorId } = await runHookWithShim(
+					const { authorId } = await runHook(
 						() => onBeforePost!(ctx.body, context),
 						ctx.error,
 						"Unauthorized: Cannot post comment",
@@ -408,7 +408,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 								"Forbidden: editing comments requires the onBeforeEdit hook",
 						});
 					}
-					await runHookWithShim(
+					await runHook(
 						() => options.onBeforeEdit!(id, { body: ctx.body.body }, context),
 						ctx.error,
 						"Unauthorized: Cannot edit comment",
@@ -456,7 +456,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 								message: "Forbidden: status filter requires authorization",
 							});
 						}
-						await runHookWithShim(
+						await runHook(
 							() =>
 								options.onBeforeList!(
 									{ ...ctx.query, status: ctx.query.status },
@@ -466,7 +466,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 							"Forbidden: Cannot count comments with this status filter",
 						);
 					} else if (options?.onBeforeList) {
-						await runHookWithShim(
+						await runHook(
 							() =>
 								options.onBeforeList!(
 									{ ...ctx.query, status: ctx.query.status },
@@ -503,7 +503,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 								"Forbidden: toggling likes requires the onBeforeLike hook",
 						});
 					}
-					await runHookWithShim(
+					await runHook(
 						() => options.onBeforeLike!(id, ctx.body.authorId, context),
 						ctx.error,
 						"Unauthorized: Cannot like comment",
@@ -539,7 +539,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 								"Forbidden: changing comment status requires the onBeforeStatusChange hook",
 						});
 					}
-					await runHookWithShim(
+					await runHook(
 						() => options.onBeforeStatusChange!(id, ctx.body.status, context),
 						ctx.error,
 						"Unauthorized: Cannot change comment status",
@@ -591,7 +591,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions) => {
 								"Forbidden: deleting comments requires the onBeforeDelete hook",
 						});
 					}
-					await runHookWithShim(
+					await runHook(
 						() => options.onBeforeDelete!(id, context),
 						ctx.error,
 						"Unauthorized: Cannot delete comment",

@@ -92,8 +92,8 @@ export interface RouteContext {
 /**
  * Overridable components and functions for the AI Chat plugin
  *
- * External consumers can provide their own implementations of these
- * to customize the behavior for their framework (Next.js, React Router, etc.)
+ * External consumers can provide their own implementations to customize
+ * plugin-specific components and behavior.
  */
 export interface AiChatPluginOverrides {
 	/**
@@ -101,38 +101,6 @@ export interface AiChatPluginOverrides {
 	 * @default 'authenticated'
 	 */
 	mode?: AiChatMode;
-
-	/**
-	 * API base URL
-	 */
-	apiBaseURL: string;
-
-	/**
-	 * API base path
-	 */
-	apiBasePath: string;
-
-	/**
-	 * Navigation function for programmatic navigation
-	 */
-	navigate: (path: string) => void | Promise<void>;
-
-	/**
-	 * Refresh function to invalidate server-side cache (e.g., Next.js router.refresh())
-	 */
-	refresh?: () => void | Promise<void>;
-
-	/**
-	 * Link component for navigation
-	 */
-	Link?: ComponentType<React.ComponentProps<"a"> & Record<string, any>>;
-
-	/**
-	 * Image component for displaying images
-	 */
-	Image?: ComponentType<
-		React.ImgHTMLAttributes<HTMLImageElement> & Record<string, any>
-	>;
 
 	/**
 	 * Function used to upload a file and return its URL.
@@ -220,22 +188,4 @@ export interface AiChatPluginOverrides {
 		error: Error,
 		context: RouteContext,
 	) => void | Promise<void>;
-
-	/**
-	 * Called before the chat page is rendered
-	 * Return false to prevent rendering (e.g., for authorization)
-	 * @param context - Route context
-	 */
-	onBeforeChatPageRendered?: (context: RouteContext) => boolean;
-
-	/**
-	 * Called before a conversation page is rendered
-	 * Return false to prevent rendering (e.g., for authorization)
-	 * @param id - The conversation ID
-	 * @param context - Route context
-	 */
-	onBeforeConversationPageRendered?: (
-		id: string,
-		context: RouteContext,
-	) => boolean;
 }

@@ -1,13 +1,17 @@
 "use client";
 
 import type { SerializedAsset } from "../types";
-import type { MediaPluginOverrides } from "./overrides";
+import type { MediaUploadMode } from "./overrides";
 import { compressImage } from "./utils/image-compression";
+import type { ImageCompressionOptions } from "./utils/image-compression";
 
-export type MediaUploadClientConfig = Pick<
-	MediaPluginOverrides,
-	"apiBaseURL" | "apiBasePath" | "headers" | "uploadMode" | "imageCompression"
->;
+export interface MediaUploadClientConfig {
+	apiBaseURL: string;
+	apiBasePath: string;
+	headers?: HeadersInit;
+	uploadMode?: MediaUploadMode;
+	imageCompression?: ImageCompressionOptions | false;
+}
 
 export interface UploadAssetInput {
 	file: File;

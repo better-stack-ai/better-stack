@@ -48,22 +48,11 @@ function ModerationPageWrapper() {
 			isSSR: typeof window === "undefined",
 		},
 		overrides,
-		beforeRenderHook: (o, context) => {
-			if (o.onBeforeModerationPageRendered) {
-				return o.onBeforeModerationPageRendered(context);
-			}
-			return true;
-		},
 	});
 
 	return (
 		<PageWrapper>
-			<ModerationPageInternal
-				apiBaseURL={overrides.apiBaseURL}
-				apiBasePath={overrides.apiBasePath}
-				headers={overrides.headers as HeadersInit | undefined}
-				localization={overrides.localization}
-			/>
+			<ModerationPageInternal localization={overrides.localization} />
 		</PageWrapper>
 	);
 }

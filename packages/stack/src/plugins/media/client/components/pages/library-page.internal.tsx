@@ -24,7 +24,6 @@ export function LibraryPage() {
 		MediaPluginOverrides,
 		Partial<MediaPluginOverrides>
 	>("media", {});
-
 	useRouteLifecycle({
 		routeName: "library",
 		context: {
@@ -32,12 +31,6 @@ export function LibraryPage() {
 			isSSR: typeof window === "undefined",
 		},
 		overrides,
-		beforeRenderHook: (overrides, context) => {
-			if (overrides.onBeforeLibraryPageRendered) {
-				return overrides.onBeforeLibraryPageRendered(context);
-			}
-			return true;
-		},
 	});
 
 	const [{ folder, q: search }, setListState] = useListState("media-library", {
@@ -72,7 +65,6 @@ export function LibraryPage() {
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const { mutateAsync: uploadAsset, isPending: isUploading } = useUploadAsset();
 	const { mutateAsync: deleteAsset } = useDeleteAsset();
-	const { apiBaseURL = "" } = overrides;
 	const { can: canCreateAsset } = useCan({
 		resource: "media:asset",
 		action: "create",
@@ -185,7 +177,6 @@ export function LibraryPage() {
 						searchQuery={search}
 						onSearchChange={setSearchInput}
 						onDelete={handleDelete}
-						apiBaseURL={apiBaseURL}
 						emptyMessage={t(
 							"media.assets.emptyLibrary",
 							"No files yet. Drag & drop or click Upload.",

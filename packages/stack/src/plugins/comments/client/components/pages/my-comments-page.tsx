@@ -46,22 +46,11 @@ function UserCommentsPageWrapper() {
 			isSSR: typeof window === "undefined",
 		},
 		overrides,
-		beforeRenderHook: (o, context) => {
-			if (o.onBeforeUserCommentsPageRendered) {
-				const result = o.onBeforeUserCommentsPageRendered(context);
-				return result === false ? false : true;
-			}
-			return true;
-		},
 	});
 
 	return (
 		<PageWrapper>
 			<UserCommentsPageInternal
-				apiBaseURL={overrides.apiBaseURL}
-				apiBasePath={overrides.apiBasePath}
-				headers={overrides.headers as HeadersInit | undefined}
-				currentUserId={overrides.currentUserId}
 				resourceLinks={overrides.resourceLinks}
 				localization={overrides.localization}
 			/>
