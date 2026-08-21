@@ -214,6 +214,19 @@ onBeforeSubmission: async (_formSlug, data, ctx) => {
 
 Hooks that transform input continue to return the transformed value.
 
+Older Form Builder documentation showed the unsupported
+`onBeforeDeleteSubmission` name. v3 exposes
+`onBeforeSubmissionDeleted`; correct the hook name while updating its denial
+behavior:
+
+```diff
+- onBeforeDeleteSubmission: async (submissionId, ctx) => {
+-   if (!isAdmin(ctx.headers)) return false
++ onBeforeSubmissionDeleted: async (submissionId, ctx) => {
++   if (!isAdmin(ctx.headers)) throw new Error("Admin access required")
+  }
+```
+
 ### Migration checklist
 
 - Replace API and page catch-all glue with the framework entry factories.
@@ -223,6 +236,7 @@ Hooks that transform input continue to return the transformed value.
 - Remove API, header, identity, and login props from Comments components.
 - Update parameterized `pageComponents` adapters to read `params`.
 - Change backend hook denials from boolean returns to thrown errors.
+- Replace Form Builder's stale documented `onBeforeDeleteSubmission` name with `onBeforeSubmissionDeleted`.
 - Run your framework build, TypeScript checks, and tests.
 
 ---

@@ -148,6 +148,8 @@ Configure the plugin overrides in your catch-all layout file. The `auth` overrid
         return data?.user ?? null
       },
       loginPath: "/p/auth/sign-in",
+      can: ({ resource, action, identity }) =>
+        Boolean(identity && authorize(identity, resource, action)),
     } satisfies StackAuthProvider
 
     export default function PagesLayout({ children }: { children: ReactNode }) {
