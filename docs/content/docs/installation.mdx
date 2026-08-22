@@ -739,12 +739,107 @@ In order to use BTST, your application must meet the following requirements:
       The factory matches the URL to a plugin route via `stackClient.router.getRoute(path)`, prefetches data server-side with `route.loader()`, renders the route's `PageComponent` with instant hydration on the client, and generates SEO metadata from `route.meta()` (running the loader first, so meta can read prefetched data).
 
       **Factory options:**
-      - `createNextPage` accepts `notFound`, `wrapPage`, and `dehydrateOptions`.
-      - `createReactRouterPage` accepts `NotFound`, `ErrorBoundary`, `wrapPage`, and `dehydrateOptions`.
-      - `createTanStackPageOptions` accepts `getQueryClient` when the QueryClient is not available from router context.
+      - `createNextPage` accepts an async `getStackClient`, plus `notFound`, `wrapPage`, and `dehydrateOptions`.
+      - `createReactRouterPage` exposes `createLoader()` for async request-aware stack clients and accepts `NotFound`, `ErrorBoundary`, `wrapPage`, and `dehydrateOptions`.
+      - `createTanStackPageOptions` accepts `getLoaderStackClient` for async context-aware loaders and `getQueryClient` when the QueryClient is not available from router context.
 
       Use these options to customize the entry factory without reimplementing
       route matching, loader ordering, hydration, metadata, or 404 handling.
+    </Callout>
+
+    <Callout type="info">
+      **Request-aware stack clients**
+
+      Keep session and authorization policy in your application. The entry
+      factories pass each framework's native lifecycle context to an async
+      resolver while preserving a synchronous client for browser rendering.
+
+      <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
+        <Tab value="next-js">
+          Next.js page and metadata functions run on the server, so the main
+          resolver can await request headers and session state directly:
+
+          ```tsx
+          import { headers } from "next/headers"
+          import { createNextPage } from "@btst/stack/next"
+          import { getOrCreateQueryClient } from "@/lib/query-client"
+          import { getStackClientForRequest } from "@/lib/stack-client"
+
+          const page = createNextPage({
+            getQueryClient: getOrCreateQueryClient,
+            getStackClient: async (queryClient, pageProps) => {
+              const requestHeaders = await headers()
+              return getStackClientForRequest(queryClient, {
+                headers: new Headers(requestHeaders),
+                pageProps,
+              })
+            },
+          })
+
+          export default page.Page
+          export const generateMetadata = page.generateMetadata
+          ```
+        </Tab>
+
+        <Tab value="react-router">
+          React Router framework loaders are server-only, but the route
+          component also renders in the browser. Keep the normal client
+          synchronous and create a request-aware loader separately:
+
+          ```tsx
+          import { createReactRouterPage } from "@btst/stack/react-router"
+          import { getOrCreateQueryClient } from "~/lib/query-client"
+          import { getStackClient } from "~/lib/stack-client"
+          import { getStackClientForRequest } from "~/lib/stack-client.server"
+
+          const page = createReactRouterPage({
+            getStackClient,
+            getQueryClient: getOrCreateQueryClient,
+          })
+
+          export const loader = page.createLoader(
+            async (queryClient, { request, context, params }) =>
+              getStackClientForRequest(queryClient, {
+                headers: request.headers,
+                context,
+                params,
+              }),
+          )
+          export const meta = page.meta
+          export default page.Component
+          ```
+        </Tab>
+
+        <Tab value="tanstack">
+          TanStack loaders run during SSR and browser navigation. Supply an
+          isomorphic resolver and put request-derived session data in router
+          context before the loader runs:
+
+          ```tsx
+          import type { QueryClient } from "@tanstack/react-query"
+          import { createFileRoute } from "@tanstack/react-router"
+          import { createTanStackPageOptions } from "@btst/stack/tanstack"
+          import type { AppSession } from "@/lib/auth"
+          import { getStackClient, getStackClientForLoad } from "@/lib/stack-client"
+
+          type AppRouterContext = {
+            queryClient: QueryClient
+            session: AppSession | null
+          }
+
+          export const Route = createFileRoute("/pages/$")(
+            createTanStackPageOptions<AppRouterContext>({
+              getStackClient,
+              getLoaderStackClient: (queryClient, { context, params }) =>
+                getStackClientForLoad(queryClient, {
+                  session: context.session,
+                  params,
+                }),
+            }),
+          )
+          ```
+        </Tab>
+      </Tabs>
     </Callout>
 
   </Step>

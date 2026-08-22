@@ -36,6 +36,7 @@ FILES=(
   "app/directory/page.tsx"
   "app/layout.tsx"
   "app/pages/layout.tsx"
+  "app/pages/[[...all]]/page.tsx"
   "components/mode-toggle.tsx"
   "components/navbar.tsx"
   "lib/adapters-build-check.ts"

@@ -71,6 +71,13 @@ Use the equivalent pair for your framework:
 The [installation guide](/installation) has complete route files for all three
 frameworks.
 
+All three page factories also support request-aware client creation. Next.js
+awaits `getStackClient` with the current page props, React Router exposes
+`page.createLoader()` with its request and router context, and TanStack accepts
+an isomorphic `getLoaderStackClient` resolver with its loader context. Existing
+synchronous factories remain valid; see the installation guide's
+request-aware examples when SSR authorization needs headers or session state.
+
 ### 2. Move shared services to `StackProvider`
 
 Remove framework and API fields from every built-in plugin override. Configure

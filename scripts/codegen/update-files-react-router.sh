@@ -40,6 +40,7 @@ FILES=(
   "app/lib/plugins/todo/types.ts"
   "app/lib/stack-auth.ts"
   "app/lib/stack-client.tsx"
+  "app/lib/stack-client.server.ts"
   "app/lib/stack-public-chat.ts"
   "app/lib/stack.ts"
   "app/root.tsx"
@@ -51,6 +52,7 @@ FILES=(
   "app/routes/directory/index.tsx"
   "app/routes/directory/resource.\$id.tsx"
   "app/routes/pages/_layout.tsx"
+  "app/routes/pages/\$.tsx"
 )
 
 COUNT=0
