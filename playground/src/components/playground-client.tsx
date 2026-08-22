@@ -42,6 +42,7 @@ interface GeneratedState {
 	routes: string[];
 	cssImports: string[];
 	extraPackages: string[];
+	extraPackageVersions: Record<string, string>;
 	hasAiChat: boolean;
 	seedRouteFiles: SeedRouteFile[];
 	seedRunnerScript: string | null;
@@ -379,6 +380,7 @@ export function PlaygroundClient({
 								generatedFiles={generated.files}
 								cssImports={generated.cssImports}
 								extraPackages={generated.extraPackages}
+								extraPackageVersions={generated.extraPackageVersions}
 								hasAiChat={generated.hasAiChat}
 								previewPath={activePreviewRoute}
 								seedRouteFiles={generated.seedRouteFiles}

@@ -41,4 +41,5 @@ export interface ScaffoldPlan {
 	pagesLayoutPath?: string;
 	cssImports: string[];
 	extraPackages: string[];
+	extraPackageVersions?: Record<string, string>;
 }

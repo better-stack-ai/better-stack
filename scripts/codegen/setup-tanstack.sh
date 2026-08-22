@@ -134,7 +134,7 @@ pkg.scripts["start:e2e"] = "rm -rf .output && rm -rf .nitro && rm -rf .tanstack 
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {
   "@btst/stack": "workspace:*",
-  "@btst/adapter-memory": "^2.2.2",
+  "@btst/adapter-memory": "2.2.3",
 };
 
 // Ensure required runtime deps

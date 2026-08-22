@@ -12,7 +12,9 @@ BTST has two CLI packages:
 - `@btst/codegen` owns `init` scaffolding (`npx @btst/codegen init`)
 - `@btst/cli` owns low-level DB schema generation and migrations
 
-`@btst/codegen generate` and `@btst/codegen migrate` are passthrough entrypoints to the existing `@btst/cli` flow.
+`@btst/codegen generate` and `@btst/codegen migrate` run the aligned
+`@btst/cli@2.2.3` release in isolation. This avoids adding its dependency graph
+or competing `btst` binary to the application.
 
 ## Init (Codegen)
 
@@ -60,7 +62,8 @@ npx @btst/codegen generate --orm=prisma --config=lib/stack.ts --output=schema.pr
 npx @btst/codegen migrate --config=lib/stack.ts --database-url=postgres://...
 ```
 
-When a delegated command fails, fix the underlying issue and run the equivalent `npx @btst/cli ...` command directly.
+When a delegated command fails, fix the underlying issue and run the equivalent
+`npx @btst/cli@2.2.3 ...` command directly.
 
 ## About Better DB
 
@@ -68,27 +71,11 @@ BTST uses [Better DB (`@btst/db`)](https://github.com/better-stack-ai/better-aut
 
 The CLI works with the `dbSchema` exported from your BTST configuration, which is built using Better DB's schema definition API. All plugin schemas are automatically merged into a unified schema that the CLI can process.
 
-Install the CLI as a dev dependency:
-
-<Tabs groupId="installation" items={['npm', 'pnpm', 'yarn']} persist>
-    <Tab value="npm">
-    ```bash
-    npm install -D @btst/cli
-    ```
-    </Tab>
-
-    <Tab value="pnpm">
-    ```bash
-    pnpm add -D @btst/cli
-    ```
-    </Tab>
-
-    <Tab value="yarn">
-    ```bash
-    yarn add -D @btst/cli
-    ```
-    </Tab>
-</Tabs>
+For v3 applications, prefer the codegen passthrough commands above. If a v2
+application lists `@btst/cli` in its dependencies, remove it during migration;
+the pinned one-off CLI keeps Better DB dependencies from polluting the consumer
+graph. You can still invoke the low-level CLI directly with
+`npx @btst/cli@2.2.3`.
 
 ## Parameters
 
@@ -106,13 +93,13 @@ Generate database schemas for your ORM from your BTST `dbSchema`:
 <Tabs items={["prisma", "drizzle", "kysely"]}>
   <Tab value="prisma">
     ```bash
-    npx @btst/cli generate --config=lib/stack.ts --orm=prisma --output=schema.prisma
+    npx @btst/cli@2.2.3 generate --config=lib/stack.ts --orm=prisma --output=schema.prisma
     ```
   </Tab>
 
   <Tab value="drizzle">
     ```bash
-    npx @btst/cli generate --config=lib/stack.ts --orm=drizzle --output=src/db/schema.ts
+    npx @btst/cli@2.2.3 generate --config=lib/stack.ts --orm=drizzle --output=src/db/schema.ts
     ```
   </Tab>
 
@@ -122,17 +109,17 @@ Generate database schemas for your ORM from your BTST `dbSchema`:
     **Using DATABASE_URL environment variable:**
 
     ```bash
-    DATABASE_URL=sqlite:./dev.db npx @btst/cli generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql
+    DATABASE_URL=sqlite:./dev.db npx @btst/cli@2.2.3 generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql
     ```
 
     **Or using --database-url flag:**
 
     ```bash
-    npx @btst/cli generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql --database-url=sqlite:./dev.db
+    npx @btst/cli@2.2.3 generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql --database-url=sqlite:./dev.db
     ```
 
     ```bash
-    npx @btst/cli generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql --database-url=postgres://user:pass@localhost:5432/db
+    npx @btst/cli@2.2.3 generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql --database-url=postgres://user:pass@localhost:5432/db
     ```
   </Tab>
 </Tabs>
@@ -145,17 +132,17 @@ Migrate your database schema directly (Kysely only). For Prisma and Drizzle, use
 **Using DATABASE_URL environment variable:**
 
 ```bash
-DATABASE_URL=sqlite:./dev.db npx @btst/cli migrate --config=lib/stack.ts
+DATABASE_URL=sqlite:./dev.db npx @btst/cli@2.2.3 migrate --config=lib/stack.ts
 ```
 
 **Or using --database-url flag:**
 
 ```bash
-npx @btst/cli migrate --config=lib/stack.ts --database-url=sqlite:./dev.db
+npx @btst/cli@2.2.3 migrate --config=lib/stack.ts --database-url=sqlite:./dev.db
 ```
 
 ```bash
-npx @btst/cli migrate --config=lib/stack.ts --database-url=postgres://user:pass@localhost:5432/db
+npx @btst/cli@2.2.3 migrate --config=lib/stack.ts --database-url=postgres://user:pass@localhost:5432/db
 ```
 
 ### Generate SQL to File
@@ -163,7 +150,7 @@ npx @btst/cli migrate --config=lib/stack.ts --database-url=postgres://user:pass@
 Instead of running migrations directly, generate SQL to a file:
 
 ```bash
-npx @btst/cli migrate --config=lib/stack.ts --output=migrations.sql --database-url=sqlite:./dev.db
+npx @btst/cli@2.2.3 migrate --config=lib/stack.ts --output=migrations.sql --database-url=sqlite:./dev.db
 ```
 
 ## Gotchas
@@ -175,11 +162,11 @@ Because the CLI executes your config file to extract the `dbSchema`, there are a
 - **Environment variables**: If your config file or its imports have conditional checks for available environment variables (e.g., checking if `process.env.SOME_VAR` exists), you should also pass those environment variables when running CLI commands:
 
 ```bash
-SOME_VAR=value npx @btst/cli generate --config=lib/stack.ts --orm=prisma --output=schema.prisma
+SOME_VAR=value npx @btst/cli@2.2.3 generate --config=lib/stack.ts --orm=prisma --output=schema.prisma
 ```
 
 or using dotenv-cli:
 
 ```bash
-npx dotenv-cli -e .env.local -- npx @btst/cli generate --orm drizzle --config lib/stack.ts --output db/btst-schema.ts
+npx dotenv-cli -e .env.local -- npx @btst/cli@2.2.3 generate --orm drizzle --config lib/stack.ts --output db/btst-schema.ts
 ```

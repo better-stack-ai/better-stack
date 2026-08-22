@@ -339,8 +339,8 @@ importers:
   packages/stack:
     dependencies:
       '@btst/db':
-        specifier: 2.2.2
-        version: 2.2.2(706a9ce1fcc616cc33147c0a84ffbdf8)
+        specifier: 2.2.3
+        version: 2.2.3(11577220e6bea834a9815f29293913ef)
       '@hookform/resolvers':
         specifier: '>=5.0.0'
         version: 5.2.2(react-hook-form@7.66.1(react@19.2.7))
@@ -436,8 +436,8 @@ importers:
         specifier: ^3.1011.0
         version: 3.1011.0
       '@btst/adapter-memory':
-        specifier: 2.2.2
-        version: 2.2.2(018b1bc68345b791db4bf45b13a5d907)
+        specifier: 2.2.3
+        version: 2.2.3(11577220e6bea834a9815f29293913ef)
       '@btst/yar':
         specifier: 1.3.0
         version: 1.3.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react@19.2.7)
@@ -1454,8 +1454,22 @@ packages:
       '@better-auth/core': '>=1.6.0'
       better-auth: '>=1.6.0'
 
+  '@btst/adapter-memory@2.2.3':
+    resolution: {integrity: sha512-qBgmfN9Wx6mCG3NoNv+12b+3iUoXGQGWBbnT/nPd1Olk+tJo8GjiLXY824gqRYLWNjpk0LIUsmo+lDMQlNrbIA==}
+    peerDependencies:
+      '@better-auth/core': 1.6.16
+      '@better-auth/utils': 0.4.1
+      better-auth: 1.6.16
+
   '@btst/db@2.2.2':
     resolution: {integrity: sha512-NLT9FXK4c60wP1DQ3lTRPd9Hqa+54VoqtQTT0w9xilk3Vm6DfNnWE9npwf8Nc+5noUBVtvgESUYssQHcOjNSbA==}
+
+  '@btst/db@2.2.3':
+    resolution: {integrity: sha512-tbx0o9mJnv3y5WVole5TZQwMMVmboamVJxsSeyMZH3O4qF9CNdEg6NfiR9zm/b81eO7ie6CftTWT9R7pJ4msSA==}
+    peerDependencies:
+      '@better-auth/core': 1.6.16
+      '@better-auth/utils': 0.4.1
+      better-auth: 1.6.16
 
   '@btst/yar@1.3.0':
     resolution: {integrity: sha512-TD6/whPS6ES7uDFkL/1QIWSvrDyg7QDvtn9s7frAcGwbg4+0VNsC8DOhmJ7MlWb3qF5JuGQXM2hB62P4vSeWPQ==}
@@ -13234,6 +13248,13 @@ snapshots:
       - vitest
       - vue
 
+  '@btst/adapter-memory@2.2.3(11577220e6bea834a9815f29293913ef)':
+    dependencies:
+      '@better-auth/core': 1.6.16(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.2.2)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.0)(kysely@0.29.2)(nanostores@1.1.1)
+      '@better-auth/utils': 0.4.1
+      '@btst/db': 2.2.3(11577220e6bea834a9815f29293913ef)
+      better-auth: 1.6.16(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@7.5.0(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3))(typescript@5.9.3))(@tanstack/react-start@1.167.16(crossws@0.4.9(srvx@0.11.20))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vite@7.3.1(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.2)))(mongodb@6.21.0(socks@2.8.7))(mysql2@3.15.3)(next@16.0.10(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(prisma@7.5.0(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.12)(vitest@3.2.4(@types/debug@4.1.12)(@types/node@24.12.0)(jiti@2.7.0)(jsdom@28.1.0(@noble/hashes@2.0.1))(lightningcss@1.32.0)(msw@2.12.10(@types/node@24.12.0)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.24(typescript@5.9.3))
+
   '@btst/db@2.2.2(706a9ce1fcc616cc33147c0a84ffbdf8)':
     dependencies:
       '@better-auth/core': 1.6.16(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.2.2)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.0)(kysely@0.29.2)(nanostores@1.1.1)
@@ -13299,6 +13320,12 @@ snapshots:
       - svelte
       - vitest
       - vue
+
+  '@btst/db@2.2.3(11577220e6bea834a9815f29293913ef)':
+    dependencies:
+      '@better-auth/core': 1.6.16(@better-auth/utils@0.4.1)(@better-fetch/fetch@1.2.2)(@opentelemetry/api@1.9.0)(better-call@1.3.6(zod@4.4.3))(jose@6.2.0)(kysely@0.29.2)(nanostores@1.1.1)
+      '@better-auth/utils': 0.4.1
+      better-auth: 1.6.16(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@7.5.0(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3))(typescript@5.9.3))(@tanstack/react-start@1.167.16(crossws@0.4.9(srvx@0.11.20))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vite@7.3.1(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.2)))(mongodb@6.21.0(socks@2.8.7))(mysql2@3.15.3)(next@16.0.10(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(prisma@7.5.0(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(solid-js@1.9.12)(vitest@3.2.4(@types/debug@4.1.12)(@types/node@24.12.0)(jiti@2.7.0)(jsdom@28.1.0(@noble/hashes@2.0.1))(lightningcss@1.32.0)(msw@2.12.10(@types/node@24.12.0)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.24(typescript@5.9.3))
 
   '@btst/yar@1.3.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react@19.2.7)':
     dependencies:

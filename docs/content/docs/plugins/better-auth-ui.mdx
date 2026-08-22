@@ -56,19 +56,63 @@ Before starting, ensure you have:
 - A database adapter (e.g., Drizzle with `@btst/adapter-drizzle`)
 </Callout>
 
-### 1. Install the Package
+### 1. Install the v3 RC Dependency Cohort
 
 ```bash
-pnpm add @btst/better-auth-ui
+pnpm add --save-exact \
+  @btst/stack@next \
+  @btst/yar@1.3.0 \
+  @btst/adapter-drizzle@2.2.3 \
+  @btst/better-auth-ui@2.0.0-rc.1 \
+  @tanstack/react-query@5.100.14 \
+  better-auth@1.6.16 \
+  @better-auth/core@1.6.16 \
+  @better-auth/api-key@1.6.16 \
+  @better-auth/drizzle-adapter@1.6.16 \
+  @better-auth/passkey@1.6.16 \
+  @better-auth/utils@0.4.1 \
+  @better-fetch/fetch@1.2.2 \
+  better-call@1.3.6 \
+  drizzle-orm@0.45.2
 ```
 
-Or with npm/yarn:
+This exact cohort keeps BTST, Better Auth, and Drizzle on one copy of their
+shared types. If you use another database, replace the two Drizzle packages
+with the matching `@btst/adapter-*` `2.2.3` and `@better-auth/*-adapter`
+`1.6.16` packages. The BTST initializer installs this aligned set when Better
+Auth UI is selected.
+
+If you are upgrading from v2, remove a locally installed `@btst/cli`. The v3
+codegen commands run the aligned `@btst/cli@2.2.3` release in isolation, which
+keeps its database tooling and `btst` binary out of the application dependency
+graph:
 
 ```bash
-npm install @btst/better-auth-ui
-# or
-yarn add @btst/better-auth-ui
+pnpm remove @btst/cli
 ```
+
+With npm, use the same exact versions:
+
+```bash
+npm install --save-exact \
+  @btst/stack@next \
+  @btst/yar@1.3.0 \
+  @btst/adapter-drizzle@2.2.3 \
+  @btst/better-auth-ui@2.0.0-rc.1 \
+  @tanstack/react-query@5.100.14 \
+  better-auth@1.6.16 \
+  @better-auth/core@1.6.16 \
+  @better-auth/api-key@1.6.16 \
+  @better-auth/drizzle-adapter@1.6.16 \
+  @better-auth/passkey@1.6.16 \
+  @better-auth/utils@0.4.1 \
+  @better-fetch/fetch@1.2.2 \
+  better-call@1.3.6 \
+  drizzle-orm@0.45.2
+```
+
+For an npm-based v2 application, use `npm uninstall @btst/cli` during the
+migration.
 
 ### 2. Configure the Stack Client
 
@@ -126,8 +170,9 @@ Configure the plugin overrides in your catch-all layout file. The `auth` overrid
     ```tsx title="app/p/layout.tsx"
     "use client"
 
-    import { StackProvider, type StackAuthProvider } from "@btst/stack/context"
+    import { StackProvider } from "@btst/stack/context"
     import { nextRouter } from "@btst/stack/next"
+    import { createBetterAuthProvider } from "@btst/better-auth-ui"
     import type {
       AuthPluginOverrides,
       AccountPluginOverrides,
@@ -142,15 +187,9 @@ Configure the plugin overrides in your catch-all layout file. The `auth` overrid
       organization: OrganizationPluginOverrides
     }
 
-    const stackAuth = {
-      getIdentity: async () => {
-        const { data } = await authClient.getSession()
-        return data?.user ?? null
-      },
+    const stackAuth = createBetterAuthProvider(authClient, {
       loginPath: "/p/auth/sign-in",
-      can: ({ resource, action, identity }) =>
-        Boolean(identity && authorize(identity, resource, action)),
-    } satisfies StackAuthProvider
+    })
 
     export default function PagesLayout({ children }: { children: ReactNode }) {
       // Better Auth UI-specific configuration shared by its three plugins
@@ -277,10 +316,10 @@ The exact sub-paths come from the view paths constants in the library and match 
 
 ### Auth Plugin (`AuthPluginOverrides`)
 
-`Link`, `navigate`, and `replace` in this table are optional APIs of the
-external `@btst/better-auth-ui` package. They are not the removed built-in BTST
-override fields; the recommended setup above uses `StackProvider.router` and
-the package defaults instead.
+The standalone upstream UI provider still supports its own navigation
+overrides. BTST plugin overrides intentionally omit those fields: the bridge
+reads navigation, notifications, localization, and session refresh from the
+top-level `StackProvider` instead.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -313,11 +352,6 @@ the package defaults instead.
 | `optimistic` | `boolean` | `false` | Optimistic user updates |
 | `hooks` | `Partial<AuthHooks>` | — | Custom data fetching hooks |
 | `mutators` | `Partial<AuthMutators>` | — | Custom mutation handlers |
-| `Link` | `Link` | `<a>` | Custom link component |
-| `navigate` | `(href: string) => void` | `location.href` | Navigation function |
-| `replace` | `(href: string) => void` | `navigate` | Replace navigation |
-| `toast` | `RenderToast` | Sonner | Custom toast renderer |
-| `onSessionChange` | `() => void` | — | Session change callback |
 | `onRouteError` | `(name, error, ctx) => void` | — | Route error callback |
 | `pageProps` | See [Per-Page Props](#per-page-props) | — | Per-page className/classNames/localization |
 
