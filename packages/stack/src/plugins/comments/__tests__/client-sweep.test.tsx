@@ -496,6 +496,29 @@ describe("CommentThread provider wiring", () => {
 				?.getAttribute("href"),
 		).toBe("/sign-in");
 	});
+
+	it("prefers the per-thread login href when unauthenticated", async () => {
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={{ getIdentity: () => null, loginPath: "/sign-in" }}
+			>
+				<CommentThread
+					resourceId="post-1"
+					resourceType="blog-post"
+					loginHref="/sign-in?redirectTo=%2Fblog%2Fpost-1%23comments"
+				/>
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		expect(
+			container
+				.querySelector<HTMLAnchorElement>('[data-testid="login-link"]')
+				?.getAttribute("href"),
+		).toBe("/sign-in?redirectTo=%2Fblog%2Fpost-1%23comments");
+	});
 });
 
 describe("CommentForm inline field errors (StackError)", () => {

@@ -70,6 +70,11 @@ export interface CommentThreadProps {
 	/** Localization strings — defaults to English */
 	localization?: Partial<CommentsLocalization>;
 	/**
+	 * Sign-in URL for unauthenticated users in this thread.
+	 * Overrides the `loginPath` from the nearest `StackProvider`.
+	 */
+	loginHref?: string;
+	/**
 	 * Number of top-level comments to load per page.
 	 * Clicking "Load more" fetches the next page. Default: 10.
 	 */
@@ -103,7 +108,6 @@ type ResolvedCommentThreadProps = CommentThreadProps & {
 	apiBaseURL: string;
 	apiBasePath: string;
 	currentUserId?: string;
-	loginHref?: string;
 };
 
 const DEFAULT_RENDERER: ComponentType<CommentRendererProps> = ({ body }) => (
@@ -842,7 +846,7 @@ export function CommentThread(props: CommentThreadProps) {
 		apiBaseURL: api?.baseURL ?? "",
 		apiBasePath: api?.basePath ?? "",
 		currentUserId,
-		loginHref: auth?.loginPath,
+		loginHref: props.loginHref ?? auth?.loginPath,
 	};
 
 	return (

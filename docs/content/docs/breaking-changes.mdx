@@ -164,13 +164,15 @@ nearest provider:
 -   apiBaseURL={baseURL}
 -   apiBasePath="/api/data"
 -   currentUserId={session?.user?.id}
--   loginHref="/login"
 -   headers={headers}
   />
 ```
 
 Keep `headers` only in client plugin factory configuration when an SSR loader
 hook needs request headers; it is no longer a public component identity prop.
+The optional `loginHref` prop remains available for threads that need a
+resource-specific sign-in return URL and takes precedence over the provider's
+`loginPath`.
 
 ### 5. Update parameterized page-component overrides
 
@@ -240,7 +242,8 @@ behavior:
 - Add one framework router preset and API configuration to `StackProvider`.
 - Add `StackProvider.auth` when routes or controls require identity or permissions.
 - Delete shared router/API fields and `onBefore*PageRendered` callbacks from plugin overrides.
-- Remove API, header, identity, and login props from Comments components.
+- Remove API, header, and identity props from Comments components; keep
+  `loginHref` only when a thread needs a per-instance sign-in URL.
 - Update parameterized `pageComponents` adapters to read `params`.
 - Change backend hook denials from boolean returns to thrown errors.
 - Replace Form Builder's stale documented `onBeforeDeleteSubmission` name with `onBeforeSubmissionDeleted`.
