@@ -18,6 +18,7 @@ interface StackBlitzEmbedProps {
 	generatedFiles: FileWritePlanItem[];
 	cssImports: string[];
 	extraPackages: string[];
+	extraPackageVersions: Record<string, string>;
 	hasAiChat?: boolean;
 	previewPath?: string | null;
 	extraButtons?: React.ReactNode;
@@ -33,6 +34,7 @@ export function StackBlitzEmbed({
 	generatedFiles,
 	cssImports,
 	extraPackages,
+	extraPackageVersions,
 	hasAiChat = false,
 	previewPath,
 	extraButtons,
@@ -67,6 +69,7 @@ export function StackBlitzEmbed({
 					generatedFiles,
 					cssImports,
 					extraPackages,
+					extraPackageVersions,
 					hasAiChat,
 					seedRouteFiles,
 					seedRunnerScript,
@@ -218,6 +221,7 @@ export function StackBlitzEmbed({
 		generatedFiles,
 		cssImports,
 		extraPackages,
+		extraPackageVersions,
 		hasAiChat,
 		seedRouteFiles,
 		seedRunnerScript,

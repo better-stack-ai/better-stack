@@ -60,17 +60,6 @@ function getPublicSiteURLVar(framework: Framework) {
 	return "VITE_PUBLIC_SITE_URL";
 }
 
-function getReplaceExpr(framework: Framework): string {
-	if (framework === "nextjs") return "router.replace(path)";
-	if (framework === "react-router") return "navigate(path, { replace: true })";
-	return "navigate({ to: path, replace: true })";
-}
-
-function getSessionChangeExpr(framework: Framework): string {
-	if (framework === "nextjs") return "router.refresh()";
-	return "window.location.reload()";
-}
-
 function getPagesLayoutFilePath(framework: Framework): string {
 	if (framework === "nextjs") return "app/pages/layout.tsx";
 	if (framework === "react-router") return "app/routes/pages/_layout.tsx";
@@ -212,28 +201,20 @@ function buildPluginTemplateContext(
 				if (m.key === "route-docs") {
 					return "";
 				}
-				const rep = getReplaceExpr(framework);
-				const ses = getSessionChangeExpr(framework);
 				const layoutFile = getPagesLayoutFilePath(framework);
 				if (m.key === "better-auth-ui") {
 					return `\t\t\t\t\tauth: {
-\t\t\t\t\t\tauthClient: undefined as any,
-\t\t\t\t\t\treplace: (path: string) => ${rep},
-\t\t\t\t\t\tonSessionChange: () => ${ses},
+\t\t\t\t\t\tauthClient,
 \t\t\t\t\t\tbasePath: "/pages/auth",
 \t\t\t\t\t\tredirectTo: "/pages/account/settings",
 \t\t\t\t\t},
 \t\t\t\t\taccount: {
-\t\t\t\t\t\tauthClient: undefined as any,
-\t\t\t\t\t\treplace: (path: string) => ${rep},
-\t\t\t\t\t\tonSessionChange: () => ${ses},
+\t\t\t\t\t\tauthClient,
 \t\t\t\t\t\tbasePath: "/pages/account",
 \t\t\t\t\t\taccount: { fields: ["image", "name"] },
 \t\t\t\t\t},
 \t\t\t\t\torganization: {
-\t\t\t\t\t\tauthClient: undefined as any,
-\t\t\t\t\t\treplace: (path: string) => ${rep},
-\t\t\t\t\t\tonSessionChange: () => ${ses},
+\t\t\t\t\t\tauthClient,
 \t\t\t\t\t\tbasePath: "/pages/org",
 \t\t\t\t\t\torganization: { basePath: "/pages/org" },
 \t\t\t\t\t},`;
@@ -647,6 +628,18 @@ export async function buildScaffoldPlan(
 			),
 		),
 	);
+	const extraPackageVersions = Object.fromEntries(
+		PLUGINS.filter((plugin) => input.plugins.includes(plugin.key)).flatMap(
+			(plugin) =>
+				(plugin.extraInstallSpecs ?? []).map((spec) => {
+					const versionSeparator = spec.lastIndexOf("@");
+					return [
+						spec.slice(0, versionSeparator),
+						spec.slice(versionSeparator + 1),
+					];
+				}),
+		),
+	);
 
 	return {
 		files,
@@ -655,5 +648,6 @@ export async function buildScaffoldPlan(
 		pagesLayoutPath: frameworkPaths.pagesLayoutPath,
 		cssImports,
 		extraPackages,
+		extraPackageVersions,
 	};
 }

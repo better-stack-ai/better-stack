@@ -4,9 +4,13 @@ export interface AdapterMeta {
 	key: Adapter;
 	label: string;
 	packageName: string;
+	installSpec?: string;
+	betterAuthInstallSpec?: string;
 	ormForGenerate?: "prisma" | "drizzle" | "kysely";
-	/** Additional npm packages that must be installed when this adapter is selected. */
+	/** Additional package names required when this adapter is selected. */
 	extraPackages?: string[];
+	/** Version-qualified forms of extraPackages used by the installer. */
+	extraInstallSpecs?: string[];
 }
 
 export interface PluginMeta {
@@ -18,8 +22,10 @@ export interface PluginMeta {
 	clientImportPath?: string;
 	clientSymbol?: string;
 	configKey: string;
-	/** Additional npm packages that must be installed when this plugin is selected. */
+	/** Additional package names required when this plugin is selected. */
 	extraPackages?: string[];
+	/** Version-qualified forms of extraPackages used by the installer. */
+	extraInstallSpecs?: string[];
 	/** Whether this plugin has sample seed data available for the playground. */
 	hasSeedData?: boolean;
 }
@@ -29,11 +35,15 @@ export const ADAPTERS: readonly AdapterMeta[] = [
 		key: "memory",
 		label: "Memory (local dev / testing)",
 		packageName: "@btst/adapter-memory",
+		installSpec: "@btst/adapter-memory@2.2.3",
+		betterAuthInstallSpec: "@better-auth/memory-adapter@1.6.16",
 	},
 	{
 		key: "prisma",
 		label: "Prisma",
 		packageName: "@btst/adapter-prisma",
+		installSpec: "@btst/adapter-prisma@2.2.3",
+		betterAuthInstallSpec: "@better-auth/prisma-adapter@1.6.16",
 		ormForGenerate: "prisma",
 		extraPackages: ["@prisma/adapter-pg", "pg"],
 	},
@@ -41,18 +51,26 @@ export const ADAPTERS: readonly AdapterMeta[] = [
 		key: "drizzle",
 		label: "Drizzle",
 		packageName: "@btst/adapter-drizzle",
+		installSpec: "@btst/adapter-drizzle@2.2.3",
+		betterAuthInstallSpec: "@better-auth/drizzle-adapter@1.6.16",
 		ormForGenerate: "drizzle",
+		extraPackages: ["drizzle-orm"],
+		extraInstallSpecs: ["drizzle-orm@0.45.2"],
 	},
 	{
 		key: "kysely",
 		label: "Kysely",
 		packageName: "@btst/adapter-kysely",
+		installSpec: "@btst/adapter-kysely@2.2.3",
+		betterAuthInstallSpec: "@better-auth/kysely-adapter@1.6.16",
 		ormForGenerate: "kysely",
 	},
 	{
 		key: "mongodb",
 		label: "MongoDB",
 		packageName: "@btst/adapter-mongodb",
+		installSpec: "@btst/adapter-mongodb@2.2.3",
+		betterAuthInstallSpec: "@better-auth/mongo-adapter@1.6.16",
 	},
 ];
 
@@ -153,7 +171,26 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/better-auth-ui/client",
 		clientSymbol: "authClientPlugin",
 		configKey: "auth",
-		extraPackages: ["@btst/better-auth-ui", "better-auth"],
+		extraPackages: [
+			"@btst/better-auth-ui",
+			"better-auth",
+			"@better-auth/core",
+			"@better-auth/api-key",
+			"@better-auth/passkey",
+			"@better-auth/utils",
+			"@better-fetch/fetch",
+			"better-call",
+		],
+		extraInstallSpecs: [
+			"@btst/better-auth-ui@2.0.0-rc.1",
+			"better-auth@1.6.16",
+			"@better-auth/core@1.6.16",
+			"@better-auth/api-key@1.6.16",
+			"@better-auth/passkey@1.6.16",
+			"@better-auth/utils@0.4.1",
+			"@better-fetch/fetch@1.2.2",
+			"better-call@1.3.6",
+		],
 	},
 	{
 		key: "route-docs",

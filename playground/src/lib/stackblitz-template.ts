@@ -18,15 +18,17 @@ function buildNextjsProjectFiles(
 	generatedFiles: FileWritePlanItem[],
 	cssImports: string[],
 	extraPackages: string[] = [],
+	extraPackageVersions: Record<string, string> = {},
 	hasAiChat = false,
 	seedFiles: SeedRouteFile[] = [],
 	seedRunnerScript: string | null = null,
 ): ProjectFiles {
 	const cssImportLines = cssImports.map((c) => `@import "${c}";`).join("\n");
 	const baseDependencies: Record<string, string> = {
-		"@btst/stack": "latest",
-		"@btst/adapter-memory": "latest",
-		"@tanstack/react-query": "^5.0.0",
+		"@btst/stack": "next",
+		"@btst/adapter-memory": "2.2.3",
+		"@btst/yar": "1.3.2",
+		"@tanstack/react-query": "5.100.14",
 		next: "15.3.4",
 		react: "19.2.4",
 		"react-dom": "19.2.4",
@@ -35,7 +37,10 @@ function buildNextjsProjectFiles(
 		"lucide-react": "latest",
 	};
 	const pluginDependencies = Object.fromEntries(
-		Array.from(new Set(extraPackages)).map((pkgName) => [pkgName, "latest"]),
+		Array.from(new Set(extraPackages)).map((pkgName) => [
+			pkgName,
+			extraPackageVersions[pkgName] ?? "latest",
+		]),
 	);
 	const dependencies = Object.fromEntries(
 		Object.entries({
@@ -435,6 +440,7 @@ function buildReactRouterProjectFiles(
 	generatedFiles: FileWritePlanItem[],
 	cssImports: string[],
 	extraPackages: string[] = [],
+	extraPackageVersions: Record<string, string> = {},
 	hasAiChat = false,
 	seedFiles: SeedRouteFile[] = [],
 	seedRunnerScript: string | null = null,
@@ -442,14 +448,18 @@ function buildReactRouterProjectFiles(
 ): ProjectFiles {
 	const cssImportLines = cssImports.map((c) => `@import "${c}";`).join("\n");
 	const pluginDependencies = Object.fromEntries(
-		Array.from(new Set(extraPackages)).map((pkgName) => [pkgName, "latest"]),
+		Array.from(new Set(extraPackages)).map((pkgName) => [
+			pkgName,
+			extraPackageVersions[pkgName] ?? "latest",
+		]),
 	);
 	const baseDependencies: Record<string, string> = {
-		"@btst/adapter-memory": "latest",
-		"@btst/stack": "latest",
+		"@btst/adapter-memory": "2.2.3",
+		"@btst/stack": "next",
+		"@btst/yar": "1.3.2",
 		"@react-router/node": "^7.0.0",
 		"@react-router/serve": "^7.0.0",
-		"@tanstack/react-query": "^5.0.0",
+		"@tanstack/react-query": "5.100.14",
 		react: "^19.0.0",
 		"react-dom": "^19.0.0",
 		"react-router": "^7.0.0",
@@ -783,6 +793,7 @@ function buildTanstackProjectFiles(
 	generatedFiles: FileWritePlanItem[],
 	cssImports: string[],
 	extraPackages: string[] = [],
+	extraPackageVersions: Record<string, string> = {},
 	hasAiChat = false,
 	seedFiles: SeedRouteFile[] = [],
 	seedRunnerScript: string | null = null,
@@ -790,13 +801,17 @@ function buildTanstackProjectFiles(
 ): ProjectFiles {
 	const cssImportLines = cssImports.map((c) => `@import "${c}";`).join("\n");
 	const pluginDependencies = Object.fromEntries(
-		Array.from(new Set(extraPackages)).map((pkgName) => [pkgName, "latest"]),
+		Array.from(new Set(extraPackages)).map((pkgName) => [
+			pkgName,
+			extraPackageVersions[pkgName] ?? "latest",
+		]),
 	);
 	const baseDependencies: Record<string, string> = {
-		"@btst/adapter-memory": "latest",
-		"@btst/stack": "latest",
+		"@btst/adapter-memory": "2.2.3",
+		"@btst/stack": "next",
+		"@btst/yar": "1.3.2",
 		"@tailwindcss/postcss": "^4",
-		"@tanstack/react-query": "^5.0.0",
+		"@tanstack/react-query": "5.100.14",
 		"@tanstack/react-router": "^1.0.0",
 		"@tanstack/react-router-ssr-query": "^1.0.0",
 		"@tanstack/react-start": "^1.0.0",
@@ -1126,6 +1141,7 @@ export function buildProjectFiles(
 	generatedFiles: FileWritePlanItem[],
 	cssImports: string[],
 	extraPackages: string[] = [],
+	extraPackageVersions: Record<string, string> = {},
 	hasAiChat = false,
 	seedFiles: SeedRouteFile[] = [],
 	seedRunnerScript: string | null = null,
@@ -1136,6 +1152,7 @@ export function buildProjectFiles(
 			generatedFiles,
 			cssImports,
 			extraPackages,
+			extraPackageVersions,
 			hasAiChat,
 			seedFiles,
 			seedRunnerScript,
@@ -1147,6 +1164,7 @@ export function buildProjectFiles(
 			generatedFiles,
 			cssImports,
 			extraPackages,
+			extraPackageVersions,
 			hasAiChat,
 			seedFiles,
 			seedRunnerScript,
@@ -1157,6 +1175,7 @@ export function buildProjectFiles(
 		generatedFiles,
 		cssImports,
 		extraPackages,
+		extraPackageVersions,
 		hasAiChat,
 		seedFiles,
 		seedRunnerScript,

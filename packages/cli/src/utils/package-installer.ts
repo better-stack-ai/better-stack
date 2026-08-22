@@ -7,12 +7,21 @@ function getInstallCommand(
 	packages: string[],
 ): { command: string; args: string[] } {
 	if (packageManager === "pnpm") {
-		return { command: "pnpm", args: ["add", ...packages] };
+		return {
+			command: "pnpm",
+			args: ["add", ...packages],
+		};
 	}
 	if (packageManager === "yarn") {
-		return { command: "yarn", args: ["add", ...packages] };
+		return {
+			command: "yarn",
+			args: ["add", ...packages],
+		};
 	}
-	return { command: "npm", args: ["install", ...packages] };
+	return {
+		command: "npm",
+		args: ["install", "--save-exact", ...packages],
+	};
 }
 
 export async function installInitDependencies(input: {
@@ -31,16 +40,20 @@ export async function installInitDependencies(input: {
 
 	const pluginExtraPackages = input.plugins.flatMap((key) => {
 		const meta = PLUGINS.find((p) => p.key === key);
-		return meta?.extraPackages ?? [];
+		return meta?.extraInstallSpecs ?? meta?.extraPackages ?? [];
 	});
 
 	const packages = [
-		"@btst/stack",
-		"@btst/yar",
-		"@tanstack/react-query",
-		adapterMeta.packageName,
-		...(adapterMeta.extraPackages ?? []),
+		"@btst/stack@next",
+		"@btst/yar@1.3.2",
+		"@tanstack/react-query@5.100.14",
+		adapterMeta.installSpec ?? adapterMeta.packageName,
+		...(adapterMeta.extraInstallSpecs ?? adapterMeta.extraPackages ?? []),
 		...pluginExtraPackages,
+		...(input.plugins.includes("better-auth-ui") &&
+		adapterMeta.betterAuthInstallSpec
+			? [adapterMeta.betterAuthInstallSpec]
+			: []),
 	];
 	const { command, args } = getInstallCommand(input.packageManager, packages);
 	await execa(command, args, { cwd: input.cwd, stdio: "inherit" });

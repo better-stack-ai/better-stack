@@ -20,6 +20,7 @@ export interface GenerateResult {
 	routes: string[];
 	cssImports: string[];
 	extraPackages: string[];
+	extraPackageVersions: Record<string, string>;
 	hasAiChat: boolean;
 	seedRouteFiles: SeedRouteFile[];
 	seedRunnerScript: string | null;
@@ -178,6 +179,7 @@ export async function generateProject(
 		routes,
 		cssImports: plan.cssImports,
 		extraPackages: plan.extraPackages,
+		extraPackageVersions: plan.extraPackageVersions ?? {},
 		hasAiChat: withRouteDocs.includes("ai-chat" as PluginKey),
 		seedRouteFiles,
 		seedRunnerScript,

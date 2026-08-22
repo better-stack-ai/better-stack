@@ -140,16 +140,12 @@ for QueryClient wiring, database adapters, all three frameworks, and auth.
 
 ## Database schemas & migrations
 
-Optional CLI to generate schemas and run migrations from enabled plugins:
+Generate schemas and run migrations through the v3 codegen CLI. It runs the
+aligned Better DB CLI in isolation, so its dependencies and `btst` binary do
+not enter your application graph:
 
 ```bash
-npm install -D @btst/cli
-```
-
-Generate drizzle schema:
-
-```bash
-npx @btst/cli generate --orm drizzle --config lib/stack.ts --output db/schema.ts
+npx @btst/codegen@next generate --orm drizzle --config lib/stack.ts --output db/schema.ts
 ```
 
 Supports Prisma, Drizzle, MongoDB and Kysely SQL dialects.

@@ -392,17 +392,26 @@ describe("scaffold plan", () => {
 		// No apiBaseURL/apiBasePath in better-auth-ui client entries
 		expect(stackClientFile?.content).not.toContain('apiBasePath: "/api/data"');
 
-		// Pages layout overrides — three blocks with authClient placeholder
-		expect(pagesLayoutFile?.content).toContain("authClient: undefined as any");
+		// The provider owns identity while the three plugin overrides share its client.
+		expect(pagesLayoutFile?.content).toContain(
+			'import { createBetterAuthProvider } from "@btst/better-auth-ui"',
+		);
+		expect(pagesLayoutFile?.content).toContain(
+			"const authClient = undefined as any",
+		);
+		expect(pagesLayoutFile?.content).toContain(
+			"const stackAuth = createBetterAuthProvider(authClient, {",
+		);
+		expect(pagesLayoutFile?.content).toContain(
+			'loginPath: "/pages/auth/sign-in"',
+		);
+		expect(pagesLayoutFile?.content).toContain("auth={stackAuth}");
+		expect(pagesLayoutFile?.content).toContain("authClient,");
 		expect(pagesLayoutFile?.content).toContain('basePath: "/pages/auth"');
 		expect(pagesLayoutFile?.content).toContain('basePath: "/pages/account"');
 		expect(pagesLayoutFile?.content).toContain('basePath: "/pages/org"');
-		expect(pagesLayoutFile?.content).toContain(
-			"replace: (path: string) => router.replace(path)",
-		);
-		expect(pagesLayoutFile?.content).toContain(
-			"onSessionChange: () => router.refresh()",
-		);
+		expect(pagesLayoutFile?.content).not.toContain("replace: (path: string)");
+		expect(pagesLayoutFile?.content).not.toContain("onSessionChange:");
 	});
 
 	it("does not include apiBaseURL/apiBasePath in better-auth-ui client entries when mixed with other plugins", async () => {
@@ -547,37 +556,33 @@ describe("scaffold plan", () => {
 		expect(layoutFile?.content).not.toContain("router.replace");
 	});
 
-	it("uses window.location.reload for onSessionChange in react-router better-auth-ui", async () => {
-		const plan = await buildScaffoldPlan({
-			framework: "react-router",
-			adapter: "memory",
-			plugins: ["better-auth-ui"],
-			alias: "~/",
-			cssFile: "app/app.css",
-		});
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"uses the top-level auth provider in %s better-auth-ui scaffolds",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["better-auth-ui"],
+				alias: framework === "react-router" ? "~/" : "@/",
+				cssFile:
+					framework === "nextjs"
+						? "app/globals.css"
+						: framework === "react-router"
+							? "app/app.css"
+							: "src/styles/globals.css",
+			});
 
-		const layoutFile = plan.files.find((f) => f.path.endsWith("_layout.tsx"));
-		expect(layoutFile?.content).toContain("window.location.reload()");
-		expect(layoutFile?.content).not.toContain("router.refresh()");
-		expect(layoutFile?.content).toContain("navigate(path, { replace: true })");
-	});
-
-	it("uses window.location.reload for onSessionChange in tanstack better-auth-ui", async () => {
-		const plan = await buildScaffoldPlan({
-			framework: "tanstack",
-			adapter: "memory",
-			plugins: ["better-auth-ui"],
-			alias: "@/",
-			cssFile: "src/styles/globals.css",
-		});
-
-		const layoutFile = plan.files.find((f) => f.path.endsWith("route.tsx"));
-		expect(layoutFile?.content).toContain("window.location.reload()");
-		expect(layoutFile?.content).not.toContain("router.refresh()");
-		expect(layoutFile?.content).toContain(
-			"navigate({ to: path, replace: true })",
-		);
-	});
+			const layoutFile = plan.files.find(
+				(file) => file.path === plan.pagesLayoutPath,
+			);
+			expect(layoutFile?.content).toContain(
+				'import { createBetterAuthProvider } from "@btst/better-auth-ui"',
+			);
+			expect(layoutFile?.content).toContain("auth={stackAuth}");
+			expect(layoutFile?.content).not.toContain("onSessionChange:");
+			expect(layoutFile?.content).not.toContain("replace: (path: string)");
+		},
+	);
 
 	it("includes better-auth-ui in the PLUGINS registry", () => {
 		const allKeys = PLUGINS.map((p) => p.key);
@@ -1082,6 +1087,25 @@ describe("scaffold plan", () => {
 		expect(plan.extraPackages).toContain("@ai-sdk/openai");
 		expect(plan.extraPackages).toContain("ai");
 		expect(plan.extraPackages.length).toBe(new Set(plan.extraPackages).size);
+	});
+
+	it("keeps Better Auth package names separate from their v3 install versions", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["better-auth-ui"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+
+		expect(plan.extraPackages).toContain("@btst/better-auth-ui");
+		expect(plan.extraPackages).not.toContain("@btst/better-auth-ui@2.0.0-rc.1");
+		expect(plan.extraPackageVersions).toMatchObject({
+			"@btst/better-auth-ui": "2.0.0-rc.1",
+			"better-auth": "1.6.16",
+			"@better-auth/core": "1.6.16",
+			"better-call": "1.3.6",
+		});
 	});
 
 	it("returns empty cssImports and extraPackages when no plugins selected", async () => {
