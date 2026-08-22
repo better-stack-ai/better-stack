@@ -1,6 +1,6 @@
 {
   "name": "@btst/codegen",
-  "version": "0.2.0-rc.1",
+  "version": "0.2.0-rc.2",
   "description": "BTST project scaffolding and CLI passthrough commands.",
   "repository": {
     "type": "git",
