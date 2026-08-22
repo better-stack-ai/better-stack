@@ -1,10 +1,12 @@
 export { toTanStackHandlers } from "./handlers";
 export {
 	type CreateTanStackPageOptions,
+	type TanStackPageLoaderArgs,
 	createTanStackPageOptions,
 } from "./page";
 export { tanstackRouter } from "./router";
 export type {
 	GetStackClient,
+	ResolveStackClient,
 	StackRequestHandler,
 } from "../shared/entry-factories";

@@ -23,6 +23,14 @@ function makeQueryClient() {
 	});
 }
 
+function reactRouterLoaderArgs(splat: string) {
+	return {
+		request: new Request(`http://test.local/${splat}`),
+		params: { "*": splat },
+		context: undefined,
+	};
+}
+
 const okHandler = async (request: Request) =>
 	new Response(`ok:${request.method}`);
 
@@ -96,6 +104,28 @@ describe("createNextPage", () => {
 		expect(html).toContain("blog page");
 	});
 
+	it("supports an async request-aware stack client when rendering", async () => {
+		const queryClient = makeQueryClient();
+		const pageProps = { params: params(["account"]) };
+		const page = createNextPage({
+			getStackClient: async (currentQueryClient, currentPageProps) => {
+				const { all } = await currentPageProps.params;
+				return makeStackClient({
+					[`/${all?.join("/")}`]: {
+						PageComponent: () => <div>request-aware page</div>,
+					},
+				})(currentQueryClient);
+			},
+			getQueryClient: () => queryClient,
+		});
+
+		const element = await page.Page(pageProps);
+		const html = renderToString(
+			<QueryClientProvider client={queryClient}>{element}</QueryClientProvider>,
+		);
+		expect(html).toContain("request-aware page");
+	});
+
 	it("calls notFound when no route matches", async () => {
 		const notFound = vi.fn(() => {
 			throw new Error("NEXT_NOT_FOUND_TEST");
@@ -140,6 +170,26 @@ describe("createNextPage", () => {
 		});
 	});
 
+	it("generateMetadata awaits a request-aware stack client", async () => {
+		const page = createNextPage({
+			getStackClient: async (queryClient, { params: pageParams }) => {
+				const { all } = await pageParams;
+				return makeStackClient({
+					[`/${all?.join("/")}`]: {
+						meta: () => [{ name: "title", content: "Request Metadata" }],
+					},
+				})(queryClient);
+			},
+			getQueryClient: makeQueryClient,
+		});
+
+		const metadata = await page.generateMetadata({
+			params: params(["account"]),
+		});
+
+		expect(metadata).toMatchObject({ title: "Request Metadata" });
+	});
+
 	it("generateMetadata returns {} without running the loader when the route has no meta", async () => {
 		const loader = vi.fn();
 		const page = createNextPage({
@@ -170,6 +220,35 @@ describe("createNextPage", () => {
 });
 
 describe("createReactRouterPage", () => {
+	it("creates an async request-aware loader without changing the render client", async () => {
+		const queryClient = makeQueryClient();
+		const page = createReactRouterPage({
+			getStackClient: makeStackClient({}),
+			getQueryClient: () => queryClient,
+		});
+		const loader = page.createLoader<{ role: string }>(
+			async (currentQueryClient, { request, context }) => {
+				const role = context.role;
+				const requestRole = request.headers.get("x-role");
+				return makeStackClient({
+					"/account": {
+						meta: () => [{ name: "viewer", content: `${role}:${requestRole}` }],
+					},
+				})(currentQueryClient);
+			},
+		);
+
+		const data = await loader({
+			params: { "*": "account" },
+			request: new Request("http://test.local/account", {
+				headers: { "x-role": "member" },
+			}),
+			context: { role: "admin" },
+		});
+
+		expect(data.meta).toEqual([{ name: "viewer", content: "admin:member" }]);
+	});
+
 	it("loader prefetches and returns path, dehydratedState and meta", async () => {
 		const queryClient = makeQueryClient();
 		const page = createReactRouterPage({
@@ -187,7 +266,7 @@ describe("createReactRouterPage", () => {
 			getQueryClient: () => queryClient,
 		});
 
-		const data = await page.loader({ params: { "*": "blog" } });
+		const data = await page.loader(reactRouterLoaderArgs("blog"));
 		expect(data.path).toBe("/blog");
 		expect(data.meta).toEqual([{ name: "title", content: "Blog" }]);
 		expect(data.dehydratedState.queries).toHaveLength(1);
@@ -215,7 +294,7 @@ describe("createReactRouterPage", () => {
 			getQueryClient: () => queryClient,
 		});
 
-		const data = await page.loader({ params: { "*": "broken" } });
+		const data = await page.loader(reactRouterLoaderArgs("broken"));
 		const errored = data.dehydratedState.queries.find(
 			(q) => q.state.status === "error",
 		);
@@ -244,12 +323,33 @@ describe("createReactRouterPage", () => {
 		});
 
 		expect(page.ErrorBoundary).toBe(CustomErrorBoundary);
-		const data = await page.loader({ params: { "*": "broken" } });
+		const data = await page.loader(reactRouterLoaderArgs("broken"));
 		expect(data.dehydratedState.queries).toHaveLength(0);
 	});
 });
 
 describe("createTanStackPageOptions", () => {
+	it("awaits a context-aware stack client for isomorphic loaders", async () => {
+		const queryClient = makeQueryClient();
+		const options = createTanStackPageOptions<{ role: string }>({
+			getStackClient: makeStackClient({}),
+			getQueryClient: () => queryClient,
+			getLoaderStackClient: async (currentQueryClient, { context }) =>
+				makeStackClient({
+					"/account": {
+						meta: () => [{ title: `Account for ${context.role}` }],
+					},
+				})(currentQueryClient),
+		});
+
+		const data = await options.loader({
+			params: { _splat: "account" },
+			context: { role: "admin" },
+		});
+
+		expect(data).toEqual({ meta: [{ title: "Account for admin" }] });
+	});
+
 	it("loader throws notFound() when no route matches", async () => {
 		const options = createTanStackPageOptions({
 			getStackClient: makeStackClient({}),
@@ -257,7 +357,7 @@ describe("createTanStackPageOptions", () => {
 		});
 
 		await expect(
-			options.loader({ params: { _splat: "missing" } }),
+			options.loader({ params: { _splat: "missing" }, context: undefined }),
 		).rejects.toMatchObject({ isNotFound: true });
 	});
 

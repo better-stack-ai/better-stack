@@ -36,6 +36,15 @@ export interface StackClientLike {
 export type GetStackClient = (queryClient: QueryClient) => StackClientLike;
 
 /**
+ * Consumer-provided resolver for lifecycle phases that can await request-aware
+ * stack client creation.
+ */
+export type ResolveStackClient<TContext> = (
+	queryClient: QueryClient,
+	context: TContext,
+) => StackClientLike | PromiseLike<StackClientLike>;
+
+/**
  * A framework-agnostic BTST API handler, as returned by
  * `createBackendHandler(...).handler`.
  */

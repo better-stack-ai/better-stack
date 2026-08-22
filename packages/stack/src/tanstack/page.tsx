@@ -2,22 +2,33 @@ import type { QueryClient } from "@tanstack/react-query";
 import { notFound, useParams, useRouteContext } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { normalizePath } from "../client/path-utils";
-import type { GetStackClient } from "../shared/entry-factories";
+import type {
+	GetStackClient,
+	ResolveStackClient,
+} from "../shared/entry-factories";
 
-export interface CreateTanStackPageOptions {
+export interface TanStackPageLoaderArgs<TContext = unknown> {
+	/** Parameters for the TanStack catch-all route. */
+	params: { _splat?: string };
+	/** The current TanStack router context. */
+	context: TContext;
+}
+
+export interface CreateTanStackPageOptions<TContext = unknown> {
 	/** Returns the stack client for a given QueryClient (`lib/stack-client`). */
 	getStackClient: GetStackClient;
+	/**
+	 * Resolves the stack client for the isomorphic route loader. Use an
+	 * isomorphic adapter when request-aware setup differs on the server and
+	 * client. Defaults to `getStackClient`.
+	 */
+	getLoaderStackClient?: ResolveStackClient<TanStackPageLoaderArgs<TContext>>;
 	/**
 	 * Returns the QueryClient for the current context. Defaults to the
 	 * `queryClient` from the router context (set up by
 	 * `setupRouterSsrQueryIntegration`).
 	 */
 	getQueryClient?: () => QueryClient;
-}
-
-interface TanStackPageLoaderArgs {
-	params: { _splat?: string };
-	context?: unknown;
 }
 
 /**
@@ -39,8 +50,10 @@ interface TanStackPageLoaderArgs {
  * );
  * ```
  */
-export function createTanStackPageOptions(options: CreateTanStackPageOptions) {
-	const { getStackClient, getQueryClient } = options;
+export function createTanStackPageOptions<TContext = unknown>(
+	options: CreateTanStackPageOptions<TContext>,
+) {
+	const { getStackClient, getLoaderStackClient, getQueryClient } = options;
 
 	function resolveQueryClient(context: unknown): QueryClient {
 		const fromContext = (context as { queryClient?: QueryClient } | null)
@@ -78,10 +91,14 @@ export function createTanStackPageOptions(options: CreateTanStackPageOptions) {
 	return {
 		ssr: true,
 		component: PageComponent,
-		loader: async ({ params, context }: TanStackPageLoaderArgs) => {
+		loader: async (loaderArgs: TanStackPageLoaderArgs<TContext>) => {
+			const { params, context } = loaderArgs;
 			const queryClient = resolveQueryClient(context);
 			const routePath = normalizePath(params._splat);
-			const route = getStackClient(queryClient).router.getRoute(routePath);
+			const stackClient = getLoaderStackClient
+				? await getLoaderStackClient(queryClient, loaderArgs)
+				: getStackClient(queryClient);
+			const route = stackClient.router.getRoute(routePath);
 			if (!route) throw notFound();
 			if (route.loader) await route.loader();
 			return { meta: await route.meta?.() };

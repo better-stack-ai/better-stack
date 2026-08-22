@@ -10,6 +10,7 @@ import { useLoaderData, useRouteError } from "react-router";
 import { normalizePath } from "../client/path-utils";
 import {
 	type GetStackClient,
+	type ResolveStackClient,
 	stackDehydrateOptions,
 } from "../shared/entry-factories";
 
@@ -19,8 +20,13 @@ import {
  * are not available inside the library, so the factory types the subset it
  * uses; the results remain assignable to the generated route exports.
  */
-export interface ReactRouterPageLoaderArgs {
+export interface ReactRouterPageLoaderArgs<TContext = unknown> {
+	/** The request that triggered the route loader. */
+	request: Request;
+	/** Parameters for the React Router catch-all route. */
 	params: { "*"?: string } & Record<string, string | undefined>;
+	/** Request-local values supplied by React Router middleware. */
+	context: TContext;
 }
 
 export interface CreateReactRouterPageOptions {
@@ -75,21 +81,36 @@ export function createReactRouterPage(options: CreateReactRouterPageOptions) {
 		dehydrateOptions = stackDehydrateOptions,
 	} = options;
 
-	async function loader({ params }: ReactRouterPageLoaderArgs) {
-		const queryClient = getQueryClient();
-		const path = normalizePath(params["*"]);
-		const route = getStackClient(queryClient).router.getRoute(path);
+	/** Creates a loader with an optional async, request-aware stack client. */
+	function createLoader<TContext = unknown>(
+		getLoaderStackClient?: ResolveStackClient<
+			ReactRouterPageLoaderArgs<TContext>
+		>,
+	) {
+		return async function loader(
+			loaderArgs: ReactRouterPageLoaderArgs<TContext>,
+		) {
+			const { params } = loaderArgs;
+			const queryClient = getQueryClient();
+			const path = normalizePath(params["*"]);
+			const stackClient = getLoaderStackClient
+				? await getLoaderStackClient(queryClient, loaderArgs)
+				: getStackClient(queryClient);
+			const route = stackClient.router.getRoute(path);
 
-		if (route?.loader) {
-			await route.loader();
-		}
+			if (route?.loader) {
+				await route.loader();
+			}
 
-		return {
-			path,
-			dehydratedState: dehydrate(queryClient, dehydrateOptions),
-			meta: await route?.meta?.(),
+			return {
+				path,
+				dehydratedState: dehydrate(queryClient, dehydrateOptions),
+				meta: await route?.meta?.(),
+			};
 		};
 	}
+
+	const loader = createLoader();
 
 	type LoaderData = Awaited<ReturnType<typeof loader>>;
 
@@ -132,6 +153,7 @@ export function createReactRouterPage(options: CreateReactRouterPageOptions) {
 
 	return {
 		loader,
+		createLoader,
 		meta,
 		Component,
 		ErrorBoundary: CustomErrorBoundary ?? DefaultErrorBoundary,

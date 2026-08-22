@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { metaElementsToObject } from "../client/meta-utils";
 import { normalizePath } from "../client/path-utils";
 import {
-	type GetStackClient,
+	type ResolveStackClient,
 	stackDehydrateOptions,
 } from "../shared/entry-factories";
 
@@ -14,9 +14,15 @@ export interface NextPageProps {
 	params: Promise<{ all?: string[] }>;
 }
 
+/** Resolves the stack client for a Next.js page or metadata request. */
+export type GetNextStackClient = ResolveStackClient<NextPageProps>;
+
 export interface CreateNextPageOptions {
-	/** Returns the stack client for a given QueryClient (`lib/stack-client`). */
-	getStackClient: GetStackClient;
+	/**
+	 * Returns the stack client for the current request. May be async and receives
+	 * the page props so request-aware clients can resolve request-local state.
+	 */
+	getStackClient: GetNextStackClient;
 	/** Returns the QueryClient for the current context (`lib/query-client`). */
 	getQueryClient: () => QueryClient;
 	/**
@@ -63,11 +69,13 @@ export function createNextPage(options: CreateNextPageOptions) {
 		dehydrateOptions = stackDehydrateOptions,
 	} = options;
 
-	async function Page({ params }: NextPageProps) {
+	async function Page(pageProps: NextPageProps) {
+		const { params } = pageProps;
 		const pathParams = await params;
 		const path = normalizePath(pathParams?.all);
 		const queryClient = getQueryClient();
-		const route = getStackClient(queryClient).router.getRoute(path);
+		const stackClient = await getStackClient(queryClient, pageProps);
+		const route = stackClient.router.getRoute(path);
 
 		if (route?.loader) {
 			await route.loader();
@@ -82,13 +90,13 @@ export function createNextPage(options: CreateNextPageOptions) {
 		);
 	}
 
-	async function generateMetadata({
-		params,
-	}: NextPageProps): Promise<Metadata> {
+	async function generateMetadata(pageProps: NextPageProps): Promise<Metadata> {
+		const { params } = pageProps;
 		const pathParams = await params;
 		const path = normalizePath(pathParams?.all);
 		const queryClient = getQueryClient();
-		const route = getStackClient(queryClient).router.getRoute(path);
+		const stackClient = await getStackClient(queryClient, pageProps);
+		const route = stackClient.router.getRoute(path);
 
 		if (!route) {
 			return notFound();
