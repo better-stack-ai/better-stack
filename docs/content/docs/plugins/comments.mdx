@@ -212,6 +212,7 @@ import { CommentThread } from "@btst/stack/plugins/comments/client/components"
 <CommentThread
   resourceId={post.slug}          // Unique identifier for the resource being commented on
   resourceType="blog-post"        // Namespace — avoids ID collisions across resource types
+  loginHref={`/sign-in?redirectTo=${encodeURIComponent(`/blog/${post.slug}#comments`)}`}
   components={{
     // Optional: replace the plain textarea with a rich editor
     Input: MarkdownEditor,
@@ -227,6 +228,7 @@ import { CommentThread } from "@btst/stack/plugins/comments/client/components"
 |------|------|----------|-------------|
 | `resourceId` | `string` | ✓ | Identifier for the resource (e.g. post slug, task ID) |
 | `resourceType` | `string` | ✓ | Type of resource (`"blog-post"`, `"kanban-task"`, etc.) |
+| `loginHref` | `string` | — | Sign-in URL for unauthenticated users in this thread. Overrides the `loginPath` from the nearest `StackProvider`, which is useful for preserving a resource-specific return URL. |
 | `pageSize` | `number` | — | Comments per page. Falls back to `defaultCommentPageSize` from overrides, then 100. A "Load more" button appears when there are additional pages. |
 | `sort` | `"asc" \| "desc"` | — | Sort direction for top-level comments by `createdAt`. Defaults to `defaultCommentSort` from overrides, then `"desc"` (newest first). Replies inside each thread always render chronologically and are unaffected. |
 | `components.Input` | `ComponentType` | — | Custom input component (default: `<textarea>`) |
