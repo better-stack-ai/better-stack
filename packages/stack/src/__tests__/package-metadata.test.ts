@@ -14,6 +14,8 @@ describe("published dependency alignment", () => {
 
 		expect(manifest.dependencies?.["@btst/db"]).toBe("2.2.3");
 		expect(manifest.devDependencies?.["@btst/adapter-memory"]).toBe("2.2.3");
+		expect(manifest.devDependencies?.["@btst/yar"]).toBe("1.3.2");
+		expect(manifest.peerDependencies?.["@btst/yar"]).toBe(">=1.3.2");
 		expect(manifest.peerDependencies?.["better-call"]).toBe("1.3.6");
 	});
 });

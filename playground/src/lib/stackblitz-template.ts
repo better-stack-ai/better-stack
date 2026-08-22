@@ -27,7 +27,7 @@ function buildNextjsProjectFiles(
 	const baseDependencies: Record<string, string> = {
 		"@btst/stack": "next",
 		"@btst/adapter-memory": "2.2.3",
-		"@btst/yar": "1.3.0",
+		"@btst/yar": "1.3.2",
 		"@tanstack/react-query": "5.100.14",
 		next: "15.3.4",
 		react: "19.2.4",
@@ -456,7 +456,7 @@ function buildReactRouterProjectFiles(
 	const baseDependencies: Record<string, string> = {
 		"@btst/adapter-memory": "2.2.3",
 		"@btst/stack": "next",
-		"@btst/yar": "1.3.0",
+		"@btst/yar": "1.3.2",
 		"@react-router/node": "^7.0.0",
 		"@react-router/serve": "^7.0.0",
 		"@tanstack/react-query": "5.100.14",
@@ -809,7 +809,7 @@ function buildTanstackProjectFiles(
 	const baseDependencies: Record<string, string> = {
 		"@btst/adapter-memory": "2.2.3",
 		"@btst/stack": "next",
-		"@btst/yar": "1.3.0",
+		"@btst/yar": "1.3.2",
 		"@tailwindcss/postcss": "^4",
 		"@tanstack/react-query": "5.100.14",
 		"@tanstack/react-router": "^1.0.0",
