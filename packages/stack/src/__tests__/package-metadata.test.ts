@@ -9,9 +9,11 @@ describe("published dependency alignment", () => {
 		) as {
 			dependencies?: Record<string, string>;
 			devDependencies?: Record<string, string>;
+			peerDependencies?: Record<string, string>;
 		};
 
 		expect(manifest.dependencies?.["@btst/db"]).toBe("2.2.3");
 		expect(manifest.devDependencies?.["@btst/adapter-memory"]).toBe("2.2.3");
+		expect(manifest.peerDependencies?.["better-call"]).toBe("1.3.6");
 	});
 });

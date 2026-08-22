@@ -193,6 +193,7 @@ main() {
         react-hook-form \
         @hookform/resolvers \
         zod \
+        better-call@1.3.6 \
         lucide-react \
         sonner \
         clsx \
