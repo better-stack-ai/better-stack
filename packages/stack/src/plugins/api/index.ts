@@ -38,7 +38,9 @@ export {
 	type OperationApi,
 	type OperationContext,
 	type OperationErrorContext,
+	type OperationPermissionRequest,
 	type OperationRecord,
+	type RouteOperationApi,
 } from "./operation";
 
 /**

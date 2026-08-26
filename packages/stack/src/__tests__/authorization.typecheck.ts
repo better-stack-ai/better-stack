@@ -6,6 +6,12 @@ import {
 } from "../authorization";
 import { createClientAuth } from "../authorization/client";
 import { createServerAuth } from "../authorization/server";
+import { stack } from "../api";
+import { defineOperation } from "../plugins/api";
+import { blogBackendPlugin, type BlogBackendHooks } from "../plugins/blog/api";
+import { blogPermissions } from "../plugins/blog/permissions";
+import type { StackIdentity } from "../shared/auth-types";
+import type { DatabaseDefinition, DBAdapter } from "@btst/db";
 
 type Equal<TLeft, TRight> = (<T>() => T extends TLeft ? 1 : 2) extends <
 	T,
@@ -120,4 +126,95 @@ createServerAuth({
 	authorization,
 	// @ts-expect-error server identity resolver uses the same inferred identity contract
 	getIdentity: () => ({ id: "user-1", role: "owner" }),
+});
+
+const operation = defineOperation({
+	input: z.object({ id: z.string() }),
+	permission: registered.article.delete,
+	facts: ({ input }) => ({ id: input.id }),
+	execute: ({ input }) => input.id,
+});
+
+// @ts-expect-error operation internals are only reachable through stack transports
+operation.run({ id: "article-1" }, { internal: true });
+
+const blogHooks: BlogBackendHooks = {
+	onBeforeDeletePost: (_id, context) => {
+		const identityIsHonest: Expect<
+			Equal<typeof context.identity, StackIdentity | null>
+		> = true;
+		const inputIsExact: Expect<Equal<typeof context.input, { id: string }>> =
+			true;
+		const factsAreExact: Expect<
+			Equal<typeof context.facts, { id: string; authorId?: string }>
+		> = true;
+		const requestIsExact: Expect<
+			Equal<typeof context.request, Request | undefined>
+		> = true;
+		void identityIsHonest;
+		void inputIsExact;
+		void factsAreExact;
+		void requestIsExact;
+	},
+	onPostDeleted: (_id, context) => {
+		const resultIsExact: Expect<
+			Equal<typeof context.result, { readonly success: true }>
+		> = true;
+		void resultIsExact;
+	},
+	onDeletePostError: (_error, context) => {
+		const errorInputIsExact: Expect<
+			Equal<typeof context.input, { id: string }>
+		> = true;
+		const errorFactsAreExact: Expect<
+			Equal<typeof context.facts, { id: string; authorId?: string }>
+		> = true;
+		void errorInputIsExact;
+		void errorFactsAreExact;
+	},
+};
+void blogHooks;
+
+type BlogRouteOperations = Parameters<
+	ReturnType<typeof blogBackendPlugin>["routes"]
+>[2];
+const declaredRouteOperationsAreRequired: Expect<
+	Equal<undefined extends BlogRouteOperations ? true : false, false>
+> = true;
+void declaredRouteOperationsAreRequired;
+
+const fakeAdapter = (_db: DatabaseDefinition) => ({}) as DBAdapter;
+const blogAuthorization = defineAuthorization({
+	identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+	permissions: [blogPermissions] as const,
+	rules: ({ blog }) => [blog.post.delete.allow()],
+});
+const blogServerAuth = createServerAuth({
+	authorization: blogAuthorization,
+	getIdentity: () => ({ id: "user-1", role: "user" as const }),
+});
+
+stack({
+	basePath: "/api",
+	plugins: { blog: blogBackendPlugin() },
+	adapter: fakeAdapter,
+	auth: blogServerAuth,
+});
+
+const unregisteredAuthorization = defineAuthorization({
+	identity: z.object({ id: z.string() }),
+	permissions: [unregistered] as const,
+	rules: () => [],
+});
+const unregisteredServerAuth = createServerAuth({
+	authorization: unregisteredAuthorization,
+	getIdentity: () => ({ id: "user-1" }),
+});
+
+stack({
+	basePath: "/api",
+	plugins: { blog: blogBackendPlugin() },
+	adapter: fakeAdapter,
+	// @ts-expect-error Blog operations require the Blog permission catalog
+	auth: unregisteredServerAuth,
 });

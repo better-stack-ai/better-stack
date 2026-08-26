@@ -10,7 +10,7 @@
 #   3. Builds the local CLI and runs `btst init` with an explicit plugin list
 #   4. Adds shadcn UI components needed by the E2E overlay
 #   5. Copies E2E overlay files from scripts/codegen/files/nextjs/ (overwrites)
-#   6. Patches package.json (name, start:e2e, workspace deps)
+#   6. Patches package.json (name, production boundary check, workspace deps)
 #   7. Creates .env and public/uploads/
 #   8. Runs pnpm install from the monorepo root
 #
@@ -119,7 +119,7 @@ pkg.name = "nextjs";
 
 // E2E start script: builds Next.js then starts in production on port 3006
 pkg.scripts = pkg.scripts || {};
-pkg.scripts["start:e2e"] = "rm -rf .next && next build && NODE_ENV=test NODE_OPTIONS='--max-old-space-size=4096' next start -p 3006";
+pkg.scripts["start:e2e"] = "rm -rf .next && next build && node ../../scripts/codegen/assert-nextjs-auth-boundary.mjs .next && NODE_ENV=test NODE_OPTIONS='--max-old-space-size=4096' next start -p 3006";
 
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {

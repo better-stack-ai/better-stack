@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { createMemoryAdapter } from "@btst/adapter-memory";
+import type { DatabaseDefinition } from "@btst/db";
 import {
 	defineAuthorization,
 	definePermissions,
 	permission,
 } from "../authorization";
-import { defineOperation } from "../plugins/api";
+import {
+	createDbPlugin,
+	defineBackendPlugin,
+	defineOperation,
+} from "../plugins/api";
+import { stack } from "../api";
 
 const blogPermissions = definePermissions("blog", {
 	post: {
@@ -48,6 +55,22 @@ describe("schema-backed authorization", () => {
 			id: "blog:post.delete",
 			facts: { id: "post-1" },
 		});
+	});
+
+	it("keeps nested permission descriptors immutable", () => {
+		const deletePermission = blogPermissions.post.delete;
+
+		expect(Object.isFrozen(blogPermissions)).toBe(true);
+		expect(Object.isFrozen(blogPermissions.post)).toBe(true);
+		expect(Object.isFrozen(deletePermission)).toBe(true);
+		expect(() => {
+			(blogPermissions.post as { delete: unknown }).delete =
+				commentsPermissions.comment.delete;
+		}).toThrow();
+		expect(blogPermissions.post.delete).toBe(deletePermission);
+		expect(blogPermissions.post.delete({ id: "post-1" }).id).toBe(
+			"blog:post.delete",
+		);
 	});
 
 	it("supports explicit allow and conditional rules", () => {
@@ -132,9 +155,23 @@ describe("schema-backed authorization", () => {
 				return input.path;
 			},
 		});
+		expect(Object.isFrozen(operation)).toBe(true);
+		expect("run" in operation).toBe(false);
+		expect(Object.getOwnPropertySymbols(operation)).toEqual([]);
+		const navigationPlugin = defineBackendPlugin({
+			name: "navigation",
+			dbPlugin: createDbPlugin("navigation", {}),
+			operations: () => ({ visit: operation }),
+			routes: () => ({}),
+		});
+		const backend = stack({
+			basePath: "/api",
+			plugins: { navigation: navigationPlugin },
+			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
+		});
 
 		await expect(
-			operation.run({ path: "/docs" }, { internal: true }),
+			backend.internal.navigation.visit({ path: "/docs" }),
 		).resolves.toBe("/docs");
 	});
 });

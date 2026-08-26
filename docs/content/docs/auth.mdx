@@ -104,6 +104,32 @@ Pass it to `stack({ auth: serverAuth })`. The Blog DELETE endpoint and `myStack.
 
 Ordinary denials become HTTP 401 for anonymous identities and 403 for authenticated identities. Identity validation and rule failures remain errors instead of being converted into denials.
 
+`stack()` also checks the operation catalog at typecheck time. A server adapter
+that registers a different permission catalog cannot be composed with the Blog
+delete operation.
+
+### Operation lifecycle ordering
+
+An operation validates input, derives trusted facts, resolves identity, and
+authorizes before entering plugin lifecycle hooks. Validation, fact, identity,
+and rule failures—including 401 and 403 denials—do not call `before`, `after`,
+or operation error hooks. Once authorization succeeds, lifecycle contexts carry
+the validated `input`, trusted `facts`, resolved `identity`, and `request`;
+post-execution contexts also carry `result`.
+
+Plugin-authored hooks know the plugin's exact input, facts, and result types.
+Because a reusable plugin is authored before an application chooses its
+identity schema, its identity field uses the honest `StackIdentity | null`
+base type. Applications can narrow provider-specific claims when needed.
+
+Operations have no public `run({ internal: true })` escape hatch. Use only the
+transport-bound APIs:
+
+```ts
+await myStack.forRequest(request).api.blog.deletePost({ id: postId });
+await myStack.internal.blog.deletePost({ id: postId });
+```
+
 ## RC auth provider
 
 The string-based RC provider remains available for plugins and applications that have not migrated to schema-backed permissions.

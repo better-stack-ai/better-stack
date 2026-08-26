@@ -60,7 +60,8 @@ const { handler, dbSchema } = stack({
 export { handler, dbSchema }
 ```
 
-The `blogBackendPlugin()` accepts optional hooks for customizing behavior (authorization, logging, etc.).
+The `blogBackendPlugin()` accepts optional compatibility and lifecycle hooks for
+customizing domain behavior, logging, and unmigrated RC authorization.
 
 ### 2. Add Plugin to Client
 
@@ -326,7 +327,8 @@ server setup.
 Unmigrated Blog controls continue to use the RC checks
 `blog:draft/read`, `blog:post/create`, `blog:post/update`, and
 `blog:post/delete`. Configure `StackProvider.auth` for those controls and use
-backend lifecycle hooks for authoritative API authorization.
+their compatibility hooks for authoritative API authorization. The migrated
+delete operation authorizes before any delete lifecycle hook runs.
 
 ```tsx title="app/pages/layout.tsx"
 <StackProvider
@@ -352,7 +354,10 @@ backend lifecycle hooks for authoritative API authorization.
 
 #### BlogBackendHooks
 
-Customize backend behavior with optional lifecycle hooks. All hooks are optional and allow you to add authorization, logging, and custom behavior:
+Customize backend behavior with optional compatibility and lifecycle hooks.
+Unmigrated operations retain their RC authorization hooks. The migrated delete
+hooks run only after the shared server rule allows the operation, so use them
+for domain invariants, logging, and side effects—not ordinary access control.
 
 <AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogBackendHooks" />
 
@@ -362,7 +367,7 @@ Customize backend behavior with optional lifecycle hooks. All hooks are optional
 import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/blog/api"
 
 const blogHooks: BlogBackendHooks = {
-  // Authorization hooks — throw to deny access
+  // RC compatibility authorization hooks for operations not migrated yet.
   async onBeforeListPosts(filter, context) {
     if (filter.published === false) {
       if (!await isBlogAdmin(context.headers as Headers))
@@ -377,9 +382,11 @@ const blogHooks: BlogBackendHooks = {
     if (!await isBlogAdmin(context.headers as Headers))
       throw new Error("Admin access required to update posts")
   },
+  // Delete is migrated: identity and trusted facts are already authorized.
   async onBeforeDeletePost(postId, context) {
-    if (!await isBlogAdmin(context.headers as Headers))
-      throw new Error("Admin access required to delete posts")
+    if (isProtectedPost(postId))
+      throw new Error("Protected posts cannot be deleted")
+    auditDeleteAttempt(context.identity?.id, context.facts)
   },
   // ... other hooks
 }
@@ -391,6 +398,19 @@ const { handler, dbSchema } = stack({
   // ...
 })
 ```
+
+#### Blog delete lifecycle contexts
+
+The migrated delete operation supplies validated input, server-derived facts,
+resolved identity, and request directly to its lifecycle hooks. The result is
+also available after execution, and the error context is only created after
+authorization succeeds.
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogDeleteOperationContext" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogDeleteResultContext" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogDeleteErrorContext" />
 
 #### BlogApiContext
 
@@ -568,7 +588,10 @@ You can import the hooks from `"@btst/stack/plugins/blog/client/hooks"` to use i
 
 ## Server-side Data Access
 
-The blog plugin exposes standalone getter and mutation functions for server-side use cases. These bypass the HTTP layer entirely and query the database directly — no authorization hooks are called, so the caller is responsible for any access-control checks.
+The Blog plugin exposes standalone getters for trusted server reads and raw
+mutation primitives for RC compatibility. Raw functions bypass the operation
+layer entirely. Keep raw mutations to migrations, test setup, and seed scripts;
+use the authorized operation API below for runtime deletion.
 
 ### Authorized delete operation
 
@@ -594,11 +617,13 @@ The existing `myStack.api.blog.deletePost(postId)` and direct mutation import
 remain raw RC escape hatches for compatibility. They do not run authorization
 or lifecycle hooks.
 
-### Two patterns
+### Raw data access patterns
 
-**Pattern 1 — via `stack().api` (recommended for runtime server code)**
+**Pattern 1 — via `stack().api` (read-only and legacy raw access)**
 
-After calling `stack()`, the returned object includes a fully-typed `api` namespace. Getters and mutations are pre-bound to the adapter:
+After calling `stack()`, the returned object includes a fully-typed `api`
+namespace. Getters are pre-bound to the adapter and are useful for trusted
+read-only server work:
 
 ```ts title="app/lib/stack.ts"
 import { myStack } from "./stack"; // your stack() instance
@@ -612,17 +637,13 @@ const result = await myStack.api.blog.getAllPosts({ published: true });
 
 const post = await myStack.api.blog.getPostBySlug("hello-world");
 const tags = await myStack.api.blog.getAllTags();
-
-// Mutations — write operations (no auth hooks are called)
-const newPost = await myStack.api.blog.createPost({
-  title: "Hello World",
-  slug: "hello-world",
-  content: "...",
-  excerpt: "...",
-});
-await myStack.api.blog.updatePost(newPost.id, { published: true });
-await myStack.api.blog.deletePost(newPost.id);
 ```
+
+Do not use raw `myStack.api.blog.deletePost()` in request handlers. Use
+`forRequest(request).api.blog.deletePost()` for user-facing deletion or
+`myStack.internal.blog.deletePost()` for explicitly trusted jobs. The raw
+mutation remains only for RC compatibility while the other Blog mutations are
+migrated.
 
 **Pattern 2 — direct import (SSG, build-time, or custom adapter)**
 
@@ -648,7 +669,10 @@ await updatePost(myAdapter, post.id, { published: true });
 ```
 
 <Callout type="warn">
-**No authorization hooks are called** when using `stack().api.*` or direct imports. These functions hit the database directly. Always perform your own access-control checks before calling them from user-facing code.
+**No authorization or lifecycle hooks are called** when using raw
+`stack().api.*` mutations or direct imports. These functions hit the database
+directly. Keep them to migrations, seed scripts, and other explicitly trusted
+low-level work; never call them from user-facing request handlers.
 </Callout>
 
 ### Available getters

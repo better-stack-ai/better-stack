@@ -2,7 +2,7 @@ import { createMemoryAdapter } from "@btst/adapter-memory";
 import type { DatabaseDefinition } from "@btst/db";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { getRequestIdentity, stack } from "../../../api";
+import { stack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
 import { createServerAuth } from "../../../authorization/server";
 import { blogBackendPlugin, type BlogBackendHooks } from "../api";
@@ -97,7 +97,22 @@ function deleteRequest(id: string, identity?: { id: string; role: string }) {
 
 describe("Blog delete one-rule authorization tracer", () => {
 	it("returns 401 for anonymous HTTP deletion and 403 for an authenticated denial", async () => {
-		const backend = makeBackend({ auth: createAuth() });
+		const lifecycleEvents: string[] = [];
+		const backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeDeletePost: () => {
+					lifecycleEvents.push("before");
+				},
+				onPostDeleted: () => {
+					lifecycleEvents.push("after");
+				},
+				onDeletePostError: () => {
+					lifecycleEvents.push("error");
+					throw new Error("hook must not replace denial");
+				},
+			},
+		});
 		const anonymousPost = await seedPost(backend, "anonymous-post");
 		const authorlessPost = await seedPost(backend, "authorless-post", null);
 		const viewerPost = await seedPost(backend, "viewer-post");
@@ -114,6 +129,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 		expect(await postExists(backend, anonymousPost.id)).toBe(true);
 		expect(await postExists(backend, authorlessPost.id)).toBe(true);
 		expect(await postExists(backend, viewerPost.id)).toBe(true);
+		expect(lifecycleEvents).toEqual([]);
 	});
 
 	it("derives trusted facts and allows the owner through HTTP", async () => {
@@ -130,12 +146,12 @@ describe("Blog delete one-rule authorization tracer", () => {
 	});
 
 	it("powers the authorized request API with the same operation", async () => {
-		let hookIdentity: unknown;
+		let hookContext: unknown;
 		const backend = makeBackend({
 			auth: createAuth(),
 			hooks: {
 				onBeforeDeletePost: async (_id, context) => {
-					hookIdentity = await getRequestIdentity(context.headers);
+					hookContext = context;
 				},
 			},
 		});
@@ -151,7 +167,12 @@ describe("Blog delete one-rule authorization tracer", () => {
 		await backend
 			.forRequest(deleteRequest(post.id, { id: "author-1", role: "user" }))
 			.api.blog.deletePost({ id: post.id });
-		expect(hookIdentity).toEqual({ id: "author-1", role: "user" });
+		expect(hookContext).toMatchObject({
+			identity: { id: "author-1", role: "user" },
+			input: { id: post.id },
+			facts: { id: post.id, authorId: "author-1" },
+			request: expect.any(Request),
+		});
 		expect(await postExists(backend, post.id)).toBe(false);
 	});
 
@@ -167,8 +188,14 @@ describe("Blog delete one-rule authorization tracer", () => {
 				onBeforeDeletePost: (id) => {
 					events.push(`before:${id}`);
 				},
-				onPostDeleted: (id) => {
+				onPostDeleted: (id, context) => {
 					events.push(`after:${id}`);
+					expect(context).toMatchObject({
+						identity: null,
+						input: { id },
+						facts: { id, authorId: "author-1" },
+						result: { success: true },
+					});
 				},
 				onDeletePostError: (_error, context) => {
 					events.push(`error:${context.params?.id ?? "invalid"}`);
@@ -185,14 +212,10 @@ describe("Blog delete one-rule authorization tracer", () => {
 		await expect(
 			backend.internal.blog.deletePost({ id: 1 } as never),
 		).rejects.toBeInstanceOf(z.ZodError);
-		expect(events).toEqual([
-			`before:${post.id}`,
-			`after:${post.id}`,
-			"error:invalid",
-		]);
+		expect(events).toEqual([`before:${post.id}`, `after:${post.id}`]);
 	});
 
-	it("runs the error lifecycle when trusted fact derivation fails", async () => {
+	it("does not enter the lifecycle when trusted fact derivation fails", async () => {
 		const onDeletePostError = vi.fn();
 		const backend = makeBackend({
 			hooks: { onDeletePostError },
@@ -206,10 +229,39 @@ describe("Blog delete one-rule authorization tracer", () => {
 			backend.internal.blog.deletePost({ id: post.id }),
 		).rejects.toThrow("database unavailable");
 
-		expect(onDeletePostError).toHaveBeenCalledWith(
-			expect.objectContaining({ message: "database unavailable" }),
-			expect.objectContaining({ params: { id: post.id } }),
+		expect(onDeletePostError).not.toHaveBeenCalled();
+		expect(await postExists(backend, post.id)).toBe(true);
+	});
+
+	it("runs the error lifecycle after authorization without replacing the operation error", async () => {
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeDeletePost: (_id, context) => {
+					events.push(`before:${context.identity?.id}`);
+				},
+				onDeletePostError: (error, context) => {
+					events.push(`error:${context.identity?.id}:${error.message}`);
+					throw new Error("observability unavailable");
+				},
+			},
+		});
+		const post = await seedPost(backend, "execution-failure", "author-1");
+		vi.spyOn(backend.adapter, "delete").mockRejectedValueOnce(
+			new Error("delete unavailable"),
 		);
+
+		await expect(
+			backend
+				.forRequest(deleteRequest(post.id, { id: "author-1", role: "user" }))
+				.api.blog.deletePost({ id: post.id }),
+		).rejects.toThrow("delete unavailable");
+
+		expect(events).toEqual([
+			"before:author-1",
+			"error:author-1:delete unavailable",
+		]);
 		expect(await postExists(backend, post.id)).toBe(true);
 	});
 

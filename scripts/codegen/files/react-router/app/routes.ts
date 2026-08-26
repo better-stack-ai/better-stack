@@ -7,7 +7,13 @@ import {
 
 export default [
 	index("routes/home.tsx"),
-	layout("routes/pages/_layout.tsx", [route("pages/*", "routes/pages/$.tsx")]),
+	layout("routes/pages/_layout.tsx", [
+		route(
+			"pages/authorization-boundary",
+			"routes/pages/authorization-boundary.tsx",
+		),
+		route("pages/*", "routes/pages/$.tsx"),
+	]),
 	route("form-demo/:slug", "routes/form-demo.tsx"),
 	route("preview/:slug", "routes/preview.tsx"),
 	route("public-chat", "routes/public-chat.tsx"),

@@ -17,6 +17,7 @@ import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder";
 import { openai } from "@ai-sdk/openai";
 import { tool } from "ai";
 import { z } from "zod";
+import { serverAuth } from "./authorization.server";
 import {
 	ProductSchema,
 	TestimonialSchema,
@@ -198,6 +199,7 @@ const blogHooks: BlogBackendHooks = {
 
 _stackRef = stack({
 	basePath: "/api/data",
+	auth: serverAuth,
 	plugins: {
 		todos: todosBackendPlugin,
 		blog: blogBackendPlugin(blogHooks),

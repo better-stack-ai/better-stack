@@ -6,7 +6,16 @@ import type {
 } from "@btst/db";
 import type { Endpoint, Router } from "better-call";
 import type { StackServerAuthProvider } from "./shared/auth-types";
-import type { OperationApi, OperationRecord } from "./plugins/api/operation";
+import type {
+	OperationApi,
+	OperationPermissionId,
+	OperationRecord,
+	RouteOperationApi,
+} from "./plugins/api/operation";
+import type {
+	AnyAuthorization,
+	AuthorizationPermissionId,
+} from "./authorization";
 
 export type {
 	CanParams,
@@ -74,11 +83,13 @@ export interface BackendPlugin<
 	 *   create, update, updateMany, delete, deleteMany, findOne, findMany, count
 	 * @param context - Optional context with access to all plugins (for introspection)
 	 */
-	routes: (
+	routes(
 		adapter: Adapter,
-		context?: StackContext,
-		operations?: TOperations,
-	) => TRoutes;
+		context: StackContext | undefined,
+		operations: [TOperations] extends [never]
+			? Record<string, never>
+			: RouteOperationApi<TOperations>,
+	): TRoutes;
 	dbPlugin: DbPlugin;
 
 	/**
@@ -163,6 +174,37 @@ export type PluginOperations<
 		: K]: OperationApi<_OperationsOf<TPlugins[K]>>;
 };
 
+type _OperationPermissionIds<T> = T extends OperationRecord
+	? OperationPermissionId<T[keyof T]>
+	: never;
+
+/** Stable permission ids required by all operations in a plugin map. */
+export type PluginOperationPermissionIds<
+	TPlugins extends Record<string, BackendPlugin<any, any, any>>,
+> = {
+	[K in keyof TPlugins]: _OperationPermissionIds<_OperationsOf<TPlugins[K]>>;
+}[keyof TPlugins];
+
+/**
+ * Reject one-rule server adapters whose registered catalogs do not cover every
+ * operation descriptor in the composed stack. RC server providers remain
+ * compatible until the v3 migration is complete.
+ */
+export type CompatibleStackAuth<
+	TPlugins extends Record<string, BackendPlugin<any, any, any>>,
+	TAuth extends StackServerAuthProvider | undefined,
+> = TAuth extends {
+	mode: "one-rule";
+	readonly authorization: infer TAuthorization extends AnyAuthorization;
+}
+	? Exclude<
+			PluginOperationPermissionIds<TPlugins>,
+			AuthorizationPermissionId<TAuthorization>
+		> extends never
+		? TAuth
+		: never
+	: TAuth;
+
 /**
  * Configuration for creating the backend library
  */
@@ -171,6 +213,9 @@ export interface BackendLibConfig<
 		string,
 		BackendPlugin<any, any, any>
 	>,
+	TAuth extends StackServerAuthProvider | undefined =
+		| StackServerAuthProvider
+		| undefined,
 > {
 	basePath: string;
 	dbSchema?: DatabaseDefinition;
@@ -182,7 +227,7 @@ export interface BackendLibConfig<
 	 * hooks and route handlers can read it via `getRequestIdentity(headers)`
 	 * from `@btst/stack/api`. When omitted, behavior is unchanged.
 	 */
-	auth?: StackServerAuthProvider;
+	auth?: TAuth;
 }
 
 /**

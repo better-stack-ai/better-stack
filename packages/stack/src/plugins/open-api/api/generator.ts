@@ -339,8 +339,13 @@ export function generateOpenAPISchema(
 			continue;
 		}
 
-		// Get plugin routes
-		const pluginRoutes = plugin.routes(context.adapter, context);
+		// Route factories are inspected but their handlers are never executed here,
+		// so no operation transport is available during schema generation.
+		const pluginRoutes = plugin.routes(
+			context.adapter,
+			context,
+			{} as Parameters<typeof plugin.routes>[2],
+		);
 
 		// Create tag for this plugin
 		const tagName = pluginKey.charAt(0).toUpperCase() + pluginKey.slice(1);

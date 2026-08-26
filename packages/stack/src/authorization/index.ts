@@ -132,7 +132,7 @@ function createPermissionDescriptor(
 		[permissionDescriptorMarker]: { value: true },
 	});
 
-	return descriptor;
+	return Object.freeze(descriptor);
 }
 
 function bindPermissionTree(
@@ -147,7 +147,7 @@ function bindPermissionTree(
 			? createPermissionDescriptor(`${namespace}:${nextPath}`, value.schema)
 			: bindPermissionTree(namespace, value, nextPath);
 	}
-	return result;
+	return Object.freeze(result);
 }
 
 /**
@@ -158,7 +158,7 @@ export function definePermissions<
 	const TName extends string,
 	const TTree extends PermissionTree,
 >(name: TName, tree: TTree): PermissionCatalog<TName, TTree> {
-	const catalog = bindPermissionTree(name, tree) as PermissionCatalog<
+	const catalog = { ...bindPermissionTree(name, tree) } as PermissionCatalog<
 		TName,
 		TTree
 	>;
@@ -289,6 +289,17 @@ export type AuthorizationIdentityInput<TAuthorization> =
 export type AuthorizationPermissionRequest<TAuthorization> =
 	TAuthorization extends Authorization<any, infer TCatalogs>
 		? RequestFor<RegisteredDescriptor<TCatalogs>>
+		: never;
+
+/** Infer stable permission ids registered by an authorization contract. */
+export type AuthorizationPermissionId<TAuthorization> =
+	TAuthorization extends Authorization<any, infer TCatalogs>
+		? RegisteredDescriptor<TCatalogs> extends PermissionDescriptor<
+				infer TId,
+				any
+			>
+			? TId
+			: never
 		: never;
 
 function createRuleTree(tree: object): Record<string, unknown> {
