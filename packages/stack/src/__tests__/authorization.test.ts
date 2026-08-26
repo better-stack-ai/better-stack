@@ -4,6 +4,7 @@ import { createMemoryAdapter } from "@btst/adapter-memory";
 import type { DatabaseDefinition } from "@btst/db";
 import {
 	defineAuthorization,
+	defineAuthorizationContract,
 	definePermissions,
 	permission,
 } from "../authorization";
@@ -49,6 +50,80 @@ const authorization = defineAuthorization({
 });
 
 describe("schema-backed authorization", () => {
+	it("exposes a versioned rule-free contract for the registered schemas", () => {
+		const contract = defineAuthorizationContract({
+			identity: z.object({
+				id: z.string(),
+				role: z.enum(["user", "admin"]),
+			}),
+			permissions: [blogPermissions] as const,
+		});
+		const localAuthorization = defineAuthorization({
+			contract,
+			rules: ({ blog }) => [blog.post.read.allow()],
+		});
+
+		expect(contract.permissionIds).toEqual([
+			"blog:post.delete",
+			"blog:post.read",
+		]);
+		expect(contract.version).toMatch(/^auth_[0-9a-f]{16}$/);
+		expect(contract.parseIdentity({ id: "user-1", role: "user" })).toEqual({
+			id: "user-1",
+			role: "user",
+		});
+		expect(
+			contract.parsePermission({
+				id: "blog:post.delete",
+				facts: { id: "post-1" },
+			}),
+		).toMatchObject({
+			id: "blog:post.delete",
+			facts: { id: "post-1" },
+		});
+		expect(() =>
+			contract.parsePermission({
+				id: "blog:post.delete",
+				facts: { id: 1 },
+			}),
+		).toThrow();
+		expect(localAuthorization.contract).toBe(contract);
+	});
+
+	it("derives the same contract version from equivalent schemas", () => {
+		const createContract = () =>
+			defineAuthorizationContract({
+				identity: z.object({ id: z.string() }),
+				permissions: [
+					definePermissions("documents", {
+						read: permission(z.object({ id: z.string() })),
+					}),
+				] as const,
+			});
+
+		expect(createContract().version).toBe(createContract().version);
+
+		const changed = defineAuthorizationContract({
+			identity: z.object({ id: z.string(), tenantId: z.string() }),
+			permissions: [
+				definePermissions("documents", {
+					read: permission(z.object({ id: z.string() })),
+				}),
+			] as const,
+		});
+		expect(changed.version).not.toBe(createContract().version);
+
+		const changedFacts = defineAuthorizationContract({
+			identity: z.object({ id: z.string() }),
+			permissions: [
+				definePermissions("documents", {
+					read: permission(z.object({ id: z.string(), revision: z.number() })),
+				}),
+			] as const,
+		});
+		expect(changedFacts.version).not.toBe(createContract().version);
+	});
+
 	it("validates permission facts when the request is created", () => {
 		expect(() => blogPermissions.post.delete({ id: 1 } as never)).toThrow();
 		expect(blogPermissions.post.delete({ id: "post-1" })).toMatchObject({

@@ -9,6 +9,10 @@ import {
 	permission,
 } from "../authorization";
 import { createClientAuth } from "../authorization/client";
+import {
+	AuthorizationResponseValidationError,
+	createRemoteAuthorizationEvaluator,
+} from "../authorization/remote";
 import { StackProvider } from "../context";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -56,6 +60,74 @@ async function render(ui: React.ReactElement) {
 }
 
 describe("createClientAuth", () => {
+	it("evaluates remote permissions asynchronously without a reusable cache", async () => {
+		const transport = vi.fn(async (request) => ({
+			version: request.version,
+			allowed: true,
+		}));
+		const evaluator = createRemoteAuthorizationEvaluator({
+			contract: authorization.contract,
+			transport,
+		});
+		const clientAuth = createClientAuth({
+			evaluator,
+			getIdentity: () => ({ id: "user-1", role: "user" as const }),
+		});
+		let firstState: ReturnType<typeof clientAuth.useCan> | undefined;
+		let secondState: ReturnType<typeof clientAuth.useCan> | undefined;
+
+		function Probe() {
+			const permissionRequest = blogPermissions.post.delete({ id: "post-1" });
+			firstState = clientAuth.useCan(permissionRequest);
+			secondState = clientAuth.useCan(permissionRequest);
+			return null;
+		}
+
+		await render(
+			<StackProvider basePath="/pages" auth={clientAuth}>
+				<Probe />
+			</StackProvider>,
+		);
+
+		expect(firstState).toEqual({ can: true, isPending: false });
+		expect(secondState).toEqual({ can: true, isPending: false });
+		expect(transport).toHaveBeenCalledTimes(2);
+	});
+
+	it("surfaces remote protocol failures instead of treating them as denials", async () => {
+		const evaluator = createRemoteAuthorizationEvaluator({
+			contract: authorization.contract,
+			transport: async () => ({
+				version: authorization.contract.version,
+				allowed: "not-a-boolean",
+			}),
+		});
+		const clientAuth = createClientAuth({
+			evaluator,
+			getIdentity: () => ({ id: "user-1", role: "user" as const }),
+		});
+		let canState: ReturnType<typeof clientAuth.useCan> | undefined;
+
+		function Probe() {
+			canState = clientAuth.useCan(
+				blogPermissions.post.delete({ id: "post-1" }),
+			);
+			return null;
+		}
+
+		await render(
+			<StackProvider basePath="/pages" auth={clientAuth}>
+				<Probe />
+			</StackProvider>,
+		);
+
+		expect(canState?.can).toBe(false);
+		expect(canState?.isPending).toBe(false);
+		expect(canState?.error).toBeInstanceOf(
+			AuthorizationResponseValidationError,
+		);
+	});
+
 	it("binds typed hooks and evaluates the shared rule locally", async () => {
 		const fetchSpy = vi.spyOn(globalThis, "fetch");
 		const clientAuth = createClientAuth({

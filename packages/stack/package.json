@@ -107,6 +107,16 @@
         "default": "./dist/authorization/client.cjs"
       }
     },
+    "./authorization/remote": {
+      "import": {
+        "types": "./dist/authorization/remote.d.ts",
+        "default": "./dist/authorization/remote.mjs"
+      },
+      "require": {
+        "types": "./dist/authorization/remote.d.cts",
+        "default": "./dist/authorization/remote.cjs"
+      }
+    },
     "./authorization/server": {
       "import": {
         "types": "./dist/authorization/server.d.ts",
@@ -710,6 +720,9 @@
       ],
       "authorization/client": [
         "./dist/authorization/client.d.ts"
+      ],
+      "authorization/remote": [
+        "./dist/authorization/remote.d.ts"
       ],
       "authorization/server": [
         "./dist/authorization/server.d.ts"

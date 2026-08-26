@@ -3,6 +3,7 @@ import { z } from "zod";
 const permissionSeedMarker = Symbol("btst.permission-seed");
 const permissionDescriptorMarker = Symbol("btst.permission-descriptor");
 const permissionCatalogMarker = Symbol("btst.permission-catalog");
+declare const authorizationContractTypes: unique symbol;
 
 type AnySchema = z.ZodType<any, any>;
 
@@ -253,11 +254,172 @@ type RuleCatalogs<
 	TIdentity,
 > = UnionToIntersection<CatalogRuleEntry<TCatalogs[number], TIdentity>>;
 
+/**
+ * A rule-free authorization vocabulary that can be published independently of
+ * an application's backend implementation.
+ */
+export interface AuthorizationContract<
+	TIdentitySchema extends z.ZodType<{ id: string }, any>,
+	TCatalogs extends readonly AnyPermissionCatalog[],
+> {
+	readonly [authorizationContractTypes]?: {
+		readonly identity: z.output<TIdentitySchema>;
+		readonly identityInput: z.input<TIdentitySchema>;
+		readonly permission: RequestFor<RegisteredDescriptor<TCatalogs>>;
+	};
+	readonly identitySchema: TIdentitySchema;
+	readonly permissions: TCatalogs;
+	readonly permissionIds: readonly string[];
+	readonly version: string;
+	parseIdentity(identity: unknown): z.output<TIdentitySchema> | null;
+	parsePermission(
+		permission: unknown,
+	): RequestFor<RegisteredDescriptor<TCatalogs>>;
+}
+
+/** Any portable authorization contract, for generic adapter APIs. */
+export interface AnyAuthorizationContract {
+	readonly [authorizationContractTypes]?: {
+		readonly identity: { id: string };
+		readonly identityInput: unknown;
+		readonly permission: any;
+	};
+	readonly identitySchema: z.ZodType<{ id: string }, any>;
+	readonly permissions: readonly AnyPermissionCatalog[];
+	readonly permissionIds: readonly string[];
+	readonly version: string;
+	parseIdentity(identity: unknown): { id: string } | null;
+	parsePermission(permission: unknown): any;
+}
+
+type ContractIdentitySchema<TContract extends AnyAuthorizationContract> =
+	TContract extends AuthorizationContract<infer TSchema, any> ? TSchema : never;
+
+type ContractCatalogs<TContract extends AnyAuthorizationContract> =
+	TContract extends AuthorizationContract<any, infer TCatalogs>
+		? TCatalogs
+		: never;
+
+/** Infer validated identity output from a portable contract. */
+export type AuthorizationContractIdentity<TContract> =
+	TContract extends AnyAuthorizationContract
+		? NonNullable<TContract[typeof authorizationContractTypes]>["identity"]
+		: never;
+
+/** Infer accepted identity input from a portable contract. */
+export type AuthorizationContractIdentityInput<TContract> =
+	TContract extends AnyAuthorizationContract
+		? NonNullable<TContract[typeof authorizationContractTypes]>["identityInput"]
+		: never;
+
+/** Infer registered permission requests from a portable contract. */
+export type AuthorizationContractPermissionRequest<TContract> =
+	TContract extends AnyAuthorizationContract
+		? NonNullable<TContract[typeof authorizationContractTypes]>["permission"]
+		: never;
+
+function stableJson(value: unknown): string {
+	if (Array.isArray(value)) {
+		return `[${value.map(stableJson).join(",")}]`;
+	}
+	if (value && typeof value === "object") {
+		return `{${Object.entries(value)
+			.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+			.map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
+			.join(",")}}`;
+	}
+	return JSON.stringify(value);
+}
+
+function fingerprint(value: string): string {
+	let hash = 0xcbf29ce484222325n;
+	for (let index = 0; index < value.length; index += 1) {
+		hash ^= BigInt(value.charCodeAt(index));
+		hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+	}
+	return hash.toString(16).padStart(16, "0");
+}
+
+function collectDescriptors(
+	catalogs: readonly AnyPermissionCatalog[],
+): Map<string, AnyPermissionDescriptor> {
+	const descriptors = new Map<string, AnyPermissionDescriptor>();
+	const collect = (tree: object) => {
+		for (const value of Object.values(tree)) {
+			if (isPermissionDescriptor(value)) {
+				if (descriptors.has(value.id)) {
+					throw new TypeError(`Permission "${value.id}" is registered twice.`);
+				}
+				descriptors.set(value.id, value);
+			} else if (typeof value === "object" && value !== null) {
+				collect(value);
+			}
+		}
+	};
+	for (const catalog of catalogs) collect(catalog);
+	return descriptors;
+}
+
+/** Define a versioned identity and permission vocabulary without any rules. */
+export function defineAuthorizationContract<
+	const TIdentitySchema extends z.ZodType<{ id: string }, any>,
+	const TCatalogs extends readonly AnyPermissionCatalog[],
+>(config: {
+	identity: TIdentitySchema;
+	permissions: TCatalogs;
+}): AuthorizationContract<TIdentitySchema, TCatalogs> {
+	const descriptors = collectDescriptors(config.permissions);
+	const permissionIds = Object.freeze([...descriptors.keys()].sort());
+	const versionSource = stableJson({
+		identity: z.toJSONSchema(config.identity),
+		permissions: permissionIds.map((id) => {
+			const descriptor = descriptors.get(id);
+			return {
+				id,
+				facts: descriptor?.schema ? z.toJSONSchema(descriptor.schema) : null,
+			};
+		}),
+	});
+
+	return Object.freeze({
+		identitySchema: config.identity,
+		permissions: config.permissions,
+		permissionIds,
+		version: `auth_${fingerprint(versionSource)}`,
+		parseIdentity(identity: unknown) {
+			return identity === null ? null : config.identity.parse(identity);
+		},
+		parsePermission(permissionRequest: unknown) {
+			if (
+				typeof permissionRequest !== "object" ||
+				permissionRequest === null ||
+				typeof (permissionRequest as { id?: unknown }).id !== "string"
+			) {
+				throw new TypeError("A permission request must contain a string id.");
+			}
+			const candidate = permissionRequest as { id: string; facts?: unknown };
+			const descriptor = descriptors.get(candidate.id);
+			if (!descriptor) {
+				throw new TypeError(`Permission "${candidate.id}" is not registered.`);
+			}
+			if (!descriptor.schema && candidate.facts !== undefined) {
+				throw new TypeError(
+					`Permission "${candidate.id}" does not accept facts.`,
+				);
+			}
+			return (
+				descriptor.schema ? descriptor(candidate.facts) : descriptor()
+			) as RequestFor<RegisteredDescriptor<TCatalogs>>;
+		},
+	});
+}
+
 /** The shared, synchronous authorization contract used by client and server. */
 export interface Authorization<
 	TIdentitySchema extends z.ZodType<{ id: string }, any>,
 	TCatalogs extends readonly AnyPermissionCatalog[],
 > {
+	readonly contract: AuthorizationContract<TIdentitySchema, TCatalogs>;
 	readonly identitySchema: TIdentitySchema;
 	readonly permissions: TCatalogs;
 	parseIdentity(identity: unknown): z.output<TIdentitySchema> | null;
@@ -268,26 +430,38 @@ export interface Authorization<
 }
 
 /** Any one-rule authorization contract, for generic adapter APIs. */
-export type AnyAuthorization = Authorization<
-	z.ZodType<{ id: string }, any>,
-	readonly AnyPermissionCatalog[]
->;
+export interface AnyAuthorization {
+	readonly contract: AnyAuthorizationContract;
+	readonly identitySchema: z.ZodType<{ id: string }, any>;
+	readonly permissions: readonly AnyPermissionCatalog[];
+	parseIdentity(identity: unknown): { id: string } | null;
+	can(request: any, identity: any): boolean;
+}
 
 /** Infer validated identity output from an authorization contract. */
-export type AuthorizationIdentity<TAuthorization> =
-	TAuthorization extends Authorization<infer TSchema, any>
-		? z.output<TSchema>
-		: never;
+export type AuthorizationIdentity<TAuthorization> = TAuthorization extends {
+	readonly identitySchema: infer TSchema extends z.ZodType<{ id: string }, any>;
+}
+	? z.output<TSchema>
+	: never;
 
 /** Infer accepted identity input from an authorization contract. */
 export type AuthorizationIdentityInput<TAuthorization> =
-	TAuthorization extends Authorization<infer TSchema, any>
+	TAuthorization extends {
+		readonly identitySchema: infer TSchema extends z.ZodType<
+			{ id: string },
+			any
+		>;
+	}
 		? z.input<TSchema>
 		: never;
 
 /** Infer registered permission requests from an authorization contract. */
 export type AuthorizationPermissionRequest<TAuthorization> =
-	TAuthorization extends Authorization<any, infer TCatalogs>
+	TAuthorization extends {
+		readonly permissions: infer TCatalogs extends
+			readonly AnyPermissionCatalog[];
+	}
 		? RequestFor<RegisteredDescriptor<TCatalogs>>
 		: never;
 
@@ -331,6 +505,20 @@ function createRuleTree(tree: object): Record<string, unknown> {
  * propagate so outages never masquerade as ordinary denials.
  */
 export function defineAuthorization<
+	const TContract extends AnyAuthorizationContract,
+>(config: {
+	contract: TContract;
+	rules: (
+		permissions: RuleCatalogs<
+			ContractCatalogs<TContract>,
+			z.output<ContractIdentitySchema<TContract>>
+		>,
+	) => readonly AuthorizationRuleDefinition[];
+}): Authorization<
+	ContractIdentitySchema<TContract>,
+	ContractCatalogs<TContract>
+>;
+export function defineAuthorization<
 	const TIdentitySchema extends z.ZodType<{ id: string }, any>,
 	const TCatalogs extends readonly AnyPermissionCatalog[],
 >(config: {
@@ -339,38 +527,38 @@ export function defineAuthorization<
 	rules: (
 		permissions: RuleCatalogs<TCatalogs, z.output<TIdentitySchema>>,
 	) => readonly AuthorizationRuleDefinition[];
-}): Authorization<TIdentitySchema, TCatalogs> {
-	const descriptors = new Map<string, AnyPermissionDescriptor>();
+}): Authorization<TIdentitySchema, TCatalogs>;
+export function defineAuthorization(config: any): any {
+	const contractValue: unknown =
+		config.contract ??
+		(
+			defineAuthorizationContract as (input: {
+				identity: z.ZodType<{ id: string }, any>;
+				permissions: readonly AnyPermissionCatalog[];
+			}) => unknown
+		)({
+			identity: config.identity,
+			permissions: config.permissions,
+		});
+	const contract = contractValue as {
+		identitySchema: z.ZodType<{ id: string }, any>;
+		permissions: readonly AnyPermissionCatalog[];
+		parseIdentity: (value: unknown) => { id: string } | null;
+		parsePermission: (value: unknown) => AnyPermissionRequest;
+	};
+	const descriptors = collectDescriptors(contract.permissions);
 	const ruleCatalogs: Record<string, unknown> = {};
 
-	for (const catalog of config.permissions) {
+	for (const catalog of contract.permissions) {
 		const name = catalog[permissionCatalogMarker].name;
 		if (name in ruleCatalogs) {
 			throw new TypeError(`Permission catalog "${name}" is registered twice.`);
 		}
 		ruleCatalogs[name] = createRuleTree(catalog);
-
-		const collect = (tree: object) => {
-			for (const value of Object.values(tree)) {
-				if (isPermissionDescriptor(value)) {
-					if (descriptors.has(value.id)) {
-						throw new TypeError(
-							`Permission "${value.id}" is registered twice.`,
-						);
-					}
-					descriptors.set(value.id, value);
-				} else if (typeof value === "object" && value !== null) {
-					collect(value);
-				}
-			}
-		};
-		collect(catalog);
 	}
 
 	const rules = new Map<string, AuthorizationRuleDefinition["evaluate"]>();
-	for (const definition of config.rules(
-		ruleCatalogs as RuleCatalogs<TCatalogs, z.output<TIdentitySchema>>,
-	)) {
+	for (const definition of config.rules(ruleCatalogs)) {
 		if (!descriptors.has(definition.permission.id)) {
 			throw new TypeError(
 				`Permission "${definition.permission.id}" is not registered.`,
@@ -385,29 +573,21 @@ export function defineAuthorization<
 	}
 
 	return Object.freeze({
-		identitySchema: config.identity,
-		permissions: config.permissions,
+		contract: contractValue as object,
+		identitySchema: contract.identitySchema,
+		permissions: contract.permissions,
 		parseIdentity(identity: unknown) {
-			return identity === null ? null : config.identity.parse(identity);
+			return contract.parseIdentity(identity);
 		},
 		can(request: AnyPermissionRequest, identity: unknown) {
-			const candidate = request;
-			const descriptor = descriptors.get(candidate.id);
-			if (!descriptor) {
-				throw new TypeError(`Permission "${candidate.id}" is not registered.`);
-			}
-
-			const parsedIdentity =
-				identity === null ? null : config.identity.parse(identity);
-			const parsedFacts = descriptor.schema
-				? descriptor.schema.parse(candidate.facts)
-				: undefined;
+			const candidate = contract.parsePermission(request);
+			const parsedIdentity = contract.parseIdentity(identity);
 			const rule = rules.get(candidate.id);
 			if (!rule) return false;
 
 			const result = rule({
 				identity: parsedIdentity,
-				facts: parsedFacts,
+				facts: candidate.facts,
 			});
 			if (typeof result !== "boolean") {
 				throw new TypeError(
@@ -416,7 +596,7 @@ export function defineAuthorization<
 			}
 			return result;
 		},
-	}) as Authorization<TIdentitySchema, TCatalogs>;
+	});
 }
 
 /** Check whether a runtime value has the shape of a permission request. */
