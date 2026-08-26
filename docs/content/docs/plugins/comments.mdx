@@ -89,7 +89,7 @@ const { handler, dbSchema } = stack({
         await sendApprovalEmail(comment.authorId)
       },
       onBeforeDelete: async (commentId, ctx) => {
-        // Require admin/moderator role — the Delete button is client-side only
+        // Keep this aligned with the client comments:comment/delete permission
         const session = await getSession(ctx.headers)
         if (!session?.user?.isAdmin) throw new Error("Admin access required")
       },
@@ -186,8 +186,11 @@ type PluginOverrides = {
   auth={{
     getIdentity: async () => (await getSession())?.user ?? null,
     loginPath: "/login",
-    can: ({ resource, action }) =>
-      resource !== "comments:comment" || action !== "moderate" || isAdmin(),
+    can: ({ resource, action }) => {
+      if (resource !== "comments:comment") return true
+      if (action === "moderate" || action === "delete") return isAdmin()
+      return true
+    },
   }}
   overrides={{
     comments: {
@@ -221,6 +224,13 @@ import { CommentThread } from "@btst/stack/plugins/comments/client/components"
   }}
 />
 ```
+
+For comments owned by the current user, `CommentThread` renders the Delete
+button only when `StackProvider.auth.can` allows
+`{ resource: "comments:comment", action: "delete", params: { id } }`. Keep this
+client permission aligned with `onBeforeDelete`; the server hook remains the
+authoritative security check. If the server still rejects a delete, the thread
+reports the failure through the configured `notify.error` handler.
 
 ### Props
 
