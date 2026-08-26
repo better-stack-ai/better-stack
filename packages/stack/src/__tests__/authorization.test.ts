@@ -5,6 +5,7 @@ import {
 	definePermissions,
 	permission,
 } from "../authorization";
+import { defineOperation } from "../plugins/api";
 
 const blogPermissions = definePermissions("blog", {
 	post: {
@@ -116,5 +117,24 @@ describe("schema-backed authorization", () => {
 		expect(() =>
 			failing.can(blogPermissions.post.delete({ id: "post-1" }), null),
 		).toThrow("policy unavailable");
+	});
+
+	it("runs operations backed by permissions without fact schemas", async () => {
+		const navigationPermissions = definePermissions("navigation", {
+			visit: permission(),
+		});
+		const operation = defineOperation({
+			input: z.object({ path: z.string() }),
+			permission: navigationPermissions.visit,
+			facts: () => undefined,
+			execute: ({ input, facts }) => {
+				expect(facts).toBeUndefined();
+				return input.path;
+			},
+		});
+
+		await expect(
+			operation.run({ path: "/docs" }, { internal: true }),
+		).resolves.toBe("/docs");
 	});
 });

@@ -2,7 +2,7 @@ import { createMemoryAdapter } from "@btst/adapter-memory";
 import type { DatabaseDefinition } from "@btst/db";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { stack } from "../../../api";
+import { getRequestIdentity, stack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
 import { createServerAuth } from "../../../authorization/server";
 import { blogBackendPlugin, type BlogBackendHooks } from "../api";
@@ -130,7 +130,15 @@ describe("Blog delete one-rule authorization tracer", () => {
 	});
 
 	it("powers the authorized request API with the same operation", async () => {
-		const backend = makeBackend({ auth: createAuth() });
+		let hookIdentity: unknown;
+		const backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeDeletePost: async (_id, context) => {
+					hookIdentity = await getRequestIdentity(context.headers);
+				},
+			},
+		});
 		const post = await seedPost(backend, "request-post", "author-1");
 
 		await expect(
@@ -143,6 +151,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 		await backend
 			.forRequest(deleteRequest(post.id, { id: "author-1", role: "user" }))
 			.api.blog.deletePost({ id: post.id });
+		expect(hookIdentity).toEqual({ id: "author-1", role: "user" });
 		expect(await postExists(backend, post.id)).toBe(false);
 	});
 

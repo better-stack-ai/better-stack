@@ -206,12 +206,15 @@ export function stack<
 		adapter: adapterInstance,
 		api: pluginApis,
 		internal,
-		forRequest: (request: Request) => ({
-			api: createOperationApi({
-				request,
-				internal: false,
-			}) as PluginOperations<TPlugins>,
-		}),
+		forRequest: (request: Request) => {
+			if (auth) registerIdentityResolver(request, auth);
+			return {
+				api: createOperationApi({
+					request,
+					internal: false,
+				}) as PluginOperations<TPlugins>,
+			};
+		},
 	};
 }
 

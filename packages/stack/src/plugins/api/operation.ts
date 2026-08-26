@@ -107,9 +107,10 @@ export function defineOperation<
 		>,
 	) => MaybePromise<void>;
 }): Operation<TInputSchema, TPermission, TResult> {
-	const runtimePermission = config.permission as unknown as (
-		facts: unknown,
-	) => { facts: unknown };
+	const runtimePermission = config.permission as unknown as {
+		(): { facts: unknown };
+		(facts: unknown): { facts: unknown };
+	};
 
 	return {
 		input: config.input,
@@ -128,7 +129,9 @@ export function defineOperation<
 					input: parsedInput,
 					...(options.request ? { request: options.request } : {}),
 				});
-				const permissionRequest = runtimePermission(trustedFacts);
+				const permissionRequest = config.permission.schema
+					? runtimePermission(trustedFacts)
+					: runtimePermission();
 				parsedFacts =
 					permissionRequest.facts as PermissionFactsFor<TPermission>;
 				hasParsedFacts = true;
