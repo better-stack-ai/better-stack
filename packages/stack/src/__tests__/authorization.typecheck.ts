@@ -208,6 +208,8 @@ const blogHooks: BlogBackendHooks = {
 			Equal<typeof context.result, { readonly success: true }>
 		> = true;
 		void resultIsExact;
+		// @ts-expect-error lifecycle result references are readonly
+		context.result = { success: true };
 	},
 	onDeletePostError: (_error, context) => {
 		const errorInputIsExact: Expect<
