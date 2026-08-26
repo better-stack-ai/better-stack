@@ -404,7 +404,8 @@ const { handler, dbSchema } = stack({
 The migrated delete operation supplies validated input, server-derived facts,
 resolved identity, and request directly to its lifecycle hooks. The result is
 also available after execution, and the error context is only created after
-authorization succeeds.
+authorization succeeds. Validated input and trusted facts are deeply readonly
+and frozen before any of these hooks run.
 
 <AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogDeleteOperationContext" />
 

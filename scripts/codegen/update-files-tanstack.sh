@@ -29,6 +29,9 @@ step "Syncing files from codegen-projects/tanstack → scripts/codegen/files/tan
 
 FILES=(
   "src/lib/adapters-build-check.ts"
+  "src/lib/authorization.server.ts"
+  "src/lib/authorization.ts"
+  "src/lib/authorization.ui.ts"
   "src/lib/cms-schemas.ts"
   "src/lib/mock-users.ts"
   "src/lib/plugins/todo/api/backend.ts"
@@ -51,6 +54,7 @@ FILES=(
   "src/routes/directory/category/\$categoryId.tsx"
   "src/routes/directory/index.tsx"
   "src/routes/pages/\$.tsx"
+  "src/routes/pages/authorization-boundary.tsx"
   "src/routes/pages/route.tsx"
 )
 

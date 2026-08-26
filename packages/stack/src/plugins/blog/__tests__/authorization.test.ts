@@ -276,10 +276,23 @@ describe("Blog delete one-rule authorization tracer", () => {
 	});
 
 	it("keeps identity and rule failures as errors", async () => {
+		const identityLifecycleEvents: string[] = [];
 		const identityFailure = makeBackend({
 			auth: createAuth(() => {
 				throw new Error("session unavailable");
 			}),
+			hooks: {
+				onBeforeDeletePost: () => {
+					identityLifecycleEvents.push("before");
+				},
+				onPostDeleted: () => {
+					identityLifecycleEvents.push("after");
+				},
+				onDeletePostError: () => {
+					identityLifecycleEvents.push("error");
+					throw new Error("hook must not replace identity failure");
+				},
+			},
 		});
 		const identityFailurePost = await seedPost(
 			identityFailure,
@@ -294,6 +307,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 		expect(await postExists(identityFailure, identityFailurePost.id)).toBe(
 			true,
 		);
+		expect(identityLifecycleEvents).toEqual([]);
 
 		const failingAuthorization = defineAuthorization({
 			identity: z.object({ id: z.string(), role: z.literal("admin") }),
@@ -304,9 +318,23 @@ describe("Blog delete one-rule authorization tracer", () => {
 				}),
 			],
 		});
+		const ruleLifecycleEvents: string[] = [];
 		const ruleFailure = stack({
 			basePath: "/api",
-			plugins: { blog: blogBackendPlugin() },
+			plugins: {
+				blog: blogBackendPlugin({
+					onBeforeDeletePost: () => {
+						ruleLifecycleEvents.push("before");
+					},
+					onPostDeleted: () => {
+						ruleLifecycleEvents.push("after");
+					},
+					onDeletePostError: () => {
+						ruleLifecycleEvents.push("error");
+						throw new Error("hook must not replace rule failure");
+					},
+				}),
+			},
 			adapter: memoryAdapter,
 			auth: createServerAuth({
 				authorization: failingAuthorization,
@@ -323,5 +351,58 @@ describe("Blog delete one-rule authorization tracer", () => {
 				.forRequest(deleteRequest(ruleFailurePost.id))
 				.api.blog.deletePost({ id: ruleFailurePost.id }),
 		).rejects.toThrow("policy unavailable");
+		expect(ruleLifecycleEvents).toEqual([]);
+		expect(
+			await postExists(
+				ruleFailure as ReturnType<typeof makeBackend>,
+				ruleFailurePost.id,
+			),
+		).toBe(true);
+
+		const missingRuleAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("admin") }),
+			permissions: [blogPermissions] as const,
+			rules: () => [],
+		});
+		const missingRuleLifecycleEvents: string[] = [];
+		const missingRule = stack({
+			basePath: "/api",
+			plugins: {
+				blog: blogBackendPlugin({
+					onBeforeDeletePost: () => {
+						missingRuleLifecycleEvents.push("before");
+					},
+					onPostDeleted: () => {
+						missingRuleLifecycleEvents.push("after");
+					},
+					onDeletePostError: () => {
+						missingRuleLifecycleEvents.push("error");
+						throw new Error("hook must not replace missing-rule denial");
+					},
+				}),
+			},
+			adapter: memoryAdapter,
+			auth: createServerAuth({
+				authorization: missingRuleAuthorization,
+				getIdentity: () => ({ id: "admin-1", role: "admin" as const }),
+			}),
+		});
+		const missingRulePost = await seedPost(
+			missingRule as ReturnType<typeof makeBackend>,
+			"missing-rule",
+		);
+
+		await expect(
+			missingRule
+				.forRequest(deleteRequest(missingRulePost.id))
+				.api.blog.deletePost({ id: missingRulePost.id }),
+		).rejects.toMatchObject({ statusCode: 403 });
+		expect(missingRuleLifecycleEvents).toEqual([]);
+		expect(
+			await postExists(
+				missingRule as ReturnType<typeof makeBackend>,
+				missingRulePost.id,
+			),
+		).toBe(true);
 	});
 });

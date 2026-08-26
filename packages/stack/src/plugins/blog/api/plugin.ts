@@ -4,8 +4,8 @@ import {
 	defineOperation,
 	type OperationContext,
 	type OperationErrorContext,
-} from "../../api";
-import { createEndpoint } from "../../api";
+} from "@btst/stack/plugins/api";
+import { createEndpoint } from "@btst/stack/plugins/api";
 import { AuthorizationError } from "../../../authorization/server";
 import { z } from "zod";
 import { blogSchema as dbSchema } from "../db";
@@ -25,8 +25,7 @@ import { serializePost, serializeTag } from "./serializers";
 import type { QueryClient } from "@tanstack/react-query";
 import { runHook } from "../../utils";
 import { blogPermissions } from "../permissions";
-import type { PermissionFactsFor } from "../../../authorization";
-import type { StackIdentity } from "../../../shared/auth-types";
+import type { PermissionFactsFor } from "@btst/stack/authorization";
 
 /**
  * Route keys for the blog plugin — matches the keys returned by
@@ -137,9 +136,9 @@ type DeletePostResult = { readonly success: true };
 
 /** Typed lifecycle context for the Blog delete operation. */
 export interface BlogDeleteOperationContext
-	extends OperationContext<DeletePostInput, DeletePostFacts, StackIdentity> {
-	params: { id: string };
-	headers?: Headers;
+	extends OperationContext<DeletePostInput, DeletePostFacts> {
+	readonly params: { readonly id: string };
+	readonly headers?: Headers;
 }
 
 /** Typed post-execution lifecycle context for the Blog delete operation. */
@@ -149,13 +148,9 @@ export interface BlogDeleteResultContext extends BlogDeleteOperationContext {
 
 /** Typed error lifecycle context after Blog delete authorization succeeds. */
 export interface BlogDeleteErrorContext
-	extends OperationErrorContext<
-		DeletePostInput,
-		DeletePostFacts,
-		StackIdentity
-	> {
-	params: { id: string };
-	headers?: Headers;
+	extends OperationErrorContext<DeletePostInput, DeletePostFacts> {
+	readonly params: { readonly id: string };
+	readonly headers?: Headers;
 }
 
 /**

@@ -25,25 +25,47 @@ type OperationExecutor = (
 
 const operationExecutors = new WeakMap<object, OperationExecutor>();
 
+/** Recursively readonly data exposed by an authorized operation lifecycle. */
+export type DeepReadonly<T> = T extends (...args: any[]) => unknown
+	? T
+	: T extends readonly unknown[]
+		? { readonly [TKey in keyof T]: DeepReadonly<T[TKey]> }
+		: T extends object
+			? { readonly [TKey in keyof T]: DeepReadonly<T[TKey]> }
+			: T;
+
+function deepFreeze<T>(
+	value: T,
+	seen = new WeakSet<object>(),
+): DeepReadonly<T> {
+	if (
+		value === null ||
+		(typeof value !== "object" && typeof value !== "function")
+	) {
+		return value as DeepReadonly<T>;
+	}
+
+	const object = value as object;
+	if (seen.has(object)) return value as DeepReadonly<T>;
+	seen.add(object);
+	for (const key of Reflect.ownKeys(object)) {
+		deepFreeze((object as Record<PropertyKey, unknown>)[key], seen);
+	}
+	return Object.freeze(object) as DeepReadonly<T>;
+}
+
 /** Validated input, trusted facts, and resolved identity passed through an operation. */
-export interface OperationContext<
-	TInput,
-	TFacts,
-	TIdentity extends StackIdentity = StackIdentity,
-> {
-	input: TInput;
-	facts: TFacts;
-	identity: TIdentity | null;
-	request?: Request;
+export interface OperationContext<TInput, TFacts> {
+	readonly input: DeepReadonly<TInput>;
+	readonly facts: DeepReadonly<TFacts>;
+	readonly identity: StackIdentity | null;
+	readonly request?: Request;
 }
 
 /** Context available after an authorized operation enters its lifecycle. */
-export interface OperationErrorContext<
-	TInput,
-	TFacts,
-	TIdentity extends StackIdentity = StackIdentity,
-> extends OperationContext<TInput, TFacts, TIdentity> {
-	error: unknown;
+export interface OperationErrorContext<TInput, TFacts>
+	extends OperationContext<TInput, TFacts> {
+	readonly error: unknown;
 }
 
 /** A validated plugin operation shared by every server transport. */
@@ -51,7 +73,6 @@ export interface Operation<
 	TInputSchema extends z.ZodTypeAny = z.ZodTypeAny,
 	TPermission extends AnyPermissionDescriptor = AnyPermissionDescriptor,
 	TResult = unknown,
-	TIdentity extends StackIdentity = StackIdentity,
 > {
 	readonly input: TInputSchema;
 	readonly permission: TPermission;
@@ -61,23 +82,22 @@ export interface Operation<
 export type AnyOperation = Operation<
 	z.ZodTypeAny,
 	AnyPermissionDescriptor,
-	any,
 	any
 >;
 /** Named operations exposed by a backend plugin. */
 export type OperationRecord = Record<string, AnyOperation>;
 
 type OperationInput<TOperation extends AnyOperation> =
-	TOperation extends Operation<infer TInputSchema, any, any, any>
+	TOperation extends Operation<infer TInputSchema, any, any>
 		? z.input<TInputSchema>
 		: never;
 
 type OperationResult<TOperation extends AnyOperation> =
-	TOperation extends Operation<any, any, infer TResult, any> ? TResult : never;
+	TOperation extends Operation<any, any, infer TResult> ? TResult : never;
 
 /** Infer the permission request enforced by an operation. */
 export type OperationPermissionRequest<TOperation extends AnyOperation> =
-	TOperation extends Operation<any, infer TPermission, any, any>
+	TOperation extends Operation<any, infer TPermission, any>
 		? PermissionRequestFor<TPermission>
 		: never;
 
@@ -112,43 +132,38 @@ export function defineOperation<
 	const TInputSchema extends z.ZodTypeAny,
 	const TPermission extends AnyPermissionDescriptor,
 	TResult,
-	TIdentity extends StackIdentity = StackIdentity,
 >(config: {
 	input: TInputSchema;
 	permission: TPermission;
 	facts: (ctx: {
-		input: z.output<TInputSchema>;
-		request?: Request;
+		readonly input: DeepReadonly<z.output<TInputSchema>>;
+		readonly request?: Request;
 	}) => MaybePromise<PermissionInputFor<TPermission>>;
 	before?: (
 		ctx: OperationContext<
 			z.output<TInputSchema>,
-			PermissionFactsFor<TPermission>,
-			TIdentity
+			PermissionFactsFor<TPermission>
 		>,
 	) => MaybePromise<void>;
 	execute: (
 		ctx: OperationContext<
 			z.output<TInputSchema>,
-			PermissionFactsFor<TPermission>,
-			TIdentity
+			PermissionFactsFor<TPermission>
 		>,
 	) => MaybePromise<TResult>;
 	after?: (
 		ctx: OperationContext<
 			z.output<TInputSchema>,
-			PermissionFactsFor<TPermission>,
-			TIdentity
-		> & { result: TResult },
+			PermissionFactsFor<TPermission>
+		> & { readonly result: DeepReadonly<TResult> },
 	) => MaybePromise<void>;
 	onError?: (
 		ctx: OperationErrorContext<
 			z.output<TInputSchema>,
-			PermissionFactsFor<TPermission>,
-			TIdentity
+			PermissionFactsFor<TPermission>
 		>,
 	) => MaybePromise<void>;
-}): Operation<TInputSchema, TPermission, TResult, TIdentity> {
+}): Operation<TInputSchema, TPermission, TResult> {
 	const runtimePermission = config.permission as unknown as {
 		(): { facts: unknown };
 		(facts: unknown): { facts: unknown };
@@ -161,7 +176,7 @@ export function defineOperation<
 		// These stages establish trusted operation context. They intentionally run
 		// before the lifecycle boundary, so validation, fact, identity, and rule
 		// failures cannot be observed or replaced by post-authorization hooks.
-		const parsedInput = config.input.parse(input);
+		const parsedInput = deepFreeze(config.input.parse(input));
 		const trustedFacts = await config.facts({
 			input: parsedInput,
 			...(options.request ? { request: options.request } : {}),
@@ -169,10 +184,11 @@ export function defineOperation<
 		const permissionRequest = config.permission.schema
 			? runtimePermission(trustedFacts)
 			: runtimePermission();
-		const parsedFacts =
-			permissionRequest.facts as PermissionFactsFor<TPermission>;
+		const parsedFacts = deepFreeze(
+			permissionRequest.facts as PermissionFactsFor<TPermission>,
+		);
 
-		let identity: TIdentity | null = null;
+		let identity: StackIdentity | null = null;
 		if (!options.skipAuthorization && isServerAuth(options.auth)) {
 			if (!options.request) {
 				throw new Error("Authorized operations require a request.");
@@ -183,31 +199,32 @@ export function defineOperation<
 					permission: unknown,
 				) => Promise<StackIdentity | null>;
 			};
-			identity = (await runtimeAuth.authorize(
+			identity = await runtimeAuth.authorize(
 				options.request,
 				permissionRequest,
-			)) as TIdentity | null;
+			);
 		}
 
-		const context: OperationContext<
-			z.output<TInputSchema>,
-			PermissionFactsFor<TPermission>,
-			TIdentity
-		> = {
+		const context = Object.freeze({
 			input: parsedInput,
 			facts: parsedFacts,
 			identity,
 			...(options.request ? { request: options.request } : {}),
-		};
+		}) satisfies OperationContext<
+			z.output<TInputSchema>,
+			PermissionFactsFor<TPermission>
+		>;
 
 		try {
 			await config.before?.(context);
 			const result = await config.execute(context);
-			await config.after?.({ ...context, result });
+			await config.after?.(
+				Object.freeze({ ...context, result: deepFreeze(result) }),
+			);
 			return result;
 		} catch (error) {
 			try {
-				await config.onError?.({ ...context, error });
+				await config.onError?.(Object.freeze({ ...context, error }));
 			} catch {
 				// Error hooks are observational and must not replace the operation error.
 			}
@@ -215,7 +232,7 @@ export function defineOperation<
 		}
 	};
 
-	const operation: Operation<TInputSchema, TPermission, TResult, TIdentity> = {
+	const operation: Operation<TInputSchema, TPermission, TResult> = {
 		input: config.input,
 		permission: config.permission,
 	};

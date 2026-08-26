@@ -34,6 +34,7 @@ export { createDbPlugin } from "@btst/db";
 export {
 	defineOperation,
 	type AnyOperation,
+	type DeepReadonly,
 	type Operation,
 	type OperationApi,
 	type OperationContext,

@@ -131,12 +131,17 @@ export function stack<
 	// Create the adapter instance once
 	const adapterInstance = adapter(betterDbSchema);
 
+	// Keep the constructed route maps on the shared context so introspection
+	// plugins inspect the real routes instead of invoking factories a second time.
+	const pluginRoutesByName: Record<string, Record<string, any>> = {};
+
 	// Create context for plugins that need access to all plugins (e.g., openAPI)
 	const context: StackContext = {
 		plugins,
 		basePath,
 		adapter: adapterInstance,
 		auth: runtimeAuth,
+		pluginRoutes: pluginRoutesByName,
 	};
 
 	const pluginOperations: Record<string, Record<string, any>> = {};
@@ -171,6 +176,7 @@ export function stack<
 			context,
 			routeOperationApis[pluginKey] ?? {},
 		);
+		pluginRoutesByName[pluginKey] = pluginRoutes;
 
 		// Prefix route keys with plugin name to avoid collisions
 		for (const [routeKey, endpoint] of Object.entries(pluginRoutes)) {

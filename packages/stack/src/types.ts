@@ -8,13 +8,13 @@ import type { Endpoint, Router } from "better-call";
 import type { StackServerAuthProvider } from "./shared/auth-types";
 import type {
 	OperationApi,
-	OperationPermissionId,
+	OperationPermissionRequest,
 	OperationRecord,
 	RouteOperationApi,
 } from "./plugins/api/operation";
 import type {
 	AnyAuthorization,
-	AuthorizationPermissionId,
+	AuthorizationPermissionRequest,
 } from "./authorization";
 
 export type {
@@ -37,6 +37,8 @@ export interface StackContext {
 	adapter: Adapter;
 	/** The server-side auth provider, when configured on `stack()` */
 	auth?: StackServerAuthProvider;
+	/** Routes already constructed for each plugin, used by introspection plugins. */
+	pluginRoutes: Record<string, Record<string, Endpoint>>;
 }
 
 /**
@@ -81,7 +83,9 @@ export interface BackendPlugin<
 	 *
 	 * @param adapter - Better DB adapter instance with methods:
 	 *   create, update, updateMany, delete, deleteMany, findOne, findMany, count
-	 * @param context - Optional context with access to all plugins (for introspection)
+	 * @param context - Stack context with access to all plugins (for introspection)
+	 * @param operations - Request-bound operations declared by this plugin. When
+	 *   the plugin declares operations, every route call requires this argument.
 	 */
 	routes(
 		adapter: Adapter,
@@ -174,16 +178,43 @@ export type PluginOperations<
 		: K]: OperationApi<_OperationsOf<TPlugins[K]>>;
 };
 
-type _OperationPermissionIds<T> = T extends OperationRecord
-	? OperationPermissionId<T[keyof T]>
+type _OperationPermissionRequests<T> = T extends OperationRecord
+	? OperationPermissionRequest<T[keyof T]>
 	: never;
 
-/** Stable permission ids required by all operations in a plugin map. */
-export type PluginOperationPermissionIds<
+/** Permission requests required by all operations in a plugin map. */
+export type PluginOperationPermissionRequests<
 	TPlugins extends Record<string, BackendPlugin<any, any, any>>,
 > = {
-	[K in keyof TPlugins]: _OperationPermissionIds<_OperationsOf<TPlugins[K]>>;
+	[K in keyof TPlugins]: _OperationPermissionRequests<
+		_OperationsOf<TPlugins[K]>
+	>;
 }[keyof TPlugins];
+
+type _RequestWithId<TRequest, TId> = TRequest extends { readonly id: TId }
+	? TRequest
+	: never;
+
+type _RequestFacts<TRequest> = TRequest extends { readonly facts: infer TFacts }
+	? TFacts
+	: never;
+
+type _IncompatibleOperationRequests<TOperationRequest, TAuthorizationRequest> =
+	TOperationRequest extends { readonly id: infer TId }
+		? _RequestWithId<TAuthorizationRequest, TId> extends infer TRegistered
+			? [TRegistered] extends [never]
+				? TOperationRequest
+				: [_RequestFacts<TOperationRequest>] extends [
+							_RequestFacts<TRegistered>,
+						]
+					? [_RequestFacts<TRegistered>] extends [
+							_RequestFacts<TOperationRequest>,
+						]
+						? never
+						: TOperationRequest
+					: TOperationRequest
+			: TOperationRequest
+		: TOperationRequest;
 
 /**
  * Reject one-rule server adapters whose registered catalogs do not cover every
@@ -197,9 +228,9 @@ export type CompatibleStackAuth<
 	mode: "one-rule";
 	readonly authorization: infer TAuthorization extends AnyAuthorization;
 }
-	? Exclude<
-			PluginOperationPermissionIds<TPlugins>,
-			AuthorizationPermissionId<TAuthorization>
+	? _IncompatibleOperationRequests<
+			PluginOperationPermissionRequests<TPlugins>,
+			AuthorizationPermissionRequest<TAuthorization>
 		> extends never
 		? TAuth
 		: never

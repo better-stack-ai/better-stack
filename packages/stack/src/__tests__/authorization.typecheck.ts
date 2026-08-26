@@ -7,7 +7,11 @@ import {
 import { createClientAuth } from "../authorization/client";
 import { createServerAuth } from "../authorization/server";
 import { stack } from "../api";
-import { defineOperation } from "../plugins/api";
+import {
+	createDbPlugin,
+	defineBackendPlugin,
+	defineOperation,
+} from "../plugins/api";
 import { blogBackendPlugin, type BlogBackendHooks } from "../plugins/blog/api";
 import { blogPermissions } from "../plugins/blog/permissions";
 import type { StackIdentity } from "../shared/auth-types";
@@ -143,10 +147,14 @@ const blogHooks: BlogBackendHooks = {
 		const identityIsHonest: Expect<
 			Equal<typeof context.identity, StackIdentity | null>
 		> = true;
-		const inputIsExact: Expect<Equal<typeof context.input, { id: string }>> =
-			true;
+		const inputIsExact: Expect<
+			Equal<typeof context.input, { readonly id: string }>
+		> = true;
 		const factsAreExact: Expect<
-			Equal<typeof context.facts, { id: string; authorId?: string }>
+			Equal<
+				typeof context.facts,
+				{ readonly id: string; readonly authorId?: string }
+			>
 		> = true;
 		const requestIsExact: Expect<
 			Equal<typeof context.request, Request | undefined>
@@ -155,6 +163,8 @@ const blogHooks: BlogBackendHooks = {
 		void inputIsExact;
 		void factsAreExact;
 		void requestIsExact;
+		// @ts-expect-error authorized input cannot be changed after policy evaluation
+		context.input.id = "another-post";
 	},
 	onPostDeleted: (_id, context) => {
 		const resultIsExact: Expect<
@@ -164,10 +174,13 @@ const blogHooks: BlogBackendHooks = {
 	},
 	onDeletePostError: (_error, context) => {
 		const errorInputIsExact: Expect<
-			Equal<typeof context.input, { id: string }>
+			Equal<typeof context.input, { readonly id: string }>
 		> = true;
 		const errorFactsAreExact: Expect<
-			Equal<typeof context.facts, { id: string; authorId?: string }>
+			Equal<
+				typeof context.facts,
+				{ readonly id: string; readonly authorId?: string }
+			>
 		> = true;
 		void errorInputIsExact;
 		void errorFactsAreExact;
@@ -217,4 +230,43 @@ stack({
 	adapter: fakeAdapter,
 	// @ts-expect-error Blog operations require the Blog permission catalog
 	auth: unregisteredServerAuth,
+});
+
+const operationPlugin = defineBackendPlugin({
+	name: "operation-fixture",
+	dbPlugin: createDbPlugin("operation-fixture", {}),
+	operations: () => ({ deleteArticle: operation }),
+	routes: () => ({}),
+});
+
+stack({
+	basePath: "/api",
+	plugins: { operationFixture: operationPlugin },
+	adapter: fakeAdapter,
+	auth: serverAuth,
+});
+
+const incompatibleRegistered = definePermissions("registered", {
+	article: {
+		delete: permission(
+			z.object({ id: z.string(), authorId: z.number().optional() }),
+		),
+	},
+});
+const incompatibleAuthorization = defineAuthorization({
+	identity: z.object({ id: z.string() }),
+	permissions: [incompatibleRegistered] as const,
+	rules: ({ registered }) => [registered.article.delete.allow()],
+});
+const incompatibleServerAuth = createServerAuth({
+	authorization: incompatibleAuthorization,
+	getIdentity: () => ({ id: "user-1" }),
+});
+
+stack({
+	basePath: "/api",
+	plugins: { operationFixture: operationPlugin },
+	adapter: fakeAdapter,
+	// @ts-expect-error matching ids with incompatible fact schemas are rejected
+	auth: incompatibleServerAuth,
 });

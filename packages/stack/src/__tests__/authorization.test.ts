@@ -174,4 +174,43 @@ describe("schema-backed authorization", () => {
 			backend.internal.navigation.visit({ path: "/docs" }),
 		).resolves.toBe("/docs");
 	});
+
+	it("deep-freezes validated input and trusted facts before lifecycle hooks", async () => {
+		const guardedPermissions = definePermissions("guarded", {
+			update: permission(z.object({ target: z.object({ id: z.string() }) })),
+		});
+		const guardedOperation = defineOperation({
+			input: z.object({ target: z.object({ id: z.string() }) }),
+			permission: guardedPermissions.update,
+			facts: ({ input }) => ({ target: { id: input.target.id } }),
+			before: ({ input, facts }) => {
+				expect(Object.isFrozen(input)).toBe(true);
+				expect(Object.isFrozen(input.target)).toBe(true);
+				expect(Object.isFrozen(facts)).toBe(true);
+				expect(Object.isFrozen(facts.target)).toBe(true);
+				expect(() => {
+					(input.target as { id: string }).id = "another-record";
+				}).toThrow();
+				expect(() => {
+					(facts.target as { id: string }).id = "another-record";
+				}).toThrow();
+			},
+			execute: ({ input }) => input.target.id,
+		});
+		const guardedPlugin = defineBackendPlugin({
+			name: "guarded",
+			dbPlugin: createDbPlugin("guarded", {}),
+			operations: () => ({ update: guardedOperation }),
+			routes: () => ({}),
+		});
+		const backend = stack({
+			basePath: "/api",
+			plugins: { guarded: guardedPlugin },
+			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
+		});
+
+		await expect(
+			backend.internal.guarded.update({ target: { id: "record-1" } }),
+		).resolves.toBe("record-1");
+	});
 });

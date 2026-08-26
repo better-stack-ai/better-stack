@@ -105,8 +105,9 @@ Pass it to `stack({ auth: serverAuth })`. The Blog DELETE endpoint and `myStack.
 Ordinary denials become HTTP 401 for anonymous identities and 403 for authenticated identities. Identity validation and rule failures remain errors instead of being converted into denials.
 
 `stack()` also checks the operation catalog at typecheck time. A server adapter
-that registers a different permission catalog cannot be composed with the Blog
-delete operation.
+that registers a different permission catalog—or reuses the same stable id
+with an incompatible fact schema—cannot be composed with the Blog delete
+operation.
 
 ### Operation lifecycle ordering
 
@@ -116,6 +117,10 @@ and rule failures—including 401 and 403 denials—do not call `before`, `after
 or operation error hooks. Once authorization succeeds, lifecycle contexts carry
 the validated `input`, trusted `facts`, resolved `identity`, and `request`;
 post-execution contexts also carry `result`.
+
+Validated input and trusted facts are deeply readonly in TypeScript and frozen
+at runtime before lifecycle hooks run. A `before` hook therefore cannot change
+the record that was authorized before `execute` uses it.
 
 Plugin-authored hooks know the plugin's exact input, facts, and result types.
 Because a reusable plugin is authored before an application chooses its
@@ -243,7 +248,11 @@ When an auth provider is configured and `can()` denies access:
 
 Without a provider, `permission` is ignored and the route renders without client-side gating.
 
-## Server-side identity
+## Legacy server-side lifecycle identity
+
+Schema-backed operation hooks receive identity directly in their operation
+context. `getRequestIdentity()` remains for RC hooks that have not migrated to
+operations; do not add a second identity lookup to an operation hook.
 
 Pass a server auth provider to `stack()`. The identity is resolved lazily and **at most once per request**, no matter how many hooks read it:
 
