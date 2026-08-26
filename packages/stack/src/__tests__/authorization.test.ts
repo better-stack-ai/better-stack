@@ -212,6 +212,11 @@ describe("schema-backed authorization", () => {
 			z.number().min(Number.POSITIVE_INFINITY),
 			z.number().multipleOf(0),
 			z.number().multipleOf(-1),
+			z.string().min(-1),
+			z.string().max(-1),
+			z.string().min(1.5),
+			z.array(z.string()).min(-1),
+			z.array(z.string()).max(1.5),
 			z.string().exactOptional(),
 			z.lazy(() => z.string()),
 			z

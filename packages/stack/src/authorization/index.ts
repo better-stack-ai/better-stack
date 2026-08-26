@@ -426,15 +426,34 @@ type PortableCheckDefinition = z.core.$ZodCheckDef & {
 	fn?: unknown;
 	format?: string;
 	hostname?: RegExp;
+	length?: number;
+	maximum?: number;
+	minimum?: number;
 	normalize?: boolean;
 	pattern?: RegExp;
 	protocol?: RegExp;
 	value?: unknown;
 };
 
+function getLengthConstraint(
+	definition: PortableCheckDefinition,
+): number | undefined {
+	switch (definition.check) {
+		case "min_length":
+			return definition.minimum;
+		case "max_length":
+			return definition.maximum;
+		case "length_equals":
+			return definition.length;
+		default:
+			return undefined;
+	}
+}
+
 function isPortableCheckDefinition(
 	definition: PortableCheckDefinition,
 ): boolean {
+	const lengthConstraint = getLengthConstraint(definition);
 	if (
 		!portableCheckTypes.has(definition.check) ||
 		Object.values(definition).some(
@@ -443,6 +462,8 @@ function isPortableCheckDefinition(
 		(definition.check === "multiple_of" &&
 			typeof definition.value === "number" &&
 			definition.value <= 0) ||
+		(lengthConstraint !== undefined &&
+			(!Number.isInteger(lengthConstraint) || lengthConstraint < 0)) ||
 		(definition.when !== undefined &&
 			!portableLengthCheckTypes.has(definition.check))
 	) {
