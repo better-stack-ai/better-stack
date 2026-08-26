@@ -327,8 +327,10 @@ await myStack.internal.todos.deleteTodo({ id: todoId })
 The request-scoped API authorizes. The explicit `internal` namespace skips
 user authorization but still validates input, derives facts, and runs the
 lifecycle. Operation descriptors do not expose a forgeable `internal` run
-option. Validated `input` and trusted `facts` are deeply readonly and frozen
-before `before` runs, so lifecycle code cannot change the target after the
+option. Lifecycle input, facts, identity, and results use primitives, plain
+objects, and arrays; they are deeply readonly and frozen. Serialize mutable
+built-ins such as `Date`, `Map`, `Set`, and typed arrays before they cross this
+boundary, so lifecycle code cannot change the target or claims after the
 authorization decision.
 
 ### Adapter Operations

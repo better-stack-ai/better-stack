@@ -9,6 +9,7 @@ import { createServerAuth } from "../authorization/server";
 import { stack } from "../api";
 import {
 	createDbPlugin,
+	type DeepReadonly,
 	defineBackendPlugin,
 	defineOperation,
 } from "../plugins/api";
@@ -139,13 +140,45 @@ const operation = defineOperation({
 	execute: ({ input }) => input.id,
 });
 
+const plainLifecyclePermissions = definePermissions("plain-lifecycle", {
+	read: permission(),
+});
+defineOperation({
+	// @ts-expect-error Date input cannot cross the immutable lifecycle boundary
+	input: z.object({ at: z.date() }),
+	permission: plainLifecyclePermissions.read,
+	facts: () => undefined,
+	execute: () => "ok",
+});
+defineOperation({
+	// @ts-expect-error Map input cannot cross the immutable lifecycle boundary
+	input: z.object({ values: z.map(z.string(), z.string()) }),
+	permission: plainLifecyclePermissions.read,
+	facts: () => undefined,
+	execute: () => "ok",
+});
+defineOperation({
+	// @ts-expect-error typed arrays cannot cross the immutable lifecycle boundary
+	input: z.object({ bytes: z.instanceof(Uint8Array) }),
+	permission: plainLifecyclePermissions.read,
+	facts: () => undefined,
+	execute: () => "ok",
+});
+defineOperation({
+	input: z.object({ id: z.string() }),
+	permission: plainLifecyclePermissions.read,
+	facts: () => undefined,
+	// @ts-expect-error operation results must also use plain immutable data
+	execute: () => new Date(),
+});
+
 // @ts-expect-error operation internals are only reachable through stack transports
 operation.run({ id: "article-1" }, { internal: true });
 
 const blogHooks: BlogBackendHooks = {
 	onBeforeDeletePost: (_id, context) => {
 		const identityIsHonest: Expect<
-			Equal<typeof context.identity, StackIdentity | null>
+			Equal<typeof context.identity, DeepReadonly<StackIdentity> | null>
 		> = true;
 		const inputIsExact: Expect<
 			Equal<typeof context.input, { readonly id: string }>
@@ -165,6 +198,10 @@ const blogHooks: BlogBackendHooks = {
 		void requestIsExact;
 		// @ts-expect-error authorized input cannot be changed after policy evaluation
 		context.input.id = "another-post";
+		if (context.identity) {
+			// @ts-expect-error authorized identity cannot be changed by lifecycle hooks
+			context.identity.id = "another-user";
+		}
 	},
 	onPostDeleted: (_id, context) => {
 		const resultIsExact: Expect<

@@ -152,7 +152,7 @@ describe("schema-backed authorization", () => {
 			facts: () => undefined,
 			execute: ({ input, facts }) => {
 				expect(facts).toBeUndefined();
-				return input.path;
+				return { path: input.path } as const;
 			},
 		});
 		expect(Object.isFrozen(operation)).toBe(true);
@@ -170,9 +170,12 @@ describe("schema-backed authorization", () => {
 			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
 		});
 
-		await expect(
-			backend.internal.navigation.visit({ path: "/docs" }),
-		).resolves.toBe("/docs");
+		const result = await backend.internal.navigation.visit({ path: "/docs" });
+		expect(result).toEqual({ path: "/docs" });
+		expect(Object.isFrozen(result)).toBe(true);
+		expect(() => {
+			(result as { path: string }).path = "/changed";
+		}).toThrow();
 	});
 
 	it("deep-freezes validated input and trusted facts before lifecycle hooks", async () => {

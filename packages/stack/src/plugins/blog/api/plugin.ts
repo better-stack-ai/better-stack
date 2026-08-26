@@ -134,6 +134,14 @@ type DeletePostInput = z.output<typeof DeletePostInputSchema>;
 type DeletePostFacts = PermissionFactsFor<typeof blogPermissions.post.delete>;
 type DeletePostResult = { readonly success: true };
 
+function normalizeOperationError(error: unknown): Error {
+	if (error instanceof Error) return error;
+	return new Error(
+		typeof error === "string" ? error : "Blog delete operation failed.",
+		{ cause: error },
+	);
+}
+
 /** Typed lifecycle context for the Blog delete operation. */
 export interface BlogDeleteOperationContext
 	extends OperationContext<DeletePostInput, DeletePostFacts> {
@@ -341,13 +349,16 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 					});
 				},
 				onError: async (operationContext) => {
-					await hooks?.onDeletePostError?.(operationContext.error as Error, {
-						...operationContext,
-						params: { id: operationContext.input.id },
-						...(operationContext.request
-							? { headers: operationContext.request.headers }
-							: {}),
-					});
+					await hooks?.onDeletePostError?.(
+						normalizeOperationError(operationContext.error),
+						{
+							...operationContext,
+							params: { id: operationContext.input.id },
+							...(operationContext.request
+								? { headers: operationContext.request.headers }
+								: {}),
+						},
+					);
 				},
 			}),
 		}),

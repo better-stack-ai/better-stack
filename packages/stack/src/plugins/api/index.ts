@@ -38,6 +38,7 @@ export {
 	type Operation,
 	type OperationApi,
 	type OperationContext,
+	type OperationData,
 	type OperationErrorContext,
 	type OperationPermissionRequest,
 	type OperationRecord,

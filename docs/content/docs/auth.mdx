@@ -118,9 +118,12 @@ or operation error hooks. Once authorization succeeds, lifecycle contexts carry
 the validated `input`, trusted `facts`, resolved `identity`, and `request`;
 post-execution contexts also carry `result`.
 
-Validated input and trusted facts are deeply readonly in TypeScript and frozen
-at runtime before lifecycle hooks run. A `before` hook therefore cannot change
-the record that was authorized before `execute` uses it.
+Operation lifecycle data uses primitives, plain objects, and arrays. Validated
+input, trusted facts, resolved identity, and results are deeply readonly in
+TypeScript and frozen at runtime. A `before` hook therefore cannot change the
+record or claims that were authorized before `execute` uses them. Mutable
+built-ins such as `Date`, `Map`, `Set`, and typed arrays do not cross this
+boundary; serialize them to plain data first.
 
 Plugin-authored hooks know the plugin's exact input, facts, and result types.
 Because a reusable plugin is authored before an application chooses its

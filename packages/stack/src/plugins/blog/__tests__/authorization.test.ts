@@ -176,6 +176,39 @@ describe("Blog delete one-rule authorization tracer", () => {
 		expect(await postExists(backend, post.id)).toBe(false);
 	});
 
+	it("freezes lifecycle identity without corrupting the request auth cache", async () => {
+		let beforeCalls = 0;
+		const backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeDeletePost: (_id, context) => {
+					beforeCalls += 1;
+					if (context.identity) {
+						(context.identity as { id: string }).id = "author-2";
+					}
+				},
+			},
+		});
+		const viewerPost = await seedPost(backend, "viewer-owned", "viewer-1");
+		const otherPost = await seedPost(backend, "other-owned", "author-2");
+		const request = deleteRequest(viewerPost.id, {
+			id: "viewer-1",
+			role: "user",
+		});
+		const requestApi = backend.forRequest(request).api.blog;
+
+		await expect(
+			requestApi.deletePost({ id: viewerPost.id }),
+		).rejects.toMatchObject({ statusCode: 403 });
+		await expect(
+			requestApi.deletePost({ id: otherPost.id }),
+		).rejects.toMatchObject({ statusCode: 403 });
+
+		expect(beforeCalls).toBe(1);
+		expect(await postExists(backend, viewerPost.id)).toBe(true);
+		expect(await postExists(backend, otherPost.id)).toBe(true);
+	});
+
 	it("keeps trusted internal calls validated and lifecycle-aware without resolving identity", async () => {
 		const events: string[] = [];
 		const getIdentity = vi.fn(() => ({
@@ -263,6 +296,27 @@ describe("Blog delete one-rule authorization tracer", () => {
 			"error:author-1:delete unavailable",
 		]);
 		expect(await postExists(backend, post.id)).toBe(true);
+	});
+
+	it("normalizes non-Error failures for the Blog error hook", async () => {
+		let observedError: Error | undefined;
+		const backend = makeBackend({
+			hooks: {
+				onDeletePostError: (error) => {
+					observedError = error;
+				},
+			},
+		});
+		const post = await seedPost(backend, "non-error-failure");
+		vi.spyOn(backend.adapter, "delete").mockRejectedValueOnce(
+			"delete unavailable",
+		);
+
+		await expect(
+			backend.internal.blog.deletePost({ id: post.id }),
+		).rejects.toBe("delete unavailable");
+		expect(observedError).toBeInstanceOf(Error);
+		expect(observedError?.message).toBe("delete unavailable");
 	});
 
 	it("preserves allow-all behavior when authorization is omitted", async () => {

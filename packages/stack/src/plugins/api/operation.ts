@@ -25,6 +25,17 @@ type OperationExecutor = (
 
 const operationExecutors = new WeakMap<object, OperationExecutor>();
 
+/** Plain values accepted at the immutable operation lifecycle boundary. */
+export type OperationData =
+	| string
+	| number
+	| boolean
+	| bigint
+	| null
+	| undefined
+	| readonly OperationData[]
+	| { readonly [key: string]: OperationData };
+
 /** Recursively readonly data exposed by an authorized operation lifecycle. */
 export type DeepReadonly<T> = T extends (...args: any[]) => unknown
 	? T
@@ -34,23 +45,51 @@ export type DeepReadonly<T> = T extends (...args: any[]) => unknown
 			? { readonly [TKey in keyof T]: DeepReadonly<T[TKey]> }
 			: T;
 
-function deepFreeze<T>(
+function freezeOperationData<T>(
 	value: T,
 	seen = new WeakSet<object>(),
+	path = "operation data",
 ): DeepReadonly<T> {
 	if (
 		value === null ||
 		(typeof value !== "object" && typeof value !== "function")
 	) {
+		if (typeof value === "function" || typeof value === "symbol") {
+			throw new TypeError(`${path} must contain only plain immutable data.`);
+		}
 		return value as DeepReadonly<T>;
 	}
 
 	const object = value as object;
-	if (seen.has(object)) return value as DeepReadonly<T>;
+	const prototype = Object.getPrototypeOf(object);
+	if (
+		!Array.isArray(object) &&
+		prototype !== Object.prototype &&
+		prototype !== null
+	) {
+		throw new TypeError(
+			`${path} must contain only plain objects and arrays; mutable built-ins are not supported.`,
+		);
+	}
+	if (seen.has(object)) {
+		throw new TypeError(`${path} must not contain circular references.`);
+	}
 	seen.add(object);
 	for (const key of Reflect.ownKeys(object)) {
-		deepFreeze((object as Record<PropertyKey, unknown>)[key], seen);
+		if (typeof key === "symbol") {
+			throw new TypeError(`${path} must not contain symbol properties.`);
+		}
+		const descriptor = Object.getOwnPropertyDescriptor(object, key);
+		if (descriptor && !("value" in descriptor)) {
+			throw new TypeError(`${path} must not contain accessor properties.`);
+		}
+		freezeOperationData(
+			(object as Record<PropertyKey, unknown>)[key],
+			seen,
+			`${path}.${key}`,
+		);
 	}
+	seen.delete(object);
 	return Object.freeze(object) as DeepReadonly<T>;
 }
 
@@ -58,7 +97,7 @@ function deepFreeze<T>(
 export interface OperationContext<TInput, TFacts> {
 	readonly input: DeepReadonly<TInput>;
 	readonly facts: DeepReadonly<TFacts>;
-	readonly identity: StackIdentity | null;
+	readonly identity: DeepReadonly<StackIdentity> | null;
 	readonly request?: Request;
 }
 
@@ -109,7 +148,7 @@ export type OperationPermissionId<TOperation extends AnyOperation> =
 export type OperationApi<TOperations extends OperationRecord> = {
 	[TKey in keyof TOperations]: (
 		input: OperationInput<TOperations[TKey]>,
-	) => Promise<OperationResult<TOperations[TKey]>>;
+	) => Promise<DeepReadonly<OperationResult<TOperations[TKey]>>>;
 };
 
 /** Operations bound to an HTTP transport; every call requires its request. */
@@ -117,7 +156,7 @@ export type RouteOperationApi<TOperations extends OperationRecord> = {
 	[TKey in keyof TOperations]: (
 		input: OperationInput<TOperations[TKey]>,
 		request: Request,
-	) => Promise<OperationResult<TOperations[TKey]>>;
+	) => Promise<DeepReadonly<OperationResult<TOperations[TKey]>>>;
 };
 
 /**
@@ -131,10 +170,19 @@ export type RouteOperationApi<TOperations extends OperationRecord> = {
 export function defineOperation<
 	const TInputSchema extends z.ZodTypeAny,
 	const TPermission extends AnyPermissionDescriptor,
-	TResult,
+	const TExecute extends (
+		ctx: OperationContext<
+			z.output<TInputSchema>,
+			PermissionFactsFor<TPermission>
+		>,
+	) => MaybePromise<OperationData>,
 >(config: {
-	input: TInputSchema;
-	permission: TPermission;
+	input: [z.output<TInputSchema>] extends [OperationData]
+		? TInputSchema
+		: never;
+	permission: [PermissionFactsFor<TPermission>] extends [OperationData]
+		? TPermission
+		: never;
 	facts: (ctx: {
 		readonly input: DeepReadonly<z.output<TInputSchema>>;
 		readonly request?: Request;
@@ -145,17 +193,14 @@ export function defineOperation<
 			PermissionFactsFor<TPermission>
 		>,
 	) => MaybePromise<void>;
-	execute: (
-		ctx: OperationContext<
-			z.output<TInputSchema>,
-			PermissionFactsFor<TPermission>
-		>,
-	) => MaybePromise<TResult>;
+	execute: TExecute;
 	after?: (
 		ctx: OperationContext<
 			z.output<TInputSchema>,
 			PermissionFactsFor<TPermission>
-		> & { readonly result: DeepReadonly<TResult> },
+		> & {
+			readonly result: DeepReadonly<Awaited<ReturnType<TExecute>>>;
+		},
 	) => MaybePromise<void>;
 	onError?: (
 		ctx: OperationErrorContext<
@@ -163,7 +208,8 @@ export function defineOperation<
 			PermissionFactsFor<TPermission>
 		>,
 	) => MaybePromise<void>;
-}): Operation<TInputSchema, TPermission, TResult> {
+}): Operation<TInputSchema, TPermission, Awaited<ReturnType<TExecute>>> {
+	type TResult = Awaited<ReturnType<TExecute>>;
 	const runtimePermission = config.permission as unknown as {
 		(): { facts: unknown };
 		(facts: unknown): { facts: unknown };
@@ -172,11 +218,15 @@ export function defineOperation<
 	const executeOperation = async (
 		input: z.input<TInputSchema>,
 		options: OperationExecutionOptions,
-	): Promise<TResult> => {
+	): Promise<unknown> => {
 		// These stages establish trusted operation context. They intentionally run
 		// before the lifecycle boundary, so validation, fact, identity, and rule
 		// failures cannot be observed or replaced by post-authorization hooks.
-		const parsedInput = deepFreeze(config.input.parse(input));
+		const parsedInput = freezeOperationData(
+			config.input.parse(input),
+			new WeakSet(),
+			"operation input",
+		);
 		const trustedFacts = await config.facts({
 			input: parsedInput,
 			...(options.request ? { request: options.request } : {}),
@@ -184,11 +234,13 @@ export function defineOperation<
 		const permissionRequest = config.permission.schema
 			? runtimePermission(trustedFacts)
 			: runtimePermission();
-		const parsedFacts = deepFreeze(
+		const parsedFacts = freezeOperationData(
 			permissionRequest.facts as PermissionFactsFor<TPermission>,
+			new WeakSet(),
+			"operation facts",
 		);
 
-		let identity: StackIdentity | null = null;
+		let identity: DeepReadonly<StackIdentity> | null = null;
 		if (!options.skipAuthorization && isServerAuth(options.auth)) {
 			if (!options.request) {
 				throw new Error("Authorized operations require a request.");
@@ -199,10 +251,17 @@ export function defineOperation<
 					permission: unknown,
 				) => Promise<StackIdentity | null>;
 			};
-			identity = await runtimeAuth.authorize(
+			const authorizedIdentity = await runtimeAuth.authorize(
 				options.request,
 				permissionRequest,
 			);
+			identity = authorizedIdentity
+				? freezeOperationData(
+						authorizedIdentity,
+						new WeakSet(),
+						"operation identity",
+					)
+				: null;
 		}
 
 		const context = Object.freeze({
@@ -217,10 +276,15 @@ export function defineOperation<
 
 		try {
 			await config.before?.(context);
-			const result = await config.execute(context);
-			await config.after?.(
-				Object.freeze({ ...context, result: deepFreeze(result) }),
+			const result = freezeOperationData<unknown>(
+				await config.execute(context),
+				new WeakSet(),
+				"operation result",
 			);
+			const after = config.after as
+				| ((ctx: unknown) => MaybePromise<void>)
+				| undefined;
+			await after?.(Object.freeze({ ...context, result }));
 			return result;
 		} catch (error) {
 			try {
@@ -251,20 +315,20 @@ export function runAuthorizedOperation<TOperation extends AnyOperation>(
 	operation: TOperation,
 	input: OperationInput<TOperation>,
 	options: { request: Request; auth?: StackServerAuthProvider },
-): Promise<OperationResult<TOperation>> {
+): Promise<DeepReadonly<OperationResult<TOperation>>> {
 	return getOperationExecutor(operation)(input, {
 		request: options.request,
 		...(options.auth ? { auth: options.auth } : {}),
 		skipAuthorization: false,
-	}) as Promise<OperationResult<TOperation>>;
+	}) as Promise<DeepReadonly<OperationResult<TOperation>>>;
 }
 
 /** @internal Execute an operation through the trusted application namespace. */
 export function runInternalOperation<TOperation extends AnyOperation>(
 	operation: TOperation,
 	input: OperationInput<TOperation>,
-): Promise<OperationResult<TOperation>> {
+): Promise<DeepReadonly<OperationResult<TOperation>>> {
 	return getOperationExecutor(operation)(input, {
 		skipAuthorization: true,
-	}) as Promise<OperationResult<TOperation>>;
+	}) as Promise<DeepReadonly<OperationResult<TOperation>>>;
 }
