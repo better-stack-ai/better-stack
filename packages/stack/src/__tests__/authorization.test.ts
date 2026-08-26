@@ -1,3 +1,6 @@
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createMemoryAdapter } from "@btst/adapter-memory";
@@ -88,6 +91,67 @@ describe("schema-backed authorization", () => {
 			}),
 		).toThrow();
 		expect(localAuthorization.contract).toBe(contract);
+	});
+
+	it("binds backend rules when the contract uses a separate physical stack copy", async () => {
+		const fixtureRoot = mkdtempSync(
+			join(process.cwd(), "node_modules/.btst-authorization-copies-"),
+		);
+		const copyPackage = (name: string) => {
+			const packageRoot = join(fixtureRoot, name, "node_modules/@btst/stack");
+			const authorizationRoot = join(packageRoot, "src/authorization");
+			mkdirSync(authorizationRoot, { recursive: true });
+			copyFileSync(
+				join(process.cwd(), "package.json"),
+				join(packageRoot, "package.json"),
+			);
+			copyFileSync(
+				join(process.cwd(), "src/authorization/index.ts"),
+				join(authorizationRoot, "index.ts"),
+			);
+			return pathToFileURL(join(authorizationRoot, "index.ts")).href;
+		};
+
+		try {
+			const contractCopy = (await import(
+				copyPackage("contract")
+			)) as typeof import("../authorization");
+			const backendCopy = (await import(
+				copyPackage("backend")
+			)) as typeof import("../authorization");
+			const publishedPermissions = contractCopy.definePermissions("documents", {
+				read: contractCopy.permission(z.object({ id: z.string() })),
+			});
+			const publishedContract = contractCopy.defineAuthorizationContract({
+				identity: z.object({ id: z.string() }),
+				permissions: [publishedPermissions] as const,
+			});
+			const backendAuthorization = backendCopy.defineAuthorization({
+				contract: publishedContract,
+				rules: ({ documents }) => [documents.read.allow()],
+			});
+			const request = publishedPermissions.read({ id: "document-1" });
+			const rebuiltContract = backendCopy.defineAuthorizationContract({
+				identity: z.object({ id: z.string() }),
+				permissions: [publishedPermissions] as const,
+			});
+
+			expect(backendCopy.isPermissionRequest(request)).toBe(true);
+			expect(rebuiltContract.version).toBe(publishedContract.version);
+			expect(backendAuthorization.can(request, { id: "user-1" })).toBe(true);
+		} finally {
+			rmSync(fixtureRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("rejects internal marker keys in permission trees", () => {
+		expect(() =>
+			definePermissions("reserved", {
+				"__btst.authorization.permission-catalog.v1": permission(),
+			}),
+		).toThrowError(
+			'Permission key "__btst.authorization.permission-catalog.v1" is reserved.',
+		);
 	});
 
 	it("derives the same contract version from equivalent schemas", () => {

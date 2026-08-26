@@ -1,10 +1,16 @@
 {
   "extends": "../../../../../tsconfig.json",
   "compilerOptions": {
+    "baseUrl": ".",
     "declaration": true,
     "emitDeclarationOnly": true,
     "incremental": false,
     "outDir": "./dist",
+    "paths": {
+      "@btst-test/stack-copy-a/authorization": [
+        "../stack-copy-a/dist/authorization/index.d.ts"
+      ]
+    },
     "rootDir": "./src"
   },
   "include": ["./src/**/*.ts"]

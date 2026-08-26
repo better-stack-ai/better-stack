@@ -166,6 +166,8 @@ export function createClientAuth(config: any): any {
 
 	const useCanRuntime = (permissionRequest: unknown): AuthorizationCanState => {
 		const context = useAuthContext();
+		const contextProvider = context?.provider;
+		const contextError = context?.error;
 		const identity = context?.identity ?? null;
 		const identityPending = context?.isPending ?? true;
 		let key = "local";
@@ -186,10 +188,10 @@ export function createClientAuth(config: any): any {
 			if (
 				!runtimeEvaluator ||
 				permissionError ||
-				!context ||
-				context.provider !== clientAuth ||
+				!contextProvider ||
+				contextProvider !== clientAuth ||
 				identityPending ||
-				context.error
+				contextError
 			) {
 				return;
 			}
@@ -228,7 +230,7 @@ export function createClientAuth(config: any): any {
 			return () => {
 				cancelled = true;
 			};
-		}, [context, identity, identityPending, key]);
+		}, [contextError, contextProvider, identity, identityPending, key]);
 
 		if (!context || context.provider !== clientAuth) {
 			throw new Error(

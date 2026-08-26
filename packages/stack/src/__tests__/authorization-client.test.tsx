@@ -96,6 +96,66 @@ describe("createClientAuth", () => {
 		expect(transport).toHaveBeenCalledTimes(2);
 	});
 
+	it("does not restart remote checks on unrelated renders or accept stale completions", async () => {
+		type Deferred = {
+			promise: Promise<{ version: string; allowed: boolean }>;
+			resolve: (allowed: boolean) => void;
+		};
+		const deferred: Deferred[] = [];
+		const transport = vi.fn((request) => {
+			let resolvePromise: ((allowed: boolean) => void) | undefined;
+			const promise = new Promise<{ version: string; allowed: boolean }>(
+				(resolve) => {
+					resolvePromise = (allowed) =>
+						resolve({ version: request.version, allowed });
+				},
+			);
+			deferred.push({
+				promise,
+				resolve: resolvePromise as (allowed: boolean) => void,
+			});
+			return promise;
+		});
+		const evaluator = createRemoteAuthorizationEvaluator({
+			contract: authorization.contract,
+			transport,
+		});
+		const clientAuth = createClientAuth({
+			evaluator,
+			getIdentity: () => ({ id: "user-1", role: "user" as const }),
+		});
+		let canState: ReturnType<typeof clientAuth.useCan> | undefined;
+
+		function Probe({ postId }: { postId: string }) {
+			canState = clientAuth.useCan(blogPermissions.post.delete({ id: postId }));
+			return null;
+		}
+		function App({ postId, unrelated }: { postId: string; unrelated: number }) {
+			return (
+				<StackProvider basePath="/pages" auth={clientAuth}>
+					<span>{unrelated}</span>
+					<Probe postId={postId} />
+				</StackProvider>
+			);
+		}
+
+		await render(<App postId="post-1" unrelated={0} />);
+		expect(transport).toHaveBeenCalledTimes(1);
+
+		await render(<App postId="post-1" unrelated={1} />);
+		expect(transport).toHaveBeenCalledTimes(1);
+
+		await render(<App postId="post-2" unrelated={1} />);
+		expect(transport).toHaveBeenCalledTimes(2);
+		expect(canState).toEqual({ can: false, isPending: true });
+
+		await act(async () => deferred[1]?.resolve(true));
+		expect(canState).toEqual({ can: true, isPending: false });
+
+		await act(async () => deferred[0]?.resolve(false));
+		expect(canState).toEqual({ can: true, isPending: false });
+	});
+
 	it("surfaces remote protocol failures instead of treating them as denials", async () => {
 		const evaluator = createRemoteAuthorizationEvaluator({
 			contract: authorization.contract,

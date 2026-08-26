@@ -1,9 +1,12 @@
 import { z } from "zod";
 
-const permissionSeedMarker = Symbol("btst.permission-seed");
-const permissionDescriptorMarker = Symbol("btst.permission-descriptor");
-const permissionCatalogMarker = Symbol("btst.permission-catalog");
-declare const authorizationContractTypes: unique symbol;
+const permissionSeedMarker = "__btst.authorization.permission-seed.v1" as const;
+const permissionDescriptorMarker =
+	"__btst.authorization.permission-descriptor.v1" as const;
+const permissionCatalogMarker =
+	"__btst.authorization.permission-catalog.v1" as const;
+const authorizationContractTypes =
+	"__btst.authorization.contract-types.v1" as const;
 
 type AnySchema = z.ZodType<any, any>;
 
@@ -65,14 +68,14 @@ type BoundPermissionTree<
 /** A named catalog of permission descriptors. */
 export type PermissionCatalog<
 	TName extends string = string,
-	TTree extends PermissionTree = PermissionTree,
+	TTree extends PermissionTree = {},
 > = BoundPermissionTree<TTree, TName> & {
 	readonly [permissionCatalogMarker]: {
 		readonly name: TName;
 	};
 };
 
-type AnyPermissionCatalog = PermissionCatalog<string, PermissionTree>;
+type AnyPermissionCatalog = PermissionCatalog<string>;
 /** Any schema-backed permission descriptor, for generic plugin APIs. */
 export type AnyPermissionDescriptor = PermissionDescriptor<
 	string,
@@ -89,10 +92,11 @@ export function permission<TSchema extends AnySchema>(
 export function permission<TSchema extends AnySchema>(
 	schema?: TSchema,
 ): PermissionSeed<TSchema | undefined> {
-	return Object.freeze({
-		[permissionSeedMarker]: true as const,
+	const seed = {
 		schema,
-	});
+	} as PermissionSeed<TSchema | undefined>;
+	Object.defineProperty(seed, permissionSeedMarker, { value: true });
+	return Object.freeze(seed);
 }
 
 function isPermissionSeed(
@@ -143,6 +147,14 @@ function bindPermissionTree(
 ): Record<string, unknown> {
 	const result: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(tree)) {
+		if (
+			key === permissionSeedMarker ||
+			key === permissionDescriptorMarker ||
+			key === permissionCatalogMarker ||
+			key === authorizationContractTypes
+		) {
+			throw new TypeError(`Permission key "${key}" is reserved.`);
+		}
 		const nextPath = path ? `${path}.${key}` : key;
 		result[key] = isPermissionSeed(value)
 			? createPermissionDescriptor(`${namespace}:${nextPath}`, value.schema)

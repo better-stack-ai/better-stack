@@ -2,7 +2,7 @@ import {
 	defineAuthorizationContract,
 	definePermissions,
 	permission,
-} from "@btst/stack/authorization";
+} from "@btst-test/stack-copy-a/authorization";
 import { z } from "zod";
 
 export const publishedPermissions = definePermissions("documents", {
