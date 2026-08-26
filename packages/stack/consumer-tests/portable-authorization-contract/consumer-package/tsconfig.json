@@ -1,0 +1,14 @@
+{
+  "extends": "../../../../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "incremental": false,
+    "noEmit": true,
+    "paths": {
+      "@btst-test/portable-authorization-contract": [
+        "../contract-package/dist/index.d.ts"
+      ]
+    }
+  },
+  "include": ["./src/**/*.ts"]
+}

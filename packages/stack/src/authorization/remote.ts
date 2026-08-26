@@ -6,6 +6,7 @@ import type {
 	PermissionRequest,
 } from ".";
 import type { MaybePromise } from "../shared/types";
+import { assertJsonSafe } from "./json";
 
 type WirePermission<TPermission> = TPermission extends PermissionRequest<
 	infer TId,
@@ -119,74 +120,6 @@ const remoteResponseSchema = z
 	})
 	.strict();
 
-function assertJsonValue(value: unknown, ancestors = new Set<object>()): void {
-	if (
-		value === null ||
-		typeof value === "string" ||
-		typeof value === "boolean"
-	) {
-		return;
-	}
-	if (typeof value === "number") {
-		if (Number.isFinite(value)) return;
-		throw new TypeError("Remote authorization values must be finite numbers.");
-	}
-	if (typeof value !== "object") {
-		throw new TypeError("Remote authorization values must be JSON-safe.");
-	}
-	if (ancestors.has(value)) {
-		throw new TypeError("Remote authorization values cannot contain cycles.");
-	}
-	ancestors.add(value);
-	try {
-		if (Array.isArray(value)) {
-			for (let index = 0; index < value.length; index += 1) {
-				if (!(index in value)) {
-					throw new TypeError(
-						"Remote authorization arrays cannot contain empty slots.",
-					);
-				}
-				assertJsonValue(value[index], ancestors);
-			}
-			for (const key of Reflect.ownKeys(value)) {
-				if (
-					key !== "length" &&
-					(typeof key !== "string" ||
-						!/^0$|^[1-9]\d*$/.test(key) ||
-						Number(key) >= value.length)
-				) {
-					throw new TypeError(
-						"Remote authorization arrays cannot contain extra properties.",
-					);
-				}
-			}
-			return;
-		}
-
-		const prototype = Object.getPrototypeOf(value);
-		if (prototype !== Object.prototype && prototype !== null) {
-			throw new TypeError(
-				"Remote authorization values must contain only plain objects.",
-			);
-		}
-		for (const key of Reflect.ownKeys(value)) {
-			const descriptor = Object.getOwnPropertyDescriptor(value, key);
-			if (
-				typeof key !== "string" ||
-				!descriptor?.enumerable ||
-				!("value" in descriptor)
-			) {
-				throw new TypeError(
-					"Remote authorization object properties must be JSON-safe.",
-				);
-			}
-			assertJsonValue(descriptor.value, ancestors);
-		}
-	} finally {
-		ancestors.delete(value);
-	}
-}
-
 /**
  * Validate a wire request before an authoritative managed backend evaluates
  * it. The returned permission is rebuilt from the contract's runtime schema.
@@ -200,6 +133,11 @@ export function parseRemoteAuthorizationRequest<
 	readonly version: string;
 	readonly permission: AuthorizationContractPermissionRequest<TContract>;
 } {
+	try {
+		assertJsonSafe(input);
+	} catch (error) {
+		throw new AuthorizationRequestValidationError(error);
+	}
 	const parsed = remoteRequestSchema.safeParse(input);
 	if (!parsed.success) {
 		throw new AuthorizationRequestValidationError(parsed.error);
@@ -211,7 +149,6 @@ export function parseRemoteAuthorizationRequest<
 		);
 	}
 	try {
-		assertJsonValue(parsed.data);
 		const runtimeContract = contract as unknown as {
 			parsePermission: (value: unknown) => unknown;
 		};
@@ -238,7 +175,11 @@ export function createRemoteAuthorizationEvaluator<
 	transport: RemoteAuthorizationTransport<TContract>;
 }): AuthorizationEvaluatorFor<TContract> {
 	const runtimeContract = config.contract as unknown as {
-		parsePermission: (value: unknown) => { id: string; facts: unknown };
+		parsePermission: (value: unknown) => {
+			id: string;
+			facts: unknown;
+			permission: { schema: unknown };
+		};
 	};
 	const transport = config.transport as (request: {
 		version: string;
@@ -247,7 +188,11 @@ export function createRemoteAuthorizationEvaluator<
 	const evaluator = Object.freeze({
 		contract: config.contract,
 		async evaluate(input: { permission: unknown }) {
-			let parsedPermission: { id: string; facts: unknown };
+			let parsedPermission: {
+				id: string;
+				facts: unknown;
+				permission: { schema: unknown };
+			};
 			try {
 				parsedPermission = runtimeContract.parsePermission(input.permission);
 			} catch (error) {
@@ -255,11 +200,11 @@ export function createRemoteAuthorizationEvaluator<
 			}
 
 			const wirePermission =
-				parsedPermission.facts === undefined
+				parsedPermission.permission.schema === undefined
 					? { id: parsedPermission.id }
 					: { id: parsedPermission.id, facts: parsedPermission.facts };
 			try {
-				assertJsonValue(wirePermission);
+				assertJsonSafe(wirePermission);
 			} catch (error) {
 				throw new AuthorizationRequestValidationError(error);
 			}
@@ -267,6 +212,11 @@ export function createRemoteAuthorizationEvaluator<
 				version: config.contract.version,
 				permission: wirePermission,
 			});
+			try {
+				assertJsonSafe(response);
+			} catch (error) {
+				throw new AuthorizationResponseValidationError(error);
+			}
 			const parsedResponse = remoteResponseSchema.safeParse(response);
 			if (!parsedResponse.success) {
 				throw new AuthorizationResponseValidationError(parsedResponse.error);

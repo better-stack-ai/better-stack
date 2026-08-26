@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("shared browser authorization renders through the framework boundary", async ({
+test("remote browser authorization renders through the framework boundary", async ({
 	page,
 }) => {
 	await page.goto("/pages/authorization-boundary");

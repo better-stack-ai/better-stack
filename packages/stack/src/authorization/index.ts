@@ -343,28 +343,44 @@ function fingerprint(value: string): string {
 const unsupportedPortableSchemaMessage =
 	"Authorization contract schemas must be fully representable as JSON Schema; custom refinements, transforms, and other opaque behavior are unsupported because they cannot be derived into a stable version.";
 
+type PortableSchemaDefinition = {
+	type?: string;
+	check?: string;
+	coerce?: boolean;
+	checks?: readonly {
+		_zod?: { def?: { check?: string; type?: string } };
+	}[];
+};
+
+function hasOpaquePortableBehavior(schema: z.core.$ZodType): boolean {
+	// Zod's JSON Schema override API does not expose check metadata. Keep the
+	// exact-version-dependent inspection isolated here; the workspace pins Zod
+	// 4.4.3 and these cases have regression coverage.
+	const definition = schema._zod.def as PortableSchemaDefinition;
+	return (
+		definition.coerce === true ||
+		definition.type === "custom" ||
+		definition.type === "transform" ||
+		definition.type === "pipe" ||
+		definition.type === "catch" ||
+		definition.type === "default" ||
+		definition.type === "prefault" ||
+		definition.check === "custom" ||
+		definition.checks?.some(
+			(check) =>
+				check._zod?.def?.check === "custom" ||
+				check._zod?.def?.check === "overwrite" ||
+				check._zod?.def?.type === "custom",
+		) === true
+	);
+}
+
 function toPortableJsonSchema(schema: z.ZodType): unknown {
 	let containsOpaqueCheck = false;
 	try {
 		const jsonSchema = z.toJSONSchema(schema, {
 			override: ({ zodSchema }) => {
-				const definition = zodSchema._zod.def as {
-					type?: string;
-					check?: string;
-					checks?: readonly {
-						_zod?: { def?: { check?: string; type?: string } };
-					}[];
-				};
-				if (
-					definition.type === "custom" ||
-					definition.type === "transform" ||
-					definition.check === "custom" ||
-					definition.checks?.some(
-						(check) =>
-							check._zod?.def?.check === "custom" ||
-							check._zod?.def?.type === "custom",
-					)
-				) {
+				if (hasOpaquePortableBehavior(zodSchema)) {
 					containsOpaqueCheck = true;
 				}
 			},

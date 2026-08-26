@@ -5,11 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
 	defineAuthorization,
+	defineAuthorizationContract,
 	definePermissions,
 	permission,
 } from "../authorization";
 import { createClientAuth } from "../authorization/client";
 import {
+	AuthorizationRequestValidationError,
 	AuthorizationResponseValidationError,
 	createRemoteAuthorizationEvaluator,
 } from "../authorization/remote";
@@ -126,6 +128,41 @@ describe("createClientAuth", () => {
 		expect(canState?.error).toBeInstanceOf(
 			AuthorizationResponseValidationError,
 		);
+	});
+
+	it("surfaces non-JSON facts as typed errors instead of render failures", async () => {
+		const portablePermissions = definePermissions("portable", {
+			inspect: permission(z.any()),
+		});
+		const portableContract = defineAuthorizationContract({
+			identity: z.object({ id: z.string() }),
+			permissions: [portablePermissions] as const,
+		});
+		const transport = vi.fn();
+		const evaluator = createRemoteAuthorizationEvaluator({
+			contract: portableContract,
+			transport,
+		});
+		const clientAuth = createClientAuth({
+			evaluator,
+			getIdentity: () => ({ id: "user-1" }),
+		});
+		let canState: ReturnType<typeof clientAuth.useCan> | undefined;
+
+		function Probe() {
+			canState = clientAuth.useCan(portablePermissions.inspect(1n));
+			return null;
+		}
+
+		await render(
+			<StackProvider basePath="/pages" auth={clientAuth}>
+				<Probe />
+			</StackProvider>,
+		);
+
+		expect(canState).toMatchObject({ can: false, isPending: false });
+		expect(canState?.error).toBeInstanceOf(AuthorizationRequestValidationError);
+		expect(transport).not.toHaveBeenCalled();
 	});
 
 	it("binds typed hooks and evaluates the shared rule locally", async () => {

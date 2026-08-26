@@ -25,7 +25,7 @@
     "build:analyze": "NODE_OPTIONS='--max-old-space-size=8192' ANALYZE=1 unbuild --clean && node ./scripts/postbuild.cjs",
     "stub": "unbuild --stub",
     "test": "vitest",
-    "typecheck": "tsc --project tsconfig.json && tsc --project consumer-tests/portable-authorization-contract/tsconfig.json",
+    "typecheck": "tsc --project tsconfig.json && tsc --project consumer-tests/portable-authorization-contract/contract-package/tsconfig.json && tsc --project consumer-tests/portable-authorization-contract/consumer-package/tsconfig.json",
     "knip": "knip --strict",
     "build-registry": "tsx scripts/build-registry.ts",
     "test-registry": "bash scripts/test-registry.sh",

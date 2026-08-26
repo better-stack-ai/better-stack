@@ -146,6 +146,24 @@ describe("schema-backed authorization", () => {
 				] as const,
 			}),
 		).toThrowError(message);
+
+		for (const schema of [
+			z.coerce.string(),
+			z.preprocess((value) => String(value), z.string()),
+			z.string().overwrite((value) => value.trim()),
+			z.string().catch("fallback"),
+			z.string().default("fallback"),
+			z.string().prefault("fallback"),
+		]) {
+			expect(() =>
+				defineAuthorizationContract({
+					identity: z.object({ id: z.string() }),
+					permissions: [
+						definePermissions("opaque", { read: permission(schema) }),
+					] as const,
+				}),
+			).toThrowError(message);
+		}
 	});
 
 	it("validates permission facts when the request is created", () => {

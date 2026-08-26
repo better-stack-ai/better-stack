@@ -11,7 +11,11 @@ import {
 	type AnyAuthorization,
 	type AnyAuthorizationContract,
 } from ".";
-import type { AuthorizationEvaluatorFor } from "./remote";
+import {
+	AuthorizationRequestValidationError,
+	type AuthorizationEvaluatorFor,
+} from "./remote";
+import { assertJsonSafe } from "./json";
 import {
 	useAuthContext,
 	useIdentity as useStackIdentity,
@@ -91,11 +95,17 @@ type ResolvedEvaluation = {
 };
 
 function permissionKey(permission: unknown): string {
-	if (typeof permission !== "object" || permission === null) {
-		return JSON.stringify(permission);
-	}
-	const request = permission as { id?: unknown; facts?: unknown };
-	return JSON.stringify([request.id, request.facts]);
+	const request = permission as {
+		id?: unknown;
+		facts?: unknown;
+		permission?: { schema?: unknown };
+	};
+	const wirePermission =
+		request?.permission?.schema === undefined
+			? { id: request?.id }
+			: { id: request.id, facts: request.facts };
+	assertJsonSafe(wirePermission);
+	return JSON.stringify(wirePermission);
 }
 
 export function createClientAuth<
@@ -158,7 +168,16 @@ export function createClientAuth(config: any): any {
 		const context = useAuthContext();
 		const identity = context?.identity ?? null;
 		const identityPending = context?.isPending ?? true;
-		const key = permissionKey(permissionRequest);
+		let key = "local";
+		let permissionError: AuthorizationRequestValidationError | undefined;
+		if (runtimeEvaluator) {
+			try {
+				key = permissionKey(permissionRequest);
+			} catch (error) {
+				permissionError = new AuthorizationRequestValidationError(error);
+				key = "invalid-remote-permission";
+			}
+		}
 		const permissionRef = useRef(permissionRequest);
 		permissionRef.current = permissionRequest;
 		const [resolved, setResolved] = useState<ResolvedEvaluation | null>(null);
@@ -166,6 +185,7 @@ export function createClientAuth(config: any): any {
 		useEffect(() => {
 			if (
 				!runtimeEvaluator ||
+				permissionError ||
 				!context ||
 				context.provider !== clientAuth ||
 				identityPending ||
@@ -218,6 +238,9 @@ export function createClientAuth(config: any): any {
 		if (context.isPending) return { can: false, isPending: true };
 		if (context.error) {
 			return { can: false, isPending: false, error: context.error };
+		}
+		if (permissionError) {
+			return { can: false, isPending: false, error: permissionError };
 		}
 
 		if (runtimeAuthorization) {

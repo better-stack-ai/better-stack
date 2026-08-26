@@ -3,7 +3,7 @@ title: Authorization
 description: Define schema-backed permissions once and enforce the same rule in the browser and backend
 ---
 
-BTST's one-rule authorization path keeps one browser-safe rule set as the contract while client and server adapters resolve identity independently. Browser checks only control presentation; backend operations derive trusted facts and enforce the same rule before mutation.
+BTST's one-rule authorization path keeps a rule-free permission contract separate from the browser-safe local rule set. Client and server adapters resolve identity independently. Browser checks only control presentation; backend operations derive trusted facts and enforce the same rule before mutation.
 
 The new path is opt-in. Omitting authorization preserves allow-all behavior, and the RC auth provider described below remains available while plugins migrate.
 
@@ -129,6 +129,7 @@ The wire request contains the contract version, stable permission id, and schema
 
 ```ts title="authorization-handler.ts"
 import { parseRemoteAuthorizationRequest } from "@btst/stack/authorization/remote";
+import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
 import { authorizationContract } from "./authorization-contract";
 import { authorization } from "./authorization";
 
@@ -136,7 +137,12 @@ export async function evaluateAuthorization(request: Request) {
   const body = await request.json();
   const parsed = parseRemoteAuthorizationRequest(authorizationContract, body);
   const identity = await getIdentityFromSession(request);
-  const allowed = authorization.can(parsed.permission, identity);
+  const post = await database.posts.findById(parsed.permission.facts.id);
+  const trustedPermission = blogPermissions.post.delete({
+    id: post.id,
+    authorId: post.authorId,
+  });
+  const allowed = authorization.can(trustedPermission, identity);
 
   return Response.json({
     version: authorizationContract.version,

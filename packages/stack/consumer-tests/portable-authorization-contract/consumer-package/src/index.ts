@@ -1,12 +1,12 @@
+import {
+	publishedAuthorizationContract,
+	publishedPermissions,
+} from "@btst-test/portable-authorization-contract";
 import { createClientAuth } from "@btst/stack/authorization/client";
 import {
 	createRemoteAuthorizationEvaluator,
 	parseRemoteAuthorizationRequest,
 } from "@btst/stack/authorization/remote";
-import {
-	publishedAuthorizationContract,
-	publishedPermissions,
-} from "./contract";
 
 const evaluator = createRemoteAuthorizationEvaluator({
 	contract: publishedAuthorizationContract,

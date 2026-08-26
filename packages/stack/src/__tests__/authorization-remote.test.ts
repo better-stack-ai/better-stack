@@ -37,15 +37,21 @@ const backendAuthorization = defineAuthorization({
 });
 
 describe("remote authorization evaluator", () => {
-	it("uses a typed portable request while the backend makes the authoritative decision", async () => {
+	it("uses backend-owned identity and facts for the authoritative decision", async () => {
+		let backendIdentity = { id: "outsider", role: "user" as const };
+		const records = new Map([
+			["document-1", { id: "document-1", ownerId: "owner-1" }],
+		]);
 		const transport = vi.fn(async (request) => {
 			const parsed = parseRemoteAuthorizationRequest(contract, request);
+			const record = records.get(parsed.permission.facts.id);
+			if (!record) throw new Error("Document not found");
 			return {
 				version: contract.version,
-				allowed: backendAuthorization.can(parsed.permission, {
-					id: "server-session-user",
-					role: "admin",
-				}),
+				allowed: backendAuthorization.can(
+					documentPermissions.document.delete(record),
+					backendIdentity,
+				),
 			};
 		});
 		const evaluator = createRemoteAuthorizationEvaluator({
@@ -53,20 +59,29 @@ describe("remote authorization evaluator", () => {
 			transport,
 		});
 
+		const spoofedPermission = documentPermissions.document.delete({
+			id: "document-1",
+			ownerId: "outsider",
+		});
 		await expect(
 			evaluator.evaluate({
-				identity: { id: "browser-user", role: "user" },
-				permission: documentPermissions.document.delete({
-					id: "document-1",
-					ownerId: "someone-else",
-				}),
+				identity: { id: "browser-user", role: "admin" },
+				permission: spoofedPermission,
+			}),
+		).resolves.toBe(false);
+
+		backendIdentity = { id: "owner-1", role: "user" };
+		await expect(
+			evaluator.evaluate({
+				identity: null,
+				permission: spoofedPermission,
 			}),
 		).resolves.toBe(true);
-		expect(transport).toHaveBeenCalledWith({
+		expect(transport).toHaveBeenLastCalledWith({
 			version: contract.version,
 			permission: {
 				id: "documents:document.delete",
-				facts: { id: "document-1", ownerId: "someone-else" },
+				facts: { id: "document-1", ownerId: "outsider" },
 			},
 		});
 	});
@@ -154,6 +169,14 @@ describe("remote authorization evaluator", () => {
 				},
 			}),
 		).toThrow(AuthorizationRequestValidationError);
+
+		const inheritedRequest = Object.assign(Object.create({ inherited: true }), {
+			version: contract.version,
+			permission: { id: "documents:document.inspect", facts: null },
+		});
+		expect(() =>
+			parseRemoteAuthorizationRequest(contract, inheritedRequest),
+		).toThrow(AuthorizationRequestValidationError);
 	});
 
 	it("rejects permission facts that cannot cross a JSON transport", async () => {
@@ -170,5 +193,28 @@ describe("remote authorization evaluator", () => {
 			}),
 		).rejects.toBeInstanceOf(AuthorizationRequestValidationError);
 		expect(transport).not.toHaveBeenCalled();
+	});
+
+	it("rejects non-JSON response envelopes", async () => {
+		const response = Object.create({ inherited: true }) as {
+			version: string;
+			allowed: boolean;
+		};
+		response.version = contract.version;
+		response.allowed = true;
+		const evaluator = createRemoteAuthorizationEvaluator({
+			contract,
+			transport: async () => response,
+		});
+
+		await expect(
+			evaluator.evaluate({
+				identity: null,
+				permission: documentPermissions.document.delete({
+					id: "document-1",
+					ownerId: "owner-1",
+				}),
+			}),
+		).rejects.toBeInstanceOf(AuthorizationResponseValidationError);
 	});
 });
