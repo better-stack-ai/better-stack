@@ -17,6 +17,7 @@ import {
 const documentPermissions = definePermissions("documents", {
 	document: {
 		delete: permission(z.object({ id: z.string(), ownerId: z.string() })),
+		inspect: permission(z.any()),
 	},
 });
 
@@ -132,5 +133,42 @@ describe("remote authorization evaluator", () => {
 				},
 			}),
 		).toThrow(AuthorizationRequestValidationError);
+
+		expect(() =>
+			parseRemoteAuthorizationRequest(contract, {
+				version: contract.version,
+				permission: {
+					id: "documents:document.delete",
+					facts: { id: "document-1", ownerId: "owner-1" },
+					identity: { id: "browser-user", role: "admin" },
+				},
+			}),
+		).toThrow(AuthorizationRequestValidationError);
+
+		expect(() =>
+			parseRemoteAuthorizationRequest(contract, {
+				version: contract.version,
+				permission: {
+					id: "documents:document.inspect",
+					facts: 1n,
+				},
+			}),
+		).toThrow(AuthorizationRequestValidationError);
+	});
+
+	it("rejects permission facts that cannot cross a JSON transport", async () => {
+		const transport = vi.fn();
+		const evaluator = createRemoteAuthorizationEvaluator({
+			contract,
+			transport,
+		});
+
+		await expect(
+			evaluator.evaluate({
+				identity: null,
+				permission: documentPermissions.document.inspect(1n),
+			}),
+		).rejects.toBeInstanceOf(AuthorizationRequestValidationError);
+		expect(transport).not.toHaveBeenCalled();
 	});
 });

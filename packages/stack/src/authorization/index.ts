@@ -340,6 +340,50 @@ function fingerprint(value: string): string {
 	return hash.toString(16).padStart(16, "0");
 }
 
+const unsupportedPortableSchemaMessage =
+	"Authorization contract schemas must be fully representable as JSON Schema; custom refinements, transforms, and other opaque behavior are unsupported because they cannot be derived into a stable version.";
+
+function toPortableJsonSchema(schema: z.ZodType): unknown {
+	let containsOpaqueCheck = false;
+	try {
+		const jsonSchema = z.toJSONSchema(schema, {
+			override: ({ zodSchema }) => {
+				const definition = zodSchema._zod.def as {
+					type?: string;
+					check?: string;
+					checks?: readonly {
+						_zod?: { def?: { check?: string; type?: string } };
+					}[];
+				};
+				if (
+					definition.type === "custom" ||
+					definition.type === "transform" ||
+					definition.check === "custom" ||
+					definition.checks?.some(
+						(check) =>
+							check._zod?.def?.check === "custom" ||
+							check._zod?.def?.type === "custom",
+					)
+				) {
+					containsOpaqueCheck = true;
+				}
+			},
+		});
+		if (containsOpaqueCheck) {
+			throw new TypeError(unsupportedPortableSchemaMessage);
+		}
+		return jsonSchema;
+	} catch (error) {
+		if (
+			error instanceof TypeError &&
+			error.message === unsupportedPortableSchemaMessage
+		) {
+			throw error;
+		}
+		throw new TypeError(unsupportedPortableSchemaMessage, { cause: error });
+	}
+}
+
 function collectDescriptors(
 	catalogs: readonly AnyPermissionCatalog[],
 ): Map<string, AnyPermissionDescriptor> {
@@ -371,12 +415,14 @@ export function defineAuthorizationContract<
 	const descriptors = collectDescriptors(config.permissions);
 	const permissionIds = Object.freeze([...descriptors.keys()].sort());
 	const versionSource = stableJson({
-		identity: z.toJSONSchema(config.identity),
+		identity: toPortableJsonSchema(config.identity),
 		permissions: permissionIds.map((id) => {
 			const descriptor = descriptors.get(id);
 			return {
 				id,
-				facts: descriptor?.schema ? z.toJSONSchema(descriptor.schema) : null,
+				facts: descriptor?.schema
+					? toPortableJsonSchema(descriptor.schema)
+					: null,
 			};
 		}),
 	});

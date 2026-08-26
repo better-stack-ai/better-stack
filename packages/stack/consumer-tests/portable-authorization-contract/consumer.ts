@@ -1,12 +1,12 @@
-import { createClientAuth } from "../authorization/client";
+import { createClientAuth } from "@btst/stack/authorization/client";
 import {
 	createRemoteAuthorizationEvaluator,
 	parseRemoteAuthorizationRequest,
-} from "../authorization/remote";
+} from "@btst/stack/authorization/remote";
 import {
 	publishedAuthorizationContract,
 	publishedPermissions,
-} from "./fixtures/published-authorization-contract";
+} from "./contract";
 
 const evaluator = createRemoteAuthorizationEvaluator({
 	contract: publishedAuthorizationContract,
@@ -39,11 +39,11 @@ parseRemoteAuthorizationRequest(publishedAuthorizationContract, {
 	},
 });
 
-// @ts-expect-error the contract's identity schema rejects unknown roles
+// @ts-expect-error the published identity schema rejects unknown roles
 createClientAuth({
 	evaluator,
 	getIdentity: () => ({ id: "user-1", role: "owner" }),
 });
 
-// @ts-expect-error permission facts stay typed in a separate contract consumer
+// @ts-expect-error published permission facts retain their exact types
 publishedPermissions.document.delete({ id: 1, ownerId: "owner-1" });

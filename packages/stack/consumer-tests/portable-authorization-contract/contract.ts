@@ -1,9 +1,9 @@
-import { z } from "zod";
 import {
 	defineAuthorizationContract,
 	definePermissions,
 	permission,
-} from "../../authorization";
+} from "@btst/stack/authorization";
+import { z } from "zod";
 
 export const publishedPermissions = definePermissions("documents", {
 	document: {

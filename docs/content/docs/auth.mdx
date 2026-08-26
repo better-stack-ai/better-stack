@@ -45,6 +45,8 @@ export const authorization = defineAuthorization({
 
 The identity and permission facts are inferred from their schemas. The contract contains only those schemas, stable permission ids, and an automatically derived `version`; it does not contain the rules. It can therefore live in a small shared package without backend code, database imports, secrets, or React. `authorization.contract` exposes the same rule-free object when starting from a local authorization instance.
 
+Portable contract schemas must be fully representable as JSON Schema. BTST rejects custom refinements, transforms, and other opaque schema behavior at contract definition time so an automatically derived version can never silently omit validation logic. Prefer explicit Zod constraints such as enums, string formats, ranges, and object shapes.
+
 A missing rule denies access once authorization is enabled. Use `.allow()` for an explicit unconditional rule.
 
 ## Bind the browser adapter
@@ -123,7 +125,7 @@ export const clientAuth = createClientAuth({
 });
 ```
 
-The wire request contains the contract version, stable permission id, and schema-validated facts. It intentionally does not send the browser identity as trusted input. The backend validates the request against its contract and resolves identity from its own session:
+The wire request contains the contract version, stable permission id, and schema-validated facts. Facts must also be JSON-safe data; the evaluator rejects values such as `bigint`, functions, non-finite numbers, class instances, and cycles before calling the transport. It intentionally does not send the browser identity as trusted input. The backend strictly validates the request against its contract and resolves identity from its own session:
 
 ```ts title="authorization-handler.ts"
 import { parseRemoteAuthorizationRequest } from "@btst/stack/authorization/remote";

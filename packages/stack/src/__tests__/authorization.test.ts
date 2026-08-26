@@ -124,6 +124,30 @@ describe("schema-backed authorization", () => {
 		expect(changedFacts.version).not.toBe(createContract().version);
 	});
 
+	it("rejects opaque schema behavior that cannot be derived into a version", () => {
+		const message =
+			"Authorization contract schemas must be fully representable as JSON Schema; custom refinements, transforms, and other opaque behavior are unsupported because they cannot be derived into a stable version.";
+		expect(() =>
+			defineAuthorizationContract({
+				identity: z
+					.object({ id: z.string() })
+					.refine(({ id }) => id.startsWith("user_")),
+				permissions: [blogPermissions] as const,
+			}),
+		).toThrowError(message);
+
+		expect(() =>
+			defineAuthorizationContract({
+				identity: z.object({ id: z.string() }),
+				permissions: [
+					definePermissions("opaque", {
+						read: permission(z.string().transform((value) => value.length)),
+					}),
+				] as const,
+			}),
+		).toThrowError(message);
+	});
+
 	it("validates permission facts when the request is created", () => {
 		expect(() => blogPermissions.post.delete({ id: 1 } as never)).toThrow();
 		expect(blogPermissions.post.delete({ id: "post-1" })).toMatchObject({

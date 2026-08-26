@@ -103,7 +103,12 @@ export class AuthorizationResponseValidationError extends Error {
 const remoteRequestSchema = z
 	.object({
 		version: z.string(),
-		permission: z.unknown(),
+		permission: z
+			.object({
+				id: z.string(),
+				facts: z.unknown().optional(),
+			})
+			.strict(),
 	})
 	.strict();
 
@@ -113,6 +118,74 @@ const remoteResponseSchema = z
 		allowed: z.boolean(),
 	})
 	.strict();
+
+function assertJsonValue(value: unknown, ancestors = new Set<object>()): void {
+	if (
+		value === null ||
+		typeof value === "string" ||
+		typeof value === "boolean"
+	) {
+		return;
+	}
+	if (typeof value === "number") {
+		if (Number.isFinite(value)) return;
+		throw new TypeError("Remote authorization values must be finite numbers.");
+	}
+	if (typeof value !== "object") {
+		throw new TypeError("Remote authorization values must be JSON-safe.");
+	}
+	if (ancestors.has(value)) {
+		throw new TypeError("Remote authorization values cannot contain cycles.");
+	}
+	ancestors.add(value);
+	try {
+		if (Array.isArray(value)) {
+			for (let index = 0; index < value.length; index += 1) {
+				if (!(index in value)) {
+					throw new TypeError(
+						"Remote authorization arrays cannot contain empty slots.",
+					);
+				}
+				assertJsonValue(value[index], ancestors);
+			}
+			for (const key of Reflect.ownKeys(value)) {
+				if (
+					key !== "length" &&
+					(typeof key !== "string" ||
+						!/^0$|^[1-9]\d*$/.test(key) ||
+						Number(key) >= value.length)
+				) {
+					throw new TypeError(
+						"Remote authorization arrays cannot contain extra properties.",
+					);
+				}
+			}
+			return;
+		}
+
+		const prototype = Object.getPrototypeOf(value);
+		if (prototype !== Object.prototype && prototype !== null) {
+			throw new TypeError(
+				"Remote authorization values must contain only plain objects.",
+			);
+		}
+		for (const key of Reflect.ownKeys(value)) {
+			const descriptor = Object.getOwnPropertyDescriptor(value, key);
+			if (
+				typeof key !== "string" ||
+				!descriptor?.enumerable ||
+				!("value" in descriptor)
+			) {
+				throw new TypeError(
+					"Remote authorization object properties must be JSON-safe.",
+				);
+			}
+			assertJsonValue(descriptor.value, ancestors);
+		}
+	} finally {
+		ancestors.delete(value);
+	}
+}
 
 /**
  * Validate a wire request before an authoritative managed backend evaluates
@@ -138,6 +211,7 @@ export function parseRemoteAuthorizationRequest<
 		);
 	}
 	try {
+		assertJsonValue(parsed.data);
 		const runtimeContract = contract as unknown as {
 			parsePermission: (value: unknown) => unknown;
 		};
@@ -184,6 +258,11 @@ export function createRemoteAuthorizationEvaluator<
 				parsedPermission.facts === undefined
 					? { id: parsedPermission.id }
 					: { id: parsedPermission.id, facts: parsedPermission.facts };
+			try {
+				assertJsonValue(wirePermission);
+			} catch (error) {
+				throw new AuthorizationRequestValidationError(error);
+			}
 			const response = await transport({
 				version: config.contract.version,
 				permission: wirePermission,
