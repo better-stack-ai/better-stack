@@ -92,6 +92,11 @@ beforeEach(() => {
 		isLoadingMore: false,
 		queryKey: ["comments", "infinite"],
 	});
+	hooks.useComments.mockReturnValue({
+		comments: [],
+		total: 0,
+		isFetching: false,
+	});
 	hooks.usePostComment.mockReturnValue({
 		mutateAsync: vi.fn(),
 		isPending: false,
@@ -421,6 +426,102 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 });
 
 describe("CommentThread provider wiring", () => {
+	it.each(["approved", "pending"] as const)(
+		"hides delete for an owned %s comment when can() denies comments:comment/delete",
+		async (status) => {
+			const ownedComment = {
+				...comment,
+				authorId: "provider-user",
+				status,
+			};
+			hooks.useInfiniteComments.mockReturnValue({
+				comments: [ownedComment],
+				total: 1,
+				isLoading: false,
+				loadMore: vi.fn(),
+				hasMore: false,
+				isLoadingMore: false,
+				queryKey: ["comments", "infinite"],
+			});
+			const can = vi.fn(
+				({ resource, action }: { resource: string; action: string }) =>
+					!(resource === "comments:comment" && action === "delete"),
+			);
+
+			await render(
+				<StackProvider
+					basePath="/pages"
+					api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+					auth={{
+						getIdentity: () => ({ id: "provider-user" }),
+						can,
+					}}
+				>
+					<CommentThread resourceId="post-1" resourceType="blog-post" />
+				</StackProvider>,
+			);
+			await act(async () => {});
+
+			expect(
+				container.querySelector('[data-testid="delete-button"]'),
+			).toBeNull();
+			expect(can).toHaveBeenCalledWith(
+				expect.objectContaining({
+					resource: "comments:comment",
+					action: "delete",
+					params: { id: comment.id },
+				}),
+			);
+		},
+	);
+
+	it("notifies an error when deleting an owned comment fails", async () => {
+		const ownedComment = {
+			...comment,
+			authorId: "provider-user",
+			status: "approved" as const,
+		};
+		hooks.useInfiniteComments.mockReturnValue({
+			comments: [ownedComment],
+			total: 1,
+			isLoading: false,
+			loadMore: vi.fn(),
+			hasMore: false,
+			isLoadingMore: false,
+			queryKey: ["comments", "infinite"],
+		});
+		const mutateAsync = vi.fn().mockRejectedValue(new Error("Unauthorized"));
+		hooks.useDeleteComment.mockReturnValue({
+			mutateAsync,
+			isPending: false,
+		});
+		const notify = { success: vi.fn(), error: vi.fn() };
+		vi.spyOn(window, "confirm").mockReturnValue(true);
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={{ getIdentity: () => ({ id: "provider-user" }) }}
+				notify={notify}
+			>
+				<CommentThread resourceId="post-1" resourceType="blog-post" />
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		const deleteButton = container.querySelector<HTMLButtonElement>(
+			'[data-testid="delete-button"]',
+		)!;
+		await act(async () => {
+			deleteButton.click();
+		});
+
+		expect(mutateAsync).toHaveBeenCalledWith(comment.id);
+		expect(notify.error).toHaveBeenCalledWith("Failed to delete comment");
+		expect(notify.success).not.toHaveBeenCalled();
+	});
+
 	it("uses top-level API and auth", async () => {
 		await render(
 			<StackProvider

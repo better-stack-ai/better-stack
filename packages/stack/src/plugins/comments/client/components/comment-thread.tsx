@@ -33,6 +33,8 @@ import {
 } from "../hooks/use-comments";
 import type { CommentsLocalization } from "../localization";
 import {
+	CanAccess,
+	useNotify,
 	usePluginOverrides,
 	useStack,
 	useTranslate,
@@ -146,6 +148,7 @@ function CommentCard({
 	allowEditing: boolean;
 }) {
 	const t = useTranslate();
+	const notify = useNotify();
 	const [isEditing, setIsEditing] = useState(false);
 	const Renderer = components?.Renderer ?? DEFAULT_RENDERER;
 
@@ -175,7 +178,14 @@ function CommentCard({
 			localization?.COMMENTS_DELETE_CONFIRM ??
 			t("comments.thread.deleteConfirm", "Delete this comment?");
 		if (!window.confirm(confirmMessage)) return;
-		await deleteMutation.mutateAsync(comment.id);
+		try {
+			await deleteMutation.mutateAsync(comment.id);
+		} catch {
+			notify.error(
+				localization?.COMMENTS_THREAD_TOAST_DELETE_ERROR ??
+					t("comments.thread.toastDeleteError", "Failed to delete comment"),
+			);
+		}
 	};
 
 	const handleLike = () => {
@@ -307,18 +317,24 @@ function CommentCard({
 											t("comments.thread.editButton", "Edit")}
 									</Button>
 								)}
-								<Button
-									variant="ghost"
-									size="sm"
-									className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-									onClick={handleDelete}
-									disabled={deleteMutation.isPending}
-									data-testid="delete-button"
+								<CanAccess
+									resource="comments:comment"
+									action="delete"
+									params={{ id: comment.id }}
 								>
-									<X className="h-3.5 w-3.5 mr-1" />
-									{localization?.COMMENTS_DELETE_BUTTON ??
-										t("comments.thread.deleteButton", "Delete")}
-								</Button>
+									<Button
+										variant="ghost"
+										size="sm"
+										className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+										onClick={handleDelete}
+										disabled={deleteMutation.isPending}
+										data-testid="delete-button"
+									>
+										<X className="h-3.5 w-3.5 mr-1" />
+										{localization?.COMMENTS_DELETE_BUTTON ??
+											t("comments.thread.deleteButton", "Delete")}
+									</Button>
+								</CanAccess>
 							</>
 						)}
 					</div>
