@@ -317,10 +317,16 @@ blogClientPlugin({
 
 ### Adding Authorization
 
-Configure `StackProvider.auth` once for client routes and controls. Blog checks
+The Blog plugin publishes the schema-backed `blogPermissions.post.delete`
+descriptor. The new one-rule path uses it for local, type-safe UI gates and
+derives its trusted `{ id, authorId? }` facts again on the server before the
+delete mutation. See the [authorization guide](/auth) for the shared client and
+server setup.
+
+Unmigrated Blog controls continue to use the RC checks
 `blog:draft/read`, `blog:post/create`, `blog:post/update`, and
-`blog:post/delete`. Use client loader hooks for SSR checks and backend
-lifecycle hooks for authoritative API authorization.
+`blog:post/delete`. Configure `StackProvider.auth` for those controls and use
+backend lifecycle hooks for authoritative API authorization.
 
 ```tsx title="app/pages/layout.tsx"
 <StackProvider
@@ -563,6 +569,30 @@ You can import the hooks from `"@btst/stack/plugins/blog/client/hooks"` to use i
 ## Server-side Data Access
 
 The blog plugin exposes standalone getter and mutation functions for server-side use cases. These bypass the HTTP layer entirely and query the database directly — no authorization hooks are called, so the caller is responsible for any access-control checks.
+
+### Authorized delete operation
+
+When `stack()` receives a one-rule server adapter, use the request-scoped API
+for user-facing Blog deletion. It runs the same operation as the HTTP DELETE
+endpoint, including input validation, trusted fact derivation, authorization,
+and lifecycle hooks:
+
+```ts
+await myStack
+  .forRequest(request)
+  .api.blog.deletePost({ id: postId });
+```
+
+Trusted server work can bypass user authorization explicitly while preserving
+validation and lifecycle behavior:
+
+```ts
+await myStack.internal.blog.deletePost({ id: postId });
+```
+
+The existing `myStack.api.blog.deletePost(postId)` and direct mutation import
+remain raw RC escape hatches for compatibility. They do not run authorization
+or lifecycle hooks.
 
 ### Two patterns
 

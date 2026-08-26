@@ -31,6 +31,14 @@ export { createRouter } from "better-call";
 export { createEndpoint } from "./create-endpoint";
 export type { SerializedValidationIssue } from "./create-endpoint";
 export { createDbPlugin } from "@btst/db";
+export {
+	defineOperation,
+	type AnyOperation,
+	type Operation,
+	type OperationApi,
+	type OperationContext,
+	type OperationRecord,
+} from "./operation";
 
 /**
  * Helper to define a backend plugin with full type inference
@@ -54,6 +62,9 @@ export { createDbPlugin } from "@btst/db";
 export function defineBackendPlugin<
 	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
 	TApi extends Record<string, (...args: any[]) => any> = never,
->(plugin: BackendPlugin<TRoutes, TApi>): BackendPlugin<TRoutes, TApi> {
+	TOperations extends import("./operation").OperationRecord = never,
+>(
+	plugin: BackendPlugin<TRoutes, TApi, TOperations>,
+): BackendPlugin<TRoutes, TApi, TOperations> {
 	return plugin;
 }

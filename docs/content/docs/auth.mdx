@@ -1,9 +1,111 @@
 ---
-title: Auth Provider
-description: Centralized identity and permissions across client and backend with one optional auth provider
+title: Authorization
+description: Define schema-backed permissions once and enforce the same rule in the browser and backend
 ---
 
-BTST has an optional auth provider contract: define identity resolution and permission checks once, and every plugin consumes them through shared hooks and components. Without a provider configured, everything behaves exactly as before — identity is `null`, all permission checks pass, and `<CanAccess>` renders its children.
+BTST's one-rule authorization path keeps one browser-safe rule set as the contract while client and server adapters resolve identity independently. Browser checks only control presentation; backend operations derive trusted facts and enforce the same rule before mutation.
+
+The new path is opt-in. Omitting authorization preserves allow-all behavior, and the RC auth provider described below remains available while plugins migrate.
+
+## Define the shared contract
+
+Plugins publish stable, schema-backed permissions. The Blog delete permission is available from its browser-safe entry point:
+
+```ts title="lib/authorization.ts"
+import { defineAuthorization } from "@btst/stack/authorization";
+import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { z } from "zod";
+
+export const authorization = defineAuthorization({
+  identity: z.object({
+    id: z.string(),
+    role: z.enum(["user", "admin"]),
+  }),
+  permissions: [blogPermissions] as const,
+  rules: ({ blog }) => [
+    blog.post.delete.when(
+      ({ identity, params }) =>
+        identity?.role === "admin" || identity?.id === params.authorId,
+    ),
+  ],
+});
+```
+
+The identity and permission facts are inferred from their schemas. A missing rule denies access once authorization is enabled. Use `.allow()` for an explicit unconditional rule.
+
+## Bind the browser adapter
+
+Keep client identity resolution in a client module. Permission evaluation is synchronous and local: it does not make an authorization request or install a permission cache.
+
+```tsx title="lib/authorization.client.ts"
+"use client";
+
+import { createClientAuth } from "@btst/stack/authorization/client";
+import { authorization } from "./authorization";
+
+export const clientAuth = createClientAuth({
+  authorization,
+  getIdentity: () => session?.user ?? null,
+  loginPath: "/auth/sign-in",
+});
+```
+
+Install that exact adapter on `StackProvider`, then use its bound hooks and component. Invalid facts and permissions outside the registered catalogs fail at typecheck time.
+
+```tsx
+import { StackProvider } from "@btst/stack/context";
+import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { clientAuth } from "@/lib/authorization.client";
+
+function DeleteControl({ post }) {
+  const { CanAccess } = clientAuth;
+
+  return (
+    <CanAccess
+      permission={blogPermissions.post.delete({
+        id: post.id,
+        authorId: post.authorId,
+      })}
+    >
+      <DeletePostButton />
+    </CanAccess>
+  );
+}
+
+<StackProvider auth={clientAuth} /* router, api, overrides */>
+  {children}
+</StackProvider>;
+```
+
+`clientAuth.useIdentity()` preserves the exact inferred identity type. `clientAuth.useCan(permission)` and `clientAuth.CanAccess` are bound to the same registered permissions.
+
+## Bind the server adapter
+
+Keep server identity dependencies behind the server entry point. In Next.js, put this adapter in a `server-only` module so client imports cannot pull session or database code into the browser bundle.
+
+```ts title="lib/authorization.server.ts"
+import "server-only";
+
+import { createServerAuth } from "@btst/stack/authorization/server";
+import { authorization } from "./authorization";
+import { auth } from "./auth";
+
+export const serverAuth = createServerAuth({
+  authorization,
+  getIdentity: async ({ headers }) => {
+    const session = await auth.api.getSession({ headers });
+    return session?.user ?? null;
+  },
+});
+```
+
+Pass it to `stack({ auth: serverAuth })`. The Blog DELETE endpoint and `myStack.forRequest(request).api.blog.deletePost({ id })` use the same operation and rule. The operation loads the post itself before authorization, so client-supplied ownership facts are never trusted. Trusted jobs can call `myStack.internal.blog.deletePost({ id })`; internal calls skip user authorization but retain input validation and lifecycle hooks.
+
+Ordinary denials become HTTP 401 for anonymous identities and 403 for authenticated identities. Identity validation and rule failures remain errors instead of being converted into denials.
+
+## RC auth provider
+
+The string-based RC provider remains available for plugins and applications that have not migrated to schema-backed permissions.
 
 ## Client provider
 

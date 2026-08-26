@@ -72,6 +72,9 @@ export default defineBuildConfig({
 		"./src/api/index.ts",
 		"./src/client/index.ts",
 		"./src/context/index.ts",
+		"./src/authorization/index.ts",
+		"./src/authorization/client.tsx",
+		"./src/authorization/server.ts",
 		"./src/client/components/index.tsx",
 		// framework router presets
 		"./src/next/index.tsx",
@@ -87,6 +90,7 @@ export default defineBuildConfig({
 		"./src/plugins/blog/client/components/index.tsx",
 		"./src/plugins/blog/client/hooks/index.tsx",
 		"./src/plugins/blog/query-keys.ts",
+		"./src/plugins/blog/permissions.ts",
 		// ai-chat plugin entries
 		"./src/plugins/ai-chat/api/index.ts",
 		"./src/plugins/ai-chat/client/index.ts",
