@@ -6,6 +6,7 @@ import type {
 } from "@btst/db";
 import type { Endpoint, Router } from "better-call";
 import type { StackServerAuthProvider } from "./shared/auth-types";
+import type { OperationApi, OperationRecord } from "./plugins/api/operation";
 
 export type {
 	CanParams,
@@ -20,7 +21,7 @@ export type {
  */
 export interface StackContext {
 	/** All registered backend plugins */
-	plugins: Record<string, BackendPlugin<any, any>>;
+	plugins: Record<string, BackendPlugin<any, any, any>>;
 	/** The API base path (e.g., "/api/data") */
 	basePath: string;
 	/** The database adapter */
@@ -61,6 +62,7 @@ export interface ClientStackContext<
 export interface BackendPlugin<
 	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
 	TApi extends Record<string, (...args: any[]) => any> = never,
+	TOperations extends OperationRecord = never,
 > {
 	name: string;
 
@@ -72,7 +74,11 @@ export interface BackendPlugin<
 	 *   create, update, updateMany, delete, deleteMany, findOne, findMany, count
 	 * @param context - Optional context with access to all plugins (for introspection)
 	 */
-	routes: (adapter: Adapter, context?: StackContext) => TRoutes;
+	routes: (
+		adapter: Adapter,
+		context?: StackContext,
+		operations?: TOperations,
+	) => TRoutes;
 	dbPlugin: DbPlugin;
 
 	/**
@@ -83,6 +89,9 @@ export interface BackendPlugin<
 	 * @param adapter - The adapter instance shared with `routes`
 	 */
 	api?: (adapter: Adapter) => TApi;
+
+	/** Define operations shared by HTTP, request-scoped, and internal calls. */
+	operations?: (adapter: Adapter) => TOperations;
 }
 
 /**
@@ -121,7 +130,7 @@ export interface ClientPlugin<
  * suggesting callable functions on what is actually `undefined` at runtime.
  */
 export type PluginApis<
-	TPlugins extends Record<string, BackendPlugin<any, any>>,
+	TPlugins extends Record<string, BackendPlugin<any, any, any>>,
 > = {
 	[K in keyof TPlugins as _ApiOf<TPlugins[K]> extends never
 		? never
@@ -129,15 +138,38 @@ export type PluginApis<
 };
 
 /** @internal Extract the TApi parameter from a BackendPlugin type. */
-type _ApiOf<T> = T extends BackendPlugin<any, infer TApi> ? TApi : never;
+type _ApiOf<T> = T extends BackendPlugin<
+	infer _TRoutes,
+	infer TApi,
+	infer _TOps
+>
+	? TApi
+	: never;
+
+type _OperationsOf<T> = T extends BackendPlugin<
+	infer _TRoutes,
+	infer _TApi,
+	infer TOperations
+>
+	? TOperations
+	: never;
+
+/** Bound operation APIs, keyed by their registered backend plugin names. */
+export type PluginOperations<
+	TPlugins extends Record<string, BackendPlugin<any, any, any>>,
+> = {
+	[K in keyof TPlugins as _OperationsOf<TPlugins[K]> extends never
+		? never
+		: K]: OperationApi<_OperationsOf<TPlugins[K]>>;
+};
 
 /**
  * Configuration for creating the backend library
  */
 export interface BackendLibConfig<
-	TPlugins extends Record<string, BackendPlugin<any, any>> = Record<
+	TPlugins extends Record<string, BackendPlugin<any, any, any>> = Record<
 		string,
-		BackendPlugin<any, any>
+		BackendPlugin<any, any, any>
 	>,
 > {
 	basePath: string;
@@ -201,11 +233,12 @@ export type PluginRoutes<
  * Example: { messages: { list: Endpoint } } => { messages_list: Endpoint }
  */
 export type PrefixedPluginRoutes<
-	TPlugins extends Record<string, BackendPlugin<any, any>>,
+	TPlugins extends Record<string, BackendPlugin<any, any, any>>,
 > = UnionToIntersection<
 	{
 		[PluginKey in keyof TPlugins]: TPlugins[PluginKey] extends BackendPlugin<
 			infer TRoutes,
+			any,
 			any
 		>
 			? {
@@ -228,6 +261,10 @@ export interface BackendLib<
 		string,
 		Record<string, (...args: any[]) => any>
 	> = Record<string, Record<string, (...args: any[]) => any>>,
+	TOperations extends Record<
+		string,
+		Record<string, (...args: any[]) => any>
+	> = Record<string, Record<string, (...args: any[]) => any>>,
 > {
 	handler: (request: Request) => Promise<Response>; // API route handler
 	router: Router; // Better-call router
@@ -236,6 +273,10 @@ export interface BackendLib<
 	adapter: Adapter;
 	/** Fully-typed server-side getter functions, namespaced per plugin */
 	api: TApis;
+	/** User/request-scoped operations with automatic authorization. */
+	forRequest: (request: Request) => { api: TOperations };
+	/** Trusted operations that retain validation and lifecycle hooks. */
+	internal: TOperations;
 }
 
 /**

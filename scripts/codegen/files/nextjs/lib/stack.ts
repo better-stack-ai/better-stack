@@ -18,6 +18,7 @@ import { openai } from "@ai-sdk/openai";
 import { tool } from "ai";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { serverAuth } from "./authorization.server";
 
 import {
 	ProductSchema,
@@ -420,6 +421,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 			}),
 		},
 		adapter: (db) => createMemoryAdapter(db)({}),
+		auth: serverAuth,
 	});
 
 	return s;

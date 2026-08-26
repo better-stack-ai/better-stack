@@ -1,6 +1,7 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import { defineBackendPlugin } from "@btst/stack/plugins/api";
+import { defineBackendPlugin, defineOperation } from "@btst/stack/plugins/api";
 import { createEndpoint } from "@btst/stack/plugins/api";
+import { AuthorizationError } from "../../../authorization/server";
 import { z } from "zod";
 import { blogSchema as dbSchema } from "../db";
 import type { Post, PostWithPostTag, Tag } from "../types";
@@ -18,6 +19,7 @@ import { BLOG_QUERY_KEYS } from "./query-key-defs";
 import { serializePost, serializeTag } from "./serializers";
 import type { QueryClient } from "@tanstack/react-query";
 import { runHook } from "../../utils";
+import { blogPermissions } from "../permissions";
 
 /**
  * Route keys for the blog plugin — matches the keys returned by
@@ -261,6 +263,56 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 		dbPlugin: dbSchema,
 
+		operations: (adapter: Adapter) => ({
+			deletePost: defineOperation({
+				input: z.object({ id: z.string() }),
+				permission: blogPermissions.post.delete,
+				facts: async ({ input }) => {
+					const post = await adapter.findOne<Post>({
+						model: "post",
+						where: [{ field: "id", value: input.id }],
+					});
+					return {
+						id: input.id,
+						...(post?.authorId ? { authorId: post.authorId } : {}),
+					};
+				},
+				before: async ({ input, request }) => {
+					if (!hooks?.onBeforeDeletePost) return;
+					const context: BlogApiContext = {
+						params: { id: input.id },
+						...(request ? { request, headers: request.headers } : {}),
+					};
+					try {
+						await hooks.onBeforeDeletePost(input.id, context);
+					} catch (error) {
+						throw new AuthorizationError(
+							403,
+							error instanceof Error
+								? error.message
+								: "Unauthorized: Cannot delete post",
+						);
+					}
+				},
+				execute: async ({ input }) => {
+					await deletePostMutation(adapter, input.id);
+					return { success: true };
+				},
+				after: async ({ input, request }) => {
+					await hooks?.onPostDeleted?.(input.id, {
+						params: { id: input.id },
+						...(request ? { request, headers: request.headers } : {}),
+					});
+				},
+				onError: async ({ input, request, error }) => {
+					await hooks?.onDeletePostError?.(error as Error, {
+						...(input ? { params: { id: input.id } } : {}),
+						...(request ? { request, headers: request.headers } : {}),
+					});
+				},
+			}),
+		}),
+
 		api: (adapter) => ({
 			getAllPosts: (params?: Parameters<typeof getAllPosts>[1]) =>
 				getAllPosts(adapter, params),
@@ -275,7 +327,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 			deletePost: (id: string) => deletePostMutation(adapter, id),
 		}),
 
-		routes: (adapter: Adapter) => {
+		routes: (adapter: Adapter, context, operations) => {
 			const listPosts = createEndpoint(
 				"/posts",
 				{
@@ -442,35 +494,26 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 				"/posts/:id",
 				{
 					method: "DELETE",
+					requireRequest: true,
 				},
 				async (ctx) => {
-					const context: BlogApiContext = {
-						params: ctx.params,
-						headers: ctx.headers,
-					};
-
 					try {
-						// Authorization hook
-						if (hooks?.onBeforeDeletePost) {
-							await runHook(
-								() => hooks.onBeforeDeletePost!(ctx.params.id, context),
-								ctx.error,
-								"Unauthorized: Cannot delete post",
-							);
+						if (!operations) {
+							throw new Error("Blog delete operation is not registered.");
 						}
-
-						await deletePostMutation(adapter, ctx.params.id);
-
-						// Lifecycle hook
-						if (hooks?.onPostDeleted) {
-							await hooks.onPostDeleted(ctx.params.id, context);
-						}
-
-						return { success: true };
+						return await operations.deletePost.run(
+							{ id: ctx.params.id },
+							{
+								request: ctx.request,
+								...(context?.auth ? { auth: context.auth } : {}),
+							},
+						);
 					} catch (error) {
-						// Error hook
-						if (hooks?.onDeletePostError) {
-							await hooks.onDeletePostError(error as Error, context);
+						if (error instanceof AuthorizationError) {
+							throw ctx.error(error.statusCode, {
+								message: error.message,
+								code: error.code,
+							});
 						}
 						throw error;
 					}

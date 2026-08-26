@@ -4,6 +4,7 @@ import type {
 	BackendLib,
 	PrefixedPluginRoutes,
 	PluginApis,
+	PluginOperations,
 	StackContext,
 } from "../types";
 import type {
@@ -103,7 +104,7 @@ export function stack<
 		PrefixedPluginRoutes<TPlugins> = PrefixedPluginRoutes<TPlugins>,
 >(
 	config: BackendLibConfig<TPlugins>,
-): BackendLib<TRoutes, PluginApis<TPlugins>> {
+): BackendLib<TRoutes, PluginApis<TPlugins>, PluginOperations<TPlugins>> {
 	const { plugins, adapter, dbSchema, basePath, auth } = config;
 
 	// Collect all routes from all plugins with type-safe prefixed keys
@@ -127,9 +128,20 @@ export function stack<
 		auth,
 	};
 
+	const pluginOperations: Record<string, Record<string, any>> = {};
+	for (const [pluginKey, plugin] of Object.entries(plugins)) {
+		if (plugin.operations) {
+			pluginOperations[pluginKey] = plugin.operations(adapterInstance);
+		}
+	}
+
 	for (const [pluginKey, plugin] of Object.entries(plugins)) {
 		// Pass both adapter and context to plugin routes
-		const pluginRoutes = plugin.routes(adapterInstance, context);
+		const pluginRoutes = plugin.routes(
+			adapterInstance,
+			context,
+			pluginOperations[pluginKey],
+		);
 
 		// Prefix route keys with plugin name to avoid collisions
 		for (const [routeKey, endpoint] of Object.entries(pluginRoutes)) {
@@ -161,12 +173,48 @@ export function stack<
 			}
 		: router.handler;
 
+	const createOperationApi = (options: {
+		request?: Request;
+		internal: boolean;
+	}) => {
+		const result: Record<
+			string,
+			Record<string, (input: unknown) => unknown>
+		> = {};
+		for (const [pluginKey, operations] of Object.entries(pluginOperations)) {
+			result[pluginKey] = {};
+			for (const [operationKey, operation] of Object.entries(operations)) {
+				result[pluginKey]![operationKey] = (input: unknown) =>
+					operation.run(input, {
+						...(options.request ? { request: options.request } : {}),
+						...(auth ? { auth } : {}),
+						internal: options.internal,
+					});
+			}
+		}
+		return result;
+	};
+
+	const internal = createOperationApi({
+		internal: true,
+	}) as PluginOperations<TPlugins>;
+
 	return {
 		handler,
 		router,
 		dbSchema: betterDbSchema,
 		adapter: adapterInstance,
 		api: pluginApis,
+		internal,
+		forRequest: (request: Request) => {
+			if (auth) registerIdentityResolver(request, auth);
+			return {
+				api: createOperationApi({
+					request,
+					internal: false,
+				}) as PluginOperations<TPlugins>,
+			};
+		},
 	};
 }
 
@@ -175,6 +223,7 @@ export type {
 	BackendLibConfig,
 	BackendLib,
 	PluginApis,
+	PluginOperations,
 	StackContext,
 } from "../types";
 

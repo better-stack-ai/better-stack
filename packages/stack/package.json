@@ -87,6 +87,36 @@
         "default": "./dist/context/index.cjs"
       }
     },
+    "./authorization": {
+      "import": {
+        "types": "./dist/authorization/index.d.ts",
+        "default": "./dist/authorization/index.mjs"
+      },
+      "require": {
+        "types": "./dist/authorization/index.d.cts",
+        "default": "./dist/authorization/index.cjs"
+      }
+    },
+    "./authorization/client": {
+      "import": {
+        "types": "./dist/authorization/client.d.ts",
+        "default": "./dist/authorization/client.mjs"
+      },
+      "require": {
+        "types": "./dist/authorization/client.d.cts",
+        "default": "./dist/authorization/client.cjs"
+      }
+    },
+    "./authorization/server": {
+      "import": {
+        "types": "./dist/authorization/server.d.ts",
+        "default": "./dist/authorization/server.mjs"
+      },
+      "require": {
+        "types": "./dist/authorization/server.d.cts",
+        "default": "./dist/authorization/server.cjs"
+      }
+    },
     "./next": {
       "import": {
         "types": "./dist/next/index.d.ts",
@@ -155,6 +185,16 @@
       "require": {
         "types": "./dist/plugins/blog/api/index.d.cts",
         "default": "./dist/plugins/blog/api/index.cjs"
+      }
+    },
+    "./plugins/blog/permissions": {
+      "import": {
+        "types": "./dist/plugins/blog/permissions.d.ts",
+        "default": "./dist/plugins/blog/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/blog/permissions.d.cts",
+        "default": "./dist/plugins/blog/permissions.cjs"
       }
     },
     "./plugins/blog/client": {
@@ -665,6 +705,15 @@
       "context": [
         "./dist/context/index.d.ts"
       ],
+      "authorization": [
+        "./dist/authorization/index.d.ts"
+      ],
+      "authorization/client": [
+        "./dist/authorization/client.d.ts"
+      ],
+      "authorization/server": [
+        "./dist/authorization/server.d.ts"
+      ],
       "next": [
         "./dist/next/index.d.ts"
       ],
@@ -685,6 +734,9 @@
       ],
       "plugins/blog/api": [
         "./dist/plugins/blog/api/index.d.ts"
+      ],
+      "plugins/blog/permissions": [
+        "./dist/plugins/blog/permissions.d.ts"
       ],
       "plugins/blog/client": [
         "./dist/plugins/blog/client/index.d.ts"

@@ -14,11 +14,13 @@ import type {
 	StackIdentity,
 } from "../shared/auth-types";
 
-interface AuthContextValue {
+export interface AuthContextValue {
 	provider: StackAuthProvider;
 	identity: StackIdentity | null;
 	/** True until the initial `getIdentity()` call settles */
 	isPending: boolean;
+	/** Identity resolution or validation failure on the one-rule auth path. */
+	error?: Error;
 	/** Re-run `getIdentity()` (e.g. after login/logout) */
 	refetch: () => Promise<void>;
 }
@@ -46,6 +48,7 @@ export function StackAuthBoundary({
 	const [state, setState] = useState<{
 		identity: StackIdentity | null;
 		isPending: boolean;
+		error?: Error;
 	}>({ identity: null, isPending: true });
 
 	const refetch = useCallback(async () => {
@@ -53,6 +56,14 @@ export function StackAuthBoundary({
 			const identity = await provider.getIdentity();
 			setState({ identity: identity ?? null, isPending: false });
 		} catch (error) {
+			if ((provider as { mode?: string }).mode === "one-rule") {
+				setState({
+					identity: null,
+					isPending: false,
+					error: error instanceof Error ? error : new Error(String(error)),
+				});
+				return;
+			}
 			console.error("[btst/auth] getIdentity() failed:", error);
 			setState({ identity: null, isPending: false });
 		}
@@ -68,6 +79,7 @@ export function StackAuthBoundary({
 				provider,
 				identity: state.identity,
 				isPending: state.isPending,
+				...(state.error ? { error: state.error } : {}),
 				refetch,
 			}}
 		>
@@ -96,6 +108,7 @@ export function useAuthContext(): AuthContextValue | null {
 export function useIdentity(): {
 	identity: StackIdentity | null;
 	isPending: boolean;
+	error?: Error;
 	refetch: () => Promise<void>;
 } {
 	const auth = useContext(AuthContext);
@@ -107,6 +120,7 @@ export function useIdentity(): {
 	return {
 		identity: auth.identity,
 		isPending: auth.isPending,
+		...(auth.error ? { error: auth.error } : {}),
 		refetch: auth.refetch,
 	};
 }

@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { StackProvider, type StackAuthProvider } from "@btst/stack/context";
+import { StackProvider } from "@btst/stack/context";
 import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
@@ -25,6 +25,7 @@ import {
 } from "@btst/stack/plugins/media/client/components";
 import { resolveUser, searchUsers } from "@/lib/mock-users";
 import { Button } from "@/components/ui/button";
+import { clientAuth } from "@/lib/authorization.client";
 
 // Get base URL - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -45,11 +46,6 @@ type PluginOverrides = {
 	comments: CommentsPluginOverrides;
 	media: MediaPluginOverrides;
 };
-
-const authProvider = {
-	getIdentity: () => ({ id: "olliethedev", name: "Ollie" }),
-	loginPath: "/login",
-} satisfies StackAuthProvider;
 
 export default function ExampleLayout({
 	children,
@@ -96,7 +92,7 @@ export default function ExampleLayout({
 				basePath="/pages"
 				router={nextRouter()}
 				api={{ baseURL, basePath: "/api/data" }}
-				auth={authProvider}
+				auth={clientAuth}
 				overrides={{
 					// Only genuinely plugin-specific overrides remain — the shared
 					// Link/navigate/refresh/Image and API wiring come from the
