@@ -132,7 +132,7 @@ describe("createClientAuth", () => {
 
 	it("surfaces non-JSON facts as typed errors instead of render failures", async () => {
 		const portablePermissions = definePermissions("portable", {
-			inspect: permission(z.any()),
+			inspect: permission(z.object({ value: z.string() })),
 		});
 		const portableContract = defineAuthorizationContract({
 			identity: z.object({ id: z.string() }),
@@ -150,7 +150,10 @@ describe("createClientAuth", () => {
 		let canState: ReturnType<typeof clientAuth.useCan> | undefined;
 
 		function Probe() {
-			canState = clientAuth.useCan(portablePermissions.inspect(1n));
+			canState = clientAuth.useCan({
+				id: "portable:inspect",
+				facts: { value: 1n },
+			} as never);
 			return null;
 		}
 

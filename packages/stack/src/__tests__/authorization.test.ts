@@ -132,6 +132,25 @@ describe("schema-backed authorization", () => {
 			permissions: [blogPermissions] as const,
 		});
 		expect(strictIdentity.version).not.toBe(stripIdentity.version);
+
+		const stringMetadata = defineAuthorizationContract({
+			identity: z.object({ id: z.string(), value: z.string() }),
+			permissions: [blogPermissions] as const,
+		});
+		const misleadingMetadata = defineAuthorizationContract({
+			identity: z.object({
+				id: z.string(),
+				value: z.number().meta({ type: "string" }),
+			}),
+			permissions: [blogPermissions] as const,
+		});
+		expect(misleadingMetadata.version).not.toBe(stringMetadata.version);
+
+		const optionalIdentityField = defineAuthorizationContract({
+			identity: z.object({ id: z.string(), value: z.string().optional() }),
+			permissions: [blogPermissions] as const,
+		});
+		expect(optionalIdentityField.version).not.toBe(stringMetadata.version);
 	});
 
 	it("rejects opaque schema behavior that cannot be derived into a version", () => {
@@ -165,6 +184,21 @@ describe("schema-backed authorization", () => {
 			z.string().default("fallback"),
 			z.string().prefault("fallback"),
 			z.string().regex(/post/i),
+			z.stringFormat("tenant", (value) => value.startsWith("tenant_")),
+			z.stringFormat("email", () => true),
+			z.url({ hostname: /example\.com/ }),
+			z.jwt({ alg: "HS256" }),
+			z.number().min(Number.POSITIVE_INFINITY),
+			z.string().exactOptional(),
+			z.lazy(() => z.string()),
+			z
+				.object({ value: z.string() })
+				.check(z.property("value", z.string().startsWith("x"))),
+			z.success(z.string()),
+			z.file(),
+			z.literal(Number.NaN),
+			z.literal(Number.POSITIVE_INFINITY),
+			z.literal(Number.NEGATIVE_INFINITY),
 		]) {
 			expect(() =>
 				defineAuthorizationContract({
@@ -174,6 +208,17 @@ describe("schema-backed authorization", () => {
 					] as const,
 				}),
 			).toThrowError(message);
+		}
+	});
+
+	it("rejects identity schemas that can violate the public identity shape", () => {
+		for (const identity of [z.any(), z.object({ id: z.any() })]) {
+			expect(() =>
+				defineAuthorizationContract({
+					identity,
+					permissions: [blogPermissions] as const,
+				}),
+			).toThrow();
 		}
 	});
 

@@ -17,7 +17,6 @@ import {
 const documentPermissions = definePermissions("documents", {
 	document: {
 		delete: permission(z.object({ id: z.string(), ownerId: z.string() })),
-		inspect: permission(z.any()),
 	},
 });
 
@@ -164,8 +163,8 @@ describe("remote authorization evaluator", () => {
 			parseRemoteAuthorizationRequest(contract, {
 				version: contract.version,
 				permission: {
-					id: "documents:document.inspect",
-					facts: 1n,
+					id: "documents:document.delete",
+					facts: { id: 1n, ownerId: "owner-1" },
 				},
 			}),
 		).toThrow(AuthorizationRequestValidationError);
@@ -189,7 +188,10 @@ describe("remote authorization evaluator", () => {
 		await expect(
 			evaluator.evaluate({
 				identity: null,
-				permission: documentPermissions.document.inspect(1n),
+				permission: {
+					id: "documents:document.delete",
+					facts: { id: 1n, ownerId: "owner-1" },
+				} as never,
 			}),
 		).rejects.toBeInstanceOf(AuthorizationRequestValidationError);
 		expect(transport).not.toHaveBeenCalled();

@@ -343,6 +343,122 @@ function fingerprint(value: string): string {
 const unsupportedPortableSchemaMessage =
 	"Authorization contract schemas must be fully representable as JSON Schema; custom refinements, transforms, and other opaque behavior are unsupported because they cannot be derived into a stable version.";
 
+const portableSchemaTypes: ReadonlySet<z.core.$ZodTypeDef["type"]> = new Set([
+	"string",
+	"number",
+	"int",
+	"boolean",
+	"null",
+	"never",
+	"object",
+	"record",
+	"array",
+	"tuple",
+	"union",
+	"intersection",
+	"enum",
+	"literal",
+	"nullable",
+	"optional",
+	"nonoptional",
+	"readonly",
+	"template_literal",
+]);
+
+const portableCheckTypes = new Set([
+	"less_than",
+	"greater_than",
+	"multiple_of",
+	"number_format",
+	"max_size",
+	"min_size",
+	"size_equals",
+	"max_length",
+	"min_length",
+	"length_equals",
+	"string_format",
+]);
+
+const portableStringFormats = new Set([
+	"email",
+	"url",
+	"emoji",
+	"uuid",
+	"guid",
+	"nanoid",
+	"cuid",
+	"cuid2",
+	"ulid",
+	"xid",
+	"ksuid",
+	"datetime",
+	"date",
+	"time",
+	"duration",
+	"ipv4",
+	"ipv6",
+	"mac",
+	"cidrv4",
+	"cidrv6",
+	"base64",
+	"base64url",
+	"json_string",
+	"e164",
+	"jwt",
+	"lowercase",
+	"uppercase",
+	"regex",
+	"starts_with",
+	"ends_with",
+	"includes",
+	"hex",
+	"hostname",
+]);
+
+type PortableCheckDefinition = z.core.$ZodCheckDef & {
+	alg?: string;
+	fn?: unknown;
+	format?: string;
+	hostname?: RegExp;
+	normalize?: boolean;
+	pattern?: RegExp;
+	protocol?: RegExp;
+};
+
+function isPortableCheckDefinition(
+	definition: PortableCheckDefinition,
+): boolean {
+	if (
+		!portableCheckTypes.has(definition.check) ||
+		definition.when !== undefined ||
+		Object.values(definition).some(
+			(value) => typeof value === "number" && !Number.isFinite(value),
+		)
+	) {
+		return false;
+	}
+	if (definition.check !== "string_format") return true;
+	return (
+		definition.format !== undefined &&
+		portableStringFormats.has(definition.format) &&
+		(typeof definition.fn !== "function" || definition.pattern !== undefined) &&
+		(!definition.pattern || definition.pattern.flags.length === 0) &&
+		definition.alg === undefined &&
+		definition.hostname === undefined &&
+		definition.protocol === undefined &&
+		definition.normalize !== true
+	);
+}
+
+function isJsonLiteral(value: unknown): boolean {
+	return (
+		value === null ||
+		typeof value === "string" ||
+		typeof value === "boolean" ||
+		(typeof value === "number" && Number.isFinite(value))
+	);
+}
+
 function inspectPortableSchema(
 	schema: z.core.$ZodType,
 	jsonSchema: Record<string, unknown>,
@@ -352,8 +468,29 @@ function inspectPortableSchema(
 	// version-sensitive boundary centralized here and covered through the public
 	// contract API.
 	const definition = schema._zod.def;
+	if (
+		!portableSchemaTypes.has(definition.type) ||
+		("coerce" in definition && definition.coerce === true) ||
+		schema._zod.traits.has("$ZodExactOptional")
+	) {
+		return true;
+	}
+	jsonSchema["x-btst-zod-type"] = definition.type;
+
+	if (definition.type === "literal") {
+		const values = (definition as z.core.$ZodLiteralDef<z.core.util.Literal>)
+			.values;
+		if (!values.every(isJsonLiteral)) return true;
+	}
+	if (definition.type === "enum") {
+		const entries = (definition as z.core.$ZodEnumDef).entries;
+		if (!Object.values(entries).every(isJsonLiteral)) return true;
+	}
+
 	if (definition.type === "object") {
 		const catchall = (definition as z.core.$ZodObjectDef).catchall;
+		if (catchall && !portableSchemaTypes.has(catchall._zod.def.type))
+			return true;
 		jsonSchema["x-btst-object-mode"] = !catchall
 			? "strip"
 			: catchall._zod.def.type === "never"
@@ -363,34 +500,17 @@ function inspectPortableSchema(
 					: "catchall";
 	}
 
-	if (
-		("coerce" in definition && definition.coerce === true) ||
-		definition.type === "custom" ||
-		definition.type === "transform" ||
-		definition.type === "pipe" ||
-		definition.type === "catch" ||
-		definition.type === "default" ||
-		definition.type === "prefault"
-	) {
-		return true;
+	if ("check" in definition) {
+		if (!isPortableCheckDefinition(definition as PortableCheckDefinition)) {
+			return true;
+		}
 	}
 
 	return (
-		definition.checks?.some((check) => {
-			const checkDefinition = check._zod.def as z.core.$ZodCheckDef & {
-				format?: string;
-				pattern?: RegExp;
-				type?: string;
-			};
-			return (
-				checkDefinition.check === "custom" ||
-				checkDefinition.check === "overwrite" ||
-				checkDefinition.type === "custom" ||
-				(checkDefinition.format === "regex" &&
-					checkDefinition.pattern instanceof RegExp &&
-					checkDefinition.pattern.flags.length > 0)
-			);
-		}) === true
+		definition.checks?.some(
+			(check) =>
+				!isPortableCheckDefinition(check._zod.def as PortableCheckDefinition),
+		) === true
 	);
 }
 
@@ -398,6 +518,7 @@ function toPortableJsonSchema(schema: z.ZodType): unknown {
 	let containsOpaqueCheck = false;
 	try {
 		const jsonSchema = z.toJSONSchema(schema, {
+			metadata: z.registry(),
 			override: ({ zodSchema, jsonSchema }) => {
 				if (inspectPortableSchema(zodSchema, jsonSchema)) {
 					containsOpaqueCheck = true;
@@ -471,7 +592,19 @@ export function defineAuthorizationContract<
 		permissionIds,
 		version: `auth_${fingerprint(versionSource)}`,
 		parseIdentity(identity: unknown) {
-			return identity === null ? null : config.identity.parse(identity);
+			if (identity === null) return null;
+			const parsed = config.identity.parse(identity);
+			if (
+				typeof parsed !== "object" ||
+				parsed === null ||
+				Array.isArray(parsed) ||
+				typeof (parsed as { id?: unknown }).id !== "string"
+			) {
+				throw new TypeError(
+					"Authorization identities must be objects with a string id.",
+				);
+			}
+			return parsed;
 		},
 		parsePermission(permissionRequest: unknown) {
 			if (
