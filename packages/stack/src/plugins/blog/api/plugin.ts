@@ -151,7 +151,7 @@ export interface BlogDeleteOperationContext
 
 /** Typed post-execution lifecycle context for the Blog delete operation. */
 export interface BlogDeleteResultContext extends BlogDeleteOperationContext {
-	result: DeletePostResult;
+	readonly result: DeletePostResult;
 }
 
 /** Typed error lifecycle context after Blog delete authorization succeeds. */
