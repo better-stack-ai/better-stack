@@ -12,8 +12,7 @@ import {
 	useIdentity as useStackIdentity,
 } from "../context/auth";
 import type { StackAuthProvider } from "../shared/auth-types";
-
-type MaybePromise<T> = T | Promise<T>;
+import type { MaybePromise } from "../shared/types";
 
 /** Result returned by a bound browser permission check. */
 export interface AuthorizationCanState {

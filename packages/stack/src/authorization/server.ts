@@ -8,8 +8,7 @@ import type {
 	StackIdentity,
 	StackServerAuthProvider,
 } from "../shared/auth-types";
-
-type MaybePromise<T> = T | Promise<T>;
+import type { MaybePromise } from "../shared/types";
 
 /** An ordinary authorization denial with its corresponding HTTP status. */
 export class AuthorizationError extends Error {

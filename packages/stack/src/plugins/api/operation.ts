@@ -9,8 +9,7 @@ import type {
 	StackIdentity,
 	StackServerAuthProvider,
 } from "../../shared/auth-types";
-
-type MaybePromise<T> = T | Promise<T>;
+import type { MaybePromise } from "../../shared/types";
 
 /** Execution mode and request state supplied by a stack transport. */
 export interface OperationRunOptions {
