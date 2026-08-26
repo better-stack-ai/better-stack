@@ -1,4 +1,3 @@
-import { expectTypeOf } from "vitest";
 import { z } from "zod";
 import {
 	defineAuthorization,
@@ -7,6 +6,15 @@ import {
 } from "../authorization";
 import { createClientAuth } from "../authorization/client";
 import { createServerAuth } from "../authorization/server";
+
+type Equal<TLeft, TRight> = (<T>() => T extends TLeft ? 1 : 2) extends <
+	T,
+>() => T extends TRight ? 1 : 2
+	? (<T>() => T extends TRight ? 1 : 2) extends <T>() => T extends TLeft ? 1 : 2
+		? true
+		: false
+	: false;
+type Expect<T extends true> = T;
 
 const registered = definePermissions("registered", {
 	article: {
@@ -29,16 +37,16 @@ const authorization = defineAuthorization({
 	}),
 	permissions: [registered] as const,
 	rules: ({ registered }) => [
-		registered.article.delete.when(({ identity, params }) => {
-			expectTypeOf(identity).toEqualTypeOf<{
-				id: string;
-				role: "user" | "admin";
-			} | null>();
-			expectTypeOf(params).toEqualTypeOf<{
-				id: string;
-				authorId?: string;
-			}>();
-			return identity?.id === params.authorId;
+		registered.article.delete.when(({ identity, facts }) => {
+			const identityIsExact: Expect<
+				Equal<typeof identity, { id: string; role: "user" | "admin" } | null>
+			> = true;
+			const factsAreExact: Expect<
+				Equal<typeof facts, { id: string; authorId?: string }>
+			> = true;
+			void identityIsExact;
+			void factsAreExact;
+			return identity !== null && identity.id === facts.authorId;
 		}),
 	],
 });
@@ -53,13 +61,20 @@ const clientAuth = createClientAuth({
 	getIdentity: () => ({ id: "user-1", role: "user" as const }),
 });
 
-expectTypeOf(clientAuth.getIdentity()).toEqualTypeOf<
-	Promise<{ id: string; role: "user" | "admin" } | null>
->();
-expectTypeOf(clientAuth.useIdentity().identity).toEqualTypeOf<{
-	id: string;
-	role: "user" | "admin";
-} | null>();
+const clientResolverIsExact: Expect<
+	Equal<
+		ReturnType<typeof clientAuth.getIdentity>,
+		Promise<{ id: string; role: "user" | "admin" } | null>
+	>
+> = true;
+const clientHookIsExact: Expect<
+	Equal<
+		ReturnType<typeof clientAuth.useIdentity>["identity"],
+		{ id: string; role: "user" | "admin" } | null
+	>
+> = true;
+void clientResolverIsExact;
+void clientHookIsExact;
 clientAuth.useCan(registered.article.delete({ id: "article-1" }));
 void clientAuth.CanAccess({
 	permission: registered.article.delete({ id: "article-1" }),
@@ -70,9 +85,13 @@ const serverAuth = createServerAuth({
 	getIdentity: () => ({ id: "user-1", role: "user" as const }),
 });
 
-expectTypeOf(
-	serverAuth.getIdentity(new Request("http://localhost")),
-).toEqualTypeOf<Promise<{ id: string; role: "user" | "admin" } | null>>();
+const serverResolverIsExact: Expect<
+	Equal<
+		ReturnType<typeof serverAuth.getIdentity>,
+		Promise<{ id: string; role: "user" | "admin" } | null>
+	>
+> = true;
+void serverResolverIsExact;
 
 // @ts-expect-error permission fact id must be a string
 registered.article.delete({ id: 1 });

@@ -37,6 +37,7 @@ export {
 	type Operation,
 	type OperationApi,
 	type OperationContext,
+	type OperationErrorContext,
 	type OperationRecord,
 } from "./operation";
 

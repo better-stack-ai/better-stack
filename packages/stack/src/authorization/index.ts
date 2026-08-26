@@ -12,11 +12,11 @@ export interface PermissionSeed<TSchema extends AnySchema | undefined> {
 	readonly schema: TSchema;
 }
 
-type PermissionParams<TSchema extends AnySchema | undefined> =
+type PermissionFacts<TSchema extends AnySchema | undefined> =
 	TSchema extends AnySchema ? z.output<TSchema> : undefined;
 
 type PermissionInput<TSchema extends AnySchema | undefined> =
-	TSchema extends AnySchema ? [params: z.input<TSchema>] : [];
+	TSchema extends AnySchema ? [facts: z.input<TSchema>] : [];
 
 /** A validated permission request passed to client and server evaluators. */
 export interface PermissionRequest<
@@ -25,7 +25,7 @@ export interface PermissionRequest<
 > {
 	readonly id: TId;
 	readonly permission: PermissionDescriptor<TId, TSchema>;
-	readonly params: PermissionParams<TSchema>;
+	readonly facts: PermissionFacts<TSchema>;
 }
 
 /** A stable, callable permission descriptor produced by `definePermissions`. */
@@ -72,6 +72,7 @@ export type PermissionCatalog<
 };
 
 type AnyPermissionCatalog = PermissionCatalog<string, PermissionTree>;
+/** Any schema-backed permission descriptor, for generic plugin APIs. */
 export type AnyPermissionDescriptor = PermissionDescriptor<
 	string,
 	AnySchema | undefined
@@ -121,8 +122,8 @@ function createPermissionDescriptor(
 		if (!schema && args.length > 0) {
 			throw new TypeError(`Permission "${id}" does not accept facts.`);
 		}
-		const params = schema ? schema.parse(args[0]) : undefined;
-		return Object.freeze({ id, permission: descriptor, params });
+		const facts = schema ? schema.parse(args[0]) : undefined;
+		return Object.freeze({ id, permission: descriptor, facts });
 	}) as unknown as AnyPermissionDescriptor;
 
 	Object.defineProperties(descriptor, {
@@ -187,11 +188,13 @@ type RequestFor<TDescriptor> = TDescriptor extends PermissionDescriptor<
 	? PermissionRequest<TId, TSchema>
 	: never;
 
-export type PermissionParamsFor<TPermission> =
+/** Infer validated fact output for a permission descriptor. */
+export type PermissionFactsFor<TPermission> =
 	TPermission extends PermissionDescriptor<infer _TId, infer TSchema>
-		? PermissionParams<TSchema>
+		? PermissionFacts<TSchema>
 		: never;
 
+/** Infer accepted fact input for a permission descriptor. */
 export type PermissionInputFor<TPermission> =
 	TPermission extends PermissionDescriptor<infer _TId, infer TSchema>
 		? TSchema extends AnySchema
@@ -199,11 +202,12 @@ export type PermissionInputFor<TPermission> =
 			: undefined
 		: never;
 
+/** Infer the validated request created by a permission descriptor. */
 export type PermissionRequestFor<TPermission> = RequestFor<TPermission>;
 
 interface AuthorizationRuleDefinition {
 	readonly permission: AnyPermissionDescriptor;
-	readonly evaluate: (input: { identity: unknown; params: unknown }) => boolean;
+	readonly evaluate: (input: { identity: unknown; facts: unknown }) => boolean;
 }
 
 type RulePermission<TPermission, TIdentity> =
@@ -213,7 +217,7 @@ type RulePermission<TPermission, TIdentity> =
 				when: (
 					rule: (input: {
 						identity: TIdentity | null;
-						params: PermissionParams<TSchema>;
+						facts: PermissionFacts<TSchema>;
 					}) => boolean,
 				) => AuthorizationRuleDefinition;
 			}
@@ -263,21 +267,25 @@ export interface Authorization<
 	): boolean;
 }
 
+/** Any one-rule authorization contract, for generic adapter APIs. */
 export type AnyAuthorization = Authorization<
 	z.ZodType<{ id: string }, any>,
 	readonly AnyPermissionCatalog[]
 >;
 
+/** Infer validated identity output from an authorization contract. */
 export type AuthorizationIdentity<TAuthorization> =
 	TAuthorization extends Authorization<infer TSchema, any>
 		? z.output<TSchema>
 		: never;
 
+/** Infer accepted identity input from an authorization contract. */
 export type AuthorizationIdentityInput<TAuthorization> =
 	TAuthorization extends Authorization<infer TSchema, any>
 		? z.input<TSchema>
 		: never;
 
+/** Infer registered permission requests from an authorization contract. */
 export type AuthorizationPermissionRequest<TAuthorization> =
 	TAuthorization extends Authorization<any, infer TCatalogs>
 		? RequestFor<RegisteredDescriptor<TCatalogs>>
@@ -380,15 +388,15 @@ export function defineAuthorization<
 
 			const parsedIdentity =
 				identity === null ? null : config.identity.parse(identity);
-			const parsedParams = descriptor.schema
-				? descriptor.schema.parse(candidate.params)
+			const parsedFacts = descriptor.schema
+				? descriptor.schema.parse(candidate.facts)
 				: undefined;
 			const rule = rules.get(candidate.id);
 			if (!rule) return false;
 
 			const result = rule({
 				identity: parsedIdentity,
-				params: parsedParams,
+				facts: parsedFacts,
 			});
 			if (typeof result !== "boolean") {
 				throw new TypeError(
@@ -400,6 +408,7 @@ export function defineAuthorization<
 	}) as Authorization<TIdentitySchema, TCatalogs>;
 }
 
+/** Check whether a runtime value has the shape of a permission request. */
 export function isPermissionRequest(
 	value: unknown,
 ): value is AnyPermissionRequest {

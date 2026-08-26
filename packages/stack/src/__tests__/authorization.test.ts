@@ -33,8 +33,9 @@ const authorization = defineAuthorization({
 	rules: ({ blog }) => [
 		blog.post.read.allow(),
 		blog.post.delete.when(
-			({ identity, params }) =>
-				identity?.role === "admin" || identity?.id === params.authorId,
+			({ identity, facts }) =>
+				identity !== null &&
+				(identity.role === "admin" || identity.id === facts.authorId),
 		),
 	],
 });
@@ -44,7 +45,7 @@ describe("schema-backed authorization", () => {
 		expect(() => blogPermissions.post.delete({ id: 1 } as never)).toThrow();
 		expect(blogPermissions.post.delete({ id: "post-1" })).toMatchObject({
 			id: "blog:post.delete",
-			params: { id: "post-1" },
+			facts: { id: "post-1" },
 		});
 	});
 

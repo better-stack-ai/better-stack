@@ -306,7 +306,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 				},
 				onError: async ({ input, request, error }) => {
 					await hooks?.onDeletePostError?.(error as Error, {
-						params: { id: input.id },
+						...(input ? { params: { id: input.id } } : {}),
 						...(request ? { request, headers: request.headers } : {}),
 					});
 				},

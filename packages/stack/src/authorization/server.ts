@@ -11,6 +11,7 @@ import type {
 
 type MaybePromise<T> = T | Promise<T>;
 
+/** An ordinary authorization denial with its corresponding HTTP status. */
 export class AuthorizationError extends Error {
 	readonly statusCode: 401 | 403;
 	readonly code: "UNAUTHORIZED" | "FORBIDDEN";
@@ -26,6 +27,7 @@ export class AuthorizationError extends Error {
 	}
 }
 
+/** Server identity adapter bound to one authorization contract. */
 export interface ServerAuth<TAuthorization extends AnyAuthorization>
 	extends StackServerAuthProvider {
 	readonly mode: "one-rule";

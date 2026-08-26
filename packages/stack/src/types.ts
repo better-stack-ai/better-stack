@@ -154,6 +154,7 @@ type _OperationsOf<T> = T extends BackendPlugin<
 	? TOperations
 	: never;
 
+/** Bound operation APIs, keyed by their registered backend plugin names. */
 export type PluginOperations<
 	TPlugins extends Record<string, BackendPlugin<any, any, any>>,
 > = {

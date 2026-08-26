@@ -29,8 +29,9 @@ const authorization = defineAuthorization({
 	permissions: [blogPermissions] as const,
 	rules: ({ blog }) => [
 		blog.post.delete.when(
-			({ identity, params }) =>
-				identity?.role === "admin" || identity?.id === params.authorId,
+			({ identity, facts }) =>
+				identity !== null &&
+				(identity.role === "admin" || identity.id === facts.authorId),
 		),
 	],
 });

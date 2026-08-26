@@ -15,12 +15,14 @@ import type { StackAuthProvider } from "../shared/auth-types";
 
 type MaybePromise<T> = T | Promise<T>;
 
+/** Result returned by a bound browser permission check. */
 export interface AuthorizationCanState {
 	can: boolean;
 	isPending: boolean;
 	error?: Error;
 }
 
+/** Validated identity state returned by the bound browser identity hook. */
 export interface AuthorizationIdentityState<TIdentity> {
 	identity: TIdentity | null;
 	isPending: boolean;
@@ -28,6 +30,7 @@ export interface AuthorizationIdentityState<TIdentity> {
 	refetch: () => Promise<void>;
 }
 
+/** Browser identity adapter and hooks bound to one authorization contract. */
 export interface ClientAuth<TAuthorization extends AnyAuthorization>
 	extends StackAuthProvider {
 	readonly mode: "one-rule";
