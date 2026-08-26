@@ -379,6 +379,12 @@ const portableCheckTypes = new Set([
 	"string_format",
 ]);
 
+const portableLengthCheckTypes = new Set([
+	"max_length",
+	"min_length",
+	"length_equals",
+]);
+
 const portableStringFormats = new Set([
 	"email",
 	"url",
@@ -423,6 +429,7 @@ type PortableCheckDefinition = z.core.$ZodCheckDef & {
 	normalize?: boolean;
 	pattern?: RegExp;
 	protocol?: RegExp;
+	value?: unknown;
 };
 
 function isPortableCheckDefinition(
@@ -430,10 +437,14 @@ function isPortableCheckDefinition(
 ): boolean {
 	if (
 		!portableCheckTypes.has(definition.check) ||
-		definition.when !== undefined ||
 		Object.values(definition).some(
 			(value) => typeof value === "number" && !Number.isFinite(value),
-		)
+		) ||
+		(definition.check === "multiple_of" &&
+			typeof definition.value === "number" &&
+			definition.value <= 0) ||
+		(definition.when !== undefined &&
+			!portableLengthCheckTypes.has(definition.check))
 	) {
 		return false;
 	}

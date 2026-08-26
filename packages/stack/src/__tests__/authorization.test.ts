@@ -151,6 +151,27 @@ describe("schema-backed authorization", () => {
 			permissions: [blogPermissions] as const,
 		});
 		expect(optionalIdentityField.version).not.toBe(stringMetadata.version);
+
+		const constrainedIdentity = defineAuthorizationContract({
+			identity: z.object({ id: z.string().min(1).max(100) }),
+			permissions: [blogPermissions] as const,
+		});
+		expect(constrainedIdentity.parseIdentity({ id: "user-1" })).toEqual({
+			id: "user-1",
+		});
+		const constrainedFacts = definePermissions("constrained", {
+			read: permission(z.array(z.string()).min(1).max(3)),
+		});
+		const constrainedFactsContract = defineAuthorizationContract({
+			identity: z.object({ id: z.string() }),
+			permissions: [constrainedFacts] as const,
+		});
+		expect(
+			constrainedFactsContract.parsePermission({
+				id: "constrained:read",
+				facts: ["one", "two"],
+			}),
+		).toMatchObject({ facts: ["one", "two"] });
 	});
 
 	it("rejects opaque schema behavior that cannot be derived into a version", () => {
@@ -189,6 +210,8 @@ describe("schema-backed authorization", () => {
 			z.url({ hostname: /example\.com/ }),
 			z.jwt({ alg: "HS256" }),
 			z.number().min(Number.POSITIVE_INFINITY),
+			z.number().multipleOf(0),
+			z.number().multipleOf(-1),
 			z.string().exactOptional(),
 			z.lazy(() => z.string()),
 			z
