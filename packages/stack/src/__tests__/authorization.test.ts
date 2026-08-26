@@ -122,6 +122,16 @@ describe("schema-backed authorization", () => {
 			] as const,
 		});
 		expect(changedFacts.version).not.toBe(createContract().version);
+
+		const stripIdentity = defineAuthorizationContract({
+			identity: z.object({ id: z.string() }),
+			permissions: [blogPermissions] as const,
+		});
+		const strictIdentity = defineAuthorizationContract({
+			identity: z.strictObject({ id: z.string() }),
+			permissions: [blogPermissions] as const,
+		});
+		expect(strictIdentity.version).not.toBe(stripIdentity.version);
 	});
 
 	it("rejects opaque schema behavior that cannot be derived into a version", () => {
@@ -154,6 +164,7 @@ describe("schema-backed authorization", () => {
 			z.string().catch("fallback"),
 			z.string().default("fallback"),
 			z.string().prefault("fallback"),
+			z.string().regex(/post/i),
 		]) {
 			expect(() =>
 				defineAuthorizationContract({
@@ -164,6 +175,21 @@ describe("schema-backed authorization", () => {
 				}),
 			).toThrowError(message);
 		}
+	});
+
+	it("snapshots the registered catalog tuple before versioning", () => {
+		const permissions = [blogPermissions];
+		const contract = defineAuthorizationContract({
+			identity: z.object({ id: z.string() }),
+			permissions,
+		});
+
+		(permissions as unknown as unknown[]).push(commentsPermissions);
+		expect(contract.permissions).toEqual([blogPermissions]);
+		expect(Object.isFrozen(contract.permissions)).toBe(true);
+		expect(() =>
+			(contract.permissions as unknown as unknown[]).push(commentsPermissions),
+		).toThrow();
 	});
 
 	it("validates permission facts when the request is created", () => {

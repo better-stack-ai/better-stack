@@ -343,35 +343,54 @@ function fingerprint(value: string): string {
 const unsupportedPortableSchemaMessage =
 	"Authorization contract schemas must be fully representable as JSON Schema; custom refinements, transforms, and other opaque behavior are unsupported because they cannot be derived into a stable version.";
 
-type PortableSchemaDefinition = {
-	type?: string;
-	check?: string;
-	coerce?: boolean;
-	checks?: readonly {
-		_zod?: { def?: { check?: string; type?: string } };
-	}[];
-};
+function inspectPortableSchema(
+	schema: z.core.$ZodType,
+	jsonSchema: Record<string, unknown>,
+): boolean {
+	// Zod Core exposes `def` as its schema traversal representation, and Zod's
+	// own JSON Schema converter consumes the same definitions. Keep that
+	// version-sensitive boundary centralized here and covered through the public
+	// contract API.
+	const definition = schema._zod.def;
+	if (definition.type === "object") {
+		const catchall = (definition as z.core.$ZodObjectDef).catchall;
+		jsonSchema["x-btst-object-mode"] = !catchall
+			? "strip"
+			: catchall._zod.def.type === "never"
+				? "strict"
+				: catchall._zod.def.type === "unknown"
+					? "passthrough"
+					: "catchall";
+	}
 
-function hasOpaquePortableBehavior(schema: z.core.$ZodType): boolean {
-	// Zod's JSON Schema override API does not expose check metadata. Keep the
-	// exact-version-dependent inspection isolated here; the workspace pins Zod
-	// 4.4.3 and these cases have regression coverage.
-	const definition = schema._zod.def as PortableSchemaDefinition;
-	return (
-		definition.coerce === true ||
+	if (
+		("coerce" in definition && definition.coerce === true) ||
 		definition.type === "custom" ||
 		definition.type === "transform" ||
 		definition.type === "pipe" ||
 		definition.type === "catch" ||
 		definition.type === "default" ||
-		definition.type === "prefault" ||
-		definition.check === "custom" ||
-		definition.checks?.some(
-			(check) =>
-				check._zod?.def?.check === "custom" ||
-				check._zod?.def?.check === "overwrite" ||
-				check._zod?.def?.type === "custom",
-		) === true
+		definition.type === "prefault"
+	) {
+		return true;
+	}
+
+	return (
+		definition.checks?.some((check) => {
+			const checkDefinition = check._zod.def as z.core.$ZodCheckDef & {
+				format?: string;
+				pattern?: RegExp;
+				type?: string;
+			};
+			return (
+				checkDefinition.check === "custom" ||
+				checkDefinition.check === "overwrite" ||
+				checkDefinition.type === "custom" ||
+				(checkDefinition.format === "regex" &&
+					checkDefinition.pattern instanceof RegExp &&
+					checkDefinition.pattern.flags.length > 0)
+			);
+		}) === true
 	);
 }
 
@@ -379,8 +398,8 @@ function toPortableJsonSchema(schema: z.ZodType): unknown {
 	let containsOpaqueCheck = false;
 	try {
 		const jsonSchema = z.toJSONSchema(schema, {
-			override: ({ zodSchema }) => {
-				if (hasOpaquePortableBehavior(zodSchema)) {
+			override: ({ zodSchema, jsonSchema }) => {
+				if (inspectPortableSchema(zodSchema, jsonSchema)) {
 					containsOpaqueCheck = true;
 				}
 			},
@@ -428,7 +447,10 @@ export function defineAuthorizationContract<
 	identity: TIdentitySchema;
 	permissions: TCatalogs;
 }): AuthorizationContract<TIdentitySchema, TCatalogs> {
-	const descriptors = collectDescriptors(config.permissions);
+	const permissions = Object.freeze([
+		...config.permissions,
+	]) as unknown as TCatalogs;
+	const descriptors = collectDescriptors(permissions);
 	const permissionIds = Object.freeze([...descriptors.keys()].sort());
 	const versionSource = stableJson({
 		identity: toPortableJsonSchema(config.identity),
@@ -445,7 +467,7 @@ export function defineAuthorizationContract<
 
 	return Object.freeze({
 		identitySchema: config.identity,
-		permissions: config.permissions,
+		permissions,
 		permissionIds,
 		version: `auth_${fingerprint(versionSource)}`,
 		parseIdentity(identity: unknown) {
