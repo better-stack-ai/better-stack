@@ -1,8 +1,9 @@
 import { z } from "zod";
 import {
 	type AnyPermissionDescriptor,
-	type PermissionInputFor,
 	type PermissionFactsFor,
+	type PermissionInputFor,
+	type PermissionRequestFor,
 } from "../../authorization";
 import { isServerAuth } from "../../authorization/server";
 import type {
@@ -11,30 +12,99 @@ import type {
 } from "../../shared/auth-types";
 import type { MaybePromise } from "../../shared/types";
 
-/** Execution mode and request state supplied by a stack transport. */
-export interface OperationRunOptions {
+interface OperationExecutionOptions {
 	request?: Request;
 	auth?: StackServerAuthProvider;
-	internal?: boolean;
+	skipAuthorization: boolean;
 }
 
-/** Validated input, trusted facts, and identity passed through an operation. */
+type OperationExecutor = (
+	input: unknown,
+	options: OperationExecutionOptions,
+) => Promise<unknown>;
+
+const operationExecutors = new WeakMap<object, OperationExecutor>();
+
+/** Plain values accepted at the immutable operation lifecycle boundary. */
+export type OperationData =
+	| string
+	| number
+	| boolean
+	| bigint
+	| null
+	| undefined
+	| readonly OperationData[]
+	| { readonly [key: string]: OperationData };
+
+/** Recursively readonly data exposed by an authorized operation lifecycle. */
+export type DeepReadonly<T> = T extends (...args: any[]) => unknown
+	? T
+	: T extends readonly unknown[]
+		? { readonly [TKey in keyof T]: DeepReadonly<T[TKey]> }
+		: T extends object
+			? { readonly [TKey in keyof T]: DeepReadonly<T[TKey]> }
+			: T;
+
+function freezeOperationData<T>(
+	value: T,
+	seen = new WeakSet<object>(),
+	path = "operation data",
+): DeepReadonly<T> {
+	if (
+		value === null ||
+		(typeof value !== "object" && typeof value !== "function")
+	) {
+		if (typeof value === "function" || typeof value === "symbol") {
+			throw new TypeError(`${path} must contain only plain immutable data.`);
+		}
+		return value as DeepReadonly<T>;
+	}
+
+	const object = value as object;
+	const prototype = Object.getPrototypeOf(object);
+	if (
+		!Array.isArray(object) &&
+		prototype !== Object.prototype &&
+		prototype !== null
+	) {
+		throw new TypeError(
+			`${path} must contain only plain objects and arrays; mutable built-ins are not supported.`,
+		);
+	}
+	if (seen.has(object)) {
+		throw new TypeError(`${path} must not contain circular references.`);
+	}
+	seen.add(object);
+	for (const key of Reflect.ownKeys(object)) {
+		if (typeof key === "symbol") {
+			throw new TypeError(`${path} must not contain symbol properties.`);
+		}
+		const descriptor = Object.getOwnPropertyDescriptor(object, key);
+		if (descriptor && !("value" in descriptor)) {
+			throw new TypeError(`${path} must not contain accessor properties.`);
+		}
+		freezeOperationData(
+			(object as Record<PropertyKey, unknown>)[key],
+			seen,
+			`${path}.${key}`,
+		);
+	}
+	seen.delete(object);
+	return Object.freeze(object) as DeepReadonly<T>;
+}
+
+/** Validated input, trusted facts, and resolved identity passed through an operation. */
 export interface OperationContext<TInput, TFacts> {
-	input: TInput;
-	facts: TFacts;
-	identity: StackIdentity | null;
-	request?: Request;
+	readonly input: DeepReadonly<TInput>;
+	readonly facts: DeepReadonly<TFacts>;
+	readonly identity: DeepReadonly<StackIdentity> | null;
+	readonly request?: Request;
 }
 
-/** Context available when any stage of an operation pipeline fails. */
-export interface OperationErrorContext<TInput, TFacts> {
-	/** Present after input validation succeeds. */
-	input?: TInput;
-	/** Present after trusted facts are derived and validated. */
-	facts?: TFacts;
-	identity: StackIdentity | null;
-	request?: Request;
-	error: unknown;
+/** Context available after an authorized operation enters its lifecycle. */
+export interface OperationErrorContext<TInput, TFacts>
+	extends OperationContext<TInput, TFacts> {
+	readonly error: unknown;
 }
 
 /** A validated plugin operation shared by every server transport. */
@@ -45,10 +115,6 @@ export interface Operation<
 > {
 	readonly input: TInputSchema;
 	readonly permission: TPermission;
-	run(
-		input: z.input<TInputSchema>,
-		options?: OperationRunOptions,
-	): Promise<TResult>;
 }
 
 /** Any plugin operation, for generic stack composition. */
@@ -60,27 +126,66 @@ export type AnyOperation = Operation<
 /** Named operations exposed by a backend plugin. */
 export type OperationRecord = Record<string, AnyOperation>;
 
-/** Convert operation definitions into their bound callable API. */
+type OperationInput<TOperation extends AnyOperation> =
+	TOperation extends Operation<infer TInputSchema, any, any>
+		? z.input<TInputSchema>
+		: never;
+
+type OperationResult<TOperation extends AnyOperation> =
+	TOperation extends Operation<any, any, infer TResult> ? TResult : never;
+
+/** Infer the permission request enforced by an operation. */
+export type OperationPermissionRequest<TOperation extends AnyOperation> =
+	TOperation extends Operation<any, infer TPermission, any>
+		? PermissionRequestFor<TPermission>
+		: never;
+
+/** Infer the stable permission id enforced by an operation. */
+export type OperationPermissionId<TOperation extends AnyOperation> =
+	OperationPermissionRequest<TOperation>["id"];
+
+/** Convert operation definitions into their bound callable application API. */
 export type OperationApi<TOperations extends OperationRecord> = {
 	[TKey in keyof TOperations]: (
-		input: Parameters<TOperations[TKey]["run"]>[0],
-	) => ReturnType<TOperations[TKey]["run"]>;
+		input: OperationInput<TOperations[TKey]>,
+	) => Promise<DeepReadonly<OperationResult<TOperations[TKey]>>>;
+};
+
+/** Operations bound to an HTTP transport; every call requires its request. */
+export type RouteOperationApi<TOperations extends OperationRecord> = {
+	[TKey in keyof TOperations]: (
+		input: OperationInput<TOperations[TKey]>,
+		request: Request,
+	) => Promise<DeepReadonly<OperationResult<TOperations[TKey]>>>;
 };
 
 /**
  * Define validation, trusted fact derivation, authorization, lifecycle hooks,
  * and execution once so transports cannot accidentally bypass the pipeline.
+ *
+ * The operation descriptor deliberately has no public `run()` method. Stack
+ * composition binds it to HTTP, `forRequest()`, and the explicit `internal`
+ * namespace so callers cannot forge an internal execution flag.
  */
 export function defineOperation<
 	const TInputSchema extends z.ZodTypeAny,
 	const TPermission extends AnyPermissionDescriptor,
-	TResult,
+	const TExecute extends (
+		ctx: OperationContext<
+			z.output<TInputSchema>,
+			PermissionFactsFor<TPermission>
+		>,
+	) => MaybePromise<OperationData>,
 >(config: {
-	input: TInputSchema;
-	permission: TPermission;
+	input: [z.output<TInputSchema>] extends [OperationData]
+		? TInputSchema
+		: never;
+	permission: [PermissionFactsFor<TPermission>] extends [OperationData]
+		? TPermission
+		: never;
 	facts: (ctx: {
-		input: z.output<TInputSchema>;
-		request?: Request;
+		readonly input: DeepReadonly<z.output<TInputSchema>>;
+		readonly request?: Request;
 	}) => MaybePromise<PermissionInputFor<TPermission>>;
 	before?: (
 		ctx: OperationContext<
@@ -88,17 +193,14 @@ export function defineOperation<
 			PermissionFactsFor<TPermission>
 		>,
 	) => MaybePromise<void>;
-	execute: (
-		ctx: OperationContext<
-			z.output<TInputSchema>,
-			PermissionFactsFor<TPermission>
-		>,
-	) => MaybePromise<TResult>;
+	execute: TExecute;
 	after?: (
 		ctx: OperationContext<
 			z.output<TInputSchema>,
 			PermissionFactsFor<TPermission>
-		> & { result: TResult },
+		> & {
+			readonly result: DeepReadonly<Awaited<ReturnType<TExecute>>>;
+		},
 	) => MaybePromise<void>;
 	onError?: (
 		ctx: OperationErrorContext<
@@ -106,77 +208,127 @@ export function defineOperation<
 			PermissionFactsFor<TPermission>
 		>,
 	) => MaybePromise<void>;
-}): Operation<TInputSchema, TPermission, TResult> {
+}): Operation<TInputSchema, TPermission, Awaited<ReturnType<TExecute>>> {
+	type TResult = Awaited<ReturnType<TExecute>>;
 	const runtimePermission = config.permission as unknown as {
 		(): { facts: unknown };
 		(facts: unknown): { facts: unknown };
 	};
 
-	return {
+	const executeOperation = async (
+		input: z.input<TInputSchema>,
+		options: OperationExecutionOptions,
+	): Promise<unknown> => {
+		// These stages establish trusted operation context. They intentionally run
+		// before the lifecycle boundary, so validation, fact, identity, and rule
+		// failures cannot be observed or replaced by post-authorization hooks.
+		const parsedInput = freezeOperationData(
+			config.input.parse(input),
+			new WeakSet(),
+			"operation input",
+		);
+		const trustedFacts = await config.facts({
+			input: parsedInput,
+			...(options.request ? { request: options.request } : {}),
+		});
+		const permissionRequest = config.permission.schema
+			? runtimePermission(trustedFacts)
+			: runtimePermission();
+		const parsedFacts = freezeOperationData(
+			permissionRequest.facts as PermissionFactsFor<TPermission>,
+			new WeakSet(),
+			"operation facts",
+		);
+
+		let identity: DeepReadonly<StackIdentity> | null = null;
+		if (!options.skipAuthorization && isServerAuth(options.auth)) {
+			if (!options.request) {
+				throw new Error("Authorized operations require a request.");
+			}
+			const runtimeAuth = options.auth as unknown as {
+				authorize: (
+					request: Request,
+					permission: unknown,
+				) => Promise<StackIdentity | null>;
+			};
+			const authorizedIdentity = await runtimeAuth.authorize(
+				options.request,
+				permissionRequest,
+			);
+			identity = authorizedIdentity
+				? freezeOperationData(
+						authorizedIdentity,
+						new WeakSet(),
+						"operation identity",
+					)
+				: null;
+		}
+
+		const context = Object.freeze({
+			input: parsedInput,
+			facts: parsedFacts,
+			identity,
+			...(options.request ? { request: options.request } : {}),
+		}) satisfies OperationContext<
+			z.output<TInputSchema>,
+			PermissionFactsFor<TPermission>
+		>;
+
+		try {
+			await config.before?.(context);
+			const result = freezeOperationData<unknown>(
+				await config.execute(context),
+				new WeakSet(),
+				"operation result",
+			);
+			const after = config.after as
+				| ((ctx: unknown) => MaybePromise<void>)
+				| undefined;
+			await after?.(Object.freeze({ ...context, result }));
+			return result;
+		} catch (error) {
+			try {
+				await config.onError?.(Object.freeze({ ...context, error }));
+			} catch {
+				// Error hooks are observational and must not replace the operation error.
+			}
+			throw error;
+		}
+	};
+
+	const operation: Operation<TInputSchema, TPermission, TResult> = {
 		input: config.input,
 		permission: config.permission,
-		async run(input, options = {}) {
-			let parsedInput: z.output<TInputSchema>;
-			let parsedFacts: PermissionFactsFor<TPermission>;
-			let hasParsedInput = false;
-			let hasParsedFacts = false;
-			let identity: StackIdentity | null = null;
-
-			try {
-				parsedInput = config.input.parse(input);
-				hasParsedInput = true;
-				const trustedFacts = await config.facts({
-					input: parsedInput,
-					...(options.request ? { request: options.request } : {}),
-				});
-				const permissionRequest = config.permission.schema
-					? runtimePermission(trustedFacts)
-					: runtimePermission();
-				parsedFacts =
-					permissionRequest.facts as PermissionFactsFor<TPermission>;
-				hasParsedFacts = true;
-
-				if (!options.internal && isServerAuth(options.auth)) {
-					if (!options.request) {
-						throw new Error(
-							"Authorized operations require a request. Use internal for trusted calls.",
-						);
-					}
-					const runtimeAuth = options.auth as unknown as {
-						authorize: (
-							request: Request,
-							permission: unknown,
-						) => Promise<StackIdentity | null>;
-					};
-					identity = await runtimeAuth.authorize(
-						options.request,
-						permissionRequest,
-					);
-				}
-
-				const typedContext: OperationContext<
-					z.output<TInputSchema>,
-					PermissionFactsFor<TPermission>
-				> = {
-					input: parsedInput,
-					facts: parsedFacts,
-					identity,
-					...(options.request ? { request: options.request } : {}),
-				};
-				await config.before?.(typedContext);
-				const result = await config.execute(typedContext);
-				await config.after?.({ ...typedContext, result });
-				return result;
-			} catch (error) {
-				await config.onError?.({
-					...(hasParsedInput ? { input: parsedInput! } : {}),
-					...(hasParsedFacts ? { facts: parsedFacts! } : {}),
-					identity,
-					...(options.request ? { request: options.request } : {}),
-					error,
-				});
-				throw error;
-			}
-		},
 	};
+	operationExecutors.set(operation, executeOperation as OperationExecutor);
+	return Object.freeze(operation);
+}
+
+function getOperationExecutor(operation: AnyOperation): OperationExecutor {
+	const executor = operationExecutors.get(operation);
+	if (!executor) throw new TypeError("Invalid operation descriptor.");
+	return executor;
+}
+
+/** @internal Execute an operation through an authorized request transport. */
+export function runAuthorizedOperation<TOperation extends AnyOperation>(
+	operation: TOperation,
+	input: OperationInput<TOperation>,
+	options: { request: Request; auth?: StackServerAuthProvider },
+): Promise<DeepReadonly<OperationResult<TOperation>>> {
+	return getOperationExecutor(operation)(input, {
+		request: options.request,
+		...(options.auth ? { auth: options.auth } : {}),
+		skipAuthorization: false,
+	}) as Promise<DeepReadonly<OperationResult<TOperation>>>;
+}
+
+/** @internal Execute an operation through the trusted application namespace. */
+export function runInternalOperation<TOperation extends AnyOperation>(
+	operation: TOperation,
+	input: OperationInput<TOperation>,
+): Promise<DeepReadonly<OperationResult<TOperation>>> {
+	return getOperationExecutor(operation)(input, {
+		skipAuthorization: true,
+	}) as Promise<DeepReadonly<OperationResult<TOperation>>>;
 }

@@ -1,4 +1,4 @@
-import { StackProvider, type StackAuthProvider } from "@btst/stack/context";
+import { StackProvider } from "@btst/stack/context";
 import { tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
@@ -24,6 +24,7 @@ import { resolveUser, searchUsers } from "../../lib/mock-users";
 import { Outlet, createFileRoute } from "@tanstack/react-router";
 import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client";
 import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client";
+import { clientAuth } from "../../lib/authorization.ui";
 
 // Get base URL function - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -44,11 +45,6 @@ type PluginOverrides = {
 	comments: CommentsPluginOverrides;
 	media: MediaPluginOverrides;
 };
-
-const authProvider = {
-	getIdentity: () => ({ id: "olliethedev", name: "Ollie" }),
-	loginPath: "/login",
-} satisfies StackAuthProvider;
 
 export const Route = createFileRoute("/pages")({
 	component: Layout,
@@ -97,7 +93,7 @@ function Layout() {
 				basePath="/pages"
 				router={tanstackRouter()}
 				api={{ baseURL, basePath: "/api/data" }}
-				auth={authProvider}
+				auth={clientAuth}
 				overrides={{
 					// Only genuinely plugin-specific overrides remain — the shared
 					// Link/navigate/refresh and API wiring come from the top-level

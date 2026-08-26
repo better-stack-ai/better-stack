@@ -6,7 +6,16 @@ import type {
 } from "@btst/db";
 import type { Endpoint, Router } from "better-call";
 import type { StackServerAuthProvider } from "./shared/auth-types";
-import type { OperationApi, OperationRecord } from "./plugins/api/operation";
+import type {
+	OperationApi,
+	OperationPermissionRequest,
+	OperationRecord,
+	RouteOperationApi,
+} from "./plugins/api/operation";
+import type {
+	AnyAuthorization,
+	AuthorizationPermissionRequest,
+} from "./authorization";
 
 export type {
 	CanParams,
@@ -28,6 +37,8 @@ export interface StackContext {
 	adapter: Adapter;
 	/** The server-side auth provider, when configured on `stack()` */
 	auth?: StackServerAuthProvider;
+	/** Routes already constructed for each plugin, used by introspection plugins. */
+	pluginRoutes: Record<string, Record<string, Endpoint>>;
 }
 
 /**
@@ -72,13 +83,17 @@ export interface BackendPlugin<
 	 *
 	 * @param adapter - Better DB adapter instance with methods:
 	 *   create, update, updateMany, delete, deleteMany, findOne, findMany, count
-	 * @param context - Optional context with access to all plugins (for introspection)
+	 * @param context - Stack context with access to all plugins (for introspection)
+	 * @param operations - Request-bound operations declared by this plugin. When
+	 *   the plugin declares operations, every route call requires this argument.
 	 */
-	routes: (
+	routes(
 		adapter: Adapter,
-		context?: StackContext,
-		operations?: TOperations,
-	) => TRoutes;
+		context: StackContext | undefined,
+		operations: [TOperations] extends [never]
+			? Record<string, never>
+			: RouteOperationApi<TOperations>,
+	): TRoutes;
 	dbPlugin: DbPlugin;
 
 	/**
@@ -163,6 +178,64 @@ export type PluginOperations<
 		: K]: OperationApi<_OperationsOf<TPlugins[K]>>;
 };
 
+type _OperationPermissionRequests<T> = T extends OperationRecord
+	? OperationPermissionRequest<T[keyof T]>
+	: never;
+
+/** Permission requests required by all operations in a plugin map. */
+export type PluginOperationPermissionRequests<
+	TPlugins extends Record<string, BackendPlugin<any, any, any>>,
+> = {
+	[K in keyof TPlugins]: _OperationPermissionRequests<
+		_OperationsOf<TPlugins[K]>
+	>;
+}[keyof TPlugins];
+
+type _RequestWithId<TRequest, TId> = TRequest extends { readonly id: TId }
+	? TRequest
+	: never;
+
+type _RequestFacts<TRequest> = TRequest extends { readonly facts: infer TFacts }
+	? TFacts
+	: never;
+
+type _IncompatibleOperationRequests<TOperationRequest, TAuthorizationRequest> =
+	TOperationRequest extends { readonly id: infer TId }
+		? _RequestWithId<TAuthorizationRequest, TId> extends infer TRegistered
+			? [TRegistered] extends [never]
+				? TOperationRequest
+				: [_RequestFacts<TOperationRequest>] extends [
+							_RequestFacts<TRegistered>,
+						]
+					? [_RequestFacts<TRegistered>] extends [
+							_RequestFacts<TOperationRequest>,
+						]
+						? never
+						: TOperationRequest
+					: TOperationRequest
+			: TOperationRequest
+		: TOperationRequest;
+
+/**
+ * Reject one-rule server adapters whose registered catalogs do not cover every
+ * operation descriptor in the composed stack. RC server providers remain
+ * compatible until the v3 migration is complete.
+ */
+export type CompatibleStackAuth<
+	TPlugins extends Record<string, BackendPlugin<any, any, any>>,
+	TAuth extends StackServerAuthProvider | undefined,
+> = TAuth extends {
+	mode: "one-rule";
+	readonly authorization: infer TAuthorization extends AnyAuthorization;
+}
+	? _IncompatibleOperationRequests<
+			PluginOperationPermissionRequests<TPlugins>,
+			AuthorizationPermissionRequest<TAuthorization>
+		> extends never
+		? TAuth
+		: never
+	: TAuth;
+
 /**
  * Configuration for creating the backend library
  */
@@ -171,6 +244,9 @@ export interface BackendLibConfig<
 		string,
 		BackendPlugin<any, any, any>
 	>,
+	TAuth extends StackServerAuthProvider | undefined =
+		| StackServerAuthProvider
+		| undefined,
 > {
 	basePath: string;
 	dbSchema?: DatabaseDefinition;
@@ -182,7 +258,7 @@ export interface BackendLibConfig<
 	 * hooks and route handlers can read it via `getRequestIdentity(headers)`
 	 * from `@btst/stack/api`. When omitted, behavior is unchanged.
 	 */
-	auth?: StackServerAuthProvider;
+	auth?: TAuth;
 }
 
 /**

@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { createMemoryAdapter } from "@btst/adapter-memory";
+import type { DatabaseDefinition } from "@btst/db";
 import {
 	defineAuthorization,
 	definePermissions,
 	permission,
 } from "../authorization";
-import { defineOperation } from "../plugins/api";
+import {
+	createDbPlugin,
+	defineBackendPlugin,
+	defineOperation,
+} from "../plugins/api";
+import { stack } from "../api";
 
 const blogPermissions = definePermissions("blog", {
 	post: {
@@ -48,6 +55,22 @@ describe("schema-backed authorization", () => {
 			id: "blog:post.delete",
 			facts: { id: "post-1" },
 		});
+	});
+
+	it("keeps nested permission descriptors immutable", () => {
+		const deletePermission = blogPermissions.post.delete;
+
+		expect(Object.isFrozen(blogPermissions)).toBe(true);
+		expect(Object.isFrozen(blogPermissions.post)).toBe(true);
+		expect(Object.isFrozen(deletePermission)).toBe(true);
+		expect(() => {
+			(blogPermissions.post as { delete: unknown }).delete =
+				commentsPermissions.comment.delete;
+		}).toThrow();
+		expect(blogPermissions.post.delete).toBe(deletePermission);
+		expect(blogPermissions.post.delete({ id: "post-1" }).id).toBe(
+			"blog:post.delete",
+		);
 	});
 
 	it("supports explicit allow and conditional rules", () => {
@@ -129,12 +152,68 @@ describe("schema-backed authorization", () => {
 			facts: () => undefined,
 			execute: ({ input, facts }) => {
 				expect(facts).toBeUndefined();
-				return input.path;
+				return { path: input.path } as const;
 			},
+		});
+		expect(Object.isFrozen(operation)).toBe(true);
+		expect("run" in operation).toBe(false);
+		expect(Object.getOwnPropertySymbols(operation)).toEqual([]);
+		const navigationPlugin = defineBackendPlugin({
+			name: "navigation",
+			dbPlugin: createDbPlugin("navigation", {}),
+			operations: () => ({ visit: operation }),
+			routes: () => ({}),
+		});
+		const backend = stack({
+			basePath: "/api",
+			plugins: { navigation: navigationPlugin },
+			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
+		});
+
+		const result = await backend.internal.navigation.visit({ path: "/docs" });
+		expect(result).toEqual({ path: "/docs" });
+		expect(Object.isFrozen(result)).toBe(true);
+		expect(() => {
+			(result as { path: string }).path = "/changed";
+		}).toThrow();
+	});
+
+	it("deep-freezes validated input and trusted facts before lifecycle hooks", async () => {
+		const guardedPermissions = definePermissions("guarded", {
+			update: permission(z.object({ target: z.object({ id: z.string() }) })),
+		});
+		const guardedOperation = defineOperation({
+			input: z.object({ target: z.object({ id: z.string() }) }),
+			permission: guardedPermissions.update,
+			facts: ({ input }) => ({ target: { id: input.target.id } }),
+			before: ({ input, facts }) => {
+				expect(Object.isFrozen(input)).toBe(true);
+				expect(Object.isFrozen(input.target)).toBe(true);
+				expect(Object.isFrozen(facts)).toBe(true);
+				expect(Object.isFrozen(facts.target)).toBe(true);
+				expect(() => {
+					(input.target as { id: string }).id = "another-record";
+				}).toThrow();
+				expect(() => {
+					(facts.target as { id: string }).id = "another-record";
+				}).toThrow();
+			},
+			execute: ({ input }) => input.target.id,
+		});
+		const guardedPlugin = defineBackendPlugin({
+			name: "guarded",
+			dbPlugin: createDbPlugin("guarded", {}),
+			operations: () => ({ update: guardedOperation }),
+			routes: () => ({}),
+		});
+		const backend = stack({
+			basePath: "/api",
+			plugins: { guarded: guardedPlugin },
+			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
 		});
 
 		await expect(
-			operation.run({ path: "/docs" }, { internal: true }),
-		).resolves.toBe("/docs");
+			backend.internal.guarded.update({ target: { id: "record-1" } }),
+		).resolves.toBe("record-1");
 	});
 });

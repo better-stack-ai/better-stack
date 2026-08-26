@@ -6,12 +6,18 @@ import type {
 	PluginApis,
 	PluginOperations,
 	StackContext,
+	BackendPlugin,
+	CompatibleStackAuth,
 } from "../types";
 import type {
 	StackIdentity,
 	StackServerAuthProvider,
 } from "../shared/auth-types";
 import { defineDb } from "@btst/db";
+import {
+	runAuthorizedOperation,
+	runInternalOperation,
+} from "../plugins/api/operation";
 
 export { toNodeHandler } from "better-call/node";
 
@@ -99,13 +105,18 @@ export async function getRequestIdentity(
  * @template TRoutes - All routes with prefixed keys like "pluginName_routeName" (computed automatically)
  */
 export function stack<
-	TPlugins extends Record<string, any>,
+	const TPlugins extends Record<string, BackendPlugin<any, any, any>>,
+	const TAuth extends StackServerAuthProvider | undefined,
 	TRoutes extends
 		PrefixedPluginRoutes<TPlugins> = PrefixedPluginRoutes<TPlugins>,
 >(
-	config: BackendLibConfig<TPlugins>,
+	config: BackendLibConfig<TPlugins, TAuth> & {
+		auth?: CompatibleStackAuth<TPlugins, TAuth>;
+	},
 ): BackendLib<TRoutes, PluginApis<TPlugins>, PluginOperations<TPlugins>> {
-	const { plugins, adapter, dbSchema, basePath, auth } = config;
+	const { plugins, adapter, dbSchema, basePath } = config;
+	const runtimeAuth = (config as unknown as { auth?: StackServerAuthProvider })
+		.auth;
 
 	// Collect all routes from all plugins with type-safe prefixed keys
 	const allRoutes = {} as TRoutes;
@@ -120,12 +131,17 @@ export function stack<
 	// Create the adapter instance once
 	const adapterInstance = adapter(betterDbSchema);
 
+	// Keep the constructed route maps on the shared context so introspection
+	// plugins inspect the real routes instead of invoking factories a second time.
+	const pluginRoutesByName: Record<string, Record<string, any>> = {};
+
 	// Create context for plugins that need access to all plugins (e.g., openAPI)
 	const context: StackContext = {
 		plugins,
 		basePath,
 		adapter: adapterInstance,
-		auth,
+		auth: runtimeAuth,
+		pluginRoutes: pluginRoutesByName,
 	};
 
 	const pluginOperations: Record<string, Record<string, any>> = {};
@@ -135,13 +151,32 @@ export function stack<
 		}
 	}
 
+	const routeOperationApis: Record<
+		string,
+		Record<string, (input: unknown, request: Request) => Promise<unknown>>
+	> = {};
+	for (const [pluginKey, operations] of Object.entries(pluginOperations)) {
+		routeOperationApis[pluginKey] = {};
+		for (const [operationKey, operation] of Object.entries(operations)) {
+			routeOperationApis[pluginKey]![operationKey] = (
+				input: unknown,
+				request: Request,
+			) =>
+				runAuthorizedOperation(operation, input, {
+					request,
+					...(runtimeAuth ? { auth: runtimeAuth } : {}),
+				});
+		}
+	}
+
 	for (const [pluginKey, plugin] of Object.entries(plugins)) {
 		// Pass both adapter and context to plugin routes
 		const pluginRoutes = plugin.routes(
 			adapterInstance,
 			context,
-			pluginOperations[pluginKey],
+			routeOperationApis[pluginKey] ?? {},
 		);
+		pluginRoutesByName[pluginKey] = pluginRoutes;
 
 		// Prefix route keys with plugin name to avoid collisions
 		for (const [routeKey, endpoint] of Object.entries(pluginRoutes)) {
@@ -166,17 +201,14 @@ export function stack<
 	// With an auth provider, register a per-request identity resolver before
 	// dispatch so hooks can call getRequestIdentity(ctx.headers). Without one,
 	// the handler is returned untouched.
-	const handler = auth
+	const handler = runtimeAuth
 		? (request: Request) => {
-				registerIdentityResolver(request, auth);
+				registerIdentityResolver(request, runtimeAuth);
 				return router.handler(request);
 			}
 		: router.handler;
 
-	const createOperationApi = (options: {
-		request?: Request;
-		internal: boolean;
-	}) => {
+	const createRequestOperationApi = (request: Request) => {
 		const result: Record<
 			string,
 			Record<string, (input: unknown) => unknown>
@@ -185,19 +217,27 @@ export function stack<
 			result[pluginKey] = {};
 			for (const [operationKey, operation] of Object.entries(operations)) {
 				result[pluginKey]![operationKey] = (input: unknown) =>
-					operation.run(input, {
-						...(options.request ? { request: options.request } : {}),
-						...(auth ? { auth } : {}),
-						internal: options.internal,
+					runAuthorizedOperation(operation, input, {
+						request,
+						...(runtimeAuth ? { auth: runtimeAuth } : {}),
 					});
 			}
 		}
 		return result;
 	};
 
-	const internal = createOperationApi({
-		internal: true,
-	}) as PluginOperations<TPlugins>;
+	const internalResult: Record<
+		string,
+		Record<string, (input: unknown) => unknown>
+	> = {};
+	for (const [pluginKey, operations] of Object.entries(pluginOperations)) {
+		internalResult[pluginKey] = {};
+		for (const [operationKey, operation] of Object.entries(operations)) {
+			internalResult[pluginKey]![operationKey] = (input: unknown) =>
+				runInternalOperation(operation, input);
+		}
+	}
+	const internal = internalResult as PluginOperations<TPlugins>;
 
 	return {
 		handler,
@@ -207,12 +247,9 @@ export function stack<
 		api: pluginApis,
 		internal,
 		forRequest: (request: Request) => {
-			if (auth) registerIdentityResolver(request, auth);
+			if (runtimeAuth) registerIdentityResolver(request, runtimeAuth);
 			return {
-				api: createOperationApi({
-					request,
-					internal: false,
-				}) as PluginOperations<TPlugins>,
+				api: createRequestOperationApi(request) as PluginOperations<TPlugins>,
 			};
 		},
 	};

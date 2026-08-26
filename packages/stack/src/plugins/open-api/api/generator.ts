@@ -339,8 +339,9 @@ export function generateOpenAPISchema(
 			continue;
 		}
 
-		// Get plugin routes
-		const pluginRoutes = plugin.routes(context.adapter, context);
+		// Stack composition records the real route map. Reusing it avoids invoking
+		// plugin factories with a forged operation transport during introspection.
+		const pluginRoutes = context.pluginRoutes[pluginKey] ?? {};
 
 		// Create tag for this plugin
 		const tagName = pluginKey.charAt(0).toUpperCase() + pluginKey.slice(1);

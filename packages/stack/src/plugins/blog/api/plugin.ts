@@ -1,5 +1,10 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import { defineBackendPlugin, defineOperation } from "@btst/stack/plugins/api";
+import {
+	defineBackendPlugin,
+	defineOperation,
+	type OperationContext,
+	type OperationErrorContext,
+} from "@btst/stack/plugins/api";
 import { createEndpoint } from "@btst/stack/plugins/api";
 import { AuthorizationError } from "../../../authorization/server";
 import { z } from "zod";
@@ -20,6 +25,7 @@ import { serializePost, serializeTag } from "./serializers";
 import type { QueryClient } from "@tanstack/react-query";
 import { runHook } from "../../utils";
 import { blogPermissions } from "../permissions";
+import type { PermissionFactsFor } from "@btst/stack/authorization";
 
 /**
  * Route keys for the blog plugin — matches the keys returned by
@@ -123,6 +129,38 @@ export const NextPreviousPostsQuerySchema = z.object({
 	date: z.coerce.date(),
 });
 
+const DeletePostInputSchema = z.object({ id: z.string() });
+type DeletePostInput = z.output<typeof DeletePostInputSchema>;
+type DeletePostFacts = PermissionFactsFor<typeof blogPermissions.post.delete>;
+type DeletePostResult = { readonly success: true };
+
+function normalizeOperationError(error: unknown): Error {
+	if (error instanceof Error) return error;
+	return new Error(
+		typeof error === "string" ? error : "Blog delete operation failed.",
+		{ cause: error },
+	);
+}
+
+/** Typed lifecycle context for the Blog delete operation. */
+export interface BlogDeleteOperationContext
+	extends OperationContext<DeletePostInput, DeletePostFacts> {
+	readonly params: { readonly id: string };
+	readonly headers?: Headers;
+}
+
+/** Typed post-execution lifecycle context for the Blog delete operation. */
+export interface BlogDeleteResultContext extends BlogDeleteOperationContext {
+	readonly result: DeletePostResult;
+}
+
+/** Typed error lifecycle context after Blog delete authorization succeeds. */
+export interface BlogDeleteErrorContext
+	extends OperationErrorContext<DeletePostInput, DeletePostFacts> {
+	readonly params: { readonly id: string };
+	readonly headers?: Headers;
+}
+
 /**
  * Context passed to blog API hooks
  */
@@ -176,7 +214,7 @@ export interface BlogBackendHooks {
 	 */
 	onBeforeDeletePost?: (
 		postId: string,
-		context: BlogApiContext,
+		context: BlogDeleteOperationContext,
 	) => Promise<void> | void;
 
 	/**
@@ -209,7 +247,7 @@ export interface BlogBackendHooks {
 	 */
 	onPostDeleted?: (
 		postId: string,
-		context: BlogApiContext,
+		context: BlogDeleteResultContext,
 	) => Promise<void> | void;
 
 	/**
@@ -246,7 +284,7 @@ export interface BlogBackendHooks {
 	 */
 	onDeletePostError?: (
 		error: Error,
-		context: BlogApiContext,
+		context: BlogDeleteErrorContext,
 	) => Promise<void> | void;
 }
 
@@ -265,7 +303,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 
 		operations: (adapter: Adapter) => ({
 			deletePost: defineOperation({
-				input: z.object({ id: z.string() }),
+				input: DeletePostInputSchema,
 				permission: blogPermissions.post.delete,
 				facts: async ({ input }) => {
 					const post = await adapter.findOne<Post>({
@@ -277,14 +315,17 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 						...(post?.authorId ? { authorId: post.authorId } : {}),
 					};
 				},
-				before: async ({ input, request }) => {
+				before: async (operationContext) => {
 					if (!hooks?.onBeforeDeletePost) return;
-					const context: BlogApiContext = {
-						params: { id: input.id },
-						...(request ? { request, headers: request.headers } : {}),
+					const context: BlogDeleteOperationContext = {
+						...operationContext,
+						params: { id: operationContext.input.id },
+						...(operationContext.request
+							? { headers: operationContext.request.headers }
+							: {}),
 					};
 					try {
-						await hooks.onBeforeDeletePost(input.id, context);
+						await hooks.onBeforeDeletePost(operationContext.input.id, context);
 					} catch (error) {
 						throw new AuthorizationError(
 							403,
@@ -296,19 +337,28 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 				},
 				execute: async ({ input }) => {
 					await deletePostMutation(adapter, input.id);
-					return { success: true };
+					return { success: true } as const;
 				},
-				after: async ({ input, request }) => {
-					await hooks?.onPostDeleted?.(input.id, {
-						params: { id: input.id },
-						...(request ? { request, headers: request.headers } : {}),
+				after: async (operationContext) => {
+					await hooks?.onPostDeleted?.(operationContext.input.id, {
+						...operationContext,
+						params: { id: operationContext.input.id },
+						...(operationContext.request
+							? { headers: operationContext.request.headers }
+							: {}),
 					});
 				},
-				onError: async ({ input, request, error }) => {
-					await hooks?.onDeletePostError?.(error as Error, {
-						...(input ? { params: { id: input.id } } : {}),
-						...(request ? { request, headers: request.headers } : {}),
-					});
+				onError: async (operationContext) => {
+					await hooks?.onDeletePostError?.(
+						normalizeOperationError(operationContext.error),
+						{
+							...operationContext,
+							params: { id: operationContext.input.id },
+							...(operationContext.request
+								? { headers: operationContext.request.headers }
+								: {}),
+						},
+					);
 				},
 			}),
 		}),
@@ -327,7 +377,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 			deletePost: (id: string) => deletePostMutation(adapter, id),
 		}),
 
-		routes: (adapter: Adapter, context, operations) => {
+		routes: (adapter: Adapter, _context, operations) => {
 			const listPosts = createEndpoint(
 				"/posts",
 				{
@@ -498,15 +548,9 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 				},
 				async (ctx) => {
 					try {
-						if (!operations) {
-							throw new Error("Blog delete operation is not registered.");
-						}
-						return await operations.deletePost.run(
+						return await operations.deletePost(
 							{ id: ctx.params.id },
-							{
-								request: ctx.request,
-								...(context?.auth ? { auth: context.auth } : {}),
-							},
+							ctx.request,
 						);
 					} catch (error) {
 						if (error instanceof AuthorizationError) {

@@ -29,6 +29,9 @@ step "Syncing files from codegen-projects/react-router → scripts/codegen/files
 
 FILES=(
   "app/lib/adapters-build-check.ts"
+  "app/lib/authorization.server.ts"
+  "app/lib/authorization.ts"
+  "app/lib/authorization.ui.ts"
   "app/lib/cms-schemas.ts"
   "app/lib/mock-users.ts"
   "app/lib/plugins/todo/api/backend.ts"
@@ -53,6 +56,7 @@ FILES=(
   "app/routes/directory/resource.\$id.tsx"
   "app/routes/pages/_layout.tsx"
   "app/routes/pages/\$.tsx"
+  "app/routes/pages/authorization-boundary.tsx"
 )
 
 COUNT=0

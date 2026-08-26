@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Outlet } from "react-router";
-import { StackProvider, type StackAuthProvider } from "@btst/stack/context";
+import { StackProvider } from "@btst/stack/context";
 import { reactRouter } from "@btst/stack/react-router";
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client";
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
@@ -23,6 +23,7 @@ import {
 import { Button } from "../../components/ui/button";
 import { resolveUser, searchUsers } from "../../lib/mock-users";
 import { getOrCreateQueryClient } from "../../lib/query-client";
+import { clientAuth } from "../../lib/authorization.ui";
 
 // Get base URL function - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -43,11 +44,6 @@ type PluginOverrides = {
 	comments: CommentsPluginOverrides;
 	media: MediaPluginOverrides;
 };
-
-const authProvider = {
-	getIdentity: () => ({ id: "olliethedev", name: "Ollie" }),
-	loginPath: "/login",
-} satisfies StackAuthProvider;
 
 export default function Layout() {
 	const baseURL = getBaseURL();
@@ -87,7 +83,7 @@ export default function Layout() {
 			basePath="/pages"
 			router={reactRouter()}
 			api={{ baseURL, basePath: "/api/data" }}
-			auth={authProvider}
+			auth={clientAuth}
 			overrides={{
 				// Only genuinely plugin-specific overrides remain — the shared
 				// Link/navigate/refresh and API wiring come from the top-level
