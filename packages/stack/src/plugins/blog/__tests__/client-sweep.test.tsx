@@ -12,11 +12,18 @@ import {
 	type StackAuthProvider,
 	type StackI18nProvider,
 } from "@btst/stack/context";
+import { defineAuthorization } from "@btst/stack/authorization";
+import { createClientAuth } from "@btst/stack/authorization/client";
 import { FeaturedImageField } from "../client/components/forms/image-field";
-import { EditPostForm } from "../client/components/forms/post-forms";
+import {
+	AddPostForm,
+	EditPostForm,
+} from "../client/components/forms/post-forms";
 import { PostsList } from "../client/components/shared/posts-list";
 import { SearchInput } from "../client/components/shared/search-input";
 import type { SerializedPost } from "../types";
+import { blogPermissions } from "../permissions";
+import { z } from "zod";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -209,7 +216,35 @@ describe("FeaturedImageField notifications (useNotify)", () => {
 	});
 });
 
-describe("EditPostForm delete control (CanAccess)", () => {
+describe("EditPostForm operation descriptor controls", () => {
+	it("separates draft creation from create-and-publish presentation", async () => {
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [blogPermissions] as const,
+			rules: ({ blog }) => [
+				blog.post.create.when(({ facts }) => facts.publish === "draft"),
+			],
+		});
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => ({ id: "user-1", role: "user" as const }),
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				overrides={{ blog: {} }}
+				auth={auth}
+				initialIdentity={{ id: "user-1", role: "user" }}
+			>
+				<AddPostForm onClose={() => {}} onSuccess={() => {}} />
+			</StackProvider>,
+		);
+
+		expect(texts()).toContain("Create Post");
+		expect(texts()).not.toContain("Published");
+	});
+
 	it("shows the delete button without an auth provider", async () => {
 		await render(
 			<StackProvider basePath="/pages" overrides={{ blog: {} }}>
@@ -254,6 +289,40 @@ describe("EditPostForm delete control (CanAccess)", () => {
 				params: { id: post.id },
 			}),
 		);
+	});
+
+	it("uses the Blog update and delete descriptors with one-rule client authorization", async () => {
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [blogPermissions] as const,
+			rules: ({ blog }) => [
+				blog.post.update.when(() => false),
+				blog.post.delete.when(() => false),
+			],
+		});
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => ({ id: "user-1", role: "user" as const }),
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				overrides={{ blog: {} }}
+				auth={auth}
+				initialIdentity={{ id: "user-1", role: "user" }}
+			>
+				<EditPostForm
+					postSlug="hello-world"
+					onClose={() => {}}
+					onSuccess={() => {}}
+				/>
+			</StackProvider>,
+		);
+
+		expect(texts()).toContain("Update Post");
+		expect(texts()).not.toContain("Published");
+		expect(texts()).not.toContain("Delete Post");
 	});
 });
 

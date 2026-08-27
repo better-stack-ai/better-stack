@@ -1,4 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
+
+test.beforeEach(async ({ context }) => {
+	await setMockAuthCookie(context);
+});
 
 /**
  * Wait for the chat widget to finish streaming and return to "ready" state.
@@ -45,6 +50,7 @@ test.describe("Page AI Context — structural (no OpenAI key needed)", () => {
 	}) => {
 		// Create a blog post via API so we have a real slug to navigate to
 		const res = await request.post("/api/data/posts", {
+			headers: mockAuthHeaders(),
 			data: {
 				title: "Context Badge Test Post",
 				content: "Content for context badge test.",
@@ -272,6 +278,7 @@ test.describe("Page AI Context — AI-driven (requires OpenAI key)", () => {
 		// Create a post with a unique phrase so we can verify the AI read the page context
 		const uniquePhrase = `ZephyrCloud2025-${Date.now()}`;
 		const res = await request.post("/api/data/posts", {
+			headers: mockAuthHeaders(),
 			data: {
 				title: "AI Context Summarization Test",
 				content: `This post discusses ${uniquePhrase} as a key concept in cloud computing.`,

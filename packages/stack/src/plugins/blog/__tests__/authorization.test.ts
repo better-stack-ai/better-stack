@@ -1,5 +1,5 @@
 import { createMemoryAdapter } from "@btst/adapter-memory";
-import type { DatabaseDefinition } from "@btst/db";
+import { defineDb, type DatabaseDefinition } from "@btst/db";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { stack } from "../../../api";
@@ -12,6 +12,53 @@ import type { StackServerAuthProvider } from "../../../shared/auth-types";
 
 const memoryAdapter = (db: DatabaseDefinition) => createMemoryAdapter(db)({});
 
+describe("Blog authorization inventory", () => {
+	it("covers every maintained HTTP and programmatic operation with a stable descriptor", () => {
+		const plugin = blogBackendPlugin();
+		const adapter = memoryAdapter(defineDb({}).use(plugin.dbPlugin));
+		const operations = plugin.operations?.(adapter);
+
+		expect(Object.keys(operations ?? {}).sort()).toEqual([
+			"createPost",
+			"deletePost",
+			"getNextPreviousPosts",
+			"listPosts",
+			"listTags",
+			"updatePost",
+		]);
+		expect(
+			Object.fromEntries(
+				Object.entries(operations ?? {}).map(([key, operation]) => [
+					key,
+					operation.permission.id,
+				]),
+			),
+		).toEqual({
+			listPosts: "blog:post.read",
+			createPost: "blog:post.create",
+			updatePost: "blog:post.update",
+			deletePost: "blog:post.delete",
+			getNextPreviousPosts: "blog:post.read",
+			listTags: "blog:tag.read",
+		});
+		expect(blogPermissions.post.read({ scope: "published" })).toMatchObject({
+			id: "blog:post.read",
+		});
+		expect(blogPermissions.post.create({ publish: "draft" })).toMatchObject({
+			id: "blog:post.create",
+		});
+		expect(
+			blogPermissions.post.update({
+				id: "post-1",
+				publish: "publish",
+			}),
+		).toMatchObject({ id: "blog:post.update" });
+		expect(blogPermissions.tag.read()).toMatchObject({
+			id: "blog:tag.read",
+		});
+	});
+});
+
 const authorization = defineAuthorization({
 	identity: z.object({
 		id: z.string(),
@@ -19,11 +66,33 @@ const authorization = defineAuthorization({
 	}),
 	permissions: [blogPermissions] as const,
 	rules: ({ blog }) => [
+		blog.post.read.when(({ identity, facts }) => {
+			if (facts.scope === "published") return true;
+			if (facts.scope === "post" && (!facts.exists || facts.published)) {
+				return true;
+			}
+			return (
+				identity?.role === "admin" ||
+				(facts.scope === "post" && identity?.id === facts.authorId)
+			);
+		}),
+		blog.post.create.when(
+			({ identity, facts }) =>
+				identity !== null &&
+				(facts.publish === "draft" || identity.role === "admin"),
+		),
+		blog.post.update.when(
+			({ identity, facts }) =>
+				identity !== null &&
+				(identity.role === "admin" ||
+					(identity.id === facts.authorId && facts.publish === "unchanged")),
+		),
 		blog.post.delete.when(
 			({ identity, facts }) =>
 				identity !== null &&
 				(identity.role === "admin" || identity.id === facts.authorId),
 		),
+		blog.tag.read.allow(),
 	],
 });
 
@@ -95,6 +164,566 @@ function deleteRequest(id: string, identity?: { id: string; role: string }) {
 	});
 }
 
+function request(
+	path: string,
+	options?: {
+		method?: string;
+		identity?: { id: string; role: string };
+		body?: unknown;
+	},
+) {
+	const headers = new Headers();
+	if (options?.identity) {
+		headers.set("x-user-id", options.identity.id);
+		headers.set("x-user-role", options.identity.role);
+	}
+	if (options?.body !== undefined) {
+		headers.set("content-type", "application/json");
+	}
+	return new Request(`http://localhost/api${path}`, {
+		method: options?.method ?? "GET",
+		headers,
+		...(options?.body !== undefined
+			? { body: JSON.stringify(options.body) }
+			: {}),
+	});
+}
+
+const protectedBlogOperations = [
+	"listPosts",
+	"createPost",
+	"updatePost",
+	"deletePost",
+] as const;
+type ProtectedBlogOperation = (typeof protectedBlogOperations)[number];
+
+const protectedCreateInput = {
+	title: "Protected operation",
+	content: "Content",
+	excerpt: "Excerpt",
+	slug: "protected-operation",
+	published: false,
+	tags: [],
+};
+
+function protectedLifecycleHooks(events: string[]): BlogBackendHooks {
+	const observed = () => {
+		events.push("lifecycle");
+	};
+	return {
+		onBeforeListPosts: observed,
+		onListPostsError: observed,
+		onBeforeCreatePost: observed,
+		onCreatePostError: observed,
+		onBeforeUpdatePost: observed,
+		onUpdatePostError: observed,
+		onBeforeDeletePost: observed,
+		onDeletePostError: observed,
+	};
+}
+
+async function invokeProtectedOperation(
+	backend: ReturnType<typeof makeBackend>,
+	operation: ProtectedBlogOperation,
+	operationRequest: Request,
+) {
+	const api = backend.forRequest(operationRequest).api.blog;
+	switch (operation) {
+		case "listPosts":
+			return api.listPosts({ published: false });
+		case "createPost":
+			return api.createPost(protectedCreateInput);
+		case "updatePost": {
+			const post = await seedPost(backend, "protected-update", "admin-1");
+			return api.updatePost({
+				id: post.id,
+				data: { ...protectedCreateInput, title: "Updated" },
+			});
+		}
+		case "deletePost": {
+			const post = await seedPost(backend, "protected-delete", "admin-1");
+			return api.deletePost({ id: post.id });
+		}
+	}
+}
+
+describe("Blog operation-first authorization", () => {
+	it.each(protectedBlogOperations)(
+		"keeps %s identity failures outside the lifecycle",
+		async (operation) => {
+			const events: string[] = [];
+			const backend = makeBackend({
+				auth: createAuth(() => {
+					throw new Error("session unavailable");
+				}),
+				hooks: protectedLifecycleHooks(events),
+			});
+
+			await expect(
+				invokeProtectedOperation(backend, operation, request("/protected")),
+			).rejects.toThrow("session unavailable");
+			expect(events).toEqual([]);
+		},
+	);
+
+	it("keeps every protected operation's rule failure and missing rule outside the lifecycle", async () => {
+		const failingAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("admin") }),
+			permissions: [blogPermissions] as const,
+			rules: ({ blog }) => [
+				blog.post.read.when(() => {
+					throw new Error("policy unavailable");
+				}),
+				blog.post.create.when(() => {
+					throw new Error("policy unavailable");
+				}),
+				blog.post.update.when(() => {
+					throw new Error("policy unavailable");
+				}),
+				blog.post.delete.when(() => {
+					throw new Error("policy unavailable");
+				}),
+			],
+		});
+		const missingRuleAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("admin") }),
+			permissions: [blogPermissions] as const,
+			rules: () => [],
+		});
+
+		for (const [authorizationDefinition, expected] of [
+			[failingAuthorization, "policy unavailable"],
+			[missingRuleAuthorization, { statusCode: 403 }],
+		] as const) {
+			const events: string[] = [];
+			const backend = makeBackend({
+				auth: createServerAuth({
+					authorization: authorizationDefinition,
+					getIdentity: () => ({ id: "admin-1", role: "admin" as const }),
+				}),
+				hooks: protectedLifecycleHooks(events),
+			});
+			for (const operation of protectedBlogOperations) {
+				const result = expect(
+					invokeProtectedOperation(
+						backend,
+						operation,
+						request("/protected", {
+							identity: { id: "admin-1", role: "admin" },
+						}),
+					),
+				).rejects;
+				if (typeof expected === "string") {
+					await result.toThrow(expected);
+				} else {
+					await result.toMatchObject(expected);
+				}
+			}
+			expect(events).toEqual([]);
+		}
+	});
+
+	it.each(["listPosts", "createPost", "updatePost", "deletePost"] as const)(
+		"keeps %s trusted-fact loader failures outside the lifecycle",
+		async (operation) => {
+			const events: string[] = [];
+			const backend = makeBackend({
+				auth: createAuth(),
+				hooks: protectedLifecycleHooks(events),
+			});
+			let call: Promise<unknown>;
+			if (operation === "listPosts") {
+				vi.spyOn(backend.adapter, "findOne").mockRejectedValueOnce(
+					new Error("facts unavailable"),
+				);
+				call = backend
+					.forRequest(
+						request("/protected", {
+							identity: { id: "admin-1", role: "admin" },
+						}),
+					)
+					.api.blog.listPosts({ slug: "protected-detail" });
+			} else if (operation === "createPost") {
+				vi.spyOn(
+					blogPermissions.post.create.schema,
+					"parse",
+				).mockImplementationOnce(() => {
+					throw new Error("facts unavailable");
+				});
+				call = backend
+					.forRequest(
+						request("/protected", {
+							identity: { id: "admin-1", role: "admin" },
+						}),
+					)
+					.api.blog.createPost(protectedCreateInput);
+			} else {
+				const post = await seedPost(backend, `facts-${operation}`, "admin-1");
+				vi.spyOn(backend.adapter, "findOne").mockRejectedValueOnce(
+					new Error("facts unavailable"),
+				);
+				const api = backend.forRequest(
+					request("/protected", {
+						identity: { id: "admin-1", role: "admin" },
+					}),
+				).api.blog;
+				call =
+					operation === "updatePost"
+						? api.updatePost({
+								id: post.id,
+								data: { ...protectedCreateInput, title: "Updated" },
+							})
+						: api.deletePost({ id: post.id });
+			}
+
+			await expect(call).rejects.toThrow("facts unavailable");
+			expect(events).toEqual([]);
+		},
+	);
+
+	it("makes published reads and tags explicitly public while protecting drafts", async () => {
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeListPosts: (filter, context) => {
+					events.push(`before:${String(filter.published)}`);
+					expect(context).toMatchObject({
+						identity:
+							filter.published === true
+								? null
+								: { id: "admin-1", role: "admin" },
+						facts: {
+							scope: filter.published === true ? "published" : "drafts",
+						},
+						input: filter,
+						request: expect.any(Request),
+					});
+				},
+				onPostsRead: (posts, _filter, context) => {
+					events.push(`after:${posts.length}`);
+					expect(context.result.items).toBe(posts);
+				},
+				onListPostsError: () => {
+					events.push("error");
+				},
+			},
+		});
+		await seedPost(backend, "public-post");
+		const draft = await seedPost(backend, "draft-post", "author-1");
+		await backend.adapter.update<Post>({
+			model: "post",
+			where: [{ field: "id", value: draft.id }],
+			update: { published: false },
+		});
+
+		const published = await backend.handler(request("/posts?published=true"));
+		expect(published.status).toBe(200);
+		expect((await published.json()).items).toHaveLength(1);
+		expect(events).toEqual(["before:true", "after:1"]);
+
+		events.length = 0;
+		const anonymousDrafts = await backend.handler(
+			request("/posts?published=false"),
+		);
+		const viewerDrafts = await backend.handler(
+			request("/posts?published=false", {
+				identity: { id: "viewer-1", role: "user" },
+			}),
+		);
+		expect(anonymousDrafts.status).toBe(401);
+		expect(viewerDrafts.status).toBe(403);
+		expect(events).toEqual([]);
+
+		const adminDrafts = await backend.handler(
+			request("/posts?published=false", {
+				identity: { id: "admin-1", role: "admin" },
+			}),
+		);
+		expect(adminDrafts.status).toBe(200);
+		expect((await adminDrafts.json()).items).toHaveLength(1);
+
+		const tags = await backend.handler(request("/tags"));
+		expect(tags.status).toBe(200);
+		expect(await tags.json()).toEqual([]);
+	});
+
+	it("derives post-detail visibility on the server", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const draft = await seedPost(backend, "owner-draft", "author-1");
+		await backend.adapter.update<Post>({
+			model: "post",
+			where: [{ field: "id", value: draft.id }],
+			update: { published: false },
+		});
+
+		const anonymous = await backend.handler(request("/posts?slug=owner-draft"));
+		expect(
+			authorization.can(blogPermissions.post.read({ scope: "published" }), {
+				id: "viewer-1",
+				role: "user",
+			}),
+		).toBe(true);
+		const viewer = await backend.handler(
+			request("/posts?slug=owner-draft", {
+				identity: { id: "viewer-1", role: "user" },
+			}),
+		);
+		expect(anonymous.status).toBe(401);
+		expect(viewer.status).toBe(403);
+
+		const ownerResult = await backend
+			.forRequest(
+				request("/posts?slug=owner-draft", {
+					identity: { id: "author-1", role: "user" },
+				}),
+			)
+			.api.blog.listPosts({ slug: "owner-draft" });
+		expect(ownerResult.items).toHaveLength(1);
+
+		const missing = await backend.handler(request("/posts?slug=missing"));
+		expect(missing.status).toBe(200);
+		expect((await missing.json()).items).toEqual([]);
+	});
+
+	it("keeps public navigation and tags on the same HTTP/request/internal operations", async () => {
+		const events: string[] = [];
+		const getIdentity = vi.fn(() => null);
+		const backend = makeBackend({
+			auth: createAuth(getIdentity),
+			hooks: {
+				onBeforeNextPreviousPosts: (_query, context) => {
+					events.push(`before:${context.facts.scope}`);
+				},
+				onNextPreviousPostsRead: (_result, context) => {
+					events.push(`after:${context.facts.scope}`);
+				},
+			},
+		});
+		await seedPost(backend, "navigation-post");
+
+		const navigationPath = "/posts/next-previous?date=2030-01-01T00:00:00.000Z";
+		const navigationInput = { date: "2030-01-01T00:00:00.000Z" };
+		const navigation = await backend.handler(request(navigationPath));
+		expect(navigation.status).toBe(200);
+		expect(await navigation.json()).toMatchObject({
+			previous: { slug: "navigation-post" },
+			next: null,
+		});
+		expect(
+			await backend
+				.forRequest(request(navigationPath))
+				.api.blog.getNextPreviousPosts(navigationInput),
+		).toMatchObject({ previous: { slug: "navigation-post" }, next: null });
+
+		getIdentity.mockClear();
+		expect(
+			await backend.internal.blog.getNextPreviousPosts(navigationInput),
+		).toMatchObject({ previous: { slug: "navigation-post" }, next: null });
+		expect(events).toEqual([
+			"before:published",
+			"after:published",
+			"before:published",
+			"after:published",
+			"before:published",
+			"after:published",
+		]);
+
+		const tagsResponse = await backend.handler(request("/tags"));
+		expect(tagsResponse.status).toBe(200);
+		expect(await tagsResponse.json()).toEqual([]);
+		expect(
+			await backend.forRequest(request("/tags")).api.blog.listTags({}),
+		).toEqual([]);
+		getIdentity.mockClear();
+		expect(await backend.internal.blog.listTags({})).toEqual([]);
+
+		const internalDrafts = await backend.internal.blog.listPosts({
+			published: false,
+		});
+		expect(internalDrafts.items).toEqual([]);
+		expect(getIdentity).not.toHaveBeenCalled();
+	});
+
+	it("uses trusted create/update facts across HTTP, request, and internal entry points", async () => {
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeCreatePost: (_data, context) => {
+					events.push(`create:before:${context.identity?.id ?? "internal"}`);
+					expect(context.facts).toEqual({
+						publish: context.input.published ? "published" : "draft",
+					});
+				},
+				onPostCreated: (post, context) => {
+					events.push(`create:after:${post.authorId ?? "none"}`);
+					expect(context.result).toBe(post);
+				},
+				onBeforeUpdatePost: (_id, _data, context) => {
+					events.push(
+						`update:before:${context.identity?.id ?? "internal"}:${context.facts.publish}`,
+					);
+				},
+				onPostUpdated: (post, context) => {
+					events.push(`update:after:${String(post.published)}`);
+					expect(context.result).toBe(post);
+				},
+			},
+		});
+		const createBody = {
+			title: "Created through operation",
+			content: "Content",
+			excerpt: "Excerpt",
+			slug: "created-through-operation",
+			published: false,
+			tags: [],
+		};
+
+		const anonymousCreate = await backend.handler(
+			request("/posts", { method: "POST", body: createBody }),
+		);
+		expect(anonymousCreate.status).toBe(401);
+		expect(events).toEqual([]);
+
+		const owner = { id: "author-1", role: "user" as const };
+		const createdResponse = await backend.handler(
+			request("/posts", {
+				method: "POST",
+				identity: owner,
+				body: createBody,
+			}),
+		);
+		expect(createdResponse.status).toBe(200);
+		const created = (await createdResponse.json()) as Post;
+		expect(created).toMatchObject({
+			authorId: "author-1",
+			slug: "created-through-operation",
+			published: false,
+		});
+		expect(events).toEqual(["create:before:author-1", "create:after:author-1"]);
+
+		const requestCreated = await backend
+			.forRequest(request("/posts", { method: "POST", identity: owner }))
+			.api.blog.createPost({
+				...createBody,
+				slug: "request-created-operation",
+			});
+		expect(requestCreated.authorId).toBe("author-1");
+		const internalCreated = await backend.internal.blog.createPost({
+			...createBody,
+			slug: "internal-created-operation",
+		});
+		expect(internalCreated.authorId).toBeUndefined();
+
+		const eventsBeforeDeniedCreate = events.length;
+		const ownerPublishedCreate = await backend.handler(
+			request("/posts", {
+				method: "POST",
+				identity: owner,
+				body: { ...createBody, slug: "owner-published", published: true },
+			}),
+		);
+		expect(
+			authorization.can(
+				blogPermissions.post.create({ publish: "draft" }),
+				owner,
+			),
+		).toBe(true);
+		expect(ownerPublishedCreate.status).toBe(403);
+		expect(events).toHaveLength(eventsBeforeDeniedCreate);
+
+		const adminPublishedCreate = await backend.handler(
+			request("/posts", {
+				method: "POST",
+				identity: { id: "admin-1", role: "admin" },
+				body: { ...createBody, slug: "admin-published", published: true },
+			}),
+		);
+		expect(adminPublishedCreate.status).toBe(200);
+		expect(await adminPublishedCreate.json()).toMatchObject({
+			authorId: "admin-1",
+			published: true,
+		});
+
+		const spoofedBrowserFacts = blogPermissions.post.update({
+			id: created.id,
+			authorId: "viewer-1",
+			publish: "unchanged",
+		});
+		expect(
+			authorization.can(spoofedBrowserFacts, {
+				id: "viewer-1",
+				role: "user",
+			}),
+		).toBe(true);
+		const eventsBeforeAnonymousUpdate = events.length;
+		const anonymousUpdate = await backend.handler(
+			request(`/posts/${created.id}`, {
+				method: "PUT",
+				body: { ...createBody, title: "Anonymous edit" },
+			}),
+		);
+		expect(anonymousUpdate.status).toBe(401);
+		expect(events).toHaveLength(eventsBeforeAnonymousUpdate);
+		const httpOwnerUpdate = await backend.handler(
+			request(`/posts/${created.id}`, {
+				method: "PUT",
+				identity: owner,
+				body: { ...createBody, title: "HTTP owner edit" },
+			}),
+		);
+		expect(httpOwnerUpdate.status).toBe(200);
+		await expect(
+			backend
+				.forRequest(
+					request("/posts", {
+						identity: { id: "viewer-1", role: "user" },
+					}),
+				)
+				.api.blog.updatePost({
+					id: created.id,
+					data: { ...createBody, title: "Spoofed" },
+				}),
+		).rejects.toMatchObject({ statusCode: 403 });
+
+		await backend
+			.forRequest(request("/posts", { identity: owner }))
+			.api.blog.updatePost({
+				id: created.id,
+				data: { ...createBody, title: "Owner edit" },
+			});
+		expect(events).toContain("update:before:author-1:unchanged");
+
+		await expect(
+			backend
+				.forRequest(request("/posts", { identity: owner }))
+				.api.blog.updatePost({
+					id: created.id,
+					data: { ...createBody, published: true },
+				}),
+		).rejects.toMatchObject({ statusCode: 403 });
+
+		await backend
+			.forRequest(
+				request("/posts", {
+					identity: { id: "admin-1", role: "admin" },
+				}),
+			)
+			.api.blog.updatePost({
+				id: created.id,
+				data: { ...createBody, published: true },
+			});
+		expect(events).toContain("update:before:admin-1:publish");
+
+		await backend.internal.blog.updatePost({
+			id: created.id,
+			data: createBody,
+		});
+		expect(events).toContain("update:before:internal:unpublish");
+	});
+});
+
 describe("Blog delete one-rule authorization tracer", () => {
 	it("returns 401 for anonymous HTTP deletion and 403 for an authenticated denial", async () => {
 		const lifecycleEvents: string[] = [];
@@ -143,6 +772,26 @@ describe("Blog delete one-rule authorization tracer", () => {
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({ success: true });
 		expect(await postExists(backend, post.id)).toBe(false);
+	});
+
+	it("ignores spoofed browser ownership facts", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const post = await seedPost(backend, "spoofed-delete", "author-1");
+		expect(
+			authorization.can(
+				blogPermissions.post.delete({
+					id: post.id,
+					authorId: "viewer-1",
+				}),
+				{ id: "viewer-1", role: "user" },
+			),
+		).toBe(true);
+
+		const response = await backend.handler(
+			deleteRequest(post.id, { id: "viewer-1", role: "user" }),
+		);
+		expect(response.status).toBe(403);
+		expect(await postExists(backend, post.id)).toBe(true);
 	});
 
 	it("powers the authorized request API with the same operation", async () => {
@@ -197,9 +846,9 @@ describe("Blog delete one-rule authorization tracer", () => {
 		});
 		const requestApi = backend.forRequest(request).api.blog;
 
-		await expect(
-			requestApi.deletePost({ id: viewerPost.id }),
-		).rejects.toMatchObject({ statusCode: 403 });
+		await expect(requestApi.deletePost({ id: viewerPost.id })).rejects.toThrow(
+			"Cannot assign to read only property",
+		);
 		await expect(
 			requestApi.deletePost({ id: otherPost.id }),
 		).rejects.toMatchObject({ statusCode: 403 });

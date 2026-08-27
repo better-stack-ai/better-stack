@@ -8,10 +8,10 @@ export const dynamic = "force-dynamic";
 const page = createNextPage({
 	getQueryClient: getOrCreateQueryClient,
 	getStackClient: async (queryClient, pageProps) => {
-		const requestHeaders = await headers();
 		await pageProps.params;
-		void requestHeaders.get("host");
-		return getStackClient(queryClient);
+		return getStackClient(queryClient, {
+			headers: new Headers(await headers()),
+		});
 	},
 });
 

@@ -65,12 +65,13 @@ const MarkdownEditor = lazy(() =>
 	})),
 );
 import {
-	CanAccess,
+	PermissionAccess,
 	useNotify,
 	usePluginOverrides,
 	useTranslate,
 	type TranslateFn,
 } from "@btst/stack/context";
+import { blogPermissions } from "../../../permissions";
 import type { BlogPluginOverrides } from "../../overrides";
 import { EmptyList } from "../shared/empty-list";
 import { TagsMultiSelect } from "./tags-multiselect";
@@ -126,6 +127,7 @@ function PostFormBody<T extends CommonPostFormValues>({
 	errorMessage,
 	setFeaturedImageUploading,
 	initialSlugTouched = false,
+	publishedPermission,
 }: {
 	form: UseFormReturn<T>;
 	onSubmit: SubmitHandler<T>;
@@ -135,6 +137,9 @@ function PostFormBody<T extends CommonPostFormValues>({
 	errorMessage?: string;
 	setFeaturedImageUploading: (uploading: boolean) => void;
 	initialSlugTouched?: boolean;
+	publishedPermission?:
+		| ReturnType<typeof blogPermissions.post.create>
+		| ReturnType<typeof blogPermissions.post.update>;
 }) {
 	const t = useTranslate();
 	const { localization } = usePluginOverrides<BlogPluginOverrides>("blog");
@@ -149,6 +154,32 @@ function PostFormBody<T extends CommonPostFormValues>({
 	const nameTags = "tags" as FieldPath<T>;
 	const nameContent = "content" as FieldPath<T>;
 	const namePublished = "published" as FieldPath<T>;
+	const publishedField = (
+		<FormField
+			control={form.control}
+			name={namePublished}
+			render={({ field }) => (
+				<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+					<div className="space-y-0.5">
+						<FormLabel>
+							{localization?.BLOG_FORMS_PUBLISHED_LABEL ??
+								t("blog.forms.publishedLabel", "Published")}
+						</FormLabel>
+						<FormDescription>
+							{localization?.BLOG_FORMS_PUBLISHED_DESCRIPTION ??
+								t(
+									"blog.forms.publishedDescription",
+									"Toggle to publish immediately",
+								)}
+						</FormDescription>
+					</div>
+					<FormControl>
+						<Switch checked={!!field.value} onCheckedChange={field.onChange} />
+					</FormControl>
+				</FormItem>
+			)}
+		/>
+	);
 	return (
 		<Form {...form}>
 			<form className="w-full space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
@@ -332,33 +363,13 @@ function PostFormBody<T extends CommonPostFormValues>({
 					)}
 				/>
 
-				<FormField
-					control={form.control}
-					name={namePublished}
-					render={({ field }) => (
-						<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-							<div className="space-y-0.5">
-								<FormLabel>
-									{localization?.BLOG_FORMS_PUBLISHED_LABEL ??
-										t("blog.forms.publishedLabel", "Published")}
-								</FormLabel>
-								<FormDescription>
-									{localization?.BLOG_FORMS_PUBLISHED_DESCRIPTION ??
-										t(
-											"blog.forms.publishedDescription",
-											"Toggle to publish immediately",
-										)}
-								</FormDescription>
-							</div>
-							<FormControl>
-								<Switch
-									checked={!!field.value}
-									onCheckedChange={field.onChange}
-								/>
-							</FormControl>
-						</FormItem>
-					)}
-				/>
+				{publishedPermission ? (
+					<PermissionAccess permission={publishedPermission}>
+						{publishedField}
+					</PermissionAccess>
+				) : (
+					publishedField
+				)}
 
 				<div className="flex gap-2 pt-4">
 					<Button type="submit" disabled={disabled}>
@@ -523,6 +534,9 @@ const AddPostFormComponent = ({
 			disabled={resourceForm.isSubmitting || featuredImageUploading}
 			errorMessage={hasFieldErrors ? undefined : resourceForm.error?.message}
 			setFeaturedImageUploading={setFeaturedImageUploading}
+			publishedPermission={blogPermissions.post.create({
+				publish: "published",
+			})}
 		/>
 	);
 };
@@ -715,8 +729,18 @@ const EditPostFormComponent = ({
 				errorMessage={hasFieldErrors ? undefined : resourceForm.error?.message}
 				setFeaturedImageUploading={setFeaturedImageUploading}
 				initialSlugTouched={!!post?.slug}
+				publishedPermission={blogPermissions.post.update({
+					id: post.id,
+					...(post.authorId ? { authorId: post.authorId } : {}),
+					publish: post.published ? "unpublish" : "publish",
+				})}
 			/>
-			<CanAccess resource="blog:post" action="delete" params={{ id: post.id }}>
+			<PermissionAccess
+				permission={blogPermissions.post.delete({
+					id: post.id,
+					...(post.authorId ? { authorId: post.authorId } : {}),
+				})}
+			>
 				<div className="w-full">
 					<AlertDialog
 						open={deleteDialogOpen}
@@ -773,7 +797,7 @@ const EditPostFormComponent = ({
 						</AlertDialogContent>
 					</AlertDialog>
 				</div>
-			</CanAccess>
+			</PermissionAccess>
 		</>
 	);
 };

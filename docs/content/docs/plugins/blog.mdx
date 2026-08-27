@@ -60,8 +60,8 @@ const { handler, dbSchema } = stack({
 export { handler, dbSchema }
 ```
 
-The `blogBackendPlugin()` accepts optional compatibility and lifecycle hooks for
-customizing domain behavior, logging, and unmigrated RC authorization.
+The `blogBackendPlugin()` accepts optional post-authorization lifecycle hooks
+for domain invariants, logging, and side effects.
 
 ### 2. Add Plugin to Client
 
@@ -318,31 +318,64 @@ blogClientPlugin({
 
 ### Adding Authorization
 
-The Blog plugin publishes the schema-backed `blogPermissions.post.delete`
-descriptor. The new one-rule path uses it for local, type-safe UI gates and
-derives its trusted `{ id, authorId? }` facts again on the server before the
-delete mutation. See the [authorization guide](/auth) for the shared client and
-server setup.
+The Blog plugin publishes a browser-safe, schema-backed catalog at
+`@btst/stack/plugins/blog/permissions`. It covers published, draft, and
+individual post reads; draft and published creation; content and publish-state
+updates; deletion; and tag reads. Built-in Blog routes and controls pass these
+exact descriptors to `StackProvider.auth`—they do not use resource/action
+strings.
 
-Unmigrated Blog controls continue to use the RC checks
-`blog:draft/read`, `blog:post/create`, `blog:post/update`, and
-`blog:post/delete`. Configure `StackProvider.auth` for those controls and use
-their compatibility hooks for authoritative API authorization. The migrated
-delete operation authorizes before any delete lifecycle hook runs.
+```ts title="lib/authorization.ts"
+import { defineAuthorization } from "@btst/stack/authorization";
+import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { z } from "zod";
 
-```tsx title="app/pages/layout.tsx"
-<StackProvider
-  auth={{
-    getIdentity: () => session?.user ?? null,
-    loginPath: "/auth/sign-in",
-    can: ({ resource, action, identity }) =>
-      Boolean(identity && canManageBlog(identity, resource, action)),
-  }}
-  // router, api, and Blog-specific overrides
->
-  {children}
-</StackProvider>
+export const authorization = defineAuthorization({
+  identity: z.object({
+    id: z.string(),
+    role: z.enum(["user", "admin"]),
+  }),
+  permissions: [blogPermissions] as const,
+  rules: ({ blog }) => [
+    blog.post.read.when(({ identity, facts }) => {
+      if (facts.scope === "published") return true;
+      if (facts.scope === "post" && (!facts.exists || facts.published)) return true;
+      return identity?.role === "admin" ||
+        (facts.scope === "post" && identity?.id === facts.authorId);
+    }),
+    blog.post.create.when(({ identity, facts }) =>
+      identity !== null &&
+      (facts.publish === "draft" || identity.role === "admin")
+    ),
+    blog.post.update.when(({ identity, facts }) =>
+      identity !== null &&
+      (identity.role === "admin" ||
+        (identity.id === facts.authorId && facts.publish === "unchanged"))
+    ),
+    blog.post.delete.when(({ identity, facts }) =>
+      identity !== null &&
+      (identity.role === "admin" || identity.id === facts.authorId)
+    ),
+    blog.tag.read.allow(),
+  ],
+});
 ```
+
+The explicit published-post and tag rules make public access intentional;
+`allow()` is the unconditional tag rule. Once authorization is installed, a
+missing Blog rule denies access. Browser facts only improve presentation: each
+record-sensitive detail, update, and delete operation reloads authoritative
+post, author, and publish state before evaluation. List facts come from the
+validated query (and the matched post for a slug), create facts come from the
+validated publish intent, and the public navigation/tag operations declare
+their fixed facts explicitly.
+
+Image upload is not a Blog backend route. `uploadImage` is an app-supplied
+client override, so its upload endpoint must enforce the application's own
+authorization policy.
+
+See the [authorization guide](/auth) to bind this definition to client and
+server identity adapters.
 
 ## API Reference
 
@@ -354,10 +387,13 @@ delete operation authorizes before any delete lifecycle hook runs.
 
 #### BlogBackendHooks
 
-Customize backend behavior with optional compatibility and lifecycle hooks.
-Unmigrated operations retain their RC authorization hooks. The migrated delete
-hooks run only after the shared server rule allows the operation, so use them
-for domain invariants, logging, and side effects—not ordinary access control.
+Customize backend behavior with optional lifecycle hooks. All Blog hooks run
+after input validation, trusted fact derivation, identity resolution, and the
+shared authorization rule. Use them for exceptional domain invariants,
+logging, and side effects—not ordinary role or ownership checks. Context
+identity, input, trusted facts, and result values are deeply readonly. The
+context object itself is frozen; `Request` and `Headers` remain standard
+platform objects.
 
 <AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogBackendHooks" />
 
@@ -367,28 +403,18 @@ for domain invariants, logging, and side effects—not ordinary access control.
 import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/blog/api"
 
 const blogHooks: BlogBackendHooks = {
-  // RC compatibility authorization hooks for operations not migrated yet.
-  async onBeforeListPosts(filter, context) {
-    if (filter.published === false) {
-      if (!await isBlogAdmin(context.headers as Headers))
-        throw new Error("Admin access required to view drafts")
-    }
-  },
-  async onBeforeCreatePost(data, context) {
-    if (!await isBlogAdmin(context.headers as Headers))
-      throw new Error("Admin access required to create posts")
-  },
-  async onBeforeUpdatePost(postId, data, context) {
-    if (!await isBlogAdmin(context.headers as Headers))
-      throw new Error("Admin access required to update posts")
-  },
-  // Delete is migrated: identity and trusted facts are already authorized.
   async onBeforeDeletePost(postId, context) {
     if (isProtectedPost(postId))
       throw new Error("Protected posts cannot be deleted")
     auditDeleteAttempt(context.identity?.id, context.facts)
   },
-  // ... other hooks
+  async onPostUpdated(post, context) {
+    await auditPostChange({
+      actorId: context.identity?.id,
+      postId: post.id,
+      publishTransition: context.facts.publish,
+    })
+  },
 }
 
 const { handler, dbSchema } = stack({
@@ -399,14 +425,32 @@ const { handler, dbSchema } = stack({
 })
 ```
 
-#### Blog delete lifecycle contexts
+#### Blog lifecycle contexts
 
-The migrated delete operation supplies validated input, server-derived facts,
-resolved identity, and request directly to its lifecycle hooks. The result is
-also available after execution, and the error context is only created after
-authorization succeeds. Validated input, trusted facts, identity, and results
-are plain lifecycle data that is deeply readonly and frozen before hooks can
-observe it.
+Every Blog operation supplies validated input, server-derived facts, resolved
+identity, and request directly to its lifecycle hooks. The result is available
+after execution, and an error context is created only after authorization
+succeeds. Identity, input, facts, and results are plain lifecycle data that is
+deeply readonly and frozen before hooks can observe it. The context object is
+also frozen, while its `Request` and `Headers` references retain their normal
+platform behavior. Operation-specific interfaces preserve the exact facts and
+result types.
+
+<Callout type="warn">
+**Migrating from the earlier v3 RC:** Blog hooks now run after authorization
+and receive operation-specific readonly contexts. Result hooks receive
+JSON-safe serialized posts (including string timestamps), not mutable database
+`Post` values with `Date` instances. Create/update hook input timestamps are
+also normalized to ISO strings by their operation schemas instead of being
+passed as `Date` instances. Move ordinary role and ownership checks into the
+shared authorization rule.
+</Callout>
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogListOperationContext" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogCreateOperationContext" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogUpdateOperationContext" />
 
 <AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogDeleteOperationContext" />
 
@@ -465,25 +509,14 @@ blog: blogClientPlugin({
   headers: options?.headers,
   hooks: {
     beforeLoadPosts: async (filter, context) => {
-      // only allow loading draft posts for admin
-      if (!filter.published) {
-        if (!await isAdmin(context.headers))
-          throw new Error("Admin access required to view drafts")
-      }
+      performance.mark(`blog:list:${filter.published ? "published" : "drafts"}`)
     },
     afterLoadPost: async (post, slug, context) => {
-      // only allow loading draft post for admin
-      const isEditRoute = context.path?.includes('/edit');
-      if (post?.published === false || isEditRoute) {
-        if (!await isAdmin(context.headers))
-          throw new Error("Admin access required")
-      }
+      analytics.track("Blog post loaded", { slug, path: context.path })
     },
     onLoadError(error, context) {
-      //handle error during prefetching
-      redirect("/auth/sign-in")
+      reportError(error, { path: context.path })
     },
-    // ... other hooks
   }
 })
 ```
@@ -591,37 +624,52 @@ You can import the hooks from `"@btst/stack/plugins/blog/client/hooks"` to use i
 ## Server-side Data Access
 
 The Blog plugin exposes standalone getters for trusted server reads and raw
-mutation primitives for RC compatibility. Raw functions bypass the operation
-layer entirely. Keep raw mutations to migrations, test setup, and seed scripts;
-use the authorized operation API below for runtime deletion.
+mutation primitives for build-time and administrative work. Raw functions
+bypass the operation and lifecycle pipeline entirely. Keep them to SSG,
+migrations, test setup, and seed scripts; use the operation API below for
+request-time application behavior.
 
-### Authorized delete operation
+### Authorized operations
 
 When `stack()` receives a one-rule server adapter, use the request-scoped API
-for user-facing Blog deletion. It runs the same operation as the HTTP DELETE
-endpoint, including input validation, trusted fact derivation, authorization,
-and lifecycle hooks:
+for user-facing Blog work. These calls run the same operations as the HTTP
+routes, including input validation, trusted fact derivation, authorization, and
+lifecycle hooks:
 
 ```ts
-await myStack
-  .forRequest(request)
-  .api.blog.deletePost({ id: postId });
+const blog = myStack.forRequest(request).api.blog;
+
+const published = await blog.listPosts({ published: true });
+const post = await blog.createPost({
+  title: "Operation-first Blog",
+  content: "...",
+  excerpt: "...",
+  published: false,
+  tags: [],
+});
+await blog.updatePost({
+  id: post.id,
+  data: { ...post, title: "Updated", tags: [] },
+});
+await blog.deletePost({ id: post.id });
 ```
 
 Trusted server work can bypass user authorization explicitly while preserving
-validation and lifecycle behavior:
+validation, trusted facts, lifecycle hooks, and domain behavior:
 
 ```ts
-await myStack.internal.blog.deletePost({ id: postId });
+await myStack.internal.blog.updatePost({
+  id: postId,
+  data: update,
+});
 ```
 
-The existing `myStack.api.blog.deletePost(postId)` and direct mutation import
-remain raw RC escape hatches for compatibility. They do not run authorization
-or lifecycle hooks.
+`internal` skips identity resolution and user authorization only. It is the
+appropriate surface for a trusted job that still needs normal Blog behavior.
 
 ### Raw data access patterns
 
-**Pattern 1 — via `stack().api` (read-only and legacy raw access)**
+**Pattern 1 — via `stack().api` (lower-level raw access)**
 
 After calling `stack()`, the returned object includes a fully-typed `api`
 namespace. Getters are pre-bound to the adapter and are useful for trusted
@@ -641,11 +689,9 @@ const post = await myStack.api.blog.getPostBySlug("hello-world");
 const tags = await myStack.api.blog.getAllTags();
 ```
 
-Do not use raw `myStack.api.blog.deletePost()` in request handlers. Use
-`forRequest(request).api.blog.deletePost()` for user-facing deletion or
-`myStack.internal.blog.deletePost()` for explicitly trusted jobs. The raw
-mutation remains only for RC compatibility while the other Blog mutations are
-migrated.
+Do not use raw `myStack.api.blog.createPost()`, `updatePost()`, or
+`deletePost()` in request handlers. Use `forRequest(request).api.blog.*` for
+user-facing work or `myStack.internal.blog.*` for explicitly trusted jobs.
 
 **Pattern 2 — direct import (SSG, build-time, or custom adapter)**
 
@@ -712,6 +758,14 @@ low-level work; never call them from user-facing request handlers.
 ## Static Site Generation (SSG)
 
 `route.loader()` makes HTTP requests to `apiBaseURL`, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
+
+<Callout type="warn">
+`prefetchForRoute()` is a trusted raw-data API. It does not resolve identity,
+evaluate authorization rules, or run Blog lifecycle hooks. Static artifacts
+are commonly public: use `"drafts"` or `"editPost"` only when your deployment
+applies equivalent access controls to the generated output. Never publish
+dehydrated protected data into a public page.
+</Callout>
 
 ### `prefetchForRoute(routeKey, queryClient, params?)`
 

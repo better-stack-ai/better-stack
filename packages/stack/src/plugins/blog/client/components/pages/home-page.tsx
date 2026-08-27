@@ -7,6 +7,7 @@ import { ComposedRoute } from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
 import { PostsLoading } from "../loading";
 import { NotFoundPage } from "./404-page";
+import { blogPermissions } from "../../../permissions";
 
 // Lazy load the internal component with actual page content
 const HomePage = lazy(() =>
@@ -27,9 +28,9 @@ export function HomePageComponent({
 			ErrorComponent={DefaultError}
 			LoadingComponent={PostsLoading}
 			NotFoundComponent={NotFoundPage}
-			permission={
-				published ? undefined : { resource: "blog:draft", action: "read" }
-			}
+			permission={blogPermissions.post.read({
+				scope: published ? "published" : "drafts",
+			})}
 			props={{ published }}
 			onError={(error) => {
 				if (onRouteError) {

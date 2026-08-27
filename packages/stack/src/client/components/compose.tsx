@@ -3,10 +3,21 @@
 import React, { Suspense, useEffect, type ErrorInfo } from "react";
 import { type FallbackProps } from "react-error-boundary";
 import type { createRouter } from "@btst/yar";
-import { useAuthContext, useCan } from "../../context/auth";
+import {
+	PermissionCheck,
+	useAuthContext,
+	useCan,
+	type PermissionCheckState,
+} from "../../context/auth";
 import { useStackOrNull } from "../../context/provider";
 import type { CanParams } from "../../shared/auth-types";
+import {
+	isPermissionRequest,
+	type PermissionRequest,
+} from "../../authorization";
 import { ErrorBoundary } from "./error-boundary";
+
+type RoutePermission = CanParams | PermissionRequest;
 
 /**
  * Route type with optional components
@@ -75,7 +86,42 @@ export function RouteRenderer({
  *   `window.location.assign`); authenticated users get an `Unauthorized`
  *   error thrown into the route's ErrorBoundary.
  */
-function RouteGuard({
+export function PermissionRouteAccess({
+	permission,
+	LoadingComponent,
+	children,
+}: {
+	permission: RoutePermission;
+	LoadingComponent?: React.ComponentType;
+	children: React.ReactNode;
+}) {
+	if (isPermissionRequest(permission)) {
+		return (
+			<PermissionCheck permission={permission}>
+				{(state) => (
+					<ResolvedRouteAccess
+						state={state}
+						permissionLabel={permission.id}
+						LoadingComponent={LoadingComponent}
+					>
+						{children}
+					</ResolvedRouteAccess>
+				)}
+			</PermissionCheck>
+		);
+	}
+
+	return (
+		<LegacyRouteGuard
+			permission={permission}
+			LoadingComponent={LoadingComponent}
+		>
+			{children}
+		</LegacyRouteGuard>
+	);
+}
+
+function LegacyRouteGuard({
 	permission,
 	LoadingComponent,
 	children,
@@ -84,9 +130,32 @@ function RouteGuard({
 	LoadingComponent?: React.ComponentType;
 	children: React.ReactNode;
 }) {
+	const state = useCan(permission);
+	return (
+		<ResolvedRouteAccess
+			state={state}
+			permissionLabel={`${permission.resource}.${permission.action}`}
+			LoadingComponent={LoadingComponent}
+		>
+			{children}
+		</ResolvedRouteAccess>
+	);
+}
+
+function ResolvedRouteAccess({
+	state,
+	permissionLabel,
+	LoadingComponent,
+	children,
+}: {
+	state: PermissionCheckState;
+	permissionLabel: string;
+	LoadingComponent?: React.ComponentType;
+	children: React.ReactNode;
+}) {
 	const auth = useAuthContext();
 	const stack = useStackOrNull();
-	const { can, isPending } = useCan(permission);
+	const { can, isPending, error } = state;
 
 	const identity = auth?.identity ?? null;
 	const loginPath = auth?.provider.loginPath;
@@ -108,6 +177,7 @@ function RouteGuard({
 	if (!auth) {
 		return <>{children}</>;
 	}
+	if (error) throw error;
 
 	if (isPending || shouldRedirect) {
 		return LoadingComponent ? <LoadingComponent /> : null;
@@ -120,9 +190,7 @@ function RouteGuard({
 	// Keep the thrown message generic — ErrorComponents commonly render
 	// error.message to end-users; the resource/action detail is dev-only.
 	if (process.env.NODE_ENV !== "production") {
-		console.warn(
-			`[btst/auth] RouteGuard denied: cannot ${permission.action} ${permission.resource}`,
-		);
+		console.warn(`[btst/auth] RouteGuard denied: ${permissionLabel}`);
 	}
 	throw new Error("Unauthorized");
 }
@@ -165,13 +233,16 @@ export function ComposedRoute({
 	NotFoundComponent?: React.ComponentType<{ message: string }>;
 	props?: any;
 	onError: (error: Error, info: ErrorInfo) => void;
-	permission?: CanParams;
+	permission?: RoutePermission;
 }) {
 	if (PageComponent) {
 		const content = permission ? (
-			<RouteGuard permission={permission} LoadingComponent={LoadingComponent}>
+			<PermissionRouteAccess
+				permission={permission}
+				LoadingComponent={LoadingComponent}
+			>
 				<PageComponent {...props} />
-			</RouteGuard>
+			</PermissionRouteAccess>
 		) : (
 			<PageComponent {...props} />
 		);

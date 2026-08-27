@@ -11,10 +11,14 @@ import {
 } from "react";
 import type {
 	CanParams,
+	SchemaBoundStackAuthProvider,
 	StackAuthProvider,
 	StackIdentity,
 } from "../shared/auth-types";
 import { isSchemaBoundStackAuthProvider } from "../shared/auth-types";
+import type { PermissionRequest } from "../authorization";
+
+type AnyPermissionRequest = PermissionRequest;
 
 export interface AuthContextValue {
 	provider: StackAuthProvider;
@@ -207,6 +211,9 @@ export function useIdentity(): {
 
 type CanState = { can: boolean; isPending: boolean };
 
+/** State yielded by a plugin-owned permission descriptor gate. */
+export type PermissionCheckState = CanState & { error?: Error };
+
 /**
  * A resolved `can()` result together with the inputs it was computed for.
  * `useCan` only trusts it while those inputs are still current, so a change
@@ -346,4 +353,125 @@ export function CanAccess({
 
 	if (isPending) return <>{loading}</>;
 	return <>{can ? children : fallback}</>;
+}
+
+function descriptorToLegacyParams(permission: AnyPermissionRequest): CanParams {
+	const separator = permission.id.lastIndexOf(".");
+	const resource =
+		separator === -1 ? permission.id : permission.id.slice(0, separator);
+	const action =
+		separator === -1 ? "access" : permission.id.slice(separator + 1);
+	const facts = permission.facts;
+	return {
+		resource,
+		action,
+		...(typeof facts === "object" && facts !== null
+			? { params: facts as Record<string, unknown> }
+			: {}),
+	};
+}
+
+function OneRulePermissionCheck({
+	provider,
+	permission,
+	children,
+}: {
+	provider: SchemaBoundStackAuthProvider & {
+		readonly usePermission: NonNullable<
+			SchemaBoundStackAuthProvider["usePermission"]
+		>;
+	};
+	permission: AnyPermissionRequest;
+	children: (state: PermissionCheckState) => ReactNode;
+}) {
+	return <>{children(provider.usePermission(permission))}</>;
+}
+
+function hasPermissionHook(
+	provider: SchemaBoundStackAuthProvider,
+): provider is SchemaBoundStackAuthProvider & {
+	readonly usePermission: NonNullable<
+		SchemaBoundStackAuthProvider["usePermission"]
+	>;
+} {
+	return typeof provider.usePermission === "function";
+}
+
+function LegacyPermissionCheck({
+	permission,
+	children,
+}: {
+	permission: AnyPermissionRequest;
+	children: (state: PermissionCheckState) => ReactNode;
+}) {
+	return <>{children(useCan(descriptorToLegacyParams(permission)))}</>;
+}
+
+/**
+ * Evaluate a plugin-owned descriptor through the configured one-rule client
+ * auth. RC providers receive a temporary stable-id compatibility mapping;
+ * omitting auth remains permissive until the v3 contraction.
+ */
+export function PermissionCheck({
+	permission,
+	children,
+}: {
+	permission: AnyPermissionRequest;
+	children: (state: PermissionCheckState) => ReactNode;
+}) {
+	const auth = useContext(AuthContext);
+	if (!auth) {
+		return <>{children({ can: true, isPending: false })}</>;
+	}
+	if (
+		isSchemaBoundStackAuthProvider(auth.provider) &&
+		hasPermissionHook(auth.provider)
+	) {
+		return (
+			<OneRulePermissionCheck provider={auth.provider} permission={permission}>
+				{children}
+			</OneRulePermissionCheck>
+		);
+	}
+	if (isSchemaBoundStackAuthProvider(auth.provider)) {
+		return (
+			<>
+				{children({
+					can: false,
+					isPending: false,
+					error: new Error(
+						"Schema-bound auth providers must expose usePermission() for built-in descriptor gates.",
+					),
+				})}
+			</>
+		);
+	}
+	return (
+		<LegacyPermissionCheck permission={permission}>
+			{children}
+		</LegacyPermissionCheck>
+	);
+}
+
+/** Element-level gate for a plugin-owned, schema-backed descriptor. */
+export function PermissionAccess({
+	permission,
+	fallback = null,
+	loading = null,
+	children,
+}: {
+	permission: AnyPermissionRequest;
+	fallback?: ReactNode;
+	loading?: ReactNode;
+	children?: ReactNode;
+}) {
+	return (
+		<PermissionCheck permission={permission}>
+			{({ can, isPending, error }) => {
+				if (error) throw error;
+				if (isPending) return loading;
+				return can ? children : fallback;
+			}}
+		</PermissionCheck>
+	);
 }

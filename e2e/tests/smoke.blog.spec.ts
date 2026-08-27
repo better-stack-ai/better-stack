@@ -4,9 +4,14 @@ import {
 	type Page,
 	type APIRequestContext,
 } from "@playwright/test";
+import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
 
 const emptySelector = '[data-testid="empty-state"]';
 const errorSelector = '[data-testid="error-placeholder"]';
+
+test.beforeEach(async ({ context }) => {
+	await setMockAuthCookie(context);
+});
 
 test("posts page renders", async ({ page }) => {
 	const errors: string[] = [];
@@ -465,6 +470,7 @@ test("tag page renders", async ({ page, request }) => {
 
 	await request.put(`/api/data/posts/${postWithTag.id}`, {
 		headers: {
+			...mockAuthHeaders(),
 			"content-type": "application/json",
 		},
 		data: {
@@ -514,6 +520,7 @@ test("tag badges appear on post detail page", async ({ page, request }) => {
 
 	await request.put(`/api/data/posts/${postWithTag.id}`, {
 		headers: {
+			...mockAuthHeaders(),
 			"content-type": "application/json",
 		},
 		data: {
@@ -638,6 +645,7 @@ async function createPost(
 ) {
 	const response = await request.post("/api/data/posts", {
 		headers: {
+			...mockAuthHeaders(),
 			"content-type": "application/json",
 		},
 		data: {

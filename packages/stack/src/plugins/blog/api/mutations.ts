@@ -83,6 +83,8 @@ async function findOrCreateTags(
  * `slug` must already be slugified by the caller.
  */
 export interface CreatePostInput {
+	/** Trusted author identity assigned by the authorized operation. */
+	authorId?: string;
 	title: string;
 	content: string;
 	excerpt: string;

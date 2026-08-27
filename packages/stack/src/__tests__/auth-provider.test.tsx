@@ -11,6 +11,10 @@ import {
 	useIdentity,
 	type StackAuthProvider,
 } from "../context";
+import { defineAuthorization } from "../authorization";
+import { createClientAuth } from "../authorization/client";
+import { blogPermissions } from "../plugins/blog/permissions";
+import { z } from "zod";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -364,6 +368,34 @@ describe("route gating (ComposedRoute permission)", () => {
 		);
 
 		expect(container.textContent).toBe("secret page");
+	});
+
+	it("evaluates a plugin-owned descriptor through one-rule client auth", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [blogPermissions] as const,
+			rules: ({ blog }) => [blog.post.create.when(() => false)],
+		});
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => ({ id: "user-1" }),
+		});
+
+		await render(
+			<Providers auth={auth}>
+				<ComposedRoute
+					path="/blog/new"
+					PageComponent={Page}
+					LoadingComponent={Loading}
+					ErrorComponent={ErrorUi}
+					onError={() => {}}
+					permission={blogPermissions.post.create({ publish: "draft" })}
+				/>
+			</Providers>,
+		);
+
+		expect(container.textContent).toBe("error page");
 	});
 
 	it("redirects unauthenticated users to loginPath via router.navigate", async () => {
