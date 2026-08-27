@@ -14,6 +14,7 @@ import {
 } from "@btst/stack/context";
 import { defineAuthorization } from "@btst/stack/authorization";
 import { createClientAuth } from "@btst/stack/authorization/client";
+import { ComposedRoute } from "@btst/stack/client/components";
 import { FeaturedImageField } from "../client/components/forms/image-field";
 import {
 	AddPostForm,
@@ -21,6 +22,7 @@ import {
 } from "../client/components/forms/post-forms";
 import { PostsList } from "../client/components/shared/posts-list";
 import { SearchInput } from "../client/components/shared/search-input";
+import { DefaultError } from "../client/components/shared/default-error";
 import type { SerializedPost } from "../types";
 import { blogPermissions } from "../permissions";
 import { z } from "zod";
@@ -213,6 +215,40 @@ describe("FeaturedImageField notifications (useNotify)", () => {
 
 		expect(uploadImage).not.toHaveBeenCalled();
 		expect(notify.error).toHaveBeenCalledWith("Please select an image file");
+	});
+});
+
+describe("Blog route authorization errors", () => {
+	it("redirects an anonymous user when a protected route query returns 401", async () => {
+		const navigate = vi.fn();
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const error = Object.assign(new Error("Authentication required"), {
+			statusCode: 401,
+		});
+		const ProtectedQueryPage = () => {
+			throw error;
+		};
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={{ navigate }}
+				overrides={{ blog: {} }}
+				auth={{ getIdentity: () => null, loginPath: "/login" }}
+				initialIdentity={null}
+			>
+				<ComposedRoute
+					path="/blog/example/edit"
+					PageComponent={ProtectedQueryPage}
+					ErrorComponent={DefaultError}
+					LoadingComponent={() => null}
+					onError={() => {}}
+				/>
+			</StackProvider>,
+		);
+
+		expect(navigate).toHaveBeenCalledWith("/login");
+		expect(texts()).not.toContain("Something went wrong");
 	});
 });
 

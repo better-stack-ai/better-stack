@@ -31,6 +31,7 @@ export function HomePageComponent({
 			permission={blogPermissions.post.read({
 				scope: published ? "published" : "drafts",
 			})}
+			legacyPublic={published}
 			props={{ published }}
 			onError={(error) => {
 				if (onRouteError) {

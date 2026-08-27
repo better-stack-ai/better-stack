@@ -370,6 +370,12 @@ validated query (and the matched post for a slug), create facts come from the
 validated publish intent, and the public navigation/tag operations declare
 their fixed facts explicitly.
 
+For migration compatibility, the string-based RC client provider keeps the
+previously public published-list, published-detail, and tag routes open. Its
+temporary descriptor-to-string mapping still applies to drafts and mutation
+controls. Schema-bound one-rule providers always evaluate the exact public
+descriptor, so the explicit public rules above remain the source of truth.
+
 Image upload is not a Blog backend route. `uploadImage` is an app-supplied
 client override, so its upload endpoint must enforce the application's own
 authorization policy.

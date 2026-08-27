@@ -398,6 +398,27 @@ describe("route gating (ComposedRoute permission)", () => {
 		expect(container.textContent).toBe("error page");
 	});
 
+	it("keeps an explicitly public descriptor open for legacy providers", async () => {
+		const can = vi.fn(() => false);
+
+		await render(
+			<Providers auth={provider({ can })}>
+				<ComposedRoute
+					path="/blog"
+					PageComponent={Page}
+					LoadingComponent={Loading}
+					ErrorComponent={ErrorUi}
+					onError={() => {}}
+					permission={blogPermissions.post.read({ scope: "published" })}
+					legacyPublic
+				/>
+			</Providers>,
+		);
+
+		expect(container.textContent).toBe("secret page");
+		expect(can).not.toHaveBeenCalled();
+	});
+
 	it("redirects unauthenticated users to loginPath via router.navigate", async () => {
 		const navigate = vi.fn();
 		await render(

@@ -10,7 +10,10 @@ import {
 	type PermissionCheckState,
 } from "../../context/auth";
 import { useStackOrNull } from "../../context/provider";
-import type { CanParams } from "../../shared/auth-types";
+import {
+	isSchemaBoundStackAuthProvider,
+	type CanParams,
+} from "../../shared/auth-types";
 import {
 	isPermissionRequest,
 	type PermissionRequest,
@@ -89,13 +92,24 @@ export function RouteRenderer({
 export function PermissionRouteAccess({
 	permission,
 	LoadingComponent,
+	legacyPublic = false,
 	children,
 }: {
 	permission: RoutePermission;
 	LoadingComponent?: React.ComponentType;
+	/** Preserve an explicitly public route for string-based RC providers. */
+	legacyPublic?: boolean;
 	children: React.ReactNode;
 }) {
+	const auth = useAuthContext();
 	if (isPermissionRequest(permission)) {
+		if (
+			legacyPublic &&
+			auth &&
+			!isSchemaBoundStackAuthProvider(auth.provider)
+		) {
+			return <>{children}</>;
+		}
 		return (
 			<PermissionCheck permission={permission}>
 				{(state) => (
@@ -118,6 +132,87 @@ export function PermissionRouteAccess({
 		>
 			{children}
 		</LegacyRouteGuard>
+	);
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+	if (typeof error !== "object" || error === null) return undefined;
+	const candidate = error as { statusCode?: unknown; status?: unknown };
+	if (typeof candidate.statusCode === "number") return candidate.statusCode;
+	return typeof candidate.status === "number" ? candidate.status : undefined;
+}
+
+function RouteErrorFallback({
+	error,
+	resetErrorBoundary,
+	ErrorComponent,
+	LoadingComponent,
+}: FallbackProps & {
+	ErrorComponent: React.ComponentType<FallbackProps>;
+	LoadingComponent?: React.ComponentType;
+}) {
+	const auth = useAuthContext();
+	const stack = useStackOrNull();
+	const loginPath = auth?.provider.loginPath;
+	const navigate = stack?.router?.navigate;
+	const shouldRedirect =
+		getErrorStatus(error) === 401 &&
+		!!auth &&
+		!auth.isPending &&
+		!auth.error &&
+		auth.identity === null &&
+		!!loginPath;
+
+	useEffect(() => {
+		if (!shouldRedirect || !loginPath) return;
+		if (navigate) {
+			void navigate(loginPath);
+		} else if (typeof window !== "undefined") {
+			window.location.assign(loginPath);
+		}
+	}, [shouldRedirect, loginPath, navigate]);
+
+	if (shouldRedirect) {
+		return LoadingComponent ? <LoadingComponent /> : null;
+	}
+
+	return (
+		<ErrorComponent error={error} resetErrorBoundary={resetErrorBoundary} />
+	);
+}
+
+function ComposedRouteErrorBoundary({
+	path,
+	ErrorComponent,
+	LoadingComponent,
+	onError,
+	children,
+}: {
+	path: string;
+	ErrorComponent: React.ComponentType<FallbackProps>;
+	LoadingComponent?: React.ComponentType;
+	onError: (error: Error, info: ErrorInfo) => void;
+	children: React.ReactNode;
+}) {
+	const FallbackComponent = React.useCallback(
+		(props: FallbackProps) => (
+			<RouteErrorFallback
+				{...props}
+				ErrorComponent={ErrorComponent}
+				LoadingComponent={LoadingComponent}
+			/>
+		),
+		[ErrorComponent, LoadingComponent],
+	);
+
+	return (
+		<ErrorBoundary
+			FallbackComponent={FallbackComponent}
+			resetKeys={[path]}
+			onError={onError}
+		>
+			{children}
+		</ErrorBoundary>
 	);
 }
 
@@ -213,6 +308,8 @@ function ResolvedRouteAccess({
  * @param permission - Optional route-level permission requirement (e.g.
  *   `{ resource: "blog:draft", action: "read" }`). Only enforced when an
  *   auth provider is configured on `StackProvider`; see `RouteGuard`.
+ * @param legacyPublic - Keeps an explicitly public descriptor route ungated
+ *   for string-based RC providers. One-rule providers still evaluate it.
  */
 export function ComposedRoute({
 	path,
@@ -224,6 +321,7 @@ export function ComposedRoute({
 	props,
 	onError,
 	permission,
+	legacyPublic = false,
 }: {
 	path: string;
 	PageComponent: React.ComponentType<any>;
@@ -234,12 +332,14 @@ export function ComposedRoute({
 	props?: any;
 	onError: (error: Error, info: ErrorInfo) => void;
 	permission?: RoutePermission;
+	legacyPublic?: boolean;
 }) {
 	if (PageComponent) {
 		const content = permission ? (
 			<PermissionRouteAccess
 				permission={permission}
 				LoadingComponent={LoadingComponent}
+				legacyPublic={legacyPublic}
 			>
 				<PageComponent {...props} />
 			</PermissionRouteAccess>
@@ -259,15 +359,16 @@ export function ComposedRoute({
 		if (ErrorComponent) {
 			return (
 				<Suspense key={`outer-${path}`} fallback={suspenseFallback}>
-					<ErrorBoundary
-						FallbackComponent={ErrorComponent}
-						resetKeys={[path]}
+					<ComposedRouteErrorBoundary
+						path={path}
+						ErrorComponent={ErrorComponent}
+						LoadingComponent={LoadingComponent}
 						onError={onError}
 					>
 						<Suspense key={`inner-${path}`} fallback={suspenseFallback}>
 							{content}
 						</Suspense>
-					</ErrorBoundary>
+					</ComposedRouteErrorBoundary>
 				</Suspense>
 			);
 		}

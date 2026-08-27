@@ -25,6 +25,7 @@ export function TagPageComponent({ tagSlug }: { tagSlug: string }) {
 			LoadingComponent={PostsLoading}
 			NotFoundComponent={NotFoundPage}
 			permission={blogPermissions.tag.read()}
+			legacyPublic
 			props={{ tagSlug }}
 			onError={(error) => {
 				if (onRouteError) {

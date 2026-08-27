@@ -39,6 +39,7 @@ function AuthorizedPostPage({ slug }: { slug: string }) {
 		<PermissionRouteAccess
 			permission={permission}
 			LoadingComponent={PostLoading}
+			legacyPublic={!post || post.published}
 		>
 			<PostPageContent slug={slug} />
 		</PermissionRouteAccess>
