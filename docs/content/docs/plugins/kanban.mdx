@@ -385,6 +385,13 @@ wrong control. The backend reloads the board, column, and task, derives trusted
 ownership, organization, assignee, and archive facts, then runs the same rule
 before reading or mutating data.
 
+Board ownership is server-owned mutation state. Authenticated board creation
+uses the resolved identity as `ownerId`, and the browser create/update schemas
+do not accept `ownerId` or `organizationId`. Assigning an organization or
+transferring ownership therefore belongs in an application-owned, trusted
+server workflow with its own authorization policy; it cannot be smuggled
+through the generic board endpoints.
+
 Local browser checks are synchronous and install no authorization-result cache.
 They recompute from the current identity and descriptor. A registered permission
 without a rule denies once authorization is enabled. Kanban declares no

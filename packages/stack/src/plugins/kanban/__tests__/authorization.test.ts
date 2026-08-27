@@ -593,6 +593,77 @@ describe("Kanban operation-first authorization", () => {
 		expect(result.items[0]?.columns[0]).not.toHaveProperty("tasks");
 	});
 
+	it("ignores client-supplied ownership on board create and update", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const createdResponse = await backend.handler(
+			request("/boards", {
+				method: "POST",
+				identity: viewer,
+				body: {
+					name: "Owned by the caller",
+					ownerId: admin.id,
+					organizationId: "other-tenant",
+				},
+			}),
+		);
+		expect(createdResponse.status).toBe(200);
+		const created = (await createdResponse.json()) as Board;
+		expect(created).toMatchObject({ ownerId: viewer.id });
+		expect(created.organizationId).toBeUndefined();
+
+		const updatedResponse = await backend.handler(
+			request(`/boards/${created.id}`, {
+				method: "PUT",
+				identity: viewer,
+				body: {
+					name: "Still owned by the caller",
+					ownerId: admin.id,
+					organizationId: "other-tenant",
+				},
+			}),
+		);
+		expect(updatedResponse.status).toBe(200);
+		expect(await updatedResponse.json()).toMatchObject({
+			name: "Still owned by the caller",
+			ownerId: viewer.id,
+		});
+		expect(
+			await backend.adapter.findOne<Board>({
+				model: "kanbanBoard",
+				where: [{ field: "id", value: created.id }],
+			}),
+		).toMatchObject({ ownerId: viewer.id, organizationId: undefined });
+
+		const requestApi = backend.forRequest(
+			request("/programmatic", { identity: viewer }),
+		).api.kanban;
+		const programmatic = await requestApi.createBoard({
+			name: "Programmatic",
+			ownerId: admin.id,
+			organizationId: "other-tenant",
+		} as { name: string });
+		expect(programmatic).toMatchObject({ ownerId: viewer.id });
+		expect(programmatic.organizationId).toBeUndefined();
+		await requestApi.updateBoard({
+			id: programmatic.id,
+			data: {
+				name: "Programmatic update",
+				ownerId: admin.id,
+				organizationId: "other-tenant",
+			} as { name: string },
+		});
+		expect(
+			await backend.adapter.findOne<Board>({
+				model: "kanbanBoard",
+				where: [{ field: "id", value: programmatic.id }],
+			}),
+		).toMatchObject({
+			name: "Programmatic update",
+			ownerId: viewer.id,
+			organizationId: undefined,
+		});
+	});
+
 	it("keeps HTTP, request, and internal behavior on one validated lifecycle", async () => {
 		const getIdentity = vi.fn(({ headers }: Request) =>
 			headers.get("x-user-id"),

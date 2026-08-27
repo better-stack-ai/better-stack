@@ -20,21 +20,27 @@ const boardCoreFields = {
 	organizationId: z.string().optional(),
 };
 
+const boardOperationFields = {
+	name: boardCoreFields.name,
+	slug: boardCoreFields.slug,
+	description: boardCoreFields.description,
+};
+
 export const BoardDomainSchema = z.object({
 	id: z.string().optional(),
 	...boardCoreFields,
 	...boardDateFields,
 });
 
-/** Browser-safe board create input. Server-owned timestamps are not accepted. */
+/** Browser-safe board create input. Ownership and timestamps are server-owned. */
 export const createBoardSchema = z.object({
-	...boardCoreFields,
-	slug: boardCoreFields.slug.optional(),
+	...boardOperationFields,
+	slug: boardOperationFields.slug.optional(),
 });
 
-/** Browser-safe board update input. Server-owned timestamps are not accepted. */
+/** Browser-safe board update input. Ownership and timestamps are server-owned. */
 export const updateBoardSchema = z
-	.object({ id: z.string(), ...boardCoreFields })
+	.object({ id: z.string(), ...boardOperationFields })
 	.partial()
 	.required({ id: true });
 
