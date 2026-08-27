@@ -1,9 +1,15 @@
 import { createMemoryAdapter as createRawMemoryAdapter } from "@btst/adapter-memory";
 import type { Adapter } from "@btst/stack/plugins/api";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 function serializeAdapter(adapter: Adapter): Adapter {
 	let tail = Promise.resolve();
+	const lockContext = new AsyncLocalStorage<{ active: boolean }>();
 	const withLock = async <T>(run: () => Promise<T>): Promise<T> => {
+		// Existing plugin transactions sometimes call the outer adapter. Re-enter
+		// only from that transaction's async context; concurrent callers still queue.
+		if (lockContext.getStore()?.active) return run();
+
 		let release = () => {};
 		const previous = tail;
 		tail = new Promise<void>((resolve) => {
@@ -36,7 +42,16 @@ function serializeAdapter(adapter: Adapter): Adapter {
 		consumeOne: ((input) =>
 			withLock(() => adapter.consumeOne(input))) as Adapter["consumeOne"],
 		transaction: ((callback) =>
-			withLock(() => adapter.transaction(callback))) as Adapter["transaction"],
+			withLock(() =>
+				adapter.transaction(async (tx) => {
+					const context = { active: true };
+					try {
+						return await lockContext.run(context, () => callback(tx));
+					} finally {
+						context.active = false;
+					}
+				}),
+			)) as Adapter["transaction"],
 	};
 }
 
