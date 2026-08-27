@@ -305,8 +305,9 @@ const provider = (process.env.BTST_PRISMA_PROVIDER ?? "postgresql") as "postgres
 			adapterImport: `import { createDrizzleAdapter } from "${meta.packageName}"`,
 			adapterSetup: `// TODO: wire your Drizzle DB instance (drizzleDb)
 const drizzleDb = {} as never
-${needsIsolatedTransactions ? 'const drizzleProvider = (process.env.BTST_DRIZZLE_PROVIDER ?? "pg") as "pg" | "mysql" | "sqlite"\n' : ""}`,
-			adapterStackLine: `adapter: (db) => createDrizzleAdapter(drizzleDb, db, {${needsIsolatedTransactions ? " provider: drizzleProvider, transaction: true " : ""}})({}),`,
+const drizzleProvider = (process.env.BTST_DRIZZLE_PROVIDER ?? "pg") as "pg" | "mysql" | "sqlite"
+`,
+			adapterStackLine: `adapter: (db) => createDrizzleAdapter(drizzleDb, db, { provider: drizzleProvider${needsIsolatedTransactions ? ", transaction: true" : ""} })({}),`,
 		};
 	}
 

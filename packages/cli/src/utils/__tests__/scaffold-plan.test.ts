@@ -44,6 +44,20 @@ describe("scaffold plan", () => {
 		},
 	);
 
+	it("emits the required configurable provider for Drizzle without Form Builder", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "drizzle",
+			plugins: ["blog"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const stackFile = plan.files.find((file) => file.path === "lib/stack.ts");
+		expect(stackFile?.content).toContain("BTST_DRIZZLE_PROVIDER");
+		expect(stackFile?.content).toContain("provider: drizzleProvider");
+		expect(stackFile?.content).not.toContain("transaction: true");
+	});
+
 	it("builds expected files for nextjs", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
