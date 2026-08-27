@@ -15,6 +15,7 @@ import {
 	getFormById,
 	getFormBySlug,
 	getFormSubmissions,
+	serializeFormSubmissionSummary,
 } from "./getters";
 import {
 	FormBuilderOperationError,
@@ -119,7 +120,7 @@ function createFormBuilderPrefetchForRoute(
 							pages: [
 								{
 									form: formContext,
-									items: result.items,
+									items: result.items.map(serializeFormSubmissionSummary),
 									total: result.total,
 									limit: result.limit ?? 20,
 									offset: result.offset ?? 0,

@@ -22,6 +22,7 @@ import { SubmissionsPageComponent } from "../client/components/pages/submissions
 import { FormBuilderPageComponent } from "../client/components/pages/form-builder-page";
 import type {
 	SerializedForm,
+	SerializedFormSubmissionSummary,
 	SerializedFormSubmissionWithData,
 } from "../types";
 import { formBuilderPermissions } from "../permissions";
@@ -43,6 +44,7 @@ const hooks = vi.hoisted(() => ({
 	useSuspenseFormById: vi.fn(),
 	useSuspenseFormForUpdate: vi.fn(),
 	useSuspenseSubmissions: vi.fn(),
+	useSubmission: vi.fn(),
 	useDeleteSubmission: vi.fn(),
 	useFormBuilderForm: vi.fn(),
 }));
@@ -68,6 +70,12 @@ const form: SerializedForm = {
 	createdAt: new Date("2024-01-01").toISOString(),
 	updatedAt: new Date("2024-01-01").toISOString(),
 } as unknown as SerializedForm;
+
+const submissionSummary: SerializedFormSubmissionSummary = {
+	id: "sub-11111111",
+	formId: "f1",
+	submittedAt: new Date("2024-01-02").toISOString(),
+};
 
 const submission: SerializedFormSubmissionWithData = {
 	id: "sub-11111111",
@@ -119,11 +127,17 @@ beforeEach(() => {
 	});
 	hooks.useSuspenseSubmissions.mockReturnValue({
 		form,
-		submissions: [submission],
+		submissions: [submissionSummary],
 		total: 1,
 		loadMore: vi.fn(),
 		hasMore: false,
 		isLoadingMore: false,
+		refetch: vi.fn(),
+	});
+	hooks.useSubmission.mockReturnValue({
+		submission,
+		isLoading: false,
+		error: null,
 		refetch: vi.fn(),
 	});
 	hooks.useDeleteSubmission.mockReturnValue({
@@ -575,7 +589,7 @@ describe("SubmissionsPage row actions (CanAccess + useNotify)", () => {
 			expect.objectContaining({
 				resource: "form-builder:submission",
 				action: "delete",
-				params: { formId: "f1", id: submission.id },
+				params: { formId: "f1", id: submissionSummary.id },
 			}),
 		);
 	});
@@ -610,6 +624,27 @@ describe("SubmissionsPage row actions (CanAccess + useNotify)", () => {
 		expect(actionButtons).toHaveLength(1);
 	});
 
+	it("fetches sensitive submission contents only after the record View action", async () => {
+		await renderSubmissionsPage();
+
+		expect(texts()).not.toContain("Alice");
+		expect(hooks.useSubmission).toHaveBeenLastCalledWith("f1", undefined);
+
+		const viewButton = container.querySelector<HTMLButtonElement>(
+			"table tbody tr button",
+		);
+		expect(viewButton).toBeTruthy();
+		await act(async () => {
+			viewButton!.click();
+		});
+
+		expect(hooks.useSubmission).toHaveBeenLastCalledWith(
+			"f1",
+			submissionSummary.id,
+		);
+		expect(texts()).toContain("Alice");
+	});
+
 	it("notifies success through the notify provider after deleting", async () => {
 		const notify = { success: vi.fn(), error: vi.fn() };
 
@@ -638,7 +673,7 @@ describe("SubmissionsPage row actions (CanAccess + useNotify)", () => {
 
 		expect(
 			hooks.useDeleteSubmission.mock.results[0]!.value.mutateAsync,
-		).toHaveBeenCalledWith(submission.id);
+		).toHaveBeenCalledWith(submissionSummary.id);
 		expect(notify.success).toHaveBeenCalledWith(
 			"Submission deleted successfully",
 		);

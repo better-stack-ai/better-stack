@@ -8,5 +8,6 @@
 export {
 	serializeForm,
 	serializeFormSubmission,
+	serializeFormSubmissionSummary,
 	serializeFormSubmissionWithData,
 } from "./getters";

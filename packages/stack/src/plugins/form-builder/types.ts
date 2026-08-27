@@ -87,6 +87,14 @@ export interface SerializedFormSubmission
 	submittedAt: string;
 }
 
+/** Non-sensitive submission metadata returned by collection reads. */
+export type SerializedFormSubmissionSummary = {
+	id: string;
+	formId: string;
+	submittedAt: string;
+	submittedBy?: string;
+};
+
 /**
  * Serialized form submission with parsed data
  */
@@ -119,10 +127,11 @@ export interface SubmissionListFormContext {
 /**
  * Paginated list response for form submissions
  */
-export interface PaginatedFormSubmissions<TData = Record<string, unknown>> {
+export interface PaginatedFormSubmissions {
 	/** Authoritative form facts returned by the submission-read operation. */
 	form: SubmissionListFormContext | null;
-	items: SerializedFormSubmissionWithData<TData>[];
+	/** Metadata only. Fetch an individual submission to read its contents. */
+	items: SerializedFormSubmissionSummary[];
 	total: number;
 	limit: number;
 	offset: number;

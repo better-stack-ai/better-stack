@@ -29,6 +29,7 @@ import type {
 	FormUpdate,
 	SubmissionHookContext,
 	SubmissionListFormContext,
+	SerializedFormSubmissionSummary,
 } from "../types";
 import { extractIpAddress, extractUserAgent, slugify } from "../utils";
 import {
@@ -36,6 +37,7 @@ import {
 	getFormSubmissions,
 	serializeForm,
 	serializeFormSubmission,
+	serializeFormSubmissionSummary,
 	serializeFormSubmissionWithData,
 } from "./getters";
 
@@ -104,7 +106,7 @@ export interface SubmissionDetailOperationResult
 
 export interface SubmissionListOperationResult {
 	readonly form: SubmissionListFormContext;
-	readonly items: readonly SubmissionDetailOperationResult[];
+	readonly items: readonly SerializedFormSubmissionSummary[];
 	readonly total: number;
 	readonly limit?: number;
 	readonly offset?: number;
@@ -680,16 +682,7 @@ function operationSubmissionsResult(
 	result: Awaited<ReturnType<typeof getFormSubmissions>>,
 ) {
 	return {
-		items: result.items.map((submission) => ({
-			id: submission.id,
-			formId: submission.formId,
-			data: submission.data,
-			submittedAt: submission.submittedAt,
-			submittedBy: submission.submittedBy,
-			ipAddress: submission.ipAddress,
-			userAgent: submission.userAgent,
-			parsedData: operationJson(submission.parsedData),
-		})),
+		items: result.items.map(serializeFormSubmissionSummary),
 		total: result.total,
 		...(result.limit !== undefined ? { limit: result.limit } : {}),
 		...(result.offset !== undefined ? { offset: result.offset } : {}),

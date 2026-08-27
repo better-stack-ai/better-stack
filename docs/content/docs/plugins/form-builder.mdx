@@ -316,12 +316,16 @@ Access form data in your frontend using the provided hooks:
 | `useUpdateForm()` | Update mutation | React Query mutation |
 | `useDeleteForm()` | Delete mutation | React Query mutation |
 | `useSubmitForm(slug)` | Submit form data | React Query mutation |
-| `useSubmissions(formId)` | List submissions and authoritative form facts | `{ form, submissions, total, isLoading }` |
+| `useSubmissions(formId)` | List non-sensitive submission metadata and authoritative form facts | `{ form, submissions, total, isLoading }` |
+| `useSubmission(formId, submissionId)` | Get one record-authorized submission with its data, IP address, and user agent | `{ submission, isLoading, error }` |
 | `useDeleteSubmission(formId)` | Delete submission | React Query mutation |
 
 `useSubmissions` returns `form` as the intentionally minimal
 `SubmissionListFormContext`: `{ id, name, createdBy? }`. Submission access does
-not expose the form schema or other fields protected by `form.read`.
+not expose the form schema or other fields protected by `form.read`. Its rows
+contain only `{ id, formId, submittedAt, submittedBy? }`; fetch sensitive
+contents with `useSubmission`, which evaluates `submission.read` again with
+record facts.
 
 ### Usage Examples
 
@@ -520,8 +524,8 @@ The Form Builder plugin exposes these REST endpoints:
 | `/form-builder/forms/:id` | PUT | Update a form |
 | `/form-builder/forms/:id` | DELETE | Delete a form |
 | `/form-builder/forms/:slug/submit` | POST | Submit form data |
-| `/form-builder/forms/:formId/submissions` | GET | List submissions for a form |
-| `/form-builder/forms/:formId/submissions/:subId` | GET | Get a submission |
+| `/form-builder/forms/:formId/submissions` | GET | List non-sensitive submission metadata for a form |
+| `/form-builder/forms/:formId/submissions/:subId` | GET | Get a record-authorized submission and its contents |
 | `/form-builder/forms/:formId/submissions/:subId` | DELETE | Delete a submission |
 
 ## Form Schema Structure

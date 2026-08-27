@@ -628,6 +628,74 @@ describe("Form Builder operation-first authorization", () => {
 		).resolves.toMatchObject({ id: form.id });
 	});
 
+	it("never exposes record contents from a collection-authorized submission list", async () => {
+		const collectionOnlyAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+			permissions: [formBuilderPermissions] as const,
+			rules: ({ forms }) => [
+				forms.submission.read.when(({ facts }) => facts.scope === "collection"),
+			],
+		});
+		const backend = makeBackend({
+			auth: createAuth(undefined, collectionOnlyAuthorization),
+		});
+		const form = await seedForm(backend);
+		const submission = await seedSubmission(backend, form.id, {
+			data: JSON.stringify({ secret: "never-list-this" }),
+			ipAddress: "203.0.113.1",
+			userAgent: "sensitive-agent",
+		});
+
+		const requestList = await backend
+			.forRequest(request(`/forms/${form.id}/submissions`, { identity: owner }))
+			.api.formBuilder.listSubmissions({
+				formId: form.id,
+				query: { limit: 20, offset: 0 },
+			});
+		expect(requestList.items).toEqual([
+			{
+				id: submission.id,
+				formId: form.id,
+				submittedAt: submission.submittedAt.toISOString(),
+				submittedBy: submission.submittedBy,
+			},
+		]);
+
+		const response = await backend.handler(
+			request(`/forms/${form.id}/submissions`, { identity: owner }),
+		);
+		expect(response.status).toBe(200);
+		const body = await response.json();
+		expect(body.items).toEqual(requestList.items);
+		expect(JSON.stringify(body)).not.toContain("never-list-this");
+		expect(JSON.stringify(body)).not.toContain("203.0.113.1");
+		expect(JSON.stringify(body)).not.toContain("sensitive-agent");
+		const internalList = await backend.internal.formBuilder.listSubmissions({
+			formId: form.id,
+			query: { limit: 20, offset: 0 },
+		});
+		expect(internalList.items).toEqual(requestList.items);
+
+		await expect(
+			backend
+				.forRequest(
+					request(`/forms/${form.id}/submissions/${submission.id}`, {
+						identity: owner,
+					}),
+				)
+				.api.formBuilder.getSubmission({
+					formId: form.id,
+					submissionId: submission.id,
+				}),
+		).rejects.toMatchObject({ statusCode: 403 });
+		const recordResponse = await backend.handler(
+			request(`/forms/${form.id}/submissions/${submission.id}`, {
+				identity: owner,
+			}),
+		);
+		expect(recordResponse.status).toBe(403);
+	});
+
 	it("allows owners and admins while keeping collection scoping in server execution", async () => {
 		const backend = makeBackend({ auth: createAuth() });
 		const form = await seedForm(backend);
@@ -662,7 +730,12 @@ describe("Form Builder operation-first authorization", () => {
 		};
 		expect(list.form).toMatchObject({ id: form.id, createdBy: owner.id });
 		expect(list.items.map((item) => item.id)).toEqual([submission.id]);
-		expect("form" in (list.items[0] ?? {})).toBe(false);
+		expect(Object.keys(list.items[0] ?? {}).sort()).toEqual([
+			"formId",
+			"id",
+			"submittedAt",
+			"submittedBy",
+		]);
 		const detail = await backend
 			.forRequest(
 				request(`/forms/${form.id}/submissions/${submission.id}`, {
@@ -1317,7 +1390,11 @@ describe("Form Builder operation-first authorization", () => {
 	it("hydrates protected route data under permission-aligned SSG keys", async () => {
 		const backend = makeBackend({ auth: createAuth() });
 		const form = await seedForm(backend);
-		await seedSubmission(backend, form.id);
+		const submission = await seedSubmission(backend, form.id, {
+			data: JSON.stringify({ secret: "never-hydrate-this" }),
+			ipAddress: "203.0.113.2",
+			userAgent: "ssg-sensitive-agent",
+		});
 		const queryClient = new QueryClient();
 
 		await backend.api.formBuilder.prefetchForRoute("editForm", queryClient, {
@@ -1331,7 +1408,11 @@ describe("Form Builder operation-first authorization", () => {
 			id: form.id,
 		});
 		const data = queryClient.getQueryData<{
-			pages: Array<{ form: Record<string, unknown>; total: number }>;
+			pages: Array<{
+				form: Record<string, unknown>;
+				items: Array<Record<string, unknown>>;
+				total: number;
+			}>;
 		}>(
 			FORM_QUERY_KEYS.submissionsList({
 				formId: form.id,
@@ -1345,5 +1426,16 @@ describe("Form Builder operation-first authorization", () => {
 			"id",
 			"name",
 		]);
+		expect(data?.pages[0]?.items).toEqual([
+			{
+				id: submission.id,
+				formId: form.id,
+				submittedAt: submission.submittedAt.toISOString(),
+				submittedBy: submission.submittedBy,
+			},
+		]);
+		expect(JSON.stringify(data)).not.toContain("never-hydrate-this");
+		expect(JSON.stringify(data)).not.toContain("203.0.113.2");
+		expect(JSON.stringify(data)).not.toContain("ssg-sensitive-agent");
 	});
 });

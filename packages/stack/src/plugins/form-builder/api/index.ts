@@ -38,6 +38,7 @@ export {
 	getFormSubmissions,
 	serializeForm,
 	serializeFormSubmission,
+	serializeFormSubmissionSummary,
 	serializeFormSubmissionWithData,
 } from "./getters";
 export { FORM_QUERY_KEYS } from "./query-key-defs";
