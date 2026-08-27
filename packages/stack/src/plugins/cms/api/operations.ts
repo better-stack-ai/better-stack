@@ -481,11 +481,7 @@ async function planRelatedItem(
 		],
 	});
 	if (existing) {
-		throw new CMSOperationError(
-			409,
-			"Inline related record could not be created because its slug is unavailable.",
-			"RELATED_RECORD_SLUG_CONFLICT",
-		);
+		throw relatedRecordSlugConflictError();
 	}
 	const now = new Date();
 	return {
@@ -499,6 +495,14 @@ async function planRelatedItem(
 	};
 }
 
+function relatedRecordSlugConflictError() {
+	return new CMSOperationError(
+		409,
+		"Inline related record could not be created because its slug is unavailable.",
+		"RELATED_RECORD_SLUG_CONFLICT",
+	);
+}
+
 async function planRelationsInData(
 	adapter: DataAdapter,
 	contentType: ContentType,
@@ -510,7 +514,7 @@ async function planRelationsInData(
 	const processedData = { ...data };
 	const relationIds: Record<string, string[]> = {};
 	const newItems: ContentItem[] = [];
-	const resolvedItems = new Map<string, ContentItem>();
+	const plannedSlugs = new Set<string>();
 
 	for (const [fieldName, relationConfig] of Object.entries(relationFields)) {
 		if (!(fieldName in data)) continue;
@@ -534,7 +538,7 @@ async function planRelationsInData(
 					targetContentType,
 					value.data as Record<string, OperationData>,
 					authorId,
-					resolvedItems,
+					plannedSlugs,
 					newItems,
 				);
 				ids.push(item.id);
@@ -554,7 +558,7 @@ async function planRelationsInData(
 						targetContentType,
 						value.data as Record<string, OperationData>,
 						authorId,
-						resolvedItems,
+						plannedSlugs,
 						newItems,
 					);
 					ids.push(item.id);
@@ -576,7 +580,7 @@ async function resolvePlannedRelatedItem(
 	targetContentType: ContentType,
 	data: Record<string, OperationData>,
 	authorId: string | undefined,
-	resolvedItems: Map<string, ContentItem>,
+	plannedSlugs: Set<string>,
 	newItems: ContentItem[],
 ) {
 	const slug = slugify(
@@ -586,8 +590,7 @@ async function resolvePlannedRelatedItem(
 			`item-${Date.now()}`,
 	);
 	const key = `${targetContentType.id}\u0000${slug}`;
-	const resolved = resolvedItems.get(key);
-	if (resolved) return resolved;
+	if (plannedSlugs.has(key)) throw relatedRecordSlugConflictError();
 	const planned = await planRelatedItem(
 		adapter,
 		targetContentType,
@@ -595,7 +598,7 @@ async function resolvePlannedRelatedItem(
 		data,
 		authorId,
 	);
-	resolvedItems.set(key, planned);
+	plannedSlugs.add(key);
 	newItems.push(planned);
 	return planned;
 }
@@ -1047,6 +1050,10 @@ export function createCMSOperations(
 		object,
 		RecordReadFacts
 	>();
+	const contentTypeListSnapshots = new WeakMap<
+		object,
+		Awaited<ReturnType<GetContentTypesWithCounts>>
+	>();
 	const assertCurrentRelationWriteAuthorization = async (
 		currentAdapter: DataAdapter,
 		authorized: RelationWriteAuthorization,
@@ -1286,11 +1293,29 @@ export function createCMSOperations(
 			await ensureSynced();
 			return {};
 		},
-		execute: async () =>
-			(await getContentTypesWithCounts()).map((contentType) => ({
+		additionalPermissions: async ({ input }) => {
+			const contentTypes = await getContentTypesWithCounts();
+			contentTypeListSnapshots.set(input as object, contentTypes);
+			return contentTypes.map((contentType) =>
+				cmsPermissions.record.read(collectionFacts(contentType.slug)),
+			);
+		},
+		legacyAdditionalAuthorization: legacyCMSAdditionalAuthorization,
+		execute: ({ input }) => {
+			const contentTypes = contentTypeListSnapshots.get(input as object);
+			contentTypeListSnapshots.delete(input as object);
+			if (!contentTypes) {
+				throw new CMSOperationError(
+					500,
+					"Content-type catalog authorization snapshot is unavailable.",
+					"AUTHORIZATION_SNAPSHOT_MISSING",
+				);
+			}
+			return contentTypes.map((contentType) => ({
 				...operationContentType(contentType),
 				itemCount: contentType.itemCount,
-			})),
+			}));
+		},
 		onError: ({ error, ...context }) =>
 			notifyError(error, "list", genericContext(context)),
 	});

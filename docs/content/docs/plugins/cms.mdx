@@ -756,6 +756,10 @@ Rules are boolean operation checks. If your
 application needs tenant or row filtering, scope the backend query itself
 rather than treating a boolean rule as a data filter.
 
+The content-type catalog includes `itemCount`, so listing it also authorizes a
+collection-scoped `cms.record.read` for every counted content type. If any
+collection is denied, the operation fails without returning partial counts.
+
 ### Server operation surfaces
 
 The same operation pipeline backs all authoritative application surfaces:
@@ -1213,9 +1217,9 @@ await fetch("/api/data/content/resource", {
 
 `_new` is strict creation, not an upsert or an alternate way to reference an
 existing record. BTST derives a slug from the inline data; if that slug already
-exists for the target content type, the operation returns HTTP `409` with code
-`RELATED_RECORD_SLUG_CONFLICT`. Pass `{ id: "existing-record-id" }` when you
-intend to link an existing record.
+exists for the target content type or occurs twice in the same request, the
+operation returns HTTP `409` with code `RELATED_RECORD_SLUG_CONFLICT`. Pass
+`{ id: "existing-record-id" }` when you intend to link an existing record.
 
 #### belongsTo Relations (Single Object)
 

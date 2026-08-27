@@ -288,6 +288,20 @@ describe("CMS operation-first authorization", () => {
 			query: {},
 		});
 		expect(internalResult.items[0]?.id).toBe(seeded.id);
+		const httpCatalog = await backend.handler(request("/content-types"));
+		expect(httpCatalog.status).toBe(200);
+		expect(
+			(
+				(await httpCatalog.json()) as Array<{ slug: string; itemCount: number }>
+			).find((contentType) => contentType.slug === "article")?.itemCount,
+		).toBe(1);
+		const requestCatalog = await backend
+			.forRequest(request("/content-types"))
+			.api.cms.listContentTypes({});
+		expect(
+			requestCatalog.find((contentType) => contentType.slug === "article")
+				?.itemCount,
+		).toBe(1);
 		expect(
 			authorization.can(
 				cmsPermissions.record.read({
@@ -297,6 +311,60 @@ describe("CMS operation-first authorization", () => {
 				null,
 			),
 		).toBe(true);
+	});
+
+	it("authorizes every collection count before returning the content-type catalog", async () => {
+		const checkedCollections: string[] = [];
+		const catalogAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.contentType.read.allow(),
+				cms.record.read.when(({ facts }) => {
+					checkedCollections.push(`${facts.contentType}:${facts.scope}`);
+					return facts.contentType !== "secret";
+				}),
+			],
+		});
+		const backend = makeBackend({
+			auth: createServerAuth({
+				authorization: catalogAuthorization,
+				getIdentity: () => ({ id: "reader-1", role: "user" as const }),
+			}),
+		});
+		await seedRecord(backend, { slug: "counted-article" });
+		await seedRecord(backend, {
+			typeSlug: "secret",
+			slug: "counted-secret",
+		});
+
+		const http = await backend.handler(request("/content-types"));
+		expect(http.status).toBe(403);
+		expect(await http.text()).not.toContain("itemCount");
+		await expect(
+			backend
+				.forRequest(request("/content-types"))
+				.api.cms.listContentTypes({}),
+		).rejects.toMatchObject({ statusCode: 403 });
+		expect(new Set(checkedCollections)).toEqual(
+			new Set([
+				"article:collection",
+				"secret:collection",
+				"category:collection",
+				"resource:collection",
+				"category-note:collection",
+			]),
+		);
+
+		const trustedCatalog = await backend.internal.cms.listContentTypes({});
+		expect(
+			trustedCatalog.find((contentType) => contentType.slug === "article")
+				?.itemCount,
+		).toBe(1);
+		expect(
+			trustedCatalog.find((contentType) => contentType.slug === "secret")
+				?.itemCount,
+		).toBe(1);
 	});
 
 	it("returns 401/403 and derives identity plus ownership on the server", async () => {
@@ -824,6 +892,38 @@ describe("CMS operation-first authorization", () => {
 				],
 			}),
 		).toBeFalsy();
+	});
+
+	it("rejects duplicate inline-new slugs instead of merging their data", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+
+		const response = await backend.handler(
+			request("/content/resource", {
+				method: "POST",
+				identity: { id: "author-1", role: "user" },
+				body: {
+					slug: "duplicate-inline-relations",
+					data: {
+						name: "Duplicate inline relations",
+						categoryIds: [
+							{ _new: true, data: { name: "Duplicate category" } },
+							{ _new: true, data: { name: "Duplicate-category" } },
+						],
+					},
+				},
+			}),
+		);
+
+		expect(response.status).toBe(409);
+		expect(await response.json()).toMatchObject({
+			code: "RELATED_RECORD_SLUG_CONFLICT",
+		});
+		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
+			0,
+		);
+		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
+			0,
+		);
 	});
 
 	it("fails closed when a relation schema changes after compound authorization", async () => {
@@ -2111,6 +2211,35 @@ describe("CMS operation-first authorization", () => {
 		);
 		expect(getIdentity).toHaveBeenCalledTimes(2);
 		expect(events).toEqual(["create:legacy-author"]);
+	});
+
+	it("maps catalog count checks to structural RC collection reads", async () => {
+		const can = vi.fn(
+			({ params }: { action: string; params?: { typeSlug?: string } }) =>
+				params?.typeSlug !== "secret",
+		);
+		const backend = makeBackend({
+			auth: {
+				getIdentity: () => ({ id: "legacy-reader" }),
+				can,
+			},
+		});
+
+		const response = await backend.handler(request("/content-types"));
+
+		expect(response.status).toBe(403);
+		expect(
+			can.mock.calls.map(([permission]) => ({
+				action: permission.action,
+				typeSlug: permission.params?.typeSlug,
+			})),
+		).toEqual(
+			expect.arrayContaining([
+				{ action: "read", typeSlug: undefined },
+				{ action: "read", typeSlug: "article" },
+				{ action: "read", typeSlug: "secret" },
+			]),
+		);
 	});
 
 	it("keeps an identity-only structural RC provider compatible with CMS routes", async () => {
