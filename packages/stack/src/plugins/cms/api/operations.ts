@@ -869,6 +869,10 @@ export function createCMSOperations(
 		object,
 		readonly string[]
 	>();
+	const inverseTargetAuthorizationSnapshots = new WeakMap<
+		object,
+		RecordReadFacts
+	>();
 	const recheckRelationCreateAuthorization = async (
 		input: object,
 		contentType: ContentType,
@@ -922,6 +926,31 @@ export function createCMSOperations(
 		);
 		assertRelationSchemaSnapshot(authorized, current.snapshot);
 		return current.sources;
+	};
+	const recheckInverseTargetAuthorization = async (
+		input: object,
+		targetType: string,
+		targetId: string,
+	) => {
+		const authorized = inverseTargetAuthorizationSnapshots.get(input);
+		if (
+			!authorized ||
+			authorized.contentType !== targetType ||
+			authorized.recordId !== targetId
+		) {
+			throw new CMSOperationError(
+				500,
+				"Inverse-relation target authorization snapshot is unavailable.",
+				"AUTHORIZATION_SNAPSHOT_MISSING",
+			);
+		}
+		const current = await adapter.findOne<ContentItemWithType>({
+			model: "contentItem",
+			where: [{ field: "id", value: targetId, operator: "eq" as const }],
+			join: { contentType: true },
+		});
+		if (!current) throw staleRecordError();
+		assertRecordFacts(current, authorized);
 	};
 	const listQuerySchema = createListContentQuerySchema(options.maxPageSize);
 	const paginationSchema = z.object({
@@ -1642,61 +1671,98 @@ export function createCMSOperations(
 				input as object,
 				authorization.snapshot,
 			);
-			return authorization.permissions;
+			const permissions: Array<
+				| ReturnType<typeof cmsPermissions.contentType.read>
+				| ReturnType<typeof cmsPermissions.record.read>
+			> = [...authorization.permissions];
+			if (input.query.itemId) {
+				const targetFacts = recordFacts(
+					await getRecordOrThrow(
+						adapter,
+						ensureSynced,
+						facts.contentType ?? "",
+						input.query.itemId,
+					),
+				);
+				inverseTargetAuthorizationSnapshots.set(input as object, targetFacts);
+				permissions.push(cmsPermissions.record.read(targetFacts));
+				const authorizedSourceTypes = new Set<string>();
+				for (const source of authorization.sources) {
+					if (authorizedSourceTypes.has(source.contentTypeSlug)) continue;
+					authorizedSourceTypes.add(source.contentTypeSlug);
+					permissions.push(
+						cmsPermissions.record.read(collectionFacts(source.contentTypeSlug)),
+					);
+				}
+			}
+			return permissions;
 		},
 		execute: async ({ input, facts }) => {
-			const sources = await recheckInverseSourceAuthorization(
-				input as object,
-				facts.contentType ?? "",
-			);
-			const inverseRelations: InverseRelation[] = [];
-			for (const source of sources) {
-				let count = 0;
+			try {
+				const sources = await recheckInverseSourceAuthorization(
+					input as object,
+					facts.contentType ?? "",
+				);
 				if (input.query.itemId) {
-					const relations = await adapter.findMany<ContentRelation>({
-						model: "contentRelation",
-						where: [
-							{
-								field: "targetId",
-								value: input.query.itemId,
-								operator: "eq" as const,
-							},
-							{
-								field: "fieldName",
-								value: source.fieldName,
-								operator: "eq" as const,
-							},
-						],
-					});
-					for (const sourceId of relations.map((value) => value.sourceId)) {
-						const item = await adapter.findOne<ContentItem>({
-							model: "contentItem",
+					await recheckInverseTargetAuthorization(
+						input as object,
+						facts.contentType ?? "",
+						input.query.itemId,
+					);
+				}
+				const inverseRelations: InverseRelation[] = [];
+				for (const source of sources) {
+					let count = 0;
+					if (input.query.itemId) {
+						const relations = await adapter.findMany<ContentRelation>({
+							model: "contentRelation",
 							where: [
 								{
-									field: "id",
-									value: sourceId,
+									field: "targetId",
+									value: input.query.itemId,
 									operator: "eq" as const,
 								},
 								{
-									field: "contentTypeId",
-									value: source.contentTypeId,
+									field: "fieldName",
+									value: source.fieldName,
 									operator: "eq" as const,
 								},
 							],
 						});
-						if (item) count += 1;
+						for (const sourceId of relations.map((value) => value.sourceId)) {
+							const item = await adapter.findOne<ContentItem>({
+								model: "contentItem",
+								where: [
+									{
+										field: "id",
+										value: sourceId,
+										operator: "eq" as const,
+									},
+									{
+										field: "contentTypeId",
+										value: source.contentTypeId,
+										operator: "eq" as const,
+									},
+								],
+							});
+							if (item) count += 1;
+						}
 					}
+					inverseRelations.push({
+						sourceType: source.contentTypeSlug,
+						sourceTypeName: source.contentTypeName,
+						fieldName: source.fieldName,
+						count,
+					});
 				}
-				inverseRelations.push({
-					sourceType: source.contentTypeSlug,
-					sourceTypeName: source.contentTypeName,
-					fieldName: source.fieldName,
-					count,
-				});
+				return {
+					inverseRelations: inverseRelations.map((relation) => ({
+						...relation,
+					})),
+				};
+			} finally {
+				inverseTargetAuthorizationSnapshots.delete(input as object);
 			}
-			return {
-				inverseRelations: inverseRelations.map((relation) => ({ ...relation })),
-			};
 		},
 		onError: ({ error, ...context }) =>
 			notifyError(
@@ -1718,19 +1784,71 @@ export function createCMSOperations(
 			);
 			return collectionFacts(sourceType.slug);
 		},
-		execute: async ({ input, facts }) => {
-			const result = await listRecordsForRelation(
+		additionalPermissions: async ({ input, facts }) => {
+			const authorization = await deriveInverseSourceAuthorization(
 				adapter,
-				await getContentTypeOrThrow(adapter, ensureSynced, facts.contentType),
-				input.query.fieldName,
-				input.query.itemId,
-				input.query.limit,
-				input.query.offset,
+				ensureSynced,
+				input.slug,
 			);
-			return {
-				...result,
-				items: result.items.map(operationContentItem),
-			};
+			const source = authorization.sources.find(
+				(value) =>
+					value.contentTypeSlug === facts.contentType &&
+					value.fieldName === input.query.fieldName,
+			);
+			if (!source) {
+				throw new CMSOperationError(
+					404,
+					"Inverse relation not found",
+					"INVERSE_RELATION_NOT_FOUND",
+				);
+			}
+			inverseSourceAuthorizationSnapshots.set(
+				input as object,
+				authorization.snapshot,
+			);
+			const targetFacts = recordFacts(
+				await getRecordOrThrow(
+					adapter,
+					ensureSynced,
+					input.slug,
+					input.query.itemId,
+				),
+			);
+			inverseTargetAuthorizationSnapshots.set(input as object, targetFacts);
+			return [cmsPermissions.record.read(targetFacts)];
+		},
+		execute: async ({ input, facts }) => {
+			try {
+				const sources = await recheckInverseSourceAuthorization(
+					input as object,
+					input.slug,
+				);
+				const source = sources.find(
+					(value) =>
+						value.contentTypeSlug === facts.contentType &&
+						value.fieldName === input.query.fieldName,
+				);
+				if (!source) throw relationSchemaChangedError();
+				await recheckInverseTargetAuthorization(
+					input as object,
+					input.slug,
+					input.query.itemId,
+				);
+				const result = await listRecordsForRelation(
+					adapter,
+					await getContentTypeOrThrow(adapter, ensureSynced, facts.contentType),
+					source.fieldName,
+					input.query.itemId,
+					input.query.limit,
+					input.query.offset,
+				);
+				return {
+					...result,
+					items: result.items.map(operationContentItem),
+				};
+			} finally {
+				inverseTargetAuthorizationSnapshots.delete(input as object);
+			}
 		},
 		onError: ({ error, ...context }) =>
 			notifyError(

@@ -883,6 +883,192 @@ describe("CMS operation-first authorization", () => {
 		expect(response.status).toBe(403);
 	});
 
+	it("authorizes the target record and source collections before inverse counts", async () => {
+		const inverseCountAuthorization = defineAuthorization({
+			identity: z.object({
+				id: z.string(),
+				mode: z.enum([
+					"target-only",
+					"source-only",
+					"all",
+					"racing",
+					"schema-racing",
+				]),
+			}),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.contentType.read.when(
+					({ facts }) =>
+						facts.contentType === "category" ||
+						facts.contentType === "category-note",
+				),
+				cms.record.read.when(({ identity, facts }) => {
+					const targetRecord =
+						facts.contentType === "category" && facts.scope === "record";
+					const sourceCollection =
+						facts.contentType === "category-note" &&
+						facts.scope === "collection";
+					if (identity?.mode === "target-only") return targetRecord;
+					if (identity?.mode === "source-only") return sourceCollection;
+					return (
+						(identity?.mode === "all" ||
+							identity?.mode === "racing" ||
+							identity?.mode === "schema-racing") &&
+						(targetRecord || sourceCollection)
+					);
+				}),
+			],
+		});
+		const modes = [
+			"target-only",
+			"source-only",
+			"all",
+			"racing",
+			"schema-racing",
+		] as const;
+		const baseAuth = createServerAuth({
+			authorization: inverseCountAuthorization,
+			getIdentity: ({ request: currentRequest }) => {
+				const mode = currentRequest.headers.get("x-mode");
+				return modes.includes(mode as (typeof modes)[number])
+					? { id: "reader-1", mode: mode as (typeof modes)[number] }
+					: null;
+			},
+		});
+		let backend: ReturnType<typeof makeBackend>;
+		let targetId = "";
+		const authorizationCalls = new WeakMap<Request, number>();
+		const authorize = baseAuth.authorize.bind(baseAuth);
+		const racingAuth: typeof baseAuth = {
+			...baseAuth,
+			async authorize(currentRequest, permissionRequest) {
+				const identity = await authorize(currentRequest, permissionRequest);
+				const count = (authorizationCalls.get(currentRequest) ?? 0) + 1;
+				authorizationCalls.set(currentRequest, count);
+				if (currentRequest.headers.get("x-mode") === "racing" && count === 4) {
+					await backend.adapter.update<ContentItem>({
+						model: "contentItem",
+						where: [{ field: "id", value: targetId }],
+						update: { authorId: "other-owner" },
+					});
+				}
+				if (
+					currentRequest.headers.get("x-mode") === "schema-racing" &&
+					count === 2
+				) {
+					const sourceType = await backend.adapter.findOne<ContentType>({
+						model: "contentType",
+						where: [{ field: "slug", value: "category-note" }],
+					});
+					if (!sourceType)
+						throw new Error("Missing category-note content type");
+					await backend.adapter.update<ContentType>({
+						model: "contentType",
+						where: [{ field: "id", value: sourceType.id }],
+						update: {
+							jsonSchema: JSON.stringify(zodToFormSchema(articleSchema)),
+							updatedAt: new Date(),
+						},
+					});
+				}
+				return identity;
+			},
+		};
+		backend = makeBackend({ auth: racingAuth });
+		const target = await seedRecord(backend, {
+			typeSlug: "category",
+			slug: "counted-category",
+			authorId: "reader-1",
+		});
+		targetId = target.id;
+		const source = await seedRecord(backend, {
+			typeSlug: "category-note",
+			slug: "counted-note",
+		});
+		const wrongTypeTarget = await seedRecord(backend, {
+			typeSlug: "article",
+			slug: "wrong-target-type",
+		});
+		await backend.adapter.create<ContentRelation>({
+			model: "contentRelation",
+			data: {
+				sourceId: source.id,
+				targetId: target.id,
+				fieldName: "categoryId",
+				createdAt: new Date(),
+			},
+		});
+		const findMany = backend.adapter.findMany.bind(backend.adapter);
+		let relationReads = 0;
+		vi.spyOn(backend.adapter, "findMany").mockImplementation(async (query) => {
+			if (query.model === "contentRelation") relationReads += 1;
+			return findMany(query);
+		});
+		const countRequest = (mode: (typeof modes)[number]) =>
+			new Request(
+				`http://localhost/api/content-types/category/inverse-relations?itemId=${target.id}`,
+				{ headers: { "x-mode": mode } },
+			);
+		const listRequest = (
+			mode: (typeof modes)[number],
+			options?: { itemId?: string; fieldName?: string },
+		) =>
+			new Request(
+				`http://localhost/api/content-types/category/inverse-relations/category-note?itemId=${options?.itemId ?? target.id}&fieldName=${options?.fieldName ?? "categoryId"}`,
+				{ headers: { "x-mode": mode } },
+			);
+
+		const listTargetDenied = await backend.handler(listRequest("source-only"));
+		expect(listTargetDenied.status).toBe(403);
+		const wrongTargetType = await backend.handler(
+			listRequest("all", { itemId: wrongTypeTarget.id }),
+		);
+		expect(wrongTargetType.status).toBe(404);
+		const invalidField = await backend.handler(
+			listRequest("all", { fieldName: "notACategoryRelation" }),
+		);
+		expect(invalidField.status).toBe(404);
+		expect(await invalidField.json()).toMatchObject({
+			code: "INVERSE_RELATION_NOT_FOUND",
+		});
+		expect(relationReads).toBe(0);
+
+		const allowedList = await backend.handler(listRequest("all"));
+		expect(allowedList.status).toBe(200);
+		expect(await allowedList.json()).toMatchObject({
+			total: 1,
+			items: [{ id: source.id }],
+		});
+		expect(relationReads).toBe(1);
+
+		const sourceDenied = await backend.handler(countRequest("target-only"));
+		expect(sourceDenied.status).toBe(403);
+		const targetDenied = await backend.handler(countRequest("source-only"));
+		expect(targetDenied.status).toBe(403);
+		expect(relationReads).toBe(1);
+
+		const allowed = await backend.handler(countRequest("all"));
+		expect(allowed.status).toBe(200);
+		expect(await allowed.json()).toMatchObject({
+			inverseRelations: [{ sourceType: "category-note", count: 1 }],
+		});
+		expect(relationReads).toBe(2);
+
+		const staleTarget = await backend.handler(countRequest("racing"));
+		expect(staleTarget.status).toBe(409);
+		expect(await staleTarget.json()).toMatchObject({
+			code: "RECORD_STATE_CHANGED",
+		});
+		expect(relationReads).toBe(2);
+
+		const staleSchema = await backend.handler(listRequest("schema-racing"));
+		expect(staleSchema.status).toBe(409);
+		expect(await staleSchema.json()).toMatchObject({
+			code: "RELATION_SCHEMA_CHANGED",
+		});
+		expect(relationReads).toBe(2);
+	});
+
 	it("fails closed when inverse relation schemas change after authorization", async () => {
 		const inverseAuthorization = defineAuthorization({
 			identity: z.object({ id: z.string(), role: z.literal("user") }),

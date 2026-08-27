@@ -771,8 +771,12 @@ but keep the same validation and transaction lifecycle.
 
 Compound reads fail closed too. A populated-record operation authorizes every
 related target record before returning it, and inverse-relation metadata
-authorizes each referring source content type before exposing its name, fields,
-or counts.
+authorizes each referring source content type before exposing its name or
+fields. When inverse metadata includes counts for an `itemId`, it also
+authorizes that target record and each counted source collection before reading
+relation rows. Listing the records for an inverse relation likewise authorizes
+the source collection and target record, and rederives the requested relation
+field from the current content-type schemas.
 
 Loader hooks may still prepare data or redirect for framework-specific UX, but
 they are not an authorization boundary. Use `onRouteRender` and `onRouteError`
