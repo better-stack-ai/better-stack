@@ -15,7 +15,7 @@ import {
 	updateCommentStatusSchema,
 } from "../schemas";
 import type { Comment, CommentListResult, SerializedComment } from "../types";
-import { getCommentById, getCommentCount, listComments } from "./getters";
+import { enrichCommentRecord, getCommentCount, listComments } from "./getters";
 import {
 	createComment as createCommentMutation,
 	deleteComment as deleteCommentMutation,
@@ -442,24 +442,17 @@ async function assertReplyTarget(
 
 async function serializeResolvedComment(
 	adapter: Adapter,
-	id: string,
+	comment: Comment,
 	options: CommentsBackendOptions,
 	currentUserId?: string,
 ) {
-	const comment = await getCommentById(
+	const enriched = await enrichCommentRecord(
 		adapter,
-		id,
+		comment,
 		options.resolveUser,
 		currentUserId,
 	);
-	if (!comment) {
-		throw new CommentsOperationError(
-			500,
-			"Failed to retrieve comment after mutation",
-			"COMMENT_SERIALIZATION_FAILED",
-		);
-	}
-	return { ...comment };
+	return { ...enriched };
 }
 
 function serializeCommentListResult(result: CommentListResult) {
@@ -496,6 +489,11 @@ export function createCommentsOperations(
 	// trusted internal author are both absent. A configured auth adapter always
 	// remains authoritative.
 	const legacyHookAuthors = new WeakMap<object, string>();
+	// These are in-flight operation snapshots, not authorization-result caches:
+	// fact loading and execution share the same parsed input object, and weak
+	// keys make denied/failed operations collectible without retained state.
+	const editSnapshots = new WeakMap<object, Comment>();
+	const moderationSnapshots = new WeakMap<object, Comment>();
 
 	const listCommentsOperation = defineOperation({
 		input: CommentListQuerySchema,
@@ -585,7 +583,7 @@ export function createCommentsOperations(
 				authorId,
 				status: options.autoApprove ? "approved" : "pending",
 			});
-			return serializeResolvedComment(adapter, created.id, options, authorId);
+			return serializeResolvedComment(adapter, created, options, authorId);
 		},
 		after: async (context) => {
 			const base = createContext(context);
@@ -601,6 +599,7 @@ export function createCommentsOperations(
 		permission: commentsPermissions.comment.edit,
 		facts: async ({ input }) => {
 			const comment = await requireComment(adapter, input.id);
+			editSnapshots.set(input, comment);
 			return {
 				commentId: comment.id,
 				authorId: comment.authorId,
@@ -621,22 +620,26 @@ export function createCommentsOperations(
 				editContext(context),
 			);
 		},
-		execute: async ({ input, identity, facts }) => {
+		execute: async ({ input, identity }) => {
+			const expected = editSnapshots.get(input);
+			editSnapshots.delete(input);
+			if (!expected) {
+				throw new CommentsOperationError(
+					500,
+					"Authorized comment snapshot was unavailable",
+					"COMMENT_SNAPSHOT_UNAVAILABLE",
+				);
+			}
 			const updated = await updateCommentMutation(
 				adapter,
 				input.id,
 				input.data.body,
-				{ authorId: facts.authorId, status: facts.status },
+				expected,
 			);
 			if (!updated) {
 				throw commentStateChanged();
 			}
-			return serializeResolvedComment(
-				adapter,
-				updated.id,
-				options,
-				identity?.id,
-			);
+			return serializeResolvedComment(adapter, updated, options, identity?.id);
 		},
 		after: async (context) => {
 			const base = editContext(context);
@@ -682,6 +685,7 @@ export function createCommentsOperations(
 		permission: commentsPermissions.comment.moderate,
 		facts: async ({ input }) => {
 			const comment = await requireComment(adapter, input.id);
+			moderationSnapshots.set(input, comment);
 			return {
 				commentId: comment.id,
 				resourceId: comment.resourceId,
@@ -697,26 +701,26 @@ export function createCommentsOperations(
 				moderateContext(context),
 			);
 		},
-		execute: async ({ input, identity, facts }) => {
+		execute: async ({ input, identity }) => {
+			const expected = moderationSnapshots.get(input);
+			moderationSnapshots.delete(input);
+			if (!expected) {
+				throw new CommentsOperationError(
+					500,
+					"Authorized comment snapshot was unavailable",
+					"COMMENT_SNAPSHOT_UNAVAILABLE",
+				);
+			}
 			const updated = await updateCommentStatusMutation(
 				adapter,
 				input.id,
 				input.data.status,
-				{
-					resourceId: facts.resourceId,
-					resourceType: facts.resourceType,
-					status: facts.currentStatus,
-				},
+				expected,
 			);
 			if (!updated) {
 				throw commentStateChanged();
 			}
-			return serializeResolvedComment(
-				adapter,
-				updated.id,
-				options,
-				identity?.id,
-			);
+			return serializeResolvedComment(adapter, updated, options, identity?.id);
 		},
 		after: async (context) => {
 			if (context.input.data.status !== "approved") return;

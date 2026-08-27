@@ -668,6 +668,126 @@ describe("Comments protected-operation matrix", () => {
 		expect(afterApprove).not.toHaveBeenCalled();
 	});
 
+	it.each([
+		{ label: "Postgres rowCount", result: { rowCount: 0 } },
+		{ label: "MySQL affectedRows", result: { affectedRows: 0 } },
+		{ label: "MySQL result tuple", result: [{ affectedRows: 0 }, 1] },
+		{ label: "Postgres.js count", result: { count: 0 } },
+		{ label: "Cloudflare D1 metadata", result: { meta: { changes: 0 } } },
+		{
+			label: "nested count metadata",
+			result: { affectedRows: { id: "meta" } },
+		},
+		{ label: "array count metadata", result: { affectedRows: [0, 1] } },
+		{ label: "unknown wrong-id object", result: { id: "unrelated" } },
+	])("fails closed for a zero-row $label result", async ({ result }) => {
+		const afterApprove = vi.fn();
+		const backend = makeBackend({
+			auth: createAuth(),
+			plugin: { onAfterApprove: afterApprove },
+		});
+		const pending = await seedComment(backend, { status: "pending" });
+		vi.spyOn(backend.adapter, "updateMany").mockResolvedValue(result as never);
+
+		await expect(
+			backend
+				.forRequest(request("/comments", { identity: moderator }))
+				.api.comments.updateCommentStatus({
+					id: pending.id,
+					data: { status: "approved" },
+				}),
+		).rejects.toMatchObject({
+			statusCode: 409,
+			code: "COMMENT_STATE_CHANGED",
+		});
+		expect(
+			await backend.adapter.findOne<Comment>({
+				model: "comment",
+				where: [{ field: "id", value: pending.id, operator: "eq" }],
+			}),
+		).toMatchObject({ status: "pending" });
+		expect(afterApprove).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		{ label: "Postgres.js count", result: { count: 1 } },
+		{
+			label: "Postgres.js array count",
+			result: Object.assign([], { count: 1 }),
+		},
+		{ label: "Cloudflare D1 metadata", result: { meta: { changes: 1 } } },
+	])("accepts a successful $label result", async ({ result }) => {
+		const backend = makeBackend({ auth: createAuth() });
+		const pending = await seedComment(backend, { status: "pending" });
+		const updateMany = backend.adapter.updateMany.bind(backend.adapter);
+		vi.spyOn(backend.adapter, "updateMany").mockImplementation(
+			async (input) => {
+				await updateMany(input);
+				return result as never;
+			},
+		);
+
+		await expect(
+			backend
+				.forRequest(request("/comments", { identity: moderator }))
+				.api.comments.updateCommentStatus({
+					id: pending.id,
+					data: { status: "approved" },
+				}),
+		).resolves.toMatchObject({ status: "approved" });
+	});
+
+	it("returns the atomic moderation snapshot when the row changes after the write", async () => {
+		const afterApprove = vi.fn();
+		const backend = makeBackend({
+			auth: createAuth(),
+			plugin: { onAfterApprove: afterApprove },
+		});
+		const pending = await seedComment(backend, { status: "pending" });
+		const updateMany = backend.adapter.updateMany.bind(backend.adapter);
+		const update = backend.adapter.update.bind(backend.adapter);
+		let raced = false;
+		vi.spyOn(backend.adapter, "updateMany").mockImplementation(
+			async (input) => {
+				const result = await updateMany(input);
+				if (
+					!raced &&
+					input.model === "comment" &&
+					input.update.status === "approved"
+				) {
+					raced = true;
+					await update({
+						model: "comment",
+						where: [{ field: "id", value: pending.id, operator: "eq" }],
+						update: { status: "spam", updatedAt: new Date() },
+					});
+				}
+				return result;
+			},
+		);
+
+		const result = await backend
+			.forRequest(request("/comments", { identity: moderator }))
+			.api.comments.updateCommentStatus({
+				id: pending.id,
+				data: { status: "approved" },
+			});
+
+		expect(result).toMatchObject({ status: "approved" });
+		expect(afterApprove).toHaveBeenCalledWith(
+			expect.objectContaining({ status: "approved" }),
+			expect.objectContaining({
+				result: expect.objectContaining({ status: "approved" }),
+			}),
+		);
+		expect(
+			await backend.adapter.findOne<Comment>({
+				model: "comment",
+				where: [{ field: "id", value: pending.id, operator: "eq" }],
+			}),
+		).toMatchObject({ status: "spam" });
+	});
+
 	it("atomically rejects an edit when authorized ownership changes", async () => {
 		const afterEdit = vi.fn();
 		const backend = makeBackend({
@@ -713,6 +833,57 @@ describe("Comments protected-operation matrix", () => {
 			}),
 		).toMatchObject({ authorId: viewer.id, body: "Authorization tracer" });
 		expect(afterEdit).not.toHaveBeenCalled();
+	});
+
+	it("returns the atomic edit snapshot when the row changes after the write", async () => {
+		const afterEdit = vi.fn();
+		const backend = makeBackend({
+			auth: createAuth(),
+			plugin: { onAfterEdit: afterEdit },
+		});
+		const comment = await seedComment(backend);
+		const updateMany = backend.adapter.updateMany.bind(backend.adapter);
+		const update = backend.adapter.update.bind(backend.adapter);
+		let raced = false;
+		vi.spyOn(backend.adapter, "updateMany").mockImplementation(
+			async (input) => {
+				const result = await updateMany(input);
+				if (
+					!raced &&
+					input.model === "comment" &&
+					input.update.body === "First edit"
+				) {
+					raced = true;
+					await update({
+						model: "comment",
+						where: [{ field: "id", value: comment.id, operator: "eq" }],
+						update: { body: "Second edit", updatedAt: new Date() },
+					});
+				}
+				return result;
+			},
+		);
+
+		const result = await backend
+			.forRequest(request("/comments", { identity: owner }))
+			.api.comments.updateComment({
+				id: comment.id,
+				data: { body: "First edit" },
+			});
+
+		expect(result).toMatchObject({ body: "First edit" });
+		expect(afterEdit).toHaveBeenCalledWith(
+			expect.objectContaining({ body: "First edit" }),
+			expect.objectContaining({
+				result: expect.objectContaining({ body: "First edit" }),
+			}),
+		);
+		expect(
+			await backend.adapter.findOne<Comment>({
+				model: "comment",
+				where: [{ field: "id", value: comment.id, operator: "eq" }],
+			}),
+		).toMatchObject({ body: "Second edit" });
 	});
 
 	it.each([

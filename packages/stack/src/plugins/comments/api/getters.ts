@@ -395,7 +395,23 @@ export async function getCommentById(
 	});
 
 	if (!comment) return null;
+	return enrichCommentRecord(adapter, comment, resolveUser, currentUserId);
+}
 
+/**
+ * Enrich an already-read comment record without reloading its domain fields.
+ *
+ * This preserves the exact snapshot returned by an atomic mutation while
+ * resolving presentation-only author and current-user like metadata.
+ */
+export async function enrichCommentRecord(
+	adapter: Adapter,
+	comment: Comment,
+	resolveUser?: (
+		authorId: string,
+	) => Promise<{ name: string; avatarUrl?: string } | null>,
+	currentUserId?: string,
+): Promise<SerializedComment> {
 	const authorMap = await resolveAuthors([comment.authorId], resolveUser);
 
 	const likedCommentIds = new Set<string>();
@@ -403,11 +419,11 @@ export async function getCommentById(
 		const like = await adapter.findOne<CommentLike>({
 			model: "commentLike",
 			where: [
-				{ field: "commentId", value: id, operator: "eq" },
+				{ field: "commentId", value: comment.id, operator: "eq" },
 				{ field: "authorId", value: currentUserId, operator: "eq" },
 			],
 		});
-		if (like) likedCommentIds.add(id);
+		if (like) likedCommentIds.add(comment.id);
 	}
 
 	return enrichComment(comment, authorMap, likedCommentIds);

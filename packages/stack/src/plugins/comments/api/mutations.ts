@@ -3,6 +3,78 @@ import type { Comment, CommentLike } from "../types";
 
 class StaleCommentStateError extends Error {}
 
+const AFFECTED_ROW_KEYS = [
+	"rowCount",
+	"affectedRows",
+	"rowsAffected",
+	"changes",
+	"numUpdatedRows",
+] as const;
+
+/**
+ * Normalize the affected-row shapes returned by supported DBAdapter runtimes.
+ *
+ * The declared adapter contract is a number, while some pinned adapters return
+ * driver results and the memory adapter returns the updated row. Unknown
+ * shapes fail closed rather than turning a zero-row CAS into a successful one.
+ */
+function hasPositiveCount(value: unknown): boolean {
+	if (typeof value === "number") return Number.isFinite(value) && value > 0;
+	if (typeof value === "bigint") return value > 0n;
+	return false;
+}
+
+function isMemoryCommentRow(
+	result: Record<string, unknown>,
+	expectedId: string,
+): boolean {
+	return (
+		result.id === expectedId &&
+		typeof result.resourceId === "string" &&
+		typeof result.resourceType === "string" &&
+		typeof result.authorId === "string" &&
+		typeof result.body === "string" &&
+		(result.status === "pending" ||
+			result.status === "approved" ||
+			result.status === "spam") &&
+		typeof result.likes === "number" &&
+		result.createdAt instanceof Date &&
+		result.updatedAt instanceof Date
+	);
+}
+
+function didUpdateRows(result: unknown, expectedId: string): boolean {
+	if (typeof result === "number" || typeof result === "bigint") {
+		return hasPositiveCount(result);
+	}
+	if (!result || typeof result !== "object") return false;
+
+	const record = result as Record<string, unknown>;
+	// Postgres.js and Bun SQL attach a scalar count to their result array.
+	if ("count" in record) return hasPositiveCount(record.count);
+	// MySQL driver results are tuples whose affected-row header is element 0.
+	// Later tuple entries are metadata and must never turn a zero count into a
+	// successful authorization CAS.
+	if (Array.isArray(result)) {
+		return result.length > 0 && didUpdateRows(result[0], expectedId);
+	}
+
+	for (const key of AFFECTED_ROW_KEYS) {
+		if (key in record) return hasPositiveCount(record[key]);
+	}
+	// Cloudflare D1 exposes the affected-row count at meta.changes.
+	if ("meta" in record) {
+		const meta = record.meta;
+		return Boolean(
+			meta &&
+				typeof meta === "object" &&
+				"changes" in meta &&
+				hasPositiveCount((meta as Record<string, unknown>).changes),
+		);
+	}
+	return isMemoryCommentRow(record, expectedId);
+}
+
 /**
  * Input for creating a new comment.
  */
@@ -46,92 +118,86 @@ export async function createComment(
  * Update the body of an existing comment and set editedAt.
  *
  * @remarks **Security:** No authorization hooks are called. The caller is
- * responsible for authorization and lifecycle composition. Pass the
- * authorized `expected` ownership and status to make the edit conditional.
+ * responsible for authorization and lifecycle composition. Pass the complete
+ * authorized `expected` snapshot to make the edit conditional and construct
+ * the result without a racy post-write read.
  */
 export async function updateComment(
 	adapter: Adapter,
 	id: string,
 	body: string,
-	expected?: Pick<Comment, "authorId" | "status">,
+	expected?: Comment,
 ): Promise<Comment | null> {
-	const updated = await adapter.updateMany({
+	const editedAt = new Date();
+	const update = {
+		body,
+		editedAt,
+		updatedAt: editedAt,
+	};
+	if (!expected) {
+		return adapter.update<Comment>({
+			model: "comment",
+			where: [{ field: "id", value: id, operator: "eq" }],
+			update,
+		});
+	}
+	if (expected.id !== id) return null;
+
+	const matched = await adapter.updateMany({
 		model: "comment",
 		where: [
 			{ field: "id", value: id, operator: "eq" },
-			...(expected
-				? [
-						{
-							field: "authorId",
-							value: expected.authorId,
-							operator: "eq" as const,
-						},
-						{
-							field: "status",
-							value: expected.status,
-							operator: "eq" as const,
-						},
-					]
-				: []),
+			{ field: "authorId", value: expected.authorId, operator: "eq" },
+			{ field: "body", value: expected.body, operator: "eq" },
+			{ field: "status", value: expected.status, operator: "eq" },
+			{ field: "likes", value: expected.likes, operator: "eq" },
+			{ field: "updatedAt", value: expected.updatedAt, operator: "eq" },
 		],
-		update: {
-			body,
-			editedAt: new Date(),
-			updatedAt: new Date(),
-		},
+		update,
 	});
-	if (!updated) return null;
-	return adapter.findOne<Comment>({
-		model: "comment",
-		where: [{ field: "id", value: id, operator: "eq" }],
-	});
+	return didUpdateRows(matched, id) ? { ...expected, ...update } : null;
 }
 
 /**
  * Update the status of a comment (approve, reject, spam).
  *
  * @remarks **Security:** No authorization hooks are called. Callers should
- * authorize moderation before calling this lower-level data function. Pass
- * the authorized `expected` state to make the transition conditional and
- * fail closed when concurrent work changes the row.
+ * authorize moderation before calling this lower-level data function. Pass the
+ * complete authorized `expected` snapshot to make the transition conditional,
+ * fail closed on concurrent changes, and avoid a racy post-write read.
  */
 export async function updateCommentStatus(
 	adapter: Adapter,
 	id: string,
 	status: "pending" | "approved" | "spam",
-	expected?: Pick<Comment, "resourceId" | "resourceType" | "status">,
+	expected?: Comment,
 ): Promise<Comment | null> {
-	const updated = await adapter.updateMany({
+	const updatedAt = new Date();
+	const update = { status, updatedAt };
+	if (!expected) {
+		return adapter.update<Comment>({
+			model: "comment",
+			where: [{ field: "id", value: id, operator: "eq" }],
+			update,
+		});
+	}
+	if (expected.id !== id) return null;
+
+	const matched = await adapter.updateMany({
 		model: "comment",
 		where: [
 			{ field: "id", value: id, operator: "eq" },
-			...(expected
-				? [
-						{
-							field: "resourceId",
-							value: expected.resourceId,
-							operator: "eq" as const,
-						},
-						{
-							field: "resourceType",
-							value: expected.resourceType,
-							operator: "eq" as const,
-						},
-						{
-							field: "status",
-							value: expected.status,
-							operator: "eq" as const,
-						},
-					]
-				: []),
+			{ field: "resourceId", value: expected.resourceId, operator: "eq" },
+			{ field: "resourceType", value: expected.resourceType, operator: "eq" },
+			{ field: "authorId", value: expected.authorId, operator: "eq" },
+			{ field: "body", value: expected.body, operator: "eq" },
+			{ field: "status", value: expected.status, operator: "eq" },
+			{ field: "likes", value: expected.likes, operator: "eq" },
+			{ field: "updatedAt", value: expected.updatedAt, operator: "eq" },
 		],
-		update: { status, updatedAt: new Date() },
+		update,
 	});
-	if (!updated) return null;
-	return adapter.findOne<Comment>({
-		model: "comment",
-		where: [{ field: "id", value: id, operator: "eq" }],
-	});
+	return didUpdateRows(matched, id) ? { ...expected, ...update } : null;
 }
 
 async function deleteCommentTree(
@@ -180,7 +246,7 @@ export async function deleteComment(
 				],
 				update: { updatedAt: new Date() },
 			});
-			if (!matched) return false;
+			if (!didUpdateRows(matched, id)) return false;
 			await deleteCommentTree(tx, id);
 			return true;
 		});
@@ -293,7 +359,9 @@ export async function toggleCommentLike(
 					],
 					update: { likes: newLikes, updatedAt: new Date() },
 				});
-				if (!updated) throw new StaleCommentStateError();
+				if (!didUpdateRows(updated, commentId)) {
+					throw new StaleCommentStateError();
+				}
 			} else {
 				await tx.update<Comment>({
 					model: "comment",
