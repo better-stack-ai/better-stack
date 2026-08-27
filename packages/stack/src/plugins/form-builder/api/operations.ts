@@ -904,9 +904,18 @@ export function createFormBuilderOperations(
 				403,
 				"CREATE_FORM_REJECTED",
 			);
+			const validation = createFormSchema.safeParse(modified);
+			if (!validation.success) {
+				throw new FormBuilderOperationError(
+					400,
+					"Invalid form data",
+					"FORM_VALIDATION_FAILED",
+					validation.error.issues,
+				);
+			}
 			const formInput: FormInput = {
-				...modified,
-				slug: sanitizeSlug(modified.slug),
+				...validation.data,
+				slug: sanitizeSlug(validation.data.slug),
 				...(context.identity ? { createdBy: context.identity.id } : {}),
 			};
 			assertValidJsonSchema(formInput.schema);
@@ -964,11 +973,11 @@ export function createFormBuilderOperations(
 			requireAtomicTransactions(adapter);
 			const initial: FormUpdate = {
 				...context.input.data,
-				...(context.input.data.slug
+				...(context.input.data.slug !== undefined
 					? { slug: sanitizeSlug(context.input.data.slug) }
 					: {}),
 			};
-			if (initial.schema) assertValidJsonSchema(initial.schema);
+			if (initial.schema !== undefined) assertValidJsonSchema(initial.schema);
 
 			return adapter.transaction(async (tx) => {
 				const latest = await findFormById(tx, context.input.id);
@@ -988,11 +997,22 @@ export function createFormBuilderOperations(
 					403,
 					"UPDATE_FORM_REJECTED",
 				);
+				const validation = updateFormSchema.safeParse(modified);
+				if (!validation.success) {
+					throw new FormBuilderOperationError(
+						400,
+						"Invalid form data",
+						"FORM_VALIDATION_FAILED",
+						validation.error.issues,
+					);
+				}
 				const update: FormUpdate = {
-					...modified,
-					...(modified.slug ? { slug: sanitizeSlug(modified.slug) } : {}),
+					...validation.data,
+					...(validation.data.slug !== undefined
+						? { slug: sanitizeSlug(validation.data.slug) }
+						: {}),
 				};
-				if (update.schema) assertValidJsonSchema(update.schema);
+				if (update.schema !== undefined) assertValidJsonSchema(update.schema);
 				const claimed = await findFormById(tx, authorized.id);
 				if (
 					!sameFormSnapshot(claimed, { ...authorized, updatedAt: claimedAt })

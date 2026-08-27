@@ -297,6 +297,68 @@ describe("Form Builder operation-first authorization", () => {
 		expect(events).toEqual(["before", "after"]);
 	});
 
+	it.each(["slug", "schema"] as const)(
+		"rejects an empty %s returned by the update hook without persisting it",
+		async (field) => {
+			const afterUpdate = vi.fn();
+			const backend = makeBackend({
+				auth: createAuth(),
+				hooks: {
+					onBeforeFormUpdated: (_id, data) => ({
+						...data,
+						[field]: "",
+					}),
+					onAfterFormUpdated: afterUpdate,
+				},
+			});
+			const form = await seedForm(backend, { slug: `hook-empty-${field}` });
+
+			await expect(
+				backend
+					.forRequest(request(`/forms/${form.id}`, { identity: owner }))
+					.api.formBuilder.updateForm({
+						id: form.id,
+						data: { name: "Should not persist" },
+					}),
+			).rejects.toMatchObject({
+				statusCode: 400,
+				code: "FORM_VALIDATION_FAILED",
+				issues: [expect.objectContaining({ path: [field] })],
+			});
+			expect(afterUpdate).not.toHaveBeenCalled();
+			expect(
+				await backend.adapter.findOne<Form>({
+					model: "form",
+					where: [{ field: "id", value: form.id }],
+				}),
+			).toMatchObject({ name: "Contact", slug: `hook-empty-${field}` });
+		},
+	);
+
+	it("revalidates create-hook output before persistence", async () => {
+		const backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeFormCreated: (data) => ({ ...data, name: "" }),
+			},
+		});
+
+		await expect(
+			backend
+				.forRequest(request("/forms", { identity: admin }))
+				.api.formBuilder.createForm({
+					name: "Valid before hook",
+					slug: "invalid-after-hook",
+					schema: activeSchema,
+				}),
+		).rejects.toMatchObject({
+			statusCode: 400,
+			code: "FORM_VALIDATION_FAILED",
+			issues: [expect.objectContaining({ path: ["name"] })],
+		});
+		expect(await backend.adapter.count({ model: "form", where: [] })).toBe(0);
+	});
+
 	it("bridges protected RC checks with trusted facts and keeps public declarations explicit", async () => {
 		const getIdentity = vi.fn(({ request }: { request: Request }) => {
 			const id = request.headers.get("x-user-id");
