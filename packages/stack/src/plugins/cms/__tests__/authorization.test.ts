@@ -587,10 +587,17 @@ describe("CMS operation-first authorization", () => {
 		let changedJsonSchema = JSON.stringify(
 			zodToFormSchema(changedResourceRelationSchema),
 		);
-		backend = makeBackend({
-			auth: createServerAuth({
-				authorization: relationAuthorization,
-				getIdentity: async () => {
+		const baseAuth = createServerAuth({
+			authorization: relationAuthorization,
+			getIdentity: () => ({ id: "author-1", role: "user" as const }),
+		});
+		const authorize = baseAuth.authorize.bind(baseAuth);
+		let authorizationCalls = 0;
+		const racingAuth: typeof baseAuth = {
+			...baseAuth,
+			async authorize(request, permissionRequest) {
+				const identity = await authorize(request, permissionRequest);
+				if (++authorizationCalls % 2 === 0) {
 					const resourceType = await backend.adapter.findOne<ContentType>({
 						model: "contentType",
 						where: [{ field: "slug", value: "resource" }],
@@ -604,10 +611,11 @@ describe("CMS operation-first authorization", () => {
 							updatedAt: new Date(),
 						},
 					});
-					return { id: "author-1", role: "user" as const };
-				},
-			}),
-		});
+				}
+				return identity;
+			},
+		};
+		backend = makeBackend({ auth: racingAuth });
 		await backend.api.cms.getAllContentTypes();
 		const originalResourceType = await backend.adapter.findOne<ContentType>({
 			model: "contentType",
@@ -888,10 +896,17 @@ describe("CMS operation-first authorization", () => {
 			],
 		});
 		let backend: ReturnType<typeof makeBackend>;
-		backend = makeBackend({
-			auth: createServerAuth({
-				authorization: inverseAuthorization,
-				getIdentity: async () => {
+		const baseAuth = createServerAuth({
+			authorization: inverseAuthorization,
+			getIdentity: () => ({ id: "reader-1", role: "user" as const }),
+		});
+		const authorize = baseAuth.authorize.bind(baseAuth);
+		let authorizationCalls = 0;
+		const racingAuth: typeof baseAuth = {
+			...baseAuth,
+			async authorize(request, permissionRequest) {
+				const identity = await authorize(request, permissionRequest);
+				if (++authorizationCalls === 2) {
 					const resourceType = await backend.adapter.findOne<ContentType>({
 						model: "contentType",
 						where: [{ field: "slug", value: "resource" }],
@@ -907,10 +922,11 @@ describe("CMS operation-first authorization", () => {
 							updatedAt: new Date(),
 						},
 					});
-					return { id: "reader-1", role: "user" as const };
-				},
-			}),
-		});
+				}
+				return identity;
+			},
+		};
+		backend = makeBackend({ auth: racingAuth });
 		await backend.api.cms.getAllContentTypes();
 
 		const response = await backend.handler(

@@ -430,10 +430,13 @@ require framework middleware.
 
 ## Operation lifecycle ordering
 
-An operation validates input, derives trusted facts, resolves identity, and
-authorizes before entering plugin lifecycle hooks. Validation, fact, identity,
-and rule failures—including 401 and 403 denials—do not call `before`, `after`,
-or operation error hooks. Once authorization succeeds, lifecycle contexts carry
+An operation validates input, derives trusted primary facts, resolves identity,
+and authorizes its primary permission. Only after that succeeds does it derive
+and authorize any compound secondary permissions, then enter plugin lifecycle
+hooks. A primary denial therefore cannot trigger secondary reads or be replaced
+by a secondary-derivation error. Validation, fact, identity, and rule
+failures—including 401 and 403 denials—do not call `before`, `after`, or
+operation error hooks. Once authorization succeeds, lifecycle contexts carry
 the validated `input`, trusted `facts`, resolved `identity`, and `request`;
 post-execution contexts also carry `result`.
 

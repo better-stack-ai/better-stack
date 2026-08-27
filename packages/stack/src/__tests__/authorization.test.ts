@@ -500,22 +500,28 @@ describe("schema-backed authorization", () => {
 
 	it("authorizes compound permissions before entering the operation lifecycle", async () => {
 		const compoundPermissions = definePermissions("compound", {
-			source: permission(),
+			source: permission(z.object({ allowed: z.boolean() })),
 			target: permission(z.object({ type: z.string() })),
 		});
 		const compoundAuthorization = defineAuthorization({
 			identity: z.object({ id: z.string() }),
 			permissions: [compoundPermissions] as const,
-			rules: ({ compound }) => [compound.source.allow()],
+			rules: ({ compound }) => [
+				compound.source.when(({ facts }) => facts.allowed),
+			],
 		});
 		const events: string[] = [];
 		const compoundOperation = defineOperation({
-			input: z.object({ targetType: z.string() }),
+			input: z.object({ targetType: z.string(), allowed: z.boolean() }),
 			permission: compoundPermissions.source,
-			facts: () => undefined,
-			additionalPermissions: ({ input }) => [
-				compoundPermissions.target({ type: input.targetType }),
-			],
+			facts: ({ input }) => ({ allowed: input.allowed }),
+			additionalPermissions: ({ input }) => {
+				events.push("derive");
+				if (input.targetType === "throws") {
+					throw new Error("compound derivation should not run");
+				}
+				return [compoundPermissions.target({ type: input.targetType })];
+			},
 			before: () => {
 				events.push("before");
 			},
@@ -546,13 +552,24 @@ describe("schema-backed authorization", () => {
 		await expect(
 			backend
 				.forRequest(new Request("http://localhost/api/compound"))
-				.api.compound.create({ targetType: "secret" }),
+				.api.compound.create({ targetType: "secret", allowed: true }),
+		).rejects.toMatchObject({ statusCode: 403 });
+		expect(events).toEqual(["derive"]);
+
+		events.length = 0;
+		await expect(
+			backend
+				.forRequest(new Request("http://localhost/api/compound"))
+				.api.compound.create({ targetType: "throws", allowed: false }),
 		).rejects.toMatchObject({ statusCode: 403 });
 		expect(events).toEqual([]);
 
 		await expect(
-			backend.internal.compound.create({ targetType: "secret" }),
+			backend.internal.compound.create({
+				targetType: "secret",
+				allowed: false,
+			}),
 		).resolves.toEqual({ success: true });
-		expect(events).toEqual(["before", "execute"]);
+		expect(events).toEqual(["derive", "before", "execute"]);
 	});
 });

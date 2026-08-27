@@ -190,8 +190,9 @@ export function defineOperation<
 	}) => MaybePromise<PermissionInputFor<TPermission>>;
 	/**
 	 * Derive any compound permission checks from validated input and trusted
-	 * primary facts. Every returned request is authorized before lifecycle hooks
-	 * run; trusted internal execution skips only the evaluations.
+	 * primary facts after request execution authorizes the primary permission.
+	 * Every returned request is authorized before lifecycle hooks run; trusted
+	 * internal execution skips only the evaluations.
 	 */
 	additionalPermissions?: (ctx: {
 		readonly input: DeepReadonly<z.output<TInputSchema>>;
@@ -250,17 +251,6 @@ export function defineOperation<
 			new WeakSet(),
 			"operation facts",
 		);
-		const additionalPermissions =
-			(await config.additionalPermissions?.({
-				input: parsedInput,
-				facts: parsedFacts,
-				...(options.request ? { request: options.request } : {}),
-			})) ?? [];
-		if (!Array.isArray(additionalPermissions)) {
-			throw new TypeError(
-				"Operation additionalPermissions() must return an array of permission requests.",
-			);
-		}
 		if (
 			!options.skipAuthorization &&
 			options.auth &&
@@ -272,11 +262,19 @@ export function defineOperation<
 		}
 
 		let identity: DeepReadonly<StackIdentity> | null = null;
+		let runtimeAuth:
+			| {
+					authorize: (
+						request: Request,
+						permission: unknown,
+					) => Promise<StackIdentity | null>;
+			  }
+			| undefined;
 		if (!options.skipAuthorization && isServerAuth(options.auth)) {
 			if (!options.request) {
 				throw new Error("Authorized operations require a request.");
 			}
-			const runtimeAuth = options.auth as unknown as {
+			runtimeAuth = options.auth as unknown as {
 				authorize: (
 					request: Request,
 					permission: unknown,
@@ -286,9 +284,6 @@ export function defineOperation<
 				options.request,
 				permissionRequest,
 			);
-			for (const additionalPermission of additionalPermissions) {
-				await runtimeAuth.authorize(options.request, additionalPermission);
-			}
 			identity = authorizedIdentity
 				? freezeOperationData(
 						authorizedIdentity,
@@ -296,6 +291,27 @@ export function defineOperation<
 						"operation identity",
 					)
 				: null;
+		}
+
+		// Compound checks may perform trusted reads. Derive them only after the
+		// primary request is authorized so denied callers cannot trigger that work
+		// or replace the primary 401/403 with a derivation error. Internal execution
+		// still derives the requests because execute() may validate their snapshots.
+		const additionalPermissions =
+			(await config.additionalPermissions?.({
+				input: parsedInput,
+				facts: parsedFacts,
+				...(options.request ? { request: options.request } : {}),
+			})) ?? [];
+		if (!Array.isArray(additionalPermissions)) {
+			throw new TypeError(
+				"Operation additionalPermissions() must return an array of permission requests.",
+			);
+		}
+		if (runtimeAuth && options.request) {
+			for (const additionalPermission of additionalPermissions) {
+				await runtimeAuth.authorize(options.request, additionalPermission);
+			}
 		}
 
 		const context = Object.freeze({
