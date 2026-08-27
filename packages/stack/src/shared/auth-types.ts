@@ -2,8 +2,8 @@
  * Shared auth contract types used by both the client provider
  * (`@btst/stack/context`) and the backend (`@btst/stack/api`).
  *
- * This module is intentionally type-only so it can be imported from server
- * and client code alike.
+ * This module is runtime-safe so it can be imported from server and client
+ * code alike without pulling in either implementation.
  */
 
 /**
@@ -108,7 +108,7 @@ export interface StackServerAuthProvider {
 	 */
 	getIdentity: (ctx: {
 		headers: Headers;
-		request?: Request;
+		request: Request;
 	}) => Promise<StackIdentity | null> | StackIdentity | null;
 	/**
 	 * Optional server-side permission check, for consumers and plugins that

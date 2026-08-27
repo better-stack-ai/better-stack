@@ -166,12 +166,17 @@ import { auth } from "./auth";
 
 export const serverAuth = createServerAuth({
   authorization,
-  getIdentity: async ({ headers }) => {
+  getIdentityFromHeaders: async ({ headers }) => {
     const session = await auth.api.getSession({ headers });
     return session?.user ?? null;
   },
 });
 ```
+
+Use `getIdentityFromHeaders` when a framework layout must hydrate identity
+without constructing a synthetic `Request`. Existing backend-only adapters can
+keep the request-aware `getIdentity({ request, headers })` callback, but those
+adapters are not accepted by headers-only layout helpers until adapted.
 
 Pass it to `stack({ auth: serverAuth })`. The Blog DELETE endpoint and `myStack.forRequest(request).api.blog.deletePost({ id })` use the same operation and rule. The operation loads the post itself before authorization, so client-supplied ownership facts are never trusted. Trusted jobs can call `myStack.internal.blog.deletePost({ id })`; internal calls skip user authorization but retain input validation and lifecycle hooks.
 
@@ -204,8 +209,9 @@ login, logout, or account switching.
 
 The framework helpers also parse through the server adapter's portable
 `contract` and reject non-JSON-safe output before framework serialization.
-Custom server identity adapters can participate by exposing the same
-`{ contract, getIdentity }` shape.
+Custom server identity adapters can participate by exposing `contract` plus
+`getIdentity(request)` for request-aware loaders, or
+`getIdentityFromHeaders({ headers })` for the Next.js layout helper.
 
 ### Next.js
 

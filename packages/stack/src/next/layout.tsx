@@ -6,8 +6,8 @@ import type {
 } from "../authorization";
 import type { StackIdentity } from "../shared/auth-types";
 import {
-	type FrameworkIdentitySource,
-	resolveInitialIdentity,
+	type HeadersFrameworkIdentitySource,
+	resolveInitialIdentityFromHeaders,
 } from "../shared/initial-identity";
 
 /** Props passed from a Next.js server layout to the generated client boundary. */
@@ -22,7 +22,7 @@ export interface CreateNextLayoutOptions<
 	TContract extends AnyAuthorizationContract,
 > {
 	/** Server-only identity adapter, normally returned by `createServerAuth`. */
-	auth: FrameworkIdentitySource<TContract, { headers: Headers }>;
+	auth: HeadersFrameworkIdentitySource<TContract>;
 	/** Client boundary that owns `StackProvider` for the complete route subtree. */
 	ClientLayout: ComponentType<
 		NextClientLayoutProps<AuthorizationContractIdentity<TContract>>
@@ -41,9 +41,10 @@ export function createNextLayout<TContract extends AnyAuthorizationContract>(
 ) {
 	async function Layout({ children }: { children?: ReactNode }) {
 		const requestHeaders = new Headers(await headers());
-		const initialIdentity = await resolveInitialIdentity(options.auth, {
-			headers: requestHeaders,
-		});
+		const initialIdentity = await resolveInitialIdentityFromHeaders(
+			options.auth,
+			{ headers: requestHeaders },
+		);
 		return (
 			<options.ClientLayout initialIdentity={initialIdentity}>
 				{children}

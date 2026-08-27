@@ -36,13 +36,42 @@ export interface ServerAuth<TAuthorization extends AnyAuthorization>
 		request: Request,
 	): Promise<AuthorizationIdentity<TAuthorization> | null>;
 	getIdentity(ctx: {
-		request?: Request;
+		request: Request;
 		headers: Headers;
 	}): Promise<AuthorizationIdentity<TAuthorization> | null>;
 	authorize(
 		request: Request,
 		permission: AuthorizationPermissionRequest<TAuthorization>,
 	): Promise<AuthorizationIdentity<TAuthorization> | null>;
+}
+
+/** A server adapter that can also resolve identity from framework headers alone. */
+export type HeaderServerAuth<TAuthorization extends AnyAuthorization> =
+	ServerAuth<TAuthorization> & {
+		getIdentityFromHeaders(ctx: {
+			headers: Headers;
+		}): Promise<AuthorizationIdentity<TAuthorization> | null>;
+	};
+
+interface RequestServerAuthConfig<TAuthorization extends AnyAuthorization> {
+	authorization: TAuthorization;
+	getIdentity: (ctx: {
+		request: Request;
+		headers: Headers;
+	}) => MaybePromise<AuthorizationIdentityInput<
+		NoInfer<TAuthorization>
+	> | null>;
+	getIdentityFromHeaders?: never;
+}
+
+interface HeaderServerAuthConfig<TAuthorization extends AnyAuthorization> {
+	authorization: TAuthorization;
+	getIdentity?: never;
+	getIdentityFromHeaders: (ctx: {
+		headers: Headers;
+	}) => MaybePromise<AuthorizationIdentityInput<
+		NoInfer<TAuthorization>
+	> | null>;
 }
 
 /** True for the typed server adapter introduced by the one-rule auth path. */
@@ -58,15 +87,17 @@ export function isServerAuth(
 }
 
 /** Bind server identity resolution to the same authorization contract as the browser. */
-export function createServerAuth<
-	TAuthorization extends AnyAuthorization,
->(config: {
-	authorization: TAuthorization;
-	getIdentity: (ctx: {
-		request?: Request;
-		headers: Headers;
-	}) => MaybePromise<AuthorizationIdentityInput<TAuthorization> | null>;
-}): ServerAuth<TAuthorization> {
+export function createServerAuth<TAuthorization extends AnyAuthorization>(
+	config: HeaderServerAuthConfig<TAuthorization>,
+): HeaderServerAuth<TAuthorization>;
+export function createServerAuth<TAuthorization extends AnyAuthorization>(
+	config: RequestServerAuthConfig<TAuthorization>,
+): ServerAuth<TAuthorization>;
+export function createServerAuth<TAuthorization extends AnyAuthorization>(
+	config:
+		| HeaderServerAuthConfig<TAuthorization>
+		| RequestServerAuthConfig<TAuthorization>,
+): HeaderServerAuth<TAuthorization> {
 	const identities = new WeakMap<
 		object,
 		Promise<AuthorizationIdentity<TAuthorization> | null>
@@ -76,21 +107,27 @@ export function createServerAuth<
 		parseIdentity: (identity: unknown) => StackIdentity | null;
 	};
 
-	const resolveIdentity = (
-		input: Request | { request?: Request; headers: Headers },
-	): Promise<AuthorizationIdentity<TAuthorization> | null> => {
+	const resolveIdentityContext = (input: {
+		request?: Request;
+		headers: Headers;
+	}): Promise<AuthorizationIdentity<TAuthorization> | null> => {
 		const headers = input.headers;
-		const request = input instanceof Request ? input : input.request;
+		const request = input.request;
 		const cacheKey = request ?? headers;
 		let pending = identities.get(cacheKey);
 		if (!pending) {
 			pending = Promise.resolve()
-				.then(() =>
-					config.getIdentity({
-						headers,
-						...(request ? { request } : {}),
-					}),
-				)
+				.then(() => {
+					if (config.getIdentityFromHeaders) {
+						return config.getIdentityFromHeaders({ headers });
+					}
+					if (!request) {
+						throw new TypeError(
+							"Header-only identity resolution requires createServerAuth({ getIdentityFromHeaders }).",
+						);
+					}
+					return config.getIdentity({ headers, request });
+				})
 				.then(
 					(identity) =>
 						runtimeAuthorization.parseIdentity(
@@ -101,12 +138,29 @@ export function createServerAuth<
 		}
 		return pending;
 	};
+	const resolveIdentity = (
+		input: Request | { request: Request; headers: Headers },
+	) =>
+		resolveIdentityContext(
+			input instanceof Request
+				? { headers: input.headers, request: input }
+				: input,
+		);
+	const resolveIdentityFromHeaders = (input: { headers: Headers }) => {
+		if (!config.getIdentityFromHeaders) {
+			throw new TypeError(
+				"Header-only identity resolution requires createServerAuth({ getIdentityFromHeaders }).",
+			);
+		}
+		return resolveIdentityContext(input);
+	};
 
 	const serverAuth = {
 		mode: "one-rule",
 		authorization: config.authorization,
 		contract: config.authorization.contract,
 		getIdentity: resolveIdentity,
+		getIdentityFromHeaders: resolveIdentityFromHeaders,
 		async authorize(request: Request, permissionRequest: unknown) {
 			const identity = await resolveIdentity(request);
 			const allowed = runtimeAuthorization.can(permissionRequest, identity);
@@ -117,5 +171,5 @@ export function createServerAuth<
 		},
 	};
 
-	return serverAuth as unknown as ServerAuth<TAuthorization>;
+	return serverAuth as unknown as HeaderServerAuth<TAuthorization>;
 }

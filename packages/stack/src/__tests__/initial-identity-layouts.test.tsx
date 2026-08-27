@@ -39,7 +39,7 @@ describe("framework identity layout helpers", () => {
 			role: "admin" as const,
 		}));
 		const layout = createNextLayout({
-			auth: { contract: identityContract, getIdentity },
+			auth: { contract: identityContract, getIdentityFromHeaders: getIdentity },
 			ClientLayout: ({ initialIdentity, children }) => (
 				<section data-user={initialIdentity?.id ?? "anonymous"}>
 					{children}
@@ -60,14 +60,14 @@ describe("framework identity layout helpers", () => {
 		const invalid = createNextLayout({
 			auth: {
 				contract: identityContract,
-				getIdentity: () => ({ id: "next-user", role: "owner" }),
+				getIdentityFromHeaders: () => ({ id: "next-user", role: "owner" }),
 			},
 			ClientLayout: () => null,
 		});
 		const nonSerializable = createNextLayout({
 			auth: {
 				contract: nonSerializableContract,
-				getIdentity: () => ({
+				getIdentityFromHeaders: () => ({
 					id: "next-user",
 					role: "admin",
 					session: () => undefined,

@@ -19,18 +19,20 @@ const authorization = defineAuthorization({
 
 describe("createServerAuth identity hydration", () => {
 	it("resolves and validates identity from headers when a framework layout has no Request", async () => {
-		const getIdentity = vi.fn(
-			({ headers, request }: { headers: Headers; request?: Request }) => ({
+		const getIdentityFromHeaders = vi.fn(
+			({ headers }: { headers: Headers }) => ({
 				id: headers.get("x-user-id") ?? "missing",
 				role: "admin" as const,
-				requestUrl: request?.url,
 			}),
 		);
-		const serverAuth = createServerAuth({ authorization, getIdentity });
+		const serverAuth = createServerAuth({
+			authorization,
+			getIdentityFromHeaders,
+		});
 		const headers = new Headers({ "x-user-id": "server-user" });
 
-		const first = serverAuth.getIdentity({ headers });
-		const second = serverAuth.getIdentity({ headers });
+		const first = serverAuth.getIdentityFromHeaders({ headers });
+		const second = serverAuth.getIdentityFromHeaders({ headers });
 		await expect(first).resolves.toEqual({
 			id: "server-user",
 			role: "admin",
@@ -39,31 +41,50 @@ describe("createServerAuth identity hydration", () => {
 			id: "server-user",
 			role: "admin",
 		});
-		expect(getIdentity).toHaveBeenCalledOnce();
-		expect(getIdentity).toHaveBeenCalledWith({ headers });
+		expect(getIdentityFromHeaders).toHaveBeenCalledOnce();
+		expect(getIdentityFromHeaders).toHaveBeenCalledWith({ headers });
+	});
+
+	it("keeps the existing request-aware adapter contract", async () => {
+		const getIdentity = vi.fn(({ request }: { request: Request }) => ({
+			id: new URL(request.url).pathname,
+			role: "user" as const,
+		}));
+		const serverAuth = createServerAuth({ authorization, getIdentity });
+		const request = new Request("https://example.test/account");
+
+		await expect(serverAuth.getIdentity(request)).resolves.toEqual({
+			id: "/account",
+			role: "user",
+		});
+		expect(getIdentity).toHaveBeenCalledWith({
+			headers: request.headers,
+			request,
+		});
 	});
 
 	it("keeps layout identity schema failures observable", async () => {
 		const serverAuth = createServerAuth({
 			authorization,
-			getIdentity: () => ({ id: "server-user", role: "owner" }) as never,
+			getIdentityFromHeaders: () =>
+				({ id: "server-user", role: "owner" }) as never,
 		});
 
 		await expect(
-			serverAuth.getIdentity({ headers: new Headers() }),
+			serverAuth.getIdentityFromHeaders({ headers: new Headers() }),
 		).rejects.toBeInstanceOf(z.ZodError);
 	});
 
 	it("keeps layout identity resolver failures observable", async () => {
 		const serverAuth = createServerAuth({
 			authorization,
-			getIdentity: () => {
+			getIdentityFromHeaders: () => {
 				throw new Error("session store unavailable");
 			},
 		});
 
 		await expect(
-			serverAuth.getIdentity({ headers: new Headers() }),
+			serverAuth.getIdentityFromHeaders({ headers: new Headers() }),
 		).rejects.toThrow("session store unavailable");
 	});
 });
