@@ -4,7 +4,9 @@ import { authorization } from "./authorization";
 export const serverAuth = createServerAuth({
 	authorization,
 	getIdentityFromHeaders: () => ({
-		id: "BTST_SERVER_AUTH_RESOLVER_MARKER",
+		// Build sentinel only; the identity contract strips this before hydration.
+		serverOnlyMarker: "BTST_SERVER_AUTH_RESOLVER_MARKER",
+		id: "olliethedev",
 		role: "admin" as const,
 	}),
 });
