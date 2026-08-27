@@ -111,11 +111,19 @@ export const formSubmissionWithDataResponseSchema =
 		form: formResponseSchema.optional(),
 	});
 
+/** Non-sensitive submission metadata returned by collection reads. */
+export const formSubmissionSummaryResponseSchema = z.object({
+	id: z.string(),
+	formId: z.string(),
+	submittedAt: z.string(),
+	submittedBy: z.string().optional(),
+});
+
 /**
  * Schema for paginated submissions response
  */
 export const paginatedSubmissionsResponseSchema = z.object({
-	items: z.array(formSubmissionWithDataResponseSchema),
+	items: z.array(formSubmissionSummaryResponseSchema),
 	total: z.number(),
 	limit: z.number(),
 	offset: z.number(),

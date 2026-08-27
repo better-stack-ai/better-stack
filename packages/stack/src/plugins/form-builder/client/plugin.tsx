@@ -11,6 +11,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createSanitizedSSRLoaderError } from "../../utils";
 import type { FormBuilderApiRouter } from "../api";
 import { createFormBuilderQueryKeys } from "../query-keys";
+import type { PaginatedFormSubmissions } from "../types";
 
 // Lazy load page components for code splitting
 const FormListPageComponent = lazy(() =>
@@ -244,7 +245,7 @@ function createFormBuilderLoader(
 				basePath: apiBasePath,
 			});
 			const queries = createFormBuilderQueryKeys(client, headers);
-			const formQuery = id ? queries.forms.byId(id) : undefined;
+			const formQuery = id ? queries.forms.forUpdate(id) : undefined;
 
 			try {
 				// Before hook - authorization check
@@ -323,7 +324,6 @@ function createSubmissionsLoader(
 			});
 			const queries = createFormBuilderQueryKeys(client, headers);
 			const limit = 20;
-			const formQuery = queries.forms.byId(formId);
 			const submissionsQuery = queries.formSubmissions.list({ formId, limit });
 
 			try {
@@ -332,8 +332,7 @@ function createSubmissionsLoader(
 					await hooks.beforeLoadSubmissions(formId, context);
 				}
 
-				// Prefetch form and submissions
-				await queryClient.prefetchQuery(formQuery);
+				// The submission operation returns the form facts needed by the page.
 				await queryClient.prefetchInfiniteQuery({
 					...submissionsQuery,
 					initialPageParam: 0,
@@ -345,11 +344,10 @@ function createSubmissionsLoader(
 				}
 
 				// Check if there was an error
-				const formState = queryClient.getQueryState(formQuery.queryKey);
 				const submissionsState = queryClient.getQueryState(
 					submissionsQuery.queryKey,
 				);
-				const queryError = formState?.error || submissionsState?.error;
+				const queryError = submissionsState?.error;
 				if (queryError && hooks?.onLoadError) {
 					const error =
 						queryError instanceof Error
@@ -414,9 +412,9 @@ function createFormBuilderMeta(
 				basePath: apiBasePath,
 			});
 			const queries = createFormBuilderQueryKeys(client);
-			const form = queryClient.getQueryData(queries.forms.byId(id).queryKey) as
-				| { name: string }
-				| undefined;
+			const form = queryClient.getQueryData(
+				queries.forms.forUpdate(id).queryKey,
+			) as { name: string } | undefined;
 			formName = form?.name || "";
 		}
 
@@ -444,9 +442,10 @@ function createSubmissionsMeta(
 			basePath: apiBasePath,
 		});
 		const queries = createFormBuilderQueryKeys(client);
-		const form = queryClient.getQueryData(
-			queries.forms.byId(formId).queryKey,
-		) as { name: string } | undefined;
+		const data = queryClient.getQueryData(
+			queries.formSubmissions.list({ formId, limit: 20 }).queryKey,
+		) as { pages?: PaginatedFormSubmissions[] } | undefined;
+		const form = data?.pages?.[0]?.form;
 
 		const title = form?.name ? `${form.name} Submissions` : "Submissions";
 

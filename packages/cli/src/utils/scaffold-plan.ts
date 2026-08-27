@@ -256,10 +256,24 @@ function buildPluginTemplateContext(
 	};
 }
 
-function buildAdapterTemplateContext(adapter: Adapter, stackPath: string) {
+function buildAdapterTemplateContext(
+	adapter: Adapter,
+	stackPath: string,
+	selectedPlugins: PluginKey[],
+) {
 	const meta = ADAPTERS.find((item) => item.key === adapter);
 	if (!meta) {
 		throw new Error(`Unsupported adapter: ${adapter}`);
+	}
+	const needsIsolatedTransactions = selectedPlugins.includes("form-builder");
+
+	if (
+		needsIsolatedTransactions &&
+		(adapter === "memory" || adapter === "mongodb")
+	) {
+		throw new Error(
+			`Form Builder requires an adapter with isolated transaction support; ${adapter} is not supported by the generated configuration. Choose prisma, drizzle, or kysely.`,
+		);
 	}
 
 	if (adapter === "memory") {
@@ -282,18 +296,18 @@ const prisma = new PrismaClient({ adapter: pgAdapter })
 
 const provider = (process.env.BTST_PRISMA_PROVIDER ?? "postgresql") as "postgresql" | "sqlite" | "cockroachdb" | "mysql" | "sqlserver" | "mongodb"
 `,
-			adapterStackLine:
-				"adapter: (db) => createPrismaAdapter(prisma, db, { provider })({}),",
+			adapterStackLine: `adapter: (db) => createPrismaAdapter(prisma, db, { provider${needsIsolatedTransactions ? ", transaction: true" : ""} })({}),`,
 		};
 	}
 
 	if (adapter === "drizzle") {
 		return {
 			adapterImport: `import { createDrizzleAdapter } from "${meta.packageName}"`,
-			adapterSetup:
-				"// TODO: wire your Drizzle DB instance (drizzleDb)\nconst drizzleDb = {} as never\n",
-			adapterStackLine:
-				"adapter: (db) => createDrizzleAdapter(drizzleDb, db, {}),",
+			adapterSetup: `// TODO: wire your Drizzle DB instance (drizzleDb)
+const drizzleDb = {} as never
+const drizzleProvider = (process.env.BTST_DRIZZLE_PROVIDER ?? "pg") as "pg" | "mysql" | "sqlite"
+`,
+			adapterStackLine: `adapter: (db) => createDrizzleAdapter(drizzleDb, db, { provider: drizzleProvider${needsIsolatedTransactions ? ", transaction: true" : ""} })({}),`,
 		};
 	}
 
@@ -302,8 +316,7 @@ const provider = (process.env.BTST_PRISMA_PROVIDER ?? "postgresql") as "postgres
 			adapterImport: `import { createKyselyAdapter } from "${meta.packageName}"`,
 			adapterSetup:
 				"// TODO: wire your Kysely DB instance (kyselyDb)\nconst kyselyDb = {} as never\n",
-			adapterStackLine:
-				"adapter: (db) => createKyselyAdapter(kyselyDb, db, {}),",
+			adapterStackLine: `adapter: (db) => createKyselyAdapter(kyselyDb, db, {${needsIsolatedTransactions ? " transaction: true " : ""}})({}),`,
 		};
 	}
 
@@ -326,6 +339,7 @@ export async function buildScaffoldPlan(
 	const adapterContext = buildAdapterTemplateContext(
 		input.adapter,
 		frameworkPaths.stackPath,
+		input.plugins,
 	);
 
 	const sharedContext = {

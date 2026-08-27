@@ -6,6 +6,7 @@ import type {
 	FormSubmissionWithForm,
 	SerializedForm,
 	SerializedFormSubmission,
+	SerializedFormSubmissionSummary,
 	SerializedFormSubmissionWithData,
 } from "../types";
 
@@ -37,6 +38,21 @@ export function serializeFormSubmission(
 	return {
 		...submission,
 		submittedAt: submission.submittedAt.toISOString(),
+	};
+}
+
+/** Strip a submission down to browser-safe collection metadata. */
+export function serializeFormSubmissionSummary(
+	submission: FormSubmission | SerializedFormSubmission,
+): SerializedFormSubmissionSummary {
+	return {
+		id: submission.id,
+		formId: submission.formId,
+		submittedAt:
+			typeof submission.submittedAt === "string"
+				? submission.submittedAt
+				: submission.submittedAt.toISOString(),
+		...(submission.submittedBy ? { submittedBy: submission.submittedBy } : {}),
 	};
 }
 
@@ -226,7 +242,7 @@ export async function getFormBySlug(
  * @param params - Optional pagination parameters
  */
 export async function getFormSubmissions(
-	adapter: Adapter,
+	adapter: Pick<Adapter, "findOne" | "findMany" | "count">,
 	formId: string,
 	params?: { limit?: number; offset?: number },
 ): Promise<{

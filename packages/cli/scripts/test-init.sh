@@ -13,6 +13,7 @@ ROOT_DIR="$(cd "$PACKAGE_DIR/../.." && pwd)"
 TEST_DIR="/tmp/test-btst-init-$(date +%s)"
 TEST_PASSED=false
 SHADCN_VERSION="4.0.5"
+MEMORY_PLUGIN_LIST="blog,ai-chat,cms,ui-builder,kanban,comments,media,better-auth-ui,route-docs,open-api"
 
 cleanup() {
 	if [ "$TEST_PASSED" = true ]; then
@@ -111,8 +112,25 @@ step "Installing packed tarballs"
 npm install "$STACK_TARBALL" "$CODEGEN_TARBALL" --legacy-peer-deps
 success "Installed local @btst/stack and @btst/codegen"
 
-step "Running btst init (first pass)"
-npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins all --skip-install 2>&1 | tee "$TEST_DIR/init-first.log"
+step "Rejecting Form Builder with the non-isolating memory scaffold"
+write_project_hash "$TEST_DIR/init-memory-before.hash"
+if npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins form-builder --skip-install > "$TEST_DIR/init-memory-form-builder.log" 2>&1; then
+	error "Expected memory + Form Builder init to fail"
+	exit 1
+fi
+write_project_hash "$TEST_DIR/init-memory-after.hash"
+if ! grep -q "requires an adapter with isolated transaction support" "$TEST_DIR/init-memory-form-builder.log"; then
+	error "Expected Form Builder transaction guidance was not printed"
+	exit 1
+fi
+if [ "$(cat "$TEST_DIR/init-memory-before.hash")" != "$(cat "$TEST_DIR/init-memory-after.hash")" ]; then
+	error "Rejected memory + Form Builder init modified the fixture"
+	exit 1
+fi
+success "Memory + Form Builder failed before scaffolding"
+
+step "Running compatible memory btst init (first pass)"
+npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins "$MEMORY_PLUGIN_LIST" --skip-install 2>&1 | tee "$TEST_DIR/init-first.log"
 if ! node -e 'const fs=require("fs");const s=fs.readFileSync(process.argv[1],"utf8");process.exit(s.includes("Running @btst/codegen init")?0:1)' "$TEST_DIR/init-first.log"; then
 	error "Expected runtime banner not found in init output"
 	exit 1
@@ -161,7 +179,7 @@ success "Generation + patch checks passed"
 step "Idempotency check (second pass)"
 write_project_hash "$TEST_DIR/init-before.hash"
 
-npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins all --skip-install > "$TEST_DIR/init-second.log" 2>&1
+npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins "$MEMORY_PLUGIN_LIST" --skip-install > "$TEST_DIR/init-second.log" 2>&1
 write_project_hash "$TEST_DIR/init-after.hash"
 
 if [ "$(cat "$TEST_DIR/init-before.hash")" != "$(cat "$TEST_DIR/init-after.hash")" ]; then
@@ -170,8 +188,8 @@ if [ "$(cat "$TEST_DIR/init-before.hash")" != "$(cat "$TEST_DIR/init-after.hash"
 fi
 success "Second run was idempotent"
 
-step "Verifying compile on all-plugin scaffold"
-success "Keeping generated BTST CSS imports from --plugins all"
+step "Verifying compile on the compatible memory scaffold"
+success "Keeping generated BTST CSS imports from the selected plugins"
 
 step "Compiling fixture project"
 npm run build

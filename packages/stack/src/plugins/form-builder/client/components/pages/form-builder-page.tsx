@@ -3,10 +3,15 @@
 import { lazy } from "react";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { FormBuilderPluginOverrides } from "../../overrides";
-import { ComposedRoute } from "@btst/stack/client/components";
+import {
+	ComposedRoute,
+	PermissionRouteAccess,
+} from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
 import { FormBuilderSkeleton } from "../loading/form-builder-skeleton";
 import { NotFoundPage } from "./404-page";
+import { formBuilderPermissions } from "../../../permissions";
+import { useSuspenseFormForUpdate } from "../../hooks";
 
 const FormBuilderPage = lazy(() =>
 	import("./form-builder-page.internal").then((m) => ({
@@ -28,15 +33,10 @@ export function FormBuilderPageComponent({ id }: FormBuilderPageProps) {
 	return (
 		<ComposedRoute
 			path={path}
-			PageComponent={FormBuilderPage}
+			PageComponent={AuthorizedFormBuilderPage}
 			ErrorComponent={DefaultError}
 			LoadingComponent={FormBuilderSkeleton}
 			NotFoundComponent={NotFoundPage}
-			permission={
-				isNew
-					? { resource: "form-builder:form", action: "create" }
-					: { resource: "form-builder:form", action: "update", params: { id } }
-			}
 			props={{ id }}
 			onError={(error) => {
 				if (onRouteError) {
@@ -48,5 +48,46 @@ export function FormBuilderPageComponent({ id }: FormBuilderPageProps) {
 				}
 			}}
 		/>
+	);
+}
+
+function AuthorizedFormBuilderPage({ id }: FormBuilderPageProps) {
+	if (!id) {
+		return (
+			<PermissionRouteAccess
+				permission={formBuilderPermissions.form.create()}
+				legacyPermission={{ resource: "form-builder:form", action: "create" }}
+				LoadingComponent={FormBuilderSkeleton}
+			>
+				<FormBuilderPage />
+			</PermissionRouteAccess>
+		);
+	}
+	return <AuthorizedExistingFormBuilderPage id={id} />;
+}
+
+function AuthorizedExistingFormBuilderPage({ id }: { id: string }) {
+	const { form } = useSuspenseFormForUpdate(id);
+	if (!form) return <NotFoundPage />;
+	return (
+		<PermissionRouteAccess
+			permission={formBuilderPermissions.form.update({
+				formId: form.id,
+				...(form.createdBy ? { ownerId: form.createdBy } : {}),
+				status: form.status,
+			})}
+			legacyPermission={{
+				resource: "form-builder:form",
+				action: "update",
+				params: {
+					id: form.id,
+					...(form.createdBy ? { ownerId: form.createdBy } : {}),
+					status: form.status,
+				},
+			}}
+			LoadingComponent={FormBuilderSkeleton}
+		>
+			<FormBuilderPage id={id} />
+		</PermissionRouteAccess>
 	);
 }

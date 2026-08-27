@@ -1,43 +1,44 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import { defineBackendPlugin } from "@btst/stack/plugins/api";
-import { createEndpoint } from "@btst/stack/plugins/api";
-import { z } from "zod";
-import { formSchemaToZod } from "@workspace/ui/lib/schema-converter";
+import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
+import type { QueryClient } from "@tanstack/react-query";
+import { AuthorizationError } from "../../../authorization/server";
 import { formBuilderSchema as dbSchema } from "../db";
-import type {
-	Form,
-	FormSubmission,
-	FormSubmissionWithForm,
-	FormBuilderBackendConfig,
-	FormBuilderHookContext,
-	SubmissionHookContext,
-	FormInput,
-	FormUpdate,
-} from "../types";
 import {
-	listFormsQuerySchema,
 	createFormSchema,
-	updateFormSchema,
+	listFormsQuerySchema,
 	listSubmissionsQuerySchema,
+	updateFormSchema,
 } from "../schemas";
-import { slugify, extractIpAddress, extractUserAgent } from "../utils";
+import type { FormBuilderBackendConfig } from "../types";
 import {
 	getAllForms,
-	getFormById as getFormByIdFromDb,
-	getFormBySlug as getFormBySlugFromDb,
+	getFormById,
+	getFormBySlug,
 	getFormSubmissions,
-	serializeForm,
-	serializeFormSubmission,
-	serializeFormSubmissionWithData,
+	serializeFormSubmissionSummary,
 } from "./getters";
+import {
+	FormBuilderOperationError,
+	GetFormByIdOperationInputSchema,
+	GetFormForUpdateOperationInputSchema,
+	GetFormBySlugOperationInputSchema,
+	SubmitFormOperationInputSchema,
+	createFormBuilderOperations,
+} from "./operations";
 import { FORM_QUERY_KEYS } from "./query-key-defs";
-import type { QueryClient } from "@tanstack/react-query";
-import { runHook } from "../../utils";
 
-/**
- * Route keys for the Form Builder plugin — matches the keys returned by
- * `stackClient.router.getRoute(path).routeKey`.
- */
+export {
+	DeleteFormOperationInputSchema,
+	GetFormByIdOperationInputSchema,
+	GetFormForUpdateOperationInputSchema,
+	GetFormBySlugOperationInputSchema,
+	GetSubmissionOperationInputSchema,
+	ListSubmissionsOperationInputSchema,
+	SubmitFormOperationInputSchema,
+	UpdateFormOperationInputSchema,
+} from "./operations";
+
+/** Route keys returned by the Form Builder client plugin. */
 export type FormBuilderRouteKey =
 	| "formList"
 	| "newForm"
@@ -53,47 +54,63 @@ interface FormBuilderPrefetchForRoute {
 	): Promise<void>;
 }
 
+/**
+ * Trusted raw SSG path. It bypasses request authorization and seeds only the
+ * route data selected by the caller. Protected static output needs equivalent
+ * deployment-level access controls.
+ */
 function createFormBuilderPrefetchForRoute(
-	adapter: Parameters<typeof getAllForms>[0],
+	adapter: Adapter,
 ): FormBuilderPrefetchForRoute {
 	return async function prefetchForRoute(
 		key: FormBuilderRouteKey,
-		qc: QueryClient,
+		queryClient: QueryClient,
 		params?: Record<string, string>,
 	): Promise<void> {
 		switch (key) {
 			case "formList": {
 				const result = await getAllForms(adapter, { limit: 20, offset: 0 });
-				qc.setQueryData(FORM_QUERY_KEYS.formsList({ limit: 20, offset: 0 }), {
-					pages: [
-						{
-							items: result.items,
-							total: result.total,
-							limit: result.limit ?? 20,
-							offset: result.offset ?? 0,
-						},
-					],
-					pageParams: [0],
-				});
+				queryClient.setQueryData(
+					FORM_QUERY_KEYS.formsList({ limit: 20, offset: 0 }),
+					{
+						pages: [
+							{
+								items: result.items,
+								total: result.total,
+								limit: result.limit ?? 20,
+								offset: result.offset ?? 0,
+							},
+						],
+						pageParams: [0],
+					},
+				);
 				break;
 			}
 			case "editForm": {
 				const id = params?.id ?? "";
 				if (id) {
-					const form = await getFormByIdFromDb(adapter, id);
-					qc.setQueryData(FORM_QUERY_KEYS.formById(id), form);
+					queryClient.setQueryData(
+						FORM_QUERY_KEYS.formForUpdate(id),
+						await getFormById(adapter, id),
+					);
 				}
 				break;
 			}
 			case "submissions": {
 				const id = params?.id ?? "";
 				if (id) {
-					const [form, submissionsResult] = await Promise.all([
-						getFormByIdFromDb(adapter, id),
+					const [form, result] = await Promise.all([
+						getFormById(adapter, id),
 						getFormSubmissions(adapter, id, { limit: 20, offset: 0 }),
 					]);
-					qc.setQueryData(FORM_QUERY_KEYS.formById(id), form);
-					qc.setQueryData(
+					const formContext = form
+						? {
+								id: form.id,
+								name: form.name,
+								...(form.createdBy ? { createdBy: form.createdBy } : {}),
+							}
+						: null;
+					queryClient.setQueryData(
 						FORM_QUERY_KEYS.submissionsList({
 							formId: id,
 							limit: 20,
@@ -102,10 +119,11 @@ function createFormBuilderPrefetchForRoute(
 						{
 							pages: [
 								{
-									items: submissionsResult.items,
-									total: submissionsResult.total,
-									limit: submissionsResult.limit ?? 20,
-									offset: submissionsResult.offset ?? 0,
+									form: formContext,
+									items: result.items.map(serializeFormSubmissionSummary),
+									total: result.total,
+									limit: result.limit ?? 20,
+									offset: result.offset ?? 0,
 								},
 							],
 							pageParams: [0],
@@ -120,25 +138,49 @@ function createFormBuilderPrefetchForRoute(
 	} as FormBuilderPrefetchForRoute;
 }
 
-/**
- * Form Builder backend plugin
- * Provides API endpoints for managing forms and form submissions
- *
- * @param config - Configuration with optional hooks
- */
+type EndpointErrorFactory = (...args: any[]) => Error;
+
+async function adaptOperationToHttp<TResult>(
+	execute: () => Promise<TResult>,
+	error: EndpointErrorFactory,
+): Promise<TResult> {
+	try {
+		return await execute();
+	} catch (cause) {
+		if (
+			cause instanceof AuthorizationError ||
+			cause instanceof FormBuilderOperationError
+		) {
+			throw error(cause.statusCode, {
+				message: cause.message,
+				...(cause instanceof FormBuilderOperationError
+					? {
+							code: cause.code,
+							...(cause.issues ? { issues: cause.issues } : {}),
+						}
+					: {}),
+			});
+		}
+		throw cause;
+	}
+}
+
+/** Form Builder backend plugin backed by one operation inventory. */
 export const formBuilderBackendPlugin = (
 	config: FormBuilderBackendConfig = {},
 ) =>
 	defineBackendPlugin({
 		name: "form-builder",
-
 		dbPlugin: dbSchema,
+		operations: (adapter: Adapter) =>
+			createFormBuilderOperations(adapter, config.hooks),
 
-		api: (adapter) => ({
+		/** Lower-level server API that intentionally bypasses auth and hooks. */
+		api: (adapter: Adapter) => ({
 			getAllForms: (params?: Parameters<typeof getAllForms>[1]) =>
 				getAllForms(adapter, params),
-			getFormById: (id: string) => getFormByIdFromDb(adapter, id),
-			getFormBySlug: (slug: string) => getFormBySlugFromDb(adapter, slug),
+			getFormById: (id: string) => getFormById(adapter, id),
+			getFormBySlug: (slug: string) => getFormBySlug(adapter, slug),
 			getFormSubmissions: (
 				formId: string,
 				params?: Parameters<typeof getFormSubmissions>[2],
@@ -146,614 +188,158 @@ export const formBuilderBackendPlugin = (
 			prefetchForRoute: createFormBuilderPrefetchForRoute(adapter),
 		}),
 
-		routes: (adapter: Adapter) => {
-			// Helper to create hook context from request
-			const createContext = (headers?: Headers): FormBuilderHookContext => ({
-				headers,
-				ipAddress: extractIpAddress(headers),
-				userAgent: extractUserAgent(headers),
-			});
-
-			// Helper to create submission hook context
-			const createSubmissionContext = (
-				formSlug: string,
-				formId: string,
-				headers?: Headers,
-			): SubmissionHookContext => ({
-				...createContext(headers),
-				formSlug,
-				formId,
-			});
-
-			// ========== Form CRUD Endpoints (Admin) ==========
-
+		routes: (_adapter: Adapter, _context, operations) => {
 			const listForms = createEndpoint(
 				"/forms",
-				{
-					method: "GET",
-					query: listFormsQuerySchema,
-				},
-				async (ctx) => {
-					const { status, limit, offset, search } = ctx.query;
-					const context = createContext(ctx.headers);
-
-					if (config.hooks?.onBeforeListForms) {
-						await runHook(
-							() => config.hooks!.onBeforeListForms!(context),
-							ctx.error,
-							"Access denied",
-						);
-					}
-
-					return getAllForms(adapter, { status, limit, offset, search });
-				},
+				{ method: "GET", query: listFormsQuerySchema, requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.listForms(ctx.query, ctx.request),
+						ctx.error,
+					),
 			);
-
-			const getFormBySlug = createEndpoint(
+			const getFormBySlugEndpoint = createEndpoint(
 				"/forms/:slug",
 				{
 					method: "GET",
-					params: z.object({ slug: z.string() }),
+					params: GetFormBySlugOperationInputSchema,
+					requireRequest: true,
 				},
-				async (ctx) => {
-					const { slug } = ctx.params;
-					const context = createContext(ctx.headers);
-
-					// Call before hook for access check
-					if (config.hooks?.onBeforeGetForm) {
-						await runHook(
-							() => config.hooks!.onBeforeGetForm!(slug, context),
-							ctx.error,
-							"Access denied",
-						);
-					}
-
-					const form = await getFormBySlugFromDb(adapter, slug);
-
-					if (!form) {
-						throw ctx.error(404, { message: "Form not found" });
-					}
-
-					return form;
-				},
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.getFormBySlug(ctx.params, ctx.request),
+						ctx.error,
+					),
 			);
-
-			const getFormById = createEndpoint(
+			const getFormByIdEndpoint = createEndpoint(
 				"/forms/id/:id",
 				{
 					method: "GET",
-					params: z.object({ id: z.string() }),
+					params: GetFormByIdOperationInputSchema,
+					requireRequest: true,
 				},
-				async (ctx) => {
-					const { id } = ctx.params;
-					const context = createContext(ctx.headers);
-
-					// Call before hook for access check
-					if (config.hooks?.onBeforeGetForm) {
-						await runHook(
-							() => config.hooks!.onBeforeGetForm!(id, context),
-							ctx.error,
-							"Access denied",
-						);
-					}
-
-					const form = await adapter.findOne<Form>({
-						model: "form",
-						where: [{ field: "id", value: id, operator: "eq" as const }],
-					});
-
-					if (!form) {
-						throw ctx.error(404, { message: "Form not found" });
-					}
-
-					return serializeForm(form);
-				},
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.getFormById(ctx.params, ctx.request),
+						ctx.error,
+					),
 			);
-
+			const getFormForUpdateEndpoint = createEndpoint(
+				"/forms/id/:id/edit",
+				{
+					method: "GET",
+					params: GetFormForUpdateOperationInputSchema,
+					requireRequest: true,
+				},
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.getFormForUpdate(ctx.params, ctx.request),
+						ctx.error,
+					),
+			);
 			const createForm = createEndpoint(
 				"/forms",
-				{
-					method: "POST",
-					body: createFormSchema,
-				},
-				async (ctx) => {
-					const body = ctx.body;
-					const context = createContext(ctx.headers);
-
-					// Sanitize slug to ensure it's URL-safe
-					const slug = slugify(body.slug);
-
-					if (!slug) {
-						throw ctx.error(400, {
-							message:
-								"Invalid slug: must contain at least one alphanumeric character",
-						});
-					}
-
-					// Check for duplicate slug
-					const existing = await adapter.findOne<Form>({
-						model: "form",
-						where: [{ field: "slug", value: slug, operator: "eq" as const }],
-					});
-					if (existing) {
-						throw ctx.error(409, {
-							message: "Form with this slug already exists",
-						});
-					}
-
-					// Validate JSON Schema
-					try {
-						JSON.parse(body.schema);
-					} catch {
-						throw ctx.error(400, { message: "Invalid JSON Schema" });
-					}
-
-					// Build form input
-					let formInput: FormInput = {
-						name: body.name,
-						slug,
-						description: body.description,
-						schema: body.schema,
-						successMessage: body.successMessage,
-						redirectUrl: body.redirectUrl || undefined,
-						status: body.status as "active" | "inactive" | "archived",
-					};
-
-					// Call before hook - may modify data or deny operation
-					if (config.hooks?.onBeforeFormCreated) {
-						const hookResult = await runHook(
-							() => config.hooks!.onBeforeFormCreated!(formInput, context),
-							ctx.error,
-							"Create operation denied",
-						);
-						if (hookResult && typeof hookResult === "object") {
-							formInput = hookResult as typeof formInput;
-						}
-					}
-
-					const form = await adapter.create<Form>({
-						model: "form",
-						data: {
-							name: formInput.name,
-							slug: formInput.slug,
-							description: formInput.description,
-							schema: formInput.schema,
-							successMessage: formInput.successMessage,
-							redirectUrl: formInput.redirectUrl,
-							status: formInput.status || "active",
-							createdBy: formInput.createdBy,
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						},
-					});
-
-					const serialized = serializeForm(form as Form);
-
-					// Call after hook
-					if (config.hooks?.onAfterFormCreated) {
-						await config.hooks.onAfterFormCreated(serialized, context);
-					}
-
-					return serialized;
-				},
+				{ method: "POST", body: createFormSchema, requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.createForm(ctx.body, ctx.request),
+						ctx.error,
+					),
 			);
-
 			const updateForm = createEndpoint(
 				"/forms/:id",
-				{
-					method: "PUT",
-					params: z.object({ id: z.string() }),
-					body: updateFormSchema,
-				},
-				async (ctx) => {
-					const { id } = ctx.params;
-					const body = ctx.body;
-					const context = createContext(ctx.headers);
-
-					const existing = await adapter.findOne<Form>({
-						model: "form",
-						where: [{ field: "id", value: id, operator: "eq" as const }],
-					});
-
-					if (!existing) {
-						throw ctx.error(404, { message: "Form not found" });
-					}
-
-					// Sanitize slug if provided
-					let slug: string | undefined;
-					if (body.slug) {
-						slug = slugify(body.slug);
-						if (!slug) {
-							throw ctx.error(400, {
-								message:
-									"Invalid slug: must contain at least one alphanumeric character",
-							});
-						}
-
-						// Check for duplicate slug if changing
-						if (slug !== existing.slug) {
-							const duplicate = await adapter.findOne<Form>({
-								model: "form",
-								where: [
-									{ field: "slug", value: slug, operator: "eq" as const },
-								],
-							});
-							if (duplicate) {
-								throw ctx.error(409, {
-									message: "Form with this slug already exists",
-								});
-							}
-						}
-					}
-
-					// Validate JSON Schema if provided
-					if (body.schema) {
-						try {
-							JSON.parse(body.schema);
-						} catch {
-							throw ctx.error(400, { message: "Invalid JSON Schema" });
-						}
-					}
-
-					// Build update input
-					let updateInput: FormUpdate = {
-						name: body.name,
-						slug,
-						description: body.description,
-						schema: body.schema,
-						successMessage: body.successMessage,
-						redirectUrl: body.redirectUrl,
-						status: body.status as
-							| "active"
-							| "inactive"
-							| "archived"
-							| undefined,
-					};
-
-					// Call before hook - may modify data or deny operation
-					if (config.hooks?.onBeforeFormUpdated) {
-						const hookResult = await runHook(
-							() =>
-								config.hooks!.onBeforeFormUpdated!(id, updateInput, context),
-							ctx.error,
-							"Update operation denied",
-						);
-						if (hookResult && typeof hookResult === "object") {
-							updateInput = hookResult as typeof updateInput;
-						}
-					}
-
-					// Build update data
-					const updateData: Partial<Form> = {
-						updatedAt: new Date(),
-					};
-					if (updateInput.name) updateData.name = updateInput.name;
-					if (updateInput.slug) updateData.slug = updateInput.slug;
-					if (updateInput.description !== undefined)
-						updateData.description = updateInput.description;
-					if (updateInput.schema) updateData.schema = updateInput.schema;
-					if (updateInput.successMessage !== undefined)
-						updateData.successMessage = updateInput.successMessage;
-					if (updateInput.redirectUrl !== undefined)
-						updateData.redirectUrl = updateInput.redirectUrl;
-					if (updateInput.status) updateData.status = updateInput.status;
-
-					await adapter.update({
-						model: "form",
-						where: [{ field: "id", value: id, operator: "eq" as const }],
-						update: updateData,
-					});
-
-					const updated = await adapter.findOne<Form>({
-						model: "form",
-						where: [{ field: "id", value: id, operator: "eq" as const }],
-					});
-
-					if (!updated) {
-						throw ctx.error(500, { message: "Failed to fetch updated form" });
-					}
-
-					const serialized = serializeForm(updated);
-
-					// Call after hook
-					if (config.hooks?.onAfterFormUpdated) {
-						await config.hooks.onAfterFormUpdated(serialized, context);
-					}
-
-					return serialized;
-				},
+				{ method: "PUT", body: updateFormSchema, requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() =>
+							operations.updateForm(
+								{ id: ctx.params.id, data: ctx.body },
+								ctx.request,
+							),
+						ctx.error,
+					),
 			);
-
 			const deleteForm = createEndpoint(
 				"/forms/:id",
-				{
-					method: "DELETE",
-					params: z.object({ id: z.string() }),
-				},
-				async (ctx) => {
-					const { id } = ctx.params;
-					const context = createContext(ctx.headers);
-
-					const existing = await adapter.findOne<Form>({
-						model: "form",
-						where: [{ field: "id", value: id, operator: "eq" as const }],
-					});
-
-					if (!existing) {
-						throw ctx.error(404, { message: "Form not found" });
-					}
-
-					// Call before hook
-					if (config.hooks?.onBeforeFormDeleted) {
-						await runHook(
-							() => config.hooks!.onBeforeFormDeleted!(id, context),
-							ctx.error,
-							"Delete operation denied",
-						);
-					}
-
-					// Delete associated submissions first (cascade)
-					await adapter.delete({
-						model: "formSubmission",
-						where: [{ field: "formId", value: id, operator: "eq" as const }],
-					});
-
-					await adapter.delete({
-						model: "form",
-						where: [{ field: "id", value: id, operator: "eq" as const }],
-					});
-
-					// Call after hook
-					if (config.hooks?.onAfterFormDeleted) {
-						await config.hooks.onAfterFormDeleted(id, context);
-					}
-
-					return { success: true };
-				},
+				{ method: "DELETE", requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.deleteForm({ id: ctx.params.id }, ctx.request),
+						ctx.error,
+					),
 			);
-
-			// ========== Form Submission Endpoints ==========
-
 			const submitForm = createEndpoint(
 				"/forms/:slug/submit",
 				{
 					method: "POST",
-					params: z.object({ slug: z.string() }),
-					body: z.object({
-						// Use passthrough object for dynamic form data
-						data: z.object({}).passthrough(),
-					}),
+					body: SubmitFormOperationInputSchema.pick({ data: true }),
+					requireRequest: true,
 				},
-				async (ctx) => {
-					const { slug } = ctx.params;
-					const { data } = ctx.body;
-					const baseContext = createContext(ctx.headers);
-
-					// Get form by slug
-					const form = await adapter.findOne<Form>({
-						model: "form",
-						where: [{ field: "slug", value: slug, operator: "eq" as const }],
-					});
-
-					if (!form) {
-						throw ctx.error(404, { message: "Form not found" });
-					}
-
-					// Check if form is active
-					if (form.status !== "active") {
-						throw ctx.error(400, {
-							message: "Form is not accepting submissions",
-						});
-					}
-
-					const submissionContext = createSubmissionContext(
-						slug,
-						form.id,
-						ctx.headers,
-					);
-
-					// Validate data against form schema
-					// Use formSchemaToZod for consistent validation with the client-side,
-					// which properly handles date constraints and step metadata
-					try {
-						const jsonSchema = JSON.parse(form.schema);
-						const zodSchema = formSchemaToZod(jsonSchema);
-						const validation = zodSchema.safeParse(data);
-						if (!validation.success) {
-							throw ctx.error(400, {
-								message: "Validation failed",
-								errors: validation.error.issues,
-							});
-						}
-					} catch (error) {
-						if (error && typeof error === "object" && "code" in error) {
-							throw error; // Re-throw API errors
-						}
-						throw ctx.error(400, { message: "Invalid form data" });
-					}
-
-					// Call before submission hook - may modify data or deny.
-					// Call the hook directly so that
-					// onSubmissionError receives the original Error, not a wrapped HTTP error.
-					let finalData = data as Record<string, unknown>;
-					if (config.hooks?.onBeforeSubmission) {
-						let hookResult: unknown;
-						let originalError: Error | undefined;
-						try {
-							hookResult = await config.hooks.onBeforeSubmission(
-								slug,
-								data as Record<string, unknown>,
-								submissionContext,
-							);
-						} catch (e) {
-							originalError =
-								e instanceof Error ? e : new Error("Submission rejected");
-						}
-						if (originalError) {
-							if (config.hooks?.onSubmissionError) {
-								await config.hooks.onSubmissionError(
-									originalError,
-									slug,
-									data as Record<string, unknown>,
-									submissionContext,
-								);
-							}
-							throw ctx.error(400, { message: originalError.message });
-						}
-						if (hookResult && typeof hookResult === "object") {
-							finalData = hookResult as Record<string, unknown>;
-						}
-					}
-
-					// Create submission
-					const submission = await adapter.create<FormSubmission>({
-						model: "formSubmission",
-						data: {
-							formId: form.id,
-							data: JSON.stringify(finalData),
-							submittedAt: new Date(),
-							ipAddress: baseContext.ipAddress,
-							userAgent: baseContext.userAgent,
-						},
-					});
-
-					const serialized = serializeFormSubmission(submission);
-
-					// Call after submission hook
-					if (config.hooks?.onAfterSubmission) {
-						await config.hooks.onAfterSubmission(
-							serialized,
-							serializeForm(form),
-							submissionContext,
-						);
-					}
-
-					return {
-						...serialized,
-						form: {
-							successMessage: form.successMessage,
-							redirectUrl: form.redirectUrl,
-						},
-					};
-				},
+				(ctx) =>
+					adaptOperationToHttp(
+						() =>
+							operations.submitForm(
+								{ slug: ctx.params.slug, data: ctx.body.data },
+								ctx.request,
+							),
+						ctx.error,
+					),
 			);
-
-			// ========== Submissions Management Endpoints (Admin) ==========
-
 			const listSubmissions = createEndpoint(
 				"/forms/:formId/submissions",
 				{
 					method: "GET",
-					params: z.object({ formId: z.string() }),
 					query: listSubmissionsQuerySchema,
+					requireRequest: true,
 				},
-				async (ctx) => {
-					const { formId } = ctx.params;
-					const { limit, offset } = ctx.query;
-					const context = createContext(ctx.headers);
-
-					// Verify form exists
-					const form = await adapter.findOne<Form>({
-						model: "form",
-						where: [{ field: "id", value: formId, operator: "eq" as const }],
-					});
-
-					if (!form) {
-						throw ctx.error(404, { message: "Form not found" });
-					}
-
-					// Call before hook for auth check
-					if (config.hooks?.onBeforeListSubmissions) {
-						await runHook(
-							() => config.hooks!.onBeforeListSubmissions!(formId, context),
-							ctx.error,
-							"Access denied",
-						);
-					}
-
-					return getFormSubmissions(adapter, formId, { limit, offset });
-				},
+				(ctx) =>
+					adaptOperationToHttp(
+						() =>
+							operations.listSubmissions(
+								{ formId: ctx.params.formId, query: ctx.query },
+								ctx.request,
+							),
+						ctx.error,
+					),
 			);
-
 			const getSubmission = createEndpoint(
 				"/forms/:formId/submissions/:subId",
-				{
-					method: "GET",
-					params: z.object({ formId: z.string(), subId: z.string() }),
-				},
-				async (ctx) => {
-					const { formId, subId } = ctx.params;
-					const context = createContext(ctx.headers);
-
-					// Call before hook for access check
-					if (config.hooks?.onBeforeGetSubmission) {
-						await runHook(
-							() => config.hooks!.onBeforeGetSubmission!(subId, context),
-							ctx.error,
-							"Access denied",
-						);
-					}
-
-					const submission = await adapter.findOne<FormSubmissionWithForm>({
-						model: "formSubmission",
-						where: [{ field: "id", value: subId, operator: "eq" as const }],
-						join: { form: true },
-					});
-
-					if (!submission || submission.formId !== formId) {
-						throw ctx.error(404, { message: "Submission not found" });
-					}
-
-					return serializeFormSubmissionWithData(submission);
-				},
+				{ method: "GET", requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() =>
+							operations.getSubmission(
+								{
+									formId: ctx.params.formId,
+									submissionId: ctx.params.subId,
+								},
+								ctx.request,
+							),
+						ctx.error,
+					),
 			);
-
 			const deleteSubmission = createEndpoint(
 				"/forms/:formId/submissions/:subId",
-				{
-					method: "DELETE",
-					params: z.object({ formId: z.string(), subId: z.string() }),
-				},
-				async (ctx) => {
-					const { formId, subId } = ctx.params;
-					const context = createContext(ctx.headers);
-
-					const existing = await adapter.findOne<FormSubmission>({
-						model: "formSubmission",
-						where: [{ field: "id", value: subId, operator: "eq" as const }],
-					});
-
-					if (!existing || existing.formId !== formId) {
-						throw ctx.error(404, { message: "Submission not found" });
-					}
-
-					// Call before hook
-					if (config.hooks?.onBeforeSubmissionDeleted) {
-						await runHook(
-							() => config.hooks!.onBeforeSubmissionDeleted!(subId, context),
-							ctx.error,
-							"Delete operation denied",
-						);
-					}
-
-					await adapter.delete({
-						model: "formSubmission",
-						where: [{ field: "id", value: subId, operator: "eq" as const }],
-					});
-
-					// Call after hook
-					if (config.hooks?.onAfterSubmissionDeleted) {
-						await config.hooks.onAfterSubmissionDeleted(subId, context);
-					}
-
-					return { success: true };
-				},
+				{ method: "DELETE", requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() =>
+							operations.deleteSubmission(
+								{
+									formId: ctx.params.formId,
+									submissionId: ctx.params.subId,
+								},
+								ctx.request,
+							),
+						ctx.error,
+					),
 			);
 
 			return {
 				listForms,
-				getFormBySlug,
-				getFormById,
+				getFormBySlug: getFormBySlugEndpoint,
+				getFormById: getFormByIdEndpoint,
+				getFormForUpdate: getFormForUpdateEndpoint,
 				createForm,
 				updateForm,
 				deleteForm,
@@ -761,7 +347,7 @@ export const formBuilderBackendPlugin = (
 				listSubmissions,
 				getSubmission,
 				deleteSubmission,
-			};
+			} as const;
 		},
 	});
 

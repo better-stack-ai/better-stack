@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-	CanAccess,
 	useNotify,
+	PermissionAccess,
 	usePluginOverrides,
 	useBasePath,
 	useStack,
@@ -51,6 +51,7 @@ import type { FormBuilderPluginOverrides } from "../../overrides";
 import { PageWrapper } from "../shared/page-wrapper";
 import { EmptyState } from "../shared/empty-state";
 import { Pagination } from "../shared/pagination";
+import { formBuilderPermissions } from "../../../permissions";
 
 // URL-synced search state: `?q=...` while typing (history: replace), clean
 // URL when the query is empty (the default is omitted from the URL).
@@ -154,7 +155,10 @@ export function FormListPage() {
 	};
 
 	const newFormButton = (
-		<CanAccess resource="form-builder:form" action="create">
+		<PermissionAccess
+			permission={formBuilderPermissions.form.create()}
+			legacyPermission={{ resource: "form-builder:form", action: "create" }}
+		>
 			<Button asChild>
 				<LinkComponent href={`${basePath}/forms/new`}>
 					<Plus className="mr-2 h-4 w-4" />
@@ -162,7 +166,7 @@ export function FormListPage() {
 						t("formBuilder.common.buttonNewForm", "New Form")}
 				</LinkComponent>
 			</Button>
-		</CanAccess>
+		</PermissionAccess>
 	);
 
 	return (
@@ -284,10 +288,25 @@ export function FormListPage() {
 														</Button>
 													</DropdownMenuTrigger>
 													<DropdownMenuContent align="end">
-														<CanAccess
-															resource="form-builder:form"
-															action="update"
-															params={{ id: form.id }}
+														<PermissionAccess
+															permission={formBuilderPermissions.form.update({
+																formId: form.id,
+																...(form.createdBy
+																	? { ownerId: form.createdBy }
+																	: {}),
+																status: form.status,
+															})}
+															legacyPermission={{
+																resource: "form-builder:form",
+																action: "update",
+																params: {
+																	id: form.id,
+																	...(form.createdBy
+																		? { ownerId: form.createdBy }
+																		: {}),
+																	status: form.status,
+																},
+															}}
 														>
 															<DropdownMenuItem
 																onClick={() =>
@@ -300,11 +319,28 @@ export function FormListPage() {
 																{localization?.FORM_BUILDER_LIST_ACTION_EDIT ??
 																	t("formBuilder.list.actionEdit", "Edit")}
 															</DropdownMenuItem>
-														</CanAccess>
-														<CanAccess
-															resource="form-builder:submission"
-															action="read"
-															params={{ formId: form.id }}
+														</PermissionAccess>
+														<PermissionAccess
+															permission={formBuilderPermissions.submission.read(
+																{
+																	scope: "collection",
+																	formId: form.id,
+																	formExists: true,
+																	...(form.createdBy
+																		? { ownerId: form.createdBy }
+																		: {}),
+																},
+															)}
+															legacyPermission={{
+																resource: "form-builder:submission",
+																action: "read",
+																params: {
+																	formId: form.id,
+																	...(form.createdBy
+																		? { ownerId: form.createdBy }
+																		: {}),
+																},
+															}}
 														>
 															<DropdownMenuItem
 																onClick={() =>
@@ -320,11 +356,26 @@ export function FormListPage() {
 																		"Submissions",
 																	)}
 															</DropdownMenuItem>
-														</CanAccess>
-														<CanAccess
-															resource="form-builder:form"
-															action="delete"
-															params={{ id: form.id }}
+														</PermissionAccess>
+														<PermissionAccess
+															permission={formBuilderPermissions.form.delete({
+																formId: form.id,
+																...(form.createdBy
+																	? { ownerId: form.createdBy }
+																	: {}),
+																status: form.status,
+															})}
+															legacyPermission={{
+																resource: "form-builder:form",
+																action: "delete",
+																params: {
+																	id: form.id,
+																	...(form.createdBy
+																		? { ownerId: form.createdBy }
+																		: {}),
+																	status: form.status,
+																},
+															}}
 														>
 															<DropdownMenuItem
 																className="text-destructive"
@@ -334,7 +385,7 @@ export function FormListPage() {
 																{localization?.FORM_BUILDER_LIST_ACTION_DELETE ??
 																	t("formBuilder.list.actionDelete", "Delete")}
 															</DropdownMenuItem>
-														</CanAccess>
+														</PermissionAccess>
 													</DropdownMenuContent>
 												</DropdownMenu>
 											</TableCell>

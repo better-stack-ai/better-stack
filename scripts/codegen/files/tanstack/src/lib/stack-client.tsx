@@ -109,6 +109,7 @@ export const getStackClient = (
 				siteBaseURL: baseURL,
 				siteBasePath: "/pages",
 				queryClient: queryClient,
+				headers: options?.headers,
 			}),
 			"ui-builder": uiBuilderClientPlugin({
 				apiBaseURL: baseURL,

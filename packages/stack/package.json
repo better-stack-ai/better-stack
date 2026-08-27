@@ -21,7 +21,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "NODE_OPTIONS='--max-old-space-size=8192' unbuild --clean && node ./scripts/postbuild.cjs",
+    "build": "NODE_OPTIONS='--max-old-space-size=12288' unbuild --clean && node ./scripts/postbuild.cjs",
     "build:analyze": "NODE_OPTIONS='--max-old-space-size=8192' ANALYZE=1 unbuild --clean && node ./scripts/postbuild.cjs",
     "stub": "unbuild --stub",
     "test": "vitest",
@@ -378,6 +378,16 @@
       "require": {
         "types": "./dist/plugins/form-builder/api/index.d.cts",
         "default": "./dist/plugins/form-builder/api/index.cjs"
+      }
+    },
+    "./plugins/form-builder/permissions": {
+      "import": {
+        "types": "./dist/plugins/form-builder/permissions.d.ts",
+        "default": "./dist/plugins/form-builder/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/form-builder/permissions.d.cts",
+        "default": "./dist/plugins/form-builder/permissions.cjs"
       }
     },
     "./plugins/form-builder/client": {
@@ -841,6 +851,9 @@
       ],
       "plugins/form-builder/api": [
         "./dist/plugins/form-builder/api/index.d.ts"
+      ],
+      "plugins/form-builder/permissions": [
+        "./dist/plugins/form-builder/permissions.d.ts"
       ],
       "plugins/form-builder/client": [
         "./dist/plugins/form-builder/client/index.d.ts"

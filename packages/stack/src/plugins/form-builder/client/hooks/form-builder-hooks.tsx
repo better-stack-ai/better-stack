@@ -4,11 +4,14 @@ import type {
 	ResourceFormConfig,
 	ResourceFormResult,
 } from "@btst/stack/plugins/client/hooks";
+import { useIdentity } from "@btst/stack/context";
 import type {
 	SerializedForm,
 	PaginatedForms,
 	SerializedFormSubmissionWithData,
+	SerializedFormSubmissionSummary,
 	PaginatedFormSubmissions,
+	SubmissionListFormContext,
 } from "../../types";
 import { formBuilder } from "./form-builder-resource";
 
@@ -150,6 +153,21 @@ export function useSuspenseFormById(id: string): {
 }
 
 /**
+ * Fetches editor data through the same update permission as the edit route.
+ */
+export function useSuspenseFormForUpdate(id: string): {
+	form: SerializedForm | null;
+	refetch: () => Promise<unknown>;
+} {
+	const { data, refetch } = formBuilder.forms.forUpdate.useSuspense([id]);
+
+	return {
+		form: data ?? null,
+		refetch,
+	};
+}
+
+/**
  * Hook for fetching a form by slug (public)
  */
 export function useFormBySlug(slug: string): {
@@ -252,7 +270,8 @@ export interface UseSubmissionsOptions {
 }
 
 export interface UseSubmissionsResult {
-	submissions: SerializedFormSubmissionWithData[];
+	form: SubmissionListFormContext | null;
+	submissions: SerializedFormSubmissionSummary[];
 	total: number;
 	isLoading: boolean;
 	error: Error | null;
@@ -283,11 +302,14 @@ export function useSubmissions(
 		enabled: enabled && !!formId,
 	});
 
-	const { items, total } = flattenPages<SerializedFormSubmissionWithData>(
+	const { items, total } = flattenPages<SerializedFormSubmissionSummary>(
 		data?.pages as PaginatedFormSubmissions[] | undefined,
 	);
+	const form =
+		(data?.pages as PaginatedFormSubmissions[] | undefined)?.[0]?.form ?? null;
 
 	return {
+		form,
 		submissions: items,
 		total,
 		isLoading,
@@ -306,7 +328,8 @@ export function useSuspenseSubmissions(
 	formId: string,
 	options: UseSubmissionsOptions = {},
 ): {
-	submissions: SerializedFormSubmissionWithData[];
+	form: SubmissionListFormContext | null;
+	submissions: SerializedFormSubmissionSummary[];
 	total: number;
 	loadMore: () => Promise<unknown>;
 	hasMore: boolean;
@@ -318,16 +341,57 @@ export function useSuspenseSubmissions(
 	const { data, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
 		formBuilder.formSubmissions.list.useSuspenseInfinite([{ formId, limit }]);
 
-	const { items, total } = flattenPages<SerializedFormSubmissionWithData>(
+	const { items, total } = flattenPages<SerializedFormSubmissionSummary>(
 		data.pages as PaginatedFormSubmissions[],
 	);
+	const form = (data.pages as PaginatedFormSubmissions[])[0]?.form ?? null;
 
 	return {
+		form,
 		submissions: items,
 		total,
 		loadMore: fetchNextPage,
 		hasMore: !!hasNextPage,
 		isLoadingMore: isFetchingNextPage,
+		refetch,
+	};
+}
+
+export interface UseSubmissionOptions {
+	/** Whether to enable the query (default: true). */
+	enabled?: boolean;
+}
+
+/**
+ * Fetch one submission through its record-scoped authorization rule.
+ */
+export function useSubmission(
+	formId: string,
+	submissionId?: string,
+	options: UseSubmissionOptions = {},
+): {
+	submission: SerializedFormSubmissionWithData | null;
+	isLoading: boolean;
+	error: Error | null;
+	refetch: () => void;
+} {
+	const { identity, isPending: isIdentityPending } = useIdentity();
+	const { data, isLoading, error, refetch } =
+		formBuilder.formSubmissions.detail.use(
+			[formId, submissionId ?? "", identity],
+			{
+				enabled:
+					(options.enabled ?? true) &&
+					!isIdentityPending &&
+					!!formId &&
+					!!submissionId,
+			},
+		);
+
+	return {
+		submission: data ?? null,
+		isLoading,
+		error,
 		refetch,
 	};
 }

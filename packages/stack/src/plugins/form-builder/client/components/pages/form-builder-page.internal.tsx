@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
 	useNotify,
+	PermissionAccess,
 	usePluginOverrides,
 	useBasePath,
 	useStack,
@@ -22,10 +23,12 @@ import { ArrowLeft, Save } from "lucide-react";
 import { FormBuilder } from "@workspace/ui/components/form-builder";
 import type { JSONSchema } from "@workspace/ui/components/form-builder/types";
 
-import { useSuspenseFormById, useFormBuilderForm } from "../../hooks";
+import { useSuspenseFormForUpdate, useFormBuilderForm } from "../../hooks";
 import type { FormBuilderPluginOverrides } from "../../overrides";
 import { slugify } from "../../../utils";
 import type { SerializedForm } from "../../../types";
+import { formBuilderPermissions } from "../../../permissions";
+import { NotFoundPage } from "./404-page";
 
 export interface FormBuilderPageProps {
 	id?: string;
@@ -45,10 +48,11 @@ export function FormBuilderPage({ id }: FormBuilderPageProps) {
 
 /**
  * Component for editing an existing form.
- * Uses useSuspenseFormById unconditionally since id is always defined.
+ * Uses the update-authorized editor query unconditionally since id is defined.
  */
 function EditFormBuilderPage({ id }: { id: string }) {
-	const { form: existingForm } = useSuspenseFormById(id);
+	const { form: existingForm } = useSuspenseFormForUpdate(id);
+	if (!existingForm) return <NotFoundPage />;
 	return <FormBuilderPageContent id={id} existingForm={existingForm} />;
 }
 
@@ -89,7 +93,7 @@ function FormBuilderPageContent({
 	const [name, setName] = useState(existingForm?.name || "");
 	const [slug, setSlug] = useState(existingForm?.slug || "");
 	const [status, setStatus] = useState<"active" | "inactive" | "archived">(
-		(existingForm?.status as "active" | "inactive" | "archived") || "active",
+		existingForm?.status || "active",
 	);
 	const [schema, setSchema] = useState<JSONSchema | undefined>(() => {
 		if (existingForm?.schema) {
@@ -196,6 +200,21 @@ function FormBuilderPageContent({
 		if (!error) return undefined;
 		return Array.isArray(error) ? error[0] : error;
 	};
+	const saveButton = (
+		<div className="ml-auto">
+			<Button onClick={handleSave} disabled={isSaving}>
+				<Save className="mr-2 h-4 w-4" />
+				{isSaving
+					? (localization?.FORM_BUILDER_STATUS_SAVING ??
+						t("formBuilder.common.statusSaving", "Saving..."))
+					: id
+						? (localization?.FORM_BUILDER_BUTTON_SAVE ??
+							t("formBuilder.common.buttonSave", "Save"))
+						: (localization?.FORM_BUILDER_BUTTON_CREATE ??
+							t("formBuilder.common.buttonCreate", "Create"))}
+			</Button>
+		</div>
+	);
 
 	return (
 		<div className="flex h-full flex-col" data-testid="form-builder-page">
@@ -283,19 +302,40 @@ function FormBuilderPageContent({
 					</Select>
 				</div>
 
-				<div className="ml-auto">
-					<Button onClick={handleSave} disabled={isSaving}>
-						<Save className="mr-2 h-4 w-4" />
-						{isSaving
-							? (localization?.FORM_BUILDER_STATUS_SAVING ??
-								t("formBuilder.common.statusSaving", "Saving..."))
-							: id
-								? (localization?.FORM_BUILDER_BUTTON_SAVE ??
-									t("formBuilder.common.buttonSave", "Save"))
-								: (localization?.FORM_BUILDER_BUTTON_CREATE ??
-									t("formBuilder.common.buttonCreate", "Create"))}
-					</Button>
-				</div>
+				{id && existingForm ? (
+					<PermissionAccess
+						permission={formBuilderPermissions.form.update({
+							formId: existingForm.id,
+							...(existingForm.createdBy
+								? { ownerId: existingForm.createdBy }
+								: {}),
+							status: existingForm.status,
+						})}
+						legacyPermission={{
+							resource: "form-builder:form",
+							action: "update",
+							params: {
+								id: existingForm.id,
+								...(existingForm.createdBy
+									? { ownerId: existingForm.createdBy }
+									: {}),
+								status: existingForm.status,
+							},
+						}}
+					>
+						{saveButton}
+					</PermissionAccess>
+				) : !id ? (
+					<PermissionAccess
+						permission={formBuilderPermissions.form.create()}
+						legacyPermission={{
+							resource: "form-builder:form",
+							action: "create",
+						}}
+					>
+						{saveButton}
+					</PermissionAccess>
+				) : null}
 			</div>
 
 			{/* Form Builder */}
