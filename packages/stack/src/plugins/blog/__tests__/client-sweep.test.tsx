@@ -250,6 +250,71 @@ describe("Blog route authorization errors", () => {
 		expect(navigate).toHaveBeenCalledWith("/login");
 		expect(texts()).not.toContain("Something went wrong");
 	});
+
+	it("treats a route-data 401 as authoritative over a stale client identity", async () => {
+		const navigate = vi.fn();
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const ProtectedQueryPage = () => {
+			throw Object.assign(new Error("Session expired"), { statusCode: 401 });
+		};
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={{ navigate }}
+				overrides={{ blog: {} }}
+				auth={{
+					getIdentity: () => ({ id: "stale-user", role: "user" }),
+					loginPath: "/login",
+				}}
+				initialIdentity={{ id: "stale-user", role: "user" }}
+			>
+				<ComposedRoute
+					path="/blog/example/edit"
+					PageComponent={ProtectedQueryPage}
+					ErrorComponent={DefaultError}
+					LoadingComponent={() => null}
+					onError={() => {}}
+				/>
+			</StackProvider>,
+		);
+
+		expect(navigate).toHaveBeenCalledWith("/login");
+		expect(texts()).not.toContain("Something went wrong");
+	});
+
+	it("redirects an authoritative route-data 401 while client identity is pending", async () => {
+		const navigate = vi.fn();
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const ProtectedQueryPage = () => {
+			throw Object.assign(new Error("Authentication required"), {
+				statusCode: 401,
+			});
+		};
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={{ navigate }}
+				overrides={{ blog: {} }}
+				auth={{
+					getIdentity: () => new Promise(() => {}),
+					loginPath: "/login",
+				}}
+			>
+				<ComposedRoute
+					path="/blog/example/edit"
+					PageComponent={ProtectedQueryPage}
+					ErrorComponent={DefaultError}
+					LoadingComponent={() => null}
+					onError={() => {}}
+				/>
+			</StackProvider>,
+		);
+
+		expect(navigate).toHaveBeenCalledWith("/login");
+		expect(texts()).not.toContain("Something went wrong");
+	});
 });
 
 describe("EditPostForm operation descriptor controls", () => {

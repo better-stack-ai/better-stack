@@ -116,6 +116,12 @@ export interface UpdatePostInput {
 	tags?: TagInput[];
 }
 
+/** Optional atomic preconditions for a post update. */
+export interface UpdatePostOptions {
+	/** Update only when the stored publish state still matches this value. */
+	expectedPublished?: boolean;
+}
+
 /**
  * Create a new blog post with optional tag associations.
  * Pure DB function — no hooks, no HTTP context. Safe for server-side and SSG use.
@@ -170,7 +176,8 @@ export async function createPost(
 
 /**
  * Update an existing blog post and reconcile its tag associations.
- * Returns `null` if no post with the given `id` exists.
+ * Returns `null` if no post with the given `id` exists or an optional state
+ * precondition no longer matches.
  * Pure DB function — no hooks, no HTTP context. Safe for server-side use.
  *
  * @remarks **Security:** Authorization hooks (e.g. `onBeforeUpdatePost`) are NOT
@@ -180,18 +187,30 @@ export async function createPost(
  * @param adapter - The database adapter
  * @param id - The post ID to update
  * @param input - Partial post data to apply; `slug` must be pre-slugified if provided
+ * @param options - Optional state that must still match when the write executes
  */
 export async function updatePost(
 	adapter: Adapter,
 	id: string,
 	input: UpdatePostInput,
+	options?: UpdatePostOptions,
 ): Promise<Post | null> {
 	const { tags: tagInputs, ...postData } = input;
 
 	return adapter.transaction(async (tx) => {
 		const updatedPost = await tx.update<Post>({
 			model: "post",
-			where: [{ field: "id", value: id }],
+			where: [
+				{ field: "id", value: id },
+				...(options?.expectedPublished === undefined
+					? []
+					: [
+							{
+								field: "published" as const,
+								value: options.expectedPublished,
+							},
+						]),
+			],
 			update: {
 				...postData,
 				updatedAt: new Date(),

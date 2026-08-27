@@ -349,6 +349,16 @@ function transitionFor(
 	return requestedPublished ? "publish" : "unpublish";
 }
 
+function expectedPublishedForUpdate(
+	requestedPublished: boolean | undefined,
+	transition: UpdateFacts["publish"],
+): boolean | undefined {
+	if (requestedPublished === undefined) return undefined;
+	if (transition === "publish") return false;
+	if (transition === "unpublish") return true;
+	return requestedPublished;
+}
+
 async function readFactsForList(
 	adapter: Adapter,
 	input: DeepReadonly<ListPostsInput>,
@@ -392,6 +402,29 @@ function serializeListResult(result: Awaited<ReturnType<typeof getAllPosts>>) {
 		...(result.limit !== undefined ? { limit: result.limit } : {}),
 		...(result.offset !== undefined ? { offset: result.offset } : {}),
 	};
+}
+
+function assertDetailReadMatchesFacts(
+	input: DeepReadonly<ListPostsInput>,
+	facts: DeepReadonly<ReadFacts>,
+	result: SerializedPostListResult,
+) {
+	if (!input.slug || facts.scope !== "post") return;
+	const stateChanged = result.items.some(
+		(post) =>
+			!facts.exists ||
+			post.id !== facts.id ||
+			post.slug !== facts.slug ||
+			(post.authorId ?? undefined) !== facts.authorId ||
+			post.published !== facts.published,
+	);
+	if (stateChanged) {
+		throw new BlogOperationError(
+			409,
+			"Post visibility changed while authorization was being evaluated. Retry the read.",
+			"POST_READ_STATE_CHANGED",
+		);
+	}
 }
 
 async function findNextPreviousPosts(adapter: Adapter, date: Date) {
@@ -457,8 +490,11 @@ export function createBlogOperations(
 		before: async (context) => {
 			await hooks?.onBeforeListPosts?.(context.input, listContext(context));
 		},
-		execute: async ({ input }) =>
-			serializeListResult(await getAllPosts(adapter, input)),
+		execute: async ({ input, facts }) => {
+			const result = serializeListResult(await getAllPosts(adapter, input));
+			assertDetailReadMatchesFacts(input, facts, result);
+			return result;
+		},
 		after: async (context) => {
 			const base = listContext(context);
 			const lifecycleContext = Object.freeze({
@@ -554,7 +590,7 @@ export function createBlogOperations(
 				updateContext(context),
 			);
 		},
-		execute: async ({ input }) => {
+		execute: async ({ input, facts }) => {
 			const {
 				tags,
 				slug: rawSlug,
@@ -571,13 +607,35 @@ export function createBlogOperations(
 					"INVALID_SLUG",
 				);
 			}
-			const updated = await updatePostMutation(adapter, input.id, {
-				...postData,
-				...(slug ? { slug } : {}),
-				tags: [...(tags ?? [])],
-				...(publishedAt ? { publishedAt: new Date(publishedAt) } : {}),
-			});
+			const expectedPublished = expectedPublishedForUpdate(
+				input.data.published,
+				facts.publish,
+			);
+			const updated = await updatePostMutation(
+				adapter,
+				input.id,
+				{
+					...postData,
+					...(slug ? { slug } : {}),
+					tags: [...(tags ?? [])],
+					...(publishedAt ? { publishedAt: new Date(publishedAt) } : {}),
+				},
+				{ expectedPublished },
+			);
 			if (!updated) {
+				if (
+					expectedPublished !== undefined &&
+					(await adapter.findOne<Post>({
+						model: "post",
+						where: [{ field: "id", value: input.id }],
+					}))
+				) {
+					throw new BlogOperationError(
+						409,
+						"Post changed while authorization was being evaluated. Retry the update.",
+						"POST_STATE_CHANGED",
+					);
+				}
 				throw new BlogOperationError(404, "Post not found", "POST_NOT_FOUND");
 			}
 			return serializeOperationPost(updated);

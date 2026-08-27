@@ -370,6 +370,13 @@ validated query (and the matched post for a slug), create facts come from the
 validated publish intent, and the public navigation/tag operations declare
 their fixed facts explicitly.
 
+Post-detail reads verify that any returned row still matches the authoritative
+existence, identity, author, and publish facts used for authorization. When an
+update includes `published`, the write atomically requires the publish state
+observed during authorization to still match. A concurrent security-relevant
+change returns HTTP 409 (`POST_READ_STATE_CHANGED` or `POST_STATE_CHANGED`)
+instead of using stale facts; retry the operation against the current post.
+
 For migration compatibility, the string-based RC client provider keeps the
 previously public published-list, published-detail, and tag routes open. Its
 temporary descriptor-to-string mapping still applies to drafts and mutation

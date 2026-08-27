@@ -155,13 +155,7 @@ function RouteErrorFallback({
 	const stack = useStackOrNull();
 	const loginPath = auth?.provider.loginPath;
 	const navigate = stack?.router?.navigate;
-	const shouldRedirect =
-		getErrorStatus(error) === 401 &&
-		!!auth &&
-		!auth.isPending &&
-		!auth.error &&
-		auth.identity === null &&
-		!!loginPath;
+	const shouldRedirect = getErrorStatus(error) === 401 && !!auth && !!loginPath;
 
 	useEffect(() => {
 		if (!shouldRedirect || !loginPath) return;

@@ -486,6 +486,67 @@ describe("Blog operation-first authorization", () => {
 		expect((await missing.json()).items).toEqual([]);
 	});
 
+	it("does not expose a draft created after a missing post detail is authorized", async () => {
+		let backend: ReturnType<typeof makeBackend>;
+		backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeListPosts: async (filter) => {
+					if (filter.slug !== "new-draft") return;
+					await backend.adapter.create<Post>({
+						model: "post",
+						data: {
+							title: "New draft",
+							slug: "new-draft",
+							content: "Private",
+							excerpt: "Private",
+							published: false,
+							tags: [],
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						},
+					});
+				},
+			},
+		});
+
+		await expect(
+			backend
+				.forRequest(request("/posts?slug=new-draft"))
+				.api.blog.listPosts({ slug: "new-draft" }),
+		).rejects.toMatchObject({
+			statusCode: 409,
+			code: "POST_READ_STATE_CHANGED",
+		});
+	});
+
+	it("does not expose a post unpublished after public detail authorization", async () => {
+		let backend: ReturnType<typeof makeBackend>;
+		backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeListPosts: async (filter) => {
+					if (filter.slug !== "newly-private") return;
+					await backend.adapter.update<Post>({
+						model: "post",
+						where: [{ field: "slug", value: filter.slug }],
+						update: { published: false },
+					});
+				},
+			},
+		});
+		await seedPost(backend, "newly-private");
+
+		await expect(
+			backend
+				.forRequest(request("/posts?slug=newly-private"))
+				.api.blog.listPosts({ slug: "newly-private" }),
+		).rejects.toMatchObject({
+			statusCode: 409,
+			code: "POST_READ_STATE_CHANGED",
+		});
+	});
+
 	it("keeps public navigation and tags on the same HTTP/request/internal operations", async () => {
 		const events: string[] = [];
 		const getIdentity = vi.fn(() => null);
@@ -721,6 +782,45 @@ describe("Blog operation-first authorization", () => {
 			data: createBody,
 		});
 		expect(events).toContain("update:before:internal:unpublish");
+	});
+
+	it("does not apply a publish update when authoritative state changes after authorization", async () => {
+		let backend: ReturnType<typeof makeBackend>;
+		backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeUpdatePost: async (id) => {
+					await backend.adapter.update<Post>({
+						model: "post",
+						where: [{ field: "id", value: id }],
+						update: { published: false },
+					});
+				},
+			},
+		});
+		const post = await seedPost(backend, "publish-race", "author-1");
+
+		await expect(
+			backend
+				.forRequest(
+					request(`/posts/${post.id}`, {
+						identity: { id: "author-1", role: "user" },
+					}),
+				)
+				.api.blog.updatePost({
+					id: post.id,
+					data: { ...protectedCreateInput, published: true },
+				}),
+		).rejects.toMatchObject({
+			statusCode: 409,
+			code: "POST_STATE_CHANGED",
+		});
+		expect(
+			await backend.adapter.findOne<Post>({
+				model: "post",
+				where: [{ field: "id", value: post.id }],
+			}),
+		).toMatchObject({ published: false });
 	});
 });
 
