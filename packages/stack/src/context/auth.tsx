@@ -81,65 +81,61 @@ export function StackAuthBoundary({
 		identity: StackIdentity | null;
 		isPending: boolean;
 		error?: Error;
-		sourceProvider: StackAuthProvider;
-		sourceInitialIdentity: StackIdentity | null | undefined;
+		sourceGeneration: object;
 	};
 
 	const hydratedState = useMemo(
 		() => createInitialAuthState(provider, initialIdentity),
 		[provider, initialIdentity],
 	);
+	const sourceGeneration = useMemo(() => ({}), [provider, initialIdentity]);
 	const [state, setState] = useState<BoundaryState>(() => ({
 		...hydratedState,
-		sourceProvider: provider,
-		sourceInitialIdentity: initialIdentity,
+		sourceGeneration,
 	}));
-	const sourceChanged =
-		state.sourceProvider !== provider ||
-		state.sourceInitialIdentity !== initialIdentity;
+	const sourceChanged = state.sourceGeneration !== sourceGeneration;
 	const currentState = sourceChanged ? hydratedState : state;
-	const sourceRef = useRef({ provider, initialIdentity });
-	sourceRef.current = { provider, initialIdentity };
+	const latestResolutionGeneration = useRef(0);
+	const activeSourceGeneration = useRef<object | null>(sourceGeneration);
+
+	useEffect(() => {
+		activeSourceGeneration.current = sourceGeneration;
+		return () => {
+			if (activeSourceGeneration.current === sourceGeneration) {
+				activeSourceGeneration.current = null;
+			}
+		};
+	}, [sourceGeneration]);
 
 	useEffect(() => {
 		if (!sourceChanged) return;
 		setState({
 			...hydratedState,
-			sourceProvider: provider,
-			sourceInitialIdentity: initialIdentity,
+			sourceGeneration,
 		});
-	}, [hydratedState, initialIdentity, provider, sourceChanged]);
+	}, [hydratedState, sourceChanged, sourceGeneration]);
 
 	const refetch = useCallback(async () => {
-		const sourceInitialIdentity = initialIdentity;
+		const resolutionGeneration = ++latestResolutionGeneration.current;
+		const isLatestResolution = () =>
+			latestResolutionGeneration.current === resolutionGeneration &&
+			activeSourceGeneration.current === sourceGeneration;
 		try {
 			const identity = await provider.getIdentity();
-			if (
-				sourceRef.current.provider !== provider ||
-				sourceRef.current.initialIdentity !== sourceInitialIdentity
-			) {
-				return;
-			}
+			if (!isLatestResolution()) return;
 			setState({
 				identity: identity ?? null,
 				isPending: false,
-				sourceProvider: provider,
-				sourceInitialIdentity,
+				sourceGeneration,
 			});
 		} catch (error) {
-			if (
-				sourceRef.current.provider !== provider ||
-				sourceRef.current.initialIdentity !== sourceInitialIdentity
-			) {
-				return;
-			}
+			if (!isLatestResolution()) return;
 			if (isSchemaBoundStackAuthProvider(provider)) {
 				setState({
 					identity: null,
 					isPending: false,
 					error: error instanceof Error ? error : new Error(String(error)),
-					sourceProvider: provider,
-					sourceInitialIdentity,
+					sourceGeneration,
 				});
 				return;
 			}
@@ -147,11 +143,10 @@ export function StackAuthBoundary({
 			setState({
 				identity: null,
 				isPending: false,
-				sourceProvider: provider,
-				sourceInitialIdentity,
+				sourceGeneration,
 			});
 		}
-	}, [initialIdentity, provider]);
+	}, [provider, sourceGeneration]);
 
 	useEffect(() => {
 		if (initialIdentity !== undefined) return;

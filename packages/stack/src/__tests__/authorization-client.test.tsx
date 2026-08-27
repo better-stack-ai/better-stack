@@ -344,6 +344,59 @@ describe("createClientAuth", () => {
 		expect(secondResolver).not.toHaveBeenCalled();
 	});
 
+	it("keeps the newest result when same-source identity resolutions overlap", async () => {
+		let finishFirstResolution: ((identity: { id: string }) => void) | undefined;
+		let finishSecondResolution:
+			| ((identity: { id: string }) => void)
+			| undefined;
+		const getIdentity = vi
+			.fn<() => Promise<{ id: string }>>()
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						finishFirstResolution = resolve;
+					}),
+			)
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						finishSecondResolution = resolve;
+					}),
+			);
+		const provider = { getIdentity };
+		let identityState: ReturnType<typeof useIdentity> | undefined;
+
+		function Probe() {
+			identityState = useIdentity();
+			return null;
+		}
+
+		await render(
+			<StackProvider basePath="/pages" auth={provider}>
+				<Probe />
+			</StackProvider>,
+		);
+		expect(getIdentity).toHaveBeenCalledOnce();
+
+		let secondResolution: Promise<void> | undefined;
+		await act(async () => {
+			secondResolution = identityState?.refetch();
+		});
+		expect(getIdentity).toHaveBeenCalledTimes(2);
+
+		await act(async () => {
+			finishSecondResolution?.({ id: "newest-user" });
+			await secondResolution;
+		});
+		expect(identityState?.identity).toEqual({ id: "newest-user" });
+
+		await act(async () => {
+			finishFirstResolution?.({ id: "stale-user" });
+			await Promise.resolve();
+		});
+		expect(identityState?.identity).toEqual({ id: "newest-user" });
+	});
+
 	it("surfaces an invalid hydrated identity as an identity error", async () => {
 		const getIdentity = vi.fn(() => ({
 			id: "browser-user",
