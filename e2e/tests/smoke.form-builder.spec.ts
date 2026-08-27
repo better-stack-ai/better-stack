@@ -316,53 +316,51 @@ test.describe("Form Builder Plugin - Admin Pages", () => {
 		);
 	});
 
-	test("view submissions page", async ({ page }) => {
+	test("loads submission contents only after the record View action", async ({
+		page,
+		request,
+	}) => {
 		const errors: string[] = [];
 		page.on("console", (msg) => {
 			if (msg.type() === "error") errors.push(msg.text());
 		});
 
-		// First create a form
-		await page.goto("/pages/forms/new", { waitUntil: "networkidle" });
-		await expect(page.getByTestId("form-builder-page")).toBeVisible({
-			timeout: 30000,
+		const formSlug = `submissions-test-form-${testRunId}`;
+		const createResponse = await request.post("/api/data/forms", {
+			headers: { "content-type": "application/json", ...mockAuthHeaders() },
+			data: {
+				name: `Submissions Test Form ${testRunId}`,
+				slug: formSlug,
+				schema: JSON.stringify({
+					type: "object",
+					properties: { name: { type: "string" } },
+					required: ["name"],
+				}),
+				status: "active",
+			},
 		});
+		expect(createResponse.ok()).toBe(true);
+		const createdForm = (await createResponse.json()) as { id: string };
 
-		const formName = `Submissions Test Form ${testRunId}`;
-		await page.getByPlaceholder("Enter form name").fill(formName);
+		const secret = `private-answer-${testRunId}`;
+		const submitResponse = await request.post(
+			`/api/data/forms/${formSlug}/submit`,
+			{
+				headers: { "content-type": "application/json" },
+				data: { data: { name: secret } },
+			},
+		);
+		expect(submitResponse.ok()).toBe(true);
 
-		// Find palette items
-		const emailItem = getPaletteItem(page, "Email", true);
-		const dropArea = getCanvasDropZone(page);
-		const canvasArea = getCanvas(page);
-
-		// Add a field
-		await expect(emailItem).toBeVisible({ timeout: 5000 });
-		await emailItem.dragTo(dropArea);
-
-		await expect(
-			canvasArea.getByText("Email", { exact: true }).first(),
-		).toBeVisible();
-		await page.waitForTimeout(500); // Allow drag-and-drop state to flush
-
-		// Save the form
-		await page.getByRole("button", { name: "Create" }).click();
-		await expect(page.locator("text=/created|saved/i")).toBeVisible({
-			timeout: 10000,
+		await page.goto(`/pages/forms/${createdForm.id}/submissions`, {
+			waitUntil: "networkidle",
 		});
-
-		// Navigate to forms list
-		await page.goto("/pages/forms", { waitUntil: "networkidle" });
-
-		// Find and click submissions button on our form using the dropdown menu
-		const expectedSlug = `submissions-test-form-${testRunId.toLowerCase()}`;
-		const row = page.locator(`tr:has-text("${expectedSlug}")`);
-		await row.getByRole("button").click(); // Open dropdown menu
-		await page.getByRole("menuitem", { name: "Submissions" }).click();
-
-		// Should be on submissions page
 		await expect(page.getByTestId("submissions-page")).toBeVisible();
-		await expect(page.locator("h1")).toContainText(formName);
+		await expect(page.locator("h1")).toContainText("Submissions Test Form");
+		await expect(page.getByText(secret)).not.toBeVisible();
+
+		await page.getByRole("button", { name: "View" }).click();
+		await expect(page.getByText(secret)).toBeVisible();
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
 			[],
