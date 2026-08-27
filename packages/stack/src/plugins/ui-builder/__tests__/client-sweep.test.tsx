@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { createMemoryAdapter } from "@btst/adapter-memory";
 import { QueryClient } from "@tanstack/react-query";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -7,13 +8,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { defineAuthorization } from "@btst/stack/authorization";
 import { createClientAuth } from "@btst/stack/authorization/client";
+import { createServerAuth } from "@btst/stack/authorization/server";
 import {
 	StackProvider,
 	type StackAuthProvider,
 	type StackI18nProvider,
 } from "@btst/stack/context";
 import { createApiClient } from "@btst/stack/plugins/client";
-import type { CMSApiRouter } from "../../cms/api";
+import { stack } from "../../../api";
+import { cmsBackendPlugin, type CMSApiRouter } from "../../cms/api";
 import { cmsPermissions } from "../../cms/permissions";
 import { createCMSQueryKeys } from "../../cms/query-keys";
 import {
@@ -24,7 +27,7 @@ import { PageBuilderPage } from "../client/components/pages/page-builder-page.in
 import { PageListPage } from "../client/components/pages/page-list-page.internal";
 import { PageListPage as PageListRoutePage } from "../client/components/pages/page-list-page";
 import { createUIBuilderQueryKeys } from "../query-keys";
-import { UI_BUILDER_TYPE_SLUG } from "../schemas";
+import { UI_BUILDER_CONTENT_TYPE, UI_BUILDER_TYPE_SLUG } from "../schemas";
 import type { SerializedUIBuilderPage } from "../types";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -101,6 +104,9 @@ const publicPageAuthorization = defineAuthorization({
 	identity: z.object({ id: z.string(), role: z.literal("user") }),
 	permissions: [cmsPermissions] as const,
 	rules: ({ cms }) => [
+		cms.contentType.read.when(
+			({ facts }) => facts.contentType === UI_BUILDER_TYPE_SLUG,
+		),
 		cms.record.read.when(
 			({ facts }) =>
 				facts.contentType === UI_BUILDER_TYPE_SLUG && facts.scope === "record",
@@ -353,7 +359,51 @@ describe("UI Builder page permissions", () => {
 });
 
 describe("UI Builder public page authorization", () => {
+	it("serves a real anonymous CMS page with the shared public rules", async () => {
+		const backend = stack({
+			basePath: "/api",
+			plugins: {
+				cms: cmsBackendPlugin({ contentTypes: [UI_BUILDER_CONTENT_TYPE] }),
+			},
+			adapter: (db) => createMemoryAdapter(db)({}),
+			auth: createServerAuth({
+				authorization: publicPageAuthorization,
+				getIdentity: () => null,
+			}),
+		});
+		await backend.internal.cms.createContentItem({
+			typeSlug: UI_BUILDER_TYPE_SLUG,
+			body: {
+				slug: "home",
+				data: { layers: "[]", variables: "[]", status: "published" },
+			},
+		});
+
+		const response = await backend.handler(
+			new Request(
+				`http://localhost/api/content/${UI_BUILDER_TYPE_SLUG}?slug=home&limit=1`,
+			),
+		);
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			items: [
+				{
+					slug: "home",
+					contentType: { slug: UI_BUILDER_TYPE_SLUG },
+				},
+			],
+		});
+	});
+
 	it("renders a cold anonymous browser page when the CMS read is public", async () => {
+		expect(
+			publicPageAuthorization.can(
+				cmsPermissions.contentType.read({
+					contentType: UI_BUILDER_TYPE_SLUG,
+				}),
+				null,
+			),
+		).toBe(true);
 		expect(
 			publicPageAuthorization.can(
 				cmsPermissions.record.read({
@@ -406,6 +456,22 @@ describe("UI Builder public page authorization", () => {
 			auth,
 			initialIdentity: null,
 		});
+
+		expect(document.body.textContent).not.toContain("Public home");
+	});
+
+	it("does not render when the embedded content type is denied", async () => {
+		const recordOnlyAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [cms.record.read.allow()],
+		});
+		const auth = createClientAuth({
+			authorization: recordOnlyAuthorization,
+			getIdentity: () => null,
+		});
+
+		await renderPage(<PageRenderer slug="home" />, { auth });
 
 		expect(document.body.textContent).not.toContain("Public home");
 	});

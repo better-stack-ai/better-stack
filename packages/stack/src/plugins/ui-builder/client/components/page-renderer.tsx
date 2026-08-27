@@ -223,14 +223,21 @@ function SuspensePageRendererContent({
 			})}
 			legacyPublic
 		>
-			<LayerRenderer
-				className={className}
-				page={rootLayer}
-				componentRegistry={componentRegistry}
-				variables={variables}
-				variableValues={variableValues}
-				functionRegistry={functionRegistry}
-			/>
+			<PermissionAccess
+				permission={cmsPermissions.contentType.read({
+					contentType: UI_BUILDER_TYPE_SLUG,
+				})}
+				legacyPublic
+			>
+				<LayerRenderer
+					className={className}
+					page={rootLayer}
+					componentRegistry={componentRegistry}
+					variables={variables}
+					variableValues={variableValues}
+					functionRegistry={functionRegistry}
+				/>
+			</PermissionAccess>
 		</PermissionAccess>
 	);
 }

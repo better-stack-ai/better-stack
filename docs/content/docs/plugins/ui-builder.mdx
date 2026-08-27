@@ -499,11 +499,13 @@ The UI Builder provides multiple ways to render pages on public routes, dependin
 <Callout type="warn">
 Public rendering is an explicit CMS authorization decision. When one-rule auth
 is configured, allow `cms.record.read` when `contentType` is
-`UI_BUILDER_TYPE_SLUG` and `scope` is `"record"`. A condition on the content
-type alone also makes the admin page list public. `PageRenderer` uses the same
-CMS descriptor as the backend read; its browser check is only a presentation
-gate. The raw SSG getters/prefetch helpers are trusted lower-level APIs and must
-only be called from server/build code.
+`UI_BUILDER_TYPE_SLUG` and `scope` is `"record"`, and allow
+`cms.contentType.read` for `UI_BUILDER_TYPE_SLUG`. The latter protects the
+schema embedded in the record response. A record condition on the content type
+alone also makes the admin page list public. `PageRenderer` checks both CMS
+descriptors used by the backend read; its browser checks are only presentation
+gates. The raw SSG getters/prefetch helpers are trusted lower-level APIs and
+must only be called from server/build code.
 </Callout>
 
 | Component | Use Case | Server Component Compatible |
@@ -762,7 +764,7 @@ UI Builder uses these CMS descriptors everywhere:
 | New page route and create controls | `cms.record.create({ contentType: UI_BUILDER_TYPE_SLUG })` |
 | Existing editor, save, and edit controls | `cms.record.update({ contentType, recordId, authorId? })` |
 | Delete controls | `cms.record.delete({ contentType, recordId, authorId? })` |
-| Public `PageRenderer` | `cms.record.read({ contentType, scope: "record", recordId, authorId? })` |
+| Public `PageRenderer` | `cms.record.read({ contentType, scope: "record", recordId, authorId? })` and `cms.contentType.read({ contentType })` |
 
 Configure those rules once in the shared authorization module:
 
@@ -777,6 +779,10 @@ export const authorization = defineAuthorization({
   permissions: [cmsPermissions] as const,
   rules: ({ cms }) => [
     // Public page reads are explicit. Other CMS types can use a stricter rule.
+    cms.contentType.read.when(
+      ({ identity, facts }) =>
+        facts.contentType === UI_BUILDER_TYPE_SLUG || identity?.role === "admin",
+    ),
     cms.record.read.when(
       ({ identity, facts }) =>
         (facts.contentType === UI_BUILDER_TYPE_SLUG && facts.scope === "record") ||
@@ -792,7 +798,8 @@ export const authorization = defineAuthorization({
 })
 ```
 
-The `scope` condition makes a by-slug page render, including its not-found
+The content-type rule permits the schema embedded in the record response. The
+`scope` condition makes a by-slug page render, including its not-found
 result, without making the admin page list public. For a by-slug read, the CMS
 backend derives `scope: "record"`, then derives the matching record ID and
 ownership when a record exists.

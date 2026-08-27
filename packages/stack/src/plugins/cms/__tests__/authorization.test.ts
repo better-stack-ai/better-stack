@@ -402,6 +402,7 @@ describe("CMS operation-first authorization", () => {
 			identity: z.object({ id: z.string(), role: z.literal("user") }),
 			permissions: [cmsPermissions] as const,
 			rules: ({ cms }) => [
+				cms.contentType.read.allow(),
 				cms.record.create.when(
 					({ identity, facts }) =>
 						identity !== null && facts.contentType === "resource",
@@ -552,7 +553,9 @@ describe("CMS operation-first authorization", () => {
 			})),
 		).toEqual([
 			{ action: "create", typeSlug: "resource" },
+			{ action: "read", typeSlug: "resource" },
 			{ action: "create", typeSlug: "category" },
+			{ action: "read", typeSlug: "resource" },
 			{ action: "read", typeSlug: "resource" },
 			{ action: "read", typeSlug: "category" },
 			{ action: "read", typeSlug: "category" },
@@ -565,6 +568,7 @@ describe("CMS operation-first authorization", () => {
 			identity: z.object({ id: z.string(), role: z.literal("user") }),
 			permissions: [cmsPermissions] as const,
 			rules: ({ cms }) => [
+				cms.contentType.read.allow(),
 				cms.record.create.when(
 					({ facts }) =>
 						facts.contentType === "resource" ||
@@ -660,6 +664,7 @@ describe("CMS operation-first authorization", () => {
 			identity: z.object({ id: z.string(), role: z.literal("user") }),
 			permissions: [cmsPermissions] as const,
 			rules: ({ cms }) => [
+				cms.contentType.read.allow(),
 				cms.record.create.when(
 					({ facts }) =>
 						facts.contentType === "resource" ||
@@ -677,12 +682,14 @@ describe("CMS operation-first authorization", () => {
 			getIdentity: () => ({ id: "author-1", role: "user" as const }),
 		});
 		const authorize = baseAuth.authorize.bind(baseAuth);
-		let authorizationCalls = 0;
+		const authorizationCalls = new WeakMap<Request, number>();
 		const racingAuth: typeof baseAuth = {
 			...baseAuth,
 			async authorize(request, permissionRequest) {
 				const identity = await authorize(request, permissionRequest);
-				if (++authorizationCalls % 2 === 0) {
+				const count = (authorizationCalls.get(request) ?? 0) + 1;
+				authorizationCalls.set(request, count);
+				if (count === 3) {
 					const resourceType = await backend.adapter.findOne<ContentType>({
 						model: "contentType",
 						where: [{ field: "slug", value: "resource" }],
@@ -824,11 +831,191 @@ describe("CMS operation-first authorization", () => {
 		expect(spoofedType.status).toBe(404);
 	});
 
+	it("requires content-type read authorization before embedding record metadata", async () => {
+		const recordOnlyAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.record.read.when(({ facts }) => facts.contentType === "article"),
+			],
+		});
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createServerAuth({
+				authorization: recordOnlyAuthorization,
+				getIdentity: () => ({ id: "reader-1", role: "user" as const }),
+			}),
+			hooks: {
+				onError: () => {
+					events.push("error");
+				},
+			},
+		});
+		const record = await seedRecord(backend, { slug: "metadata-boundary" });
+
+		expect(
+			await backend.handler(request(`/content/article/${record.id}`)),
+		).toMatchObject({ status: 403 });
+		expect(
+			await backend.handler(request("/content/article?limit=1")),
+		).toMatchObject({ status: 403 });
+		expect(events).toEqual([]);
+	});
+
+	it("authorizes relation-filter targets before querying junction rows", async () => {
+		const sourceOnlyAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.contentType.read.when(
+					({ facts }) => facts.contentType === "resource",
+				),
+				cms.record.read.when(({ facts }) => facts.contentType === "resource"),
+			],
+		});
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createServerAuth({
+				authorization: sourceOnlyAuthorization,
+				getIdentity: () => ({ id: "reader-1", role: "user" as const }),
+			}),
+			hooks: {
+				onError: () => {
+					events.push("error");
+				},
+			},
+		});
+		const source = await seedRecord(backend, {
+			typeSlug: "resource",
+			slug: "relation-filter-source",
+		});
+		const target = await seedRecord(backend, {
+			typeSlug: "category",
+			slug: "private-filter-target",
+		});
+		await backend.adapter.create<ContentRelation>({
+			model: "contentRelation",
+			data: {
+				sourceId: source.id,
+				targetId: target.id,
+				fieldName: "categoryIds",
+				createdAt: new Date(),
+			},
+		});
+		const findMany = backend.adapter.findMany.bind(backend.adapter);
+		let relationReads = 0;
+		vi.spyOn(backend.adapter, "findMany").mockImplementation(async (query) => {
+			if (query.model === "contentRelation") relationReads += 1;
+			return findMany(query);
+		});
+
+		const response = await backend.handler(
+			request(
+				`/content/resource/by-relation?field=categoryIds&targetId=${target.id}`,
+			),
+		);
+		expect(response.status).toBe(403);
+		expect(relationReads).toBe(0);
+		expect(events).toEqual([]);
+	});
+
+	it("fails closed when relation-filter schemas or targets change after authorization", async () => {
+		const relationFilterAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.contentType.read.allow(),
+				cms.record.read.allow(),
+			],
+		});
+		const runRace = async (kind: "schema" | "target") => {
+			const baseAuth = createServerAuth({
+				authorization: relationFilterAuthorization,
+				getIdentity: () => ({ id: "reader-1", role: "user" as const }),
+			});
+			const authorize = baseAuth.authorize.bind(baseAuth);
+			let backend: ReturnType<typeof makeBackend>;
+			let targetId = "";
+			const calls = new WeakMap<Request, number>();
+			const racingAuth: typeof baseAuth = {
+				...baseAuth,
+				async authorize(currentRequest, permissionRequest) {
+					const identity = await authorize(currentRequest, permissionRequest);
+					const count = (calls.get(currentRequest) ?? 0) + 1;
+					calls.set(currentRequest, count);
+					if (count === 3) {
+						if (kind === "schema") {
+							const resourceType = await backend.adapter.findOne<ContentType>({
+								model: "contentType",
+								where: [{ field: "slug", value: "resource" }],
+							});
+							if (!resourceType)
+								throw new Error("Missing resource content type");
+							await backend.adapter.update<ContentType>({
+								model: "contentType",
+								where: [{ field: "id", value: resourceType.id }],
+								update: {
+									jsonSchema: JSON.stringify(zodToFormSchema(articleSchema)),
+									updatedAt: new Date(),
+								},
+							});
+						} else {
+							await backend.adapter.delete({
+								model: "contentItem",
+								where: [{ field: "id", value: targetId }],
+							});
+						}
+					}
+					return identity;
+				},
+			};
+			backend = makeBackend({ auth: racingAuth });
+			const source = await seedRecord(backend, {
+				typeSlug: "resource",
+				slug: `${kind}-race-source`,
+			});
+			const target = await seedRecord(backend, {
+				typeSlug: "category",
+				slug: `${kind}-race-target`,
+			});
+			targetId = target.id;
+			await backend.adapter.create<ContentRelation>({
+				model: "contentRelation",
+				data: {
+					sourceId: source.id,
+					targetId: target.id,
+					fieldName: "categoryIds",
+					createdAt: new Date(),
+				},
+			});
+			const response = await backend.handler(
+				request(
+					`/content/resource/by-relation?field=categoryIds&targetId=${target.id}`,
+				),
+			);
+			expect(response.status).toBe(409);
+			expect(await response.json()).toMatchObject({
+				code:
+					kind === "schema"
+						? "RELATION_SCHEMA_CHANGED"
+						: "RECORD_STATE_CHANGED",
+			});
+		};
+
+		await runRace("schema");
+		await runRace("target");
+	});
+
 	it("authorizes every populated relation target before returning its record", async () => {
 		const sourceOnlyAuthorization = defineAuthorization({
 			identity: z.object({ id: z.string(), role: z.literal("user") }),
 			permissions: [cmsPermissions] as const,
 			rules: ({ cms }) => [
+				cms.contentType.read.when(
+					({ facts }) =>
+						facts.contentType === "resource" ||
+						facts.contentType === "category",
+				),
 				cms.record.read.when(({ facts }) => facts.contentType === "resource"),
 			],
 		});
@@ -882,6 +1069,7 @@ describe("CMS operation-first authorization", () => {
 			identity: z.object({ id: z.string(), role: z.literal("user") }),
 			permissions: [cmsPermissions] as const,
 			rules: ({ cms }) => [
+				cms.contentType.read.allow(),
 				cms.record.read.when(
 					({ identity, facts }) =>
 						facts.contentType === "resource" || identity?.id === facts.authorId,
@@ -1216,6 +1404,9 @@ describe("CMS operation-first authorization", () => {
 			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
 			permissions: [cmsPermissions] as const,
 			rules: ({ cms }) => [
+				cms.contentType.read.when(
+					({ facts }) => facts.contentType === "article",
+				),
 				cms.record.read.when(
 					({ identity, facts }) =>
 						identity?.id === facts.authorId && facts.recordId !== undefined,
@@ -1256,6 +1447,9 @@ describe("CMS operation-first authorization", () => {
 			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
 			permissions: [cmsPermissions] as const,
 			rules: ({ cms }) => [
+				cms.contentType.read.when(
+					({ facts }) => facts.contentType === "article",
+				),
 				cms.record.read.when(
 					({ facts }) =>
 						facts.contentType === "article" && facts.scope === "record",
@@ -1293,6 +1487,9 @@ describe("CMS operation-first authorization", () => {
 			identity: z.object({ id: z.string(), role: z.literal("user") }),
 			permissions: [cmsPermissions] as const,
 			rules: ({ cms }) => [
+				cms.contentType.read.when(
+					({ facts }) => facts.contentType === "article",
+				),
 				cms.record.read.when(({ facts }) => facts.scope === "record"),
 			],
 		});
@@ -1337,6 +1534,9 @@ describe("CMS operation-first authorization", () => {
 			identity: z.object({ id: z.string(), role: z.literal("user") }),
 			permissions: [cmsPermissions] as const,
 			rules: ({ cms }) => [
+				cms.contentType.read.when(
+					({ facts }) => facts.contentType === "article",
+				),
 				cms.record.read.when(
 					({ identity, facts }) => identity?.id === facts.authorId,
 				),
@@ -1378,6 +1578,9 @@ describe("CMS operation-first authorization", () => {
 			identity: z.object({ id: z.string(), role: z.literal("user") }),
 			permissions: [cmsPermissions] as const,
 			rules: ({ cms }) => [
+				cms.contentType.read.when(
+					({ facts }) => facts.contentType === "article",
+				),
 				cms.record.read.when(({ facts }) => facts.scope === "record"),
 			],
 		});
@@ -1687,7 +1890,10 @@ describe("CMS operation-first authorization", () => {
 	it("adapts trusted CMS facts to structural RC server rules", async () => {
 		const events: string[] = [];
 		const getIdentity = vi.fn(() => ({ id: "legacy-author" }));
-		const can = vi.fn(({ action }: { action: string }) => action === "create");
+		const can = vi.fn(
+			({ action }: { action: string }) =>
+				action === "create" || action === "read",
+		);
 		const backend = makeBackend({
 			auth: { getIdentity, can },
 			hooks: {
@@ -1725,7 +1931,7 @@ describe("CMS operation-first authorization", () => {
 		);
 		expect(deniedDelete.status).toBe(403);
 		expect(can).toHaveBeenNthCalledWith(
-			2,
+			3,
 			expect.objectContaining({
 				resource: "cms:content",
 				action: "delete",

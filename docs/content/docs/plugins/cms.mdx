@@ -658,9 +658,10 @@ export const authorization = defineAuthorization({
   }),
   permissions: [cmsPermissions] as const,
   rules: ({ cms }) => [
-    // Public content must be declared public. Omit this rule to deny it.
+    // Public record responses embed their content-type schema, so both reads
+    // must be declared public. Omit either rule to deny that response.
     cms.record.read.allow(),
-    cms.contentType.read.when(({ identity }) => identity?.role === "admin"),
+    cms.contentType.read.allow(),
     cms.record.create.when(({ identity }) => identity !== null),
     cms.record.update.when(
       ({ identity, facts }) =>
@@ -709,7 +710,11 @@ descriptor. The string mapping is removed with the remaining RC authorization
 interfaces in #193. Compound inline-create, populated-record, and inverse
 relation checks map every server-derived target or source separately, so a
 legacy rule can deny secondary content without allowing the primary operation
-to expose or mutate it.
+to expose or mutate it. Record responses embed their content-type schema, so
+record list, detail, create, update, populated, and relation-list operations
+also require `cms.contentType.read` for every embedded type. Relation filters
+derive the target type from the configured relation field and authorize the
+authoritative target record before reading junction rows.
 
 Bind it in the browser for immediate presentation checks. Browser facts only
 control what is shown; they are never trusted by the backend.

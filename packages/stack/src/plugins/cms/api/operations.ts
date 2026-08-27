@@ -631,6 +631,68 @@ interface RelationCreateAuthorization {
 	readonly snapshot: readonly string[];
 }
 
+interface RelationFilterAuthorization {
+	readonly permission: ReturnType<typeof cmsPermissions.record.read>;
+	readonly snapshot: string;
+	readonly targetFacts: RecordReadFacts;
+}
+
+function relationFilterSnapshot(
+	sourceContentType: ContentType,
+	fieldName: string,
+	relation: ReturnType<typeof extractRelationFields>[string],
+	targetContentType: ContentType,
+) {
+	return JSON.stringify([
+		sourceContentType.id,
+		sourceContentType.slug,
+		fieldName,
+		relation.type,
+		targetContentType.id,
+		targetContentType.slug,
+	]);
+}
+
+async function deriveRelationFilterAuthorization(
+	adapter: Adapter,
+	ensureSynced: () => Promise<void>,
+	sourceContentType: ContentType,
+	fieldName: string,
+	targetId: string,
+): Promise<RelationFilterAuthorization> {
+	const relation = extractRelationFields(sourceContentType)[fieldName];
+	if (!relation) {
+		throw new CMSOperationError(
+			404,
+			`Relation field "${fieldName}" was not found on content type "${sourceContentType.slug}".`,
+			"RELATION_FIELD_NOT_FOUND",
+		);
+	}
+	const targetContentType = await getContentTypeOrThrow(
+		adapter,
+		ensureSynced,
+		relation.targetType,
+		`Target content type "${relation.targetType}" not found for relation field "${fieldName}"`,
+	);
+	const target = await getRecordOrThrow(
+		adapter,
+		ensureSynced,
+		targetContentType.slug,
+		targetId,
+	);
+	const targetFacts = recordFacts(target);
+	return {
+		permission: cmsPermissions.record.read(targetFacts),
+		snapshot: relationFilterSnapshot(
+			sourceContentType,
+			fieldName,
+			relation,
+			targetContentType,
+		),
+		targetFacts,
+	};
+}
+
 async function deriveRelationCreateAuthorization(
 	adapter: Adapter,
 	contentType: ContentType,
@@ -901,6 +963,10 @@ export function createCMSOperations(
 		object,
 		readonly string[]
 	>();
+	const relationFilterAuthorizationSnapshots = new WeakMap<
+		object,
+		RelationFilterAuthorization
+	>();
 	const inverseSourceAuthorizationSnapshots = new WeakMap<
 		object,
 		readonly string[]
@@ -962,6 +1028,91 @@ export function createCMSOperations(
 		);
 		assertRelationSchemaSnapshot(authorized, current.snapshot);
 		return current.sources;
+	};
+	const recheckRelationFilterAuthorization = async (
+		input: object,
+		sourceType: string,
+		fieldName: string,
+		targetId: string,
+	) => {
+		const authorized = relationFilterAuthorizationSnapshots.get(input);
+		relationFilterAuthorizationSnapshots.delete(input);
+		if (!authorized) {
+			throw new CMSOperationError(
+				500,
+				"Relation-filter authorization snapshot is unavailable.",
+				"AUTHORIZATION_SNAPSHOT_MISSING",
+			);
+		}
+		let sourceContentType: ContentType;
+		try {
+			sourceContentType = await getContentTypeOrThrow(
+				adapter,
+				ensureSynced,
+				sourceType,
+			);
+		} catch (error) {
+			if (
+				error instanceof CMSOperationError &&
+				error.code === "CONTENT_TYPE_NOT_FOUND"
+			) {
+				throw relationSchemaChangedError();
+			}
+			throw error;
+		}
+		const relation = extractRelationFields(sourceContentType)[fieldName];
+		if (!relation) throw relationSchemaChangedError();
+		let targetContentType: ContentType;
+		try {
+			targetContentType = await getContentTypeOrThrow(
+				adapter,
+				ensureSynced,
+				relation.targetType,
+			);
+		} catch (error) {
+			if (
+				error instanceof CMSOperationError &&
+				error.code === "CONTENT_TYPE_NOT_FOUND"
+			) {
+				throw relationSchemaChangedError();
+			}
+			throw error;
+		}
+		const currentSnapshot = relationFilterSnapshot(
+			sourceContentType,
+			fieldName,
+			relation,
+			targetContentType,
+		);
+		if (authorized.snapshot !== currentSnapshot) {
+			throw relationSchemaChangedError();
+		}
+		let target: ContentItemWithType;
+		try {
+			target = await getRecordOrThrow(
+				adapter,
+				ensureSynced,
+				targetContentType.slug,
+				targetId,
+			);
+		} catch (error) {
+			if (
+				error instanceof CMSOperationError &&
+				error.code === "RECORD_NOT_FOUND"
+			) {
+				throw staleRecordError();
+			}
+			throw error;
+		}
+		const currentFacts = recordFacts(target);
+		if (
+			authorized.targetFacts.contentType !== currentFacts.contentType ||
+			authorized.targetFacts.recordId !== currentFacts.recordId ||
+			authorized.targetFacts.authorId !== currentFacts.authorId
+		) {
+			throw staleRecordError();
+		}
+		return sourceContentType;
 	};
 	const recheckInverseTargetAuthorization = async (
 		input: object,
@@ -1098,6 +1249,7 @@ export function createCMSOperations(
 				...(facts.authorId ? { authorId: facts.authorId } : {}),
 			},
 		}),
+		legacyAdditionalAuthorization: legacyCMSAdditionalAuthorization,
 		facts: async ({ input }) => {
 			const contentType = await getContentTypeOrThrow(
 				adapter,
@@ -1124,6 +1276,9 @@ export function createCMSOperations(
 			};
 			return facts;
 		},
+		additionalPermissions: ({ facts }) => [
+			cmsPermissions.contentType.read({ contentType: facts.contentType }),
+		],
 		execute: async ({ input, facts }) => {
 			const result = await getAllContentItems(
 				adapter,
@@ -1179,10 +1334,14 @@ export function createCMSOperations(
 				...(facts.authorId ? { authorId: facts.authorId } : {}),
 			},
 		}),
+		legacyAdditionalAuthorization: legacyCMSAdditionalAuthorization,
 		facts: async ({ input }) =>
 			recordFacts(
 				await getRecordOrThrow(adapter, ensureSynced, input.typeSlug, input.id),
 			),
+		additionalPermissions: ({ facts }) => [
+			cmsPermissions.contentType.read({ contentType: facts.contentType }),
+		],
 		execute: async ({ facts }) => {
 			const item = await getRecordOrThrow(
 				adapter,
@@ -1226,7 +1385,10 @@ export function createCMSOperations(
 				input as object,
 				authorization.snapshot,
 			);
-			return authorization.permissions;
+			return [
+				cmsPermissions.contentType.read({ contentType: facts.contentType }),
+				...authorization.permissions,
+			];
 		},
 		execute: async (context) => {
 			const lifecycleContext = createContext(context);
@@ -1376,7 +1538,10 @@ export function createCMSOperations(
 			};
 		},
 		additionalPermissions: async ({ input, facts }) => {
-			if (!input.body.data) return [];
+			const contentTypePermission = cmsPermissions.contentType.read({
+				contentType: facts.contentType,
+			});
+			if (!input.body.data) return [contentTypePermission];
 			const authorization = await deriveRelationCreateAuthorization(
 				adapter,
 				await getContentTypeOrThrow(adapter, ensureSynced, facts.contentType),
@@ -1387,7 +1552,7 @@ export function createCMSOperations(
 				input as object,
 				authorization.snapshot,
 			);
-			return authorization.permissions;
+			return [contentTypePermission, ...authorization.permissions];
 		},
 		execute: async (context) => {
 			const lifecycleContext = updateContext(context);
@@ -1685,9 +1850,20 @@ export function createCMSOperations(
 				facts.recordId ?? "",
 			);
 			populatedRelationSnapshots.set(input as object, snapshot);
-			return snapshot.targets.map(({ facts: targetFacts }) =>
-				cmsPermissions.record.read(targetFacts),
-			);
+			const contentTypes = new Set([
+				facts.contentType,
+				...snapshot.targets.map(
+					({ facts: targetFacts }) => targetFacts.contentType,
+				),
+			]);
+			return [
+				...[...contentTypes].map((contentType) =>
+					cmsPermissions.contentType.read({ contentType }),
+				),
+				...snapshot.targets.map(({ facts: targetFacts }) =>
+					cmsPermissions.record.read(targetFacts),
+				),
+			];
 		},
 		execute: async ({ input, facts }) => {
 			try {
@@ -1743,15 +1919,41 @@ export function createCMSOperations(
 			action: "read",
 			params: { typeSlug: facts.contentType },
 		}),
+		legacyAdditionalAuthorization: legacyCMSAdditionalAuthorization,
 		facts: async ({ input }) =>
 			collectionFacts(
 				(await getContentTypeOrThrow(adapter, ensureSynced, input.typeSlug))
 					.slug,
 			),
+		additionalPermissions: async ({ input, facts }) => {
+			const sourceContentType = await getContentTypeOrThrow(
+				adapter,
+				ensureSynced,
+				facts.contentType,
+			);
+			const authorization = await deriveRelationFilterAuthorization(
+				adapter,
+				ensureSynced,
+				sourceContentType,
+				input.query.field,
+				input.query.targetId,
+			);
+			relationFilterAuthorizationSnapshots.set(input as object, authorization);
+			return [
+				cmsPermissions.contentType.read({ contentType: facts.contentType }),
+				authorization.permission,
+			];
+		},
 		execute: async ({ input, facts }) => {
+			const sourceContentType = await recheckRelationFilterAuthorization(
+				input as object,
+				facts.contentType,
+				input.query.field,
+				input.query.targetId,
+			);
 			const result = await listRecordsForRelation(
 				adapter,
-				await getContentTypeOrThrow(adapter, ensureSynced, facts.contentType),
+				sourceContentType,
 				input.query.field,
 				input.query.targetId,
 				input.query.limit,
@@ -1944,7 +2146,10 @@ export function createCMSOperations(
 				),
 			);
 			inverseTargetAuthorizationSnapshots.set(input as object, targetFacts);
-			return [cmsPermissions.record.read(targetFacts)];
+			return [
+				cmsPermissions.contentType.read({ contentType: facts.contentType }),
+				cmsPermissions.record.read(targetFacts),
+			];
 		},
 		execute: async ({ input, facts }) => {
 			try {
