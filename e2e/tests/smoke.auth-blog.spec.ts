@@ -640,13 +640,26 @@ test.describe("Blog Authentication - Browser SSR Flow", () => {
 
 		// Should show error state or unauthorized message
 		// The exact behavior depends on how the blog plugin handles errors
-		const hasErrorPlaceholder = await page
-			.locator('[data-testid="error-placeholder"]')
+		const errorPlaceholder = page.locator('[data-testid="error-placeholder"]');
+		const unauthorizedText = page.getByText(
+			/unauthorized|forbidden|access denied/i,
+		);
+
+		// React Router can stream the route skeleton before hydration swaps in the
+		// rejected-query boundary. Poll the actual denial states instead of taking
+		// a one-frame visibility snapshot during that transition.
+		await expect
+			.poll(
+				async () =>
+					(await errorPlaceholder.isVisible().catch(() => false)) ||
+					(await unauthorizedText.isVisible().catch(() => false)),
+			)
+			.toBe(true);
+
+		const hasErrorPlaceholder = await errorPlaceholder
 			.isVisible()
 			.catch(() => false);
-
-		const hasUnauthorizedText = await page
-			.getByText(/unauthorized|forbidden|access denied/i)
+		const hasUnauthorizedText = await unauthorizedText
 			.isVisible()
 			.catch(() => false);
 
