@@ -1,5 +1,6 @@
 import { createMemoryAdapter } from "@btst/adapter-memory";
 import { defineDb, type DatabaseDefinition } from "@btst/db";
+import { zodToFormSchema } from "@workspace/ui/lib/schema-converter";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { stack } from "../../../api";
@@ -8,7 +9,7 @@ import { createServerAuth } from "../../../authorization/server";
 import type { StackServerAuthProvider } from "../../../shared/auth-types";
 import { cmsBackendPlugin, type CMSBackendHooks } from "../api";
 import { cmsPermissions } from "../permissions";
-import type { ContentItem, ContentRelation } from "../types";
+import type { ContentItem, ContentRelation, ContentType } from "../types";
 
 const memoryAdapter = (db: DatabaseDefinition) => createMemoryAdapter(db)({});
 
@@ -24,6 +25,36 @@ const resourceSchema = z.object({
 			relation: {
 				type: "manyToMany",
 				targetType: "category",
+				displayField: "name",
+				creatable: true,
+			},
+		}),
+});
+const changedResourceRelationSchema = z.object({
+	name: z.string(),
+	categoryIds: z
+		.array(z.object({ id: z.string() }))
+		.default([])
+		.meta({
+			fieldType: "relation",
+			relation: {
+				type: "manyToMany",
+				targetType: "secret",
+				displayField: "title",
+				creatable: true,
+			},
+		}),
+});
+const missingResourceRelationSchema = z.object({
+	name: z.string(),
+	categoryIds: z
+		.array(z.object({ id: z.string() }))
+		.default([])
+		.meta({
+			fieldType: "relation",
+			relation: {
+				type: "manyToMany",
+				targetType: "missing-target",
 				displayField: "name",
 				creatable: true,
 			},
@@ -430,6 +461,134 @@ describe("CMS operation-first authorization", () => {
 		expect(events).toEqual([]);
 		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
 			0,
+		);
+	});
+
+	it("fails closed when a relation schema changes after compound authorization", async () => {
+		const relationAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.record.create.when(
+					({ facts }) =>
+						facts.contentType === "resource" ||
+						facts.contentType === "category",
+				),
+				cms.record.update.when(({ facts }) => facts.contentType === "resource"),
+			],
+		});
+		let backend: ReturnType<typeof makeBackend>;
+		let changedJsonSchema = JSON.stringify(
+			zodToFormSchema(changedResourceRelationSchema),
+		);
+		backend = makeBackend({
+			auth: createServerAuth({
+				authorization: relationAuthorization,
+				getIdentity: async () => {
+					const resourceType = await backend.adapter.findOne<ContentType>({
+						model: "contentType",
+						where: [{ field: "slug", value: "resource" }],
+					});
+					if (!resourceType) throw new Error("Missing resource content type");
+					await backend.adapter.update<ContentType>({
+						model: "contentType",
+						where: [{ field: "id", value: resourceType.id }],
+						update: {
+							jsonSchema: changedJsonSchema,
+							updatedAt: new Date(),
+						},
+					});
+					return { id: "author-1", role: "user" as const };
+				},
+			}),
+		});
+		await backend.api.cms.getAllContentTypes();
+		const originalResourceType = await backend.adapter.findOne<ContentType>({
+			model: "contentType",
+			where: [{ field: "slug", value: "resource" }],
+		});
+		if (!originalResourceType) throw new Error("Missing resource content type");
+		const resetResourceSchema = () =>
+			backend.adapter.update<ContentType>({
+				model: "contentType",
+				where: [{ field: "id", value: originalResourceType.id }],
+				update: {
+					jsonSchema: originalResourceType.jsonSchema,
+					updatedAt: new Date(),
+				},
+			});
+		const relationInput = {
+			name: "Source",
+			categoryIds: [{ _new: true, data: { title: "Denied secret" } }],
+		};
+
+		const createResponse = await backend.handler(
+			request("/content/resource", {
+				method: "POST",
+				identity: { id: "author-1", role: "user" },
+				body: { slug: "racing-create", data: relationInput },
+			}),
+		);
+		expect(createResponse.status).toBe(409);
+		expect(await createResponse.json()).toMatchObject({
+			code: "RELATION_SCHEMA_CHANGED",
+		});
+		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
+			0,
+		);
+		expect((await backend.api.cms.getAllContentItems("secret")).total).toBe(0);
+
+		await resetResourceSchema();
+		const source = await seedRecord(backend, {
+			typeSlug: "resource",
+			slug: "racing-update",
+			authorId: "author-1",
+		});
+		const updateResponse = await backend.handler(
+			request(`/content/resource/${source.id}`, {
+				method: "PUT",
+				identity: { id: "author-1", role: "user" },
+				body: { data: relationInput },
+			}),
+		);
+		expect(updateResponse.status).toBe(409);
+		expect(await updateResponse.json()).toMatchObject({
+			code: "RELATION_SCHEMA_CHANGED",
+		});
+		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
+			0,
+		);
+		expect((await backend.api.cms.getAllContentItems("secret")).total).toBe(0);
+
+		changedJsonSchema = JSON.stringify(
+			zodToFormSchema(missingResourceRelationSchema),
+		);
+		await resetResourceSchema();
+		const missingCreateResponse = await backend.handler(
+			request("/content/resource", {
+				method: "POST",
+				identity: { id: "author-1", role: "user" },
+				body: { slug: "missing-target-create", data: relationInput },
+			}),
+		);
+		expect(missingCreateResponse.status).toBe(409);
+		expect(await missingCreateResponse.json()).toMatchObject({
+			code: "RELATION_SCHEMA_CHANGED",
+		});
+		await resetResourceSchema();
+		const missingUpdateResponse = await backend.handler(
+			request(`/content/resource/${source.id}`, {
+				method: "PUT",
+				identity: { id: "author-1", role: "user" },
+				body: { data: relationInput },
+			}),
+		);
+		expect(missingUpdateResponse.status).toBe(409);
+		expect(await missingUpdateResponse.json()).toMatchObject({
+			code: "RELATION_SCHEMA_CHANGED",
+		});
+		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
+			1,
 		);
 	});
 
