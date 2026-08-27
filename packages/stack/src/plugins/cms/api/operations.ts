@@ -624,11 +624,13 @@ async function applyRelationWritePlan(
 	}
 }
 
-interface RelationCreateAuthorization {
-	readonly permissions: readonly ReturnType<
-		typeof cmsPermissions.record.create
-	>[];
+interface RelationWriteAuthorization {
+	readonly permissions: readonly (
+		| ReturnType<typeof cmsPermissions.record.create>
+		| ReturnType<typeof cmsPermissions.record.read>
+	)[];
 	readonly snapshot: readonly string[];
+	readonly targets: readonly RecordReadFacts[];
 }
 
 interface RelationFilterAuthorization {
@@ -693,26 +695,45 @@ async function deriveRelationFilterAuthorization(
 	};
 }
 
-async function deriveRelationCreateAuthorization(
-	adapter: Adapter,
+function relationTargetSnapshot(facts: RecordReadFacts) {
+	return JSON.stringify([
+		facts.contentType,
+		facts.recordId,
+		facts.authorId ?? null,
+	]);
+}
+
+async function deriveRelationWriteAuthorization(
+	adapter: DataAdapter,
 	contentType: ContentType,
 	data: Readonly<Record<string, unknown>>,
 	ensureSynced: () => Promise<void>,
-): Promise<RelationCreateAuthorization> {
-	const permissions = [];
+	expectedSchemaSnapshot?: readonly string[],
+): Promise<RelationWriteAuthorization> {
+	const permissions: Array<
+		| ReturnType<typeof cmsPermissions.record.create>
+		| ReturnType<typeof cmsPermissions.record.read>
+	> = [];
 	const snapshot: string[] = [];
-	const seenTargetTypes = new Set<string>();
+	const targets: RecordReadFacts[] = [];
+	const seenCreateTargetTypes = new Set<string>();
+	const seenReadTargets = new Set<string>();
+	const resolvedRelations: Array<{
+		readonly values: readonly unknown[];
+		readonly targetContentType: ContentType;
+	}> = [];
 
 	for (const [fieldName, relationConfig] of Object.entries(
 		extractRelationFields(contentType),
 	)) {
 		if (!(fieldName in data)) continue;
 		const value = data[fieldName];
-		const createsTarget =
+		const values =
 			relationConfig.type === "belongsTo"
-				? isNewRelationValue(value)
-				: Array.isArray(value) && value.some(isNewRelationValue);
-		if (!createsTarget) continue;
+				? [value]
+				: Array.isArray(value)
+					? value
+					: [];
 		const targetContentType = await getContentTypeOrThrow(
 			adapter,
 			ensureSynced,
@@ -727,14 +748,52 @@ async function deriveRelationCreateAuthorization(
 				targetContentType.slug,
 			]),
 		);
-		if (seenTargetTypes.has(targetContentType.slug)) continue;
-		seenTargetTypes.add(targetContentType.slug);
-		permissions.push(
-			cmsPermissions.record.create({ contentType: targetContentType.slug }),
-		);
+		resolvedRelations.push({ values, targetContentType });
 	}
 
-	return { permissions, snapshot: snapshot.sort() };
+	snapshot.sort();
+	if (expectedSchemaSnapshot) {
+		assertRelationSchemaSnapshot(expectedSchemaSnapshot, snapshot);
+	}
+	for (const { values, targetContentType } of resolvedRelations) {
+		if (
+			values.some(isNewRelationValue) &&
+			!seenCreateTargetTypes.has(targetContentType.slug)
+		) {
+			seenCreateTargetTypes.add(targetContentType.slug);
+			permissions.push(
+				cmsPermissions.record.create({ contentType: targetContentType.slug }),
+			);
+		}
+		for (const reference of values) {
+			if (
+				isNewRelationValue(reference) ||
+				!isExistingRelationValue(reference)
+			) {
+				continue;
+			}
+			const target = await getRecordOrThrow(
+				adapter,
+				ensureSynced,
+				targetContentType.slug,
+				reference.id,
+			);
+			const facts = recordFacts(target);
+			const targetKey = relationTargetSnapshot(facts);
+			if (seenReadTargets.has(targetKey)) continue;
+			seenReadTargets.add(targetKey);
+			targets.push(facts);
+			permissions.push(cmsPermissions.record.read(facts));
+		}
+	}
+
+	return {
+		permissions,
+		snapshot,
+		targets: targets.sort((left, right) =>
+			relationTargetSnapshot(left).localeCompare(relationTargetSnapshot(right)),
+		),
+	};
 }
 
 function assertRelationSchemaSnapshot(
@@ -743,6 +802,19 @@ function assertRelationSchemaSnapshot(
 ) {
 	if (JSON.stringify(authorized) !== JSON.stringify(current)) {
 		throw relationSchemaChangedError();
+	}
+}
+
+function assertRelationWriteAuthorization(
+	authorized: RelationWriteAuthorization,
+	current: RelationWriteAuthorization,
+) {
+	assertRelationSchemaSnapshot(authorized.snapshot, current.snapshot);
+	if (
+		JSON.stringify(authorized.targets.map(relationTargetSnapshot)) !==
+		JSON.stringify(current.targets.map(relationTargetSnapshot))
+	) {
+		throw staleRecordError();
 	}
 }
 
@@ -959,9 +1031,9 @@ export function createCMSOperations(
 		object,
 		PopulatedRelationSnapshot
 	>();
-	const relationCreateAuthorizationSnapshots = new WeakMap<
+	const relationWriteAuthorizationSnapshots = new WeakMap<
 		object,
-		readonly string[]
+		RelationWriteAuthorization
 	>();
 	const relationFilterAuthorizationSnapshots = new WeakMap<
 		object,
@@ -975,13 +1047,44 @@ export function createCMSOperations(
 		object,
 		RecordReadFacts
 	>();
-	const recheckRelationCreateAuthorization = async (
-		input: object,
-		contentType: ContentType,
+	const assertCurrentRelationWriteAuthorization = async (
+		currentAdapter: DataAdapter,
+		authorized: RelationWriteAuthorization,
+		contentTypeSlug: string,
 		data: Readonly<Record<string, unknown>>,
 	) => {
-		const authorized = relationCreateAuthorizationSnapshots.get(input);
-		relationCreateAuthorizationSnapshots.delete(input);
+		let current: RelationWriteAuthorization;
+		try {
+			const contentType = await getContentTypeOrThrow(
+				currentAdapter,
+				ensureSynced,
+				contentTypeSlug,
+			);
+			current = await deriveRelationWriteAuthorization(
+				currentAdapter,
+				contentType,
+				data,
+				ensureSynced,
+				authorized.snapshot,
+			);
+		} catch (error) {
+			if (error instanceof CMSOperationError) {
+				if (error.code === "CONTENT_TYPE_NOT_FOUND") {
+					throw relationSchemaChangedError();
+				}
+				if (error.code === "RECORD_NOT_FOUND") throw staleRecordError();
+			}
+			throw error;
+		}
+		assertRelationWriteAuthorization(authorized, current);
+	};
+	const recheckRelationWriteAuthorization = async (
+		input: object,
+		contentTypeSlug: string,
+		data: Readonly<Record<string, unknown>>,
+	) => {
+		const authorized = relationWriteAuthorizationSnapshots.get(input);
+		relationWriteAuthorizationSnapshots.delete(input);
 		if (!authorized) {
 			throw new CMSOperationError(
 				500,
@@ -989,24 +1092,13 @@ export function createCMSOperations(
 				"AUTHORIZATION_SNAPSHOT_MISSING",
 			);
 		}
-		let current: RelationCreateAuthorization;
-		try {
-			current = await deriveRelationCreateAuthorization(
-				adapter,
-				contentType,
-				data,
-				ensureSynced,
-			);
-		} catch (error) {
-			if (
-				error instanceof CMSOperationError &&
-				error.code === "CONTENT_TYPE_NOT_FOUND"
-			) {
-				throw relationSchemaChangedError();
-			}
-			throw error;
-		}
-		assertRelationSchemaSnapshot(authorized, current.snapshot);
+		await assertCurrentRelationWriteAuthorization(
+			adapter,
+			authorized,
+			contentTypeSlug,
+			data,
+		);
+		return authorized;
 	};
 	const recheckInverseSourceAuthorization = async (
 		input: object,
@@ -1375,16 +1467,13 @@ export function createCMSOperations(
 			).slug,
 		}),
 		additionalPermissions: async ({ input, facts }) => {
-			const authorization = await deriveRelationCreateAuthorization(
+			const authorization = await deriveRelationWriteAuthorization(
 				adapter,
 				await getContentTypeOrThrow(adapter, ensureSynced, facts.contentType),
 				input.body.data as unknown as Readonly<Record<string, unknown>>,
 				ensureSynced,
 			);
-			relationCreateAuthorizationSnapshots.set(
-				input as object,
-				authorization.snapshot,
-			);
+			relationWriteAuthorizationSnapshots.set(input as object, authorization);
 			return [
 				cmsPermissions.contentType.read({ contentType: facts.contentType }),
 				...authorization.permissions,
@@ -1405,9 +1494,9 @@ export function createCMSOperations(
 					"INVALID_SLUG",
 				);
 			}
-			await recheckRelationCreateAuthorization(
+			const relationAuthorization = await recheckRelationWriteAuthorization(
 				context.input as object,
-				contentType,
+				contentType.slug,
 				context.input.body.data,
 			);
 			const relationPlan = await planRelationsInData(
@@ -1452,6 +1541,12 @@ export function createCMSOperations(
 				"Create operation denied",
 			);
 			return adapter.transaction(async (tx) => {
+				await assertCurrentRelationWriteAuthorization(
+					tx,
+					relationAuthorization,
+					contentType.slug,
+					context.input.body.data,
+				);
 				const currentDuplicate = await tx.findOne<ContentItem>({
 					model: "contentItem",
 					where: [
@@ -1542,16 +1637,13 @@ export function createCMSOperations(
 				contentType: facts.contentType,
 			});
 			if (!input.body.data) return [contentTypePermission];
-			const authorization = await deriveRelationCreateAuthorization(
+			const authorization = await deriveRelationWriteAuthorization(
 				adapter,
 				await getContentTypeOrThrow(adapter, ensureSynced, facts.contentType),
 				input.body.data as unknown as Readonly<Record<string, unknown>>,
 				ensureSynced,
 			);
-			relationCreateAuthorizationSnapshots.set(
-				input as object,
-				authorization.snapshot,
-			);
+			relationWriteAuthorizationSnapshots.set(input as object, authorization);
 			return [contentTypePermission, ...authorization.permissions];
 		},
 		execute: async (context) => {
@@ -1571,13 +1663,13 @@ export function createCMSOperations(
 				);
 			}
 			const bodyData = context.input.body.data;
-			if (bodyData) {
-				await recheckRelationCreateAuthorization(
-					context.input as object,
-					contentType,
-					bodyData,
-				);
-			}
+			const relationAuthorization = bodyData
+				? await recheckRelationWriteAuthorization(
+						context.input as object,
+						contentType.slug,
+						bodyData,
+					)
+				: undefined;
 			const authorizedRecord = await getRecordOrThrow(
 				adapter,
 				ensureSynced,
@@ -1640,6 +1732,14 @@ export function createCMSOperations(
 				"Update operation denied",
 			);
 			return adapter.transaction(async (tx) => {
+				if (bodyData && relationAuthorization) {
+					await assertCurrentRelationWriteAuthorization(
+						tx,
+						relationAuthorization,
+						contentType.slug,
+						bodyData,
+					);
+				}
 				const current = await getRecordOrThrow(
 					tx,
 					ensureSynced,

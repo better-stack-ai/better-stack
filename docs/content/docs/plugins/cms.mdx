@@ -707,8 +707,8 @@ denial happens before lifecycle hooks. An identity-only RC provider has no
 authorization policy and retains its prior allow-all behavior. `createServerAuth()`
 does not use this bridge and always evaluates the exact `cmsPermissions`
 descriptor. The string mapping is removed with the remaining RC authorization
-interfaces in #193. Compound inline-create, populated-record, and inverse
-relation checks map every server-derived target or source separately, so a
+interfaces in #193. Compound inline-create, existing-relation, populated-record,
+and inverse-relation checks map every server-derived target or source separately, so a
 legacy rule can deny secondary content without allowing the primary operation
 to expose or mutate it. Record responses embed their content-type schema, so
 record list, detail, create, update, populated, and relation-list operations
@@ -784,8 +784,12 @@ lifecycle. Use it only from trusted server/build code.
 Inline `_new` relation values are compound writes. Request-scoped create and
 update operations authorize `cms.record.create` for every server-derived target
 content type before hooks run, then commit the parent, related records, and
-relation rows atomically. Trusted `internal.cms` calls skip those user checks
-but keep the same validation and transaction lifecycle.
+relation rows atomically. Existing `{ id }` relation values are resolved against
+the configured target content type and require `cms.record.read` for the
+authoritative target facts. The operation rejects wrong-type IDs and rechecks
+target ownership before the transaction writes a relation. Trusted
+`internal.cms` calls skip those user checks but keep the same validation and
+transaction lifecycle.
 
 Compound reads fail closed too. A populated-record operation authorizes every
 related target record before returning it, and inverse-relation metadata

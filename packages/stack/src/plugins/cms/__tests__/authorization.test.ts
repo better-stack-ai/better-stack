@@ -476,6 +476,154 @@ describe("CMS operation-first authorization", () => {
 		);
 	});
 
+	it("authorizes authoritative existing relation targets before linking them", async () => {
+		const ownerReadAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.contentType.read.allow(),
+				cms.record.read.when(
+					({ identity, facts }) => identity?.id === facts.authorId,
+				),
+				cms.record.create.when(({ facts }) => facts.contentType === "resource"),
+				cms.record.update.when(({ facts }) => facts.contentType === "resource"),
+			],
+		});
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createServerAuth({
+				authorization: ownerReadAuthorization,
+				getIdentity: () => ({ id: "author-1", role: "user" as const }),
+			}),
+			hooks: {
+				onBeforeCreate: () => {
+					events.push("before:create");
+				},
+				onBeforeUpdate: () => {
+					events.push("before:update");
+				},
+			},
+		});
+		const privateCategory = await seedRecord(backend, {
+			typeSlug: "category",
+			slug: "private-category",
+			authorId: "other-owner",
+		});
+		const source = await seedRecord(backend, {
+			typeSlug: "resource",
+			slug: "existing-source",
+			authorId: "author-1",
+		});
+		const relationData = {
+			name: "Source",
+			categoryIds: [{ id: privateCategory.id }],
+		};
+
+		const createResponse = await backend.handler(
+			request("/content/resource", {
+				method: "POST",
+				identity: { id: "author-1", role: "user" },
+				body: { slug: "denied-link", data: relationData },
+			}),
+		);
+		expect(createResponse.status).toBe(403);
+		const updateResponse = await backend.handler(
+			request(`/content/resource/${source.id}`, {
+				method: "PUT",
+				identity: { id: "author-1", role: "user" },
+				body: { data: relationData },
+			}),
+		);
+		expect(updateResponse.status).toBe(403);
+		expect(events).toEqual([]);
+		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
+			1,
+		);
+		expect(
+			await backend.adapter.findOne<ContentRelation>({
+				model: "contentRelation",
+				where: [{ field: "targetId", value: privateCategory.id }],
+			}),
+		).toBeFalsy();
+	});
+
+	it("rejects wrong-type and stale existing relation targets before writing", async () => {
+		const events: string[] = [];
+		let backend: ReturnType<typeof makeBackend>;
+		backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeCreate: async () => {
+					events.push("before");
+					await backend.adapter.update<ContentItem>({
+						model: "contentItem",
+						where: [{ field: "slug", value: "owned-category" }],
+						update: { authorId: "other-owner" },
+					});
+				},
+				onError: (_error, operation) => {
+					events.push(`error:${operation}`);
+				},
+			},
+		});
+		const wrongType = await seedRecord(backend, {
+			typeSlug: "secret",
+			slug: "not-a-category",
+			authorId: "author-1",
+		});
+		const wrongTypeResponse = await backend.handler(
+			request("/content/resource", {
+				method: "POST",
+				identity: { id: "author-1", role: "user" },
+				body: {
+					slug: "wrong-type-link",
+					data: {
+						name: "Wrong type",
+						categoryIds: [{ id: wrongType.id }],
+					},
+				},
+			}),
+		);
+		expect(wrongTypeResponse.status).toBe(404);
+		expect(await wrongTypeResponse.json()).toMatchObject({
+			code: "RECORD_NOT_FOUND",
+		});
+		expect(events).toEqual([]);
+
+		const category = await seedRecord(backend, {
+			typeSlug: "category",
+			slug: "owned-category",
+			authorId: "author-1",
+		});
+		const staleResponse = await backend.handler(
+			request("/content/resource", {
+				method: "POST",
+				identity: { id: "author-1", role: "user" },
+				body: {
+					slug: "stale-link",
+					data: {
+						name: "Stale target",
+						categoryIds: [{ id: category.id }],
+					},
+				},
+			}),
+		);
+		expect(staleResponse.status).toBe(409);
+		expect(await staleResponse.json()).toMatchObject({
+			code: "RECORD_STATE_CHANGED",
+		});
+		expect(events).toEqual(["before", "error:create"]);
+		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
+			0,
+		);
+		expect(
+			await backend.adapter.findOne<ContentRelation>({
+				model: "contentRelation",
+				where: [{ field: "targetId", value: category.id }],
+			}),
+		).toBeFalsy();
+	});
+
 	it("maps every compound CMS check through structural RC server rules", async () => {
 		const events: string[] = [];
 		let deniedType = "category";
@@ -525,6 +673,22 @@ describe("CMS operation-first authorization", () => {
 		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
 			1,
 		);
+		const deniedExistingLink = await backend.handler(
+			request("/content/resource", {
+				method: "POST",
+				body: {
+					slug: "legacy-existing-link",
+					data: {
+						name: "Denied existing link",
+						categoryIds: [{ id: target.id }],
+					},
+				},
+			}),
+		);
+		expect(deniedExistingLink.status).toBe(403);
+		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
+			1,
+		);
 
 		await backend.adapter.create<ContentRelation>({
 			model: "contentRelation",
@@ -555,6 +719,9 @@ describe("CMS operation-first authorization", () => {
 			{ action: "create", typeSlug: "resource" },
 			{ action: "read", typeSlug: "resource" },
 			{ action: "create", typeSlug: "category" },
+			{ action: "create", typeSlug: "resource" },
+			{ action: "read", typeSlug: "resource" },
+			{ action: "read", typeSlug: "category" },
 			{ action: "read", typeSlug: "resource" },
 			{ action: "read", typeSlug: "resource" },
 			{ action: "read", typeSlug: "category" },
