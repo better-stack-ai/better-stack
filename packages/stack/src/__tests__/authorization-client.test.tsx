@@ -397,6 +397,69 @@ describe("createClientAuth", () => {
 		expect(identityState?.identity).toEqual({ id: "newest-user" });
 	});
 
+	it("rejects a stale identity resolution after an A-to-B-to-A source cycle", async () => {
+		let finishStaleResolution: ((identity: { id: string }) => void) | undefined;
+		const firstResolver = vi.fn(
+			() =>
+				new Promise<{ id: string }>((resolve) => {
+					finishStaleResolution = resolve;
+				}),
+		);
+		const secondResolver = vi.fn(() => ({ id: "browser-second" }));
+		const firstProvider = { getIdentity: firstResolver };
+		const secondProvider = { getIdentity: secondResolver };
+		const firstSnapshot = { id: "hydrated-first" };
+		const secondSnapshot = { id: "hydrated-second" };
+		let identityState: ReturnType<typeof useIdentity> | undefined;
+
+		function Probe() {
+			identityState = useIdentity();
+			return null;
+		}
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				auth={firstProvider}
+				initialIdentity={firstSnapshot}
+			>
+				<Probe />
+			</StackProvider>,
+		);
+		let staleResolution: Promise<void> | undefined;
+		await act(async () => {
+			staleResolution = identityState?.refetch();
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				auth={secondProvider}
+				initialIdentity={secondSnapshot}
+			>
+				<Probe />
+			</StackProvider>,
+		);
+		await render(
+			<StackProvider
+				basePath="/pages"
+				auth={firstProvider}
+				initialIdentity={firstSnapshot}
+			>
+				<Probe />
+			</StackProvider>,
+		);
+		expect(identityState?.identity).toEqual(firstSnapshot);
+		expect(firstResolver).toHaveBeenCalledOnce();
+		expect(secondResolver).not.toHaveBeenCalled();
+
+		await act(async () => {
+			finishStaleResolution?.({ id: "stale-first" });
+			await staleResolution;
+		});
+		expect(identityState?.identity).toEqual(firstSnapshot);
+	});
+
 	it("surfaces an invalid hydrated identity as an identity error", async () => {
 		const getIdentity = vi.fn(() => ({
 			id: "browser-user",
