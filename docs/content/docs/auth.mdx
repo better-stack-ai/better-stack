@@ -246,6 +246,8 @@ import { createNextLayout } from "@btst/stack/next/server";
 import { serverAuth } from "@/lib/authorization.server";
 import { BtstPagesClientLayout } from "./client-layout";
 
+export const dynamic = "force-dynamic";
+
 const layout = createNextLayout({
   auth: serverAuth,
   ClientLayout: BtstPagesClientLayout,
@@ -256,7 +258,9 @@ export default layout.Layout;
 
 Only the schema-validated identity crosses the Server Component boundary.
 `next/headers`, the session provider, and database dependencies stay in the
-server graph.
+server graph. Because the layout reads request headers, Next.js must render its
+request-aware layout per request; the explicit `dynamic` segment config also
+lets that layout wrap child routes that use SSG or ISR.
 
 ### React Router
 
