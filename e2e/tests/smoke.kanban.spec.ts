@@ -1,4 +1,11 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
+import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
+
+test.use({ extraHTTPHeaders: mockAuthHeaders() });
+
+test.beforeEach(async ({ context }) => {
+	await setMockAuthCookie(context);
+});
 
 const emptySelector = '[data-testid="empty-state"]';
 const errorSelector = '[data-testid="error-placeholder"]';

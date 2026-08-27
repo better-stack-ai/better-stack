@@ -21,7 +21,11 @@ const getBaseURL = () =>
 
 export const getStackClient = (
 	queryClient: QueryClient,
-	options?: { headers?: Headers; currentUserId?: string },
+	options?: {
+		headers?: Headers;
+		currentUserId?: string;
+		identity?: { readonly id: string; readonly [key: string]: unknown };
+	},
 ) => {
 	const baseURL = getBaseURL();
 	return createStackClient({
@@ -161,6 +165,7 @@ export const getStackClient = (
 				siteBasePath: "/pages",
 				queryClient: queryClient,
 				headers: options?.headers,
+				identityPartition: options?.identity,
 				seo: {
 					siteName: "BTST Kanban",
 					description: "Manage your projects with kanban boards",

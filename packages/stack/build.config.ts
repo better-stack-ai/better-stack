@@ -132,6 +132,7 @@ export default defineBuildConfig({
 		"./src/plugins/kanban/client/components/index.tsx",
 		"./src/plugins/kanban/client/hooks/index.tsx",
 		"./src/plugins/kanban/query-keys.ts",
+		"./src/plugins/kanban/permissions.ts",
 		// comments plugin entries
 		"./src/plugins/comments/api/index.ts",
 		"./src/plugins/comments/client/index.ts",

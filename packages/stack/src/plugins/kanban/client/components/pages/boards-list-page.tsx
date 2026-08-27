@@ -5,6 +5,7 @@ import { ComposedRoute } from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
 import { BoardsListSkeleton } from "../loading/boards-list-skeleton";
 import { NotFoundPage } from "./404-page";
+import { kanbanPermissions } from "../../../permissions";
 
 const BoardsListPage = lazy(() =>
 	import("./boards-list-page.internal").then((m) => ({
@@ -16,7 +17,8 @@ export function BoardsListPageComponent() {
 	return (
 		<ComposedRoute
 			path="/kanban"
-			permission={{ resource: "kanban:board", action: "read" }}
+			permission={kanbanPermissions.board.read({ scope: "collection" })}
+			legacyPermission={{ resource: "kanban:board", action: "read" }}
 			PageComponent={BoardsListPage}
 			ErrorComponent={DefaultError}
 			LoadingComponent={BoardsListSkeleton}

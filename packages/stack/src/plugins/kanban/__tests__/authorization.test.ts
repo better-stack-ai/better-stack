@@ -1,0 +1,976 @@
+import { createMemoryAdapter } from "@btst/adapter-memory";
+import { type DatabaseDefinition, type DBAdapter, defineDb } from "@btst/db";
+import { QueryClient } from "@tanstack/react-query";
+import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import { stack } from "../../../api";
+import { defineAuthorization } from "../../../authorization";
+import { createServerAuth } from "../../../authorization/server";
+import type { StackServerAuthProvider } from "../../../shared/auth-types";
+import { KANBAN_QUERY_KEYS, kanbanBackendPlugin } from "../api";
+import { kanbanPermissions } from "../permissions";
+import type { Board, Column, KanbanBackendHooks, Task } from "../types";
+
+const rawMemoryAdapter = (db: DatabaseDefinition) =>
+	createMemoryAdapter(db)({});
+
+/** Serialize the memory adapter so tests exercise an isolated transaction. */
+function serializedMemoryAdapter(db: DatabaseDefinition): DBAdapter {
+	const adapter = rawMemoryAdapter(db);
+	let tail = Promise.resolve();
+	const withLock = async <T>(run: () => Promise<T>): Promise<T> => {
+		let release = () => {};
+		const previous = tail;
+		tail = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await previous;
+		try {
+			return await run();
+		} finally {
+			release();
+		}
+	};
+	return {
+		...adapter,
+		id: "serialized-memory-test",
+		create: ((input) =>
+			withLock(() => adapter.create(input))) as DBAdapter["create"],
+		findOne: ((input) =>
+			withLock(() => adapter.findOne(input))) as DBAdapter["findOne"],
+		findMany: ((input) =>
+			withLock(() => adapter.findMany(input))) as DBAdapter["findMany"],
+		count: (input) => withLock(() => adapter.count(input)),
+		update: ((input) =>
+			withLock(() => adapter.update(input))) as DBAdapter["update"],
+		updateMany: (input) => withLock(() => adapter.updateMany(input)),
+		delete: ((input) =>
+			withLock(() => adapter.delete(input))) as DBAdapter["delete"],
+		deleteMany: (input) => withLock(() => adapter.deleteMany(input)),
+		consumeOne: ((input) =>
+			withLock(() => adapter.consumeOne(input))) as DBAdapter["consumeOne"],
+		transaction: ((callback) =>
+			withLock(() =>
+				adapter.transaction(callback),
+			)) as DBAdapter["transaction"],
+	};
+}
+
+describe("Kanban authorization inventory", () => {
+	it("covers every maintained HTTP and programmatic operation with a stable descriptor", () => {
+		const plugin = kanbanBackendPlugin();
+		const adapter = createMemoryAdapter(defineDb({}).use(plugin.dbPlugin))({});
+		const operations = plugin.operations?.(adapter);
+
+		expect(Object.keys(operations ?? {}).sort()).toEqual([
+			"createBoard",
+			"createColumn",
+			"createTask",
+			"deleteBoard",
+			"deleteColumn",
+			"deleteTask",
+			"getBoard",
+			"listBoards",
+			"moveTask",
+			"reorderColumns",
+			"reorderTasks",
+			"updateBoard",
+			"updateColumn",
+			"updateTask",
+		]);
+		expect(
+			Object.fromEntries(
+				Object.entries(operations ?? {}).map(([key, operation]) => [
+					key,
+					operation.permission.id,
+				]),
+			),
+		).toEqual({
+			listBoards: "kanban:board.read",
+			getBoard: "kanban:board.read",
+			createBoard: "kanban:board.create",
+			updateBoard: "kanban:board.update",
+			deleteBoard: "kanban:board.delete",
+			createColumn: "kanban:column.create",
+			updateColumn: "kanban:column.update",
+			deleteColumn: "kanban:column.delete",
+			reorderColumns: "kanban:column.reorder",
+			createTask: "kanban:task.create",
+			updateTask: "kanban:task.update",
+			deleteTask: "kanban:task.delete",
+			moveTask: "kanban:task.move",
+			reorderTasks: "kanban:task.reorder",
+		});
+
+		expect(kanbanPermissions.board.read({ scope: "collection" })).toMatchObject(
+			{ id: "kanban:board.read" },
+		);
+		expect(
+			kanbanPermissions.task.move({
+				boardId: "board-1",
+				columnId: "column-1",
+				targetColumnId: "column-2",
+				taskId: "task-1",
+				isArchived: false,
+			}),
+		).toMatchObject({ id: "kanban:task.move" });
+		expect(() =>
+			kanbanPermissions.task.update({
+				boardId: "board-1",
+				columnId: "column-1",
+				taskId: "task-1",
+				// @ts-expect-error Task status must be present in the catalog facts.
+				isArchived: undefined,
+			}),
+		).toThrow();
+	});
+});
+
+const authorization = defineAuthorization({
+	identity: z.object({
+		id: z.string(),
+		role: z.enum(["user", "admin"]),
+		organizationIds: z.array(z.string()),
+	}),
+	permissions: [kanbanPermissions] as const,
+	rules: ({ kanban }) => {
+		const managesBoard = ({
+			identity,
+			facts,
+		}: {
+			identity: {
+				id: string;
+				role: "user" | "admin";
+				organizationIds: string[];
+			} | null;
+			facts: { ownerId?: string; organizationId?: string };
+		}) =>
+			identity?.role === "admin" ||
+			identity?.id === facts.ownerId ||
+			Boolean(
+				facts.organizationId &&
+					identity?.organizationIds.includes(facts.organizationId),
+			);
+		return [
+			kanban.board.read.when(({ identity, facts }) =>
+				facts.scope === "collection"
+					? identity?.role === "admin"
+					: managesBoard({ identity, facts }),
+			),
+			kanban.board.create.when(({ identity }) => identity !== null),
+			kanban.board.update.when(
+				({ identity, facts }) =>
+					identity?.role === "admin" || identity?.id === facts.ownerId,
+			),
+			kanban.board.delete.when(
+				({ identity, facts }) =>
+					identity?.role === "admin" || identity?.id === facts.ownerId,
+			),
+			kanban.column.create.when(managesBoard),
+			kanban.column.update.when(managesBoard),
+			kanban.column.delete.when(managesBoard),
+			kanban.column.reorder.when(managesBoard),
+			kanban.task.create.when(managesBoard),
+			kanban.task.update.when(managesBoard),
+			kanban.task.delete.when(managesBoard),
+			kanban.task.move.when(managesBoard),
+			kanban.task.reorder.when(managesBoard),
+		];
+	},
+});
+
+type Identity = {
+	id: string;
+	role: "user" | "admin";
+	organizationIds: string[];
+};
+
+function createAuth(
+	getIdentity: (
+		request: Request,
+	) => Identity | null | Promise<Identity | null> = (request) => {
+		const id = request.headers.get("x-user-id");
+		const role = request.headers.get("x-user-role");
+		if (!id || (role !== "user" && role !== "admin")) return null;
+		return {
+			id,
+			role,
+			organizationIds:
+				request.headers.get("x-organization-ids")?.split(",").filter(Boolean) ??
+				[],
+		};
+	},
+	definition = authorization,
+) {
+	return createServerAuth({
+		authorization: definition,
+		getIdentity: ({ request }) => getIdentity(request),
+	});
+}
+
+function makeBackend(options?: {
+	hooks?: KanbanBackendHooks;
+	auth?: StackServerAuthProvider;
+	adapter?: (db: DatabaseDefinition) => DBAdapter;
+}) {
+	return stack({
+		basePath: "/api",
+		plugins: { kanban: kanbanBackendPlugin(options?.hooks) },
+		adapter: options?.adapter ?? serializedMemoryAdapter,
+		...(options?.auth ? { auth: options.auth } : {}),
+	});
+}
+
+function request(
+	path: string,
+	options?: { method?: string; identity?: Identity; body?: unknown },
+) {
+	const headers = new Headers();
+	if (options?.identity) {
+		headers.set("x-user-id", options.identity.id);
+		headers.set("x-user-role", options.identity.role);
+		headers.set(
+			"x-organization-ids",
+			options.identity.organizationIds.join(","),
+		);
+	}
+	if (options?.body !== undefined)
+		headers.set("content-type", "application/json");
+	return new Request(`http://localhost/api${path}`, {
+		method: options?.method ?? "GET",
+		headers,
+		...(options?.body !== undefined
+			? { body: JSON.stringify(options.body) }
+			: {}),
+	});
+}
+
+const owner = {
+	id: "owner-1",
+	role: "user",
+	organizationIds: [],
+} as const satisfies Identity;
+const member = {
+	id: "member-1",
+	role: "user",
+	organizationIds: ["org-1"],
+} as const satisfies Identity;
+const viewer = {
+	id: "viewer-1",
+	role: "user",
+	organizationIds: [],
+} as const satisfies Identity;
+const admin = {
+	id: "admin-1",
+	role: "admin",
+	organizationIds: [],
+} as const satisfies Identity;
+
+async function seedBoard(
+	backend: ReturnType<typeof makeBackend>,
+	overrides: Partial<Board> = {},
+) {
+	const now = new Date("2026-01-01T00:00:00.000Z");
+	return backend.adapter.create<Board>({
+		model: "kanbanBoard",
+		data: {
+			name: "Roadmap",
+			slug: "roadmap",
+			ownerId: owner.id,
+			organizationId: "org-1",
+			createdAt: now,
+			updatedAt: now,
+			...overrides,
+		},
+	});
+}
+
+async function seedColumn(
+	backend: ReturnType<typeof makeBackend>,
+	boardId: string,
+	overrides: Partial<Column> = {},
+) {
+	const now = new Date("2026-01-01T00:00:00.000Z");
+	return backend.adapter.create<Column>({
+		model: "kanbanColumn",
+		data: {
+			title: "Todo",
+			order: 0,
+			boardId,
+			createdAt: now,
+			updatedAt: now,
+			...overrides,
+		},
+	});
+}
+
+async function seedTask(
+	backend: ReturnType<typeof makeBackend>,
+	columnId: string,
+	overrides: Partial<Task> = {},
+) {
+	const now = new Date("2026-01-01T00:00:00.000Z");
+	return backend.adapter.create<Task>({
+		model: "kanbanTask",
+		data: {
+			title: "Ship authorization",
+			priority: "HIGH",
+			order: 0,
+			columnId,
+			assigneeId: member.id,
+			isArchived: false,
+			createdAt: now,
+			updatedAt: now,
+			...overrides,
+		},
+	});
+}
+
+describe("Kanban operation-first authorization", () => {
+	it("preserves omitted-auth compatibility while retaining validation and hooks", async () => {
+		const events: string[] = [];
+		const backend = makeBackend({
+			hooks: {
+				onBeforeCreateBoard: (_input, context) => {
+					events.push(`before:${context.identity?.id ?? "anonymous"}`);
+				},
+				onBoardCreated: (_board, context) => {
+					events.push(`after:${context.identity?.id ?? "anonymous"}`);
+				},
+			},
+		});
+		const response = await backend.handler(
+			request("/boards", { method: "POST", body: { name: "Compatible" } }),
+		);
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({ name: "Compatible" });
+		expect(events).toEqual(["before:anonymous", "after:anonymous"]);
+	});
+
+	it("runs typed board error hooks without replacing the domain failure", async () => {
+		const events: string[] = [];
+		const contexts: unknown[] = [];
+		const backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeCreateBoard: (_input, context) => {
+					events.push("before");
+					expect(context.identity).toEqual(owner);
+					throw new Error("workflow rejected");
+				},
+				onCreateBoardError: (error, context) => {
+					events.push("error");
+					contexts.push(context);
+					expect(error).toMatchObject({
+						message: "workflow rejected",
+						code: "CREATE_BOARD_REJECTED",
+					});
+					throw new Error("observer failed");
+				},
+				onBoardCreated: () => {
+					events.push("after");
+				},
+			},
+		});
+
+		await expect(
+			backend
+				.forRequest(request("/create", { identity: owner }))
+				.api.kanban.createBoard({ name: "Rejected" }),
+		).rejects.toMatchObject({
+			message: "workflow rejected",
+			code: "CREATE_BOARD_REJECTED",
+		});
+		expect(events).toEqual(["before", "error"]);
+		expect(contexts).toEqual([
+			expect.objectContaining({
+				input: { name: "Rejected" },
+				facts: undefined,
+				identity: owner,
+			}),
+		]);
+		expect(contexts[0]).not.toHaveProperty("result");
+		expect(await backend.adapter.count({ model: "kanbanBoard" })).toBe(0);
+	});
+
+	it("returns 401/403 before hooks and allows owner, member, and admin where declared", async () => {
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeReadBoard: () => {
+					events.push("read");
+				},
+				onBeforeUpdateTask: () => {
+					events.push("task");
+				},
+			},
+		});
+		const board = await seedBoard(backend);
+		const column = await seedColumn(backend, board.id);
+		await seedTask(backend, column.id, { title: "Earlier", order: 0 });
+		const task = await seedTask(backend, column.id, { order: 1 });
+
+		expect((await backend.handler(request(`/boards/${board.id}`))).status).toBe(
+			401,
+		);
+		expect(
+			(
+				await backend.handler(
+					request(`/boards/${board.id}`, { identity: viewer }),
+				)
+			).status,
+		).toBe(403);
+		expect(events).toEqual([]);
+		expect(
+			authorization.can(
+				kanbanPermissions.task.update({
+					boardId: board.id,
+					ownerId: viewer.id,
+					organizationId: "spoofed-org",
+					columnId: column.id,
+					taskId: task.id,
+					isArchived: false,
+				}),
+				viewer,
+			),
+		).toBe(true);
+		await expect(
+			backend
+				.forRequest(request("/spoofed", { identity: viewer }))
+				.api.kanban.updateTask({
+					id: task.id,
+					data: { title: "Spoofed" },
+				}),
+		).rejects.toMatchObject({ statusCode: 403 });
+		expect(events).toEqual([]);
+
+		expect(
+			(
+				await backend.handler(
+					request(`/boards/${board.id}`, { identity: owner }),
+				)
+			).status,
+		).toBe(200);
+		await expect(
+			backend
+				.forRequest(request("/member", { identity: member }))
+				.api.kanban.updateTask({
+					id: task.id,
+					data: { title: "Member edit" },
+				}),
+		).resolves.toMatchObject({
+			title: "Member edit",
+			priority: "HIGH",
+			order: 1,
+			isArchived: false,
+		});
+		await expect(
+			backend
+				.forRequest(request("/admin", { identity: admin }))
+				.api.kanban.listBoards({}),
+		).resolves.toMatchObject({ total: 1 });
+		expect(events).toEqual(["read", "task"]);
+	});
+
+	it("fails closed across every anonymous HTTP operation", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const board = await seedBoard(backend);
+		const first = await seedColumn(backend, board.id);
+		const second = await seedColumn(backend, board.id, {
+			title: "Done",
+			order: 1,
+		});
+		const task = await seedTask(backend, first.id);
+		const protectedRequests = [
+			request("/boards"),
+			request(`/boards/${board.id}`),
+			request("/boards", { method: "POST", body: { name: "Denied" } }),
+			request(`/boards/${board.id}`, {
+				method: "PUT",
+				body: { name: "Denied" },
+			}),
+			request(`/boards/${board.id}`, { method: "DELETE" }),
+			request("/columns", {
+				method: "POST",
+				body: { title: "Denied", boardId: board.id },
+			}),
+			request(`/columns/${first.id}`, {
+				method: "PUT",
+				body: { title: "Denied" },
+			}),
+			request(`/columns/${first.id}`, { method: "DELETE" }),
+			request("/columns/reorder", {
+				method: "POST",
+				body: { boardId: board.id, columnIds: [second.id, first.id] },
+			}),
+			request("/tasks", {
+				method: "POST",
+				body: { title: "Denied", columnId: first.id },
+			}),
+			request(`/tasks/${task.id}`, {
+				method: "PUT",
+				body: { title: "Denied" },
+			}),
+			request(`/tasks/${task.id}`, { method: "DELETE" }),
+			request("/tasks/move", {
+				method: "POST",
+				body: { taskId: task.id, targetColumnId: second.id, targetOrder: 0 },
+			}),
+			request("/tasks/reorder", {
+				method: "POST",
+				body: { columnId: first.id, taskIds: [task.id] },
+			}),
+		];
+		for (const protectedRequest of protectedRequests) {
+			expect((await backend.handler(protectedRequest)).status).toBe(401);
+		}
+	});
+
+	it("derives ownership and task status on the server and minimizes collection data", async () => {
+		const seen: unknown[] = [];
+		const getIdentity = vi.fn(async () => owner);
+		const backend = makeBackend({
+			auth: {
+				getIdentity,
+				can: (input) => {
+					seen.push(input);
+					return input.params?.ownerId === owner.id;
+				},
+			},
+		});
+		const board = await seedBoard(backend);
+		const column = await seedColumn(backend, board.id);
+		const target = await seedColumn(backend, board.id, {
+			title: "Done",
+			order: 1,
+		});
+		const task = await seedTask(backend, column.id, { isArchived: true });
+
+		await expect(
+			backend.forRequest(request("/spoof")).api.kanban.updateTask({
+				id: task.id,
+				data: { title: "Trusted", columnId: target.id, order: 0 },
+			}),
+		).resolves.toMatchObject({ title: "Trusted", columnId: target.id });
+		expect(getIdentity).toHaveBeenCalledOnce();
+		expect(seen).toContainEqual(
+			expect.objectContaining({
+				resource: "kanban:task",
+				action: "update",
+				params: expect.objectContaining({
+					boardId: board.id,
+					columnId: column.id,
+					id: task.id,
+					ownerId: owner.id,
+					isArchived: true,
+				}),
+			}),
+		);
+		expect(seen).toContainEqual(
+			expect.objectContaining({
+				resource: "kanban:task",
+				action: "update",
+				params: expect.objectContaining({
+					id: task.id,
+					columnId: column.id,
+					targetColumnId: target.id,
+					isArchived: true,
+				}),
+			}),
+		);
+
+		const list = await backend.api.kanban.getAllBoards();
+		expect(JSON.stringify(list)).toContain("Trusted");
+		const authorizedList = await makeBackend({ auth: createAuth() });
+		const listedBoard = await seedBoard(authorizedList);
+		const listedColumn = await seedColumn(authorizedList, listedBoard.id);
+		await seedTask(authorizedList, listedColumn.id, { title: "Record secret" });
+		const result = await authorizedList
+			.forRequest(request("/boards", { identity: admin }))
+			.api.kanban.listBoards({});
+		expect(JSON.stringify(result)).not.toContain("Record secret");
+		expect(result.items[0]?.columns[0]).not.toHaveProperty("tasks");
+	});
+
+	it("keeps HTTP, request, and internal behavior on one validated lifecycle", async () => {
+		const getIdentity = vi.fn(({ headers }: Request) =>
+			headers.get("x-user-id"),
+		);
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createAuth((incoming) => {
+				getIdentity(incoming);
+				return owner;
+			}),
+			hooks: {
+				onBeforeUpdateBoard: (_id, _data, context) => {
+					events.push(`before:${context.identity?.id ?? "internal"}`);
+				},
+				onBoardUpdated: (_board, context) => {
+					events.push(`after:${context.identity?.id ?? "internal"}`);
+				},
+			},
+		});
+		const board = await seedBoard(backend);
+		const response = await backend.handler(
+			request(`/boards/${board.id}`, {
+				method: "PUT",
+				identity: owner,
+				body: { name: "HTTP" },
+			}),
+		);
+		expect(response.status).toBe(200);
+		await backend
+			.forRequest(request("/request", { identity: owner }))
+			.api.kanban.updateBoard({ id: board.id, data: { name: "Request" } });
+		await expect(
+			backend.internal.kanban.updateBoard({ id: board.id, data: { name: "" } }),
+		).rejects.toThrow();
+		await backend.internal.kanban.updateBoard({
+			id: board.id,
+			data: { name: "Internal" },
+		});
+		expect(events).toEqual([
+			"before:owner-1",
+			"after:owner-1",
+			"before:owner-1",
+			"after:owner-1",
+			"before:internal",
+			"after:internal",
+		]);
+		expect(getIdentity).toHaveBeenCalledTimes(2);
+	});
+
+	it("keeps task ordering and lifecycle hooks active for trusted internal jobs", async () => {
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createAuth(() => {
+				throw new Error("internal must not resolve identity");
+			}),
+			hooks: {
+				onBeforeUpdateTask: (_id, _data, context) => {
+					events.push(`before:${context.identity?.id ?? "internal"}`);
+				},
+				onTaskUpdated: (_task, context) => {
+					events.push(`after:${context.identity?.id ?? "internal"}`);
+				},
+			},
+		});
+		const board = await seedBoard(backend);
+		const source = await seedColumn(backend, board.id);
+		const target = await seedColumn(backend, board.id, {
+			title: "Done",
+			order: 1,
+		});
+		const moved = await seedTask(backend, source.id);
+		const sibling = await seedTask(backend, target.id, {
+			title: "Existing",
+			order: 0,
+		});
+		await backend.internal.kanban.moveTask({
+			taskId: moved.id,
+			targetColumnId: target.id,
+			targetOrder: 0,
+		});
+		const tasks = await backend.adapter.findMany<Task>({
+			model: "kanbanTask",
+			where: [{ field: "columnId", value: target.id }],
+			sortBy: { field: "order", direction: "asc" },
+		});
+		expect(tasks.map(({ id, order }) => [id, order])).toEqual([
+			[moved.id, 0],
+			[sibling.id, 1],
+		]);
+		expect(events).toEqual(["before:internal", "after:internal"]);
+	});
+
+	it("preserves identity/rule/fact failures and missing rules before hooks", async () => {
+		const missing = defineAuthorization({
+			identity: z.object({
+				id: z.string(),
+				role: z.enum(["user", "admin"]),
+				organizationIds: z.array(z.string()),
+			}),
+			permissions: [kanbanPermissions] as const,
+			rules: ({ kanban }) => [kanban.board.create.when(() => true)],
+		});
+		const missingBackend = makeBackend({
+			auth: createAuth(undefined, missing),
+		});
+		const board = await seedBoard(missingBackend);
+		await expect(
+			missingBackend
+				.forRequest(request("/missing", { identity: owner }))
+				.api.kanban.updateBoard({ id: board.id, data: { name: "No" } }),
+		).rejects.toMatchObject({ statusCode: 403 });
+
+		const identityFailure = makeBackend({
+			auth: createAuth(() => {
+				throw new Error("session unavailable");
+			}),
+		});
+		const identityBoard = await seedBoard(identityFailure, {
+			slug: "identity",
+		});
+		await expect(
+			identityFailure.forRequest(request("/identity")).api.kanban.updateBoard({
+				id: identityBoard.id,
+				data: { name: "No" },
+			}),
+		).rejects.toThrow("session unavailable");
+
+		const failing = defineAuthorization({
+			identity: z.object({
+				id: z.string(),
+				role: z.enum(["user", "admin"]),
+				organizationIds: z.array(z.string()),
+			}),
+			permissions: [kanbanPermissions] as const,
+			rules: ({ kanban }) => [
+				kanban.board.update.when(() => {
+					throw new Error("policy unavailable");
+				}),
+			],
+		});
+		const ruleFailure = makeBackend({ auth: createAuth(undefined, failing) });
+		const ruleBoard = await seedBoard(ruleFailure, { slug: "rule" });
+		await expect(
+			ruleFailure
+				.forRequest(request("/rule", { identity: owner }))
+				.api.kanban.updateBoard({
+					id: ruleBoard.id,
+					data: { name: "No" },
+				}),
+		).rejects.toThrow("policy unavailable");
+
+		const factEvents: string[] = [];
+		const factFailure = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeUpdateBoard: () => {
+					factEvents.push("hook");
+				},
+			},
+		});
+		const factBoard = await seedBoard(factFailure, { slug: "facts" });
+		vi.spyOn(factFailure.adapter, "findOne").mockRejectedValueOnce(
+			new Error("database unavailable"),
+		);
+		await expect(
+			factFailure
+				.forRequest(request("/facts", { identity: owner }))
+				.api.kanban.updateBoard({
+					id: factBoard.id,
+					data: { name: "No" },
+				}),
+		).rejects.toThrow("database unavailable");
+		expect(factEvents).toEqual([]);
+	});
+
+	it("rejects stale authoritative facts before hooks without reverting the winner", async () => {
+		const events: string[] = [];
+		let backend: ReturnType<typeof makeBackend>;
+		let raced = false;
+		backend = makeBackend({
+			auth: createAuth(async () => {
+				if (!raced) {
+					raced = true;
+					const board = await backend.adapter.findOne<Board>({
+						model: "kanbanBoard",
+						where: [{ field: "slug", value: "race" }],
+					});
+					if (board) {
+						await backend.adapter.update<Board>({
+							model: "kanbanBoard",
+							where: [{ field: "id", value: board.id }],
+							update: {
+								ownerId: viewer.id,
+								updatedAt: new Date("2026-02-01T00:00:00.000Z"),
+							},
+						});
+					}
+				}
+				return owner;
+			}),
+			hooks: {
+				onBeforeUpdateBoard: () => {
+					events.push("hook");
+				},
+			},
+		});
+		const board = await seedBoard(backend, { slug: "race" });
+		await expect(
+			backend
+				.forRequest(request("/race"))
+				.api.kanban.updateBoard({ id: board.id, data: { name: "Stale" } }),
+		).rejects.toMatchObject({ statusCode: 409, code: "KANBAN_STATE_CHANGED" });
+		expect(events).toEqual([]);
+		expect(
+			await backend.adapter.findOne<Board>({
+				model: "kanbanBoard",
+				where: [{ field: "id", value: board.id }],
+			}),
+		).toMatchObject({ ownerId: viewer.id, name: "Roadmap" });
+	});
+
+	it("fails before claims and hooks when the adapter cannot isolate sensitive writes", async () => {
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createAuth(),
+			adapter: rawMemoryAdapter,
+			hooks: {
+				onBeforeUpdateBoard: () => {
+					events.push("hook");
+				},
+			},
+		});
+		const board = await seedBoard(backend);
+		await expect(
+			backend
+				.forRequest(request("/unsafe", { identity: owner }))
+				.api.kanban.updateBoard({ id: board.id, data: { name: "Unsafe" } }),
+		).rejects.toMatchObject({
+			statusCode: 500,
+			code: "ATOMIC_TRANSACTION_REQUIRED",
+		});
+		expect(events).toEqual([]);
+		expect(
+			await backend.adapter.findOne<Board>({
+				model: "kanbanBoard",
+				where: [{ field: "id", value: board.id }],
+			}),
+		).toMatchObject({ name: "Roadmap" });
+	});
+
+	it("serializes competing moves, preserves ordering, and runs only the winning hook", async () => {
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeUpdateTask: (id) => {
+					events.push(id);
+				},
+			},
+		});
+		const board = await seedBoard(backend);
+		const source = await seedColumn(backend, board.id);
+		const target = await seedColumn(backend, board.id, {
+			title: "Done",
+			order: 1,
+		});
+		const moved = await seedTask(backend, source.id);
+		const sourceSibling = await seedTask(backend, source.id, {
+			title: "Source sibling",
+			order: 1,
+		});
+		const targetSibling = await seedTask(backend, target.id, {
+			title: "Target sibling",
+			order: 0,
+		});
+		const api = backend.forRequest(request("/move", { identity: owner })).api
+			.kanban;
+		const settled = await Promise.allSettled([
+			api.moveTask({
+				taskId: moved.id,
+				targetColumnId: target.id,
+				targetOrder: 0,
+			}),
+			api.moveTask({
+				taskId: moved.id,
+				targetColumnId: target.id,
+				targetOrder: 1,
+			}),
+		]);
+		expect(settled.filter(({ status }) => status === "fulfilled")).toHaveLength(
+			1,
+		);
+		expect(settled.filter(({ status }) => status === "rejected")).toHaveLength(
+			1,
+		);
+		expect(events).toEqual([moved.id]);
+		const sourceTasks = await backend.adapter.findMany<Task>({
+			model: "kanbanTask",
+			where: [{ field: "columnId", value: source.id }],
+			sortBy: { field: "order", direction: "asc" },
+		});
+		const targetTasks = await backend.adapter.findMany<Task>({
+			model: "kanbanTask",
+			where: [{ field: "columnId", value: target.id }],
+			sortBy: { field: "order", direction: "asc" },
+		});
+		expect(sourceTasks.map(({ id, order }) => [id, order])).toEqual([
+			[sourceSibling.id, 0],
+		]);
+		expect(targetTasks.map((task) => task.id).sort()).toEqual(
+			[moved.id, targetSibling.id].sort(),
+		);
+		expect(targetTasks.map((task) => task.order).sort()).toEqual([0, 1]);
+	});
+
+	it("rolls back move claims when a post-authorization domain hook rejects", async () => {
+		const backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeUpdateTask: () => {
+					throw new Error("workflow rejected");
+				},
+			},
+		});
+		const board = await seedBoard(backend);
+		const source = await seedColumn(backend, board.id);
+		const target = await seedColumn(backend, board.id, {
+			title: "Done",
+			order: 1,
+		});
+		const task = await seedTask(backend, source.id);
+		await expect(
+			backend
+				.forRequest(request("/rejected", { identity: owner }))
+				.api.kanban.moveTask({
+					taskId: task.id,
+					targetColumnId: target.id,
+					targetOrder: 0,
+				}),
+		).rejects.toMatchObject({ statusCode: 403, code: "MOVE_TASK_REJECTED" });
+		expect(
+			await backend.adapter.findOne<Task>({
+				model: "kanbanTask",
+				where: [{ field: "id", value: task.id }],
+			}),
+		).toMatchObject({ columnId: source.id, order: 0 });
+	});
+
+	it("keeps trusted raw helpers out of authorized namespaces and documents raw SSG data", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const board = await seedBoard(backend);
+		const column = await seedColumn(backend, board.id);
+		await seedTask(backend, column.id);
+		expect("prefetchForRoute" in backend.internal.kanban).toBe(false);
+		expect("getAllBoards" in backend.internal.kanban).toBe(false);
+		expect("createTask" in backend.internal.kanban).toBe(true);
+		expect(
+			"prefetchForRoute" in backend.forRequest(request("/raw")).api.kanban,
+		).toBe(false);
+		const queryClient = new QueryClient();
+		await backend.api.kanban.prefetchForRoute("boards", queryClient);
+		expect(
+			queryClient.getQueryData<Array<{ columns: Array<unknown> }>>(
+				KANBAN_QUERY_KEYS.boardsList({}),
+			),
+		).toEqual([
+			expect.objectContaining({
+				id: board.id,
+				columns: [expect.not.objectContaining({ tasks: expect.anything() })],
+			}),
+		]);
+		await backend.api.kanban.prefetchForRoute("board", queryClient, {
+			boardId: board.id,
+		});
+		expect(
+			queryClient.getQueryData(KANBAN_QUERY_KEYS.boardDetail(board.id)),
+		).toMatchObject({
+			id: board.id,
+		});
+	});
+});

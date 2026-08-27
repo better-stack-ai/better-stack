@@ -8,10 +8,10 @@ import type { SerializedColumn, SerializedTask } from "../../../types";
 
 interface KanbanBoardProps {
 	boardId: string;
+	ownerId?: string;
+	organizationId?: string;
 	columns: (SerializedColumn & { tasks: SerializedTask[] })[];
 	kanbanState: Record<string, SerializedTask[]>;
-	canMoveColumns: boolean;
-	canMoveTasks: boolean;
 	onKanbanChange: (newData: Record<string, SerializedTask[]>) => void;
 	onAddTask: (columnId: string) => void;
 	onEditTask: (columnId: string, taskId: string) => void;
@@ -21,10 +21,10 @@ interface KanbanBoardProps {
 
 function KanbanBoardComponent({
 	boardId,
+	ownerId,
+	organizationId,
 	columns,
 	kanbanState,
-	canMoveColumns,
-	canMoveTasks,
 	onKanbanChange,
 	onAddTask,
 	onEditTask,
@@ -76,9 +76,9 @@ function KanbanBoardComponent({
 					<ColumnContent
 						key={column.id}
 						boardId={boardId}
+						ownerId={ownerId}
+						organizationId={organizationId}
 						column={column}
-						canMoveColumn={canMoveColumns}
-						canMoveTasks={canMoveTasks}
 						onAddTask={() => onAddTask(column.id)}
 						onEditTask={(taskId) => onEditTask(column.id, taskId)}
 						onEditColumn={() => onEditColumn(column.id)}

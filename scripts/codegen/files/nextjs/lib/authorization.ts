@@ -3,22 +3,46 @@ import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
 import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
 import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
 import { formBuilderPermissions } from "@btst/stack/plugins/form-builder/permissions";
+import { kanbanPermissions } from "@btst/stack/plugins/kanban/permissions";
 import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 import { z } from "zod";
 
+const identitySchema = z.object({
+	id: z.string(),
+	role: z.enum(["user", "admin"]),
+	organizationIds: z.array(z.string()),
+});
+
+type Identity = z.output<typeof identitySchema>;
+type KanbanBoardFacts = {
+	ownerId?: string;
+	organizationId?: string;
+};
+
+function canManageKanbanBoard(
+	identity: Identity | null,
+	facts: KanbanBoardFacts,
+) {
+	return (
+		identity !== null &&
+		(identity.role === "admin" ||
+			identity.id === facts.ownerId ||
+			(facts.organizationId !== undefined &&
+				identity.organizationIds.includes(facts.organizationId)))
+	);
+}
+
 /** Browser-safe authorization contract shared by the client and server adapters. */
 export const authorization = defineAuthorization({
-	identity: z.object({
-		id: z.string(),
-		role: z.enum(["user", "admin"]),
-	}),
+	identity: identitySchema,
 	permissions: [
 		blogPermissions,
 		cmsPermissions,
 		commentsPermissions,
 		formBuilderPermissions,
+		kanbanPermissions,
 	] as const,
-	rules: ({ blog, cms, comments, forms }) => [
+	rules: ({ blog, cms, comments, forms, kanban }) => [
 		blog.post.read.when(({ identity, facts }) => {
 			if (facts.scope === "published") return true;
 			if (facts.scope === "post" && (!facts.exists || facts.published)) {
@@ -108,6 +132,45 @@ export const authorization = defineAuthorization({
 		forms.submission.delete.when(
 			({ identity, facts }) =>
 				identity?.role === "admin" || identity?.id === facts.ownerId,
+		),
+		kanban.board.read.when(({ identity, facts }) =>
+			facts.scope === "collection"
+				? identity?.role === "admin"
+				: canManageKanbanBoard(identity, facts),
+		),
+		kanban.board.create.when(({ identity }) => identity !== null),
+		kanban.board.update.when(({ identity, facts }) =>
+			canManageKanbanBoard(identity, facts),
+		),
+		kanban.board.delete.when(({ identity, facts }) =>
+			canManageKanbanBoard(identity, facts),
+		),
+		kanban.column.create.when(({ identity, facts }) =>
+			canManageKanbanBoard(identity, facts),
+		),
+		kanban.column.update.when(({ identity, facts }) =>
+			canManageKanbanBoard(identity, facts),
+		),
+		kanban.column.delete.when(({ identity, facts }) =>
+			canManageKanbanBoard(identity, facts),
+		),
+		kanban.column.reorder.when(({ identity, facts }) =>
+			canManageKanbanBoard(identity, facts),
+		),
+		kanban.task.create.when(({ identity, facts }) =>
+			canManageKanbanBoard(identity, facts),
+		),
+		kanban.task.update.when(({ identity, facts }) =>
+			canManageKanbanBoard(identity, facts),
+		),
+		kanban.task.move.when(({ identity, facts }) =>
+			canManageKanbanBoard(identity, facts),
+		),
+		kanban.task.delete.when(({ identity, facts }) =>
+			canManageKanbanBoard(identity, facts),
+		),
+		kanban.task.reorder.when(({ identity, facts }) =>
+			canManageKanbanBoard(identity, facts),
 		),
 	],
 });

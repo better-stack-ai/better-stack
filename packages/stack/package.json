@@ -492,6 +492,16 @@
         "default": "./dist/plugins/kanban/api/index.cjs"
       }
     },
+    "./plugins/kanban/permissions": {
+      "import": {
+        "types": "./dist/plugins/kanban/permissions.d.ts",
+        "default": "./dist/plugins/kanban/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/kanban/permissions.d.cts",
+        "default": "./dist/plugins/kanban/permissions.cjs"
+      }
+    },
     "./plugins/kanban/client": {
       "import": {
         "types": "./dist/plugins/kanban/client/index.d.ts",
@@ -884,6 +894,9 @@
       ],
       "plugins/kanban/api": [
         "./dist/plugins/kanban/api/index.d.ts"
+      ],
+      "plugins/kanban/permissions": [
+        "./dist/plugins/kanban/permissions.d.ts"
       ],
       "plugins/kanban/client": [
         "./dist/plugins/kanban/client/index.d.ts"

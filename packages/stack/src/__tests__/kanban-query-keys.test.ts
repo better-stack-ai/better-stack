@@ -2,9 +2,13 @@
  * SSG guard: factory-generated Kanban query keys must stay deep-equal to the
  * builders used by `prefetchForRoute`. Key drift silently breaks hydration.
  */
-import { describe, expect, it, vi } from "vitest";
+import { QueryClient } from "@tanstack/react-query";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createStackClient } from "../client";
 import { KANBAN_QUERY_KEYS } from "../plugins/kanban/api/query-key-defs";
+import { kanbanClientPlugin } from "../plugins/kanban/client/plugin";
 import { createKanbanQueryKeys } from "../plugins/kanban/query-keys";
+import { createTanStackPageOptions } from "../tanstack";
 
 const client = vi.fn() as any;
 
@@ -46,6 +50,169 @@ describe("kanban query keys match SSG prefetch keys", () => {
 			"bySlug",
 			"slug",
 			"roadmap",
+		]);
+	});
+});
+
+describe("Kanban authenticated SSR hydration", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+		vi.unstubAllGlobals();
+	});
+
+	it("forwards request headers and seeds detail metadata under the hydrated identity key", async () => {
+		const queryClient = new QueryClient();
+		const identity = { id: "owner-1", role: "admin" };
+		const headers = new Headers({ cookie: "session=request-session" });
+		const board = {
+			id: "board-1",
+			name: "Private roadmap",
+			slug: "private-roadmap",
+			description: "",
+			ownerId: identity.id,
+			organizationId: null,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+			columns: [],
+		};
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify(board), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+		const plugin = kanbanClientPlugin({
+			apiBaseURL: "http://test.local",
+			apiBasePath: "/api/data",
+			siteBaseURL: "http://test.local",
+			siteBasePath: "/pages",
+			queryClient,
+			headers,
+			identityPartition: identity,
+		});
+
+		const route = plugin.routes().board({ params: { boardId: board.id } });
+		await route.loader?.();
+
+		const queries = createKanbanQueryKeys(client);
+		expect(
+			queryClient.getQueryData(
+				queries.boards.detail(board.id, identity).queryKey,
+			),
+		).toEqual(board);
+		expect(
+			queryClient.getQueryData(queries.boards.detail(board.id).queryKey),
+		).toBeUndefined();
+		expect(route.meta?.()).toContainEqual({ title: board.name });
+		const [, init] = fetchMock.mock.calls[0] ?? [];
+		expect(new Headers(init?.headers).get("cookie")).toBe(
+			"session=request-session",
+		);
+	});
+
+	it("reads hydrated identity-partitioned metadata during TanStack client navigation", async () => {
+		const queryClient = new QueryClient();
+		const identity = { id: "owner-1", role: "admin" };
+		const board = {
+			id: "board-1",
+			name: "Hydrated private roadmap",
+			slug: "private-roadmap",
+			description: "",
+			ownerId: identity.id,
+			organizationId: null,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+			columns: [],
+		};
+		queryClient.setQueryData(
+			createKanbanQueryKeys(client).boards.detail(board.id, identity).queryKey,
+			board,
+		);
+
+		const stackClient = (identityPartition?: typeof identity) =>
+			createStackClient({
+				plugins: {
+					kanban: kanbanClientPlugin({
+						apiBaseURL: "http://test.local",
+						apiBasePath: "/api/data",
+						siteBaseURL: "http://test.local",
+						siteBasePath: "/pages",
+						queryClient,
+						identityPartition,
+					}),
+				},
+			});
+		const page = createTanStackPageOptions<{ queryClient: QueryClient }>({
+			getStackClient: () => stackClient(),
+			getLoaderStackClient: () => stackClient(identity),
+		});
+		vi.stubGlobal("window", {});
+
+		const loaderData = await page.loader({
+			params: { _splat: "kanban/board-1" },
+			context: { queryClient },
+		});
+
+		expect(loaderData.meta).toContainEqual({ title: board.name });
+		expect(page.head({ loaderData }).meta).toContainEqual({
+			title: board.name,
+		});
+	});
+});
+
+describe("Kanban anonymous sitemap", () => {
+	afterEach(() => vi.restoreAllMocks());
+
+	function createClient() {
+		return createStackClient({
+			plugins: {
+				kanban: kanbanClientPlugin({
+					apiBaseURL: "http://test.local",
+					apiBasePath: "/api/data",
+					siteBaseURL: "http://test.local",
+					siteBasePath: "/pages",
+					queryClient: new QueryClient(),
+				}),
+			},
+		});
+	}
+
+	it("omits every route when anonymous collection authorization fails", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ message: "Unauthorized" }), {
+				status: 401,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+
+		await expect(createClient().generateSitemap()).resolves.toEqual([]);
+	});
+
+	it("publishes routes only after an explicit public collection succeeds", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					items: [
+						{
+							id: "public-board",
+							updatedAt: "2026-01-01T00:00:00.000Z",
+							columns: [],
+						},
+					],
+					total: 1,
+				}),
+				{
+					status: 200,
+					headers: { "content-type": "application/json" },
+				},
+			),
+		);
+
+		expect(
+			(await createClient().generateSitemap()).map(({ url }) => url),
+		).toEqual([
+			"http://test.local/pages/kanban",
+			"http://test.local/pages/kanban/public-board",
 		]);
 	});
 });

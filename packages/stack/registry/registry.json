@@ -145,6 +145,7 @@
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
+        "zod",
         "date-fns",
         "@dnd-kit/core",
         "@dnd-kit/sortable",

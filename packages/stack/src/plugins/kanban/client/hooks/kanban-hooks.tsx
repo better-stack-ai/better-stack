@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { usePluginOverrides } from "@btst/stack/context";
+import { useIdentity, usePluginOverrides } from "@btst/stack/context";
 import type {
 	ResourceFormConfig,
 	ResourceFormResult,
@@ -14,6 +14,11 @@ import type {
 } from "../../types";
 import { kanban } from "./kanban-resource";
 
+function useIdentityPartition() {
+	const { identity, isPending } = useIdentity();
+	return isPending ? ("pending" as const) : (identity ?? undefined);
+}
+
 // ============ Board Hooks ============
 
 /** Hook to fetch a list of boards. */
@@ -22,7 +27,8 @@ export function useBoards(params?: {
 	ownerId?: string;
 	organizationId?: string;
 }) {
-	return kanban.boards.list.use([params]);
+	const identityPartition = useIdentityPartition();
+	return kanban.boards.list.use([params, identityPartition]);
 }
 
 /** Suspense variant of useBoards. */
@@ -31,17 +37,22 @@ export function useSuspenseBoards(params?: {
 	ownerId?: string;
 	organizationId?: string;
 }) {
-	return kanban.boards.list.useSuspense([params]);
+	const identityPartition = useIdentityPartition();
+	return kanban.boards.list.useSuspense([params, identityPartition]);
 }
 
 /** Hook to fetch a single board by ID. */
 export function useBoard(boardId: string) {
-	return kanban.boards.detail.use([boardId], { enabled: !!boardId });
+	const identityPartition = useIdentityPartition();
+	return kanban.boards.detail.use([boardId, identityPartition], {
+		enabled: !!boardId,
+	});
 }
 
 /** Suspense variant of useBoard. */
 export function useSuspenseBoard(boardId: string) {
-	return kanban.boards.detail.useSuspense([boardId]);
+	const identityPartition = useIdentityPartition();
+	return kanban.boards.detail.useSuspense([boardId, identityPartition]);
 }
 
 /**
@@ -176,14 +187,15 @@ export function useTaskMutations() {
 /** Resolve a user from the consumer-provided callback. */
 export function useResolveUser(userId: string | undefined | null) {
 	const { resolveUser } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const identityPartition = useIdentityPartition();
 
 	return useQuery<KanbanUser | null>({
-		queryKey: ["kanban", "users", userId],
+		queryKey: ["kanban", "users", userId, identityPartition],
 		queryFn: async () => {
 			if (!userId) return null;
 			return resolveUser(userId);
 		},
-		enabled: !!userId,
+		enabled: !!userId && identityPartition !== "pending",
 		staleTime: 5 * 60 * 1000,
 		gcTime: 10 * 60 * 1000,
 	});
@@ -192,10 +204,12 @@ export function useResolveUser(userId: string | undefined | null) {
 /** Search for assignable users through the consumer-provided callback. */
 export function useSearchUsers(query: string, boardId?: string) {
 	const { searchUsers } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const identityPartition = useIdentityPartition();
 
 	return useQuery<KanbanUser[]>({
-		queryKey: ["kanban", "users", "search", query, boardId],
+		queryKey: ["kanban", "users", "search", query, boardId, identityPartition],
 		queryFn: () => searchUsers(query, boardId),
+		enabled: identityPartition !== "pending",
 		staleTime: 30_000,
 	});
 }

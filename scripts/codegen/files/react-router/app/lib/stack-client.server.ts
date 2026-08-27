@@ -10,5 +10,6 @@ export async function getStackClientForRequest(
 	return getStackClient(queryClient, {
 		headers: request.headers,
 		currentUserId: identity?.id,
+		identity: identity ?? undefined,
 	});
 }

@@ -4,6 +4,7 @@ import type {
 	BoardWithColumns,
 	SerializedTask,
 	SerializedColumn,
+	SerializedBoardSummary,
 	SerializedBoardWithColumns,
 } from "../types";
 
@@ -46,4 +47,20 @@ export function serializeBoard(
 		updatedAt: board.updatedAt.toISOString(),
 		columns: board.columns.map(serializeColumn),
 	};
+}
+
+/** Serialize a collection-safe board summary without task rows. */
+export function serializeBoardSummary(board: BoardWithColumns) {
+	const serialized = serializeBoard(board);
+	return {
+		id: serialized.id,
+		name: serialized.name,
+		slug: serialized.slug,
+		description: serialized.description,
+		ownerId: serialized.ownerId,
+		organizationId: serialized.organizationId,
+		createdAt: serialized.createdAt,
+		updatedAt: serialized.updatedAt,
+		columns: serialized.columns.map(({ tasks: _tasks, ...column }) => column),
+	} satisfies SerializedBoardSummary;
 }

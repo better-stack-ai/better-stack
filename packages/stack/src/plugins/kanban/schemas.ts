@@ -26,13 +26,15 @@ export const BoardDomainSchema = z.object({
 	...boardDateFields,
 });
 
-export const createBoardSchema = BoardDomainSchema.extend({
-	slug: BoardDomainSchema.shape.slug.optional(),
-}).omit({ id: true });
+/** Browser-safe board create input. Server-owned timestamps are not accepted. */
+export const createBoardSchema = z.object({
+	...boardCoreFields,
+	slug: boardCoreFields.slug.optional(),
+});
 
-export const updateBoardSchema = BoardDomainSchema.extend({
-	id: z.string(),
-})
+/** Browser-safe board update input. Server-owned timestamps are not accepted. */
+export const updateBoardSchema = z
+	.object({ id: z.string(), ...boardCoreFields })
 	.partial()
 	.required({ id: true });
 
@@ -45,21 +47,23 @@ const columnDateFields = {
 
 const columnCoreFields = {
 	title: z.string().min(1, "Title is required"),
-	order: z.number().int().min(0).optional().default(0),
+	order: z.number().int().min(0).optional(),
 	boardId: z.string().min(1, "Board ID is required"),
 };
 
 export const ColumnDomainSchema = z.object({
 	id: z.string().optional(),
 	...columnCoreFields,
+	order: columnCoreFields.order.default(0),
 	...columnDateFields,
 });
 
-export const createColumnSchema = ColumnDomainSchema.omit({ id: true });
+/** Browser-safe column create input. Server-owned timestamps are not accepted. */
+export const createColumnSchema = z.object(columnCoreFields);
 
-export const updateColumnSchema = ColumnDomainSchema.extend({
-	id: z.string(),
-})
+/** Browser-safe column update input. Server-owned timestamps are not accepted. */
+export const updateColumnSchema = z
+	.object({ id: z.string(), ...columnCoreFields })
 	.partial()
 	.required({ id: true });
 
@@ -71,27 +75,43 @@ const taskDateFields = {
 	updatedAt: z.coerce.date().optional(),
 };
 
+const taskOperationCompletedAt = z
+	.union([z.iso.datetime(), z.date()])
+	.transform((value) => (value instanceof Date ? value.toISOString() : value))
+	.optional();
+
 const taskCoreFields = {
 	title: z.string().min(1, "Title is required"),
 	description: z.string().optional(),
-	priority: PrioritySchema.optional().default("MEDIUM"),
-	order: z.number().int().min(0).optional().default(0),
+	priority: PrioritySchema.optional(),
+	order: z.number().int().min(0).optional(),
 	columnId: z.string().min(1, "Column ID is required"),
 	assigneeId: z.string().optional().nullable(),
-	isArchived: z.boolean().optional().default(false),
+	isArchived: z.boolean().optional(),
 };
 
 export const TaskDomainSchema = z.object({
 	id: z.string().optional(),
 	...taskCoreFields,
+	priority: taskCoreFields.priority.default("MEDIUM"),
+	order: taskCoreFields.order.default(0),
+	isArchived: taskCoreFields.isArchived.default(false),
 	...taskDateFields,
 });
 
-export const createTaskSchema = TaskDomainSchema.omit({ id: true });
+/** Browser-safe task create input. Dates cross the boundary as ISO strings. */
+export const createTaskSchema = z.object({
+	...taskCoreFields,
+	completedAt: taskOperationCompletedAt,
+});
 
-export const updateTaskSchema = TaskDomainSchema.extend({
-	id: z.string(),
-})
+/** Browser-safe task update input. Dates cross the boundary as ISO strings. */
+export const updateTaskSchema = z
+	.object({
+		id: z.string(),
+		...taskCoreFields,
+		completedAt: taskOperationCompletedAt,
+	})
 	.partial()
 	.required({ id: true });
 
