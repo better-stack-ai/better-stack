@@ -177,6 +177,173 @@ describe("createClientAuth", () => {
 		expect(getIdentity).not.toHaveBeenCalled();
 	});
 
+	it("synchronizes a changed hydrated identity while the provider stays mounted", async () => {
+		const getIdentity = vi.fn(() => ({
+			id: "browser-user",
+			role: "user" as const,
+		}));
+		const clientAuth = createClientAuth({ authorization, getIdentity });
+		let identityState: ReturnType<typeof clientAuth.useIdentity> | undefined;
+		let canState: ReturnType<typeof clientAuth.useCan> | undefined;
+
+		function Probe() {
+			identityState = clientAuth.useIdentity();
+			canState = clientAuth.useCan(
+				blogPermissions.post.delete({
+					id: "post-1",
+					authorId: "account-user",
+				}),
+			);
+			return null;
+		}
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				auth={clientAuth}
+				initialIdentity={{ id: "server-admin", role: "admin" }}
+			>
+				<Probe />
+			</StackProvider>,
+		);
+		expect(identityState).toMatchObject({
+			identity: { id: "server-admin", role: "admin" },
+			isPending: false,
+		});
+		expect(canState).toEqual({ can: true, isPending: false });
+
+		await render(
+			<StackProvider basePath="/pages" auth={clientAuth} initialIdentity={null}>
+				<Probe />
+			</StackProvider>,
+		);
+
+		expect(identityState).toMatchObject({ identity: null, isPending: false });
+		expect(canState).toEqual({ can: false, isPending: false });
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				auth={clientAuth}
+				initialIdentity={{ id: "account-user", role: "user" }}
+			>
+				<Probe />
+			</StackProvider>,
+		);
+
+		expect(identityState).toMatchObject({
+			identity: { id: "account-user", role: "user" },
+			isPending: false,
+		});
+		expect(canState).toEqual({ can: true, isPending: false });
+		expect(getIdentity).not.toHaveBeenCalled();
+	});
+
+	it("re-parses the snapshot when the mounted provider changes without an automatic refetch", async () => {
+		const firstResolver = vi.fn(() => ({ id: "browser-first" }));
+		const secondResolver = vi.fn(() => ({ id: "browser-second" }));
+		const firstProvider = {
+			mode: "one-rule" as const,
+			contract: { parseIdentity: () => ({ id: "parsed-first" }) },
+			getIdentity: firstResolver,
+		};
+		const secondProvider = {
+			mode: "one-rule" as const,
+			contract: { parseIdentity: () => ({ id: "parsed-second" }) },
+			getIdentity: secondResolver,
+		};
+		const initialIdentity = { id: "serialized-user" };
+		let identityState: ReturnType<typeof useIdentity> | undefined;
+
+		function Probe() {
+			identityState = useIdentity();
+			return null;
+		}
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				auth={firstProvider}
+				initialIdentity={initialIdentity}
+			>
+				<Probe />
+			</StackProvider>,
+		);
+		expect(identityState?.identity).toEqual({ id: "parsed-first" });
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				auth={secondProvider}
+				initialIdentity={initialIdentity}
+			>
+				<Probe />
+			</StackProvider>,
+		);
+
+		expect(identityState?.identity).toEqual({ id: "parsed-second" });
+		expect(firstResolver).not.toHaveBeenCalled();
+		expect(secondResolver).not.toHaveBeenCalled();
+
+		await act(async () => identityState?.refetch());
+		expect(firstResolver).not.toHaveBeenCalled();
+		expect(secondResolver).toHaveBeenCalledOnce();
+		expect(identityState?.identity).toEqual({ id: "browser-second" });
+	});
+
+	it("ignores an identity resolution that finishes after the provider changes", async () => {
+		let finishFirstResolution: ((identity: { id: string }) => void) | undefined;
+		const firstResolver = vi.fn(
+			() =>
+				new Promise<{ id: string }>((resolve) => {
+					finishFirstResolution = resolve;
+				}),
+		);
+		const secondResolver = vi.fn(() => ({ id: "browser-second" }));
+		const firstProvider = { getIdentity: firstResolver };
+		const secondProvider = {
+			mode: "one-rule" as const,
+			contract: { parseIdentity: () => ({ id: "parsed-second" }) },
+			getIdentity: secondResolver,
+		};
+		let identityState: ReturnType<typeof useIdentity> | undefined;
+
+		function Probe() {
+			identityState = useIdentity();
+			return null;
+		}
+
+		await render(
+			<StackProvider basePath="/pages" auth={firstProvider}>
+				<Probe />
+			</StackProvider>,
+		);
+		expect(identityState).toMatchObject({ identity: null, isPending: true });
+		expect(firstResolver).toHaveBeenCalledOnce();
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				auth={secondProvider}
+				initialIdentity={{ id: "serialized-user" }}
+			>
+				<Probe />
+			</StackProvider>,
+		);
+		expect(identityState).toMatchObject({
+			identity: { id: "parsed-second" },
+			isPending: false,
+		});
+		expect(secondResolver).not.toHaveBeenCalled();
+
+		await act(async () => finishFirstResolution?.({ id: "late-first" }));
+		expect(identityState).toMatchObject({
+			identity: { id: "parsed-second" },
+			isPending: false,
+		});
+		expect(secondResolver).not.toHaveBeenCalled();
+	});
+
 	it("surfaces an invalid hydrated identity as an identity error", async () => {
 		const getIdentity = vi.fn(() => ({
 			id: "browser-user",

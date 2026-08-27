@@ -4,6 +4,7 @@ import {
 	useCallback,
 	useContext,
 	useEffect,
+	useMemo,
 	useRef,
 	useState,
 	type ReactNode,
@@ -76,29 +77,81 @@ export function StackAuthBoundary({
 	initialIdentity?: StackIdentity | null;
 	children?: ReactNode;
 }) {
-	const [state, setState] = useState<{
+	type BoundaryState = {
 		identity: StackIdentity | null;
 		isPending: boolean;
 		error?: Error;
-	}>(() => createInitialAuthState(provider, initialIdentity));
+		sourceProvider: StackAuthProvider;
+		sourceInitialIdentity: StackIdentity | null | undefined;
+	};
+
+	const hydratedState = useMemo(
+		() => createInitialAuthState(provider, initialIdentity),
+		[provider, initialIdentity],
+	);
+	const [state, setState] = useState<BoundaryState>(() => ({
+		...hydratedState,
+		sourceProvider: provider,
+		sourceInitialIdentity: initialIdentity,
+	}));
+	const sourceChanged =
+		state.sourceProvider !== provider ||
+		state.sourceInitialIdentity !== initialIdentity;
+	const currentState = sourceChanged ? hydratedState : state;
+	const sourceRef = useRef({ provider, initialIdentity });
+	sourceRef.current = { provider, initialIdentity };
+
+	useEffect(() => {
+		if (!sourceChanged) return;
+		setState({
+			...hydratedState,
+			sourceProvider: provider,
+			sourceInitialIdentity: initialIdentity,
+		});
+	}, [hydratedState, initialIdentity, provider, sourceChanged]);
 
 	const refetch = useCallback(async () => {
+		const sourceInitialIdentity = initialIdentity;
 		try {
 			const identity = await provider.getIdentity();
-			setState({ identity: identity ?? null, isPending: false });
+			if (
+				sourceRef.current.provider !== provider ||
+				sourceRef.current.initialIdentity !== sourceInitialIdentity
+			) {
+				return;
+			}
+			setState({
+				identity: identity ?? null,
+				isPending: false,
+				sourceProvider: provider,
+				sourceInitialIdentity,
+			});
 		} catch (error) {
+			if (
+				sourceRef.current.provider !== provider ||
+				sourceRef.current.initialIdentity !== sourceInitialIdentity
+			) {
+				return;
+			}
 			if (isSchemaBoundStackAuthProvider(provider)) {
 				setState({
 					identity: null,
 					isPending: false,
 					error: error instanceof Error ? error : new Error(String(error)),
+					sourceProvider: provider,
+					sourceInitialIdentity,
 				});
 				return;
 			}
 			console.error("[btst/auth] getIdentity() failed:", error);
-			setState({ identity: null, isPending: false });
+			setState({
+				identity: null,
+				isPending: false,
+				sourceProvider: provider,
+				sourceInitialIdentity,
+			});
 		}
-	}, [provider]);
+	}, [initialIdentity, provider]);
 
 	useEffect(() => {
 		if (initialIdentity !== undefined) return;
@@ -109,9 +162,9 @@ export function StackAuthBoundary({
 		<AuthContext.Provider
 			value={{
 				provider,
-				identity: state.identity,
-				isPending: state.isPending,
-				...(state.error ? { error: state.error } : {}),
+				identity: currentState.identity,
+				isPending: currentState.isPending,
+				...(currentState.error ? { error: currentState.error } : {}),
 				refetch,
 			}}
 		>
