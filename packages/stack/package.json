@@ -137,6 +137,16 @@
         "default": "./dist/next/index.cjs"
       }
     },
+    "./next/server": {
+      "import": {
+        "types": "./dist/next/server.d.ts",
+        "default": "./dist/next/server.mjs"
+      },
+      "require": {
+        "types": "./dist/next/server.d.cts",
+        "default": "./dist/next/server.cjs"
+      }
+    },
     "./react-router": {
       "import": {
         "types": "./dist/react-router/index.d.ts",
@@ -729,6 +739,9 @@
       ],
       "next": [
         "./dist/next/index.d.ts"
+      ],
+      "next/server": [
+        "./dist/next/server.d.ts"
       ],
       "react-router": [
         "./dist/react-router/index.d.ts"

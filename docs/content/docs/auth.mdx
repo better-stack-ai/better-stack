@@ -182,6 +182,149 @@ that registers a different permission catalog—or reuses the same stable id
 with an incompatible fact schema—cannot be composed with the Blog delete
 operation.
 
+## Hydrate identity at the layout boundary
+
+Resolve identity once from the incoming request and hydrate it into the
+`StackProvider` that covers the complete pages subtree. The server render and
+first browser render then evaluate local rules from the same identity without
+an immediate duplicate session request.
+
+`initialIdentity` is intentionally tri-state:
+
+| Value | First browser state | Browser resolver |
+| --- | --- | --- |
+| `undefined` or omitted | Pending | Runs immediately |
+| `null` | Settled anonymous | Skipped initially |
+| Validated identity | Settled authenticated | Skipped initially |
+
+The supplied snapshot is parsed again through the client authorization
+contract. Schema and resolver failures remain observable errors. A later
+`clientAuth.useIdentity().refetch()` still runs the browser resolver after
+login, logout, or account switching.
+
+### Next.js
+
+Keep the provider and browser auth in a client boundary, then create the server
+layout through the server-only framework entry:
+
+```tsx title="app/pages/client-layout.tsx"
+"use client";
+
+import { StackProvider } from "@btst/stack/context";
+import { clientAuth } from "@/lib/authorization.client";
+import type { ReactNode } from "react";
+
+export function BtstPagesClientLayout({ children, initialIdentity }: {
+  children?: ReactNode;
+  initialIdentity: Awaited<ReturnType<typeof clientAuth.getIdentity>>;
+}) {
+  return (
+    <StackProvider
+      basePath="/pages"
+      auth={clientAuth}
+      initialIdentity={initialIdentity}
+      /* router, api, overrides */
+    >
+      {children}
+    </StackProvider>
+  );
+}
+```
+
+```tsx title="app/pages/layout.tsx"
+import { createNextLayout } from "@btst/stack/next/server";
+import { serverAuth } from "@/lib/authorization.server";
+import { BtstPagesClientLayout } from "./client-layout";
+
+const layout = createNextLayout({
+  auth: serverAuth,
+  ClientLayout: BtstPagesClientLayout,
+});
+
+export default layout.Layout;
+```
+
+Only the schema-validated identity crosses the Server Component boundary.
+`next/headers`, the session provider, and database dependencies stay in the
+server graph.
+
+### React Router
+
+Use the parent layout loader so its snapshot covers the complete `<Outlet />`
+subtree:
+
+```tsx title="app/routes/pages/_layout.tsx"
+import { StackProvider } from "@btst/stack/context";
+import { createReactRouterLayout } from "@btst/stack/react-router";
+import { Outlet, useLoaderData } from "react-router";
+import { clientAuth } from "~/lib/authorization.ui";
+import { serverAuth } from "~/lib/authorization.server";
+
+const layout = createReactRouterLayout({ auth: serverAuth });
+export const loader = layout.loader;
+
+export default function BtstPagesLayout() {
+  const { initialIdentity } = useLoaderData<typeof loader>();
+  return (
+    <StackProvider
+      basePath="/pages"
+      auth={clientAuth}
+      initialIdentity={initialIdentity}
+      /* router, api, overrides */
+    >
+      <Outlet />
+    </StackProvider>
+  );
+}
+```
+
+### TanStack Start
+
+TanStack loaders are isomorphic, so resolve the request through a server
+function and use the generated loader on the parent route:
+
+```ts title="src/lib/authorization.identity.ts"
+import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
+import { serverAuth } from "./authorization.server";
+
+export const getInitialIdentity = createServerFn({ method: "GET" }).handler(
+  () => serverAuth.getIdentity(getRequest()),
+);
+```
+
+```tsx title="src/routes/pages/route.tsx"
+import { StackProvider } from "@btst/stack/context";
+import { createTanStackLayout } from "@btst/stack/tanstack";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
+import { clientAuth } from "../../lib/authorization.ui";
+import { getInitialIdentity } from "../../lib/authorization.identity";
+
+const layout = createTanStackLayout({ getInitialIdentity });
+
+export const Route = createFileRoute("/pages")({
+  loader: layout.loader,
+  component: BtstPagesLayout,
+});
+
+function BtstPagesLayout() {
+  const { initialIdentity } = Route.useLoaderData();
+  return (
+    <StackProvider
+      basePath="/pages"
+      auth={clientAuth}
+      initialIdentity={initialIdentity}
+      /* router, api, overrides */
+    >
+      <Outlet />
+    </StackProvider>
+  );
+}
+```
+
+This is identity hydration only. BTST does not cache authorization results or
+require framework middleware.
+
 ### Operation lifecycle ordering
 
 An operation validates input, derives trusted facts, resolves identity, and

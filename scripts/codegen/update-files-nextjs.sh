@@ -35,6 +35,7 @@ FILES=(
   "app/directory/category/[categoryId]/page.tsx"
   "app/directory/page.tsx"
   "app/layout.tsx"
+  "app/pages/client-layout.tsx"
   "app/pages/layout.tsx"
   "app/pages/[[...all]]/page.tsx"
   "app/pages/authorization-boundary/page.tsx"

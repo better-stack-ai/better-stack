@@ -62,6 +62,149 @@ async function render(ui: React.ReactElement) {
 }
 
 describe("createClientAuth", () => {
+	it("keeps an omitted identity snapshot pending while the browser resolver runs", async () => {
+		const getIdentity = vi.fn(() => new Promise<never>(() => {}));
+		const clientAuth = createClientAuth({ authorization, getIdentity });
+		let identityState: ReturnType<typeof clientAuth.useIdentity> | undefined;
+
+		function Probe() {
+			identityState = clientAuth.useIdentity();
+			return null;
+		}
+
+		await render(
+			<StackProvider basePath="/pages" auth={clientAuth}>
+				<Probe />
+			</StackProvider>,
+		);
+
+		expect(identityState).toMatchObject({ identity: null, isPending: true });
+		expect(getIdentity).toHaveBeenCalledOnce();
+	});
+
+	it("starts from a hydrated authenticated identity without calling the browser resolver", async () => {
+		const getIdentity = vi.fn(() => ({
+			id: "browser-user",
+			role: "user" as const,
+		}));
+		const clientAuth = createClientAuth({ authorization, getIdentity });
+		let identityState: ReturnType<typeof clientAuth.useIdentity> | undefined;
+		let canState: ReturnType<typeof clientAuth.useCan> | undefined;
+
+		function Probe() {
+			identityState = clientAuth.useIdentity();
+			canState = clientAuth.useCan(
+				blogPermissions.post.delete({ id: "post-1" }),
+			);
+			return null;
+		}
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				auth={clientAuth}
+				initialIdentity={{ id: "server-admin", role: "admin" }}
+			>
+				<Probe />
+			</StackProvider>,
+		);
+
+		expect(identityState).toMatchObject({
+			identity: { id: "server-admin", role: "admin" },
+			isPending: false,
+		});
+		expect(canState).toEqual({ can: true, isPending: false });
+		expect(getIdentity).not.toHaveBeenCalled();
+	});
+
+	it("keeps an explicit hydrated anonymous identity settled without calling the browser resolver", async () => {
+		const getIdentity = vi.fn(() => ({
+			id: "browser-user",
+			role: "admin" as const,
+		}));
+		const clientAuth = createClientAuth({ authorization, getIdentity });
+		let identityState: ReturnType<typeof clientAuth.useIdentity> | undefined;
+		let canState: ReturnType<typeof clientAuth.useCan> | undefined;
+
+		function Probe() {
+			identityState = clientAuth.useIdentity();
+			canState = clientAuth.useCan(
+				blogPermissions.post.delete({ id: "post-1" }),
+			);
+			return null;
+		}
+
+		await render(
+			<StackProvider basePath="/pages" auth={clientAuth} initialIdentity={null}>
+				<Probe />
+			</StackProvider>,
+		);
+
+		expect(identityState).toMatchObject({ identity: null, isPending: false });
+		expect(canState).toEqual({ can: false, isPending: false });
+		expect(getIdentity).not.toHaveBeenCalled();
+	});
+
+	it("surfaces an invalid hydrated identity as an identity error", async () => {
+		const getIdentity = vi.fn(() => ({
+			id: "browser-user",
+			role: "user" as const,
+		}));
+		const clientAuth = createClientAuth({ authorization, getIdentity });
+		let identityState: ReturnType<typeof clientAuth.useIdentity> | undefined;
+
+		function Probe() {
+			identityState = clientAuth.useIdentity();
+			return null;
+		}
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				auth={clientAuth}
+				initialIdentity={{ id: "server-user", role: "owner" } as never}
+			>
+				<Probe />
+			</StackProvider>,
+		);
+
+		expect(identityState).toMatchObject({ identity: null, isPending: false });
+		expect(identityState?.error).toBeInstanceOf(z.ZodError);
+		expect(getIdentity).not.toHaveBeenCalled();
+	});
+
+	it("can explicitly refresh after starting from a hydrated identity", async () => {
+		const getIdentity = vi.fn(() => ({
+			id: "browser-user",
+			role: "user" as const,
+		}));
+		const clientAuth = createClientAuth({ authorization, getIdentity });
+		let identityState: ReturnType<typeof clientAuth.useIdentity> | undefined;
+
+		function Probe() {
+			identityState = clientAuth.useIdentity();
+			return null;
+		}
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				auth={clientAuth}
+				initialIdentity={{ id: "server-user", role: "admin" }}
+			>
+				<Probe />
+			</StackProvider>,
+		);
+
+		expect(getIdentity).not.toHaveBeenCalled();
+		await act(async () => identityState?.refetch());
+		expect(getIdentity).toHaveBeenCalledOnce();
+		expect(identityState).toMatchObject({
+			identity: { id: "browser-user", role: "user" },
+			isPending: false,
+		});
+	});
+
 	it("evaluates remote permissions asynchronously without a reusable cache", async () => {
 		const transport = vi.fn(async (request) => ({
 			version: request.version,

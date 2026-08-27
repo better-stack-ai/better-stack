@@ -129,7 +129,7 @@ pkg.name = "tanstack";
 
 // E2E start script: builds TanStack then starts in production on port 3007
 pkg.scripts = pkg.scripts || {};
-pkg.scripts["start:e2e"] = "rm -rf .output && rm -rf .nitro && rm -rf .tanstack && NODE_OPTIONS=--max-old-space-size=8192 vite build && NODE_ENV=test PORT=3007 node .output/server/index.mjs";
+pkg.scripts["start:e2e"] = "rm -rf .output && rm -rf .nitro && rm -rf .tanstack && NODE_OPTIONS=--max-old-space-size=8192 vite build && node ../../scripts/codegen/assert-vite-auth-boundary.mjs .output/public .output/server 'TanStack Start' && NODE_ENV=test PORT=3007 node .output/server/index.mjs";
 
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {

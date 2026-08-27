@@ -54,6 +54,7 @@ export default defineBuildConfig({
 		"next/link",
 		"next/image",
 		"next/navigation",
+		"next/headers",
 		"react-router",
 		"@tanstack/react-router",
 		// test/build-time deps kept external
@@ -79,6 +80,7 @@ export default defineBuildConfig({
 		"./src/client/components/index.tsx",
 		// framework router presets
 		"./src/next/index.tsx",
+		"./src/next/server.ts",
 		"./src/react-router/index.tsx",
 		"./src/tanstack/index.tsx",
 		// plugin development entries

@@ -35,7 +35,7 @@ export interface ServerAuth<TAuthorization extends AnyAuthorization>
 		request: Request,
 	): Promise<AuthorizationIdentity<TAuthorization> | null>;
 	getIdentity(ctx: {
-		request: Request;
+		request?: Request;
 		headers: Headers;
 	}): Promise<AuthorizationIdentity<TAuthorization> | null>;
 	authorize(
@@ -76,19 +76,27 @@ export function createServerAuth<
 	};
 
 	const resolveIdentity = (
-		input: Request | { request: Request; headers: Headers },
+		input: Request | { request?: Request; headers: Headers },
 	): Promise<AuthorizationIdentity<TAuthorization> | null> => {
-		const request = input instanceof Request ? input : input.request;
+		const headers = input.headers;
+		// Some layout APIs expose request headers without the original Request.
+		// Preserve the adapter callback shape with a private request-scoped stand-in;
+		// identity resolvers should read authentication data from the headers.
+		const request =
+			input instanceof Request
+				? input
+				: (input.request ??
+					new Request("http://btst.layout/", { headers: input.headers }));
 		let pending = identities.get(request);
 		if (!pending) {
-			pending = Promise.resolve(
-				config.getIdentity({ request, headers: request.headers }),
-			).then(
-				(identity) =>
-					runtimeAuthorization.parseIdentity(
-						identity,
-					) as AuthorizationIdentity<TAuthorization> | null,
-			);
+			pending = Promise.resolve()
+				.then(() => config.getIdentity({ request, headers }))
+				.then(
+					(identity) =>
+						runtimeAuthorization.parseIdentity(
+							identity,
+						) as AuthorizationIdentity<TAuthorization> | null,
+				);
 			identities.set(request, pending);
 		}
 		return pending;

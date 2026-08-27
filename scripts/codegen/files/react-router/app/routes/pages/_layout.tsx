@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
-import { Outlet } from "react-router";
+import { Outlet, useLoaderData } from "react-router";
 import { StackProvider } from "@btst/stack/context";
-import { reactRouter } from "@btst/stack/react-router";
+import { createReactRouterLayout, reactRouter } from "@btst/stack/react-router";
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client";
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
@@ -24,6 +24,10 @@ import { Button } from "../../components/ui/button";
 import { resolveUser, searchUsers } from "../../lib/mock-users";
 import { getOrCreateQueryClient } from "../../lib/query-client";
 import { clientAuth } from "../../lib/authorization.ui";
+import { serverAuth } from "../../lib/authorization.server";
+
+const layout = createReactRouterLayout({ auth: serverAuth });
+export const loader = layout.loader;
 
 // Get base URL function - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -46,6 +50,7 @@ type PluginOverrides = {
 };
 
 export default function Layout() {
+	const { initialIdentity } = useLoaderData<typeof loader>();
 	const baseURL = getBaseURL();
 	const [queryClient] = useState(() => getOrCreateQueryClient());
 	const mediaClientConfig = useMemo(
@@ -84,6 +89,7 @@ export default function Layout() {
 			router={reactRouter()}
 			api={{ baseURL, basePath: "/api/data" }}
 			auth={clientAuth}
+			initialIdentity={initialIdentity}
 			overrides={{
 				// Only genuinely plugin-specific overrides remain — the shared
 				// Link/navigate/refresh and API wiring come from the top-level

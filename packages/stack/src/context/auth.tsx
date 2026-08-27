@@ -32,24 +32,62 @@ export interface AuthContextValue {
  */
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function createInitialAuthState(
+	provider: StackAuthProvider,
+	initialIdentity: StackIdentity | null | undefined,
+): {
+	identity: StackIdentity | null;
+	isPending: boolean;
+	error?: Error;
+} {
+	if (initialIdentity === undefined) {
+		return { identity: null, isPending: true };
+	}
+
+	const contract = (
+		provider as {
+			mode?: string;
+			contract?: {
+				parseIdentity?: (identity: unknown) => StackIdentity | null;
+			};
+		}
+	).contract;
+	try {
+		return {
+			identity: contract?.parseIdentity
+				? contract.parseIdentity(initialIdentity)
+				: initialIdentity,
+			isPending: false,
+		};
+	} catch (error) {
+		return {
+			identity: null,
+			isPending: false,
+			error: error instanceof Error ? error : new Error(String(error)),
+		};
+	}
+}
+
 /**
  * Internal boundary rendered by `StackProvider` when an `auth` provider is
- * configured. Resolves `getIdentity()` once on the client (effects don't run
- * during SSR, so server renders see `isPending: true`) and shares the result
- * with all `useIdentity()` / `useCan()` / `<CanAccess>` consumers.
+ * configured. A supplied identity snapshot is used for the first server and
+ * client render; otherwise `getIdentity()` resolves once in the browser. The
+ * result is shared with all identity and permission consumers.
  */
 export function StackAuthBoundary({
 	provider,
+	initialIdentity,
 	children,
 }: {
 	provider: StackAuthProvider;
+	initialIdentity?: StackIdentity | null;
 	children?: ReactNode;
 }) {
 	const [state, setState] = useState<{
 		identity: StackIdentity | null;
 		isPending: boolean;
 		error?: Error;
-	}>({ identity: null, isPending: true });
+	}>(() => createInitialAuthState(provider, initialIdentity));
 
 	const refetch = useCallback(async () => {
 		try {
@@ -70,8 +108,9 @@ export function StackAuthBoundary({
 	}, [provider]);
 
 	useEffect(() => {
+		if (initialIdentity !== undefined) return;
 		void refetch();
-	}, [refetch]);
+	}, [initialIdentity, refetch]);
 
 	return (
 		<AuthContext.Provider
