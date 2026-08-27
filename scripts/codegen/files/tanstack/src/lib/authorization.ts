@@ -41,7 +41,11 @@ export const authorization = defineAuthorization({
 				(identity.role === "admin" || identity.id === facts.authorId),
 		),
 		blog.tag.read.allow(),
-		cms.contentType.read.when(({ identity }) => identity?.role === "admin"),
+		cms.contentType.read.when(
+			({ identity, facts }) =>
+				facts.contentType === UI_BUILDER_TYPE_SLUG ||
+				identity?.role === "admin",
+		),
 		cms.record.read.when(
 			({ identity, facts }) =>
 				(facts.contentType === UI_BUILDER_TYPE_SLUG &&
