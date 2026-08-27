@@ -513,6 +513,16 @@
         "default": "./dist/plugins/comments/api/index.cjs"
       }
     },
+    "./plugins/comments/permissions": {
+      "import": {
+        "types": "./dist/plugins/comments/permissions.d.ts",
+        "default": "./dist/plugins/comments/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/comments/permissions.d.cts",
+        "default": "./dist/plugins/comments/permissions.cjs"
+      }
+    },
     "./plugins/comments/client": {
       "import": {
         "types": "./dist/plugins/comments/client/index.d.ts",
@@ -860,6 +870,9 @@
       ],
       "plugins/comments/api": [
         "./dist/plugins/comments/api/index.d.ts"
+      ],
+      "plugins/comments/permissions": [
+        "./dist/plugins/comments/permissions.d.ts"
       ],
       "plugins/comments/client": [
         "./dist/plugins/comments/client/index.d.ts"

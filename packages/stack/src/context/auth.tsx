@@ -456,15 +456,22 @@ export function PermissionCheck({
 /** Element-level gate for a plugin-owned, schema-backed descriptor. */
 export function PermissionAccess({
 	permission,
+	legacyPublic = false,
 	fallback = null,
 	loading = null,
 	children,
 }: {
 	permission: AnyPermissionRequest;
+	/** Preserve explicitly public content for string-based RC providers. */
+	legacyPublic?: boolean;
 	fallback?: ReactNode;
 	loading?: ReactNode;
 	children?: ReactNode;
 }) {
+	const auth = useContext(AuthContext);
+	if (legacyPublic && auth && !isSchemaBoundStackAuthProvider(auth.provider)) {
+		return <>{children}</>;
+	}
 	return (
 		<PermissionCheck permission={permission}>
 			{({ can, isPending, error }) => {

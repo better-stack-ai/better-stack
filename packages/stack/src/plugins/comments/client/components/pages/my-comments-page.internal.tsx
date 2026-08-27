@@ -28,8 +28,14 @@ import {
 } from "@workspace/ui/components/avatar";
 import { Trash2, ExternalLink, LogIn, MessageSquareOff } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { useNotify, useStack, useTranslate } from "@btst/stack/context";
+import {
+	PermissionAccess,
+	useNotify,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
 import { useListState, type ListStateSchema } from "@btst/stack/client";
+import { PermissionRouteAccess } from "@btst/stack/client/components";
 import type { CommentsPluginOverrides } from "../../overrides";
 import { PaginationControls } from "@workspace/ui/components/pagination-controls";
 import type { SerializedComment, CommentStatus } from "../../../types";
@@ -39,6 +45,7 @@ import {
 } from "../../hooks/use-comments";
 import type { CommentsLocalization } from "../../localization";
 import { getInitials, useCurrentUserId } from "../../utils";
+import { commentsPermissions } from "../../../permissions";
 
 const PAGE_LIMIT = 20;
 
@@ -131,13 +138,21 @@ export function UserCommentsPage({
 	}
 
 	return (
-		<UserCommentsList
-			apiBaseURL={api?.baseURL ?? ""}
-			apiBasePath={api?.basePath ?? ""}
-			currentUserId={resolvedUserId}
-			resourceLinks={resourceLinks}
-			localization={localization}
-		/>
+		<PermissionRouteAccess
+			permission={commentsPermissions.thread.read({
+				scope: "own",
+				authorId: resolvedUserId,
+			})}
+			legacyPublic
+		>
+			<UserCommentsList
+				apiBaseURL={api?.baseURL ?? ""}
+				apiBasePath={api?.basePath ?? ""}
+				currentUserId={resolvedUserId}
+				resourceLinks={resourceLinks}
+				localization={localization}
+			/>
+		</PermissionRouteAccess>
 	);
 }
 
@@ -413,20 +428,27 @@ function CommentRow({
 			</TableCell>
 
 			<TableCell>
-				<Button
-					variant="ghost"
-					size="icon"
-					className="h-7 w-7 text-muted-foreground hover:text-destructive"
-					onClick={onDelete}
-					disabled={isDeleting}
-					data-testid="my-comment-delete-button"
+				<PermissionAccess
+					permission={commentsPermissions.comment.delete({
+						commentId: comment.id,
+						authorId: comment.authorId,
+					})}
 				>
-					<Trash2 className="h-4 w-4" />
-					<span className="sr-only">
-						{localization?.COMMENTS_MY_DELETE_BUTTON_SR ??
-							t("comments.my.deleteButtonSr", "Delete comment")}
-					</span>
-				</Button>
+					<Button
+						variant="ghost"
+						size="icon"
+						className="h-7 w-7 text-muted-foreground hover:text-destructive"
+						onClick={onDelete}
+						disabled={isDeleting}
+						data-testid="my-comment-delete-button"
+					>
+						<Trash2 className="h-4 w-4" />
+						<span className="sr-only">
+							{localization?.COMMENTS_MY_DELETE_BUTTON_SR ??
+								t("comments.my.deleteButtonSr", "Delete comment")}
+						</span>
+					</Button>
+				</PermissionAccess>
 			</TableCell>
 		</TableRow>
 	);

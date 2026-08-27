@@ -57,11 +57,11 @@ export interface CreateCommentInput {
  * `api/query-key-defs.ts` so SSG/loader prefetch hydration keeps working.
  *
  * `currentUserId` is intentionally NOT sent to the server in any query.
- * The server resolves the caller's identity server-side via the
- * `resolveCurrentUserId` hook. Sending it would allow any caller to
- * impersonate another user and read their pending comments. It is still
- * included in the query keys for client-side cache segregation (different
- * users get different cache entries).
+ * The maintained operation resolves the caller's identity through the generic
+ * server auth adapter. Sending it would allow any caller to impersonate another
+ * user and read their pending comments. It is still included in the query keys
+ * for client-side cache segregation (different users get different cache
+ * entries).
  *
  * Mutations declare only the HTTP mapping (path/method/input/select).
  * Cache behavior (optimistic updates, invalidation) lives in the wrapper
@@ -136,9 +136,9 @@ export const commentsResources = {
 			like: {
 				path: "@post/comments/:id/like",
 				method: "POST" as const,
-				input: (vars: { commentId: string; authorId: string }) => ({
+				input: (vars: { commentId: string }) => ({
 					params: { id: vars.commentId },
-					body: { authorId: vars.authorId },
+					body: {},
 				}),
 				select: (data: any) => data as { likes: number; isLiked: boolean },
 			},

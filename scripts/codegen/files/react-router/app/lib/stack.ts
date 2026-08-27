@@ -317,9 +317,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 			},
 			onBeforeList: async (query, ctx) => {
 				if (query.status && query.status !== "approved") {
-					console.log(
-						"onBeforeList: non-approved status filter — ensure admin check in production",
-					);
+					console.log("onBeforeList: reading moderation queue");
 				}
 			},
 			onBeforePost: async (input, ctx) => {
@@ -328,7 +326,6 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 					input.resourceType,
 					input.resourceId,
 				);
-				return { authorId: "olliethedev" };
 			},
 			onBeforeEdit: async (commentId, update, ctx) => {
 				console.log("onBeforeEdit: comment", commentId);
@@ -346,12 +343,6 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 			},
 			onBeforeDelete: async (commentId, ctx) => {
 				console.log("onBeforeDelete: comment", commentId);
-			},
-			onBeforeListByAuthor: async (authorId, query, ctx) => {
-				if (authorId !== "olliethedev") throw new Error("Forbidden");
-			},
-			resolveCurrentUserId: async (ctx) => {
-				return ctx?.headers?.get?.("x-user-id") ?? null;
 			},
 		}),
 		media: mediaBackendPlugin({

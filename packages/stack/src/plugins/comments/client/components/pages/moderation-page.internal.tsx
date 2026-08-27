@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
 	Table,
 	TableBody,
@@ -37,12 +37,13 @@ import {
 import { CheckCircle, ShieldOff, Trash2, Eye } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import {
-	CanAccess,
+	PermissionAccess,
 	useNotify,
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
-import { useListState, type ListStateSchema } from "@btst/stack/client";
+import type { PermissionRequest } from "@btst/stack/authorization";
+import { useListState } from "@btst/stack/client";
 import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
 import type { SerializedComment, CommentStatus } from "../../../types";
 import {
@@ -53,17 +54,31 @@ import {
 import type { CommentsLocalization } from "../../localization";
 import { getInitials } from "../../utils";
 import { Pagination } from "../shared/pagination";
+import { commentsPermissions } from "../../../permissions";
+import {
+	MODERATION_LIST_STATE_SCHEMA,
+	resolveModerationStatus,
+} from "./moderation-state";
 
 interface ModerationPageProps {
 	localization?: Partial<CommentsLocalization>;
 }
 
-// URL-synced moderation queue state: tab + page survive reloads and are
-// undoable with the back button (discrete changes default to push history).
-const LIST_STATE_SCHEMA = {
-	tab: { type: "string", default: "pending" },
-	page: { type: "number", default: 1 },
-} as const satisfies ListStateSchema;
+function PermissionAccessAll({
+	permissions,
+	children,
+}: {
+	permissions: readonly PermissionRequest[];
+	children: ReactNode;
+}) {
+	const [permission, ...rest] = permissions;
+	if (!permission) return <>{children}</>;
+	return (
+		<PermissionAccess permission={permission}>
+			<PermissionAccessAll permissions={rest}>{children}</PermissionAccessAll>
+		</PermissionAccess>
+	);
+}
 
 function StatusBadge({ status }: { status: CommentStatus }) {
 	const variants: Record<
@@ -84,14 +99,11 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 
 	const [listState, setListState] = useListState(
 		"comments-moderation",
-		LIST_STATE_SCHEMA,
+		MODERATION_LIST_STATE_SCHEMA,
 	);
 	// Bound the URL-sourced values: unknown tabs fall back to "pending",
 	// pages clamp to >= 1 so a mangled URL cannot produce an invalid query.
-	const activeTab: CommentStatus =
-		listState.tab === "approved" || listState.tab === "spam"
-			? listState.tab
-			: "pending";
+	const activeTab = resolveModerationStatus(listState.tab);
 	const currentPage = Math.max(1, Math.floor(listState.page) || 1);
 
 	const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -110,6 +122,21 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 			status: activeTab,
 			page: currentPage,
 		});
+	const selectedComments = comments.filter((comment) =>
+		selected.has(comment.id),
+	);
+	const hasResolvedSelection =
+		selected.size > 0 && selectedComments.length === selected.size;
+	const deleteComments = comments.filter((comment) =>
+		deleteIds.includes(comment.id),
+	);
+	const hasResolvedDeleteScope =
+		deleteIds.length > 0 && deleteComments.length === deleteIds.length;
+
+	useEffect(() => {
+		setSelected(new Set());
+		setDeleteIds([]);
+	}, [activeTab, currentPage]);
 
 	const updateStatus = useUpdateCommentStatus(config);
 	const deleteMutation = useDeleteComment(config);
@@ -212,7 +239,7 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 	};
 
 	const handleBulkApprove = async () => {
-		const ids = [...selected];
+		const ids = selectedComments.map((comment) => comment.id);
 		try {
 			await Promise.all(
 				ids.map((id) => updateStatus.mutateAsync({ id, status: "approved" })),
@@ -276,7 +303,7 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 			</Tabs>
 
 			{/* Bulk actions toolbar */}
-			{selected.size > 0 && (
+			{hasResolvedSelection && (
 				<div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
 					<span className="text-sm text-muted-foreground">
 						{(
@@ -285,7 +312,17 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 						).replace("{n}", String(selected.size))}
 					</span>
 					{activeTab !== "approved" && (
-						<CanAccess resource="comments:comment" action="moderate">
+						<PermissionAccessAll
+							permissions={selectedComments.map((comment) =>
+								commentsPermissions.comment.moderate({
+									commentId: comment.id,
+									resourceId: comment.resourceId,
+									resourceType: comment.resourceType,
+									currentStatus: comment.status,
+									nextStatus: "approved",
+								}),
+							)}
+						>
 							<Button
 								size="sm"
 								variant="outline"
@@ -296,20 +333,29 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 								{localization?.COMMENTS_MODERATION_APPROVE_SELECTED ??
 									t("comments.moderation.approveSelected", "Approve selected")}
 							</Button>
-						</CanAccess>
+						</PermissionAccessAll>
 					)}
-					<CanAccess resource="comments:comment" action="delete">
+					<PermissionAccessAll
+						permissions={selectedComments.map((comment) =>
+							commentsPermissions.comment.delete({
+								commentId: comment.id,
+								authorId: comment.authorId,
+							}),
+						)}
+					>
 						<Button
 							size="sm"
 							variant="outline"
 							className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
-							onClick={() => setDeleteIds([...selected])}
+							onClick={() =>
+								setDeleteIds(selectedComments.map((comment) => comment.id))
+							}
 						>
 							<Trash2 className="h-4 w-4 mr-1" />
 							{localization?.COMMENTS_MODERATION_DELETE_SELECTED ??
 								t("comments.moderation.deleteSelected", "Delete selected")}
 						</Button>
-					</CanAccess>
+					</PermissionAccessAll>
 				</div>
 			)}
 
@@ -426,10 +472,14 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 													<Eye className="h-4 w-4" />
 												</Button>
 												{activeTab !== "approved" && (
-													<CanAccess
-														resource="comments:comment"
-														action="moderate"
-														params={{ id: comment.id }}
+													<PermissionAccess
+														permission={commentsPermissions.comment.moderate({
+															commentId: comment.id,
+															resourceId: comment.resourceId,
+															resourceType: comment.resourceType,
+															currentStatus: comment.status,
+															nextStatus: "approved",
+														})}
 													>
 														<Button
 															variant="ghost"
@@ -448,13 +498,17 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 														>
 															<CheckCircle className="h-4 w-4" />
 														</Button>
-													</CanAccess>
+													</PermissionAccess>
 												)}
 												{activeTab !== "spam" && (
-													<CanAccess
-														resource="comments:comment"
-														action="moderate"
-														params={{ id: comment.id }}
+													<PermissionAccess
+														permission={commentsPermissions.comment.moderate({
+															commentId: comment.id,
+															resourceId: comment.resourceId,
+															resourceType: comment.resourceType,
+															currentStatus: comment.status,
+															nextStatus: "spam",
+														})}
 													>
 														<Button
 															variant="ghost"
@@ -473,12 +527,13 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 														>
 															<ShieldOff className="h-4 w-4" />
 														</Button>
-													</CanAccess>
+													</PermissionAccess>
 												)}
-												<CanAccess
-													resource="comments:comment"
-													action="delete"
-													params={{ id: comment.id }}
+												<PermissionAccess
+													permission={commentsPermissions.comment.delete({
+														commentId: comment.id,
+														authorId: comment.authorId,
+													})}
 												>
 													<Button
 														variant="ghost"
@@ -493,7 +548,7 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 													>
 														<Trash2 className="h-4 w-4" />
 													</Button>
-												</CanAccess>
+												</PermissionAccess>
 											</div>
 										</TableCell>
 									</TableRow>
@@ -504,7 +559,10 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 					<Pagination
 						currentPage={currentPage}
 						totalPages={totalPages}
-						onPageChange={(p) => setListState({ page: p })}
+						onPageChange={(p) => {
+							setListState({ page: p });
+							setSelected(new Set());
+						}}
 						total={total}
 						limit={limit}
 						offset={offset}
@@ -594,10 +652,14 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 
 							<div className="flex justify-end gap-2">
 								{viewComment.status !== "approved" && (
-									<CanAccess
-										resource="comments:comment"
-										action="moderate"
-										params={{ id: viewComment.id }}
+									<PermissionAccess
+										permission={commentsPermissions.comment.moderate({
+											commentId: viewComment.id,
+											resourceId: viewComment.resourceId,
+											resourceType: viewComment.resourceType,
+											currentStatus: viewComment.status,
+											nextStatus: "approved",
+										})}
 									>
 										<Button
 											size="sm"
@@ -612,13 +674,17 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 											{localization?.COMMENTS_MODERATION_DIALOG_APPROVE ??
 												t("comments.moderation.dialogApprove", "Approve")}
 										</Button>
-									</CanAccess>
+									</PermissionAccess>
 								)}
 								{viewComment.status !== "spam" && (
-									<CanAccess
-										resource="comments:comment"
-										action="moderate"
-										params={{ id: viewComment.id }}
+									<PermissionAccess
+										permission={commentsPermissions.comment.moderate({
+											commentId: viewComment.id,
+											resourceId: viewComment.resourceId,
+											resourceType: viewComment.resourceType,
+											currentStatus: viewComment.status,
+											nextStatus: "spam",
+										})}
 									>
 										<Button
 											size="sm"
@@ -633,12 +699,13 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 											{localization?.COMMENTS_MODERATION_DIALOG_MARK_SPAM ??
 												t("comments.moderation.dialogMarkSpam", "Mark spam")}
 										</Button>
-									</CanAccess>
+									</PermissionAccess>
 								)}
-								<CanAccess
-									resource="comments:comment"
-									action="delete"
-									params={{ id: viewComment.id }}
+								<PermissionAccess
+									permission={commentsPermissions.comment.delete({
+										commentId: viewComment.id,
+										authorId: viewComment.authorId,
+									})}
 								>
 									<Button
 										size="sm"
@@ -652,7 +719,7 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 										{localization?.COMMENTS_MODERATION_DIALOG_DELETE ??
 											t("comments.moderation.dialogDelete", "Delete")}
 									</Button>
-								</CanAccess>
+								</PermissionAccess>
 							</div>
 						</div>
 					)}
@@ -661,7 +728,7 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 
 			{/* Delete confirmation dialog */}
 			<AlertDialog
-				open={deleteIds.length > 0}
+				open={hasResolvedDeleteScope}
 				onOpenChange={(open) => !open && setDeleteIds([])}
 			>
 				<AlertDialogContent>
@@ -700,17 +767,28 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 							{localization?.COMMENTS_MODERATION_DELETE_CANCEL ??
 								t("comments.moderation.deleteCancel", "Cancel")}
 						</AlertDialogCancel>
-						<AlertDialogAction
-							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-							onClick={() => handleDelete(deleteIds)}
-							data-testid="confirm-delete-button"
+						<PermissionAccessAll
+							permissions={deleteComments.map((comment) =>
+								commentsPermissions.comment.delete({
+									commentId: comment.id,
+									authorId: comment.authorId,
+								}),
+							)}
 						>
-							{deleteMutation.isPending
-								? (localization?.COMMENTS_MODERATION_DELETE_DELETING ??
-									t("comments.moderation.deleteDeleting", "Deleting…"))
-								: (localization?.COMMENTS_MODERATION_DELETE_CONFIRM ??
-									t("comments.moderation.deleteConfirm", "Delete"))}
-						</AlertDialogAction>
+							<AlertDialogAction
+								className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+								onClick={() =>
+									handleDelete(deleteComments.map((comment) => comment.id))
+								}
+								data-testid="confirm-delete-button"
+							>
+								{deleteMutation.isPending
+									? (localization?.COMMENTS_MODERATION_DELETE_DELETING ??
+										t("comments.moderation.deleteDeleting", "Deleting…"))
+									: (localization?.COMMENTS_MODERATION_DELETE_CONFIRM ??
+										t("comments.moderation.deleteConfirm", "Delete"))}
+							</AlertDialogAction>
+						</PermissionAccessAll>
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>

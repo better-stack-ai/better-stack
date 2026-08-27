@@ -1,11 +1,17 @@
 "use client";
 
 import { lazy } from "react";
+import { useListState } from "@btst/stack/client";
 import { ComposedRoute } from "@btst/stack/client/components";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../../overrides";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { PageWrapper } from "../shared/page-wrapper";
+import { commentsPermissions } from "../../../permissions";
+import {
+	MODERATION_LIST_STATE_SCHEMA,
+	resolveModerationStatus,
+} from "./moderation-state";
 
 const ModerationPageInternal = lazy(() =>
 	import("./moderation-page.internal").then((m) => ({
@@ -25,12 +31,24 @@ function ModerationPageSkeleton() {
 }
 
 export function ModerationPageComponent() {
+	const [listState] = useListState(
+		"comments-moderation",
+		MODERATION_LIST_STATE_SCHEMA,
+	);
+	const status = resolveModerationStatus(listState.tab);
 	return (
 		<ComposedRoute
 			path="/comments/moderation"
 			PageComponent={ModerationPageWrapper}
 			LoadingComponent={ModerationPageSkeleton}
-			permission={{ resource: "comments:comment", action: "moderate" }}
+			permission={commentsPermissions.thread.read({
+				scope: "moderation",
+				status,
+			})}
+			legacyPermission={{
+				resource: "comments:comment",
+				action: "moderate",
+			}}
 			onError={(error) =>
 				console.error("[btst/comments] Moderation error:", error)
 			}

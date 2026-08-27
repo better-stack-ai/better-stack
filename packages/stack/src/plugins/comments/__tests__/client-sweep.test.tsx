@@ -11,11 +11,17 @@ import {
 	type StackAuthProvider,
 	type StackI18nProvider,
 } from "@btst/stack/context";
+import { defineAuthorization } from "@btst/stack/authorization";
+import { createClientAuth } from "@btst/stack/authorization/client";
+import { z } from "zod";
 import { ModerationPage } from "../client/components/pages/moderation-page.internal";
+import { ModerationPageComponent } from "../client/components/pages/moderation-page";
 import { UserCommentsPage } from "../client/components/pages/my-comments-page.internal";
 import { CommentForm } from "../client/components/comment-form";
+import { CommentCount } from "../client/components/comment-count";
 import { CommentThread } from "../client/components/comment-thread";
 import type { SerializedComment } from "../types";
+import { commentsPermissions } from "../permissions";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -97,7 +103,12 @@ beforeEach(() => {
 		total: 0,
 		isFetching: false,
 	});
+	hooks.useCommentCount.mockReturnValue({ count: 3, isLoading: false });
 	hooks.usePostComment.mockReturnValue({
+		mutateAsync: vi.fn(),
+		isPending: false,
+	});
+	hooks.useUpdateComment.mockReturnValue({
 		mutateAsync: vi.fn(),
 		isPending: false,
 	});
@@ -107,6 +118,10 @@ beforeEach(() => {
 	});
 	hooks.useDeleteComment.mockReturnValue({
 		mutateAsync: vi.fn().mockResolvedValue({ success: true }),
+		isPending: false,
+	});
+	hooks.useToggleLike.mockReturnValue({
+		mutate: vi.fn(),
 		isPending: false,
 	});
 });
@@ -142,10 +157,54 @@ function createMockRouter(initial = "") {
 		navigate: vi.fn(),
 		getSearchParams: () => new URLSearchParams(params.toString()),
 		setSearchParams,
+		setExternalSearchParams: (next: string) => {
+			params = new URLSearchParams(next);
+		},
 	};
 }
 
 const commentsOverrides = {};
+
+const commentsAuthorization = defineAuthorization({
+	identity: z.object({
+		id: z.string(),
+		role: z.enum(["user", "moderator"]),
+	}),
+	permissions: [commentsPermissions] as const,
+	rules: ({ comments }) => [
+		comments.thread.read.when(({ identity, facts }) =>
+			facts.scope === "public"
+				? true
+				: facts.scope === "own"
+					? identity?.id === facts.authorId || identity?.role === "moderator"
+					: identity?.role === "moderator",
+		),
+		comments.thread.createComment.when(({ identity }) => identity !== null),
+		comments.comment.edit.when(
+			({ identity, facts }) =>
+				identity?.id === facts.authorId || identity?.role === "moderator",
+		),
+		comments.comment.delete.when(
+			({ identity, facts }) =>
+				identity?.id === facts.authorId || identity?.role === "moderator",
+		),
+		comments.comment.react.when(
+			({ identity, facts }) => identity !== null && facts.status === "approved",
+		),
+		comments.comment.moderate.when(
+			({ identity }) => identity?.role === "moderator",
+		),
+	],
+});
+
+function clientAuth(
+	identity: { id: string; role: "user" | "moderator" } | null,
+) {
+	return createClientAuth({
+		authorization: commentsAuthorization,
+		getIdentity: () => identity,
+	});
+}
 
 function typeInto(element: HTMLElement, value: string) {
 	const proto =
@@ -157,7 +216,7 @@ function typeInto(element: HTMLElement, value: string) {
 	element.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-describe("ModerationPage row actions (CanAccess)", () => {
+describe("ModerationPage row actions (PermissionAccess)", () => {
 	function renderModerationPage(
 		auth?: StackAuthProvider,
 		notify?: {
@@ -211,9 +270,51 @@ describe("ModerationPage row actions (CanAccess)", () => {
 			expect.objectContaining({
 				resource: "comments:comment",
 				action: "moderate",
-				params: { id: comment.id },
+				params: {
+					commentId: comment.id,
+					resourceId: comment.resourceId,
+					resourceType: comment.resourceType,
+					currentStatus: comment.status,
+					nextStatus: "approved",
+				},
 			}),
 		);
+		expect(can).toHaveBeenCalledWith(
+			expect.objectContaining({
+				resource: "comments:comment",
+				action: "moderate",
+				params: {
+					commentId: comment.id,
+					resourceId: comment.resourceId,
+					resourceType: comment.resourceType,
+					currentStatus: comment.status,
+					nextStatus: "spam",
+				},
+			}),
+		);
+	});
+
+	it("distinguishes approval from marking spam in the shared rule", async () => {
+		const transitionAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("moderator") }),
+			permissions: [commentsPermissions] as const,
+			rules: ({ comments }) => [
+				comments.comment.moderate.when(
+					({ identity, facts }) =>
+						identity?.role === "moderator" && facts.nextStatus === "approved",
+				),
+			],
+		});
+		const auth = createClientAuth({
+			authorization: transitionAuthorization,
+			getIdentity: () => ({ id: "moderator-1", role: "moderator" as const }),
+		});
+
+		await renderModerationPage(auth);
+
+		const row = container.querySelector('[data-testid="moderation-row"]')!;
+		expect(row.querySelector('[data-testid="approve-button"]')).toBeTruthy();
+		expect(row.querySelector('[data-testid="spam-button"]')).toBeNull();
 	});
 
 	it("hides the delete button when can() denies comments:comment/delete", async () => {
@@ -231,6 +332,15 @@ describe("ModerationPage row actions (CanAccess)", () => {
 		const row = container.querySelector('[data-testid="moderation-row"]')!;
 		expect(row.querySelector('[data-testid="delete-button"]')).toBeNull();
 		expect(row.querySelector('[data-testid="approve-button"]')).toBeTruthy();
+	});
+
+	it("uses the same schema-backed rule to hide routed moderation controls", async () => {
+		await renderModerationPage(clientAuth({ id: "viewer-1", role: "user" }));
+
+		const row = container.querySelector('[data-testid="moderation-row"]')!;
+		expect(row.querySelector('[data-testid="approve-button"]')).toBeNull();
+		expect(row.querySelector('[data-testid="spam-button"]')).toBeNull();
+		expect(row.querySelector('[data-testid="delete-button"]')).toBeNull();
 	});
 
 	it("notifies success through the notify provider after approving", async () => {
@@ -253,7 +363,271 @@ describe("ModerationPage row actions (CanAccess)", () => {
 	});
 });
 
+describe("Comments route descriptors", () => {
+	it("guards the real moderation route with the schema-backed moderation rule", async () => {
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		await expect(
+			render(
+				<StackProvider
+					basePath="/pages"
+					router={createMockRouter()}
+					overrides={{ comments: commentsOverrides }}
+					auth={clientAuth({ id: "viewer-1", role: "user" })}
+				>
+					<ModerationPageComponent />
+				</StackProvider>,
+			),
+		).rejects.toThrow("Unauthorized");
+
+		expect(hooks.useSuspenseModerationComments).not.toHaveBeenCalled();
+	});
+
+	it("guards the moderation route with the selected queue status", async () => {
+		const statusAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("moderator") }),
+			permissions: [commentsPermissions] as const,
+			rules: ({ comments }) => [
+				comments.thread.read.when(
+					({ identity, facts }) =>
+						facts.scope === "moderation" &&
+						facts.status === "spam" &&
+						identity?.role === "moderator",
+				),
+			],
+		});
+		const auth = createClientAuth({
+			authorization: statusAuthorization,
+			getIdentity: () => ({ id: "moderator-1", role: "moderator" as const }),
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={createMockRouter("tab=spam")}
+				overrides={{ comments: commentsOverrides }}
+				auth={auth}
+			>
+				<ModerationPageComponent />
+			</StackProvider>,
+		);
+
+		expect(hooks.useSuspenseModerationComments).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ status: "spam" }),
+		);
+	});
+});
+
+describe("CommentCount permission descriptors", () => {
+	it("renders an explicitly public approved count for an anonymous identity", async () => {
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={clientAuth(null)}
+			>
+				<CommentCount resourceId="post-1" resourceType="post" />
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		expect(
+			container.querySelector('[data-testid="comment-count"]'),
+		).toBeTruthy();
+		expect(hooks.useCommentCount).toHaveBeenCalledWith(expect.anything(), {
+			resourceId: "post-1",
+			resourceType: "post",
+			status: "approved",
+		});
+	});
+
+	it("keeps an approved count public for a default-deny legacy provider", async () => {
+		const can = vi.fn(() => false);
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={{ getIdentity: () => null, can }}
+			>
+				<CommentCount resourceId="post-1" resourceType="post" />
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		expect(
+			container.querySelector('[data-testid="comment-count"]'),
+		).toBeTruthy();
+		expect(hooks.useCommentCount).toHaveBeenCalled();
+		expect(can).not.toHaveBeenCalled();
+	});
+
+	it("does not fetch a moderation count when the local rule denies it", async () => {
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={clientAuth({ id: "viewer-1", role: "user" })}
+			>
+				<CommentCount
+					resourceId="post-1"
+					resourceType="post"
+					status="pending"
+				/>
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		expect(container.querySelector('[data-testid="comment-count"]')).toBeNull();
+		expect(hooks.useCommentCount).not.toHaveBeenCalled();
+	});
+});
+
 describe("ModerationPage tab/page state (useListState)", () => {
+	it("clears selected rows before moving to another page", async () => {
+		hooks.useSuspenseModerationComments.mockReturnValue({
+			comments: [comment],
+			total: 40,
+			limit: 20,
+			offset: 0,
+			totalPages: 2,
+			refetch: vi.fn(),
+		});
+		const router = createMockRouter();
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={router}
+				overrides={{ comments: commentsOverrides }}
+			>
+				<ModerationPage />
+			</StackProvider>,
+		);
+
+		const rowCheckbox =
+			container.querySelectorAll<HTMLElement>('[role="checkbox"]')[1]!;
+		await act(async () => rowCheckbox.click());
+		expect(texts()).toContain("1 selected");
+
+		const next = [
+			...container.querySelectorAll<HTMLButtonElement>("button"),
+		].find((button) => button.textContent === "Next")!;
+		await act(async () => next.click());
+
+		expect(texts()).not.toContain("selected");
+		expect(texts()).not.toContain("Approve selected");
+		const [written] = router.setSearchParams.mock.calls.at(-1)!;
+		expect(written.get("page")).toBe("2");
+	});
+
+	it("fails closed when browser navigation changes the selected page", async () => {
+		hooks.useSuspenseModerationComments.mockReturnValue({
+			comments: [comment],
+			total: 40,
+			limit: 20,
+			offset: 0,
+			totalPages: 2,
+			refetch: vi.fn(),
+		});
+		const router = createMockRouter();
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={router}
+				overrides={{ comments: commentsOverrides }}
+			>
+				<ModerationPage />
+			</StackProvider>,
+		);
+
+		const rowCheckbox =
+			container.querySelectorAll<HTMLElement>('[role="checkbox"]')[1]!;
+		await act(async () => rowCheckbox.click());
+		expect(texts()).toContain("1 selected");
+
+		hooks.useSuspenseModerationComments.mockReturnValue({
+			comments: [{ ...comment, id: "c2" }],
+			total: 40,
+			limit: 20,
+			offset: 20,
+			totalPages: 2,
+			refetch: vi.fn(),
+		});
+		router.setExternalSearchParams("page=2");
+		await act(async () => {
+			window.dispatchEvent(new PopStateEvent("popstate"));
+		});
+
+		expect(hooks.useSuspenseModerationComments).toHaveBeenLastCalledWith(
+			expect.anything(),
+			expect.objectContaining({ page: 2 }),
+		);
+		expect(texts()).not.toContain("selected");
+		expect(texts()).not.toContain("Approve selected");
+		expect(texts()).not.toContain("Delete selected");
+
+		hooks.useSuspenseModerationComments.mockReturnValue({
+			comments: [comment],
+			total: 40,
+			limit: 20,
+			offset: 0,
+			totalPages: 2,
+			refetch: vi.fn(),
+		});
+		router.setExternalSearchParams("");
+		await act(async () => {
+			window.dispatchEvent(new PopStateEvent("popstate"));
+		});
+
+		expect(hooks.useSuspenseModerationComments).toHaveBeenLastCalledWith(
+			expect.anything(),
+			expect.objectContaining({ page: 1 }),
+		);
+		expect(texts()).not.toContain("selected");
+		expect(texts()).not.toContain("Approve selected");
+		expect(texts()).not.toContain("Delete selected");
+	});
+
+	it("closes bulk delete when a refetch no longer resolves every target", async () => {
+		const router = createMockRouter();
+		const page = () => (
+			<StackProvider
+				basePath="/pages"
+				router={router}
+				overrides={{ comments: commentsOverrides }}
+			>
+				<ModerationPage />
+			</StackProvider>
+		);
+		await render(page());
+
+		const rowCheckbox =
+			container.querySelectorAll<HTMLElement>('[role="checkbox"]')[1]!;
+		await act(async () => rowCheckbox.click());
+		const deleteSelected = [
+			...container.querySelectorAll<HTMLButtonElement>("button"),
+		].find((button) => button.textContent === "Delete selected")!;
+		await act(async () => deleteSelected.click());
+		expect(
+			document.querySelector('[data-testid="confirm-delete-button"]'),
+		).not.toBeNull();
+
+		hooks.useSuspenseModerationComments.mockReturnValue({
+			comments: [{ ...comment, id: "c2" }],
+			total: 1,
+			limit: 20,
+			offset: 0,
+			totalPages: 1,
+			refetch: vi.fn(),
+		});
+		await render(page());
+
+		expect(
+			document.querySelector('[data-testid="confirm-delete-button"]'),
+		).toBeNull();
+	});
+
 	it("seeds tab and page from the URL", async () => {
 		const router = createMockRouter("tab=spam&page=3");
 
@@ -426,6 +800,55 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 });
 
 describe("CommentThread provider wiring", () => {
+	it("keeps the approved thread public for a default-deny legacy provider", async () => {
+		const can = vi.fn(() => false);
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={{ getIdentity: () => null, can }}
+			>
+				<CommentThread resourceId="post-1" resourceType="post" />
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		expect(hooks.useInfiniteComments).toHaveBeenCalled();
+	});
+
+	it("uses the same schema-backed rule for embedded owner controls", async () => {
+		const ownedComment = {
+			...comment,
+			authorId: "owner-1",
+			status: "approved" as const,
+		};
+		hooks.useInfiniteComments.mockReturnValue({
+			comments: [ownedComment],
+			total: 1,
+			isLoading: false,
+			loadMore: vi.fn(),
+			hasMore: false,
+			isLoadingMore: false,
+			queryKey: ["comments", "infinite"],
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={clientAuth({ id: "owner-1", role: "user" })}
+			>
+				<CommentThread resourceId="post-1" resourceType="post" />
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		expect(container.querySelector('[data-testid="edit-button"]')).toBeTruthy();
+		expect(
+			container.querySelector('[data-testid="delete-button"]'),
+		).toBeTruthy();
+		expect(container.querySelector('[data-testid="like-button"]')).toBeTruthy();
+	});
 	it.each(["approved", "pending"] as const)(
 		"hides delete for an owned %s comment when can() denies comments:comment/delete",
 		async (status) => {
@@ -469,7 +892,10 @@ describe("CommentThread provider wiring", () => {
 				expect.objectContaining({
 					resource: "comments:comment",
 					action: "delete",
-					params: { id: comment.id },
+					params: {
+						commentId: comment.id,
+						authorId: "provider-user",
+					},
 				}),
 			);
 		},

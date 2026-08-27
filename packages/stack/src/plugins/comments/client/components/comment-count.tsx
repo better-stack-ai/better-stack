@@ -1,8 +1,9 @@
 "use client";
 
 import { MessageSquare } from "lucide-react";
-import { useStack } from "@btst/stack/context";
+import { PermissionAccess, useStack } from "@btst/stack/context";
 import { useCommentCount } from "../hooks/use-comments";
+import { commentsPermissions } from "../../permissions";
 
 export interface CommentCountProps {
 	resourceId: string;
@@ -31,6 +32,41 @@ export function CommentCount({
 	status = "approved",
 	className,
 }: CommentCountProps) {
+	const permission =
+		status === "approved"
+			? commentsPermissions.thread.read({
+					scope: "public",
+					resourceId,
+					resourceType,
+				})
+			: commentsPermissions.thread.read({
+					scope: "moderation",
+					status,
+					resourceId,
+					resourceType,
+				});
+	return (
+		<PermissionAccess
+			permission={permission}
+			legacyPublic={status === "approved"}
+		>
+			<CommentCountValue
+				resourceId={resourceId}
+				resourceType={resourceType}
+				status={status}
+				className={className}
+			/>
+		</PermissionAccess>
+	);
+}
+
+function CommentCountValue({
+	resourceId,
+	resourceType,
+	status,
+	className,
+}: Required<Pick<CommentCountProps, "resourceId" | "resourceType" | "status">> &
+	Pick<CommentCountProps, "className">) {
 	const { api } = useStack();
 	const { count, isLoading } = useCommentCount(
 		{ apiBaseURL: api?.baseURL ?? "", apiBasePath: api?.basePath ?? "" },

@@ -6,9 +6,8 @@ export const CommentStatusSchema = z.enum(["pending", "approved", "spam"]);
 
 /**
  * Schema for the POST /comments request body.
- * authorId is intentionally absent — the server resolves identity from the
- * session inside onBeforePost and injects it. Never trust authorId from the
- * client body.
+ * authorId is intentionally absent — request operations resolve it through
+ * the generic server auth adapter. Never trust authorId from the client body.
  */
 export const createCommentSchema = z.object({
 	resourceId: z.string().min(1, "Resource ID is required"),
@@ -39,8 +38,8 @@ export const updateCommentStatusSchema = z.object({
  * Schema for GET /comments query parameters.
  *
  * `currentUserId` is intentionally absent — it is never accepted from the client.
- * The server always resolves the caller's identity via the `resolveCurrentUserId`
- * hook and injects it internally. Accepting it from the client would allow any
+ * The server always resolves the caller's identity through the generic auth
+ * adapter and injects it internally. Accepting it from the client would allow any
  * anonymous caller to supply an arbitrary user ID and read that user's pending
  * (pre-moderation) comments.
  */
@@ -58,8 +57,8 @@ export const CommentListQuerySchema = z.object({
 /**
  * Internal params schema used by `listComments()` and the `api` factory.
  * Extends the HTTP query schema with `currentUserId`, which is always injected
- * server-side (either by the HTTP handler via `resolveCurrentUserId`, or by a
- * trusted server-side caller such as a Server Component or cron job).
+ * server-side (by the maintained operation from request identity, or by a
+ * trusted raw data-layer caller such as a Server Component or cron job).
  */
 export const CommentListParamsSchema = CommentListQuerySchema.extend({
 	currentUserId: z.string().optional(),

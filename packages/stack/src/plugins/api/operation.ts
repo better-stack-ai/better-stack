@@ -239,6 +239,15 @@ export function defineOperation<
 			new WeakSet(),
 			"operation facts",
 		);
+		if (
+			!options.skipAuthorization &&
+			options.auth &&
+			!isServerAuth(options.auth)
+		) {
+			throw new TypeError(
+				"Schema-backed operations require an auth provider created with createServerAuth().",
+			);
+		}
 
 		let identity: DeepReadonly<StackIdentity> | null = null;
 		if (!options.skipAuthorization && isServerAuth(options.auth)) {
