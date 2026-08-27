@@ -47,7 +47,15 @@ export const UpdateBoardOperationInputSchema = z.object({
 export const ColumnIdOperationInputSchema = z.object({ id: z.string() });
 export const UpdateColumnOperationInputSchema = z.object({
 	id: z.string(),
-	data: updateColumnSchema.omit({ id: true }),
+	data: updateColumnSchema.omit({ id: true }).superRefine((data, context) => {
+		if (Object.hasOwn(data, "order") && data.order === undefined) {
+			context.addIssue({
+				code: "custom",
+				path: ["order"],
+				message: "Order must be a number when provided.",
+			});
+		}
+	}),
 });
 export const TaskIdOperationInputSchema = z.object({ id: z.string() });
 export const UpdateTaskOperationInputSchema = z.object({

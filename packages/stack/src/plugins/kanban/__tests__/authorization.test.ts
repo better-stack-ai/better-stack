@@ -483,6 +483,22 @@ describe("Kanban operation-first authorization", () => {
 				where: [{ field: "id", value: column.id }],
 			}),
 		).toMatchObject({ order: 0 });
+
+		await expect(
+			backend
+				.forRequest(request("/member", { identity: owner }))
+				.api.kanban.updateColumn({
+					id: column.id,
+					data: { order: undefined },
+				}),
+		).rejects.toBeInstanceOf(z.ZodError);
+		expect(events).toEqual([]);
+		expect(
+			await backend.adapter.findOne<Column>({
+				model: "kanbanColumn",
+				where: [{ field: "id", value: column.id }],
+			}),
+		).toMatchObject({ order: 0 });
 	});
 
 	it("fails closed across every anonymous HTTP operation", async () => {
