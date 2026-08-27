@@ -362,7 +362,7 @@ describe("maintained route authorization gates", () => {
 		expect(hooks.useSuspenseFormById).not.toHaveBeenCalled();
 	});
 
-	it("passes authoritative owner facts through legacy edit route and save gates", async () => {
+	it("passes presentation owner hints through legacy edit route and save gates", async () => {
 		const ownedForm = { ...form, createdBy: "owner-1" };
 		hooks.useSuspenseFormForUpdate.mockReturnValue({
 			form: ownedForm,
@@ -431,7 +431,7 @@ describe("maintained route authorization gates", () => {
 		);
 	});
 
-	it("passes authoritative owner facts through the legacy submission route gate", async () => {
+	it("passes presentation owner hints through the legacy submission route gate", async () => {
 		hooks.useSuspenseSubmissions.mockReturnValue({
 			form: { ...form, createdBy: "owner-1" },
 			submissions: [submissionSummary],
@@ -559,7 +559,7 @@ describe("FormListPage New Form button (CanAccess)", () => {
 		expect(texts()).not.toContain("Edit");
 	});
 
-	it("passes authoritative owner facts through legacy row action gates", async () => {
+	it("passes presentation owner hints through legacy row action gates", async () => {
 		hooks.useSuspenseForms.mockReturnValue({
 			forms: [{ ...form, createdBy: "owner-1" }],
 			total: 1,
@@ -770,7 +770,7 @@ describe("SubmissionsPage row actions (CanAccess + useNotify)", () => {
 		);
 	});
 
-	it("passes authoritative owner and submitter facts through legacy submission row gates", async () => {
+	it("passes presentation owner and submitter hints through legacy submission row gates", async () => {
 		hooks.useSuspenseSubmissions.mockReturnValue({
 			form: { ...form, createdBy: "owner-1" },
 			submissions: [{ ...submissionSummary, submittedBy: "submitter-1" }],
