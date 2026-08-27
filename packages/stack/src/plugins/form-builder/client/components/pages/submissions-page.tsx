@@ -3,10 +3,15 @@
 import { lazy } from "react";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { FormBuilderPluginOverrides } from "../../overrides";
-import { ComposedRoute } from "@btst/stack/client/components";
+import {
+	ComposedRoute,
+	PermissionRouteAccess,
+} from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
 import { SubmissionsSkeleton } from "../loading/submissions-skeleton";
 import { NotFoundPage } from "./404-page";
+import { formBuilderPermissions } from "../../../permissions";
+import { useSuspenseFormById } from "../../hooks";
 
 const SubmissionsPage = lazy(() =>
 	import("./submissions-page.internal").then((m) => ({
@@ -27,15 +32,10 @@ export function SubmissionsPageComponent({ formId }: SubmissionsPageProps) {
 	return (
 		<ComposedRoute
 			path={path}
-			PageComponent={SubmissionsPage}
+			PageComponent={AuthorizedSubmissionsPage}
 			ErrorComponent={DefaultError}
 			LoadingComponent={SubmissionsSkeleton}
 			NotFoundComponent={NotFoundPage}
-			permission={{
-				resource: "form-builder:submission",
-				action: "read",
-				params: { formId },
-			}}
 			props={{ formId }}
 			onError={(error) => {
 				if (onRouteError) {
@@ -47,5 +47,27 @@ export function SubmissionsPageComponent({ formId }: SubmissionsPageProps) {
 				}
 			}}
 		/>
+	);
+}
+
+function AuthorizedSubmissionsPage({ formId }: SubmissionsPageProps) {
+	const { form } = useSuspenseFormById(formId);
+	return (
+		<PermissionRouteAccess
+			permission={formBuilderPermissions.submission.read({
+				scope: "collection",
+				formId,
+				formExists: form !== null,
+				...(form?.createdBy ? { ownerId: form.createdBy } : {}),
+			})}
+			legacyPermission={{
+				resource: "form-builder:submission",
+				action: "read",
+				params: { formId },
+			}}
+			LoadingComponent={SubmissionsSkeleton}
+		>
+			<SubmissionsPage formId={formId} />
+		</PermissionRouteAccess>
 	);
 }

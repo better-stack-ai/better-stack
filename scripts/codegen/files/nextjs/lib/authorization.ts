@@ -2,6 +2,7 @@ import { defineAuthorization } from "@btst/stack/authorization";
 import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
 import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
 import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
+import { formBuilderPermissions } from "@btst/stack/plugins/form-builder/permissions";
 import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 import { z } from "zod";
 
@@ -11,8 +12,13 @@ export const authorization = defineAuthorization({
 		id: z.string(),
 		role: z.enum(["user", "admin"]),
 	}),
-	permissions: [blogPermissions, cmsPermissions, commentsPermissions] as const,
-	rules: ({ blog, cms, comments }) => [
+	permissions: [
+		blogPermissions,
+		cmsPermissions,
+		commentsPermissions,
+		formBuilderPermissions,
+	] as const,
+	rules: ({ blog, cms, comments, forms }) => [
 		blog.post.read.when(({ identity, facts }) => {
 			if (facts.scope === "published") return true;
 			if (facts.scope === "post" && (!facts.exists || facts.published)) {
@@ -78,6 +84,30 @@ export const authorization = defineAuthorization({
 		),
 		comments.comment.moderate.when(
 			({ identity }) => identity?.role === "admin",
+		),
+		forms.form.read.when(
+			({ identity, facts }) =>
+				identity?.role === "admin" ||
+				(facts.scope === "record" && identity?.id === facts.ownerId),
+		),
+		forms.form.render.allow(),
+		forms.form.create.when(({ identity }) => identity?.role === "admin"),
+		forms.form.update.when(
+			({ identity, facts }) =>
+				identity?.role === "admin" || identity?.id === facts.ownerId,
+		),
+		forms.form.delete.when(
+			({ identity, facts }) =>
+				identity?.role === "admin" || identity?.id === facts.ownerId,
+		),
+		forms.submission.create.allow(),
+		forms.submission.read.when(
+			({ identity, facts }) =>
+				identity?.role === "admin" || identity?.id === facts.ownerId,
+		),
+		forms.submission.delete.when(
+			({ identity, facts }) =>
+				identity?.role === "admin" || identity?.id === facts.ownerId,
 		),
 	],
 });

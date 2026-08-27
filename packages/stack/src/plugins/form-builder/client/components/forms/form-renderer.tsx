@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useMemo, type ComponentType } from "react";
-import { usePluginOverrides, useTranslate } from "@btst/stack/context";
+import {
+	PermissionAccess,
+	usePluginOverrides,
+	useTranslate,
+} from "@btst/stack/context";
 import { SteppedAutoForm } from "@workspace/ui/components/auto-form/stepped-auto-form";
 import { buildFieldConfigFromJsonSchema } from "@workspace/ui/components/auto-form/helpers";
 import { formSchemaToZod } from "@workspace/ui/lib/schema-converter";
@@ -12,6 +16,7 @@ import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-
 import { useFormBySlug, useSubmitForm } from "../../hooks/form-builder-hooks";
 import type { FormBuilderPluginOverrides } from "../../overrides";
 import type { SerializedFormSubmission } from "../../../types";
+import { formBuilderPermissions } from "../../../permissions";
 
 export interface FormRendererProps {
 	/** Form slug to render */
@@ -274,18 +279,42 @@ export function FormRenderer({
 	// Render form using SteppedAutoForm
 	// It automatically handles both single-step and multi-step forms
 	return (
-		<div className={className} data-testid="form-renderer">
-			<SteppedAutoForm
-				formSchema={zodSchema}
-				fieldConfig={fieldConfig}
-				onSubmit={(values) => handleSubmit(values as Record<string, unknown>)}
-				isSubmitting={submitMutation.isPending}
-				submitButtonText={
-					submitButtonText ||
-					(localization?.FORM_BUILDER_BUTTON_SUBMIT ??
-						t("formBuilder.common.buttonSubmit", "Submit"))
-				}
-			/>
-		</div>
+		<PermissionAccess
+			permission={formBuilderPermissions.form.render({
+				slug: form.slug,
+				exists: true,
+				formId: form.id,
+				...(form.createdBy ? { ownerId: form.createdBy } : {}),
+				status: form.status,
+			})}
+			legacyPublic
+		>
+			<PermissionAccess
+				permission={formBuilderPermissions.submission.create({
+					slug: form.slug,
+					exists: true,
+					formId: form.id,
+					...(form.createdBy ? { ownerId: form.createdBy } : {}),
+					status: form.status,
+				})}
+				legacyPublic
+			>
+				<div className={className} data-testid="form-renderer">
+					<SteppedAutoForm
+						formSchema={zodSchema}
+						fieldConfig={fieldConfig}
+						onSubmit={(values) =>
+							handleSubmit(values as Record<string, unknown>)
+						}
+						isSubmitting={submitMutation.isPending}
+						submitButtonText={
+							submitButtonText ||
+							(localization?.FORM_BUILDER_BUTTON_SUBMIT ??
+								t("formBuilder.common.buttonSubmit", "Submit"))
+						}
+					/>
+				</div>
+			</PermissionAccess>
+		</PermissionAccess>
 	);
 }

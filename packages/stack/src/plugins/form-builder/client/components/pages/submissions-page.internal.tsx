@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import {
-	CanAccess,
 	useNotify,
+	PermissionAccess,
 	usePluginOverrides,
 	useBasePath,
 	useStack,
@@ -46,6 +46,7 @@ import type { SerializedFormSubmissionWithData } from "../../../types";
 import { PageWrapper } from "../shared/page-wrapper";
 import { EmptyState } from "../shared/empty-state";
 import { Pagination } from "../shared/pagination";
+import { formBuilderPermissions } from "../../../permissions";
 
 export interface SubmissionsPageProps {
 	formId: string;
@@ -192,21 +193,59 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 											</TableCell>
 											<TableCell>
 												<div className="flex gap-1">
-													<Button
-														variant="ghost"
-														size="icon"
-														onClick={() => setViewSubmission(sub)}
+													<PermissionAccess
+														permission={formBuilderPermissions.submission.read({
+															scope: "record",
+															formId,
+															submissionId: sub.id,
+															exists: true,
+															...(form?.createdBy
+																? { ownerId: form.createdBy }
+																: {}),
+															...(sub.submittedBy
+																? { submittedBy: sub.submittedBy }
+																: {}),
+														})}
+														legacyPermission={{
+															resource: "form-builder:submission",
+															action: "read",
+															params: { formId, id: sub.id },
+														}}
 													>
-														<Eye className="h-4 w-4" />
-														<span className="sr-only">
-															{localization?.FORM_BUILDER_SUBMISSIONS_ACTION_VIEW ??
-																t("formBuilder.submissions.actionView", "View")}
-														</span>
-													</Button>
-													<CanAccess
-														resource="form-builder:submission"
-														action="delete"
-														params={{ formId, id: sub.id }}
+														<Button
+															variant="ghost"
+															size="icon"
+															onClick={() => setViewSubmission(sub)}
+														>
+															<Eye className="h-4 w-4" />
+															<span className="sr-only">
+																{localization?.FORM_BUILDER_SUBMISSIONS_ACTION_VIEW ??
+																	t(
+																		"formBuilder.submissions.actionView",
+																		"View",
+																	)}
+															</span>
+														</Button>
+													</PermissionAccess>
+													<PermissionAccess
+														permission={formBuilderPermissions.submission.delete(
+															{
+																formId,
+																submissionId: sub.id,
+																exists: true,
+																...(form?.createdBy
+																	? { ownerId: form.createdBy }
+																	: {}),
+																...(sub.submittedBy
+																	? { submittedBy: sub.submittedBy }
+																	: {}),
+															},
+														)}
+														legacyPermission={{
+															resource: "form-builder:submission",
+															action: "delete",
+															params: { formId, id: sub.id },
+														}}
 													>
 														<Button
 															variant="ghost"
@@ -223,7 +262,7 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 																	)}
 															</span>
 														</Button>
-													</CanAccess>
+													</PermissionAccess>
 												</div>
 											</TableCell>
 										</TableRow>

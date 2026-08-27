@@ -74,13 +74,20 @@ success "CLI built → $CLI_BIN"
 
 step "Running btst init (explicit plugin list, skip install)"
 cd "$DEST"
+# Form Builder rejects the non-isolating memory scaffold. The E2E overlay later
+# replaces this production-safe template with its serialized test adapter.
 node "$CLI_BIN" init \
   --yes \
   --framework tanstack \
-  --adapter memory \
+  --adapter prisma \
   --plugins "blog,ai-chat,cms,form-builder,ui-builder,kanban,comments,media,route-docs,open-api" \
   --skip-install
 success "btst init complete"
+
+step "Removing temporary Prisma scaffold artifacts before the memory E2E overlay"
+rm -f "$DEST/prisma.config.ts"
+rm -rf "$DEST/prisma" "$DEST/generated/prisma" "$DEST/src/generated/prisma"
+success "Temporary Prisma artifacts removed"
 
 # ── Step 4: Add shadcn UI components ──────────────────────────────────────────
 # These are needed by the E2E overlay patches (todo plugin UI, etc.)

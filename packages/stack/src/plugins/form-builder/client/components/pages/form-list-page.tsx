@@ -7,6 +7,7 @@ import { ComposedRoute } from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
 import { FormListSkeleton } from "../loading/form-list-skeleton";
 import { NotFoundPage } from "./404-page";
+import { formBuilderPermissions } from "../../../permissions";
 
 const FormListPage = lazy(() =>
 	import("./form-list-page.internal").then((m) => ({
@@ -21,6 +22,8 @@ export function FormListPageComponent() {
 	return (
 		<ComposedRoute
 			path="/forms"
+			permission={formBuilderPermissions.form.read({ scope: "collection" })}
+			legacyPermission={{ resource: "form-builder:form", action: "read" }}
 			PageComponent={FormListPage}
 			ErrorComponent={DefaultError}
 			LoadingComponent={FormListSkeleton}

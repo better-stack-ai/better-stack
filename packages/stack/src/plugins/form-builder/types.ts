@@ -6,6 +6,17 @@
  * - Form Builder allows non-technical admins to build forms via drag-and-drop UI
  * - Forms are serialized to/from JSON Schema for storage
  */
+import type { DeepReadonly } from "@btst/stack/plugins/api";
+import type { PermissionFactsFor } from "@btst/stack/authorization";
+import type { StackIdentity } from "@btst/stack/context";
+import type { formBuilderPermissions } from "./permissions";
+import type {
+	CreateFormInput,
+	ListFormsQuery,
+	ListSubmissionsQuery,
+	SubmitFormInput,
+	UpdateFormInput,
+} from "./schemas";
 
 /**
  * Form stored in the database
@@ -63,7 +74,7 @@ export type FormSubmissionWithForm = FormSubmission & {
  */
 export interface SerializedForm
 	extends Omit<Form, "createdAt" | "updatedAt" | "status"> {
-	status: string;
+	status: Form["status"];
 	createdAt: string;
 	updatedAt: string;
 }
@@ -115,26 +126,117 @@ export interface PaginatedFormSubmissions<TData = Record<string, unknown>> {
 /**
  * Context passed to all backend hooks
  */
-export interface FormBuilderHookContext {
+export interface FormBuilderHookContext<TInput = unknown, TFacts = unknown> {
+	/** Validated operation input. */
+	readonly input: DeepReadonly<TInput>;
+	/** Trusted facts derived by the backend before authorization. */
+	readonly facts: DeepReadonly<TFacts>;
+	/** Authorized request identity, or `null` for anonymous/internal execution. */
+	readonly identity: DeepReadonly<StackIdentity> | null;
+	/** Request when invoked through HTTP or `forRequest()`. */
+	readonly request?: Request;
 	/** User ID if authenticated */
-	userId?: string;
+	readonly userId?: string;
 	/** Request headers */
-	headers?: Headers;
+	readonly headers?: Headers;
 	/** Client IP address (for rate limiting) */
-	ipAddress?: string;
+	readonly ipAddress?: string;
 	/** User agent string */
-	userAgent?: string;
+	readonly userAgent?: string;
 }
 
 /**
  * Context for submission-specific hooks
  */
-export interface SubmissionHookContext extends FormBuilderHookContext {
+export interface SubmissionHookContext<TInput = unknown, TFacts = unknown>
+	extends FormBuilderHookContext<TInput, TFacts> {
 	/** Form slug being submitted */
-	formSlug: string;
+	readonly formSlug: string;
 	/** Form ID */
-	formId: string;
+	readonly formId: string;
 }
+
+type FormReadFacts = PermissionFactsFor<
+	typeof formBuilderPermissions.form.read
+>;
+type FormRenderFacts = PermissionFactsFor<
+	typeof formBuilderPermissions.form.render
+>;
+type FormCreateFacts = PermissionFactsFor<
+	typeof formBuilderPermissions.form.create
+>;
+type FormUpdateFacts = PermissionFactsFor<
+	typeof formBuilderPermissions.form.update
+>;
+type FormDeleteFacts = PermissionFactsFor<
+	typeof formBuilderPermissions.form.delete
+>;
+type SubmissionCreateFacts = PermissionFactsFor<
+	typeof formBuilderPermissions.submission.create
+>;
+type SubmissionReadFacts = PermissionFactsFor<
+	typeof formBuilderPermissions.submission.read
+>;
+type SubmissionDeleteFacts = PermissionFactsFor<
+	typeof formBuilderPermissions.submission.delete
+>;
+
+/** Authorized form-list lifecycle context. */
+export type FormListOperationContext = FormBuilderHookContext<
+	ListFormsQuery,
+	FormReadFacts
+>;
+/** Authorized form-detail lifecycle context. */
+export type FormGetOperationContext =
+	| FormBuilderHookContext<{ id: string }, FormReadFacts>
+	| FormBuilderHookContext<{ slug: string }, FormRenderFacts>;
+/** Authorized form-create lifecycle context. */
+export type FormCreateOperationContext = FormBuilderHookContext<
+	CreateFormInput,
+	FormCreateFacts
+>;
+/** Authorized form-update lifecycle context. */
+export type FormUpdateOperationContext = FormBuilderHookContext<
+	{ id: string; data: UpdateFormInput },
+	FormUpdateFacts
+>;
+/** Authorized form-delete lifecycle context. */
+export type FormDeleteOperationContext = FormBuilderHookContext<
+	{ id: string },
+	FormDeleteFacts
+>;
+/** Authorized public submission lifecycle context. */
+export type SubmissionCreateOperationContext = SubmissionHookContext<
+	{ slug: string } & SubmitFormInput,
+	SubmissionCreateFacts
+>;
+/** Authorized submission-list lifecycle context. */
+export type SubmissionListOperationContext = FormBuilderHookContext<
+	{ formId: string; query: ListSubmissionsQuery },
+	SubmissionReadFacts
+>;
+/** Authorized submission-detail lifecycle context. */
+export type SubmissionGetOperationContext = FormBuilderHookContext<
+	{ formId: string; submissionId: string },
+	SubmissionReadFacts
+>;
+/** Authorized submission-delete lifecycle context. */
+export type SubmissionDeleteOperationContext = FormBuilderHookContext<
+	{ formId: string; submissionId: string },
+	SubmissionDeleteFacts
+>;
+
+/** Typed context union used by the cross-operation error hook. */
+export type FormBuilderOperationHookContext =
+	| FormListOperationContext
+	| FormGetOperationContext
+	| FormCreateOperationContext
+	| FormUpdateOperationContext
+	| FormDeleteOperationContext
+	| SubmissionCreateOperationContext
+	| SubmissionListOperationContext
+	| SubmissionGetOperationContext
+	| SubmissionDeleteOperationContext;
 
 /**
  * Input data for creating a form
@@ -166,58 +268,58 @@ export interface FormUpdate {
 /**
  * Backend hooks for Form Builder plugin
  *
- * All CRUD hooks receive ipAddress and headers for auth/rate limiting.
- * Throw an error from onBefore* hooks to reject the operation (throws 403).
+ * Authorization runs before these hooks. Hooks receive trusted typed operation
+ * context and can enforce domain invariants or perform lifecycle behavior.
  */
 export interface FormBuilderBackendHooks {
 	// ============================================================================
 	// FORM CRUD HOOKS (Admin operations)
 	// ============================================================================
 
-	/** Called before listing forms. Throw an error to deny access (403). */
-	onBeforeListForms?: (ctx: FormBuilderHookContext) => Promise<void> | void;
+	/** Called before listing forms to enforce domain preconditions. */
+	onBeforeListForms?: (ctx: FormListOperationContext) => Promise<void> | void;
 
 	/** Called before creating a form. Throw an error to deny, or return modified data. */
 	onBeforeFormCreated?: (
 		data: FormInput,
-		ctx: FormBuilderHookContext,
+		ctx: FormCreateOperationContext,
 	) => Promise<FormInput | void> | FormInput | void;
 
 	/** Called after a form is created */
 	onAfterFormCreated?: (
 		form: SerializedForm,
-		ctx: FormBuilderHookContext,
+		ctx: FormCreateOperationContext,
 	) => Promise<void> | void;
 
-	/** Called before getting a form by ID or slug. Throw an error to deny access. */
+	/** Called before getting a form by ID or slug. */
 	onBeforeGetForm?: (
 		idOrSlug: string,
-		ctx: FormBuilderHookContext,
+		ctx: FormGetOperationContext,
 	) => Promise<void> | void;
 
 	/** Called before updating a form. Throw an error to deny, or return modified data. */
 	onBeforeFormUpdated?: (
 		id: string,
 		data: FormUpdate,
-		ctx: FormBuilderHookContext,
+		ctx: FormUpdateOperationContext,
 	) => Promise<FormUpdate | void> | FormUpdate | void;
 
 	/** Called after a form is updated */
 	onAfterFormUpdated?: (
 		form: SerializedForm,
-		ctx: FormBuilderHookContext,
+		ctx: FormUpdateOperationContext,
 	) => Promise<void> | void;
 
 	/** Called before deleting a form. Throw an error to deny. */
 	onBeforeFormDeleted?: (
 		id: string,
-		ctx: FormBuilderHookContext,
+		ctx: FormDeleteOperationContext,
 	) => Promise<void> | void;
 
 	/** Called after a form is deleted */
 	onAfterFormDeleted?: (
 		id: string,
-		ctx: FormBuilderHookContext,
+		ctx: FormDeleteOperationContext,
 	) => Promise<void> | void;
 
 	// ============================================================================
@@ -233,7 +335,7 @@ export interface FormBuilderBackendHooks {
 	onBeforeSubmission?: (
 		formSlug: string,
 		data: Record<string, unknown>,
-		ctx: SubmissionHookContext,
+		ctx: SubmissionCreateOperationContext,
 	) => Promise<Record<string, unknown> | void> | Record<string, unknown> | void;
 
 	/**
@@ -243,7 +345,7 @@ export interface FormBuilderBackendHooks {
 	onAfterSubmission?: (
 		submission: SerializedFormSubmission,
 		form: SerializedForm,
-		ctx: SubmissionHookContext,
+		ctx: SubmissionCreateOperationContext,
 	) => Promise<void> | void;
 
 	/** Called when a submission fails */
@@ -251,35 +353,35 @@ export interface FormBuilderBackendHooks {
 		error: Error,
 		formSlug: string,
 		data: Record<string, unknown>,
-		ctx: SubmissionHookContext,
+		ctx: SubmissionCreateOperationContext,
 	) => Promise<void> | void;
 
 	// ============================================================================
 	// SUBMISSIONS MANAGEMENT HOOKS (Admin viewing submissions)
 	// ============================================================================
 
-	/** Called before listing submissions. Throw an error to deny access (403). */
+	/** Called before listing submissions to enforce domain preconditions. */
 	onBeforeListSubmissions?: (
 		formId: string,
-		ctx: FormBuilderHookContext,
+		ctx: SubmissionListOperationContext,
 	) => Promise<void> | void;
 
 	/** Called before getting a submission. Throw an error to deny access. */
 	onBeforeGetSubmission?: (
 		submissionId: string,
-		ctx: FormBuilderHookContext,
+		ctx: SubmissionGetOperationContext,
 	) => Promise<void> | void;
 
 	/** Called before deleting a submission. Throw an error to deny. */
 	onBeforeSubmissionDeleted?: (
 		submissionId: string,
-		ctx: FormBuilderHookContext,
+		ctx: SubmissionDeleteOperationContext,
 	) => Promise<void> | void;
 
 	/** Called after a submission is deleted */
 	onAfterSubmissionDeleted?: (
 		submissionId: string,
-		ctx: FormBuilderHookContext,
+		ctx: SubmissionDeleteOperationContext,
 	) => Promise<void> | void;
 
 	// ============================================================================
@@ -299,7 +401,7 @@ export interface FormBuilderBackendHooks {
 			| "listSubmissions"
 			| "getSubmission"
 			| "deleteSubmission",
-		ctx: FormBuilderHookContext,
+		ctx: FormBuilderOperationHookContext,
 	) => Promise<void> | void;
 }
 

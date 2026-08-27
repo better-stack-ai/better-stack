@@ -11,13 +11,20 @@ import {
 	type StackAuthProvider,
 	type StackI18nProvider,
 } from "@btst/stack/context";
+import { defineAuthorization } from "@btst/stack/authorization";
+import { createClientAuth } from "@btst/stack/authorization/client";
+import { z } from "zod";
 import { FormListPage } from "../client/components/pages/form-list-page.internal";
 import { SubmissionsPage } from "../client/components/pages/submissions-page.internal";
 import { FormBuilderPage } from "../client/components/pages/form-builder-page.internal";
+import { FormListPageComponent } from "../client/components/pages/form-list-page";
+import { SubmissionsPageComponent } from "../client/components/pages/submissions-page";
+import { FormBuilderPageComponent } from "../client/components/pages/form-builder-page";
 import type {
 	SerializedForm,
 	SerializedFormSubmissionWithData,
 } from "../types";
+import { formBuilderPermissions } from "../permissions";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -176,6 +183,115 @@ function typeInto(input: HTMLInputElement, value: string) {
 	input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+const deniedRouteAuthorization = defineAuthorization({
+	identity: z.object({ id: z.string(), role: z.literal("user") }),
+	permissions: [formBuilderPermissions] as const,
+	rules: ({ forms }) => [
+		forms.form.read.when(() => false),
+		forms.form.create.when(() => false),
+		forms.form.update.when(() => false),
+		forms.submission.read.when(() => false),
+	],
+});
+
+const deniedRouteAuth = createClientAuth({
+	authorization: deniedRouteAuthorization,
+	getIdentity: () => ({ id: "viewer-1", role: "user" as const }),
+});
+
+describe("maintained route authorization gates", () => {
+	it.each([
+		{
+			label: "form list",
+			page: <FormListPageComponent />,
+			forbiddenSelector: '[data-testid="form-builder-list-search"]',
+		},
+		{
+			label: "form create",
+			page: <FormBuilderPageComponent />,
+			forbiddenSelector: '[data-testid="form-builder-page"]',
+		},
+		{
+			label: "form edit",
+			page: <FormBuilderPageComponent id="f1" />,
+			forbiddenSelector: '[data-testid="form-builder-page"]',
+		},
+		{
+			label: "submission list",
+			page: <SubmissionsPageComponent formId="f1" />,
+			forbiddenSelector: "table",
+		},
+	] as const)(
+		"fails closed at the $label route boundary",
+		async ({ page, forbiddenSelector }) => {
+			vi.spyOn(console, "error").mockImplementation(() => {});
+			await render(
+				<StackProvider
+					basePath="/pages"
+					router={createMockRouter()}
+					overrides={{ "form-builder": formBuilderOverrides }}
+					auth={deniedRouteAuth}
+					initialIdentity={{ id: "viewer-1", role: "user" }}
+				>
+					{page}
+				</StackProvider>,
+			);
+			await act(async () => {
+				await Promise.resolve();
+			});
+
+			expect(container.querySelector(forbiddenSelector)).toBeNull();
+			expect(texts()).toContain("Something went wrong");
+		},
+	);
+
+	it("renders Not Found for a missing edit record without consulting create permission", async () => {
+		const createRule = vi.fn(() => true);
+		const updateRule = vi.fn(() => false);
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [formBuilderPermissions] as const,
+			rules: ({ forms }) => [
+				forms.form.create.when(createRule),
+				forms.form.update.when(updateRule),
+			],
+		});
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => ({ id: "viewer-1", role: "user" as const }),
+		});
+		hooks.useSuspenseFormById.mockReturnValue({
+			form: null,
+			refetch: vi.fn(),
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={createMockRouter()}
+				overrides={{ "form-builder": formBuilderOverrides }}
+				auth={auth}
+				initialIdentity={{ id: "viewer-1", role: "user" }}
+			>
+				<FormBuilderPageComponent id="missing" />
+			</StackProvider>,
+		);
+		await act(async () => {
+			await Promise.resolve();
+		});
+
+		expect(texts()).toContain("Page not found");
+		expect(
+			container.querySelector('[data-testid="form-builder-page"]'),
+		).toBeNull();
+		expect(
+			container.querySelector('[data-testid="form-builder-canvas"]'),
+		).toBeNull();
+		expect(createRule).not.toHaveBeenCalled();
+		expect(updateRule).not.toHaveBeenCalled();
+	});
+});
+
 describe("FormListPage New Form button (CanAccess)", () => {
 	function renderListPage(
 		auth?: StackAuthProvider,
@@ -215,6 +331,41 @@ describe("FormListPage New Form button (CanAccess)", () => {
 		expect(texts()).not.toContain("New Form");
 		// The list itself still renders
 		expect(texts()).toContain("Contact Form");
+	});
+
+	it("uses exact typed descriptors for form and submission controls", async () => {
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [formBuilderPermissions] as const,
+			rules: ({ forms }) => [
+				forms.form.read.when(() => true),
+				forms.form.create.when(() => false),
+				forms.form.update.when(() => false),
+				forms.form.delete.when(() => false),
+				forms.submission.read.when(() => true),
+				forms.submission.delete.when(() => false),
+			],
+		});
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => ({ id: "viewer-1", role: "user" as const }),
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={createMockRouter()}
+				overrides={{ "form-builder": formBuilderOverrides }}
+				auth={auth}
+				initialIdentity={{ id: "viewer-1", role: "user" }}
+			>
+				<FormListPage />
+			</StackProvider>,
+		);
+
+		expect(texts()).toContain("Contact Form");
+		expect(texts()).not.toContain("New Form");
+		expect(texts()).not.toContain("Edit");
 	});
 });
 
@@ -370,6 +521,36 @@ describe("SubmissionsPage row actions (CanAccess + useNotify)", () => {
 				params: { formId: "f1", id: submission.id },
 			}),
 		);
+	});
+
+	it("uses record read and delete descriptors for typed submission row gates", async () => {
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [formBuilderPermissions] as const,
+			rules: ({ forms }) => [
+				forms.submission.read.when(() => true),
+				forms.submission.delete.when(() => false),
+			],
+		});
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => ({ id: "viewer-1", role: "user" as const }),
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={createMockRouter()}
+				overrides={{ "form-builder": formBuilderOverrides }}
+				auth={auth}
+				initialIdentity={{ id: "viewer-1", role: "user" }}
+			>
+				<SubmissionsPage formId="f1" />
+			</StackProvider>,
+		);
+
+		const actionButtons = container.querySelectorAll("table tbody tr button");
+		expect(actionButtons).toHaveLength(1);
 	});
 
 	it("notifies success through the notify provider after deleting", async () => {

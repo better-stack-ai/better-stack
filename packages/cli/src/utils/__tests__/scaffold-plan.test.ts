@@ -3,6 +3,45 @@ import { buildScaffoldPlan } from "../scaffold-plan";
 import { PLUGINS } from "../constants";
 
 describe("scaffold plan", () => {
+	it.each(["memory", "mongodb"] as const)(
+		"rejects Form Builder with the unsupported %s generated adapter configuration",
+		async (adapter) => {
+			await expect(
+				buildScaffoldPlan({
+					framework: "nextjs",
+					adapter,
+					plugins: ["form-builder"],
+					alias: "@/",
+					cssFile: "app/globals.css",
+				}),
+			).rejects.toThrow(
+				"requires an adapter with isolated transaction support",
+			);
+		},
+	);
+
+	it.each(["prisma", "drizzle", "kysely"] as const)(
+		"enables isolated transactions for Form Builder in the %s scaffold",
+		async (adapter) => {
+			const plan = await buildScaffoldPlan({
+				framework: "nextjs",
+				adapter,
+				plugins: ["form-builder"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const stackFile = plan.files.find((file) => file.path === "lib/stack.ts");
+			expect(stackFile?.content).toContain("transaction: true");
+			expect(stackFile?.content).toContain(")({}),");
+			if (adapter === "drizzle") {
+				expect(stackFile?.content).toContain('provider: "pg"');
+			}
+			if (adapter === "kysely") {
+				expect(stackFile?.content).toContain('type: "postgres"');
+			}
+		},
+	);
+
 	it("builds expected files for nextjs", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
@@ -201,7 +240,7 @@ describe("scaffold plan", () => {
 	it("uses camelCase config keys for client plugins", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
-			adapter: "memory",
+			adapter: "prisma",
 			plugins: ["ai-chat", "cms", "ui-builder", "form-builder"],
 			alias: "@/",
 			cssFile: "app/globals.css",
@@ -594,7 +633,7 @@ describe("scaffold plan", () => {
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
 				framework,
-				adapter: "memory",
+				adapter: "prisma",
 				plugins: [
 					"blog",
 					"ai-chat",
@@ -883,7 +922,7 @@ describe("scaffold plan", () => {
 	it("emits SSG forms page for nextjs when form-builder selected", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
-			adapter: "memory",
+			adapter: "prisma",
 			plugins: ["form-builder"],
 			alias: "@/",
 			cssFile: "app/globals.css",
@@ -910,7 +949,7 @@ describe("scaffold plan", () => {
 		for (const framework of ["react-router", "tanstack"] as const) {
 			const plan = await buildScaffoldPlan({
 				framework,
-				adapter: "memory",
+				adapter: "prisma",
 				plugins: ["blog", "cms", "form-builder", "kanban"],
 				alias: "@/",
 				cssFile: "src/styles/globals.css",
@@ -984,7 +1023,7 @@ describe("scaffold plan", () => {
 	it("emits form-demo page for nextjs when form-builder selected", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
-			adapter: "memory",
+			adapter: "prisma",
 			plugins: ["form-builder"],
 			alias: "@/",
 			cssFile: "app/globals.css",
@@ -1000,7 +1039,7 @@ describe("scaffold plan", () => {
 	it("emits form-demo route for react-router when form-builder selected", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "react-router",
-			adapter: "memory",
+			adapter: "prisma",
 			plugins: ["form-builder"],
 			alias: "~/",
 			cssFile: "app/app.css",
@@ -1011,7 +1050,7 @@ describe("scaffold plan", () => {
 	it("emits form-demo route for tanstack when form-builder selected", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "tanstack",
-			adapter: "memory",
+			adapter: "prisma",
 			plugins: ["form-builder"],
 			alias: "@/",
 			cssFile: "src/styles/globals.css",

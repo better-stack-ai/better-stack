@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
 
 // Helper functions for finding form builder UI elements using data-testid
 function getPalette(page: Page) {
@@ -18,6 +19,11 @@ function getPaletteItem(page: Page, itemName: string, exact = false) {
 }
 
 test.describe("Form Builder Plugin - Admin Pages", () => {
+	test.use({ extraHTTPHeaders: mockAuthHeaders() });
+	test.beforeEach(async ({ context }) => {
+		await setMockAuthCookie(context);
+	});
+
 	// Generate unique ID for each test run to avoid slug collisions
 	const testRunId = Date.now().toString(36);
 
@@ -365,6 +371,11 @@ test.describe("Form Builder Plugin - Admin Pages", () => {
 });
 
 test.describe("Form Builder - Form Creation", () => {
+	test.use({ extraHTTPHeaders: mockAuthHeaders() });
+	test.beforeEach(async ({ context }) => {
+		await setMockAuthCookie(context);
+	});
+
 	test.beforeEach(async ({ page }) => {
 		await page.goto("/pages/forms/new", { waitUntil: "networkidle" });
 		// Wait for lazy-loaded form builder to finish loading
@@ -598,7 +609,10 @@ test.describe("Form Builder - Public Form Submission", () => {
 		});
 
 		const response = await request.post("/api/data/forms", {
-			headers: { "content-type": "application/json" },
+			headers: {
+				"content-type": "application/json",
+				...mockAuthHeaders(),
+			},
 			data: {
 				name: `Public Test Form ${testRunId}`,
 				slug: formSlug,
@@ -668,8 +682,11 @@ test.describe("Form Builder - Public Form Submission", () => {
 			required: ["name", "email"],
 		});
 
-		await request.post("/api/data/forms", {
-			headers: { "content-type": "application/json" },
+		const response = await request.post("/api/data/forms", {
+			headers: {
+				"content-type": "application/json",
+				...mockAuthHeaders(),
+			},
 			data: {
 				name: `Validation Test Form ${testRunId}`,
 				slug: formSlug,
@@ -677,6 +694,7 @@ test.describe("Form Builder - Public Form Submission", () => {
 				status: "active", // Must be "active" to accept submissions
 			},
 		});
+		expect(response.ok()).toBe(true);
 
 		// Navigate to public form page
 		await page.goto(`/form-demo/${formSlug}`, { waitUntil: "networkidle" });

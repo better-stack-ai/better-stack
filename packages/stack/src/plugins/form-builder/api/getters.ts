@@ -226,7 +226,7 @@ export async function getFormBySlug(
  * @param params - Optional pagination parameters
  */
 export async function getFormSubmissions(
-	adapter: Adapter,
+	adapter: Pick<Adapter, "findOne" | "findMany" | "count">,
 	formId: string,
 	params?: { limit?: number; offset?: number },
 ): Promise<{
