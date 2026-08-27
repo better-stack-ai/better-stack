@@ -185,12 +185,19 @@ type RequestFields = {
 export class FormBuilderOperationError extends Error {
 	readonly statusCode: number;
 	readonly code: string;
+	readonly issues?: readonly unknown[];
 
-	constructor(statusCode: number, message: string, code: string) {
+	constructor(
+		statusCode: number,
+		message: string,
+		code: string,
+		issues?: readonly unknown[],
+	) {
 		super(message);
 		this.name = "FormBuilderOperationError";
 		this.statusCode = statusCode;
 		this.code = code;
+		this.issues = issues;
 	}
 }
 
@@ -1144,6 +1151,7 @@ export function createFormBuilderOperations(
 						400,
 						"Validation failed",
 						"SUBMISSION_VALIDATION_FAILED",
+						validation.error.issues,
 					);
 				}
 			} catch (error) {

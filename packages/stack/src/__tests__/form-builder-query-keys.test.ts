@@ -65,6 +65,31 @@ describe("form-builder query keys match SSG prefetch keys", () => {
 		]);
 	});
 
+	it("partitions sensitive submission detail keys by identity", () => {
+		const userA = { id: "user-a", role: "user" };
+		const userB = { id: "user-b", role: "user" };
+		const userAKey = queries.formSubmissions.detail(
+			"f1",
+			"submission-1",
+			userA,
+		).queryKey;
+
+		expect(userAKey).toEqual([
+			"formSubmissions",
+			"detail",
+			"f1",
+			"submission-1",
+			{ identity: userA },
+		]);
+		expect(
+			queries.formSubmissions.detail("f1", "submission-1", { ...userA })
+				.queryKey,
+		).toEqual(userAKey);
+		expect(
+			queries.formSubmissions.detail("f1", "submission-1", userB).queryKey,
+		).not.toEqual(userAKey);
+	});
+
 	it("exposes the same _def prefixes as the previous factory", () => {
 		expect([...queries.forms._def]).toEqual(["forms"]);
 		expect([...queries.forms.list._def]).toEqual(["forms", "list"]);

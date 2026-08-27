@@ -154,7 +154,10 @@ async function adaptOperationToHttp<TResult>(
 			throw error(cause.statusCode, {
 				message: cause.message,
 				...(cause instanceof FormBuilderOperationError
-					? { code: cause.code }
+					? {
+							code: cause.code,
+							...(cause.issues ? { issues: cause.issues } : {}),
+						}
 					: {}),
 			});
 		}

@@ -645,6 +645,68 @@ describe("SubmissionsPage row actions (CanAccess + useNotify)", () => {
 		expect(texts()).toContain("Alice");
 	});
 
+	it("closes an open submission detail when the provider identity changes", async () => {
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [formBuilderPermissions] as const,
+			rules: ({ forms }) => [
+				forms.submission.read.when(
+					({ identity, facts }) =>
+						facts.scope === "collection" || identity?.id === facts.submittedBy,
+				),
+			],
+		});
+		let currentIdentity = { id: "user-a", role: "user" as const };
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => currentIdentity,
+		});
+		let refetchIdentity: () => Promise<void> = async () => {};
+		function Harness() {
+			refetchIdentity = auth.useIdentity().refetch;
+			return <SubmissionsPage formId="f1" />;
+		}
+		hooks.useSuspenseSubmissions.mockReturnValue({
+			form,
+			submissions: [{ ...submissionSummary, submittedBy: "user-a" }],
+			total: 1,
+			loadMore: vi.fn(),
+			hasMore: false,
+			isLoadingMore: false,
+			refetch: vi.fn(),
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={createMockRouter()}
+				overrides={{ "form-builder": formBuilderOverrides }}
+				auth={auth}
+				initialIdentity={currentIdentity}
+			>
+				<Harness />
+			</StackProvider>,
+		);
+		await act(async () => Promise.resolve());
+
+		const viewButton = container.querySelector<HTMLButtonElement>(
+			"table tbody tr button",
+		);
+		expect(viewButton).toBeTruthy();
+		await act(async () => {
+			viewButton!.click();
+		});
+		expect(texts()).toContain("Alice");
+
+		currentIdentity = { id: "user-b", role: "user" };
+		await act(async () => {
+			await refetchIdentity();
+		});
+
+		expect(texts()).not.toContain("Alice");
+		expect(hooks.useSubmission).toHaveBeenLastCalledWith("f1", undefined);
+	});
+
 	it("notifies success through the notify provider after deleting", async () => {
 		const notify = { success: vi.fn(), error: vi.fn() };
 

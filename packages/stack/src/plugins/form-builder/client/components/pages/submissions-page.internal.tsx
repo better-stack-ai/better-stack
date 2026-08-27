@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	useNotify,
 	PermissionAccess,
@@ -8,6 +8,7 @@ import {
 	useBasePath,
 	useStack,
 	useTranslate,
+	useIdentity,
 } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -59,6 +60,7 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
 	const { router } = useStack();
 	const basePath = useBasePath();
+	const { identity } = useIdentity();
 
 	const { form, submissions, total, hasMore, isLoadingMore, loadMore } =
 		useSuspenseSubmissions(formId);
@@ -71,6 +73,13 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 		isLoading: isViewLoading,
 		error: viewError,
 	} = useSubmission(formId, viewSubmissionId ?? undefined);
+
+	// A detail response was authorized for the identity that opened it. Close
+	// the dialog immediately when that identity snapshot changes; the hook also
+	// partitions its sensitive cache by identity before any subsequent fetch.
+	useEffect(() => {
+		setViewSubmissionId(null);
+	}, [identity]);
 
 	const LinkComponent = router?.Link ?? "a";
 

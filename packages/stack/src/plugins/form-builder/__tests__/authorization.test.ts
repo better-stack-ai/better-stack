@@ -420,6 +420,44 @@ describe("Form Builder operation-first authorization", () => {
 		expect(events).toHaveLength(9);
 	});
 
+	it("preserves dynamic schema issues across operation and HTTP submission errors", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		await seedForm(backend);
+
+		await expect(
+			backend.internal.formBuilder.submitForm({
+				slug: "contact",
+				data: {},
+			}),
+		).rejects.toMatchObject({
+			statusCode: 400,
+			code: "SUBMISSION_VALIDATION_FAILED",
+			issues: [
+				expect.objectContaining({
+					path: ["name"],
+					message: expect.any(String),
+				}),
+			],
+		});
+
+		const response = await backend.handler(
+			request("/forms/contact/submit", {
+				method: "POST",
+				body: { data: {} },
+			}),
+		);
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			code: "SUBMISSION_VALIDATION_FAILED",
+			issues: [
+				expect.objectContaining({
+					path: ["name"],
+					message: expect.any(String),
+				}),
+			],
+		});
+	});
+
 	it("returns 401 for anonymous callers and 403 for authenticated non-owners before lifecycle hooks", async () => {
 		const events: string[] = [];
 		const backend = makeBackend({

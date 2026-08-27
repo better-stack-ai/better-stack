@@ -4,6 +4,7 @@ import type {
 	ResourceFormConfig,
 	ResourceFormResult,
 } from "@btst/stack/plugins/client/hooks";
+import { useIdentity } from "@btst/stack/context";
 import type {
 	SerializedForm,
 	PaginatedForms,
@@ -374,10 +375,18 @@ export function useSubmission(
 	error: Error | null;
 	refetch: () => void;
 } {
+	const { identity, isPending: isIdentityPending } = useIdentity();
 	const { data, isLoading, error, refetch } =
-		formBuilder.formSubmissions.detail.use([formId, submissionId ?? ""], {
-			enabled: (options.enabled ?? true) && !!formId && !!submissionId,
-		});
+		formBuilder.formSubmissions.detail.use(
+			[formId, submissionId ?? "", identity],
+			{
+				enabled:
+					(options.enabled ?? true) &&
+					!isIdentityPending &&
+					!!formId &&
+					!!submissionId,
+			},
+		);
 
 	return {
 		submission: data ?? null,

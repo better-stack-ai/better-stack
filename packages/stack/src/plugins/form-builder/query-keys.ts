@@ -11,6 +11,7 @@ import type {
 	SerializedFormSubmission,
 	SerializedFormSubmissionWithData,
 } from "./types";
+import type { StackIdentity } from "@btst/stack/context";
 import {
 	formsListDiscriminator,
 	submissionsListDiscriminator,
@@ -213,14 +214,30 @@ export const formBuilderResources = {
 
 			detail: {
 				path: "/forms/:formId/submissions/:subId",
-				params: (formId: string, subId: string) => ({ formId, subId }),
-				key: (formId: string, subId: string) => [formId, subId],
+				params: (
+					formId: string,
+					subId: string,
+					_identityPartition?: StackIdentity | null,
+				) => ({ formId, subId }),
+				key: (
+					formId: string,
+					subId: string,
+					identityPartition?: StackIdentity | null,
+				) =>
+					identityPartition === undefined
+						? [formId, subId]
+						: [formId, subId, { identity: identityPartition }],
 				select: (
 					data: any,
 					_formId: string,
 					_subId: string,
+					_identityPartition?: StackIdentity | null,
 				): SerializedFormSubmissionWithData | null => data ?? null,
-				skip: (formId: string, subId: string) => !formId || !subId,
+				skip: (
+					formId: string,
+					subId: string,
+					_identityPartition?: StackIdentity | null,
+				) => !formId || !subId,
 			},
 		},
 
