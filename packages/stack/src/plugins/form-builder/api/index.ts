@@ -30,6 +30,7 @@ export type {
 	SubmissionListOperationContext,
 	SubmissionListFormContext,
 	SubmissionHookContext,
+	SerializedFormSubmissionSummary,
 } from "../types";
 export {
 	getAllForms,

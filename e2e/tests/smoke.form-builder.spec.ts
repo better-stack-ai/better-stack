@@ -351,6 +351,26 @@ test.describe("Form Builder Plugin - Admin Pages", () => {
 			},
 		);
 		expect(submitResponse.ok()).toBe(true);
+		const createdSubmission = (await submitResponse.json()) as { id: string };
+
+		const listResponse = await request.get(
+			`/api/data/forms/${createdForm.id}/submissions?limit=20&offset=0`,
+			{ headers: mockAuthHeaders() },
+		);
+		expect(listResponse.ok()).toBe(true);
+		const listBody = (await listResponse.json()) as {
+			items: Array<Record<string, unknown>>;
+		};
+		const listedSubmission = listBody.items.find(
+			(item) => item.id === createdSubmission.id,
+		);
+		expect(listedSubmission).toEqual({
+			id: createdSubmission.id,
+			formId: createdForm.id,
+			submittedAt: expect.any(String),
+			submittedBy: "admin-e2e",
+		});
+		expect(JSON.stringify(listBody)).not.toContain(secret);
 
 		await page.goto(`/pages/forms/${createdForm.id}/submissions`, {
 			waitUntil: "networkidle",
@@ -358,8 +378,21 @@ test.describe("Form Builder Plugin - Admin Pages", () => {
 		await expect(page.getByTestId("submissions-page")).toBeVisible();
 		await expect(page.locator("h1")).toContainText("Submissions Test Form");
 		await expect(page.getByText(secret)).not.toBeVisible();
+		expect(await page.content()).not.toContain(secret);
 
+		const detailResponsePromise = page.waitForResponse((response) => {
+			const url = new URL(response.url());
+			return (
+				response.request().method() === "GET" &&
+				url.pathname.endsWith(
+					`/api/data/forms/${createdForm.id}/submissions/${createdSubmission.id}`,
+				)
+			);
+		});
 		await page.getByRole("button", { name: "View" }).click();
+		const detailResponse = await detailResponsePromise;
+		expect(detailResponse.ok()).toBe(true);
+		expect(await detailResponse.text()).toContain(secret);
 		await expect(page.getByText(secret)).toBeVisible();
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
