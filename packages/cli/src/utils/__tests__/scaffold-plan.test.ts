@@ -34,10 +34,12 @@ describe("scaffold plan", () => {
 			expect(stackFile?.content).toContain("transaction: true");
 			expect(stackFile?.content).toContain(")({}),");
 			if (adapter === "drizzle") {
-				expect(stackFile?.content).toContain('provider: "pg"');
+				expect(stackFile?.content).toContain("BTST_DRIZZLE_PROVIDER");
+				expect(stackFile?.content).toContain("provider: drizzleProvider");
+				expect(stackFile?.content).not.toContain('provider: "pg"');
 			}
 			if (adapter === "kysely") {
-				expect(stackFile?.content).toContain('type: "postgres"');
+				expect(stackFile?.content).not.toContain('type: "postgres"');
 			}
 		},
 	);

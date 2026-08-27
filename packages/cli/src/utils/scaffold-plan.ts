@@ -303,9 +303,10 @@ const provider = (process.env.BTST_PRISMA_PROVIDER ?? "postgresql") as "postgres
 	if (adapter === "drizzle") {
 		return {
 			adapterImport: `import { createDrizzleAdapter } from "${meta.packageName}"`,
-			adapterSetup:
-				"// TODO: wire your Drizzle DB instance (drizzleDb)\nconst drizzleDb = {} as never\n",
-			adapterStackLine: `adapter: (db) => createDrizzleAdapter(drizzleDb, db, { provider: "pg"${needsIsolatedTransactions ? ", transaction: true" : ""} })({}),`,
+			adapterSetup: `// TODO: wire your Drizzle DB instance (drizzleDb)
+const drizzleDb = {} as never
+${needsIsolatedTransactions ? 'const drizzleProvider = (process.env.BTST_DRIZZLE_PROVIDER ?? "pg") as "pg" | "mysql" | "sqlite"\n' : ""}`,
+			adapterStackLine: `adapter: (db) => createDrizzleAdapter(drizzleDb, db, {${needsIsolatedTransactions ? " provider: drizzleProvider, transaction: true " : ""}})({}),`,
 		};
 	}
 
@@ -314,7 +315,7 @@ const provider = (process.env.BTST_PRISMA_PROVIDER ?? "postgresql") as "postgres
 			adapterImport: `import { createKyselyAdapter } from "${meta.packageName}"`,
 			adapterSetup:
 				"// TODO: wire your Kysely DB instance (kyselyDb)\nconst kyselyDb = {} as never\n",
-			adapterStackLine: `adapter: (db) => createKyselyAdapter(kyselyDb, db, { type: "postgres"${needsIsolatedTransactions ? ", transaction: true" : ""} })({}),`,
+			adapterStackLine: `adapter: (db) => createKyselyAdapter(kyselyDb, db, {${needsIsolatedTransactions ? " transaction: true " : ""}})({}),`,
 		};
 	}
 
