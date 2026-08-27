@@ -189,8 +189,8 @@ export const authorization = defineAuthorization({
     comments.comment.react.when(({ identity, facts }) =>
       identity !== null && facts.status === "approved"
     ),
-    comments.comment.moderate.when(({ identity }) =>
-      identity?.role === "moderator"
+    comments.comment.moderate.when(({ identity, facts }) =>
+      identity?.role === "moderator" && facts.currentStatus !== facts.nextStatus
     ),
   ],
 })
@@ -342,9 +342,13 @@ The comments plugin adds a `/comments/moderation` admin route with:
 - **Comment detail dialog** — View full body and metadata
 - **Per-row actions** — Approve, spam, delete from the table row
 
-Access is controlled by `comments.thread.read({ scope: "moderation", ... })`;
-each row and bulk action additionally evaluates exact `comment.moderate` or
-`comment.delete` facts.
+Each selected queue is controlled by its exact
+`comments.thread.read({ scope: "moderation", status, ... })` descriptor. Status
+still scopes the server query; the boolean rule only decides whether that scope
+is allowed. Each row and bulk action additionally evaluates exact
+`comment.moderate` or `comment.delete` facts. Moderation facts include both
+`currentStatus` and the requested `nextStatus` so an app can distinguish
+approval from marking spam.
 
 ## Backend Configuration
 

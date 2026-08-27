@@ -73,15 +73,21 @@ type UpdateStatusInput = z.output<
 type DeleteInput = z.output<typeof DeleteCommentOperationInputSchema>;
 
 type RequestFields = {
+	/** Request that entered the authorized transport, when one exists. */
 	readonly request?: Request;
+	/** Headers from the request that entered the authorized transport. */
 	readonly headers?: Headers;
 };
 
 /** @deprecated Use the operation-specific Comments lifecycle contexts. */
 export interface CommentsApiContext extends RequestFields {
+	/** Legacy untyped request body. */
 	readonly body?: unknown;
+	/** Legacy untyped route parameters. */
 	readonly params?: unknown;
+	/** Legacy untyped query parameters. */
 	readonly query?: unknown;
+	/** Additional legacy request context values. */
 	readonly [key: string]: unknown;
 }
 
@@ -89,6 +95,7 @@ export interface CommentsApiContext extends RequestFields {
 export interface CommentsListOperationContext
 	extends OperationContext<ListInput, ReadFacts>,
 		RequestFields {
+	/** Validated immutable list query. */
 	readonly query: DeepReadonly<ListInput>;
 }
 
@@ -96,6 +103,7 @@ export interface CommentsListOperationContext
 export interface CommentsCountOperationContext
 	extends OperationContext<CountInput, ReadFacts>,
 		RequestFields {
+	/** Validated immutable count query. */
 	readonly query: DeepReadonly<CountInput>;
 }
 
@@ -103,12 +111,14 @@ export interface CommentsCountOperationContext
 export interface CommentsCreateOperationContext
 	extends OperationContext<CreateInput, CreateFacts>,
 		RequestFields {
+	/** Validated immutable comment input. */
 	readonly body: DeepReadonly<CreateInput>;
 }
 
 /** Comment-create context after execution. */
 export interface CommentsCreateResultContext
 	extends CommentsCreateOperationContext {
+	/** Immutable serialized comment returned by the operation. */
 	readonly result: DeepReadonly<SerializedComment>;
 }
 
@@ -116,13 +126,16 @@ export interface CommentsCreateResultContext
 export interface CommentsEditOperationContext
 	extends OperationContext<UpdateInput, EditFacts>,
 		RequestFields {
+	/** Validated route parameters. */
 	readonly params: { readonly id: string };
+	/** Validated immutable edit body. */
 	readonly body: DeepReadonly<UpdateInput["data"]>;
 }
 
 /** Comment-edit context after execution. */
 export interface CommentsEditResultContext
 	extends CommentsEditOperationContext {
+	/** Immutable serialized comment returned by the operation. */
 	readonly result: DeepReadonly<SerializedComment>;
 }
 
@@ -130,6 +143,7 @@ export interface CommentsEditResultContext
 export interface CommentsReactOperationContext
 	extends OperationContext<ToggleLikeInput, ReactFacts>,
 		RequestFields {
+	/** Validated route parameters. */
 	readonly params: { readonly id: string };
 }
 
@@ -137,13 +151,16 @@ export interface CommentsReactOperationContext
 export interface CommentsModerateOperationContext
 	extends OperationContext<UpdateStatusInput, ModerateFacts>,
 		RequestFields {
+	/** Validated route parameters. */
 	readonly params: { readonly id: string };
+	/** Validated immutable moderation body. */
 	readonly body: DeepReadonly<UpdateStatusInput["data"]>;
 }
 
 /** Comment-moderation context after execution. */
 export interface CommentsModerateResultContext
 	extends CommentsModerateOperationContext {
+	/** Immutable serialized comment returned by the operation. */
 	readonly result: DeepReadonly<SerializedComment>;
 }
 
@@ -151,65 +168,79 @@ export interface CommentsModerateResultContext
 export interface CommentsDeleteOperationContext
 	extends OperationContext<DeleteInput, DeleteFacts>,
 		RequestFields {
+	/** Validated route parameters. */
 	readonly params: { readonly id: string };
 }
 
 /** Comment-delete context after execution. */
 export interface CommentsDeleteResultContext
 	extends CommentsDeleteOperationContext {
+	/** Immutable deletion result returned by the operation. */
 	readonly result: { readonly success: true };
 }
 
 /** Domain lifecycle hooks that run only after successful Comments authorization. */
 export interface CommentsBackendHooks {
+	/** Run before an authorized comment-list query. */
 	onBeforeList?: (
 		query: DeepReadonly<ListInput>,
 		context: CommentsListOperationContext,
 	) => Promise<void> | void;
+	/** Run before an authorized comment-count query. */
 	onBeforeCount?: (
 		query: DeepReadonly<CountInput>,
 		context: CommentsCountOperationContext,
 	) => Promise<void> | void;
+	/** Run before an authorized author-scoped list query. */
 	onBeforeListByAuthor?: (
 		authorId: string,
 		query: DeepReadonly<ListInput>,
 		context: CommentsListOperationContext,
 	) => Promise<void> | void;
+	/** Run before an authorized comment create. */
 	onBeforePost?: (
 		input: DeepReadonly<z.output<typeof createCommentSchema>>,
 		context: CommentsCreateOperationContext,
 	) => Promise<{ authorId: string } | void> | { authorId: string } | void;
+	/** Run after a comment is created. */
 	onAfterPost?: (
 		comment: DeepReadonly<SerializedComment>,
 		context: CommentsCreateResultContext,
 	) => Promise<void> | void;
+	/** Run before an authorized comment edit. */
 	onBeforeEdit?: (
 		commentId: string,
 		update: DeepReadonly<UpdateInput["data"]>,
 		context: CommentsEditOperationContext,
 	) => Promise<void> | void;
+	/** Run after a comment is edited. */
 	onAfterEdit?: (
 		comment: DeepReadonly<SerializedComment>,
 		context: CommentsEditResultContext,
 	) => Promise<void> | void;
+	/** Run before an authorized reaction is toggled. */
 	onBeforeLike?: (
 		commentId: string,
 		authorId: string,
 		context: CommentsReactOperationContext,
 	) => Promise<void> | void;
+	/** Run before an authorized moderation status change. */
 	onBeforeStatusChange?: (
 		commentId: string,
 		status: "pending" | "approved" | "spam",
 		context: CommentsModerateOperationContext,
 	) => Promise<void> | void;
+	/** Run after a comment is approved. */
 	onAfterApprove?: (
 		comment: DeepReadonly<SerializedComment>,
 		context: CommentsModerateResultContext,
 	) => Promise<void> | void;
+	/** Run before an authorized comment deletion. */
 	onBeforeDelete?: (
 		commentId: string,
 		context: CommentsDeleteOperationContext,
 	) => Promise<void> | void;
+	/** Run after a comment is deleted. */
 	onAfterDelete?: (
 		commentId: string,
 		context: CommentsDeleteResultContext,
@@ -679,7 +710,8 @@ export function createCommentsOperations(
 				commentId: comment.id,
 				resourceId: comment.resourceId,
 				resourceType: comment.resourceType,
-				status: comment.status,
+				currentStatus: comment.status,
+				nextStatus: input.data.status,
 			};
 		},
 		before: async (context) => {
@@ -697,7 +729,7 @@ export function createCommentsOperations(
 					comment.id === facts.commentId &&
 					comment.resourceId === facts.resourceId &&
 					comment.resourceType === facts.resourceType &&
-					comment.status === facts.status,
+					comment.status === facts.currentStatus,
 			);
 			const updated = await updateCommentStatusMutation(
 				adapter,
@@ -775,4 +807,5 @@ export function createCommentsOperations(
 	} as const;
 }
 
+/** Serialized list result returned by maintained Comments read operations. */
 export type SerializedCommentListResult = CommentListResult;

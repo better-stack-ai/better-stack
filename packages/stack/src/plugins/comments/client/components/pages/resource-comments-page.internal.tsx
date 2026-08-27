@@ -212,7 +212,8 @@ function PendingCommentRow({
 							commentId: comment.id,
 							resourceId: comment.resourceId,
 							resourceType: comment.resourceType,
-							status: comment.status,
+							currentStatus: comment.status,
+							nextStatus: "approved",
 						})}
 					>
 						<Button
@@ -233,7 +234,8 @@ function PendingCommentRow({
 							commentId: comment.id,
 							resourceId: comment.resourceId,
 							resourceType: comment.resourceType,
-							status: comment.status,
+							currentStatus: comment.status,
+							nextStatus: "spam",
 						})}
 					>
 						<Button

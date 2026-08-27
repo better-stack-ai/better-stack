@@ -271,10 +271,47 @@ describe("ModerationPage row actions (PermissionAccess)", () => {
 					commentId: comment.id,
 					resourceId: comment.resourceId,
 					resourceType: comment.resourceType,
-					status: comment.status,
+					currentStatus: comment.status,
+					nextStatus: "approved",
 				},
 			}),
 		);
+		expect(can).toHaveBeenCalledWith(
+			expect.objectContaining({
+				resource: "comments:comment",
+				action: "moderate",
+				params: {
+					commentId: comment.id,
+					resourceId: comment.resourceId,
+					resourceType: comment.resourceType,
+					currentStatus: comment.status,
+					nextStatus: "spam",
+				},
+			}),
+		);
+	});
+
+	it("distinguishes approval from marking spam in the shared rule", async () => {
+		const transitionAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("moderator") }),
+			permissions: [commentsPermissions] as const,
+			rules: ({ comments }) => [
+				comments.comment.moderate.when(
+					({ identity, facts }) =>
+						identity?.role === "moderator" && facts.nextStatus === "approved",
+				),
+			],
+		});
+		const auth = createClientAuth({
+			authorization: transitionAuthorization,
+			getIdentity: () => ({ id: "moderator-1", role: "moderator" as const }),
+		});
+
+		await renderModerationPage(auth);
+
+		const row = container.querySelector('[data-testid="moderation-row"]')!;
+		expect(row.querySelector('[data-testid="approve-button"]')).toBeTruthy();
+		expect(row.querySelector('[data-testid="spam-button"]')).toBeNull();
 	});
 
 	it("hides the delete button when can() denies comments:comment/delete", async () => {
@@ -340,6 +377,41 @@ describe("Comments route descriptors", () => {
 		).rejects.toThrow("Unauthorized");
 
 		expect(hooks.useSuspenseModerationComments).not.toHaveBeenCalled();
+	});
+
+	it("guards the moderation route with the selected queue status", async () => {
+		const statusAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("moderator") }),
+			permissions: [commentsPermissions] as const,
+			rules: ({ comments }) => [
+				comments.thread.read.when(
+					({ identity, facts }) =>
+						facts.scope === "moderation" &&
+						facts.status === "spam" &&
+						identity?.role === "moderator",
+				),
+			],
+		});
+		const auth = createClientAuth({
+			authorization: statusAuthorization,
+			getIdentity: () => ({ id: "moderator-1", role: "moderator" as const }),
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={createMockRouter("tab=spam")}
+				overrides={{ comments: commentsOverrides }}
+				auth={auth}
+			>
+				<ModerationPageComponent />
+			</StackProvider>,
+		);
+
+		expect(hooks.useSuspenseModerationComments).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ status: "spam" }),
+		);
 	});
 });
 

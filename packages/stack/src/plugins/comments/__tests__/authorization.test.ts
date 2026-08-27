@@ -48,18 +48,94 @@ const authorization = defineAuthorization({
 
 type Identity = { id: string; role: "user" | "moderator" };
 
+function identityFromRequest(request: Request): Identity | null {
+	const id = request.headers.get("x-user-id");
+	const role = request.headers.get("x-user-role");
+	if (!id || (role !== "user" && role !== "moderator")) return null;
+	return { id, role };
+}
+
 function createAuth(
 	getIdentity: (
 		request: Request,
-	) => Identity | null | Promise<Identity | null> = (request) => {
-		const id = request.headers.get("x-user-id");
-		const role = request.headers.get("x-user-role");
-		if (!id || (role !== "user" && role !== "moderator")) return null;
-		return { id, role };
-	},
+	) => Identity | null | Promise<Identity | null> = identityFromRequest,
 ) {
 	return createServerAuth({
 		authorization,
+		getIdentity: ({ request }) => getIdentity(request),
+	});
+}
+
+const moderatorOnlyAuthorization = defineAuthorization({
+	identity: z.object({
+		id: z.string(),
+		role: z.enum(["user", "moderator"]),
+	}),
+	permissions: [commentsPermissions] as const,
+	rules: ({ comments }) => [
+		comments.thread.read.when(({ identity }) => identity?.role === "moderator"),
+		comments.thread.createComment.when(
+			({ identity }) => identity?.role === "moderator",
+		),
+		comments.comment.edit.when(
+			({ identity }) => identity?.role === "moderator",
+		),
+		comments.comment.delete.when(
+			({ identity }) => identity?.role === "moderator",
+		),
+		comments.comment.react.when(
+			({ identity }) => identity?.role === "moderator",
+		),
+		comments.comment.moderate.when(
+			({ identity }) => identity?.role === "moderator",
+		),
+	],
+});
+
+const missingRulesAuthorization = defineAuthorization({
+	identity: z.object({
+		id: z.string(),
+		role: z.enum(["user", "moderator"]),
+	}),
+	permissions: [commentsPermissions] as const,
+	rules: () => [],
+});
+
+const throwingRulesAuthorization = defineAuthorization({
+	identity: z.object({
+		id: z.string(),
+		role: z.enum(["user", "moderator"]),
+	}),
+	permissions: [commentsPermissions] as const,
+	rules: ({ comments }) => [
+		comments.thread.read.when(() => {
+			throw new Error("rule unavailable");
+		}),
+		comments.thread.createComment.when(() => {
+			throw new Error("rule unavailable");
+		}),
+		comments.comment.edit.when(() => {
+			throw new Error("rule unavailable");
+		}),
+		comments.comment.delete.when(() => {
+			throw new Error("rule unavailable");
+		}),
+		comments.comment.react.when(() => {
+			throw new Error("rule unavailable");
+		}),
+		comments.comment.moderate.when(() => {
+			throw new Error("rule unavailable");
+		}),
+	],
+});
+
+function createModeratorOnlyAuth(
+	getIdentity: (
+		request: Request,
+	) => Identity | null | Promise<Identity | null> = identityFromRequest,
+) {
+	return createServerAuth({
+		authorization: moderatorOnlyAuthorization,
 		getIdentity: ({ request }) => getIdentity(request),
 	});
 }
@@ -120,6 +196,105 @@ async function seedComment(
 const owner = { id: "owner-1", role: "user" } as const;
 const viewer = { id: "viewer-1", role: "user" } as const;
 const moderator = { id: "moderator-1", role: "moderator" } as const;
+
+type CommentsOperationApi = ReturnType<
+	typeof makeBackend
+>["internal"]["comments"];
+
+type OperationScenario = {
+	readonly name: string;
+	readonly hook: keyof CommentsBackendOptions;
+	readonly prepare: (
+		backend: ReturnType<typeof makeBackend>,
+	) => Promise<(api: CommentsOperationApi) => Promise<unknown>>;
+	readonly invalid: (api: CommentsOperationApi) => Promise<unknown>;
+};
+
+const operationScenarios: readonly OperationScenario[] = [
+	{
+		name: "listComments",
+		hook: "onBeforeList",
+		prepare: async () => (api) => api.listComments({ status: "pending" }),
+		invalid: (api) => api.listComments({ limit: 0 }),
+	},
+	{
+		name: "getCommentCount",
+		hook: "onBeforeCount",
+		prepare: async () => (api) =>
+			api.getCommentCount({
+				resourceId: "post-1",
+				resourceType: "post",
+				status: "pending",
+			}),
+		invalid: (api) =>
+			api.getCommentCount({ resourceId: "", resourceType: "post" }),
+	},
+	{
+		name: "createComment",
+		hook: "onBeforePost",
+		prepare: async () => (api) =>
+			api.createComment({
+				resourceId: "post-1",
+				resourceType: "post",
+				body: "Operation matrix",
+				authorId: "trusted-job",
+			}),
+		invalid: (api) =>
+			api.createComment({
+				resourceId: "post-1",
+				resourceType: "post",
+				body: "",
+				authorId: "trusted-job",
+			}),
+	},
+	{
+		name: "updateComment",
+		hook: "onBeforeEdit",
+		prepare: async (backend) => {
+			const comment = await seedComment(backend);
+			return (api) =>
+				api.updateComment({
+					id: comment.id,
+					data: { body: "Updated by matrix" },
+				});
+		},
+		invalid: (api) =>
+			api.updateComment({ id: "", data: { body: "Updated by matrix" } }),
+	},
+	{
+		name: "toggleLike",
+		hook: "onBeforeLike",
+		prepare: async (backend) => {
+			const comment = await seedComment(backend);
+			return (api) =>
+				api.toggleLike({ id: comment.id, authorId: "trusted-job" });
+		},
+		invalid: (api) => api.toggleLike({ id: "", authorId: "trusted-job" }),
+	},
+	{
+		name: "updateCommentStatus",
+		hook: "onBeforeStatusChange",
+		prepare: async (backend) => {
+			const comment = await seedComment(backend, { status: "pending" });
+			return (api) =>
+				api.updateCommentStatus({
+					id: comment.id,
+					data: { status: "approved" },
+				});
+		},
+		invalid: (api) =>
+			api.updateCommentStatus({ id: "", data: { status: "approved" } }),
+	},
+	{
+		name: "deleteComment",
+		hook: "onBeforeDelete",
+		prepare: async (backend) => {
+			const comment = await seedComment(backend);
+			return (api) => api.deleteComment({ id: comment.id });
+		},
+		invalid: (api) => api.deleteComment({ id: "" }),
+	},
+];
 
 describe("Comments authorization inventory", () => {
 	it("covers every maintained transport operation with one descriptor", () => {
@@ -212,6 +387,197 @@ describe("Comments authorization inventory", () => {
 				status: "published" as "approved",
 			}),
 		).toThrow();
+		expect(
+			commentsPermissions.comment.moderate({
+				commentId: "comment-1",
+				resourceId: "post-1",
+				resourceType: "post",
+				currentStatus: "pending",
+				nextStatus: "approved",
+			}),
+		).toMatchObject({ id: "comments:comment.moderate" });
+		expect(() =>
+			commentsPermissions.comment.moderate({
+				commentId: "comment-1",
+				resourceId: "post-1",
+				resourceType: "post",
+				currentStatus: "pending",
+				nextStatus: "published" as "approved",
+			}),
+		).toThrow();
+	});
+});
+
+describe("Comments protected-operation matrix", () => {
+	it.each(operationScenarios)(
+		"enforces anonymous, authenticated denial, and allowed $name",
+		async (scenario) => {
+			const lifecycle = vi.fn();
+			const backend = makeBackend({
+				auth: createModeratorOnlyAuth(),
+				plugin: { [scenario.hook]: lifecycle } as CommentsBackendOptions,
+			});
+			const run = await scenario.prepare(backend);
+
+			await expect(
+				run(
+					backend.forRequest(request("/comments")).api
+						.comments as CommentsOperationApi,
+				),
+			).rejects.toMatchObject({ statusCode: 401 });
+			await expect(
+				run(
+					backend.forRequest(request("/comments", { identity: viewer })).api
+						.comments as CommentsOperationApi,
+				),
+			).rejects.toMatchObject({ statusCode: 403 });
+			expect(lifecycle).not.toHaveBeenCalled();
+
+			await expect(
+				run(
+					backend.forRequest(request("/comments", { identity: moderator })).api
+						.comments as CommentsOperationApi,
+				),
+			).resolves.toBeDefined();
+			expect(lifecycle).toHaveBeenCalledTimes(1);
+		},
+	);
+
+	it.each(operationScenarios)(
+		"keeps identity, missing-rule, and rule failures before $name lifecycle",
+		async (scenario) => {
+			const authFailures = [
+				createModeratorOnlyAuth(() => {
+					throw new Error("session unavailable");
+				}),
+				createServerAuth({
+					authorization: missingRulesAuthorization,
+					getIdentity: () => owner,
+				}),
+				createServerAuth({
+					authorization: throwingRulesAuthorization,
+					getIdentity: () => owner,
+				}),
+			] as const;
+
+			for (const auth of authFailures) {
+				const lifecycle = vi.fn();
+				const backend = makeBackend({
+					auth,
+					plugin: { [scenario.hook]: lifecycle } as CommentsBackendOptions,
+				});
+				const run = await scenario.prepare(backend);
+				await expect(
+					run(
+						backend.forRequest(request("/comments", { identity: owner })).api
+							.comments as CommentsOperationApi,
+					),
+				).rejects.toBeInstanceOf(Error);
+				expect(lifecycle).not.toHaveBeenCalled();
+			}
+		},
+	);
+
+	it.each(operationScenarios)(
+		"keeps validation and $name lifecycle on trusted internal execution",
+		async (scenario) => {
+			const lifecycle = vi.fn();
+			const backend = makeBackend({
+				plugin: { [scenario.hook]: lifecycle } as CommentsBackendOptions,
+			});
+			const run = await scenario.prepare(backend);
+
+			await expect(
+				scenario.invalid(backend.internal.comments),
+			).rejects.toThrow();
+			expect(lifecycle).not.toHaveBeenCalled();
+			await expect(run(backend.internal.comments)).resolves.toBeDefined();
+			expect(lifecycle).toHaveBeenCalledTimes(1);
+		},
+	);
+
+	it("fails closed before lifecycle when record-backed fact derivation fails", async () => {
+		const hooks = {
+			onBeforePost: vi.fn(),
+			onBeforeEdit: vi.fn(),
+			onBeforeLike: vi.fn(),
+			onBeforeStatusChange: vi.fn(),
+			onBeforeDelete: vi.fn(),
+		};
+		const backend = makeBackend({
+			auth: createModeratorOnlyAuth(),
+			plugin: hooks,
+		});
+		const api = backend.forRequest(
+			request("/comments", { identity: moderator }),
+		).api.comments;
+		const failures = [
+			() =>
+				api.createComment({
+					resourceId: "post-1",
+					resourceType: "post",
+					parentId: "missing-comment",
+					body: "Missing parent",
+				}),
+			() =>
+				api.updateComment({
+					id: "missing-comment",
+					data: { body: "Missing comment" },
+				}),
+			() => api.toggleLike({ id: "missing-comment" }),
+			() =>
+				api.updateCommentStatus({
+					id: "missing-comment",
+					data: { status: "approved" },
+				}),
+			() => api.deleteComment({ id: "missing-comment" }),
+		];
+
+		for (const failure of failures) {
+			await expect(failure()).rejects.toMatchObject({
+				code: "COMMENT_NOT_FOUND",
+			});
+		}
+		for (const hook of Object.values(hooks)) {
+			expect(hook).not.toHaveBeenCalled();
+		}
+	});
+
+	it("derives transition facts from current storage and the requested next status", async () => {
+		const transitionAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("moderator") }),
+			permissions: [commentsPermissions] as const,
+			rules: ({ comments }) => [
+				comments.comment.moderate.when(
+					({ identity, facts }) =>
+						identity?.role === "moderator" && facts.nextStatus === "approved",
+				),
+			],
+		});
+		const backend = makeBackend({
+			auth: createServerAuth({
+				authorization: transitionAuthorization,
+				getIdentity: () => moderator,
+			}),
+		});
+		const approve = await seedComment(backend, { status: "pending" });
+		const spam = await seedComment(backend, { status: "pending" });
+		const api = backend.forRequest(
+			request("/comments", { identity: moderator }),
+		).api.comments;
+
+		await expect(
+			api.updateCommentStatus({
+				id: approve.id,
+				data: { status: "approved" },
+			}),
+		).resolves.toMatchObject({ status: "approved" });
+		await expect(
+			api.updateCommentStatus({
+				id: spam.id,
+				data: { status: "spam" },
+			}),
+		).rejects.toMatchObject({ statusCode: 403 });
 	});
 });
 

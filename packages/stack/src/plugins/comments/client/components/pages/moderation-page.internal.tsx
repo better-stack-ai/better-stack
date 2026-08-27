@@ -43,7 +43,7 @@ import {
 	useTranslate,
 } from "@btst/stack/context";
 import type { PermissionRequest } from "@btst/stack/authorization";
-import { useListState, type ListStateSchema } from "@btst/stack/client";
+import { useListState } from "@btst/stack/client";
 import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
 import type { SerializedComment, CommentStatus } from "../../../types";
 import {
@@ -55,6 +55,10 @@ import type { CommentsLocalization } from "../../localization";
 import { getInitials } from "../../utils";
 import { Pagination } from "../shared/pagination";
 import { commentsPermissions } from "../../../permissions";
+import {
+	MODERATION_LIST_STATE_SCHEMA,
+	resolveModerationStatus,
+} from "./moderation-state";
 
 interface ModerationPageProps {
 	localization?: Partial<CommentsLocalization>;
@@ -76,13 +80,6 @@ function PermissionAccessAll({
 	);
 }
 
-// URL-synced moderation queue state: tab + page survive reloads and are
-// undoable with the back button (discrete changes default to push history).
-const LIST_STATE_SCHEMA = {
-	tab: { type: "string", default: "pending" },
-	page: { type: "number", default: 1 },
-} as const satisfies ListStateSchema;
-
 function StatusBadge({ status }: { status: CommentStatus }) {
 	const variants: Record<
 		CommentStatus,
@@ -102,14 +99,11 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 
 	const [listState, setListState] = useListState(
 		"comments-moderation",
-		LIST_STATE_SCHEMA,
+		MODERATION_LIST_STATE_SCHEMA,
 	);
 	// Bound the URL-sourced values: unknown tabs fall back to "pending",
 	// pages clamp to >= 1 so a mangled URL cannot produce an invalid query.
-	const activeTab: CommentStatus =
-		listState.tab === "approved" || listState.tab === "spam"
-			? listState.tab
-			: "pending";
+	const activeTab = resolveModerationStatus(listState.tab);
 	const currentPage = Math.max(1, Math.floor(listState.page) || 1);
 
 	const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -311,7 +305,8 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 										commentId: comment.id,
 										resourceId: comment.resourceId,
 										resourceType: comment.resourceType,
-										status: comment.status,
+										currentStatus: comment.status,
+										nextStatus: "approved",
 									}),
 								)}
 						>
@@ -469,7 +464,8 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 															commentId: comment.id,
 															resourceId: comment.resourceId,
 															resourceType: comment.resourceType,
-															status: comment.status,
+															currentStatus: comment.status,
+															nextStatus: "approved",
 														})}
 													>
 														<Button
@@ -497,7 +493,8 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 															commentId: comment.id,
 															resourceId: comment.resourceId,
 															resourceType: comment.resourceType,
-															status: comment.status,
+															currentStatus: comment.status,
+															nextStatus: "spam",
 														})}
 													>
 														<Button
@@ -644,7 +641,8 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 											commentId: viewComment.id,
 											resourceId: viewComment.resourceId,
 											resourceType: viewComment.resourceType,
-											status: viewComment.status,
+											currentStatus: viewComment.status,
+											nextStatus: "approved",
 										})}
 									>
 										<Button
@@ -668,7 +666,8 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 											commentId: viewComment.id,
 											resourceId: viewComment.resourceId,
 											resourceType: viewComment.resourceType,
-											status: viewComment.status,
+											currentStatus: viewComment.status,
+											nextStatus: "spam",
 										})}
 									>
 										<Button

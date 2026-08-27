@@ -358,8 +358,9 @@ commentsPermissions.comment.moderate({
 	commentId: "comment-1",
 	resourceId: "post-1",
 	resourceType: "post",
+	currentStatus: "pending",
 	// @ts-expect-error moderation status is schema-backed
-	status: "published",
+	nextStatus: "published",
 });
 
 const commentsHooks: CommentsBackendHooks = {
@@ -393,7 +394,8 @@ const commentsHooks: CommentsBackendHooks = {
 					readonly commentId: string;
 					readonly resourceId: string;
 					readonly resourceType: string;
-					readonly status: "pending" | "approved" | "spam";
+					readonly currentStatus: "pending" | "approved" | "spam";
+					readonly nextStatus: "pending" | "approved" | "spam";
 				}
 			>
 		> = true;
