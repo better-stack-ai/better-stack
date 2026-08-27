@@ -13,7 +13,9 @@ import type {
 	SerializedTask,
 } from "./types";
 import type { StackIdentity } from "@btst/stack/context";
+import type { z } from "zod";
 import { boardsListDiscriminator } from "./api/query-key-defs";
+import type { createBoardSchema } from "./schemas";
 
 /**
  * Browser authorization can change without the URL changing. Protected
@@ -32,12 +34,7 @@ export interface BoardsListParams {
 	offset?: number;
 }
 
-export interface CreateBoardInput {
-	name: string;
-	description?: string;
-	ownerId?: string;
-	organizationId?: string;
-}
+export type CreateBoardInput = z.input<typeof createBoardSchema>;
 
 export interface UpdateBoardInput {
 	id: string;

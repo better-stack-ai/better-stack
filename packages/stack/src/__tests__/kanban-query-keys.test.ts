@@ -3,17 +3,28 @@
  * builders used by `prefetchForRoute`. Key drift silently breaks hydration.
  */
 import { QueryClient } from "@tanstack/react-query";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createStackClient } from "../client";
 import { KANBAN_QUERY_KEYS } from "../plugins/kanban/api/query-key-defs";
 import { kanbanClientPlugin } from "../plugins/kanban/client/plugin";
-import { createKanbanQueryKeys } from "../plugins/kanban/query-keys";
+import {
+	type CreateBoardInput,
+	createKanbanQueryKeys,
+} from "../plugins/kanban/query-keys";
 import { createTanStackPageOptions } from "../tanstack";
 
 const client = vi.fn() as any;
 
 describe("kanban query keys match SSG prefetch keys", () => {
 	const queries = createKanbanQueryKeys(client);
+
+	it("derives board create input from the browser-safe runtime schema", () => {
+		expectTypeOf<CreateBoardInput>()
+			.toHaveProperty("slug")
+			.toEqualTypeOf<string | undefined>();
+		expectTypeOf<CreateBoardInput>().not.toHaveProperty("ownerId");
+		expectTypeOf<CreateBoardInput>().not.toHaveProperty("organizationId");
+	});
 
 	it("board list keys match for default params", () => {
 		expect([...queries.boards.list().queryKey]).toEqual([
