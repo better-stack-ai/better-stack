@@ -379,8 +379,9 @@ instead of using stale facts; retry the operation against the current post.
 
 For migration compatibility, the string-based RC client provider keeps the
 previously public published-list, published-detail, and tag routes open. Its
-temporary descriptor-to-string mapping still applies to drafts and mutation
-controls. Schema-bound one-rule providers always evaluate the exact public
+drafts route keeps its former `{ resource: "blog:draft", action: "read" }`
+permission, while the temporary descriptor-to-string mapping applies to
+mutation controls. Schema-bound one-rule providers always evaluate the exact
 descriptor, so the explicit public rules above remain the source of truth.
 
 Image upload is not a Blog backend route. `uploadImage` is an app-supplied

@@ -93,22 +93,31 @@ export function PermissionRouteAccess({
 	permission,
 	LoadingComponent,
 	legacyPublic = false,
+	legacyPermission,
 	children,
 }: {
 	permission: RoutePermission;
 	LoadingComponent?: React.ComponentType;
 	/** Preserve an explicitly public route for string-based RC providers. */
 	legacyPublic?: boolean;
+	/** String permission used only by legacy RC providers for this descriptor. */
+	legacyPermission?: CanParams;
 	children: React.ReactNode;
 }) {
 	const auth = useAuthContext();
 	if (isPermissionRequest(permission)) {
-		if (
-			legacyPublic &&
-			auth &&
-			!isSchemaBoundStackAuthProvider(auth.provider)
-		) {
-			return <>{children}</>;
+		if (auth && !isSchemaBoundStackAuthProvider(auth.provider)) {
+			if (legacyPublic) return <>{children}</>;
+			if (legacyPermission) {
+				return (
+					<LegacyRouteGuard
+						permission={legacyPermission}
+						LoadingComponent={LoadingComponent}
+					>
+						{children}
+					</LegacyRouteGuard>
+				);
+			}
 		}
 		return (
 			<PermissionCheck permission={permission}>
@@ -304,6 +313,8 @@ function ResolvedRouteAccess({
  *   auth provider is configured on `StackProvider`; see `RouteGuard`.
  * @param legacyPublic - Keeps an explicitly public descriptor route ungated
  *   for string-based RC providers. One-rule providers still evaluate it.
+ * @param legacyPermission - Optional string permission used instead of a
+ *   descriptor only for string-based RC providers during migration.
  */
 export function ComposedRoute({
 	path,
@@ -316,6 +327,7 @@ export function ComposedRoute({
 	onError,
 	permission,
 	legacyPublic = false,
+	legacyPermission,
 }: {
 	path: string;
 	PageComponent: React.ComponentType<any>;
@@ -327,6 +339,7 @@ export function ComposedRoute({
 	onError: (error: Error, info: ErrorInfo) => void;
 	permission?: RoutePermission;
 	legacyPublic?: boolean;
+	legacyPermission?: CanParams;
 }) {
 	if (PageComponent) {
 		const content = permission ? (
@@ -334,6 +347,7 @@ export function ComposedRoute({
 				permission={permission}
 				LoadingComponent={LoadingComponent}
 				legacyPublic={legacyPublic}
+				legacyPermission={legacyPermission}
 			>
 				<PageComponent {...props} />
 			</PermissionRouteAccess>

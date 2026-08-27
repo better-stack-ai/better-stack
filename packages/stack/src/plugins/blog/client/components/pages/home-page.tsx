@@ -32,6 +32,9 @@ export function HomePageComponent({
 				scope: published ? "published" : "drafts",
 			})}
 			legacyPublic={published}
+			legacyPermission={
+				published ? undefined : { resource: "blog:draft", action: "read" }
+			}
 			props={{ published }}
 			onError={(error) => {
 				if (onRouteError) {

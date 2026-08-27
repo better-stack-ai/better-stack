@@ -574,7 +574,10 @@ authoritative, so the redirect also happens while browser identity is pending
 or still contains a stale signed-in snapshot. Plugin-owned descriptor routes
 that were already public may set `legacyPublic` during the RC migration; that
 bypass applies only to string-based providers, while one-rule providers still
-evaluate the exact descriptor.
+evaluate the exact descriptor. If an RC route previously used a different
+resource/action key, set `legacyPermission` alongside the descriptor. Only a
+string-based provider receives that override; one-rule providers still receive
+the descriptor.
 
 Without a provider, `permission` is ignored and the route renders without client-side gating.
 
