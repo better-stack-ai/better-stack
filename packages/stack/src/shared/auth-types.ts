@@ -73,6 +73,28 @@ export interface StackAuthProvider {
 	loginPath?: string;
 }
 
+/** A browser auth provider whose identity is bound to a runtime contract. */
+export interface SchemaBoundStackAuthProvider extends StackAuthProvider {
+	readonly mode: "one-rule";
+	readonly contract: {
+		parseIdentity(identity: unknown): StackIdentity | null;
+	};
+}
+
+/** True when a browser provider exposes the v3 schema-bound auth protocol. */
+export function isSchemaBoundStackAuthProvider(
+	provider: StackAuthProvider,
+): provider is SchemaBoundStackAuthProvider {
+	if ((provider as { mode?: unknown }).mode !== "one-rule") return false;
+	const contract = (provider as { contract?: unknown }).contract;
+	return (
+		typeof contract === "object" &&
+		contract !== null &&
+		typeof (contract as { parseIdentity?: unknown }).parseIdentity ===
+			"function"
+	);
+}
+
 /**
  * Server-side auth provider, passed to `stack()` via the `auth` config option.
  * `stack()` resolves the identity lazily and at most once per request; plugin
@@ -86,7 +108,7 @@ export interface StackServerAuthProvider {
 	 */
 	getIdentity: (ctx: {
 		headers: Headers;
-		request: Request;
+		request?: Request;
 	}) => Promise<StackIdentity | null> | StackIdentity | null;
 	/**
 	 * Optional server-side permission check, for consumers and plugins that

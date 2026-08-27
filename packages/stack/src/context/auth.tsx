@@ -13,6 +13,7 @@ import type {
 	StackAuthProvider,
 	StackIdentity,
 } from "../shared/auth-types";
+import { isSchemaBoundStackAuthProvider } from "../shared/auth-types";
 
 export interface AuthContextValue {
 	provider: StackAuthProvider;
@@ -44,18 +45,10 @@ function createInitialAuthState(
 		return { identity: null, isPending: true };
 	}
 
-	const contract = (
-		provider as {
-			mode?: string;
-			contract?: {
-				parseIdentity?: (identity: unknown) => StackIdentity | null;
-			};
-		}
-	).contract;
 	try {
 		return {
-			identity: contract?.parseIdentity
-				? contract.parseIdentity(initialIdentity)
+			identity: isSchemaBoundStackAuthProvider(provider)
+				? provider.contract.parseIdentity(initialIdentity)
 				: initialIdentity,
 			isPending: false,
 		};
@@ -94,7 +87,7 @@ export function StackAuthBoundary({
 			const identity = await provider.getIdentity();
 			setState({ identity: identity ?? null, isPending: false });
 		} catch (error) {
-			if ((provider as { mode?: string }).mode === "one-rule") {
+			if (isSchemaBoundStackAuthProvider(provider)) {
 				setState({
 					identity: null,
 					isPending: false,

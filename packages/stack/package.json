@@ -167,6 +167,16 @@
         "default": "./dist/tanstack/index.cjs"
       }
     },
+    "./tanstack/server": {
+      "import": {
+        "types": "./dist/tanstack/server.d.ts",
+        "default": "./dist/tanstack/server.mjs"
+      },
+      "require": {
+        "types": "./dist/tanstack/server.d.cts",
+        "default": "./dist/tanstack/server.cjs"
+      }
+    },
     "./plugins/api": {
       "import": {
         "types": "./dist/plugins/api/index.d.ts",
@@ -748,6 +758,9 @@
       ],
       "tanstack": [
         "./dist/tanstack/index.d.ts"
+      ],
+      "tanstack/server": [
+        "./dist/tanstack/server.d.ts"
       ],
       "plugins/api": [
         "./dist/plugins/api/index.d.ts"

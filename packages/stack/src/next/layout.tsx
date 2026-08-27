@@ -1,7 +1,14 @@
 import { headers } from "next/headers";
 import type { ComponentType, ReactNode } from "react";
+import type {
+	AuthorizationContractIdentity,
+	AnyAuthorizationContract,
+} from "../authorization";
 import type { StackIdentity } from "../shared/auth-types";
-import type { MaybePromise } from "../shared/types";
+import {
+	type FrameworkIdentitySource,
+	resolveInitialIdentity,
+} from "../shared/initial-identity";
 
 /** Props passed from a Next.js server layout to the generated client boundary. */
 export interface NextClientLayoutProps<TIdentity extends StackIdentity> {
@@ -11,15 +18,15 @@ export interface NextClientLayoutProps<TIdentity extends StackIdentity> {
 }
 
 /** Options for the request-aware Next.js identity layout factory. */
-export interface CreateNextLayoutOptions<TIdentity extends StackIdentity> {
+export interface CreateNextLayoutOptions<
+	TContract extends AnyAuthorizationContract,
+> {
 	/** Server-only identity adapter, normally returned by `createServerAuth`. */
-	auth: {
-		getIdentity: (context: {
-			headers: Headers;
-		}) => MaybePromise<TIdentity | null>;
-	};
+	auth: FrameworkIdentitySource<TContract, { headers: Headers }>;
 	/** Client boundary that owns `StackProvider` for the complete route subtree. */
-	ClientLayout: ComponentType<NextClientLayoutProps<TIdentity>>;
+	ClientLayout: ComponentType<
+		NextClientLayoutProps<AuthorizationContractIdentity<TContract>>
+	>;
 }
 
 /**
@@ -29,12 +36,12 @@ export interface CreateNextLayoutOptions<TIdentity extends StackIdentity> {
  * Import this helper from `@btst/stack/next/server` so `next/headers` and the
  * application server auth module never enter the client graph.
  */
-export function createNextLayout<TIdentity extends StackIdentity>(
-	options: CreateNextLayoutOptions<TIdentity>,
+export function createNextLayout<TContract extends AnyAuthorizationContract>(
+	options: CreateNextLayoutOptions<TContract>,
 ) {
 	async function Layout({ children }: { children?: ReactNode }) {
 		const requestHeaders = new Headers(await headers());
-		const initialIdentity = await options.auth.getIdentity({
+		const initialIdentity = await resolveInitialIdentity(options.auth, {
 			headers: requestHeaders,
 		});
 		return (

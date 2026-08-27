@@ -20,26 +20,27 @@ const authorization = defineAuthorization({
 describe("createServerAuth identity hydration", () => {
 	it("resolves and validates identity from headers when a framework layout has no Request", async () => {
 		const getIdentity = vi.fn(
-			({ headers, request }: { headers: Headers; request: Request }) => ({
+			({ headers, request }: { headers: Headers; request?: Request }) => ({
 				id: headers.get("x-user-id") ?? "missing",
 				role: "admin" as const,
-				request,
+				requestUrl: request?.url,
 			}),
 		);
 		const serverAuth = createServerAuth({ authorization, getIdentity });
 		const headers = new Headers({ "x-user-id": "server-user" });
 
-		await expect(serverAuth.getIdentity({ headers })).resolves.toEqual({
+		const first = serverAuth.getIdentity({ headers });
+		const second = serverAuth.getIdentity({ headers });
+		await expect(first).resolves.toEqual({
 			id: "server-user",
 			role: "admin",
 		});
-		expect(getIdentity).toHaveBeenCalledWith({
-			headers,
-			request: expect.any(Request),
+		await expect(second).resolves.toEqual({
+			id: "server-user",
+			role: "admin",
 		});
-		expect(getIdentity.mock.calls[0]?.[0].request.url).toBe(
-			"http://btst.layout/",
-		);
+		expect(getIdentity).toHaveBeenCalledOnce();
+		expect(getIdentity).toHaveBeenCalledWith({ headers });
 	});
 
 	it("keeps layout identity schema failures observable", async () => {

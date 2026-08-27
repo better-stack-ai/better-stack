@@ -83,6 +83,7 @@ export default defineBuildConfig({
 		"./src/next/server.ts",
 		"./src/react-router/index.tsx",
 		"./src/tanstack/index.tsx",
+		"./src/tanstack/server.ts",
 		// plugin development entries
 		"./src/plugins/api/index.ts",
 		"./src/plugins/client/index.ts",

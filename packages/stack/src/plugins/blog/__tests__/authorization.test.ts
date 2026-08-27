@@ -42,7 +42,11 @@ function createAuth(
 ) {
 	return createServerAuth({
 		authorization,
-		getIdentity: ({ request }) => getIdentity(request),
+		getIdentity: ({ request }) => {
+			if (!request)
+				throw new Error("This test identity adapter needs a Request.");
+			return getIdentity(request);
+		},
 	});
 }
 

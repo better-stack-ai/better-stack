@@ -31,6 +31,7 @@ export interface ServerAuth<TAuthorization extends AnyAuthorization>
 	extends StackServerAuthProvider {
 	readonly mode: "one-rule";
 	readonly authorization: TAuthorization;
+	readonly contract: TAuthorization["contract"];
 	getIdentity(
 		request: Request,
 	): Promise<AuthorizationIdentity<TAuthorization> | null>;
@@ -62,12 +63,12 @@ export function createServerAuth<
 >(config: {
 	authorization: TAuthorization;
 	getIdentity: (ctx: {
-		request: Request;
+		request?: Request;
 		headers: Headers;
 	}) => MaybePromise<AuthorizationIdentityInput<TAuthorization> | null>;
 }): ServerAuth<TAuthorization> {
 	const identities = new WeakMap<
-		Request,
+		object,
 		Promise<AuthorizationIdentity<TAuthorization> | null>
 	>();
 	const runtimeAuthorization = config.authorization as unknown as {
@@ -79,25 +80,24 @@ export function createServerAuth<
 		input: Request | { request?: Request; headers: Headers },
 	): Promise<AuthorizationIdentity<TAuthorization> | null> => {
 		const headers = input.headers;
-		// Some layout APIs expose request headers without the original Request.
-		// Preserve the adapter callback shape with a private request-scoped stand-in;
-		// identity resolvers should read authentication data from the headers.
-		const request =
-			input instanceof Request
-				? input
-				: (input.request ??
-					new Request("http://btst.layout/", { headers: input.headers }));
-		let pending = identities.get(request);
+		const request = input instanceof Request ? input : input.request;
+		const cacheKey = request ?? headers;
+		let pending = identities.get(cacheKey);
 		if (!pending) {
 			pending = Promise.resolve()
-				.then(() => config.getIdentity({ request, headers }))
+				.then(() =>
+					config.getIdentity({
+						headers,
+						...(request ? { request } : {}),
+					}),
+				)
 				.then(
 					(identity) =>
 						runtimeAuthorization.parseIdentity(
 							identity,
 						) as AuthorizationIdentity<TAuthorization> | null,
 				);
-			identities.set(request, pending);
+			identities.set(cacheKey, pending);
 		}
 		return pending;
 	};
@@ -105,6 +105,7 @@ export function createServerAuth<
 	const serverAuth = {
 		mode: "one-rule",
 		authorization: config.authorization,
+		contract: config.authorization.contract,
 		getIdentity: resolveIdentity,
 		async authorize(request: Request, permissionRequest: unknown) {
 			const identity = await resolveIdentity(request);

@@ -202,6 +202,11 @@ contract. Schema and resolver failures remain observable errors. A later
 `clientAuth.useIdentity().refetch()` still runs the browser resolver after
 login, logout, or account switching.
 
+The framework helpers also parse through the server adapter's portable
+`contract` and reject non-JSON-safe output before framework serialization.
+Custom server identity adapters can participate by exposing the same
+`{ contract, getIdentity }` shape.
+
 ### Next.js
 
 Keep the provider and browser auth in a client boundary, then create the server
@@ -223,7 +228,6 @@ export function BtstPagesClientLayout({ children, initialIdentity }: {
       basePath="/pages"
       auth={clientAuth}
       initialIdentity={initialIdentity}
-      /* router, api, overrides */
     >
       {children}
     </StackProvider>
@@ -270,7 +274,6 @@ export default function BtstPagesLayout() {
       basePath="/pages"
       auth={clientAuth}
       initialIdentity={initialIdentity}
-      /* router, api, overrides */
     >
       <Outlet />
     </StackProvider>
@@ -281,15 +284,20 @@ export default function BtstPagesLayout() {
 ### TanStack Start
 
 TanStack loaders are isomorphic, so resolve the request through a server
-function and use the generated loader on the parent route:
+function and use the generated loader on the parent route. The server helper
+produces the validated snapshot envelope required by the layout helper:
 
 ```ts title="src/lib/authorization.identity.ts"
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
+import { resolveTanStackInitialIdentity } from "@btst/stack/tanstack/server";
 import { serverAuth } from "./authorization.server";
 
 export const getInitialIdentity = createServerFn({ method: "GET" }).handler(
-  () => serverAuth.getIdentity(getRequest()),
+  () => resolveTanStackInitialIdentity({
+    auth: serverAuth,
+    request: getRequest(),
+  }),
 );
 ```
 
@@ -314,7 +322,6 @@ function BtstPagesLayout() {
       basePath="/pages"
       auth={clientAuth}
       initialIdentity={initialIdentity}
-      /* router, api, overrides */
     >
       <Outlet />
     </StackProvider>
@@ -325,7 +332,7 @@ function BtstPagesLayout() {
 This is identity hydration only. BTST does not cache authorization results or
 require framework middleware.
 
-### Operation lifecycle ordering
+## Operation lifecycle ordering
 
 An operation validates input, derives trusted facts, resolves identity, and
 authorizes before entering plugin lifecycle hooks. Validation, fact, identity,

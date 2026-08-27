@@ -111,7 +111,7 @@ describe("stack() server-side identity resolution", () => {
 
 	it("passes headers and request to getIdentity", async () => {
 		const getIdentity = vi.fn(
-			(_ctx: { headers: Headers; request: Request }) => null,
+			(_ctx: { headers: Headers; request?: Request }) => null,
 		);
 		const backend = makeStack({ getIdentity });
 
@@ -119,7 +119,7 @@ describe("stack() server-side identity resolution", () => {
 
 		const ctx = getIdentity.mock.calls[0]![0];
 		expect(ctx.headers.get("x-user-id")).toBe("user-1");
-		expect(ctx.request.url).toBe("http://localhost/api/whoami");
+		expect(ctx.request?.url).toBe("http://localhost/api/whoami");
 	});
 
 	it("returns null without an auth provider (handler untouched)", async () => {

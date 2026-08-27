@@ -15,7 +15,7 @@ import {
 	AuthorizationResponseValidationError,
 	createRemoteAuthorizationEvaluator,
 } from "../authorization/remote";
-import { StackProvider } from "../context";
+import { StackProvider, useIdentity } from "../context";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -62,6 +62,38 @@ async function render(ui: React.ReactElement) {
 }
 
 describe("createClientAuth", () => {
+	it("does not treat an unrelated custom-provider contract as the one-rule parser", async () => {
+		const parseIdentity = vi.fn(() => {
+			throw new Error("unrelated parser called");
+		});
+		const provider = {
+			getIdentity: () => null,
+			contract: { parseIdentity },
+		};
+		let identityState: ReturnType<typeof useIdentity> | undefined;
+
+		function Probe() {
+			identityState = useIdentity();
+			return null;
+		}
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				auth={provider}
+				initialIdentity={{ id: "custom-user" }}
+			>
+				<Probe />
+			</StackProvider>,
+		);
+
+		expect(identityState).toMatchObject({
+			identity: { id: "custom-user" },
+			isPending: false,
+		});
+		expect(parseIdentity).not.toHaveBeenCalled();
+	});
+
 	it("keeps an omitted identity snapshot pending while the browser resolver runs", async () => {
 		const getIdentity = vi.fn(() => new Promise<never>(() => {}));
 		const clientAuth = createClientAuth({ authorization, getIdentity });

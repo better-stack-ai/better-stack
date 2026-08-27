@@ -1,5 +1,11 @@
-import type { StackIdentity } from "../shared/auth-types";
-import type { MaybePromise } from "../shared/types";
+import type {
+	AuthorizationContractIdentity,
+	AnyAuthorizationContract,
+} from "../authorization";
+import {
+	type FrameworkIdentitySource,
+	resolveInitialIdentity,
+} from "../shared/initial-identity";
 
 /** Request values supplied to a React Router parent layout loader. */
 export interface ReactRouterLayoutLoaderArgs<TContext = unknown> {
@@ -10,25 +16,27 @@ export interface ReactRouterLayoutLoaderArgs<TContext = unknown> {
 
 /** Options for the request-aware React Router identity layout factory. */
 export interface CreateReactRouterLayoutOptions<
-	TIdentity extends StackIdentity,
+	TContract extends AnyAuthorizationContract,
 > {
 	/** Server-only identity adapter, normally returned by `createServerAuth`. */
-	auth: {
-		getIdentity: (request: Request) => MaybePromise<TIdentity | null>;
-	};
+	auth: FrameworkIdentitySource<TContract, Request>;
 }
 
 /**
  * Creates the loader for a React Router parent layout. Its result is passed to
  * `StackProvider.initialIdentity` by the layout component around `<Outlet />`.
  */
-export function createReactRouterLayout<TIdentity extends StackIdentity>(
-	options: CreateReactRouterLayoutOptions<TIdentity>,
-) {
+export function createReactRouterLayout<
+	TContract extends AnyAuthorizationContract,
+>(options: CreateReactRouterLayoutOptions<TContract>) {
 	async function loader<TContext = unknown>(
 		args: ReactRouterLayoutLoaderArgs<TContext>,
 	) {
-		return { initialIdentity: await options.auth.getIdentity(args.request) };
+		return {
+			initialIdentity: await resolveInitialIdentity(options.auth, args.request),
+		} satisfies {
+			initialIdentity: AuthorizationContractIdentity<TContract> | null;
+		};
 	}
 
 	return { loader };
