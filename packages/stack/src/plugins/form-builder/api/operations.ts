@@ -789,7 +789,15 @@ export function createFormBuilderOperations(
 		legacyAuthorization: ({ facts }) => ({
 			resource: "form-builder:form",
 			action: "read",
-			params: { id: facts.scope === "record" ? facts.formId : "" },
+			params: {
+				id: facts.scope === "record" ? facts.formId : "",
+				...(facts.scope === "record" && facts.ownerId
+					? { ownerId: facts.ownerId }
+					: {}),
+				...(facts.scope === "record" && facts.status
+					? { status: facts.status }
+					: {}),
+			},
 		}),
 		facts: async ({ input }) => {
 			const form = await findFormById(adapter, input.id);
@@ -1297,7 +1305,10 @@ export function createFormBuilderOperations(
 		legacyAuthorization: ({ facts }) => ({
 			resource: "form-builder:submission",
 			action: "read",
-			params: { formId: facts.formId },
+			params: {
+				formId: facts.formId,
+				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
+			},
 		}),
 		facts: async ({ input }) => {
 			const form = await findFormById(adapter, input.formId);
@@ -1358,7 +1369,12 @@ export function createFormBuilderOperations(
 			return {
 				resource: "form-builder:submission",
 				action: "read",
-				params: { formId: facts.formId, id: facts.submissionId },
+				params: {
+					formId: facts.formId,
+					id: facts.submissionId,
+					...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
+					...(facts.submittedBy ? { submittedBy: facts.submittedBy } : {}),
+				},
 			};
 		},
 		facts: async ({ input }) => {
@@ -1440,7 +1456,12 @@ export function createFormBuilderOperations(
 		legacyAuthorization: ({ facts }) => ({
 			resource: "form-builder:submission",
 			action: "delete",
-			params: { formId: facts.formId, id: facts.submissionId },
+			params: {
+				formId: facts.formId,
+				id: facts.submissionId,
+				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
+				...(facts.submittedBy ? { submittedBy: facts.submittedBy } : {}),
+			},
 		}),
 		facts: async ({ input }) => {
 			const [form, submission] = await Promise.all([

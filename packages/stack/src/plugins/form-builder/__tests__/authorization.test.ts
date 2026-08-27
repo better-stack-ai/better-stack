@@ -420,6 +420,120 @@ describe("Form Builder operation-first authorization", () => {
 		expect(can).not.toHaveBeenCalled();
 	});
 
+	it("bridges trusted owner and submitter facts through legacy read and submission checks", async () => {
+		const getIdentity = ({ request }: { request: Request }) => {
+			const id = request.headers.get("x-user-id");
+			return id ? { id } : null;
+		};
+		const can = vi.fn(
+			({
+				resource,
+				action,
+				params,
+				identity,
+			}: {
+				resource: string;
+				action: string;
+				params?: Record<string, unknown>;
+				identity: { id: string } | null;
+			}) => {
+				if (resource === "form-builder:form" && action === "read") {
+					return (
+						identity?.id === params?.ownerId && params?.status === "active"
+					);
+				}
+				if (resource === "form-builder:submission" && action === "read") {
+					return (
+						identity?.id === params?.ownerId ||
+						identity?.id === params?.submittedBy
+					);
+				}
+				return (
+					resource === "form-builder:submission" &&
+					action === "delete" &&
+					identity?.id === params?.submittedBy
+				);
+			},
+		);
+		const backend = makeBackend({ auth: { getIdentity, can } });
+		const form = await seedForm(backend);
+		const submission = await seedSubmission(backend, form.id);
+		const submitter = { id: "submitter-1", role: "user" } as const;
+
+		const formResponse = await backend.handler(
+			request(`/forms/id/${form.id}`, { identity: owner }),
+		);
+		expect(formResponse.status).toBe(200);
+		await expect(
+			backend
+				.forRequest(
+					request(`/forms/${form.id}/submissions`, { identity: owner }),
+				)
+				.api.formBuilder.listSubmissions({
+					formId: form.id,
+					query: { limit: 20, offset: 0 },
+				}),
+		).resolves.toMatchObject({ total: 1 });
+		await expect(
+			backend
+				.forRequest(
+					request(`/forms/${form.id}/submissions/${submission.id}`, {
+						identity: submitter,
+					}),
+				)
+				.api.formBuilder.getSubmission({
+					formId: form.id,
+					submissionId: submission.id,
+				}),
+		).resolves.toMatchObject({ id: submission.id });
+		await expect(
+			backend
+				.forRequest(
+					request(`/forms/${form.id}/submissions/${submission.id}`, {
+						method: "DELETE",
+						identity: submitter,
+					}),
+				)
+				.api.formBuilder.deleteSubmission({
+					formId: form.id,
+					submissionId: submission.id,
+				}),
+		).resolves.toEqual({ success: true });
+
+		expect(can).toHaveBeenCalledWith(
+			expect.objectContaining({
+				resource: "form-builder:form",
+				action: "read",
+				params: {
+					id: form.id,
+					ownerId: owner.id,
+					status: "active",
+				},
+			}),
+		);
+		expect(can).toHaveBeenCalledWith(
+			expect.objectContaining({
+				resource: "form-builder:submission",
+				action: "read",
+				params: { formId: form.id, ownerId: owner.id },
+			}),
+		);
+		for (const action of ["read", "delete"]) {
+			expect(can).toHaveBeenCalledWith(
+				expect.objectContaining({
+					resource: "form-builder:submission",
+					action,
+					params: {
+						formId: form.id,
+						id: submission.id,
+						ownerId: owner.id,
+						submittedBy: submitter.id,
+					},
+				}),
+			);
+		}
+	});
+
 	it("keeps public render and submission explicitly anonymous across HTTP, request, and internal transports", async () => {
 		const events: string[] = [];
 		const backend = makeBackend({

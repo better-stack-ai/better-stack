@@ -430,6 +430,57 @@ describe("maintained route authorization gates", () => {
 			}),
 		);
 	});
+
+	it("passes authoritative owner facts through the legacy submission route gate", async () => {
+		hooks.useSuspenseSubmissions.mockReturnValue({
+			form: { ...form, createdBy: "owner-1" },
+			submissions: [submissionSummary],
+			total: 1,
+			loadMore: vi.fn(),
+			hasMore: false,
+			isLoadingMore: false,
+			refetch: vi.fn(),
+		});
+		const can = vi.fn(
+			({
+				resource,
+				action,
+				params,
+			}: {
+				resource: string;
+				action: string;
+				params?: Record<string, unknown>;
+			}) =>
+				resource === "form-builder:submission" &&
+				action === "read" &&
+				params?.ownerId === "owner-1",
+		);
+		const auth: StackAuthProvider = {
+			getIdentity: () => ({ id: "owner-1" }),
+			can,
+		};
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={createMockRouter()}
+				overrides={{ "form-builder": formBuilderOverrides }}
+				auth={auth}
+			>
+				<SubmissionsPageComponent formId="f1" />
+			</StackProvider>,
+		);
+		await act(async () => Promise.resolve());
+
+		expect(container.querySelector("table")).toBeTruthy();
+		expect(can).toHaveBeenCalledWith(
+			expect.objectContaining({
+				resource: "form-builder:submission",
+				action: "read",
+				params: { formId: "f1", ownerId: "owner-1" },
+			}),
+		);
+	});
 });
 
 describe("FormListPage New Form button (CanAccess)", () => {
@@ -508,7 +559,7 @@ describe("FormListPage New Form button (CanAccess)", () => {
 		expect(texts()).not.toContain("Edit");
 	});
 
-	it("passes authoritative owner facts through legacy row update and delete gates", async () => {
+	it("passes authoritative owner facts through legacy row action gates", async () => {
 		hooks.useSuspenseForms.mockReturnValue({
 			forms: [{ ...form, createdBy: "owner-1" }],
 			total: 1,
@@ -555,6 +606,13 @@ describe("FormListPage New Form button (CanAccess)", () => {
 				}),
 			);
 		}
+		expect(can).toHaveBeenCalledWith(
+			expect.objectContaining({
+				resource: "form-builder:submission",
+				action: "read",
+				params: { formId: "f1", ownerId: "owner-1" },
+			}),
+		);
 	});
 });
 
@@ -710,6 +768,54 @@ describe("SubmissionsPage row actions (CanAccess + useNotify)", () => {
 				params: { formId: "f1", id: submissionSummary.id },
 			}),
 		);
+	});
+
+	it("passes authoritative owner and submitter facts through legacy submission row gates", async () => {
+		hooks.useSuspenseSubmissions.mockReturnValue({
+			form: { ...form, createdBy: "owner-1" },
+			submissions: [{ ...submissionSummary, submittedBy: "submitter-1" }],
+			total: 1,
+			loadMore: vi.fn(),
+			hasMore: false,
+			isLoadingMore: false,
+			refetch: vi.fn(),
+		});
+		const can = vi.fn(
+			({
+				resource,
+				action,
+				params,
+			}: {
+				resource: string;
+				action: string;
+				params?: Record<string, unknown>;
+			}) =>
+				resource === "form-builder:submission" &&
+				(action === "read" || action === "delete") &&
+				params?.submittedBy === "submitter-1",
+		);
+		const auth: StackAuthProvider = {
+			getIdentity: () => ({ id: "submitter-1" }),
+			can,
+		};
+
+		await renderSubmissionsPage(auth);
+
+		expect(container.querySelectorAll("table tbody tr button")).toHaveLength(2);
+		for (const action of ["read", "delete"]) {
+			expect(can).toHaveBeenCalledWith(
+				expect.objectContaining({
+					resource: "form-builder:submission",
+					action,
+					params: {
+						formId: "f1",
+						id: submissionSummary.id,
+						ownerId: "owner-1",
+						submittedBy: "submitter-1",
+					},
+				}),
+			);
+		}
 	});
 
 	it("uses record read and delete descriptors for typed submission row gates", async () => {

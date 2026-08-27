@@ -191,7 +191,16 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 														legacyPermission={{
 															resource: "form-builder:submission",
 															action: "read",
-															params: { formId, id: sub.id },
+															params: {
+																formId,
+																id: sub.id,
+																...(form?.createdBy
+																	? { ownerId: form.createdBy }
+																	: {}),
+																...(sub.submittedBy
+																	? { submittedBy: sub.submittedBy }
+																	: {}),
+															},
 														}}
 													>
 														<Button
@@ -226,7 +235,16 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 														legacyPermission={{
 															resource: "form-builder:submission",
 															action: "delete",
-															params: { formId, id: sub.id },
+															params: {
+																formId,
+																id: sub.id,
+																...(form?.createdBy
+																	? { ownerId: form.createdBy }
+																	: {}),
+																...(sub.submittedBy
+																	? { submittedBy: sub.submittedBy }
+																	: {}),
+															},
 														}}
 													>
 														<Button

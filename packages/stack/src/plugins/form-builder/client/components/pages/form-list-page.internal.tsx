@@ -334,7 +334,12 @@ export function FormListPage() {
 															legacyPermission={{
 																resource: "form-builder:submission",
 																action: "read",
-																params: { formId: form.id },
+																params: {
+																	formId: form.id,
+																	...(form.createdBy
+																		? { ownerId: form.createdBy }
+																		: {}),
+																},
 															}}
 														>
 															<DropdownMenuItem
