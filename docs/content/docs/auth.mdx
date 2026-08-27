@@ -548,6 +548,32 @@ import { CanAccess } from "@btst/stack/context";
 
 While the check is pending, the optional `loading` node (default `null`) renders instead — gated UI never flashes. Without an auth provider configured, `<CanAccess>` always renders its children.
 
+For schema-backed plugin permissions, use `PermissionAccess` with the exact
+descriptor published by the plugin:
+
+```tsx
+import { PermissionAccess } from "@btst/stack/context";
+import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+
+<PermissionAccess
+  permission={blogPermissions.post.delete({
+    id: post.id,
+    authorId: post.authorId ?? undefined,
+  })}
+  fallback={null}
+>
+  <DeletePostButton />
+</PermissionAccess>;
+```
+
+`PermissionAccess` renders its optional `loading` node while authorization is
+pending, `children` when allowed, and `fallback` when denied. Without an auth
+provider it remains permissive. Its lower-level `PermissionCheck` primitive
+provides the same descriptor evaluation as a render prop when a plugin needs
+custom handling for `{ can, isPending, error }`. Throw `error` before trusting
+`can`; a schema-bound provider without its required descriptor hook fails
+closed through that field.
+
 ## Route gating
 
 `ComposedRoute` (the wrapper every plugin page uses) accepts an optional `permission`:
@@ -578,6 +604,14 @@ evaluate the exact descriptor. If an RC route previously used a different
 resource/action key, set `legacyPermission` alongside the descriptor. Only a
 string-based provider receives that override; one-rule providers still receive
 the descriptor.
+
+Plugins whose route facts are available only after loading data can wrap that
+content directly with `PermissionRouteAccess` from
+`@btst/stack/client/components`. It accepts the same descriptor plus the
+route's `LoadingComponent`, then applies the same anonymous redirect and
+authenticated error behavior as `ComposedRoute`. `legacyPublic` and
+`legacyPermission` are RC migration bridges for string-based providers only;
+new one-rule integrations should not set them.
 
 Without a provider, `permission` is ignored and the route renders without client-side gating.
 

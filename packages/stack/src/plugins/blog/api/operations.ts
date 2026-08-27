@@ -65,14 +65,12 @@ type ReadFacts = PermissionFactsFor<typeof blogPermissions.post.read>;
 type CreateFacts = PermissionFactsFor<typeof blogPermissions.post.create>;
 type UpdateFacts = PermissionFactsFor<typeof blogPermissions.post.update>;
 type DeleteFacts = PermissionFactsFor<typeof blogPermissions.post.delete>;
-type TagReadFacts = PermissionFactsFor<typeof blogPermissions.tag.read>;
 
 type ListPostsInput = z.output<typeof PostListQuerySchema>;
 type CreatePostInput = z.output<typeof CreatePostOperationInputSchema>;
 type UpdatePostInput = z.output<typeof UpdatePostOperationInputSchema>;
 type DeletePostInput = z.output<typeof DeletePostInputSchema>;
 type NextPreviousPostsInput = z.output<typeof NextPreviousPostsQuerySchema>;
-type EmptyInput = z.output<typeof EmptyInputSchema>;
 
 export type SerializedPostListResult = ReturnType<typeof serializeListResult>;
 export type SerializedNextPreviousPostsResult = Awaited<
