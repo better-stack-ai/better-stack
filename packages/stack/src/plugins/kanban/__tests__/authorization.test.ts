@@ -14,48 +14,6 @@ import type { Board, Column, KanbanBackendHooks, Task } from "../types";
 const rawMemoryAdapter = (db: DatabaseDefinition) =>
 	createMemoryAdapter(db)({});
 
-/** Serialize the memory adapter so tests exercise an isolated transaction. */
-function serializedMemoryAdapter(db: DatabaseDefinition): DBAdapter {
-	const adapter = rawMemoryAdapter(db);
-	let tail = Promise.resolve();
-	const withLock = async <T>(run: () => Promise<T>): Promise<T> => {
-		let release = () => {};
-		const previous = tail;
-		tail = new Promise<void>((resolve) => {
-			release = resolve;
-		});
-		await previous;
-		try {
-			return await run();
-		} finally {
-			release();
-		}
-	};
-	return {
-		...adapter,
-		id: "serialized-memory-test",
-		create: ((input) =>
-			withLock(() => adapter.create(input))) as DBAdapter["create"],
-		findOne: ((input) =>
-			withLock(() => adapter.findOne(input))) as DBAdapter["findOne"],
-		findMany: ((input) =>
-			withLock(() => adapter.findMany(input))) as DBAdapter["findMany"],
-		count: (input) => withLock(() => adapter.count(input)),
-		update: ((input) =>
-			withLock(() => adapter.update(input))) as DBAdapter["update"],
-		updateMany: (input) => withLock(() => adapter.updateMany(input)),
-		delete: ((input) =>
-			withLock(() => adapter.delete(input))) as DBAdapter["delete"],
-		deleteMany: (input) => withLock(() => adapter.deleteMany(input)),
-		consumeOne: ((input) =>
-			withLock(() => adapter.consumeOne(input))) as DBAdapter["consumeOne"],
-		transaction: ((callback) =>
-			withLock(() =>
-				adapter.transaction(callback),
-			)) as DBAdapter["transaction"],
-	};
-}
-
 describe("Kanban authorization inventory", () => {
 	it("covers every maintained HTTP and programmatic operation with a stable descriptor", () => {
 		const plugin = kanbanBackendPlugin();
@@ -216,7 +174,7 @@ function makeBackend(options?: {
 	return stack({
 		basePath: "/api",
 		plugins: { kanban: kanbanBackendPlugin(options?.hooks) },
-		adapter: options?.adapter ?? serializedMemoryAdapter,
+		adapter: options?.adapter ?? rawMemoryAdapter,
 		...(options?.auth ? { auth: options.auth } : {}),
 	});
 }
@@ -330,6 +288,7 @@ describe("Kanban operation-first authorization", () => {
 	it("preserves omitted-auth compatibility while retaining validation and hooks", async () => {
 		const events: string[] = [];
 		const backend = makeBackend({
+			adapter: rawMemoryAdapter,
 			hooks: {
 				onBeforeCreateBoard: (_input, context) => {
 					events.push(`before:${context.identity?.id ?? "anonymous"}`);
@@ -343,7 +302,18 @@ describe("Kanban operation-first authorization", () => {
 			request("/boards", { method: "POST", body: { name: "Compatible" } }),
 		);
 		expect(response.status).toBe(200);
-		expect(await response.json()).toMatchObject({ name: "Compatible" });
+		const board = (await response.json()) as Board;
+		expect(board).toMatchObject({ name: "Compatible" });
+		const updateResponse = await backend.handler(
+			request(`/boards/${board.id}`, {
+				method: "PUT",
+				body: { name: "Still compatible" },
+			}),
+		);
+		expect(updateResponse.status).toBe(200);
+		expect(await updateResponse.json()).toMatchObject({
+			name: "Still compatible",
+		});
 		expect(events).toEqual(["before:anonymous", "after:anonymous"]);
 	});
 
@@ -671,6 +641,7 @@ describe("Kanban operation-first authorization", () => {
 		);
 		const events: string[] = [];
 		const backend = makeBackend({
+			adapter: rawMemoryAdapter,
 			auth: createAuth((incoming) => {
 				getIdentity(incoming);
 				return owner;
@@ -717,6 +688,7 @@ describe("Kanban operation-first authorization", () => {
 	it("keeps task ordering and lifecycle hooks active for trusted internal jobs", async () => {
 		const events: string[] = [];
 		const backend = makeBackend({
+			adapter: rawMemoryAdapter,
 			auth: createAuth(() => {
 				throw new Error("internal must not resolve identity");
 			}),
@@ -886,39 +858,159 @@ describe("Kanban operation-first authorization", () => {
 		).toMatchObject({ ownerId: viewer.id, name: "Roadmap" });
 	});
 
-	it("fails before claims and hooks when the adapter cannot isolate sensitive writes", async () => {
+	it("serializes raw-memory rollback without overwriting API or raw winners", async () => {
 		const events: string[] = [];
+		let markRejectedHookStarted = () => {};
+		const rejectedHookStarted = new Promise<void>((resolve) => {
+			markRejectedHookStarted = resolve;
+		});
+		let releaseRejectedHook = () => {};
+		const rejectedHookGate = new Promise<void>((resolve) => {
+			releaseRejectedHook = resolve;
+		});
 		const backend = makeBackend({
 			auth: createAuth(),
 			adapter: rawMemoryAdapter,
 			hooks: {
-				onBeforeUpdateBoard: () => {
-					events.push("hook");
+				onBeforeUpdateBoard: async (_id, data) => {
+					events.push(data.name ?? "missing");
+					if (data.name === "Rejected") {
+						markRejectedHookStarted();
+						await rejectedHookGate;
+						throw new Error("workflow rejected");
+					}
+				},
+			},
+		});
+		const board = await seedBoard(backend);
+		const api = backend.forRequest(request("/race", { identity: owner })).api
+			.kanban;
+		const rejected = api.updateBoard({
+			id: board.id,
+			data: { name: "Rejected" },
+		});
+		await rejectedHookStarted;
+		const now = new Date();
+		const rawWinner = backend.adapter.create<Board>({
+			model: "kanbanBoard",
+			data: {
+				name: "Raw winner",
+				slug: "raw-winner",
+				createdAt: now,
+				updatedAt: now,
+			},
+		});
+		const winner = api.updateBoard({
+			id: board.id,
+			data: { name: "Winner" },
+		});
+		releaseRejectedHook();
+		await expect(rejected).rejects.toMatchObject({
+			statusCode: 403,
+			code: "UPDATE_BOARD_REJECTED",
+		});
+		await expect(winner).resolves.toMatchObject({ name: "Winner" });
+		await expect(rawWinner).resolves.toMatchObject({ name: "Raw winner" });
+		expect(events).toEqual(["Rejected", "Winner"]);
+		expect(
+			await backend.adapter.findOne<Board>({
+				model: "kanbanBoard",
+				where: [{ field: "id", value: board.id }],
+			}),
+		).toMatchObject({ name: "Winner" });
+		expect(
+			await backend.adapter.findOne<Board>({
+				model: "kanbanBoard",
+				where: [{ field: "slug", value: "raw-winner" }],
+			}),
+		).toMatchObject({ name: "Raw winner" });
+	});
+
+	it("keeps awaited nested hook operations in the raw-memory transaction context", async () => {
+		let backend: ReturnType<typeof makeBackend>;
+		const nestedNames: string[] = [];
+		backend = makeBackend({
+			auth: createAuth(),
+			adapter: rawMemoryAdapter,
+			hooks: {
+				onBeforeUpdateBoard: async (id) => {
+					const nested = await backend.internal.kanban.getBoard({ id });
+					nestedNames.push(nested.name);
 				},
 			},
 		});
 		const board = await seedBoard(backend);
 		await expect(
 			backend
-				.forRequest(request("/unsafe", { identity: owner }))
-				.api.kanban.updateBoard({ id: board.id, data: { name: "Unsafe" } }),
-		).rejects.toMatchObject({
-			statusCode: 500,
-			code: "ATOMIC_TRANSACTION_REQUIRED",
+				.forRequest(request("/nested", { identity: owner }))
+				.api.kanban.updateBoard({
+					id: board.id,
+					data: { name: "Updated" },
+				}),
+		).resolves.toMatchObject({ name: "Updated" });
+		expect(nestedNames).toEqual(["Roadmap"]);
+	}, 1_000);
+
+	it("rolls back a caught nested after-hook failure with its raw-memory parent", async () => {
+		let backend: ReturnType<typeof makeBackend>;
+		let outerId = "";
+		let nestedId = "";
+		const caught: string[] = [];
+		backend = makeBackend({
+			auth: createAuth(),
+			adapter: rawMemoryAdapter,
+			hooks: {
+				onBeforeUpdateBoard: async (id) => {
+					if (id !== outerId) return;
+					try {
+						await backend.internal.kanban.updateBoard({
+							id: nestedId,
+							data: { name: "Nested change" },
+						});
+					} catch (error) {
+						caught.push(error instanceof Error ? error.message : "unknown");
+					}
+				},
+				onBoardUpdated: (board) => {
+					if (board.id === nestedId) throw new Error("nested after rejected");
+				},
+			},
 		});
-		expect(events).toEqual([]);
+		const outer = await seedBoard(backend, { slug: "outer" });
+		const nested = await seedBoard(backend, {
+			name: "Nested original",
+			slug: "nested",
+		});
+		outerId = outer.id;
+		nestedId = nested.id;
+		await expect(
+			backend
+				.forRequest(request("/nested-write", { identity: owner }))
+				.api.kanban.updateBoard({
+					id: outer.id,
+					data: { name: "Outer change" },
+				}),
+		).rejects.toThrow("nested after rejected");
+		expect(caught).toEqual(["nested after rejected"]);
 		expect(
 			await backend.adapter.findOne<Board>({
 				model: "kanbanBoard",
-				where: [{ field: "id", value: board.id }],
+				where: [{ field: "id", value: outer.id }],
 			}),
 		).toMatchObject({ name: "Roadmap" });
-	});
+		expect(
+			await backend.adapter.findOne<Board>({
+				model: "kanbanBoard",
+				where: [{ field: "id", value: nested.id }],
+			}),
+		).toMatchObject({ name: "Nested original" });
+	}, 1_000);
 
 	it("serializes competing moves, preserves ordering, and runs only the winning hook", async () => {
 		const events: string[] = [];
 		const backend = makeBackend({
 			auth: createAuth(),
+			adapter: rawMemoryAdapter,
 			hooks: {
 				onBeforeUpdateTask: (id) => {
 					events.push(id);

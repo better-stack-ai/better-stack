@@ -711,11 +711,12 @@ inventory. Raw getters, mutations, and SSG helpers are available separately on
 lifecycle composition.
 
 <Callout type="warning">
-Authorization-sensitive Kanban writes require an adapter with real isolated
-transactions. The ordinary memory adapter and a sequential transaction fallback
-fail closed because they cannot keep the server-derived authorization snapshot
-stable across hooks and the write. Use a transactional production adapter; a
-serialized wrapper is suitable only for single-process tests.
+Kanban writes require isolated transactions. Use a transactional production
+adapter in deployed applications. When Kanban is installed with the published
+memory adapter, it automatically serializes the shared adapter instance so
+single-process development and tests keep rollback and winner ordering safe
+across plugins and raw helpers. That behavior is not a production isolation
+substitute; raw Kanban helpers still bypass operation authorization and hooks.
 </Callout>
 
 #### KanbanBackendHooks

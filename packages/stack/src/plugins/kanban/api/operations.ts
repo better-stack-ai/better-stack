@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { DBAdapter as Adapter } from "@btst/db";
 import {
 	type DeepReadonly,
@@ -355,14 +356,128 @@ function didAffectRow(result: unknown, expectedId: string): boolean {
 	return record.id === expectedId;
 }
 
+const memoryRollbackMarkers = new WeakMap<Adapter, (error: unknown) => void>();
+
+function markMemoryRollback(adapter: Adapter, error: unknown) {
+	memoryRollbackMarkers.get(adapter)?.(error);
+}
+
+/**
+ * The published memory adapter rolls back from a whole-database clone but does
+ * not isolate overlapping callbacks. Instrument the shared adapter instance
+ * so every stack access queues behind whole-database transactions: temporary
+ * CAS claims stay private and rollback cannot overwrite a later winner.
+ */
+function serializeMemoryOperations(adapter: Adapter): Adapter {
+	if (adapter.id !== "memory" || memoryRollbackMarkers.has(adapter)) {
+		return adapter;
+	}
+	const source: Adapter = { ...adapter };
+	type TransactionAdapter = Parameters<
+		Parameters<Adapter["transaction"]>[0]
+	>[0];
+	type ActiveAdapter = Omit<Adapter, "transaction"> &
+		Partial<Pick<Adapter, "transaction">>;
+	type LockContext = {
+		owner: object;
+		adapter: ActiveAdapter;
+		inTransaction?: boolean;
+		rollbackError?: unknown;
+		rollbackOnly?: boolean;
+	};
+	const lockContext = new AsyncLocalStorage<LockContext>();
+	let tail = Promise.resolve();
+	let activeOwner: object | undefined;
+	const withLock = async <T>(
+		run: (activeAdapter: ActiveAdapter) => Promise<T>,
+	): Promise<T> => {
+		const inherited = lockContext.getStore();
+		if (inherited && inherited.owner === activeOwner) {
+			return run(inherited.adapter);
+		}
+		let release = () => {};
+		const previous = tail;
+		tail = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await previous;
+		const owner = {};
+		activeOwner = owner;
+		try {
+			return await lockContext.run({ owner, adapter: source }, () =>
+				run(source),
+			);
+		} finally {
+			if (activeOwner === owner) activeOwner = undefined;
+			release();
+		}
+	};
+	const serialized: Adapter = {
+		...source,
+		create: ((input) =>
+			withLock((active) => active.create(input))) as Adapter["create"],
+		findOne: ((input) =>
+			withLock((active) => active.findOne(input))) as Adapter["findOne"],
+		findMany: ((input) =>
+			withLock((active) => active.findMany(input))) as Adapter["findMany"],
+		count: (input) => withLock((active) => active.count(input)),
+		update: ((input) =>
+			withLock((active) => active.update(input))) as Adapter["update"],
+		updateMany: (input) => withLock((active) => active.updateMany(input)),
+		delete: ((input) =>
+			withLock((active) => active.delete(input))) as Adapter["delete"],
+		deleteMany: (input) => withLock((active) => active.deleteMany(input)),
+		consumeOne: ((input) =>
+			withLock((active) => active.consumeOne(input))) as Adapter["consumeOne"],
+		transaction: ((callback) =>
+			withLock((active) => {
+				const context = lockContext.getStore();
+				if (!context) throw new TypeError("Missing memory lock context.");
+				if (context.inTransaction) {
+					return callback(active as TransactionAdapter).catch((error) => {
+						context.rollbackOnly = true;
+						context.rollbackError = error;
+						throw error;
+					});
+				}
+				if (!active.transaction) {
+					throw new TypeError("Missing memory transaction adapter.");
+				}
+				return active.transaction((tx) =>
+					lockContext.run(
+						{ owner: context.owner, adapter: tx, inTransaction: true },
+						async () => {
+							const transactionContext = lockContext.getStore();
+							const result = await callback(tx);
+							if (transactionContext?.rollbackOnly) {
+								throw transactionContext.rollbackError;
+							}
+							return result;
+						},
+					),
+				);
+			})) as Adapter["transaction"],
+	};
+	memoryRollbackMarkers.set(adapter, (error) => {
+		const context = lockContext.getStore();
+		if (!context || context.owner !== activeOwner || !context.inTransaction) {
+			return;
+		}
+		context.rollbackOnly = true;
+		context.rollbackError = error;
+	});
+	Object.assign(adapter, serialized);
+	return adapter;
+}
+
 function requireAtomicTransactions(adapter: Adapter) {
 	if (
-		adapter.id === "memory" ||
+		adapter.id !== "memory" &&
 		typeof adapter.options?.adapterConfig.transaction !== "function"
 	) {
 		throw new KanbanOperationError(
 			500,
-			"Kanban authorization-sensitive writes require an adapter with isolated transaction support.",
+			"Kanban writes require an adapter with isolated transaction support.",
 			"ATOMIC_TRANSACTION_REQUIRED",
 		);
 	}
@@ -981,9 +1096,10 @@ function sameOptionalBoard(
 
 /** Create the complete Kanban operation inventory for every server transport. */
 export function createKanbanOperations(
-	adapter: Adapter,
+	sourceAdapter: Adapter,
 	hooks?: KanbanBackendHooks,
 ): KanbanOperations {
+	const adapter = serializeMemoryOperations(sourceAdapter);
 	const boardSnapshots = new WeakMap<object, BoardSnapshot | null>();
 	const columnSnapshots = new WeakMap<object, ColumnAuthorizationSnapshot>();
 	const taskSnapshots = new WeakMap<object, TaskAuthorizationSnapshot>();
@@ -1165,10 +1281,12 @@ export function createKanbanOperations(
 				hookContext(context, { body: context.input }),
 			);
 		},
-		onError: ({ error, ...context }) =>
-			notifyBoardError(hooks?.onCreateBoardError, error, context, {
+		onError: ({ error, ...context }) => {
+			markMemoryRollback(adapter, error);
+			return notifyBoardError(hooks?.onCreateBoardError, error, context, {
 				body: context.input,
-			}),
+			});
+		},
 	});
 
 	const updateBoard = defineOperation({
@@ -1240,11 +1358,13 @@ export function createKanbanOperations(
 				}),
 			);
 		},
-		onError: ({ error, ...context }) =>
-			notifyBoardError(hooks?.onUpdateBoardError, error, context, {
+		onError: ({ error, ...context }) => {
+			markMemoryRollback(adapter, error);
+			return notifyBoardError(hooks?.onUpdateBoardError, error, context, {
 				body: context.input.data,
 				params: { id: context.input.id },
-			}),
+			});
+		},
 	});
 
 	const deleteBoard = defineOperation({
@@ -1299,10 +1419,12 @@ export function createKanbanOperations(
 				hookContext(context, { params: { id: context.input.id } }),
 			);
 		},
-		onError: ({ error, ...context }) =>
-			notifyBoardError(hooks?.onDeleteBoardError, error, context, {
+		onError: ({ error, ...context }) => {
+			markMemoryRollback(adapter, error);
+			return notifyBoardError(hooks?.onDeleteBoardError, error, context, {
 				params: { id: context.input.id },
-			}),
+			});
+		},
 	});
 
 	const createColumn = defineOperation({
@@ -1366,6 +1488,7 @@ export function createKanbanOperations(
 				hookContext(context, { body: context.input }),
 			);
 		},
+		onError: ({ error }) => markMemoryRollback(adapter, error),
 	});
 
 	const updateColumn = defineOperation({
@@ -1451,6 +1574,7 @@ export function createKanbanOperations(
 				}),
 			);
 		},
+		onError: ({ error }) => markMemoryRollback(adapter, error),
 	});
 
 	const deleteColumn = defineOperation({
@@ -1518,6 +1642,7 @@ export function createKanbanOperations(
 				hookContext(context, { params: { id: context.input.id } }),
 			);
 		},
+		onError: ({ error }) => markMemoryRollback(adapter, error),
 	});
 
 	const reorderColumns = defineOperation({
@@ -1624,6 +1749,7 @@ export function createKanbanOperations(
 				);
 			}
 		},
+		onError: ({ error }) => markMemoryRollback(adapter, error),
 	});
 
 	const createTask = defineOperation({
@@ -1694,6 +1820,7 @@ export function createKanbanOperations(
 				hookContext(context, { body: context.input }),
 			);
 		},
+		onError: ({ error }) => markMemoryRollback(adapter, error),
 	});
 
 	const updateTask = defineOperation({
@@ -1847,6 +1974,7 @@ export function createKanbanOperations(
 				}),
 			);
 		},
+		onError: ({ error }) => markMemoryRollback(adapter, error),
 	});
 
 	const deleteTask = defineOperation({
@@ -1914,6 +2042,7 @@ export function createKanbanOperations(
 				hookContext(context, { params: { id: context.input.id } }),
 			);
 		},
+		onError: ({ error }) => markMemoryRollback(adapter, error),
 	});
 
 	const moveTask = defineOperation({
@@ -1978,6 +2107,7 @@ export function createKanbanOperations(
 				hookContext(context, { body: context.input }),
 			);
 		},
+		onError: ({ error }) => markMemoryRollback(adapter, error),
 	});
 
 	const reorderTasks = defineOperation({
@@ -2070,6 +2200,7 @@ export function createKanbanOperations(
 				);
 			}
 		},
+		onError: ({ error }) => markMemoryRollback(adapter, error),
 	});
 
 	return {
