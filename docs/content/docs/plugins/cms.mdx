@@ -706,7 +706,10 @@ denial happens before lifecycle hooks. An identity-only RC provider has no
 authorization policy and retains its prior allow-all behavior. `createServerAuth()`
 does not use this bridge and always evaluates the exact `cmsPermissions`
 descriptor. The string mapping is removed with the remaining RC authorization
-interfaces in #193.
+interfaces in #193. Compound inline-create, populated-record, and inverse
+relation checks map every server-derived target or source separately, so a
+legacy rule can deny secondary content without allowing the primary operation
+to expose or mutate it.
 
 Bind it in the browser for immediate presentation checks. Browser facts only
 control what is shown; they are never trusted by the backend.

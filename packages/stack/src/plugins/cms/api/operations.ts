@@ -331,6 +331,42 @@ function collectionFacts(contentType: string): RecordReadFacts {
 	return { contentType, scope: "collection" };
 }
 
+function legacyCMSAdditionalAuthorization(permission: {
+	readonly id: string;
+	readonly facts: unknown;
+}) {
+	const facts =
+		typeof permission.facts === "object" && permission.facts !== null
+			? (permission.facts as Record<string, unknown>)
+			: {};
+	const contentType = facts.contentType;
+	if (typeof contentType !== "string" || contentType.length === 0) {
+		throw new TypeError(
+			`CMS additional permission ${permission.id} is missing trusted contentType facts.`,
+		);
+	}
+	const params = {
+		typeSlug: contentType,
+		...(typeof facts.recordId === "string" ? { id: facts.recordId } : {}),
+		...(typeof facts.authorId === "string" ? { authorId: facts.authorId } : {}),
+	};
+	switch (permission.id) {
+		case "cms:contentType.read":
+		case "cms:record.read":
+			return { resource: "cms:content", action: "read", params };
+		case "cms:record.create":
+			return { resource: "cms:content", action: "create", params };
+		case "cms:record.update":
+			return { resource: "cms:content", action: "update", params };
+		case "cms:record.delete":
+			return { resource: "cms:content", action: "delete", params };
+		default:
+			throw new TypeError(
+				`CMS additional permission ${permission.id} has no RC authorization mapping.`,
+			);
+	}
+}
+
 function assertRecordFacts(
 	item: Pick<ContentItemWithType, "id" | "authorId"> & {
 		contentType?: Pick<ContentType, "slug">;
@@ -1173,6 +1209,7 @@ export function createCMSOperations(
 			action: "create",
 			params: { typeSlug: facts.contentType },
 		}),
+		legacyAdditionalAuthorization: legacyCMSAdditionalAuthorization,
 		facts: async ({ input }) => ({
 			contentType: (
 				await getContentTypeOrThrow(adapter, ensureSynced, input.typeSlug)
@@ -1323,6 +1360,7 @@ export function createCMSOperations(
 				...(facts.authorId ? { authorId: facts.authorId } : {}),
 			},
 		}),
+		legacyAdditionalAuthorization: legacyCMSAdditionalAuthorization,
 		facts: async ({ input }) => {
 			const item = await getRecordOrThrow(
 				adapter,
@@ -1636,6 +1674,7 @@ export function createCMSOperations(
 				...(facts.authorId ? { authorId: facts.authorId } : {}),
 			},
 		}),
+		legacyAdditionalAuthorization: legacyCMSAdditionalAuthorization,
 		facts: async ({ input }) =>
 			recordFacts(
 				await getRecordOrThrow(adapter, ensureSynced, input.typeSlug, input.id),
@@ -1739,6 +1778,7 @@ export function createCMSOperations(
 			action: "read",
 			...(facts.contentType ? { params: { typeSlug: facts.contentType } } : {}),
 		}),
+		legacyAdditionalAuthorization: legacyCMSAdditionalAuthorization,
 		facts: async ({ input }) => ({
 			contentType: (
 				await getContentTypeOrThrow(adapter, ensureSynced, input.slug)
@@ -1863,6 +1903,7 @@ export function createCMSOperations(
 			action: "read",
 			params: { typeSlug: facts.contentType },
 		}),
+		legacyAdditionalAuthorization: legacyCMSAdditionalAuthorization,
 		facts: async ({ input }) => {
 			await getContentTypeOrThrow(adapter, ensureSynced, input.slug);
 			const sourceType = await getContentTypeOrThrow(

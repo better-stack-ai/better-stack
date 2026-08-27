@@ -475,6 +475,91 @@ describe("CMS operation-first authorization", () => {
 		);
 	});
 
+	it("maps every compound CMS check through structural RC server rules", async () => {
+		const events: string[] = [];
+		let deniedType = "category";
+		const can = vi.fn(
+			({ params }: { action: string; params?: Record<string, unknown> }) =>
+				params?.typeSlug !== deniedType,
+		);
+		const backend = makeBackend({
+			auth: {
+				getIdentity: () => ({ id: "legacy-reader" }),
+				can,
+			},
+			hooks: {
+				onBeforeCreate: () => {
+					events.push("before:create");
+				},
+				onError: () => {
+					events.push("error");
+				},
+			},
+		});
+		const source = await seedRecord(backend, {
+			typeSlug: "resource",
+			slug: "legacy-compound-source",
+		});
+		const target = await seedRecord(backend, {
+			typeSlug: "category",
+			slug: "legacy-compound-target",
+		});
+
+		const deniedInlineCreate = await backend.handler(
+			request("/content/resource", {
+				method: "POST",
+				body: {
+					slug: "legacy-compound-create",
+					data: {
+						name: "Denied source",
+						categoryIds: [{ _new: true, data: { name: "Denied target" } }],
+					},
+				},
+			}),
+		);
+		expect(deniedInlineCreate.status).toBe(403);
+		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
+			1,
+		);
+		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
+			1,
+		);
+
+		await backend.adapter.create<ContentRelation>({
+			model: "contentRelation",
+			data: {
+				sourceId: source.id,
+				targetId: target.id,
+				fieldName: "categoryIds",
+				createdAt: new Date(),
+			},
+		});
+		const deniedPopulatedRead = await backend.handler(
+			request(`/content/resource/${source.id}/populated`),
+		);
+		expect(deniedPopulatedRead.status).toBe(403);
+
+		deniedType = "category-note";
+		const deniedInverseSource = await backend.handler(
+			request("/content-types/category/inverse-relations"),
+		);
+		expect(deniedInverseSource.status).toBe(403);
+		expect(events).toEqual([]);
+		expect(
+			can.mock.calls.map(([permission]) => ({
+				action: permission.action,
+				typeSlug: permission.params?.typeSlug,
+			})),
+		).toEqual([
+			{ action: "create", typeSlug: "resource" },
+			{ action: "create", typeSlug: "category" },
+			{ action: "read", typeSlug: "resource" },
+			{ action: "read", typeSlug: "category" },
+			{ action: "read", typeSlug: "category" },
+			{ action: "read", typeSlug: "category-note" },
+		]);
+	});
+
 	it("does not reuse unreadable records submitted as inline new relations", async () => {
 		const createWithoutReadAuthorization = defineAuthorization({
 			identity: z.object({ id: z.string(), role: z.literal("user") }),

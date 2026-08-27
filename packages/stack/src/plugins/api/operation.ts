@@ -96,6 +96,51 @@ function freezeOperationData<T>(
 	return Object.freeze(object) as DeepReadonly<T>;
 }
 
+type LegacyAuthorizationDeclaration = CanParams | { readonly public: true };
+
+async function enforceLegacyAuthorization(
+	auth: StackServerAuthProvider,
+	request: Request,
+	identity: DeepReadonly<StackIdentity> | null,
+	declaration: LegacyAuthorizationDeclaration,
+): Promise<void> {
+	if ("public" in declaration) {
+		if (declaration.public !== true) {
+			throw new TypeError(
+				"Operation RC authorization must return a valid string permission or { public: true }.",
+			);
+		}
+		return;
+	}
+	if (
+		typeof declaration.resource !== "string" ||
+		declaration.resource.length === 0 ||
+		typeof declaration.action !== "string" ||
+		declaration.action.length === 0
+	) {
+		throw new TypeError(
+			"Operation RC authorization must return a valid string permission or { public: true }.",
+		);
+	}
+	if (!auth.can) return;
+	const permission = freezeOperationData(
+		declaration,
+		new WeakSet(),
+		"legacy operation permission",
+	) as DeepReadonly<CanParams>;
+	const allowed = await auth.can({
+		...permission,
+		identity,
+		headers: request.headers,
+	});
+	if (typeof allowed !== "boolean") {
+		throw new TypeError("StackServerAuthProvider.can() must return a boolean.");
+	}
+	if (!allowed) {
+		throw new AuthorizationError(identity === null ? 401 : 403);
+	}
+}
+
 /** Validated input, trusted facts, and resolved identity passed through an operation. */
 export interface OperationContext<TInput, TFacts> {
 	readonly input: DeepReadonly<TInput>;
@@ -194,7 +239,7 @@ export function defineOperation<
 	legacyAuthorization?: (ctx: {
 		readonly input: DeepReadonly<z.output<TInputSchema>>;
 		readonly facts: DeepReadonly<PermissionFactsFor<TPermission>>;
-	}) => CanParams | { readonly public: true };
+	}) => LegacyAuthorizationDeclaration;
 	facts: (ctx: {
 		readonly input: DeepReadonly<z.output<TInputSchema>>;
 		readonly request?: Request;
@@ -210,6 +255,13 @@ export function defineOperation<
 		readonly facts: DeepReadonly<PermissionFactsFor<TPermission>>;
 		readonly request?: Request;
 	}) => MaybePromise<readonly PermissionRequest<string, any>[]>;
+	/**
+	 * @deprecated Temporary v3 RC bridge removed by #193. Explicitly map each
+	 * compound schema-backed permission to its former string permission.
+	 */
+	legacyAdditionalAuthorization?: (
+		permission: Pick<PermissionRequest<string, any>, "id" | "facts">,
+	) => LegacyAuthorizationDeclaration;
 	before?: (
 		ctx: OperationContext<
 			z.output<TInputSchema>,
@@ -271,6 +323,13 @@ export function defineOperation<
 					) => Promise<StackIdentity | null>;
 			  }
 			| undefined;
+		let legacyAuthContext:
+			| {
+					auth: StackServerAuthProvider;
+					request: Request;
+					identity: DeepReadonly<StackIdentity> | null;
+			  }
+			| undefined;
 		if (!options.skipAuthorization && isServerAuth(options.auth)) {
 			if (!options.request) {
 				throw new Error("Authorized operations require a request.");
@@ -319,44 +378,17 @@ export function defineOperation<
 					"Operation does not declare RC server authorization compatibility. Use createServerAuth().",
 				);
 			}
-			if ("public" in legacyAuthorization) {
-				if (legacyAuthorization.public !== true) {
-					throw new TypeError(
-						"Operation legacyAuthorization() must return a valid string permission or { public: true }.",
-					);
-				}
-			} else {
-				if (
-					typeof legacyAuthorization.resource !== "string" ||
-					legacyAuthorization.resource.length === 0 ||
-					typeof legacyAuthorization.action !== "string" ||
-					legacyAuthorization.action.length === 0
-				) {
-					throw new TypeError(
-						"Operation legacyAuthorization() must return a valid string permission or { public: true }.",
-					);
-				}
-				if (options.auth.can) {
-					const permission = freezeOperationData(
-						legacyAuthorization,
-						new WeakSet(),
-						"legacy operation permission",
-					) as DeepReadonly<CanParams>;
-					const allowed = await options.auth.can({
-						...permission,
-						identity,
-						headers: options.request.headers,
-					});
-					if (typeof allowed !== "boolean") {
-						throw new TypeError(
-							"StackServerAuthProvider.can() must return a boolean.",
-						);
-					}
-					if (!allowed) {
-						throw new AuthorizationError(identity === null ? 401 : 403);
-					}
-				}
-			}
+			await enforceLegacyAuthorization(
+				options.auth,
+				options.request,
+				identity,
+				legacyAuthorization,
+			);
+			legacyAuthContext = {
+				auth: options.auth,
+				request: options.request,
+				identity,
+			};
 		}
 
 		// Compound checks may perform trusted reads. Derive them only after the
@@ -377,6 +409,24 @@ export function defineOperation<
 		if (runtimeAuth && options.request) {
 			for (const additionalPermission of additionalPermissions) {
 				await runtimeAuth.authorize(options.request, additionalPermission);
+			}
+		} else if (legacyAuthContext) {
+			for (const additionalPermission of additionalPermissions) {
+				const legacyAuthorization = config.legacyAdditionalAuthorization?.({
+					id: additionalPermission.id,
+					facts: additionalPermission.facts,
+				});
+				if (!legacyAuthorization) {
+					throw new TypeError(
+						"Operation does not map an additional permission for RC server authorization. Use createServerAuth().",
+					);
+				}
+				await enforceLegacyAuthorization(
+					legacyAuthContext.auth,
+					legacyAuthContext.request,
+					legacyAuthContext.identity,
+					legacyAuthorization,
+				);
 			}
 		}
 

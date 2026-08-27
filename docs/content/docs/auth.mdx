@@ -660,12 +660,14 @@ only through explicit deprecated mappings. A protected operation maps its
 server-derived facts to the former `{ resource, action, params }` vocabulary
 and calls the provider's `can`; an ordinary denial remains 401/403 and happens
 before lifecycle hooks. Operations without a safe mapping fail closed. An
-explicitly public RC operation does not call `can`. These mappings are a
-migration bridge, not a second supported authorization model. An identity-only
-RC provider has no authorization policy, so mapped operations retain its prior
-allow-all behavior; add `can` to enforce the mapped string permissions. The
-bridge is removed with the other RC interfaces in #193. `createServerAuth()`
-ignores the mappings and always evaluates the exact schema-backed descriptor.
+operation's compound checks each require their own mapping and are evaluated
+before lifecycle too. An explicitly public RC operation does not call `can`.
+These mappings are a migration bridge, not a second supported authorization
+model. An identity-only RC provider has no authorization policy, so mapped
+operations retain its prior allow-all behavior; add `can` to enforce the mapped
+string permissions. The bridge is removed with the other RC interfaces in
+#193. `createServerAuth()` ignores the mappings and always evaluates the exact
+schema-backed descriptor.
 
 <AutoTypeTable path="../packages/stack/src/shared/auth-types.ts" name="StackServerAuthProvider" />
 
