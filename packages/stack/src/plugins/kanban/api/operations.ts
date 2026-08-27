@@ -1110,20 +1110,20 @@ export function createKanbanOperations(
 		}),
 		facts: () => undefined,
 		execute: async (context) => {
-			const slug = sanitizeSlug(context.input.slug || context.input.name);
-			const input = {
-				...context.input,
-				slug,
-				...(context.identity ? { ownerId: context.identity.id } : {}),
-			};
+			const data = { ...context.input };
 			await runDomainHook(
 				() =>
 					hooks?.onBeforeCreateBoard?.(
-						input,
-						hookContext(context, { body: input }),
+						data,
+						hookContext(context, { body: data }),
 					),
 				"CREATE_BOARD_REJECTED",
 			);
+			const input = {
+				...data,
+				slug: sanitizeSlug(data.slug || data.name),
+				...(context.identity ? { ownerId: context.identity.id } : {}),
+			};
 			return adapter.transaction(async (tx) => {
 				const now = new Date();
 				const board = await tx.create<Board>({

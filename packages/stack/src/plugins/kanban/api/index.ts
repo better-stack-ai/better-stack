@@ -42,6 +42,7 @@ export type {
 	TaskMoveOperationResultContext,
 	TaskReorderOperationContext,
 	TaskReorderOperationResultContext,
+	SerializedBoardSummary,
 } from "../types";
 export { getAllBoards, getBoardById, type BoardListResult } from "./getters";
 export {
@@ -50,5 +51,10 @@ export {
 	getKanbanColumnsByBoardId,
 	type CreateKanbanTaskInput,
 } from "./mutations";
-export { serializeBoard, serializeColumn, serializeTask } from "./serializers";
+export {
+	serializeBoard,
+	serializeBoardSummary,
+	serializeColumn,
+	serializeTask,
+} from "./serializers";
 export { KANBAN_QUERY_KEYS } from "./query-key-defs";

@@ -353,8 +353,9 @@ describe("Kanban operation-first authorization", () => {
 		const backend = makeBackend({
 			auth: createAuth(),
 			hooks: {
-				onBeforeCreateBoard: (_input, context) => {
+				onBeforeCreateBoard: (input, context) => {
 					events.push("before");
+					expect(input).toEqual({ name: "Rejected" });
 					expect(context.identity).toEqual(owner);
 					throw new Error("workflow rejected");
 				},

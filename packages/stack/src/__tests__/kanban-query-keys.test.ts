@@ -5,6 +5,10 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createStackClient } from "../client";
+import {
+	serializeBoardSummary,
+	type SerializedBoardSummary,
+} from "../plugins/kanban/api";
 import { KANBAN_QUERY_KEYS } from "../plugins/kanban/api/query-key-defs";
 import { kanbanClientPlugin } from "../plugins/kanban/client/plugin";
 import {
@@ -24,6 +28,13 @@ describe("kanban query keys match SSG prefetch keys", () => {
 			.toEqualTypeOf<string | undefined>();
 		expectTypeOf<CreateBoardInput>().not.toHaveProperty("ownerId");
 		expectTypeOf<CreateBoardInput>().not.toHaveProperty("organizationId");
+	});
+
+	it("exports the collection-safe serializer from the public API", () => {
+		expect(serializeBoardSummary).toBeTypeOf("function");
+		expectTypeOf<
+			ReturnType<typeof serializeBoardSummary>
+		>().toMatchTypeOf<SerializedBoardSummary>();
 	});
 
 	it("board list keys match for default params", () => {
