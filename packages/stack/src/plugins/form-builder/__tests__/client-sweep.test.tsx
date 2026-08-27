@@ -361,6 +361,75 @@ describe("maintained route authorization gates", () => {
 		expect(hooks.useSuspenseSubmissions).toHaveBeenCalledWith("f1");
 		expect(hooks.useSuspenseFormById).not.toHaveBeenCalled();
 	});
+
+	it("passes authoritative owner facts through legacy edit route and save gates", async () => {
+		const ownedForm = { ...form, createdBy: "owner-1" };
+		hooks.useSuspenseFormForUpdate.mockReturnValue({
+			form: ownedForm,
+			refetch: vi.fn(),
+		});
+		const can = vi.fn(
+			({
+				resource,
+				action,
+				params,
+			}: {
+				resource: string;
+				action: string;
+				params?: Record<string, unknown>;
+			}) =>
+				resource === "form-builder:form" &&
+				action === "update" &&
+				params?.ownerId === "owner-1" &&
+				params.status === "active",
+		);
+		const auth: StackAuthProvider = {
+			getIdentity: () => ({ id: "owner-1" }),
+			can,
+		};
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={createMockRouter()}
+				overrides={{ "form-builder": formBuilderOverrides }}
+				auth={auth}
+			>
+				<FormBuilderPageComponent id="f1" />
+			</StackProvider>,
+		);
+		await act(async () => Promise.resolve());
+
+		expect(
+			container.querySelector("[data-testid='form-builder-canvas']"),
+		).toBeTruthy();
+		expect(texts()).toContain("Save");
+		expect(can).toHaveBeenCalledTimes(2);
+		expect(can).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({
+				resource: "form-builder:form",
+				action: "update",
+				params: {
+					id: "f1",
+					ownerId: "owner-1",
+					status: "active",
+				},
+			}),
+		);
+		expect(can).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({
+				resource: "form-builder:form",
+				action: "update",
+				params: {
+					id: "f1",
+					ownerId: "owner-1",
+					status: "active",
+				},
+			}),
+		);
+	});
 });
 
 describe("FormListPage New Form button (CanAccess)", () => {
@@ -437,6 +506,55 @@ describe("FormListPage New Form button (CanAccess)", () => {
 		expect(texts()).toContain("Contact Form");
 		expect(texts()).not.toContain("New Form");
 		expect(texts()).not.toContain("Edit");
+	});
+
+	it("passes authoritative owner facts through legacy row update and delete gates", async () => {
+		hooks.useSuspenseForms.mockReturnValue({
+			forms: [{ ...form, createdBy: "owner-1" }],
+			total: 1,
+			loadMore: vi.fn(),
+			hasMore: false,
+			isLoadingMore: false,
+			refetch: vi.fn(),
+		});
+		const can = vi.fn(() => true);
+		const auth: StackAuthProvider = {
+			getIdentity: () => ({ id: "owner-1" }),
+			can,
+		};
+		await renderListPage(auth);
+
+		const menuTrigger = container.querySelector<HTMLButtonElement>(
+			"table tbody tr button",
+		);
+		expect(menuTrigger).toBeTruthy();
+		await act(async () => {
+			const pointerDown = new Event("pointerdown", {
+				bubbles: true,
+				cancelable: true,
+			});
+			Object.assign(pointerDown, {
+				button: 0,
+				ctrlKey: false,
+				pointerType: "mouse",
+			});
+			menuTrigger!.dispatchEvent(pointerDown);
+			await Promise.resolve();
+		});
+
+		for (const action of ["update", "delete"]) {
+			expect(can).toHaveBeenCalledWith(
+				expect.objectContaining({
+					resource: "form-builder:form",
+					action,
+					params: {
+						id: "f1",
+						ownerId: "owner-1",
+						status: "active",
+					},
+				}),
+			);
+		}
 	});
 });
 

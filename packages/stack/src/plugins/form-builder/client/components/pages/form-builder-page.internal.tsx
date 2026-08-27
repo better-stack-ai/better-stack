@@ -314,7 +314,13 @@ function FormBuilderPageContent({
 						legacyPermission={{
 							resource: "form-builder:form",
 							action: "update",
-							params: { id },
+							params: {
+								id: existingForm.id,
+								...(existingForm.createdBy
+									? { ownerId: existingForm.createdBy }
+									: {}),
+								status: existingForm.status,
+							},
 						}}
 					>
 						{saveButton}

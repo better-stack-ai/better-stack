@@ -79,7 +79,11 @@ function AuthorizedExistingFormBuilderPage({ id }: { id: string }) {
 			legacyPermission={{
 				resource: "form-builder:form",
 				action: "update",
-				params: { id: form.id },
+				params: {
+					id: form.id,
+					...(form.createdBy ? { ownerId: form.createdBy } : {}),
+					status: form.status,
+				},
 			}}
 			LoadingComponent={FormBuilderSkeleton}
 		>
