@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
 	Table,
 	TableBody,
@@ -122,6 +122,21 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 			status: activeTab,
 			page: currentPage,
 		});
+	const selectedComments = comments.filter((comment) =>
+		selected.has(comment.id),
+	);
+	const hasResolvedSelection =
+		selected.size > 0 && selectedComments.length === selected.size;
+	const deleteComments = comments.filter((comment) =>
+		deleteIds.includes(comment.id),
+	);
+	const hasResolvedDeleteScope =
+		deleteIds.length > 0 && deleteComments.length === deleteIds.length;
+
+	useEffect(() => {
+		setSelected(new Set());
+		setDeleteIds([]);
+	}, [activeTab, currentPage]);
 
 	const updateStatus = useUpdateCommentStatus(config);
 	const deleteMutation = useDeleteComment(config);
@@ -224,7 +239,7 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 	};
 
 	const handleBulkApprove = async () => {
-		const ids = [...selected];
+		const ids = selectedComments.map((comment) => comment.id);
 		try {
 			await Promise.all(
 				ids.map((id) => updateStatus.mutateAsync({ id, status: "approved" })),
@@ -288,7 +303,7 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 			</Tabs>
 
 			{/* Bulk actions toolbar */}
-			{selected.size > 0 && (
+			{hasResolvedSelection && (
 				<div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
 					<span className="text-sm text-muted-foreground">
 						{(
@@ -298,17 +313,15 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 					</span>
 					{activeTab !== "approved" && (
 						<PermissionAccessAll
-							permissions={comments
-								.filter((comment) => selected.has(comment.id))
-								.map((comment) =>
-									commentsPermissions.comment.moderate({
-										commentId: comment.id,
-										resourceId: comment.resourceId,
-										resourceType: comment.resourceType,
-										currentStatus: comment.status,
-										nextStatus: "approved",
-									}),
-								)}
+							permissions={selectedComments.map((comment) =>
+								commentsPermissions.comment.moderate({
+									commentId: comment.id,
+									resourceId: comment.resourceId,
+									resourceType: comment.resourceType,
+									currentStatus: comment.status,
+									nextStatus: "approved",
+								}),
+							)}
 						>
 							<Button
 								size="sm"
@@ -323,20 +336,20 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 						</PermissionAccessAll>
 					)}
 					<PermissionAccessAll
-						permissions={comments
-							.filter((comment) => selected.has(comment.id))
-							.map((comment) =>
-								commentsPermissions.comment.delete({
-									commentId: comment.id,
-									authorId: comment.authorId,
-								}),
-							)}
+						permissions={selectedComments.map((comment) =>
+							commentsPermissions.comment.delete({
+								commentId: comment.id,
+								authorId: comment.authorId,
+							}),
+						)}
 					>
 						<Button
 							size="sm"
 							variant="outline"
 							className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
-							onClick={() => setDeleteIds([...selected])}
+							onClick={() =>
+								setDeleteIds(selectedComments.map((comment) => comment.id))
+							}
 						>
 							<Trash2 className="h-4 w-4 mr-1" />
 							{localization?.COMMENTS_MODERATION_DELETE_SELECTED ??
@@ -546,7 +559,10 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 					<Pagination
 						currentPage={currentPage}
 						totalPages={totalPages}
-						onPageChange={(p) => setListState({ page: p })}
+						onPageChange={(p) => {
+							setListState({ page: p });
+							setSelected(new Set());
+						}}
 						total={total}
 						limit={limit}
 						offset={offset}
@@ -712,7 +728,7 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 
 			{/* Delete confirmation dialog */}
 			<AlertDialog
-				open={deleteIds.length > 0}
+				open={hasResolvedDeleteScope}
 				onOpenChange={(open) => !open && setDeleteIds([])}
 			>
 				<AlertDialogContent>
@@ -751,17 +767,28 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 							{localization?.COMMENTS_MODERATION_DELETE_CANCEL ??
 								t("comments.moderation.deleteCancel", "Cancel")}
 						</AlertDialogCancel>
-						<AlertDialogAction
-							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-							onClick={() => handleDelete(deleteIds)}
-							data-testid="confirm-delete-button"
+						<PermissionAccessAll
+							permissions={deleteComments.map((comment) =>
+								commentsPermissions.comment.delete({
+									commentId: comment.id,
+									authorId: comment.authorId,
+								}),
+							)}
 						>
-							{deleteMutation.isPending
-								? (localization?.COMMENTS_MODERATION_DELETE_DELETING ??
-									t("comments.moderation.deleteDeleting", "Deleting…"))
-								: (localization?.COMMENTS_MODERATION_DELETE_CONFIRM ??
-									t("comments.moderation.deleteConfirm", "Delete"))}
-						</AlertDialogAction>
+							<AlertDialogAction
+								className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+								onClick={() =>
+									handleDelete(deleteComments.map((comment) => comment.id))
+								}
+								data-testid="confirm-delete-button"
+							>
+								{deleteMutation.isPending
+									? (localization?.COMMENTS_MODERATION_DELETE_DELETING ??
+										t("comments.moderation.deleteDeleting", "Deleting…"))
+									: (localization?.COMMENTS_MODERATION_DELETE_CONFIRM ??
+										t("comments.moderation.deleteConfirm", "Delete"))}
+							</AlertDialogAction>
+						</PermissionAccessAll>
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>

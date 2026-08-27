@@ -157,6 +157,9 @@ function createMockRouter(initial = "") {
 		navigate: vi.fn(),
 		getSearchParams: () => new URLSearchParams(params.toString()),
 		setSearchParams,
+		setExternalSearchParams: (next: string) => {
+			params = new URLSearchParams(next);
+		},
 	};
 }
 
@@ -480,6 +483,151 @@ describe("CommentCount permission descriptors", () => {
 });
 
 describe("ModerationPage tab/page state (useListState)", () => {
+	it("clears selected rows before moving to another page", async () => {
+		hooks.useSuspenseModerationComments.mockReturnValue({
+			comments: [comment],
+			total: 40,
+			limit: 20,
+			offset: 0,
+			totalPages: 2,
+			refetch: vi.fn(),
+		});
+		const router = createMockRouter();
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={router}
+				overrides={{ comments: commentsOverrides }}
+			>
+				<ModerationPage />
+			</StackProvider>,
+		);
+
+		const rowCheckbox =
+			container.querySelectorAll<HTMLElement>('[role="checkbox"]')[1]!;
+		await act(async () => rowCheckbox.click());
+		expect(texts()).toContain("1 selected");
+
+		const next = [
+			...container.querySelectorAll<HTMLButtonElement>("button"),
+		].find((button) => button.textContent === "Next")!;
+		await act(async () => next.click());
+
+		expect(texts()).not.toContain("selected");
+		expect(texts()).not.toContain("Approve selected");
+		const [written] = router.setSearchParams.mock.calls.at(-1)!;
+		expect(written.get("page")).toBe("2");
+	});
+
+	it("fails closed when browser navigation changes the selected page", async () => {
+		hooks.useSuspenseModerationComments.mockReturnValue({
+			comments: [comment],
+			total: 40,
+			limit: 20,
+			offset: 0,
+			totalPages: 2,
+			refetch: vi.fn(),
+		});
+		const router = createMockRouter();
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={router}
+				overrides={{ comments: commentsOverrides }}
+			>
+				<ModerationPage />
+			</StackProvider>,
+		);
+
+		const rowCheckbox =
+			container.querySelectorAll<HTMLElement>('[role="checkbox"]')[1]!;
+		await act(async () => rowCheckbox.click());
+		expect(texts()).toContain("1 selected");
+
+		hooks.useSuspenseModerationComments.mockReturnValue({
+			comments: [{ ...comment, id: "c2" }],
+			total: 40,
+			limit: 20,
+			offset: 20,
+			totalPages: 2,
+			refetch: vi.fn(),
+		});
+		router.setExternalSearchParams("page=2");
+		await act(async () => {
+			window.dispatchEvent(new PopStateEvent("popstate"));
+		});
+
+		expect(hooks.useSuspenseModerationComments).toHaveBeenLastCalledWith(
+			expect.anything(),
+			expect.objectContaining({ page: 2 }),
+		);
+		expect(texts()).not.toContain("selected");
+		expect(texts()).not.toContain("Approve selected");
+		expect(texts()).not.toContain("Delete selected");
+
+		hooks.useSuspenseModerationComments.mockReturnValue({
+			comments: [comment],
+			total: 40,
+			limit: 20,
+			offset: 0,
+			totalPages: 2,
+			refetch: vi.fn(),
+		});
+		router.setExternalSearchParams("");
+		await act(async () => {
+			window.dispatchEvent(new PopStateEvent("popstate"));
+		});
+
+		expect(hooks.useSuspenseModerationComments).toHaveBeenLastCalledWith(
+			expect.anything(),
+			expect.objectContaining({ page: 1 }),
+		);
+		expect(texts()).not.toContain("selected");
+		expect(texts()).not.toContain("Approve selected");
+		expect(texts()).not.toContain("Delete selected");
+	});
+
+	it("closes bulk delete when a refetch no longer resolves every target", async () => {
+		const router = createMockRouter();
+		const page = () => (
+			<StackProvider
+				basePath="/pages"
+				router={router}
+				overrides={{ comments: commentsOverrides }}
+			>
+				<ModerationPage />
+			</StackProvider>
+		);
+		await render(page());
+
+		const rowCheckbox =
+			container.querySelectorAll<HTMLElement>('[role="checkbox"]')[1]!;
+		await act(async () => rowCheckbox.click());
+		const deleteSelected = [
+			...container.querySelectorAll<HTMLButtonElement>("button"),
+		].find((button) => button.textContent === "Delete selected")!;
+		await act(async () => deleteSelected.click());
+		expect(
+			document.querySelector('[data-testid="confirm-delete-button"]'),
+		).not.toBeNull();
+
+		hooks.useSuspenseModerationComments.mockReturnValue({
+			comments: [{ ...comment, id: "c2" }],
+			total: 1,
+			limit: 20,
+			offset: 0,
+			totalPages: 1,
+			refetch: vi.fn(),
+		});
+		await render(page());
+
+		expect(
+			document.querySelector('[data-testid="confirm-delete-button"]'),
+		).toBeNull();
+	});
+
 	it("seeds tab and page from the URL", async () => {
 		const router = createMockRouter("tab=spam&page=3");
 
