@@ -19,3 +19,20 @@ export {
 } from "./mutations";
 export { CMS_QUERY_KEYS } from "./query-key-defs";
 export { createCMSQueryKeys } from "../query-keys";
+export {
+	CMSContentItemParamsSchema,
+	CMSContentTypeParamsSchema,
+	CMSCreateContentItemBodySchema,
+	CMSUpdateContentItemBodySchema,
+} from "./operations";
+export type {
+	CMSBackendHooks,
+	CMSCreateOperationContext,
+	CMSCreateResultContext,
+	CMSDeleteOperationContext,
+	CMSDeleteResultContext,
+	CMSOperationErrorContext,
+	CMSOperationLifecycleContext,
+	CMSUpdateOperationContext,
+	CMSUpdateResultContext,
+} from "../types";

@@ -3,10 +3,12 @@ import {
 	type AnyPermissionDescriptor,
 	type PermissionFactsFor,
 	type PermissionInputFor,
+	type PermissionRequest,
 	type PermissionRequestFor,
 } from "../../authorization";
-import { isServerAuth } from "../../authorization/server";
+import { AuthorizationError, isServerAuth } from "../../authorization/server";
 import type {
+	CanParams,
 	StackIdentity,
 	StackServerAuthProvider,
 } from "../../shared/auth-types";
@@ -15,6 +17,7 @@ import type { MaybePromise } from "../../shared/types";
 interface OperationExecutionOptions {
 	request?: Request;
 	auth?: StackServerAuthProvider;
+	resolveIdentity?: () => Promise<StackIdentity | null>;
 	skipAuthorization: boolean;
 }
 
@@ -91,6 +94,51 @@ function freezeOperationData<T>(
 	}
 	seen.delete(object);
 	return Object.freeze(object) as DeepReadonly<T>;
+}
+
+type LegacyAuthorizationDeclaration = CanParams | { readonly public: true };
+
+async function enforceLegacyAuthorization(
+	auth: StackServerAuthProvider,
+	request: Request,
+	identity: DeepReadonly<StackIdentity> | null,
+	declaration: LegacyAuthorizationDeclaration,
+): Promise<void> {
+	if ("public" in declaration) {
+		if (declaration.public !== true) {
+			throw new TypeError(
+				"Operation RC authorization must return a valid string permission or { public: true }.",
+			);
+		}
+		return;
+	}
+	if (
+		typeof declaration.resource !== "string" ||
+		declaration.resource.length === 0 ||
+		typeof declaration.action !== "string" ||
+		declaration.action.length === 0
+	) {
+		throw new TypeError(
+			"Operation RC authorization must return a valid string permission or { public: true }.",
+		);
+	}
+	if (!auth.can) return;
+	const permission = freezeOperationData(
+		declaration,
+		new WeakSet(),
+		"legacy operation permission",
+	) as DeepReadonly<CanParams>;
+	const allowed = await auth.can({
+		...permission,
+		identity,
+		headers: request.headers,
+	});
+	if (typeof allowed !== "boolean") {
+		throw new TypeError("StackServerAuthProvider.can() must return a boolean.");
+	}
+	if (!allowed) {
+		throw new AuthorizationError(identity === null ? 401 : 403);
+	}
 }
 
 /** Validated input, trusted facts, and resolved identity passed through an operation. */
@@ -183,10 +231,37 @@ export function defineOperation<
 	permission: [PermissionFactsFor<TPermission>] extends [OperationData]
 		? TPermission
 		: never;
+	/**
+	 * @deprecated Temporary v3 RC bridge removed by #193. Map trusted operation
+	 * facts to the previous string permission, or explicitly declare the RC path
+	 * public. Schema-backed authorization never reads this metadata.
+	 */
+	legacyAuthorization?: (ctx: {
+		readonly input: DeepReadonly<z.output<TInputSchema>>;
+		readonly facts: DeepReadonly<PermissionFactsFor<TPermission>>;
+	}) => LegacyAuthorizationDeclaration;
 	facts: (ctx: {
 		readonly input: DeepReadonly<z.output<TInputSchema>>;
 		readonly request?: Request;
 	}) => MaybePromise<PermissionInputFor<TPermission>>;
+	/**
+	 * Derive any compound permission checks from validated input and trusted
+	 * primary facts after request execution authorizes the primary permission.
+	 * Every returned request is authorized before lifecycle hooks run; trusted
+	 * internal execution skips only the evaluations.
+	 */
+	additionalPermissions?: (ctx: {
+		readonly input: DeepReadonly<z.output<TInputSchema>>;
+		readonly facts: DeepReadonly<PermissionFactsFor<TPermission>>;
+		readonly request?: Request;
+	}) => MaybePromise<readonly PermissionRequest<string, any>[]>;
+	/**
+	 * @deprecated Temporary v3 RC bridge removed by #193. Explicitly map each
+	 * compound schema-backed permission to its former string permission.
+	 */
+	legacyAdditionalAuthorization?: (
+		permission: Pick<PermissionRequest<string, any>, "id" | "facts">,
+	) => LegacyAuthorizationDeclaration;
 	before?: (
 		ctx: OperationContext<
 			z.output<TInputSchema>,
@@ -239,22 +314,27 @@ export function defineOperation<
 			new WeakSet(),
 			"operation facts",
 		);
-		if (
-			!options.skipAuthorization &&
-			options.auth &&
-			!isServerAuth(options.auth)
-		) {
-			throw new TypeError(
-				"Schema-backed operations require an auth provider created with createServerAuth().",
-			);
-		}
-
 		let identity: DeepReadonly<StackIdentity> | null = null;
+		let runtimeAuth:
+			| {
+					authorize: (
+						request: Request,
+						permission: unknown,
+					) => Promise<StackIdentity | null>;
+			  }
+			| undefined;
+		let legacyAuthContext:
+			| {
+					auth: StackServerAuthProvider;
+					request: Request;
+					identity: DeepReadonly<StackIdentity> | null;
+			  }
+			| undefined;
 		if (!options.skipAuthorization && isServerAuth(options.auth)) {
 			if (!options.request) {
 				throw new Error("Authorized operations require a request.");
 			}
-			const runtimeAuth = options.auth as unknown as {
+			runtimeAuth = options.auth as unknown as {
 				authorize: (
 					request: Request,
 					permission: unknown,
@@ -271,6 +351,83 @@ export function defineOperation<
 						"operation identity",
 					)
 				: null;
+		} else if (!options.skipAuthorization && options.auth) {
+			if (!options.request) {
+				throw new Error("Identity-aware operations require a request.");
+			}
+			const legacyIdentity = options.resolveIdentity
+				? await options.resolveIdentity()
+				: await options.auth.getIdentity({
+						headers: options.request.headers,
+						request: options.request,
+					});
+			identity = legacyIdentity
+				? freezeOperationData(
+						legacyIdentity,
+						new WeakSet(),
+						"operation identity",
+					)
+				: null;
+
+			const legacyAuthorization = config.legacyAuthorization?.({
+				input: parsedInput,
+				facts: parsedFacts,
+			});
+			if (!legacyAuthorization) {
+				throw new TypeError(
+					"Operation does not declare RC server authorization compatibility. Use createServerAuth().",
+				);
+			}
+			await enforceLegacyAuthorization(
+				options.auth,
+				options.request,
+				identity,
+				legacyAuthorization,
+			);
+			legacyAuthContext = {
+				auth: options.auth,
+				request: options.request,
+				identity,
+			};
+		}
+
+		// Compound checks may perform trusted reads. Derive them only after the
+		// primary request is authorized so denied callers cannot trigger that work
+		// or replace the primary 401/403 with a derivation error. Internal execution
+		// still derives the requests because execute() may validate their snapshots.
+		const additionalPermissions =
+			(await config.additionalPermissions?.({
+				input: parsedInput,
+				facts: parsedFacts,
+				...(options.request ? { request: options.request } : {}),
+			})) ?? [];
+		if (!Array.isArray(additionalPermissions)) {
+			throw new TypeError(
+				"Operation additionalPermissions() must return an array of permission requests.",
+			);
+		}
+		if (runtimeAuth && options.request) {
+			for (const additionalPermission of additionalPermissions) {
+				await runtimeAuth.authorize(options.request, additionalPermission);
+			}
+		} else if (legacyAuthContext) {
+			for (const additionalPermission of additionalPermissions) {
+				const legacyAuthorization = config.legacyAdditionalAuthorization?.({
+					id: additionalPermission.id,
+					facts: additionalPermission.facts,
+				});
+				if (!legacyAuthorization) {
+					throw new TypeError(
+						"Operation does not map an additional permission for RC server authorization. Use createServerAuth().",
+					);
+				}
+				await enforceLegacyAuthorization(
+					legacyAuthContext.auth,
+					legacyAuthContext.request,
+					legacyAuthContext.identity,
+					legacyAuthorization,
+				);
+			}
 		}
 
 		const context = Object.freeze({
@@ -323,11 +480,18 @@ function getOperationExecutor(operation: AnyOperation): OperationExecutor {
 export function runAuthorizedOperation<TOperation extends AnyOperation>(
 	operation: TOperation,
 	input: OperationInput<TOperation>,
-	options: { request: Request; auth?: StackServerAuthProvider },
+	options: {
+		request: Request;
+		auth?: StackServerAuthProvider;
+		resolveIdentity?: () => Promise<StackIdentity | null>;
+	},
 ): Promise<DeepReadonly<OperationResult<TOperation>>> {
 	return getOperationExecutor(operation)(input, {
 		request: options.request,
 		...(options.auth ? { auth: options.auth } : {}),
+		...(options.resolveIdentity
+			? { resolveIdentity: options.resolveIdentity }
+			: {}),
 		skipAuthorization: false,
 	}) as Promise<DeepReadonly<OperationResult<TOperation>>>;
 }

@@ -498,6 +498,14 @@ export function createCommentsOperations(
 	const listCommentsOperation = defineOperation({
 		input: CommentListQuerySchema,
 		permission: commentsPermissions.thread.read,
+		legacyAuthorization: ({ facts }) =>
+			facts.scope === "public"
+				? { public: true }
+				: {
+						resource: "comments:thread",
+						action: "read",
+						params: { ...facts },
+					},
 		facts: ({ input }) => readFactsForList(input),
 		before: async (context) => {
 			const lifecycle = listContext(context);
@@ -526,6 +534,14 @@ export function createCommentsOperations(
 	const getCommentCountOperation = defineOperation({
 		input: CommentCountQuerySchema,
 		permission: commentsPermissions.thread.read,
+		legacyAuthorization: ({ facts }) =>
+			facts.scope === "public"
+				? { public: true }
+				: {
+						resource: "comments:thread",
+						action: "read",
+						params: { ...facts },
+					},
 		facts: ({ input }) => readFactsForCount(input),
 		before: async (context) => {
 			await options.onBeforeCount?.(context.input, countContext(context));
@@ -538,6 +554,11 @@ export function createCommentsOperations(
 	const createCommentOperation = defineOperation({
 		input: CreateCommentOperationInputSchema,
 		permission: commentsPermissions.thread.createComment,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "comments:thread",
+			action: "createComment",
+			params: { ...facts },
+		}),
 		facts: async ({ input }) => {
 			await assertReplyTarget(adapter, input);
 			return {
@@ -597,6 +618,11 @@ export function createCommentsOperations(
 	const updateCommentOperation = defineOperation({
 		input: UpdateCommentOperationInputSchema,
 		permission: commentsPermissions.comment.edit,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "comments:comment",
+			action: "edit",
+			params: { ...facts },
+		}),
 		facts: async ({ input }) => {
 			const comment = await requireComment(adapter, input.id);
 			editSnapshots.set(input, comment);
@@ -653,6 +679,11 @@ export function createCommentsOperations(
 	const toggleLikeOperation = defineOperation({
 		input: ToggleCommentLikeOperationInputSchema,
 		permission: commentsPermissions.comment.react,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "comments:comment",
+			action: "react",
+			params: { ...facts },
+		}),
 		facts: async ({ input }) => {
 			const comment = await requireComment(adapter, input.id);
 			return { commentId: comment.id, status: comment.status };
@@ -683,6 +714,11 @@ export function createCommentsOperations(
 	const updateCommentStatusOperation = defineOperation({
 		input: UpdateCommentStatusOperationInputSchema,
 		permission: commentsPermissions.comment.moderate,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "comments:comment",
+			action: "moderate",
+			params: { ...facts },
+		}),
 		facts: async ({ input }) => {
 			const comment = await requireComment(adapter, input.id);
 			moderationSnapshots.set(input, comment);
@@ -735,6 +771,11 @@ export function createCommentsOperations(
 	const deleteCommentOperation = defineOperation({
 		input: DeleteCommentOperationInputSchema,
 		permission: commentsPermissions.comment.delete,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "comments:comment",
+			action: "delete",
+			params: { ...facts },
+		}),
 		facts: async ({ input }) => {
 			const comment = await requireComment(adapter, input.id);
 			return { commentId: comment.id, authorId: comment.authorId };

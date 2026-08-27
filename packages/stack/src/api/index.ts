@@ -165,6 +165,7 @@ export function stack<
 				runAuthorizedOperation(operation, input, {
 					request,
 					...(runtimeAuth ? { auth: runtimeAuth } : {}),
+					resolveIdentity: () => getRequestIdentity(request.headers),
 				});
 		}
 	}
@@ -220,6 +221,7 @@ export function stack<
 					runAuthorizedOperation(operation, input, {
 						request,
 						...(runtimeAuth ? { auth: runtimeAuth } : {}),
+						resolveIdentity: () => getRequestIdentity(request.headers),
 					});
 			}
 		}

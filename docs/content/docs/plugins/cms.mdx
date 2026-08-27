@@ -522,16 +522,14 @@ cmsBackendPlugin({
   hooks: {
     onBeforeCreate: async (data, context) => {
       console.log("Creating item in", context.typeSlug)
-      // Return modified data to allow, throw to deny
-      return data
+      // `data` is validated and canonical. Throw to deny.
     },
     onAfterCreate: async (item, context) => {
       console.log("Created:", item.slug)
       // Trigger webhooks, notifications, etc.
     },
     onBeforeUpdate: async (id, data, context) => {
-      // Return modified data to allow, throw to deny
-      return data
+      // `data` is the complete merged, validated record. Throw to deny.
     },
     onAfterUpdate: async (item, context) => {
       // ...
@@ -548,6 +546,11 @@ cmsBackendPlugin({
   },
 })
 ```
+
+A plain error thrown by `onBeforeCreate`, `onBeforeUpdate`, or
+`onBeforeDelete` denies the request with HTTP 403. Create and update hooks run
+before the parent or any inline related record is written, and no mutation is
+committed when a before hook denies the operation.
 
 ## Type Safety
 
@@ -631,75 +634,179 @@ The CMS plugin exposes these REST endpoints:
 | `/content/:typeSlug/:id` | PUT | Update item |
 | `/content/:typeSlug/:id` | DELETE | Delete item |
 | `/content/:typeSlug/:id/populated` | GET | Get item with relations populated |
-| `/content/:typeSlug/populated` | GET | List items with relations populated |
 | `/content/:typeSlug/by-relation` | GET | Filter by relation (query: `field`, `targetId`) |
+| `/content-types/:slug/inverse-relations` | GET | Inspect inverse relation definitions |
+| `/content-types/:slug/inverse-relations/:sourceType` | GET | List inverse relation items |
 
 ## Authorization & Lifecycle Hooks
 
-Use loader hooks for SSR authorization and the top-level auth provider for client-side route permissions:
+CMS owns a browser-safe, schema-backed permission catalog. Define one rule set
+against that catalog, then bind it to a server identity adapter and a browser
+identity adapter. The built-in CMS routes and the backend operations use the
+same descriptors—there is no second list of resource/action strings to keep in
+sync.
 
-### Client Hooks (SSR Authorization)
+```ts title="lib/authorization.ts"
+import { z } from "zod"
+import { defineAuthorization } from "@btst/stack/authorization"
+import { cmsPermissions } from "@btst/stack/plugins/cms/permissions"
 
-Use `hooks` in the client plugin config for **async authorization** during SSR. These run in loaders before pages render, supporting async session checks and redirects:
-
-```tsx title="lib/stack-client.tsx"
-import { redirect } from "next/navigation" // or your framework's redirect
-
-cms: cmsClientPlugin({
-  apiBaseURL: baseURL,
-  apiBasePath: "/api/data",
-  siteBaseURL: baseURL,
-  siteBasePath: "/pages",
-  queryClient: queryClient,
-  headers: options?.headers,
-  hooks: {
-    beforeLoadDashboard: async (context) => {
-      const session = await getSession(context.headers)
-      if (session?.user?.isAdmin !== true)
-        throw new Error("Admin access required")
-    },
-    beforeLoadContentList: async (typeSlug, context) => {
-      const session = await getSession(context.headers)
-      if (session?.user?.isAdmin !== true)
-        throw new Error("Admin access required")
-    },
-    beforeLoadContentEditor: async (typeSlug, id, context) => {
-      const session = await getSession(context.headers)
-      if (session?.user?.isAdmin !== true)
-        throw new Error("Admin access required")
-    },
-    onLoadError: (error, context) => {
-      // Redirect to login on authorization failure
-      redirect("/auth/sign-in")
-    },
-  },
+export const authorization = defineAuthorization({
+  identity: z.object({
+    id: z.string(),
+    role: z.enum(["editor", "admin"]),
+  }),
+  permissions: [cmsPermissions] as const,
+  rules: ({ cms }) => [
+    // Public record responses embed their content-type schema, so both reads
+    // must be declared public. Omit either rule to deny that response.
+    cms.record.read.allow(),
+    cms.contentType.read.allow(),
+    cms.record.create.when(({ identity }) => identity !== null),
+    cms.record.update.when(
+      ({ identity, facts }) =>
+        identity?.role === "admin" || identity?.id === facts.authorId,
+    ),
+    cms.record.delete.when(
+      ({ identity, facts }) =>
+        identity?.role === "admin" || identity?.id === facts.authorId,
+    ),
+  ],
 })
 ```
 
-<Callout type="info">
-**Use client hooks for SSR.** These hooks run during server-side data loading and support async operations like session checks. Throw from a `beforeLoad*` hook to deny access; `onLoadError` can then redirect unauthorized users.
-</Callout>
+Bind the same value on the backend. HTTP routes and request-scoped calls resolve
+the identity, derive trusted facts from the database, evaluate the rule, and
+only then enter CMS lifecycle hooks and mutation code.
 
-### Auth Provider (Client-Side)
+```ts title="lib/stack.ts"
+import { createServerAuth } from "@btst/stack/authorization/server"
+import { authorization } from "./authorization"
 
-Built-in CMS routes declare their required resource/action permission. Supply `auth.can` once on `StackProvider` to enforce those gates during client navigation:
+const auth = createServerAuth({
+  authorization,
+  getIdentity: async ({ request }) => {
+    const session = await getSession(request.headers)
+    return session?.user ?? null
+  },
+})
+
+export const myStack = stack({
+  basePath: "/api/data",
+  plugins: { cms: cmsBackendPlugin({ contentTypes }) },
+  adapter: (db) => createMemoryAdapter(db)({}),
+  auth,
+})
+```
+
+During the v3 RC migration, a structural `StackServerAuthProvider` is adapted
+through CMS's explicit deprecated mappings (`cms:content` with
+`read`/`create`/`update`/`delete`). Its `can` callback receives the
+server-resolved identity and parameters derived from trusted CMS facts; a
+denial happens before lifecycle hooks. An identity-only RC provider has no
+authorization policy and retains its prior allow-all behavior. `createServerAuth()`
+does not use this bridge and always evaluates the exact `cmsPermissions`
+descriptor. The string mapping is removed with the remaining RC authorization
+interfaces in #193. Compound inline-create, existing-relation, populated-record,
+and inverse-relation checks map every server-derived target or source separately, so a
+legacy rule can deny secondary content without allowing the primary operation
+to expose or mutate it. Record responses embed their content-type schema, so
+record list, detail, create, update, populated, and relation-list operations
+also require `cms.contentType.read` for every embedded type. Relation filters
+derive the target type from the configured relation field and authorize the
+authoritative target record before reading junction rows.
+
+Bind it in the browser for immediate presentation checks. Browser facts only
+control what is shown; they are never trusted by the backend.
 
 ```tsx title="app/pages/layout.tsx"
+import { createClientAuth } from "@btst/stack/authorization/client"
+import { authorization } from "@/lib/authorization"
+
+const auth = createClientAuth({
+  authorization,
+  getIdentity: () => getBrowserSession()?.user ?? null,
+})
+
 <StackProvider
-  auth={{
-    getIdentity: () => session?.user ?? null,
-    can: ({ resource, action }) => canUser(session?.user, resource, action),
-    loginPath: "/auth/sign-in",
-  }}
+  auth={auth}
+  initialIdentity={initialIdentity}
   // router, api, overrides, ...
 >
   {children}
 </StackProvider>
 ```
 
-<Callout type="info">
-Use `onRouteRender` and `onRouteError` override hooks for analytics and error reporting. Authorization belongs in loader/backend hooks and `StackProvider.auth`.
-</Callout>
+### CMS permission catalog
+
+| Descriptor | Facts | Backend operations |
+|---|---|---|
+| `cms.contentType.read` | `contentType?` | List content types, get a content type, inspect inverse relation definitions |
+| `cms.record.read` | `contentType`, `scope: "collection" \| "record"`, `recordId?`, `authorId?` | List, get, populate, and relation reads |
+| `cms.record.create` | `contentType` | Create a record |
+| `cms.record.update` | `contentType`, `recordId`, `authorId?` | Update a record |
+| `cms.record.delete` | `contentType`, `recordId`, `authorId?` | Delete a record |
+
+The backend reloads the content type and record before it derives
+`contentType`, `scope`, `recordId`, and `authorId`; client-supplied ownership,
+lookup scope, or type claims cannot authorize a write. A by-slug lookup uses
+`scope: "record"` even when no matching record exists, so an explicitly public
+detail rule can return a not-found result without exposing the collection.
+Rules are boolean operation checks. If your
+application needs tenant or row filtering, scope the backend query itself
+rather than treating a boolean rule as a data filter.
+
+The content-type catalog includes `itemCount`, so listing it also authorizes a
+collection-scoped `cms.record.read` for every counted content type. If any
+collection is denied, the operation fails without returning partial counts.
+
+### Server operation surfaces
+
+The same operation pipeline backs all authoritative application surfaces:
+
+```ts
+// Identity comes from this request; authorization is enforced.
+await myStack.forRequest(request).api.cms.updateContentItem({
+  typeSlug: "product",
+  id: productId,
+  body: { data: { name: "Updated" } },
+})
+
+// Trusted application code skips only user authorization. Validation,
+// fact derivation, execution, and lifecycle hooks still run.
+await myStack.internal.cms.deleteContentItem({
+  typeSlug: "product",
+  id: productId,
+})
+```
+
+`myStack.api.cms` is the lower-level adapter/getter and SSG prefetch surface.
+It deliberately does not appear under `forRequest(...).api.cms` or
+`internal.cms`, and its raw helpers do not enter the authorized operation
+lifecycle. Use it only from trusted server/build code.
+
+Inline `_new` relation values are compound writes. Request-scoped create and
+update operations authorize `cms.record.create` for every server-derived target
+content type before hooks run, then commit the parent, related records, and
+relation rows atomically. Existing `{ id }` relation values are resolved against
+the configured target content type and require `cms.record.read` for the
+authoritative target facts. The operation rejects wrong-type IDs and rechecks
+target ownership before the transaction writes a relation. Trusted
+`internal.cms` calls skip those user checks but keep the same validation and
+transaction lifecycle.
+
+Compound reads fail closed too. A populated-record operation authorizes every
+related target record before returning it, and inverse-relation metadata
+authorizes each referring source content type before exposing its name or
+fields. When inverse metadata includes counts for an `itemId`, it also
+authorizes that target record and each counted source collection before reading
+relation rows. Listing the records for an inverse relation likewise authorizes
+the source collection and target record, and rederives the requested relation
+field from the current content-type schemas.
+
+Loader hooks may still prepare data or redirect for framework-specific UX, but
+they are not an authorization boundary. Use `onRouteRender` and `onRouteError`
+for presentation lifecycle and reporting.
 
 ## Custom Field Components
 
@@ -1108,6 +1215,12 @@ await fetch("/api/data/content/resource", {
 });
 ```
 
+`_new` is strict creation, not an upsert or an alternate way to reference an
+existing record. BTST derives a slug from the inline data; if that slug already
+exists for the target content type or occurs twice in the same request, the
+operation returns HTTP `409` with code `RELATED_RECORD_SLUG_CONFLICT`. Pass
+`{ id: "existing-record-id" }` when you intend to link an existing record.
+
 #### belongsTo Relations (Single Object)
 
 ```ts
@@ -1195,9 +1308,17 @@ export default function DirectoryPage() {
 
 <AutoTypeTable path="../packages/stack/src/plugins/cms/types.ts" name="CMSBackendHooks" />
 
-#### CMSHookContext
+#### CMSCreateOperationContext
 
-<AutoTypeTable path="../packages/stack/src/plugins/cms/types.ts" name="CMSHookContext" />
+<AutoTypeTable path="../packages/stack/src/plugins/cms/types.ts" name="CMSCreateOperationContext" />
+
+#### CMSUpdateOperationContext
+
+<AutoTypeTable path="../packages/stack/src/plugins/cms/types.ts" name="CMSUpdateOperationContext" />
+
+#### CMSDeleteOperationContext
+
+<AutoTypeTable path="../packages/stack/src/plugins/cms/types.ts" name="CMSDeleteOperationContext" />
 
 ### Client (`@btst/stack/plugins/cms/client`)
 
@@ -1211,7 +1332,9 @@ export default function DirectoryPage() {
 
 #### CMSClientHooks
 
-Customize client-side behavior with lifecycle hooks. These hooks run during SSR data loading and support async authorization:
+Customize framework-side data loading, redirects, analytics, and error
+presentation with lifecycle hooks. The shared CMS operation rules remain the
+authorization boundary:
 
 <AutoTypeTable path="../packages/stack/src/plugins/cms/client/plugin.tsx" name="CMSClientHooks" />
 
@@ -1223,20 +1346,16 @@ cms: cmsClientPlugin({
   headers: options?.headers,
   hooks: {
     beforeLoadDashboard: async (context) => {
-      const session = await getSession(context.headers)
-      if (session?.user?.isAdmin !== true)
-        throw new Error("Admin access required")
+      await warmDashboardDependencies(context.headers)
     },
     beforeLoadContentList: async (typeSlug, context) => {
-      // Check per-content-type permissions
-      if (!await isAdmin(context.headers)) throw new Error("Unauthorized")
+      await recordContentListLoad(typeSlug, context.headers)
     },
     beforeLoadContentEditor: async (typeSlug, id, context) => {
-      if (!await isAdmin(context.headers)) throw new Error("Unauthorized")
+      await recordEditorLoad(typeSlug, id, context.headers)
     },
     onLoadError(error, context) {
-      // Redirect on auth failure
-      redirect("/auth/sign-in")
+      reportCMSLoaderError(error, context)
     },
   }
 })
@@ -1351,10 +1470,14 @@ export async function generateStaticParams() {
 
 ### Server-side mutation — `createContentItem`
 
-In addition to read-only getters, the CMS plugin exposes a **mutation function** for creating content items directly from server-side code. This is the recommended path for seeds, imports, and scheduled jobs.
+In addition to read-only getters, the CMS plugin exposes a lower-level
+**mutation function** for trusted server code that intentionally needs to
+bypass the operation lifecycle. Ordinary seeds, imports, and scheduled jobs
+should use `myStack.internal.cms.createContentItem(...)` so validation and
+lifecycle hooks still run.
 
 <Callout type="warn">
-**`createContentItem` bypasses authorization hooks and Zod schema validation.** Hooks such as `onBeforeCreate` and `onAfterCreate` are **not** called, and the data payload is stored as-is without running the content type's schema validation. The caller is responsible for providing valid data and for any access-control checks. Inline `_new` relation creation is not supported — pre-create related items and pass their IDs. For schema validation or inline `_new` creation, use the HTTP endpoint instead.
+**The raw `myStack.api.cms.createContentItem` helper bypasses authorization, lifecycle hooks, and Zod schema validation.** Hooks such as `onBeforeCreate` and `onAfterCreate` are **not** called, and the data payload is stored as-is without running the content type's schema validation. The caller is responsible for providing valid data and for any access-control checks. Inline `_new` relation creation is not supported — pre-create related items and pass their IDs. For the authoritative operation lifecycle, use the HTTP endpoint, `myStack.forRequest(request).api.cms.createContentItem(...)`, or `myStack.internal.cms.createContentItem(...)`.
 </Callout>
 
 **Via `myStack.api.cms`:**

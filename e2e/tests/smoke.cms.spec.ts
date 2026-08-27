@@ -1,6 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
+
+test.use({ extraHTTPHeaders: mockAuthHeaders() });
+
+test.beforeEach(async ({ context }) => {
+	await setMockAuthCookie(context);
+});
 
 // Shared test image buffer loaded once for the whole module
 const testImageBuffer = readFileSync(

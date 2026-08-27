@@ -35,7 +35,7 @@ For comprehensive documentation including interactive demos, block templates, an
 - **Variables** - Define page variables for dynamic content
 - **CMS Integration** - Leverages the CMS plugin for data persistence
 - **Public Page Rendering** - Render pages by slug with the `PageRenderer` component
-- **SSR Authorization** - Lifecycle hooks for protecting admin pages
+- **Shared Authorization** - One CMS rule set gates browser UI and backend operations
 
 [View interactive demo →](https://www.better-stack.ai/playground?plugins=ui-builder&view=preview)
 
@@ -51,8 +51,21 @@ The UI Builder stores pages as CMS content items. Add the pre-configured content
 
 ```ts title="lib/stack.ts"
 import { stack } from "@btst/stack"
+import { createServerAuth } from "@btst/stack/authorization/server"
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
-import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
+import {
+  UI_BUILDER_CONTENT_TYPE,
+  UI_BUILDER_TYPE_SLUG,
+} from "@btst/stack/plugins/ui-builder"
+import { authorization } from "./authorization"
+
+const auth = createServerAuth({
+  authorization,
+  getIdentity: async ({ request }) => {
+    const session = await getSession(request.headers)
+    return session?.user ?? null
+  },
+})
 
 const { handler, dbSchema } = stack({
   basePath: "/api/data",
@@ -62,23 +75,21 @@ const { handler, dbSchema } = stack({
         UI_BUILDER_CONTENT_TYPE,
         // ... other content types
       ],
-      hooks: {
-        // Optional: Add authorization for CMS operations
-        onBeforeListContent: async (typeSlug, ctx) => {
-          if (typeSlug === "ui-builder-page") {
-            const session = await getSession(ctx.headers)
-            if (session?.user?.isAdmin !== true)
-              throw new Error("Admin access required")
-          }
-        },
-      },
     })
   },
-  adapter: (db) => createMemoryAdapter(db)({})
+  adapter: (db) => createMemoryAdapter(db)({}),
+  auth,
 })
 
 export { handler, dbSchema }
 ```
+
+UI Builder does not define or copy its own permission strings. Its page list,
+editor, controls, and public renderer import the exact descriptors owned by the
+CMS catalog. Add `cmsPermissions` to the shared authorization contract as shown
+in the [CMS authorization guide](/plugins/cms#authorization--lifecycle-hooks).
+`UI_BUILDER_TYPE_SLUG` is only the content-model slug; permission IDs and fact
+schemas still come from CMS.
 
 ### 2. Add Plugin to Client
 
@@ -89,7 +100,6 @@ import { createStackClient } from "@btst/stack/client"
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
 import { uiBuilderClientPlugin, defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
 import { QueryClient } from "@tanstack/react-query"
-import { redirect } from "next/navigation"
 
 const getBaseURL = () => 
   process.env.BASE_URL || "http://localhost:3000"
@@ -116,22 +126,6 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
         queryClient,
         componentRegistry: defaultComponentRegistry,
         headers: options?.headers,
-        hooks: {
-          // SSR authorization hooks
-          beforeLoadPageList: async (context) => {
-            const session = await getSession(context.headers)
-            if (session?.user?.isAdmin !== true)
-              throw new Error("Admin access required")
-          },
-          beforeLoadPageBuilder: async (pageId, context) => {
-            const session = await getSession(context.headers)
-            if (session?.user?.isAdmin !== true)
-              throw new Error("Admin access required")
-          },
-          onLoadError: (error, context) => {
-            redirect("/auth/sign-in")
-          },
-        },
       })
     }
   })
@@ -205,14 +199,15 @@ these permission checks:
 
 | UI | Permission |
 |----|------------|
-| Page list route | `ui-builder:page` / `read` |
-| New-page route and create buttons | `ui-builder:page` / `create` |
-| Edit route and action | `ui-builder:page` / `update` with `{ id }` |
-| Delete action | `ui-builder:page` / `delete` with `{ id }` |
+| Page list route | `cms.record.read({ contentType: UI_BUILDER_TYPE_SLUG, scope: "collection" })` |
+| New-page route and create buttons | `cms.record.create({ contentType: UI_BUILDER_TYPE_SLUG })` |
+| Edit route and action | `cms.record.update({ contentType, recordId, authorId? })` |
+| Delete action | `cms.record.delete({ contentType, recordId, authorId? })` |
 
 Without an auth provider, permission gates remain disabled for backward
 compatibility. These client checks control visibility and navigation only;
-continue enforcing authorization in the CMS backend.
+the matching CMS operation independently derives trusted facts and enforces the
+same rule on the backend.
 
 <Callout type="warn">
 Admin routes are automatically set to `noindex` for SEO. Don't include them in your public sitemap.
@@ -501,6 +496,18 @@ Blocks appear in a separate "Blocks" tab in the add component popover, organized
 
 The UI Builder provides multiple ways to render pages on public routes, depending on your needs:
 
+<Callout type="warn">
+Public rendering is an explicit CMS authorization decision. When one-rule auth
+is configured, allow `cms.record.read` when `contentType` is
+`UI_BUILDER_TYPE_SLUG` and `scope` is `"record"`, and allow
+`cms.contentType.read` for `UI_BUILDER_TYPE_SLUG`. The latter protects the
+schema embedded in the record response. A record condition on the content type
+alone also makes the admin page list public. `PageRenderer` checks both CMS
+descriptors used by the backend read; its browser checks are only presentation
+gates. The raw SSG getters/prefetch helpers are trusted lower-level APIs and
+must only be called from server/build code.
+</Callout>
+
 | Component | Use Case | Server Component Compatible |
 |-----------|----------|---------------------------|
 | `PageRenderer` | Client-side rendering with built-in data fetching | No (requires "use client") |
@@ -747,9 +754,63 @@ function CreatePage() {
 }
 ```
 
-## SSR Authorization Hooks
+## Shared Authorization and Loader Lifecycle
 
-Use hooks in the client plugin config for async authorization during SSR:
+UI Builder uses these CMS descriptors everywhere:
+
+| UI Builder surface | CMS descriptor |
+|---|---|
+| Page list route | `cms.record.read({ contentType: UI_BUILDER_TYPE_SLUG, scope: "collection" })` |
+| New page route and create controls | `cms.record.create({ contentType: UI_BUILDER_TYPE_SLUG })` |
+| Existing editor, save, and edit controls | `cms.record.update({ contentType, recordId, authorId? })` |
+| Delete controls | `cms.record.delete({ contentType, recordId, authorId? })` |
+| Public `PageRenderer` | `cms.record.read({ contentType, scope: "record", recordId, authorId? })` and `cms.contentType.read({ contentType })` |
+
+Configure those rules once in the shared authorization module:
+
+```ts title="lib/authorization.ts"
+import { z } from "zod"
+import { defineAuthorization } from "@btst/stack/authorization"
+import { cmsPermissions } from "@btst/stack/plugins/cms/permissions"
+import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder"
+
+export const authorization = defineAuthorization({
+  identity: z.object({ id: z.string(), role: z.enum(["editor", "admin"]) }),
+  permissions: [cmsPermissions] as const,
+  rules: ({ cms }) => [
+    // Public page reads are explicit. Other CMS types can use a stricter rule.
+    cms.contentType.read.when(
+      ({ identity, facts }) =>
+        facts.contentType === UI_BUILDER_TYPE_SLUG || identity?.role === "admin",
+    ),
+    cms.record.read.when(
+      ({ identity, facts }) =>
+        (facts.contentType === UI_BUILDER_TYPE_SLUG && facts.scope === "record") ||
+        identity?.role === "admin",
+    ),
+    cms.record.create.when(({ identity }) => identity?.role === "admin"),
+    cms.record.update.when(
+      ({ identity, facts }) =>
+        identity?.role === "admin" || identity?.id === facts.authorId,
+    ),
+    cms.record.delete.when(({ identity }) => identity?.role === "admin"),
+  ],
+})
+```
+
+The content-type rule permits the schema embedded in the record response. The
+`scope` condition makes a by-slug page render, including its not-found
+result, without making the admin page list public. For a by-slug read, the CMS
+backend derives `scope: "record"`, then derives the matching record ID and
+ownership when a record exists.
+
+The browser uses page ownership as a presentation hint. The CMS backend reloads
+the matching content type and record before evaluating the same rule, so a
+stale or spoofed browser value cannot authorize a mutation.
+
+Client loader hooks remain available for framework-specific data preparation,
+redirect UX, analytics, and error reporting. They do not replace the backend
+operation boundary and should not duplicate the authorization rule:
 
 ```tsx title="lib/stack-client.tsx"
 import { redirect } from "next/navigation"
@@ -758,16 +819,10 @@ import { redirect } from "next/navigation"
   // ... config
   hooks: {
     beforeLoadPageList: async (context) => {
-      // context.headers contains request headers
-      const session = await getSession(context.headers)
-      if (session?.user?.isAdmin !== true)
-        throw new Error("Admin access required")
+      await warmPageListDependencies(context.headers)
     },
     beforeLoadPageBuilder: async (pageId, context) => {
-      // pageId is undefined for new pages
-      const session = await getSession(context.headers)
-      if (session?.user?.isAdmin !== true)
-        throw new Error("Admin access required")
+      await recordPageBuilderLoad(pageId, context.headers)
     },
     afterLoadPageList: async (context) => {
       console.log("Page list loaded")
@@ -776,26 +831,23 @@ import { redirect } from "next/navigation"
       console.log("Page builder loaded for:", pageId)
     },
     onLoadError: (error, context) => {
-      // Redirect on authorization failure
-      redirect("/auth/sign-in")
+      reportPageLoaderError(error, context)
     },
   },
 })
 ```
 
-Configure `StackProvider.auth` for client navigation and controls. UI Builder
-uses `ui-builder:page` with `read`, `create`, `update`, and `delete`
-actions. Keep SSR loader checks above and backend hooks as the server-side
-authorization boundary.
+Bind the shared rules with `createClientAuth` for client navigation and controls.
+Hydrating `initialIdentity` keeps the first server and browser render in
+agreement without an authorization cache.
 
 ```tsx title="app/pages/layout.tsx"
 <StackProvider
-  auth={{
-    getIdentity: () => session?.user ?? null,
-    loginPath: "/auth/sign-in",
-    can: ({ resource, action, identity }) =>
-      Boolean(identity && canManagePages(identity, resource, action)),
-  }}
+  auth={createClientAuth({
+    authorization,
+    getIdentity: () => getBrowserSession()?.user ?? null,
+  })}
+  initialIdentity={initialIdentity}
   // router, api, and plugin-specific overrides
 >
   {children}
@@ -806,11 +858,11 @@ authorization boundary.
 
 | Hook | Parameters | Return | Description |
 |------|------------|--------|-------------|
-| `beforeLoadPageList` | `context` | `void \| Promise<void>` | SSR auth for page list — throw to deny |
+| `beforeLoadPageList` | `context` | `void \| Promise<void>` | Pre-load framework lifecycle for the page list |
 | `afterLoadPageList` | `context` | `void` | Post-load lifecycle |
-| `beforeLoadPageBuilder` | `pageId, context` | `void \| Promise<void>` | SSR auth for builder — throw to deny |
+| `beforeLoadPageBuilder` | `pageId, context` | `void \| Promise<void>` | Pre-load framework lifecycle for the builder |
 | `afterLoadPageBuilder` | `pageId, context` | `void` | Post-load lifecycle |
-| `onLoadError` | `error, context` | `void` | Handle auth failures |
+| `onLoadError` | `error, context` | `void` | Observe or present loader failures |
 
 ### LoaderContext
 

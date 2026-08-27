@@ -7,6 +7,7 @@ import { ComposedRoute } from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
 import { ListSkeleton } from "../loading";
 import { NotFoundPage } from "./404-page";
+import { cmsPermissions } from "../../../permissions";
 
 const ContentListPageInternal = lazy(() =>
 	import("./content-list-page.internal").then((m) => ({
@@ -26,6 +27,15 @@ export function ContentListPageComponent({
 	return (
 		<ComposedRoute
 			path={`/cms/${typeSlug}`}
+			permission={cmsPermissions.record.read({
+				contentType: typeSlug,
+				scope: "collection",
+			})}
+			legacyPermission={{
+				resource: "cms:content",
+				action: "read",
+				params: { typeSlug },
+			}}
 			PageComponent={ContentListPageInternal}
 			ErrorComponent={DefaultError}
 			LoadingComponent={ListSkeleton}

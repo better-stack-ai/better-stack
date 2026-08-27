@@ -16,13 +16,14 @@ import {
 	CardTitle,
 } from "@workspace/ui/components/card";
 import {
-	CanAccess,
+	PermissionAccess,
 	usePluginOverrides,
 	useBasePath,
 	useStack,
 	useTranslate,
 	type TranslateFn,
 } from "@btst/stack/context";
+import { cmsPermissions } from "../../permissions";
 import {
 	useDeleteContent,
 	useInverseRelations,
@@ -282,10 +283,18 @@ function InverseRelationSection({
 											<span className="truncate">{displayValue}</span>
 											<ExternalLink className="h-3 w-3 opacity-50" />
 										</LinkComponent>
-										<CanAccess
-											resource="cms:content"
-											action="delete"
-											params={{ typeSlug: relation.sourceType, id: item.id }}
+										<PermissionAccess
+											permission={cmsPermissions.record.delete({
+												contentType:
+													item.contentType?.slug ?? relation.sourceType,
+												recordId: item.id,
+												...(item.authorId ? { authorId: item.authorId } : {}),
+											})}
+											legacyPermission={{
+												resource: "cms:content",
+												action: "delete",
+												params: { typeSlug: relation.sourceType, id: item.id },
+											}}
 										>
 											<Button
 												variant="ghost"
@@ -295,17 +304,22 @@ function InverseRelationSection({
 											>
 												<Trash2 className="h-3.5 w-3.5" />
 											</Button>
-										</CanAccess>
+										</PermissionAccess>
 									</li>
 								);
 							})}
 						</ul>
 					)}
 					<div className="mt-3 pt-3 border-t">
-						<CanAccess
-							resource="cms:content"
-							action="create"
-							params={{ typeSlug: relation.sourceType }}
+						<PermissionAccess
+							permission={cmsPermissions.record.create({
+								contentType: relation.sourceType,
+							})}
+							legacyPermission={{
+								resource: "cms:content",
+								action: "create",
+								params: { typeSlug: relation.sourceType },
+							}}
 						>
 							<Button
 								variant="outline"
@@ -320,7 +334,7 @@ function InverseRelationSection({
 								).replace("{sourceTypeName}", relation.sourceTypeName)}
 								{fieldLabel ? ` (${fieldLabel})` : ""}
 							</Button>
-						</CanAccess>
+						</PermissionAccess>
 					</div>
 				</CardContent>
 			)}

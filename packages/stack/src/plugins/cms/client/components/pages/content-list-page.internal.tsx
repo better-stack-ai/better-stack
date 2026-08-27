@@ -13,7 +13,7 @@ import {
 	TableRow,
 } from "@workspace/ui/components/table";
 import {
-	CanAccess,
+	PermissionAccess,
 	useNotify,
 	usePluginOverrides,
 	useBasePath,
@@ -21,6 +21,7 @@ import {
 	useTranslate,
 	type TranslateFn,
 } from "@btst/stack/context";
+import { cmsPermissions } from "../../../permissions";
 import { useListState, type ListStateSchema } from "@btst/stack/client";
 import type { CMSPluginOverrides } from "../../overrides";
 import type { SerializedContentItemWithType } from "../../../types";
@@ -183,10 +184,15 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 							)}
 						</div>
 					</div>
-					<CanAccess
-						resource="cms:content"
-						action="create"
-						params={{ typeSlug }}
+					<PermissionAccess
+						permission={cmsPermissions.record.create({
+							contentType: typeSlug,
+						})}
+						legacyPermission={{
+							resource: "cms:content",
+							action: "create",
+							params: { typeSlug },
+						}}
 					>
 						<Button
 							onClick={() => void navigate?.(`${basePath}/cms/${typeSlug}/new`)}
@@ -195,7 +201,7 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 							{localization?.CMS_BUTTON_NEW_ITEM ??
 								t("cms.common.newItem", "New Item")}
 						</Button>
-					</CanAccess>
+					</PermissionAccess>
 				</div>
 
 				<div className="relative max-w-sm">
@@ -244,10 +250,15 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 								)
 							}
 							action={
-								<CanAccess
-									resource="cms:content"
-									action="create"
-									params={{ typeSlug }}
+								<PermissionAccess
+									permission={cmsPermissions.record.create({
+										contentType: typeSlug,
+									})}
+									legacyPermission={{
+										resource: "cms:content",
+										action: "create",
+										params: { typeSlug },
+									}}
 								>
 									<Button
 										onClick={() =>
@@ -258,7 +269,7 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 										{localization?.CMS_BUTTON_CREATE ??
 											t("cms.common.create", "Create")}
 									</Button>
-								</CanAccess>
+								</PermissionAccess>
 							}
 						/>
 					)
@@ -354,10 +365,17 @@ function ContentTable({
 							<TableCell>{formatDate(item.updatedAt)}</TableCell>
 							<TableCell>
 								<div className="flex items-center gap-1">
-									<CanAccess
-										resource="cms:content"
-										action="update"
-										params={{ typeSlug, id: item.id }}
+									<PermissionAccess
+										permission={cmsPermissions.record.update({
+											contentType: item.contentType?.slug ?? typeSlug,
+											recordId: item.id,
+											...(item.authorId ? { authorId: item.authorId } : {}),
+										})}
+										legacyPermission={{
+											resource: "cms:content",
+											action: "update",
+											params: { typeSlug, id: item.id },
+										}}
 									>
 										<Button
 											variant="ghost"
@@ -370,11 +388,18 @@ function ContentTable({
 										>
 											<Pencil className="h-4 w-4" />
 										</Button>
-									</CanAccess>
-									<CanAccess
-										resource="cms:content"
-										action="delete"
-										params={{ typeSlug, id: item.id }}
+									</PermissionAccess>
+									<PermissionAccess
+										permission={cmsPermissions.record.delete({
+											contentType: item.contentType?.slug ?? typeSlug,
+											recordId: item.id,
+											...(item.authorId ? { authorId: item.authorId } : {}),
+										})}
+										legacyPermission={{
+											resource: "cms:content",
+											action: "delete",
+											params: { typeSlug, id: item.id },
+										}}
 									>
 										<Button
 											variant="ghost"
@@ -384,7 +409,7 @@ function ContentTable({
 										>
 											<Trash2 className="h-4 w-4 text-destructive" />
 										</Button>
-									</CanAccess>
+									</PermissionAccess>
 								</div>
 							</TableCell>
 						</TableRow>

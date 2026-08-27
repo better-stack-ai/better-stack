@@ -101,6 +101,7 @@ export const getStackClient = (
 				siteBaseURL: baseURL,
 				siteBasePath: "/pages",
 				queryClient: queryClient,
+				headers: options?.headers,
 			}),
 			"form-builder": formBuilderClientPlugin({
 				apiBaseURL: baseURL,
@@ -115,6 +116,7 @@ export const getStackClient = (
 				siteBaseURL: baseURL,
 				siteBasePath: "/pages",
 				queryClient: queryClient,
+				headers: options?.headers,
 				componentRegistry: defaultComponentRegistry,
 			}),
 			routeDocs: routeDocsClientPlugin({

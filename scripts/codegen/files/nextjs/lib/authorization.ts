@@ -1,6 +1,8 @@
 import { defineAuthorization } from "@btst/stack/authorization";
 import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
 import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
+import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 import { z } from "zod";
 
 /** Browser-safe authorization contract shared by the client and server adapters. */
@@ -9,8 +11,8 @@ export const authorization = defineAuthorization({
 		id: z.string(),
 		role: z.enum(["user", "admin"]),
 	}),
-	permissions: [blogPermissions, commentsPermissions] as const,
-	rules: ({ blog, comments }) => [
+	permissions: [blogPermissions, cmsPermissions, commentsPermissions] as const,
+	rules: ({ blog, cms, comments }) => [
 		blog.post.read.when(({ identity, facts }) => {
 			if (facts.scope === "published") return true;
 			if (facts.scope === "post" && (!facts.exists || facts.published)) {
@@ -39,6 +41,20 @@ export const authorization = defineAuthorization({
 				(identity.role === "admin" || identity.id === facts.authorId),
 		),
 		blog.tag.read.allow(),
+		cms.contentType.read.when(
+			({ identity, facts }) =>
+				facts.contentType === UI_BUILDER_TYPE_SLUG ||
+				identity?.role === "admin",
+		),
+		cms.record.read.when(
+			({ identity, facts }) =>
+				(facts.contentType === UI_BUILDER_TYPE_SLUG &&
+					facts.scope === "record") ||
+				identity?.role === "admin",
+		),
+		cms.record.create.when(({ identity }) => identity?.role === "admin"),
+		cms.record.update.when(({ identity }) => identity?.role === "admin"),
+		cms.record.delete.when(({ identity }) => identity?.role === "admin"),
 		comments.thread.read.when(({ identity, facts }) => {
 			if (facts.scope === "public") return true;
 			if (facts.scope === "own") {

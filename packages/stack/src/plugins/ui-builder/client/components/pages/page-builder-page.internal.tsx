@@ -2,12 +2,15 @@
 
 import { useState, useCallback } from "react";
 import {
+	PermissionAccess,
 	useBasePath,
 	useNotify,
 	usePluginOverrides,
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
+import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
+import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import {
@@ -545,21 +548,38 @@ function PageBuilderPageContent({
 
 	// NavBar right children - save button (icon only on mobile, with text on desktop)
 	const navRightChildren = (
-		<Button
-			onClick={handleSave}
-			disabled={isSaving}
-			size="icon"
-			className="md:w-auto md:px-4"
+		<PermissionAccess
+			permission={
+				id
+					? cmsPermissions.record.update({
+							contentType: UI_BUILDER_TYPE_SLUG,
+							recordId: id,
+							...(existingPage?.authorId
+								? { authorId: existingPage.authorId }
+								: {}),
+						})
+					: cmsPermissions.record.create({
+							contentType: UI_BUILDER_TYPE_SLUG,
+						})
+			}
+			legacyPermission={
+				id
+					? { resource: "ui-builder:page", action: "update", params: { id } }
+					: { resource: "ui-builder:page", action: "create" }
+			}
 		>
-			<Save className="h-4 w-4 md:mr-2" />
-			<span className="hidden md:inline">
-				{isSaving
-					? loc.pageBuilder.saving
-					: id
-						? loc.pageBuilder.save
-						: loc.pageBuilder.save}
-			</span>
-		</Button>
+			<Button
+				onClick={handleSave}
+				disabled={isSaving}
+				size="icon"
+				className="md:w-auto md:px-4"
+			>
+				<Save className="h-4 w-4 md:mr-2" />
+				<span className="hidden md:inline">
+					{isSaving ? loc.pageBuilder.saving : loc.pageBuilder.save}
+				</span>
+			</Button>
+		</PermissionAccess>
 	);
 
 	return (

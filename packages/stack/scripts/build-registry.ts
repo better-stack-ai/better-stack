@@ -243,7 +243,7 @@ const PLUGINS: PluginConfig[] = [
 		// auto-form's date field imports @/components/ui/date-picker which is not
 		// in the radix-nova registry — embed it from workspace explicitly.
 		extraWorkspaceUiComponents: ["date-picker"],
-		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts"],
+		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts", "permissions.ts"],
 	},
 	{
 		name: "form-builder",

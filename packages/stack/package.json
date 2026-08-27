@@ -329,6 +329,16 @@
         "default": "./dist/plugins/cms/api/index.cjs"
       }
     },
+    "./plugins/cms/permissions": {
+      "import": {
+        "types": "./dist/plugins/cms/permissions.d.ts",
+        "default": "./dist/plugins/cms/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/cms/permissions.d.cts",
+        "default": "./dist/plugins/cms/permissions.cjs"
+      }
+    },
     "./plugins/cms/client": {
       "import": {
         "types": "./dist/plugins/cms/client/index.d.ts",
@@ -816,6 +826,9 @@
       ],
       "plugins/cms/api": [
         "./dist/plugins/cms/api/index.d.ts"
+      ],
+      "plugins/cms/permissions": [
+        "./dist/plugins/cms/permissions.d.ts"
       ],
       "plugins/cms/client": [
         "./dist/plugins/cms/client/index.d.ts"

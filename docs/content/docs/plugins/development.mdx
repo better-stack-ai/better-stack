@@ -315,6 +315,26 @@ export const todosBackendPlugin = defineBackendPlugin({
 })
 ```
 
+For compound behavior, `additionalPermissions` derives every secondary check
+from the already validated input and trusted primary facts:
+
+```typescript
+additionalPermissions: async ({ input }) => {
+  const related = await loadRelatedTodo(input.id)
+  return related
+    ? [todoPermissions.todo.delete({ id: related.id, ownerId: related.ownerId })]
+    : []
+},
+```
+
+Every returned schema-backed request is authorized before `before` or
+`execute` runs. For request execution, BTST authorizes the operation's primary
+permission before invoking this callback, so a primary denial cannot trigger
+secondary reads or be replaced by a callback error. The callback may load
+trusted server state to build those requests, but it must not mutate it.
+Trusted `internal` execution still derives the requests and runs the lifecycle;
+it skips only user authorization.
+
 Register the same catalog in the application's server authorization. `stack()`
 rejects catalog mismatches at typecheck time. Call the composed operation—not
 the descriptor—from application code:

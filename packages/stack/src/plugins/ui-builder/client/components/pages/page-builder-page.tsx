@@ -1,11 +1,17 @@
 "use client";
 
 import { lazy } from "react";
-import { ComposedRoute } from "@btst/stack/client/components";
+import {
+	ComposedRoute,
+	PermissionRouteAccess,
+} from "@btst/stack/client/components";
 import { usePluginOverrides } from "@btst/stack/context";
 import { PageBuilderSkeleton } from "../loading/page-builder-skeleton";
 import { DefaultError } from "../shared/default-error";
 import type { UIBuilderPluginOverrides } from "../../overrides";
+import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
+import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
+import { useSuspenseUIBuilderPage } from "../../hooks/ui-builder-hooks";
 
 const PageBuilderPageInternal = lazy(() =>
 	import("./page-builder-page.internal").then((m) => ({
@@ -25,12 +31,7 @@ export function PageBuilderPage({ id }: PageBuilderPageProps) {
 	return (
 		<ComposedRoute
 			path={path}
-			permission={
-				id
-					? { resource: "ui-builder:page", action: "update", params: { id } }
-					: { resource: "ui-builder:page", action: "create" }
-			}
-			PageComponent={PageBuilderPageInternal}
+			PageComponent={AuthorizedPageBuilderPage}
 			ErrorComponent={DefaultError}
 			LoadingComponent={PageBuilderSkeleton}
 			NotFoundComponent={() => null}
@@ -43,5 +44,44 @@ export function PageBuilderPage({ id }: PageBuilderPageProps) {
 				});
 			}}
 		/>
+	);
+}
+
+function AuthorizedPageBuilderPage({ id }: PageBuilderPageProps) {
+	if (!id) {
+		return (
+			<PermissionRouteAccess
+				permission={cmsPermissions.record.create({
+					contentType: UI_BUILDER_TYPE_SLUG,
+				})}
+				legacyPermission={{ resource: "ui-builder:page", action: "create" }}
+				LoadingComponent={PageBuilderSkeleton}
+			>
+				<PageBuilderPageInternal />
+			</PermissionRouteAccess>
+		);
+	}
+	return <AuthorizedExistingPageBuilderPage id={id} />;
+}
+
+function AuthorizedExistingPageBuilderPage({ id }: { id: string }) {
+	const { page } = useSuspenseUIBuilderPage(id);
+	if (!page) return <PageBuilderPageInternal id={id} />;
+	return (
+		<PermissionRouteAccess
+			permission={cmsPermissions.record.update({
+				contentType: UI_BUILDER_TYPE_SLUG,
+				recordId: page.id,
+				...(page.authorId ? { authorId: page.authorId } : {}),
+			})}
+			legacyPermission={{
+				resource: "ui-builder:page",
+				action: "update",
+				params: { id },
+			}}
+			LoadingComponent={PageBuilderSkeleton}
+		>
+			<PageBuilderPageInternal id={id} />
+		</PermissionRouteAccess>
 	);
 }

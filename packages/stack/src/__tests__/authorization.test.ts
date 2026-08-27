@@ -11,6 +11,7 @@ import {
 	definePermissions,
 	permission,
 } from "../authorization";
+import { createServerAuth } from "../authorization/server";
 import {
 	createDbPlugin,
 	defineBackendPlugin,
@@ -495,5 +496,115 @@ describe("schema-backed authorization", () => {
 		await expect(
 			backend.internal.guarded.update({ target: { id: "record-1" } }),
 		).resolves.toBe("record-1");
+	});
+
+	it("authorizes compound permissions before entering the operation lifecycle", async () => {
+		const compoundPermissions = definePermissions("compound", {
+			source: permission(z.object({ allowed: z.boolean() })),
+			target: permission(z.object({ type: z.string() })),
+		});
+		const compoundAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [compoundPermissions] as const,
+			rules: ({ compound }) => [
+				compound.source.when(({ facts }) => facts.allowed),
+			],
+		});
+		const events: string[] = [];
+		const compoundOperation = defineOperation({
+			input: z.object({ targetType: z.string(), allowed: z.boolean() }),
+			permission: compoundPermissions.source,
+			facts: ({ input }) => ({ allowed: input.allowed }),
+			additionalPermissions: ({ input }) => {
+				events.push("derive");
+				if (input.targetType === "throws") {
+					throw new Error("compound derivation should not run");
+				}
+				return [compoundPermissions.target({ type: input.targetType })];
+			},
+			before: () => {
+				events.push("before");
+			},
+			execute: () => {
+				events.push("execute");
+				return { success: true } as const;
+			},
+			onError: () => {
+				events.push("error");
+			},
+		});
+		const compoundPlugin = defineBackendPlugin({
+			name: "compound",
+			dbPlugin: createDbPlugin("compound", {}),
+			operations: () => ({ create: compoundOperation }),
+			routes: () => ({}),
+		});
+		const backend = stack({
+			basePath: "/api",
+			plugins: { compound: compoundPlugin },
+			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
+			auth: createServerAuth({
+				authorization: compoundAuthorization,
+				getIdentity: () => ({ id: "user-1" }),
+			}),
+		});
+
+		await expect(
+			backend
+				.forRequest(new Request("http://localhost/api/compound"))
+				.api.compound.create({ targetType: "secret", allowed: true }),
+		).rejects.toMatchObject({ statusCode: 403 });
+		expect(events).toEqual(["derive"]);
+
+		events.length = 0;
+		await expect(
+			backend
+				.forRequest(new Request("http://localhost/api/compound"))
+				.api.compound.create({ targetType: "throws", allowed: false }),
+		).rejects.toMatchObject({ statusCode: 403 });
+		expect(events).toEqual([]);
+
+		await expect(
+			backend.internal.compound.create({
+				targetType: "secret",
+				allowed: false,
+			}),
+		).resolves.toEqual({ success: true });
+		expect(events).toEqual(["derive", "before", "execute"]);
+	});
+
+	it("fails closed for structural RC auth when an operation has no explicit mapping", async () => {
+		const events: string[] = [];
+		const unmappedOperation = defineOperation({
+			input: z.object({}),
+			permission: blogPermissions.post.read,
+			facts: () => undefined,
+			before: () => {
+				events.push("before");
+			},
+			execute: () => ({ success: true }) as const,
+		});
+		const plugin = defineBackendPlugin({
+			name: "unmapped",
+			dbPlugin: createDbPlugin("unmapped", {}),
+			operations: () => ({ read: unmappedOperation }),
+			routes: () => ({}),
+		});
+		const backend = stack({
+			basePath: "/api",
+			plugins: { unmapped: plugin },
+			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
+			auth: {
+				getIdentity: () => ({ id: "legacy-user" }),
+				can: () => true,
+			},
+		});
+
+		await expect(
+			backend
+				.forRequest(new Request("http://localhost/api/unmapped"))
+				.api.unmapped.read({}),
+		).rejects.toThrow("does not declare RC server authorization compatibility");
+		expect(events).toEqual([]);
 	});
 });
