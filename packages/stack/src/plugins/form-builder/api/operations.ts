@@ -44,6 +44,9 @@ import {
 const SubmissionDataSchema = z
 	.record(z.string(), z.unknown())
 	.transform((value) => value as Record<string, OperationData>);
+const CreateFormHookResultSchema = createFormSchema.extend({
+	createdBy: z.string().min(1).optional(),
+});
 
 export const SubmitFormOperationInputSchema = z.object({
 	slug: z.string(),
@@ -904,7 +907,7 @@ export function createFormBuilderOperations(
 				403,
 				"CREATE_FORM_REJECTED",
 			);
-			const validation = createFormSchema.safeParse(modified);
+			const validation = CreateFormHookResultSchema.safeParse(modified);
 			if (!validation.success) {
 				throw new FormBuilderOperationError(
 					400,

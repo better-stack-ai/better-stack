@@ -890,8 +890,9 @@ describe("Form Builder operation-first authorization", () => {
 		const backend = makeBackend({
 			auth: createAuth(getIdentity),
 			hooks: {
-				onBeforeFormCreated: (_input, context) => {
+				onBeforeFormCreated: (input, context) => {
 					events.push(`before:${context.identity?.id ?? "internal"}`);
+					return { ...input, createdBy: "system-owner" };
 				},
 				onAfterFormCreated: (_form, context) => {
 					events.push(`after:${context.identity?.id ?? "internal"}`);
@@ -908,12 +909,13 @@ describe("Form Builder operation-first authorization", () => {
 			}),
 		).rejects.toThrow();
 		expect(events).toEqual([]);
-		await backend.internal.formBuilder.createForm({
+		const created = await backend.internal.formBuilder.createForm({
 			name: "Internal",
 			slug: "internal",
 			schema: activeSchema,
 			status: "active",
 		});
+		expect(created.createdBy).toBe("system-owner");
 		expect(events).toEqual(["before:internal", "after:internal"]);
 		expect(getIdentity).not.toHaveBeenCalled();
 	});
