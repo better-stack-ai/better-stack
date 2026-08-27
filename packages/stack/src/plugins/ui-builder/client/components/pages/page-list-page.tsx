@@ -24,6 +24,7 @@ export function PageListPage() {
 			path="/ui-builder"
 			permission={cmsPermissions.record.read({
 				contentType: UI_BUILDER_TYPE_SLUG,
+				scope: "collection",
 			})}
 			legacyPermission={{ resource: "ui-builder:page", action: "read" }}
 			PageComponent={PageListPageInternal}

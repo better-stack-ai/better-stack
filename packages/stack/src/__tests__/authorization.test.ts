@@ -11,6 +11,7 @@ import {
 	definePermissions,
 	permission,
 } from "../authorization";
+import { createServerAuth } from "../authorization/server";
 import {
 	createDbPlugin,
 	defineBackendPlugin,
@@ -495,5 +496,63 @@ describe("schema-backed authorization", () => {
 		await expect(
 			backend.internal.guarded.update({ target: { id: "record-1" } }),
 		).resolves.toBe("record-1");
+	});
+
+	it("authorizes compound permissions before entering the operation lifecycle", async () => {
+		const compoundPermissions = definePermissions("compound", {
+			source: permission(),
+			target: permission(z.object({ type: z.string() })),
+		});
+		const compoundAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [compoundPermissions] as const,
+			rules: ({ compound }) => [compound.source.allow()],
+		});
+		const events: string[] = [];
+		const compoundOperation = defineOperation({
+			input: z.object({ targetType: z.string() }),
+			permission: compoundPermissions.source,
+			facts: () => undefined,
+			additionalPermissions: ({ input }) => [
+				compoundPermissions.target({ type: input.targetType }),
+			],
+			before: () => {
+				events.push("before");
+			},
+			execute: () => {
+				events.push("execute");
+				return { success: true } as const;
+			},
+			onError: () => {
+				events.push("error");
+			},
+		});
+		const compoundPlugin = defineBackendPlugin({
+			name: "compound",
+			dbPlugin: createDbPlugin("compound", {}),
+			operations: () => ({ create: compoundOperation }),
+			routes: () => ({}),
+		});
+		const backend = stack({
+			basePath: "/api",
+			plugins: { compound: compoundPlugin },
+			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
+			auth: createServerAuth({
+				authorization: compoundAuthorization,
+				getIdentity: () => ({ id: "user-1" }),
+			}),
+		});
+
+		await expect(
+			backend
+				.forRequest(new Request("http://localhost/api/compound"))
+				.api.compound.create({ targetType: "secret" }),
+		).rejects.toMatchObject({ statusCode: 403 });
+		expect(events).toEqual([]);
+
+		await expect(
+			backend.internal.compound.create({ targetType: "secret" }),
+		).resolves.toEqual({ success: true });
+		expect(events).toEqual(["before", "execute"]);
 	});
 });

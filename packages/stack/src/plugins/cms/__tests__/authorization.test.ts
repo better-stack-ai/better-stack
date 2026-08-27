@@ -8,14 +8,48 @@ import { createServerAuth } from "../../../authorization/server";
 import type { StackServerAuthProvider } from "../../../shared/auth-types";
 import { cmsBackendPlugin, type CMSBackendHooks } from "../api";
 import { cmsPermissions } from "../permissions";
-import type { ContentItem } from "../types";
+import type { ContentItem, ContentRelation } from "../types";
 
 const memoryAdapter = (db: DatabaseDefinition) => createMemoryAdapter(db)({});
 
 const articleSchema = z.object({ title: z.string() });
+const categorySchema = z.object({ name: z.string() });
+const resourceSchema = z.object({
+	name: z.string(),
+	categoryIds: z
+		.array(z.object({ id: z.string() }))
+		.default([])
+		.meta({
+			fieldType: "relation",
+			relation: {
+				type: "manyToMany",
+				targetType: "category",
+				displayField: "name",
+				creatable: true,
+			},
+		}),
+});
+const categoryNoteSchema = z.object({
+	message: z.string(),
+	categoryId: z.object({ id: z.string() }).meta({
+		fieldType: "relation",
+		relation: {
+			type: "belongsTo",
+			targetType: "category",
+			displayField: "name",
+		},
+	}),
+});
 const contentTypes = [
 	{ name: "Article", slug: "article", schema: articleSchema },
 	{ name: "Secret", slug: "secret", schema: articleSchema },
+	{ name: "Category", slug: "category", schema: categorySchema },
+	{ name: "Resource", slug: "resource", schema: resourceSchema },
+	{
+		name: "Category note",
+		slug: "category-note",
+		schema: categoryNoteSchema,
+	},
 ];
 
 const authorization = defineAuthorization({
@@ -214,7 +248,10 @@ describe("CMS operation-first authorization", () => {
 		expect(internalResult.items[0]?.id).toBe(seeded.id);
 		expect(
 			authorization.can(
-				cmsPermissions.record.read({ contentType: "article" }),
+				cmsPermissions.record.read({
+					contentType: "article",
+					scope: "collection",
+				}),
 				null,
 			),
 		).toBe(true);
@@ -318,6 +355,84 @@ describe("CMS operation-first authorization", () => {
 		).toBeFalsy();
 	});
 
+	it("authorizes inline related-record creation for the server-derived target type", async () => {
+		const sourceOnlyAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.record.create.when(
+					({ identity, facts }) =>
+						identity !== null && facts.contentType === "resource",
+				),
+				cms.record.update.when(
+					({ identity, facts }) =>
+						identity !== null && facts.contentType === "resource",
+				),
+			],
+		});
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createServerAuth({
+				authorization: sourceOnlyAuthorization,
+				getIdentity: () => ({ id: "author-1", role: "user" as const }),
+			}),
+			hooks: {
+				onBeforeCreate: () => {
+					events.push("before");
+				},
+				onBeforeUpdate: () => {
+					events.push("before");
+				},
+				onError: () => {
+					events.push("error");
+				},
+			},
+		});
+
+		const response = await backend.handler(
+			request("/content/resource", {
+				method: "POST",
+				identity: { id: "author-1", role: "user" },
+				body: {
+					slug: "source",
+					data: {
+						name: "Source",
+						categoryIds: [{ _new: true, data: { name: "Forbidden category" } }],
+					},
+				},
+			}),
+		);
+
+		expect(response.status).toBe(403);
+		expect(events).toEqual([]);
+		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
+			0,
+		);
+
+		const source = await seedRecord(backend, {
+			typeSlug: "resource",
+			slug: "existing-source",
+			authorId: "author-1",
+		});
+		const updateResponse = await backend.handler(
+			request(`/content/resource/${source.id}`, {
+				method: "PUT",
+				identity: { id: "author-1", role: "user" },
+				body: {
+					data: {
+						name: "Source",
+						categoryIds: [{ _new: true, data: { name: "Forbidden category" } }],
+					},
+				},
+			}),
+		);
+		expect(updateResponse.status).toBe(403);
+		expect(events).toEqual([]);
+		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
+			0,
+		);
+	});
+
 	it("ignores spoofed browser ownership and content-type facts", async () => {
 		const backend = makeBackend({ auth: createAuth() });
 		const record = await seedRecord(backend, {
@@ -349,6 +464,150 @@ describe("CMS operation-first authorization", () => {
 			}),
 		);
 		expect(spoofedType.status).toBe(404);
+	});
+
+	it("authorizes every populated relation target before returning its record", async () => {
+		const sourceOnlyAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.record.read.when(({ facts }) => facts.contentType === "resource"),
+			],
+		});
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createServerAuth({
+				authorization: sourceOnlyAuthorization,
+				getIdentity: () => ({ id: "reader-1", role: "user" as const }),
+			}),
+			hooks: {
+				onError: () => {
+					events.push("error");
+				},
+			},
+		});
+		const source = await seedRecord(backend, {
+			typeSlug: "resource",
+			slug: "source-with-secret-relation",
+		});
+		const target = await seedRecord(backend, {
+			typeSlug: "category",
+			slug: "secret-category",
+		});
+		await backend.adapter.create<ContentRelation>({
+			model: "contentRelation",
+			data: {
+				sourceId: source.id,
+				targetId: target.id,
+				fieldName: "categoryIds",
+				createdAt: new Date(),
+			},
+		});
+
+		const response = await backend.handler(
+			request(`/content/resource/${source.id}/populated`, {
+				identity: { id: "reader-1", role: "user" },
+			}),
+		);
+		expect(response.status).toBe(403);
+		expect(events).toEqual([]);
+
+		const internal = await backend.internal.cms.getContentItemPopulated({
+			typeSlug: "resource",
+			id: source.id,
+		});
+		expect(internal._relations.categoryIds?.[0]?.id).toBe(target.id);
+	});
+
+	it("does not return a populated target whose trusted facts change after authorization", async () => {
+		const ownerReadAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.record.read.when(
+					({ identity, facts }) =>
+						facts.contentType === "resource" || identity?.id === facts.authorId,
+				),
+			],
+		});
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createServerAuth({
+				authorization: ownerReadAuthorization,
+				getIdentity: () => ({ id: "reader-1", role: "user" as const }),
+			}),
+			hooks: {
+				onError: (_error, operation) => {
+					events.push(`error:${operation}`);
+				},
+			},
+		});
+		const source = await seedRecord(backend, {
+			typeSlug: "resource",
+			slug: "source-with-racing-relation",
+		});
+		const target = await seedRecord(backend, {
+			typeSlug: "category",
+			slug: "owned-category",
+			authorId: "reader-1",
+		});
+		await backend.adapter.create<ContentRelation>({
+			model: "contentRelation",
+			data: {
+				sourceId: source.id,
+				targetId: target.id,
+				fieldName: "categoryIds",
+				createdAt: new Date(),
+			},
+		});
+		const findMany = backend.adapter.findMany.bind(backend.adapter);
+		let relationReads = 0;
+		vi.spyOn(backend.adapter, "findMany").mockImplementation(async (query) => {
+			if (query.model === "contentRelation" && ++relationReads === 2) {
+				await backend.adapter.update<ContentItem>({
+					model: "contentItem",
+					where: [{ field: "id", value: target.id }],
+					update: { authorId: "other-owner" },
+				});
+			}
+			return findMany(query);
+		});
+
+		const response = await backend.handler(
+			request(`/content/resource/${source.id}/populated`, {
+				identity: { id: "reader-1", role: "user" },
+			}),
+		);
+		expect(response.status).toBe(409);
+		expect(await response.json()).toMatchObject({
+			code: "RECORD_STATE_CHANGED",
+		});
+		expect(events).toEqual(["error:get"]);
+	});
+
+	it("authorizes referring source types before returning inverse metadata", async () => {
+		const targetOnlyAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.contentType.read.when(
+					({ facts }) => facts.contentType === "category",
+				),
+			],
+		});
+		const backend = makeBackend({
+			auth: createServerAuth({
+				authorization: targetOnlyAuthorization,
+				getIdentity: () => ({ id: "reader-1", role: "user" as const }),
+			}),
+		});
+
+		const response = await backend.handler(
+			request("/content-types/category/inverse-relations", {
+				identity: { id: "reader-1", role: "user" },
+			}),
+		);
+		expect(response.status).toBe(403);
 	});
 
 	it("derives detail-by-slug facts for UI Builder and other page renderers", async () => {
@@ -398,7 +657,7 @@ describe("CMS operation-first authorization", () => {
 			rules: ({ cms }) => [
 				cms.record.read.when(
 					({ facts }) =>
-						facts.contentType === "article" && facts.recordId !== undefined,
+						facts.contentType === "article" && facts.scope === "record",
 				),
 			],
 		});
@@ -418,6 +677,11 @@ describe("CMS operation-first authorization", () => {
 		);
 		expect(publicRender.status).toBe(200);
 		expect((await publicRender.json()).items[0]?.id).toBe(record.id);
+		const missingRender = await backend.handler(
+			request("/content/article?slug=missing-render&limit=1"),
+		);
+		expect(missingRender.status).toBe(200);
+		expect(await missingRender.json()).toMatchObject({ items: [], total: 0 });
 		expect(await backend.handler(request("/content/article"))).toMatchObject({
 			status: 401,
 		});
@@ -457,6 +721,53 @@ describe("CMS operation-first authorization", () => {
 
 		const response = await backend.handler(
 			request("/content/article?slug=ownership-race&limit=1"),
+		);
+		expect(response.status).toBe(409);
+		expect(await response.json()).toMatchObject({
+			code: "RECORD_STATE_CHANGED",
+		});
+	});
+
+	it("does not expose a by-slug record created after a public missing-record check", async () => {
+		const publicPageAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.record.read.when(({ facts }) => facts.scope === "record"),
+			],
+		});
+		const backend = makeBackend({
+			auth: createServerAuth({
+				authorization: publicPageAuthorization,
+				getIdentity: () => null,
+			}),
+		});
+		const contentType = (await backend.api.cms.getAllContentTypes()).find(
+			(value) => value.slug === "article",
+		);
+		if (!contentType) throw new Error("Missing article content type");
+		const findMany = backend.adapter.findMany.bind(backend.adapter);
+		let inserted = false;
+		vi.spyOn(backend.adapter, "findMany").mockImplementation(async (query) => {
+			if (query.model === "contentItem" && !inserted) {
+				inserted = true;
+				await backend.adapter.create<ContentItem>({
+					model: "contentItem",
+					data: {
+						contentTypeId: contentType.id,
+						slug: "just-created",
+						data: JSON.stringify({ title: "Just created" }),
+						authorId: "private-owner",
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+				});
+			}
+			return findMany(query);
+		});
+
+		const response = await backend.handler(
+			request("/content/article?slug=just-created&limit=1"),
 		);
 		expect(response.status).toBe(409);
 		expect(await response.json()).toMatchObject({
@@ -550,6 +861,111 @@ describe("CMS operation-first authorization", () => {
 		expect(events).toEqual([]);
 	});
 
+	it("preserves 403 denials from plain before-hook errors", async () => {
+		let backend: ReturnType<typeof makeBackend>;
+		backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeCreate: async (data) => {
+					expect(data).toMatchObject({
+						name: "Denied",
+						categoryIds: [{ id: expect.any(String) }],
+					});
+					expect(
+						(await backend.api.cms.getAllContentItems("category")).total,
+					).toBe(0);
+					throw new Error("Create denied by hook");
+				},
+				onBeforeUpdate: (_id, data) => {
+					expect(data).toMatchObject({ title: "hook-protected" });
+					throw new Error("Update denied by hook");
+				},
+				onBeforeDelete: () => {
+					throw new Error("Delete denied by hook");
+				},
+			},
+		});
+		const record = await seedRecord(backend, {
+			slug: "hook-protected",
+			authorId: "author-1",
+		});
+		const identity = { id: "author-1", role: "user" as const };
+
+		for (const [response, message] of [
+			[
+				await backend.handler(
+					request("/content/resource", {
+						method: "POST",
+						identity,
+						body: {
+							slug: "denied-create",
+							data: {
+								name: "Denied",
+								categoryIds: [
+									{ _new: true, data: { name: "Should not persist" } },
+								],
+							},
+						},
+					}),
+				),
+				"Create denied by hook",
+			],
+			[
+				await backend.handler(
+					request(`/content/article/${record.id}`, {
+						method: "PUT",
+						identity,
+						body: { data: {} },
+					}),
+				),
+				"Update denied by hook",
+			],
+			[
+				await backend.handler(
+					request(`/content/article/${record.id}`, {
+						method: "PUT",
+						identity,
+						body: { slug: "denied-rename" },
+					}),
+				),
+				"Update denied by hook",
+			],
+			[
+				await backend.handler(
+					request(`/content/article/${record.id}`, {
+						method: "DELETE",
+						identity,
+					}),
+				),
+				"Delete denied by hook",
+			],
+		] as const) {
+			expect(response.status).toBe(403);
+			expect(await response.json()).toMatchObject({
+				code: "HOOK_DENIED",
+				message,
+			});
+		}
+
+		expect((await backend.api.cms.getAllContentItems("article")).total).toBe(1);
+		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
+			0,
+		);
+		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
+			0,
+		);
+		expect(
+			JSON.parse(
+				(
+					await backend.adapter.findOne<ContentItem>({
+						model: "contentItem",
+						where: [{ field: "id", value: record.id }],
+					})
+				)?.data ?? "{}",
+			).title,
+		).toBe("hook-protected");
+	});
+
 	it("detects ownership changes after authorization before an update commits", async () => {
 		const events: string[] = [];
 		let backend: ReturnType<typeof makeBackend>;
@@ -558,6 +974,9 @@ describe("CMS operation-first authorization", () => {
 			hooks: {
 				onBeforeUpdate: async (id) => {
 					events.push("before");
+					expect(
+						(await backend.api.cms.getAllContentItems("category")).total,
+					).toBe(0);
 					await backend.adapter.update<ContentItem>({
 						model: "contentItem",
 						where: [{ field: "id", value: id }],
@@ -576,20 +995,26 @@ describe("CMS operation-first authorization", () => {
 			},
 		});
 		const record = await seedRecord(backend, {
+			typeSlug: "resource",
 			slug: "stale-owner",
 			authorId: "author-1",
 		});
 		await expect(
 			backend
 				.forRequest(
-					request(`/content/article/${record.id}`, {
+					request(`/content/resource/${record.id}`, {
 						identity: { id: "author-1", role: "user" },
 					}),
 				)
 				.api.cms.updateContentItem({
-					typeSlug: "article",
+					typeSlug: "resource",
 					id: record.id,
-					body: { data: { title: "Must not commit" } },
+					body: {
+						data: {
+							name: "Must not commit",
+							categoryIds: [{ _new: true, data: { name: "Must not persist" } }],
+						},
+					},
 				}),
 		).rejects.toMatchObject({ statusCode: 409, code: "RECORD_STATE_CHANGED" });
 		expect(events).toEqual(["before", "error:update"]);
@@ -598,6 +1023,9 @@ describe("CMS operation-first authorization", () => {
 			where: [{ field: "id", value: record.id }],
 		});
 		expect(JSON.parse(persisted?.data ?? "{}").title).toBe("stale-owner");
+		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
+			0,
+		);
 	});
 
 	it("preserves permissive compatibility when authorization is omitted", async () => {

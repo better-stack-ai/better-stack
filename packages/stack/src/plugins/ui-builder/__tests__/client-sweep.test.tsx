@@ -103,8 +103,7 @@ const publicPageAuthorization = defineAuthorization({
 	rules: ({ cms }) => [
 		cms.record.read.when(
 			({ facts }) =>
-				facts.contentType === UI_BUILDER_TYPE_SLUG &&
-				facts.recordId !== undefined,
+				facts.contentType === UI_BUILDER_TYPE_SLUG && facts.scope === "record",
 		),
 	],
 });
@@ -306,6 +305,7 @@ describe("UI Builder page permissions", () => {
 			authorization.can(
 				cmsPermissions.record.read({
 					contentType: UI_BUILDER_TYPE_SLUG,
+					scope: "collection",
 				}),
 				identity,
 			),
@@ -358,6 +358,7 @@ describe("UI Builder public page authorization", () => {
 			publicPageAuthorization.can(
 				cmsPermissions.record.read({
 					contentType: UI_BUILDER_TYPE_SLUG,
+					scope: "collection",
 				}),
 				null,
 			),

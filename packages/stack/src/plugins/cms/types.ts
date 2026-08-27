@@ -263,12 +263,19 @@ type CMSDeepReadonly<T> = T extends (...args: any[]) => unknown
 			: T;
 
 interface CMSOperationContextBase<TInput, TFacts> {
+	/** Validated, deeply readonly input supplied to the operation. */
 	readonly input: Readonly<TInput>;
+	/** Trusted server-derived facts used by the authorization rule. */
 	readonly facts: Readonly<TFacts>;
+	/** Authorized request identity, or `null` for anonymous and trusted internal calls. */
 	readonly identity: Readonly<CMSOperationIdentity> | null;
+	/** Transport request when the operation was invoked through HTTP or `forRequest()`. */
 	readonly request?: Request;
+	/** Compatibility view of the transport request headers. */
 	readonly headers?: Headers;
+	/** Compatibility alias for the authorized identity ID. */
 	readonly userId?: string;
+	/** Compatibility alias for the operation's CMS content-type slug. */
 	readonly typeSlug?: string;
 }
 
@@ -284,15 +291,20 @@ export interface CMSCreateOperationContext
 		},
 		{ contentType: string }
 	> {
+	/** Server-resolved content-type slug for the record being created. */
 	readonly typeSlug: string;
+	/** Validated create payload supplied to the operation. */
 	readonly body: {
+		/** Requested record slug before canonical slugification. */
 		readonly slug: string;
+		/** Validated JSON-safe request fields, including any inline `_new` relation values. */
 		readonly data: Readonly<Record<string, CMSOperationData>>;
 	};
 }
 
 /** CMS create context after execution. */
 export interface CMSCreateResultContext extends CMSCreateOperationContext {
+	/** Fully serialized record returned by the successful create operation. */
 	readonly result: CMSDeepReadonly<SerializedContentItemWithType>;
 }
 
@@ -309,16 +321,22 @@ export interface CMSUpdateOperationContext
 		},
 		{ contentType: string; recordId: string; authorId?: string }
 	> {
+	/** Server-resolved content-type slug for the record being updated. */
 	readonly typeSlug: string;
+	/** Canonical route parameters for the authorized record. */
 	readonly params: { readonly typeSlug: string; readonly id: string };
+	/** Validated partial update payload supplied to the operation. */
 	readonly body: {
+		/** Optional replacement slug before canonical slugification. */
 		readonly slug?: string;
+		/** Optional record-field fragment; hooks receive its merged validated result. */
 		readonly data?: Readonly<Record<string, CMSOperationData>>;
 	};
 }
 
 /** CMS update context after execution. */
 export interface CMSUpdateResultContext extends CMSUpdateOperationContext {
+	/** Fully serialized record returned by the successful update operation. */
 	readonly result: CMSDeepReadonly<SerializedContentItemWithType>;
 }
 
@@ -328,12 +346,15 @@ export interface CMSDeleteOperationContext
 		{ readonly typeSlug: string; readonly id: string },
 		{ contentType: string; recordId: string; authorId?: string }
 	> {
+	/** Server-resolved content-type slug for the record being deleted. */
 	readonly typeSlug: string;
+	/** Canonical route parameters for the authorized record. */
 	readonly params: { readonly typeSlug: string; readonly id: string };
 }
 
 /** CMS delete context after execution. */
 export interface CMSDeleteResultContext extends CMSDeleteOperationContext {
+	/** Successful delete result. */
 	readonly result: { readonly success: true };
 }
 
@@ -342,6 +363,7 @@ interface CMSReadOperationContext
 		unknown,
 		{
 			contentType?: string;
+			scope?: "collection" | "record";
 			recordId?: string;
 			authorId?: string;
 		}
@@ -356,36 +378,44 @@ export type CMSOperationLifecycleContext =
 
 /** Authorized lifecycle context supplied to the observational error hook. */
 export type CMSOperationErrorContext = CMSOperationLifecycleContext & {
+	/** Original post-authorization operation error observed by `onError`. */
 	readonly error: unknown;
 };
 
 /** Domain lifecycle hooks that run only after successful CMS authorization. */
 export interface CMSBackendHooks {
+	/** Runs with validated canonical record data after authorization and before any database write. */
 	onBeforeCreate?: (
 		data: Readonly<Record<string, CMSOperationData>>,
 		context: CMSCreateOperationContext,
 	) => Promise<void> | void;
+	/** Observes the fully created record after the atomic create succeeds. */
 	onAfterCreate?: (
 		item: CMSDeepReadonly<SerializedContentItemWithType>,
 		context: CMSCreateResultContext,
 	) => Promise<void> | void;
+	/** Runs for every update with the complete merged, validated record before any database write. */
 	onBeforeUpdate?: (
 		id: string,
 		data: Readonly<Record<string, CMSOperationData>>,
 		context: CMSUpdateOperationContext,
 	) => Promise<void> | void;
+	/** Observes the fully updated record after the atomic update succeeds. */
 	onAfterUpdate?: (
 		item: CMSDeepReadonly<SerializedContentItemWithType>,
 		context: CMSUpdateResultContext,
 	) => Promise<void> | void;
+	/** Runs after authorization and before the record is deleted. */
 	onBeforeDelete?: (
 		id: string,
 		context: CMSDeleteOperationContext,
 	) => Promise<void> | void;
+	/** Observes the deleted record ID after the atomic delete succeeds. */
 	onAfterDelete?: (
 		id: string,
 		context: CMSDeleteResultContext,
 	) => Promise<void> | void;
+	/** Observes post-authorization failures without replacing the original error. */
 	onError?: (
 		error: Error,
 		operation: "create" | "update" | "delete" | "list" | "get",

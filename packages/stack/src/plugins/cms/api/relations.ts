@@ -6,6 +6,8 @@ import type {
 	RelationValue,
 } from "../types";
 
+type DataAdapter = Omit<Adapter, "transaction">;
+
 /**
  * Shape of a property inside a content type's stored JSON Schema.
  * Relation fields carry `fieldType: "relation"` and a `relation` descriptor.
@@ -146,7 +148,7 @@ export function collectExistingRelationIds(
  * fieldName) are deleted and replaced with the provided target IDs.
  */
 export async function syncRelations(
-	adapter: Adapter,
+	adapter: DataAdapter,
 	sourceId: string,
 	relationIds: Record<string, string[]>,
 ): Promise<void> {

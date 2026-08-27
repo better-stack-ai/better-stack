@@ -522,16 +522,14 @@ cmsBackendPlugin({
   hooks: {
     onBeforeCreate: async (data, context) => {
       console.log("Creating item in", context.typeSlug)
-      // Return modified data to allow, throw to deny
-      return data
+      // `data` is validated and canonical. Throw to deny.
     },
     onAfterCreate: async (item, context) => {
       console.log("Created:", item.slug)
       // Trigger webhooks, notifications, etc.
     },
     onBeforeUpdate: async (id, data, context) => {
-      // Return modified data to allow, throw to deny
-      return data
+      // `data` is the complete merged, validated record. Throw to deny.
     },
     onAfterUpdate: async (item, context) => {
       // ...
@@ -548,6 +546,11 @@ cmsBackendPlugin({
   },
 })
 ```
+
+A plain error thrown by `onBeforeCreate`, `onBeforeUpdate`, or
+`onBeforeDelete` denies the request with HTTP 403. Create and update hooks run
+before the parent or any inline related record is written, and no mutation is
+committed when a before hook denies the operation.
 
 ## Type Safety
 
@@ -721,14 +724,17 @@ const auth = createClientAuth({
 | Descriptor | Facts | Backend operations |
 |---|---|---|
 | `cms.contentType.read` | `contentType?` | List content types, get a content type, inspect inverse relation definitions |
-| `cms.record.read` | `contentType`, `recordId?`, `authorId?` | List, get, populate, and relation reads |
+| `cms.record.read` | `contentType`, `scope: "collection" \| "record"`, `recordId?`, `authorId?` | List, get, populate, and relation reads |
 | `cms.record.create` | `contentType` | Create a record |
 | `cms.record.update` | `contentType`, `recordId`, `authorId?` | Update a record |
 | `cms.record.delete` | `contentType`, `recordId`, `authorId?` | Delete a record |
 
 The backend reloads the content type and record before it derives
-`contentType`, `recordId`, and `authorId`; client-supplied ownership or type
-claims cannot authorize a write. Rules are boolean operation checks. If your
+`contentType`, `scope`, `recordId`, and `authorId`; client-supplied ownership,
+lookup scope, or type claims cannot authorize a write. A by-slug lookup uses
+`scope: "record"` even when no matching record exists, so an explicitly public
+detail rule can return a not-found result without exposing the collection.
+Rules are boolean operation checks. If your
 application needs tenant or row filtering, scope the backend query itself
 rather than treating a boolean rule as a data filter.
 
@@ -756,6 +762,17 @@ await myStack.internal.cms.deleteContentItem({
 It deliberately does not appear under `forRequest(...).api.cms` or
 `internal.cms`, and its raw helpers do not enter the authorized operation
 lifecycle. Use it only from trusted server/build code.
+
+Inline `_new` relation values are compound writes. Request-scoped create and
+update operations authorize `cms.record.create` for every server-derived target
+content type before hooks run, then commit the parent, related records, and
+relation rows atomically. Trusted `internal.cms` calls skip those user checks
+but keep the same validation and transaction lifecycle.
+
+Compound reads fail closed too. A populated-record operation authorizes every
+related target record before returning it, and inverse-relation metadata
+authorizes each referring source content type before exposing its name, fields,
+or counts.
 
 Loader hooks may still prepare data or redirect for framework-specific UX, but
 they are not an authorization boundary. Use `onRouteRender` and `onRouteError`

@@ -17,6 +17,7 @@ import type {
 	CMSBackendHooks,
 	CMSCreateOperationContext,
 	CMSDeleteOperationContext,
+	CMSOperationData,
 	CMSOperationLifecycleContext,
 	CMSUpdateOperationContext,
 	ContentItem,
@@ -40,6 +41,8 @@ import {
 	isNewRelationValue,
 	syncRelations,
 } from "./relations";
+
+type DataAdapter = Omit<Adapter, "transaction">;
 
 function operationContentType(
 	contentType: ReturnType<typeof serializeContentType>,
@@ -171,6 +174,22 @@ function normalizeOperationError(error: unknown, fallback: string): Error {
 	});
 }
 
+async function runBeforeHook(
+	hook: (() => Promise<void> | void) | undefined,
+	defaultMessage: string,
+) {
+	if (!hook) return;
+	try {
+		await hook();
+	} catch (error) {
+		throw new CMSOperationError(
+			403,
+			error instanceof Error ? error.message : defaultMessage,
+			"HOOK_DENIED",
+		);
+	}
+}
+
 function requestFields(
 	context: OperationContext<unknown, unknown>,
 ): RequestFields {
@@ -254,7 +273,7 @@ function getContentTypeZodSchema(contentType: ContentType): z.ZodTypeAny {
 }
 
 async function getContentTypeOrThrow(
-	adapter: Adapter,
+	adapter: DataAdapter,
 	ensureSynced: () => Promise<void>,
 	slug: string,
 	message = "Content type not found",
@@ -271,7 +290,7 @@ async function getContentTypeOrThrow(
 }
 
 async function getRecordOrThrow(
-	adapter: Adapter,
+	adapter: DataAdapter,
 	ensureSynced: () => Promise<void>,
 	typeSlug: string,
 	id: string,
@@ -302,9 +321,14 @@ function recordFacts(item: ContentItemWithType): RecordReadFacts {
 	}
 	return {
 		contentType: item.contentType.slug,
+		scope: "record",
 		recordId: item.id,
 		...(item.authorId ? { authorId: item.authorId } : {}),
 	};
+}
+
+function collectionFacts(contentType: string): RecordReadFacts {
+	return { contentType, scope: "collection" };
 }
 
 function assertRecordFacts(
@@ -319,26 +343,87 @@ function assertRecordFacts(
 		item.contentType?.slug !== facts.contentType ||
 		(item.authorId ?? undefined) !== facts.authorId
 	) {
-		throw new CMSOperationError(
-			409,
-			"Content item changed while authorization was being evaluated. Retry the operation.",
-			"RECORD_STATE_CHANGED",
-		);
+		throw staleRecordError();
 	}
 }
 
-async function createRelatedItem(
-	adapter: Adapter,
+const AFFECTED_ROW_KEYS = [
+	"rowCount",
+	"affectedRows",
+	"rowsAffected",
+	"changes",
+	"numUpdatedRows",
+] as const;
+
+function hasPositiveCount(value: unknown): boolean {
+	if (typeof value === "number") return Number.isFinite(value) && value > 0;
+	if (typeof value === "bigint") return value > 0n;
+	return false;
+}
+
+function didUpdateContentItem(result: unknown, expectedId: string): boolean {
+	if (typeof result === "number" || typeof result === "bigint") {
+		return hasPositiveCount(result);
+	}
+	if (!result || typeof result !== "object") return false;
+	const record = result as Record<string, unknown>;
+	if ("count" in record) return hasPositiveCount(record.count);
+	if (Array.isArray(result)) {
+		return result.length > 0 && didUpdateContentItem(result[0], expectedId);
+	}
+	for (const key of AFFECTED_ROW_KEYS) {
+		if (key in record) return hasPositiveCount(record[key]);
+	}
+	if ("meta" in record) {
+		const meta = record.meta;
+		return Boolean(
+			meta &&
+				typeof meta === "object" &&
+				"changes" in meta &&
+				hasPositiveCount((meta as Record<string, unknown>).changes),
+		);
+	}
+	return record.id === expectedId;
+}
+
+function staleRecordError() {
+	return new CMSOperationError(
+		409,
+		"Content item changed while authorization was being evaluated. Retry the operation.",
+		"RECORD_STATE_CHANGED",
+	);
+}
+
+function assertRecordSnapshot(
+	current: ContentItemWithType,
+	expected: ContentItemWithType,
+) {
+	if (
+		current.id !== expected.id ||
+		current.contentTypeId !== expected.contentTypeId ||
+		current.contentType?.slug !== expected.contentType?.slug ||
+		(current.authorId ?? undefined) !== (expected.authorId ?? undefined) ||
+		current.slug !== expected.slug ||
+		current.data !== expected.data ||
+		current.updatedAt.getTime() !== expected.updatedAt.getTime()
+	) {
+		throw staleRecordError();
+	}
+}
+
+interface RelationWritePlan {
+	readonly processedData: Record<string, OperationData>;
+	readonly relationIds: Record<string, string[]>;
+	readonly newItems: readonly ContentItem[];
+}
+
+async function planRelatedItem(
+	adapter: DataAdapter,
 	targetContentType: ContentType,
+	slug: string,
 	data: Record<string, OperationData>,
 	authorId?: string,
-): Promise<ContentItem> {
-	const slug = slugify(
-		(data.slug as string) ||
-			(data.name as string) ||
-			(data.title as string) ||
-			`item-${Date.now()}`,
-	);
+): Promise<{ item: ContentItem; isNew: boolean }> {
 	const validation = getContentTypeZodSchema(targetContentType).safeParse(data);
 	if (!validation.success) {
 		throw new CMSOperationError(
@@ -359,33 +444,34 @@ async function createRelatedItem(
 			{ field: "slug", value: slug, operator: "eq" as const },
 		],
 	});
-	if (existing) return existing;
-	return adapter.create<ContentItem>({
-		model: "contentItem",
-		data: {
+	if (existing) return { item: existing, isNew: false };
+	const now = new Date();
+	return {
+		item: {
+			id: globalThis.crypto.randomUUID(),
 			contentTypeId: targetContentType.id,
 			slug,
 			data: JSON.stringify(validation.data),
 			...(authorId ? { authorId } : {}),
-			createdAt: new Date(),
-			updatedAt: new Date(),
+			createdAt: now,
+			updatedAt: now,
 		},
-	});
+		isNew: true,
+	};
 }
 
-async function processRelationsInData(
-	adapter: Adapter,
+async function planRelationsInData(
+	adapter: DataAdapter,
 	contentType: ContentType,
 	data: Record<string, OperationData>,
 	ensureSynced: () => Promise<void>,
 	authorId?: string,
-): Promise<{
-	processedData: Record<string, OperationData>;
-	relationIds: Record<string, string[]>;
-}> {
+): Promise<RelationWritePlan> {
 	const relationFields = extractRelationFields(contentType);
 	const processedData = { ...data };
 	const relationIds: Record<string, string[]> = {};
+	const newItems: ContentItem[] = [];
+	const resolvedItems = new Map<string, ContentItem>();
 
 	for (const [fieldName, relationConfig] of Object.entries(relationFields)) {
 		if (!(fieldName in data)) continue;
@@ -404,11 +490,13 @@ async function processRelationsInData(
 		if (relationConfig.type === "belongsTo") {
 			const value = fieldValue as RelationValue;
 			if (isNewRelationValue(value)) {
-				const item = await createRelatedItem(
+				const item = await resolvePlannedRelatedItem(
 					adapter,
 					targetContentType,
 					value.data as Record<string, OperationData>,
 					authorId,
+					resolvedItems,
+					newItems,
 				);
 				ids.push(item.id);
 				processedData[fieldName] = { id: item.id };
@@ -422,11 +510,13 @@ async function processRelationsInData(
 			const processedValues: Array<{ id: string }> = [];
 			for (const value of values) {
 				if (isNewRelationValue(value)) {
-					const item = await createRelatedItem(
+					const item = await resolvePlannedRelatedItem(
 						adapter,
 						targetContentType,
 						value.data as Record<string, OperationData>,
 						authorId,
+						resolvedItems,
+						newItems,
 					);
 					ids.push(item.id);
 					processedValues.push({ id: item.id });
@@ -439,35 +529,199 @@ async function processRelationsInData(
 		}
 		relationIds[fieldName] = ids;
 	}
-	return { processedData, relationIds };
+	return { processedData, relationIds, newItems };
 }
 
-async function populateRelations(
-	adapter: Adapter,
-	item: ContentItemWithType,
-): Promise<Record<string, SerializedContentItemWithType[]>> {
-	const contentRelations = await adapter.findMany<ContentRelation>({
-		model: "contentRelation",
-		where: [{ field: "sourceId", value: item.id, operator: "eq" as const }],
-	});
-	const relationsByField: Record<string, string[]> = {};
-	for (const relation of contentRelations) {
-		(relationsByField[relation.fieldName] ??= []).push(relation.targetId);
+async function resolvePlannedRelatedItem(
+	adapter: DataAdapter,
+	targetContentType: ContentType,
+	data: Record<string, OperationData>,
+	authorId: string | undefined,
+	resolvedItems: Map<string, ContentItem>,
+	newItems: ContentItem[],
+) {
+	const slug = slugify(
+		(data.slug as string) ||
+			(data.name as string) ||
+			(data.title as string) ||
+			`item-${Date.now()}`,
+	);
+	const key = `${targetContentType.id}\u0000${slug}`;
+	const resolved = resolvedItems.get(key);
+	if (resolved) return resolved;
+	const planned = await planRelatedItem(
+		adapter,
+		targetContentType,
+		slug,
+		data,
+		authorId,
+	);
+	resolvedItems.set(key, planned.item);
+	if (planned.isNew) newItems.push(planned.item);
+	return planned.item;
+}
+
+async function applyRelationWritePlan(
+	adapter: DataAdapter,
+	plan: RelationWritePlan,
+) {
+	for (const item of plan.newItems) {
+		const existing = await adapter.findOne<ContentItem>({
+			model: "contentItem",
+			where: [
+				{
+					field: "contentTypeId",
+					value: item.contentTypeId,
+					operator: "eq" as const,
+				},
+				{ field: "slug", value: item.slug, operator: "eq" as const },
+			],
+		});
+		if (existing) throw staleRecordError();
+		await adapter.create<ContentItem>({
+			model: "contentItem",
+			data: item,
+		});
 	}
-	const populated: Record<string, SerializedContentItemWithType[]> = {};
-	for (const [fieldName, ids] of Object.entries(relationsByField)) {
-		populated[fieldName] = [];
-		for (const id of ids) {
-			const related = await adapter.findOne<ContentItemWithType>({
-				model: "contentItem",
-				where: [{ field: "id", value: id, operator: "eq" as const }],
-				join: { contentType: true },
-			});
-			if (related)
-				populated[fieldName].push(serializeContentItemWithType(related));
+}
+
+async function relationCreatePermissions(
+	adapter: Adapter,
+	contentType: ContentType,
+	data: Readonly<Record<string, unknown>>,
+	ensureSynced: () => Promise<void>,
+) {
+	const permissions = [];
+	const seenTargetTypes = new Set<string>();
+
+	for (const [fieldName, relationConfig] of Object.entries(
+		extractRelationFields(contentType),
+	)) {
+		if (!(fieldName in data)) continue;
+		const value = data[fieldName];
+		const createsTarget =
+			relationConfig.type === "belongsTo"
+				? isNewRelationValue(value)
+				: Array.isArray(value) && value.some(isNewRelationValue);
+		if (!createsTarget || seenTargetTypes.has(relationConfig.targetType)) {
+			continue;
 		}
+		const targetContentType = await getContentTypeOrThrow(
+			adapter,
+			ensureSynced,
+			relationConfig.targetType,
+			`Target content type "${relationConfig.targetType}" not found for relation field "${fieldName}"`,
+		);
+		seenTargetTypes.add(targetContentType.slug);
+		permissions.push(
+			cmsPermissions.record.create({ contentType: targetContentType.slug }),
+		);
+	}
+
+	return permissions;
+}
+
+interface PopulatedRelationSnapshot {
+	readonly relationKeys: readonly string[];
+	readonly targets: readonly {
+		readonly item: SerializedContentItemWithType;
+		readonly facts: RecordReadFacts;
+	}[];
+}
+
+async function getPopulatedRelationSnapshot(
+	adapter: Adapter,
+	sourceId: string,
+): Promise<PopulatedRelationSnapshot> {
+	const relations = await adapter.findMany<ContentRelation>({
+		model: "contentRelation",
+		where: [{ field: "sourceId", value: sourceId, operator: "eq" as const }],
+	});
+	const targets: PopulatedRelationSnapshot["targets"][number][] = [];
+	const seenTargets = new Set<string>();
+	for (const relation of relations) {
+		if (seenTargets.has(relation.targetId)) continue;
+		const target = await adapter.findOne<ContentItemWithType>({
+			model: "contentItem",
+			where: [
+				{ field: "id", value: relation.targetId, operator: "eq" as const },
+			],
+			join: { contentType: true },
+		});
+		if (!target) continue;
+		seenTargets.add(target.id);
+		targets.push({
+			item: serializeContentItemWithType(target),
+			facts: recordFacts(target),
+		});
+	}
+	return {
+		relationKeys: relations
+			.map((relation) => `${relation.fieldName}\u0000${relation.targetId}`)
+			.sort(),
+		targets: targets.sort((left, right) =>
+			(left.facts.recordId ?? "").localeCompare(right.facts.recordId ?? ""),
+		),
+	};
+}
+
+function assertPopulatedRelationSnapshot(
+	authorized: PopulatedRelationSnapshot,
+	current: PopulatedRelationSnapshot,
+) {
+	const factsKey = (facts: RecordReadFacts) =>
+		JSON.stringify([facts.contentType, facts.recordId, facts.authorId ?? null]);
+	if (
+		JSON.stringify(authorized.relationKeys) !==
+			JSON.stringify(current.relationKeys) ||
+		JSON.stringify(authorized.targets.map(({ facts }) => factsKey(facts))) !==
+			JSON.stringify(current.targets.map(({ facts }) => factsKey(facts)))
+	) {
+		throw new CMSOperationError(
+			409,
+			"Related content changed while authorization was being evaluated. Retry the operation.",
+			"RECORD_STATE_CHANGED",
+		);
+	}
+}
+
+function populatedRelationsFromSnapshot(snapshot: PopulatedRelationSnapshot) {
+	const targetsById = new Map(
+		snapshot.targets.map((target) => [target.facts.recordId, target.item]),
+	);
+	const populated: Record<string, SerializedContentItemWithType[]> = {};
+	for (const relationKey of snapshot.relationKeys) {
+		const [fieldName, targetId] = relationKey.split("\u0000");
+		if (!fieldName || !targetId) continue;
+		const target = targetsById.get(targetId);
+		if (target) (populated[fieldName] ??= []).push(target);
 	}
 	return populated;
+}
+
+async function inverseSourceTypePermissions(
+	adapter: Adapter,
+	ensureSynced: () => Promise<void>,
+	targetType: string,
+) {
+	await ensureSynced();
+	const permissions = [];
+	for (const contentType of await adapter.findMany<ContentType>({
+		model: "contentType",
+	})) {
+		const referencesTarget = Object.values(
+			extractRelationFields(contentType),
+		).some(
+			(relation) =>
+				relation.type === "belongsTo" && relation.targetType === targetType,
+		);
+		if (referencesTarget) {
+			permissions.push(
+				cmsPermissions.contentType.read({ contentType: contentType.slug }),
+			);
+		}
+	}
+	return permissions;
 }
 
 async function listRecordsForRelation(
@@ -528,6 +782,10 @@ export function createCMSOperations(
 	},
 ) {
 	const { ensureSynced, getContentTypesWithCounts, hooks } = options;
+	const populatedRelationSnapshots = new WeakMap<
+		object,
+		PopulatedRelationSnapshot
+	>();
 	const listQuerySchema = createListContentQuerySchema(options.maxPageSize);
 	const paginationSchema = z.object({
 		limit: z.coerce
@@ -629,14 +887,17 @@ export function createCMSOperations(
 				ensureSynced,
 				input.typeSlug,
 			);
-			if (!input.query.slug) return { contentType: contentType.slug };
+			if (!input.query.slug) {
+				return collectionFacts(contentType.slug);
+			}
 			const item = await getContentItemBySlug(
 				adapter,
 				contentType.slug,
 				input.query.slug,
 			);
-			return {
+			const facts: RecordReadFacts = {
 				contentType: contentType.slug,
+				scope: "record",
 				...(item
 					? {
 							recordId: item.id,
@@ -644,6 +905,7 @@ export function createCMSOperations(
 						}
 					: {}),
 			};
+			return facts;
 		},
 		execute: async ({ input, facts }) => {
 			const result = await getAllContentItems(
@@ -651,7 +913,12 @@ export function createCMSOperations(
 				facts.contentType,
 				input.query,
 			);
-			if (facts.recordId) {
+			if (facts.scope === "record") {
+				if (!facts.recordId) {
+					if (result.items.length > 0) throw staleRecordError();
+					return operationContentList(result);
+				}
+				if (result.items.length !== 1) throw staleRecordError();
 				for (const item of result.items) {
 					assertRecordFacts(item, facts);
 				}
@@ -699,6 +966,13 @@ export function createCMSOperations(
 				await getContentTypeOrThrow(adapter, ensureSynced, input.typeSlug)
 			).slug,
 		}),
+		additionalPermissions: async ({ input, facts }) =>
+			relationCreatePermissions(
+				adapter,
+				await getContentTypeOrThrow(adapter, ensureSynced, facts.contentType),
+				input.body.data as unknown as Readonly<Record<string, unknown>>,
+				ensureSynced,
+			),
 		execute: async (context) => {
 			const lifecycleContext = createContext(context);
 			const contentType = await getContentTypeOrThrow(
@@ -714,16 +988,16 @@ export function createCMSOperations(
 					"INVALID_SLUG",
 				);
 			}
-			await hooks?.onBeforeCreate?.(context.input.body.data, lifecycleContext);
-			const { processedData, relationIds } = await processRelationsInData(
+			const relationPlan = await planRelationsInData(
 				adapter,
 				contentType,
 				context.input.body.data,
 				ensureSynced,
 				context.identity?.id,
 			);
-			const validation =
-				getContentTypeZodSchema(contentType).safeParse(processedData);
+			const validation = getContentTypeZodSchema(contentType).safeParse(
+				relationPlan.processedData,
+			);
 			if (!validation.success) {
 				throw new CMSOperationError(
 					400,
@@ -750,26 +1024,51 @@ export function createCMSOperations(
 					"DUPLICATE_SLUG",
 				);
 			}
-			const validatedData = validation.data as Record<string, OperationData>;
-			const item = await adapter.create<ContentItem>({
-				model: "contentItem",
-				data: {
-					contentTypeId: contentType.id,
-					slug,
-					data: JSON.stringify(validatedData),
-					...(context.identity ? { authorId: context.identity.id } : {}),
-					createdAt: new Date(),
-					updatedAt: new Date(),
-				},
-			});
-			await syncRelations(adapter, item.id, relationIds);
-			const joined = await getRecordOrThrow(
-				adapter,
-				ensureSynced,
-				contentType.slug,
-				item.id,
+			const validatedData = validation.data as Record<string, CMSOperationData>;
+			await runBeforeHook(
+				() => hooks?.onBeforeCreate?.(validatedData, lifecycleContext),
+				"Create operation denied",
 			);
-			return operationContentItem(serializeContentItemWithType(joined));
+			return adapter.transaction(async (tx) => {
+				const currentDuplicate = await tx.findOne<ContentItem>({
+					model: "contentItem",
+					where: [
+						{
+							field: "contentTypeId",
+							value: contentType.id,
+							operator: "eq" as const,
+						},
+						{ field: "slug", value: slug, operator: "eq" as const },
+					],
+				});
+				if (currentDuplicate) {
+					throw new CMSOperationError(
+						409,
+						"Content item with this slug already exists",
+						"DUPLICATE_SLUG",
+					);
+				}
+				await applyRelationWritePlan(tx, relationPlan);
+				const item = await tx.create<ContentItem>({
+					model: "contentItem",
+					data: {
+						contentTypeId: contentType.id,
+						slug,
+						data: JSON.stringify(validatedData),
+						...(context.identity ? { authorId: context.identity.id } : {}),
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+				});
+				await syncRelations(tx, item.id, relationPlan.relationIds);
+				const joined = await getRecordOrThrow(
+					tx,
+					ensureSynced,
+					contentType.slug,
+					item.id,
+				);
+				return operationContentItem(serializeContentItemWithType(joined));
+			});
 		},
 		after: async (context) => {
 			const base = createContext(context);
@@ -806,6 +1105,19 @@ export function createCMSOperations(
 				...(facts.authorId ? { authorId: facts.authorId } : {}),
 			};
 		},
+		additionalPermissions: async ({ input, facts }) =>
+			input.body.data
+				? relationCreatePermissions(
+						adapter,
+						await getContentTypeOrThrow(
+							adapter,
+							ensureSynced,
+							facts.contentType,
+						),
+						input.body.data as unknown as Readonly<Record<string, unknown>>,
+						ensureSynced,
+					)
+				: [],
 		execute: async (context) => {
 			const lifecycleContext = updateContext(context);
 			const contentType = await getContentTypeOrThrow(
@@ -813,13 +1125,6 @@ export function createCMSOperations(
 				ensureSynced,
 				context.facts.contentType,
 			);
-			const existing = await getRecordOrThrow(
-				adapter,
-				ensureSynced,
-				context.facts.contentType,
-				context.facts.recordId,
-			);
-			assertRecordFacts(existing, context.facts);
 			const rawSlug = context.input.body.slug;
 			const slug = rawSlug ? slugify(rawSlug) : undefined;
 			if (rawSlug && !slug) {
@@ -829,7 +1134,15 @@ export function createCMSOperations(
 					"INVALID_SLUG",
 				);
 			}
-			if (slug && slug !== existing.slug) {
+			const bodyData = context.input.body.data;
+			const authorizedRecord = await getRecordOrThrow(
+				adapter,
+				ensureSynced,
+				context.facts.contentType,
+				context.facts.recordId,
+			);
+			assertRecordFacts(authorizedRecord, context.facts);
+			if (slug && slug !== authorizedRecord.slug) {
 				const duplicate = await adapter.findOne<ContentItem>({
 					model: "contentItem",
 					where: [
@@ -849,75 +1162,117 @@ export function createCMSOperations(
 					);
 				}
 			}
-
-			let validatedData: Record<string, OperationData> | undefined;
-			let relationIds: Record<string, string[]> | undefined;
-			if (context.input.body.data) {
-				await hooks?.onBeforeUpdate?.(
-					context.facts.recordId,
-					context.input.body.data,
-					lifecycleContext,
+			const relationPlan = bodyData
+				? await planRelationsInData(
+						adapter,
+						contentType,
+						bodyData,
+						ensureSynced,
+						context.identity?.id,
+					)
+				: undefined;
+			const currentData = authorizedRecord.data
+				? (JSON.parse(authorizedRecord.data) as Record<string, OperationData>)
+				: {};
+			const validation = getContentTypeZodSchema(contentType).safeParse({
+				...currentData,
+				...(relationPlan?.processedData ?? {}),
+			});
+			if (!validation.success) {
+				throw new CMSOperationError(
+					400,
+					"Validation failed",
+					"RECORD_VALIDATION_FAILED",
+					validation.error.issues,
 				);
-				const processed = await processRelationsInData(
-					adapter,
-					contentType,
-					context.input.body.data,
+			}
+			const mergedData = validation.data as Record<string, CMSOperationData>;
+			await runBeforeHook(
+				() =>
+					hooks?.onBeforeUpdate?.(
+						context.facts.recordId,
+						mergedData,
+						lifecycleContext,
+					),
+				"Update operation denied",
+			);
+			return adapter.transaction(async (tx) => {
+				const current = await getRecordOrThrow(
+					tx,
 					ensureSynced,
-					context.identity?.id,
+					context.facts.contentType,
+					context.facts.recordId,
 				);
-				relationIds = processed.relationIds;
-				const currentData = existing.data
-					? (JSON.parse(existing.data) as Record<string, OperationData>)
-					: {};
-				const validation = getContentTypeZodSchema(contentType).safeParse({
-					...currentData,
-					...processed.processedData,
+				assertRecordFacts(current, context.facts);
+				assertRecordSnapshot(current, authorizedRecord);
+				if (slug && slug !== current.slug) {
+					const duplicate = await tx.findOne<ContentItem>({
+						model: "contentItem",
+						where: [
+							{
+								field: "contentTypeId",
+								value: contentType.id,
+								operator: "eq" as const,
+							},
+							{ field: "slug", value: slug, operator: "eq" as const },
+						],
+					});
+					if (duplicate) {
+						throw new CMSOperationError(
+							409,
+							"Content item with this slug already exists",
+							"DUPLICATE_SLUG",
+						);
+					}
+				}
+				if (relationPlan) await applyRelationWritePlan(tx, relationPlan);
+				const update: Partial<ContentItem> = { updatedAt: new Date() };
+				if (slug) update.slug = slug;
+				if (bodyData) update.data = JSON.stringify(mergedData);
+				const matched = await tx.updateMany({
+					model: "contentItem",
+					where: [
+						{
+							field: "id",
+							value: context.facts.recordId,
+							operator: "eq" as const,
+						},
+						{
+							field: "contentTypeId",
+							value: contentType.id,
+							operator: "eq" as const,
+						},
+						{
+							field: "authorId",
+							value: context.facts.authorId ?? null,
+							operator: "eq" as const,
+						},
+						{
+							field: "updatedAt",
+							value: current.updatedAt,
+							operator: "eq" as const,
+						},
+					],
+					update,
 				});
-				if (!validation.success) {
-					throw new CMSOperationError(
-						400,
-						"Validation failed",
-						"RECORD_VALIDATION_FAILED",
-						validation.error.issues,
+				if (!didUpdateContentItem(matched, context.facts.recordId)) {
+					throw staleRecordError();
+				}
+				if (relationPlan) {
+					await syncRelations(
+						tx,
+						context.facts.recordId,
+						relationPlan.relationIds,
 					);
 				}
-				validatedData = validation.data as Record<string, OperationData>;
-			}
-			const current = await getRecordOrThrow(
-				adapter,
-				ensureSynced,
-				context.facts.contentType,
-				context.facts.recordId,
-			);
-			assertRecordFacts(current, context.facts);
-			const update: Partial<ContentItem> = { updatedAt: new Date() };
-			if (slug) update.slug = slug;
-			if (validatedData) update.data = JSON.stringify(validatedData);
-			await adapter.update({
-				model: "contentItem",
-				where: [
-					{
-						field: "id",
-						value: context.facts.recordId,
-						operator: "eq" as const,
-					},
-					{
-						field: "contentTypeId",
-						value: contentType.id,
-						operator: "eq" as const,
-					},
-				],
-				update,
+				const updated = await getRecordOrThrow(
+					tx,
+					ensureSynced,
+					context.facts.contentType,
+					context.facts.recordId,
+				);
+				return operationContentItem(serializeContentItemWithType(updated));
 			});
-			if (relationIds)
-				await syncRelations(adapter, context.facts.recordId, relationIds);
-			const updated = await getRecordOrThrow(
-				adapter,
-				ensureSynced,
-				context.facts.contentType,
-				context.facts.recordId,
-			);
-			return operationContentItem(serializeContentItemWithType(updated));
 		},
 		after: async (context) => {
 			const base = updateContext(context);
@@ -952,32 +1307,62 @@ export function createCMSOperations(
 			};
 		},
 		before: async (context) => {
-			await hooks?.onBeforeDelete?.(
-				context.facts.recordId,
-				deleteContext(context),
+			await runBeforeHook(
+				() =>
+					hooks?.onBeforeDelete?.(
+						context.facts.recordId,
+						deleteContext(context),
+					),
+				"Delete operation denied",
 			);
 		},
-		execute: async ({ facts }) => {
-			const existing = await getRecordOrThrow(
-				adapter,
-				ensureSynced,
-				facts.contentType,
-				facts.recordId,
-			);
-			assertRecordFacts(existing, facts);
-			await adapter.delete({
-				model: "contentItem",
-				where: [
-					{ field: "id", value: facts.recordId, operator: "eq" as const },
-					{
-						field: "contentTypeId",
-						value: existing.contentTypeId,
-						operator: "eq" as const,
-					},
-				],
-			});
-			return { success: true } as const;
-		},
+		execute: async ({ facts }) =>
+			adapter.transaction(async (tx) => {
+				const existing = await getRecordOrThrow(
+					tx,
+					ensureSynced,
+					facts.contentType,
+					facts.recordId,
+				);
+				assertRecordFacts(existing, facts);
+				const matched = await tx.updateMany({
+					model: "contentItem",
+					where: [
+						{ field: "id", value: facts.recordId, operator: "eq" as const },
+						{
+							field: "contentTypeId",
+							value: existing.contentTypeId,
+							operator: "eq" as const,
+						},
+						{
+							field: "authorId",
+							value: facts.authorId ?? null,
+							operator: "eq" as const,
+						},
+						{
+							field: "updatedAt",
+							value: existing.updatedAt,
+							operator: "eq" as const,
+						},
+					],
+					update: { updatedAt: new Date() },
+				});
+				if (!didUpdateContentItem(matched, facts.recordId)) {
+					throw staleRecordError();
+				}
+				await tx.delete({
+					model: "contentItem",
+					where: [
+						{ field: "id", value: facts.recordId, operator: "eq" as const },
+						{
+							field: "contentTypeId",
+							value: existing.contentTypeId,
+							operator: "eq" as const,
+						},
+					],
+				});
+				return { success: true } as const;
+			}),
 		after: async (context) => {
 			const base = deleteContext(context);
 			await hooks?.onAfterDelete?.(
@@ -997,24 +1382,53 @@ export function createCMSOperations(
 			recordFacts(
 				await getRecordOrThrow(adapter, ensureSynced, input.typeSlug, input.id),
 			),
-		execute: async ({ facts }) => {
-			const item = await getRecordOrThrow(
+		additionalPermissions: async ({ input, facts }) => {
+			const snapshot = await getPopulatedRelationSnapshot(
 				adapter,
-				ensureSynced,
-				facts.contentType,
 				facts.recordId ?? "",
 			);
-			assertRecordFacts(item, facts);
-			const relations = await populateRelations(adapter, item);
-			return {
-				...operationContentItem(serializeContentItemWithType(item)),
-				_relations: Object.fromEntries(
-					Object.entries(relations).map(([field, records]) => [
-						field,
-						records.map(operationContentItem),
-					]),
-				),
-			};
+			populatedRelationSnapshots.set(input as object, snapshot);
+			return snapshot.targets.map(({ facts: targetFacts }) =>
+				cmsPermissions.record.read(targetFacts),
+			);
+		},
+		execute: async ({ input, facts }) => {
+			try {
+				const item = await getRecordOrThrow(
+					adapter,
+					ensureSynced,
+					facts.contentType,
+					facts.recordId ?? "",
+				);
+				assertRecordFacts(item, facts);
+				const authorizedSnapshot = populatedRelationSnapshots.get(
+					input as object,
+				);
+				if (!authorizedSnapshot) {
+					throw new CMSOperationError(
+						500,
+						"Related-content authorization snapshot is unavailable.",
+						"AUTHORIZATION_SNAPSHOT_MISSING",
+					);
+				}
+				const currentSnapshot = await getPopulatedRelationSnapshot(
+					adapter,
+					facts.recordId ?? "",
+				);
+				assertPopulatedRelationSnapshot(authorizedSnapshot, currentSnapshot);
+				const relations = populatedRelationsFromSnapshot(currentSnapshot);
+				return {
+					...operationContentItem(serializeContentItemWithType(item)),
+					_relations: Object.fromEntries(
+						Object.entries(relations).map(([field, records]) => [
+							field,
+							records.map(operationContentItem),
+						]),
+					),
+				};
+			} finally {
+				populatedRelationSnapshots.delete(input as object);
+			}
 		},
 		onError: ({ error, ...context }) =>
 			notifyError(
@@ -1027,11 +1441,11 @@ export function createCMSOperations(
 	const listContentByRelation = defineOperation({
 		input: ListContentByRelationInputSchema,
 		permission: cmsPermissions.record.read,
-		facts: async ({ input }) => ({
-			contentType: (
-				await getContentTypeOrThrow(adapter, ensureSynced, input.typeSlug)
-			).slug,
-		}),
+		facts: async ({ input }) =>
+			collectionFacts(
+				(await getContentTypeOrThrow(adapter, ensureSynced, input.typeSlug))
+					.slug,
+			),
 		execute: async ({ input, facts }) => {
 			const result = await listRecordsForRelation(
 				adapter,
@@ -1062,6 +1476,12 @@ export function createCMSOperations(
 				await getContentTypeOrThrow(adapter, ensureSynced, input.slug)
 			).slug,
 		}),
+		additionalPermissions: ({ facts }) =>
+			inverseSourceTypePermissions(
+				adapter,
+				ensureSynced,
+				facts.contentType ?? "",
+			),
 		execute: async ({ input, facts }) => {
 			await ensureSynced();
 			const allContentTypes = await adapter.findMany<ContentType>({
@@ -1144,7 +1564,7 @@ export function createCMSOperations(
 				ensureSynced,
 				input.sourceType,
 			);
-			return { contentType: sourceType.slug };
+			return collectionFacts(sourceType.slug);
 		},
 		execute: async ({ input, facts }) => {
 			const result = await listRecordsForRelation(

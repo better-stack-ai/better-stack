@@ -3,6 +3,7 @@ import {
 	type AnyPermissionDescriptor,
 	type PermissionFactsFor,
 	type PermissionInputFor,
+	type PermissionRequest,
 	type PermissionRequestFor,
 } from "../../authorization";
 import { isServerAuth } from "../../authorization/server";
@@ -187,6 +188,16 @@ export function defineOperation<
 		readonly input: DeepReadonly<z.output<TInputSchema>>;
 		readonly request?: Request;
 	}) => MaybePromise<PermissionInputFor<TPermission>>;
+	/**
+	 * Derive any compound permission checks from validated input and trusted
+	 * primary facts. Every returned request is authorized before lifecycle hooks
+	 * run; trusted internal execution skips only the evaluations.
+	 */
+	additionalPermissions?: (ctx: {
+		readonly input: DeepReadonly<z.output<TInputSchema>>;
+		readonly facts: DeepReadonly<PermissionFactsFor<TPermission>>;
+		readonly request?: Request;
+	}) => MaybePromise<readonly PermissionRequest<string, any>[]>;
 	before?: (
 		ctx: OperationContext<
 			z.output<TInputSchema>,
@@ -239,6 +250,17 @@ export function defineOperation<
 			new WeakSet(),
 			"operation facts",
 		);
+		const additionalPermissions =
+			(await config.additionalPermissions?.({
+				input: parsedInput,
+				facts: parsedFacts,
+				...(options.request ? { request: options.request } : {}),
+			})) ?? [];
+		if (!Array.isArray(additionalPermissions)) {
+			throw new TypeError(
+				"Operation additionalPermissions() must return an array of permission requests.",
+			);
+		}
 		if (
 			!options.skipAuthorization &&
 			options.auth &&
@@ -264,6 +286,9 @@ export function defineOperation<
 				options.request,
 				permissionRequest,
 			);
+			for (const additionalPermission of additionalPermissions) {
+				await runtimeAuth.authorize(options.request, additionalPermission);
+			}
 			identity = authorizedIdentity
 				? freezeOperationData(
 						authorizedIdentity,

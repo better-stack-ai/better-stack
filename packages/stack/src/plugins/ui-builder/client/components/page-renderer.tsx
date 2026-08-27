@@ -217,6 +217,7 @@ function SuspensePageRendererContent({
 		<PermissionAccess
 			permission={cmsPermissions.record.read({
 				contentType: UI_BUILDER_TYPE_SLUG,
+				scope: "record",
 				recordId: page.id,
 				...(page.authorId ? { authorId: page.authorId } : {}),
 			})}

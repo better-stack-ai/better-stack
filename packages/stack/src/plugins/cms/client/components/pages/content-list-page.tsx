@@ -27,7 +27,10 @@ export function ContentListPageComponent({
 	return (
 		<ComposedRoute
 			path={`/cms/${typeSlug}`}
-			permission={cmsPermissions.record.read({ contentType: typeSlug })}
+			permission={cmsPermissions.record.read({
+				contentType: typeSlug,
+				scope: "collection",
+			})}
 			legacyPermission={{
 				resource: "cms:content",
 				action: "read",

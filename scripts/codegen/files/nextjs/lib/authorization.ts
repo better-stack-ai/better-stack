@@ -45,7 +45,7 @@ export const authorization = defineAuthorization({
 		cms.record.read.when(
 			({ identity, facts }) =>
 				(facts.contentType === UI_BUILDER_TYPE_SLUG &&
-					facts.recordId !== undefined) ||
+					facts.scope === "record") ||
 				identity?.role === "admin",
 		),
 		cms.record.create.when(({ identity }) => identity?.role === "admin"),

@@ -16,6 +16,7 @@ export const cmsPermissions = definePermissions("cms", {
 		read: permission(
 			z.object({
 				contentType: z.string(),
+				scope: z.enum(["collection", "record"]),
 				recordId: z.string().optional(),
 				authorId: z.string().optional(),
 			}),
