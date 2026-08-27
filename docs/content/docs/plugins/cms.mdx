@@ -698,6 +698,16 @@ export const myStack = stack({
 })
 ```
 
+During the v3 RC migration, a structural `StackServerAuthProvider` is adapted
+through CMS's explicit deprecated mappings (`cms:content` with
+`read`/`create`/`update`/`delete`). Its `can` callback receives the
+server-resolved identity and parameters derived from trusted CMS facts; a
+denial happens before lifecycle hooks. An identity-only RC provider has no
+authorization policy and retains its prior allow-all behavior. `createServerAuth()`
+does not use this bridge and always evaluates the exact `cmsPermissions`
+descriptor. The string mapping is removed with the remaining RC authorization
+interfaces in #193.
+
 Bind it in the browser for immediate presentation checks. Browser facts only
 control what is shown; they are never trusted by the backend.
 

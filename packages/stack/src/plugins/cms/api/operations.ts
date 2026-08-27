@@ -1002,6 +1002,7 @@ export function createCMSOperations(
 	const listContentTypes = defineOperation({
 		input: ListContentTypesInputSchema,
 		permission: cmsPermissions.contentType.read,
+		legacyAuthorization: () => ({ resource: "cms:content", action: "read" }),
 		facts: async () => {
 			await ensureSynced();
 			return {};
@@ -1018,6 +1019,11 @@ export function createCMSOperations(
 	const getContentTypeBySlug = defineOperation({
 		input: GetContentTypeInputSchema,
 		permission: cmsPermissions.contentType.read,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "cms:content",
+			action: "read",
+			...(facts.contentType ? { params: { typeSlug: facts.contentType } } : {}),
+		}),
 		facts: async ({ input }) => {
 			const contentType = await getContentTypeOrThrow(
 				adapter,
@@ -1047,6 +1053,15 @@ export function createCMSOperations(
 	const listContentItems = defineOperation({
 		input: ListContentItemsInputSchema,
 		permission: cmsPermissions.record.read,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "cms:content",
+			action: "read",
+			params: {
+				typeSlug: facts.contentType,
+				...(facts.recordId ? { id: facts.recordId } : {}),
+				...(facts.authorId ? { authorId: facts.authorId } : {}),
+			},
+		}),
 		facts: async ({ input }) => {
 			const contentType = await getContentTypeOrThrow(
 				adapter,
@@ -1082,11 +1097,28 @@ export function createCMSOperations(
 			if (facts.scope === "record") {
 				if (!facts.recordId) {
 					if (result.items.length > 0) throw staleRecordError();
+					if (
+						await getContentItemBySlug(
+							adapter,
+							facts.contentType,
+							input.query.slug ?? "",
+						)
+					) {
+						throw staleRecordError();
+					}
 					return operationContentList(result);
 				}
-				if (result.items.length !== 1) throw staleRecordError();
-				for (const item of result.items) {
-					assertRecordFacts(item, facts);
+				if (result.items.length > 1) throw staleRecordError();
+				if (result.items.length === 0) {
+					const current = await getContentItemBySlug(
+						adapter,
+						facts.contentType,
+						input.query.slug ?? "",
+					);
+					if (!current) throw staleRecordError();
+					assertRecordFacts(current, facts);
+				} else {
+					assertRecordFacts(result.items[0]!, facts);
 				}
 			}
 			return operationContentList(result);
@@ -1102,6 +1134,15 @@ export function createCMSOperations(
 	const getContentItem = defineOperation({
 		input: GetContentItemInputSchema,
 		permission: cmsPermissions.record.read,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "cms:content",
+			action: "read",
+			params: {
+				typeSlug: facts.contentType,
+				...(facts.recordId ? { id: facts.recordId } : {}),
+				...(facts.authorId ? { authorId: facts.authorId } : {}),
+			},
+		}),
 		facts: async ({ input }) =>
 			recordFacts(
 				await getRecordOrThrow(adapter, ensureSynced, input.typeSlug, input.id),
@@ -1127,6 +1168,11 @@ export function createCMSOperations(
 	const createContentItem = defineOperation({
 		input: CreateContentItemInputSchema,
 		permission: cmsPermissions.record.create,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "cms:content",
+			action: "create",
+			params: { typeSlug: facts.contentType },
+		}),
 		facts: async ({ input }) => ({
 			contentType: (
 				await getContentTypeOrThrow(adapter, ensureSynced, input.typeSlug)
@@ -1268,6 +1314,15 @@ export function createCMSOperations(
 	const updateContentItem = defineOperation({
 		input: UpdateContentItemInputSchema,
 		permission: cmsPermissions.record.update,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "cms:content",
+			action: "update",
+			params: {
+				typeSlug: facts.contentType,
+				id: facts.recordId,
+				...(facts.authorId ? { authorId: facts.authorId } : {}),
+			},
+		}),
 		facts: async ({ input }) => {
 			const item = await getRecordOrThrow(
 				adapter,
@@ -1477,6 +1532,15 @@ export function createCMSOperations(
 	const deleteContentItem = defineOperation({
 		input: DeleteContentItemInputSchema,
 		permission: cmsPermissions.record.delete,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "cms:content",
+			action: "delete",
+			params: {
+				typeSlug: facts.contentType,
+				id: facts.recordId,
+				...(facts.authorId ? { authorId: facts.authorId } : {}),
+			},
+		}),
 		facts: async ({ input }) => {
 			const item = await getRecordOrThrow(
 				adapter,
@@ -1563,6 +1627,15 @@ export function createCMSOperations(
 	const getContentItemPopulated = defineOperation({
 		input: GetContentItemInputSchema,
 		permission: cmsPermissions.record.read,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "cms:content",
+			action: "read",
+			params: {
+				typeSlug: facts.contentType,
+				...(facts.recordId ? { id: facts.recordId } : {}),
+				...(facts.authorId ? { authorId: facts.authorId } : {}),
+			},
+		}),
 		facts: async ({ input }) =>
 			recordFacts(
 				await getRecordOrThrow(adapter, ensureSynced, input.typeSlug, input.id),
@@ -1626,6 +1699,11 @@ export function createCMSOperations(
 	const listContentByRelation = defineOperation({
 		input: ListContentByRelationInputSchema,
 		permission: cmsPermissions.record.read,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "cms:content",
+			action: "read",
+			params: { typeSlug: facts.contentType },
+		}),
 		facts: async ({ input }) =>
 			collectionFacts(
 				(await getContentTypeOrThrow(adapter, ensureSynced, input.typeSlug))
@@ -1656,6 +1734,11 @@ export function createCMSOperations(
 	const getInverseRelations = defineOperation({
 		input: GetInverseRelationsInputSchema,
 		permission: cmsPermissions.contentType.read,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "cms:content",
+			action: "read",
+			...(facts.contentType ? { params: { typeSlug: facts.contentType } } : {}),
+		}),
 		facts: async ({ input }) => ({
 			contentType: (
 				await getContentTypeOrThrow(adapter, ensureSynced, input.slug)
@@ -1775,6 +1858,11 @@ export function createCMSOperations(
 	const listInverseRelationItems = defineOperation({
 		input: ListInverseRelationItemsInputSchema,
 		permission: cmsPermissions.record.read,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "cms:content",
+			action: "read",
+			params: { typeSlug: facts.contentType },
+		}),
 		facts: async ({ input }) => {
 			await getContentTypeOrThrow(adapter, ensureSynced, input.slug);
 			const sourceType = await getContentTypeOrThrow(

@@ -1078,6 +1078,53 @@ describe("Blog delete one-rule authorization tracer", () => {
 		expect(await postExists(backend, post.id)).toBe(false);
 	});
 
+	it("adapts trusted Blog facts to structural RC server rules", async () => {
+		const events: string[] = [];
+		const getIdentity = vi.fn(() => ({ id: "author-1" }));
+		const can = vi.fn(
+			({ resource, action }: { resource: string; action: string }) =>
+				resource === "blog:post" && action === "delete",
+		);
+		const backend = makeBackend({
+			auth: { getIdentity, can },
+			hooks: {
+				onBeforeDeletePost: (_id, context) => {
+					events.push(`before:${context.identity?.id}`);
+				},
+			},
+		});
+		const post = await seedPost(backend, "legacy-mapped", "author-1");
+
+		const response = await backend.handler(deleteRequest(post.id));
+
+		expect(response.status).toBe(200);
+		expect(getIdentity).toHaveBeenCalledTimes(1);
+		expect(can).toHaveBeenCalledWith(
+			expect.objectContaining({
+				resource: "blog:post",
+				action: "delete",
+				identity: { id: "author-1" },
+				params: { id: post.id, authorId: "author-1" },
+			}),
+		);
+		expect(events).toEqual(["before:author-1"]);
+	});
+
+	it("keeps published Blog reads explicitly public for structural RC auth", async () => {
+		const can = vi.fn(() => false);
+		const backend = makeBackend({
+			auth: { getIdentity: () => null, can },
+		});
+		await seedPost(backend, "legacy-public");
+
+		const response = await backend.handler(
+			new Request("http://localhost/api/posts?published=true"),
+		);
+
+		expect(response.status).toBe(200);
+		expect(can).not.toHaveBeenCalled();
+	});
+
 	it("keeps identity and rule failures as errors", async () => {
 		const identityLifecycleEvents: string[] = [];
 		const identityFailure = makeBackend({

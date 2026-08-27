@@ -242,12 +242,16 @@ the rule.
 
 Once authorization is installed, a missing Comments rule denies that action.
 Omitting `stack({ auth })` preserves the v3 RC allow-all server behavior during
-the authorization migration. Supplying a structural legacy server auth
-provider is different: operation-backed endpoints fail closed and require a
-provider created with `createServerAuth()`. The legacy string client provider
-also remains narrowly supported during that migration; explicitly public
-approved threads/counts stay public, while schema-bound providers always
-evaluate the exact descriptor shown above.
+the authorization migration. A structural legacy server auth provider remains
+narrowly supported through explicit operation mappings: approved public
+threads/counts stay public, while protected operations call its string `can`
+callback with the server-resolved identity and trusted Comments facts. A denied
+mapping fails before lifecycle hooks; an identity-only RC provider has no
+authorization policy and retains its prior allow-all behavior. Use
+`createServerAuth()` to enable exact descriptor enforcement and default-deny
+missing rules. The legacy string client provider remains supported through the
+same migration; schema-bound providers always evaluate the exact descriptor
+shown above.
 
 ## Embedding Comments
 

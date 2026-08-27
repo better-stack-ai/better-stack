@@ -1203,6 +1203,50 @@ describe("CMS operation-first authorization", () => {
 		});
 	});
 
+	it("preserves empty by-slug results when pagination or search excludes the authorized record", async () => {
+		const publicPageAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.record.read.when(({ facts }) => facts.scope === "record"),
+			],
+		});
+		const backend = makeBackend({
+			auth: createServerAuth({
+				authorization: publicPageAuthorization,
+				getIdentity: () => null,
+			}),
+		});
+		await seedRecord(backend, {
+			slug: "filtered-render",
+			authorId: "owner-1",
+		});
+
+		const paginated = await backend.handler(
+			request("/content/article?slug=filtered-render&limit=1&offset=1"),
+		);
+		expect(paginated.status).toBe(200);
+		expect(await paginated.json()).toMatchObject({
+			items: [],
+			total: 1,
+			limit: 1,
+			offset: 1,
+		});
+
+		const searched = await backend.handler(
+			request(
+				"/content/article?slug=filtered-render&search=does-not-match&limit=1",
+			),
+		);
+		expect(searched.status).toBe(200);
+		expect(await searched.json()).toMatchObject({
+			items: [],
+			total: 0,
+			limit: 1,
+			offset: 0,
+		});
+	});
+
 	it("does not return a by-slug record whose ownership changes after authorization", async () => {
 		const ownerReadAuthorization = defineAuthorization({
 			identity: z.object({ id: z.string(), role: z.literal("user") }),
@@ -1283,7 +1327,7 @@ describe("CMS operation-first authorization", () => {
 		});
 
 		const response = await backend.handler(
-			request("/content/article?slug=just-created&limit=1"),
+			request("/content/article?slug=just-created&limit=1&offset=1"),
 		);
 		expect(response.status).toBe(409);
 		expect(await response.json()).toMatchObject({
@@ -1553,5 +1597,71 @@ describe("CMS operation-first authorization", () => {
 			}),
 		);
 		expect(response.status).toBe(200);
+	});
+
+	it("adapts trusted CMS facts to structural RC server rules", async () => {
+		const events: string[] = [];
+		const getIdentity = vi.fn(() => ({ id: "legacy-author" }));
+		const can = vi.fn(({ action }: { action: string }) => action === "create");
+		const backend = makeBackend({
+			auth: { getIdentity, can },
+			hooks: {
+				onBeforeCreate: (_data, context) => {
+					events.push(`create:${context.identity?.id}`);
+				},
+				onBeforeDelete: () => {
+					events.push("delete");
+				},
+			},
+		});
+
+		const createdResponse = await backend.handler(
+			request("/content/article", {
+				method: "POST",
+				body: { slug: "legacy-mapped", data: { title: "Legacy mapped" } },
+			}),
+		);
+		expect(createdResponse.status).toBe(200);
+		const created = (await createdResponse.json()) as ContentItem;
+		expect(created.authorId).toBe("legacy-author");
+		expect(can).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({
+				resource: "cms:content",
+				action: "create",
+				identity: { id: "legacy-author" },
+				params: { typeSlug: "article" },
+			}),
+		);
+		expect(events).toEqual(["create:legacy-author"]);
+
+		const deniedDelete = await backend.handler(
+			request(`/content/article/${created.id}`, { method: "DELETE" }),
+		);
+		expect(deniedDelete.status).toBe(403);
+		expect(can).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({
+				resource: "cms:content",
+				action: "delete",
+				params: {
+					typeSlug: "article",
+					id: created.id,
+					authorId: "legacy-author",
+				},
+			}),
+		);
+		expect(getIdentity).toHaveBeenCalledTimes(2);
+		expect(events).toEqual(["create:legacy-author"]);
+	});
+
+	it("keeps an identity-only structural RC provider compatible with CMS routes", async () => {
+		const getIdentity = vi.fn(() => null);
+		const backend = makeBackend({ auth: { getIdentity } });
+
+		const response = await backend.handler(request("/content-types"));
+
+		expect(response.status).toBe(200);
+		expect(getIdentity).toHaveBeenCalledTimes(1);
 	});
 });
