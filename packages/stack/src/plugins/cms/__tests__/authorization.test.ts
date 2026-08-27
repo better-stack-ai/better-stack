@@ -2143,6 +2143,70 @@ describe("CMS operation-first authorization", () => {
 		);
 	});
 
+	it("revalidates delete ownership before entering lifecycle hooks", async () => {
+		const events: string[] = [];
+		const baseAuth = createAuth();
+		const authorize = baseAuth.authorize.bind(baseAuth);
+		let backend: ReturnType<typeof makeBackend>;
+		let record: Awaited<ReturnType<typeof seedRecord>>;
+		let ownershipChanged = false;
+		const racingAuth: typeof baseAuth = {
+			...baseAuth,
+			async authorize(request, permissionRequest) {
+				const identity = await authorize(request, permissionRequest);
+				if (!ownershipChanged) {
+					ownershipChanged = true;
+					await backend.adapter.update<ContentItem>({
+						model: "contentItem",
+						where: [{ field: "id", value: record.id }],
+						update: { authorId: "other-owner" },
+					});
+				}
+				return identity;
+			},
+		};
+		backend = makeBackend({
+			auth: racingAuth,
+			hooks: {
+				onBeforeDelete: () => {
+					events.push("before");
+				},
+				onAfterDelete: () => {
+					events.push("after");
+				},
+				onError: (_error, operation, context) => {
+					events.push(`error:${operation}`);
+					expect(context.error).toMatchObject({
+						code: "RECORD_STATE_CHANGED",
+					});
+				},
+			},
+		});
+		record = await seedRecord(backend, {
+			slug: "delete-ownership-race",
+			authorId: "author-1",
+		});
+
+		const response = await backend.handler(
+			request(`/content/article/${record.id}`, {
+				method: "DELETE",
+				identity: { id: "author-1", role: "user" },
+			}),
+		);
+
+		expect(response.status).toBe(409);
+		expect(await response.json()).toMatchObject({
+			code: "RECORD_STATE_CHANGED",
+		});
+		expect(events).toEqual(["error:delete"]);
+		expect(
+			await backend.adapter.findOne<ContentItem>({
+				model: "contentItem",
+				where: [{ field: "id", value: record.id }],
+			}),
+		).toMatchObject({ authorId: "other-owner" });
+	});
+
 	it("preserves permissive compatibility when authorization is omitted", async () => {
 		const backend = makeBackend();
 		const response = await backend.handler(

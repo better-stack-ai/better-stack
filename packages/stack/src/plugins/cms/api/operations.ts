@@ -1884,6 +1884,13 @@ export function createCMSOperations(
 			};
 		},
 		before: async (context) => {
+			const current = await getRecordOrThrow(
+				adapter,
+				ensureSynced,
+				context.facts.contentType,
+				context.facts.recordId,
+			);
+			assertRecordFacts(current, context.facts);
 			await runBeforeHook(
 				() =>
 					hooks?.onBeforeDelete?.(
