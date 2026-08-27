@@ -241,10 +241,10 @@ export function BtstPagesClientLayout({ children, initialIdentity }: {
 }
 ```
 
-```tsx title="app/pages/layout.tsx"
+```tsx title="app/(request)/pages/layout.tsx"
 import { createNextLayout } from "@btst/stack/next/server";
 import { serverAuth } from "@/lib/authorization.server";
-import { BtstPagesClientLayout } from "./client-layout";
+import { BtstPagesClientLayout } from "@/app/pages/client-layout";
 
 export const dynamic = "force-dynamic";
 
@@ -259,8 +259,31 @@ export default layout.Layout;
 Only the schema-validated identity crosses the Server Component boundary.
 `next/headers`, the session provider, and database dependencies stay in the
 server graph. Because the layout reads request headers, Next.js must render its
-request-aware layout per request; the explicit `dynamic` segment config also
-lets that layout wrap child routes that use SSG or ISR.
+subtree per request. If the application also has SSG/ISR pages, put them in a
+separate route group with a client layout that omits `initialIdentity`. Static
+pages then keep full-route caching and resolve identity in the browser, while
+the request-aware group keeps server identity hydration for its entire provider
+subtree.
+
+```tsx title="app/(static)/pages/layout.tsx"
+import { BtstPagesClientLayout } from "@/app/pages/client-layout";
+import type { ReactNode } from "react";
+
+export default function StaticPagesLayout({ children }: { children?: ReactNode }) {
+  // Omitting the prop preserves `undefined`: pending, then browser resolution.
+  return <BtstPagesClientLayout>{children}</BtstPagesClientLayout>;
+}
+```
+
+Route-group folders do not change URLs: both subtrees still render under
+`/pages`. True static output cannot contain a per-request identity; choosing the
+static group intentionally chooses the `undefined` branch of the tri-state
+contract.
+
+This integration targets conventional Next.js route-segment caching with
+`cacheComponents` disabled. Cache Components ignores `dynamic` segment config
+and requires an application-owned Suspense/PPR composition for request APIs;
+`createNextLayout` does not install that caching architecture in v3.
 
 ### React Router
 

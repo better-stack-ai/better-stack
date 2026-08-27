@@ -52,7 +52,7 @@ export function BtstPagesClientLayout({
 	initialIdentity,
 }: {
 	children?: React.ReactNode;
-	initialIdentity: Awaited<ReturnType<typeof clientAuth.getIdentity>>;
+	initialIdentity?: Awaited<ReturnType<typeof clientAuth.getIdentity>>;
 }) {
 	// fresh instance to avoid stale client cache overriding hydrated data
 	const [queryClient] = useState(() => getOrCreateQueryClient());

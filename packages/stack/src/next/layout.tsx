@@ -36,8 +36,9 @@ export interface CreateNextLayoutOptions<
  * Import this helper from `@btst/stack/next/server` so `next/headers` and the
  * application server auth module never enter the client graph.
  * Because identity is resolved from request headers, the consuming layout must
- * export `const dynamic = "force-dynamic"` so Next.js can render the
- * request-aware layout around child routes, including SSG/ISR pages.
+ * export `const dynamic = "force-dynamic"`. Keep SSG/ISR pages in a separate
+ * static route group with no server identity snapshot. This helper targets
+ * Next.js route-segment caching with Cache Components disabled.
  */
 export function createNextLayout<TContract extends AnyAuthorizationContract>(
 	options: CreateNextLayoutOptions<TContract>,
