@@ -558,7 +558,7 @@ import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
 <PermissionAccess
   permission={blogPermissions.post.delete({
     id: post.id,
-    authorId: post.authorId ?? undefined,
+    ...(post.authorId != null ? { authorId: post.authorId } : {}),
   })}
   fallback={null}
 >
