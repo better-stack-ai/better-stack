@@ -28,6 +28,7 @@ import type {
 	SerializedFormSubmission,
 	FormUpdate,
 	SubmissionHookContext,
+	SubmissionListFormContext,
 } from "../types";
 import { extractIpAddress, extractUserAgent, slugify } from "../utils";
 import {
@@ -53,6 +54,9 @@ export const UpdateFormOperationInputSchema = z.object({
 export const DeleteFormOperationInputSchema = z.object({ id: z.string() });
 export const GetFormBySlugOperationInputSchema = z.object({ slug: z.string() });
 export const GetFormByIdOperationInputSchema = z.object({ id: z.string() });
+export const GetFormForUpdateOperationInputSchema = z.object({
+	id: z.string(),
+});
 export const ListSubmissionsOperationInputSchema = z.object({
 	formId: z.string(),
 	query: listSubmissionsQuerySchema,
@@ -99,6 +103,7 @@ export interface SubmissionDetailOperationResult
 }
 
 export interface SubmissionListOperationResult {
+	readonly form: SubmissionListFormContext;
 	readonly items: readonly SubmissionDetailOperationResult[];
 	readonly total: number;
 	readonly limit?: number;
@@ -123,6 +128,11 @@ export type FormBuilderOperations = {
 	readonly getFormById: Operation<
 		typeof GetFormByIdOperationInputSchema,
 		typeof formBuilderPermissions.form.read,
+		SerializedForm
+	>;
+	readonly getFormForUpdate: Operation<
+		typeof GetFormForUpdateOperationInputSchema,
+		typeof formBuilderPermissions.form.update,
 		SerializedForm
 	>;
 	readonly createForm: Operation<
@@ -686,6 +696,14 @@ function operationSubmissionsResult(
 	};
 }
 
+function operationSubmissionFormContext(form: Form) {
+	return {
+		id: form.id,
+		name: form.name,
+		...(form.createdBy ? { createdBy: form.createdBy } : {}),
+	};
+}
+
 /** Create the complete Form Builder operation inventory for every transport. */
 export function createFormBuilderOperations(
 	adapter: Adapter,
@@ -787,6 +805,61 @@ export function createFormBuilderOperations(
 			}
 			await runDomainHook(
 				() => hooks?.onBeforeGetForm?.(context.input.id, hookContext(context)),
+				403,
+				"GET_FORM_REJECTED",
+			);
+		},
+		execute: async (context) => {
+			const form = await findFormById(adapter, context.input.id);
+			if (
+				!sameFormSnapshot(
+					form,
+					formSnapshots.get(context.input as object) ?? null,
+				)
+			) {
+				throw staleFormError();
+			}
+			if (!form) throw formNotFoundError();
+			return operationForm(form);
+		},
+		onError: ({ error, ...context }) =>
+			notifyError(hooks, error, "get", hookContext(context)),
+	});
+
+	const getFormForUpdate = defineOperation({
+		input: GetFormForUpdateOperationInputSchema,
+		permission: formBuilderPermissions.form.update,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "form-builder:form",
+			action: "update",
+			params: {
+				id: facts.formId,
+				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
+				status: facts.status,
+			},
+		}),
+		facts: async ({ input }) => {
+			const form = await findFormById(adapter, input.id);
+			if (!form) throw formNotFoundError();
+			formSnapshots.set(input as object, snapshotForm(form));
+			return resolvedFormFacts(form);
+		},
+		before: async (context) => {
+			const current = await findFormById(adapter, context.input.id);
+			if (
+				!sameFormSnapshot(
+					current,
+					formSnapshots.get(context.input as object) ?? null,
+				)
+			) {
+				throw staleFormError();
+			}
+			await runDomainHook(
+				() =>
+					hooks?.onBeforeGetFormForUpdate?.(
+						context.input.id,
+						hookContext(context),
+					),
 				403,
 				"GET_FORM_REJECTED",
 			);
@@ -1240,7 +1313,11 @@ export function createFormBuilderOperations(
 				);
 				const after = await findFormById(tx, context.input.formId);
 				if (!sameFormSnapshot(after, expected)) throw staleFormError();
-				return operationSubmissionsResult(result);
+				if (!after) throw formNotFoundError();
+				return {
+					form: operationSubmissionFormContext(after),
+					...operationSubmissionsResult(result),
+				};
 			});
 		},
 		onError: ({ error, ...context }) =>
@@ -1451,6 +1528,7 @@ export function createFormBuilderOperations(
 		listForms,
 		getFormBySlug,
 		getFormById,
+		getFormForUpdate,
 		createForm,
 		updateForm,
 		deleteForm,

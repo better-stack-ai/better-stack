@@ -41,6 +41,7 @@ const hooks = vi.hoisted(() => ({
 	useSuspenseForms: vi.fn(),
 	useDeleteForm: vi.fn(),
 	useSuspenseFormById: vi.fn(),
+	useSuspenseFormForUpdate: vi.fn(),
 	useSuspenseSubmissions: vi.fn(),
 	useDeleteSubmission: vi.fn(),
 	useFormBuilderForm: vi.fn(),
@@ -112,7 +113,12 @@ beforeEach(() => {
 		form,
 		refetch: vi.fn(),
 	});
+	hooks.useSuspenseFormForUpdate.mockReturnValue({
+		form,
+		refetch: vi.fn(),
+	});
 	hooks.useSuspenseSubmissions.mockReturnValue({
+		form,
 		submissions: [submission],
 		total: 1,
 		loadMore: vi.fn(),
@@ -260,7 +266,7 @@ describe("maintained route authorization gates", () => {
 			authorization,
 			getIdentity: () => ({ id: "viewer-1", role: "user" as const }),
 		});
-		hooks.useSuspenseFormById.mockReturnValue({
+		hooks.useSuspenseFormForUpdate.mockReturnValue({
 			form: null,
 			refetch: vi.fn(),
 		});
@@ -289,6 +295,57 @@ describe("maintained route authorization gates", () => {
 		).toBeNull();
 		expect(createRule).not.toHaveBeenCalled();
 		expect(updateRule).not.toHaveBeenCalled();
+	});
+
+	it("loads edit and submission routes through their exact permissions without form.read", async () => {
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [formBuilderPermissions] as const,
+			rules: ({ forms }) => [
+				forms.form.read.when(() => false),
+				forms.form.create.when(() => false),
+				forms.form.update.when(() => true),
+				forms.submission.read.when(() => true),
+				forms.submission.delete.when(() => false),
+			],
+		});
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => ({ id: "viewer-1", role: "user" as const }),
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={createMockRouter()}
+				overrides={{ "form-builder": formBuilderOverrides }}
+				auth={auth}
+				initialIdentity={{ id: "viewer-1", role: "user" }}
+			>
+				<FormBuilderPageComponent id="f1" />
+			</StackProvider>,
+		);
+		await act(async () => Promise.resolve());
+		expect(
+			container.querySelector("[data-testid='form-builder-canvas']"),
+		).toBeTruthy();
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={createMockRouter()}
+				overrides={{ "form-builder": formBuilderOverrides }}
+				auth={auth}
+				initialIdentity={{ id: "viewer-1", role: "user" }}
+			>
+				<SubmissionsPageComponent formId="f1" />
+			</StackProvider>,
+		);
+		await act(async () => Promise.resolve());
+		expect(container.querySelector("table")).toBeTruthy();
+		expect(hooks.useSuspenseFormForUpdate).toHaveBeenCalledWith("f1");
+		expect(hooks.useSuspenseSubmissions).toHaveBeenCalledWith("f1");
+		expect(hooks.useSuspenseFormById).not.toHaveBeenCalled();
 	});
 });
 

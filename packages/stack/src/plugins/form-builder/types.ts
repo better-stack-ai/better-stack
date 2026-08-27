@@ -109,10 +109,19 @@ export interface PaginatedForms {
 	offset: number;
 }
 
+/** Minimal form context carried by the submission-read response. */
+export interface SubmissionListFormContext {
+	id: string;
+	name: string;
+	createdBy?: string;
+}
+
 /**
  * Paginated list response for form submissions
  */
 export interface PaginatedFormSubmissions<TData = Record<string, unknown>> {
+	/** Authoritative form facts returned by the submission-read operation. */
+	form: SubmissionListFormContext | null;
 	items: SerializedFormSubmissionWithData<TData>[];
 	total: number;
 	limit: number;
@@ -190,6 +199,11 @@ export type FormListOperationContext = FormBuilderHookContext<
 export type FormGetOperationContext =
 	| FormBuilderHookContext<{ id: string }, FormReadFacts>
 	| FormBuilderHookContext<{ slug: string }, FormRenderFacts>;
+/** Authorized editor-data lifecycle context. */
+export type FormGetForUpdateOperationContext = FormBuilderHookContext<
+	{ id: string },
+	FormUpdateFacts
+>;
 /** Authorized form-create lifecycle context. */
 export type FormCreateOperationContext = FormBuilderHookContext<
 	CreateFormInput,
@@ -230,6 +244,7 @@ export type SubmissionDeleteOperationContext = FormBuilderHookContext<
 export type FormBuilderOperationHookContext =
 	| FormListOperationContext
 	| FormGetOperationContext
+	| FormGetForUpdateOperationContext
 	| FormCreateOperationContext
 	| FormUpdateOperationContext
 	| FormDeleteOperationContext
@@ -295,6 +310,12 @@ export interface FormBuilderBackendHooks {
 	onBeforeGetForm?: (
 		idOrSlug: string,
 		ctx: FormGetOperationContext,
+	) => Promise<void> | void;
+
+	/** Called before loading editor data through the form update permission. */
+	onBeforeGetFormForUpdate?: (
+		id: string,
+		ctx: FormGetForUpdateOperationContext,
 	) => Promise<void> | void;
 
 	/** Called before updating a form. Throw an error to deny, or return modified data. */

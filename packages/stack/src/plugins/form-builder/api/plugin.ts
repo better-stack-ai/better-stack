@@ -19,6 +19,7 @@ import {
 import {
 	FormBuilderOperationError,
 	GetFormByIdOperationInputSchema,
+	GetFormForUpdateOperationInputSchema,
 	GetFormBySlugOperationInputSchema,
 	SubmitFormOperationInputSchema,
 	createFormBuilderOperations,
@@ -28,6 +29,7 @@ import { FORM_QUERY_KEYS } from "./query-key-defs";
 export {
 	DeleteFormOperationInputSchema,
 	GetFormByIdOperationInputSchema,
+	GetFormForUpdateOperationInputSchema,
 	GetFormBySlugOperationInputSchema,
 	GetSubmissionOperationInputSchema,
 	ListSubmissionsOperationInputSchema,
@@ -87,7 +89,7 @@ function createFormBuilderPrefetchForRoute(
 				const id = params?.id ?? "";
 				if (id) {
 					queryClient.setQueryData(
-						FORM_QUERY_KEYS.formById(id),
+						FORM_QUERY_KEYS.formForUpdate(id),
 						await getFormById(adapter, id),
 					);
 				}
@@ -100,7 +102,13 @@ function createFormBuilderPrefetchForRoute(
 						getFormById(adapter, id),
 						getFormSubmissions(adapter, id, { limit: 20, offset: 0 }),
 					]);
-					queryClient.setQueryData(FORM_QUERY_KEYS.formById(id), form);
+					const formContext = form
+						? {
+								id: form.id,
+								name: form.name,
+								...(form.createdBy ? { createdBy: form.createdBy } : {}),
+							}
+						: null;
 					queryClient.setQueryData(
 						FORM_QUERY_KEYS.submissionsList({
 							formId: id,
@@ -110,6 +118,7 @@ function createFormBuilderPrefetchForRoute(
 						{
 							pages: [
 								{
+									form: formContext,
 									items: result.items,
 									total: result.total,
 									limit: result.limit ?? 20,
@@ -208,6 +217,19 @@ export const formBuilderBackendPlugin = (
 				(ctx) =>
 					adaptOperationToHttp(
 						() => operations.getFormById(ctx.params, ctx.request),
+						ctx.error,
+					),
+			);
+			const getFormForUpdateEndpoint = createEndpoint(
+				"/forms/id/:id/edit",
+				{
+					method: "GET",
+					params: GetFormForUpdateOperationInputSchema,
+					requireRequest: true,
+				},
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.getFormForUpdate(ctx.params, ctx.request),
 						ctx.error,
 					),
 			);
@@ -313,6 +335,7 @@ export const formBuilderBackendPlugin = (
 				listForms,
 				getFormBySlug: getFormBySlugEndpoint,
 				getFormById: getFormByIdEndpoint,
+				getFormForUpdate: getFormForUpdateEndpoint,
 				createForm,
 				updateForm,
 				deleteForm,

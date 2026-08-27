@@ -36,11 +36,7 @@ import {
 } from "@workspace/ui/components/dialog";
 import { ArrowLeft, Trash2, Eye } from "lucide-react";
 
-import {
-	useSuspenseFormById,
-	useSuspenseSubmissions,
-	useDeleteSubmission,
-} from "../../hooks";
+import { useSuspenseSubmissions, useDeleteSubmission } from "../../hooks";
 import type { FormBuilderPluginOverrides } from "../../overrides";
 import type { SerializedFormSubmissionWithData } from "../../../types";
 import { PageWrapper } from "../shared/page-wrapper";
@@ -60,8 +56,7 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 	const { router } = useStack();
 	const basePath = useBasePath();
 
-	const { form } = useSuspenseFormById(formId);
-	const { submissions, total, hasMore, isLoadingMore, loadMore } =
+	const { form, submissions, total, hasMore, isLoadingMore, loadMore } =
 		useSuspenseSubmissions(formId);
 	const deleteMutation = useDeleteSubmission(formId);
 

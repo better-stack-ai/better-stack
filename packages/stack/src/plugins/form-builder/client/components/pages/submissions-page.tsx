@@ -11,7 +11,7 @@ import { DefaultError } from "../shared/default-error";
 import { SubmissionsSkeleton } from "../loading/submissions-skeleton";
 import { NotFoundPage } from "./404-page";
 import { formBuilderPermissions } from "../../../permissions";
-import { useSuspenseFormById } from "../../hooks";
+import { useSuspenseSubmissions } from "../../hooks";
 
 const SubmissionsPage = lazy(() =>
 	import("./submissions-page.internal").then((m) => ({
@@ -51,7 +51,8 @@ export function SubmissionsPageComponent({ formId }: SubmissionsPageProps) {
 }
 
 function AuthorizedSubmissionsPage({ formId }: SubmissionsPageProps) {
-	const { form } = useSuspenseFormById(formId);
+	const { form } = useSuspenseSubmissions(formId);
+	if (!form) return <NotFoundPage />;
 	return (
 		<PermissionRouteAccess
 			permission={formBuilderPermissions.submission.read({

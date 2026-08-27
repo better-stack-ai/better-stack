@@ -23,7 +23,7 @@ import { ArrowLeft, Save } from "lucide-react";
 import { FormBuilder } from "@workspace/ui/components/form-builder";
 import type { JSONSchema } from "@workspace/ui/components/form-builder/types";
 
-import { useSuspenseFormById, useFormBuilderForm } from "../../hooks";
+import { useSuspenseFormForUpdate, useFormBuilderForm } from "../../hooks";
 import type { FormBuilderPluginOverrides } from "../../overrides";
 import { slugify } from "../../../utils";
 import type { SerializedForm } from "../../../types";
@@ -48,10 +48,10 @@ export function FormBuilderPage({ id }: FormBuilderPageProps) {
 
 /**
  * Component for editing an existing form.
- * Uses useSuspenseFormById unconditionally since id is always defined.
+ * Uses the update-authorized editor query unconditionally since id is defined.
  */
 function EditFormBuilderPage({ id }: { id: string }) {
-	const { form: existingForm } = useSuspenseFormById(id);
+	const { form: existingForm } = useSuspenseFormForUpdate(id);
 	if (!existingForm) return <NotFoundPage />;
 	return <FormBuilderPageContent id={id} existingForm={existingForm} />;
 }

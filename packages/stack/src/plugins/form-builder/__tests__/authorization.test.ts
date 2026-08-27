@@ -1,12 +1,13 @@
 import { createMemoryAdapter } from "@btst/adapter-memory";
 import { type DBAdapter, defineDb, type DatabaseDefinition } from "@btst/db";
+import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { stack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
 import { createServerAuth } from "../../../authorization/server";
 import type { StackServerAuthProvider } from "../../../shared/auth-types";
-import { formBuilderBackendPlugin } from "../api";
+import { FORM_QUERY_KEYS, formBuilderBackendPlugin } from "../api";
 import { formBuilderPermissions } from "../permissions";
 import type { Form, FormBuilderBackendHooks, FormSubmission } from "../types";
 
@@ -75,6 +76,7 @@ describe("Form Builder authorization inventory", () => {
 			"deleteSubmission",
 			"getFormById",
 			"getFormBySlug",
+			"getFormForUpdate",
 			"getSubmission",
 			"listForms",
 			"listSubmissions",
@@ -92,6 +94,7 @@ describe("Form Builder authorization inventory", () => {
 			listForms: "forms:form.read",
 			getFormBySlug: "forms:form.render",
 			getFormById: "forms:form.read",
+			getFormForUpdate: "forms:form.update",
 			createForm: "forms:form.create",
 			updateForm: "forms:form.update",
 			deleteForm: "forms:form.delete",
@@ -461,6 +464,9 @@ describe("Form Builder operation-first authorization", () => {
 				onBeforeGetForm: () => {
 					events.push("get-form");
 				},
+				onBeforeGetFormForUpdate: () => {
+					events.push("get-form-for-update");
+				},
 				onBeforeFormCreated: () => {
 					events.push("create-form");
 				},
@@ -489,6 +495,7 @@ describe("Form Builder operation-first authorization", () => {
 		const protectedRequests = [
 			() => request("/forms"),
 			() => request(`/forms/id/${form.id}`),
+			() => request(`/forms/id/${form.id}/edit`),
 			() =>
 				request("/forms", {
 					method: "POST",
@@ -551,6 +558,76 @@ describe("Form Builder operation-first authorization", () => {
 		expect(unchanged?.name).toBe("Contact");
 	});
 
+	it("loads editor and submission page data through their exact permissions", async () => {
+		const exactPageAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+			permissions: [formBuilderPermissions] as const,
+			rules: ({ forms }) => [
+				forms.form.read.when(() => false),
+				forms.form.update.when(
+					({ identity, facts }) => identity?.id === facts.ownerId,
+				),
+				forms.submission.read.when(
+					({ identity, facts }) => identity?.id === facts.ownerId,
+				),
+			],
+		});
+		const backend = makeBackend({
+			auth: createAuth(undefined, exactPageAuthorization),
+		});
+		const form = await seedForm(backend);
+		await seedSubmission(backend, form.id);
+
+		await expect(
+			backend
+				.forRequest(request(`/forms/id/${form.id}`, { identity: owner }))
+				.api.formBuilder.getFormById({ id: form.id }),
+		).rejects.toMatchObject({ statusCode: 403 });
+		await expect(
+			backend
+				.forRequest(request(`/forms/id/${form.id}/edit`, { identity: owner }))
+				.api.formBuilder.getFormForUpdate({ id: form.id }),
+		).resolves.toMatchObject({ id: form.id, createdBy: owner.id });
+		const editorResponse = await backend.handler(
+			request(`/forms/id/${form.id}/edit`, { identity: owner }),
+		);
+		expect(editorResponse.status).toBe(200);
+		expect(await editorResponse.json()).toMatchObject({ id: form.id });
+		await expect(
+			backend
+				.forRequest(request(`/forms/id/${form.id}/edit`, { identity: viewer }))
+				.api.formBuilder.getFormForUpdate({ id: form.id }),
+		).rejects.toMatchObject({ statusCode: 403 });
+		const list = await backend
+			.forRequest(request(`/forms/${form.id}/submissions`, { identity: owner }))
+			.api.formBuilder.listSubmissions({
+				formId: form.id,
+				query: { limit: 20, offset: 0 },
+			});
+		expect(list).toMatchObject({
+			form: { id: form.id, createdBy: owner.id },
+			total: 1,
+		});
+		expect(Object.keys(list.form).sort()).toEqual(["createdBy", "id", "name"]);
+		const submissionsResponse = await backend.handler(
+			request(`/forms/${form.id}/submissions`, { identity: owner }),
+		);
+		expect(submissionsResponse.status).toBe(200);
+		const submissionsBody = await submissionsResponse.json();
+		expect(submissionsBody).toMatchObject({
+			form: { id: form.id, createdBy: owner.id },
+			total: 1,
+		});
+		expect(Object.keys(submissionsBody.form).sort()).toEqual([
+			"createdBy",
+			"id",
+			"name",
+		]);
+		await expect(
+			backend.internal.formBuilder.getFormForUpdate({ id: form.id }),
+		).resolves.toMatchObject({ id: form.id });
+	});
+
 	it("allows owners and admins while keeping collection scoping in server execution", async () => {
 		const backend = makeBackend({ auth: createAuth() });
 		const form = await seedForm(backend);
@@ -571,12 +648,19 @@ describe("Form Builder operation-first authorization", () => {
 			listSubmissions(input: {
 				formId: string;
 				query: { limit: number; offset: number };
-			}): Promise<{ readonly items: ReadonlyArray<{ readonly id: string }> }>;
+			}): Promise<{
+				readonly form: { readonly id: string; readonly createdBy?: string };
+				readonly items: ReadonlyArray<{ readonly id: string }>;
+			}>;
 		};
 		const list = (await requestApi.listSubmissions({
 			formId: form.id,
 			query: { limit: 20, offset: 0 },
-		})) as { readonly items: ReadonlyArray<{ readonly id: string }> };
+		})) as {
+			readonly form: { readonly id: string; readonly createdBy?: string };
+			readonly items: ReadonlyArray<{ readonly id: string }>;
+		};
+		expect(list.form).toMatchObject({ id: form.id, createdBy: owner.id });
 		expect(list.items.map((item) => item.id)).toEqual([submission.id]);
 		expect("form" in (list.items[0] ?? {})).toBe(false);
 		const detail = await backend
@@ -1228,5 +1312,38 @@ describe("Form Builder operation-first authorization", () => {
 		expect(Object.keys(requestApi).sort()).toEqual(
 			Object.keys(backend.internal.formBuilder).sort(),
 		);
+	});
+
+	it("hydrates protected route data under permission-aligned SSG keys", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const form = await seedForm(backend);
+		await seedSubmission(backend, form.id);
+		const queryClient = new QueryClient();
+
+		await backend.api.formBuilder.prefetchForRoute("editForm", queryClient, {
+			id: form.id,
+		});
+		expect(
+			queryClient.getQueryData(FORM_QUERY_KEYS.formForUpdate(form.id)),
+		).toMatchObject({ id: form.id, schema: activeSchema });
+
+		await backend.api.formBuilder.prefetchForRoute("submissions", queryClient, {
+			id: form.id,
+		});
+		const data = queryClient.getQueryData<{
+			pages: Array<{ form: Record<string, unknown>; total: number }>;
+		}>(
+			FORM_QUERY_KEYS.submissionsList({
+				formId: form.id,
+				limit: 20,
+				offset: 0,
+			}),
+		);
+		expect(data?.pages[0]?.total).toBe(1);
+		expect(Object.keys(data?.pages[0]?.form ?? {}).sort()).toEqual([
+			"createdBy",
+			"id",
+			"name",
+		]);
 	});
 });

@@ -76,6 +76,13 @@ export const FORM_QUERY_KEYS = {
 	formById: (id: string) => ["forms", "byId", "byId", id] as const,
 
 	/**
+	 * Key for forms.forUpdate(id) query.
+	 * Full key: ["forms", "forUpdate", "forUpdate", id]
+	 */
+	formForUpdate: (id: string) =>
+		["forms", "forUpdate", "forUpdate", id] as const,
+
+	/**
 	 * Key for formSubmissions.list(params) query.
 	 * Full key: ["formSubmissions", "list", { formId, limit, offset }]
 	 */

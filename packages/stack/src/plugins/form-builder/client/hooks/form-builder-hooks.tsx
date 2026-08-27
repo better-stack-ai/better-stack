@@ -9,6 +9,7 @@ import type {
 	PaginatedForms,
 	SerializedFormSubmissionWithData,
 	PaginatedFormSubmissions,
+	SubmissionListFormContext,
 } from "../../types";
 import { formBuilder } from "./form-builder-resource";
 
@@ -150,6 +151,21 @@ export function useSuspenseFormById(id: string): {
 }
 
 /**
+ * Fetches editor data through the same update permission as the edit route.
+ */
+export function useSuspenseFormForUpdate(id: string): {
+	form: SerializedForm | null;
+	refetch: () => Promise<unknown>;
+} {
+	const { data, refetch } = formBuilder.forms.forUpdate.useSuspense([id]);
+
+	return {
+		form: data ?? null,
+		refetch,
+	};
+}
+
+/**
  * Hook for fetching a form by slug (public)
  */
 export function useFormBySlug(slug: string): {
@@ -252,6 +268,7 @@ export interface UseSubmissionsOptions {
 }
 
 export interface UseSubmissionsResult {
+	form: SubmissionListFormContext | null;
 	submissions: SerializedFormSubmissionWithData[];
 	total: number;
 	isLoading: boolean;
@@ -286,8 +303,11 @@ export function useSubmissions(
 	const { items, total } = flattenPages<SerializedFormSubmissionWithData>(
 		data?.pages as PaginatedFormSubmissions[] | undefined,
 	);
+	const form =
+		(data?.pages as PaginatedFormSubmissions[] | undefined)?.[0]?.form ?? null;
 
 	return {
+		form,
 		submissions: items,
 		total,
 		isLoading,
@@ -306,6 +326,7 @@ export function useSuspenseSubmissions(
 	formId: string,
 	options: UseSubmissionsOptions = {},
 ): {
+	form: SubmissionListFormContext | null;
 	submissions: SerializedFormSubmissionWithData[];
 	total: number;
 	loadMore: () => Promise<unknown>;
@@ -321,8 +342,10 @@ export function useSuspenseSubmissions(
 	const { items, total } = flattenPages<SerializedFormSubmissionWithData>(
 		data.pages as PaginatedFormSubmissions[],
 	);
+	const form = (data.pages as PaginatedFormSubmissions[])[0]?.form ?? null;
 
 	return {
+		form,
 		submissions: items,
 		total,
 		loadMore: fetchNextPage,

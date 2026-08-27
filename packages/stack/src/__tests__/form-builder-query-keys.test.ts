@@ -46,6 +46,12 @@ describe("form-builder query keys match SSG prefetch keys", () => {
 		]);
 	});
 
+	it("form editor keys match", () => {
+		expect([...queries.forms.forUpdate("abc").queryKey]).toEqual([
+			...FORM_QUERY_KEYS.formForUpdate("abc"),
+		]);
+	});
+
 	it("submissions list keys match", () => {
 		expect([
 			...queries.formSubmissions.list({ formId: "f1", limit: 20, offset: 0 })
@@ -63,6 +69,7 @@ describe("form-builder query keys match SSG prefetch keys", () => {
 		expect([...queries.forms._def]).toEqual(["forms"]);
 		expect([...queries.forms.list._def]).toEqual(["forms", "list"]);
 		expect([...queries.forms.byId._def]).toEqual(["forms", "byId"]);
+		expect([...queries.forms.forUpdate._def]).toEqual(["forms", "forUpdate"]);
 		expect([...queries.formSubmissions._def]).toEqual(["formSubmissions"]);
 		expect([...queries.formSubmissions.list._def]).toEqual([
 			"formSubmissions",

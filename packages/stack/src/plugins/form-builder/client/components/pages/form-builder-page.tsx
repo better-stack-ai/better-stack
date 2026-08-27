@@ -11,7 +11,7 @@ import { DefaultError } from "../shared/default-error";
 import { FormBuilderSkeleton } from "../loading/form-builder-skeleton";
 import { NotFoundPage } from "./404-page";
 import { formBuilderPermissions } from "../../../permissions";
-import { useSuspenseFormById } from "../../hooks";
+import { useSuspenseFormForUpdate } from "../../hooks";
 
 const FormBuilderPage = lazy(() =>
 	import("./form-builder-page.internal").then((m) => ({
@@ -67,7 +67,7 @@ function AuthorizedFormBuilderPage({ id }: FormBuilderPageProps) {
 }
 
 function AuthorizedExistingFormBuilderPage({ id }: { id: string }) {
-	const { form } = useSuspenseFormById(id);
+	const { form } = useSuspenseFormForUpdate(id);
 	if (!form) return <NotFoundPage />;
 	return (
 		<PermissionRouteAccess

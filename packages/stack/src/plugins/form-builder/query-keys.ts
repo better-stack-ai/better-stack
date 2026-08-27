@@ -133,6 +133,14 @@ export const formBuilderResources = {
 				select: (data: any, _id: string): SerializedForm | null => data ?? null,
 				skip: (id: string) => !id,
 			},
+
+			forUpdate: {
+				path: "/forms/id/:id/edit",
+				params: (id: string) => ({ id }),
+				key: (id: string) => ["forUpdate", id],
+				select: (data: any, _id: string): SerializedForm | null => data ?? null,
+				skip: (id: string) => !id,
+			},
 		},
 
 		mutations: {

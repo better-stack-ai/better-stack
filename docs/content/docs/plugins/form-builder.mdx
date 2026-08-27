@@ -311,12 +311,17 @@ Access form data in your frontend using the provided hooks:
 | `useFormsAdmin()` | List all forms (admin) | `{ forms, total, isLoading, error, refetch }` |
 | `useFormBySlug(slug)` | Get form by slug (public) | `{ form, isLoading, error }` |
 | `useSuspenseFormById(id)` | Get form by ID with Suspense | `{ form, refetch }` |
+| `useSuspenseFormForUpdate(id)` | Get editor data through the form update permission | `{ form, refetch }` |
 | `useCreateForm()` | Create mutation | React Query mutation |
 | `useUpdateForm()` | Update mutation | React Query mutation |
 | `useDeleteForm()` | Delete mutation | React Query mutation |
 | `useSubmitForm(slug)` | Submit form data | React Query mutation |
-| `useSubmissions(formId)` | List submissions for a form | `{ submissions, total, isLoading }` |
+| `useSubmissions(formId)` | List submissions and authoritative form facts | `{ form, submissions, total, isLoading }` |
 | `useDeleteSubmission(formId)` | Delete submission | React Query mutation |
+
+`useSubmissions` returns `form` as the intentionally minimal
+`SubmissionListFormContext`: `{ id, name, createdBy? }`. Submission access does
+not expose the form schema or other fields protected by `form.read`.
 
 ### Usage Examples
 
@@ -511,6 +516,7 @@ The Form Builder plugin exposes these REST endpoints:
 | `/form-builder/forms` | POST | Create a new form |
 | `/form-builder/forms/:slug` | GET | Get form by slug |
 | `/form-builder/forms/id/:id` | GET | Get an admin form by ID |
+| `/form-builder/forms/id/:id/edit` | GET | Get editor data using the form update permission |
 | `/form-builder/forms/:id` | PUT | Update a form |
 | `/form-builder/forms/:id` | DELETE | Delete a form |
 | `/form-builder/forms/:slug/submit` | POST | Submit form data |
@@ -618,6 +624,7 @@ Creates the backend plugin with optional hooks configuration.
 | `onBeforeListForms` | `ctx` | `void` | Domain precondition before listing forms |
 | `onBeforeFormCreated` | `data, ctx` | `data \| void` | Validate/transform before create; throw to deny |
 | `onAfterFormCreated` | `form, ctx` | `void` | Post-create lifecycle |
+| `onBeforeGetFormForUpdate` | `id, ctx` | `void` | Domain precondition before loading editor data through the update permission |
 | `onBeforeFormUpdated` | `id, data, ctx` | `data \| void` | Validate/transform before update; throw to deny |
 | `onAfterFormUpdated` | `form, ctx` | `void` | Post-update lifecycle |
 | `onBeforeFormDeleted` | `id, ctx` | `void` | Domain precondition before delete |
