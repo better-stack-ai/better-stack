@@ -193,6 +193,39 @@ defineOperation({
 operation.run({ id: "article-1" }, { internal: true });
 
 const blogHooks: BlogBackendHooks = {
+	onBeforeListPosts: (_filter, context) => {
+		const readFactsAreExact: Expect<
+			Equal<
+				typeof context.facts,
+				| { readonly scope: "published" }
+				| { readonly scope: "drafts" }
+				| {
+						readonly scope: "post";
+						readonly slug: string;
+						readonly exists: boolean;
+						readonly id?: string;
+						readonly authorId?: string;
+						readonly published: boolean;
+				  }
+			>
+		> = true;
+		void readFactsAreExact;
+	},
+	onBeforeUpdatePost: (_id, _data, context) => {
+		const updateFactsAreExact: Expect<
+			Equal<
+				typeof context.facts,
+				{
+					readonly id: string;
+					readonly authorId?: string;
+					readonly publish: "unchanged" | "publish" | "unpublish";
+				}
+			>
+		> = true;
+		void updateFactsAreExact;
+		// @ts-expect-error trusted publish transitions are readonly
+		context.facts.publish = "publish";
+	},
 	onBeforeDeletePost: (_id, context) => {
 		const identityIsHonest: Expect<
 			Equal<typeof context.identity, DeepReadonly<StackIdentity> | null>
@@ -244,6 +277,24 @@ const blogHooks: BlogBackendHooks = {
 };
 void blogHooks;
 
+blogPermissions.post.read({ scope: "published" });
+blogPermissions.post.read({
+	scope: "post",
+	slug: "hello",
+	exists: true,
+	id: "post-1",
+	published: false,
+});
+// @ts-expect-error a post read needs server/browser visibility facts
+blogPermissions.post.read({ scope: "post", slug: "hello" });
+// @ts-expect-error publish transitions are a closed vocabulary
+blogPermissions.post.update({ id: "post-1", publish: "toggle" });
+blogPermissions.post.create({ publish: "draft" });
+// @ts-expect-error create must declare the requested initial publish state
+blogPermissions.post.create();
+// @ts-expect-error create publish state is a closed vocabulary
+blogPermissions.post.create({ publish: "publish" });
+
 type BlogRouteOperations = Parameters<
 	ReturnType<typeof blogBackendPlugin>["routes"]
 >[2];
@@ -263,11 +314,45 @@ const blogServerAuth = createServerAuth({
 	getIdentity: () => ({ id: "user-1", role: "user" as const }),
 });
 
-stack({
+const blogStack = stack({
 	basePath: "/api",
 	plugins: { blog: blogBackendPlugin() },
 	adapter: fakeAdapter,
 	auth: blogServerAuth,
+});
+
+type BlogOperationKeys = keyof typeof blogStack.internal.blog;
+const blogOperationKeysAreExact: Expect<
+	Equal<
+		BlogOperationKeys,
+		| "listPosts"
+		| "createPost"
+		| "updatePost"
+		| "deletePost"
+		| "getNextPreviousPosts"
+		| "listTags"
+	>
+> = true;
+void blogOperationKeysAreExact;
+
+blogStack.forRequest(new Request("https://example.test")).api.blog.listPosts({
+	published: true,
+});
+blogStack.internal.blog.updatePost({
+	id: "post-1",
+	data: {
+		title: "Title",
+		content: "Content",
+		excerpt: "Excerpt",
+		slug: "title",
+		published: false,
+		tags: [],
+	},
+});
+blogStack.forRequest(new Request("https://example.test")).api.blog.deletePost({
+	id: "post-1",
+	// @ts-expect-error request operations do not accept browser-supplied trusted facts
+	authorId: "spoofed-owner",
 });
 
 const unregisteredAuthorization = defineAuthorization({

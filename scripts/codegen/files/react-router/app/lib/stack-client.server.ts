@@ -5,6 +5,5 @@ export async function getStackClientForRequest(
 	queryClient: QueryClient,
 	request: Request,
 ) {
-	void request.headers.get("host");
-	return getStackClient(queryClient);
+	return getStackClient(queryClient, { headers: request.headers });
 }

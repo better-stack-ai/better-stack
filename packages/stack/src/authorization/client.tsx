@@ -51,6 +51,8 @@ export interface ClientAuth<TAuthorization extends AnyAuthorization>
 	useCan: (
 		permission: AuthorizationPermissionRequest<TAuthorization>,
 	) => AuthorizationCanState;
+	/** Generic runtime hook used by descriptor-aware built-in plugin UI. */
+	usePermission: (permission: unknown) => AuthorizationCanState;
 	CanAccess: (props: {
 		permission: AuthorizationPermissionRequest<TAuthorization>;
 		fallback?: ReactNode;
@@ -70,6 +72,8 @@ export interface EvaluatedClientAuth<
 	getIdentity: () => Promise<TIdentity | null>;
 	useIdentity: () => AuthorizationIdentityState<TIdentity>;
 	useCan: (permission: TPermission) => AuthorizationCanState;
+	/** Generic runtime hook used by descriptor-aware built-in plugin UI. */
+	usePermission: (permission: unknown) => AuthorizationCanState;
 	CanAccess: (props: {
 		permission: TPermission;
 		fallback?: ReactNode;
@@ -298,6 +302,7 @@ export function createClientAuth(config: any): any {
 		...(config.loginPath ? { loginPath: config.loginPath } : {}),
 		useIdentity,
 		useCan: useCanRuntime,
+		usePermission: useCanRuntime,
 		CanAccess: CanAccessRuntime,
 	} as unknown as StackAuthProvider;
 

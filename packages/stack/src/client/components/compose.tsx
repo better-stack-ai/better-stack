@@ -3,10 +3,24 @@
 import React, { Suspense, useEffect, type ErrorInfo } from "react";
 import { type FallbackProps } from "react-error-boundary";
 import type { createRouter } from "@btst/yar";
-import { useAuthContext, useCan } from "../../context/auth";
+import {
+	PermissionCheck,
+	useAuthContext,
+	useCan,
+	type PermissionCheckState,
+} from "../../context/auth";
 import { useStackOrNull } from "../../context/provider";
-import type { CanParams } from "../../shared/auth-types";
+import {
+	isSchemaBoundStackAuthProvider,
+	type CanParams,
+} from "../../shared/auth-types";
+import {
+	isPermissionRequest,
+	type PermissionRequest,
+} from "../../authorization";
 import { ErrorBoundary } from "./error-boundary";
+
+type RoutePermission = CanParams | PermissionRequest;
 
 /**
  * Route type with optional components
@@ -75,7 +89,137 @@ export function RouteRenderer({
  *   `window.location.assign`); authenticated users get an `Unauthorized`
  *   error thrown into the route's ErrorBoundary.
  */
-function RouteGuard({
+export function PermissionRouteAccess({
+	permission,
+	LoadingComponent,
+	legacyPublic = false,
+	legacyPermission,
+	children,
+}: {
+	permission: RoutePermission;
+	LoadingComponent?: React.ComponentType;
+	/** Preserve an explicitly public route for string-based RC providers. */
+	legacyPublic?: boolean;
+	/** String permission used only by legacy RC providers for this descriptor. */
+	legacyPermission?: CanParams;
+	children: React.ReactNode;
+}) {
+	const auth = useAuthContext();
+	if (isPermissionRequest(permission)) {
+		if (auth && !isSchemaBoundStackAuthProvider(auth.provider)) {
+			if (legacyPublic) return <>{children}</>;
+			if (legacyPermission) {
+				return (
+					<LegacyRouteGuard
+						permission={legacyPermission}
+						LoadingComponent={LoadingComponent}
+					>
+						{children}
+					</LegacyRouteGuard>
+				);
+			}
+		}
+		return (
+			<PermissionCheck permission={permission}>
+				{(state) => (
+					<ResolvedRouteAccess
+						state={state}
+						permissionLabel={permission.id}
+						LoadingComponent={LoadingComponent}
+					>
+						{children}
+					</ResolvedRouteAccess>
+				)}
+			</PermissionCheck>
+		);
+	}
+
+	return (
+		<LegacyRouteGuard
+			permission={permission}
+			LoadingComponent={LoadingComponent}
+		>
+			{children}
+		</LegacyRouteGuard>
+	);
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+	if (typeof error !== "object" || error === null) return undefined;
+	const candidate = error as { statusCode?: unknown; status?: unknown };
+	if (typeof candidate.statusCode === "number") return candidate.statusCode;
+	return typeof candidate.status === "number" ? candidate.status : undefined;
+}
+
+function RouteErrorFallback({
+	error,
+	resetErrorBoundary,
+	ErrorComponent,
+	LoadingComponent,
+}: FallbackProps & {
+	ErrorComponent: React.ComponentType<FallbackProps>;
+	LoadingComponent?: React.ComponentType;
+}) {
+	const auth = useAuthContext();
+	const stack = useStackOrNull();
+	const loginPath = auth?.provider.loginPath;
+	const navigate = stack?.router?.navigate;
+	const shouldRedirect = getErrorStatus(error) === 401 && !!auth && !!loginPath;
+
+	useEffect(() => {
+		if (!shouldRedirect || !loginPath) return;
+		if (navigate) {
+			void navigate(loginPath);
+		} else if (typeof window !== "undefined") {
+			window.location.assign(loginPath);
+		}
+	}, [shouldRedirect, loginPath, navigate]);
+
+	if (shouldRedirect) {
+		return LoadingComponent ? <LoadingComponent /> : null;
+	}
+
+	return (
+		<ErrorComponent error={error} resetErrorBoundary={resetErrorBoundary} />
+	);
+}
+
+function ComposedRouteErrorBoundary({
+	path,
+	ErrorComponent,
+	LoadingComponent,
+	onError,
+	children,
+}: {
+	path: string;
+	ErrorComponent: React.ComponentType<FallbackProps>;
+	LoadingComponent?: React.ComponentType;
+	onError: (error: Error, info: ErrorInfo) => void;
+	children: React.ReactNode;
+}) {
+	const FallbackComponent = React.useCallback(
+		(props: FallbackProps) => (
+			<RouteErrorFallback
+				{...props}
+				ErrorComponent={ErrorComponent}
+				LoadingComponent={LoadingComponent}
+			/>
+		),
+		[ErrorComponent, LoadingComponent],
+	);
+
+	return (
+		<ErrorBoundary
+			FallbackComponent={FallbackComponent}
+			resetKeys={[path]}
+			onError={onError}
+		>
+			{children}
+		</ErrorBoundary>
+	);
+}
+
+function LegacyRouteGuard({
 	permission,
 	LoadingComponent,
 	children,
@@ -84,9 +228,32 @@ function RouteGuard({
 	LoadingComponent?: React.ComponentType;
 	children: React.ReactNode;
 }) {
+	const state = useCan(permission);
+	return (
+		<ResolvedRouteAccess
+			state={state}
+			permissionLabel={`${permission.resource}.${permission.action}`}
+			LoadingComponent={LoadingComponent}
+		>
+			{children}
+		</ResolvedRouteAccess>
+	);
+}
+
+function ResolvedRouteAccess({
+	state,
+	permissionLabel,
+	LoadingComponent,
+	children,
+}: {
+	state: PermissionCheckState;
+	permissionLabel: string;
+	LoadingComponent?: React.ComponentType;
+	children: React.ReactNode;
+}) {
 	const auth = useAuthContext();
 	const stack = useStackOrNull();
-	const { can, isPending } = useCan(permission);
+	const { can, isPending, error } = state;
 
 	const identity = auth?.identity ?? null;
 	const loginPath = auth?.provider.loginPath;
@@ -108,6 +275,7 @@ function RouteGuard({
 	if (!auth) {
 		return <>{children}</>;
 	}
+	if (error) throw error;
 
 	if (isPending || shouldRedirect) {
 		return LoadingComponent ? <LoadingComponent /> : null;
@@ -120,9 +288,7 @@ function RouteGuard({
 	// Keep the thrown message generic — ErrorComponents commonly render
 	// error.message to end-users; the resource/action detail is dev-only.
 	if (process.env.NODE_ENV !== "production") {
-		console.warn(
-			`[btst/auth] RouteGuard denied: cannot ${permission.action} ${permission.resource}`,
-		);
+		console.warn(`[btst/auth] RouteGuard denied: ${permissionLabel}`);
 	}
 	throw new Error("Unauthorized");
 }
@@ -145,6 +311,10 @@ function RouteGuard({
  * @param permission - Optional route-level permission requirement (e.g.
  *   `{ resource: "blog:draft", action: "read" }`). Only enforced when an
  *   auth provider is configured on `StackProvider`; see `RouteGuard`.
+ * @param legacyPublic - Keeps an explicitly public descriptor route ungated
+ *   for string-based RC providers. One-rule providers still evaluate it.
+ * @param legacyPermission - Optional string permission used instead of a
+ *   descriptor only for string-based RC providers during migration.
  */
 export function ComposedRoute({
 	path,
@@ -156,6 +326,8 @@ export function ComposedRoute({
 	props,
 	onError,
 	permission,
+	legacyPublic = false,
+	legacyPermission,
 }: {
 	path: string;
 	PageComponent: React.ComponentType<any>;
@@ -165,13 +337,20 @@ export function ComposedRoute({
 	NotFoundComponent?: React.ComponentType<{ message: string }>;
 	props?: any;
 	onError: (error: Error, info: ErrorInfo) => void;
-	permission?: CanParams;
+	permission?: RoutePermission;
+	legacyPublic?: boolean;
+	legacyPermission?: CanParams;
 }) {
 	if (PageComponent) {
 		const content = permission ? (
-			<RouteGuard permission={permission} LoadingComponent={LoadingComponent}>
+			<PermissionRouteAccess
+				permission={permission}
+				LoadingComponent={LoadingComponent}
+				legacyPublic={legacyPublic}
+				legacyPermission={legacyPermission}
+			>
 				<PageComponent {...props} />
-			</RouteGuard>
+			</PermissionRouteAccess>
 		) : (
 			<PageComponent {...props} />
 		);
@@ -188,15 +367,16 @@ export function ComposedRoute({
 		if (ErrorComponent) {
 			return (
 				<Suspense key={`outer-${path}`} fallback={suspenseFallback}>
-					<ErrorBoundary
-						FallbackComponent={ErrorComponent}
-						resetKeys={[path]}
+					<ComposedRouteErrorBoundary
+						path={path}
+						ErrorComponent={ErrorComponent}
+						LoadingComponent={LoadingComponent}
 						onError={onError}
 					>
 						<Suspense key={`inner-${path}`} fallback={suspenseFallback}>
 							{content}
 						</Suspense>
-					</ErrorBoundary>
+					</ComposedRouteErrorBoundary>
 				</Suspense>
 			);
 		}

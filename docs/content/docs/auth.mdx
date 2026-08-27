@@ -9,7 +9,7 @@ The new path is opt-in. Omitting authorization preserves allow-all behavior, and
 
 ## Define the shared contract
 
-Plugins publish stable, schema-backed permissions. The Blog delete permission is available from its browser-safe entry point:
+Plugins publish stable, schema-backed permissions. The complete Blog operation catalog is available from its browser-safe entry point:
 
 ```ts title="lib/authorization-contract.ts"
 import { defineAuthorizationContract } from "@btst/stack/authorization";
@@ -34,11 +34,26 @@ import { authorizationContract } from "./authorization-contract";
 export const authorization = defineAuthorization({
   contract: authorizationContract,
   rules: ({ blog }) => [
-    blog.post.delete.when(
-      ({ identity, facts }) =>
-        identity !== null &&
-        (identity.role === "admin" || identity.id === facts.authorId),
+    blog.post.read.when(({ identity, facts }) => {
+      if (facts.scope === "published") return true;
+      if (facts.scope === "post" && (!facts.exists || facts.published)) return true;
+      return identity?.role === "admin" ||
+        (facts.scope === "post" && identity?.id === facts.authorId);
+    }),
+    blog.post.create.when(({ identity, facts }) =>
+      identity !== null &&
+      (facts.publish === "draft" || identity.role === "admin")
     ),
+    blog.post.update.when(({ identity, facts }) =>
+      identity !== null &&
+      (identity.role === "admin" ||
+        (identity.id === facts.authorId && facts.publish === "unchanged"))
+    ),
+    blog.post.delete.when(({ identity, facts }) =>
+      identity !== null &&
+      (identity.role === "admin" || identity.id === facts.authorId)
+    ),
+    blog.tag.read.allow(),
   ],
 });
 ```
@@ -47,7 +62,7 @@ The identity and permission facts are inferred from their schemas. The contract 
 
 Portable contract schemas must be fully representable as JSON Schema. BTST rejects custom refinements, transforms, and other opaque schema behavior at contract definition time so an automatically derived version can never silently omit validation logic. Prefer explicit Zod constraints such as enums, string formats, ranges, and object shapes.
 
-A missing rule denies access once authorization is enabled. Use `.allow()` for an explicit unconditional rule.
+A missing rule denies access once authorization is enabled. Use `.allow()` for an explicit unconditional rule. The example makes public published-post and tag reads intentional while protecting draft collections, draft details, mutation, and publish transitions.
 
 ## Bind the browser adapter
 
@@ -73,17 +88,18 @@ import { StackProvider } from "@btst/stack/context";
 import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
 import { clientAuth } from "@/lib/authorization.client";
 
-function DeleteControl({ post }) {
+function UpdateControl({ post }) {
   const { CanAccess } = clientAuth;
 
   return (
     <CanAccess
-      permission={blogPermissions.post.delete({
+      permission={blogPermissions.post.update({
         id: post.id,
         authorId: post.authorId,
+        publish: "unchanged",
       })}
     >
-      <DeletePostButton />
+      <EditPostButton />
     </CanAccess>
   );
 }
@@ -137,11 +153,59 @@ export async function evaluateAuthorization(request: Request) {
   const body = await request.json();
   const parsed = parseRemoteAuthorizationRequest(authorizationContract, body);
   const identity = await getIdentityFromSession(request);
-  const post = await database.posts.findById(parsed.permission.facts.id);
-  const trustedPermission = blogPermissions.post.delete({
-    id: post.id,
-    authorId: post.authorId,
-  });
+
+  let trustedPermission;
+  switch (parsed.permission.id) {
+    case blogPermissions.post.read.id: {
+      const facts = parsed.permission.facts;
+      if (facts.scope !== "post") {
+        trustedPermission = blogPermissions.post.read(facts);
+        break;
+      }
+      const post = await database.posts.findBySlug(facts.slug);
+      trustedPermission = blogPermissions.post.read({
+        scope: "post",
+        slug: facts.slug,
+        exists: post !== null,
+        ...(post ? {
+          id: post.id,
+          authorId: post.authorId,
+          published: post.published,
+        } : { published: false }),
+      });
+      break;
+    }
+    case blogPermissions.post.create.id:
+      // `publish` is the validated action the UI is asking about. The create
+      // operation independently derives it again from its validated input.
+      trustedPermission = blogPermissions.post.create({
+        publish: parsed.permission.facts.publish,
+      });
+      break;
+    case blogPermissions.post.update.id: {
+      const post = await database.posts.findById(parsed.permission.facts.id);
+      trustedPermission = blogPermissions.post.update({
+        id: parsed.permission.facts.id,
+        authorId: post?.authorId,
+        publish: parsed.permission.facts.publish,
+      });
+      break;
+    }
+    case blogPermissions.post.delete.id: {
+      const post = await database.posts.findById(parsed.permission.facts.id);
+      trustedPermission = blogPermissions.post.delete({
+        id: parsed.permission.facts.id,
+        authorId: post?.authorId,
+      });
+      break;
+    }
+    case blogPermissions.tag.read.id:
+      trustedPermission = blogPermissions.tag.read();
+      break;
+    default:
+      throw new TypeError("Unsupported permission id");
+  }
+
   const allowed = authorization.can(trustedPermission, identity);
 
   return Response.json({
@@ -178,14 +242,13 @@ without constructing a synthetic `Request`. Existing backend-only adapters can
 keep the request-aware `getIdentity({ request, headers })` callback, but those
 adapters are not accepted by headers-only layout helpers until adapted.
 
-Pass it to `stack({ auth: serverAuth })`. The Blog DELETE endpoint and `myStack.forRequest(request).api.blog.deletePost({ id })` use the same operation and rule. The operation loads the post itself before authorization, so client-supplied ownership facts are never trusted. Trusted jobs can call `myStack.internal.blog.deletePost({ id })`; internal calls skip user authorization but retain input validation and lifecycle hooks.
+Pass it to `stack({ auth: serverAuth })`. Every Blog HTTP route and its matching `myStack.forRequest(request).api.blog.*` method use the same operation and rule. Operations load authoritative post, author, and current publish facts before authorization, so client-supplied ownership or visibility facts are never trusted. Trusted jobs can call `myStack.internal.blog.*`; internal calls skip user authorization but retain input validation, trusted fact derivation, domain behavior, and lifecycle hooks.
 
 Ordinary denials become HTTP 401 for anonymous identities and 403 for authenticated identities. Identity validation and rule failures remain errors instead of being converted into denials.
 
 `stack()` also checks the operation catalog at typecheck time. A server adapter
 that registers a different permission catalog—or reuses the same stable id
-with an incompatible fact schema—cannot be composed with the Blog delete
-operation.
+with an incompatible fact schema—cannot be composed with Blog operations.
 
 ## Hydrate identity at the layout boundary
 
@@ -390,8 +453,8 @@ Operations have no public `run({ internal: true })` escape hatch. Use only the
 transport-bound APIs:
 
 ```ts
-await myStack.forRequest(request).api.blog.deletePost({ id: postId });
-await myStack.internal.blog.deletePost({ id: postId });
+await myStack.forRequest(request).api.blog.updatePost({ id: postId, data });
+await myStack.internal.blog.updatePost({ id: postId, data });
 ```
 
 ## RC auth provider
@@ -485,18 +548,44 @@ import { CanAccess } from "@btst/stack/context";
 
 While the check is pending, the optional `loading` node (default `null`) renders instead — gated UI never flashes. Without an auth provider configured, `<CanAccess>` always renders its children.
 
+For schema-backed plugin permissions, use `PermissionAccess` with the exact
+descriptor published by the plugin:
+
+```tsx
+import { PermissionAccess } from "@btst/stack/context";
+import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+
+<PermissionAccess
+  permission={blogPermissions.post.delete({
+    id: post.id,
+    ...(post.authorId != null ? { authorId: post.authorId } : {}),
+  })}
+  fallback={null}
+>
+  <DeletePostButton />
+</PermissionAccess>;
+```
+
+`PermissionAccess` renders its optional `loading` node while authorization is
+pending, `children` when allowed, and `fallback` when denied. Without an auth
+provider it remains permissive. Its lower-level `PermissionCheck` primitive
+provides the same descriptor evaluation as a render prop when a plugin needs
+custom handling for `{ can, isPending, error }`. Throw `error` before trusting
+`can`; a schema-bound provider without its required descriptor hook fails
+closed through that field.
+
 ## Route gating
 
 `ComposedRoute` (the wrapper every plugin page uses) accepts an optional `permission`:
 
 ```tsx
 <ComposedRoute
-  path="/blog/drafts"
-  PageComponent={DraftsPage}
-  LoadingComponent={PostsLoading}
+  path="/reports"
+  PageComponent={ReportsPage}
+  LoadingComponent={ReportsLoading}
   ErrorComponent={DefaultError}
   onError={console.error}
-  permission={{ resource: "blog:draft", action: "read" }}
+  permission={{ resource: "legacy:reports", action: "read" }}
 />
 ```
 
@@ -504,6 +593,25 @@ When an auth provider is configured and `can()` denies access:
 
 - **Unauthenticated** users are redirected to the provider's `loginPath` (via the top-level `router`'s `navigate`, falling back to `window.location.assign`), with the route's `LoadingComponent` shown in the meantime.
 - **Authenticated** users get an `Unauthorized` error thrown into the route's ErrorBoundary.
+
+The same login redirect applies when a protected route query returns HTTP 401
+before its fact-dependent descriptor gate can mount. The backend response is
+authoritative, so the redirect also happens while browser identity is pending
+or still contains a stale signed-in snapshot. Plugin-owned descriptor routes
+that were already public may set `legacyPublic` during the RC migration; that
+bypass applies only to string-based providers, while one-rule providers still
+evaluate the exact descriptor. If an RC route previously used a different
+resource/action key, set `legacyPermission` alongside the descriptor. Only a
+string-based provider receives that override; one-rule providers still receive
+the descriptor.
+
+Plugins whose route facts are available only after loading data can wrap that
+content directly with `PermissionRouteAccess` from
+`@btst/stack/client/components`. It accepts the same descriptor plus the
+route's `LoadingComponent`, then applies the same anonymous redirect and
+authenticated error behavior as `ComposedRoute`. `legacyPublic` and
+`legacyPermission` are RC migration bridges for string-based providers only;
+new one-rule integrations should not set them.
 
 Without a provider, `permission` is ignored and the route renders without client-side gating.
 
@@ -513,10 +621,12 @@ Schema-backed operation hooks receive identity directly in their operation
 context. `getRequestIdentity()` remains for RC hooks that have not migrated to
 operations; do not add a second identity lookup to an operation hook.
 
-Pass a server auth provider to `stack()`. The identity is resolved lazily and **at most once per request**, no matter how many hooks read it:
+Pass a server auth provider to `stack()`. For unmigrated RC plugins, identity
+is resolved lazily and **at most once per request**, no matter how many legacy
+hooks read it:
 
 ```ts
-import { stack, getRequestIdentity } from "@btst/stack/api";
+import { stack } from "@btst/stack/api";
 import type { StackServerAuthProvider } from "@btst/stack/api";
 import { auth } from "@/lib/auth"; // better-auth server instance
 
@@ -531,20 +641,13 @@ export const myStack = stack({
   basePath: "/api/data",
   adapter: memoryAdapter,
   auth: serverAuthProvider,
-  plugins: {
-    blog: blogBackendPlugin({
-      hooks: {
-        onBeforeCreatePost: async (data, ctx) => {
-          const identity = await getRequestIdentity(ctx.headers);
-          if (!identity) throw new Error("Unauthorized");
-        },
-      },
-    }),
-  },
+  plugins: { /* RC plugins */ },
 });
 ```
 
-`getRequestIdentity(headers)` returns `null` when no auth provider is configured, outside a request handled by `stack().handler`, or when the user is unauthenticated — so hooks written against it are safe in all setups.
+`getRequestIdentity(headers)` remains available only for those unmigrated RC
+hooks. Blog operations receive validated identity in their readonly operation
+context and must not perform a second global identity lookup.
 
 <AutoTypeTable path="../packages/stack/src/shared/auth-types.ts" name="StackServerAuthProvider" />
 

@@ -79,6 +79,12 @@ export interface SchemaBoundStackAuthProvider extends StackAuthProvider {
 	readonly contract: {
 		parseIdentity(identity: unknown): StackIdentity | null;
 	};
+	/** Runtime hook used by descriptor-aware built-in plugin gates. */
+	readonly usePermission?: (permission: unknown) => {
+		readonly can: boolean;
+		readonly isPending: boolean;
+		readonly error?: Error;
+	};
 }
 
 /** True when a browser provider exposes the v3 schema-bound auth protocol. */

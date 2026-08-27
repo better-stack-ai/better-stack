@@ -4,6 +4,7 @@ import {
 	type APIRequestContext,
 	type Page,
 } from "@playwright/test";
+import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
 
 // ─── API Helpers ────────────────────────────────────────────────────────────────
 
@@ -13,7 +14,10 @@ async function createBlogPost(
 	data: { title: string; slug: string },
 ) {
 	const response = await request.post("/api/data/posts", {
-		headers: { "content-type": "application/json" },
+		headers: {
+			...mockAuthHeaders(),
+			"content-type": "application/json",
+		},
 		data: {
 			title: data.title,
 			content: `Content for ${data.title}`,
@@ -693,6 +697,10 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 
 test.describe("My Comments Page", () => {
 	const AUTHOR_ID = "olliethedev";
+
+	test.beforeEach(async ({ context }) => {
+		await setMockAuthCookie(context, AUTHOR_ID);
+	});
 
 	test("page renders without console errors", async ({ page }) => {
 		const errors: string[] = [];

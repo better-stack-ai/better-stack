@@ -201,7 +201,7 @@ const PLUGINS: PluginConfig[] = [
 		// in any strict-mode TS project.
 		extraNpmDevDeps: ["@types/slug"],
 		extraRegistryDeps: [],
-		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts"],
+		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts", "permissions.ts"],
 	},
 	{
 		name: "ai-chat",

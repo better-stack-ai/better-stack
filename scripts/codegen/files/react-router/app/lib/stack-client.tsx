@@ -23,7 +23,10 @@ const getBaseURL = () =>
 		: process.env.BASE_URL || "http://localhost:3008";
 
 // Create the client library with plugins
-export const getStackClient = (queryClient: QueryClient) => {
+export const getStackClient = (
+	queryClient: QueryClient,
+	options?: { headers?: Headers },
+) => {
 	const baseURL = getBaseURL();
 	return createStackClient({
 		plugins: {
@@ -40,6 +43,7 @@ export const getStackClient = (queryClient: QueryClient) => {
 				siteBaseURL: baseURL,
 				siteBasePath: "/pages",
 				queryClient: queryClient,
+				headers: options?.headers,
 				seo: {
 					siteName: "BTST Blog",
 					author: "BTST Team",

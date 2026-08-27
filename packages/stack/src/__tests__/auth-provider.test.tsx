@@ -11,6 +11,10 @@ import {
 	useIdentity,
 	type StackAuthProvider,
 } from "../context";
+import { defineAuthorization } from "../authorization";
+import { createClientAuth } from "../authorization/client";
+import { blogPermissions } from "../plugins/blog/permissions";
+import { z } from "zod";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -364,6 +368,112 @@ describe("route gating (ComposedRoute permission)", () => {
 		);
 
 		expect(container.textContent).toBe("secret page");
+	});
+
+	it("evaluates a plugin-owned descriptor through one-rule client auth", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [blogPermissions] as const,
+			rules: ({ blog }) => [blog.post.create.when(() => false)],
+		});
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => ({ id: "user-1" }),
+		});
+
+		await render(
+			<Providers auth={auth}>
+				<ComposedRoute
+					path="/blog/new"
+					PageComponent={Page}
+					LoadingComponent={Loading}
+					ErrorComponent={ErrorUi}
+					onError={() => {}}
+					permission={blogPermissions.post.create({ publish: "draft" })}
+				/>
+			</Providers>,
+		);
+
+		expect(container.textContent).toBe("error page");
+	});
+
+	it("keeps an explicitly public descriptor open for legacy providers", async () => {
+		const can = vi.fn(() => false);
+
+		await render(
+			<Providers auth={provider({ can })}>
+				<ComposedRoute
+					path="/blog"
+					PageComponent={Page}
+					LoadingComponent={Loading}
+					ErrorComponent={ErrorUi}
+					onError={() => {}}
+					permission={blogPermissions.post.read({ scope: "published" })}
+					legacyPublic
+				/>
+			</Providers>,
+		);
+
+		expect(container.textContent).toBe("secret page");
+		expect(can).not.toHaveBeenCalled();
+	});
+
+	it("uses a route's legacy permission override for string providers", async () => {
+		const can = vi.fn(
+			({ resource, action }) => resource === "blog:draft" && action === "read",
+		);
+
+		await render(
+			<Providers auth={provider({ can })}>
+				<ComposedRoute
+					path="/blog/drafts"
+					PageComponent={Page}
+					LoadingComponent={Loading}
+					ErrorComponent={ErrorUi}
+					onError={() => {}}
+					permission={blogPermissions.post.read({ scope: "drafts" })}
+					legacyPermission={{ resource: "blog:draft", action: "read" }}
+				/>
+			</Providers>,
+		);
+
+		expect(container.textContent).toBe("secret page");
+		expect(can).toHaveBeenCalledWith(
+			expect.objectContaining({
+				resource: "blog:draft",
+				action: "read",
+			}),
+		);
+	});
+
+	it("ignores a legacy permission override for one-rule providers", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [blogPermissions] as const,
+			rules: ({ blog }) => [blog.post.read.when(() => false)],
+		});
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => ({ id: "user-1" }),
+		});
+
+		await render(
+			<Providers auth={auth}>
+				<ComposedRoute
+					path="/blog/drafts"
+					PageComponent={Page}
+					LoadingComponent={Loading}
+					ErrorComponent={ErrorUi}
+					onError={() => {}}
+					permission={blogPermissions.post.read({ scope: "drafts" })}
+					legacyPermission={{ resource: "blog:draft", action: "read" }}
+				/>
+			</Providers>,
+		);
+
+		expect(container.textContent).toBe("error page");
 	});
 
 	it("redirects unauthenticated users to loginPath via router.navigate", async () => {

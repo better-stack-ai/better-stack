@@ -168,7 +168,7 @@ const blogHooks: BlogBackendHooks = {
 	},
 	onBeforeListPosts: async (filter) => {
 		if (filter.published === false) {
-			console.log("onBeforeListPosts: checking auth for drafts");
+			console.log("onBeforeListPosts: loading drafts");
 		}
 	},
 	onPostCreated: async (post) => {

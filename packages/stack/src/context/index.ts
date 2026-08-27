@@ -1,6 +1,12 @@
 export * from "./provider";
 export * from "./router";
-export { CanAccess, useCan, useIdentity } from "./auth";
+export {
+	CanAccess,
+	PermissionAccess,
+	PermissionCheck,
+	useCan,
+	useIdentity,
+} from "./auth";
 export { useNotify, defaultNotifyProvider } from "./notify";
 export { useTranslate, type TranslateFn } from "./i18n";
 export type {

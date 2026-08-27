@@ -1,6 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { setMockAuthCookie } from "./helpers/mock-auth";
+
+test.beforeEach(async ({ context }) => {
+	await setMockAuthCookie(context);
+});
 
 // Load the test image from fixtures once
 const testImageBuffer = readFileSync(

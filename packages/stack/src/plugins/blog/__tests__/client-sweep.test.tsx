@@ -12,11 +12,21 @@ import {
 	type StackAuthProvider,
 	type StackI18nProvider,
 } from "@btst/stack/context";
+import { defineAuthorization } from "@btst/stack/authorization";
+import { createClientAuth } from "@btst/stack/authorization/client";
+import { ComposedRoute } from "@btst/stack/client/components";
 import { FeaturedImageField } from "../client/components/forms/image-field";
-import { EditPostForm } from "../client/components/forms/post-forms";
+import {
+	AddPostForm,
+	EditPostForm,
+} from "../client/components/forms/post-forms";
 import { PostsList } from "../client/components/shared/posts-list";
 import { SearchInput } from "../client/components/shared/search-input";
+import { DefaultError } from "../client/components/shared/default-error";
+import { HomePageComponent } from "../client/components/pages/home-page";
 import type { SerializedPost } from "../types";
+import { blogPermissions } from "../permissions";
+import { z } from "zod";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -33,6 +43,7 @@ const hooks = vi.hoisted(() => ({
 	useDeletePost: vi.fn(),
 	usePostForm: vi.fn(),
 	usePostSearch: vi.fn(),
+	useSuspensePosts: vi.fn(),
 	useTags: vi.fn(),
 }));
 
@@ -88,6 +99,12 @@ beforeEach(() => {
 		},
 	});
 	hooks.usePostSearch.mockReturnValue({ data: [], isLoading: false });
+	hooks.useSuspensePosts.mockReturnValue({
+		posts: [],
+		loadMore: vi.fn(),
+		hasMore: false,
+		isLoadingMore: false,
+	});
 	hooks.useTags.mockReturnValue({ tags: [], isLoading: false, error: null });
 });
 
@@ -209,7 +226,159 @@ describe("FeaturedImageField notifications (useNotify)", () => {
 	});
 });
 
-describe("EditPostForm delete control (CanAccess)", () => {
+describe("Blog route authorization errors", () => {
+	it("keeps the legacy draft-list permission for string providers", async () => {
+		const can = vi.fn(
+			({ resource, action }: { resource: string; action: string }) =>
+				resource === "blog:draft" && action === "read",
+		);
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				overrides={{ blog: {} }}
+				auth={{ getIdentity: () => ({ id: "user-1" }), can }}
+				initialIdentity={{ id: "user-1" }}
+			>
+				<HomePageComponent published={false} />
+			</StackProvider>,
+		);
+
+		expect(can).toHaveBeenCalledWith(
+			expect.objectContaining({
+				resource: "blog:draft",
+				action: "read",
+			}),
+		);
+	});
+
+	it("redirects an anonymous user when a protected route query returns 401", async () => {
+		const navigate = vi.fn();
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const error = Object.assign(new Error("Authentication required"), {
+			statusCode: 401,
+		});
+		const ProtectedQueryPage = () => {
+			throw error;
+		};
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={{ navigate }}
+				overrides={{ blog: {} }}
+				auth={{ getIdentity: () => null, loginPath: "/login" }}
+				initialIdentity={null}
+			>
+				<ComposedRoute
+					path="/blog/example/edit"
+					PageComponent={ProtectedQueryPage}
+					ErrorComponent={DefaultError}
+					LoadingComponent={() => null}
+					onError={() => {}}
+				/>
+			</StackProvider>,
+		);
+
+		expect(navigate).toHaveBeenCalledWith("/login");
+		expect(texts()).not.toContain("Something went wrong");
+	});
+
+	it("treats a route-data 401 as authoritative over a stale client identity", async () => {
+		const navigate = vi.fn();
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const ProtectedQueryPage = () => {
+			throw Object.assign(new Error("Session expired"), { statusCode: 401 });
+		};
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={{ navigate }}
+				overrides={{ blog: {} }}
+				auth={{
+					getIdentity: () => ({ id: "stale-user", role: "user" }),
+					loginPath: "/login",
+				}}
+				initialIdentity={{ id: "stale-user", role: "user" }}
+			>
+				<ComposedRoute
+					path="/blog/example/edit"
+					PageComponent={ProtectedQueryPage}
+					ErrorComponent={DefaultError}
+					LoadingComponent={() => null}
+					onError={() => {}}
+				/>
+			</StackProvider>,
+		);
+
+		expect(navigate).toHaveBeenCalledWith("/login");
+		expect(texts()).not.toContain("Something went wrong");
+	});
+
+	it("redirects an authoritative route-data 401 while client identity is pending", async () => {
+		const navigate = vi.fn();
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const ProtectedQueryPage = () => {
+			throw Object.assign(new Error("Authentication required"), {
+				statusCode: 401,
+			});
+		};
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={{ navigate }}
+				overrides={{ blog: {} }}
+				auth={{
+					getIdentity: () => new Promise(() => {}),
+					loginPath: "/login",
+				}}
+			>
+				<ComposedRoute
+					path="/blog/example/edit"
+					PageComponent={ProtectedQueryPage}
+					ErrorComponent={DefaultError}
+					LoadingComponent={() => null}
+					onError={() => {}}
+				/>
+			</StackProvider>,
+		);
+
+		expect(navigate).toHaveBeenCalledWith("/login");
+		expect(texts()).not.toContain("Something went wrong");
+	});
+});
+
+describe("EditPostForm operation descriptor controls", () => {
+	it("separates draft creation from create-and-publish presentation", async () => {
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [blogPermissions] as const,
+			rules: ({ blog }) => [
+				blog.post.create.when(({ facts }) => facts.publish === "draft"),
+			],
+		});
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => ({ id: "user-1", role: "user" as const }),
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				overrides={{ blog: {} }}
+				auth={auth}
+				initialIdentity={{ id: "user-1", role: "user" }}
+			>
+				<AddPostForm onClose={() => {}} onSuccess={() => {}} />
+			</StackProvider>,
+		);
+
+		expect(texts()).toContain("Create Post");
+		expect(texts()).not.toContain("Published");
+	});
+
 	it("shows the delete button without an auth provider", async () => {
 		await render(
 			<StackProvider basePath="/pages" overrides={{ blog: {} }}>
@@ -254,6 +423,40 @@ describe("EditPostForm delete control (CanAccess)", () => {
 				params: { id: post.id },
 			}),
 		);
+	});
+
+	it("uses the Blog update and delete descriptors with one-rule client authorization", async () => {
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [blogPermissions] as const,
+			rules: ({ blog }) => [
+				blog.post.update.when(() => false),
+				blog.post.delete.when(() => false),
+			],
+		});
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => ({ id: "user-1", role: "user" as const }),
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				overrides={{ blog: {} }}
+				auth={auth}
+				initialIdentity={{ id: "user-1", role: "user" }}
+			>
+				<EditPostForm
+					postSlug="hello-world"
+					onClose={() => {}}
+					onSuccess={() => {}}
+				/>
+			</StackProvider>,
+		);
+
+		expect(texts()).toContain("Update Post");
+		expect(texts()).not.toContain("Published");
+		expect(texts()).not.toContain("Delete Post");
 	});
 });
 

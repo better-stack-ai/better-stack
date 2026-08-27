@@ -1,36 +1,57 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import {
-	defineBackendPlugin,
-	defineOperation,
-	type OperationContext,
-	type OperationErrorContext,
-} from "@btst/stack/plugins/api";
-import { createEndpoint } from "@btst/stack/plugins/api";
+import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
+import type { QueryClient } from "@tanstack/react-query";
 import { AuthorizationError } from "../../../authorization/server";
-import { z } from "zod";
 import { blogSchema as dbSchema } from "../db";
-import type { Post, PostWithPostTag, Tag } from "../types";
-import { slugify } from "../utils";
-import { createPostSchema, updatePostSchema } from "../schemas";
-import { getAllPosts, getPostBySlug, getAllTags } from "./getters";
+import { getAllPosts, getAllTags, getPostBySlug } from "./getters";
 import {
 	createPost as createPostMutation,
-	updatePost as updatePostMutation,
 	deletePost as deletePostMutation,
 	type CreatePostInput,
 	type UpdatePostInput,
+	updatePost as updatePostMutation,
 } from "./mutations";
+import {
+	BlogOperationError,
+	CreatePostOperationInputSchema,
+	NextPreviousPostsQuerySchema,
+	PostListQuerySchema,
+	UpdatePostOperationInputSchema,
+	createBlogOperations,
+	type BlogBackendHooks,
+} from "./operations";
 import { BLOG_QUERY_KEYS } from "./query-key-defs";
 import { serializePost, serializeTag } from "./serializers";
-import type { QueryClient } from "@tanstack/react-query";
-import { runHook } from "../../utils";
-import { blogPermissions } from "../permissions";
-import type { PermissionFactsFor } from "@btst/stack/authorization";
 
-/**
- * Route keys for the blog plugin — matches the keys returned by
- * `stackClient.router.getRoute(path).routeKey`.
- */
+export {
+	CreatePostOperationInputSchema,
+	NextPreviousPostsQuerySchema,
+	PostListQuerySchema,
+	UpdatePostOperationInputSchema,
+} from "./operations";
+export type {
+	BlogApiContext,
+	BlogBackendHooks,
+	BlogCreateErrorContext,
+	BlogCreateOperationContext,
+	BlogCreateResultContext,
+	BlogDeleteErrorContext,
+	BlogDeleteOperationContext,
+	BlogDeleteResultContext,
+	BlogListErrorContext,
+	BlogListOperationContext,
+	BlogListResultContext,
+	BlogNextPreviousErrorContext,
+	BlogNextPreviousOperationContext,
+	BlogNextPreviousResultContext,
+	BlogUpdateErrorContext,
+	BlogUpdateOperationContext,
+	BlogUpdateResultContext,
+	SerializedNextPreviousPostsResult,
+	SerializedPostListResult,
+} from "./operations";
+
+/** Route keys returned by the Blog client plugin. */
 export type BlogRouteKey =
 	| "posts"
 	| "drafts"
@@ -39,10 +60,6 @@ export type BlogRouteKey =
 	| "newPost"
 	| "editPost";
 
-/**
- * Overloaded signature for `prefetchForRoute`.
- * TypeScript enforces the correct params for each routeKey at call sites.
- */
 interface BlogPrefetchForRoute {
 	(key: "posts" | "drafts" | "newPost", qc: QueryClient): Promise<void>;
 	(
@@ -53,10 +70,16 @@ interface BlogPrefetchForRoute {
 	(key: "tag", qc: QueryClient, params: { tagSlug: string }): Promise<void>;
 }
 
+/**
+ * SSG is a trusted raw-data path: it intentionally bypasses request
+ * authorization and seeds only the route data selected by the caller. Build
+ * protected routes only when the resulting artifact has equivalent deployment
+ * access controls; static output is commonly public.
+ */
 function createBlogPrefetchForRoute(adapter: Adapter): BlogPrefetchForRoute {
 	return async function prefetchForRoute(
 		key: BlogRouteKey,
-		qc: QueryClient,
+		queryClient: QueryClient,
 		params?: Record<string, string>,
 	): Promise<void> {
 		switch (key) {
@@ -67,11 +90,17 @@ function createBlogPrefetchForRoute(adapter: Adapter): BlogPrefetchForRoute {
 					getAllPosts(adapter, { published, limit: 10 }),
 					getAllTags(adapter),
 				]);
-				qc.setQueryData(BLOG_QUERY_KEYS.postsList({ published, limit: 10 }), {
-					pages: [result.items.map(serializePost)],
-					pageParams: [0],
-				});
-				qc.setQueryData(BLOG_QUERY_KEYS.tagsList(), tags.map(serializeTag));
+				queryClient.setQueryData(
+					BLOG_QUERY_KEYS.postsList({ published, limit: 10 }),
+					{
+						pages: [result.items.map(serializePost)],
+						pageParams: [0],
+					},
+				);
+				queryClient.setQueryData(
+					BLOG_QUERY_KEYS.tagsList(),
+					tags.map(serializeTag),
+				);
 				break;
 			}
 			case "post":
@@ -79,7 +108,7 @@ function createBlogPrefetchForRoute(adapter: Adapter): BlogPrefetchForRoute {
 				const slug = params?.slug ?? "";
 				if (slug) {
 					const post = await getPostBySlug(adapter, slug);
-					qc.setQueryData(
+					queryClient.setQueryData(
 						BLOG_QUERY_KEYS.postDetail(slug),
 						post ? serializePost(post) : null,
 					);
@@ -92,14 +121,17 @@ function createBlogPrefetchForRoute(adapter: Adapter): BlogPrefetchForRoute {
 					getAllPosts(adapter, { published: true, limit: 10, tagSlug }),
 					getAllTags(adapter),
 				]);
-				qc.setQueryData(
+				queryClient.setQueryData(
 					BLOG_QUERY_KEYS.postsList({ published: true, limit: 10, tagSlug }),
 					{
 						pages: [result.items.map(serializePost)],
 						pageParams: [0],
 					},
 				);
-				qc.setQueryData(BLOG_QUERY_KEYS.tagsList(), tags.map(serializeTag));
+				queryClient.setQueryData(
+					BLOG_QUERY_KEYS.tagsList(),
+					tags.map(serializeTag),
+				);
 				break;
 			}
 			default:
@@ -108,268 +140,48 @@ function createBlogPrefetchForRoute(adapter: Adapter): BlogPrefetchForRoute {
 	} as BlogPrefetchForRoute;
 }
 
-export const PostListQuerySchema = z.object({
-	slug: z.string().optional(),
-	tagSlug: z.string().optional(),
-	offset: z.coerce.number().int().min(0).optional(),
-	limit: z.coerce.number().int().min(1).max(100).optional(),
-	query: z.string().max(200).optional(),
-	published: z
-		.string()
-		.optional()
-		.transform((val) => {
-			if (val === undefined) return undefined;
-			if (val === "true") return true;
-			if (val === "false") return false;
-			return undefined;
-		}),
-});
+type EndpointErrorFactory = (...args: any[]) => Error;
 
-export const NextPreviousPostsQuerySchema = z.object({
-	date: z.coerce.date(),
-});
-
-const DeletePostInputSchema = z.object({ id: z.string() });
-type DeletePostInput = z.output<typeof DeletePostInputSchema>;
-type DeletePostFacts = PermissionFactsFor<typeof blogPermissions.post.delete>;
-type DeletePostResult = { readonly success: true };
-
-function normalizeOperationError(error: unknown): Error {
-	if (error instanceof Error) return error;
-	return new Error(
-		typeof error === "string" ? error : "Blog delete operation failed.",
-		{ cause: error },
-	);
-}
-
-/** Typed lifecycle context for the Blog delete operation. */
-export interface BlogDeleteOperationContext
-	extends OperationContext<DeletePostInput, DeletePostFacts> {
-	readonly params: { readonly id: string };
-	readonly headers?: Headers;
-}
-
-/** Typed post-execution lifecycle context for the Blog delete operation. */
-export interface BlogDeleteResultContext extends BlogDeleteOperationContext {
-	readonly result: DeletePostResult;
-}
-
-/** Typed error lifecycle context after Blog delete authorization succeeds. */
-export interface BlogDeleteErrorContext
-	extends OperationErrorContext<DeletePostInput, DeletePostFacts> {
-	readonly params: { readonly id: string };
-	readonly headers?: Headers;
+async function adaptOperationToHttp<TResult>(
+	execute: () => Promise<TResult>,
+	error: EndpointErrorFactory,
+): Promise<TResult> {
+	try {
+		return await execute();
+	} catch (cause) {
+		if (
+			cause instanceof AuthorizationError ||
+			cause instanceof BlogOperationError
+		) {
+			throw error(cause.statusCode, {
+				message: cause.message,
+				code: cause.code,
+			});
+		}
+		throw cause;
+	}
 }
 
 /**
- * Context passed to blog API hooks
- */
-export interface BlogApiContext<TBody = any, TParams = any, TQuery = any> {
-	body?: TBody;
-	params?: TParams;
-	query?: TQuery;
-	request?: Request;
-	headers?: Headers;
-	[key: string]: any;
-}
-
-/**
- * Configuration hooks for blog backend plugin
- * All hooks are optional and allow consumers to customize behavior
- */
-export interface BlogBackendHooks {
-	/**
-	 * Called before listing posts. Throw an error to deny access.
-	 * @param filter - Query parameters for filtering posts
-	 * @param context - Request context with headers, etc.
-	 */
-	onBeforeListPosts?: (
-		filter: z.infer<typeof PostListQuerySchema>,
-		context: BlogApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called before creating a post. Throw an error to deny access.
-	 * @param data - Post data being created
-	 * @param context - Request context with headers, etc.
-	 */
-	onBeforeCreatePost?: (
-		data: z.infer<typeof createPostSchema>,
-		context: BlogApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called before updating a post. Throw an error to deny access.
-	 * @param postId - ID of the post being updated
-	 * @param data - Updated post data
-	 * @param context - Request context with headers, etc.
-	 */
-	onBeforeUpdatePost?: (
-		postId: string,
-		data: z.infer<typeof updatePostSchema>,
-		context: BlogApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called before deleting a post. Throw an error to deny access.
-	 * @param postId - ID of the post being deleted
-	 * @param context - Request context with headers, etc.
-	 */
-	onBeforeDeletePost?: (
-		postId: string,
-		context: BlogDeleteOperationContext,
-	) => Promise<void> | void;
-
-	/**
-	 * Called after posts are read successfully
-	 * @param posts - The list of posts returned by the query
-	 * @param filter - Query parameters used for filtering
-	 * @param context - Request context
-	 */
-	onPostsRead?: (
-		posts: Array<Post & { tags: Tag[] }>,
-		filter: z.infer<typeof PostListQuerySchema>,
-		context: BlogApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called after a post is created successfully
-	 * @param post - The created post
-	 * @param context - Request context
-	 */
-	onPostCreated?: (post: Post, context: BlogApiContext) => Promise<void> | void;
-	/**
-	 * Called after a post is updated successfully
-	 * @param post - The updated post
-	 * @param context - Request context
-	 */
-	onPostUpdated?: (post: Post, context: BlogApiContext) => Promise<void> | void;
-	/**
-	 * Called after a post is deleted successfully
-	 * @param postId - ID of the deleted post
-	 * @param context - Request context
-	 */
-	onPostDeleted?: (
-		postId: string,
-		context: BlogDeleteResultContext,
-	) => Promise<void> | void;
-
-	/**
-	 * Called when listing posts fails
-	 * @param error - The error that occurred
-	 * @param context - Request context
-	 */
-	onListPostsError?: (
-		error: Error,
-		context: BlogApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called when creating a post fails
-	 * @param error - The error that occurred
-	 * @param context - Request context
-	 */
-	onCreatePostError?: (
-		error: Error,
-		context: BlogApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called when updating a post fails
-	 * @param error - The error that occurred
-	 * @param context - Request context
-	 */
-	onUpdatePostError?: (
-		error: Error,
-		context: BlogApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called when deleting a post fails
-	 * @param error - The error that occurred
-	 * @param context - Request context
-	 */
-	onDeletePostError?: (
-		error: Error,
-		context: BlogDeleteErrorContext,
-	) => Promise<void> | void;
-}
-
-/**
- * Blog backend plugin
- * Provides API endpoints for managing blog posts
- * Uses better-db adapter for database operations
- *
- * @param hooks - Optional configuration hooks for customizing plugin behavior
+ * Blog backend plugin. Every maintained HTTP endpoint adapts the same
+ * operation exposed by `forRequest(request).api.blog` and `internal.blog`.
  */
 export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 	defineBackendPlugin({
 		name: "blog",
-
 		dbPlugin: dbSchema,
+		operations: (adapter: Adapter) => createBlogOperations(adapter, hooks),
 
-		operations: (adapter: Adapter) => ({
-			deletePost: defineOperation({
-				input: DeletePostInputSchema,
-				permission: blogPermissions.post.delete,
-				facts: async ({ input }) => {
-					const post = await adapter.findOne<Post>({
-						model: "post",
-						where: [{ field: "id", value: input.id }],
-					});
-					return {
-						id: input.id,
-						...(post?.authorId ? { authorId: post.authorId } : {}),
-					};
-				},
-				before: async (operationContext) => {
-					if (!hooks?.onBeforeDeletePost) return;
-					const context: BlogDeleteOperationContext = {
-						...operationContext,
-						params: { id: operationContext.input.id },
-						...(operationContext.request
-							? { headers: operationContext.request.headers }
-							: {}),
-					};
-					try {
-						await hooks.onBeforeDeletePost(operationContext.input.id, context);
-					} catch (error) {
-						throw new AuthorizationError(
-							403,
-							error instanceof Error
-								? error.message
-								: "Unauthorized: Cannot delete post",
-						);
-					}
-				},
-				execute: async ({ input }) => {
-					await deletePostMutation(adapter, input.id);
-					return { success: true } as const;
-				},
-				after: async (operationContext) => {
-					await hooks?.onPostDeleted?.(operationContext.input.id, {
-						...operationContext,
-						params: { id: operationContext.input.id },
-						...(operationContext.request
-							? { headers: operationContext.request.headers }
-							: {}),
-					});
-				},
-				onError: async (operationContext) => {
-					await hooks?.onDeletePostError?.(
-						normalizeOperationError(operationContext.error),
-						{
-							...operationContext,
-							params: { id: operationContext.input.id },
-							...(operationContext.request
-								? { headers: operationContext.request.headers }
-								: {}),
-						},
-					);
-				},
-			}),
-		}),
-
-		api: (adapter) => ({
+		/**
+		 * Explicit lower-level data API for SSG, jobs, and migration code.
+		 * These functions bypass authorization and lifecycle composition.
+		 */
+		api: (adapter: Adapter) => ({
 			getAllPosts: (params?: Parameters<typeof getAllPosts>[1]) =>
 				getAllPosts(adapter, params),
 			getPostBySlug: (slug: string) => getPostBySlug(adapter, slug),
 			getAllTags: () => getAllTags(adapter),
 			prefetchForRoute: createBlogPrefetchForRoute(adapter),
-			// Mutations
 			createPost: (input: CreatePostInput) =>
 				createPostMutation(adapter, input),
 			updatePost: (id: string, input: UpdatePostInput) =>
@@ -377,191 +189,57 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 			deletePost: (id: string) => deletePostMutation(adapter, id),
 		}),
 
-		routes: (adapter: Adapter, _context, operations) => {
+		routes: (_adapter: Adapter, _context, operations) => {
 			const listPosts = createEndpoint(
 				"/posts",
-				{
-					method: "GET",
-					query: PostListQuerySchema,
-				},
-				async (ctx) => {
-					const { query, headers } = ctx;
-					const context: BlogApiContext = { query, headers };
-
-					try {
-						if (hooks?.onBeforeListPosts) {
-							await runHook(
-								() => hooks.onBeforeListPosts!(query, context),
-								ctx.error,
-								"Unauthorized: Cannot list posts",
-							);
-						}
-
-						const result = await getAllPosts(adapter, query);
-
-						if (hooks?.onPostsRead) {
-							await hooks.onPostsRead(result.items, query, context);
-						}
-
-						return result;
-					} catch (error) {
-						if (hooks?.onListPostsError) {
-							await hooks.onListPostsError(error as Error, context);
-						}
-						throw error;
-					}
-				},
+				{ method: "GET", query: PostListQuerySchema, requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.listPosts(ctx.query, ctx.request),
+						ctx.error,
+					),
 			);
+
 			const createPost = createEndpoint(
 				"/posts",
 				{
 					method: "POST",
-					body: createPostSchema,
+					body: CreatePostOperationInputSchema,
+					requireRequest: true,
 				},
-				async (ctx) => {
-					const context: BlogApiContext = {
-						body: ctx.body,
-						headers: ctx.headers,
-					};
-
-					try {
-						if (hooks?.onBeforeCreatePost) {
-							await runHook(
-								() => hooks.onBeforeCreatePost!(ctx.body, context),
-								ctx.error,
-								"Unauthorized: Cannot create post",
-							);
-						}
-
-						// Destructure and discard createdAt/updatedAt — timestamps are always server-generated
-						const {
-							tags,
-							slug: rawSlug,
-							createdAt: _ca,
-							updatedAt: _ua,
-							...postData
-						} = ctx.body;
-
-						// Always slugify to ensure URL-safe slug, whether provided or generated from title
-						const slug = slugify(rawSlug || postData.title);
-
-						// Validate that slugification produced a non-empty result
-						if (!slug) {
-							throw ctx.error(400, {
-								message:
-									"Invalid slug: must contain at least one alphanumeric character",
-							});
-						}
-
-						const newPost = await createPostMutation(adapter, {
-							...postData,
-							slug,
-							tags: tags ?? [],
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						});
-
-						if (hooks?.onPostCreated) {
-							await hooks.onPostCreated(newPost, context);
-						}
-
-						return newPost;
-					} catch (error) {
-						if (hooks?.onCreatePostError) {
-							await hooks.onCreatePostError(error as Error, context);
-						}
-						throw error;
-					}
-				},
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.createPost(ctx.body, ctx.request),
+						ctx.error,
+					),
 			);
+
 			const updatePost = createEndpoint(
 				"/posts/:id",
 				{
 					method: "PUT",
-					body: updatePostSchema,
-				},
-				async (ctx) => {
-					const context: BlogApiContext = {
-						body: ctx.body,
-						params: ctx.params,
-						headers: ctx.headers,
-					};
-
-					try {
-						if (hooks?.onBeforeUpdatePost) {
-							await runHook(
-								() =>
-									hooks.onBeforeUpdatePost!(ctx.params.id, ctx.body, context),
-								ctx.error,
-								"Unauthorized: Cannot update post",
-							);
-						}
-
-						// Destructure and discard createdAt/updatedAt — timestamps are always server-generated
-						const {
-							tags,
-							slug: rawSlug,
-							createdAt: _ca,
-							updatedAt: _ua,
-							...restPostData
-						} = ctx.body;
-
-						// Sanitize slug if provided to ensure it's URL-safe
-						const slugified = rawSlug ? slugify(rawSlug) : undefined;
-
-						// Validate that slugification produced a non-empty result (if slug was provided)
-						if (rawSlug && !slugified) {
-							throw ctx.error(400, {
-								message:
-									"Invalid slug: must contain at least one alphanumeric character",
-							});
-						}
-
-						const updated = await updatePostMutation(adapter, ctx.params.id, {
-							...restPostData,
-							...(slugified ? { slug: slugified } : {}),
-							tags: tags ?? [],
-						});
-
-						if (!updated) {
-							throw ctx.error(404, { message: "Post not found" });
-						}
-
-						if (hooks?.onPostUpdated) {
-							await hooks.onPostUpdated(updated, context);
-						}
-
-						return updated;
-					} catch (error) {
-						if (hooks?.onUpdatePostError) {
-							await hooks.onUpdatePostError(error as Error, context);
-						}
-						throw error;
-					}
-				},
-			);
-			const deletePost = createEndpoint(
-				"/posts/:id",
-				{
-					method: "DELETE",
+					body: UpdatePostOperationInputSchema.shape.data,
 					requireRequest: true,
 				},
-				async (ctx) => {
-					try {
-						return await operations.deletePost(
-							{ id: ctx.params.id },
-							ctx.request,
-						);
-					} catch (error) {
-						if (error instanceof AuthorizationError) {
-							throw ctx.error(error.statusCode, {
-								message: error.message,
-								code: error.code,
-							});
-						}
-						throw error;
-					}
-				},
+				(ctx) =>
+					adaptOperationToHttp(
+						() =>
+							operations.updatePost(
+								{ id: ctx.params.id, data: ctx.body },
+								ctx.request,
+							),
+						ctx.error,
+					),
+			);
+
+			const deletePost = createEndpoint(
+				"/posts/:id",
+				{ method: "DELETE", requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.deletePost({ id: ctx.params.id }, ctx.request),
+						ctx.error,
+					),
 			);
 
 			const getNextPreviousPosts = createEndpoint(
@@ -569,134 +247,23 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 				{
 					method: "GET",
 					query: NextPreviousPostsQuerySchema,
+					requireRequest: true,
 				},
-				async (ctx) => {
-					const { query, headers } = ctx;
-					const context: BlogApiContext = { query, headers };
-
-					try {
-						if (hooks?.onBeforeListPosts) {
-							await runHook(
-								() => hooks.onBeforeListPosts!({ published: true }, context),
-								ctx.error,
-								"Unauthorized: Cannot list posts",
-							);
-						}
-
-						const date = query.date;
-
-						// Get previous post (createdAt < date, newest first)
-						const previousPosts = await adapter.findMany<PostWithPostTag>({
-							model: "post",
-							limit: 1,
-							where: [
-								{
-									field: "createdAt",
-									value: date,
-									operator: "lt" as const,
-								},
-								{
-									field: "published",
-									value: true,
-									operator: "eq" as const,
-								},
-							],
-							sortBy: {
-								field: "createdAt",
-								direction: "desc",
-							},
-							join: {
-								postTag: true,
-							},
-						});
-
-						const nextPosts = await adapter.findMany<PostWithPostTag>({
-							model: "post",
-							limit: 1,
-							where: [
-								{
-									field: "createdAt",
-									value: date,
-									operator: "gt" as const,
-								},
-								{
-									field: "published",
-									value: true,
-									operator: "eq" as const,
-								},
-							],
-							sortBy: {
-								field: "createdAt",
-								direction: "asc",
-							},
-							join: {
-								postTag: true,
-							},
-						});
-
-						// Collect unique tag IDs from joined data
-						const tagIds = new Set<string>();
-						const allPosts = [...previousPosts, ...nextPosts];
-						for (const post of allPosts) {
-							if (post.postTag) {
-								for (const pt of post.postTag) {
-									tagIds.add(pt.tagId);
-								}
-							}
-						}
-
-						// Fetch tags if needed
-						const tagMap = new Map<string, Tag>();
-						if (tagIds.size > 0) {
-							const tags = await adapter.findMany<Tag>({
-								model: "tag",
-							});
-							for (const tag of tags) {
-								if (tagIds.has(tag.id)) {
-									tagMap.set(tag.id, tag);
-								}
-							}
-						}
-
-						// Helper to map post with tags (spread to avoid circular references)
-						const mapPostWithTags = (post: PostWithPostTag) => {
-							const tags = (post.postTag || [])
-								.map((pt) => {
-									const tag = tagMap.get(pt.tagId);
-									return tag ? { ...tag } : undefined;
-								})
-								.filter((tag): tag is Tag => tag !== undefined);
-							const { postTag: _, ...postWithoutJoin } = post;
-							return {
-								...postWithoutJoin,
-								tags,
-							};
-						};
-
-						return {
-							previous: previousPosts[0]
-								? mapPostWithTags(previousPosts[0])
-								: null,
-							next: nextPosts[0] ? mapPostWithTags(nextPosts[0]) : null,
-						};
-					} catch (error) {
-						// Error hook
-						if (hooks?.onListPostsError) {
-							await hooks.onListPostsError(error as Error, context);
-						}
-						throw error;
-					}
-				},
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.getNextPreviousPosts(ctx.query, ctx.request),
+						ctx.error,
+					),
 			);
 
 			const listTags = createEndpoint(
 				"/tags",
-				{
-					method: "GET",
-				},
-				async () => {
-					return await getAllTags(adapter);
-				},
+				{ method: "GET", requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.listTags({}, ctx.request),
+						ctx.error,
+					),
 			);
 
 			return {

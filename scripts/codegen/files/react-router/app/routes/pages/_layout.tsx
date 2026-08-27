@@ -24,9 +24,9 @@ import { Button } from "../../components/ui/button";
 import { resolveUser, searchUsers } from "../../lib/mock-users";
 import { getOrCreateQueryClient } from "../../lib/query-client";
 import { clientAuth } from "../../lib/authorization.ui";
-import { serverAuth } from "../../lib/authorization.server";
+import { hydrationAuth } from "../../lib/authorization.server";
 
-const layout = createReactRouterLayout({ auth: serverAuth });
+const layout = createReactRouterLayout({ auth: hydrationAuth });
 export const loader = layout.loader;
 
 // Get base URL function - works on both server and client
