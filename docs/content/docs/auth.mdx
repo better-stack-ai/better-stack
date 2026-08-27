@@ -572,7 +572,10 @@ provider it remains permissive. Its lower-level `PermissionCheck` primitive
 provides the same descriptor evaluation as a render prop when a plugin needs
 custom handling for `{ can, isPending, error }`. Throw `error` before trusting
 `can`; a schema-bound provider without its required descriptor hook fails
-closed through that field.
+closed through that field. Built-in components may pass `legacyPublic` for
+content that was explicitly public before descriptor-aware client providers;
+the compatibility flag bypasses only string-based RC providers, never a
+schema-bound one-rule provider.
 
 ## Route gating
 

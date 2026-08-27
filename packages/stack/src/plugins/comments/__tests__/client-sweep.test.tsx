@@ -438,6 +438,26 @@ describe("CommentCount permission descriptors", () => {
 		});
 	});
 
+	it("keeps an approved count public for a default-deny legacy provider", async () => {
+		const can = vi.fn(() => false);
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={{ getIdentity: () => null, can }}
+			>
+				<CommentCount resourceId="post-1" resourceType="post" />
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		expect(
+			container.querySelector('[data-testid="comment-count"]'),
+		).toBeTruthy();
+		expect(hooks.useCommentCount).toHaveBeenCalled();
+		expect(can).not.toHaveBeenCalled();
+	});
+
 	it("does not fetch a moderation count when the local rule denies it", async () => {
 		await render(
 			<StackProvider
@@ -632,6 +652,22 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 });
 
 describe("CommentThread provider wiring", () => {
+	it("keeps the approved thread public for a default-deny legacy provider", async () => {
+		const can = vi.fn(() => false);
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={{ getIdentity: () => null, can }}
+			>
+				<CommentThread resourceId="post-1" resourceType="post" />
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		expect(hooks.useInfiniteComments).toHaveBeenCalled();
+	});
+
 	it("uses the same schema-backed rule for embedded owner controls", async () => {
 		const ownedComment = {
 			...comment,

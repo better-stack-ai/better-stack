@@ -479,6 +479,47 @@ describe("Comments protected-operation matrix", () => {
 	);
 
 	it.each(operationScenarios)(
+		"rejects a legacy server auth provider before $name lifecycle",
+		async (scenario) => {
+			const lifecycle = vi.fn();
+			const backend = makeBackend({
+				auth: {
+					getIdentity: () => moderator,
+					can: () => true,
+				},
+				plugin: { [scenario.hook]: lifecycle } as CommentsBackendOptions,
+			});
+			const run = await scenario.prepare(backend);
+
+			await expect(
+				run(
+					backend.forRequest(request("/comments", { identity: moderator })).api
+						.comments as CommentsOperationApi,
+				),
+			).rejects.toThrow("createServerAuth");
+			expect(lifecycle).not.toHaveBeenCalled();
+		},
+	);
+
+	it("validates trusted facts before rejecting a legacy server auth provider", async () => {
+		const lifecycle = vi.fn();
+		const backend = makeBackend({
+			auth: { getIdentity: () => moderator, can: () => true },
+			plugin: { onBeforeEdit: lifecycle },
+		});
+
+		await expect(
+			backend
+				.forRequest(request("/comments", { identity: moderator }))
+				.api.comments.updateComment({
+					id: "missing-comment",
+					data: { body: "No row" },
+				}),
+		).rejects.toMatchObject({ code: "COMMENT_NOT_FOUND" });
+		expect(lifecycle).not.toHaveBeenCalled();
+	});
+
+	it.each(operationScenarios)(
 		"keeps validation and $name lifecycle on trusted internal execution",
 		async (scenario) => {
 			const lifecycle = vi.fn();
@@ -578,6 +619,217 @@ describe("Comments protected-operation matrix", () => {
 				data: { status: "spam" },
 			}),
 		).rejects.toMatchObject({ statusCode: 403 });
+	});
+
+	it("atomically rejects a moderation update when authorized state changes", async () => {
+		const afterApprove = vi.fn();
+		const backend = makeBackend({
+			auth: createAuth(),
+			plugin: { onAfterApprove: afterApprove },
+		});
+		const pending = await seedComment(backend, { status: "pending" });
+		const updateMany = backend.adapter.updateMany.bind(backend.adapter);
+		let raced = false;
+		vi.spyOn(backend.adapter, "updateMany").mockImplementation(
+			async (input) => {
+				if (
+					!raced &&
+					input.model === "comment" &&
+					input.update.status === "approved"
+				) {
+					raced = true;
+					await backend.adapter.update<Comment>({
+						model: "comment",
+						where: [{ field: "id", value: pending.id, operator: "eq" }],
+						update: { status: "spam", updatedAt: new Date() },
+					});
+				}
+				return updateMany(input);
+			},
+		);
+
+		await expect(
+			backend
+				.forRequest(request("/comments", { identity: moderator }))
+				.api.comments.updateCommentStatus({
+					id: pending.id,
+					data: { status: "approved" },
+				}),
+		).rejects.toMatchObject({
+			statusCode: 409,
+			code: "COMMENT_STATE_CHANGED",
+		});
+		expect(
+			await backend.adapter.findOne<Comment>({
+				model: "comment",
+				where: [{ field: "id", value: pending.id, operator: "eq" }],
+			}),
+		).toMatchObject({ status: "spam" });
+		expect(afterApprove).not.toHaveBeenCalled();
+	});
+
+	it("atomically rejects an edit when authorized ownership changes", async () => {
+		const afterEdit = vi.fn();
+		const backend = makeBackend({
+			auth: createAuth(),
+			plugin: { onAfterEdit: afterEdit },
+		});
+		const comment = await seedComment(backend);
+		const updateMany = backend.adapter.updateMany.bind(backend.adapter);
+		let raced = false;
+		vi.spyOn(backend.adapter, "updateMany").mockImplementation(
+			async (input) => {
+				if (
+					!raced &&
+					input.model === "comment" &&
+					input.update.body === "Raced edit"
+				) {
+					raced = true;
+					await backend.adapter.update<Comment>({
+						model: "comment",
+						where: [{ field: "id", value: comment.id, operator: "eq" }],
+						update: { authorId: viewer.id },
+					});
+				}
+				return updateMany(input);
+			},
+		);
+
+		await expect(
+			backend
+				.forRequest(request("/comments", { identity: owner }))
+				.api.comments.updateComment({
+					id: comment.id,
+					data: { body: "Raced edit" },
+				}),
+		).rejects.toMatchObject({
+			statusCode: 409,
+			code: "COMMENT_STATE_CHANGED",
+		});
+		expect(
+			await backend.adapter.findOne<Comment>({
+				model: "comment",
+				where: [{ field: "id", value: comment.id, operator: "eq" }],
+			}),
+		).toMatchObject({ authorId: viewer.id, body: "Authorization tracer" });
+		expect(afterEdit).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		{ initiallyLiked: false, label: "like" },
+		{ initiallyLiked: true, label: "unlike" },
+	])(
+		"rolls back a $label when authorized visibility changes before commit",
+		async ({ initiallyLiked }) => {
+			const backend = makeBackend({ auth: createAuth() });
+			const comment = await seedComment(backend);
+			if (initiallyLiked) {
+				await backend.adapter.create<CommentLike>({
+					model: "commentLike",
+					data: {
+						commentId: comment.id,
+						authorId: viewer.id,
+						createdAt: new Date(),
+					},
+				});
+				await backend.adapter.update<Comment>({
+					model: "comment",
+					where: [{ field: "id", value: comment.id, operator: "eq" }],
+					update: { likes: 1 },
+				});
+			}
+			const transaction = backend.adapter.transaction.bind(backend.adapter);
+			let raced = false;
+			vi.spyOn(backend.adapter, "transaction").mockImplementation(
+				async (callback) => {
+					return transaction(async (tx) => {
+						const updateMany = tx.updateMany.bind(tx);
+						vi.spyOn(tx, "updateMany").mockImplementation(async (input) => {
+							if (
+								!raced &&
+								input.model === "comment" &&
+								"likes" in input.update
+							) {
+								raced = true;
+								await tx.update<Comment>({
+									model: "comment",
+									where: [{ field: "id", value: comment.id, operator: "eq" }],
+									update: { status: "spam" },
+								});
+							}
+							return updateMany(input);
+						});
+						return callback(tx);
+					});
+				},
+			);
+
+			await expect(
+				backend
+					.forRequest(request("/comments", { identity: viewer }))
+					.api.comments.toggleLike({ id: comment.id }),
+			).rejects.toMatchObject({
+				statusCode: 409,
+				code: "COMMENT_STATE_CHANGED",
+			});
+			expect(
+				await backend.adapter.findOne<Comment>({
+					model: "comment",
+					where: [{ field: "id", value: comment.id, operator: "eq" }],
+				}),
+			).toMatchObject({
+				likes: initiallyLiked ? 1 : 0,
+				status: "approved",
+			});
+			const storedLike = await backend.adapter.findOne<CommentLike>({
+				model: "commentLike",
+				where: [
+					{ field: "commentId", value: comment.id, operator: "eq" },
+					{ field: "authorId", value: viewer.id, operator: "eq" },
+				],
+			});
+			expect(storedLike !== null).toBe(initiallyLiked);
+		},
+	);
+
+	it("atomically rejects deletion when authorized ownership changes", async () => {
+		const afterDelete = vi.fn();
+		const backend = makeBackend({
+			auth: createAuth(),
+			plugin: { onAfterDelete: afterDelete },
+		});
+		const comment = await seedComment(backend);
+		const transaction = backend.adapter.transaction.bind(backend.adapter);
+		let raced = false;
+		vi.spyOn(backend.adapter, "transaction").mockImplementation(
+			async (callback) => {
+				if (!raced) {
+					raced = true;
+					await backend.adapter.update<Comment>({
+						model: "comment",
+						where: [{ field: "id", value: comment.id, operator: "eq" }],
+						update: { authorId: viewer.id },
+					});
+				}
+				return transaction(callback);
+			},
+		);
+
+		await expect(
+			backend
+				.forRequest(request("/comments", { identity: owner }))
+				.api.comments.deleteComment({ id: comment.id }),
+		).rejects.toMatchObject({
+			statusCode: 409,
+			code: "COMMENT_STATE_CHANGED",
+		});
+		expect(
+			await backend.adapter.findOne<Comment>({
+				model: "comment",
+				where: [{ field: "id", value: comment.id, operator: "eq" }],
+			}),
+		).toMatchObject({ authorId: viewer.id });
+		expect(afterDelete).not.toHaveBeenCalled();
 	});
 });
 

@@ -235,12 +235,18 @@ moderating, the backend reloads the comment's authoritative author, status,
 resource, and thread facts. Request authorship and like identity always come
 from the server adapter, even if an old RC caller sends an `authorId`. A
 security-relevant state change during evaluation returns HTTP 409
-(`COMMENT_STATE_CHANGED`) instead of mutating with stale facts.
+(`COMMENT_STATE_CHANGED`) instead of mutating with stale facts. Edit,
+reaction, moderation, and delete writes condition on the ownership, status,
+and resource facts their rule authorized, so overlapping changes cannot bypass
+the rule.
 
 Once authorization is installed, a missing Comments rule denies that action.
 Omitting `stack({ auth })` preserves the v3 RC allow-all server behavior during
-the authorization migration. The legacy string client provider also remains
-narrowly supported during that migration; schema-bound providers always
+the authorization migration. Supplying a structural legacy server auth
+provider is different: operation-backed endpoints fail closed and require a
+provider created with `createServerAuth()`. The legacy string client provider
+also remains narrowly supported during that migration; explicitly public
+approved threads/counts stay public, while schema-bound providers always
 evaluate the exact descriptor shown above.
 
 ## Embedding Comments

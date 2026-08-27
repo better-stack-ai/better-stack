@@ -421,16 +421,6 @@ function commentStateChanged(): CommentsOperationError {
 	);
 }
 
-async function assertCommentState(
-	adapter: Adapter,
-	id: string,
-	matches: (comment: Comment) => boolean,
-): Promise<Comment> {
-	const comment = await requireComment(adapter, id);
-	if (!matches(comment)) throw commentStateChanged();
-	return comment;
-}
-
 async function assertReplyTarget(
 	adapter: Adapter,
 	input: DeepReadonly<CreateInput>,
@@ -632,25 +622,14 @@ export function createCommentsOperations(
 			);
 		},
 		execute: async ({ input, identity, facts }) => {
-			await assertCommentState(
-				adapter,
-				input.id,
-				(comment) =>
-					comment.id === facts.commentId &&
-					comment.authorId === facts.authorId &&
-					comment.status === facts.status,
-			);
 			const updated = await updateCommentMutation(
 				adapter,
 				input.id,
 				input.data.body,
+				{ authorId: facts.authorId, status: facts.status },
 			);
 			if (!updated) {
-				throw new CommentsOperationError(
-					404,
-					"Comment not found",
-					"COMMENT_NOT_FOUND",
-				);
+				throw commentStateChanged();
 			}
 			return serializeResolvedComment(
 				adapter,
@@ -687,17 +666,14 @@ export function createCommentsOperations(
 			);
 		},
 		execute: async ({ input, identity, facts }) => {
-			await assertCommentState(
-				adapter,
-				input.id,
-				(comment) =>
-					comment.id === facts.commentId && comment.status === facts.status,
-			);
-			return toggleCommentLikeMutation(
+			const result = await toggleCommentLikeMutation(
 				adapter,
 				input.id,
 				authoritativeAuthorId(identity?.id, input.authorId),
+				{ status: facts.status },
 			);
+			if (!result) throw commentStateChanged();
+			return result;
 		},
 	});
 
@@ -722,26 +698,18 @@ export function createCommentsOperations(
 			);
 		},
 		execute: async ({ input, identity, facts }) => {
-			await assertCommentState(
-				adapter,
-				input.id,
-				(comment) =>
-					comment.id === facts.commentId &&
-					comment.resourceId === facts.resourceId &&
-					comment.resourceType === facts.resourceType &&
-					comment.status === facts.currentStatus,
-			);
 			const updated = await updateCommentStatusMutation(
 				adapter,
 				input.id,
 				input.data.status,
+				{
+					resourceId: facts.resourceId,
+					resourceType: facts.resourceType,
+					status: facts.currentStatus,
+				},
 			);
 			if (!updated) {
-				throw new CommentsOperationError(
-					404,
-					"Comment not found",
-					"COMMENT_NOT_FOUND",
-				);
+				throw commentStateChanged();
 			}
 			return serializeResolvedComment(
 				adapter,
@@ -771,19 +739,11 @@ export function createCommentsOperations(
 			await options.onBeforeDelete?.(context.input.id, deleteContext(context));
 		},
 		execute: async ({ input, facts }) => {
-			await assertCommentState(
-				adapter,
-				input.id,
-				(comment) =>
-					comment.id === facts.commentId && comment.authorId === facts.authorId,
-			);
-			const deleted = await deleteCommentMutation(adapter, input.id);
+			const deleted = await deleteCommentMutation(adapter, input.id, {
+				authorId: facts.authorId,
+			});
 			if (!deleted) {
-				throw new CommentsOperationError(
-					404,
-					"Comment not found",
-					"COMMENT_NOT_FOUND",
-				);
+				throw commentStateChanged();
 			}
 			return { success: true } as const;
 		},
