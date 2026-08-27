@@ -3,10 +3,15 @@
 import { lazy } from "react";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
-import { ComposedRoute } from "@btst/stack/client/components";
+import {
+	ComposedRoute,
+	PermissionRouteAccess,
+} from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
 import { EditorSkeleton } from "../loading";
 import { NotFoundPage } from "./404-page";
+import { cmsPermissions } from "../../../permissions";
+import { useSuspenseContentItem } from "../../hooks";
 
 const ContentEditorPageInternal = lazy(() =>
 	import("./content-editor-page.internal").then((m) => ({
@@ -31,19 +36,10 @@ export function ContentEditorPageComponent({
 	return (
 		<ComposedRoute
 			path={path}
-			PageComponent={ContentEditorPageInternal}
+			PageComponent={AuthorizedContentEditorPage}
 			ErrorComponent={DefaultError}
 			LoadingComponent={EditorSkeleton}
 			NotFoundComponent={NotFoundPage}
-			permission={
-				isNew
-					? { resource: "cms:content", action: "create", params: { typeSlug } }
-					: {
-							resource: "cms:content",
-							action: "update",
-							params: { typeSlug, id },
-						}
-			}
 			props={{ typeSlug, id }}
 			onError={(error) => {
 				if (onRouteError) {
@@ -55,5 +51,55 @@ export function ContentEditorPageComponent({
 				}
 			}}
 		/>
+	);
+}
+
+function AuthorizedContentEditorPage({
+	typeSlug,
+	id,
+}: ContentEditorPageComponentProps) {
+	if (!id) {
+		return (
+			<PermissionRouteAccess
+				permission={cmsPermissions.record.create({ contentType: typeSlug })}
+				legacyPermission={{
+					resource: "cms:content",
+					action: "create",
+					params: { typeSlug },
+				}}
+				LoadingComponent={EditorSkeleton}
+			>
+				<ContentEditorPageInternal typeSlug={typeSlug} />
+			</PermissionRouteAccess>
+		);
+	}
+	return <AuthorizedExistingContentEditorPage typeSlug={typeSlug} id={id} />;
+}
+
+function AuthorizedExistingContentEditorPage({
+	typeSlug,
+	id,
+}: {
+	typeSlug: string;
+	id: string;
+}) {
+	const { item } = useSuspenseContentItem(typeSlug, id);
+	if (!item) return <ContentEditorPageInternal typeSlug={typeSlug} id={id} />;
+	return (
+		<PermissionRouteAccess
+			permission={cmsPermissions.record.update({
+				contentType: item.contentType?.slug ?? typeSlug,
+				recordId: item.id,
+				...(item.authorId ? { authorId: item.authorId } : {}),
+			})}
+			legacyPermission={{
+				resource: "cms:content",
+				action: "update",
+				params: { typeSlug, id },
+			}}
+			LoadingComponent={EditorSkeleton}
+		>
+			<ContentEditorPageInternal typeSlug={typeSlug} id={id} />
+		</PermissionRouteAccess>
 	);
 }

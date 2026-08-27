@@ -7,6 +7,7 @@ import { ComposedRoute } from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
 import { DashboardSkeleton } from "../loading";
 import { NotFoundPage } from "./404-page";
+import { cmsPermissions } from "../../../permissions";
 
 const DashboardPageInternal = lazy(() =>
 	import("./dashboard-page.internal").then((m) => ({
@@ -20,6 +21,8 @@ export function DashboardPageComponent() {
 	return (
 		<ComposedRoute
 			path="/cms"
+			permission={cmsPermissions.contentType.read({})}
+			legacyPermission={{ resource: "cms:content", action: "read" }}
 			PageComponent={DashboardPageInternal}
 			ErrorComponent={DefaultError}
 			LoadingComponent={DashboardSkeleton}

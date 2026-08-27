@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 import {
-	CanAccess,
+	PermissionAccess,
 	useBasePath,
 	useNotify,
 	usePluginOverrides,
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
+import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
+import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 import { Button } from "@workspace/ui/components/button";
 import {
 	Table,
@@ -113,7 +115,12 @@ export function PageListPage() {
 	};
 
 	const createButton = (
-		<CanAccess resource="ui-builder:page" action="create">
+		<PermissionAccess
+			permission={cmsPermissions.record.create({
+				contentType: UI_BUILDER_TYPE_SLUG,
+			})}
+			legacyPermission={{ resource: "ui-builder:page", action: "create" }}
+		>
 			<Button asChild>
 				<LinkComponent href={`${basePath}/ui-builder/new`}>
 					<Plus data-icon="inline-start" />
@@ -124,7 +131,7 @@ export function PageListPage() {
 						)}
 				</LinkComponent>
 			</Button>
-		</CanAccess>
+		</PermissionAccess>
 	);
 
 	return (
@@ -232,10 +239,19 @@ export function PageListPage() {
 														</Button>
 													</DropdownMenuTrigger>
 													<DropdownMenuContent align="end">
-														<CanAccess
-															resource="ui-builder:page"
-															action="update"
-															params={{ id: page.id }}
+														<PermissionAccess
+															permission={cmsPermissions.record.update({
+																contentType: UI_BUILDER_TYPE_SLUG,
+																recordId: page.id,
+																...(page.authorId
+																	? { authorId: page.authorId }
+																	: {}),
+															})}
+															legacyPermission={{
+																resource: "ui-builder:page",
+																action: "update",
+																params: { id: page.id },
+															}}
 														>
 															<DropdownMenuItem
 																onClick={() =>
@@ -251,11 +267,20 @@ export function PageListPage() {
 																		uiBuilderLocalization.pageList.actions.edit,
 																	)}
 															</DropdownMenuItem>
-														</CanAccess>
-														<CanAccess
-															resource="ui-builder:page"
-															action="delete"
-															params={{ id: page.id }}
+														</PermissionAccess>
+														<PermissionAccess
+															permission={cmsPermissions.record.delete({
+																contentType: UI_BUILDER_TYPE_SLUG,
+																recordId: page.id,
+																...(page.authorId
+																	? { authorId: page.authorId }
+																	: {}),
+															})}
+															legacyPermission={{
+																resource: "ui-builder:page",
+																action: "delete",
+																params: { id: page.id },
+															}}
 														>
 															<DropdownMenuItem
 																className="text-destructive"
@@ -269,7 +294,7 @@ export function PageListPage() {
 																			.delete,
 																	)}
 															</DropdownMenuItem>
-														</CanAccess>
+														</PermissionAccess>
 													</DropdownMenuContent>
 												</DropdownMenu>
 											</TableCell>

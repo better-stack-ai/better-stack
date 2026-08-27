@@ -6,6 +6,8 @@ import { usePluginOverrides } from "@btst/stack/context";
 import { PageListSkeleton } from "../loading/page-list-skeleton";
 import { DefaultError } from "../shared/default-error";
 import type { UIBuilderPluginOverrides } from "../../overrides";
+import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
+import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 
 const PageListPageInternal = lazy(() =>
 	import("./page-list-page.internal").then((m) => ({
@@ -20,7 +22,10 @@ export function PageListPage() {
 	return (
 		<ComposedRoute
 			path="/ui-builder"
-			permission={{ resource: "ui-builder:page", action: "read" }}
+			permission={cmsPermissions.record.read({
+				contentType: UI_BUILDER_TYPE_SLUG,
+			})}
+			legacyPermission={{ resource: "ui-builder:page", action: "read" }}
 			PageComponent={PageListPageInternal}
 			ErrorComponent={DefaultError}
 			LoadingComponent={PageListSkeleton}

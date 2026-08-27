@@ -108,6 +108,7 @@ export default defineBuildConfig({
 		"./src/plugins/cms/client/components/index.tsx",
 		"./src/plugins/cms/client/hooks/index.tsx",
 		"./src/plugins/cms/query-keys.ts",
+		"./src/plugins/cms/permissions.ts",
 		// form-builder plugin entries
 		"./src/plugins/form-builder/api/index.ts",
 		"./src/plugins/form-builder/client/index.ts",

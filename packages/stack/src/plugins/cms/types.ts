@@ -233,65 +233,163 @@ export interface PaginatedContentItems<TData = Record<string, unknown>> {
  */
 export type CMSContentTypeMap = Record<string, Record<string, unknown>>;
 
-/**
- * Context passed to CMS backend hooks
- */
+/** JSON-safe values accepted at the CMS operation boundary. */
+export type CMSOperationData =
+	| string
+	| number
+	| boolean
+	| null
+	| readonly CMSOperationData[]
+	| { readonly [key: string]: CMSOperationData };
+
+/** @deprecated Use the operation-specific CMS lifecycle contexts instead. */
 export interface CMSHookContext {
-	/** Content type slug */
-	typeSlug: string;
-	/** User ID if authenticated */
-	userId?: string;
-	/** Request headers */
-	headers?: Headers;
+	readonly typeSlug: string;
+	readonly userId?: string;
+	readonly headers?: Headers;
 }
 
-/**
- * Hooks for customizing CMS backend behavior
- *
- * Note: Before hooks deny operations by throwing an error.
- * They cannot modify the data being saved. This ensures consistency
- * between the stored content item data and relation junction tables.
- */
+interface CMSOperationIdentity {
+	readonly id: string;
+	readonly [key: string]: unknown;
+}
+
+type CMSDeepReadonly<T> = T extends (...args: any[]) => unknown
+	? T
+	: T extends readonly unknown[]
+		? { readonly [TKey in keyof T]: CMSDeepReadonly<T[TKey]> }
+		: T extends object
+			? { readonly [TKey in keyof T]: CMSDeepReadonly<T[TKey]> }
+			: T;
+
+interface CMSOperationContextBase<TInput, TFacts> {
+	readonly input: Readonly<TInput>;
+	readonly facts: Readonly<TFacts>;
+	readonly identity: Readonly<CMSOperationIdentity> | null;
+	readonly request?: Request;
+	readonly headers?: Headers;
+	readonly userId?: string;
+	readonly typeSlug?: string;
+}
+
+/** Authorized context supplied before a CMS record is created. */
+export interface CMSCreateOperationContext
+	extends CMSOperationContextBase<
+		{
+			readonly typeSlug: string;
+			readonly body: {
+				readonly slug: string;
+				readonly data: Readonly<Record<string, CMSOperationData>>;
+			};
+		},
+		{ contentType: string }
+	> {
+	readonly typeSlug: string;
+	readonly body: {
+		readonly slug: string;
+		readonly data: Readonly<Record<string, CMSOperationData>>;
+	};
+}
+
+/** CMS create context after execution. */
+export interface CMSCreateResultContext extends CMSCreateOperationContext {
+	readonly result: CMSDeepReadonly<SerializedContentItemWithType>;
+}
+
+/** Authorized context supplied before a CMS record is updated. */
+export interface CMSUpdateOperationContext
+	extends CMSOperationContextBase<
+		{
+			readonly typeSlug: string;
+			readonly id: string;
+			readonly body: {
+				readonly slug?: string;
+				readonly data?: Readonly<Record<string, CMSOperationData>>;
+			};
+		},
+		{ contentType: string; recordId: string; authorId?: string }
+	> {
+	readonly typeSlug: string;
+	readonly params: { readonly typeSlug: string; readonly id: string };
+	readonly body: {
+		readonly slug?: string;
+		readonly data?: Readonly<Record<string, CMSOperationData>>;
+	};
+}
+
+/** CMS update context after execution. */
+export interface CMSUpdateResultContext extends CMSUpdateOperationContext {
+	readonly result: CMSDeepReadonly<SerializedContentItemWithType>;
+}
+
+/** Authorized context supplied before a CMS record is deleted. */
+export interface CMSDeleteOperationContext
+	extends CMSOperationContextBase<
+		{ readonly typeSlug: string; readonly id: string },
+		{ contentType: string; recordId: string; authorId?: string }
+	> {
+	readonly typeSlug: string;
+	readonly params: { readonly typeSlug: string; readonly id: string };
+}
+
+/** CMS delete context after execution. */
+export interface CMSDeleteResultContext extends CMSDeleteOperationContext {
+	readonly result: { readonly success: true };
+}
+
+interface CMSReadOperationContext
+	extends CMSOperationContextBase<
+		unknown,
+		{
+			contentType?: string;
+			recordId?: string;
+			authorId?: string;
+		}
+	> {}
+
+/** Authorized context shared by the CMS operation lifecycle hooks. */
+export type CMSOperationLifecycleContext =
+	| CMSReadOperationContext
+	| CMSCreateOperationContext
+	| CMSUpdateOperationContext
+	| CMSDeleteOperationContext;
+
+/** Authorized lifecycle context supplied to the observational error hook. */
+export type CMSOperationErrorContext = CMSOperationLifecycleContext & {
+	readonly error: unknown;
+};
+
+/** Domain lifecycle hooks that run only after successful CMS authorization. */
 export interface CMSBackendHooks {
-	/** Called before creating a content item. Throw an error to deny the operation. */
 	onBeforeCreate?: (
-		data: Record<string, unknown>,
-		context: CMSHookContext,
+		data: Readonly<Record<string, CMSOperationData>>,
+		context: CMSCreateOperationContext,
 	) => Promise<void> | void;
-
-	/** Called after creating a content item */
 	onAfterCreate?: (
-		item: SerializedContentItem,
-		context: CMSHookContext,
+		item: CMSDeepReadonly<SerializedContentItemWithType>,
+		context: CMSCreateResultContext,
 	) => Promise<void> | void;
-
-	/** Called before updating a content item. Throw an error to deny the operation. */
 	onBeforeUpdate?: (
 		id: string,
-		data: Record<string, unknown>,
-		context: CMSHookContext,
+		data: Readonly<Record<string, CMSOperationData>>,
+		context: CMSUpdateOperationContext,
 	) => Promise<void> | void;
-
-	/** Called after updating a content item */
 	onAfterUpdate?: (
-		item: SerializedContentItem,
-		context: CMSHookContext,
+		item: CMSDeepReadonly<SerializedContentItemWithType>,
+		context: CMSUpdateResultContext,
 	) => Promise<void> | void;
-
-	/** Called before deleting a content item. Throw an error to deny the operation. */
 	onBeforeDelete?: (
 		id: string,
-		context: CMSHookContext,
+		context: CMSDeleteOperationContext,
 	) => Promise<void> | void;
-
-	/** Called after deleting a content item */
-	onAfterDelete?: (id: string, context: CMSHookContext) => Promise<void> | void;
-
-	/** Called on any CMS error */
+	onAfterDelete?: (
+		id: string,
+		context: CMSDeleteResultContext,
+	) => Promise<void> | void;
 	onError?: (
 		error: Error,
 		operation: "create" | "update" | "delete" | "list" | "get",
-		context: CMSHookContext,
+		context: CMSOperationErrorContext,
 	) => Promise<void> | void;
 }
 

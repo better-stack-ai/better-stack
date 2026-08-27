@@ -2,7 +2,11 @@
 import { QueryClient } from "@tanstack/react-query";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { renderToStaticMarkup, renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import { defineAuthorization } from "@btst/stack/authorization";
+import { createClientAuth } from "@btst/stack/authorization/client";
 import {
 	StackProvider,
 	type StackAuthProvider,
@@ -10,9 +14,15 @@ import {
 } from "@btst/stack/context";
 import { createApiClient } from "@btst/stack/plugins/client";
 import type { CMSApiRouter } from "../../cms/api";
+import { cmsPermissions } from "../../cms/permissions";
 import { createCMSQueryKeys } from "../../cms/query-keys";
+import {
+	PageRenderer,
+	SuspensePageRenderer,
+} from "../client/components/page-renderer";
 import { PageBuilderPage } from "../client/components/pages/page-builder-page.internal";
 import { PageListPage } from "../client/components/pages/page-list-page.internal";
+import { PageListPage as PageListRoutePage } from "../client/components/pages/page-list-page";
 import { createUIBuilderQueryKeys } from "../query-keys";
 import { UI_BUILDER_TYPE_SLUG } from "../schemas";
 import type { SerializedUIBuilderPage } from "../types";
@@ -23,6 +33,7 @@ const hooks = vi.hoisted(() => ({
 	useSuspenseUIBuilderPages: vi.fn(),
 	useDeleteUIBuilderPage: vi.fn(),
 	useSuspenseUIBuilderPage: vi.fn(),
+	useSuspenseUIBuilderPageBySlug: vi.fn(),
 	useUIBuilderPageForm: vi.fn(),
 }));
 
@@ -32,6 +43,11 @@ vi.mock("@btst/stack/plugins/ai-chat/client/context", () => ({
 }));
 vi.mock("@workspace/ui/lib/ui-builder/store/layer-store", () => ({
 	useLayerStore: { getState: vi.fn() },
+}));
+vi.mock("@workspace/ui/components/ui-builder/layer-renderer", () => ({
+	default: ({ page }: { page: { name?: string } }) => (
+		<div data-testid="rendered-public-page">{page.name}</div>
+	),
 }));
 vi.mock("@workspace/ui/components/ui-builder", () => ({
 	default: ({
@@ -78,7 +94,27 @@ const page: SerializedUIBuilderPage = {
 	createdAt: new Date("2024-01-01").toISOString(),
 	updatedAt: new Date("2024-01-02").toISOString(),
 	parsedData: { layers: "[]", variables: "[]", status: "draft" },
+	authorId: "owner-1",
 };
+
+const publicPageAuthorization = defineAuthorization({
+	identity: z.object({ id: z.string(), role: z.literal("user") }),
+	permissions: [cmsPermissions] as const,
+	rules: ({ cms }) => [
+		cms.record.read.when(
+			({ facts }) =>
+				facts.contentType === UI_BUILDER_TYPE_SLUG &&
+				facts.recordId !== undefined,
+		),
+	],
+});
+
+function publicPageAuth() {
+	return createClientAuth({
+		authorization: publicPageAuthorization,
+		getIdentity: () => null,
+	});
+}
 
 let container: HTMLDivElement;
 let root: Root;
@@ -105,6 +141,20 @@ beforeEach(() => {
 		isPending: false,
 	});
 	hooks.useSuspenseUIBuilderPage.mockReturnValue({ page, refetch: vi.fn() });
+	hooks.useSuspenseUIBuilderPageBySlug.mockReturnValue({
+		page,
+		layers: [
+			{
+				id: "root",
+				type: "div",
+				name: "Public home",
+				props: {},
+				children: [],
+			},
+		],
+		variables: [],
+		refetch: vi.fn(),
+	});
 	hooks.useUIBuilderPageForm.mockReturnValue({
 		action: "create",
 		record: null,
@@ -146,6 +196,7 @@ async function renderPage(
 	pageNode: ReactNode,
 	options: {
 		auth?: StackAuthProvider;
+		initialIdentity?: { id: string; role: "user" } | null;
 		i18n?: StackI18nProvider;
 		notify?: {
 			success: ReturnType<typeof vi.fn>;
@@ -164,6 +215,7 @@ async function renderPage(
 					"ui-builder": { ...overrides(), localization: options.localization },
 				}}
 				auth={options.auth}
+				initialIdentity={options.initialIdentity}
 				i18n={options.i18n}
 				notify={options.notify}
 			>
@@ -224,6 +276,137 @@ describe("UI Builder page permissions", () => {
 				action: "create",
 			}),
 		);
+	});
+
+	it("uses the CMS catalog for read, create, update, and delete controls", async () => {
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.record.read.allow(),
+				cms.record.create.when(
+					({ facts }) => facts.contentType === UI_BUILDER_TYPE_SLUG,
+				),
+				cms.record.update.when(
+					({ identity, facts }) =>
+						facts.contentType === UI_BUILDER_TYPE_SLUG &&
+						facts.recordId === page.id &&
+						facts.authorId === identity?.id,
+				),
+				cms.record.delete.when(() => false),
+			],
+		});
+		const identity = { id: "owner-1", role: "user" as const };
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => identity,
+		});
+
+		expect(
+			authorization.can(
+				cmsPermissions.record.read({
+					contentType: UI_BUILDER_TYPE_SLUG,
+				}),
+				identity,
+			),
+		).toBe(true);
+		expect(
+			authorization.can(
+				cmsPermissions.record.update({
+					contentType: UI_BUILDER_TYPE_SLUG,
+					recordId: page.id,
+					authorId: page.authorId,
+				}),
+				identity,
+			),
+		).toBe(true);
+		expect(
+			authorization.can(
+				cmsPermissions.record.delete({
+					contentType: UI_BUILDER_TYPE_SLUG,
+					recordId: page.id,
+					authorId: page.authorId,
+				}),
+				identity,
+			),
+		).toBe(false);
+
+		await renderPage(<PageListRoutePage />, {
+			auth,
+			initialIdentity: identity,
+		});
+		expect(document.body.textContent).toContain("Create Page");
+
+		const actionsTrigger =
+			container.querySelector<HTMLButtonElement>("tbody button")!;
+		await act(async () => {
+			actionsTrigger.dispatchEvent(
+				new MouseEvent("pointerdown", { bubbles: true, button: 0 }),
+			);
+		});
+		const actions = Array.from(
+			document.querySelectorAll<HTMLElement>("[role=menuitem]"),
+		).map((item) => item.textContent);
+		expect(actions).toContain("Edit");
+		expect(actions).not.toContain("Delete");
+	});
+});
+
+describe("UI Builder public page authorization", () => {
+	it("renders a cold anonymous browser page when the CMS read is public", async () => {
+		expect(
+			publicPageAuthorization.can(
+				cmsPermissions.record.read({
+					contentType: UI_BUILDER_TYPE_SLUG,
+				}),
+				null,
+			),
+		).toBe(false);
+		await renderPage(<PageRenderer slug="home" />, { auth: publicPageAuth() });
+
+		expect(document.body.textContent).toContain("Public home");
+	});
+
+	it("renders anonymous SSR and SSG output from an explicitly public CMS read", () => {
+		const ssr = renderToString(
+			<StackProvider
+				basePath="/pages"
+				auth={publicPageAuth()}
+				initialIdentity={null}
+				overrides={{ "ui-builder": overrides() }}
+			>
+				<SuspensePageRenderer slug="home" />
+			</StackProvider>,
+		);
+		const ssg = renderToStaticMarkup(
+			<StackProvider
+				basePath="/pages"
+				auth={publicPageAuth()}
+				initialIdentity={null}
+				overrides={{ "ui-builder": overrides() }}
+			>
+				<SuspensePageRenderer slug="home" />
+			</StackProvider>,
+		);
+
+		expect(ssr).toContain("Public home");
+		expect(ssg).toContain("Public home");
+	});
+
+	it("keeps the public declaration authoritative for one-rule providers", async () => {
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [cms.record.read.when(() => false)],
+		});
+		const auth = createClientAuth({ authorization, getIdentity: () => null });
+
+		await renderPage(<PageRenderer slug="home" />, {
+			auth,
+			initialIdentity: null,
+		});
+
+		expect(document.body.textContent).not.toContain("Public home");
 	});
 });
 

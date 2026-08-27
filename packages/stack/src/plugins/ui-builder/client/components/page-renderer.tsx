@@ -3,7 +3,11 @@
 import type { ComponentType, ReactNode } from "react";
 import { Suspense } from "react";
 import { ErrorBoundary } from "react-error-boundary";
-import { usePluginOverrides, useTranslate } from "@btst/stack/context";
+import {
+	PermissionAccess,
+	usePluginOverrides,
+	useTranslate,
+} from "@btst/stack/context";
 import LayerRenderer from "@workspace/ui/components/ui-builder/layer-renderer";
 import type {
 	ComponentRegistry,
@@ -14,6 +18,8 @@ import { useSuspenseUIBuilderPageBySlug } from "../hooks/ui-builder-hooks";
 import { defaultComponentRegistry } from "../registry";
 import { uiBuilderLocalization } from "../localization";
 import type { UIBuilderPluginOverrides } from "../overrides";
+import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
+import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 
 /**
  * Default loading component for PageRenderer
@@ -208,14 +214,23 @@ function SuspensePageRendererContent({
 	}
 
 	return (
-		<LayerRenderer
-			className={className}
-			page={rootLayer}
-			componentRegistry={componentRegistry}
-			variables={variables}
-			variableValues={variableValues}
-			functionRegistry={functionRegistry}
-		/>
+		<PermissionAccess
+			permission={cmsPermissions.record.read({
+				contentType: UI_BUILDER_TYPE_SLUG,
+				recordId: page.id,
+				...(page.authorId ? { authorId: page.authorId } : {}),
+			})}
+			legacyPublic
+		>
+			<LayerRenderer
+				className={className}
+				page={rootLayer}
+				componentRegistry={componentRegistry}
+				variables={variables}
+				variableValues={variableValues}
+				functionRegistry={functionRegistry}
+			/>
+		</PermissionAccess>
 	);
 }
 

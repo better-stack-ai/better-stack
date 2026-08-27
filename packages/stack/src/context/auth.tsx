@@ -407,6 +407,16 @@ function LegacyPermissionCheck({
 	return <>{children(useCan(descriptorToLegacyParams(permission)))}</>;
 }
 
+function LegacyPermissionParamsCheck({
+	permission,
+	children,
+}: {
+	permission: CanParams;
+	children: (state: PermissionCheckState) => ReactNode;
+}) {
+	return <>{children(useCan(permission))}</>;
+}
+
 /**
  * Evaluate a plugin-owned descriptor through the configured one-rule client
  * auth. RC providers receive a temporary stable-id compatibility mapping;
@@ -457,6 +467,7 @@ export function PermissionCheck({
 export function PermissionAccess({
 	permission,
 	legacyPublic = false,
+	legacyPermission,
 	fallback = null,
 	loading = null,
 	children,
@@ -464,6 +475,8 @@ export function PermissionAccess({
 	permission: AnyPermissionRequest;
 	/** Preserve explicitly public content for string-based RC providers. */
 	legacyPublic?: boolean;
+	/** String permission used only by RC providers during descriptor migration. */
+	legacyPermission?: CanParams;
 	fallback?: ReactNode;
 	loading?: ReactNode;
 	children?: ReactNode;
@@ -471,6 +484,21 @@ export function PermissionAccess({
 	const auth = useContext(AuthContext);
 	if (legacyPublic && auth && !isSchemaBoundStackAuthProvider(auth.provider)) {
 		return <>{children}</>;
+	}
+	if (
+		legacyPermission &&
+		auth &&
+		!isSchemaBoundStackAuthProvider(auth.provider)
+	) {
+		return (
+			<LegacyPermissionParamsCheck permission={legacyPermission}>
+				{({ can, isPending, error }) => {
+					if (error) throw error;
+					if (isPending) return loading;
+					return can ? children : fallback;
+				}}
+			</LegacyPermissionParamsCheck>
+		);
 	}
 	return (
 		<PermissionCheck permission={permission}>

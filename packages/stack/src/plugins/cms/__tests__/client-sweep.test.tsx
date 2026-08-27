@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { Form, FormField } from "@workspace/ui/components/form";
 // Core primitives MUST be imported from the package entry (not relative src
 // paths) so they share module identity — and React context — with the cms
@@ -12,9 +13,13 @@ import {
 	type StackAuthProvider,
 	type StackI18nProvider,
 } from "@btst/stack/context";
+import { defineAuthorization } from "@btst/stack/authorization";
+import { createClientAuth } from "@btst/stack/authorization/client";
 import { CMSFileUpload } from "../client/components/forms/file-upload";
 import { ContentForm } from "../client/components/forms/content-form";
 import { ContentListPage } from "../client/components/pages/content-list-page.internal";
+import { ContentListPageComponent } from "../client/components/pages/content-list-page";
+import { cmsPermissions } from "../permissions";
 import type {
 	SerializedContentItemWithType,
 	SerializedContentType,
@@ -70,6 +75,7 @@ const item: SerializedContentItemWithType = {
 	contentType: { id: "ct1", name: "Post", slug: "post" },
 	createdAt: new Date("2024-01-01").toISOString(),
 	updatedAt: new Date("2024-01-01").toISOString(),
+	authorId: "user-1",
 } as unknown as SerializedContentItemWithType;
 
 let container: HTMLDivElement;
@@ -320,6 +326,54 @@ describe("ContentListPage row actions (CanAccess)", () => {
 		expect(texts()).not.toContain("New Item");
 		// The list itself still renders
 		expect(texts()).toContain("hello-world");
+	});
+
+	it("uses the CMS catalog for route read and record write controls", async () => {
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.record.read.allow(),
+				cms.record.create.when(({ facts }) => facts.contentType === "post"),
+				cms.record.update.when(
+					({ identity, facts }) =>
+						facts.contentType === "post" &&
+						facts.recordId === item.id &&
+						facts.authorId === identity?.id,
+				),
+				cms.record.delete.when(() => false),
+			],
+		});
+		const identity = { id: "user-1", role: "user" as const };
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => identity,
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={createMockRouter()}
+				overrides={{ cms: cmsOverrides }}
+				auth={auth}
+				initialIdentity={identity}
+			>
+				<ContentListPageComponent typeSlug="post" />
+			</StackProvider>,
+		);
+
+		expect(texts()).toContain("New Item");
+		expect(container.querySelectorAll("table tbody tr button")).toHaveLength(1);
+		expect(
+			authorization.can(
+				cmsPermissions.record.delete({
+					contentType: "post",
+					recordId: item.id,
+					authorId: item.authorId,
+				}),
+				identity,
+			),
+		).toBe(false);
 	});
 
 	it("notifies success through the notify provider after deleting", async () => {
