@@ -423,7 +423,7 @@ async function planRelatedItem(
 	slug: string,
 	data: Record<string, OperationData>,
 	authorId?: string,
-): Promise<{ item: ContentItem; isNew: boolean }> {
+): Promise<ContentItem> {
 	const validation = getContentTypeZodSchema(targetContentType).safeParse(data);
 	if (!validation.success) {
 		throw new CMSOperationError(
@@ -444,19 +444,22 @@ async function planRelatedItem(
 			{ field: "slug", value: slug, operator: "eq" as const },
 		],
 	});
-	if (existing) return { item: existing, isNew: false };
+	if (existing) {
+		throw new CMSOperationError(
+			409,
+			"Inline related record could not be created because its slug is unavailable.",
+			"RELATED_RECORD_SLUG_CONFLICT",
+		);
+	}
 	const now = new Date();
 	return {
-		item: {
-			id: globalThis.crypto.randomUUID(),
-			contentTypeId: targetContentType.id,
-			slug,
-			data: JSON.stringify(validation.data),
-			...(authorId ? { authorId } : {}),
-			createdAt: now,
-			updatedAt: now,
-		},
-		isNew: true,
+		id: globalThis.crypto.randomUUID(),
+		contentTypeId: targetContentType.id,
+		slug,
+		data: JSON.stringify(validation.data),
+		...(authorId ? { authorId } : {}),
+		createdAt: now,
+		updatedAt: now,
 	};
 }
 
@@ -556,9 +559,9 @@ async function resolvePlannedRelatedItem(
 		data,
 		authorId,
 	);
-	resolvedItems.set(key, planned.item);
-	if (planned.isNew) newItems.push(planned.item);
-	return planned.item;
+	resolvedItems.set(key, planned);
+	newItems.push(planned);
+	return planned;
 }
 
 async function applyRelationWritePlan(

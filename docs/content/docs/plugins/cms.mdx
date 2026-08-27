@@ -1185,6 +1185,12 @@ await fetch("/api/data/content/resource", {
 });
 ```
 
+`_new` is strict creation, not an upsert or an alternate way to reference an
+existing record. BTST derives a slug from the inline data; if that slug already
+exists for the target content type, the operation returns HTTP `409` with code
+`RELATED_RECORD_SLUG_CONFLICT`. Pass `{ id: "existing-record-id" }` when you
+intend to link an existing record.
+
 #### belongsTo Relations (Single Object)
 
 ```ts

@@ -475,6 +475,101 @@ describe("CMS operation-first authorization", () => {
 		);
 	});
 
+	it("does not reuse unreadable records submitted as inline new relations", async () => {
+		const createWithoutReadAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.record.create.when(
+					({ facts }) =>
+						facts.contentType === "resource" ||
+						facts.contentType === "category",
+				),
+				cms.record.update.when(({ facts }) => facts.contentType === "resource"),
+			],
+		});
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createServerAuth({
+				authorization: createWithoutReadAuthorization,
+				getIdentity: () => ({ id: "author-1", role: "user" as const }),
+			}),
+			hooks: {
+				onBeforeCreate: () => {
+					events.push("before:create");
+				},
+				onBeforeUpdate: () => {
+					events.push("before:update");
+				},
+				onError: (_error, operation) => {
+					events.push(`error:${operation}`);
+				},
+			},
+		});
+		const privateCategory = await seedRecord(backend, {
+			typeSlug: "category",
+			slug: "private-category",
+			authorId: "other-owner",
+		});
+		const inlineCollision = {
+			name: "Source",
+			categoryIds: [{ _new: true, data: { name: "Private category" } }],
+		};
+
+		const createResponse = await backend.handler(
+			request("/content/resource", {
+				method: "POST",
+				identity: { id: "author-1", role: "user" },
+				body: { slug: "collision-source", data: inlineCollision },
+			}),
+		);
+		expect(createResponse.status).toBe(409);
+		expect(await createResponse.json()).toMatchObject({
+			code: "RELATED_RECORD_SLUG_CONFLICT",
+		});
+		expect(events).toEqual(["error:create"]);
+		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
+			0,
+		);
+		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
+			1,
+		);
+
+		const source = await seedRecord(backend, {
+			typeSlug: "resource",
+			slug: "existing-source",
+			authorId: "author-1",
+		});
+		const updateResponse = await backend.handler(
+			request(`/content/resource/${source.id}`, {
+				method: "PUT",
+				identity: { id: "author-1", role: "user" },
+				body: { data: inlineCollision },
+			}),
+		);
+		expect(updateResponse.status).toBe(409);
+		expect(await updateResponse.json()).toMatchObject({
+			code: "RELATED_RECORD_SLUG_CONFLICT",
+		});
+		expect(events).toEqual(["error:create", "error:update"]);
+		const persistedSource = await backend.adapter.findOne<ContentItem>({
+			model: "contentItem",
+			where: [{ field: "id", value: source.id }],
+		});
+		expect(JSON.parse(persistedSource?.data ?? "{}")).toMatchObject({
+			title: "existing-source",
+		});
+		expect(
+			await backend.adapter.findOne<ContentRelation>({
+				model: "contentRelation",
+				where: [
+					{ field: "sourceId", value: source.id },
+					{ field: "targetId", value: privateCategory.id },
+				],
+			}),
+		).toBeFalsy();
+	});
+
 	it("fails closed when a relation schema changes after compound authorization", async () => {
 		const relationAuthorization = defineAuthorization({
 			identity: z.object({ id: z.string(), role: z.literal("user") }),
