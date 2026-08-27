@@ -2,8 +2,8 @@
  * Shared auth contract types used by both the client provider
  * (`@btst/stack/context`) and the backend (`@btst/stack/api`).
  *
- * This module is intentionally type-only so it can be imported from server
- * and client code alike.
+ * This module is runtime-safe so it can be imported from server and client
+ * code alike without pulling in either implementation.
  */
 
 /**
@@ -71,6 +71,28 @@ export interface StackAuthProvider {
 	 * checks deny access (e.g. "/login").
 	 */
 	loginPath?: string;
+}
+
+/** A browser auth provider whose identity is bound to a runtime contract. */
+export interface SchemaBoundStackAuthProvider extends StackAuthProvider {
+	readonly mode: "one-rule";
+	readonly contract: {
+		parseIdentity(identity: unknown): StackIdentity | null;
+	};
+}
+
+/** True when a browser provider exposes the v3 schema-bound auth protocol. */
+export function isSchemaBoundStackAuthProvider(
+	provider: StackAuthProvider,
+): provider is SchemaBoundStackAuthProvider {
+	if ((provider as { mode?: unknown }).mode !== "one-rule") return false;
+	const contract = (provider as { contract?: unknown }).contract;
+	return (
+		typeof contract === "object" &&
+		contract !== null &&
+		typeof (contract as { parseIdentity?: unknown }).parseIdentity ===
+			"function"
+	);
 }
 
 /**

@@ -1,5 +1,10 @@
 export { toReactRouterHandlers } from "./handlers";
 export {
+	type CreateReactRouterLayoutOptions,
+	type ReactRouterLayoutLoaderArgs,
+	createReactRouterLayout,
+} from "./layout";
+export {
 	type CreateReactRouterPageOptions,
 	type ReactRouterPageLoaderArgs,
 	createReactRouterPage,

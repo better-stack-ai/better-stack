@@ -6,6 +6,7 @@ import {
 } from "../authorization";
 import { createClientAuth } from "../authorization/client";
 import { createServerAuth } from "../authorization/server";
+import { createNextLayout } from "../next/server";
 import { stack } from "../api";
 import {
 	createDbPlugin,
@@ -96,6 +97,19 @@ const serverAuth = createServerAuth({
 	getIdentity: () => ({ id: "user-1", role: "user" as const }),
 });
 
+createNextLayout({
+	// @ts-expect-error request-only server adapters cannot hydrate a headers-only Next layout
+	auth: serverAuth,
+	ClientLayout: () => null,
+});
+
+const headerServerAuth = createServerAuth({
+	authorization,
+	getIdentityFromHeaders: () => ({ id: "user-1", role: "user" as const }),
+});
+
+createNextLayout({ auth: headerServerAuth, ClientLayout: () => null });
+
 const serverResolverIsExact: Expect<
 	Equal<
 		ReturnType<typeof serverAuth.getIdentity>,
@@ -127,10 +141,13 @@ void clientAuth.CanAccess({
 	permission: unregistered.article.delete({ id: "article-1" }),
 });
 
+// @ts-expect-error server identity resolver uses the same inferred identity contract
 createServerAuth({
 	authorization,
-	// @ts-expect-error server identity resolver uses the same inferred identity contract
-	getIdentity: () => ({ id: "user-1", role: "owner" }),
+	getIdentityFromHeaders: () => ({
+		id: "user-1",
+		role: "owner",
+	}),
 });
 
 const operation = defineOperation({

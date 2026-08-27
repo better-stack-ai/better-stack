@@ -47,10 +47,12 @@ type PluginOverrides = {
 	media: MediaPluginOverrides;
 };
 
-export default function ExampleLayout({
+export function BtstPagesClientLayout({
 	children,
+	initialIdentity,
 }: {
-	children: React.ReactNode;
+	children?: React.ReactNode;
+	initialIdentity?: Awaited<ReturnType<typeof clientAuth.getIdentity>>;
 }) {
 	// fresh instance to avoid stale client cache overriding hydrated data
 	const [queryClient] = useState(() => getOrCreateQueryClient());
@@ -93,6 +95,7 @@ export default function ExampleLayout({
 				router={nextRouter()}
 				api={{ baseURL, basePath: "/api/data" }}
 				auth={clientAuth}
+				initialIdentity={initialIdentity}
 				overrides={{
 					// Only genuinely plugin-specific overrides remain — the shared
 					// Link/navigate/refresh/Image and API wiring come from the

@@ -46,4 +46,34 @@ if (!(await contains(clientFiles, clientMarker))) {
 	);
 }
 
+const prerenderManifest = JSON.parse(
+	await readFile(resolve(buildDirectory, "prerender-manifest.json"), "utf8"),
+);
+const expectedStaticRoutes = [
+	"/pages/ssg-blog",
+	"/pages/ssg-cms/product",
+	"/pages/ssg-forms",
+	"/pages/ssg-kanban",
+];
+
+for (const route of expectedStaticRoutes) {
+	if (!prerenderManifest.routes[route]) {
+		throw new Error(
+			`${route} is no longer prerendered; keep it outside the request identity layout`,
+		);
+	}
+}
+
+if (!prerenderManifest.dynamicRoutes["/pages/ssg-blog/[slug]"]) {
+	throw new Error(
+		"The SSG blog detail route no longer supports on-demand prerendering",
+	);
+}
+
+if (prerenderManifest.routes["/pages/authorization-boundary"]) {
+	throw new Error(
+		"The request identity boundary was unexpectedly included in the prerender manifest",
+	);
+}
+
 console.log("Next.js authorization boundary verified");

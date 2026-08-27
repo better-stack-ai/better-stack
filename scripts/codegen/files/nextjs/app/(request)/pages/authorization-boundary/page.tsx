@@ -1,12 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+"use client";
+
+import { clientAuth } from "@/lib/authorization.client";
 import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
-import { clientAuth } from "../../lib/authorization.ui";
 
-export const Route = createFileRoute("/pages/authorization-boundary")({
-	component: AuthorizationBoundaryPage,
-});
-
-function AuthorizationBoundaryPage() {
+export default function AuthorizationBoundaryPage() {
 	const { CanAccess } = clientAuth;
 	const { identity, isPending, error } = clientAuth.useIdentity();
 	if (error) throw error;

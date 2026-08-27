@@ -4,6 +4,7 @@ import {
 	useCallback,
 	useContext,
 	useEffect,
+	useMemo,
 	useRef,
 	useState,
 	type ReactNode,
@@ -13,6 +14,7 @@ import type {
 	StackAuthProvider,
 	StackIdentity,
 } from "../shared/auth-types";
+import { isSchemaBoundStackAuthProvider } from "../shared/auth-types";
 
 export interface AuthContextValue {
 	provider: StackAuthProvider;
@@ -32,54 +34,132 @@ export interface AuthContextValue {
  */
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function createInitialAuthState(
+	provider: StackAuthProvider,
+	initialIdentity: StackIdentity | null | undefined,
+): {
+	identity: StackIdentity | null;
+	isPending: boolean;
+	error?: Error;
+} {
+	if (initialIdentity === undefined) {
+		return { identity: null, isPending: true };
+	}
+
+	try {
+		return {
+			identity: isSchemaBoundStackAuthProvider(provider)
+				? provider.contract.parseIdentity(initialIdentity)
+				: initialIdentity,
+			isPending: false,
+		};
+	} catch (error) {
+		return {
+			identity: null,
+			isPending: false,
+			error: error instanceof Error ? error : new Error(String(error)),
+		};
+	}
+}
+
 /**
  * Internal boundary rendered by `StackProvider` when an `auth` provider is
- * configured. Resolves `getIdentity()` once on the client (effects don't run
- * during SSR, so server renders see `isPending: true`) and shares the result
- * with all `useIdentity()` / `useCan()` / `<CanAccess>` consumers.
+ * configured. A supplied identity snapshot is used for the first server and
+ * client render; otherwise `getIdentity()` resolves once in the browser. The
+ * result is shared with all identity and permission consumers.
  */
 export function StackAuthBoundary({
 	provider,
+	initialIdentity,
 	children,
 }: {
 	provider: StackAuthProvider;
+	initialIdentity?: StackIdentity | null;
 	children?: ReactNode;
 }) {
-	const [state, setState] = useState<{
+	type BoundaryState = {
 		identity: StackIdentity | null;
 		isPending: boolean;
 		error?: Error;
-	}>({ identity: null, isPending: true });
+		sourceGeneration: object;
+	};
+
+	const hydratedState = useMemo(
+		() => createInitialAuthState(provider, initialIdentity),
+		[provider, initialIdentity],
+	);
+	const sourceGeneration = useMemo(() => ({}), [provider, initialIdentity]);
+	const [state, setState] = useState<BoundaryState>(() => ({
+		...hydratedState,
+		sourceGeneration,
+	}));
+	const sourceChanged = state.sourceGeneration !== sourceGeneration;
+	const currentState = sourceChanged ? hydratedState : state;
+	const latestResolutionGeneration = useRef(0);
+	const activeSourceGeneration = useRef<object | null>(sourceGeneration);
+
+	useEffect(() => {
+		activeSourceGeneration.current = sourceGeneration;
+		return () => {
+			if (activeSourceGeneration.current === sourceGeneration) {
+				activeSourceGeneration.current = null;
+			}
+		};
+	}, [sourceGeneration]);
+
+	useEffect(() => {
+		if (!sourceChanged) return;
+		setState({
+			...hydratedState,
+			sourceGeneration,
+		});
+	}, [hydratedState, sourceChanged, sourceGeneration]);
 
 	const refetch = useCallback(async () => {
+		const resolutionGeneration = ++latestResolutionGeneration.current;
+		const isLatestResolution = () =>
+			latestResolutionGeneration.current === resolutionGeneration &&
+			activeSourceGeneration.current === sourceGeneration;
 		try {
 			const identity = await provider.getIdentity();
-			setState({ identity: identity ?? null, isPending: false });
+			if (!isLatestResolution()) return;
+			setState({
+				identity: identity ?? null,
+				isPending: false,
+				sourceGeneration,
+			});
 		} catch (error) {
-			if ((provider as { mode?: string }).mode === "one-rule") {
+			if (!isLatestResolution()) return;
+			if (isSchemaBoundStackAuthProvider(provider)) {
 				setState({
 					identity: null,
 					isPending: false,
 					error: error instanceof Error ? error : new Error(String(error)),
+					sourceGeneration,
 				});
 				return;
 			}
 			console.error("[btst/auth] getIdentity() failed:", error);
-			setState({ identity: null, isPending: false });
+			setState({
+				identity: null,
+				isPending: false,
+				sourceGeneration,
+			});
 		}
-	}, [provider]);
+	}, [provider, sourceGeneration]);
 
 	useEffect(() => {
+		if (initialIdentity !== undefined) return;
 		void refetch();
-	}, [refetch]);
+	}, [initialIdentity, refetch]);
 
 	return (
 		<AuthContext.Provider
 			value={{
 				provider,
-				identity: state.identity,
-				isPending: state.isPending,
-				...(state.error ? { error: state.error } : {}),
+				identity: currentState.identity,
+				isPending: currentState.isPending,
+				...(currentState.error ? { error: currentState.error } : {}),
 				refetch,
 			}}
 		>

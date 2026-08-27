@@ -11,13 +11,13 @@ export function assertJsonSafe(
 	}
 	if (typeof value === "number") {
 		if (Number.isFinite(value)) return;
-		throw new TypeError("Remote authorization values must be finite numbers.");
+		throw new TypeError("Authorization values must be finite numbers.");
 	}
 	if (typeof value !== "object") {
-		throw new TypeError("Remote authorization values must be JSON-safe.");
+		throw new TypeError("Authorization values must be JSON-safe.");
 	}
 	if (ancestors.has(value)) {
-		throw new TypeError("Remote authorization values cannot contain cycles.");
+		throw new TypeError("Authorization values cannot contain cycles.");
 	}
 	ancestors.add(value);
 	try {
@@ -25,7 +25,7 @@ export function assertJsonSafe(
 			for (let index = 0; index < value.length; index += 1) {
 				if (!(index in value)) {
 					throw new TypeError(
-						"Remote authorization arrays cannot contain empty slots.",
+						"Authorization arrays cannot contain empty slots.",
 					);
 				}
 				assertJsonSafe(value[index], ancestors);
@@ -38,7 +38,7 @@ export function assertJsonSafe(
 						Number(key) >= value.length)
 				) {
 					throw new TypeError(
-						"Remote authorization arrays cannot contain extra properties.",
+						"Authorization arrays cannot contain extra properties.",
 					);
 				}
 			}
@@ -48,7 +48,7 @@ export function assertJsonSafe(
 		const prototype = Object.getPrototypeOf(value);
 		if (prototype !== Object.prototype && prototype !== null) {
 			throw new TypeError(
-				"Remote authorization values must contain only plain objects.",
+				"Authorization values must contain only plain objects.",
 			);
 		}
 		for (const key of Reflect.ownKeys(value)) {
@@ -59,7 +59,7 @@ export function assertJsonSafe(
 				!("value" in descriptor)
 			) {
 				throw new TypeError(
-					"Remote authorization object properties must be JSON-safe.",
+					"Authorization object properties must be JSON-safe.",
 				);
 			}
 			assertJsonSafe(descriptor.value, ancestors);

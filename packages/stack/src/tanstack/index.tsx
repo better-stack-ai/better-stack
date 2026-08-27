@@ -1,5 +1,10 @@
 export { toTanStackHandlers } from "./handlers";
 export {
+	type CreateTanStackLayoutOptions,
+	type TanStackInitialIdentitySnapshot,
+	createTanStackLayout,
+} from "./layout";
+export {
 	type CreateTanStackPageOptions,
 	type TanStackPageLoaderArgs,
 	createTanStackPageOptions,

@@ -166,12 +166,17 @@ import { auth } from "./auth";
 
 export const serverAuth = createServerAuth({
   authorization,
-  getIdentity: async ({ headers }) => {
+  getIdentityFromHeaders: async ({ headers }) => {
     const session = await auth.api.getSession({ headers });
     return session?.user ?? null;
   },
 });
 ```
+
+Use `getIdentityFromHeaders` when a framework layout must hydrate identity
+without constructing a synthetic `Request`. Existing backend-only adapters can
+keep the request-aware `getIdentity({ request, headers })` callback, but those
+adapters are not accepted by headers-only layout helpers until adapted.
 
 Pass it to `stack({ auth: serverAuth })`. The Blog DELETE endpoint and `myStack.forRequest(request).api.blog.deletePost({ id })` use the same operation and rule. The operation loads the post itself before authorization, so client-supplied ownership facts are never trusted. Trusted jobs can call `myStack.internal.blog.deletePost({ id })`; internal calls skip user authorization but retain input validation and lifecycle hooks.
 
@@ -182,7 +187,185 @@ that registers a different permission catalog—or reuses the same stable id
 with an incompatible fact schema—cannot be composed with the Blog delete
 operation.
 
-### Operation lifecycle ordering
+## Hydrate identity at the layout boundary
+
+Resolve identity once from the incoming request and hydrate it into the
+`StackProvider` that covers the complete pages subtree. The server render and
+first browser render then evaluate local rules from the same identity without
+an immediate duplicate session request.
+
+`initialIdentity` is intentionally tri-state:
+
+| Value | First browser state | Browser resolver |
+| --- | --- | --- |
+| `undefined` or omitted | Pending | Runs immediately |
+| `null` | Settled anonymous | Skipped initially |
+| Validated identity | Settled authenticated | Skipped initially |
+
+The supplied snapshot is parsed again through the client authorization
+contract. Schema and resolver failures remain observable errors. A later
+`clientAuth.useIdentity().refetch()` still runs the browser resolver after
+login, logout, or account switching.
+
+The framework helpers also parse through the server adapter's portable
+`contract` and reject non-JSON-safe output before framework serialization.
+Custom server identity adapters can participate by exposing `contract` plus
+`getIdentity(request)` for request-aware loaders, or
+`getIdentityFromHeaders({ headers })` for the Next.js layout helper.
+
+### Next.js
+
+Keep the provider and browser auth in a client boundary, then create the server
+layout through the server-only framework entry:
+
+```tsx title="app/pages/client-layout.tsx"
+"use client";
+
+import { StackProvider } from "@btst/stack/context";
+import { clientAuth } from "@/lib/authorization.client";
+import type { ReactNode } from "react";
+
+export function BtstPagesClientLayout({ children, initialIdentity }: {
+  children?: ReactNode;
+  initialIdentity?: Awaited<ReturnType<typeof clientAuth.getIdentity>>;
+}) {
+  return (
+    <StackProvider
+      basePath="/pages"
+      auth={clientAuth}
+      initialIdentity={initialIdentity}
+    >
+      {children}
+    </StackProvider>
+  );
+}
+```
+
+```tsx title="app/(request)/pages/layout.tsx"
+import { createNextLayout } from "@btst/stack/next/server";
+import { serverAuth } from "@/lib/authorization.server";
+import { BtstPagesClientLayout } from "@/app/pages/client-layout";
+
+export const dynamic = "force-dynamic";
+
+const layout = createNextLayout({
+  auth: serverAuth,
+  ClientLayout: BtstPagesClientLayout,
+});
+
+export default layout.Layout;
+```
+
+Only the schema-validated identity crosses the Server Component boundary.
+`next/headers`, the session provider, and database dependencies stay in the
+server graph. Because the layout reads request headers, Next.js must render its
+subtree per request. If the application also has SSG/ISR pages, put them in a
+separate route group with a client layout that omits `initialIdentity`. Static
+pages then keep full-route caching and resolve identity in the browser, while
+the request-aware group keeps server identity hydration for its entire provider
+subtree.
+
+```tsx title="app/(static)/pages/layout.tsx"
+import { BtstPagesClientLayout } from "@/app/pages/client-layout";
+import type { ReactNode } from "react";
+
+export default function StaticPagesLayout({ children }: { children?: ReactNode }) {
+  // Omitting the prop preserves `undefined`: pending, then browser resolution.
+  return <BtstPagesClientLayout>{children}</BtstPagesClientLayout>;
+}
+```
+
+Route-group folders do not change URLs: both subtrees still render under
+`/pages`. True static output cannot contain a per-request identity; choosing the
+static group intentionally chooses the `undefined` branch of the tri-state
+contract.
+
+This integration targets conventional Next.js route-segment caching with
+`cacheComponents` disabled. Cache Components ignores `dynamic` segment config
+and requires an application-owned Suspense/PPR composition for request APIs;
+`createNextLayout` does not install that caching architecture in v3.
+
+### React Router
+
+Use the parent layout loader so its snapshot covers the complete `<Outlet />`
+subtree:
+
+```tsx title="app/routes/pages/_layout.tsx"
+import { StackProvider } from "@btst/stack/context";
+import { createReactRouterLayout } from "@btst/stack/react-router";
+import { Outlet, useLoaderData } from "react-router";
+import { clientAuth } from "~/lib/authorization.ui";
+import { serverAuth } from "~/lib/authorization.server";
+
+const layout = createReactRouterLayout({ auth: serverAuth });
+export const loader = layout.loader;
+
+export default function BtstPagesLayout() {
+  const { initialIdentity } = useLoaderData<typeof loader>();
+  return (
+    <StackProvider
+      basePath="/pages"
+      auth={clientAuth}
+      initialIdentity={initialIdentity}
+    >
+      <Outlet />
+    </StackProvider>
+  );
+}
+```
+
+### TanStack Start
+
+TanStack loaders are isomorphic, so resolve the request through a server
+function and use the generated loader on the parent route. The server helper
+produces the validated snapshot envelope required by the layout helper:
+
+```ts title="src/lib/authorization.identity.ts"
+import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
+import { resolveTanStackInitialIdentity } from "@btst/stack/tanstack/server";
+import { serverAuth } from "./authorization.server";
+
+export const getInitialIdentity = createServerFn({ method: "GET" }).handler(
+  () => resolveTanStackInitialIdentity({
+    auth: serverAuth,
+    request: getRequest(),
+  }),
+);
+```
+
+```tsx title="src/routes/pages/route.tsx"
+import { StackProvider } from "@btst/stack/context";
+import { createTanStackLayout } from "@btst/stack/tanstack";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
+import { clientAuth } from "../../lib/authorization.ui";
+import { getInitialIdentity } from "../../lib/authorization.identity";
+
+const layout = createTanStackLayout({ getInitialIdentity });
+
+export const Route = createFileRoute("/pages")({
+  loader: layout.loader,
+  component: BtstPagesLayout,
+});
+
+function BtstPagesLayout() {
+  const { initialIdentity } = Route.useLoaderData();
+  return (
+    <StackProvider
+      basePath="/pages"
+      auth={clientAuth}
+      initialIdentity={initialIdentity}
+    >
+      <Outlet />
+    </StackProvider>
+  );
+}
+```
+
+This is identity hydration only. BTST does not cache authorization results or
+require framework middleware.
+
+## Operation lifecycle ordering
 
 An operation validates input, derives trusted facts, resolves identity, and
 authorizes before entering plugin lifecycle hooks. Validation, fact, identity,

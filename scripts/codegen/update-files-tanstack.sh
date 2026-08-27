@@ -29,6 +29,7 @@ step "Syncing files from codegen-projects/tanstack → scripts/codegen/files/tan
 
 FILES=(
   "src/lib/adapters-build-check.ts"
+  "src/lib/authorization.identity.ts"
   "src/lib/authorization.server.ts"
   "src/lib/authorization.ts"
   "src/lib/authorization.ui.ts"

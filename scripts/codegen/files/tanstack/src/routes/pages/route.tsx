@@ -1,5 +1,5 @@
 import { StackProvider } from "@btst/stack/context";
-import { tanstackRouter } from "@btst/stack/tanstack";
+import { createTanStackLayout, tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useCallback, useMemo } from "react";
@@ -25,6 +25,7 @@ import { Outlet, createFileRoute } from "@tanstack/react-router";
 import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client";
 import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client";
 import { clientAuth } from "../../lib/authorization.ui";
+import { getInitialIdentity } from "../../lib/authorization.identity";
 
 // Get base URL function - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -46,7 +47,10 @@ type PluginOverrides = {
 	media: MediaPluginOverrides;
 };
 
+const layout = createTanStackLayout({ getInitialIdentity });
+
 export const Route = createFileRoute("/pages")({
+	loader: layout.loader,
 	component: Layout,
 	notFoundComponent: () => {
 		return <p>This page doesn't exist!</p>;
@@ -55,6 +59,7 @@ export const Route = createFileRoute("/pages")({
 
 function Layout() {
 	const routeContext = Route.useRouteContext();
+	const { initialIdentity } = Route.useLoaderData();
 	const baseURL = getBaseURL();
 	const mediaClientConfig = useMemo(
 		() => ({
@@ -94,6 +99,7 @@ function Layout() {
 				router={tanstackRouter()}
 				api={{ baseURL, basePath: "/api/data" }}
 				auth={clientAuth}
+				initialIdentity={initialIdentity}
 				overrides={{
 					// Only genuinely plugin-specific overrides remain — the shared
 					// Link/navigate/refresh and API wiring come from the top-level

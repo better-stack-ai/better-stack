@@ -1,6 +1,6 @@
 "use client";
 import { createContext, useContext, type ReactNode } from "react";
-import type { StackAuthProvider } from "../shared/auth-types";
+import type { StackAuthProvider, StackIdentity } from "../shared/auth-types";
 import type { StackI18nProvider } from "../shared/i18n-types";
 import type { StackNotifyProvider } from "../shared/notify-types";
 import { StackAuthBoundary } from "./auth";
@@ -147,6 +147,7 @@ export function StackProvider<
 	router,
 	api,
 	auth,
+	initialIdentity,
 	notify,
 	i18n,
 }: {
@@ -162,6 +163,11 @@ export function StackProvider<
 	 * checks pass.
 	 */
 	auth?: StackAuthProvider;
+	/**
+	 * Request identity resolved on the server. `undefined` means no snapshot was
+	 * supplied; `null` is an explicitly hydrated anonymous identity.
+	 */
+	initialIdentity?: StackIdentity | null;
 	/**
 	 * Optional notification provider. When omitted, sonner toasts are used via
 	 * `useNotify()`.
@@ -182,7 +188,9 @@ export function StackProvider<
 	};
 
 	const content = auth ? (
-		<StackAuthBoundary provider={auth}>{children}</StackAuthBoundary>
+		<StackAuthBoundary provider={auth} initialIdentity={initialIdentity}>
+			{children}
+		</StackAuthBoundary>
 	) : (
 		children
 	);
