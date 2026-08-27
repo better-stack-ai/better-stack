@@ -444,6 +444,47 @@ describe("Kanban operation-first authorization", () => {
 		expect(events).toEqual(["read", "task"]);
 	});
 
+	it("requires column reorder permission when ordinary updates include order", async () => {
+		const events: string[] = [];
+		const updateWithoutReorder = defineAuthorization({
+			identity: z.object({
+				id: z.string(),
+				role: z.enum(["user", "admin"]),
+				organizationIds: z.array(z.string()),
+			}),
+			permissions: [kanbanPermissions] as const,
+			rules: ({ kanban }) => [
+				kanban.column.update.when(() => true),
+				kanban.column.reorder.when(() => false),
+			],
+		});
+		const backend = makeBackend({
+			auth: createAuth(undefined, updateWithoutReorder),
+			hooks: {
+				onBeforeUpdateColumn: () => {
+					events.push("before");
+				},
+			},
+		});
+		const board = await seedBoard(backend);
+		const column = await seedColumn(backend, board.id);
+		const response = await backend.handler(
+			request(`/columns/${column.id}`, {
+				method: "PUT",
+				identity: owner,
+				body: { order: 1 },
+			}),
+		);
+		expect(response.status).toBe(403);
+		expect(events).toEqual([]);
+		expect(
+			await backend.adapter.findOne<Column>({
+				model: "kanbanColumn",
+				where: [{ field: "id", value: column.id }],
+			}),
+		).toMatchObject({ order: 0 });
+	});
+
 	it("fails closed across every anonymous HTTP operation", async () => {
 		const backend = makeBackend({ auth: createAuth() });
 		const board = await seedBoard(backend);

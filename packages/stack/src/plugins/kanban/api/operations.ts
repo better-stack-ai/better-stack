@@ -1514,6 +1514,29 @@ export function createKanbanOperations(
 				columnId: snapshot.column.id,
 			} satisfies ColumnUpdateFacts;
 		},
+		additionalPermissions: ({ input }) => {
+			if (input.data.order === undefined) return [];
+			const snapshot = columnSnapshots.get(input as object);
+			if (!snapshot) throw staleStateError();
+			return [kanbanPermissions.column.reorder(boardFacts(snapshot.board))];
+		},
+		legacyAdditionalAuthorization: ({ id, facts }) => {
+			if (id !== kanbanPermissions.column.reorder.id) {
+				throw new TypeError(`Unknown Kanban compound permission: ${id}`);
+			}
+			const reorder = facts as ColumnReorderFacts;
+			return {
+				resource: "kanban:column",
+				action: "update",
+				params: {
+					boardId: reorder.boardId,
+					...(reorder.ownerId ? { ownerId: reorder.ownerId } : {}),
+					...(reorder.organizationId
+						? { organizationId: reorder.organizationId }
+						: {}),
+				},
+			};
+		},
 		execute: async (context) => {
 			const snapshot = columnSnapshots.get(context.input as object);
 			if (!snapshot) throw staleStateError();
