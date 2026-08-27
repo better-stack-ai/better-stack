@@ -60,6 +60,17 @@ const missingResourceRelationSchema = z.object({
 			},
 		}),
 });
+const inverseResourceRelationSchema = z.object({
+	name: z.string(),
+	categoryId: z.object({ id: z.string() }).meta({
+		fieldType: "relation",
+		relation: {
+			type: "belongsTo",
+			targetType: "category",
+			displayField: "name",
+		},
+	}),
+});
 const categoryNoteSchema = z.object({
 	message: z.string(),
 	categoryId: z.object({ id: z.string() }).meta({
@@ -767,6 +778,55 @@ describe("CMS operation-first authorization", () => {
 			}),
 		);
 		expect(response.status).toBe(403);
+	});
+
+	it("fails closed when inverse relation schemas change after authorization", async () => {
+		const inverseAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.literal("user") }),
+			permissions: [cmsPermissions] as const,
+			rules: ({ cms }) => [
+				cms.contentType.read.when(
+					({ facts }) =>
+						facts.contentType === "category" ||
+						facts.contentType === "category-note",
+				),
+			],
+		});
+		let backend: ReturnType<typeof makeBackend>;
+		backend = makeBackend({
+			auth: createServerAuth({
+				authorization: inverseAuthorization,
+				getIdentity: async () => {
+					const resourceType = await backend.adapter.findOne<ContentType>({
+						model: "contentType",
+						where: [{ field: "slug", value: "resource" }],
+					});
+					if (!resourceType) throw new Error("Missing resource content type");
+					await backend.adapter.update<ContentType>({
+						model: "contentType",
+						where: [{ field: "id", value: resourceType.id }],
+						update: {
+							jsonSchema: JSON.stringify(
+								zodToFormSchema(inverseResourceRelationSchema),
+							),
+							updatedAt: new Date(),
+						},
+					});
+					return { id: "reader-1", role: "user" as const };
+				},
+			}),
+		});
+		await backend.api.cms.getAllContentTypes();
+
+		const response = await backend.handler(
+			request("/content-types/category/inverse-relations", {
+				identity: { id: "reader-1", role: "user" },
+			}),
+		);
+		expect(response.status).toBe(409);
+		expect(await response.json()).toMatchObject({
+			code: "RELATION_SCHEMA_CHANGED",
+		});
 	});
 
 	it("derives detail-by-slug facts for UI Builder and other page renderers", async () => {

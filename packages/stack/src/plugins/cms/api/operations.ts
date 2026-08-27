@@ -636,7 +636,7 @@ async function deriveRelationCreateAuthorization(
 	return { permissions, snapshot: snapshot.sort() };
 }
 
-function assertRelationCreateAuthorization(
+function assertRelationSchemaSnapshot(
 	authorized: readonly string[],
 	current: readonly string[],
 ) {
@@ -731,29 +731,69 @@ function populatedRelationsFromSnapshot(snapshot: PopulatedRelationSnapshot) {
 	return populated;
 }
 
-async function inverseSourceTypePermissions(
+interface InverseSourceDescriptor {
+	readonly contentTypeId: string;
+	readonly contentTypeSlug: string;
+	readonly contentTypeName: string;
+	readonly fieldName: string;
+}
+
+interface InverseSourceAuthorization {
+	readonly permissions: readonly ReturnType<
+		typeof cmsPermissions.contentType.read
+	>[];
+	readonly snapshot: readonly string[];
+	readonly sources: readonly InverseSourceDescriptor[];
+}
+
+function inverseSourceKey(source: InverseSourceDescriptor) {
+	return JSON.stringify([
+		source.contentTypeId,
+		source.contentTypeSlug,
+		source.contentTypeName,
+		source.fieldName,
+	]);
+}
+
+async function deriveInverseSourceAuthorization(
 	adapter: Adapter,
 	ensureSynced: () => Promise<void>,
 	targetType: string,
-) {
+): Promise<InverseSourceAuthorization> {
 	await ensureSynced();
 	const permissions = [];
+	const sources: InverseSourceDescriptor[] = [];
+	const seenSourceTypes = new Set<string>();
 	for (const contentType of await adapter.findMany<ContentType>({
 		model: "contentType",
 	})) {
-		const referencesTarget = Object.values(
+		for (const [fieldName, relation] of Object.entries(
 			extractRelationFields(contentType),
-		).some(
-			(relation) =>
-				relation.type === "belongsTo" && relation.targetType === targetType,
-		);
-		if (referencesTarget) {
+		)) {
+			if (relation.type !== "belongsTo" || relation.targetType !== targetType) {
+				continue;
+			}
+			sources.push({
+				contentTypeId: contentType.id,
+				contentTypeSlug: contentType.slug,
+				contentTypeName: contentType.name,
+				fieldName,
+			});
+			if (seenSourceTypes.has(contentType.slug)) continue;
+			seenSourceTypes.add(contentType.slug);
 			permissions.push(
 				cmsPermissions.contentType.read({ contentType: contentType.slug }),
 			);
 		}
 	}
-	return permissions;
+	sources.sort((left, right) =>
+		inverseSourceKey(left).localeCompare(inverseSourceKey(right)),
+	);
+	return {
+		permissions,
+		snapshot: sources.map(inverseSourceKey),
+		sources,
+	};
 }
 
 async function listRecordsForRelation(
@@ -822,6 +862,10 @@ export function createCMSOperations(
 		object,
 		readonly string[]
 	>();
+	const inverseSourceAuthorizationSnapshots = new WeakMap<
+		object,
+		readonly string[]
+	>();
 	const recheckRelationCreateAuthorization = async (
 		input: object,
 		contentType: ContentType,
@@ -853,7 +897,28 @@ export function createCMSOperations(
 			}
 			throw error;
 		}
-		assertRelationCreateAuthorization(authorized, current.snapshot);
+		assertRelationSchemaSnapshot(authorized, current.snapshot);
+	};
+	const recheckInverseSourceAuthorization = async (
+		input: object,
+		targetType: string,
+	) => {
+		const authorized = inverseSourceAuthorizationSnapshots.get(input);
+		inverseSourceAuthorizationSnapshots.delete(input);
+		if (!authorized) {
+			throw new CMSOperationError(
+				500,
+				"Inverse relation authorization snapshot is unavailable.",
+				"AUTHORIZATION_SNAPSHOT_MISSING",
+			);
+		}
+		const current = await deriveInverseSourceAuthorization(
+			adapter,
+			ensureSynced,
+			targetType,
+		);
+		assertRelationSchemaSnapshot(authorized, current.snapshot);
+		return current.sources;
 	};
 	const listQuerySchema = createListContentQuerySchema(options.maxPageSize);
 	const paginationSchema = z.object({
@@ -1564,71 +1629,67 @@ export function createCMSOperations(
 				await getContentTypeOrThrow(adapter, ensureSynced, input.slug)
 			).slug,
 		}),
-		additionalPermissions: ({ facts }) =>
-			inverseSourceTypePermissions(
+		additionalPermissions: async ({ input, facts }) => {
+			const authorization = await deriveInverseSourceAuthorization(
 				adapter,
 				ensureSynced,
 				facts.contentType ?? "",
-			),
+			);
+			inverseSourceAuthorizationSnapshots.set(
+				input as object,
+				authorization.snapshot,
+			);
+			return authorization.permissions;
+		},
 		execute: async ({ input, facts }) => {
-			await ensureSynced();
-			const allContentTypes = await adapter.findMany<ContentType>({
-				model: "contentType",
-			});
+			const sources = await recheckInverseSourceAuthorization(
+				input as object,
+				facts.contentType ?? "",
+			);
 			const inverseRelations: InverseRelation[] = [];
-			for (const contentType of allContentTypes) {
-				for (const [fieldName, relation] of Object.entries(
-					extractRelationFields(contentType),
-				)) {
-					if (
-						relation.type !== "belongsTo" ||
-						relation.targetType !== facts.contentType
-					) {
-						continue;
-					}
-					let count = 0;
-					if (input.query.itemId) {
-						const relations = await adapter.findMany<ContentRelation>({
-							model: "contentRelation",
+			for (const source of sources) {
+				let count = 0;
+				if (input.query.itemId) {
+					const relations = await adapter.findMany<ContentRelation>({
+						model: "contentRelation",
+						where: [
+							{
+								field: "targetId",
+								value: input.query.itemId,
+								operator: "eq" as const,
+							},
+							{
+								field: "fieldName",
+								value: source.fieldName,
+								operator: "eq" as const,
+							},
+						],
+					});
+					for (const sourceId of relations.map((value) => value.sourceId)) {
+						const item = await adapter.findOne<ContentItem>({
+							model: "contentItem",
 							where: [
 								{
-									field: "targetId",
-									value: input.query.itemId,
+									field: "id",
+									value: sourceId,
 									operator: "eq" as const,
 								},
 								{
-									field: "fieldName",
-									value: fieldName,
+									field: "contentTypeId",
+									value: source.contentTypeId,
 									operator: "eq" as const,
 								},
 							],
 						});
-						for (const sourceId of relations.map((value) => value.sourceId)) {
-							const item = await adapter.findOne<ContentItem>({
-								model: "contentItem",
-								where: [
-									{
-										field: "id",
-										value: sourceId,
-										operator: "eq" as const,
-									},
-									{
-										field: "contentTypeId",
-										value: contentType.id,
-										operator: "eq" as const,
-									},
-								],
-							});
-							if (item) count += 1;
-						}
+						if (item) count += 1;
 					}
-					inverseRelations.push({
-						sourceType: contentType.slug,
-						sourceTypeName: contentType.name,
-						fieldName,
-						count,
-					});
 				}
+				inverseRelations.push({
+					sourceType: source.contentTypeSlug,
+					sourceTypeName: source.contentTypeName,
+					fieldName: source.fieldName,
+					count,
+				});
 			}
 			return {
 				inverseRelations: inverseRelations.map((relation) => ({ ...relation })),
