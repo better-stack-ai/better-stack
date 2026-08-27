@@ -1,0 +1,26 @@
+{
+  "extends": "../../../../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "incremental": false,
+    "noEmit": true,
+    "paths": {
+      "@btst-test/portable-authorization-contract": [
+        "../contract-package/dist/index.d.ts"
+      ],
+      "@btst-test/stack-copy-a/authorization": [
+        "../stack-copy-a/dist/authorization/index.d.ts"
+      ],
+      "@btst/stack/authorization": [
+        "../stack-copy-b/dist/authorization/index.d.ts"
+      ],
+      "@btst/stack/authorization/client": [
+        "../stack-copy-b/dist/authorization/client.d.ts"
+      ],
+      "@btst/stack/authorization/remote": [
+        "../stack-copy-b/dist/authorization/remote.d.ts"
+      ]
+    }
+  },
+  "include": ["./src/**/*.ts"]
+}

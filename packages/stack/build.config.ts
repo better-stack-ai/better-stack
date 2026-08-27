@@ -74,6 +74,7 @@ export default defineBuildConfig({
 		"./src/context/index.ts",
 		"./src/authorization/index.ts",
 		"./src/authorization/client.tsx",
+		"./src/authorization/remote.ts",
 		"./src/authorization/server.ts",
 		"./src/client/components/index.tsx",
 		// framework router presets

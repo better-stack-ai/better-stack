@@ -3,7 +3,7 @@ title: Authorization
 description: Define schema-backed permissions once and enforce the same rule in the browser and backend
 ---
 
-BTST's one-rule authorization path keeps one browser-safe rule set as the contract while client and server adapters resolve identity independently. Browser checks only control presentation; backend operations derive trusted facts and enforce the same rule before mutation.
+BTST's one-rule authorization path keeps a rule-free permission contract separate from the browser-safe local rule set. Client and server adapters resolve identity independently. Browser checks only control presentation; backend operations derive trusted facts and enforce the same rule before mutation.
 
 The new path is opt-in. Omitting authorization preserves allow-all behavior, and the RC auth provider described below remains available while plugins migrate.
 
@@ -11,17 +11,28 @@ The new path is opt-in. Omitting authorization preserves allow-all behavior, and
 
 Plugins publish stable, schema-backed permissions. The Blog delete permission is available from its browser-safe entry point:
 
-```ts title="lib/authorization.ts"
-import { defineAuthorization } from "@btst/stack/authorization";
+```ts title="lib/authorization-contract.ts"
+import { defineAuthorizationContract } from "@btst/stack/authorization";
 import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
 import { z } from "zod";
 
-export const authorization = defineAuthorization({
+export const authorizationContract = defineAuthorizationContract({
   identity: z.object({
     id: z.string(),
     role: z.enum(["user", "admin"]),
   }),
   permissions: [blogPermissions] as const,
+});
+```
+
+Keep the local rules in a separate browser-safe module:
+
+```ts title="lib/authorization.ts"
+import { defineAuthorization } from "@btst/stack/authorization";
+import { authorizationContract } from "./authorization-contract";
+
+export const authorization = defineAuthorization({
+  contract: authorizationContract,
   rules: ({ blog }) => [
     blog.post.delete.when(
       ({ identity, facts }) =>
@@ -32,7 +43,11 @@ export const authorization = defineAuthorization({
 });
 ```
 
-The identity and permission facts are inferred from their schemas. A missing rule denies access once authorization is enabled. Use `.allow()` for an explicit unconditional rule.
+The identity and permission facts are inferred from their schemas. The contract contains only those schemas, stable permission ids, and an automatically derived `version`; it does not contain the rules. It can therefore live in a small shared package without backend code, database imports, secrets, or React. `authorization.contract` exposes the same rule-free object when starting from a local authorization instance.
+
+Portable contract schemas must be fully representable as JSON Schema. BTST rejects custom refinements, transforms, and other opaque schema behavior at contract definition time so an automatically derived version can never silently omit validation logic. Prefer explicit Zod constraints such as enums, string formats, ranges, and object shapes.
+
+A missing rule denies access once authorization is enabled. Use `.allow()` for an explicit unconditional rule.
 
 ## Bind the browser adapter
 
@@ -79,6 +94,64 @@ function DeleteControl({ post }) {
 ```
 
 `clientAuth.useIdentity()` preserves the exact inferred identity type. `clientAuth.useCan(permission)` and `clientAuth.CanAccess` are bound to the same registered permissions.
+
+## Use a managed or separate backend
+
+Publish only `authorizationContract` and the permission descriptors to the frontend. A remote evaluator keeps the same bound hook API while the managed backend remains authoritative:
+
+```tsx title="lib/authorization.client.ts"
+"use client";
+
+import { createClientAuth } from "@btst/stack/authorization/client";
+import { createRemoteAuthorizationEvaluator } from "@btst/stack/authorization/remote";
+import { authorizationContract } from "@acme/backend-contract";
+
+const evaluator = createRemoteAuthorizationEvaluator({
+  contract: authorizationContract,
+  transport: async (request) => {
+    const response = await fetch("/api/authorization/evaluate", {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    return response.json();
+  },
+});
+
+export const clientAuth = createClientAuth({
+  evaluator,
+  getIdentity: () => session?.user ?? null,
+});
+```
+
+The wire request contains the contract version, stable permission id, and schema-validated facts. Facts must also be JSON-safe data; the evaluator rejects values such as `bigint`, functions, non-finite numbers, class instances, and cycles before calling the transport. It intentionally does not send the browser identity as trusted input. The backend strictly validates the request against its contract and resolves identity from its own session:
+
+```ts title="authorization-handler.ts"
+import { parseRemoteAuthorizationRequest } from "@btst/stack/authorization/remote";
+import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { authorizationContract } from "./authorization-contract";
+import { authorization } from "./authorization";
+
+export async function evaluateAuthorization(request: Request) {
+  const body = await request.json();
+  const parsed = parseRemoteAuthorizationRequest(authorizationContract, body);
+  const identity = await getIdentityFromSession(request);
+  const post = await database.posts.findById(parsed.permission.facts.id);
+  const trustedPermission = blogPermissions.post.delete({
+    id: post.id,
+    authorId: post.authorId,
+  });
+  const allowed = authorization.can(trustedPermission, identity);
+
+  return Response.json({
+    version: authorizationContract.version,
+    allowed,
+  });
+}
+```
+
+Contract version mismatches and malformed responses throw typed protocol errors; they are never converted into ordinary denials. Remote decisions are stored only in each mounted `useCan()` hook. BTST does not install a reusable authorization cache, so installation needs no framework-specific cache wiring.
 
 ## Bind the server adapter
 

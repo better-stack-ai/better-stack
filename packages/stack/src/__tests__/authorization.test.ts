@@ -1,9 +1,13 @@
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createMemoryAdapter } from "@btst/adapter-memory";
 import type { DatabaseDefinition } from "@btst/db";
 import {
 	defineAuthorization,
+	defineAuthorizationContract,
 	definePermissions,
 	permission,
 } from "../authorization";
@@ -49,6 +53,282 @@ const authorization = defineAuthorization({
 });
 
 describe("schema-backed authorization", () => {
+	it("exposes a versioned rule-free contract for the registered schemas", () => {
+		const contract = defineAuthorizationContract({
+			identity: z.object({
+				id: z.string(),
+				role: z.enum(["user", "admin"]),
+			}),
+			permissions: [blogPermissions] as const,
+		});
+		const localAuthorization = defineAuthorization({
+			contract,
+			rules: ({ blog }) => [blog.post.read.allow()],
+		});
+
+		expect(contract.permissionIds).toEqual([
+			"blog:post.delete",
+			"blog:post.read",
+		]);
+		expect(contract.version).toMatch(/^auth_[0-9a-f]{16}$/);
+		expect(contract.parseIdentity({ id: "user-1", role: "user" })).toEqual({
+			id: "user-1",
+			role: "user",
+		});
+		expect(
+			contract.parsePermission({
+				id: "blog:post.delete",
+				facts: { id: "post-1" },
+			}),
+		).toMatchObject({
+			id: "blog:post.delete",
+			facts: { id: "post-1" },
+		});
+		expect(() =>
+			contract.parsePermission({
+				id: "blog:post.delete",
+				facts: { id: 1 },
+			}),
+		).toThrow();
+		expect(localAuthorization.contract).toBe(contract);
+	});
+
+	it("binds backend rules when the contract uses a separate physical stack copy", async () => {
+		const fixtureRoot = mkdtempSync(
+			join(process.cwd(), "node_modules/.btst-authorization-copies-"),
+		);
+		const copyPackage = (name: string) => {
+			const packageRoot = join(fixtureRoot, name, "node_modules/@btst/stack");
+			const authorizationRoot = join(packageRoot, "src/authorization");
+			mkdirSync(authorizationRoot, { recursive: true });
+			copyFileSync(
+				join(process.cwd(), "package.json"),
+				join(packageRoot, "package.json"),
+			);
+			copyFileSync(
+				join(process.cwd(), "src/authorization/index.ts"),
+				join(authorizationRoot, "index.ts"),
+			);
+			return pathToFileURL(join(authorizationRoot, "index.ts")).href;
+		};
+
+		try {
+			const contractCopy = (await import(
+				copyPackage("contract")
+			)) as typeof import("../authorization");
+			const backendCopy = (await import(
+				copyPackage("backend")
+			)) as typeof import("../authorization");
+			const publishedPermissions = contractCopy.definePermissions("documents", {
+				read: contractCopy.permission(z.object({ id: z.string() })),
+			});
+			const publishedContract = contractCopy.defineAuthorizationContract({
+				identity: z.object({ id: z.string() }),
+				permissions: [publishedPermissions] as const,
+			});
+			const backendAuthorization = backendCopy.defineAuthorization({
+				contract: publishedContract,
+				rules: ({ documents }) => [documents.read.allow()],
+			});
+			const request = publishedPermissions.read({ id: "document-1" });
+			const rebuiltContract = backendCopy.defineAuthorizationContract({
+				identity: z.object({ id: z.string() }),
+				permissions: [publishedPermissions] as const,
+			});
+
+			expect(backendCopy.isPermissionRequest(request)).toBe(true);
+			expect(rebuiltContract.version).toBe(publishedContract.version);
+			expect(backendAuthorization.can(request, { id: "user-1" })).toBe(true);
+		} finally {
+			rmSync(fixtureRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("rejects internal marker keys in permission trees", () => {
+		expect(() =>
+			definePermissions("reserved", {
+				"__btst.authorization.permission-catalog.v1": permission(),
+			}),
+		).toThrowError(
+			'Permission key "__btst.authorization.permission-catalog.v1" is reserved.',
+		);
+	});
+
+	it("derives the same contract version from equivalent schemas", () => {
+		const createContract = () =>
+			defineAuthorizationContract({
+				identity: z.object({ id: z.string() }),
+				permissions: [
+					definePermissions("documents", {
+						read: permission(z.object({ id: z.string() })),
+					}),
+				] as const,
+			});
+
+		expect(createContract().version).toBe(createContract().version);
+
+		const changed = defineAuthorizationContract({
+			identity: z.object({ id: z.string(), tenantId: z.string() }),
+			permissions: [
+				definePermissions("documents", {
+					read: permission(z.object({ id: z.string() })),
+				}),
+			] as const,
+		});
+		expect(changed.version).not.toBe(createContract().version);
+
+		const changedFacts = defineAuthorizationContract({
+			identity: z.object({ id: z.string() }),
+			permissions: [
+				definePermissions("documents", {
+					read: permission(z.object({ id: z.string(), revision: z.number() })),
+				}),
+			] as const,
+		});
+		expect(changedFacts.version).not.toBe(createContract().version);
+
+		const stripIdentity = defineAuthorizationContract({
+			identity: z.object({ id: z.string() }),
+			permissions: [blogPermissions] as const,
+		});
+		const strictIdentity = defineAuthorizationContract({
+			identity: z.strictObject({ id: z.string() }),
+			permissions: [blogPermissions] as const,
+		});
+		expect(strictIdentity.version).not.toBe(stripIdentity.version);
+
+		const stringMetadata = defineAuthorizationContract({
+			identity: z.object({ id: z.string(), value: z.string() }),
+			permissions: [blogPermissions] as const,
+		});
+		const misleadingMetadata = defineAuthorizationContract({
+			identity: z.object({
+				id: z.string(),
+				value: z.number().meta({ type: "string" }),
+			}),
+			permissions: [blogPermissions] as const,
+		});
+		expect(misleadingMetadata.version).not.toBe(stringMetadata.version);
+
+		const optionalIdentityField = defineAuthorizationContract({
+			identity: z.object({ id: z.string(), value: z.string().optional() }),
+			permissions: [blogPermissions] as const,
+		});
+		expect(optionalIdentityField.version).not.toBe(stringMetadata.version);
+
+		const constrainedIdentity = defineAuthorizationContract({
+			identity: z.object({ id: z.string().min(1).max(100) }),
+			permissions: [blogPermissions] as const,
+		});
+		expect(constrainedIdentity.parseIdentity({ id: "user-1" })).toEqual({
+			id: "user-1",
+		});
+		const constrainedFacts = definePermissions("constrained", {
+			read: permission(z.array(z.string()).min(1).max(3)),
+		});
+		const constrainedFactsContract = defineAuthorizationContract({
+			identity: z.object({ id: z.string() }),
+			permissions: [constrainedFacts] as const,
+		});
+		expect(
+			constrainedFactsContract.parsePermission({
+				id: "constrained:read",
+				facts: ["one", "two"],
+			}),
+		).toMatchObject({ facts: ["one", "two"] });
+	});
+
+	it("rejects opaque schema behavior that cannot be derived into a version", () => {
+		const message =
+			"Authorization contract schemas must be fully representable as JSON Schema; custom refinements, transforms, and other opaque behavior are unsupported because they cannot be derived into a stable version.";
+		expect(() =>
+			defineAuthorizationContract({
+				identity: z
+					.object({ id: z.string() })
+					.refine(({ id }) => id.startsWith("user_")),
+				permissions: [blogPermissions] as const,
+			}),
+		).toThrowError(message);
+
+		expect(() =>
+			defineAuthorizationContract({
+				identity: z.object({ id: z.string() }),
+				permissions: [
+					definePermissions("opaque", {
+						read: permission(z.string().transform((value) => value.length)),
+					}),
+				] as const,
+			}),
+		).toThrowError(message);
+
+		for (const schema of [
+			z.coerce.string(),
+			z.preprocess((value) => String(value), z.string()),
+			z.string().overwrite((value) => value.trim()),
+			z.string().catch("fallback"),
+			z.string().default("fallback"),
+			z.string().prefault("fallback"),
+			z.string().regex(/post/i),
+			z.stringFormat("tenant", (value) => value.startsWith("tenant_")),
+			z.stringFormat("email", () => true),
+			z.url({ hostname: /example\.com/ }),
+			z.jwt({ alg: "HS256" }),
+			z.number().min(Number.POSITIVE_INFINITY),
+			z.number().multipleOf(0),
+			z.number().multipleOf(-1),
+			z.string().min(-1),
+			z.string().max(-1),
+			z.string().min(1.5),
+			z.array(z.string()).min(-1),
+			z.array(z.string()).max(1.5),
+			z.string().exactOptional(),
+			z.lazy(() => z.string()),
+			z
+				.object({ value: z.string() })
+				.check(z.property("value", z.string().startsWith("x"))),
+			z.success(z.string()),
+			z.file(),
+			z.literal(Number.NaN),
+			z.literal(Number.POSITIVE_INFINITY),
+			z.literal(Number.NEGATIVE_INFINITY),
+		]) {
+			expect(() =>
+				defineAuthorizationContract({
+					identity: z.object({ id: z.string() }),
+					permissions: [
+						definePermissions("opaque", { read: permission(schema) }),
+					] as const,
+				}),
+			).toThrowError(message);
+		}
+	});
+
+	it("rejects identity schemas that can violate the public identity shape", () => {
+		for (const identity of [z.any(), z.object({ id: z.any() })]) {
+			expect(() =>
+				defineAuthorizationContract({
+					identity,
+					permissions: [blogPermissions] as const,
+				}),
+			).toThrow();
+		}
+	});
+
+	it("snapshots the registered catalog tuple before versioning", () => {
+		const permissions = [blogPermissions];
+		const contract = defineAuthorizationContract({
+			identity: z.object({ id: z.string() }),
+			permissions,
+		});
+
+		(permissions as unknown as unknown[]).push(commentsPermissions);
+		expect(contract.permissions).toEqual([blogPermissions]);
+		expect(Object.isFrozen(contract.permissions)).toBe(true);
+		expect(() =>
+			(contract.permissions as unknown as unknown[]).push(commentsPermissions),
+		).toThrow();
+	});
+
 	it("validates permission facts when the request is created", () => {
 		expect(() => blogPermissions.post.delete({ id: 1 } as never)).toThrow();
 		expect(blogPermissions.post.delete({ id: "post-1" })).toMatchObject({

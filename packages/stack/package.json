@@ -25,7 +25,7 @@
     "build:analyze": "NODE_OPTIONS='--max-old-space-size=8192' ANALYZE=1 unbuild --clean && node ./scripts/postbuild.cjs",
     "stub": "unbuild --stub",
     "test": "vitest",
-    "typecheck": "tsc --project tsconfig.json",
+    "typecheck": "tsc --project tsconfig.json && tsc --project consumer-tests/portable-authorization-contract/stack-package/tsconfig.json --outDir consumer-tests/portable-authorization-contract/stack-copy-a/dist && tsc --project consumer-tests/portable-authorization-contract/stack-package/tsconfig.json --outDir consumer-tests/portable-authorization-contract/stack-copy-b/dist && tsc --project consumer-tests/portable-authorization-contract/contract-package/tsconfig.json && tsc --project consumer-tests/portable-authorization-contract/consumer-package/tsconfig.json",
     "knip": "knip --strict",
     "build-registry": "tsx scripts/build-registry.ts",
     "test-registry": "bash scripts/test-registry.sh",
@@ -105,6 +105,16 @@
       "require": {
         "types": "./dist/authorization/client.d.cts",
         "default": "./dist/authorization/client.cjs"
+      }
+    },
+    "./authorization/remote": {
+      "import": {
+        "types": "./dist/authorization/remote.d.ts",
+        "default": "./dist/authorization/remote.mjs"
+      },
+      "require": {
+        "types": "./dist/authorization/remote.d.cts",
+        "default": "./dist/authorization/remote.cjs"
       }
     },
     "./authorization/server": {
@@ -710,6 +720,9 @@
       ],
       "authorization/client": [
         "./dist/authorization/client.d.ts"
+      ],
+      "authorization/remote": [
+        "./dist/authorization/remote.d.ts"
       ],
       "authorization/server": [
         "./dist/authorization/server.d.ts"

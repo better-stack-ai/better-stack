@@ -5,10 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
 	defineAuthorization,
+	defineAuthorizationContract,
 	definePermissions,
 	permission,
 } from "../authorization";
 import { createClientAuth } from "../authorization/client";
+import {
+	AuthorizationRequestValidationError,
+	AuthorizationResponseValidationError,
+	createRemoteAuthorizationEvaluator,
+} from "../authorization/remote";
 import { StackProvider } from "../context";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -56,6 +62,172 @@ async function render(ui: React.ReactElement) {
 }
 
 describe("createClientAuth", () => {
+	it("evaluates remote permissions asynchronously without a reusable cache", async () => {
+		const transport = vi.fn(async (request) => ({
+			version: request.version,
+			allowed: true,
+		}));
+		const evaluator = createRemoteAuthorizationEvaluator({
+			contract: authorization.contract,
+			transport,
+		});
+		const clientAuth = createClientAuth({
+			evaluator,
+			getIdentity: () => ({ id: "user-1", role: "user" as const }),
+		});
+		let firstState: ReturnType<typeof clientAuth.useCan> | undefined;
+		let secondState: ReturnType<typeof clientAuth.useCan> | undefined;
+
+		function Probe() {
+			const permissionRequest = blogPermissions.post.delete({ id: "post-1" });
+			firstState = clientAuth.useCan(permissionRequest);
+			secondState = clientAuth.useCan(permissionRequest);
+			return null;
+		}
+
+		await render(
+			<StackProvider basePath="/pages" auth={clientAuth}>
+				<Probe />
+			</StackProvider>,
+		);
+
+		expect(firstState).toEqual({ can: true, isPending: false });
+		expect(secondState).toEqual({ can: true, isPending: false });
+		expect(transport).toHaveBeenCalledTimes(2);
+	});
+
+	it("does not restart remote checks on unrelated renders or accept stale completions", async () => {
+		type Deferred = {
+			promise: Promise<{ version: string; allowed: boolean }>;
+			resolve: (allowed: boolean) => void;
+		};
+		const deferred: Deferred[] = [];
+		const transport = vi.fn((request) => {
+			let resolvePromise: ((allowed: boolean) => void) | undefined;
+			const promise = new Promise<{ version: string; allowed: boolean }>(
+				(resolve) => {
+					resolvePromise = (allowed) =>
+						resolve({ version: request.version, allowed });
+				},
+			);
+			deferred.push({
+				promise,
+				resolve: resolvePromise as (allowed: boolean) => void,
+			});
+			return promise;
+		});
+		const evaluator = createRemoteAuthorizationEvaluator({
+			contract: authorization.contract,
+			transport,
+		});
+		const clientAuth = createClientAuth({
+			evaluator,
+			getIdentity: () => ({ id: "user-1", role: "user" as const }),
+		});
+		let canState: ReturnType<typeof clientAuth.useCan> | undefined;
+
+		function Probe({ postId }: { postId: string }) {
+			canState = clientAuth.useCan(blogPermissions.post.delete({ id: postId }));
+			return null;
+		}
+		function App({ postId, unrelated }: { postId: string; unrelated: number }) {
+			return (
+				<StackProvider basePath="/pages" auth={clientAuth}>
+					<span>{unrelated}</span>
+					<Probe postId={postId} />
+				</StackProvider>
+			);
+		}
+
+		await render(<App postId="post-1" unrelated={0} />);
+		expect(transport).toHaveBeenCalledTimes(1);
+
+		await render(<App postId="post-1" unrelated={1} />);
+		expect(transport).toHaveBeenCalledTimes(1);
+
+		await render(<App postId="post-2" unrelated={1} />);
+		expect(transport).toHaveBeenCalledTimes(2);
+		expect(canState).toEqual({ can: false, isPending: true });
+
+		await act(async () => deferred[1]?.resolve(true));
+		expect(canState).toEqual({ can: true, isPending: false });
+
+		await act(async () => deferred[0]?.resolve(false));
+		expect(canState).toEqual({ can: true, isPending: false });
+	});
+
+	it("surfaces remote protocol failures instead of treating them as denials", async () => {
+		const evaluator = createRemoteAuthorizationEvaluator({
+			contract: authorization.contract,
+			transport: async () => ({
+				version: authorization.contract.version,
+				allowed: "not-a-boolean",
+			}),
+		});
+		const clientAuth = createClientAuth({
+			evaluator,
+			getIdentity: () => ({ id: "user-1", role: "user" as const }),
+		});
+		let canState: ReturnType<typeof clientAuth.useCan> | undefined;
+
+		function Probe() {
+			canState = clientAuth.useCan(
+				blogPermissions.post.delete({ id: "post-1" }),
+			);
+			return null;
+		}
+
+		await render(
+			<StackProvider basePath="/pages" auth={clientAuth}>
+				<Probe />
+			</StackProvider>,
+		);
+
+		expect(canState?.can).toBe(false);
+		expect(canState?.isPending).toBe(false);
+		expect(canState?.error).toBeInstanceOf(
+			AuthorizationResponseValidationError,
+		);
+	});
+
+	it("surfaces non-JSON facts as typed errors instead of render failures", async () => {
+		const portablePermissions = definePermissions("portable", {
+			inspect: permission(z.object({ value: z.string() })),
+		});
+		const portableContract = defineAuthorizationContract({
+			identity: z.object({ id: z.string() }),
+			permissions: [portablePermissions] as const,
+		});
+		const transport = vi.fn();
+		const evaluator = createRemoteAuthorizationEvaluator({
+			contract: portableContract,
+			transport,
+		});
+		const clientAuth = createClientAuth({
+			evaluator,
+			getIdentity: () => ({ id: "user-1" }),
+		});
+		let canState: ReturnType<typeof clientAuth.useCan> | undefined;
+
+		function Probe() {
+			canState = clientAuth.useCan({
+				id: "portable:inspect",
+				facts: { value: 1n },
+			} as never);
+			return null;
+		}
+
+		await render(
+			<StackProvider basePath="/pages" auth={clientAuth}>
+				<Probe />
+			</StackProvider>,
+		);
+
+		expect(canState).toMatchObject({ can: false, isPending: false });
+		expect(canState?.error).toBeInstanceOf(AuthorizationRequestValidationError);
+		expect(transport).not.toHaveBeenCalled();
+	});
+
 	it("binds typed hooks and evaluates the shared rule locally", async () => {
 		const fetchSpy = vi.spyOn(globalThis, "fetch");
 		const clientAuth = createClientAuth({
