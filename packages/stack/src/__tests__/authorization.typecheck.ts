@@ -16,6 +16,11 @@ import {
 } from "../plugins/api";
 import { blogBackendPlugin, type BlogBackendHooks } from "../plugins/blog/api";
 import { blogPermissions } from "../plugins/blog/permissions";
+import {
+	commentsBackendPlugin,
+	type CommentsBackendHooks,
+} from "../plugins/comments/api";
+import { commentsPermissions } from "../plugins/comments/permissions";
 import type { StackIdentity } from "../shared/auth-types";
 import type { DatabaseDefinition, DBAdapter } from "@btst/db";
 
@@ -334,6 +339,132 @@ const blogOperationKeysAreExact: Expect<
 	>
 > = true;
 void blogOperationKeysAreExact;
+
+commentsPermissions.thread.read({
+	scope: "public",
+	resourceId: "post-1",
+	resourceType: "post",
+});
+commentsPermissions.thread.read({ scope: "own", authorId: "user-1" });
+commentsPermissions.thread.read({
+	scope: "moderation",
+	status: "pending",
+});
+// @ts-expect-error public reads require one concrete thread
+commentsPermissions.thread.read({ scope: "public", resourceId: "post-1" });
+// @ts-expect-error scopes are a closed vocabulary
+commentsPermissions.thread.read({ scope: "team", authorId: "user-1" });
+commentsPermissions.comment.moderate({
+	commentId: "comment-1",
+	resourceId: "post-1",
+	resourceType: "post",
+	// @ts-expect-error moderation status is schema-backed
+	status: "published",
+});
+
+const commentsHooks: CommentsBackendHooks = {
+	onBeforeEdit: (_id, _data, context) => {
+		const editFactsAreExact: Expect<
+			Equal<
+				typeof context.facts,
+				{
+					readonly commentId: string;
+					readonly authorId: string;
+					readonly status: "pending" | "approved" | "spam";
+				}
+			>
+		> = true;
+		const inputIsExact: Expect<
+			Equal<
+				typeof context.input,
+				{ readonly id: string; readonly data: { readonly body: string } }
+			>
+		> = true;
+		void editFactsAreExact;
+		void inputIsExact;
+		// @ts-expect-error trusted ownership facts are readonly
+		context.facts.authorId = "spoofed-owner";
+	},
+	onBeforeStatusChange: (_id, _status, context) => {
+		const moderationFactsAreExact: Expect<
+			Equal<
+				typeof context.facts,
+				{
+					readonly commentId: string;
+					readonly resourceId: string;
+					readonly resourceType: string;
+					readonly status: "pending" | "approved" | "spam";
+				}
+			>
+		> = true;
+		void moderationFactsAreExact;
+	},
+};
+void commentsHooks;
+
+const commentsAuthorization = defineAuthorization({
+	identity: z.object({ id: z.string(), role: z.enum(["user", "moderator"]) }),
+	permissions: [commentsPermissions] as const,
+	rules: ({ comments }) => [comments.comment.edit.allow()],
+});
+const commentsServerAuth = createServerAuth({
+	authorization: commentsAuthorization,
+	getIdentity: () => ({ id: "user-1", role: "user" as const }),
+});
+const commentsStack = stack({
+	basePath: "/api",
+	plugins: { comments: commentsBackendPlugin() },
+	adapter: fakeAdapter,
+	auth: commentsServerAuth,
+});
+
+type CommentsOperationKeys = keyof typeof commentsStack.internal.comments;
+const commentsOperationKeysAreExact: Expect<
+	Equal<
+		CommentsOperationKeys,
+		| "listComments"
+		| "getCommentCount"
+		| "createComment"
+		| "updateComment"
+		| "toggleLike"
+		| "updateCommentStatus"
+		| "deleteComment"
+	>
+> = true;
+void commentsOperationKeysAreExact;
+
+commentsStack
+	.forRequest(new Request("https://example.test"))
+	.api.comments.updateComment({ id: "comment-1", data: { body: "Updated" } });
+commentsStack.internal.comments.createComment({
+	resourceId: "post-1",
+	resourceType: "post",
+	body: "Job comment",
+	authorId: "job-1",
+});
+const requestComments = commentsStack.forRequest(
+	new Request("https://example.test"),
+).api.comments;
+// @ts-expect-error raw getters are not exposed through request operations
+requestComments.getCommentById("comment-1");
+// @ts-expect-error raw getters are not exposed through the internal operation namespace
+commentsStack.internal.comments.getCommentById("comment-1");
+// @ts-expect-error raw mutation exports are not exposed through request operations
+requestComments.toggleCommentLike("comment-1", "user-1");
+// @ts-expect-error raw mutation exports are not exposed through the internal operation namespace
+commentsStack.internal.comments.toggleCommentLike("comment-1", "user-1");
+// @ts-expect-error app-authored raw prefetch is not a maintained request operation
+requestComments.prefetchForRoute("/comments");
+// @ts-expect-error app-authored raw prefetch is not an internal operation
+commentsStack.internal.comments.prefetchForRoute("/comments");
+
+stack({
+	basePath: "/api",
+	plugins: { comments: commentsBackendPlugin() },
+	adapter: fakeAdapter,
+	// @ts-expect-error Comments operations require the Comments permission catalog
+	auth: unregisteredServerAuth,
+});
 
 blogStack.forRequest(new Request("https://example.test")).api.blog.listPosts({
 	published: true,

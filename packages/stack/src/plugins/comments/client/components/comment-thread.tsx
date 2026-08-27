@@ -33,13 +33,14 @@ import {
 } from "../hooks/use-comments";
 import type { CommentsLocalization } from "../localization";
 import {
-	CanAccess,
+	PermissionAccess,
 	useNotify,
 	usePluginOverrides,
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../overrides";
+import { commentsPermissions } from "../../permissions";
 
 /** Custom input component props */
 export interface CommentInputProps {
@@ -149,6 +150,7 @@ function CommentCard({
 }) {
 	const t = useTranslate();
 	const notify = useNotify();
+	const { auth } = useStack();
 	const [isEditing, setIsEditing] = useState(false);
 	const Renderer = components?.Renderer ?? DEFAULT_RENDERER;
 
@@ -190,10 +192,7 @@ function CommentCard({
 
 	const handleLike = () => {
 		if (!currentUserId) return;
-		toggleLikeMutation.mutate({
-			commentId: comment.id,
-			authorId: currentUserId,
-		});
+		toggleLikeMutation.mutate({ commentId: comment.id });
 	};
 
 	return (
@@ -262,80 +261,102 @@ function CommentCard({
 				{!isEditing && (
 					<div className="flex items-center gap-1 mt-2">
 						{currentUserId && isApproved && (
-							<Button
-								variant="ghost"
-								size="sm"
-								className="h-7 px-2 text-xs gap-1"
-								onClick={handleLike}
-								aria-label={
-									comment.isLikedByCurrentUser
-										? (localization?.COMMENTS_UNLIKE_ARIA ??
-											t("comments.thread.unlikeAria", "Unlike"))
-										: (localization?.COMMENTS_LIKE_ARIA ??
-											t("comments.thread.likeAria", "Like"))
-								}
-								data-testid="like-button"
+							<PermissionAccess
+								permission={commentsPermissions.comment.react({
+									commentId: comment.id,
+									status: comment.status,
+								})}
 							>
-								<Heart
-									className={`h-3.5 w-3.5 ${comment.isLikedByCurrentUser ? "fill-current text-red-500" : ""}`}
-								/>
-								{comment.likes > 0 && (
-									<span data-testid="like-count">{comment.likes}</span>
-								)}
-							</Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									className="h-7 px-2 text-xs gap-1"
+									onClick={handleLike}
+									aria-label={
+										comment.isLikedByCurrentUser
+											? (localization?.COMMENTS_UNLIKE_ARIA ??
+												t("comments.thread.unlikeAria", "Unlike"))
+											: (localization?.COMMENTS_LIKE_ARIA ??
+												t("comments.thread.likeAria", "Like"))
+									}
+									data-testid="like-button"
+								>
+									<Heart
+										className={`h-3.5 w-3.5 ${comment.isLikedByCurrentUser ? "fill-current text-red-500" : ""}`}
+									/>
+									{comment.likes > 0 && (
+										<span data-testid="like-count">{comment.likes}</span>
+									)}
+								</Button>
+							</PermissionAccess>
 						)}
 
 						{allowPosting &&
 							currentUserId &&
 							!comment.parentId &&
 							isApproved && (
-								<Button
-									variant="ghost"
-									size="sm"
-									className="h-7 px-2 text-xs"
-									onClick={() => onReplyClick(comment.id)}
-									data-testid="reply-button"
+								<PermissionAccess
+									permission={commentsPermissions.thread.createComment({
+										resourceId,
+										resourceType,
+										parentId: comment.id,
+									})}
 								>
-									<MessageSquare className="h-3.5 w-3.5 mr-1" />
-									{localization?.COMMENTS_REPLY_BUTTON ??
-										t("comments.thread.replyButton", "Reply")}
-								</Button>
-							)}
-
-						{isOwn && (
-							<>
-								{allowEditing && isApproved && (
 									<Button
 										variant="ghost"
 										size="sm"
 										className="h-7 px-2 text-xs"
-										onClick={() => setIsEditing(true)}
-										data-testid="edit-button"
+										onClick={() => onReplyClick(comment.id)}
+										data-testid="reply-button"
 									>
-										<Pencil className="h-3.5 w-3.5 mr-1" />
-										{localization?.COMMENTS_EDIT_BUTTON ??
-											t("comments.thread.editButton", "Edit")}
+										<MessageSquare className="h-3.5 w-3.5 mr-1" />
+										{localization?.COMMENTS_REPLY_BUTTON ??
+											t("comments.thread.replyButton", "Reply")}
 									</Button>
-								)}
-								<CanAccess
-									resource="comments:comment"
-									action="delete"
-									params={{ id: comment.id }}
+								</PermissionAccess>
+							)}
+
+						{allowEditing && isApproved && (isOwn || auth) && (
+							<PermissionAccess
+								permission={commentsPermissions.comment.edit({
+									commentId: comment.id,
+									authorId: comment.authorId,
+									status: comment.status,
+								})}
+							>
+								<Button
+									variant="ghost"
+									size="sm"
+									className="h-7 px-2 text-xs"
+									onClick={() => setIsEditing(true)}
+									data-testid="edit-button"
 								>
-									<Button
-										variant="ghost"
-										size="sm"
-										className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-										onClick={handleDelete}
-										disabled={deleteMutation.isPending}
-										data-testid="delete-button"
-									>
-										<X className="h-3.5 w-3.5 mr-1" />
-										{localization?.COMMENTS_DELETE_BUTTON ??
-											t("comments.thread.deleteButton", "Delete")}
-									</Button>
-								</CanAccess>
-							</>
+									<Pencil className="h-3.5 w-3.5 mr-1" />
+									{localization?.COMMENTS_EDIT_BUTTON ??
+										t("comments.thread.editButton", "Edit")}
+								</Button>
+							</PermissionAccess>
+						)}
+						{(isOwn || auth) && (
+							<PermissionAccess
+								permission={commentsPermissions.comment.delete({
+									commentId: comment.id,
+									authorId: comment.authorId,
+								})}
+							>
+								<Button
+									variant="ghost"
+									size="sm"
+									className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+									onClick={handleDelete}
+									disabled={deleteMutation.isPending}
+									data-testid="delete-button"
+								>
+									<X className="h-3.5 w-3.5 mr-1" />
+									{localization?.COMMENTS_DELETE_BUTTON ??
+										t("comments.thread.deleteButton", "Delete")}
+								</Button>
+							</PermissionAccess>
 						)}
 					</div>
 				)}
@@ -521,18 +542,26 @@ function CommentThreadInner({
 
 							{allowPosting && replyingTo === comment.id && currentUserId && (
 								<div className="pl-11 pb-3">
-									<CommentForm
-										authorId={currentUserId}
-										parentId={comment.id}
-										submitLabel={
-											localization?.COMMENTS_FORM_POST_REPLY ??
-											t("comments.form.postReply", "Post reply")
-										}
-										InputComponent={components?.Input}
-										localization={localization}
-										onSubmit={(body) => handleReply(body, comment.id)}
-										onCancel={() => setReplyingTo(null)}
-									/>
+									<PermissionAccess
+										permission={commentsPermissions.thread.createComment({
+											resourceId,
+											resourceType,
+											parentId: comment.id,
+										})}
+									>
+										<CommentForm
+											authorId={currentUserId}
+											parentId={comment.id}
+											submitLabel={
+												localization?.COMMENTS_FORM_POST_REPLY ??
+												t("comments.form.postReply", "Post reply")
+											}
+											InputComponent={components?.Input}
+											localization={localization}
+											onSubmit={(body) => handleReply(body, comment.id)}
+											onCancel={() => setReplyingTo(null)}
+										/>
+									</PermissionAccess>
 								</div>
 							)}
 						</div>
@@ -571,16 +600,24 @@ function CommentThreadInner({
 
 					{currentUserId ? (
 						<div data-testid="comment-form-wrapper">
-							<CommentForm
-								authorId={currentUserId}
-								submitLabel={
-									localization?.COMMENTS_FORM_POST_COMMENT ??
-									t("comments.form.postComment", "Post comment")
-								}
-								InputComponent={components?.Input}
-								localization={localization}
-								onSubmit={handlePost}
-							/>
+							<PermissionAccess
+								permission={commentsPermissions.thread.createComment({
+									resourceId,
+									resourceType,
+									parentId: null,
+								})}
+							>
+								<CommentForm
+									authorId={currentUserId}
+									submitLabel={
+										localization?.COMMENTS_FORM_POST_COMMENT ??
+										t("comments.form.postComment", "Post comment")
+									}
+									InputComponent={components?.Input}
+									localization={localization}
+									onSubmit={handlePost}
+								/>
+							</PermissionAccess>
 						</div>
 					) : (
 						<div
@@ -867,13 +904,22 @@ export function CommentThread(props: CommentThreadProps) {
 
 	return (
 		<div id="comments" className={props.className}>
-			<WhenVisible fallback={<CommentThreadSkeleton />} rootMargin="300px">
-				{isIdentityPending ? (
-					<CommentThreadSkeleton />
-				) : (
-					<CommentThreadInner {...resolvedProps} />
-				)}
-			</WhenVisible>
+			<PermissionAccess
+				permission={commentsPermissions.thread.read({
+					scope: "public",
+					resourceId: props.resourceId,
+					resourceType: props.resourceType,
+				})}
+				loading={<CommentThreadSkeleton />}
+			>
+				<WhenVisible fallback={<CommentThreadSkeleton />} rootMargin="300px">
+					{isIdentityPending ? (
+						<CommentThreadSkeleton />
+					) : (
+						<CommentThreadInner {...resolvedProps} />
+					)}
+				</WhenVisible>
+			</PermissionAccess>
 		</div>
 	);
 }

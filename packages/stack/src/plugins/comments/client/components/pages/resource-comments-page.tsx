@@ -6,6 +6,7 @@ import { usePluginOverrides } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../../overrides";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { PageWrapper } from "../shared/page-wrapper";
+import { commentsPermissions } from "../../../permissions";
 
 const ResourceCommentsPageInternal = lazy(() =>
 	import("./resource-comments-page.internal").then((m) => ({
@@ -40,6 +41,13 @@ export function ResourceCommentsPageComponent({
 				/>
 			)}
 			LoadingComponent={ResourceCommentsSkeleton}
+			permission={commentsPermissions.thread.read({
+				scope: "moderation",
+				status: "pending",
+				resourceId,
+				resourceType,
+			})}
+			legacyPublic
 			onError={(error) =>
 				console.error("[btst/comments] Resource comments error:", error)
 			}

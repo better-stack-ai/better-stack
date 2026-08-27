@@ -352,9 +352,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 				},
 				onBeforeList: async (query, ctx) => {
 					if (query.status && query.status !== "approved") {
-						console.log(
-							"onBeforeList: non-approved status filter — ensure admin check in production",
-						);
+						console.log("onBeforeList: reading moderation queue");
 					}
 				},
 				onBeforePost: async (input, ctx) => {
@@ -363,7 +361,6 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 						input.resourceType,
 						input.resourceId,
 					);
-					return { authorId: "olliethedev" };
 				},
 				onAfterPost: async (comment, ctx) => {
 					console.log(
@@ -395,12 +392,6 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 				},
 				onAfterDelete: async (commentId, ctx) => {
 					console.log("Comment deleted:", commentId);
-				},
-				onBeforeListByAuthor: async (authorId, query, ctx) => {
-					if (authorId !== "olliethedev") throw new Error("Forbidden");
-				},
-				resolveCurrentUserId: async (ctx) => {
-					return ctx?.headers?.get?.("x-user-id") ?? null;
 				},
 			}),
 			kanban: kanbanBackendPlugin({

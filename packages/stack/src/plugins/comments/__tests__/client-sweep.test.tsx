@@ -11,11 +11,17 @@ import {
 	type StackAuthProvider,
 	type StackI18nProvider,
 } from "@btst/stack/context";
+import { defineAuthorization } from "@btst/stack/authorization";
+import { createClientAuth } from "@btst/stack/authorization/client";
+import { z } from "zod";
 import { ModerationPage } from "../client/components/pages/moderation-page.internal";
+import { ModerationPageComponent } from "../client/components/pages/moderation-page";
 import { UserCommentsPage } from "../client/components/pages/my-comments-page.internal";
 import { CommentForm } from "../client/components/comment-form";
+import { CommentCount } from "../client/components/comment-count";
 import { CommentThread } from "../client/components/comment-thread";
 import type { SerializedComment } from "../types";
+import { commentsPermissions } from "../permissions";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -97,7 +103,12 @@ beforeEach(() => {
 		total: 0,
 		isFetching: false,
 	});
+	hooks.useCommentCount.mockReturnValue({ count: 3, isLoading: false });
 	hooks.usePostComment.mockReturnValue({
+		mutateAsync: vi.fn(),
+		isPending: false,
+	});
+	hooks.useUpdateComment.mockReturnValue({
 		mutateAsync: vi.fn(),
 		isPending: false,
 	});
@@ -107,6 +118,10 @@ beforeEach(() => {
 	});
 	hooks.useDeleteComment.mockReturnValue({
 		mutateAsync: vi.fn().mockResolvedValue({ success: true }),
+		isPending: false,
+	});
+	hooks.useToggleLike.mockReturnValue({
+		mutate: vi.fn(),
 		isPending: false,
 	});
 });
@@ -147,6 +162,47 @@ function createMockRouter(initial = "") {
 
 const commentsOverrides = {};
 
+const commentsAuthorization = defineAuthorization({
+	identity: z.object({
+		id: z.string(),
+		role: z.enum(["user", "moderator"]),
+	}),
+	permissions: [commentsPermissions] as const,
+	rules: ({ comments }) => [
+		comments.thread.read.when(({ identity, facts }) =>
+			facts.scope === "public"
+				? true
+				: facts.scope === "own"
+					? identity?.id === facts.authorId || identity?.role === "moderator"
+					: identity?.role === "moderator",
+		),
+		comments.thread.createComment.when(({ identity }) => identity !== null),
+		comments.comment.edit.when(
+			({ identity, facts }) =>
+				identity?.id === facts.authorId || identity?.role === "moderator",
+		),
+		comments.comment.delete.when(
+			({ identity, facts }) =>
+				identity?.id === facts.authorId || identity?.role === "moderator",
+		),
+		comments.comment.react.when(
+			({ identity, facts }) => identity !== null && facts.status === "approved",
+		),
+		comments.comment.moderate.when(
+			({ identity }) => identity?.role === "moderator",
+		),
+	],
+});
+
+function clientAuth(
+	identity: { id: string; role: "user" | "moderator" } | null,
+) {
+	return createClientAuth({
+		authorization: commentsAuthorization,
+		getIdentity: () => identity,
+	});
+}
+
 function typeInto(element: HTMLElement, value: string) {
 	const proto =
 		element instanceof HTMLTextAreaElement
@@ -157,7 +213,7 @@ function typeInto(element: HTMLElement, value: string) {
 	element.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-describe("ModerationPage row actions (CanAccess)", () => {
+describe("ModerationPage row actions (PermissionAccess)", () => {
 	function renderModerationPage(
 		auth?: StackAuthProvider,
 		notify?: {
@@ -211,7 +267,12 @@ describe("ModerationPage row actions (CanAccess)", () => {
 			expect.objectContaining({
 				resource: "comments:comment",
 				action: "moderate",
-				params: { id: comment.id },
+				params: {
+					commentId: comment.id,
+					resourceId: comment.resourceId,
+					resourceType: comment.resourceType,
+					status: comment.status,
+				},
 			}),
 		);
 	});
@@ -233,6 +294,15 @@ describe("ModerationPage row actions (CanAccess)", () => {
 		expect(row.querySelector('[data-testid="approve-button"]')).toBeTruthy();
 	});
 
+	it("uses the same schema-backed rule to hide routed moderation controls", async () => {
+		await renderModerationPage(clientAuth({ id: "viewer-1", role: "user" }));
+
+		const row = container.querySelector('[data-testid="moderation-row"]')!;
+		expect(row.querySelector('[data-testid="approve-button"]')).toBeNull();
+		expect(row.querySelector('[data-testid="spam-button"]')).toBeNull();
+		expect(row.querySelector('[data-testid="delete-button"]')).toBeNull();
+	});
+
 	it("notifies success through the notify provider after approving", async () => {
 		const notify = { success: vi.fn(), error: vi.fn() };
 
@@ -250,6 +320,70 @@ describe("ModerationPage row actions (CanAccess)", () => {
 		).toHaveBeenCalledWith({ id: comment.id, status: "approved" });
 		expect(notify.success).toHaveBeenCalledWith("Comment approved");
 		expect(notify.error).not.toHaveBeenCalled();
+	});
+});
+
+describe("Comments route descriptors", () => {
+	it("guards the real moderation route with the schema-backed moderation rule", async () => {
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		await expect(
+			render(
+				<StackProvider
+					basePath="/pages"
+					router={createMockRouter()}
+					overrides={{ comments: commentsOverrides }}
+					auth={clientAuth({ id: "viewer-1", role: "user" })}
+				>
+					<ModerationPageComponent />
+				</StackProvider>,
+			),
+		).rejects.toThrow("Unauthorized");
+
+		expect(hooks.useSuspenseModerationComments).not.toHaveBeenCalled();
+	});
+});
+
+describe("CommentCount permission descriptors", () => {
+	it("renders an explicitly public approved count for an anonymous identity", async () => {
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={clientAuth(null)}
+			>
+				<CommentCount resourceId="post-1" resourceType="post" />
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		expect(
+			container.querySelector('[data-testid="comment-count"]'),
+		).toBeTruthy();
+		expect(hooks.useCommentCount).toHaveBeenCalledWith(expect.anything(), {
+			resourceId: "post-1",
+			resourceType: "post",
+			status: "approved",
+		});
+	});
+
+	it("does not fetch a moderation count when the local rule denies it", async () => {
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={clientAuth({ id: "viewer-1", role: "user" })}
+			>
+				<CommentCount
+					resourceId="post-1"
+					resourceType="post"
+					status="pending"
+				/>
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		expect(container.querySelector('[data-testid="comment-count"]')).toBeNull();
+		expect(hooks.useCommentCount).not.toHaveBeenCalled();
 	});
 });
 
@@ -426,6 +560,39 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 });
 
 describe("CommentThread provider wiring", () => {
+	it("uses the same schema-backed rule for embedded owner controls", async () => {
+		const ownedComment = {
+			...comment,
+			authorId: "owner-1",
+			status: "approved" as const,
+		};
+		hooks.useInfiniteComments.mockReturnValue({
+			comments: [ownedComment],
+			total: 1,
+			isLoading: false,
+			loadMore: vi.fn(),
+			hasMore: false,
+			isLoadingMore: false,
+			queryKey: ["comments", "infinite"],
+		});
+
+		await render(
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				auth={clientAuth({ id: "owner-1", role: "user" })}
+			>
+				<CommentThread resourceId="post-1" resourceType="post" />
+			</StackProvider>,
+		);
+		await act(async () => {});
+
+		expect(container.querySelector('[data-testid="edit-button"]')).toBeTruthy();
+		expect(
+			container.querySelector('[data-testid="delete-button"]'),
+		).toBeTruthy();
+		expect(container.querySelector('[data-testid="like-button"]')).toBeTruthy();
+	});
 	it.each(["approved", "pending"] as const)(
 		"hides delete for an owned %s comment when can() denies comments:comment/delete",
 		async (status) => {
@@ -469,7 +636,10 @@ describe("CommentThread provider wiring", () => {
 				expect.objectContaining({
 					resource: "comments:comment",
 					action: "delete",
-					params: { id: comment.id },
+					params: {
+						commentId: comment.id,
+						authorId: "provider-user",
+					},
 				}),
 			);
 		},

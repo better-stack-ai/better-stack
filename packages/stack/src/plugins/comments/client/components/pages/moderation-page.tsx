@@ -6,6 +6,7 @@ import { usePluginOverrides } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../../overrides";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { PageWrapper } from "../shared/page-wrapper";
+import { commentsPermissions } from "../../../permissions";
 
 const ModerationPageInternal = lazy(() =>
 	import("./moderation-page.internal").then((m) => ({
@@ -30,7 +31,14 @@ export function ModerationPageComponent() {
 			path="/comments/moderation"
 			PageComponent={ModerationPageWrapper}
 			LoadingComponent={ModerationPageSkeleton}
-			permission={{ resource: "comments:comment", action: "moderate" }}
+			permission={commentsPermissions.thread.read({
+				scope: "moderation",
+				status: "pending",
+			})}
+			legacyPermission={{
+				resource: "comments:comment",
+				action: "moderate",
+			}}
 			onError={(error) =>
 				console.error("[btst/comments] Moderation error:", error)
 			}

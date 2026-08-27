@@ -25,7 +25,7 @@ const getBaseURL = () =>
 // Create the client library with plugins
 export const getStackClient = (
 	queryClient: QueryClient,
-	options?: { headers?: Headers },
+	options?: { headers?: Headers; currentUserId?: string },
 ) => {
 	const baseURL = getBaseURL();
 	return createStackClient({
@@ -140,6 +140,14 @@ export const getStackClient = (
 				siteBaseURL: baseURL,
 				siteBasePath: "/pages",
 				queryClient: queryClient,
+				headers: options?.headers,
+				hooks: options?.currentUserId
+					? {
+							beforeLoadUserComments: (context) => {
+								context.currentUserId = options.currentUserId;
+							},
+						}
+					: undefined,
 			}),
 			media: mediaClientPlugin({
 				apiBaseURL: baseURL,

@@ -136,6 +136,7 @@ export default defineBuildConfig({
 		"./src/plugins/comments/client/components/index.tsx",
 		"./src/plugins/comments/client/hooks/index.tsx",
 		"./src/plugins/comments/query-keys.ts",
+		"./src/plugins/comments/permissions.ts",
 		// media plugin entries
 		"./src/plugins/media/api/index.ts",
 		"./src/plugins/media/api/adapters/local.ts",

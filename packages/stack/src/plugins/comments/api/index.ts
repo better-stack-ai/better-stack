@@ -1,9 +1,4 @@
-export {
-	commentsBackendPlugin,
-	type CommentsApiRouter,
-	type CommentsApiContext,
-	type CommentsBackendOptions,
-} from "./plugin";
+export * from "./plugin";
 export {
 	listComments,
 	getCommentById,
@@ -19,3 +14,4 @@ export {
 } from "./mutations";
 export { serializeComment } from "./serializers";
 export { COMMENTS_QUERY_KEYS } from "./query-key-defs";
+export { commentsPermissions } from "../permissions";

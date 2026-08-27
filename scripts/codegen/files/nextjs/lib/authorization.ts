@@ -1,5 +1,6 @@
 import { defineAuthorization } from "@btst/stack/authorization";
 import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
 import { z } from "zod";
 
 /** Browser-safe authorization contract shared by the client and server adapters. */
@@ -8,8 +9,8 @@ export const authorization = defineAuthorization({
 		id: z.string(),
 		role: z.enum(["user", "admin"]),
 	}),
-	permissions: [blogPermissions] as const,
-	rules: ({ blog }) => [
+	permissions: [blogPermissions, commentsPermissions] as const,
+	rules: ({ blog, comments }) => [
 		blog.post.read.when(({ identity, facts }) => {
 			if (facts.scope === "published") return true;
 			if (facts.scope === "post" && (!facts.exists || facts.published)) {
@@ -38,5 +39,29 @@ export const authorization = defineAuthorization({
 				(identity.role === "admin" || identity.id === facts.authorId),
 		),
 		blog.tag.read.allow(),
+		comments.thread.read.when(({ identity, facts }) => {
+			if (facts.scope === "public") return true;
+			if (facts.scope === "own") {
+				return identity?.role === "admin" || identity?.id === facts.authorId;
+			}
+			return identity?.role === "admin";
+		}),
+		comments.thread.createComment.when(({ identity }) => identity !== null),
+		comments.comment.edit.when(
+			({ identity, facts }) =>
+				identity !== null &&
+				(identity.role === "admin" || identity.id === facts.authorId),
+		),
+		comments.comment.delete.when(
+			({ identity, facts }) =>
+				identity !== null &&
+				(identity.role === "admin" || identity.id === facts.authorId),
+		),
+		comments.comment.react.when(
+			({ identity, facts }) => identity !== null && facts.status === "approved",
+		),
+		comments.comment.moderate.when(
+			({ identity }) => identity?.role === "admin",
+		),
 	],
 });

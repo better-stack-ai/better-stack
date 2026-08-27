@@ -17,13 +17,14 @@ import {
 import { CheckCircle, ShieldOff, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import {
-	CanAccess,
+	PermissionAccess,
 	useNotify,
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import type { CommentsLocalization } from "../../localization";
 import { getInitials } from "../../utils";
+import { commentsPermissions } from "../../../permissions";
 
 interface ResourceCommentsPageProps {
 	resourceId: string;
@@ -206,10 +207,13 @@ function PendingCommentRow({
 					{comment.body}
 				</p>
 				<div className="flex gap-1 mt-2">
-					<CanAccess
-						resource="comments:comment"
-						action="moderate"
-						params={{ id: comment.id }}
+					<PermissionAccess
+						permission={commentsPermissions.comment.moderate({
+							commentId: comment.id,
+							resourceId: comment.resourceId,
+							resourceType: comment.resourceType,
+							status: comment.status,
+						})}
 					>
 						<Button
 							size="sm"
@@ -223,11 +227,14 @@ function PendingCommentRow({
 							{localization?.COMMENTS_RESOURCE_ACTION_APPROVE ??
 								t("comments.resource.actionApprove", "Approve")}
 						</Button>
-					</CanAccess>
-					<CanAccess
-						resource="comments:comment"
-						action="moderate"
-						params={{ id: comment.id }}
+					</PermissionAccess>
+					<PermissionAccess
+						permission={commentsPermissions.comment.moderate({
+							commentId: comment.id,
+							resourceId: comment.resourceId,
+							resourceType: comment.resourceType,
+							status: comment.status,
+						})}
 					>
 						<Button
 							size="sm"
@@ -240,11 +247,12 @@ function PendingCommentRow({
 							{localization?.COMMENTS_RESOURCE_ACTION_SPAM ??
 								t("comments.resource.actionSpam", "Spam")}
 						</Button>
-					</CanAccess>
-					<CanAccess
-						resource="comments:comment"
-						action="delete"
-						params={{ id: comment.id }}
+					</PermissionAccess>
+					<PermissionAccess
+						permission={commentsPermissions.comment.delete({
+							commentId: comment.id,
+							authorId: comment.authorId,
+						})}
 					>
 						<Button
 							size="sm"
@@ -257,7 +265,7 @@ function PendingCommentRow({
 							{localization?.COMMENTS_RESOURCE_ACTION_DELETE ??
 								t("comments.resource.actionDelete", "Delete")}
 						</Button>
-					</CanAccess>
+					</PermissionAccess>
 				</div>
 			</div>
 		</div>

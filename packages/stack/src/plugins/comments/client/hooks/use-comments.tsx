@@ -688,7 +688,7 @@ export function useToggleLike(
 	}
 
 	return useMutation({
-		mutationFn: (input: { commentId: string; authorId: string }) =>
+		mutationFn: (input: { commentId: string }) =>
 			runResourceMutation(
 				client,
 				commentMutations.like,

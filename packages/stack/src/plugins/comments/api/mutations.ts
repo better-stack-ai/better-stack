@@ -17,8 +17,8 @@ export interface CreateCommentInput {
  * Create a new comment.
  *
  * @remarks **Security:** No authorization hooks are called. The caller is
- * responsible for any access-control checks (e.g., onBeforePost) before
- * invoking this function.
+ * responsible for authorization and lifecycle composition before invoking
+ * this lower-level data function.
  */
 export async function createComment(
 	adapter: Adapter,
@@ -44,7 +44,7 @@ export async function createComment(
  * Update the body of an existing comment and set editedAt.
  *
  * @remarks **Security:** No authorization hooks are called. The caller is
- * responsible for ensuring the requesting user owns the comment (onBeforeEdit).
+ * responsible for authorization and lifecycle composition.
  */
 export async function updateComment(
 	adapter: Adapter,
@@ -72,7 +72,7 @@ export async function updateComment(
  * Update the status of a comment (approve, reject, spam).
  *
  * @remarks **Security:** No authorization hooks are called. Callers should
- * ensure the requesting user has moderation privileges.
+ * authorize moderation before calling this lower-level data function.
  */
 export async function updateCommentStatus(
 	adapter: Adapter,

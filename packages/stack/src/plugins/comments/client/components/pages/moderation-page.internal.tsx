@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
 	Table,
 	TableBody,
@@ -37,11 +37,12 @@ import {
 import { CheckCircle, ShieldOff, Trash2, Eye } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import {
-	CanAccess,
+	PermissionAccess,
 	useNotify,
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
+import type { PermissionRequest } from "@btst/stack/authorization";
 import { useListState, type ListStateSchema } from "@btst/stack/client";
 import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
 import type { SerializedComment, CommentStatus } from "../../../types";
@@ -53,9 +54,26 @@ import {
 import type { CommentsLocalization } from "../../localization";
 import { getInitials } from "../../utils";
 import { Pagination } from "../shared/pagination";
+import { commentsPermissions } from "../../../permissions";
 
 interface ModerationPageProps {
 	localization?: Partial<CommentsLocalization>;
+}
+
+function PermissionAccessAll({
+	permissions,
+	children,
+}: {
+	permissions: readonly PermissionRequest[];
+	children: ReactNode;
+}) {
+	const [permission, ...rest] = permissions;
+	if (!permission) return <>{children}</>;
+	return (
+		<PermissionAccess permission={permission}>
+			<PermissionAccessAll permissions={rest}>{children}</PermissionAccessAll>
+		</PermissionAccess>
+	);
 }
 
 // URL-synced moderation queue state: tab + page survive reloads and are
@@ -285,7 +303,18 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 						).replace("{n}", String(selected.size))}
 					</span>
 					{activeTab !== "approved" && (
-						<CanAccess resource="comments:comment" action="moderate">
+						<PermissionAccessAll
+							permissions={comments
+								.filter((comment) => selected.has(comment.id))
+								.map((comment) =>
+									commentsPermissions.comment.moderate({
+										commentId: comment.id,
+										resourceId: comment.resourceId,
+										resourceType: comment.resourceType,
+										status: comment.status,
+									}),
+								)}
+						>
 							<Button
 								size="sm"
 								variant="outline"
@@ -296,9 +325,18 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 								{localization?.COMMENTS_MODERATION_APPROVE_SELECTED ??
 									t("comments.moderation.approveSelected", "Approve selected")}
 							</Button>
-						</CanAccess>
+						</PermissionAccessAll>
 					)}
-					<CanAccess resource="comments:comment" action="delete">
+					<PermissionAccessAll
+						permissions={comments
+							.filter((comment) => selected.has(comment.id))
+							.map((comment) =>
+								commentsPermissions.comment.delete({
+									commentId: comment.id,
+									authorId: comment.authorId,
+								}),
+							)}
+					>
 						<Button
 							size="sm"
 							variant="outline"
@@ -309,7 +347,7 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 							{localization?.COMMENTS_MODERATION_DELETE_SELECTED ??
 								t("comments.moderation.deleteSelected", "Delete selected")}
 						</Button>
-					</CanAccess>
+					</PermissionAccessAll>
 				</div>
 			)}
 
@@ -426,10 +464,13 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 													<Eye className="h-4 w-4" />
 												</Button>
 												{activeTab !== "approved" && (
-													<CanAccess
-														resource="comments:comment"
-														action="moderate"
-														params={{ id: comment.id }}
+													<PermissionAccess
+														permission={commentsPermissions.comment.moderate({
+															commentId: comment.id,
+															resourceId: comment.resourceId,
+															resourceType: comment.resourceType,
+															status: comment.status,
+														})}
 													>
 														<Button
 															variant="ghost"
@@ -448,13 +489,16 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 														>
 															<CheckCircle className="h-4 w-4" />
 														</Button>
-													</CanAccess>
+													</PermissionAccess>
 												)}
 												{activeTab !== "spam" && (
-													<CanAccess
-														resource="comments:comment"
-														action="moderate"
-														params={{ id: comment.id }}
+													<PermissionAccess
+														permission={commentsPermissions.comment.moderate({
+															commentId: comment.id,
+															resourceId: comment.resourceId,
+															resourceType: comment.resourceType,
+															status: comment.status,
+														})}
 													>
 														<Button
 															variant="ghost"
@@ -473,12 +517,13 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 														>
 															<ShieldOff className="h-4 w-4" />
 														</Button>
-													</CanAccess>
+													</PermissionAccess>
 												)}
-												<CanAccess
-													resource="comments:comment"
-													action="delete"
-													params={{ id: comment.id }}
+												<PermissionAccess
+													permission={commentsPermissions.comment.delete({
+														commentId: comment.id,
+														authorId: comment.authorId,
+													})}
 												>
 													<Button
 														variant="ghost"
@@ -493,7 +538,7 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 													>
 														<Trash2 className="h-4 w-4" />
 													</Button>
-												</CanAccess>
+												</PermissionAccess>
 											</div>
 										</TableCell>
 									</TableRow>
@@ -594,10 +639,13 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 
 							<div className="flex justify-end gap-2">
 								{viewComment.status !== "approved" && (
-									<CanAccess
-										resource="comments:comment"
-										action="moderate"
-										params={{ id: viewComment.id }}
+									<PermissionAccess
+										permission={commentsPermissions.comment.moderate({
+											commentId: viewComment.id,
+											resourceId: viewComment.resourceId,
+											resourceType: viewComment.resourceType,
+											status: viewComment.status,
+										})}
 									>
 										<Button
 											size="sm"
@@ -612,13 +660,16 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 											{localization?.COMMENTS_MODERATION_DIALOG_APPROVE ??
 												t("comments.moderation.dialogApprove", "Approve")}
 										</Button>
-									</CanAccess>
+									</PermissionAccess>
 								)}
 								{viewComment.status !== "spam" && (
-									<CanAccess
-										resource="comments:comment"
-										action="moderate"
-										params={{ id: viewComment.id }}
+									<PermissionAccess
+										permission={commentsPermissions.comment.moderate({
+											commentId: viewComment.id,
+											resourceId: viewComment.resourceId,
+											resourceType: viewComment.resourceType,
+											status: viewComment.status,
+										})}
 									>
 										<Button
 											size="sm"
@@ -633,12 +684,13 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 											{localization?.COMMENTS_MODERATION_DIALOG_MARK_SPAM ??
 												t("comments.moderation.dialogMarkSpam", "Mark spam")}
 										</Button>
-									</CanAccess>
+									</PermissionAccess>
 								)}
-								<CanAccess
-									resource="comments:comment"
-									action="delete"
-									params={{ id: viewComment.id }}
+								<PermissionAccess
+									permission={commentsPermissions.comment.delete({
+										commentId: viewComment.id,
+										authorId: viewComment.authorId,
+									})}
 								>
 									<Button
 										size="sm"
@@ -652,7 +704,7 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 										{localization?.COMMENTS_MODERATION_DIALOG_DELETE ??
 											t("comments.moderation.dialogDelete", "Delete")}
 									</Button>
-								</CanAccess>
+								</PermissionAccess>
 							</div>
 						</div>
 					)}
