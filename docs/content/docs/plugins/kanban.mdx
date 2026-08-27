@@ -674,11 +674,11 @@ const app = stack({
 | `updateBoard` | `kanban.board.update` |
 | `deleteBoard` | `kanban.board.delete` |
 | `createColumn` | `kanban.column.create` |
-| `updateColumn` | `kanban.column.update` |
+| `updateColumn` | `kanban.column.update` (and `kanban.column.reorder` when changing order) |
 | `deleteColumn` | `kanban.column.delete` |
 | `reorderColumns` | `kanban.column.reorder` |
 | `createTask` | `kanban.task.create` |
-| `updateTask` | `kanban.task.update` (and `kanban.task.move` when changing columns) |
+| `updateTask` | `kanban.task.update` (and `kanban.task.move` when changing columns or order) |
 | `deleteTask` | `kanban.task.delete` |
 | `moveTask` | `kanban.task.move` |
 | `reorderTasks` | `kanban.task.reorder` |
