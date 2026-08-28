@@ -180,14 +180,14 @@ function getScalarHTML(
  * // - GET /api/data/reference - Interactive Scalar UI
  * ```
  */
-export const openApiBackendPlugin = (options?: OpenAPIOptions) => {
-	const referencePath = options?.path ?? "/reference";
+export const openApiBackendPlugin = (options: OpenAPIOptions = {}) => {
+	const referencePath = options.path ?? "/reference";
 
 	// Store context for use in endpoint handlers
 	let storedContext: StackContext | null = null;
 
 	return defineBackendPlugin({
-		name: "open-api",
+		id: "openApi",
 		dbPlugin: openApiSchema,
 		infrastructureRoutes: OPEN_API_INFRASTRUCTURE_ROUTES,
 
@@ -208,9 +208,9 @@ export const openApiBackendPlugin = (options?: OpenAPIOptions) => {
 					}
 
 					const schema = generateOpenAPISchema(storedContext, {
-						title: options?.title,
-						description: options?.description,
-						version: options?.version,
+						title: options.title,
+						description: options.description,
+						version: options.version,
 					});
 
 					return schema;
@@ -223,7 +223,7 @@ export const openApiBackendPlugin = (options?: OpenAPIOptions) => {
 					method: "GET",
 				},
 				async (ctx) => {
-					if (options?.disableDefaultReference) {
+					if (options.disableDefaultReference) {
 						throw ctx.error(404, {
 							message: "Reference page is disabled",
 						});
@@ -236,13 +236,13 @@ export const openApiBackendPlugin = (options?: OpenAPIOptions) => {
 					}
 
 					const schema = generateOpenAPISchema(storedContext, {
-						title: options?.title,
-						description: options?.description,
-						version: options?.version,
+						title: options.title,
+						description: options.description,
+						version: options.version,
 					});
 
 					return new Response(
-						getScalarHTML(schema, options?.theme, options?.nonce),
+						getScalarHTML(schema, options.theme, options.nonce),
 						{
 							headers: {
 								"Content-Type": "text/html; charset=utf-8",

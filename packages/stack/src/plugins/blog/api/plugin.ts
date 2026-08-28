@@ -134,11 +134,17 @@ function createBlogPrefetchForRoute(adapter: Adapter): BlogPrefetchForRoute {
  * Blog backend plugin. Every maintained HTTP endpoint adapts the same
  * operation exposed by `forRequest(request).api.blog` and `internal.blog`.
  */
-export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
+export interface BlogBackendOptions {
+	/** Post-authorization domain lifecycle hooks. */
+	hooks?: BlogBackendHooks;
+}
+
+export const blogBackendPlugin = (options: BlogBackendOptions = {}) =>
 	defineBackendPlugin({
-		name: "blog",
+		id: "blog",
 		dbPlugin: dbSchema,
-		operations: (adapter: Adapter) => createBlogOperations(adapter, hooks),
+		operations: (adapter: Adapter) =>
+			createBlogOperations(adapter, options.hooks),
 
 		/**
 		 * Explicit lower-level data API for SSG, jobs, and migration code.

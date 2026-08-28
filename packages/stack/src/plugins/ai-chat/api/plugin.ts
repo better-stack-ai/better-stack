@@ -81,7 +81,7 @@ export const aiChatBackendPlugin = <
 	};
 
 	return defineBackendPlugin({
-		name: "ai-chat",
+		id: "aiChat",
 		dbPlugin: dbSchema,
 		operationRouteMap: { chat: "startStream" },
 		operations: (adapter: Adapter) =>

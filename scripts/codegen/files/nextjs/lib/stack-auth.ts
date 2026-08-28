@@ -73,7 +73,7 @@ const blogLifecycleHooks: BlogBackendHooks = {
 const { handler, dbSchema } = stack({
 	basePath: "/api/example-auth",
 	auth: exampleServerAuth,
-	plugins: { blog: blogBackendPlugin(blogLifecycleHooks) },
+	plugins: { blog: blogBackendPlugin({ hooks: blogLifecycleHooks }) },
 	adapter: (db) => createMemoryAdapter(db)({}),
 });
 

@@ -23,6 +23,12 @@ import {
 import { KANBAN_QUERY_KEYS } from "./query-key-defs";
 import { serializeBoard, serializeBoardSummary } from "./serializers";
 
+/** Configuration for the Kanban backend plugin. */
+export interface KanbanBackendOptions {
+	/** Post-authorization domain lifecycle hooks. */
+	hooks?: KanbanBackendHooks;
+}
+
 export {
 	BoardIdOperationInputSchema,
 	ColumnIdOperationInputSchema,
@@ -83,11 +89,12 @@ function createKanbanPrefetchForRoute(
 }
 
 /** Kanban backend plugin backed by one operation inventory. */
-export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
+export const kanbanBackendPlugin = (options: KanbanBackendOptions = {}) =>
 	defineBackendPlugin({
-		name: "kanban",
+		id: "kanban",
 		dbPlugin: dbSchema,
-		operations: (adapter: Adapter) => createKanbanOperations(adapter, hooks),
+		operations: (adapter: Adapter) =>
+			createKanbanOperations(adapter, options.hooks),
 
 		/** Lower-level server API that intentionally bypasses auth and hooks. */
 		api: (adapter: Adapter) => ({

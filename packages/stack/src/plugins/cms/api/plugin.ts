@@ -210,7 +210,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 		} as CMSPrefetchForRoute;
 
 	return defineBackendPlugin({
-		name: "cms",
+		id: "cms",
 		dbPlugin: dbSchema,
 		operations: (adapter: Adapter) =>
 			createCMSOperations(adapter, {
