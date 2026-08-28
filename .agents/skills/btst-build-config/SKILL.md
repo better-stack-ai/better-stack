@@ -93,13 +93,12 @@ Keep generated framework routes on the v3 entry factories:
 Do not generate hand-written route resolution, loader/meta ordering,
 dehydration, or 404 plumbing. The entry factories own that behavior.
 
-Generated layouts must configure shared services once on `StackProvider`:
+Generated layouts pass the resolved client stack to `StackProvider`:
 
 ```tsx
-<StackProvider<PluginOverrides>
-  basePath="/pages"
+<StackProvider
+  stack={clientStack}
   router={frameworkRouter()}
-  api={{ baseURL, basePath: "/api/data" }}
   auth={authProvider}
   overrides={{
     blog: { uploadImage },
@@ -111,23 +110,26 @@ Generated layouts must configure shared services once on `StackProvider`:
 
 Only plugin-specific values belong in `overrides`. Never generate `Link`,
 `Image`, `navigate`, `refresh`, API paths, identity, or login values inside a
-built-in plugin override. Client plugin factory fields such as `apiBaseURL`,
-`siteBaseURL`, and `queryClient` remain necessary for SSR loaders and metadata.
+built-in plugin override. Configure `api`, `site`, and `queryClient` once in
+`createClientStack()`. Resolved client definitions such as Blog and AI Chat
+accept only plugin-specific options; their loaders and metadata receive shared
+runtime through the stack resolver.
 
 ### Override type registration (in each layout)
 
 ```typescript
 import type { YourPluginOverrides } from "@btst/stack/plugins/{name}/client"
 
-type PluginOverrides = {
-  blog: BlogPluginOverrides,
-  "ai-chat": AiChatPluginOverrides,
-  "{name}": YourPluginOverrides,  // add here
+type LegacyPluginOverrides = {
+  "{name}": YourPluginOverrides,
 }
 ```
 
-Register only the plugin's public override type. Do not recreate removed v2
-framework, API, guard, or identity fields in local intersection types.
+Resolved definitions contribute their public override type automatically under
+their canonical programmatic ID (`blog`, `aiChat`). Keep a manual map only for
+an unmigrated compatibility plugin, and delete it when that plugin adopts the
+resolved contract. Do not recreate removed v2 framework, API, guard, or identity
+fields in local intersection types.
 
 ## Adding shared UI components (@workspace/ui)
 

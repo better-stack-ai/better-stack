@@ -200,4 +200,49 @@ describe("AI Chat resolved client runtime", () => {
 			message: SSR_LOADER_ERROR_MESSAGE,
 		});
 	});
+
+	it("sanitizes each backend failure when a detail loader also has a connection failure", async () => {
+		vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+			const url =
+				typeof input === "string"
+					? input
+					: input instanceof URL
+						? input.href
+						: input.url;
+			if (url.endsWith("/chat/conversations/conv-1")) {
+				throw new Error("fetch failed");
+			}
+			return response({ message: "private list failure" }, 500);
+		});
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		const onErrorLoad = vi.fn();
+		const stack = createClientStack({
+			api: appApi,
+			site: appSite,
+			queryClient,
+			plugins: {
+				aiChat: aiChatClientPlugin({ hooks: { onErrorLoad } }),
+			},
+		});
+
+		await stack.router.getRoute("/chat/conv-1")?.loader?.();
+
+		const queries = createAiChatQueryKeys(
+			createApiClient<AiChatApiRouter>(appApi),
+		);
+		expect(
+			queryClient.getQueryState(
+				queries.conversations.detail("conv-1", "anonymous").queryKey,
+			)?.error,
+		).toMatchObject({ message: "fetch failed" });
+		expect(
+			queryClient.getQueryState(
+				queries.conversations.list("anonymous").queryKey,
+			)?.error,
+		).toMatchObject({ message: SSR_LOADER_ERROR_MESSAGE });
+		expect(onErrorLoad).toHaveBeenCalledOnce();
+	});
 });

@@ -322,15 +322,22 @@ function createConversationLoader(
 				);
 				const queryError = failedQueries[0]?.error;
 				if (queryError) {
-					if (isConnectionError(queryError)) {
+					const connectionFailures = failedQueries.filter(({ error }) =>
+						isConnectionError(error),
+					);
+					const backendFailures = failedQueries.filter(
+						({ error }) => !isConnectionError(error),
+					);
+					if (connectionFailures.length > 0) {
 						console.warn(
 							"[btst/ai-chat] route.loader() failed — no server running at build time. " +
 								"AI Chat conversations do not support SSG.",
 						);
-					} else {
+					}
+					if (backendFailures.length > 0) {
 						await seedSanitizedLoaderErrors(
 							queryClient,
-							failedQueries.map(({ queryKey }) => queryKey),
+							backendFailures.map(({ queryKey }) => queryKey),
 						);
 					}
 					await reportError(queryError);
