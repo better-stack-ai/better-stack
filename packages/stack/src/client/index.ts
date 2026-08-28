@@ -202,8 +202,6 @@ export {
 	type InferListState,
 	type ListStateField,
 	type ListStateSchema,
+	type SetListState,
+	type SetListStateOptions,
 } from "../shared/list-state";
-export type {
-	SetListState,
-	SetListStateOptions,
-} from "./hooks/use-list-state";

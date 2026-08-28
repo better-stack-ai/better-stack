@@ -1,8 +1,13 @@
 {
   "extends": "../../../../tsconfig.json",
   "compilerOptions": {
+    "baseUrl": ".",
     "incremental": false,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@btst/stack/client": ["../../src/client/index.ts"],
+      "@btst/stack/plugins/client": ["../../src/plugins/client/index.ts"]
+    }
   },
   "include": ["./index.ts"]
 }

@@ -28,6 +28,18 @@ export type InferListState<S extends ListStateSchema> = {
 	[K in keyof S]: InferListStateValue<S[K]>;
 };
 
+export type SetListStateOptions = {
+	/** Force `replace` vs `push` history semantics for this update. */
+	replace?: boolean;
+};
+
+export type SetListState<S extends ListStateSchema> = (
+	updates:
+		| Partial<InferListState<S>>
+		| ((prev: InferListState<S>) => Partial<InferListState<S>>),
+	options?: SetListStateOptions,
+) => void;
+
 /**
  * URL query param key for a list-state field.
  * The `namespace` argument identifies the hook instance for SSR helpers but

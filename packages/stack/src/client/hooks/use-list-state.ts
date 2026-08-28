@@ -1,7 +1,11 @@
 "use client";
 import { useCallback, useState, useSyncExternalStore } from "react";
 import { useStackOrNull } from "../../context/provider";
-import type { InferListState, ListStateSchema } from "../../shared/list-state";
+import type {
+	InferListState,
+	ListStateSchema,
+	SetListState,
+} from "../../shared/list-state";
 import {
 	parseListStateFromSearchParams,
 	resolveListStateHistoryMode,
@@ -12,24 +16,14 @@ export type {
 	InferListState,
 	ListStateField,
 	ListStateSchema,
+	SetListState,
+	SetListStateOptions,
 } from "../../shared/list-state";
 export {
 	listStateParamKey,
 	parseListStateFromSearchParams,
 	serializeListStateToSearchParams,
 } from "../../shared/list-state";
-
-export type SetListStateOptions = {
-	/** Force `replace` vs `push` history semantics for this update */
-	replace?: boolean;
-};
-
-export type SetListState<S extends ListStateSchema> = (
-	updates:
-		| Partial<InferListState<S>>
-		| ((prev: InferListState<S>) => Partial<InferListState<S>>),
-	options?: SetListStateOptions,
-) => void;
 
 interface PendingUpdate {
 	namespace: string;
