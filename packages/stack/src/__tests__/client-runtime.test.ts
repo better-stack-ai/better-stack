@@ -635,6 +635,12 @@ describe("resolved client runtime", () => {
 		expect(() =>
 			createClientStack({
 				...baseConfig,
+				plugins: new Date(),
+			} as any),
+		).toThrowError(/plugins.*registration map/i);
+		expect(() =>
+			createClientStack({
+				...baseConfig,
 				endpoints: { probe: [] } as any,
 			}),
 		).toThrowError(/probe.*object/i);
@@ -778,6 +784,38 @@ describe("resolved client runtime", () => {
 			expect(runtime?.api.basePath).toBe("/api/data");
 			expect(Object.hasOwn(stack.provider.plugins, registeredName)).toBe(true);
 		}
+	});
+
+	it("ignores inherited runtime and plugin-definition discriminator fields", () => {
+		const legacyPlugin = Object.assign(
+			Object.create({
+				resolve: () => {
+					throw new Error("inherited resolve must not run");
+				},
+			}),
+			{
+				name: "legacyWithPrototype",
+				routes: () => ({
+					legacyWithPrototype: createRoute("/legacy-with-prototype", () => ({
+						PageComponent: () => null,
+					})),
+				}),
+			},
+		);
+		const inheritedCanonicalRuntime = {
+			api: { baseURL: "https://inherited.example.com", basePath: "/api" },
+			site: { baseURL: "https://inherited.example.com", basePath: "/pages" },
+			queryClient: new QueryClient(),
+		};
+		const legacyConfig = Object.assign(
+			Object.create(inheritedCanonicalRuntime),
+			{ plugins: { legacyWithPrototype: legacyPlugin } },
+		);
+
+		const stack = createClientStack(legacyConfig as any);
+
+		expect(stack.router.getRoute("/legacy-with-prototype")).toBeTruthy();
+		expect("provider" in stack).toBe(false);
 	});
 
 	it("keeps legacy client plugins working during first-party migration", async () => {

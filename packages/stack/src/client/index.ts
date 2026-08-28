@@ -4,6 +4,7 @@ import type {
 	ClientStackConfig,
 	ClientStack,
 	ClientPlugin,
+	ClientPluginDefinition,
 	ClientPluginRegistration,
 	ClientStackContext,
 	LegacyClientStackConfig,
@@ -40,10 +41,10 @@ function hasResolvedRuntime<TPlugins extends AnyPluginMap>(
 	config: ClientStackConfig<TPlugins>,
 ): config is ResolvedClientStackConfig<TPlugins> {
 	return (
-		"api" in config ||
-		"site" in config ||
-		"queryClient" in config ||
-		"endpoints" in config
+		Object.hasOwn(config, "api") ||
+		Object.hasOwn(config, "site") ||
+		Object.hasOwn(config, "queryClient") ||
+		Object.hasOwn(config, "endpoints")
 	);
 }
 
@@ -104,26 +105,25 @@ export function createClientStack<
 	);
 
 	for (const [pluginKey, registration] of Object.entries(config.plugins)) {
-		if ("resolve" in registration) {
+		if (Object.hasOwn(registration, "resolve")) {
 			if (!runtime) {
 				throw new Error(
 					`[btst/client] Client plugin "${pluginKey}" is a runtime-independent definition. Configure api, site, and queryClient on createClientStack().`,
 				);
 			}
-			const resolution = registration.resolve(
-				runtime.pluginRuntimes[pluginKey]!,
-			);
+			const definition = registration as ClientPluginDefinition<any, any>;
+			const resolution = definition.resolve(runtime.pluginRuntimes[pluginKey]!);
 			if (!resolution || typeof resolution.routes !== "function") {
 				throw new Error(
 					`[btst/client] Client plugin "${pluginKey}" did not resolve to a routes() function.`,
 				);
 			}
 			resolvedPlugins[pluginKey] = {
-				name: registration.name,
+				name: definition.name,
 				...resolution,
 			};
 		} else {
-			resolvedPlugins[pluginKey] = registration;
+			resolvedPlugins[pluginKey] = registration as ClientPlugin<any, any>;
 		}
 	}
 

@@ -86,8 +86,14 @@ function normalizeLocation(
 		throw new Error(`[btst/client] ${label} endpoint is required.`);
 	}
 	return {
-		baseURL: normalizeBaseURL(value.baseURL, `${label}.baseURL`),
-		basePath: normalizeBasePath(value.basePath, `${label}.basePath`),
+		baseURL: normalizeBaseURL(
+			Object.hasOwn(value, "baseURL") ? value.baseURL : undefined,
+			`${label}.baseURL`,
+		),
+		basePath: normalizeBasePath(
+			Object.hasOwn(value, "basePath") ? value.basePath : undefined,
+			`${label}.basePath`,
+		),
 	};
 }
 
@@ -101,21 +107,27 @@ function resolveLocationOverride(
 		throw new Error(`[btst/client] ${label} must be an endpoint object.`);
 	}
 
-	if ("baseURL" in override && override.baseURL !== undefined) {
-		if (!("basePath" in override) || override.basePath === undefined) {
+	const overrideBaseURL = Object.hasOwn(override, "baseURL")
+		? override.baseURL
+		: undefined;
+	const overrideBasePath = Object.hasOwn(override, "basePath")
+		? override.basePath
+		: undefined;
+	if (overrideBaseURL !== undefined) {
+		if (overrideBasePath === undefined) {
 			throw new Error(
 				`[btst/client] ${label}.basePath is required when replacing baseURL.`,
 			);
 		}
 		return normalizeLocation(
-			{ baseURL: override.baseURL, basePath: override.basePath },
+			{ baseURL: overrideBaseURL, basePath: overrideBasePath },
 			label,
 		);
 	}
 
 	return {
 		baseURL: base.baseURL,
-		basePath: normalizeBasePath(override.basePath, `${label}.basePath`),
+		basePath: normalizeBasePath(overrideBasePath, `${label}.basePath`),
 	};
 }
 
@@ -201,11 +213,7 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 			"[btst/client] queryClient must be one React Query QueryClient instance shared by the stack.",
 		);
 	}
-	if (
-		config.plugins === null ||
-		typeof config.plugins !== "object" ||
-		Array.isArray(config.plugins)
-	) {
+	if (!isPlainRecord(config.plugins)) {
 		throw new Error(`[btst/client] plugins must be a plugin registration map.`);
 	}
 	if (config.endpoints !== undefined && !isPlainRecord(config.endpoints)) {
