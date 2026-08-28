@@ -3,6 +3,7 @@ export {
 	type FormBuilderApiRouter,
 	type FormBuilderRouteKey,
 } from "./plugin";
+export { FORM_BUILDER_LIFECYCLE_HOOK_MIGRATIONS } from "./lifecycle-migrations";
 export {
 	FormBuilderOperationError,
 	createFormBuilderOperations,

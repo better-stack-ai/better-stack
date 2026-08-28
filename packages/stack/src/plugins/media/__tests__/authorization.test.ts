@@ -11,6 +11,7 @@ import {
 	type ServerAuth,
 } from "../../../authorization/server";
 import {
+	MEDIA_LIFECYCLE_HOOK_MIGRATIONS,
 	MEDIA_QUERY_KEYS,
 	VercelBlobOperationInputSchema,
 	getAssetById,
@@ -324,6 +325,14 @@ async function seedAsset(
 }
 
 describe("Media authorization inventory", () => {
+	it("records public hook migrations without renaming storage callbacks", () => {
+		expect(MEDIA_LIFECYCLE_HOOK_MIGRATIONS).toEqual({
+			onBeforeDelete: "onBeforeDeleteAsset",
+			onAfterDelete: "onAfterDeleteAsset",
+			onOperationError: "onError",
+		});
+	});
+
 	it("covers every maintained transport behavior with runtime-schema-backed descriptors", () => {
 		const plugin = mediaBackendPlugin({ storageAdapter: directStorage() });
 		const adapter = createMemoryAdapter(defineDb({}).use(plugin.dbPlugin))({});
@@ -379,6 +388,59 @@ describe("Media authorization inventory", () => {
 });
 
 describe("Media operation-first authorization", () => {
+	it("runs canonical asset-delete hooks across request and trusted calls", async () => {
+		const events: string[] = [];
+		const storage = directStorage();
+		const backend = makeBackend({
+			auth: createAuth(),
+			storage,
+			tenantId: "tenant-a",
+			hooks: {
+				onBeforeDeleteAsset: (asset, context) => {
+					events.push(
+						`before:${asset.filename}:${context.identity?.id ?? "internal"}`,
+					);
+					if (asset.filename === "rejected.jpg") {
+						throw new Error("retention policy rejected deletion");
+					}
+				},
+				onAfterDeleteAsset: (_assetId, context) => {
+					events.push(`after:${context.identity?.id}`);
+				},
+				onError: (_error, context) => {
+					events.push(`error:${context.identity?.id ?? "internal"}`);
+				},
+			},
+		});
+		const requestedAsset = await seedAsset(backend);
+		const rejectedAsset = await seedAsset(backend, {
+			filename: "rejected.jpg",
+			originalName: "Rejected.jpg",
+			url: "https://files.example/rejected.jpg",
+		});
+
+		await backend
+			.forRequest(request("/delete", { identity: tenantMember }))
+			.api.media.deleteAsset({ id: requestedAsset.id });
+		await expect(
+			backend.internal.media.deleteAsset({ id: rejectedAsset.id }),
+		).rejects.toMatchObject({
+			code: "DELETE_ASSET_REJECTED",
+			message: "retention policy rejected deletion",
+		});
+
+		expect(events).toEqual([
+			`before:photo.jpg:${tenantMember.id}`,
+			`after:${tenantMember.id}`,
+			"before:rejected.jpg:internal",
+			"error:internal",
+		]);
+		expect(storage.delete).toHaveBeenCalledTimes(1);
+		await expect(
+			getAssetById(backend.adapter, rejectedAsset.id),
+		).resolves.toMatchObject({ filename: "rejected.jpg" });
+	});
+
 	it("preserves omitted-auth compatibility while retaining validation and hooks", async () => {
 		const events: string[] = [];
 		const backend = makeBackend({
@@ -410,7 +472,7 @@ describe("Media operation-first authorization", () => {
 		const backend = makeBackend({
 			auth: createAuth(),
 			tenantId: "tenant-a",
-			hooks: { onBeforeDelete: beforeDelete },
+			hooks: { onBeforeDeleteAsset: beforeDelete },
 		});
 		const folder = await seedFolder(backend);
 		const asset = await seedAsset(backend, { folderId: folder.id });
@@ -1410,7 +1472,7 @@ describe("Media operation-first authorization", () => {
 				onBeforeUpload: (_meta, context) => {
 					events.push(context.facts.phase);
 				},
-				onBeforeDelete: () => {
+				onBeforeDeleteAsset: () => {
 					events.push("delete");
 				},
 			},
@@ -1547,7 +1609,7 @@ describe("Media operation-first authorization", () => {
 			auth: createAuth(),
 			storage,
 			tenantId: "tenant-a",
-			hooks: { onBeforeDelete: hooks },
+			hooks: { onBeforeDeleteAsset: hooks },
 		});
 		const asset = await seedAsset(backend);
 		const api = backend.forRequest(

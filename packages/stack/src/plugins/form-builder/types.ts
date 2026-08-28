@@ -304,13 +304,13 @@ export interface FormBuilderBackendHooks {
 	onBeforeListForms?: (ctx: FormListOperationContext) => Promise<void> | void;
 
 	/** Called before creating a form. Throw an error to deny, or return modified data. */
-	onBeforeFormCreated?: (
+	onBeforeCreateForm?: (
 		data: FormInput,
 		ctx: FormCreateOperationContext,
 	) => Promise<FormInput | void> | FormInput | void;
 
 	/** Called after a form is created */
-	onAfterFormCreated?: (
+	onAfterCreateForm?: (
 		form: SerializedForm,
 		ctx: FormCreateOperationContext,
 	) => Promise<void> | void;
@@ -328,26 +328,26 @@ export interface FormBuilderBackendHooks {
 	) => Promise<void> | void;
 
 	/** Called before updating a form. Throw an error to deny, or return modified data. */
-	onBeforeFormUpdated?: (
+	onBeforeUpdateForm?: (
 		id: string,
 		data: FormUpdate,
 		ctx: FormUpdateOperationContext,
 	) => Promise<FormUpdate | void> | FormUpdate | void;
 
 	/** Called after a form is updated */
-	onAfterFormUpdated?: (
+	onAfterUpdateForm?: (
 		form: SerializedForm,
 		ctx: FormUpdateOperationContext,
 	) => Promise<void> | void;
 
 	/** Called before deleting a form. Throw an error to deny. */
-	onBeforeFormDeleted?: (
+	onBeforeDeleteForm?: (
 		id: string,
 		ctx: FormDeleteOperationContext,
 	) => Promise<void> | void;
 
 	/** Called after a form is deleted */
-	onAfterFormDeleted?: (
+	onAfterDeleteForm?: (
 		id: string,
 		ctx: FormDeleteOperationContext,
 	) => Promise<void> | void;
@@ -379,7 +379,7 @@ export interface FormBuilderBackendHooks {
 	) => Promise<void> | void;
 
 	/** Called when a submission fails */
-	onSubmissionError?: (
+	onErrorSubmission?: (
 		error: Error,
 		formSlug: string,
 		data: Record<string, unknown>,
@@ -403,13 +403,13 @@ export interface FormBuilderBackendHooks {
 	) => Promise<void> | void;
 
 	/** Called before deleting a submission. Throw an error to deny. */
-	onBeforeSubmissionDeleted?: (
+	onBeforeDeleteSubmission?: (
 		submissionId: string,
 		ctx: SubmissionDeleteOperationContext,
 	) => Promise<void> | void;
 
 	/** Called after a submission is deleted */
-	onAfterSubmissionDeleted?: (
+	onAfterDeleteSubmission?: (
 		submissionId: string,
 		ctx: SubmissionDeleteOperationContext,
 	) => Promise<void> | void;

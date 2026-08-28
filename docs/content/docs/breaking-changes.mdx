@@ -268,21 +268,21 @@ sign-in, account, and organization routes in your chosen authentication
 framework. Remove the retired plugin from existing `btst init` commands and
 delete its generated imports, overrides, CSS import, and package dependencies.
 
-Form Builder's `onBeforeFormCreated`, `onBeforeFormUpdated`, and
+Form Builder's `onBeforeCreateForm`, `onBeforeUpdateForm`, and
 `onBeforeSubmission` hooks receive a separate mutable-data value and may return
 its transformed replacement. Other lifecycle hooks observe their deeply
 readonly operation context and perform domain side effects; they do not
 transform operation input by returning a value.
 
-Older Form Builder documentation showed the unsupported
-`onBeforeDeleteSubmission` name. v3 exposes
-`onBeforeSubmissionDeleted`; correct the hook name while updating its denial
-behavior:
+Earlier v3 prereleases used the past-tense
+`onBeforeSubmissionDeleted` spelling. RC3 uses the canonical
+`onBeforeDeleteSubmission` action/entity order. Update the name and keep hook
+denials exception-based:
 
 ```diff
-- onBeforeDeleteSubmission: async (submissionId, ctx) => {
+- onBeforeSubmissionDeleted: async (submissionId, ctx) => {
 -   if (!isAdmin(ctx.headers)) return false
-+ onBeforeSubmissionDeleted: async (submissionId, ctx) => {
++ onBeforeDeleteSubmission: async (submissionId, ctx) => {
 +   if (!isAdmin(ctx.headers)) throw new Error("Admin access required")
   }
 ```
@@ -297,7 +297,7 @@ behavior:
   `loginHref` only when a thread needs a per-instance sign-in URL.
 - Update parameterized `pageComponents` adapters to read `params`.
 - Change backend hook denials from boolean returns to thrown errors.
-- Replace Form Builder's stale documented `onBeforeDeleteSubmission` name with `onBeforeSubmissionDeleted`.
+- Replace Form Builder's prerelease `onBeforeSubmissionDeleted` name with `onBeforeDeleteSubmission`.
 - Replace the provider-specific auth scaffold with application-owned identity resolvers and routes.
 - Run your framework build, TypeScript checks, and tests.
 

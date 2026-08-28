@@ -9,7 +9,11 @@ import {
 	createServerAuth,
 	type ServerAuth,
 } from "../../../authorization/server";
-import { KANBAN_QUERY_KEYS, kanbanBackendPlugin } from "../api";
+import {
+	KANBAN_LIFECYCLE_HOOK_MIGRATIONS,
+	KANBAN_QUERY_KEYS,
+	kanbanBackendPlugin,
+} from "../api";
 import { kanbanPermissions } from "../permissions";
 import type { Board, Column, KanbanBackendHooks, Task } from "../types";
 
@@ -17,6 +21,28 @@ const rawMemoryAdapter = (db: DatabaseDefinition) =>
 	createMemoryAdapter(db)({});
 
 describe("Kanban authorization inventory", () => {
+	it("records every removed lifecycle spelling", () => {
+		expect(KANBAN_LIFECYCLE_HOOK_MIGRATIONS).toEqual({
+			onBeforeReadBoard: "onBeforeGetBoard",
+			onBoardsRead: "onAfterListBoards",
+			onBoardRead: "onAfterGetBoard",
+			onBoardCreated: "onAfterCreateBoard",
+			onBoardUpdated: "onAfterUpdateBoard",
+			onBoardDeleted: "onAfterDeleteBoard",
+			onListBoardsError: "onErrorListBoards",
+			onReadBoardError: "onErrorGetBoard",
+			onCreateBoardError: "onErrorCreateBoard",
+			onUpdateBoardError: "onErrorUpdateBoard",
+			onDeleteBoardError: "onErrorDeleteBoard",
+			onColumnCreated: "onAfterCreateColumn",
+			onColumnUpdated: "onAfterUpdateColumn",
+			onColumnDeleted: "onAfterDeleteColumn",
+			onTaskCreated: "onAfterCreateTask",
+			onTaskUpdated: "onAfterUpdateTask",
+			onTaskDeleted: "onAfterDeleteTask",
+		});
+	});
+
 	it("covers every maintained HTTP and programmatic operation with a stable descriptor", () => {
 		const plugin = kanbanBackendPlugin();
 		const adapter = createMemoryAdapter(defineDb({}).use(plugin.dbPlugin))({});
@@ -291,6 +317,154 @@ async function seedTask(
 }
 
 describe("Kanban operation-first authorization", () => {
+	it("runs every renamed hook across request-authorized and trusted calls", async () => {
+		const events: string[] = [];
+		let rejectedBoardAction: string | undefined;
+		const reject = (action: string) => {
+			if (rejectedBoardAction === action) throw new Error(`${action} rejected`);
+		};
+		const backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeListBoards: () => reject("listBoards"),
+				onAfterListBoards: (_boards, _filter, context) => {
+					events.push(`afterListBoards:${context.identity?.id}`);
+				},
+				onErrorListBoards: () => {
+					events.push("errorListBoards");
+				},
+				onBeforeGetBoard: () => reject("getBoard"),
+				onAfterGetBoard: (_board, context) => {
+					events.push(`afterGetBoard:${context.identity?.id}`);
+				},
+				onErrorGetBoard: () => {
+					events.push("errorGetBoard");
+				},
+				onBeforeCreateBoard: () => reject("createBoard"),
+				onAfterCreateBoard: (_board, context) => {
+					events.push(`afterCreateBoard:${context.identity?.id ?? "internal"}`);
+				},
+				onErrorCreateBoard: () => {
+					events.push("errorCreateBoard");
+				},
+				onBeforeUpdateBoard: () => reject("updateBoard"),
+				onAfterUpdateBoard: (_board, context) => {
+					events.push(`afterUpdateBoard:${context.identity?.id}`);
+				},
+				onErrorUpdateBoard: () => {
+					events.push("errorUpdateBoard");
+				},
+				onBeforeDeleteBoard: () => reject("deleteBoard"),
+				onAfterDeleteBoard: (_id, context) => {
+					events.push(`afterDeleteBoard:${context.identity?.id}`);
+				},
+				onErrorDeleteBoard: () => {
+					events.push("errorDeleteBoard");
+				},
+				onAfterCreateColumn: (_column, context) => {
+					events.push(
+						`afterCreateColumn:${context.identity?.id ?? "internal"}`,
+					);
+				},
+				onAfterUpdateColumn: (_column, context) => {
+					events.push(`afterUpdateColumn:${context.identity?.id}`);
+				},
+				onAfterDeleteColumn: (_id, context) => {
+					events.push(`afterDeleteColumn:${context.identity?.id}`);
+				},
+				onAfterCreateTask: (_task, context) => {
+					events.push(`afterCreateTask:${context.identity?.id ?? "internal"}`);
+				},
+				onAfterUpdateTask: (_task, context) => {
+					events.push(`afterUpdateTask:${context.identity?.id}`);
+				},
+				onAfterDeleteTask: (_id, context) => {
+					events.push(`afterDeleteTask:${context.identity?.id}`);
+				},
+			},
+		});
+		const requested = backend.forRequest(
+			request("/lifecycle", { identity: admin }),
+		).api.kanban;
+
+		rejectedBoardAction = "createBoard";
+		await expect(
+			requested.createBoard({ name: "Rejected" }),
+		).rejects.toMatchObject({ code: "CREATE_BOARD_REJECTED" });
+		rejectedBoardAction = undefined;
+		const board = await backend.internal.kanban.createBoard({
+			name: "Lifecycle",
+		});
+
+		rejectedBoardAction = "listBoards";
+		await expect(requested.listBoards({})).rejects.toMatchObject({
+			code: "LIST_BOARDS_REJECTED",
+		});
+		rejectedBoardAction = undefined;
+		await requested.listBoards({});
+
+		rejectedBoardAction = "getBoard";
+		await expect(requested.getBoard({ id: board.id })).rejects.toMatchObject({
+			code: "READ_BOARD_REJECTED",
+		});
+		rejectedBoardAction = undefined;
+		await requested.getBoard({ id: board.id });
+
+		rejectedBoardAction = "updateBoard";
+		await expect(
+			requested.updateBoard({ id: board.id, data: { name: "Rejected" } }),
+		).rejects.toMatchObject({ code: "UPDATE_BOARD_REJECTED" });
+		rejectedBoardAction = undefined;
+		await requested.updateBoard({ id: board.id, data: { name: "Updated" } });
+
+		const column = await backend.internal.kanban.createColumn({
+			boardId: board.id,
+			title: "Lifecycle",
+		});
+		await requested.updateColumn({
+			id: column.id,
+			data: { title: "Updated column" },
+		});
+		const task = await backend.internal.kanban.createTask({
+			columnId: column.id,
+			title: "Lifecycle",
+		});
+		await requested.updateTask({
+			id: task.id,
+			data: { title: "Updated task" },
+		});
+		await requested.deleteTask({ id: task.id });
+		await requested.deleteColumn({ id: column.id });
+
+		rejectedBoardAction = "deleteBoard";
+		await expect(requested.deleteBoard({ id: board.id })).rejects.toMatchObject(
+			{
+				code: "DELETE_BOARD_REJECTED",
+			},
+		);
+		rejectedBoardAction = undefined;
+		await requested.deleteBoard({ id: board.id });
+
+		expect(events).toEqual([
+			"errorCreateBoard",
+			"afterCreateBoard:internal",
+			"errorListBoards",
+			"afterListBoards:admin-1",
+			"errorGetBoard",
+			"afterGetBoard:admin-1",
+			"errorUpdateBoard",
+			"afterUpdateBoard:admin-1",
+			"afterCreateColumn:internal",
+			"afterUpdateColumn:admin-1",
+			"afterCreateTask:internal",
+			"afterUpdateTask:admin-1",
+			"afterDeleteTask:admin-1",
+			"afterDeleteColumn:admin-1",
+			"errorDeleteBoard",
+			"afterDeleteBoard:admin-1",
+		]);
+	});
+
 	it("preserves omitted-auth compatibility while retaining validation and hooks", async () => {
 		const events: string[] = [];
 		const backend = makeBackend({
@@ -299,7 +473,7 @@ describe("Kanban operation-first authorization", () => {
 				onBeforeCreateBoard: (_input, context) => {
 					events.push(`before:${context.identity?.id ?? "anonymous"}`);
 				},
-				onBoardCreated: (_board, context) => {
+				onAfterCreateBoard: (_board, context) => {
 					events.push(`after:${context.identity?.id ?? "anonymous"}`);
 				},
 			},
@@ -335,7 +509,7 @@ describe("Kanban operation-first authorization", () => {
 					expect(context.identity).toEqual(owner);
 					throw new Error("workflow rejected");
 				},
-				onCreateBoardError: (error, context) => {
+				onErrorCreateBoard: (error, context) => {
 					events.push("error");
 					contexts.push(context);
 					expect(error).toMatchObject({
@@ -344,7 +518,7 @@ describe("Kanban operation-first authorization", () => {
 					});
 					throw new Error("observer failed");
 				},
-				onBoardCreated: () => {
+				onAfterCreateBoard: () => {
 					events.push("after");
 				},
 			},
@@ -431,7 +605,7 @@ describe("Kanban operation-first authorization", () => {
 		const backend = makeBackend({
 			auth: createAuth(),
 			hooks: {
-				onBeforeReadBoard: () => {
+				onBeforeGetBoard: () => {
 					events.push("read");
 				},
 				onBeforeUpdateTask: () => {
@@ -702,7 +876,7 @@ describe("Kanban operation-first authorization", () => {
 				onBeforeUpdateBoard: (_id, _data, context) => {
 					events.push(`before:${context.identity?.id ?? "internal"}`);
 				},
-				onBoardUpdated: (_board, context) => {
+				onAfterUpdateBoard: (_board, context) => {
 					events.push(`after:${context.identity?.id ?? "internal"}`);
 				},
 			},
@@ -748,7 +922,7 @@ describe("Kanban operation-first authorization", () => {
 				onBeforeUpdateTask: (_id, _data, context) => {
 					events.push(`before:${context.identity?.id ?? "internal"}`);
 				},
-				onTaskUpdated: (_task, context) => {
+				onAfterUpdateTask: (_task, context) => {
 					events.push(`after:${context.identity?.id ?? "internal"}`);
 				},
 			},
@@ -1023,7 +1197,7 @@ describe("Kanban operation-first authorization", () => {
 						caught.push(error instanceof Error ? error.message : "unknown");
 					}
 				},
-				onBoardUpdated: (board) => {
+				onAfterUpdateBoard: (board) => {
 					if (board.id === nestedId) throw new Error("nested after rejected");
 				},
 			},

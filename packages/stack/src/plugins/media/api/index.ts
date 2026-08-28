@@ -1,4 +1,5 @@
 export * from "./plugin";
+export { MEDIA_LIFECYCLE_HOOK_MIGRATIONS } from "./lifecycle-migrations";
 
 export {
 	listAssets,

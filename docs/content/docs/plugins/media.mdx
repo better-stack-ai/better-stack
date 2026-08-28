@@ -704,7 +704,7 @@ mediaBackendPlugin({
         throw new Error("Storage quota exceeded")
       }
     },
-    onBeforeDelete: async (asset) => {
+    onBeforeDeleteAsset: async (asset) => {
       if (asset.mimeType.startsWith("image/")) return
       throw new Error("Only image deletion is allowed here")
     },

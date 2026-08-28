@@ -9,7 +9,11 @@ import {
 	createServerAuth,
 	type ServerAuth,
 } from "../../../authorization/server";
-import { FORM_QUERY_KEYS, formBuilderBackendPlugin } from "../api";
+import {
+	FORM_BUILDER_LIFECYCLE_HOOK_MIGRATIONS,
+	FORM_QUERY_KEYS,
+	formBuilderBackendPlugin,
+} from "../api";
 import { formBuilderPermissions } from "../permissions";
 import type { Form, FormBuilderBackendHooks, FormSubmission } from "../types";
 
@@ -67,6 +71,20 @@ function serializedMemoryAdapter(db: DatabaseDefinition): DBAdapter {
 const memoryAdapter = serializedMemoryAdapter;
 
 describe("Form Builder authorization inventory", () => {
+	it("records every removed lifecycle spelling", () => {
+		expect(FORM_BUILDER_LIFECYCLE_HOOK_MIGRATIONS).toEqual({
+			onBeforeFormCreated: "onBeforeCreateForm",
+			onAfterFormCreated: "onAfterCreateForm",
+			onBeforeFormUpdated: "onBeforeUpdateForm",
+			onAfterFormUpdated: "onAfterUpdateForm",
+			onBeforeFormDeleted: "onBeforeDeleteForm",
+			onAfterFormDeleted: "onAfterDeleteForm",
+			onSubmissionError: "onErrorSubmission",
+			onBeforeSubmissionDeleted: "onBeforeDeleteSubmission",
+			onAfterSubmissionDeleted: "onAfterDeleteSubmission",
+		});
+	});
+
 	it("covers every maintained HTTP and programmatic operation with a stable descriptor", () => {
 		const plugin = formBuilderBackendPlugin();
 		const adapter = memoryAdapter(defineDb({}).use(plugin.dbPlugin));
@@ -275,14 +293,106 @@ const viewer = { id: "viewer-1", role: "user" } as const;
 const admin = { id: "admin-1", role: "admin" } as const;
 
 describe("Form Builder operation-first authorization", () => {
+	it("runs every renamed form and submission hook across request and trusted calls", async () => {
+		const events: string[] = [];
+		const backend = makeBackend({
+			auth: createAuth(),
+			hooks: {
+				onBeforeCreateForm: (data, context) => {
+					events.push(`beforeCreate:${context.identity?.id}`);
+					return { ...data, name: "Created by hook" };
+				},
+				onAfterCreateForm: (_form, context) => {
+					events.push(`afterCreate:${context.identity?.id}`);
+				},
+				onBeforeUpdateForm: (_id, data, context) => {
+					events.push(`beforeUpdate:${context.identity?.id ?? "internal"}`);
+					return { ...data, name: "Updated by hook" };
+				},
+				onAfterUpdateForm: (_form, context) => {
+					events.push(`afterUpdate:${context.identity?.id ?? "internal"}`);
+				},
+				onBeforeSubmission: (_slug, data, context) => {
+					events.push(`beforeSubmission:${context.identity?.id ?? "internal"}`);
+					return { ...data, normalized: true };
+				},
+				onAfterSubmission: (_submission, _form, context) => {
+					events.push(`afterSubmission:${context.identity?.id ?? "internal"}`);
+				},
+				onErrorSubmission: (_error, _slug, _data, context) => {
+					events.push(
+						`errorSubmission:${context.request ? "request" : "internal"}`,
+					);
+				},
+				onBeforeDeleteSubmission: (_id, context) => {
+					events.push(`beforeDeleteSubmission:${context.identity?.id}`);
+				},
+				onAfterDeleteSubmission: (_id, context) => {
+					events.push(`afterDeleteSubmission:${context.identity?.id}`);
+				},
+				onBeforeDeleteForm: (_id, context) => {
+					events.push(`beforeDeleteForm:${context.identity?.id ?? "internal"}`);
+				},
+				onAfterDeleteForm: (_id, context) => {
+					events.push(`afterDeleteForm:${context.identity?.id ?? "internal"}`);
+				},
+			},
+		});
+		const requested = backend.forRequest(
+			request("/lifecycle", { identity: admin }),
+		).api.formBuilder;
+		const created = await requested.createForm({
+			name: "Original",
+			slug: "lifecycle",
+			schema: activeSchema,
+			status: "active",
+		});
+		expect(created.name).toBe("Created by hook");
+		const updated = await backend.internal.formBuilder.updateForm({
+			id: created.id,
+			data: { name: "Original update" },
+		});
+		expect(updated.name).toBe("Updated by hook");
+
+		await expect(
+			backend
+				.forRequest(request("/lifecycle-submit"))
+				.api.formBuilder.submitForm({ slug: created.slug, data: {} }),
+		).rejects.toMatchObject({ code: "SUBMISSION_VALIDATION_FAILED" });
+		const submission = await backend.internal.formBuilder.submitForm({
+			slug: created.slug,
+			data: { name: "Ada" },
+		});
+		expect(JSON.parse(submission.data)).toMatchObject({ normalized: true });
+		await requested.deleteSubmission({
+			formId: created.id,
+			submissionId: submission.id,
+		});
+		await backend.internal.formBuilder.deleteForm({ id: created.id });
+
+		expect(events).toEqual([
+			"beforeCreate:admin-1",
+			"afterCreate:admin-1",
+			"beforeUpdate:internal",
+			"afterUpdate:internal",
+			"errorSubmission:request",
+			"beforeSubmission:internal",
+			"afterSubmission:internal",
+			"beforeDeleteSubmission:admin-1",
+			"afterDeleteSubmission:admin-1",
+			"beforeDeleteForm:internal",
+			"afterDeleteForm:internal",
+		]);
+	});
+
 	it("preserves permissive compatibility when stack authorization is omitted", async () => {
 		const events: string[] = [];
 		const backend = makeBackend({
 			hooks: {
-				onBeforeFormUpdated: () => {
+				onBeforeUpdateForm: () => {
 					events.push("before");
 				},
-				onAfterFormUpdated: () => {
+				onAfterUpdateForm: () => {
 					events.push("after");
 				},
 			},
@@ -306,11 +416,11 @@ describe("Form Builder operation-first authorization", () => {
 			const backend = makeBackend({
 				auth: createAuth(),
 				hooks: {
-					onBeforeFormUpdated: (_id, data) => ({
+					onBeforeUpdateForm: (_id, data) => ({
 						...data,
 						[field]: "",
 					}),
-					onAfterFormUpdated: afterUpdate,
+					onAfterUpdateForm: afterUpdate,
 				},
 			});
 			const form = await seedForm(backend, { slug: `hook-empty-${field}` });
@@ -341,7 +451,7 @@ describe("Form Builder operation-first authorization", () => {
 		const backend = makeBackend({
 			auth: createAuth(),
 			hooks: {
-				onBeforeFormCreated: (data) => ({ ...data, name: "" }),
+				onBeforeCreateForm: (data) => ({ ...data, name: "" }),
 			},
 		});
 
@@ -465,7 +575,7 @@ describe("Form Builder operation-first authorization", () => {
 		const backend = makeBackend({
 			auth: createAuth(),
 			hooks: {
-				onBeforeFormUpdated: () => {
+				onBeforeUpdateForm: () => {
 					events.push("before");
 				},
 				onError: () => {
@@ -507,13 +617,13 @@ describe("Form Builder operation-first authorization", () => {
 				onBeforeGetFormForUpdate: () => {
 					events.push("get-form-for-update");
 				},
-				onBeforeFormCreated: () => {
+				onBeforeCreateForm: () => {
 					events.push("create-form");
 				},
-				onBeforeFormUpdated: () => {
+				onBeforeUpdateForm: () => {
 					events.push("update-form");
 				},
-				onBeforeFormDeleted: () => {
+				onBeforeDeleteForm: () => {
 					events.push("delete-form");
 				},
 				onBeforeListSubmissions: () => {
@@ -522,7 +632,7 @@ describe("Form Builder operation-first authorization", () => {
 				onBeforeGetSubmission: () => {
 					events.push("get-submission");
 				},
-				onBeforeSubmissionDeleted: () => {
+				onBeforeDeleteSubmission: () => {
 					events.push("delete-submission");
 				},
 				onError: () => {
@@ -830,11 +940,11 @@ describe("Form Builder operation-first authorization", () => {
 		const backend = makeBackend({
 			auth: createAuth(getIdentity),
 			hooks: {
-				onBeforeFormCreated: (input, context) => {
+				onBeforeCreateForm: (input, context) => {
 					events.push(`before:${context.identity?.id ?? "internal"}`);
 					return { ...input, createdBy: "system-owner" };
 				},
-				onAfterFormCreated: (_form, context) => {
+				onAfterCreateForm: (_form, context) => {
 					events.push(`after:${context.identity?.id ?? "internal"}`);
 				},
 			},
@@ -915,7 +1025,7 @@ describe("Form Builder operation-first authorization", () => {
 		const factFailure = makeBackend({
 			auth: createAuth(),
 			hooks: {
-				onBeforeFormUpdated: () => {
+				onBeforeUpdateForm: () => {
 					factFailureEvents.push("before");
 				},
 				onError: () => {
@@ -966,13 +1076,13 @@ describe("Form Builder operation-first authorization", () => {
 					return owner;
 				}),
 				hooks: {
-					onBeforeFormUpdated: () => {
+					onBeforeUpdateForm: () => {
 						events.push("update-hook");
 					},
-					onBeforeFormDeleted: () => {
+					onBeforeDeleteForm: () => {
 						events.push("delete-hook");
 					},
-					onBeforeSubmissionDeleted: () => {
+					onBeforeDeleteSubmission: () => {
 						events.push("submission-hook");
 					},
 				},
@@ -1002,16 +1112,16 @@ describe("Form Builder operation-first authorization", () => {
 			const backend = makeBackend({
 				auth: createAuth(),
 				hooks: {
-					onBeforeFormUpdated: () => {
+					onBeforeUpdateForm: () => {
 						events.push("update-hook");
 					},
-					onBeforeFormDeleted: () => {
+					onBeforeDeleteForm: () => {
 						events.push("delete-hook");
 					},
 					onBeforeSubmission: () => {
 						events.push("submit-hook");
 					},
-					onBeforeSubmissionDeleted: () => {
+					onBeforeDeleteSubmission: () => {
 						events.push("submission-hook");
 					},
 				},
@@ -1094,16 +1204,16 @@ describe("Form Builder operation-first authorization", () => {
 			const backend = makeBackend({
 				auth: createAuth(),
 				hooks: {
-					onBeforeFormUpdated: () => {
+					onBeforeUpdateForm: () => {
 						events.push("update-hook");
 					},
-					onBeforeFormDeleted: () => {
+					onBeforeDeleteForm: () => {
 						events.push("delete-hook");
 					},
 					onBeforeSubmission: () => {
 						events.push("submit-hook");
 					},
-					onBeforeSubmissionDeleted: () => {
+					onBeforeDeleteSubmission: () => {
 						events.push("submission-hook");
 					},
 				},
@@ -1270,7 +1380,7 @@ describe("Form Builder operation-first authorization", () => {
 		const backend = makeBackend({
 			adapter: rawMemoryAdapter,
 			auth: createAuth(),
-			hooks: { onBeforeFormUpdated: beforeUpdate },
+			hooks: { onBeforeUpdateForm: beforeUpdate },
 		});
 		const form = await seedForm(backend, { slug: "memory-no-isolation" });
 

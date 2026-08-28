@@ -275,14 +275,14 @@ export interface MediaBackendHooks {
 			SerializedAsset
 		>,
 	) => Promise<void> | void;
-	onBeforeDelete?: (
+	onBeforeDeleteAsset?: (
 		asset: DeepReadonly<SerializedAsset>,
 		context: MediaApiContext<
 			z.output<typeof AssetIdOperationInputSchema>,
 			AssetDeleteFacts
 		>,
 	) => Promise<void> | void;
-	onAfterDelete?: (
+	onAfterDeleteAsset?: (
 		assetId: string,
 		context: MediaApiResultContext<
 			z.output<typeof AssetIdOperationInputSchema>,
@@ -327,7 +327,7 @@ export interface MediaBackendHooks {
 		>,
 	) => Promise<void> | void;
 	/** Observes failures after authorization without replacing the original error. */
-	onOperationError?: (
+	onError?: (
 		error: Error,
 		context: MediaOperationHookContext,
 	) => Promise<void> | void;
@@ -615,7 +615,7 @@ function hookContext<TInput, TFacts, TResult>(
 }
 
 async function notifyError(
-	hook: MediaBackendHooks["onOperationError"],
+	hook: MediaBackendHooks["onError"],
 	error: unknown,
 	context: OperationContext<any, any>,
 	legacy: { body?: unknown; params?: unknown; query?: unknown } = {},
@@ -1165,7 +1165,7 @@ export function createMediaOperations(
 			};
 		},
 		onError: ({ error, ...context }) =>
-			notifyError(hooks?.onOperationError, error, context, {
+			notifyError(hooks?.onError, error, context, {
 				query: context.input,
 			}),
 	});
@@ -1231,7 +1231,7 @@ export function createMediaOperations(
 			)) as any,
 		onError: ({ error, ...context }) => {
 			markMemoryRollback(adapter, error);
-			return notifyError(hooks?.onOperationError, error, context, {
+			return notifyError(hooks?.onError, error, context, {
 				body: context.input,
 			});
 		},
@@ -1315,7 +1315,7 @@ export function createMediaOperations(
 		},
 		onError: ({ error, ...context }) => {
 			markMemoryRollback(adapter, error);
-			return notifyError(hooks?.onOperationError, error, context, {
+			return notifyError(hooks?.onError, error, context, {
 				body: context.input.data,
 				params: { id: context.input.id },
 			});
@@ -1347,7 +1347,7 @@ export function createMediaOperations(
 				const claimedAt = await claimAsset(tx, snapshot);
 				await runDomainHook(
 					() =>
-						hooks?.onBeforeDelete?.(
+						hooks?.onBeforeDeleteAsset?.(
 							operationAsset(current as Asset),
 							hookContext(context, { params: { id: context.input.id } }),
 						),
@@ -1371,13 +1371,13 @@ export function createMediaOperations(
 			});
 		},
 		after: (context) =>
-			hooks?.onAfterDelete?.(
+			hooks?.onAfterDeleteAsset?.(
 				context.input.id,
 				hookContext(context, { params: { id: context.input.id } }),
 			),
 		onError: ({ error, ...context }) => {
 			markMemoryRollback(adapter, error);
-			return notifyError(hooks?.onOperationError, error, context, {
+			return notifyError(hooks?.onError, error, context, {
 				params: { id: context.input.id },
 			});
 		},
@@ -1407,7 +1407,7 @@ export function createMediaOperations(
 			return result.map((folder) => withoutTenant(serializeFolder(folder)));
 		},
 		onError: ({ error, ...context }) =>
-			notifyError(hooks?.onOperationError, error, context, {
+			notifyError(hooks?.onError, error, context, {
 				query: context.input,
 			}),
 	});
@@ -1461,7 +1461,7 @@ export function createMediaOperations(
 		},
 		onError: ({ error, ...context }) => {
 			markMemoryRollback(adapter, error);
-			return notifyError(hooks?.onOperationError, error, context, {
+			return notifyError(hooks?.onError, error, context, {
 				body: context.input,
 			});
 		},
@@ -1527,7 +1527,7 @@ export function createMediaOperations(
 		},
 		onError: ({ error, ...context }) => {
 			markMemoryRollback(adapter, error);
-			return notifyError(hooks?.onOperationError, error, context, {
+			return notifyError(hooks?.onError, error, context, {
 				params: { id: context.input.id },
 			});
 		},
@@ -1638,7 +1638,7 @@ export function createMediaOperations(
 			)) as any,
 		onError: ({ error, ...context }) => {
 			markMemoryRollback(adapter, error);
-			return notifyError(hooks?.onOperationError, error, context, {
+			return notifyError(hooks?.onError, error, context, {
 				body: context.input,
 			});
 		},
@@ -1709,7 +1709,7 @@ export function createMediaOperations(
 			});
 		},
 		onError: ({ error, ...context }) =>
-			notifyError(hooks?.onOperationError, error, context, {
+			notifyError(hooks?.onError, error, context, {
 				body: context.input,
 			}),
 	});
@@ -1853,7 +1853,7 @@ export function createMediaOperations(
 			return handleProviderRequest();
 		},
 		onError: ({ error, ...context }) =>
-			notifyError(hooks?.onOperationError, error, context, {
+			notifyError(hooks?.onError, error, context, {
 				body: context.input.body,
 			}),
 	});

@@ -4,6 +4,7 @@ export {
 	type KanbanBackendOptions,
 	type KanbanRouteKey,
 } from "./plugin";
+export { KANBAN_LIFECYCLE_HOOK_MIGRATIONS } from "./lifecycle-migrations";
 export {
 	KanbanOperationError,
 	createKanbanOperations,

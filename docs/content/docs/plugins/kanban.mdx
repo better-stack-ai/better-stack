@@ -746,7 +746,7 @@ const kanbanHooks: KanbanBackendHooks = {
       input: context.input,
     })
   },
-  onTaskCreated: async (task, context) => {
+  onAfterCreateTask: async (task, context) => {
     await sendTaskNotification(task, context.facts.boardId)
   },
 }
@@ -762,13 +762,13 @@ successful authorization and cannot replace the original error.
 
 | Group | Hooks |
 |---|---|
-| Board before | `onBeforeListBoards`, `onBeforeReadBoard`, `onBeforeCreateBoard`, `onBeforeUpdateBoard`, `onBeforeDeleteBoard` |
-| Board after | `onBoardsRead`, `onBoardRead`, `onBoardCreated`, `onBoardUpdated`, `onBoardDeleted` |
-| Board error | `onListBoardsError`, `onReadBoardError`, `onCreateBoardError`, `onUpdateBoardError`, `onDeleteBoardError` |
+| Board before | `onBeforeListBoards`, `onBeforeGetBoard`, `onBeforeCreateBoard`, `onBeforeUpdateBoard`, `onBeforeDeleteBoard` |
+| Board after | `onAfterListBoards`, `onAfterGetBoard`, `onAfterCreateBoard`, `onAfterUpdateBoard`, `onAfterDeleteBoard` |
+| Board error | `onErrorListBoards`, `onErrorGetBoard`, `onErrorCreateBoard`, `onErrorUpdateBoard`, `onErrorDeleteBoard` |
 | Column before | `onBeforeCreateColumn`, `onBeforeUpdateColumn`, `onBeforeDeleteColumn` |
-| Column after | `onColumnCreated`, `onColumnUpdated`, `onColumnDeleted` |
+| Column after | `onAfterCreateColumn`, `onAfterUpdateColumn`, `onAfterDeleteColumn` |
 | Task before | `onBeforeCreateTask`, `onBeforeUpdateTask`, `onBeforeDeleteTask` |
-| Task after | `onTaskCreated`, `onTaskUpdated`, `onTaskDeleted` |
+| Task after | `onAfterCreateTask`, `onAfterUpdateTask`, `onAfterDeleteTask` |
 
 ### Client (`@btst/stack/plugins/kanban/client`)
 
@@ -821,7 +821,7 @@ Customize client-side behavior with lifecycle hooks:
 
 #### v3 board-list migration
 
-`useBoards()`, `onBoardsRead`, and `afterLoadBoards` now receive
+`useBoards()`, `onAfterListBoards`, and `afterLoadBoards` now receive
 `SerializedBoardSummary[]`. Summary dates are ISO strings and summary columns
 intentionally omit `tasks`, keeping collection authorization from exposing
 record-only task data. Code that previously read tasks from a list callback
@@ -1039,13 +1039,13 @@ import { revalidatePath } from "next/cache"
 import type { KanbanBackendHooks } from "@btst/stack/plugins/kanban/api"
 
 const kanbanHooks: KanbanBackendHooks = {
-  onBoardCreated: async (board) => {
+  onAfterCreateBoard: async (board) => {
     revalidatePath("/kanban")
   },
-  onBoardUpdated: async (board) => {
+  onAfterUpdateBoard: async (board) => {
     revalidatePath("/kanban")
   },
-  onBoardDeleted: async (boardId) => {
+  onAfterDeleteBoard: async (boardId) => {
     revalidatePath("/kanban")
   },
 }

@@ -371,7 +371,7 @@ export interface KanbanBackendHooks {
 		data: z.output<typeof createBoardSchema>,
 		context: BoardCreateOperationContext,
 	) => Promise<void> | void;
-	onBeforeReadBoard?: (
+	onBeforeGetBoard?: (
 		boardId: string,
 		context: BoardReadOperationContext,
 	) => Promise<void> | void;
@@ -384,44 +384,44 @@ export interface KanbanBackendHooks {
 		boardId: string,
 		context: BoardDeleteOperationContext,
 	) => Promise<void> | void;
-	onBoardsRead?: (
+	onAfterListBoards?: (
 		boards: readonly DeepReadonly<SerializedBoardSummary>[],
 		filter: z.output<typeof BoardListQuerySchema>,
 		context: BoardListOperationResultContext,
 	) => Promise<void> | void;
-	onBoardRead?: (
+	onAfterGetBoard?: (
 		board: DeepReadonly<SerializedBoardWithColumns>,
 		context: BoardReadOperationResultContext,
 	) => Promise<void> | void;
-	onBoardCreated?: (
+	onAfterCreateBoard?: (
 		board: DeepReadonly<SerializedBoardWithColumns>,
 		context: BoardCreateOperationResultContext,
 	) => Promise<void> | void;
-	onBoardUpdated?: (
+	onAfterUpdateBoard?: (
 		board: DeepReadonly<SerializedBoard>,
 		context: BoardUpdateOperationResultContext,
 	) => Promise<void> | void;
-	onBoardDeleted?: (
+	onAfterDeleteBoard?: (
 		boardId: string,
 		context: BoardDeleteOperationResultContext,
 	) => Promise<void> | void;
-	onListBoardsError?: (
+	onErrorListBoards?: (
 		error: Error,
 		context: BoardListOperationContext,
 	) => Promise<void> | void;
-	onReadBoardError?: (
+	onErrorGetBoard?: (
 		error: Error,
 		context: BoardReadOperationContext,
 	) => Promise<void> | void;
-	onCreateBoardError?: (
+	onErrorCreateBoard?: (
 		error: Error,
 		context: BoardCreateOperationContext,
 	) => Promise<void> | void;
-	onUpdateBoardError?: (
+	onErrorUpdateBoard?: (
 		error: Error,
 		context: BoardUpdateOperationContext,
 	) => Promise<void> | void;
-	onDeleteBoardError?: (
+	onErrorDeleteBoard?: (
 		error: Error,
 		context: BoardDeleteOperationContext,
 	) => Promise<void> | void;
@@ -438,17 +438,17 @@ export interface KanbanBackendHooks {
 		columnId: string,
 		context: ColumnDeleteOperationContext,
 	) => Promise<void> | void;
-	onColumnCreated?: (
+	onAfterCreateColumn?: (
 		column: DeepReadonly<SerializedColumn>,
 		context: ColumnCreateOperationResultContext,
 	) => Promise<void> | void;
-	onColumnUpdated?: (
+	onAfterUpdateColumn?: (
 		column: DeepReadonly<SerializedColumn>,
 		context:
 			| ColumnUpdateOperationResultContext
 			| ColumnReorderOperationResultContext,
 	) => Promise<void> | void;
-	onColumnDeleted?: (
+	onAfterDeleteColumn?: (
 		columnId: string,
 		context: ColumnDeleteOperationResultContext,
 	) => Promise<void> | void;
@@ -468,18 +468,18 @@ export interface KanbanBackendHooks {
 		taskId: string,
 		context: TaskDeleteOperationContext,
 	) => Promise<void> | void;
-	onTaskCreated?: (
+	onAfterCreateTask?: (
 		task: DeepReadonly<SerializedTask>,
 		context: TaskCreateOperationResultContext,
 	) => Promise<void> | void;
-	onTaskUpdated?: (
+	onAfterUpdateTask?: (
 		task: DeepReadonly<SerializedTask>,
 		context:
 			| TaskUpdateOperationResultContext
 			| TaskMoveOperationResultContext
 			| TaskReorderOperationResultContext,
 	) => Promise<void> | void;
-	onTaskDeleted?: (
+	onAfterDeleteTask?: (
 		taskId: string,
 		context: TaskDeleteOperationResultContext,
 	) => Promise<void> | void;
