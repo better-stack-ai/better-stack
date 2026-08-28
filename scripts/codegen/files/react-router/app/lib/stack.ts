@@ -295,10 +295,10 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 		}),
 		formBuilder: formBuilderBackendPlugin({
 			hooks: {
-				onAfterFormCreated: async (form, context) => {
+				onAfterCreateForm: async (form, context) => {
 					console.log("Form created:", form.name, form.slug);
 				},
-				onAfterFormUpdated: async (form, context) => {
+				onAfterUpdateForm: async (form, context) => {
 					console.log("Form updated:", form.name);
 				},
 				onAfterSubmission: async (submission, form, context) => {
@@ -317,7 +317,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 				onBeforeListBoards: async (filter, context) => {
 					console.log("onBeforeListBoards hook called", filter);
 				},
-				onBoardCreated: async (board, context) => {
+				onAfterCreateBoard: async (board, context) => {
 					console.log("Board created:", board.id, board.name);
 				},
 			},

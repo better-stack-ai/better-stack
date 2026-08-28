@@ -1138,14 +1138,14 @@ export function createKanbanOperations(
 			};
 		},
 		after: async (context) => {
-			await hooks?.onBoardsRead?.(
+			await hooks?.onAfterListBoards?.(
 				context.result.items,
 				{ ...context.input },
 				hookContext(context, { query: context.input }),
 			);
 		},
 		onError: ({ error, ...context }) =>
-			notifyBoardError(hooks?.onListBoardsError, error, context, {
+			notifyBoardError(hooks?.onErrorListBoards, error, context, {
 				query: context.input,
 			}),
 	});
@@ -1173,7 +1173,7 @@ export function createKanbanOperations(
 			}
 			await runDomainHook(
 				() =>
-					hooks?.onBeforeReadBoard?.(
+					hooks?.onBeforeGetBoard?.(
 						context.input.id,
 						hookContext(context, { params: { id: context.input.id } }),
 					),
@@ -1190,7 +1190,7 @@ export function createKanbanOperations(
 			return operationBoard(board);
 		},
 		after: async (context) => {
-			await hooks?.onBoardRead?.(
+			await hooks?.onAfterGetBoard?.(
 				context.result,
 				hookContext<
 					z.output<typeof BoardIdOperationInputSchema>,
@@ -1200,7 +1200,7 @@ export function createKanbanOperations(
 			);
 		},
 		onError: ({ error, ...context }) =>
-			notifyBoardError(hooks?.onReadBoardError, error, context, {
+			notifyBoardError(hooks?.onErrorGetBoard, error, context, {
 				params: { id: context.input.id },
 			}),
 	});
@@ -1261,7 +1261,7 @@ export function createKanbanOperations(
 			});
 		},
 		after: async (context) => {
-			await hooks?.onBoardCreated?.(
+			await hooks?.onAfterCreateBoard?.(
 				context.result,
 				hookContext<
 					z.output<typeof createBoardSchema>,
@@ -1272,7 +1272,7 @@ export function createKanbanOperations(
 		},
 		onError: ({ error, ...context }) => {
 			markMemoryRollback(adapter, error);
-			return notifyBoardError(hooks?.onCreateBoardError, error, context, {
+			return notifyBoardError(hooks?.onErrorCreateBoard, error, context, {
 				body: context.input,
 			});
 		},
@@ -1328,7 +1328,7 @@ export function createKanbanOperations(
 			});
 		},
 		after: async (context) => {
-			await hooks?.onBoardUpdated?.(
+			await hooks?.onAfterUpdateBoard?.(
 				context.result,
 				hookContext(context, {
 					body: context.input.data,
@@ -1338,7 +1338,7 @@ export function createKanbanOperations(
 		},
 		onError: ({ error, ...context }) => {
 			markMemoryRollback(adapter, error);
-			return notifyBoardError(hooks?.onUpdateBoardError, error, context, {
+			return notifyBoardError(hooks?.onErrorUpdateBoard, error, context, {
 				body: context.input.data,
 				params: { id: context.input.id },
 			});
@@ -1381,14 +1381,14 @@ export function createKanbanOperations(
 			});
 		},
 		after: async (context) => {
-			await hooks?.onBoardDeleted?.(
+			await hooks?.onAfterDeleteBoard?.(
 				context.input.id,
 				hookContext(context, { params: { id: context.input.id } }),
 			);
 		},
 		onError: ({ error, ...context }) => {
 			markMemoryRollback(adapter, error);
-			return notifyBoardError(hooks?.onDeleteBoardError, error, context, {
+			return notifyBoardError(hooks?.onErrorDeleteBoard, error, context, {
 				params: { id: context.input.id },
 			});
 		},
@@ -1439,7 +1439,7 @@ export function createKanbanOperations(
 			});
 		},
 		after: async (context) => {
-			await hooks?.onColumnCreated?.(
+			await hooks?.onAfterCreateColumn?.(
 				context.result,
 				hookContext(context, { body: context.input }),
 			);
@@ -1516,7 +1516,7 @@ export function createKanbanOperations(
 			});
 		},
 		after: async (context) => {
-			await hooks?.onColumnUpdated?.(
+			await hooks?.onAfterUpdateColumn?.(
 				context.result,
 				hookContext(context, {
 					body: context.input.data,
@@ -1575,7 +1575,7 @@ export function createKanbanOperations(
 			});
 		},
 		after: async (context) => {
-			await hooks?.onColumnDeleted?.(
+			await hooks?.onAfterDeleteColumn?.(
 				context.input.id,
 				hookContext(context, { params: { id: context.input.id } }),
 			);
@@ -1670,7 +1670,7 @@ export function createKanbanOperations(
 		},
 		after: async (context) => {
 			for (const column of reorderedColumns.get(context.result) ?? []) {
-				await hooks?.onColumnUpdated?.(
+				await hooks?.onAfterUpdateColumn?.(
 					column,
 					hookContext<
 						z.output<typeof reorderColumnsSchema>,
@@ -1734,7 +1734,7 @@ export function createKanbanOperations(
 			});
 		},
 		after: async (context) => {
-			await hooks?.onTaskCreated?.(
+			await hooks?.onAfterCreateTask?.(
 				context.result,
 				hookContext(context, { body: context.input }),
 			);
@@ -1848,7 +1848,7 @@ export function createKanbanOperations(
 			});
 		},
 		after: async (context) => {
-			await hooks?.onTaskUpdated?.(
+			await hooks?.onAfterUpdateTask?.(
 				context.result,
 				hookContext(context, {
 					body: context.input.data,
@@ -1904,7 +1904,7 @@ export function createKanbanOperations(
 			});
 		},
 		after: async (context) => {
-			await hooks?.onTaskDeleted?.(
+			await hooks?.onAfterDeleteTask?.(
 				context.input.id,
 				hookContext(context, { params: { id: context.input.id } }),
 			);
@@ -1953,7 +1953,7 @@ export function createKanbanOperations(
 			});
 		},
 		after: async (context) => {
-			await hooks?.onTaskUpdated?.(
+			await hooks?.onAfterUpdateTask?.(
 				context.result,
 				hookContext(context, { body: context.input }),
 			);
@@ -2033,7 +2033,7 @@ export function createKanbanOperations(
 		},
 		after: async (context) => {
 			for (const task of reorderedTasks.get(context.result) ?? []) {
-				await hooks?.onTaskUpdated?.(
+				await hooks?.onAfterUpdateTask?.(
 					task,
 					hookContext<
 						z.output<typeof reorderTasksSchema>,

@@ -245,7 +245,82 @@ onBeforeSubmission: async (_formSlug, data, ctx) => {
 }
 ```
 
-### 7. Replace the retired provider-specific auth scaffold
+### 7. Rename normalized backend lifecycle hooks
+
+RC3 removes the lifecycle spellings used by earlier v3 prereleases. Rename
+each configured hook key using the tables below; callback parameters and return
+values are otherwise unchanged. JavaScript applications must make the same
+updates because removed hook keys are not invoked at runtime.
+
+#### Form Builder
+
+| Earlier v3 spelling | RC3 spelling |
+| --- | --- |
+| `onBeforeFormCreated` | `onBeforeCreateForm` |
+| `onAfterFormCreated` | `onAfterCreateForm` |
+| `onBeforeFormUpdated` | `onBeforeUpdateForm` |
+| `onAfterFormUpdated` | `onAfterUpdateForm` |
+| `onBeforeFormDeleted` | `onBeforeDeleteForm` |
+| `onAfterFormDeleted` | `onAfterDeleteForm` |
+| `onSubmissionError` | `onErrorSubmission` |
+| `onBeforeSubmissionDeleted` | `onBeforeDeleteSubmission` |
+| `onAfterSubmissionDeleted` | `onAfterDeleteSubmission` |
+
+Form Builder's `onBeforeCreateForm`, `onBeforeUpdateForm`, and
+`onBeforeSubmission` hooks receive a separate mutable-data value and may return
+its transformed replacement. Other lifecycle hooks observe their deeply
+readonly operation context and perform domain side effects; they do not
+transform operation input by returning a value. Submission receipt hooks such
+as `onBeforeSubmission` and `onAfterSubmission` keep their domain-event names.
+
+Keep hook denials exception-based while renaming them:
+
+```diff
+- onBeforeSubmissionDeleted: async (submissionId, ctx) => {
+-   if (!isAdmin(ctx.headers)) return false
++ onBeforeDeleteSubmission: async (submissionId, ctx) => {
++   if (!isAdmin(ctx.headers)) throw new Error("Admin access required")
+  }
+```
+
+#### Kanban
+
+| Earlier v3 spelling | RC3 spelling |
+| --- | --- |
+| `onBeforeReadBoard` | `onBeforeGetBoard` |
+| `onBoardsRead` | `onAfterListBoards` |
+| `onBoardRead` | `onAfterGetBoard` |
+| `onBoardCreated` | `onAfterCreateBoard` |
+| `onBoardUpdated` | `onAfterUpdateBoard` |
+| `onBoardDeleted` | `onAfterDeleteBoard` |
+| `onListBoardsError` | `onErrorListBoards` |
+| `onReadBoardError` | `onErrorGetBoard` |
+| `onCreateBoardError` | `onErrorCreateBoard` |
+| `onUpdateBoardError` | `onErrorUpdateBoard` |
+| `onDeleteBoardError` | `onErrorDeleteBoard` |
+| `onColumnCreated` | `onAfterCreateColumn` |
+| `onColumnUpdated` | `onAfterUpdateColumn` |
+| `onColumnDeleted` | `onAfterDeleteColumn` |
+| `onTaskCreated` | `onAfterCreateTask` |
+| `onTaskUpdated` | `onAfterUpdateTask` |
+| `onTaskDeleted` | `onAfterDeleteTask` |
+
+Task and column reorder or move operations continue to use the corresponding
+update lifecycle; RC3 does not add separate reorder or move hook phases.
+
+#### Media
+
+| Earlier v3 spelling | RC3 spelling |
+| --- | --- |
+| `onBeforeDelete` | `onBeforeDeleteAsset` |
+| `onAfterDelete` | `onAfterDeleteAsset` |
+| `onOperationError` | `onError` |
+
+Media upload hooks keep their domain-event names. Storage-adapter callbacks are
+transport contracts rather than public plugin lifecycle hooks and are not part
+of this rename.
+
+### 8. Replace the retired provider-specific auth scaffold
 
 The v3 CLI no longer offers `better-auth-ui`, installs
 `@btst/better-auth-ui` or Better Auth packages, or generates auth, account,
@@ -289,25 +364,6 @@ sign-in, account, and organization routes in your chosen authentication
 framework. Remove the retired plugin from existing `btst init` commands and
 delete its generated imports, overrides, CSS import, and package dependencies.
 
-Form Builder's `onBeforeFormCreated`, `onBeforeFormUpdated`, and
-`onBeforeSubmission` hooks receive a separate mutable-data value and may return
-its transformed replacement. Other lifecycle hooks observe their deeply
-readonly operation context and perform domain side effects; they do not
-transform operation input by returning a value.
-
-Older Form Builder documentation showed the unsupported
-`onBeforeDeleteSubmission` name. v3 exposes
-`onBeforeSubmissionDeleted`; correct the hook name while updating its denial
-behavior:
-
-```diff
-- onBeforeDeleteSubmission: async (submissionId, ctx) => {
--   if (!isAdmin(ctx.headers)) return false
-+ onBeforeSubmissionDeleted: async (submissionId, ctx) => {
-+   if (!isAdmin(ctx.headers)) throw new Error("Admin access required")
-  }
-```
-
 ### Migration checklist
 
 - Replace API and page catch-all glue with the framework entry factories.
@@ -320,7 +376,8 @@ behavior:
   `loginHref` only when a thread needs a per-instance sign-in URL.
 - Update parameterized `pageComponents` adapters to read `params`.
 - Change backend hook denials from boolean returns to thrown errors.
-- Replace Form Builder's stale documented `onBeforeDeleteSubmission` name with `onBeforeSubmissionDeleted`.
+- Replace every retired Form Builder, Kanban, and Media lifecycle spelling
+  using the RC3 mapping tables.
 - Replace the provider-specific auth scaffold with application-owned identity resolvers and routes.
 - Run your framework build, TypeScript checks, and tests.
 

@@ -463,7 +463,7 @@ const commentsHooks: CommentsBackendHooks = {
 void commentsHooks;
 
 const kanbanHooks: KanbanBackendHooks = {
-	onBoardsRead: (_boards, _query, context) => {
+	onAfterListBoards: (_boards, _query, context) => {
 		const limit: number | undefined = context.result.limit;
 		const offset: number | undefined = context.result.offset;
 		void limit;

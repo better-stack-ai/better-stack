@@ -873,7 +873,7 @@ export function createFormBuilderOperations(
 			assertValidJsonSchema(initial.schema);
 			const modified = await runDomainHook(
 				async () =>
-					(await hooks?.onBeforeFormCreated?.(initial, hookContext(context))) ??
+					(await hooks?.onBeforeCreateForm?.(initial, hookContext(context))) ??
 					initial,
 				403,
 				"CREATE_FORM_REJECTED",
@@ -917,7 +917,7 @@ export function createFormBuilderOperations(
 			});
 		},
 		after: async (context) => {
-			await hooks?.onAfterFormCreated?.(context.result, hookContext(context));
+			await hooks?.onAfterCreateForm?.(context.result, hookContext(context));
 		},
 		onError: ({ error, ...context }) =>
 			notifyError(hooks, error, "create", hookContext(context)),
@@ -954,7 +954,7 @@ export function createFormBuilderOperations(
 				);
 				const modified = await runDomainHook(
 					async () =>
-						(await hooks?.onBeforeFormUpdated?.(
+						(await hooks?.onBeforeUpdateForm?.(
 							context.input.id,
 							initial,
 							hookContext(context),
@@ -1013,7 +1013,7 @@ export function createFormBuilderOperations(
 			});
 		},
 		after: async (context) => {
-			await hooks?.onAfterFormUpdated?.(context.result, hookContext(context));
+			await hooks?.onAfterUpdateForm?.(context.result, hookContext(context));
 		},
 		onError: ({ error, ...context }) =>
 			notifyError(hooks, error, "update", hookContext(context)),
@@ -1042,10 +1042,7 @@ export function createFormBuilderOperations(
 				);
 				await runDomainHook(
 					() =>
-						hooks?.onBeforeFormDeleted?.(
-							context.input.id,
-							hookContext(context),
-						),
+						hooks?.onBeforeDeleteForm?.(context.input.id, hookContext(context)),
 					403,
 					"DELETE_FORM_REJECTED",
 				);
@@ -1077,7 +1074,7 @@ export function createFormBuilderOperations(
 			});
 		},
 		after: async (context) => {
-			await hooks?.onAfterFormDeleted?.(context.input.id, hookContext(context));
+			await hooks?.onAfterDeleteForm?.(context.input.id, hookContext(context));
 		},
 		onError: ({ error, ...context }) =>
 			notifyError(hooks, error, "delete", hookContext(context)),
@@ -1227,7 +1224,7 @@ export function createFormBuilderOperations(
 				SubmissionCreateFacts
 			>(context, context.input.slug, formId);
 			try {
-				await hooks?.onSubmissionError?.(
+				await hooks?.onErrorSubmission?.(
 					normalizeError(error, "Submission failed."),
 					context.input.slug,
 					JSON.parse(JSON.stringify(context.input.data)) as Record<
@@ -1422,7 +1419,7 @@ export function createFormBuilderOperations(
 				);
 				await runDomainHook(
 					() =>
-						hooks?.onBeforeSubmissionDeleted?.(
+						hooks?.onBeforeDeleteSubmission?.(
 							context.input.submissionId,
 							hookContext(context),
 						),
@@ -1471,7 +1468,7 @@ export function createFormBuilderOperations(
 			});
 		},
 		after: async (context) => {
-			await hooks?.onAfterSubmissionDeleted?.(
+			await hooks?.onAfterDeleteSubmission?.(
 				context.input.submissionId,
 				hookContext(context),
 			);

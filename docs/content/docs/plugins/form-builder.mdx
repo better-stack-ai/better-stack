@@ -626,19 +626,20 @@ Creates the backend plugin with optional hooks configuration.
 | Hook | Parameters | Return | Description |
 |------|------------|--------|-------------|
 | `onBeforeListForms` | `ctx` | `void` | Domain precondition before listing forms |
-| `onBeforeFormCreated` | `data, ctx` | `data \| void` | Validate/transform before create; throw to reject invalid domain input |
-| `onAfterFormCreated` | `form, ctx` | `void` | Post-create lifecycle |
+| `onBeforeCreateForm` | `data, ctx` | `data \| void` | Validate/transform before create; throw to reject invalid domain input |
+| `onAfterCreateForm` | `form, ctx` | `void` | Post-create lifecycle |
 | `onBeforeGetFormForUpdate` | `id, ctx` | `void` | Domain precondition before loading editor data through the update permission |
-| `onBeforeFormUpdated` | `id, data, ctx` | `data \| void` | Validate/transform before update; throw to reject invalid domain input |
-| `onAfterFormUpdated` | `form, ctx` | `void` | Post-update lifecycle |
-| `onBeforeFormDeleted` | `id, ctx` | `void` | Domain precondition before delete |
-| `onAfterFormDeleted` | `id, ctx` | `void` | Post-delete lifecycle |
+| `onBeforeUpdateForm` | `id, data, ctx` | `data \| void` | Validate/transform before update; throw to reject invalid domain input |
+| `onAfterUpdateForm` | `form, ctx` | `void` | Post-update lifecycle |
+| `onBeforeDeleteForm` | `id, ctx` | `void` | Domain precondition before delete |
+| `onAfterDeleteForm` | `id, ctx` | `void` | Post-delete lifecycle |
 | `onBeforeSubmission` | `slug, data, ctx` | `data \| void` | Validate/rate limit submissions; throw to reject |
 | `onAfterSubmission` | `submission, form, ctx` | `void` | Post-submission actions |
 | `onBeforeListSubmissions` | `formId, ctx` | `void` | Domain precondition before listing submissions |
-| `onBeforeSubmissionDeleted` | `id, ctx` | `void` | Domain precondition before deleting a submission |
+| `onBeforeDeleteSubmission` | `id, ctx` | `void` | Domain precondition before deleting a submission |
+| `onAfterDeleteSubmission` | `id, ctx` | `void` | Post-delete submission lifecycle |
 | `onError` | `error, operation, ctx` | `void` | Observe post-authorization operation errors |
-| `onSubmissionError` | `error, slug, ctx` | `void` | Handle submission errors |
+| `onErrorSubmission` | `error, slug, ctx` | `void` | Handle submission errors |
 
 ### Client (`@btst/stack/plugins/form-builder/client`)
 
@@ -805,10 +806,10 @@ import { revalidatePath } from "next/cache"
 import type { FormBuilderBackendHooks } from "@btst/stack/plugins/form-builder"
 
 const formHooks: FormBuilderBackendHooks = {
-  onAfterFormCreated: async (form) => {
+  onAfterCreateForm: async (form) => {
     revalidatePath("/forms", "page")
   },
-  onAfterFormUpdated: async (form) => {
+  onAfterUpdateForm: async (form) => {
     revalidatePath("/forms", "page")
   },
 }

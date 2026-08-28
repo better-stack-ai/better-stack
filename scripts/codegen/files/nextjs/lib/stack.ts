@@ -335,11 +335,11 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 			}),
 			formBuilder: formBuilderBackendPlugin({
 				hooks: {
-					onAfterFormCreated: async (form, context) => {
+					onAfterCreateForm: async (form, context) => {
 						console.log("Form created:", form.name, form.slug);
 						revalidatePath("/pages/ssg-forms", "page");
 					},
-					onAfterFormUpdated: async (form, context) => {
+					onAfterUpdateForm: async (form, context) => {
 						console.log("Form updated:", form.name);
 						revalidatePath("/pages/ssg-forms", "page");
 					},
@@ -419,7 +419,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 					onBeforeCreateBoard: async (data, context) => {
 						console.log("onBeforeCreateBoard hook called", data.name);
 					},
-					onBoardCreated: async (board, context) => {
+					onAfterCreateBoard: async (board, context) => {
 						console.log("Board created:", board.id, board.name);
 						revalidatePath("/pages/ssg-kanban", "page");
 					},
