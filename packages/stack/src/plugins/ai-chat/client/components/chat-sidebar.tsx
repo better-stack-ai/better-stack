@@ -44,7 +44,7 @@ import {
 } from "@btst/stack/context";
 import { aiChatPermissions } from "../../permissions";
 import {
-	resolveAiChatSitePath,
+	resolveAiChatSiteLocation,
 	type AiChatPluginOverrides,
 } from "../overrides";
 import type { SerializedConversation } from "../../types";
@@ -54,6 +54,7 @@ import {
 	useDeleteConversation,
 } from "../hooks/chat-hooks";
 import { useAiChatTranslation } from "../localization";
+import { navigateAiChatCrossOrigin } from "../navigation";
 
 interface ChatSidebarProps {
 	currentConversationId?: string;
@@ -72,7 +73,8 @@ export function ChatSidebar({
 	>("aiChat", {});
 	const { basePath: legacyBasePath, plugins, router } = useStack();
 	const navigate = router?.navigate;
-	const basePath = plugins?.aiChat?.site.basePath ?? legacyBasePath;
+	const siteBaseURL = plugins?.aiChat?.site.baseURL;
+	const siteBasePath = plugins?.aiChat?.site.basePath ?? legacyBasePath;
 	const notify = useNotify();
 	const tr = useAiChatTranslation(customLocalization);
 	const { conversations, isLoading } = useConversations();
@@ -91,22 +93,31 @@ export function ChatSidebar({
 			setNewTitle("");
 		},
 	});
+	const navigateToChat = (...segments: string[]) => {
+		const location = resolveAiChatSiteLocation(
+			{ baseURL: siteBaseURL, basePath: siteBasePath },
+			typeof window === "undefined" ? undefined : window.location.origin,
+			"chat",
+			...segments,
+		);
+		if (location.crossOrigin && typeof window !== "undefined") {
+			navigateAiChatCrossOrigin(location.href);
+			return;
+		}
+		return navigate?.(location.path);
+	};
 
 	const handleNewChat = () => {
 		// Use the StackProvider router when available.
 		// Also run onNewChat to support "reset chat" behavior when already on /chat.
-		if (navigate) {
-			navigate(resolveAiChatSitePath(basePath, "chat"));
-		}
+		void navigateToChat();
 		if (onNewChat) {
 			onNewChat();
 		}
 	};
 
 	const handleConversationClick = (conversation: SerializedConversation) => {
-		if (navigate) {
-			navigate(resolveAiChatSitePath(basePath, "chat", conversation.id));
-		}
+		void navigateToChat(conversation.id);
 	};
 
 	const handleRenameClick = (conversation: SerializedConversation) => {
@@ -141,8 +152,8 @@ export function ChatSidebar({
 				setDeleteDialogOpen(false);
 				setSelectedConversation(null);
 				// Navigate away if deleted current conversation
-				if (selectedConversation.id === currentConversationId && navigate) {
-					await navigate(resolveAiChatSitePath(basePath, "chat"));
+				if (selectedConversation.id === currentConversationId) {
+					await navigateToChat();
 				}
 			} catch {
 				notify.error(

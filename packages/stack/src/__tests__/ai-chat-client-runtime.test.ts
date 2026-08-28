@@ -5,6 +5,10 @@ import { aiChatClientPlugin } from "../plugins/ai-chat/client";
 import { createAiChatQueryKeys } from "../plugins/ai-chat/query-keys";
 import { createApiClient, SSR_LOADER_ERROR_MESSAGE } from "../plugins/client";
 import type { AiChatApiRouter } from "../plugins/ai-chat/api";
+import {
+	resolveAiChatApiUrl,
+	resolveAiChatSiteLocation,
+} from "../plugins/ai-chat/client/overrides";
 
 const appApi = {
 	baseURL: "https://app.example.com",
@@ -96,6 +100,46 @@ describe("AI Chat resolved client runtime", () => {
 		expect(stack.router.getRoute("/chat/conv-1")?.meta?.()).toContainEqual({
 			property: "og:url",
 			content: "https://app.example.com/chat/conv-1",
+		});
+	});
+
+	it("normalizes root-mounted stream and resource endpoints", async () => {
+		const fetchMock = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(response([]));
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/" },
+			site: appSite,
+			queryClient: new QueryClient({
+				defaultOptions: { queries: { retry: false } },
+			}),
+			plugins: { aiChat: aiChatClientPlugin() },
+		});
+
+		await stack.router.getRoute("/chat")?.loader?.();
+
+		expect(resolveAiChatApiUrl("https://app.example.com", "/")).toBe(
+			"https://app.example.com/chat",
+		);
+		const request = observedRequest(fetchMock.mock.calls[0] ?? []);
+		expect(request.url).toBe("https://app.example.com/chat/conversations");
+	});
+
+	it("resolves cross-origin site navigation as an absolute safe URL", () => {
+		expect(
+			resolveAiChatSiteLocation(
+				{
+					baseURL: "https://assistant.example.com",
+					basePath: "/",
+				},
+				"https://app.example.com",
+				"chat",
+				"conv-1",
+			),
+		).toEqual({
+			path: "/chat/conv-1",
+			href: "https://assistant.example.com/chat/conv-1",
+			crossOrigin: true,
 		});
 	});
 

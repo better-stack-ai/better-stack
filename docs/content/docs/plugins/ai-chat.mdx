@@ -353,7 +353,10 @@ The AI Chat plugin supports two distinct modes:
 
 ### API Endpoints
 
-The AI Chat plugin provides the following API endpoints (mounted at your configured `apiBasePath`):
+The AI Chat plugin provides the following API endpoints, mounted at the resolved
+AI Chat API location. Configure that location with
+`createClientStack({ endpoints: { aiChat: { api: { ... } } } })`; otherwise it
+inherits the stack's top-level `api` location.
 
 - **POST** `/chat` - Send a message and receive streaming response
 - **GET** `/chat/conversations` - List all conversations (authenticated mode only)
@@ -366,7 +369,10 @@ In authorized mode, the streaming response includes `X-Conversation-Id` as soon 
 
 ### Page Routes
 
-The AI Chat plugin automatically creates the following pages (mounted at your configured `siteBasePath`):
+The AI Chat plugin automatically creates the following pages, mounted at the
+resolved AI Chat site location. Configure that location with
+`createClientStack({ endpoints: { aiChat: { site: { ... } } } })`; otherwise it
+inherits the stack's top-level `site` location.
 
 **Authenticated mode:**
 - `/chat` - Start a new conversation (with sidebar showing history)
@@ -562,7 +568,11 @@ aiChat: aiChatClientPlugin({
 
 #### AiChatClientHooks
 
-Customize client-side behavior with lifecycle hooks. These hooks are called during data fetching (both SSR and CSR):
+Customize server-loader behavior with lifecycle hooks. The route loaders call
+these hooks while preloading data for SSR. Browser queries and mutations do not
+run them. `onErrorLoad` is a contained reporting hook: use it for logging or
+telemetry, not redirects, and do not rely on errors it throws escaping the
+loader.
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/plugin.tsx" name="AiChatClientHooks" />
 
@@ -572,17 +582,14 @@ Customize client-side behavior with lifecycle hooks. These hooks are called duri
 aiChat: aiChatClientPlugin({
   hooks: {
     beforeLoadConversations: async (context) => {
-      // Check if user is authenticated before loading
-      if (!await isAuthenticated(context.headers))
-        throw new Error("Unauthorized")
+      console.log("Loading conversations for", context.path)
     },
     afterLoadConversation: async (conversation, id, context) => {
       // Log access for analytics
       console.log("User accessed conversation:", id)
     },
     onErrorLoad(error, context) {
-      // Handle error - redirect to login
-      redirect("/auth/sign-in")
+      reportLoaderError(error, { path: context.path })
     },
   }
 })

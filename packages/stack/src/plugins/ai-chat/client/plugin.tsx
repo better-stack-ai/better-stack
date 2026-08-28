@@ -145,7 +145,7 @@ export interface AiChatClientHooks {
 	) => Promise<void> | void;
 
 	/**
-	 * Called when a loading error occurs
+	 * Reports an SSR loader error. Errors thrown here are contained by the loader.
 	 * @param error - The error that occurred
 	 * @param context - Loader context
 	 */

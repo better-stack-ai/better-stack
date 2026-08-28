@@ -46,6 +46,7 @@ const mocks = vi.hoisted(() => ({
 		  }
 		| undefined,
 	chatLayout: vi.fn(),
+	navigateCrossOrigin: vi.fn(),
 }));
 
 vi.mock("@ai-sdk/react", () => ({ useChat: mocks.useChat }));
@@ -136,6 +137,9 @@ vi.mock("../client/components/chat-layout", () => ({
 }));
 vi.mock("../client/context/page-ai-context", () => ({
 	usePageAIContext: () => mocks.pageAIContext,
+}));
+vi.mock("../client/navigation", () => ({
+	navigateAiChatCrossOrigin: mocks.navigateCrossOrigin,
 }));
 
 const conversation: SerializedConversation = {
@@ -244,7 +248,7 @@ async function render(
 ) {
 	const stack = createClientStack({
 		api: { baseURL: "http://test.local", basePath: "/api/data" },
-		site: { baseURL: "http://test.local", basePath: "/pages" },
+		site: { baseURL: window.location.origin, basePath: "/pages" },
 		queryClient,
 		plugins: {
 			aiChat: aiChatClientPlugin({
@@ -341,6 +345,31 @@ describe("AI Chat permissions", () => {
 			}),
 		);
 		expect(mocks.useChat.mock.calls.at(-1)?.[0]?.id).toMatch(/:public$/);
+	});
+
+	it("normalizes a root-mounted browser stream endpoint", async () => {
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: window.location.origin, basePath: "/pages" },
+			queryClient,
+			plugins: { aiChat: aiChatClientPlugin({ mode: "public" }) },
+			endpoints: { aiChat: { api: { basePath: "/" } } },
+		});
+
+		await act(async () => {
+			root.render(
+				<QueryClientProvider client={queryClient}>
+					<StackProvider stack={stack}>
+						<ChatInterface variant="widget" />
+					</StackProvider>
+				</QueryClientProvider>,
+			);
+			await Promise.resolve();
+		});
+
+		expect(mocks.useChat.mock.calls.at(-1)?.[0]?.transport.api).toBe(
+			"https://app.example.com/chat",
+		);
 	});
 
 	it("uses the client factory mode for built-in and standalone page rendering", async () => {
@@ -704,9 +733,21 @@ describe("AI Chat permissions", () => {
 			pluginSiteBasePath: "/",
 			expectedPath: "/chat/persisted-conversation",
 		},
+		{
+			pluginSiteBaseURL: "https://assistant.example.com",
+			pluginSiteBasePath: "/",
+			expectedPath: "/",
+			expectedCrossOriginURL:
+				"https://assistant.example.com/chat/persisted-conversation",
+		},
 	])(
-		"discovers a new authoritative conversation at $expectedPath",
-		async ({ pluginSiteBasePath, expectedPath }) => {
+		"discovers a new authoritative conversation using the resolved site location",
+		async ({
+			pluginSiteBaseURL,
+			pluginSiteBasePath,
+			expectedPath,
+			expectedCrossOriginURL,
+		}) => {
 			const clientMessages = [
 				{
 					id: "client-user",
@@ -757,11 +798,18 @@ describe("AI Chat permissions", () => {
 
 			const stack = createClientStack({
 				api: { baseURL: "http://test.local", basePath: "/api/data" },
-				site: { baseURL: "http://test.local", basePath: "/pages" },
+				site: { baseURL: window.location.origin, basePath: "/pages" },
 				queryClient,
 				plugins: { aiChat: aiChatClientPlugin() },
 				endpoints: {
-					aiChat: { site: { basePath: pluginSiteBasePath } },
+					aiChat: {
+						site: pluginSiteBaseURL
+							? {
+									baseURL: pluginSiteBaseURL,
+									basePath: pluginSiteBasePath,
+								}
+							: { basePath: pluginSiteBasePath },
+					},
 				},
 			});
 			const renderChat = async () => {
@@ -793,6 +841,14 @@ describe("AI Chat permissions", () => {
 				{ ...clientMessages[0], id: "persisted-user" },
 			]);
 			expect(window.location.pathname).toBe(expectedPath);
+			if (expectedCrossOriginURL) {
+				expect(mocks.navigateCrossOrigin).toHaveBeenCalledWith(
+					expectedCrossOriginURL,
+					{ replace: true },
+				);
+			} else {
+				expect(mocks.navigateCrossOrigin).not.toHaveBeenCalled();
+			}
 			fetchMock.mockRestore();
 		},
 	);
@@ -806,17 +862,34 @@ describe("AI Chat permissions", () => {
 			pluginSiteBasePath: "/",
 			expectedPath: "/chat/conv-1",
 		},
+		{
+			pluginSiteBaseURL: "https://assistant.example.com",
+			pluginSiteBasePath: "/",
+			expectedCrossOriginURL: "https://assistant.example.com/chat/conv-1",
+		},
 	])(
-		"uses the resolved AI Chat site path $expectedPath for sidebar navigation",
-		async ({ pluginSiteBasePath, expectedPath }) => {
+		"uses the resolved AI Chat site location for sidebar navigation",
+		async ({
+			pluginSiteBaseURL,
+			pluginSiteBasePath,
+			expectedPath,
+			expectedCrossOriginURL,
+		}) => {
 			const navigate = vi.fn();
 			const stack = createClientStack({
 				api: { baseURL: "http://test.local", basePath: "/api/data" },
-				site: { baseURL: "http://test.local", basePath: "/pages" },
+				site: { baseURL: window.location.origin, basePath: "/pages" },
 				queryClient,
 				plugins: { aiChat: aiChatClientPlugin() },
 				endpoints: {
-					aiChat: { site: { basePath: pluginSiteBasePath } },
+					aiChat: {
+						site: pluginSiteBaseURL
+							? {
+									baseURL: pluginSiteBaseURL,
+									basePath: pluginSiteBasePath,
+								}
+							: { basePath: pluginSiteBasePath },
+					},
 				},
 			});
 
@@ -835,7 +908,15 @@ describe("AI Chat permissions", () => {
 			).find((button) => button.textContent?.includes(conversation.title));
 			await act(async () => conversationButton?.click());
 
-			expect(navigate).toHaveBeenCalledWith(expectedPath);
+			if (expectedCrossOriginURL) {
+				expect(mocks.navigateCrossOrigin).toHaveBeenCalledWith(
+					expectedCrossOriginURL,
+				);
+				expect(navigate).not.toHaveBeenCalled();
+			} else {
+				expect(navigate).toHaveBeenCalledWith(expectedPath);
+				expect(mocks.navigateCrossOrigin).not.toHaveBeenCalled();
+			}
 		},
 	);
 

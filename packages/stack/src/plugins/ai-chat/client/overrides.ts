@@ -30,6 +30,31 @@ export function resolveAiChatSitePath(
 	return normalizePath([basePath, ...segments].join("/"));
 }
 
+/** Resolve the browser streaming URL from the effective AI Chat API mount. */
+export function resolveAiChatApiUrl(
+	baseURL: string | undefined,
+	basePath: string | undefined,
+): string {
+	return `${baseURL ?? ""}${normalizePath([basePath ?? "", "chat"].join("/"))}`;
+}
+
+/** Resolve path and absolute URL forms for an AI Chat page destination. */
+export function resolveAiChatSiteLocation(
+	site: { baseURL?: string; basePath: string },
+	currentOrigin: string | undefined,
+	...segments: string[]
+): { path: string; href: string; crossOrigin: boolean } {
+	const path = resolveAiChatSitePath(site.basePath, ...segments);
+	const href = site.baseURL ? `${site.baseURL}${path}` : path;
+	return {
+		path,
+		href,
+		crossOrigin:
+			Boolean(site.baseURL && currentOrigin) &&
+			new URL(href).origin !== currentOrigin,
+	};
+}
+
 /**
  * State of a tool call execution
  */

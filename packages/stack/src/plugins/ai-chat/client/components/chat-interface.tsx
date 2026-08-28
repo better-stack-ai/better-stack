@@ -28,8 +28,9 @@ import {
 } from "@btst/stack/context";
 import { aiChatPermissions } from "../../permissions";
 import {
+	resolveAiChatApiUrl,
 	resolveAiChatMode,
-	resolveAiChatSitePath,
+	resolveAiChatSiteLocation,
 	type AiChatPluginOverrides,
 } from "../overrides";
 import { useAiChatTranslation } from "../localization";
@@ -43,9 +44,9 @@ import {
 	type SerializedMessage,
 } from "../hooks/chat-hooks";
 import { usePageAIContext } from "../context/page-ai-context";
+import { navigateAiChatCrossOrigin } from "../navigation";
 
 interface ChatInterfaceProps {
-	apiPath?: string;
 	initialMessages?: UIMessage[];
 	id?: string;
 	/** Variant: 'full' for full-page layout, 'widget' for embedded widget */
@@ -252,7 +253,6 @@ function PermissionedChatMessage({
 }
 
 export function ChatInterface({
-	apiPath,
 	initialMessages,
 	id,
 	variant = "full",
@@ -278,10 +278,10 @@ export function ChatInterface({
 	const apiBasePath = aiChatApi?.basePath ?? api?.basePath;
 	const browserHeaders = aiChatApi?.browserHeaders;
 	const credentials = aiChatApi?.credentials;
-	const resolvedApiPath =
-		apiPath ?? `${apiBaseURL ?? ""}${apiBasePath ?? ""}/chat`;
+	const resolvedApiPath = resolveAiChatApiUrl(apiBaseURL, apiBasePath);
 	const mode = resolveAiChatMode(plugins?.aiChat?.config);
-	const basePath = plugins?.aiChat?.site.basePath ?? legacyBasePath;
+	const siteBaseURL = plugins?.aiChat?.site.baseURL;
+	const siteBasePath = plugins?.aiChat?.site.basePath ?? legacyBasePath;
 	const isPublicMode = mode === "public";
 
 	// Read page AI context registered by the current page
@@ -656,17 +656,26 @@ export function ChatInterface({
 						// Only update the URL in full-page mode; in widget mode the chat is
 						// embedded in another page and clobbering the URL is disruptive.
 						if (variant === "full") {
-							const newUrl = resolveAiChatSitePath(
-								basePath,
+							const newLocation = resolveAiChatSiteLocation(
+								{ baseURL: siteBaseURL, basePath: siteBasePath },
+								typeof window === "undefined"
+									? undefined
+									: window.location.origin,
 								"chat",
 								discoveredConversationId,
 							);
 							if (typeof window !== "undefined") {
-								window.history.replaceState(
-									{ ...window.history.state },
-									"",
-									newUrl,
-								);
+								if (newLocation.crossOrigin) {
+									navigateAiChatCrossOrigin(newLocation.href, {
+										replace: true,
+									});
+								} else {
+									window.history.replaceState(
+										{ ...window.history.state },
+										"",
+										newLocation.path,
+									);
+								}
 							}
 						}
 					}
@@ -776,11 +785,21 @@ export function ChatInterface({
 				hasNavigatedRef.current = true;
 				setCurrentConversationId(retryConversationId);
 				if (variant === "full" && typeof window !== "undefined") {
-					window.history.replaceState(
-						{ ...window.history.state },
-						"",
-						resolveAiChatSitePath(basePath, "chat", retryConversationId),
+					const newLocation = resolveAiChatSiteLocation(
+						{ baseURL: siteBaseURL, basePath: siteBasePath },
+						window.location.origin,
+						"chat",
+						retryConversationId,
 					);
+					if (newLocation.crossOrigin) {
+						navigateAiChatCrossOrigin(newLocation.href, { replace: true });
+					} else {
+						window.history.replaceState(
+							{ ...window.history.state },
+							"",
+							newLocation.path,
+						);
+					}
 				}
 			}
 			setMessages(
@@ -799,12 +818,13 @@ export function ChatInterface({
 	}, [
 		apiBasePath,
 		apiBaseURL,
-		basePath,
 		credentials,
 		isHistorySyncRetrying,
 		isPublicMode,
 		queryClient,
 		setMessages,
+		siteBasePath,
+		siteBaseURL,
 		variant,
 	]);
 	useLayoutEffect(() => {

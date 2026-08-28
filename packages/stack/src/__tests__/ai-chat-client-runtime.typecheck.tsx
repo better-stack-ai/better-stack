@@ -42,6 +42,8 @@ stack.provider.plugins.aiChat.config?.hooks;
 <ChatLayout mode="public" />;
 // @ts-expect-error Mode is configured only in aiChatClientPlugin().
 <ChatInterface mode="public" />;
+// @ts-expect-error The stream endpoint comes from the resolved AI Chat runtime.
+<ChatInterface apiPath="/alternate/chat" />;
 type ChatInputProps = ComponentProps<typeof ChatInput>;
 // @ts-expect-error ChatInput has no component-level mode.
 type ChatInputMode = ChatInputProps["mode"];
