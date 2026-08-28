@@ -1240,7 +1240,9 @@ describe("Kanban operation-first authorization", () => {
 		const prefetchFindMany = vi.spyOn(backend.adapter, "findMany");
 		await backend.api.kanban.prefetchForRoute("boards", queryClient);
 		expect(
-			prefetchFindMany.mock.calls.some(([query]) => query.model === "kanbanBoard"),
+			prefetchFindMany.mock.calls.some(
+				([query]) => query.model === "kanbanBoard",
+			),
 		).toBe(true);
 		expect(
 			prefetchFindMany.mock.calls.some(
