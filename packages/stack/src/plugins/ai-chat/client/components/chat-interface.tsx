@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { hashKey, useQueryClient } from "@tanstack/react-query";
 import { ChatMessage } from "./chat-message";
 import { ChatInput, type AttachedFile } from "./chat-input";
 import { StackAttribution } from "@workspace/ui/components/stack-attribution";
@@ -14,11 +14,12 @@ import {
 } from "ai";
 import { cn } from "@workspace/ui/lib/utils";
 import {
-	useCan,
+	PermissionCheck,
 	usePluginOverrides,
 	useBasePath,
 	useStack,
 } from "@btst/stack/context";
+import { aiChatPermissions } from "../../permissions";
 import type { AiChatPluginOverrides } from "../overrides";
 import { useAiChatTranslation } from "../localization";
 import { createApiClient } from "@btst/stack/plugins/client";
@@ -27,6 +28,7 @@ import { createAiChatQueryKeys } from "../../query-keys";
 import {
 	useConversation,
 	useConversations,
+	useAiChatIdentityPartition,
 	type SerializedConversation,
 } from "../hooks/chat-hooks";
 import { usePageAIContext } from "../context/page-ai-context";
@@ -40,6 +42,194 @@ interface ChatInterfaceProps {
 	className?: string;
 	/** Called whenever messages change (for persistence). Only fires in public mode. */
 	onMessagesChange?: (messages: UIMessage[]) => void;
+}
+
+type ChatAction = "send" | "edit" | "retry";
+
+function ChatActionCheck({
+	publicMode,
+	action,
+	conversationId,
+	ownerId,
+	messageId,
+	toolNames = [],
+	routeName,
+	children,
+}: {
+	publicMode: boolean;
+	action: ChatAction;
+	conversationId?: string;
+	ownerId?: string;
+	messageId?: string;
+	toolNames?: readonly string[];
+	routeName?: string;
+	children: (allowed: boolean) => React.ReactNode;
+}) {
+	if (publicMode) return <>{children(true)}</>;
+	const base = {
+		...(conversationId ? { conversationId } : {}),
+		...(ownerId ? { ownerId } : {}),
+	};
+	const streamPermission = aiChatPermissions.stream.start({
+		...base,
+		createsConversation: !conversationId,
+		intent: action,
+	});
+	const messagePermission =
+		action === "send"
+			? aiChatPermissions.message.send({
+					...base,
+					createsConversation: !conversationId,
+				})
+			: action === "edit" && conversationId && messageId
+				? aiChatPermissions.message.edit({
+						conversationId,
+						...(ownerId ? { ownerId } : {}),
+						messageId,
+					})
+				: action === "retry" && conversationId && messageId
+					? aiChatPermissions.message.retry({
+							conversationId,
+							...(ownerId ? { ownerId } : {}),
+							messageId,
+						})
+					: null;
+	if (!messagePermission) return <>{children(false)}</>;
+
+	return (
+		<PermissionCheck
+			permission={streamPermission}
+			legacyPermission={{ resource: "ai-chat:stream", action: "start" }}
+		>
+			{(streamState) => (
+				<PermissionCheck
+					permission={messagePermission}
+					legacyPermission={{
+						resource: "ai-chat:message",
+						action: action === "send" ? "create" : action,
+					}}
+				>
+					{(messageState) => {
+						const baseAllowed =
+							streamState.can &&
+							!streamState.isPending &&
+							!streamState.error &&
+							messageState.can &&
+							!messageState.isPending &&
+							!messageState.error;
+						const renderToolCheck = (allowed: boolean) => {
+							if (!allowed || toolNames.length === 0) return children(allowed);
+							return (
+								<PermissionCheck
+									permission={aiChatPermissions.tool.activate({
+										...base,
+										...(routeName ? { routeName } : {}),
+										toolNames: [...toolNames],
+									})}
+									legacyPermission={{
+										resource: "ai-chat:tool",
+										action: "activate",
+									}}
+								>
+									{(toolState) =>
+										children(
+											toolState.can && !toolState.isPending && !toolState.error,
+										)
+									}
+								</PermissionCheck>
+							);
+						};
+						if (action !== "send" || conversationId) {
+							return renderToolCheck(Boolean(baseAllowed));
+						}
+						return (
+							<PermissionCheck
+								permission={aiChatPermissions.conversation.create()}
+								legacyPermission={{
+									resource: "ai-chat:conversation",
+									action: "create",
+								}}
+							>
+								{(createState) =>
+									renderToolCheck(
+										Boolean(baseAllowed) &&
+											createState.can &&
+											!createState.isPending &&
+											!createState.error,
+									)
+								}
+							</PermissionCheck>
+						);
+					}}
+				</PermissionCheck>
+			)}
+		</PermissionCheck>
+	);
+}
+
+function PermissionedChatMessage({
+	publicMode,
+	action,
+	conversationId,
+	ownerId,
+	messageId,
+	...messageProps
+}: React.ComponentProps<typeof ChatMessage> & {
+	publicMode: boolean;
+	action?: "edit" | "retry";
+	conversationId?: string;
+	ownerId?: string;
+	messageId?: string;
+}) {
+	if (!action) return <ChatMessage {...messageProps} />;
+	return (
+		<ChatActionCheck
+			publicMode={publicMode}
+			action={action}
+			conversationId={conversationId}
+			ownerId={ownerId}
+			messageId={messageId}
+		>
+			{(allowed) => (
+				<ChatMessage
+					{...messageProps}
+					onRetry={allowed ? messageProps.onRetry : undefined}
+					onEdit={allowed ? messageProps.onEdit : undefined}
+				/>
+			)}
+		</ChatActionCheck>
+	);
+}
+
+function AttachmentCheck({
+	publicMode,
+	conversationId,
+	ownerId,
+	children,
+}: {
+	publicMode: boolean;
+	conversationId?: string;
+	ownerId?: string;
+	children: (allowed: boolean) => React.ReactNode;
+}) {
+	// The built-in public UI intentionally has no upload transport, although the
+	// public stream operation still validates file parts submitted by consumers.
+	if (publicMode) return <>{children(false)}</>;
+	return (
+		<PermissionCheck
+			permission={aiChatPermissions.attachment.send({
+				...(conversationId ? { conversationId } : {}),
+				...(ownerId ? { ownerId } : {}),
+				mediaTypes: [],
+			})}
+			legacyPermission={{
+				resource: "ai-chat:attachment",
+				action: "create",
+			}}
+		>
+			{(state) => children(state.can && !state.isPending && !state.error)}
+		</PermissionCheck>
+	);
 }
 
 export function ChatInterface({
@@ -72,6 +262,11 @@ export function ChatInterface({
 
 	const tr = useAiChatTranslation(customLocalization);
 	const queryClient = useQueryClient();
+	const identityPartition = useAiChatIdentityPartition();
+	const identityPartitionKey = hashKey([identityPartition]);
+	const latestIdentityPartitionKey = useRef(identityPartitionKey);
+	latestIdentityPartitionKey.current = identityPartitionKey;
+	const activeStreamPartitionKey = useRef<string | undefined>(undefined);
 
 	const conversationsListQueryKey = useMemo(() => {
 		// In public mode, we don't need conversation queries
@@ -81,22 +276,14 @@ export function ChatInterface({
 			basePath: apiBasePath,
 		});
 		const queries = createAiChatQueryKeys(client, headers);
-		return queries.conversations.list().queryKey;
-	}, [apiBaseURL, apiBasePath, headers, isPublicMode]);
+		return queries.conversations.list(identityPartition).queryKey;
+	}, [apiBaseURL, apiBasePath, headers, identityPartition, isPublicMode]);
 
 	// Track the current conversation ID - initialized from prop, updated after first message
 	// In public mode, we don't track conversation IDs
 	const [currentConversationId, setCurrentConversationId] = useState<
 		string | undefined
 	>(isPublicMode ? undefined : id);
-	const { can: canPersistConversation, isPending: isPermissionPending } =
-		useCan({
-			resource: "ai-chat:conversation",
-			action: currentConversationId ? "update" : "create",
-			params: currentConversationId ? { id: currentConversationId } : undefined,
-		});
-	const canWrite =
-		isPublicMode || (!isPermissionPending && canPersistConversation);
 	// Track if we've sent the first message on a new chat (to trigger navigation)
 	const isFirstMessageSentRef = useRef(false);
 	const hasNavigatedRef = useRef(false);
@@ -120,6 +307,14 @@ export function ChatInterface({
 
 	// Fetch conversations list for navigation after first message (authenticated mode only)
 	const { conversations } = useConversations({ enabled: !isPublicMode });
+	const currentConversationOwnerId =
+		conversation?.userId ??
+		conversations.find((item) => item.id === currentConversationId)?.userId ??
+		(!isPublicMode &&
+		currentConversationId &&
+		typeof identityPartition === "object"
+			? identityPartition.id
+			: undefined);
 
 	// Use a ref to track the conversation ID for the transport body
 	// This ensures the transport always uses the latest value
@@ -222,6 +417,7 @@ export function ChatInterface({
 		setMessages,
 		regenerate,
 		addToolOutput,
+		stop,
 	} = useChat({
 		transport,
 		// Automatically resubmit after all client-side tool results are provided
@@ -275,6 +471,13 @@ export function ChatInterface({
 		},
 		onError: (err) => {
 			console.error("useChat onError:", err);
+			if (
+				!isPublicMode &&
+				activeStreamPartitionKey.current !== latestIdentityPartitionKey.current
+			) {
+				return;
+			}
+			activeStreamPartitionKey.current = undefined;
 			// Reset first-message tracking if the send failed before a conversation was created.
 			// Without this, isFirstMessageSentRef stays true and the next successful send
 			// skips the "first message" navigation logic, corrupting the conversation flow.
@@ -284,7 +487,16 @@ export function ChatInterface({
 		},
 		onFinish: async () => {
 			// In public mode, skip all persistence-related operations
-			if (isPublicMode) return;
+			if (isPublicMode) {
+				activeStreamPartitionKey.current = undefined;
+				return;
+			}
+			if (
+				activeStreamPartitionKey.current !== latestIdentityPartitionKey.current
+			) {
+				return;
+			}
+			activeStreamPartitionKey.current = undefined;
 
 			// Invalidate conversation list to show new/updated conversations
 			await queryClient.invalidateQueries({
@@ -327,6 +539,21 @@ export function ChatInterface({
 			}
 		},
 	});
+
+	const previousIdentityPartition = useRef(identityPartitionKey);
+	useEffect(() => {
+		if (isPublicMode) return;
+		const nextPartition = identityPartitionKey;
+		if (previousIdentityPartition.current === nextPartition) return;
+		previousIdentityPartition.current = nextPartition;
+		activeStreamPartitionKey.current = undefined;
+		void stop();
+		setMessages([]);
+		setCurrentConversationId(undefined);
+		conversationIdRef.current = undefined;
+		isFirstMessageSentRef.current = false;
+		hasNavigatedRef.current = false;
+	}, [identityPartitionKey, isPublicMode, setMessages, stop]);
 
 	// Keep addToolOutputRef in sync so onToolCall always has the latest reference
 	useEffect(() => {
@@ -453,7 +680,6 @@ export function ChatInterface({
 		files?: AttachedFile[],
 	) => {
 		e.preventDefault();
-		if (!canWrite) return;
 		const text = input.trim();
 		// Allow submit if there's text OR files
 		if (!text && (!files || files.length === 0)) return;
@@ -487,6 +713,7 @@ export function ChatInterface({
 		setAttachedFiles([]);
 
 		try {
+			activeStreamPartitionKey.current = latestIdentityPartitionKey.current;
 			// Use AI SDK's file attachment format
 			// The SDK automatically converts supported file types (images, text) to the correct format
 			if (files && files.length > 0) {
@@ -506,6 +733,7 @@ export function ChatInterface({
 				await sendMessage({ text });
 			}
 		} catch (error) {
+			activeStreamPartitionKey.current = undefined;
 			// Restore input on failure so user can retry
 			setInput(savedInput);
 			setAttachedFiles(savedFiles);
@@ -524,6 +752,7 @@ export function ChatInterface({
 
 	// Handler for retrying/regenerating the last AI response
 	const handleRetry = useCallback(() => {
+		activeStreamPartitionKey.current = latestIdentityPartitionKey.current;
 		regenerate();
 	}, [regenerate]);
 
@@ -541,6 +770,7 @@ export function ChatInterface({
 			// Clear edit in progress flag - the new message will now be sent
 			// and we want subsequent effects to work normally
 			isEditInProgressRef.current = false;
+			activeStreamPartitionKey.current = latestIdentityPartitionKey.current;
 			sendMessage({ text: textToSend });
 		}
 	}, [messages.length, pendingEdit, sendMessage]);
@@ -614,7 +844,7 @@ export function ChatInterface({
 											...pageSuggestions,
 											...(chatSuggestions ?? []),
 										];
-										return canWrite && allSuggestions.length > 0 ? (
+										return allSuggestions.length > 0 ? (
 											<div className="flex flex-wrap justify-center gap-2 pb-4 max-w-md mx-auto">
 												{allSuggestions.map((suggestion, index) => (
 													<button
@@ -632,8 +862,27 @@ export function ChatInterface({
 								</div>
 							) : (
 								messages.map((m, index) => (
-									<ChatMessage
+									<PermissionedChatMessage
 										key={m.id || `msg-${index}`}
+										publicMode={isPublicMode}
+										action={
+											m.role === "user"
+												? "edit"
+												: m.role === "assistant" &&
+														index === messages.length - 1
+													? "retry"
+													: undefined
+										}
+										conversationId={currentConversationId}
+										ownerId={currentConversationOwnerId}
+										messageId={
+											m.role === "assistant"
+												? [...messages]
+														.slice(0, index)
+														.reverse()
+														.find((message) => message.role === "user")?.id
+												: m.id
+										}
 										message={m}
 										isStreaming={
 											status === "streaming" &&
@@ -644,17 +893,13 @@ export function ChatInterface({
 										onRetry={
 											// Only show retry on the last assistant message
 											m.role === "assistant" && index === messages.length - 1
-												? canWrite
-													? handleRetry
-													: undefined
+												? handleRetry
 												: undefined
 										}
 										onEdit={
 											// Allow editing user messages
 											m.role === "user"
-												? canWrite
-													? (newText) => handleEditMessage(m.id, newText)
-													: undefined
+												? (newText) => handleEditMessage(m.id, newText)
 												: undefined
 										}
 										isRetrying={isLoading && m.role === "assistant"}
@@ -685,32 +930,52 @@ export function ChatInterface({
 				</div>
 			</div>
 			{/* Input Area */}
-			{canWrite && (
-				<div
-					className={cn(
-						"border-t bg-background p-4",
-						isWidget ? "px-3 py-3" : "px-4",
-					)}
-				>
-					<div className={cn(!isWidget && "max-w-3xl mx-auto")}>
-						<ChatInput
-							input={input}
-							handleInputChange={handleInputChange}
-							handleSubmit={handleSubmit}
-							isLoading={isLoading}
-							placeholder={tr(
-								"CHAT_PLACEHOLDER",
-								"aiChat.chat.placeholder",
-								"Type a message...",
+			<ChatActionCheck
+				publicMode={isPublicMode}
+				action="send"
+				conversationId={currentConversationId}
+				ownerId={currentConversationOwnerId}
+				toolNames={Object.keys(pageAIContext?.clientTools ?? {})}
+				routeName={pageAIContext?.routeName}
+			>
+				{(allowed) =>
+					allowed ? (
+						<div
+							className={cn(
+								"border-t bg-background p-4",
+								isWidget ? "px-3 py-3" : "px-4",
 							)}
-							variant={isWidget ? "compact" : "default"}
-							onFilesAttached={setAttachedFiles}
-							attachedFiles={attachedFiles}
-						/>
-						{showAttribution && <StackAttribution />}
-					</div>
-				</div>
-			)}
+						>
+							<div className={cn(!isWidget && "max-w-3xl mx-auto")}>
+								<AttachmentCheck
+									publicMode={isPublicMode}
+									conversationId={currentConversationId}
+									ownerId={currentConversationOwnerId}
+								>
+									{(allowAttachments) => (
+										<ChatInput
+											input={input}
+											handleInputChange={handleInputChange}
+											handleSubmit={handleSubmit}
+											isLoading={isLoading}
+											placeholder={tr(
+												"CHAT_PLACEHOLDER",
+												"aiChat.chat.placeholder",
+												"Type a message...",
+											)}
+											variant={isWidget ? "compact" : "default"}
+											onFilesAttached={setAttachedFiles}
+											attachedFiles={attachedFiles}
+											allowAttachments={allowAttachments}
+										/>
+									)}
+								</AttachmentCheck>
+								{showAttribution && <StackAttribution />}
+							</div>
+						</div>
+					) : null
+				}
+			</ChatActionCheck>
 		</>
 	);
 }

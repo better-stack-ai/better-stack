@@ -21,6 +21,12 @@ interface OperationExecutionOptions {
 	skipAuthorization: boolean;
 }
 
+/** Whether a request operation requires identity authorization. */
+export type OperationAccess = "authorized" | "public";
+
+/** How an operation result crosses the lifecycle boundary. */
+export type OperationResultMode = "immutable" | "passthrough";
+
 type OperationExecutor = (
 	input: unknown,
 	options: OperationExecutionOptions,
@@ -160,31 +166,43 @@ export interface Operation<
 	TInputSchema extends z.ZodTypeAny = z.ZodTypeAny,
 	TPermission extends AnyPermissionDescriptor = AnyPermissionDescriptor,
 	TResult = unknown,
+	TPassthroughResult extends boolean = false,
 > {
 	readonly input: TInputSchema;
 	readonly permission: TPermission;
+	readonly access: OperationAccess;
+	readonly resultMode: TPassthroughResult extends true
+		? "passthrough"
+		: "immutable";
 }
 
 /** Any plugin operation, for generic stack composition. */
-export type AnyOperation = Operation<
-	z.ZodTypeAny,
-	AnyPermissionDescriptor,
-	any
->;
+export type AnyOperation =
+	| Operation<z.ZodTypeAny, AnyPermissionDescriptor, any, false>
+	| Operation<z.ZodTypeAny, AnyPermissionDescriptor, any, true>;
 /** Named operations exposed by a backend plugin. */
 export type OperationRecord = Record<string, AnyOperation>;
 
 type OperationInput<TOperation extends AnyOperation> =
-	TOperation extends Operation<infer TInputSchema, any, any>
+	TOperation extends Operation<infer TInputSchema, any, any, any>
 		? z.input<TInputSchema>
 		: never;
 
-type OperationResult<TOperation extends AnyOperation> =
-	TOperation extends Operation<any, any, infer TResult> ? TResult : never;
+type OperationTransportResult<TOperation extends AnyOperation> =
+	TOperation extends Operation<
+		any,
+		any,
+		infer TResult,
+		infer TPassthroughResult
+	>
+		? TPassthroughResult extends true
+			? TResult
+			: DeepReadonly<TResult>
+		: never;
 
 /** Infer the permission request enforced by an operation. */
 export type OperationPermissionRequest<TOperation extends AnyOperation> =
-	TOperation extends Operation<any, infer TPermission, any>
+	TOperation extends Operation<any, infer TPermission, any, any>
 		? PermissionRequestFor<TPermission>
 		: never;
 
@@ -196,7 +214,7 @@ export type OperationPermissionId<TOperation extends AnyOperation> =
 export type OperationApi<TOperations extends OperationRecord> = {
 	[TKey in keyof TOperations]: (
 		input: OperationInput<TOperations[TKey]>,
-	) => Promise<DeepReadonly<OperationResult<TOperations[TKey]>>>;
+	) => Promise<OperationTransportResult<TOperations[TKey]>>;
 };
 
 /** Operations bound to an HTTP transport; every call requires its request. */
@@ -204,7 +222,7 @@ export type RouteOperationApi<TOperations extends OperationRecord> = {
 	[TKey in keyof TOperations]: (
 		input: OperationInput<TOperations[TKey]>,
 		request: Request,
-	) => Promise<DeepReadonly<OperationResult<TOperations[TKey]>>>;
+	) => Promise<OperationTransportResult<TOperations[TKey]>>;
 };
 
 /**
@@ -215,22 +233,29 @@ export type RouteOperationApi<TOperations extends OperationRecord> = {
  * composition binds it to HTTP, `forRequest()`, and the explicit `internal`
  * namespace so callers cannot forge an internal execution flag.
  */
-export function defineOperation<
-	const TInputSchema extends z.ZodTypeAny,
-	const TPermission extends AnyPermissionDescriptor,
-	const TExecute extends (
+type OperationConfig<
+	TInputSchema extends z.ZodTypeAny,
+	TPermission extends AnyPermissionDescriptor,
+	TExecute extends (
 		ctx: OperationContext<
 			z.output<TInputSchema>,
 			PermissionFactsFor<TPermission>
 		>,
-	) => MaybePromise<OperationData>,
->(config: {
+	) => MaybePromise<unknown>,
+	TResult,
+> = {
 	input: [z.output<TInputSchema>] extends [OperationData]
 		? TInputSchema
 		: never;
 	permission: [PermissionFactsFor<TPermission>] extends [OperationData]
 		? TPermission
 		: never;
+	/**
+	 * Explicitly bypass request identity authorization for this one operation.
+	 * Validation, trusted fact derivation, lifecycle hooks, and execution still run.
+	 * @default "authorized"
+	 */
+	access?: OperationAccess;
 	/**
 	 * @deprecated Temporary v3 RC bridge removed by #193. Map trusted operation
 	 * facts to the previous string permission, or explicitly declare the RC path
@@ -274,6 +299,67 @@ export function defineOperation<
 			z.output<TInputSchema>,
 			PermissionFactsFor<TPermission>
 		> & {
+			readonly result: TResult;
+		},
+	) => MaybePromise<void>;
+	onError?: (
+		ctx: OperationErrorContext<
+			z.output<TInputSchema>,
+			PermissionFactsFor<TPermission>
+		>,
+	) => MaybePromise<void>;
+};
+
+export function defineOperation<
+	const TInputSchema extends z.ZodTypeAny,
+	const TPermission extends AnyPermissionDescriptor,
+	const TExecute extends (
+		ctx: OperationContext<
+			z.output<TInputSchema>,
+			PermissionFactsFor<TPermission>
+		>,
+	) => MaybePromise<OperationData>,
+>(config: {
+	input: [z.output<TInputSchema>] extends [OperationData]
+		? TInputSchema
+		: never;
+	permission: [PermissionFactsFor<TPermission>] extends [OperationData]
+		? TPermission
+		: never;
+	/**
+	 * Explicitly bypass request identity authorization for this one operation.
+	 * Validation, trusted fact derivation, lifecycle hooks, and execution still run.
+	 * @default "authorized"
+	 */
+	access?: OperationAccess;
+	legacyAuthorization?: (ctx: {
+		readonly input: DeepReadonly<z.output<TInputSchema>>;
+		readonly facts: DeepReadonly<PermissionFactsFor<TPermission>>;
+	}) => LegacyAuthorizationDeclaration;
+	facts: (ctx: {
+		readonly input: DeepReadonly<z.output<TInputSchema>>;
+		readonly request?: Request;
+	}) => MaybePromise<PermissionInputFor<TPermission>>;
+	additionalPermissions?: (ctx: {
+		readonly input: DeepReadonly<z.output<TInputSchema>>;
+		readonly facts: DeepReadonly<PermissionFactsFor<TPermission>>;
+		readonly request?: Request;
+	}) => MaybePromise<readonly PermissionRequest<string, any>[]>;
+	legacyAdditionalAuthorization?: (
+		permission: Pick<PermissionRequest<string, any>, "id" | "facts">,
+	) => LegacyAuthorizationDeclaration;
+	before?: (
+		ctx: OperationContext<
+			z.output<TInputSchema>,
+			PermissionFactsFor<TPermission>
+		>,
+	) => MaybePromise<void>;
+	execute: TExecute;
+	after?: (
+		ctx: OperationContext<
+			z.output<TInputSchema>,
+			PermissionFactsFor<TPermission>
+		> & {
 			readonly result: DeepReadonly<Awaited<ReturnType<TExecute>>>;
 		},
 	) => MaybePromise<void>;
@@ -283,8 +369,48 @@ export function defineOperation<
 			PermissionFactsFor<TPermission>
 		>,
 	) => MaybePromise<void>;
-}): Operation<TInputSchema, TPermission, Awaited<ReturnType<TExecute>>> {
-	type TResult = Awaited<ReturnType<TExecute>>;
+}): Operation<TInputSchema, TPermission, Awaited<ReturnType<TExecute>>>;
+export function defineOperation(config: any): AnyOperation {
+	return defineOperationRuntime(config, false);
+}
+
+/**
+ * Define an operation whose transport-native result must retain its runtime
+ * identity (for example a streaming `Response`). Input, facts, identity,
+ * authorization, and lifecycle ordering remain identical to `defineOperation`;
+ * only the result skips recursive freezing.
+ */
+export function definePassthroughOperation<
+	const TInputSchema extends z.ZodTypeAny,
+	const TPermission extends AnyPermissionDescriptor,
+	const TExecute extends (
+		ctx: OperationContext<
+			z.output<TInputSchema>,
+			PermissionFactsFor<TPermission>
+		>,
+	) => MaybePromise<unknown>,
+>(
+	config: OperationConfig<
+		TInputSchema,
+		TPermission,
+		TExecute,
+		Awaited<ReturnType<TExecute>>
+	>,
+): Operation<TInputSchema, TPermission, Awaited<ReturnType<TExecute>>, true>;
+export function definePassthroughOperation(config: any): AnyOperation {
+	return defineOperationRuntime(config, true);
+}
+
+function defineOperationRuntime<
+	TInputSchema extends z.ZodTypeAny = z.ZodTypeAny,
+	TPermission extends AnyPermissionDescriptor = AnyPermissionDescriptor,
+>(config: any, passthroughResult: boolean): AnyOperation {
+	const operationAccess = config.access ?? "authorized";
+	if (operationAccess !== "authorized" && operationAccess !== "public") {
+		throw new TypeError(
+			'Operation access must be either "authorized" or "public".',
+		);
+	}
 	const runtimePermission = config.permission as unknown as {
 		(): { facts: unknown };
 		(facts: unknown): { facts: unknown };
@@ -330,7 +456,11 @@ export function defineOperation<
 					identity: DeepReadonly<StackIdentity> | null;
 			  }
 			| undefined;
-		if (!options.skipAuthorization && isServerAuth(options.auth)) {
+		if (
+			!options.skipAuthorization &&
+			operationAccess === "authorized" &&
+			isServerAuth(options.auth)
+		) {
 			if (!options.request) {
 				throw new Error("Authorized operations require a request.");
 			}
@@ -351,7 +481,11 @@ export function defineOperation<
 						"operation identity",
 					)
 				: null;
-		} else if (!options.skipAuthorization && options.auth) {
+		} else if (
+			!options.skipAuthorization &&
+			operationAccess === "authorized" &&
+			options.auth
+		) {
 			if (!options.request) {
 				throw new Error("Identity-aware operations require a request.");
 			}
@@ -442,11 +576,14 @@ export function defineOperation<
 
 		try {
 			await config.before?.(context);
-			const result = freezeOperationData<unknown>(
-				await config.execute(context),
-				new WeakSet(),
-				"operation result",
-			);
+			const executed = await config.execute(context);
+			const result = passthroughResult
+				? executed
+				: freezeOperationData<unknown>(
+						executed,
+						new WeakSet(),
+						"operation result",
+					);
 			const after = config.after as
 				| ((ctx: unknown) => MaybePromise<void>)
 				| undefined;
@@ -462,10 +599,12 @@ export function defineOperation<
 		}
 	};
 
-	const operation: Operation<TInputSchema, TPermission, TResult> = {
+	const operation = {
 		input: config.input,
 		permission: config.permission,
-	};
+		access: operationAccess,
+		resultMode: passthroughResult ? "passthrough" : "immutable",
+	} as AnyOperation;
 	operationExecutors.set(operation, executeOperation as OperationExecutor);
 	return Object.freeze(operation);
 }
@@ -485,7 +624,7 @@ export function runAuthorizedOperation<TOperation extends AnyOperation>(
 		auth?: StackServerAuthProvider;
 		resolveIdentity?: () => Promise<StackIdentity | null>;
 	},
-): Promise<DeepReadonly<OperationResult<TOperation>>> {
+): Promise<OperationTransportResult<TOperation>> {
 	return getOperationExecutor(operation)(input, {
 		request: options.request,
 		...(options.auth ? { auth: options.auth } : {}),
@@ -493,15 +632,15 @@ export function runAuthorizedOperation<TOperation extends AnyOperation>(
 			? { resolveIdentity: options.resolveIdentity }
 			: {}),
 		skipAuthorization: false,
-	}) as Promise<DeepReadonly<OperationResult<TOperation>>>;
+	}) as Promise<OperationTransportResult<TOperation>>;
 }
 
 /** @internal Execute an operation through the trusted application namespace. */
 export function runInternalOperation<TOperation extends AnyOperation>(
 	operation: TOperation,
 	input: OperationInput<TOperation>,
-): Promise<DeepReadonly<OperationResult<TOperation>>> {
+): Promise<OperationTransportResult<TOperation>> {
 	return getOperationExecutor(operation)(input, {
 		skipAuthorization: true,
-	}) as Promise<DeepReadonly<OperationResult<TOperation>>>;
+	}) as Promise<OperationTransportResult<TOperation>>;
 }

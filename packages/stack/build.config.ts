@@ -102,6 +102,7 @@ export default defineBuildConfig({
 		"./src/plugins/ai-chat/client/hooks/index.tsx",
 		"./src/plugins/ai-chat/client/context/page-ai-context.tsx",
 		"./src/plugins/ai-chat/query-keys.ts",
+		"./src/plugins/ai-chat/permissions.ts",
 		// cms plugin entries
 		"./src/plugins/cms/api/index.ts",
 		"./src/plugins/cms/client/index.ts",

@@ -7,11 +7,16 @@ import {
 	StackProvider,
 	type StackAuthProvider,
 	type StackI18nProvider,
+	type StackIdentity,
 } from "@btst/stack/context";
+import { defineAuthorization } from "@btst/stack/authorization";
+import { createClientAuth } from "@btst/stack/authorization/client";
+import { z } from "zod";
 import { ChatInterface } from "../client/components/chat-interface";
 import { ChatSidebar } from "../client/components/chat-sidebar";
 import { ChatPage } from "../client/components/pages/chat-page.internal";
 import type { SerializedConversation } from "../types";
+import { aiChatPermissions } from "../permissions";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 (globalThis as any).ResizeObserver ??= class {
@@ -27,19 +32,47 @@ const mocks = vi.hoisted(() => ({
 	useConversations: vi.fn(),
 	useRenameConversationForm: vi.fn(),
 	useDeleteConversation: vi.fn(),
+	useAiChatIdentityPartition: vi.fn(),
 	chatLayout: vi.fn(),
 }));
 
 vi.mock("@ai-sdk/react", () => ({ useChat: mocks.useChat }));
 vi.mock("../client/hooks/chat-hooks", () => ({
+	useAiChatIdentityPartition: mocks.useAiChatIdentityPartition,
 	useConversation: mocks.useConversation,
 	useConversations: mocks.useConversations,
 	useRenameConversationForm: mocks.useRenameConversationForm,
 	useDeleteConversation: mocks.useDeleteConversation,
 }));
 vi.mock("../client/components/chat-input", () => ({
-	ChatInput: ({ placeholder }: { placeholder?: string }) => (
-		<div data-testid="chat-input">{placeholder}</div>
+	ChatInput: ({
+		placeholder,
+		handleSubmit,
+	}: {
+		placeholder?: string;
+		handleSubmit: (
+			event: { preventDefault: () => void },
+			files: Array<{ url: string; mediaType: string; filename: string }>,
+		) => void;
+	}) => (
+		<div data-testid="chat-input">
+			{placeholder}
+			<button
+				type="button"
+				data-testid="chat-send"
+				onClick={() =>
+					handleSubmit({ preventDefault: () => {} }, [
+						{
+							url: "data:text/plain;base64,dGVzdA==",
+							mediaType: "text/plain",
+							filename: "test.txt",
+						},
+					])
+				}
+			>
+				Send
+			</button>
+		</div>
 	),
 }));
 vi.mock("../client/components/chat-message", () => ({
@@ -54,6 +87,7 @@ vi.mock("../client/components/chat-layout", () => ({
 
 const conversation: SerializedConversation = {
 	id: "conv-1",
+	userId: "owner-1",
 	title: "First conversation",
 	createdAt: new Date("2024-01-01").toISOString(),
 	updatedAt: new Date("2024-01-02").toISOString(),
@@ -72,6 +106,7 @@ beforeEach(() => {
 		defaultOptions: { queries: { retry: false } },
 	});
 	deleteConversation = vi.fn().mockResolvedValue({ success: true });
+	mocks.useAiChatIdentityPartition.mockReturnValue(undefined);
 
 	mocks.useChat.mockReturnValue({
 		messages: [],
@@ -81,6 +116,7 @@ beforeEach(() => {
 		setMessages: vi.fn(),
 		regenerate: vi.fn(),
 		addToolOutput: vi.fn(),
+		stop: vi.fn(),
 	});
 	mocks.useConversation.mockReturnValue({
 		conversation: null,
@@ -142,6 +178,7 @@ async function render(
 		};
 		mode?: "authenticated" | "public";
 		localization?: Record<string, string>;
+		initialIdentity?: StackIdentity | null;
 	} = {},
 ) {
 	await act(async () => {
@@ -155,6 +192,7 @@ async function render(
 						"ai-chat": overrides(options.mode, options.localization),
 					}}
 					auth={options.auth}
+					initialIdentity={options.initialIdentity}
 					i18n={options.i18n}
 					notify={options.notify}
 				>
@@ -194,29 +232,158 @@ describe("AI Chat permissions", () => {
 		expect(container.querySelector('[data-testid="chat-input"]')).toBeTruthy();
 	});
 
-	it("gates authenticated create and per-conversation controls independently", async () => {
-		const can = vi.fn(
-			({ action }: { action: string }) =>
-				action === "read" || action === "delete",
+	it("gates authenticated controls with exact rendered owner facts", async () => {
+		const deleteRule = vi.fn(
+			({
+				identity,
+				facts,
+			}: {
+				identity: { id: string } | null;
+				facts: { ownerId?: string };
+			}) => identity?.id === facts.ownerId,
 		);
-		const auth: StackAuthProvider = {
-			getIdentity: () => ({ id: "viewer" }),
-			can,
-		};
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [aiChatPermissions] as const,
+			rules: ({ aiChat }) => [
+				aiChat.conversation.read.allow(),
+				aiChat.conversation.create.when(() => false),
+				aiChat.conversation.update.when(() => false),
+				aiChat.conversation.delete.when(deleteRule),
+			],
+		});
+		const identity = { id: "owner-1" };
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => identity,
+		});
 
-		await render(<ChatSidebar />, { auth });
+		await render(<ChatSidebar />, { auth, initialIdentity: identity });
 		expect(document.body.textContent).not.toContain("New chat");
 
 		await openConversationMenu();
 		expect(menuItem("Rename")).toBeUndefined();
 		expect(menuItem("Delete")).toBeTruthy();
-		expect(can).toHaveBeenCalledWith(
+		expect(deleteRule).toHaveBeenCalledWith(
 			expect.objectContaining({
-				resource: "ai-chat:conversation",
-				action: "delete",
-				params: { id: conversation.id },
+				identity,
+				facts: {
+					conversationId: conversation.id,
+					exists: true,
+					ownerId: conversation.userId,
+				},
 			}),
 		);
+	});
+
+	it("requires the exact send rule in addition to stream start", async () => {
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [aiChatPermissions] as const,
+			rules: ({ aiChat }) => [
+				aiChat.stream.start.allow(),
+				aiChat.conversation.create.allow(),
+				aiChat.message.send.when(() => false),
+			],
+		});
+		const identity = { id: "owner-1" };
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => identity,
+		});
+
+		await render(<ChatInterface />, { auth, initialIdentity: identity });
+
+		expect(container.querySelector('[data-testid="chat-input"]')).toBeNull();
+	});
+
+	it("uses the persisted user message hint for retry checks", async () => {
+		const retryRule = vi.fn(() => true);
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [aiChatPermissions] as const,
+			rules: ({ aiChat }) => [
+				aiChat.stream.start.allow(),
+				aiChat.message.send.allow(),
+				aiChat.message.edit.allow(),
+				aiChat.message.retry.when(retryRule),
+				aiChat.attachment.send.allow(),
+			],
+		});
+		const identity = { id: "owner-1" };
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => identity,
+		});
+		mocks.useChat.mockReturnValue({
+			messages: [
+				{ id: "user-1", role: "user", parts: [{ type: "text", text: "Hi" }] },
+				{
+					id: "assistant-1",
+					role: "assistant",
+					parts: [{ type: "text", text: "Hello" }],
+				},
+			],
+			sendMessage: vi.fn(),
+			status: "ready",
+			error: null,
+			setMessages: vi.fn(),
+			regenerate: vi.fn(),
+			addToolOutput: vi.fn(),
+			stop: vi.fn(),
+		});
+		mocks.useConversation.mockReturnValue({
+			conversation: { ...conversation, messages: [] },
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+
+		await render(<ChatInterface id={conversation.id} />, {
+			auth,
+			initialIdentity: identity,
+		});
+
+		expect(retryRule).toHaveBeenCalledWith(
+			expect.objectContaining({
+				facts: expect.objectContaining({ messageId: "user-1" }),
+			}),
+		);
+	});
+
+	it("stops and clears an active chat when the identity partition changes", async () => {
+		const stop = vi.fn();
+		const setMessages = vi.fn();
+		let firstOnFinish: (() => Promise<void>) | undefined;
+		mocks.useChat.mockImplementation((options) => {
+			firstOnFinish ??= options.onFinish;
+			return {
+				messages: [],
+				sendMessage: vi.fn().mockResolvedValue(undefined),
+				status: "streaming",
+				error: null,
+				setMessages,
+				regenerate: vi.fn(),
+				addToolOutput: vi.fn(),
+				stop,
+			};
+		});
+		mocks.useAiChatIdentityPartition.mockReturnValue({ id: "owner-1" });
+		await render(<ChatInterface />);
+		await act(async () => {
+			container
+				.querySelector<HTMLButtonElement>('[data-testid="chat-send"]')
+				?.click();
+		});
+
+		mocks.useAiChatIdentityPartition.mockReturnValue({ id: "viewer-1" });
+		await render(<ChatInterface />);
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+		await act(async () => firstOnFinish?.());
+
+		expect(stop).toHaveBeenCalledOnce();
+		expect(setMessages).toHaveBeenCalledWith([]);
+		expect(invalidate).not.toHaveBeenCalled();
 	});
 });
 

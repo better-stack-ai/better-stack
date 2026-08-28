@@ -1,4 +1,5 @@
 import { defineAuthorization } from "@btst/stack/authorization";
+import { aiChatPermissions } from "@btst/stack/plugins/ai-chat/permissions";
 import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
 import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
 import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
@@ -20,6 +21,20 @@ type KanbanBoardFacts = {
 	organizationId?: string;
 };
 
+type AiChatConversationFacts = {
+	ownerId?: string;
+};
+
+function canUseAiChatConversation(
+	identity: Identity | null,
+	facts: AiChatConversationFacts,
+) {
+	return (
+		identity !== null &&
+		(identity.role === "admin" || identity.id === facts.ownerId)
+	);
+}
+
 function canManageKanbanBoard(
 	identity: Identity | null,
 	facts: KanbanBoardFacts,
@@ -37,6 +52,7 @@ function canManageKanbanBoard(
 export const authorization = defineAuthorization({
 	identity: identitySchema,
 	permissions: [
+		aiChatPermissions,
 		blogPermissions,
 		cmsPermissions,
 		commentsPermissions,
@@ -44,7 +60,47 @@ export const authorization = defineAuthorization({
 		kanbanPermissions,
 		mediaPermissions,
 	] as const,
-	rules: ({ blog, cms, comments, forms, kanban, media }) => [
+	rules: ({ aiChat, blog, cms, comments, forms, kanban, media }) => [
+		aiChat.conversation.read.when(({ identity, facts }) =>
+			facts.scope === "collection"
+				? identity !== null
+				: canUseAiChatConversation(identity, facts),
+		),
+		aiChat.conversation.create.when(({ identity }) => identity !== null),
+		aiChat.conversation.update.when(({ identity, facts }) =>
+			canUseAiChatConversation(identity, facts),
+		),
+		aiChat.conversation.delete.when(({ identity, facts }) =>
+			canUseAiChatConversation(identity, facts),
+		),
+		aiChat.message.send.when(
+			({ identity, facts }) =>
+				identity !== null &&
+				(facts.createsConversation ||
+					canUseAiChatConversation(identity, facts)),
+		),
+		aiChat.message.edit.when(({ identity, facts }) =>
+			canUseAiChatConversation(identity, facts),
+		),
+		aiChat.message.retry.when(({ identity, facts }) =>
+			canUseAiChatConversation(identity, facts),
+		),
+		aiChat.attachment.send.when(({ identity, facts }) =>
+			facts.conversationId === undefined
+				? identity !== null
+				: canUseAiChatConversation(identity, facts),
+		),
+		aiChat.tool.activate.when(({ identity, facts }) =>
+			facts.conversationId === undefined
+				? identity !== null
+				: canUseAiChatConversation(identity, facts),
+		),
+		aiChat.stream.start.when(
+			({ identity, facts }) =>
+				identity !== null &&
+				(facts.createsConversation ||
+					canUseAiChatConversation(identity, facts)),
+		),
 		blog.post.read.when(({ identity, facts }) => {
 			if (facts.scope === "published") return true;
 			if (facts.scope === "post" && (!facts.exists || facts.published)) {

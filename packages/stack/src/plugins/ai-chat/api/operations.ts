@@ -1,0 +1,1419 @@
+import type { DBAdapter as Adapter } from "@btst/db";
+import type { PermissionFactsFor } from "@btst/stack/authorization";
+import {
+	defineOperation,
+	definePassthroughOperation,
+	type DeepReadonly,
+	type Operation,
+	type OperationContext,
+} from "@btst/stack/plugins/api";
+import {
+	convertToModelMessages,
+	stepCountIs,
+	streamText,
+	type LanguageModel,
+	type Tool,
+	type UIMessage,
+} from "ai";
+import { z } from "zod";
+import { aiChatPermissions } from "../permissions";
+import {
+	chatRequestSchema,
+	createConversationSchema,
+	updateConversationSchema,
+} from "../schemas";
+import type {
+	Conversation,
+	Message,
+	SerializedConversation,
+	SerializedMessage,
+} from "../types";
+import { getAllConversations, getConversationById } from "./getters";
+import {
+	BUILT_IN_PAGE_TOOL_ROUTE_ALLOWLIST,
+	BUILT_IN_PAGE_TOOL_SCHEMAS,
+} from "./page-tools";
+import { serializeConversation, serializeMessage } from "./serializers";
+
+export type AiChatAccess = "authorized" | "public";
+
+/** Runtime input for one conversation operation. */
+export const ConversationOperationInputSchema = z.object({ id: z.string() });
+/** Runtime input for one conversation rename operation. */
+export const UpdateConversationOperationInputSchema = z.object({
+	id: z.string(),
+	data: updateConversationSchema,
+});
+/** Runtime input accepted only from trusted internal stream callers. */
+export const ChatOperationInputSchema = chatRequestSchema.extend({
+	trustedUserId: z.string().optional(),
+}) as unknown as z.ZodType<ChatOperationInput>;
+/** JSON-safe AI SDK message shape accepted at the operation boundary. */
+export type ChatOperationInput = {
+	readonly messages: readonly (
+		| {
+				readonly role: "system" | "user" | "assistant" | "data";
+				readonly content: string;
+				readonly id?: string;
+		  }
+		| {
+				readonly role: "system" | "user" | "assistant" | "data";
+				readonly parts: readonly ({
+					readonly type: string;
+					readonly text?: string;
+				} & Record<string, any>)[];
+				readonly id?: string;
+				readonly metadata?: any;
+		  }
+	)[];
+	readonly conversationId?: string;
+	readonly model?: string;
+	readonly pageContext?: string;
+	readonly availableTools?: readonly string[];
+	readonly routeName?: string;
+	readonly trustedUserId?: string;
+};
+const EmptyInputSchema = z.object({});
+
+type ConversationReadFacts = PermissionFactsFor<
+	typeof aiChatPermissions.conversation.read
+>;
+type ConversationRecordFacts = PermissionFactsFor<
+	typeof aiChatPermissions.conversation.update
+>;
+type StreamStartFacts = PermissionFactsFor<
+	typeof aiChatPermissions.stream.start
+>;
+
+/** One conversation and its serialized message history. */
+export type AiChatConversationResult = SerializedConversation & {
+	readonly messages: readonly SerializedMessage[];
+};
+
+/** Complete AI Chat operation inventory shared by every server transport. */
+export type AiChatOperations = {
+	readonly startStream: Operation<
+		typeof ChatOperationInputSchema,
+		typeof aiChatPermissions.stream.start,
+		Response,
+		true
+	>;
+	readonly listConversations: Operation<
+		typeof EmptyInputSchema,
+		typeof aiChatPermissions.conversation.read,
+		readonly SerializedConversation[]
+	>;
+	readonly getConversation: Operation<
+		typeof ConversationOperationInputSchema,
+		typeof aiChatPermissions.conversation.read,
+		AiChatConversationResult
+	>;
+	readonly createConversation: Operation<
+		typeof createConversationSchema,
+		typeof aiChatPermissions.conversation.create,
+		SerializedConversation
+	>;
+	readonly updateConversation: Operation<
+		typeof UpdateConversationOperationInputSchema,
+		typeof aiChatPermissions.conversation.update,
+		SerializedConversation
+	>;
+	readonly deleteConversation: Operation<
+		typeof ConversationOperationInputSchema,
+		typeof aiChatPermissions.conversation.delete,
+		{ readonly success: true }
+	>;
+};
+
+/** Executable inventory used by tests, docs, and future transport audits. */
+export const AI_CHAT_OPERATION_INVENTORY = Object.freeze({
+	startStream: Object.freeze({
+		http: "POST /chat",
+		request: "forRequest(request).api.aiChat.startStream",
+		internal: "internal.aiChat.startStream",
+		ui: Object.freeze([
+			"composer",
+			"edit",
+			"retry",
+			"attachment",
+			"tool-result",
+		]),
+		semantics: Object.freeze([
+			"stream.start",
+			"conversation.create",
+			"message.send",
+			"message.edit",
+			"message.retry",
+			"attachment.send",
+			"tool.activate",
+		]),
+		publicSemantics: Object.freeze([
+			"stream.start",
+			"message.send",
+			"message.edit",
+			"message.retry",
+			"attachment.send",
+			"tool.activate",
+		]),
+		publicWhenConfigured: true,
+	}),
+	listConversations: Object.freeze({
+		http: "GET /chat/conversations",
+		request: "forRequest(request).api.aiChat.listConversations",
+		internal: "internal.aiChat.listConversations",
+		ui: Object.freeze(["conversation sidebar"]),
+		semantics: Object.freeze(["conversation.read"]),
+		publicWhenConfigured: false,
+	}),
+	getConversation: Object.freeze({
+		http: "GET /chat/conversations/:id",
+		request: "forRequest(request).api.aiChat.getConversation",
+		internal: "internal.aiChat.getConversation",
+		ui: Object.freeze(["conversation route"]),
+		semantics: Object.freeze(["conversation.read"]),
+		publicWhenConfigured: false,
+	}),
+	createConversation: Object.freeze({
+		http: "POST /chat/conversations",
+		request: "forRequest(request).api.aiChat.createConversation",
+		internal: "internal.aiChat.createConversation",
+		ui: Object.freeze(["new chat"]),
+		semantics: Object.freeze(["conversation.create"]),
+		publicWhenConfigured: false,
+	}),
+	updateConversation: Object.freeze({
+		http: "PUT /chat/conversations/:id",
+		request: "forRequest(request).api.aiChat.updateConversation",
+		internal: "internal.aiChat.updateConversation",
+		ui: Object.freeze(["rename conversation"]),
+		semantics: Object.freeze(["conversation.update"]),
+		publicWhenConfigured: false,
+	}),
+	deleteConversation: Object.freeze({
+		http: "DELETE /chat/conversations/:id",
+		request: "forRequest(request).api.aiChat.deleteConversation",
+		internal: "internal.aiChat.deleteConversation",
+		ui: Object.freeze(["delete conversation"]),
+		semantics: Object.freeze(["conversation.delete"]),
+		publicWhenConfigured: false,
+	}),
+});
+
+/** Trusted raw getters bypassing authorization and operation lifecycle hooks. */
+export const AI_CHAT_RAW_ESCAPE_HATCH_INVENTORY = Object.freeze([
+	"api.aiChat.getAllConversations",
+	"api.aiChat.getConversationById",
+]);
+
+/** A domain/HTTP failure raised after AI Chat authorization succeeds. */
+export class AiChatOperationError extends Error {
+	readonly statusCode: number;
+	readonly code: string;
+
+	constructor(statusCode: number, message: string, code: string) {
+		super(message);
+		this.name = "AiChatOperationError";
+		this.statusCode = statusCode;
+		this.code = code;
+	}
+}
+
+/** Typed operation context supplied to AI Chat lifecycle hooks. */
+export interface ChatApiContext<TInput = unknown, TFacts = unknown>
+	extends OperationContext<TInput, TFacts> {
+	readonly headers?: Headers;
+	readonly body?: DeepReadonly<TInput>;
+	readonly params?: Readonly<Record<string, string>>;
+	readonly query?: DeepReadonly<TInput>;
+}
+
+/** Post-authorization AI Chat domain lifecycle hooks. */
+export interface AiChatBackendHooks {
+	onBeforeChat?: (
+		messages: readonly { readonly role: string; readonly content: string }[],
+		context: ChatApiContext<
+			z.output<typeof ChatOperationInputSchema>,
+			StreamStartFacts
+		>,
+	) => Promise<void> | void;
+	onBeforeListConversations?: (
+		context: ChatApiContext<
+			z.output<typeof EmptyInputSchema>,
+			ConversationReadFacts
+		>,
+	) => Promise<void> | void;
+	onBeforeGetConversation?: (
+		conversationId: string,
+		context: ChatApiContext<
+			z.output<typeof ConversationOperationInputSchema>,
+			ConversationReadFacts
+		>,
+	) => Promise<void> | void;
+	onBeforeCreateConversation?: (
+		data: DeepReadonly<z.output<typeof createConversationSchema>>,
+		context: ChatApiContext<
+			z.output<typeof createConversationSchema>,
+			undefined
+		>,
+	) => Promise<void> | void;
+	onBeforeUpdateConversation?: (
+		conversationId: string,
+		data: DeepReadonly<z.output<typeof updateConversationSchema>>,
+		context: ChatApiContext<
+			z.output<typeof UpdateConversationOperationInputSchema>,
+			ConversationRecordFacts
+		>,
+	) => Promise<void> | void;
+	onBeforeDeleteConversation?: (
+		conversationId: string,
+		context: ChatApiContext<
+			z.output<typeof ConversationOperationInputSchema>,
+			ConversationRecordFacts
+		>,
+	) => Promise<void> | void;
+	/**
+	 * Post-authorization tool safety/filter hook. Structural route validation and
+	 * exact `tool.activate` authorization have already succeeded.
+	 */
+	onBeforeToolsActivated?: (
+		toolNames: readonly string[],
+		routeName: string | undefined,
+		context: ChatApiContext<
+			z.output<typeof ChatOperationInputSchema>,
+			StreamStartFacts
+		>,
+	) => Promise<readonly string[]> | readonly string[];
+	onAfterChat?: (
+		conversationId: string,
+		messages: readonly SerializedMessage[],
+		context: ChatApiContext<
+			z.output<typeof ChatOperationInputSchema>,
+			StreamStartFacts
+		>,
+	) => Promise<void> | void;
+	onConversationsRead?: (
+		conversations: readonly SerializedConversation[],
+		context: ChatApiContext<
+			z.output<typeof EmptyInputSchema>,
+			ConversationReadFacts
+		>,
+	) => Promise<void> | void;
+	onConversationRead?: (
+		conversation: DeepReadonly<AiChatConversationResult>,
+		context: ChatApiContext<
+			z.output<typeof ConversationOperationInputSchema>,
+			ConversationReadFacts
+		>,
+	) => Promise<void> | void;
+	onConversationCreated?: (
+		conversation: DeepReadonly<SerializedConversation>,
+		context: ChatApiContext<
+			z.output<typeof createConversationSchema>,
+			undefined
+		>,
+	) => Promise<void> | void;
+	onConversationUpdated?: (
+		conversation: DeepReadonly<SerializedConversation>,
+		context: ChatApiContext<
+			z.output<typeof UpdateConversationOperationInputSchema>,
+			ConversationRecordFacts
+		>,
+	) => Promise<void> | void;
+	onConversationDeleted?: (
+		conversationId: string,
+		context: ChatApiContext<
+			z.output<typeof ConversationOperationInputSchema>,
+			ConversationRecordFacts
+		>,
+	) => Promise<void> | void;
+	onChatError?: (
+		error: Error,
+		context: ChatApiContext<
+			z.output<typeof ChatOperationInputSchema>,
+			StreamStartFacts
+		>,
+	) => Promise<void> | void;
+	onListConversationsError?: (
+		error: Error,
+		context: ChatApiContext<
+			z.output<typeof EmptyInputSchema>,
+			ConversationReadFacts
+		>,
+	) => Promise<void> | void;
+	onGetConversationError?: (
+		error: Error,
+		context: ChatApiContext<
+			z.output<typeof ConversationOperationInputSchema>,
+			ConversationReadFacts
+		>,
+	) => Promise<void> | void;
+	onCreateConversationError?: (
+		error: Error,
+		context: ChatApiContext<
+			z.output<typeof createConversationSchema>,
+			undefined
+		>,
+	) => Promise<void> | void;
+	onUpdateConversationError?: (
+		error: Error,
+		context: ChatApiContext<
+			z.output<typeof UpdateConversationOperationInputSchema>,
+			ConversationRecordFacts
+		>,
+	) => Promise<void> | void;
+	onDeleteConversationError?: (
+		error: Error,
+		context: ChatApiContext<
+			z.output<typeof ConversationOperationInputSchema>,
+			ConversationRecordFacts
+		>,
+	) => Promise<void> | void;
+}
+
+export interface AiChatOperationsConfig {
+	access: AiChatAccess;
+	model: LanguageModel;
+	systemPrompt?: string;
+	tools?: Record<string, Tool>;
+	enablePageTools?: boolean;
+	clientToolSchemas?: Record<string, Tool>;
+	getUserId?: (
+		context: Pick<ChatApiContext, "request" | "headers" | "body" | "params">,
+	) => string | null | undefined | Promise<string | null | undefined>;
+	hooks?: AiChatBackendHooks;
+}
+
+interface ConversationSnapshot {
+	readonly id: string;
+	readonly userId?: string;
+	readonly title: string;
+	readonly createdAt: number;
+	readonly updatedAt: number;
+	readonly messages: readonly MessageSnapshot[];
+}
+
+interface MessageSnapshot {
+	readonly id: string;
+	readonly conversationId: string;
+	readonly role: Message["role"];
+	readonly content: string;
+	readonly createdAt: number;
+}
+
+interface StreamPreparation {
+	readonly snapshot: ConversationSnapshot | null;
+	readonly intent: StreamStartFacts["intent"];
+	readonly messageId?: string;
+	readonly mediaTypes: readonly string[];
+	readonly authorizationToolNames: readonly string[];
+	readonly toolNames: readonly string[];
+}
+
+function normalizeError(error: unknown, fallback: string): Error {
+	if (error instanceof Error) return error;
+	return new Error(typeof error === "string" ? error : fallback, {
+		cause: error,
+	});
+}
+
+function requestFields(request: Request | undefined) {
+	return request ? { request, headers: request.headers } : {};
+}
+
+function hookContext<TInput, TFacts>(
+	context: OperationContext<TInput, TFacts>,
+	fields: {
+		body?: DeepReadonly<TInput>;
+		params?: Readonly<Record<string, string>>;
+		query?: DeepReadonly<TInput>;
+	} = {},
+): ChatApiContext<TInput, TFacts> {
+	return Object.freeze({
+		...context,
+		...requestFields(context.request),
+		...fields,
+	});
+}
+
+async function notifyError<TInput, TFacts>(
+	hook:
+		| ((
+				error: Error,
+				context: ChatApiContext<TInput, TFacts>,
+		  ) => Promise<void> | void)
+		| undefined,
+	error: unknown,
+	context: OperationContext<TInput, TFacts>,
+	fields?: {
+		body?: DeepReadonly<TInput>;
+		params?: Readonly<Record<string, string>>;
+		query?: DeepReadonly<TInput>;
+	},
+) {
+	await hook?.(
+		normalizeError(error, "AI Chat operation failed"),
+		hookContext(context, fields),
+	);
+}
+
+function publicConversation(
+	conversation: Conversation,
+): SerializedConversation {
+	// `userId` is the minimum rendered owner hint needed by browser permission
+	// gates. The server always reloads the authoritative owner before enforcement.
+	return serializeConversation(conversation);
+}
+
+function conversationResult(
+	conversation: Conversation & { messages: Message[] },
+): AiChatConversationResult {
+	return {
+		...publicConversation(conversation),
+		messages: conversation.messages.map(serializeMessage),
+	};
+}
+
+function snapshotConversation(
+	conversation: Conversation & { messages?: Message[] },
+): ConversationSnapshot {
+	return {
+		id: conversation.id,
+		...(conversation.userId ? { userId: conversation.userId } : {}),
+		title: conversation.title,
+		createdAt: conversation.createdAt.getTime(),
+		updatedAt: conversation.updatedAt.getTime(),
+		messages: (conversation.messages ?? []).map((message) => ({
+			id: message.id,
+			conversationId: message.conversationId,
+			role: message.role,
+			content: message.content,
+			createdAt: message.createdAt.getTime(),
+		})),
+	};
+}
+
+function sameSnapshot(
+	conversation: (Conversation & { messages: Message[] }) | null,
+	expected: ConversationSnapshot | null,
+) {
+	if (!conversation || !expected)
+		return conversation === null && expected === null;
+	return (
+		JSON.stringify(snapshotConversation(conversation)) ===
+		JSON.stringify(expected)
+	);
+}
+
+function recordFacts(
+	id: string,
+	snapshot: ConversationSnapshot | null,
+): ConversationRecordFacts {
+	return {
+		conversationId: id,
+		exists: snapshot !== null,
+		...(snapshot?.userId ? { ownerId: snapshot.userId } : {}),
+	};
+}
+
+function textContent(message: UIMessage): string {
+	return (message.parts ?? [])
+		.filter(
+			(part): part is Extract<UIMessage["parts"][number], { type: "text" }> =>
+				part.type === "text",
+		)
+		.map((part) => part.text)
+		.join("");
+}
+
+function serializedParts(message: UIMessage): string {
+	return JSON.stringify(
+		(message.parts ?? []).filter(
+			(part) => part.type === "text" || part.type === "file",
+		),
+	);
+}
+
+function fileParts(messages: readonly UIMessage[]) {
+	return messages.flatMap((message) =>
+		(message.parts ?? []).filter(
+			(part): part is Extract<UIMessage["parts"][number], { type: "file" }> =>
+				part.type === "file",
+		),
+	);
+}
+
+function validateAttachments(messages: readonly UIMessage[]) {
+	const files = fileParts(messages);
+	if (files.length > 10) {
+		throw new AiChatOperationError(
+			400,
+			"A chat request may include at most 10 attachments.",
+			"TOO_MANY_ATTACHMENTS",
+		);
+	}
+	for (const file of files) {
+		if (
+			typeof file.url !== "string" ||
+			(!file.url.startsWith("https://") &&
+				!file.url.startsWith("http://") &&
+				!file.url.startsWith("data:"))
+		) {
+			throw new AiChatOperationError(
+				400,
+				"Attachment URLs must use http, https, or data URLs.",
+				"INVALID_ATTACHMENT_URL",
+			);
+		}
+		if (file.url.startsWith("data:") && file.url.length > 14_000_000) {
+			throw new AiChatOperationError(
+				413,
+				"Inline attachments must not exceed 10 MB.",
+				"ATTACHMENT_TOO_LARGE",
+			);
+		}
+	}
+}
+
+function structuralToolNames(
+	input: DeepReadonly<z.output<typeof ChatOperationInputSchema>>,
+	config: AiChatOperationsConfig,
+) {
+	if (!config.enablePageTools || !input.availableTools?.length) return [];
+	const consumerSchemas = config.clientToolSchemas ?? {};
+	return [...new Set(input.availableTools)].filter((name) => {
+		if (name in BUILT_IN_PAGE_TOOL_SCHEMAS) {
+			const allowlist = BUILT_IN_PAGE_TOOL_ROUTE_ALLOWLIST[name];
+			return Boolean(
+				allowlist && input.routeName && allowlist.includes(input.routeName),
+			);
+		}
+		return name in consumerSchemas;
+	});
+}
+
+function buildTools(names: readonly string[], config: AiChatOperationsConfig) {
+	const pageTools = Object.fromEntries(
+		names.map((name) => [
+			name,
+			BUILT_IN_PAGE_TOOL_SCHEMAS[name] ?? config.clientToolSchemas?.[name],
+		]),
+	) as Record<string, Tool>;
+	return Object.keys(pageTools).length > 0
+		? { ...pageTools, ...config.tools }
+		: config.tools;
+}
+
+function determineIntent(
+	messages: readonly UIMessage[],
+	snapshot: ConversationSnapshot | null,
+): { intent: StreamStartFacts["intent"]; messageId?: string } {
+	const last = messages[messages.length - 1];
+	if (!snapshot || !last) return { intent: "send" };
+	const hasToolResult = messages.some((message) =>
+		(message.parts ?? []).some(
+			(part) =>
+				part.type.startsWith("tool-") &&
+				"state" in part &&
+				(part.state === "output-available" || part.state === "output-error"),
+		),
+	);
+	if (hasToolResult && last.role === "assistant") {
+		return { intent: "tool-result", messageId: last.id };
+	}
+	if (last.role !== "user") {
+		const messageId = snapshot.messages[snapshot.messages.length - 1]?.id;
+		if (!messageId) {
+			throw new AiChatOperationError(
+				400,
+				"Retry requires a persisted message.",
+				"MESSAGE_NOT_FOUND",
+			);
+		}
+		return {
+			intent: "retry",
+			messageId,
+		};
+	}
+	const persistedAtIncomingIndex = snapshot.messages[messages.length - 1];
+	if (!persistedAtIncomingIndex) {
+		return { intent: "send" };
+	}
+	if (
+		persistedAtIncomingIndex.role === "user" &&
+		persistedAtIncomingIndex.content === serializedParts(last)
+	) {
+		return { intent: "retry", messageId: persistedAtIncomingIndex.id };
+	}
+	if (persistedAtIncomingIndex.role !== "user") {
+		throw new AiChatOperationError(
+			400,
+			"Edit requires a persisted user message.",
+			"MESSAGE_NOT_FOUND",
+		);
+	}
+	return { intent: "edit", messageId: persistedAtIncomingIndex.id };
+}
+
+function nextVersion(date: Date) {
+	return new Date(Math.max(Date.now(), date.getTime() + 1));
+}
+
+async function scopedUserId(
+	context: OperationContext<any, any>,
+	input: object,
+	getUserId: AiChatOperationsConfig["getUserId"],
+) {
+	if (context.identity) return context.identity.id;
+	const trustedUserId = (input as { trustedUserId?: string }).trustedUserId;
+	if (!context.request && trustedUserId) return trustedUserId;
+	if (!context.request || !getUserId) return undefined;
+	return (
+		(await getUserId({
+			request: context.request,
+			headers: context.request.headers,
+			body: context.input,
+			...(typeof (input as { id?: unknown }).id === "string"
+				? { params: { id: (input as { id: string }).id } }
+				: {}),
+		})) ?? undefined
+	);
+}
+
+/** Build all AI Chat operations once for HTTP, request, and trusted execution. */
+export function createAiChatOperations(
+	adapter: Adapter,
+	config: AiChatOperationsConfig,
+): AiChatOperations {
+	const hooks = config.hooks;
+	const conversationSnapshots = new WeakMap<
+		object,
+		ConversationSnapshot | null
+	>();
+	const streamPreparations = new WeakMap<object, StreamPreparation>();
+	const assertHistoryAvailable = () => {
+		if (config.access === "public") {
+			throw new AiChatOperationError(
+				404,
+				"Conversations are not available in public mode.",
+				"HISTORY_UNAVAILABLE",
+			);
+		}
+	};
+
+	const listConversations = defineOperation({
+		input: EmptyInputSchema,
+		permission: aiChatPermissions.conversation.read,
+		legacyAuthorization: () => ({
+			resource: "ai-chat:conversation",
+			action: "read",
+		}),
+		facts: () => {
+			assertHistoryAvailable();
+			return { scope: "collection" as const };
+		},
+		before: (context) =>
+			hooks?.onBeforeListConversations?.(
+				hookContext(context, { query: context.input }),
+			),
+		execute: async (context) => {
+			const userId = await scopedUserId(
+				context,
+				context.input,
+				config.getUserId,
+			);
+			const conversations =
+				context.request && !userId
+					? []
+					: (await getAllConversations(adapter, userId)).map(
+							publicConversation,
+						);
+			await hooks?.onConversationsRead?.(
+				conversations,
+				hookContext(context, { query: context.input }),
+			);
+			return conversations;
+		},
+		onError: ({ error, ...context }) =>
+			notifyError(hooks?.onListConversationsError, error, context, {
+				query: context.input,
+			}),
+	});
+
+	const getConversation = defineOperation({
+		input: ConversationOperationInputSchema,
+		permission: aiChatPermissions.conversation.read,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "ai-chat:conversation",
+			action: "read",
+			params:
+				facts.scope === "record"
+					? { id: facts.conversationId, ownerId: facts.ownerId }
+					: undefined,
+		}),
+		facts: async ({ input }) => {
+			assertHistoryAvailable();
+			const conversation = await getConversationById(adapter, input.id);
+			const snapshot = conversation ? snapshotConversation(conversation) : null;
+			conversationSnapshots.set(input as object, snapshot);
+			return {
+				scope: "record" as const,
+				...recordFacts(input.id, snapshot),
+			};
+		},
+		before: async (context) => {
+			const current = await getConversationById(adapter, context.input.id);
+			if (
+				!sameSnapshot(
+					current,
+					conversationSnapshots.get(context.input as object) ?? null,
+				)
+			) {
+				throw new AiChatOperationError(
+					409,
+					"Conversation changed during authorization.",
+					"STALE_CONVERSATION",
+				);
+			}
+			await hooks?.onBeforeGetConversation?.(
+				context.input.id,
+				hookContext(context, { params: { id: context.input.id } }),
+			);
+		},
+		execute: async (context) => {
+			const conversation = await getConversationById(adapter, context.input.id);
+			if (!conversation) {
+				throw new AiChatOperationError(
+					404,
+					"Conversation not found.",
+					"CONVERSATION_NOT_FOUND",
+				);
+			}
+			if (
+				!sameSnapshot(
+					conversation,
+					conversationSnapshots.get(context.input as object) ?? null,
+				)
+			) {
+				throw new AiChatOperationError(
+					409,
+					"Conversation changed during authorization.",
+					"STALE_CONVERSATION",
+				);
+			}
+			const result = conversationResult(conversation);
+			await hooks?.onConversationRead?.(
+				result,
+				hookContext(context, { params: { id: context.input.id } }),
+			);
+			return result;
+		},
+		onError: ({ error, ...context }) =>
+			notifyError(hooks?.onGetConversationError, error, context, {
+				params: { id: context.input.id },
+			}),
+	});
+
+	const createConversation = defineOperation({
+		input: createConversationSchema,
+		permission: aiChatPermissions.conversation.create,
+		legacyAuthorization: () => ({
+			resource: "ai-chat:conversation",
+			action: "create",
+		}),
+		facts: () => {
+			assertHistoryAvailable();
+			return undefined;
+		},
+		before: async (context) => {
+			await hooks?.onBeforeCreateConversation?.(
+				context.input,
+				hookContext(context, { body: context.input }),
+			);
+		},
+		execute: async (context) => {
+			const userId = await scopedUserId(
+				context,
+				context.input,
+				config.getUserId,
+			);
+			const now = new Date();
+			const conversation = await adapter.create<Conversation>({
+				model: "conversation",
+				data: {
+					...(context.input.id ? { id: context.input.id } : {}),
+					...(userId ? { userId } : {}),
+					title: context.input.title || "New Conversation",
+					createdAt: now,
+					updatedAt: now,
+				} as Conversation,
+			});
+			const result = publicConversation(conversation);
+			await hooks?.onConversationCreated?.(
+				result,
+				hookContext(context, { body: context.input }),
+			);
+			return result;
+		},
+		onError: ({ error, ...context }) =>
+			notifyError(hooks?.onCreateConversationError, error, context, {
+				body: context.input,
+			}),
+	});
+
+	const updateConversation = defineOperation({
+		input: UpdateConversationOperationInputSchema,
+		permission: aiChatPermissions.conversation.update,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "ai-chat:conversation",
+			action: "update",
+			params: { id: facts.conversationId, ownerId: facts.ownerId },
+		}),
+		facts: async ({ input }) => {
+			assertHistoryAvailable();
+			const conversation = await getConversationById(adapter, input.id);
+			const snapshot = conversation ? snapshotConversation(conversation) : null;
+			conversationSnapshots.set(input as object, snapshot);
+			return recordFacts(input.id, snapshot);
+		},
+		execute: async (context) => {
+			const expected =
+				conversationSnapshots.get(context.input as object) ?? null;
+			if (!expected) {
+				throw new AiChatOperationError(
+					404,
+					"Conversation not found.",
+					"CONVERSATION_NOT_FOUND",
+				);
+			}
+			return adapter.transaction(async (tx) => {
+				const current = await getConversationById(tx, context.input.id);
+				if (!sameSnapshot(current, expected)) {
+					throw new AiChatOperationError(
+						409,
+						"Conversation changed during authorization.",
+						"STALE_CONVERSATION",
+					);
+				}
+				await hooks?.onBeforeUpdateConversation?.(
+					context.input.id,
+					context.input.data,
+					hookContext(context, {
+						body: context.input,
+						params: { id: context.input.id },
+					}),
+				);
+				const updatedAt = nextVersion(new Date(expected.updatedAt));
+				const matched = await tx.updateMany({
+					model: "conversation",
+					where: [
+						{ field: "id", value: expected.id, operator: "eq" as const },
+						{
+							field: "updatedAt",
+							value: new Date(expected.updatedAt),
+							operator: "eq" as const,
+						},
+					],
+					update: { title: context.input.data.title, updatedAt },
+				});
+				if (matched !== 1) {
+					throw new AiChatOperationError(
+						409,
+						"Conversation changed during authorization.",
+						"STALE_CONVERSATION",
+					);
+				}
+				const updated = await tx.findOne<Conversation>({
+					model: "conversation",
+					where: [{ field: "id", value: expected.id }],
+				});
+				if (!updated) {
+					throw new AiChatOperationError(
+						404,
+						"Conversation not found.",
+						"CONVERSATION_NOT_FOUND",
+					);
+				}
+				return publicConversation(updated);
+			});
+		},
+		after: (context) =>
+			hooks?.onConversationUpdated?.(
+				context.result,
+				hookContext(context, {
+					body: context.input,
+					params: { id: context.input.id },
+				}),
+			),
+		onError: ({ error, ...context }) =>
+			notifyError(hooks?.onUpdateConversationError, error, context, {
+				body: context.input,
+				params: { id: context.input.id },
+			}),
+	});
+
+	const deleteConversation = defineOperation({
+		input: ConversationOperationInputSchema,
+		permission: aiChatPermissions.conversation.delete,
+		legacyAuthorization: ({ facts }) => ({
+			resource: "ai-chat:conversation",
+			action: "delete",
+			params: { id: facts.conversationId, ownerId: facts.ownerId },
+		}),
+		facts: async ({ input }) => {
+			assertHistoryAvailable();
+			const conversation = await getConversationById(adapter, input.id);
+			const snapshot = conversation ? snapshotConversation(conversation) : null;
+			conversationSnapshots.set(input as object, snapshot);
+			return recordFacts(input.id, snapshot);
+		},
+		execute: async (context) => {
+			const expected =
+				conversationSnapshots.get(context.input as object) ?? null;
+			if (!expected) {
+				throw new AiChatOperationError(
+					404,
+					"Conversation not found.",
+					"CONVERSATION_NOT_FOUND",
+				);
+			}
+			return adapter.transaction(async (tx) => {
+				const current = await getConversationById(tx, context.input.id);
+				if (!sameSnapshot(current, expected)) {
+					throw new AiChatOperationError(
+						409,
+						"Conversation changed during authorization.",
+						"STALE_CONVERSATION",
+					);
+				}
+				await hooks?.onBeforeDeleteConversation?.(
+					context.input.id,
+					hookContext(context, { params: { id: context.input.id } }),
+				);
+				const deleted = await tx.deleteMany({
+					model: "conversation",
+					where: [
+						{ field: "id", value: expected.id, operator: "eq" as const },
+						{
+							field: "updatedAt",
+							value: new Date(expected.updatedAt),
+							operator: "eq" as const,
+						},
+					],
+				});
+				if (deleted !== 1) {
+					throw new AiChatOperationError(
+						409,
+						"Conversation changed during authorization.",
+						"STALE_CONVERSATION",
+					);
+				}
+				return { success: true as const };
+			});
+		},
+		after: (context) =>
+			hooks?.onConversationDeleted?.(
+				context.input.id,
+				hookContext(context, { params: { id: context.input.id } }),
+			),
+		onError: ({ error, ...context }) =>
+			notifyError(hooks?.onDeleteConversationError, error, context, {
+				params: { id: context.input.id },
+			}),
+	});
+
+	const startStream = definePassthroughOperation({
+		input: ChatOperationInputSchema,
+		permission: aiChatPermissions.stream.start,
+		access: config.access,
+		legacyAuthorization: ({ facts }) =>
+			config.access === "public"
+				? { public: true as const }
+				: {
+						resource: "ai-chat:stream",
+						action: "start",
+						params: { ...facts },
+					},
+		facts: async ({ input }) => {
+			const conversation =
+				config.access === "authorized" && input.conversationId
+					? await getConversationById(adapter, input.conversationId)
+					: null;
+			const snapshot = conversation ? snapshotConversation(conversation) : null;
+			const intent = determineIntent(input.messages as UIMessage[], snapshot);
+			const mediaTypes = fileParts(input.messages as UIMessage[]).map(
+				(file) => file.mediaType,
+			);
+			const toolNames = structuralToolNames(input, config);
+			streamPreparations.set(input as object, {
+				snapshot,
+				...intent,
+				mediaTypes,
+				authorizationToolNames: [
+					...new Set([...toolNames, ...Object.keys(config.tools ?? {})]),
+				],
+				toolNames,
+			});
+			return {
+				...(input.conversationId
+					? { conversationId: input.conversationId }
+					: {}),
+				...(snapshot?.userId ? { ownerId: snapshot.userId } : {}),
+				createsConversation: snapshot === null,
+				intent: intent.intent,
+			};
+		},
+		additionalPermissions: ({ input, facts }) => {
+			const prepared = streamPreparations.get(input as object);
+			if (!prepared) {
+				throw new AiChatOperationError(
+					500,
+					"Stream authorization context is unavailable.",
+					"AUTHORIZATION_SNAPSHOT_MISSING",
+				);
+			}
+			const requests = [];
+			if (config.access === "authorized" && !prepared.snapshot) {
+				requests.push(aiChatPermissions.conversation.create());
+			}
+			const base = {
+				...(facts.conversationId
+					? { conversationId: facts.conversationId }
+					: {}),
+				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
+			};
+			if (prepared.intent === "send") {
+				requests.push(
+					aiChatPermissions.message.send({
+						...base,
+						createsConversation: !prepared.snapshot,
+					}),
+				);
+			} else if (prepared.intent === "edit" && facts.conversationId) {
+				if (!prepared.messageId) {
+					throw new AiChatOperationError(
+						500,
+						"Edit authorization message is unavailable.",
+						"AUTHORIZATION_SNAPSHOT_MISSING",
+					);
+				}
+				requests.push(
+					aiChatPermissions.message.edit({
+						conversationId: facts.conversationId,
+						messageId: prepared.messageId,
+						...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
+					}),
+				);
+			} else if (prepared.intent === "retry" && facts.conversationId) {
+				if (!prepared.messageId) {
+					throw new AiChatOperationError(
+						500,
+						"Retry authorization message is unavailable.",
+						"AUTHORIZATION_SNAPSHOT_MISSING",
+					);
+				}
+				requests.push(
+					aiChatPermissions.message.retry({
+						conversationId: facts.conversationId,
+						messageId: prepared.messageId,
+						...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
+					}),
+				);
+			} else if (prepared.intent === "tool-result") {
+				requests.push(
+					aiChatPermissions.message.send({
+						...base,
+						createsConversation: false,
+					}),
+				);
+			}
+			if (prepared.mediaTypes.length > 0) {
+				requests.push(
+					aiChatPermissions.attachment.send({
+						...base,
+						mediaTypes: [...prepared.mediaTypes],
+					}),
+				);
+			}
+			if (prepared.authorizationToolNames.length > 0) {
+				requests.push(
+					aiChatPermissions.tool.activate({
+						...base,
+						...(input.routeName ? { routeName: input.routeName } : {}),
+						toolNames: [...prepared.authorizationToolNames],
+					}),
+				);
+			}
+			return requests;
+		},
+		legacyAdditionalAuthorization: ({ id, facts }) => {
+			if (config.access === "public") return { public: true };
+			const mapping: Record<string, { resource: string; action: string }> = {
+				[aiChatPermissions.conversation.create.id]: {
+					resource: "ai-chat:conversation",
+					action: "create",
+				},
+				[aiChatPermissions.message.send.id]: {
+					resource: "ai-chat:message",
+					action: "create",
+				},
+				[aiChatPermissions.message.edit.id]: {
+					resource: "ai-chat:message",
+					action: "update",
+				},
+				[aiChatPermissions.message.retry.id]: {
+					resource: "ai-chat:message",
+					action: "retry",
+				},
+				[aiChatPermissions.attachment.send.id]: {
+					resource: "ai-chat:attachment",
+					action: "create",
+				},
+				[aiChatPermissions.tool.activate.id]: {
+					resource: "ai-chat:tool",
+					action: "activate",
+				},
+			};
+			const mapped = mapping[id];
+			if (!mapped) throw new TypeError(`Unknown AI Chat permission: ${id}`);
+			return { ...mapped, params: facts };
+		},
+		execute: async (context) => {
+			const prepared = streamPreparations.get(context.input as object);
+			if (!prepared) {
+				throw new AiChatOperationError(
+					500,
+					"Stream authorization context is unavailable.",
+					"AUTHORIZATION_SNAPSHOT_MISSING",
+				);
+			}
+			const uiMessages = context.input.messages as UIMessage[];
+			const firstMessage = uiMessages[0];
+			if (!firstMessage) {
+				throw new AiChatOperationError(
+					400,
+					"At least one message is required.",
+					"EMPTY_CHAT",
+				);
+			}
+			validateAttachments(uiMessages);
+
+			if (prepared.snapshot) {
+				const current = await getConversationById(
+					adapter,
+					prepared.snapshot.id,
+				);
+				if (!sameSnapshot(current, prepared.snapshot)) {
+					throw new AiChatOperationError(
+						409,
+						"Conversation changed during authorization.",
+						"STALE_CONVERSATION",
+					);
+				}
+			}
+
+			const contextForHooks = hookContext(context, { body: context.input });
+			await hooks?.onBeforeChat?.(
+				uiMessages.map((message) => ({
+					role: message.role,
+					content: textContent(message),
+				})),
+				contextForHooks,
+			);
+
+			let allowedToolNames = [...prepared.toolNames];
+			if (allowedToolNames.length > 0 && hooks?.onBeforeToolsActivated) {
+				const filtered = await hooks.onBeforeToolsActivated(
+					allowedToolNames,
+					context.input.routeName,
+					contextForHooks,
+				);
+				const structurallyAllowed = new Set(allowedToolNames);
+				allowedToolNames = [
+					...new Set(filtered.filter((name) => structurallyAllowed.has(name))),
+				];
+			}
+			const mergedTools = buildTools(allowedToolNames, config);
+			const modelMessages = await convertToModelMessages(uiMessages);
+			const pageContext = context.input.pageContext?.trim();
+			const pageSuffix = pageContext
+				? `\n\nCurrent page context:\n${pageContext}`
+				: "";
+			const systemContent = config.systemPrompt
+				? `${config.systemPrompt}${pageSuffix}`
+				: pageSuffix || undefined;
+			const messages = systemContent
+				? [
+						{ role: "system" as const, content: systemContent },
+						...modelMessages,
+					]
+				: modelMessages;
+
+			const startModelStream = (
+				onFinish?: (completion: { text: string }) => Promise<void>,
+			) => {
+				const result = streamText({
+					model: config.model,
+					messages,
+					tools: mergedTools,
+					...(mergedTools ? { stopWhen: stepCountIs(5) } : {}),
+					...(onFinish ? { onFinish } : {}),
+				});
+				return result.toUIMessageStreamResponse({
+					originalMessages: uiMessages,
+				});
+			};
+
+			if (config.access === "public") return startModelStream();
+
+			const userId = await scopedUserId(
+				context,
+				context.input,
+				config.getUserId,
+			);
+			return adapter.transaction(async (tx) => {
+				let conversationId = context.input.conversationId;
+				if (prepared.snapshot) {
+					const current = await getConversationById(tx, prepared.snapshot.id);
+					if (!sameSnapshot(current, prepared.snapshot)) {
+						throw new AiChatOperationError(
+							409,
+							"Conversation changed during authorization.",
+							"STALE_CONVERSATION",
+						);
+					}
+					conversationId = prepared.snapshot.id;
+				} else {
+					const now = new Date();
+					const created = await tx.create<Conversation>({
+						model: "conversation",
+						data: {
+							...(conversationId ? { id: conversationId } : {}),
+							...(userId ? { userId } : {}),
+							title:
+								textContent(firstMessage).slice(0, 50) || "New Conversation",
+							createdAt: now,
+							updatedAt: now,
+						} as Conversation,
+					});
+					conversationId = created.id;
+				}
+				if (!conversationId) {
+					throw new AiChatOperationError(
+						500,
+						"Conversation id was not created.",
+						"CONVERSATION_CREATE_FAILED",
+					);
+				}
+
+				const existingMessages = await tx.findMany<Message>({
+					model: "message",
+					where: [
+						{
+							field: "conversationId",
+							value: conversationId,
+							operator: "eq",
+						},
+					],
+					sortBy: { field: "createdAt", direction: "asc" },
+				});
+				const lastIncoming = uiMessages[uiMessages.length - 1];
+				const incomingUser = lastIncoming?.role === "user";
+				const lastPersistedUser = [...existingMessages]
+					.reverse()
+					.find((message) => message.role === "user");
+				const shouldCreateUser = Boolean(
+					incomingUser &&
+						lastIncoming &&
+						lastPersistedUser?.content !== serializedParts(lastIncoming),
+				);
+				const expectedCount = shouldCreateUser
+					? Math.max(0, uiMessages.length - 1)
+					: uiMessages.length;
+				for (const message of existingMessages.slice(expectedCount)) {
+					await tx.delete({
+						model: "message",
+						where: [{ field: "id", value: message.id }],
+					});
+				}
+				if (shouldCreateUser && lastIncoming) {
+					await tx.create<Message>({
+						model: "message",
+						data: {
+							conversationId,
+							role: "user",
+							content: serializedParts(lastIncoming),
+							createdAt: new Date(),
+						},
+					});
+				}
+
+				const response = startModelStream(async ({ text }) => {
+					try {
+						await adapter.create<Message>({
+							model: "message",
+							data: {
+								conversationId,
+								role: "assistant",
+								content: JSON.stringify(text ? [{ type: "text", text }] : []),
+								createdAt: new Date(),
+							},
+						});
+						await adapter.update({
+							model: "conversation",
+							where: [{ field: "id", value: conversationId }],
+							update: { updatedAt: new Date() },
+						});
+						if (hooks?.onAfterChat) {
+							const persisted = await adapter.findMany<Message>({
+								model: "message",
+								where: [
+									{
+										field: "conversationId",
+										value: conversationId,
+										operator: "eq",
+									},
+								],
+								sortBy: { field: "createdAt", direction: "asc" },
+							});
+							await hooks.onAfterChat(
+								conversationId,
+								persisted.map(serializeMessage),
+								contextForHooks,
+							);
+						}
+					} catch (error) {
+						console.error("[ai-chat] Error in stream completion:", error);
+						try {
+							await hooks?.onChatError?.(
+								normalizeError(error, "Chat completion persistence failed"),
+								contextForHooks,
+							);
+						} catch (hookError) {
+							console.error("[ai-chat] Error in onChatError hook:", hookError);
+						}
+					}
+				});
+				const headers = new Headers(response.headers);
+				headers.set("X-Conversation-Id", conversationId);
+				return new Response(response.body, {
+					status: response.status,
+					statusText: response.statusText,
+					headers,
+				});
+			});
+		},
+		onError: ({ error, ...context }) =>
+			notifyError(hooks?.onChatError, error, context, {
+				body: context.input,
+			}),
+	});
+
+	return {
+		startStream,
+		listConversations,
+		getConversation,
+		createConversation,
+		updateConversation,
+		deleteConversation,
+	};
+}

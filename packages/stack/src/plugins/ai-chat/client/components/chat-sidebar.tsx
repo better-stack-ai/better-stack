@@ -37,13 +37,13 @@ import {
 } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import {
-	CanAccess,
+	PermissionAccess,
 	useBasePath,
-	useCan,
 	useNotify,
 	usePluginOverrides,
 	useStack,
 } from "@btst/stack/context";
+import { aiChatPermissions } from "../../permissions";
 import type { AiChatPluginOverrides } from "../overrides";
 import type { SerializedConversation } from "../../types";
 import {
@@ -73,13 +73,7 @@ export function ChatSidebar({
 	const basePath = useBasePath();
 	const notify = useNotify();
 	const tr = useAiChatTranslation(customLocalization);
-	const { can: canRead, isPending: isReadPermissionPending } = useCan({
-		resource: "ai-chat:conversation",
-		action: "read",
-	});
-	const { conversations, isLoading } = useConversations({
-		enabled: !isReadPermissionPending && canRead,
-	});
+	const { conversations, isLoading } = useConversations();
 	const deleteMutation = useDeleteConversation();
 
 	const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -200,7 +194,13 @@ export function ChatSidebar({
 		>
 			{/* Header */}
 			<div className="p-4 border-b">
-				<CanAccess resource="ai-chat:conversation" action="create">
+				<PermissionAccess
+					permission={aiChatPermissions.conversation.create()}
+					legacyPermission={{
+						resource: "ai-chat:conversation",
+						action: "create",
+					}}
+				>
 					<Button
 						onClick={handleNewChat}
 						className="w-full justify-start gap-2"
@@ -209,7 +209,7 @@ export function ChatSidebar({
 						<MessageSquarePlus className="h-4 w-4" />
 						{tr("SIDEBAR_NEW_CHAT", "aiChat.sidebar.newChat", "New chat")}
 					</Button>
-				</CanAccess>
+				</PermissionAccess>
 			</div>
 
 			{/* Conversations List */}
@@ -268,10 +268,19 @@ export function ChatSidebar({
 											</Button>
 										</DropdownMenuTrigger>
 										<DropdownMenuContent align="end">
-											<CanAccess
-												resource="ai-chat:conversation"
-												action="update"
-												params={{ id: conversation.id }}
+											<PermissionAccess
+												permission={aiChatPermissions.conversation.update({
+													conversationId: conversation.id,
+													exists: true,
+													...(conversation.userId
+														? { ownerId: conversation.userId }
+														: {}),
+												})}
+												legacyPermission={{
+													resource: "ai-chat:conversation",
+													action: "update",
+													params: { id: conversation.id },
+												}}
 											>
 												<DropdownMenuItem
 													onClick={(e) => {
@@ -286,11 +295,20 @@ export function ChatSidebar({
 														"Rename",
 													)}
 												</DropdownMenuItem>
-											</CanAccess>
-											<CanAccess
-												resource="ai-chat:conversation"
-												action="delete"
-												params={{ id: conversation.id }}
+											</PermissionAccess>
+											<PermissionAccess
+												permission={aiChatPermissions.conversation.delete({
+													conversationId: conversation.id,
+													exists: true,
+													...(conversation.userId
+														? { ownerId: conversation.userId }
+														: {}),
+												})}
+												legacyPermission={{
+													resource: "ai-chat:conversation",
+													action: "delete",
+													params: { id: conversation.id },
+												}}
 											>
 												<DropdownMenuItem
 													onClick={(e) => {
@@ -306,7 +324,7 @@ export function ChatSidebar({
 														"Delete",
 													)}
 												</DropdownMenuItem>
-											</CanAccess>
+											</PermissionAccess>
 										</DropdownMenuContent>
 									</DropdownMenu>
 								</div>

@@ -330,7 +330,7 @@ describe("scaffold plan", () => {
 
 		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
 		expect(stackFile?.content).toContain(
-			'aiChat: aiChatBackendPlugin({ model: openai("gpt-4o-mini"), mode: "public" as const }),',
+			'aiChat: aiChatBackendPlugin({ model: openai("gpt-4o-mini"), access: "public" as const }),',
 		);
 		expect(stackFile?.content).toContain(
 			'import { openai } from "@ai-sdk/openai"',

@@ -7,7 +7,7 @@ import {
 import { updateConversationSchema } from "../plugins/ai-chat/schemas";
 
 describe("AI Chat resource declaration", () => {
-	it("preserves the v3 conversation query keys", () => {
+	it("partitions protected conversation keys without changing legacy keys", () => {
 		const client = vi.fn() as any;
 		const queries = createAiChatQueryKeys(client);
 
@@ -21,6 +21,27 @@ describe("AI Chat resource declaration", () => {
 			"conversations",
 			"detail",
 			"conv-1",
+		]);
+		const identity = { id: "user-1", role: "admin" };
+		expect([...queries.conversations.list(identity).queryKey]).toEqual([
+			"conversations",
+			"list",
+			"all",
+			{ identity: { id: identity.id } },
+		]);
+		expect([
+			...queries.conversations.detail("conv-1", identity).queryKey,
+		]).toEqual([
+			"conversations",
+			"detail",
+			"conv-1",
+			{ identity: { id: identity.id } },
+		]);
+		expect([...queries.conversations.list("anonymous").queryKey]).toEqual([
+			"conversations",
+			"list",
+			"all",
+			{ identity: "anonymous" },
 		]);
 	});
 
@@ -101,26 +122,9 @@ describe("AI Chat resource declaration", () => {
 		);
 	});
 
-	it("only merges rename results into an existing detail cache entry", () => {
-		const updater =
-			aiChatResources.conversations.mutations.rename.setData.updater;
-		const renamed = {
-			id: "conv-1",
-			title: "Renamed",
-			createdAt: new Date("2024-01-01").toISOString(),
-			updatedAt: new Date("2024-01-03").toISOString(),
-		};
-
-		expect(updater(undefined, renamed)).toBeUndefined();
-		expect(
-			updater(
-				{
-					...renamed,
-					title: "Original",
-					messages: [{ id: "message-1" }],
-				},
-				renamed,
-			),
-		).toEqual({ ...renamed, messages: [{ id: "message-1" }] });
+	it("does not broadly refresh protected caches after mutations", () => {
+		expect(aiChatResources.conversations.mutations.create.refresh).toBe(false);
+		expect(aiChatResources.conversations.mutations.rename.refresh).toBe(false);
+		expect(aiChatResources.conversations.mutations.delete.refresh).toBe(false);
 	});
 });

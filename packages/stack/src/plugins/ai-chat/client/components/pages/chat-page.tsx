@@ -7,6 +7,8 @@ import { ComposedRoute } from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
 import { ChatLoading } from "../loading";
 import { NotFoundPage } from "./404-page";
+import { aiChatPermissions } from "../../../permissions";
+import { useConversation } from "../../hooks/chat-hooks";
 
 // Lazy load the internal component with actual page content
 const ChatPage = lazy(() =>
@@ -23,19 +25,30 @@ export function ChatPageComponent({ conversationId }: ChatPageComponentProps) {
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
 	>("ai-chat", {});
+	const { conversation, isLoading } = useConversation(conversationId, {
+		enabled: Boolean(conversationId) && mode !== "public",
+	});
+	if (conversationId && mode !== "public" && isLoading) {
+		return <ChatLoading />;
+	}
+	const permission = conversationId
+		? aiChatPermissions.conversation.read({
+				scope: "record",
+				conversationId,
+				exists: conversation !== null,
+				...(conversation?.userId ? { ownerId: conversation.userId } : {}),
+			})
+		: aiChatPermissions.conversation.read({ scope: "collection" });
 
 	return (
 		<ComposedRoute
 			path={conversationId ? `/chat/${conversationId}` : "/chat"}
-			permission={
-				mode === "public"
-					? undefined
-					: {
-							resource: "ai-chat:conversation",
-							action: "read",
-							params: conversationId ? { id: conversationId } : undefined,
-						}
-			}
+			permission={mode === "public" ? undefined : permission}
+			legacyPermission={{
+				resource: "ai-chat:conversation",
+				action: "read",
+				...(conversationId ? { params: { id: conversationId } } : {}),
+			}}
 			PageComponent={ChatPage}
 			ErrorComponent={DefaultError}
 			LoadingComponent={ChatLoading}

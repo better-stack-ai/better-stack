@@ -35,6 +35,8 @@ interface ChatInputProps {
 	onFilesAttached?: (files: AttachedFile[]) => void;
 	/** Attached files (for controlled mode) */
 	attachedFiles?: AttachedFile[];
+	/** Browser permission hint for showing attachment controls. */
+	allowAttachments?: boolean;
 }
 
 export function ChatInput({
@@ -46,6 +48,7 @@ export function ChatInput({
 	variant = "default",
 	onFilesAttached,
 	attachedFiles: controlledFiles,
+	allowAttachments = true,
 }: ChatInputProps) {
 	const {
 		uploadFile,
@@ -110,6 +113,7 @@ export function ChatInput({
 
 	// File uploads are disabled in public mode or if no file types are allowed
 	const canUploadFiles =
+		allowAttachments &&
 		!isPublicMode &&
 		typeof uploadFile === "function" &&
 		effectiveAllowedTypes.length > 0;

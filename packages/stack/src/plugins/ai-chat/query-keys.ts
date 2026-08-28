@@ -4,7 +4,21 @@ import {
 	type ResourcesDeclaration,
 } from "@btst/stack/plugins/client";
 import type { AiChatApiRouter } from "./api/plugin";
+import type { StackIdentity } from "@btst/stack/context";
 import type { SerializedConversation, SerializedMessage } from "./types";
+
+/** Identity partition for protected AI Chat history caches. */
+export type AiChatIdentityPartition =
+	| Pick<StackIdentity, "id">
+	| "anonymous"
+	| `pending:${number}`
+	| `error:${number}`;
+
+function identityKey(identityPartition: AiChatIdentityPartition) {
+	return typeof identityPartition === "string"
+		? identityPartition
+		: { id: identityPartition.id };
+}
 
 export type ConversationWithMessages = SerializedConversation & {
 	messages: SerializedMessage[];
@@ -26,15 +40,30 @@ export const aiChatResources = {
 		queries: {
 			list: {
 				path: "/chat/conversations",
-				key: () => ["all"],
-				select: (data: any): SerializedConversation[] => data ?? [],
+				key: (identityPartition?: AiChatIdentityPartition) =>
+					identityPartition === undefined
+						? ["all"]
+						: ["all", { identity: identityKey(identityPartition) }],
+				select: (
+					data: any,
+					_identityPartition?: AiChatIdentityPartition,
+				): SerializedConversation[] => data ?? [],
 			},
 			detail: {
 				path: "/chat/conversations/:id",
-				params: (id: string) => ({ id }),
-				key: (id: string) => [id],
-				select: (data: any): ConversationWithMessages | null => data,
-				skip: (id: string) => !id,
+				params: (id: string, _identityPartition?: AiChatIdentityPartition) => ({
+					id,
+				}),
+				key: (id: string, identityPartition?: AiChatIdentityPartition) =>
+					identityPartition === undefined
+						? [id]
+						: [id, { identity: identityKey(identityPartition) }],
+				select: (
+					data: any,
+					_id?: string,
+					_identityPartition?: AiChatIdentityPartition,
+				): ConversationWithMessages | null => data,
+				skip: (id: string, _identityPartition?: AiChatIdentityPartition) => !id,
 			},
 		},
 		mutations: {
@@ -43,7 +72,7 @@ export const aiChatResources = {
 				method: "POST" as const,
 				input: (input: CreateConversationInput) => ({ body: input }),
 				select: (data: any): SerializedConversation | null => data,
-				invalidates: ["conversations.list"],
+				refresh: false,
 			},
 			rename: {
 				path: "@put/chat/conversations/:id",
@@ -53,30 +82,14 @@ export const aiChatResources = {
 					body: { title: input.title },
 				}),
 				select: (data: any): SerializedConversation | null => data,
-				invalidates: ["conversations.list"],
-				setData: {
-					args: (result: SerializedConversation | null) =>
-						result?.id ? [result.id] : null,
-					updater: (
-						previous: unknown,
-						result: SerializedConversation | null,
-					) =>
-						previous && result
-							? { ...(previous as ConversationWithMessages), ...result }
-							: previous,
-				},
+				refresh: false,
 			},
 			delete: {
 				path: "@delete/chat/conversations/:id",
 				method: "DELETE" as const,
 				input: (input: { id: string }) => ({ params: { id: input.id } }),
 				select: (data: any): { success: boolean } => data,
-				invalidates: ["conversations.list"],
-				removeData: {
-					args: (_result: { success: boolean }, input: { id: string }) => [
-						input.id,
-					],
-				},
+				refresh: false,
 			},
 		},
 	},

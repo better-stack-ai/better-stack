@@ -33,15 +33,18 @@ export type { SerializedValidationIssue } from "./create-endpoint";
 export { createDbPlugin } from "@btst/db";
 export {
 	defineOperation,
+	definePassthroughOperation,
 	type AnyOperation,
 	type DeepReadonly,
 	type Operation,
+	type OperationAccess,
 	type OperationApi,
 	type OperationContext,
 	type OperationData,
 	type OperationErrorContext,
 	type OperationPermissionRequest,
 	type OperationRecord,
+	type OperationResultMode,
 	type RouteOperationApi,
 } from "./operation";
 

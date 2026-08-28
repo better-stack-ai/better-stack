@@ -134,7 +134,7 @@ function buildPluginTemplateContext(
 					return "";
 				}
 				if (m.key === "ai-chat") {
-					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), mode: "public" as const }),`;
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), access: "public" as const }),`;
 				}
 				if (m.key === "cms") {
 					const articleType = `{

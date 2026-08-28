@@ -8,7 +8,10 @@ import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { AiChatApiRouter } from "../api";
-import { createAiChatQueryKeys } from "../query-keys";
+import {
+	createAiChatQueryKeys,
+	type AiChatIdentityPartition,
+} from "../query-keys";
 import type { SerializedConversation, SerializedMessage } from "../types";
 import { ChatPageComponent } from "./components/pages/chat-page";
 import type { AiChatMode } from "./overrides";
@@ -87,6 +90,8 @@ export interface AiChatClientConfig {
 
 	/** Optional headers for SSR (e.g., forwarding cookies) */
 	headers?: Headers;
+	/** Identity hydrated for this SSR request's protected query partition. */
+	identityPartition?: AiChatIdentityPartition;
 
 	/**
 	 * Optional page component overrides.
@@ -163,7 +168,14 @@ function createConversationsLoader(config: AiChatClientConfig) {
 		}
 
 		if (typeof window === "undefined") {
-			const { queryClient, apiBasePath, apiBaseURL, hooks, headers } = config;
+			const {
+				queryClient,
+				apiBasePath,
+				apiBaseURL,
+				hooks,
+				headers,
+				identityPartition = "anonymous",
+			} = config;
 
 			const context: LoaderContext = {
 				path: "/chat",
@@ -177,7 +189,7 @@ function createConversationsLoader(config: AiChatClientConfig) {
 				basePath: apiBasePath,
 			});
 			const queries = createAiChatQueryKeys(client, headers);
-			const listQuery = queries.conversations.list();
+			const listQuery = queries.conversations.list(identityPartition);
 
 			try {
 				// Before hook
@@ -233,7 +245,14 @@ function createConversationsLoader(config: AiChatClientConfig) {
 function createConversationLoader(id: string, config: AiChatClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const { queryClient, apiBasePath, apiBaseURL, hooks, headers } = config;
+			const {
+				queryClient,
+				apiBasePath,
+				apiBaseURL,
+				hooks,
+				headers,
+				identityPartition = "anonymous",
+			} = config;
 
 			const context: LoaderContext = {
 				path: `/chat/${id}`,
@@ -248,8 +267,11 @@ function createConversationLoader(id: string, config: AiChatClientConfig) {
 				basePath: apiBasePath,
 			});
 			const queries = createAiChatQueryKeys(client, headers);
-			const conversationQuery = queries.conversations.detail(id);
-			const listQuery = queries.conversations.list();
+			const conversationQuery = queries.conversations.detail(
+				id,
+				identityPartition,
+			);
+			const listQuery = queries.conversations.list(identityPartition);
 
 			try {
 				// Before hook
@@ -361,6 +383,7 @@ function createConversationMeta(id: string, config: AiChatClientConfig) {
 			siteBaseURL,
 			siteBasePath,
 			seo,
+			identityPartition = "anonymous",
 		} = config;
 		const queries = createAiChatQueryKeys(
 			createApiClient<AiChatApiRouter>({
@@ -371,7 +394,7 @@ function createConversationMeta(id: string, config: AiChatClientConfig) {
 
 		const conversation = queryClient.getQueryData<
 			SerializedConversation & { messages: SerializedMessage[] }
-		>(queries.conversations.detail(id).queryKey);
+		>(queries.conversations.detail(id, identityPartition).queryKey);
 
 		const fullUrl = `${siteBaseURL}${siteBasePath}/chat/${id}`;
 		const title = conversation?.title || "Chat";

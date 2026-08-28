@@ -237,7 +237,7 @@ When AML signals are present:
 - Escalated case: confirm that a compliance review is required before proceeding and they'll be contacted.
 
 Keep all responses concise. Do not discuss the technology stack or internal tools.`,
-				mode: "authenticated",
+				access: "authorized",
 				tools: {
 					stackDocs: stackDocsTool,
 					submitIntakeAssessment,

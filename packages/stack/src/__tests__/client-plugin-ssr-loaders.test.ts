@@ -437,7 +437,7 @@ describe("client plugin SSR loaders", () => {
 		const query = createAiChatQueryKeys(
 			client,
 			TEST_HEADERS,
-		).conversations.list();
+		).conversations.list("anonymous");
 		expect(getErrorMessage(queryClient, query.queryKey)).toBe(
 			SSR_LOADER_ERROR_MESSAGE,
 		);
@@ -476,10 +476,16 @@ describe("client plugin SSR loaders", () => {
 		});
 		const queries = createAiChatQueryKeys(client, TEST_HEADERS);
 		expect(
-			getErrorMessage(queryClient, queries.conversations.detail(id).queryKey),
+			getErrorMessage(
+				queryClient,
+				queries.conversations.detail(id, "anonymous").queryKey,
+			),
 		).toBe(SSR_LOADER_ERROR_MESSAGE);
 		expect(
-			getErrorMessage(queryClient, queries.conversations.list().queryKey),
+			getErrorMessage(
+				queryClient,
+				queries.conversations.list("anonymous").queryKey,
+			),
 		).toBe(SSR_LOADER_ERROR_MESSAGE);
 	});
 });

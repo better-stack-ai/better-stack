@@ -35,23 +35,70 @@ Import and register the AI Chat backend plugin in your `stack.ts` file:
 
 ```ts title="lib/stack.ts"
 import { stack } from "@btst/stack"
+import { defineAuthorization } from "@btst/stack/authorization"
+import { createServerAuth } from "@btst/stack/authorization/server"
 import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
+import { aiChatPermissions } from "@btst/stack/plugins/ai-chat/permissions"
 import { openai } from "@ai-sdk/openai"
+import { z } from "zod"
 // ... your adapter imports
+
+// Browser-safe: put this in a shared authorization.ts module when the
+// frontend and backend live in the same codebase.
+export const authorization = defineAuthorization({
+  identity: z.object({
+    id: z.string(),
+    role: z.enum(["user", "admin"]),
+  }),
+  permissions: [aiChatPermissions] as const,
+  rules: ({ aiChat }) => {
+    const owns = (
+      identity: { id: string; role: "user" | "admin" } | null,
+      ownerId?: string,
+    ) => identity !== null && (identity.role === "admin" || identity.id === ownerId)
+    const canStart = (
+      identity: { id: string; role: "user" | "admin" } | null,
+      ownerId?: string,
+    ) => identity !== null && (ownerId === undefined || owns(identity, ownerId))
+
+    return [
+      aiChat.conversation.read.when(({ identity, facts }) =>
+        facts.scope === "collection" ? identity !== null : owns(identity, facts.ownerId),
+      ),
+      aiChat.conversation.create.when(({ identity }) => identity !== null),
+      aiChat.conversation.update.when(({ identity, facts }) => owns(identity, facts.ownerId)),
+      aiChat.conversation.delete.when(({ identity, facts }) => owns(identity, facts.ownerId)),
+      aiChat.message.send.when(({ identity, facts }) =>
+        facts.createsConversation ? identity !== null : owns(identity, facts.ownerId),
+      ),
+      aiChat.message.edit.when(({ identity, facts }) => owns(identity, facts.ownerId)),
+      aiChat.message.retry.when(({ identity, facts }) => owns(identity, facts.ownerId)),
+      aiChat.attachment.send.when(({ identity, facts }) => canStart(identity, facts.ownerId)),
+      aiChat.tool.activate.when(({ identity, facts }) => canStart(identity, facts.ownerId)),
+      aiChat.stream.start.when(({ identity, facts }) =>
+        facts.createsConversation ? identity !== null : owns(identity, facts.ownerId),
+      ),
+    ]
+  },
+})
+
+const serverAuth = createServerAuth({
+  authorization,
+  getIdentity: async ({ headers }) => {
+    const token = headers.get("authorization")
+    if (!token) return null
+    const user = await verifyToken(token)
+    return user ? { id: user.id, role: user.role } : null
+  },
+})
 
 const { handler, dbSchema } = stack({
   basePath: "/api/data",
+  auth: serverAuth,
   plugins: {
     aiChat: aiChatBackendPlugin({
       model: openai("gpt-4o"), // Or any LanguageModel from AI SDK
-      mode: "authenticated", // "authenticated" (default) or "public"
-      // Extract userId from request headers to scope conversations per user
-      getUserId: async (ctx) => {
-        const token = ctx.headers?.get("authorization")
-        if (!token) return null // Deny access if no auth
-        const user = await verifyToken(token) // Your auth logic
-        return user?.id ?? null
-      },
+      access: "authorized", // Default; use "public" only intentionally
       systemPrompt: "You are a helpful assistant.", // Optional
       tools: {}, // Optional: AI SDK v5 tools
     })
@@ -62,7 +109,7 @@ const { handler, dbSchema } = stack({
 export { handler, dbSchema }
 ```
 
-The `aiChatBackendPlugin()` accepts optional hooks for customizing behavior (authorization, logging, etc.).
+The `aiChatBackendPlugin()` accepts optional lifecycle hooks for domain behavior, logging, rate limits, and tool safety. Identity/role/ownership policy belongs in the typed rules above.
 
 <Callout type="info">
 **Model Configuration:** You can use any model from the AI SDK, including OpenAI, Anthropic, Google, and more. Make sure to install the corresponding provider package (e.g., `@ai-sdk/openai`) and set up your API keys in environment variables.
@@ -82,7 +129,10 @@ const getBaseURL = () =>
     ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
     : (process.env.BASE_URL || "http://localhost:3000")
 
-export const getStackClient = (queryClient: QueryClient, options?: { headers?: Headers }) => {
+export const getStackClient = (
+  queryClient: QueryClient,
+  options?: { headers?: Headers; identity?: { id: string; role: "user" | "admin" } },
+) => {
   const baseURL = getBaseURL()
   return createStackClient({
     plugins: {
@@ -94,6 +144,7 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
         siteBasePath: "/pages",
         queryClient: queryClient,
         headers: options?.headers,
+        identityPartition: options?.identity,
         // Mode should match backend config
         mode: "authenticated", // "authenticated" (default) or "public"
         // Optional: SEO configuration
@@ -295,13 +346,13 @@ For more details on the CLI and all available options, see the [CLI documentatio
 
 Your AI Chat plugin is now fully configured and ready to use! Here's a quick reference of what's available:
 
-### Plugin Modes
+### Access modes
 
 The AI Chat plugin supports two distinct modes:
 
-**Authenticated Mode (Default)**
+**Authorized access (default)**
 - Conversation persistence in database
-- User-scoped data via `getUserId`
+- Identity-scoped data from the request's validated server identity
 - Full UI with sidebar and conversation history
 - Routes: `/chat` (new/list) and `/chat/:id` (existing conversation)
 
@@ -342,7 +393,7 @@ The AI Chat plugin automatically creates the following pages (mounted at your co
 - **File Uploads**: Attach images, PDFs, and text files to messages
 - **Tools Support**: Use AI SDK v5 tools for function calling
 - **Customizable Models**: Use any LanguageModel from the AI SDK
-- **Authorization Hooks**: Add custom authentication and authorization logic
+- **Typed Authorization**: Reuse the same schema-backed rules for browser hints and authoritative server checks
 - **Localization**: Customize all UI strings
 
 ### Page Component Overrides
@@ -366,30 +417,41 @@ aiChatClientPlugin({
 
 ### Adding Authorization
 
-Use the `auth` provider on `StackProvider` for client-side route and control visibility, and backend lifecycle hooks for authoritative API authorization. Authenticated mode uses this permission map:
-
-| Resource | Action | UI covered |
-| --- | --- | --- |
-| `ai-chat:conversation` | `read` | `/chat`, `/chat/:id`, and conversation history |
-| `ai-chat:conversation` | `create` | New chat and the first persisted send |
-| `ai-chat:conversation` | `update` | Continue, retry, edit, and rename; receives `{ id }` when available |
-| `ai-chat:conversation` | `delete` | Delete; receives `{ id }` |
+AI Chat publishes its browser-safe catalog from `@btst/stack/plugins/ai-chat/permissions`. Bind the same `authorization` definition to `createClientAuth()` for presentation and `createServerAuth()` for enforcement:
 
 ```tsx
+import { createClientAuth } from "@btst/stack/authorization/client"
+import { authorization } from "./authorization"
+
+const clientAuth = createClientAuth({
+  authorization,
+  getIdentity: () => session?.user ?? null,
+  loginPath: "/sign-in",
+})
+
 <StackProvider
-  auth={{
-    getIdentity: () => session?.user ?? null,
-    can: ({ resource, action, params }) =>
-      authorizeConversation(resource, action, params?.id),
-    loginPath: "/sign-in",
-  }}
+  auth={clientAuth}
+  initialIdentity={initialIdentity}
   // ...
 >
   {children}
 </StackProvider>
 ```
 
-Without an auth provider, permission checks remain permissive for backward compatibility. Public mode intentionally bypasses conversation permission gates because it is stateless; protect the public streaming endpoint with backend rate limits or `onBeforeChat` as needed.
+The built-in route, new-chat, rename, delete, send, edit, retry, attachment, and tool controls construct exact descriptors from rendered conversation/message data. Those values are presentation hints only. Every backend operation reloads the authoritative conversation owner and message state before evaluating the same rule.
+
+The streaming operation checks `stream.start` plus the exact semantic intent (`message.send`, `message.edit`, `message.retry`, attachment, tool, and conversation creation when applicable) before hooks, persistence, or provider work. A coarse stream rule cannot bypass a denied sub-operation rule.
+
+Missing rules deny in authorized mode. Anonymous denials return 401 and identified denials return 403; identity, rule, schema, and fact-loading failures remain errors. BTST does not install an authorization-result cache.
+
+The operation catalog also powers both server call styles:
+
+```ts
+await app.forRequest(request).api.aiChat.deleteConversation({ id }) // authorized
+await app.internal.aiChat.deleteConversation({ id })                // trusted
+```
+
+`internal` skips only user authorization. Input validation, authoritative reads, lifecycle hooks, persistence, and provider/tool behavior remain active. The raw getters documented below deliberately bypass authorization and lifecycle composition.
 
 ## API Reference
 
@@ -401,13 +463,13 @@ Without an auth provider, permission checks remain permissive for backward compa
 
 #### AiChatBackendConfig
 
-The backend plugin accepts a configuration object with the model, mode, and optional hooks:
+The backend plugin accepts a configuration object with the model, explicit access policy, and optional hooks:
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/api/plugin.ts" name="AiChatBackendConfig" />
 
 #### AiChatBackendHooks
 
-Customize backend behavior with optional lifecycle hooks. All hooks are optional and allow you to add authorization, logging, and custom behavior:
+Customize post-authorization domain behavior with optional lifecycle hooks. Keep ordinary identity, role, owner, message, attachment, and tool policy in `aiChatPermissions` rules.
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/api/plugin.ts" name="AiChatBackendHooks" />
 
@@ -417,18 +479,9 @@ Customize backend behavior with optional lifecycle hooks. All hooks are optional
 import { aiChatBackendPlugin, type AiChatBackendHooks } from "@btst/stack/plugins/ai-chat/api"
 
 const chatHooks: AiChatBackendHooks = {
-  // Authorization hooks — throw to deny access
+  // Domain/abuse controls run only after typed authorization succeeds.
   onBeforeChat(messages, context) {
-    const authHeader = context.headers?.get("authorization")
-    if (!authHeader) throw new Error("Unauthorized")
-  },
-  async onBeforeListConversations(context) {
-    if (!await isAuthenticated(context.headers as Headers))
-      throw new Error("Unauthorized")
-  },
-  async onBeforeDeleteConversation(conversationId, context) {
-    if (!await isAuthenticated(context.headers as Headers))
-      throw new Error("Unauthorized")
+    enforceRateLimit(context.headers)
   },
   // Lifecycle hooks
   onConversationCreated(conversation, context) {
@@ -783,7 +836,7 @@ import {
 } from "@btst/stack/plugins/ai-chat/query-keys"
 ```
 
-The stable keys remain `['conversations', 'list', 'all']` and `['conversations', 'detail', id]`, so existing dehydrated caches and manual invalidations continue to match.
+The stable prefixes remain `['conversations', 'list', 'all']` and `['conversations', 'detail', id]`. Protected keys append only the validated identity id (or an explicit anonymous marker), never the full identity object. Pending/error identity generations use separate disabled keys, mutations refresh only the partition that started them, and an account switch stops and clears an active stream. Server loaders must pass `identityPartition` (the framework codegen does this automatically) so dehydrated data lands in the same browser partition.
 
 ## Model & Tools Configuration
 
@@ -948,7 +1001,7 @@ const { handler, dbSchema } = stack({
   plugins: {
     aiChat: aiChatBackendPlugin({
       model: openai("gpt-4o"),
-      mode: "public", // Stateless mode - no persistence
+      access: "public", // Explicit, stateless streaming access
       systemPrompt: "You are a helpful customer support bot.",
       hooks: {
         onBeforeChat: async (messages, ctx) => {
@@ -994,7 +1047,7 @@ aiChat: aiChatClientPlugin({
 ```
 
 <Callout type="info">
-In public mode, the sidebar is hidden, conversation history is not saved to the database, only the `/chat` route is available, and client conversation permission gates are bypassed.
+Public access is explicit operation metadata, not a missing-rule fallback. It makes only the maintained streaming intents public: stream start, send/edit/retry semantics, validated attachments, and configured tools. Validation, rate/abuse hooks, provider limits, route/tool allowlists, and attachment safety still run. Conversation history and CRUD endpoints remain unavailable (404), no conversation is persisted, and the setting does not make any other plugin or application operation public.
 </Callout>
 
 ### Local Storage Persistence
@@ -1077,7 +1130,11 @@ Rename, delete, and file-upload feedback uses the shared `notify` provider. Fiel
 
 ## Server-side Data Access
 
-The AI Chat plugin exposes standalone getter functions for server-side use cases, giving you direct access to conversation history without going through HTTP.
+The AI Chat plugin exposes standalone getter functions for deliberately low-level server data access.
+
+<Callout type="warn">
+These raw getters bypass typed authorization, identity scoping, authoritative snapshot checks, and lifecycle hooks. Prefer `app.forRequest(request).api.aiChat` for request-driven code and `app.internal.aiChat` for trusted jobs. Use raw getters only when the caller owns those responsibilities explicitly.
+</Callout>
 
 ### Two patterns
 
@@ -1263,11 +1320,11 @@ useRegisterPageAIContext({
 |---|---|---|---|
 | `enablePageTools` | `boolean` | `false` | Activate page tool support |
 | `clientToolSchemas` | `Record<string, Tool>` | — | Custom tool schemas for non-BTST pages |
-| `hooks.onBeforeToolsActivated` | `(toolNames, routeName, context) => string[]` | — | Filter active tools per request; throw to abort with 403 |
+| `hooks.onBeforeToolsActivated` | `(toolNames, routeName, context) => string[]` | — | Apply a final domain/safety filter after typed tool authorization |
 
 ### Tool Authorization Hook
 
-`onBeforeToolsActivated` runs server-side after the structural `routeName` allowlist check. Use it to add user-level authorization — for example, restricting which tools are available based on the authenticated user's role or subscription tier.
+`onBeforeToolsActivated` runs server-side after the structural `routeName` allowlist and the exact `aiChat.tool.activate` rule have succeeded. Use the typed rule for identity, role, subscription, or ownership policy. Use this hook only for exceptional server-side domain/safety narrowing.
 
 ```ts title="lib/stack.ts"
 import type { AiChatBackendHooks } from "@btst/stack/plugins/ai-chat/api"
@@ -1276,12 +1333,8 @@ aiChatBackendPlugin({
   enablePageTools: true,
   hooks: {
     onBeforeToolsActivated: async (toolNames, routeName, context) => {
-      const role = await getUserRole(context.headers);
-      // Viewers cannot use any interactive tools
-      if (role === "viewer") return [];
-      // Non-editors cannot fill the blog form
-      if (role !== "editor") return toolNames.filter(t => t !== "fillBlogForm");
-      return toolNames;
+      const disabled = await loadEmergencyToolDisableList()
+      return toolNames.filter((name) => !disabled.has(name))
     },
   },
 })
@@ -1293,10 +1346,10 @@ aiChatBackendPlugin({
 | `routeName` | `string \| undefined` | Claimed route name from the request |
 | `context` | `ChatApiContext` | Full request context (headers, body, etc.) |
 
-Return a subset of `toolNames` to allow, or `[]` to suppress all page tools. Throw an `Error` to abort the entire chat request — the endpoint catches it and returns a **403** response.
+Return a subset of `toolNames` to allow, or `[]` to suppress all page tools. Throwing aborts the stream through the ordinary post-authorization operation error path.
 
 <Callout type="info">
-This hook runs **after** the structural `routeName` allowlist check (which validates that each built-in tool is only requested from its intended page). `onBeforeToolsActivated` is the right place to add user-specific logic — the two layers are complementary.
+The server authorizes the complete configured tool-name set before this hook or provider execution. Filtering cannot be used to smuggle an unapproved tool into the model, and client-supplied `routeName`/tool names never override the server allowlist.
 </Callout>
 
 ## Shadcn Registry

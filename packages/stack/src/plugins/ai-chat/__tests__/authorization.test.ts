@@ -1,0 +1,664 @@
+import { createMemoryAdapter } from "@btst/adapter-memory";
+import { type DatabaseDefinition, defineDb } from "@btst/db";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import { stack } from "../../../api";
+import { defineAuthorization } from "../../../authorization";
+import { createServerAuth } from "../../../authorization/server";
+import {
+	aiChatBackendPlugin,
+	AI_CHAT_OPERATION_INVENTORY,
+	AI_CHAT_RAW_ESCAPE_HATCH_INVENTORY,
+} from "../api";
+import { aiChatPermissions } from "../permissions";
+import type { Conversation, Message } from "../types";
+
+const { streamText } = vi.hoisted(() => ({
+	streamText: vi.fn(() => ({
+		toUIMessageStreamResponse: () => new Response("stream", { status: 200 }),
+	})),
+}));
+
+vi.mock("ai", async (importOriginal) => ({
+	...(await importOriginal<typeof import("ai")>()),
+	convertToModelMessages: (messages: unknown) => messages,
+	stepCountIs: () => () => false,
+	streamText,
+}));
+
+type Identity = { id: string; role: "user" | "admin" };
+
+const fullAuthorization = defineAuthorization({
+	identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+	permissions: [aiChatPermissions] as const,
+	rules: ({ aiChat }) => {
+		const owns = ({
+			identity,
+			facts,
+		}: {
+			identity: Identity | null;
+			facts: { ownerId?: string };
+		}) => identity?.role === "admin" || identity?.id === facts.ownerId;
+		return [
+			aiChat.conversation.read.when(({ identity, facts }) =>
+				facts.scope === "collection"
+					? identity !== null
+					: owns({ identity, facts }),
+			),
+			aiChat.conversation.create.when(({ identity }) => identity !== null),
+			aiChat.conversation.update.when(owns),
+			aiChat.conversation.delete.when(owns),
+			aiChat.message.send.when(({ identity, facts }) =>
+				facts.createsConversation
+					? identity !== null
+					: owns({ identity, facts }),
+			),
+			aiChat.message.edit.when(owns),
+			aiChat.message.retry.when(owns),
+			aiChat.attachment.send.when(owns),
+			aiChat.tool.activate.when(owns),
+			aiChat.stream.start.when(({ identity, facts }) =>
+				facts.createsConversation
+					? identity !== null
+					: owns({ identity, facts }),
+			),
+		];
+	},
+});
+
+function request(
+	path: string,
+	options?: { method?: string; identity?: Identity; body?: unknown },
+) {
+	const headers = new Headers();
+	if (options?.identity) {
+		headers.set("x-user-id", options.identity.id);
+		headers.set("x-user-role", options.identity.role);
+	}
+	if (options?.body !== undefined)
+		headers.set("content-type", "application/json");
+	return new Request(`http://localhost/api${path}`, {
+		method: options?.method ?? "GET",
+		headers,
+		...(options?.body === undefined
+			? {}
+			: { body: JSON.stringify(options.body) }),
+	});
+}
+
+const model = {} as never;
+const memory = (db: DatabaseDefinition) => createMemoryAdapter(db)({});
+const owner = { id: "owner-1", role: "user" } as const;
+const viewer = { id: "viewer-1", role: "user" } as const;
+const admin = { id: "admin-1", role: "admin" } as const;
+const messageBody = {
+	messages: [
+		{ id: "message-1", role: "user", parts: [{ type: "text", text: "Hi" }] },
+	],
+};
+
+function backend(options?: {
+	access?: "authorized" | "public";
+	authorization?: typeof fullAuthorization;
+	hooks?: Parameters<typeof aiChatBackendPlugin>[0]["hooks"];
+	tools?: Parameters<typeof aiChatBackendPlugin>[0]["tools"];
+	getIdentity?: (
+		request: Request,
+	) => Identity | null | Promise<Identity | null>;
+}) {
+	return stack({
+		basePath: "/api",
+		plugins: {
+			aiChat: aiChatBackendPlugin({
+				model,
+				access: options?.access ?? "authorized",
+				hooks: options?.hooks,
+				tools: options?.tools,
+			}),
+		},
+		adapter: memory,
+		auth: createServerAuth({
+			authorization: options?.authorization ?? fullAuthorization,
+			getIdentity: ({ request }) =>
+				options?.getIdentity
+					? options.getIdentity(request)
+					: (() => {
+							const id = request.headers.get("x-user-id");
+							const role = request.headers.get("x-user-role");
+							return id && (role === "user" || role === "admin")
+								? { id, role: role as "user" | "admin" }
+								: null;
+						})(),
+		}),
+	});
+}
+
+async function seedConversation(
+	app: ReturnType<typeof backend>,
+	userId: string = owner.id,
+	title = "Private",
+) {
+	const now = new Date("2026-01-01T00:00:00.000Z");
+	return app.adapter.create<Conversation>({
+		model: "conversation",
+		data: { userId, title, createdAt: now, updatedAt: now },
+	});
+}
+
+async function seedMessage(
+	app: ReturnType<typeof backend>,
+	conversationId: string,
+	role: Message["role"],
+	parts: readonly Record<string, unknown>[],
+) {
+	return app.adapter.create<Message>({
+		model: "message",
+		data: {
+			conversationId,
+			role,
+			content: JSON.stringify(parts),
+			createdAt: new Date(),
+		},
+	});
+}
+
+describe("AI Chat operation authorization", () => {
+	beforeEach(() => streamText.mockClear());
+
+	it("publishes one executable inventory for every maintained transport", () => {
+		const plugin = aiChatBackendPlugin({ model });
+		const adapter = createMemoryAdapter(defineDb({}).use(plugin.dbPlugin))({});
+		const operations = plugin.operations?.(adapter);
+		expect(Object.keys(operations ?? {}).sort()).toEqual([
+			"createConversation",
+			"deleteConversation",
+			"getConversation",
+			"listConversations",
+			"startStream",
+			"updateConversation",
+		]);
+		expect(AI_CHAT_OPERATION_INVENTORY.startStream).toMatchObject({
+			http: "POST /chat",
+			request: "forRequest(request).api.aiChat.startStream",
+			internal: "internal.aiChat.startStream",
+			publicSemantics: [
+				"stream.start",
+				"message.send",
+				"message.edit",
+				"message.retry",
+				"attachment.send",
+				"tool.activate",
+			],
+			publicWhenConfigured: true,
+		});
+		expect(AI_CHAT_RAW_ESCAPE_HATCH_INVENTORY).toEqual([
+			"api.aiChat.getAllConversations",
+			"api.aiChat.getConversationById",
+		]);
+		expect(operations?.startStream.resultMode).toBe("passthrough");
+		expect(operations?.listConversations.resultMode).toBe("immutable");
+		expect(operations?.listConversations.access).toBe("authorized");
+		const publicPlugin = aiChatBackendPlugin({ model, access: "public" });
+		const publicAdapter = createMemoryAdapter(
+			defineDb({}).use(publicPlugin.dbPlugin),
+		)({});
+		const publicOperations = publicPlugin.operations?.(publicAdapter);
+		expect(publicOperations?.startStream.access).toBe("public");
+		expect(publicOperations?.listConversations.access).toBe("authorized");
+		expect(() =>
+			aiChatPermissions.message.retry({
+				conversationId: "conversation-1",
+				messageId: 42 as never,
+			}),
+		).toThrow();
+	});
+
+	it("keeps explicit public chat cold-anonymous while history remains unavailable", async () => {
+		const before = vi.fn();
+		const app = backend({
+			access: "public",
+			hooks: { onBeforeChat: before },
+			getIdentity: () => {
+				throw new Error("public chat must stay cold-anonymous");
+			},
+		});
+		const response = await app.handler(
+			request("/chat", { method: "POST", body: messageBody }),
+		);
+		expect(response.status).toBe(200);
+		expect(await response.text()).toBe("stream");
+		expect(before).toHaveBeenCalledOnce();
+		expect(streamText).toHaveBeenCalledOnce();
+		expect((await app.handler(request("/chat/conversations"))).status).toBe(
+			404,
+		);
+		await expect(
+			app
+				.forRequest(request("/public-history"))
+				.api.aiChat.listConversations({}),
+		).rejects.toMatchObject({
+			statusCode: 404,
+			code: "HISTORY_UNAVAILABLE",
+		});
+		await expect(
+			app.internal.aiChat.createConversation({ title: "Unavailable" }),
+		).rejects.toMatchObject({
+			statusCode: 404,
+			code: "HISTORY_UNAVAILABLE",
+		});
+		expect(await app.adapter.count({ model: "conversation" })).toBe(0);
+
+		const unsafeAttachment = await app.handler(
+			request("/chat", {
+				method: "POST",
+				body: {
+					messages: [
+						{
+							role: "user",
+							parts: [
+								{
+									type: "file",
+									mediaType: "image/png",
+									url: "file:///etc/passwd",
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+		expect(unsafeAttachment.status).toBe(400);
+		expect(before).toHaveBeenCalledOnce();
+		expect(streamText).toHaveBeenCalledOnce();
+	});
+
+	it("returns 401/403 before hooks and derives owner facts on the server", async () => {
+		const beforeRead = vi.fn();
+		const app = backend({ hooks: { onBeforeGetConversation: beforeRead } });
+		const conversation = await seedConversation(app);
+
+		expect(
+			(await app.handler(request(`/chat/conversations/${conversation.id}`)))
+				.status,
+		).toBe(401);
+		expect(
+			(
+				await app.handler(
+					request(`/chat/conversations/${conversation.id}`, {
+						identity: viewer,
+					}),
+				)
+			).status,
+		).toBe(403);
+		expect(beforeRead).not.toHaveBeenCalled();
+		expect(
+			fullAuthorization.can(
+				aiChatPermissions.conversation.update({
+					conversationId: conversation.id,
+					exists: true,
+					ownerId: viewer.id,
+				}),
+				viewer,
+			),
+		).toBe(true);
+		await expect(
+			app
+				.forRequest(request("/spoof", { identity: viewer }))
+				.api.aiChat.updateConversation({
+					id: conversation.id,
+					data: { title: "Spoofed" },
+				}),
+		).rejects.toMatchObject({ statusCode: 403 });
+		await expect(
+			app
+				.forRequest(request("/owner", { identity: owner }))
+				.api.aiChat.getConversation({ id: conversation.id }),
+		).resolves.toMatchObject({ id: conversation.id, userId: owner.id });
+		await expect(
+			app
+				.forRequest(request("/admin", { identity: admin }))
+				.api.aiChat.getConversation({ id: conversation.id }),
+		).resolves.toMatchObject({ id: conversation.id });
+		expect(beforeRead).toHaveBeenCalledTimes(2);
+	});
+
+	it("keeps ordinary HTTP results JSON-serialized and programmatic results immutable", async () => {
+		const app = backend();
+		const httpResponse = await app.handler(
+			request("/chat/conversations", {
+				method: "POST",
+				identity: owner,
+				body: { title: "HTTP conversation" },
+			}),
+		);
+		expect(httpResponse.status).toBe(200);
+		await expect(httpResponse.json()).resolves.toMatchObject({
+			title: "HTTP conversation",
+			userId: owner.id,
+		});
+
+		const result = await app
+			.forRequest(request("/create", { identity: owner }))
+			.api.aiChat.createConversation({ title: "Request conversation" });
+		expect(result).toMatchObject({ title: "Request conversation" });
+		expect(Object.isFrozen(result)).toBe(true);
+	});
+
+	it("keeps collection scoping server-only and partitions owner histories", async () => {
+		const app = backend();
+		await seedConversation(app, owner.id, "Owner");
+		await seedConversation(app, viewer.id, "Viewer");
+		await expect(
+			app
+				.forRequest(request("/owner", { identity: owner }))
+				.api.aiChat.listConversations({}),
+		).resolves.toEqual([
+			expect.objectContaining({ title: "Owner", userId: owner.id }),
+		]);
+		await expect(
+			app
+				.forRequest(request("/admin", { identity: admin }))
+				.api.aiChat.listConversations({}),
+		).resolves.toHaveLength(0);
+
+		const anonymousCollection = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+			permissions: [aiChatPermissions] as const,
+			rules: ({ aiChat }) => [aiChat.conversation.read.allow()],
+		});
+		const anonymousApp = backend({
+			authorization: anonymousCollection as typeof fullAuthorization,
+		});
+		await seedConversation(anonymousApp, owner.id, "Never public");
+		await expect(
+			anonymousApp
+				.forRequest(request("/anonymous"))
+				.api.aiChat.listConversations({}),
+		).resolves.toEqual([]);
+	});
+
+	it("does not let stream.start bypass a denied exact send permission", async () => {
+		const streamOnly = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+			permissions: [aiChatPermissions] as const,
+			rules: ({ aiChat }) => [
+				aiChat.stream.start.allow(),
+				aiChat.conversation.create.allow(),
+				aiChat.message.send.when(() => false),
+			],
+		});
+		const before = vi.fn();
+		const app = backend({
+			authorization: streamOnly as typeof fullAuthorization,
+			hooks: { onBeforeChat: before },
+		});
+		await expect(
+			app
+				.forRequest(request("/chat", { identity: owner }))
+				.api.aiChat.startStream(messageBody),
+		).rejects.toMatchObject({ statusCode: 403 });
+		expect(before).not.toHaveBeenCalled();
+		expect(streamText).not.toHaveBeenCalled();
+		expect(await app.adapter.count({ model: "conversation" })).toBe(0);
+	});
+
+	it("preauthorizes retry and edit with server-resolved message ids", async () => {
+		const observed: Array<{ intent: string; messageId?: string }> = [];
+		const exact = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+			permissions: [aiChatPermissions] as const,
+			rules: ({ aiChat }) => [
+				aiChat.stream.start.allow(),
+				aiChat.message.retry.when(({ facts }) => {
+					observed.push({ intent: "retry", messageId: facts.messageId });
+					return false;
+				}),
+				aiChat.message.edit.when(({ facts }) => {
+					observed.push({ intent: "edit", messageId: facts.messageId });
+					return false;
+				}),
+			],
+		});
+		const before = vi.fn();
+		const app = backend({
+			authorization: exact as typeof fullAuthorization,
+			hooks: { onBeforeChat: before },
+		});
+		const conversation = await seedConversation(app);
+		const firstUser = await seedMessage(app, conversation.id, "user", [
+			{ type: "text", text: "Original" },
+		]);
+		await seedMessage(app, conversation.id, "assistant", [
+			{ type: "text", text: "First answer" },
+		]);
+		const latestUser = await seedMessage(app, conversation.id, "user", [
+			{ type: "text", text: "Latest" },
+		]);
+		await seedMessage(app, conversation.id, "assistant", [
+			{ type: "text", text: "Latest answer" },
+		]);
+
+		await expect(
+			app
+				.forRequest(request("/chat", { identity: owner }))
+				.api.aiChat.startStream({
+					conversationId: conversation.id,
+					messages: [
+						{
+							id: "spoofed-1",
+							role: "user",
+							parts: [{ type: "text", text: "Original" }],
+						},
+						{
+							id: "spoofed-2",
+							role: "assistant",
+							parts: [{ type: "text", text: "First answer" }],
+						},
+						{
+							id: "spoofed-3",
+							role: "user",
+							parts: [{ type: "text", text: "Latest" }],
+						},
+					],
+				}),
+		).rejects.toMatchObject({ statusCode: 403 });
+		await expect(
+			app
+				.forRequest(request("/chat", { identity: owner }))
+				.api.aiChat.startStream({
+					conversationId: conversation.id,
+					messages: [
+						{
+							id: "browser-controlled-id",
+							role: "user",
+							parts: [{ type: "text", text: "Edited first" }],
+						},
+					],
+				}),
+		).rejects.toMatchObject({ statusCode: 403 });
+
+		expect(observed).toEqual([
+			{ intent: "retry", messageId: latestUser.id },
+			{ intent: "edit", messageId: firstUser.id },
+		]);
+		expect(before).not.toHaveBeenCalled();
+		expect(streamText).not.toHaveBeenCalled();
+		expect(await app.adapter.count({ model: "message" })).toBe(4);
+	});
+
+	it.each([
+		{
+			name: "attachment",
+			permission: "attachment" as const,
+			body: {
+				messages: [
+					{
+						id: "message-1",
+						role: "user" as const,
+						parts: [
+							{ type: "text", text: "Inspect" },
+							{
+								type: "file",
+								mediaType: "image/png",
+								url: "https://example.com/image.png",
+							},
+						],
+					},
+				],
+			},
+			tools: undefined,
+		},
+		{
+			name: "tool",
+			permission: "tool" as const,
+			body: messageBody,
+			tools: { dangerous: {} as never },
+		},
+	])(
+		"denies exact $name permission before side effects",
+		async ({ permission, body, tools }) => {
+			const exact = defineAuthorization({
+				identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+				permissions: [aiChatPermissions] as const,
+				rules: ({ aiChat }) => [
+					aiChat.stream.start.allow(),
+					aiChat.conversation.create.allow(),
+					aiChat.message.send.allow(),
+					aiChat.attachment.send.when(() => permission !== "attachment"),
+					aiChat.tool.activate.when(() => permission !== "tool"),
+				],
+			});
+			const before = vi.fn();
+			const app = backend({
+				authorization: exact as typeof fullAuthorization,
+				hooks: { onBeforeChat: before },
+				tools,
+			});
+			await expect(
+				app
+					.forRequest(request("/chat", { identity: owner }))
+					.api.aiChat.startStream(body),
+			).rejects.toMatchObject({ statusCode: 403 });
+			expect(before).not.toHaveBeenCalled();
+			expect(streamText).not.toHaveBeenCalled();
+			expect(await app.adapter.count({ model: "conversation" })).toBe(0);
+		},
+	);
+
+	it("keeps HTTP, request, and trusted stream execution on one lifecycle", async () => {
+		const before = vi.fn();
+		const app = backend({ hooks: { onBeforeChat: before } });
+		const httpResponse = await app.handler(
+			request("/chat", { method: "POST", identity: owner, body: messageBody }),
+		);
+		const requestResponse = await app
+			.forRequest(request("/chat", { identity: owner }))
+			.api.aiChat.startStream(messageBody);
+		const internalResponse = await app.internal.aiChat.startStream({
+			...messageBody,
+			trustedUserId: owner.id,
+		});
+
+		for (const response of [httpResponse, requestResponse, internalResponse]) {
+			expect(response).toBeInstanceOf(Response);
+			expect(response.status).toBe(200);
+			expect(response.headers.get("x-conversation-id")).toBeTruthy();
+		}
+		expect(before).toHaveBeenCalledTimes(3);
+		expect(streamText).toHaveBeenCalledTimes(3);
+		expect(await app.adapter.count({ model: "conversation" })).toBe(3);
+		expect(await app.adapter.count({ model: "message" })).toBe(3);
+	});
+
+	it("rechecks authoritative stream state before hooks, persistence, and provider work", async () => {
+		let app: ReturnType<typeof backend>;
+		let conversation: Conversation | undefined;
+		const before = vi.fn();
+		const onError = vi.fn();
+		app = backend({
+			hooks: { onBeforeChat: before, onChatError: onError },
+			getIdentity: async () => {
+				if (conversation) {
+					await app.adapter.update({
+						model: "conversation",
+						where: [{ field: "id", value: conversation.id }],
+						update: { updatedAt: new Date() },
+					});
+				}
+				return owner;
+			},
+		});
+		conversation = await seedConversation(app);
+
+		await expect(
+			app
+				.forRequest(request("/chat", { identity: owner }))
+				.api.aiChat.startStream({
+					...messageBody,
+					conversationId: conversation.id,
+				}),
+		).rejects.toMatchObject({ statusCode: 409, code: "STALE_CONVERSATION" });
+		expect(before).not.toHaveBeenCalled();
+		expect(streamText).not.toHaveBeenCalled();
+		expect(await app.adapter.count({ model: "message" })).toBe(0);
+		expect(onError).toHaveBeenCalledOnce();
+	});
+
+	it("denies missing rules and propagates identity resolver failures", async () => {
+		const missing = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+			permissions: [aiChatPermissions] as const,
+			rules: () => [],
+		});
+		const before = vi.fn();
+		const missingApp = backend({
+			authorization: missing as typeof fullAuthorization,
+			hooks: { onBeforeCreateConversation: before },
+		});
+		await expect(
+			missingApp
+				.forRequest(request("/create", { identity: owner }))
+				.api.aiChat.createConversation({ title: "Missing" }),
+		).rejects.toMatchObject({ statusCode: 403 });
+
+		const identityApp = backend({
+			hooks: { onBeforeCreateConversation: before },
+			getIdentity: () => {
+				throw new Error("identity unavailable");
+			},
+		});
+		await expect(
+			identityApp
+				.forRequest(request("/create", { identity: owner }))
+				.api.aiChat.createConversation({ title: "Identity error" }),
+		).rejects.toThrow("identity unavailable");
+		expect(before).not.toHaveBeenCalled();
+	});
+
+	it("propagates rule failures and keeps trusted internal calls in the lifecycle", async () => {
+		const failing = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+			permissions: [aiChatPermissions] as const,
+			rules: ({ aiChat }) => [
+				aiChat.conversation.create.when(() => {
+					throw new Error("policy unavailable");
+				}),
+			],
+		});
+		const before = vi.fn();
+		const app = backend({
+			authorization: failing as typeof fullAuthorization,
+			hooks: { onBeforeCreateConversation: before },
+		});
+		await expect(
+			app
+				.forRequest(request("/create", { identity: owner }))
+				.api.aiChat.createConversation({ title: "Denied" }),
+		).rejects.toThrow("policy unavailable");
+		expect(before).not.toHaveBeenCalled();
+		await expect(
+			app.internal.aiChat.createConversation({ title: "Trusted" }),
+		).resolves.toMatchObject({ title: "Trusted" });
+		expect(before).toHaveBeenCalledOnce();
+	});
+});

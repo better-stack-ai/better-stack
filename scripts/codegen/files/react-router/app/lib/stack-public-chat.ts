@@ -39,7 +39,7 @@ const { handler, dbSchema } = stack({
 	plugins: {
 		aiChat: aiChatBackendPlugin({
 			model: openai("gpt-4o"),
-			mode: "public",
+			access: "public",
 			systemPrompt:
 				"You are a helpful customer support assistant. Be concise and friendly.",
 			hooks: {
