@@ -150,24 +150,24 @@ const FORM_BUILDER_SEED_BODY = `
 `;
 
 const CMS_SEED_BODY = `
-  const api = myStack.api
-  const existing = await api.cms.getAllContentItems("article", { limit: 1 })
+  const cms = myStack.internal.cms
+  const existing = await cms.listContentItems({ typeSlug: "article", query: { limit: 1 } })
   if (existing.items && existing.items.length > 0) return { ok: true, skipped: true }
-  await api.cms.createContentItem("article", { slug: "welcome-to-btst-cms", data: { title: "Welcome to BTST CMS", summary: "An introduction to managing structured content with the BTST CMS plugin.", body: "The BTST CMS plugin lets you define your content types as Zod schemas and get a fully functional headless CMS automatically.", publishedAt: new Date().toISOString(), published: true } })
-  await api.cms.createContentItem("article", { slug: "getting-started-with-content-types", data: { title: "Getting Started with Content Types", summary: "Learn how to define and manage content types in the BTST CMS plugin.", body: "Content types are defined as Zod schemas in your stack configuration. Each schema field maps to a form field in the CMS editor.", publishedAt: new Date(Date.now() - 86400000).toISOString(), published: true } })
-  await api.cms.createContentItem("article", { slug: "headless-cms-benefits", data: { title: "Benefits of a Headless CMS", summary: "Explore why headless CMS architecture is ideal for modern web applications.", body: "A headless CMS separates content management from presentation, giving developers full control over how content is displayed.", publishedAt: new Date(Date.now() - 172800000).toISOString(), published: false } })
+  await cms.createContentItem({ typeSlug: "article", body: { slug: "welcome-to-btst-cms", data: { title: "Welcome to BTST CMS", summary: "An introduction to managing structured content with the BTST CMS plugin.", body: "The BTST CMS plugin lets you define your content types as Zod schemas and get a fully functional headless CMS automatically.", publishedAt: new Date().toISOString(), published: true } } })
+  await cms.createContentItem({ typeSlug: "article", body: { slug: "getting-started-with-content-types", data: { title: "Getting Started with Content Types", summary: "Learn how to define and manage content types in the BTST CMS plugin.", body: "Content types are defined as Zod schemas in your stack configuration. Each schema field maps to a form field in the CMS editor.", publishedAt: new Date(Date.now() - 86400000).toISOString(), published: true } } })
+  await cms.createContentItem({ typeSlug: "article", body: { slug: "headless-cms-benefits", data: { title: "Benefits of a Headless CMS", summary: "Explore why headless CMS architecture is ideal for modern web applications.", body: "A headless CMS separates content management from presentation, giving developers full control over how content is displayed.", publishedAt: new Date(Date.now() - 172800000).toISOString(), published: false } } })
   console.log("[seed] cms: 3 articles created")
   return { ok: true }
 `;
 
 const UI_BUILDER_SEED_BODY = `
   const { UI_BUILDER_TYPE_SLUG } = await import("@btst/stack/plugins/ui-builder")
-  const api = myStack.api
-  const existing = await api.cms.getAllContentItems(UI_BUILDER_TYPE_SLUG, { limit: 1 })
+  const cms = myStack.internal.cms
+  const existing = await cms.listContentItems({ typeSlug: UI_BUILDER_TYPE_SLUG, query: { limit: 1 } })
   if (existing.items && existing.items.length > 0) return { ok: true, skipped: true }
   const initialLayers = [{ id: "page-root", type: "div", name: "Page", props: { className: "min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-8" }, children: [{ id: "welcome-card", type: "Card", name: "Welcome Card", props: { className: "w-full max-w-md shadow-xl" }, children: [{ id: "card-content", type: "CardContent", name: "Card Content", props: {}, children: [{ id: "welcome-text", type: "CardDescription", name: "Welcome Message", props: { className: "text-base leading-relaxed" }, children: "Welcome to UI Builder! Edit this page in the visual editor." }] }] }] }]
   const initialVariables = [{ id: "userName", name: "User Name", type: "string", defaultValue: "Alex" }]
-  await api.cms.createContentItem(UI_BUILDER_TYPE_SLUG, { slug: "welcome", data: { layers: JSON.stringify(initialLayers), variables: JSON.stringify(initialVariables), status: "published" } })
+  await cms.createContentItem({ typeSlug: UI_BUILDER_TYPE_SLUG, body: { slug: "welcome", data: { layers: JSON.stringify(initialLayers), variables: JSON.stringify(initialVariables), status: "published" } } })
   console.log("[seed] ui-builder: 1 sample page created")
   return { ok: true }
 `;

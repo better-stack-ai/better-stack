@@ -634,27 +634,41 @@ collection scope.
 
 ### Get-or-create folders per tenant
 
-A common pattern in workflow automation is to find a tenant's folder by name, creating it if it does not exist yet. Use `getFolderByName` from the server-side `api` factory:
+A common pattern in trusted workflow automation is to find a tenant's root
+folder by name, creating it if it does not exist yet. The explicit tenant ID is
+an adapter-level concern, so use the retained standalone primitives instead of
+the removed raw business API:
 
 ```ts
 import { stack } from "@btst/stack"
+import {
+  createFolder,
+  getFolderByName,
+} from "@btst/stack/plugins/media/api"
 
-const { api } = stack({ /* ... */ })
+const app = stack({ /* ... */ })
 
 async function getOrCreateProfileFolder(profileId: string) {
   const name = `blog-gen-${profileId}`
-  const existing = await api.media.getFolderByName(name, null, profileId)
+  const existing = await getFolderByName(app.adapter, name, null, profileId)
 
   if (existing) return existing
 
-  return api.media.createFolder(adapter, {
+  return createFolder(app.adapter, {
     name,
     tenantId: profileId,
   })
 }
 ```
 
-`getFolderByName(name, parentId?, tenantId?)` scopes the lookup to a name, an optional parent folder, and an optional tenant. Pass `null` for `parentId` to search only root-level folders.
+`getFolderByName(adapter, name, parentId?, tenantId?)` scopes the lookup to a
+name, an optional parent folder, and an optional tenant. Pass `null` for
+`parentId` to search only root-level folders.
+
+These lower-level primitives intentionally bypass operation authorization,
+validation, and lifecycle hooks; keep them inside trusted adapter-owned
+automation. Use `app.internal.media` for ordinary trusted business calls that
+should retain the complete operation lifecycle.
 
 ## API Reference
 
