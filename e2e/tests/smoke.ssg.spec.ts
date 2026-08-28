@@ -146,7 +146,7 @@ test.describe("SSG Blog Pages", () => {
 		});
 		expect(createRes.ok()).toBeTruthy();
 
-		// The onPostCreated hook calls revalidatePath("/pages/ssg-blog"), which
+		// The onAfterCreatePost hook calls revalidatePath("/pages/ssg-blog"), which
 		// purges the ISR cache immediately. The next request to /pages/ssg-blog
 		// triggers a blocking regeneration using the loader (HTTP request).
 		await page.goto("/pages/ssg-blog", { waitUntil: "networkidle" });

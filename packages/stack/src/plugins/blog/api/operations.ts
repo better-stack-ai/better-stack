@@ -198,48 +198,48 @@ export interface BlogBackendHooks {
 		postId: string,
 		context: BlogDeleteOperationContext,
 	) => Promise<void> | void;
-	onBeforeNextPreviousPosts?: (
+	onBeforeGetNextPreviousPosts?: (
 		query: DeepReadonly<NextPreviousPostsInput>,
 		context: BlogNextPreviousOperationContext,
 	) => Promise<void> | void;
-	onPostsRead?: (
+	onAfterListPosts?: (
 		posts: readonly DeepReadonly<SerializedPost>[],
 		filter: DeepReadonly<ListPostsInput>,
 		context: BlogListResultContext,
 	) => Promise<void> | void;
-	onPostCreated?: (
+	onAfterCreatePost?: (
 		post: DeepReadonly<SerializedPost>,
 		context: BlogCreateResultContext,
 	) => Promise<void> | void;
-	onPostUpdated?: (
+	onAfterUpdatePost?: (
 		post: DeepReadonly<SerializedPost>,
 		context: BlogUpdateResultContext,
 	) => Promise<void> | void;
-	onPostDeleted?: (
+	onAfterDeletePost?: (
 		postId: string,
 		context: BlogDeleteResultContext,
 	) => Promise<void> | void;
-	onNextPreviousPostsRead?: (
+	onAfterGetNextPreviousPosts?: (
 		result: DeepReadonly<SerializedNextPreviousPostsResult>,
 		context: BlogNextPreviousResultContext,
 	) => Promise<void> | void;
-	onListPostsError?: (
+	onErrorListPosts?: (
 		error: Error,
 		context: BlogListErrorContext,
 	) => Promise<void> | void;
-	onNextPreviousPostsError?: (
+	onErrorGetNextPreviousPosts?: (
 		error: Error,
 		context: BlogNextPreviousErrorContext,
 	) => Promise<void> | void;
-	onCreatePostError?: (
+	onErrorCreatePost?: (
 		error: Error,
 		context: BlogCreateErrorContext,
 	) => Promise<void> | void;
-	onUpdatePostError?: (
+	onErrorUpdatePost?: (
 		error: Error,
 		context: BlogUpdateErrorContext,
 	) => Promise<void> | void;
-	onDeletePostError?: (
+	onErrorDeletePost?: (
 		error: Error,
 		context: BlogDeleteErrorContext,
 	) => Promise<void> | void;
@@ -484,7 +484,7 @@ export function createBlogOperations(
 				...base,
 				result: context.result,
 			}) satisfies BlogListResultContext;
-			await hooks?.onPostsRead?.(
+			await hooks?.onAfterListPosts?.(
 				context.result.items,
 				context.input,
 				lifecycleContext,
@@ -492,7 +492,7 @@ export function createBlogOperations(
 		},
 		onError: async (context) => {
 			const base = listContext(context);
-			await hooks?.onListPostsError?.(
+			await hooks?.onErrorListPosts?.(
 				normalizeOperationError(context.error, "Blog list operation failed."),
 				Object.freeze({ ...base, error: context.error }),
 			);
@@ -538,14 +538,14 @@ export function createBlogOperations(
 		},
 		after: async (context) => {
 			const base = createContext(context);
-			await hooks?.onPostCreated?.(
+			await hooks?.onAfterCreatePost?.(
 				context.result,
 				Object.freeze({ ...base, result: context.result }),
 			);
 		},
 		onError: async (context) => {
 			const base = createContext(context);
-			await hooks?.onCreatePostError?.(
+			await hooks?.onErrorCreatePost?.(
 				normalizeOperationError(context.error, "Blog create operation failed."),
 				Object.freeze({ ...base, error: context.error }),
 			);
@@ -625,14 +625,14 @@ export function createBlogOperations(
 		},
 		after: async (context) => {
 			const base = updateContext(context);
-			await hooks?.onPostUpdated?.(
+			await hooks?.onAfterUpdatePost?.(
 				context.result,
 				Object.freeze({ ...base, result: context.result }),
 			);
 		},
 		onError: async (context) => {
 			const base = updateContext(context);
-			await hooks?.onUpdatePostError?.(
+			await hooks?.onErrorUpdatePost?.(
 				normalizeOperationError(context.error, "Blog update operation failed."),
 				Object.freeze({ ...base, error: context.error }),
 			);
@@ -664,14 +664,14 @@ export function createBlogOperations(
 		},
 		after: async (context) => {
 			const base = deleteContext(context);
-			await hooks?.onPostDeleted?.(
+			await hooks?.onAfterDeletePost?.(
 				context.input.id,
 				Object.freeze({ ...base, result: context.result }),
 			);
 		},
 		onError: async (context) => {
 			const base = deleteContext(context);
-			await hooks?.onDeletePostError?.(
+			await hooks?.onErrorDeletePost?.(
 				normalizeOperationError(context.error, "Blog delete operation failed."),
 				Object.freeze({ ...base, error: context.error }),
 			);
@@ -683,7 +683,7 @@ export function createBlogOperations(
 		permission: blogPermissions.post.read,
 		facts: () => ({ scope: "published" as const }),
 		before: async (context) => {
-			await hooks?.onBeforeNextPreviousPosts?.(
+			await hooks?.onBeforeGetNextPreviousPosts?.(
 				context.input,
 				nextPreviousContext(context),
 			);
@@ -692,14 +692,14 @@ export function createBlogOperations(
 			findNextPreviousPosts(adapter, new Date(input.date)),
 		after: async (context) => {
 			const base = nextPreviousContext(context);
-			await hooks?.onNextPreviousPostsRead?.(
+			await hooks?.onAfterGetNextPreviousPosts?.(
 				context.result,
 				Object.freeze({ ...base, result: context.result }),
 			);
 		},
 		onError: async (context) => {
 			const base = nextPreviousContext(context);
-			await hooks?.onNextPreviousPostsError?.(
+			await hooks?.onErrorGetNextPreviousPosts?.(
 				normalizeOperationError(
 					context.error,
 					"Blog navigation operation failed.",

@@ -10,6 +10,7 @@ import {
 } from "../../../authorization/server";
 import {
 	commentsBackendPlugin,
+	COMMENTS_LIFECYCLE_HOOK_MIGRATIONS,
 	type CommentsBackendHooks,
 	type CommentsBackendOptions,
 } from "../api";
@@ -219,13 +220,13 @@ type OperationScenario = {
 const operationScenarios: readonly OperationScenario[] = [
 	{
 		name: "listComments",
-		hook: "onBeforeList",
+		hook: "onBeforeListComments",
 		prepare: async () => (api) => api.listComments({ status: "pending" }),
 		invalid: (api) => api.listComments({ limit: 0 }),
 	},
 	{
 		name: "getCommentCount",
-		hook: "onBeforeCount",
+		hook: "onBeforeCountComments",
 		prepare: async () => (api) =>
 			api.getCommentCount({
 				resourceId: "post-1",
@@ -237,7 +238,7 @@ const operationScenarios: readonly OperationScenario[] = [
 	},
 	{
 		name: "createComment",
-		hook: "onBeforePost",
+		hook: "onBeforeCreateComment",
 		prepare: async () => (api) =>
 			api.createComment({
 				resourceId: "post-1",
@@ -255,7 +256,7 @@ const operationScenarios: readonly OperationScenario[] = [
 	},
 	{
 		name: "updateComment",
-		hook: "onBeforeEdit",
+		hook: "onBeforeUpdateComment",
 		prepare: async (backend) => {
 			const comment = await seedComment(backend);
 			return (api) =>
@@ -269,7 +270,7 @@ const operationScenarios: readonly OperationScenario[] = [
 	},
 	{
 		name: "toggleLike",
-		hook: "onBeforeLike",
+		hook: "onBeforeToggleCommentReaction",
 		prepare: async (backend) => {
 			const comment = await seedComment(backend);
 			return (api) =>
@@ -279,7 +280,7 @@ const operationScenarios: readonly OperationScenario[] = [
 	},
 	{
 		name: "updateCommentStatus",
-		hook: "onBeforeStatusChange",
+		hook: "onBeforeModerateComment",
 		prepare: async (backend) => {
 			const comment = await seedComment(backend, { status: "pending" });
 			return (api) =>
@@ -293,7 +294,7 @@ const operationScenarios: readonly OperationScenario[] = [
 	},
 	{
 		name: "deleteComment",
-		hook: "onBeforeDelete",
+		hook: "onBeforeDeleteComment",
 		prepare: async (backend) => {
 			const comment = await seedComment(backend);
 			return (api) => api.deleteComment({ id: comment.id });
@@ -303,6 +304,23 @@ const operationScenarios: readonly OperationScenario[] = [
 ];
 
 describe("Comments authorization inventory", () => {
+	it("records every removed lifecycle name and canonical replacement", () => {
+		expect(COMMENTS_LIFECYCLE_HOOK_MIGRATIONS).toEqual({
+			onBeforeList: "onBeforeListComments",
+			onBeforeCount: "onBeforeCountComments",
+			onBeforeListByAuthor: "onBeforeListCommentsByAuthor",
+			onBeforePost: "onBeforeCreateComment",
+			onAfterPost: "onAfterCreateComment",
+			onBeforeEdit: "onBeforeUpdateComment",
+			onAfterEdit: "onAfterUpdateComment",
+			onBeforeLike: "onBeforeToggleCommentReaction",
+			onBeforeStatusChange: "onBeforeModerateComment",
+			onAfterApprove: "onAfterApproveComment",
+			onBeforeDelete: "onBeforeDeleteComment",
+			onAfterDelete: "onAfterDeleteComment",
+		});
+	});
+
 	it.each([
 		{
 			allowPosting: true,
@@ -535,11 +553,11 @@ describe("Comments protected-operation matrix", () => {
 
 	it("fails closed before lifecycle when record-backed fact derivation fails", async () => {
 		const hooks = {
-			onBeforePost: vi.fn(),
-			onBeforeEdit: vi.fn(),
-			onBeforeLike: vi.fn(),
-			onBeforeStatusChange: vi.fn(),
-			onBeforeDelete: vi.fn(),
+			onBeforeCreateComment: vi.fn(),
+			onBeforeUpdateComment: vi.fn(),
+			onBeforeToggleCommentReaction: vi.fn(),
+			onBeforeModerateComment: vi.fn(),
+			onBeforeDeleteComment: vi.fn(),
 		};
 		const backend = makeBackend({
 			auth: createModeratorOnlyAuth(),
@@ -621,7 +639,7 @@ describe("Comments protected-operation matrix", () => {
 		const afterApprove = vi.fn();
 		const backend = makeBackend({
 			auth: createAuth(),
-			plugin: { hooks: { onAfterApprove: afterApprove } },
+			plugin: { hooks: { onAfterApproveComment: afterApprove } },
 		});
 		const pending = await seedComment(backend, { status: "pending" });
 		const updateMany = backend.adapter.updateMany.bind(backend.adapter);
@@ -680,7 +698,7 @@ describe("Comments protected-operation matrix", () => {
 		const afterApprove = vi.fn();
 		const backend = makeBackend({
 			auth: createAuth(),
-			plugin: { hooks: { onAfterApprove: afterApprove } },
+			plugin: { hooks: { onAfterApproveComment: afterApprove } },
 		});
 		const pending = await seedComment(backend, { status: "pending" });
 		vi.spyOn(backend.adapter, "updateMany").mockResolvedValue(result as never);
@@ -737,7 +755,7 @@ describe("Comments protected-operation matrix", () => {
 		const afterApprove = vi.fn();
 		const backend = makeBackend({
 			auth: createAuth(),
-			plugin: { hooks: { onAfterApprove: afterApprove } },
+			plugin: { hooks: { onAfterApproveComment: afterApprove } },
 		});
 		const pending = await seedComment(backend, { status: "pending" });
 		const updateMany = backend.adapter.updateMany.bind(backend.adapter);
@@ -788,7 +806,7 @@ describe("Comments protected-operation matrix", () => {
 		const afterEdit = vi.fn();
 		const backend = makeBackend({
 			auth: createAuth(),
-			plugin: { hooks: { onAfterEdit: afterEdit } },
+			plugin: { hooks: { onAfterUpdateComment: afterEdit } },
 		});
 		const comment = await seedComment(backend);
 		const updateMany = backend.adapter.updateMany.bind(backend.adapter);
@@ -835,7 +853,7 @@ describe("Comments protected-operation matrix", () => {
 		const afterEdit = vi.fn();
 		const backend = makeBackend({
 			auth: createAuth(),
-			plugin: { hooks: { onAfterEdit: afterEdit } },
+			plugin: { hooks: { onAfterUpdateComment: afterEdit } },
 		});
 		const comment = await seedComment(backend);
 		const updateMany = backend.adapter.updateMany.bind(backend.adapter);
@@ -963,7 +981,7 @@ describe("Comments protected-operation matrix", () => {
 		const afterDelete = vi.fn();
 		const backend = makeBackend({
 			auth: createAuth(),
-			plugin: { hooks: { onAfterDelete: afterDelete } },
+			plugin: { hooks: { onAfterDeleteComment: afterDelete } },
 		});
 		const comment = await seedComment(backend);
 		const transaction = backend.adapter.transaction.bind(backend.adapter);
@@ -1006,7 +1024,7 @@ describe("Comments operation-first authorization", () => {
 			auth: createAuth(),
 			plugin: {
 				autoApprove: true,
-				hooks: { onBeforePost: vi.fn() },
+				hooks: { onBeforeCreateComment: vi.fn() },
 			},
 		});
 		const comment = await seedComment(backend);
@@ -1244,7 +1262,7 @@ describe("Comments operation-first authorization", () => {
 			auth: createAuth(),
 			plugin: {
 				hooks: {
-					onBeforeEdit: async (id) => {
+					onBeforeUpdateComment: async (id) => {
 						await backend.adapter.update<Comment>({
 							model: "comment",
 							where: [{ field: "id", value: id }],
@@ -1284,14 +1302,14 @@ describe("Comments operation-first authorization", () => {
 			auth: createAuth(),
 			plugin: {
 				hooks: {
-					onBeforeEdit: (_id, _data, context) => {
+					onBeforeUpdateComment: (_id, _data, context) => {
 						events.push(
 							`before:${context.identity?.id}:${context.facts.authorId}`,
 						);
 						expect(Object.isFrozen(context)).toBe(true);
 						expect(Object.isFrozen(context.input)).toBe(true);
 					},
-					onAfterEdit: (result, context) => {
+					onAfterUpdateComment: (result, context) => {
 						events.push(`after:${result.body}`);
 						expect(context.result).toBe(result);
 					},
@@ -1339,7 +1357,7 @@ describe("Comments operation-first authorization", () => {
 			const lifecycle = vi.fn();
 			const backend = makeBackend({
 				auth,
-				plugin: { hooks: { onBeforeDelete: lifecycle } },
+				plugin: { hooks: { onBeforeDeleteComment: lifecycle } },
 			});
 			const comment = await seedComment(backend);
 			await expect(
@@ -1369,10 +1387,10 @@ describe("Comments operation-first authorization", () => {
 			auth: createAuth(getIdentity),
 			plugin: {
 				hooks: {
-					onBeforePost: (_input, context) => {
+					onBeforeCreateComment: (_input, context) => {
 						events.push(`before:${context.identity?.id ?? "internal"}`);
 					},
-					onAfterPost: (comment, context) => {
+					onAfterCreateComment: (comment, context) => {
 						events.push(`after:${comment.authorId}`);
 						expect(context.result).toBe(comment);
 					},
@@ -1419,6 +1437,114 @@ describe("Comments operation-first authorization", () => {
 			}),
 		).rejects.toThrow();
 	});
+
+	it.each(["request", "internal"] as const)(
+		"invokes every canonical comments lifecycle through %s execution",
+		async (transport) => {
+			const events: string[] = [];
+			const backend = makeBackend({
+				auth: createAuth(),
+				plugin: {
+					hooks: {
+						onBeforeListCommentsByAuthor: () => {
+							events.push("list:author");
+						},
+						onBeforeListComments: () => {
+							events.push("list");
+						},
+						onBeforeCountComments: () => {
+							events.push("count");
+						},
+						onBeforeCreateComment: () => {
+							events.push("create:before");
+						},
+						onAfterCreateComment: () => {
+							events.push("create:after");
+						},
+						onBeforeUpdateComment: () => {
+							events.push("update:before");
+						},
+						onAfterUpdateComment: () => {
+							events.push("update:after");
+						},
+						onBeforeToggleCommentReaction: () => {
+							events.push("reaction");
+						},
+						onBeforeModerateComment: () => {
+							events.push("moderate:before");
+						},
+						onAfterApproveComment: () => {
+							events.push("approve:after");
+						},
+						onBeforeDeleteComment: () => {
+							events.push("delete:before");
+						},
+						onAfterDeleteComment: () => {
+							events.push("delete:after");
+						},
+					},
+				},
+			});
+			const updateTarget = await seedComment(backend, {
+				body: "Update target",
+			});
+			const reactionTarget = await seedComment(backend, {
+				body: "Reaction target",
+			});
+			const moderationTarget = await seedComment(backend, {
+				body: "Moderation target",
+				status: "pending",
+			});
+			const deleteTarget = await seedComment(backend, {
+				body: "Delete target",
+			});
+			const api =
+				transport === "request"
+					? backend.forRequest(request("/lifecycle", { identity: moderator }))
+							.api.comments
+					: backend.internal.comments;
+
+			await api.listComments({ authorId: owner.id });
+			await api.getCommentCount({
+				resourceId: "post-1",
+				resourceType: "post",
+			});
+			await api.createComment({
+				resourceId: "post-1",
+				resourceType: "post",
+				body: "Lifecycle create",
+				...(transport === "internal" ? { authorId: "job-1" } : {}),
+			});
+			await api.updateComment({
+				id: updateTarget.id,
+				data: { body: "Lifecycle update" },
+			});
+			await api.toggleLike({
+				id: reactionTarget.id,
+				...(transport === "internal" ? { authorId: "job-1" } : {}),
+			});
+			await api.updateCommentStatus({
+				id: moderationTarget.id,
+				data: { status: "approved" },
+			});
+			await api.deleteComment({ id: deleteTarget.id });
+
+			expect(events).toEqual([
+				"list:author",
+				"list",
+				"count",
+				"create:before",
+				"create:after",
+				"update:before",
+				"update:after",
+				"reaction",
+				"moderate:before",
+				"approve:after",
+				"delete:before",
+				"delete:after",
+			]);
+		},
+	);
 
 	it("preserves permissive operation behavior only when no auth provider is configured", async () => {
 		const unauthenticatedBackend = makeBackend({ auth: createAuth() });

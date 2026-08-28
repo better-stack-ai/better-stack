@@ -171,66 +171,66 @@ export interface CommentsDeleteResultContext
 /** Domain lifecycle hooks that run only after successful Comments authorization. */
 export interface CommentsBackendHooks {
 	/** Run before an authorized comment-list query. */
-	onBeforeList?: (
+	onBeforeListComments?: (
 		query: DeepReadonly<ListInput>,
 		context: CommentsListOperationContext,
 	) => Promise<void> | void;
 	/** Run before an authorized comment-count query. */
-	onBeforeCount?: (
+	onBeforeCountComments?: (
 		query: DeepReadonly<CountInput>,
 		context: CommentsCountOperationContext,
 	) => Promise<void> | void;
 	/** Run before an authorized author-scoped list query. */
-	onBeforeListByAuthor?: (
+	onBeforeListCommentsByAuthor?: (
 		authorId: string,
 		query: DeepReadonly<ListInput>,
 		context: CommentsListOperationContext,
 	) => Promise<void> | void;
 	/** Run before an authorized comment create. */
-	onBeforePost?: (
+	onBeforeCreateComment?: (
 		input: DeepReadonly<z.output<typeof createCommentSchema>>,
 		context: CommentsCreateOperationContext,
 	) => Promise<void> | void;
 	/** Run after a comment is created. */
-	onAfterPost?: (
+	onAfterCreateComment?: (
 		comment: DeepReadonly<SerializedComment>,
 		context: CommentsCreateResultContext,
 	) => Promise<void> | void;
 	/** Run before an authorized comment edit. */
-	onBeforeEdit?: (
+	onBeforeUpdateComment?: (
 		commentId: string,
 		update: DeepReadonly<UpdateInput["data"]>,
 		context: CommentsEditOperationContext,
 	) => Promise<void> | void;
 	/** Run after a comment is edited. */
-	onAfterEdit?: (
+	onAfterUpdateComment?: (
 		comment: DeepReadonly<SerializedComment>,
 		context: CommentsEditResultContext,
 	) => Promise<void> | void;
 	/** Run before an authorized reaction is toggled. */
-	onBeforeLike?: (
+	onBeforeToggleCommentReaction?: (
 		commentId: string,
 		authorId: string,
 		context: CommentsReactOperationContext,
 	) => Promise<void> | void;
 	/** Run before an authorized moderation status change. */
-	onBeforeStatusChange?: (
+	onBeforeModerateComment?: (
 		commentId: string,
 		status: "pending" | "approved" | "spam",
 		context: CommentsModerateOperationContext,
 	) => Promise<void> | void;
 	/** Run after a comment is approved. */
-	onAfterApprove?: (
+	onAfterApproveComment?: (
 		comment: DeepReadonly<SerializedComment>,
 		context: CommentsModerateResultContext,
 	) => Promise<void> | void;
 	/** Run before an authorized comment deletion. */
-	onBeforeDelete?: (
+	onBeforeDeleteComment?: (
 		commentId: string,
 		context: CommentsDeleteOperationContext,
 	) => Promise<void> | void;
 	/** Run after a comment is deleted. */
-	onAfterDelete?: (
+	onAfterDeleteComment?: (
 		commentId: string,
 		context: CommentsDeleteResultContext,
 	) => Promise<void> | void;
@@ -475,13 +475,13 @@ export function createCommentsOperations(
 		before: async (context) => {
 			const lifecycle = listContext(context);
 			if (context.input.authorId) {
-				await options.hooks?.onBeforeListByAuthor?.(
+				await options.hooks?.onBeforeListCommentsByAuthor?.(
 					context.input.authorId,
 					context.input,
 					lifecycle,
 				);
 			}
-			await options.hooks?.onBeforeList?.(context.input, lifecycle);
+			await options.hooks?.onBeforeListComments?.(context.input, lifecycle);
 		},
 		execute: async ({ input, identity }) =>
 			serializeCommentListResult(
@@ -501,7 +501,7 @@ export function createCommentsOperations(
 		permission: commentsPermissions.thread.read,
 		facts: ({ input }) => readFactsForCount(input),
 		before: async (context) => {
-			await options.hooks?.onBeforeCount?.(
+			await options.hooks?.onBeforeCountComments?.(
 				context.input,
 				countContext(context),
 			);
@@ -531,7 +531,10 @@ export function createCommentsOperations(
 				);
 			}
 			const { authorId: _trustedAuthorId, ...publicInput } = context.input;
-			await options.hooks?.onBeforePost?.(publicInput, createContext(context));
+			await options.hooks?.onBeforeCreateComment?.(
+				publicInput,
+				createContext(context),
+			);
 		},
 		execute: async ({ input, identity }) => {
 			await assertReplyTarget(adapter, input);
@@ -548,7 +551,7 @@ export function createCommentsOperations(
 		},
 		after: async (context) => {
 			const base = createContext(context);
-			await options.hooks?.onAfterPost?.(
+			await options.hooks?.onAfterCreateComment?.(
 				context.result,
 				Object.freeze({ ...base, result: context.result }),
 			);
@@ -575,7 +578,7 @@ export function createCommentsOperations(
 					"COMMENT_EDITING_DISABLED",
 				);
 			}
-			await options.hooks?.onBeforeEdit?.(
+			await options.hooks?.onBeforeUpdateComment?.(
 				context.input.id,
 				context.input.data,
 				editContext(context),
@@ -604,7 +607,7 @@ export function createCommentsOperations(
 		},
 		after: async (context) => {
 			const base = editContext(context);
-			await options.hooks?.onAfterEdit?.(
+			await options.hooks?.onAfterUpdateComment?.(
 				context.result,
 				Object.freeze({ ...base, result: context.result }),
 			);
@@ -623,7 +626,7 @@ export function createCommentsOperations(
 				context.identity?.id,
 				context.input.authorId,
 			);
-			await options.hooks?.onBeforeLike?.(
+			await options.hooks?.onBeforeToggleCommentReaction?.(
 				context.input.id,
 				authorId,
 				reactContext(context),
@@ -656,7 +659,7 @@ export function createCommentsOperations(
 			};
 		},
 		before: async (context) => {
-			await options.hooks?.onBeforeStatusChange?.(
+			await options.hooks?.onBeforeModerateComment?.(
 				context.input.id,
 				context.input.data.status,
 				moderateContext(context),
@@ -686,7 +689,7 @@ export function createCommentsOperations(
 		after: async (context) => {
 			if (context.input.data.status !== "approved") return;
 			const base = moderateContext(context);
-			await options.hooks?.onAfterApprove?.(
+			await options.hooks?.onAfterApproveComment?.(
 				context.result,
 				Object.freeze({ ...base, result: context.result }),
 			);
@@ -701,7 +704,7 @@ export function createCommentsOperations(
 			return { commentId: comment.id, authorId: comment.authorId };
 		},
 		before: async (context) => {
-			await options.hooks?.onBeforeDelete?.(
+			await options.hooks?.onBeforeDeleteComment?.(
 				context.input.id,
 				deleteContext(context),
 			);
@@ -717,7 +720,7 @@ export function createCommentsOperations(
 		},
 		after: async (context) => {
 			const base = deleteContext(context);
-			await options.hooks?.onAfterDelete?.(
+			await options.hooks?.onAfterDeleteComment?.(
 				context.input.id,
 				Object.freeze({ ...base, result: context.result }),
 			);

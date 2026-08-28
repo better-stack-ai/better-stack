@@ -106,7 +106,7 @@ mediaBackendPlugin({});
 // @ts-expect-error Blog lifecycle callbacks belong under `hooks`.
 blogBackendPlugin({ onBeforeListPosts: async () => undefined });
 // @ts-expect-error Comments lifecycle callbacks belong under `hooks`.
-commentsBackendPlugin({ onBeforePost: async () => undefined });
+commentsBackendPlugin({ onBeforeCreateComment: async () => undefined });
 // @ts-expect-error Kanban lifecycle callbacks belong under `hooks`.
 kanbanBackendPlugin({ onBeforeListBoards: async () => undefined });
 // @ts-expect-error Form Builder lifecycle callbacks belong under `hooks`.

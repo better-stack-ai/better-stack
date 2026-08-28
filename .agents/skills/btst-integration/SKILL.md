@@ -32,7 +32,7 @@ See [REFERENCE.md](REFERENCE.md) for full code shapes for every file.
 ### 2) Register plugins (backend + client)
 
 - **Backend** (`lib/stack.ts`): import `{plugin}BackendPlugin` from `@btst/stack/plugins/{plugin}/api`.
-  - Pass hooks and config to the backend plugin factory (e.g. `blogBackendPlugin(hooks)`).
+  - Pass hooks and config in the backend plugin options object (e.g. `blogBackendPlugin({ hooks })`).
   - Use camelCase keys for plugins that have compound names: `aiChat`, `formBuilder`, `uiBuilder`.
 - **Client** (`lib/stack-client.tsx`): import `{plugin}ClientPlugin` from `@btst/stack/plugins/{plugin}/client`.
   - Blog and new v3 client definitions receive only plugin-specific options such as `seo`, hooks, or page components. Configure `api`, `site`, and `queryClient` once on `createClientStack()`; its resolver binds that runtime to every definition.

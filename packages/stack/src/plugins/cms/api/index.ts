@@ -1,5 +1,6 @@
 export {
 	cmsBackendPlugin,
+	CMS_LIFECYCLE_HOOK_MIGRATIONS,
 	type CMSApiRouter,
 	type CMSRouteKey,
 } from "./plugin";

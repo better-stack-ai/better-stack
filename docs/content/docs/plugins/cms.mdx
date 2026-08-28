@@ -520,37 +520,52 @@ Customize CMS behavior with backend hooks:
 cmsBackendPlugin({
   contentTypes: [...],
   hooks: {
-    onBeforeCreate: async (data, context) => {
+    onBeforeCreateContent: async (data, context) => {
       console.log("Creating item in", context.typeSlug)
       // `data` is validated and canonical. Throw to deny.
     },
-    onAfterCreate: async (item, context) => {
+    onAfterCreateContent: async (item, context) => {
       console.log("Created:", item.slug)
       // Trigger webhooks, notifications, etc.
     },
-    onBeforeUpdate: async (id, data, context) => {
+    onBeforeUpdateContent: async (id, data, context) => {
       // `data` is the complete merged, validated record. Throw to deny.
     },
-    onAfterUpdate: async (item, context) => {
+    onAfterUpdateContent: async (item, context) => {
       // ...
     },
-    onBeforeDelete: async (id, context) => {
+    onBeforeDeleteContent: async (id, context) => {
       // Throw to deny: throw new Error("Cannot delete published content")
     },
-    onAfterDelete: async (id, context) => {
+    onAfterDeleteContent: async (id, context) => {
       // ...
     },
-    onError: async (error, operation, context) => {
+    onErrorExecuteContentOperation: async (error, operation, context) => {
       console.error(`CMS ${operation} error:`, error.message)
     },
   },
 })
 ```
 
-A plain error thrown by `onBeforeCreate`, `onBeforeUpdate`, or
-`onBeforeDelete` denies the request with HTTP 403. Create and update hooks run
+A plain error thrown by `onBeforeCreateContent`, `onBeforeUpdateContent`, or
+`onBeforeDeleteContent` denies the request with HTTP 403. Create and update hooks run
 before the parent or any inline related record is written, and no mutation is
 committed when a before hook denies the operation.
+
+CMS lifecycle names use the action-first `onBefore<Action><Entity>`,
+`onAfter<Action><Entity>`, and `onError<Action><Entity>` grammar. The existing
+aggregate error phase remains one callback; its `operation` argument identifies
+the failed create, update, delete, list, or get operation.
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeCreate` | `onBeforeCreateContent` |
+| `onAfterCreate` | `onAfterCreateContent` |
+| `onBeforeUpdate` | `onBeforeUpdateContent` |
+| `onAfterUpdate` | `onAfterUpdateContent` |
+| `onBeforeDelete` | `onBeforeDeleteContent` |
+| `onAfterDelete` | `onAfterDeleteContent` |
+| `onError` | `onErrorExecuteContentOperation` |
 
 ## Type Safety
 
@@ -1504,13 +1519,13 @@ import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 cmsBackendPlugin({
   contentTypes: { ... },
   hooks: {
-    onAfterCreate: async (item, context) => {
+    onAfterCreateContent: async (item, context) => {
       revalidatePath(`/cms/${context.typeSlug}`, "page")
     },
-    onAfterUpdate: async (item, context) => {
+    onAfterUpdateContent: async (item, context) => {
       revalidatePath(`/cms/${context.typeSlug}`, "page")
     },
-    onAfterDelete: async (id, context) => {
+    onAfterDeleteContent: async (id, context) => {
       revalidatePath(`/cms/${context.typeSlug}`, "page")
     },
   },

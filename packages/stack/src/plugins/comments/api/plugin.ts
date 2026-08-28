@@ -1,4 +1,5 @@
 import type { DBAdapter as Adapter } from "@btst/db";
+export { COMMENTS_LIFECYCLE_HOOK_MIGRATIONS } from "./lifecycle-migrations";
 import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
 import { commentsSchema as dbSchema } from "../db";
 import {
