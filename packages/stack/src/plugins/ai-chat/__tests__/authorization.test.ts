@@ -1362,7 +1362,7 @@ describe("AI Chat operation authorization", () => {
 		expect(await app.adapter.count({ model: "message" })).toBe(1);
 	});
 
-	it("serializes raw-memory rollbacks across different conversations", async () => {
+	it("serializes raw-memory rollbacks across all history writes", async () => {
 		let enteredFirstHook: (() => void) | undefined;
 		const firstHookEntered = new Promise<void>((resolve) => {
 			enteredFirstHook = resolve;
@@ -1396,9 +1396,18 @@ describe("AI Chat operation authorization", () => {
 				...messageBody,
 				conversationId: secondConversation.id,
 			});
+		let createSettled = false;
+		const createdConversation = app
+			.forRequest(request("/create", { identity: owner }))
+			.api.aiChat.createConversation({ title: "Created during rollback" })
+			.then((conversation) => {
+				createSettled = true;
+				return conversation;
+			});
 		await Promise.resolve();
 		await Promise.resolve();
 		expect(before).toHaveBeenCalledOnce();
+		expect(createSettled).toBe(false);
 
 		releaseFirstHook?.();
 		await expect(rejectedStream).rejects.toMatchObject({
@@ -1406,6 +1415,9 @@ describe("AI Chat operation authorization", () => {
 			code: "HOOK_DENIED",
 		});
 		await expect(successfulStream).resolves.toBeInstanceOf(Response);
+		await expect(createdConversation).resolves.toMatchObject({
+			title: "Created during rollback",
+		});
 		expect(before).toHaveBeenCalledTimes(2);
 		expect(
 			await app.adapter.count({

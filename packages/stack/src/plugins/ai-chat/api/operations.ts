@@ -838,10 +838,9 @@ export function createAiChatOperations(
 	const pendingRequestedConversationClaims = new Set<string>();
 	const pendingConversationMutationClaims = new Set<string>();
 	let memoryTransactionTail = Promise.resolve();
-	const runConversationTransaction = async <T>(
-		callback: (transaction: TransactionAdapter) => Promise<T>,
+	const serializeMemoryHistory = async <T>(
+		run: () => Promise<T>,
 	): Promise<T> => {
-		const run = () => adapter.transaction(callback);
 		if (adapter.id !== "memory") return run();
 		let release = () => {};
 		const previous = memoryTransactionTail;
@@ -855,6 +854,9 @@ export function createAiChatOperations(
 			release();
 		}
 	};
+	const runConversationTransaction = <T>(
+		callback: (transaction: TransactionAdapter) => Promise<T>,
+	) => serializeMemoryHistory(() => adapter.transaction(callback));
 	const claimConversationMutation = (conversationId: string) => {
 		requireAtomicConversationTransactions(adapter);
 		if (pendingConversationMutationClaims.has(conversationId)) {
@@ -1041,17 +1043,19 @@ export function createAiChatOperations(
 		execute: async (context) => {
 			const userId = scopedUserIds.get(context.input as object);
 			const now = new Date();
-			const conversation = await adapter.create<Conversation>({
-				model: "conversation",
-				forceAllowId: Boolean(context.input.id),
-				data: {
-					...(context.input.id ? { id: context.input.id } : {}),
-					...(userId ? { userId } : {}),
-					title: context.input.title || "New Conversation",
-					createdAt: now,
-					updatedAt: now,
-				} as Conversation,
-			});
+			const conversation = await serializeMemoryHistory(() =>
+				adapter.create<Conversation>({
+					model: "conversation",
+					forceAllowId: Boolean(context.input.id),
+					data: {
+						...(context.input.id ? { id: context.input.id } : {}),
+						...(userId ? { userId } : {}),
+						title: context.input.title || "New Conversation",
+						createdAt: now,
+						updatedAt: now,
+					} as Conversation,
+				}),
+			);
 			const result = publicConversation(conversation);
 			await hooks?.onConversationCreated?.(
 				result,
