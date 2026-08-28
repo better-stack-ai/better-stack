@@ -365,18 +365,24 @@ approval from marking spam.
 | `allowPosting` | `boolean` | `true` | When `false`, the `POST /comments` endpoint is not registered (read-only comments mode). |
 | `allowEditing` | `boolean` | `true` | When `false`, the `PATCH /comments/:id` edit endpoint is not registered. |
 | `resolveUser` | `(authorId: string) => Promise<{ name: string; avatarUrl?: string } \| null>` | — | Map author IDs to display info; returns `null` → shows `"[deleted]"` |
-| `onBeforeList` | hook | — | Called after authorization and before a list query. |
-| `onBeforeCount` | hook | — | Called after authorization and before a count query. |
-| `onBeforePost` | hook | — | Called after authorization and before a comment is saved. Request identity is authoritative when server authorization is configured. |
-| `onAfterPost` | hook | — | Called after a comment is saved. |
-| `onBeforeEdit` | hook | — | Called after authorization and before a comment body is updated. |
-| `onAfterEdit` | hook | — | Called after a comment body is updated. |
-| `onBeforeLike` | hook | — | Called after authorization and before the request identity's reaction is toggled. |
-| `onBeforeStatusChange` | hook | — | Called after authorization and before moderation status changes. |
-| `onAfterApprove` | hook | — | Called after a comment is approved. |
-| `onBeforeDelete` | hook | — | Called after authorization and before a comment is deleted. |
-| `onAfterDelete` | hook | — | Called after a comment is deleted. |
-| `onBeforeListByAuthor` | hook | — | Called after the own-history rule allows an author-scoped query. |
+| `hooks` | `CommentsBackendHooks` | — | Post-authorization domain lifecycle callbacks. |
+
+Pass lifecycle callbacks inside the `hooks` option:
+
+| `CommentsBackendHooks` field | Description |
+|------------------------------|-------------|
+| `onBeforeList` | Called after authorization and before a list query. |
+| `onBeforeCount` | Called after authorization and before a count query. |
+| `onBeforeListByAuthor` | Called after the own-history rule allows an author-scoped query. |
+| `onBeforePost` | Called after authorization and before a comment is saved. Request identity is authoritative when server authorization is configured. |
+| `onAfterPost` | Called after a comment is saved. |
+| `onBeforeEdit` | Called after authorization and before a comment body is updated. |
+| `onAfterEdit` | Called after a comment body is updated. |
+| `onBeforeLike` | Called after authorization and before the request identity's reaction is toggled. |
+| `onBeforeStatusChange` | Called after authorization and before moderation status changes. |
+| `onAfterApprove` | Called after a comment is approved. |
+| `onBeforeDelete` | Called after authorization and before a comment is deleted. |
+| `onAfterDelete` | Called after a comment is deleted. |
 
 <Callout type="warn">
 All lifecycle hooks receive validated input, server-derived facts, resolved
