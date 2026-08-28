@@ -404,31 +404,164 @@ The embedded `MediaPicker` intentionally keeps this state local, so opening a pi
 
 ### Permissions
 
-When `StackProvider` has an auth provider with `can()`, the Media UI checks these permissions:
+Media publishes one browser-safe, runtime-schema-backed catalog from
+`@btst/stack/plugins/media/permissions`. Configure the rule once and bind the
+same definition to server and browser auth:
 
-| Resource | Action | Controls |
-| --- | --- | --- |
-| `media:asset` | `read` | Standalone `/media` route |
-| `media:asset` | `create` | Upload, URL registration, and drag/drop |
-| `media:asset` | `delete` | Asset delete action (`params.id` is supplied) |
-| `media:folder` | `create` | New folder form |
-| `media:folder` | `delete` | Folder delete action (`params.id` is supplied) |
+```ts title="lib/authorization.ts"
+import { defineAuthorization } from "@btst/stack/authorization"
+import { mediaPermissions } from "@btst/stack/plugins/media/permissions"
+import { z } from "zod"
 
-Without an auth provider, all controls remain available for backward compatibility. Client checks only control presentation; continue using backend hooks such as `onBeforeUpload`, `onBeforeDelete`, and `onBeforeListAssets` as the security boundary.
+const identitySchema = z.object({
+  id: z.string(),
+  role: z.enum(["member", "admin"]),
+  tenantIds: z.array(z.string()),
+})
 
-```tsx title="app/pages/layout.tsx"
-<StackProvider
-  auth={{
-    getIdentity: () => session?.user ?? null,
-    loginPath: "/login",
-    can: ({ resource, action, identity }) =>
-      Boolean(identity && canUseMedia(identity, resource, action)),
-  }}
-  // router, api, and media-specific overrides
->
+type Identity = z.infer<typeof identitySchema>
+
+export const authorization = defineAuthorization({
+  identity: identitySchema,
+  permissions: [mediaPermissions] as const,
+  rules: ({ media }) => {
+    const belongsToTenant = (identity: Identity | null, tenantId?: string) =>
+      identity?.role === "admin" ||
+      Boolean(
+        identity &&
+        (!tenantId || identity.tenantIds.includes(tenantId)),
+      )
+
+    return [
+      media.library.read.when(({ identity }) => identity !== null),
+      media.asset.read.when(({ identity, facts }) =>
+        belongsToTenant(identity, facts.tenantId),
+      ),
+      media.asset.upload.when(({ identity, facts }) =>
+        // Vercel callbacks reach this rule only after provider verification.
+        facts.phase === "callback" || belongsToTenant(identity, facts.tenantId),
+      ),
+      media.asset.update.when(({ identity, facts }) =>
+        belongsToTenant(identity, facts.tenantId),
+      ),
+      media.asset.delete.when(({ identity, facts }) =>
+        belongsToTenant(identity, facts.tenantId),
+      ),
+      media.folder.create.when(({ identity, facts }) =>
+        belongsToTenant(identity, facts.tenantId),
+      ),
+      media.folder.delete.when(({ identity, facts }) =>
+        belongsToTenant(identity, facts.tenantId),
+      ),
+    ]
+  },
+})
+```
+
+```ts title="lib/stack.ts"
+import { createServerAuth } from "@btst/stack/authorization/server"
+import { authorization } from "./authorization"
+
+const serverAuth = createServerAuth({
+  authorization,
+  getIdentity: async ({ request }) => {
+    const session = await getSession(request.headers)
+    return session?.user ?? null
+  },
+})
+
+export const appStack = stack({
+  auth: serverAuth,
+  plugins: {
+    media: mediaBackendPlugin({
+      storageAdapter: s3Adapter({ /* ... */ }),
+      // Collection scope is a server concern, separate from allow/deny rules.
+      resolveTenantId: async ({ headers }) =>
+        (await getSession(headers))?.activeTenantId,
+    }),
+  },
+  // adapter, basePath, ...
+})
+```
+
+```tsx title="lib/stack-client.tsx"
+import { createClientAuth } from "@btst/stack/authorization/client"
+import { authorization } from "./authorization"
+
+export const clientAuth = createClientAuth({
+  authorization,
+  getIdentity: () => fetch("/api/session").then((response) => response.json()),
+})
+
+// Framework layout helpers resolve this once on the server. Pass the same
+// snapshot both to StackProvider and the Media SSR query partition.
+<StackProvider auth={clientAuth} initialIdentity={initialIdentity}>
   {children}
 </StackProvider>
+
+mediaClientPlugin({
+  // ...route and API configuration
+  queryClient,
+  headers: requestHeaders,
+  identityPartition: initialIdentity ?? undefined,
+})
 ```
+
+The Next.js, React Router, and TanStack framework helpers hydrate
+`initialIdentity`; generated integrations forward that snapshot to Media. This
+avoids a second identity request before the protected asset and folder queries
+can render. Browser query keys also include the current identity, so a login,
+logout, user switch, failed resolution, or refetch cannot reuse another
+identity's response.
+
+| Descriptor | Authoritative server facts | Built-in UI/operation |
+| --- | --- | --- |
+| `media.library.read()` | Server-side collection scope | `/media`, folder lists, picker/library browse gate |
+| `media.asset.read(facts)` | `assetId`, folder, MIME, tenant | Asset-list response, presentation, preview, copy, picker selection |
+| `media.asset.upload(facts)` | `phase`, folder, MIME, tenant | Direct upload, S3/Vercel initialization, URL/provider finalization |
+| `media.asset.update(facts)` | Current asset plus target folder | Asset metadata update |
+| `media.asset.delete(facts)` | Current asset/storage context | Destructive asset control and deletion |
+| `media.folder.create(facts)` | Current parent and tenant | New-folder controls and creation |
+| `media.folder.delete(facts)` | Current folder, parent, tenant | Folder deletion |
+
+Browser facts are presentation hints. The browser can, for example, hide an
+admin button from `identity.role`, but the backend reloads the asset/folder,
+derives tenant and storage facts, evaluates the same descriptor, and performs a
+final compare-and-swap check before hooks, tokens, storage effects, or database
+mutation. Query scoping remains in `resolveTenantId`; it is not a boolean rule.
+An asset-list operation first checks `library.read`, derives the scoped rows on
+the server, and then checks `asset.read` for every asset before returning any
+asset data. A caller with only the collection rule receives no asset response;
+the rules never filter rows.
+
+Every transport uses the same operation lifecycle:
+
+1. Parse and validate input.
+2. Load authoritative facts and resolve the request identity.
+3. Evaluate the exact permission (or fail closed when its rule is missing).
+4. Recheck authoritative state, then run domain hooks and the storage/database work.
+5. Run after/error lifecycle hooks.
+
+`stack.forRequest(request).api.media.*` follows that entire lifecycle.
+`stack.internal.media.*` is for trusted server jobs: it skips only user
+authorization and still runs validation, storage/domain hooks, cleanup, and
+ordering. Omitting `auth` remains permissive during the v3 RC compatibility
+window.
+
+<Callout type="warn">
+Backend hooks are workflow/lifecycle hooks, not the authorization boundary.
+Do not trust browser ownership, tenant, MIME, status, URL, token, or storage
+facts inside a rule. Signed upload URLs and tokens are returned only by their
+exact upload operations, never by a collection-only permission.
+</Callout>
+
+Public behavior must be explicit in the exact catalog. For a public library,
+declare both `media.library.read.allow()` and `media.asset.read.allow()`; the
+collection rule alone does not release asset records. For a Vercel completion
+callback, allow only `facts.phase === "callback"`; Media verifies the provider
+signature and binds the callback to server-issued token context before that
+public rule is evaluated. A callback payload is never authoritative merely
+because the rule is public.
 
 ### Translation and notifications
 
@@ -474,7 +607,9 @@ const { handler, dbSchema } = stack({
 })
 ```
 
-When `resolveTenantId` throws, the request is rejected exactly like any other hook error. Use this to enforce authentication before any media operation is allowed.
+When `resolveTenantId` throws, the request is rejected. Use authorization rules
+for allow/deny decisions and `resolveTenantId` only to derive the server-side
+collection scope.
 
 ### Get-or-create folders per tenant
 
@@ -722,7 +857,11 @@ Like other BTST plugins, the Media plugin supports two server-side access patter
 | `deleteFolder(adapter, id)` | Delete a folder |
 
 <Callout type="warn">
-Authorization hooks are not called when you use `stack().api.media.*` or direct getter and mutation imports. Enforce access control at the call site.
+`stack().api.media.*`, direct getter/mutation imports, and
+`stack().api.media.prefetchForRoute()` are lower-level trusted server escape
+hatches. They bypass the operation authorization and lifecycle and are never
+exposed through HTTP, `forRequest()`, or `internal`. Enforce trust at the call
+site.
 </Callout>
 
 ### `AssetListParams`
@@ -769,9 +908,18 @@ Authorization hooks are not called when you use `stack().api.media.*` or direct 
 
 ## Static Site Generation (SSG)
 
-The Media plugin does not currently support build-time SSG prefetching. Its client loader warns when no server is available at build time, and the library route is intended to run against a live API.
+The trusted raw API can prefetch the initial library without a live HTTP server:
 
-Use the Media plugin for authenticated dashboards, admin tools, and editor workflows rather than static public pages.
+```ts
+await appStack.api.media.prefetchForRoute("library", queryClient)
+```
+
+This seeds the same anonymous asset/folder keys used by the browser and strips
+tenant fields. It deliberately performs no request authorization. Use it only
+when the generated page is intentionally public and protected at the deployment
+boundary; never put private or per-user Media data into a shared static build.
+Authenticated SSR should instead forward request headers, hydrate
+`initialIdentity`, and pass that identity as `MediaClientConfig.identityPartition`.
 
 ## Shadcn Registry
 

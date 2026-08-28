@@ -8,6 +8,7 @@ export {
 	useIdentity,
 	useIdentitySourceGeneration,
 } from "./auth";
+export type { PermissionCheckState } from "./auth";
 export { useNotify, defaultNotifyProvider } from "./notify";
 export { useTranslate, type TranslateFn } from "./i18n";
 export type {

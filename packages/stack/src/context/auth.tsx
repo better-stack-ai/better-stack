@@ -464,9 +464,12 @@ function LegacyPermissionParamsCheck({
  */
 export function PermissionCheck({
 	permission,
+	legacyPermission,
 	children,
 }: {
 	permission: AnyPermissionRequest;
+	/** String permission used only by RC providers during descriptor migration. */
+	legacyPermission?: CanParams;
 	children: (state: PermissionCheckState) => ReactNode;
 }) {
 	const auth = useContext(AuthContext);
@@ -494,6 +497,13 @@ export function PermissionCheck({
 					),
 				})}
 			</>
+		);
+	}
+	if (legacyPermission) {
+		return (
+			<LegacyPermissionParamsCheck permission={legacyPermission}>
+				{children}
+			</LegacyPermissionParamsCheck>
 		);
 	}
 	return (

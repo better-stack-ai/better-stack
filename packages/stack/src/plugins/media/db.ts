@@ -48,6 +48,10 @@ export const mediaSchema = createDbPlugin("media", {
 				type: "date",
 				defaultValue: () => new Date(),
 			},
+			updatedAt: {
+				type: "date",
+				defaultValue: () => new Date(),
+			},
 		},
 	},
 	folder: {
@@ -70,6 +74,10 @@ export const mediaSchema = createDbPlugin("media", {
 				required: false,
 			},
 			createdAt: {
+				type: "date",
+				defaultValue: () => new Date(),
+			},
+			updatedAt: {
 				type: "date",
 				defaultValue: () => new Date(),
 			},

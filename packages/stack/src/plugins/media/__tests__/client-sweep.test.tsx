@@ -8,6 +8,10 @@ import {
 	type StackAuthProvider,
 	type StackI18nProvider,
 } from "@btst/stack/context";
+import { createClientAuth } from "@btst/stack/authorization/client";
+import { defineAuthorization } from "@btst/stack/authorization";
+import { z } from "zod";
+import { mediaPermissions } from "../permissions";
 import { LibraryPage } from "../client/components/pages/library-page.internal";
 import { UrlTab } from "../client/components/media-picker/url-tab";
 import type { SerializedAsset, SerializedFolder } from "../types";
@@ -124,6 +128,7 @@ async function renderLibrary(
 		auth?: StackAuthProvider;
 		i18n?: StackI18nProvider;
 		router?: ReturnType<typeof createMockRouter>;
+		initialIdentity?: { id: string; role?: string } | null;
 	} = {},
 ) {
 	const router = options.router ?? createMockRouter();
@@ -135,6 +140,7 @@ async function renderLibrary(
 				router={router}
 				overrides={{ media: mediaOverrides() }}
 				auth={options.auth}
+				initialIdentity={options.initialIdentity}
 				i18n={options.i18n}
 			>
 				<LibraryPage />
@@ -183,6 +189,55 @@ describe("Media library permissions", () => {
 				params: { id: asset.id },
 			}),
 		);
+	});
+
+	it("uses exact schema-backed facts for one-rule asset and upload gates", async () => {
+		const seen: Array<{ id: string; facts?: unknown }> = [];
+		const definition = defineAuthorization({
+			identity: z.object({
+				id: z.string(),
+				role: z.enum(["viewer", "editor"]),
+			}),
+			permissions: [mediaPermissions] as const,
+			rules: ({ media }) => [
+				media.library.read.allow(),
+				media.asset.read.when(({ facts }) => {
+					seen.push({ id: "read", facts });
+					return (
+						facts.assetId === asset.id && facts.mimeType === asset.mimeType
+					);
+				}),
+				media.asset.upload.when(({ identity, facts }) => {
+					seen.push({ id: "upload", facts });
+					return identity?.role === "editor";
+				}),
+				media.asset.delete.when(() => false),
+				media.folder.create.when(() => false),
+				media.folder.delete.when(() => false),
+			],
+		});
+		const clientAuth = createClientAuth({
+			authorization: definition,
+			getIdentity: () => ({ id: "viewer", role: "viewer" as const }),
+		});
+		await renderLibrary({
+			auth: clientAuth,
+			initialIdentity: { id: "viewer", role: "viewer" },
+		});
+
+		expect(document.body.textContent).toContain("Beach.jpg");
+		expect(document.body.textContent).not.toContain("Upload");
+		expect(seen).toContainEqual({
+			id: "read",
+			facts: {
+				assetId: asset.id,
+				mimeType: asset.mimeType,
+			},
+		});
+		expect(seen).toContainEqual({
+			id: "upload",
+			facts: { phase: "direct" },
+		});
 	});
 });
 

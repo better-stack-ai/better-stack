@@ -8,6 +8,7 @@ import type { AssetListParams } from "./api/getters";
 import {
 	assetListDiscriminator,
 	folderListDiscriminator,
+	type MediaIdentityPartition,
 } from "./api/query-key-defs";
 import { ROOT_FOLDER_QUERY_VALUE } from "./schemas";
 import type { SerializedAsset, SerializedFolder } from "./types";
@@ -54,14 +55,27 @@ export const mediaResources = {
 		queries: {
 			list: {
 				path: "/media/assets",
-				query: (params: AssetListParams = {}) => ({
+				query: (
+					params: AssetListParams = {},
+					_identityPartition?: MediaIdentityPartition,
+				) => ({
 					folderId: params.folderId,
 					mimeType: params.mimeType,
 					query: normalizeSearch(params.query),
 					limit: params.limit ?? 20,
 				}),
-				key: (params: AssetListParams = {}) => [assetListDiscriminator(params)],
-				select: (data: any) =>
+				key: (
+					params: AssetListParams = {},
+					identityPartition?: MediaIdentityPartition,
+				) =>
+					identityPartition === undefined
+						? [assetListDiscriminator(params)]
+						: [assetListDiscriminator(params), { identity: identityPartition }],
+				select: (
+					data: any,
+					_params?: AssetListParams,
+					_identityPartition?: MediaIdentityPartition,
+				) =>
 					data as {
 						items: SerializedAsset[];
 						total: number;
@@ -69,7 +83,10 @@ export const mediaResources = {
 						offset?: number;
 					},
 				infinite: true,
-				pageSize: (params: AssetListParams = {}) => params.limit ?? 20,
+				pageSize: (
+					params: AssetListParams = {},
+					_identityPartition?: MediaIdentityPartition,
+				) => params.limit ?? 20,
 				nextPageParam: paginatedNextPageParam,
 			},
 		},
@@ -108,12 +125,28 @@ export const mediaResources = {
 		queries: {
 			list: {
 				path: "/media/folders",
-				query: (parentId?: string | null) =>
+				query: (
+					parentId?: string | null,
+					_identityPartition?: MediaIdentityPartition,
+				) =>
 					parentId === undefined
 						? {}
 						: { parentId: parentId ?? ROOT_FOLDER_QUERY_VALUE },
-				key: (parentId?: string | null) => [folderListDiscriminator(parentId)],
-				select: (data: any) => data as SerializedFolder[],
+				key: (
+					parentId?: string | null,
+					identityPartition?: MediaIdentityPartition,
+				) =>
+					identityPartition === undefined
+						? [folderListDiscriminator(parentId)]
+						: [
+								folderListDiscriminator(parentId),
+								{ identity: identityPartition },
+							],
+				select: (
+					data: any,
+					_parentId?: string | null,
+					_identityPartition?: MediaIdentityPartition,
+				) => data as SerializedFolder[],
 			},
 		},
 		mutations: {

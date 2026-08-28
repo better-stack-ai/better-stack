@@ -9,6 +9,8 @@ export type Asset = {
 	alt?: string;
 	tenantId?: string | null;
 	createdAt: Date;
+	/** Mutation version used for authoritative compare-and-swap checks. */
+	updatedAt?: Date;
 };
 
 export type Folder = {
@@ -17,12 +19,16 @@ export type Folder = {
 	parentId?: string;
 	tenantId?: string | null;
 	createdAt: Date;
+	/** Mutation version used for authoritative compare-and-swap checks. */
+	updatedAt?: Date;
 };
 
-export interface SerializedAsset extends Omit<Asset, "createdAt"> {
+export interface SerializedAsset
+	extends Omit<Asset, "createdAt" | "updatedAt"> {
 	createdAt: string;
 }
 
-export interface SerializedFolder extends Omit<Folder, "createdAt"> {
+export interface SerializedFolder
+	extends Omit<Folder, "createdAt" | "updatedAt"> {
 	createdAt: string;
 }

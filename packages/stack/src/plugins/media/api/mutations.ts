@@ -40,9 +40,10 @@ export interface CreateFolderInput {
  * The caller is responsible for any access-control checks before invoking this function.
  */
 export async function createAsset(
-	adapter: Adapter,
+	adapter: Pick<Adapter, "create">,
 	input: CreateAssetInput,
 ): Promise<Asset> {
+	const now = new Date();
 	return adapter.create<Asset>({
 		model: "mediaAsset",
 		data: {
@@ -54,7 +55,8 @@ export async function createAsset(
 			folderId: input.folderId,
 			alt: input.alt,
 			tenantId: input.tenantId,
-			createdAt: new Date(),
+			createdAt: now,
+			updatedAt: now,
 		},
 	});
 }
@@ -80,6 +82,8 @@ export async function updateAsset(
 		// null explicitly clears the folder association; undefined means "not provided"
 		update.folderId = input.folderId;
 	}
+
+	update.updatedAt = new Date();
 
 	return adapter.update<Asset>({
 		model: "mediaAsset",
@@ -112,13 +116,15 @@ export async function createFolder(
 	adapter: Adapter,
 	input: CreateFolderInput,
 ): Promise<Folder> {
+	const now = new Date();
 	return adapter.create<Folder>({
 		model: "mediaFolder",
 		data: {
 			name: input.name,
 			parentId: input.parentId,
 			tenantId: input.tenantId,
-			createdAt: new Date(),
+			createdAt: now,
+			updatedAt: now,
 		},
 	});
 }

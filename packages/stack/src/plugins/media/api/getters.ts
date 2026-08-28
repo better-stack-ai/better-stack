@@ -129,7 +129,7 @@ export async function listAssets(
  * @remarks **Security:** Authorization hooks are NOT called.
  */
 export async function getAssetById(
-	adapter: Adapter,
+	adapter: Pick<Adapter, "findOne">,
 	id: string,
 ): Promise<Asset | null> {
 	return adapter.findOne<Asset>({
@@ -186,7 +186,7 @@ export async function listFolders(
  * @remarks **Security:** Authorization hooks are NOT called.
  */
 export async function getFolderById(
-	adapter: Adapter,
+	adapter: Pick<Adapter, "findOne">,
 	id: string,
 ): Promise<Folder | null> {
 	return adapter.findOne<Folder>({

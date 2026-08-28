@@ -1,263 +1,195 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import { defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api";
-import { z } from "zod";
+import {
+	createEndpoint,
+	defineBackendPlugin,
+	type OperationData,
+} from "@btst/stack/plugins/api";
+import type { QueryClient } from "@tanstack/react-query";
+import { AuthorizationError } from "../../../authorization/server";
 import { mediaSchema as dbSchema } from "../db";
-import type { Asset, Folder } from "../types";
 import {
 	AssetListQuerySchema,
 	FolderListQuerySchema,
 	createAssetSchema,
-	updateAssetSchema,
 	createFolderSchema,
+	updateAssetSchema,
 	uploadTokenRequestSchema,
 } from "../schemas";
 import {
-	listAssets,
 	getAssetById,
-	listFolders,
 	getFolderById,
 	getFolderByName,
+	listAssets,
+	listFolders,
 } from "./getters";
+import { createAsset, createFolder, updateAsset } from "./mutations";
 import {
-	createAsset,
-	updateAsset,
-	deleteAsset,
-	createFolder,
-	deleteFolder,
-} from "./mutations";
-import {
-	isDirectAdapter,
-	isS3Adapter,
-	isVercelBlobAdapter,
-	type StorageAdapter,
-} from "./storage-adapter";
-import { runHook } from "../../utils";
+	FolderListOperationInputSchema,
+	MediaOperationError,
+	createMediaOperations,
+	type MediaBackendHooks,
+	type MediaOperationsConfig,
+} from "./operations";
+import { MEDIA_QUERY_KEYS } from "./query-key-defs";
+import { serializeAsset, serializeFolder } from "./serializers";
+import type { StorageAdapter } from "./storage-adapter";
 
-/**
- * Sanitize a string for use in an S3 object key.
- * Strips path separators and parent-directory segments to prevent path traversal.
- */
-function sanitizeS3KeySegment(s: string): string {
-	return s.replace(/[/\\]/g, "-").replace(/\.\./g, "_").trim() || "unknown";
-}
+export {
+	AssetIdOperationInputSchema,
+	DirectUploadOperationInputSchema,
+	FolderIdOperationInputSchema,
+	FolderListOperationInputSchema,
+	UpdateAssetOperationInputSchema,
+	VercelBlobOperationInputSchema,
+	MediaOperationError,
+} from "./operations";
+export type {
+	MediaApiContext,
+	MediaApiResultContext,
+	MediaBackendHooks,
+	MediaOperationHookContext,
+	MediaOperations,
+} from "./operations";
 
-function matchesUrlPrefix(url: string, prefix: string): boolean {
-	const trimmedPrefix = prefix.trim();
-	if (!trimmedPrefix) return false;
-
-	if (/^[a-z][a-z\d+.-]*:\/\//i.test(trimmedPrefix)) {
-		if (trimmedPrefix.endsWith("://")) {
-			return url.startsWith(trimmedPrefix);
-		}
-
-		const normalizedPrefix = trimmedPrefix.replace(/\/+$/, "");
-		return url === normalizedPrefix || url.startsWith(`${normalizedPrefix}/`);
-	}
-
-	const normalizedPrefix = `${trimmedPrefix.replace(/\/+$/, "")}/`;
-	return url.startsWith(normalizedPrefix);
-}
-
-/**
- * Context passed to media API hooks.
- */
-export interface MediaApiContext<
-	TBody = unknown,
-	TParams = unknown,
-	TQuery = unknown,
-> {
-	body?: TBody;
-	params?: TParams;
-	query?: TQuery;
-	request?: Request;
-	headers?: Headers;
-	[key: string]: unknown;
-}
-
-/**
- * Configuration hooks for the media backend plugin.
- * All hooks are optional and allow consumers to customise behaviour.
- */
-export interface MediaBackendHooks {
-	/**
-	 * Called before a file upload is allowed (both direct and signed adapters).
-	 * Throw an Error to reject the upload (e.g. if the user is not authenticated).
-	 */
-	onBeforeUpload?: (
-		meta: { filename: string; mimeType: string; size?: number },
-		context: MediaApiContext,
-	) => Promise<void> | void;
-
-	/**
-	 * Called after an asset record is created in the database.
-	 */
-	onAfterUpload?: (
-		asset: Asset,
-		context: MediaApiContext,
-	) => Promise<void> | void;
-
-	/**
-	 * Called before an asset is deleted. Throw to prevent deletion.
-	 */
-	onBeforeDelete?: (
-		asset: Asset,
-		context: MediaApiContext,
-	) => Promise<void> | void;
-
-	/**
-	 * Called after an asset has been deleted from the DB and storage.
-	 */
-	onAfterDelete?: (
-		assetId: string,
-		context: MediaApiContext,
-	) => Promise<void> | void;
-
-	/**
-	 * Called before listing assets. Throw to deny access.
-	 */
-	onBeforeListAssets?: (
-		filter: z.infer<typeof AssetListQuerySchema>,
-		context: MediaApiContext,
-	) => Promise<void> | void;
-
-	/**
-	 * Called before updating an asset (PATCH). Throw to deny access.
-	 */
-	onBeforeUpdateAsset?: (
-		asset: Asset,
-		updates: z.infer<typeof updateAssetSchema>,
-		context: MediaApiContext,
-	) => Promise<void> | void;
-
-	/**
-	 * Called before listing folders. Throw to deny access.
-	 */
-	onBeforeListFolders?: (
-		filter: { parentId?: string | null },
-		context: MediaApiContext,
-	) => Promise<void> | void;
-
-	/**
-	 * Called before creating a folder. Throw to deny access.
-	 */
-	onBeforeCreateFolder?: (
-		input: z.infer<typeof createFolderSchema>,
-		context: MediaApiContext,
-	) => Promise<void> | void;
-
-	/**
-	 * Called before deleting a folder. Throw to deny access.
-	 */
-	onBeforeDeleteFolder?: (
-		folder: Folder,
-		context: MediaApiContext,
-	) => Promise<void> | void;
-}
-
-/**
- * Configuration for the media backend plugin.
- */
+/** Configuration for the Media backend plugin. */
 export interface MediaBackendConfig {
-	/**
-	 * The storage adapter to use for file uploads.
-	 * - `localAdapter()` — writes to the local filesystem (dev / self-hosted)
-	 * - `s3Adapter()` — presigned PUT URL (AWS S3, Cloudflare R2, MinIO)
-	 * - `vercelBlobAdapter()` — signed direct upload via Vercel Blob
-	 */
+	/** Storage implementation used for upload initialization, writes, and cleanup. */
 	storageAdapter: StorageAdapter;
-
-	/**
-	 * Maximum file size in bytes.
-	 * Enforced server-side for `localAdapter`.
-	 * Passed into the Vercel Blob token for edge enforcement.
-	 * Validated against the client-reported size for `s3Adapter`.
-	 * @default 10485760 (10 MB)
-	 */
+	/** Maximum accepted upload size. @default 10485760 */
 	maxFileSizeBytes?: number;
-
-	/**
-	 * MIME type allowlist (e.g. `["image/jpeg", "image/png"]`).
-	 * If omitted, all MIME types are accepted.
-	 * Enforced server-side for `localAdapter`.
-	 * Passed to Vercel Blob token for edge enforcement.
-	 * Validated against the client-reported MIME type for `s3Adapter`.
-	 */
+	/** Optional MIME allowlist, including wildcard forms such as `image/*`. */
 	allowedMimeTypes?: string[];
-
-	/**
-	 * URL prefixes that are allowed when creating asset records via `POST /media/assets`.
-	 * When omitted the plugin automatically derives a safe default from the storage adapter:
-	 * - `s3Adapter` → the configured `publicBaseUrl`
-	 * - `vercelBlobAdapter` → any URL whose hostname ends with `.public.blob.vercel-storage.com`
-	 * - `localAdapter` → rejects client-supplied URLs; use `POST /media/upload` instead
-	 *
-	 * Provide this option only when you need to override the automatic default (e.g. to allow
-	 * assets from a CDN in front of your storage that uses a different domain). When using
-	 * `localAdapter`, setting `allowedUrlPrefixes` explicitly opts `POST /media/assets` back in.
-	 *
-	 * @remarks
-	 * Protocol-only prefixes such as `"https://"` (and especially `"http://"`) disable
-	 * origin-based restrictions entirely — any URL with that scheme will be accepted.
-	 * Only use them when you intentionally want to allow assets from arbitrary hosts:
-	 * `"http://"` URLs will be blocked as mixed content on HTTPS pages, and if your
-	 * `onAfterUpload` hook fetches asset URLs server-side, accepting arbitrary hosts
-	 * can expose an SSRF surface. Prefer full origin prefixes like
-	 * `"https://cdn.example.com"` whenever possible.
-	 */
+	/** Trusted URL prefixes accepted by asset finalization/registration. */
 	allowedUrlPrefixes?: string[];
-
-	/**
-	 * Optional lifecycle hooks for the media backend plugin.
-	 */
+	/** Post-authorization domain lifecycle hooks. */
 	hooks?: MediaBackendHooks;
-
 	/**
-	 * Optional function to resolve a tenant ID from the incoming request context.
-	 *
-	 * When provided, all asset and folder list/create operations through the HTTP
-	 * API are automatically scoped to the returned tenant ID:
-	 * - GET /media/assets  →  filters results to the resolved tenant
-	 * - POST /media/assets →  tags the created asset with the resolved tenant
-	 * - POST /media/upload →  tags the uploaded asset with the resolved tenant
-	 * - GET /media/folders →  filters results to the resolved tenant
-	 * - POST /media/folders → tags the created folder with the resolved tenant
-	 *
-	 * When absent, no tenant filtering is applied (existing behaviour).
-	 *
-	 * Returning `null` or `undefined` means "no tenant" for this request —
-	 * the operation proceeds without tenant scoping (useful for super-admin routes).
+	 * Server-only collection scope resolver. Its result is never accepted from a
+	 * browser and remains separate from boolean authorization rules.
 	 */
-	resolveTenantId?: (
-		context: MediaApiContext,
-	) => Promise<string | null | undefined> | string | null | undefined;
+	resolveTenantId?: MediaOperationsConfig["resolveTenantId"];
+}
+
+/** Raw trusted route key exposed only on `stack.api.media`. */
+export type MediaRouteKey = "library";
+
+interface MediaPrefetchForRoute {
+	(key: "library", queryClient: QueryClient): Promise<void>;
 }
 
 /**
- * Media backend plugin.
- * Provides API endpoints for managing media assets and folders, and supports
- * local, S3-compatible, and Vercel Blob storage backends.
- *
- * @example
- * ```ts
- * import { mediaBackendPlugin, localAdapter } from "@btst/stack/plugins/media/api";
- *
- * mediaBackendPlugin({
- *   storageAdapter: localAdapter(),
- *   hooks: {
- *     onBeforeUpload: async (_meta, ctx) => {
- *       const session = await getSession(ctx.headers as Headers);
- *       if (!session) throw new Error("Unauthorized");
- *     },
- *   },
- * })
- * ```
+ * Trusted raw SSG prefetch. It bypasses request authorization and is never
+ * reachable through HTTP or `forRequest()`. Protect generated output at the
+ * deployment boundary when the Media library is not public.
  */
+function createMediaPrefetchForRoute(adapter: Adapter): MediaPrefetchForRoute {
+	return async (_key, queryClient) => {
+		const [assets, folders] = await Promise.all([
+			listAssets(adapter, { limit: 40 }),
+			listFolders(adapter, { parentId: null }),
+		]);
+		queryClient.setQueryData(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }), {
+			pages: [
+				{
+					...assets,
+					items: assets.items.map((asset) => {
+						const { tenantId: _tenantId, ...safe } = serializeAsset(asset);
+						return safe;
+					}),
+				},
+			],
+			pageParams: [0],
+		});
+		queryClient.setQueryData(
+			MEDIA_QUERY_KEYS.foldersList(null),
+			folders.map((folder) => {
+				const { tenantId: _tenantId, ...safe } = serializeFolder(folder);
+				return safe;
+			}),
+		);
+	};
+}
+
+type EndpointErrorFactory = (...args: any[]) => Error;
+
+async function adaptOperationToHttp<TResult>(
+	execute: () => Promise<TResult>,
+	error: EndpointErrorFactory,
+): Promise<TResult> {
+	try {
+		return await execute();
+	} catch (cause) {
+		if (
+			cause instanceof AuthorizationError ||
+			cause instanceof MediaOperationError
+		) {
+			throw error(cause.statusCode, {
+				message: cause.message,
+				...(cause instanceof MediaOperationError ? { code: cause.code } : {}),
+			});
+		}
+		throw cause;
+	}
+}
+
+function parseMultipartFile(body: unknown) {
+	if (!body || typeof body !== "object") {
+		throw new MediaOperationError(
+			400,
+			"Expected multipart/form-data request body",
+			"INVALID_UPLOAD_BODY",
+		);
+	}
+	const record = body as Record<string, unknown>;
+	const file = record.file as Record<string, unknown> | undefined;
+	if (!file || typeof file.arrayBuffer !== "function") {
+		throw new MediaOperationError(
+			400,
+			"Missing 'file' field in form data",
+			"MISSING_UPLOAD_FILE",
+		);
+	}
+	if (typeof file.size !== "number" || file.size < 0) {
+		throw new MediaOperationError(
+			400,
+			"File 'size' is missing or invalid",
+			"INVALID_UPLOAD_FILE",
+		);
+	}
+	if (typeof file.name !== "string" || !file.name) {
+		throw new MediaOperationError(
+			400,
+			"File 'name' is missing or invalid",
+			"INVALID_UPLOAD_FILE",
+		);
+	}
+	if (typeof file.type !== "string") {
+		throw new MediaOperationError(
+			400,
+			"File 'type' is missing or invalid",
+			"INVALID_UPLOAD_FILE",
+		);
+	}
+	return {
+		file: file as unknown as Pick<
+			File,
+			"name" | "type" | "size" | "arrayBuffer"
+		>,
+		folderId:
+			typeof record.folderId === "string" && record.folderId
+				? record.folderId
+				: undefined,
+	};
+}
+
+/** Media backend plugin backed by one operation inventory. */
 export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 	defineBackendPlugin({
 		name: "media",
-
 		dbPlugin: dbSchema,
+		operations: (adapter: Adapter) => createMediaOperations(adapter, config),
 
+		/** Lower-level trusted server API that intentionally bypasses auth and hooks. */
 		api: (adapter: Adapter) => ({
 			listAssets: (params?: Parameters<typeof listAssets>[1]) =>
 				listAssets(adapter, params),
@@ -276,696 +208,150 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 			) => getFolderByName(adapter, name, parentId, tenantId),
 			createFolder: (input: Parameters<typeof createFolder>[1]) =>
 				createFolder(adapter, input),
+			prefetchForRoute: createMediaPrefetchForRoute(adapter),
 		}),
 
-		routes: (adapter: Adapter) => {
-			const {
-				storageAdapter,
-				maxFileSizeBytes = 10 * 1024 * 1024,
-				allowedMimeTypes,
-				allowedUrlPrefixes,
-				hooks,
-				resolveTenantId,
-			} = config;
-
-			function validateMimeType(mimeType: string, ctx: { error: Function }) {
-				if (allowedMimeTypes && allowedMimeTypes.length > 0) {
-					const allowed = allowedMimeTypes.some((pattern) => {
-						if (pattern.endsWith("/*")) {
-							return mimeType.startsWith(pattern.slice(0, -1));
-						}
-						return mimeType === pattern;
-					});
-					if (!allowed) {
-						throw ctx.error(415, {
-							message: `MIME type '${mimeType}' is not allowed. Allowed: ${allowedMimeTypes.join(", ")}`,
-						});
-					}
-				}
-			}
-
-			// ── Asset endpoints ────────────────────────────────────────────────────
-
+		routes: (_adapter: Adapter, _context, operations) => {
+			// Keep the transport boundary shallow; the operation performs the runtime
+			// parse. Expanding this generated route API type exceeds TypeScript's
+			// instantiation limit for the nested Vercel body union.
+			const executeVercelBlob = operations.uploadVercelBlob as unknown as (
+				input: { body: unknown },
+				request: Request,
+			) => Promise<OperationData>;
 			const listAssetsEndpoint = createEndpoint(
 				"/media/assets",
-				{
-					method: "GET",
-					query: AssetListQuerySchema,
-				},
-				async (ctx) => {
-					const { query, headers } = ctx;
-					const context: MediaApiContext = { query, headers };
-
-					const tenantId = resolveTenantId
-						? ((await resolveTenantId(context)) ?? undefined)
-						: undefined;
-
-					if (hooks?.onBeforeListAssets) {
-						await runHook(
-							() => hooks.onBeforeListAssets!(query, context),
-							ctx.error,
-							"Unauthorized: Cannot list assets",
-						);
-					}
-
-					return listAssets(adapter, { ...query, tenantId });
-				},
+				{ method: "GET", query: AssetListQuerySchema, requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.listAssets(ctx.query, ctx.request),
+						ctx.error,
+					),
 			);
-
 			const createAssetEndpoint = createEndpoint(
 				"/media/assets",
-				{
-					method: "POST",
-					body: createAssetSchema,
-				},
-				async (ctx) => {
-					const context: MediaApiContext = {
-						body: ctx.body,
-						headers: ctx.headers,
-					};
-
-					const tenantId = resolveTenantId
-						? ((await resolveTenantId(context)) ?? undefined)
-						: undefined;
-
-					if (hooks?.onBeforeUpload) {
-						await runHook(
-							() =>
-								hooks.onBeforeUpload!(
-									{
-										filename: ctx.body.filename,
-										mimeType: ctx.body.mimeType,
-										size: ctx.body.size,
-									},
-									context,
-								),
-							ctx.error,
-							"Unauthorized: Cannot upload asset",
-						);
-					}
-
-					validateMimeType(ctx.body.mimeType, ctx);
-
-					if (ctx.body.size > maxFileSizeBytes) {
-						throw ctx.error(413, {
-							message: `File size ${ctx.body.size} bytes exceeds the limit of ${maxFileSizeBytes} bytes`,
-						});
-					}
-
-					{
-						const url = ctx.body.url;
-						let urlAllowed = true;
-						let denialReason = "";
-
-						if (allowedUrlPrefixes && allowedUrlPrefixes.length > 0) {
-							// Consumer-supplied override — validate against explicit list.
-							urlAllowed = allowedUrlPrefixes.some((p) =>
-								matchesUrlPrefix(url, p),
-							);
-							denialReason = `URL must start with one of: ${allowedUrlPrefixes.join(", ")}`;
-						} else if (isDirectAdapter(storageAdapter)) {
-							// localAdapter writes files server-side via POST /media/upload and returns
-							// relative URLs. Reject client-supplied asset URLs unless the consumer
-							// explicitly opts into trusted prefixes via allowedUrlPrefixes.
-							urlAllowed = false;
-							denialReason =
-								"Client-supplied asset URLs are not allowed with localAdapter. Use POST /media/upload instead, or configure allowedUrlPrefixes to explicitly allow trusted URL prefixes.";
-						} else if (isS3Adapter(storageAdapter)) {
-							// Auto-derived from s3Adapter's publicBaseUrl.
-							urlAllowed = matchesUrlPrefix(url, storageAdapter.urlPrefix);
-							denialReason = `URL must start with the configured S3 publicBaseUrl: ${storageAdapter.urlPrefix}`;
-						} else if (isVercelBlobAdapter(storageAdapter)) {
-							// Vercel Blob public URLs always belong to a known CDN hostname suffix.
-							try {
-								const hostname = new URL(url).hostname;
-								urlAllowed = hostname.endsWith(
-									storageAdapter.urlHostnameSuffix,
-								);
-							} catch {
-								urlAllowed = false;
-							}
-							denialReason = `URL hostname must end with ${storageAdapter.urlHostnameSuffix}`;
-						}
-
-						if (!urlAllowed) {
-							throw ctx.error(400, { message: denialReason });
-						}
-					}
-
-					if (ctx.body.folderId) {
-						const folder = await getFolderById(adapter, ctx.body.folderId);
-						if (!folder) {
-							throw ctx.error(404, { message: "Folder not found" });
-						}
-						if (tenantId !== undefined && folder.tenantId !== tenantId) {
-							throw ctx.error(404, { message: "Folder not found" });
-						}
-					}
-
-					const asset = await createAsset(adapter, { ...ctx.body, tenantId });
-
-					if (hooks?.onAfterUpload) {
-						await hooks.onAfterUpload(asset, context);
-					}
-
-					return asset;
-				},
+				{ method: "POST", body: createAssetSchema, requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.createAsset(ctx.body, ctx.request),
+						ctx.error,
+					),
 			);
-
 			const updateAssetEndpoint = createEndpoint(
 				"/media/assets/:id",
-				{
-					method: "PATCH",
-					body: updateAssetSchema,
-				},
-				async (ctx) => {
-					const existing = await getAssetById(adapter, ctx.params.id);
-					if (!existing) {
-						throw ctx.error(404, { message: "Asset not found" });
-					}
-
-					const context: MediaApiContext = {
-						body: ctx.body,
-						params: ctx.params,
-						headers: ctx.headers,
-					};
-
-					const tenantId = resolveTenantId
-						? ((await resolveTenantId(context)) ?? undefined)
-						: undefined;
-
-					if (tenantId !== undefined && existing.tenantId !== tenantId) {
-						throw ctx.error(404, { message: "Asset not found" });
-					}
-
-					if (hooks?.onBeforeUpdateAsset) {
-						await runHook(
-							() => hooks.onBeforeUpdateAsset!(existing, ctx.body, context),
-							ctx.error,
-							"Unauthorized: Cannot update asset",
-						);
-					}
-
-					if (ctx.body.folderId != null) {
-						const folder = await getFolderById(adapter, ctx.body.folderId);
-						if (!folder) {
-							throw ctx.error(404, { message: "Folder not found" });
-						}
-						if (tenantId !== undefined && folder.tenantId !== tenantId) {
-							throw ctx.error(404, { message: "Folder not found" });
-						}
-					}
-
-					const updated = await updateAsset(adapter, ctx.params.id, ctx.body);
-					if (!updated) {
-						throw ctx.error(404, { message: "Asset not found" });
-					}
-
-					return updated;
-				},
+				{ method: "PATCH", body: updateAssetSchema, requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() =>
+							operations.updateAsset(
+								{ id: ctx.params.id, data: ctx.body },
+								ctx.request,
+							),
+						ctx.error,
+					),
 			);
-
 			const deleteAssetEndpoint = createEndpoint(
 				"/media/assets/:id",
-				{
-					method: "DELETE",
-				},
-				async (ctx) => {
-					const context: MediaApiContext = {
-						params: ctx.params,
-						headers: ctx.headers,
-					};
-
-					const tenantId = resolveTenantId
-						? ((await resolveTenantId(context)) ?? undefined)
-						: undefined;
-
-					const asset = await getAssetById(adapter, ctx.params.id);
-					if (!asset) {
-						throw ctx.error(404, { message: "Asset not found" });
-					}
-
-					if (tenantId !== undefined && asset.tenantId !== tenantId) {
-						throw ctx.error(404, { message: "Asset not found" });
-					}
-
-					if (hooks?.onBeforeDelete) {
-						await runHook(
-							() => hooks.onBeforeDelete!(asset, context),
-							ctx.error,
-							"Unauthorized: Cannot delete asset",
-						);
-					}
-
-					// Delete the storage file FIRST — if this fails the DB record is
-					// still intact and the deletion can be retried. Removing the DB
-					// record first would silently orphan the file in storage with no
-					// way to track or clean it up.
-					try {
-						await storageAdapter.delete(asset.url);
-					} catch (err) {
-						console.error(
-							`[btst/media] Failed to delete file from storage: ${asset.url}`,
-							err,
-						);
-						throw ctx.error(500, {
-							message: "Failed to delete file from storage",
-						});
-					}
-
-					await deleteAsset(adapter, ctx.params.id);
-
-					if (hooks?.onAfterDelete) {
-						await hooks.onAfterDelete(ctx.params.id, context);
-					}
-
-					return { success: true };
-				},
+				{ method: "DELETE", requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.deleteAsset({ id: ctx.params.id }, ctx.request),
+						ctx.error,
+					),
 			);
-
-			// ── Folder endpoints ────────────────────────────────────────────────────
-
 			const listFoldersEndpoint = createEndpoint(
 				"/media/folders",
-				{
-					method: "GET",
-					query: FolderListQuerySchema,
-				},
-				async (ctx) => {
-					const filter = { parentId: ctx.query.parentId };
-					const context: MediaApiContext = {
-						query: ctx.query,
-						headers: ctx.headers,
-					};
-
-					const tenantId = resolveTenantId
-						? ((await resolveTenantId(context)) ?? undefined)
-						: undefined;
-
-					if (hooks?.onBeforeListFolders) {
-						await runHook(
-							() => hooks.onBeforeListFolders!(filter, context),
-							ctx.error,
-							"Unauthorized: Cannot list folders",
-						);
-					}
-
-					return listFolders(adapter, { ...filter, tenantId });
-				},
+				{ method: "GET", query: FolderListQuerySchema, requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() =>
+							operations.listFolders(
+								FolderListOperationInputSchema.parse(ctx.query),
+								ctx.request,
+							),
+						ctx.error,
+					),
 			);
-
 			const createFolderEndpoint = createEndpoint(
 				"/media/folders",
-				{
-					method: "POST",
-					body: createFolderSchema,
-				},
-				async (ctx) => {
-					const context: MediaApiContext = {
-						body: ctx.body,
-						headers: ctx.headers,
-					};
-
-					const tenantId = resolveTenantId
-						? ((await resolveTenantId(context)) ?? undefined)
-						: undefined;
-
-					if (hooks?.onBeforeCreateFolder) {
-						await runHook(
-							() => hooks.onBeforeCreateFolder!(ctx.body, context),
-							ctx.error,
-							"Unauthorized: Cannot create folder",
-						);
-					}
-
-					if (ctx.body.parentId) {
-						const folder = await getFolderById(adapter, ctx.body.parentId);
-						if (!folder) {
-							throw ctx.error(404, { message: "Folder not found" });
-						}
-						if (tenantId !== undefined && folder.tenantId !== tenantId) {
-							throw ctx.error(404, { message: "Folder not found" });
-						}
-					}
-
-					return createFolder(adapter, { ...ctx.body, tenantId });
-				},
+				{ method: "POST", body: createFolderSchema, requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.createFolder(ctx.body, ctx.request),
+						ctx.error,
+					),
 			);
-
 			const deleteFolderEndpoint = createEndpoint(
 				"/media/folders/:id",
-				{
-					method: "DELETE",
-				},
-				async (ctx) => {
-					const context: MediaApiContext = {
-						params: ctx.params,
-						headers: ctx.headers,
-					};
-
-					const tenantId = resolveTenantId
-						? ((await resolveTenantId(context)) ?? undefined)
-						: undefined;
-
-					const folder = await getFolderById(adapter, ctx.params.id);
-					if (!folder) {
-						throw ctx.error(404, { message: "Folder not found" });
-					}
-
-					if (tenantId !== undefined && folder.tenantId !== tenantId) {
-						throw ctx.error(404, { message: "Folder not found" });
-					}
-
-					if (hooks?.onBeforeDeleteFolder) {
-						await runHook(
-							() => hooks.onBeforeDeleteFolder!(folder, context),
-							ctx.error,
-							"Unauthorized: Cannot delete folder",
-						);
-					}
-
-					try {
-						await deleteFolder(adapter, ctx.params.id);
-					} catch (err) {
-						throw ctx.error(409, {
-							message:
-								err instanceof Error ? err.message : "Cannot delete folder",
-						});
-					}
-
-					return { success: true };
-				},
+				{ method: "DELETE", requireRequest: true },
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.deleteFolder({ id: ctx.params.id }, ctx.request),
+						ctx.error,
+					),
 			);
-
-			// ── Upload endpoints (adapter-specific) ────────────────────────────────
-
-			// Direct upload — local adapter only
 			const uploadDirectEndpoint = createEndpoint(
 				"/media/upload",
 				{
 					method: "POST",
-					metadata: {
-						// Tell Better Call this endpoint accepts multipart/form-data so it
-						// parses the body into a FormData object and exposes it as ctx.body.
-						// Without this, Better Call may pre-read the body stream and calling
-						// ctx.request.formData() afterwards fails with "Body already read".
-						allowedMediaTypes: ["multipart/form-data"],
-					},
+					requireRequest: true,
+					metadata: { allowedMediaTypes: ["multipart/form-data"] },
 				},
 				async (ctx) => {
-					if (!isDirectAdapter(storageAdapter)) {
-						throw ctx.error(400, {
-							message:
-								"Direct upload is only supported with the local storage adapter",
-						});
-					}
-
-					// Better Call parses multipart/form-data into a plain object on ctx.body,
-					// where each field's value is preserved as-is (File instances for file fields).
-					const body = ctx.body as Record<string, unknown> | undefined;
-
-					if (!body || typeof body !== "object") {
-						throw ctx.error(400, {
-							message: "Expected multipart/form-data request body",
-						});
-					}
-
-					const fileRaw = body.file;
-
-					// Use a duck-type check instead of instanceof File to avoid
-					// cross-module-boundary failures (e.g. undici's File vs globalThis.File).
-					if (
-						!fileRaw ||
-						typeof fileRaw !== "object" ||
-						typeof (fileRaw as any).arrayBuffer !== "function"
-					) {
-						throw ctx.error(400, {
-							message: "Missing 'file' field in form data",
-						});
-					}
-
-					if (
-						typeof (fileRaw as any).size !== "number" ||
-						(fileRaw as any).size < 0
-					) {
-						throw ctx.error(400, {
-							message: "File 'size' is missing or invalid",
-						});
-					}
-					if (
-						typeof (fileRaw as any).name !== "string" ||
-						!(fileRaw as any).name
-					) {
-						throw ctx.error(400, {
-							message: "File 'name' is missing or invalid",
-						});
-					}
-					if (typeof (fileRaw as any).type !== "string") {
-						throw ctx.error(400, {
-							message: "File 'type' is missing or invalid",
-						});
-					}
-
-					// Safe to treat as a File-like object after the duck-type check above.
-					const file = fileRaw as Pick<
-						File,
-						"name" | "type" | "size" | "arrayBuffer"
-					>;
-
-					const context: MediaApiContext = { headers: ctx.headers };
-
-					const tenantId = resolveTenantId
-						? ((await resolveTenantId(context)) ?? undefined)
-						: undefined;
-
-					if (hooks?.onBeforeUpload) {
-						await runHook(
-							() =>
-								hooks.onBeforeUpload!(
-									{
-										filename: file.name,
-										mimeType: file.type,
-										size: file.size,
-									},
-									context,
-								),
-							ctx.error,
-							"Unauthorized: Cannot upload asset",
-						);
-					}
-
-					validateMimeType(file.type, ctx);
-
-					if (file.size > maxFileSizeBytes) {
-						throw ctx.error(413, {
-							message: `File size ${file.size} bytes exceeds the limit of ${maxFileSizeBytes} bytes`,
-						});
-					}
-
-					const buffer = Buffer.from(await file.arrayBuffer());
-					const folderId =
-						typeof body.folderId === "string" && body.folderId
-							? body.folderId
-							: undefined;
-
-					if (folderId) {
-						const folder = await getFolderById(adapter, folderId);
-						if (!folder) {
-							throw ctx.error(404, { message: "Folder not found" });
-						}
-						if (tenantId !== undefined && folder.tenantId !== tenantId) {
-							throw ctx.error(404, { message: "Folder not found" });
-						}
-					}
-
-					const { url } = await storageAdapter.upload(buffer, {
-						filename: file.name,
-						mimeType: file.type,
-						size: file.size,
-						folderId,
-					});
-
-					// Create the DB record. If this fails, clean up the already-uploaded
-					// storage file so it does not become a silently orphaned file.
-					let asset: Asset;
 					try {
-						asset = await createAsset(adapter, {
-							filename: url.split("/").pop() ?? file.name,
-							originalName: file.name,
+						const { file, folderId } = parseMultipartFile(ctx.body);
+						const contentBase64 = Buffer.from(
+							await file.arrayBuffer(),
+						).toString("base64");
+						const input = {
+							filename: file.name,
 							mimeType: file.type,
 							size: file.size,
-							url,
+							contentBase64,
 							folderId,
-							tenantId,
-						});
-					} catch (err) {
-						try {
-							await storageAdapter.delete(url);
-						} catch (cleanupErr) {
-							console.error(
-								`[btst/media] Failed to clean up orphaned storage file after DB error: ${url}`,
-								cleanupErr,
-							);
+						};
+						return await adaptOperationToHttp(
+							() => operations.uploadDirect(input, ctx.request),
+							ctx.error,
+						);
+					} catch (cause) {
+						if (cause instanceof MediaOperationError) {
+							throw ctx.error(cause.statusCode as any, {
+								message: cause.message,
+								code: cause.code,
+							});
 						}
-						throw err;
+						throw cause;
 					}
-
-					if (hooks?.onAfterUpload) {
-						await hooks.onAfterUpload(asset, context);
-					}
-
-					return asset;
 				},
 			);
-
-			// Token generation — S3 adapter
 			const uploadTokenEndpoint = createEndpoint(
 				"/media/upload/token",
 				{
 					method: "POST",
 					body: uploadTokenRequestSchema,
+					requireRequest: true,
 				},
-				async (ctx) => {
-					if (!isS3Adapter(storageAdapter)) {
-						throw ctx.error(400, {
-							message:
-								"Upload token endpoint is only supported with the S3 storage adapter",
-						});
-					}
-
-					const context: MediaApiContext = {
-						body: ctx.body,
-						headers: ctx.headers,
-					};
-
-					// Resolve tenant for auth checks and folder ownership validation.
-					// The token response does not embed tenantId — the follow-up POST /media/assets
-					// call tags the asset automatically via resolveTenantId.
-					const tenantId = resolveTenantId
-						? ((await resolveTenantId(context)) ?? undefined)
-						: undefined;
-
-					if (hooks?.onBeforeUpload) {
-						await runHook(
-							() =>
-								hooks.onBeforeUpload!(
-									{
-										filename: ctx.body.filename,
-										mimeType: ctx.body.mimeType,
-										size: ctx.body.size,
-									},
-									context,
-								),
-							ctx.error,
-							"Unauthorized: Cannot upload asset",
-						);
-					}
-
-					validateMimeType(ctx.body.mimeType, ctx);
-
-					if (ctx.body.size > maxFileSizeBytes) {
-						throw ctx.error(413, {
-							message: `File size ${ctx.body.size} bytes exceeds the limit of ${maxFileSizeBytes} bytes`,
-						});
-					}
-
-					let folderId: string | undefined = ctx.body.folderId;
-					if (folderId) {
-						const folder = await getFolderById(adapter, folderId);
-						if (!folder) {
-							throw ctx.error(404, {
-								message: "Folder not found",
-							});
-						}
-						if (tenantId !== undefined && folder.tenantId !== tenantId) {
-							throw ctx.error(404, { message: "Folder not found" });
-						}
-						folderId = folder.id;
-					}
-					const filename = sanitizeS3KeySegment(ctx.body.filename);
-
-					return storageAdapter.generateUploadToken({
-						filename,
-						mimeType: ctx.body.mimeType,
-						size: ctx.body.size,
-						folderId,
-					});
-				},
+				(ctx) =>
+					adaptOperationToHttp(
+						() => operations.uploadToken(ctx.body, ctx.request),
+						ctx.error,
+					),
 			);
-
-			// Vercel Blob token exchange — vercel-blob adapter
 			const uploadVercelBlobEndpoint = createEndpoint(
 				"/media/upload/vercel-blob",
-				{
-					method: "POST",
-				},
+				{ method: "POST", requireRequest: true },
 				async (ctx) => {
-					if (!isVercelBlobAdapter(storageAdapter)) {
-						throw ctx.error(400, {
-							message:
-								"Vercel Blob endpoint is only supported with the vercelBlobAdapter",
-						});
-					}
-
-					const context: MediaApiContext = { headers: ctx.headers };
-
-					// Resolve tenant for hook side-effects (e.g. auth checks). The token
-					// response does not embed tenantId — the follow-up POST /media/assets
-					// call tags the asset automatically via resolveTenantId.
-					if (resolveTenantId) {
-						await resolveTenantId(context);
-					}
-
-					if (!ctx.request) {
-						throw ctx.error(400, {
-							message: "Request object is not available",
-						});
-					}
-
-					return storageAdapter.handleRequest(ctx.request, ctx.body, {
-						onBeforeGenerateToken: async (pathname, clientPayload) => {
-							const filename = pathname.split("/").pop() ?? pathname;
-							let parsed: Record<string, unknown> = {};
-							try {
-								parsed = clientPayload ? JSON.parse(clientPayload) : {};
-							} catch {
-								/* ignore invalid JSON — fall back to defaults */
-							}
-							const mimeType =
-								(parsed.mimeType as string | undefined) ??
-								"application/octet-stream";
-							const size = parsed.size as number | undefined;
-
-							if (hooks?.onBeforeUpload) {
-								await runHook(
-									() =>
-										hooks.onBeforeUpload!(
-											{ filename, mimeType, size },
-											context,
-										),
-									ctx.error,
-									"Unauthorized: Cannot upload asset",
-								);
-							}
-
-							validateMimeType(mimeType, ctx);
-
-							if (size != null && size > maxFileSizeBytes) {
-								throw ctx.error(413, {
-									message: `File size ${size} bytes exceeds the limit of ${maxFileSizeBytes} bytes`,
-								});
-							}
-
-							return {
-								addRandomSuffix: true,
-								allowedContentTypes:
-									allowedMimeTypes && allowedMimeTypes.length > 0
-										? allowedMimeTypes
-										: undefined,
-								maximumSizeInBytes: maxFileSizeBytes,
-							};
-						},
-					});
+					const body =
+						ctx.body ??
+						(await ctx.request
+							.clone()
+							.json()
+							.catch(() => ({})));
+					return adaptOperationToHttp(
+						() => executeVercelBlob({ body }, ctx.request),
+						ctx.error,
+					);
 				},
 			);
 

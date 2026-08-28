@@ -4,6 +4,7 @@ import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
 import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
 import { formBuilderPermissions } from "@btst/stack/plugins/form-builder/permissions";
 import { kanbanPermissions } from "@btst/stack/plugins/kanban/permissions";
+import { mediaPermissions } from "@btst/stack/plugins/media/permissions";
 import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 import { z } from "zod";
 
@@ -41,8 +42,9 @@ export const authorization = defineAuthorization({
 		commentsPermissions,
 		formBuilderPermissions,
 		kanbanPermissions,
+		mediaPermissions,
 	] as const,
-	rules: ({ blog, cms, comments, forms, kanban }) => [
+	rules: ({ blog, cms, comments, forms, kanban, media }) => [
 		blog.post.read.when(({ identity, facts }) => {
 			if (facts.scope === "published") return true;
 			if (facts.scope === "post" && (!facts.exists || facts.published)) {
@@ -172,5 +174,14 @@ export const authorization = defineAuthorization({
 		kanban.task.reorder.when(({ identity, facts }) =>
 			canManageKanbanBoard(identity, facts),
 		),
+		media.library.read.when(({ identity }) => identity !== null),
+		media.asset.read.when(({ identity }) => identity !== null),
+		media.asset.upload.when(
+			({ identity, facts }) => facts.phase === "callback" || identity !== null,
+		),
+		media.asset.update.when(({ identity }) => identity !== null),
+		media.asset.delete.when(({ identity }) => identity !== null),
+		media.folder.create.when(({ identity }) => identity !== null),
+		media.folder.delete.when(({ identity }) => identity !== null),
 	],
 });

@@ -5,6 +5,7 @@ import { usePluginOverrides } from "@btst/stack/context";
 import { ComposedRoute } from "@btst/stack/client/components";
 import type { MediaPluginOverrides } from "../../overrides";
 import { Loader2 } from "lucide-react";
+import { mediaPermissions } from "../../../permissions";
 
 const LibraryPage = lazy(() =>
 	import("./library-page.internal").then((m) => ({ default: m.LibraryPage })),
@@ -32,7 +33,8 @@ export function LibraryPageComponent() {
 	return (
 		<ComposedRoute
 			path="/media"
-			permission={{ resource: "media:asset", action: "read" }}
+			permission={mediaPermissions.library.read()}
+			legacyPermission={{ resource: "media:asset", action: "read" }}
 			PageComponent={LibraryPage}
 			ErrorComponent={LibraryError}
 			LoadingComponent={LibraryLoading}

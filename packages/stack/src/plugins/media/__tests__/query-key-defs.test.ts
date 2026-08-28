@@ -51,4 +51,20 @@ describe("media asset list query keys", () => {
 			MEDIA_QUERY_KEYS.assetsList({ limit: 20, offset: 0 }),
 		);
 	});
+
+	it("partitions protected asset and folder queries by identity", () => {
+		const first = { id: "user-a", role: "member" };
+		const second = { id: "user-b", role: "member" };
+		expect(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, first)).not.toEqual(
+			MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, second),
+		);
+		expect(MEDIA_QUERY_KEYS.foldersList(null, first)).not.toEqual(
+			MEDIA_QUERY_KEYS.foldersList(null, "pending:2"),
+		);
+		expect(MEDIA_QUERY_KEYS.assetsList({ limit: 40 })).toEqual([
+			"mediaAssets",
+			"list",
+			assetListDiscriminator({ limit: 40 }),
+		]);
+	});
 });

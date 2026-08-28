@@ -144,6 +144,7 @@ export async function uploadAsset(
 			clientPayload: JSON.stringify({
 				mimeType: processedFile.type,
 				size: processedFile.size,
+				...(folderId ? { folderId } : {}),
 			}),
 		});
 

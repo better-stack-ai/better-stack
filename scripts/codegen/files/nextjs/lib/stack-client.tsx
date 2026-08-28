@@ -204,6 +204,7 @@ export const getStackClient = (
 				siteBasePath: "/pages",
 				queryClient: queryClient,
 				headers: options?.headers,
+				identityPartition: options?.identity,
 			}),
 		},
 	});

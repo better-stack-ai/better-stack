@@ -3,6 +3,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ResourceFormResult } from "@btst/stack/plugins/client/hooks";
 import {
+	useIdentity,
+	useIdentitySourceGeneration,
 	usePluginOverrides,
 	useStack,
 	useTranslate,
@@ -14,14 +16,34 @@ import type { MediaPluginOverrides } from "../overrides";
 import { uploadAsset } from "../upload";
 import { media } from "./media-resource";
 
+function useIdentityPartition() {
+	const { identity, isPending, error } = useIdentity();
+	const sourceGeneration = useIdentitySourceGeneration();
+	if (isPending) return `pending:${sourceGeneration}` as const;
+	if (error) return `error:${sourceGeneration}` as const;
+	return identity ?? undefined;
+}
+
+function isUnresolvedIdentityPartition(
+	partition: ReturnType<typeof useIdentityPartition>,
+) {
+	return typeof partition === "string";
+}
+
 /** Infinite-scroll list of assets, optionally filtered by folder, MIME type, or search. */
 export function useAssets(params: AssetListParams = {}) {
-	return media.mediaAssets.list.useInfinite([params]);
+	const identityPartition = useIdentityPartition();
+	return media.mediaAssets.list.useInfinite([params, identityPartition], {
+		enabled: !isUnresolvedIdentityPartition(identityPartition),
+	});
 }
 
 /** Pass `null` for root-level folders and `undefined` for all folders. */
 export function useFolders(parentId?: string | null) {
-	return media.mediaFolders.list.use([parentId]);
+	const identityPartition = useIdentityPartition();
+	return media.mediaFolders.list.use([parentId, identityPartition], {
+		enabled: !isUnresolvedIdentityPartition(identityPartition),
+	});
 }
 
 /**
