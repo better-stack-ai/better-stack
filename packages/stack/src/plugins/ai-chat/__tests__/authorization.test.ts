@@ -1311,6 +1311,57 @@ describe("AI Chat operation authorization", () => {
 		expect(await app.adapter.count({ model: "message" })).toBe(1);
 	});
 
+	it("holds a raw-memory stream claim until a rejected hook finishes rolling back", async () => {
+		let enteredHook: (() => void) | undefined;
+		const hookEntered = new Promise<void>((resolve) => {
+			enteredHook = resolve;
+		});
+		let releaseHook: (() => void) | undefined;
+		const hookBarrier = new Promise<void>((resolve) => {
+			releaseHook = resolve;
+		});
+		let hookCalls = 0;
+		const before = vi.fn(async () => {
+			hookCalls += 1;
+			if (hookCalls !== 1) return;
+			enteredHook?.();
+			await hookBarrier;
+			throw new Error("reject first stream");
+		});
+		const app = backend({ hooks: { onBeforeChat: before } });
+		const conversation = await seedConversation(app);
+		const input = { ...messageBody, conversationId: conversation.id };
+
+		const rejectedStream = app
+			.forRequest(request("/first", { identity: owner }))
+			.api.aiChat.startStream(input);
+		await hookEntered;
+		await expect(
+			app
+				.forRequest(request("/overlap", { identity: owner }))
+				.api.aiChat.startStream(input),
+		).rejects.toMatchObject({
+			statusCode: 409,
+			code: "STALE_CONVERSATION",
+		});
+		expect(before).toHaveBeenCalledOnce();
+
+		releaseHook?.();
+		await expect(rejectedStream).rejects.toMatchObject({
+			statusCode: 403,
+			code: "HOOK_DENIED",
+		});
+		expect(await app.adapter.count({ model: "message" })).toBe(0);
+
+		await expect(
+			app
+				.forRequest(request("/retry", { identity: owner }))
+				.api.aiChat.startStream(input),
+		).resolves.toBeInstanceOf(Response);
+		expect(before).toHaveBeenCalledTimes(2);
+		expect(await app.adapter.count({ model: "message" })).toBe(1);
+	});
+
 	it("claims concurrent rename and delete snapshots before lifecycle hooks", async () => {
 		let enterUpdate: (() => void) | undefined;
 		const updateEntered = new Promise<void>((resolve) => {

@@ -1576,6 +1576,9 @@ export function createAiChatOperations(
 				return startModelStream(mergedTools);
 			}
 			requireAtomicConversationTransactions(adapter);
+			const releaseExistingConversationClaim = prepared.snapshot
+				? claimConversationMutation(prepared.snapshot.id)
+				: undefined;
 
 			const requestedMissingConversationId =
 				!prepared.snapshot && context.input.conversationId
@@ -1821,6 +1824,7 @@ export function createAiChatOperations(
 					});
 				});
 			} finally {
+				releaseExistingConversationClaim?.();
 				if (requestedMissingConversationId) {
 					pendingRequestedConversationClaims.delete(
 						requestedMissingConversationId,
