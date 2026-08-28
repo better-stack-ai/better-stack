@@ -9,7 +9,11 @@ import {
 	useIdentity,
 } from "@btst/stack/context";
 import { MEDIA_QUERY_KEYS } from "../api/query-key-defs";
-import { useAssets, useUploadAsset } from "../client/hooks/use-media";
+import {
+	useAssets,
+	useDeleteAsset,
+	useUploadAsset,
+} from "../client/hooks/use-media";
 import { mediaResources } from "../query-keys";
 
 (
@@ -235,12 +239,85 @@ describe("Media protected query identity partition", () => {
 		expect(userA?.pages[0]?.items[0]?.filename).toBe("user-a.jpg");
 	});
 
-	it("limits generated asset mutation refetches to active queries", () => {
-		expect(mediaResources.mediaAssets.mutations.create.refetchType).toBe(
-			"active",
+	it("refetches an unmounted list only for the deleting identity", async () => {
+		fetchMock
+			.mockResolvedValueOnce(responseFor("user-a"))
+			.mockResolvedValueOnce(responseFor("user-b"))
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ success: true }), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				}),
+			)
+			.mockResolvedValueOnce(responseFor("user-b-updated"));
+		const auth = {
+			getIdentity: vi.fn(() => null),
+		} satisfies StackAuthProvider;
+		let filename: string | undefined;
+		let deleteAsset:
+			| ReturnType<typeof useDeleteAsset>["mutateAsync"]
+			| undefined;
+
+		function ListProbe() {
+			filename = useAssets({ limit: 40 }).data?.pages[0]?.items[0]?.filename;
+			return null;
+		}
+
+		function Probe({ showList }: { showList: boolean }) {
+			deleteAsset = useDeleteAsset().mutateAsync;
+			return showList ? <ListProbe /> : null;
+		}
+
+		async function render(initialIdentity: { id: string }, showList: boolean) {
+			await act(async () => {
+				root.render(
+					<StackProvider
+						basePath="/pages"
+						api={{ baseURL: "http://test.local", basePath: "/api" }}
+						auth={auth}
+						initialIdentity={initialIdentity}
+						overrides={{ media: { queryClient } }}
+					>
+						<QueryClientProvider client={queryClient}>
+							<Probe showList={showList} />
+						</QueryClientProvider>
+					</StackProvider>,
+				);
+			});
+		}
+
+		await render({ id: "user-a" }, true);
+		await waitFor(() => filename === "user-a.jpg");
+		await render({ id: "user-b" }, true);
+		await waitFor(() => filename === "user-b.jpg");
+		await render({ id: "user-b" }, false);
+		await act(async () => {
+			await deleteAsset?.("asset-user-b");
+		});
+
+		expect(fetchMock).toHaveBeenCalledTimes(4);
+		const userA = queryClient.getQueryData<{
+			pages: Array<{ items: Array<{ filename: string }> }>;
+		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-a" }));
+		const userB = queryClient.getQueryData<{
+			pages: Array<{ items: Array<{ filename: string }> }>;
+		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-b" }));
+		expect(userA?.pages[0]?.items[0]?.filename).toBe("user-a.jpg");
+		expect(userB?.pages[0]?.items[0]?.filename).toBe("user-b-updated.jpg");
+	});
+
+	it("keeps broad generated invalidation out of protected mutations", () => {
+		expect("invalidates" in mediaResources.mediaAssets.mutations.create).toBe(
+			false,
 		);
-		expect(mediaResources.mediaAssets.mutations.delete.refetchType).toBe(
-			"active",
+		expect("invalidates" in mediaResources.mediaAssets.mutations.delete).toBe(
+			false,
+		);
+		expect("invalidates" in mediaResources.mediaFolders.mutations.create).toBe(
+			false,
+		);
+		expect("invalidates" in mediaResources.mediaFolders.mutations.delete).toBe(
+			false,
 		);
 	});
 });

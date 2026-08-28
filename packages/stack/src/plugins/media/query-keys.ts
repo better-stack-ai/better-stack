@@ -105,10 +105,9 @@ export const mediaResources = {
 					},
 				}),
 				select: (data: any) => data as SerializedAsset,
-				invalidates: ["mediaAssets.list"],
-				// Only mounted queries belong to the current identity. URL registration
-				// explicitly refreshes inactive variants for that identity in its hook.
-				refetchType: "active",
+				// Public Media wrappers refresh only the current identity partition.
+				// A broad generated invalidation could refetch an inactive old account
+				// with the current account's request headers.
 				refresh: false,
 			},
 			delete: {
@@ -116,8 +115,6 @@ export const mediaResources = {
 				method: "DELETE" as const,
 				input: (id: string) => ({ params: { id } }),
 				select: (data: any) => data as { success: boolean },
-				invalidates: ["mediaAssets.list"],
-				refetchType: "active",
 				refresh: false,
 			},
 		},
@@ -157,7 +154,6 @@ export const mediaResources = {
 				method: "POST" as const,
 				input: (input: CreateMediaFolderInput) => ({ body: input }),
 				select: (data: any) => data as SerializedFolder,
-				invalidates: ["mediaFolders.list"],
 				refresh: false,
 			},
 			delete: {
@@ -165,7 +161,6 @@ export const mediaResources = {
 				method: "DELETE" as const,
 				input: (id: string) => ({ params: { id } }),
 				select: (data: any) => data as { success: boolean },
-				invalidates: ["mediaFolders.list"],
 				refresh: false,
 			},
 		},

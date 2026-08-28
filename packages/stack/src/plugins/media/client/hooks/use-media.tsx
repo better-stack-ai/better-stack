@@ -1,6 +1,11 @@
 "use client";
 
-import { hashKey, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+	hashKey,
+	useMutation,
+	useQueryClient,
+	type UseMutationResult,
+} from "@tanstack/react-query";
 import type { ResourceFormResult } from "@btst/stack/plugins/client/hooks";
 import {
 	useIdentity,
@@ -56,6 +61,30 @@ function useInvalidateCurrentMediaList(
 			// with the current request headers.
 			refetchType: "all",
 		});
+}
+
+function withCurrentListRefresh<TData, TVariables>(
+	mutation: UseMutationResult<TData, Error, TVariables>,
+	invalidateCurrentList: () => Promise<void>,
+): UseMutationResult<TData, Error, TVariables> {
+	const mutate: typeof mutation.mutate = (variables, options) => {
+		mutation.mutate(variables, {
+			...options,
+			onSuccess: (...args) => {
+				void invalidateCurrentList();
+				options?.onSuccess?.(...args);
+			},
+		});
+	};
+	const mutateAsync: typeof mutation.mutateAsync = async (
+		variables,
+		options,
+	) => {
+		const result = await mutation.mutateAsync(variables, options);
+		await invalidateCurrentList();
+		return result;
+	};
+	return { ...mutation, mutate, mutateAsync };
 }
 
 /** Infinite-scroll list of assets, optionally filtered by folder, MIME type, or search. */
@@ -115,22 +144,32 @@ export function useUploadAsset() {
 
 /** Register an already-hosted asset URL. */
 export function useRegisterAsset() {
-	return media.mediaAssets.create.use();
+	const mutation = media.mediaAssets.create.use();
+	const invalidateCurrentAssets = useInvalidateCurrentMediaList("mediaAssets");
+	return withCurrentListRefresh(mutation, invalidateCurrentAssets);
 }
 
 /** Delete an asset by ID. */
 export function useDeleteAsset() {
-	return media.mediaAssets.delete.use();
+	const mutation = media.mediaAssets.delete.use();
+	const invalidateCurrentAssets = useInvalidateCurrentMediaList("mediaAssets");
+	return withCurrentListRefresh(mutation, invalidateCurrentAssets);
 }
 
 /** Create a new folder. */
 export function useCreateFolder() {
-	return media.mediaFolders.create.use();
+	const mutation = media.mediaFolders.create.use();
+	const invalidateCurrentFolders =
+		useInvalidateCurrentMediaList("mediaFolders");
+	return withCurrentListRefresh(mutation, invalidateCurrentFolders);
 }
 
 /** Delete a folder by ID. */
 export function useDeleteFolder() {
-	return media.mediaFolders.delete.use();
+	const mutation = media.mediaFolders.delete.use();
+	const invalidateCurrentFolders =
+		useInvalidateCurrentMediaList("mediaFolders");
+	return withCurrentListRefresh(mutation, invalidateCurrentFolders);
 }
 
 export interface RegisterAssetFormValues {
@@ -193,6 +232,8 @@ export function useCreateFolderForm(
 	options: UseCreateFolderFormOptions = {},
 ): ResourceFormResult<CreateFolderFormValues, null, SerializedFolder> {
 	const t = useTranslate();
+	const invalidateCurrentFolders =
+		useInvalidateCurrentMediaList("mediaFolders");
 	return media.mediaFolders.useForm<
 		CreateFolderFormValues,
 		SerializedFolder,
@@ -208,6 +249,9 @@ export function useCreateFolderForm(
 		errorMessage: (error) =>
 			error.message ||
 			t("media.toasts.folderCreateError", "Failed to create folder"),
-		onSuccess: options.onSuccess,
+		onSuccess: async (folder) => {
+			await invalidateCurrentFolders();
+			await options.onSuccess?.(folder);
+		},
 	});
 }

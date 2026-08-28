@@ -24,6 +24,30 @@ import type { Asset, Folder } from "../types";
 
 const memoryAdapter = (db: DatabaseDefinition) => createMemoryAdapter(db)({});
 
+function d1ResultAdapter(db: DatabaseDefinition): DBAdapter {
+	const adapter = createMemoryAdapter(db)({});
+	const transaction = adapter.transaction.bind(adapter);
+	return {
+		...adapter,
+		transaction: ((callback) =>
+			transaction((tx) =>
+				callback({
+					...tx,
+					updateMany: (async (
+						input: Parameters<DBAdapter["updateMany"]>[0],
+					) => ({
+						meta: { changes: (await tx.updateMany(input)) ? 1 : 0 },
+					})) as unknown as DBAdapter["updateMany"],
+					deleteMany: (async (
+						input: Parameters<DBAdapter["deleteMany"]>[0],
+					) => ({
+						meta: { changes: await tx.deleteMany(input) },
+					})) as unknown as DBAdapter["deleteMany"],
+				}),
+			)) as DBAdapter["transaction"],
+	};
+}
+
 const identitySchema = z.object({
 	id: z.string(),
 	role: z.enum(["member", "admin"]),
@@ -783,6 +807,31 @@ describe("Media operation-first authorization", () => {
 				.forRequest(request("/legacy", { identity: tenantMember }))
 				.api.media.updateAsset({ id: legacy.id, data: { alt: "Still works" } }),
 		).resolves.toMatchObject({ alt: "Still works" });
+	});
+
+	it("accepts D1 nested affected-row results for CAS updates and deletes", async () => {
+		const backend = makeBackend({
+			adapter: d1ResultAdapter,
+			auth: createAuth(),
+			tenantId: "tenant-a",
+		});
+		const updatedAsset = await seedAsset(backend, { filename: "update.jpg" });
+		const deletedAsset = await seedAsset(backend, { filename: "delete.jpg" });
+		const api = backend.forRequest(request("/d1", { identity: tenantMember }))
+			.api.media;
+
+		await expect(
+			api.updateAsset({ id: updatedAsset.id, data: { alt: "Updated" } }),
+		).resolves.toMatchObject({ id: updatedAsset.id, alt: "Updated" });
+		await expect(api.deleteAsset({ id: deletedAsset.id })).resolves.toEqual({
+			success: true,
+		});
+		expect(
+			await backend.adapter.findOne<Asset>({
+				model: "mediaAsset",
+				where: [{ field: "id", value: deletedAsset.id }],
+			}),
+		).toBeNull();
 	});
 
 	it("rejects stale upload initialization and finalization before hooks, tokens, or writes", async () => {

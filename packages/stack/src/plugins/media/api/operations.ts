@@ -477,6 +477,15 @@ function didAffectRow(result: unknown, id: string): boolean {
 	for (const key of AFFECTED_ROW_KEYS) {
 		if (key in record) return positive(record[key]);
 	}
+	if ("meta" in record) {
+		const meta = record.meta;
+		return Boolean(
+			meta &&
+				typeof meta === "object" &&
+				"changes" in meta &&
+				positive((meta as Record<string, unknown>).changes),
+		);
+	}
 	return record.id === id;
 }
 
