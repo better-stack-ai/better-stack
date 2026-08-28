@@ -354,7 +354,9 @@ describe("scaffold plan", () => {
 		const stackClientFile = plan.files.find((file) =>
 			file.path.endsWith("stack-client.tsx"),
 		);
-		expect(stackClientFile?.content).toContain("aiChat: aiChatClientPlugin(),");
+		expect(stackClientFile?.content).toContain(
+			'aiChat: aiChatClientPlugin({ mode: "public" as const }),',
+		);
 		expect(stackClientFile?.content).toContain('basePath: "/api/data"');
 		expect(stackClientFile?.content).toContain('basePath: "/pages"');
 		expect(stackClientFile?.content).toContain("queryClient,");
@@ -398,18 +400,14 @@ describe("scaffold plan", () => {
 			'import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"',
 		);
 		expect(pagesLayoutFile?.content).toContain('layout="widget"');
-		expect(pagesLayoutFile?.content).toContain('mode: "public" as const,');
-		// Override key matches the canonical client plugin ID.
-		expect(pagesLayoutFile?.content).toContain("aiChat: {");
+		expect(pagesLayoutFile?.content).not.toContain('mode: "public" as const,');
+		expect(pagesLayoutFile?.content).not.toContain("overrides=");
 		// Widget must be hidden on the chat route itself
 		expect(pagesLayoutFile?.content).toContain("usePathname");
 		expect(pagesLayoutFile?.content).toContain(
 			'pathname.startsWith("/pages/chat")',
 		);
-		// StackProvider overrides use the same camelCase programmatic ID as registration.
-		expect(pagesLayoutFile?.content).toContain("aiChat:");
 		expect(pagesLayoutFile?.content).not.toContain('"ai-chat":');
-		expect(pagesLayoutFile?.content).toContain("} as never");
 	});
 
 	it("renders cms backend plugin with default article content type", async () => {
@@ -977,7 +975,8 @@ describe("scaffold plan", () => {
 		expect(paths).toContain("app/public-chat/page.tsx");
 		const page = plan.files.find((f) => f.path === "app/public-chat/page.tsx");
 		expect(page?.content).toContain("ChatLayout");
-		expect(page?.content).toContain("aiChat: {");
+		expect(page?.content).toContain('mode="public"');
+		expect(page?.content).not.toContain("overrides=");
 		expect(page?.content).not.toContain('"ai-chat":');
 	});
 

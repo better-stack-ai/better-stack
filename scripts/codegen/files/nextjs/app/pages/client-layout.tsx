@@ -112,7 +112,6 @@ export function BtstPagesClientLayout({
 							),
 						},
 						aiChat: {
-							mode: "authenticated", // Full chat with conversation history
 							uploadFile: uploadFileForChat,
 							chatSuggestions: [
 								"Hi, I'm Sarah, 34. I'm getting married next year and I just inherited $50,000 from my grandmother. I have no debt and about $30k in savings. I'm wondering if my current moderate-risk portfolio still makes sense.",

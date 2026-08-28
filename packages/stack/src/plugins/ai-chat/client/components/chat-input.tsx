@@ -9,9 +9,14 @@ import {
 	PermissionCheck,
 	useNotify,
 	usePluginOverrides,
+	useStack,
 } from "@btst/stack/context";
-import type { AiChatPluginOverrides } from "../overrides";
-import { DEFAULT_ALLOWED_FILE_TYPES, FILE_TYPE_MIME_MAP } from "../overrides";
+import type { AiChatMode, AiChatPluginOverrides } from "../overrides";
+import {
+	DEFAULT_ALLOWED_FILE_TYPES,
+	FILE_TYPE_MIME_MAP,
+	resolveAiChatMode,
+} from "../overrides";
 import { useAiChatTranslation } from "../localization";
 import type { FormEvent } from "react";
 import { aiChatPermissions } from "../../permissions";
@@ -36,6 +41,8 @@ interface ChatInputProps {
 	isLoading: boolean;
 	placeholder?: string;
 	variant?: "default" | "compact";
+	/** Explicit component mode; otherwise inherited from aiChatClientPlugin(). */
+	mode?: AiChatMode;
 	/** Callback when files are attached (for controlled mode) */
 	onFilesAttached?: (files: AttachedFile[]) => void;
 	/** Attached files (for controlled mode) */
@@ -79,6 +86,7 @@ export function ChatInput({
 	isLoading,
 	placeholder,
 	variant = "default",
+	mode: configuredMode,
 	onFilesAttached,
 	attachedFiles: controlledFiles,
 	allowAttachments = true,
@@ -87,12 +95,13 @@ export function ChatInput({
 	const {
 		uploadFile,
 		localization: customLocalization,
-		mode,
 		allowedFileTypes,
 	} = usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
 		"aiChat",
 		{},
 	);
+	const { plugins } = useStack();
+	const mode = resolveAiChatMode(configuredMode, plugins?.aiChat?.config);
 
 	const notify = useNotify();
 	const tr = useAiChatTranslation(customLocalization);

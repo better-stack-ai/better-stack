@@ -23,6 +23,7 @@ import type { UIMessage } from "ai";
 import { usePageAIContext } from "../context/page-ai-context";
 import { usePluginOverrides, useStack } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../overrides";
+import { resolveAiChatMode } from "../overrides";
 import { useAiChatTranslation } from "../localization";
 
 interface ChatLayoutBaseProps {
@@ -93,6 +94,7 @@ export function ChatLayout(props: ChatLayoutProps) {
 		Partial<AiChatPluginOverrides>
 	>("aiChat", {});
 	const { api, plugins } = useStack();
+	const resolvedMode = resolveAiChatMode(mode, plugins?.aiChat?.config);
 	const tr = useAiChatTranslation(localization);
 
 	// Widget-specific props — TypeScript narrows props to ChatLayoutWidgetProps here
@@ -202,7 +204,7 @@ export function ChatLayout(props: ChatLayoutProps) {
 							key={`widget-${conversationId ?? "new"}-${widgetResetKey}`}
 							apiPath={apiPath}
 							id={conversationId}
-							mode={mode}
+							mode={resolvedMode}
 							variant="widget"
 							initialMessages={initialMessages}
 							onMessagesChange={onMessagesChange}
@@ -368,7 +370,7 @@ export function ChatLayout(props: ChatLayoutProps) {
 					key={`chat-${conversationId ?? "new"}-${chatResetKey}`}
 					apiPath={apiPath}
 					id={conversationId}
-					mode={mode}
+					mode={resolvedMode}
 					variant="full"
 					initialMessages={initialMessages}
 					onMessagesChange={onMessagesChange}

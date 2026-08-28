@@ -74,6 +74,9 @@ describe("AI Chat resolved client runtime", () => {
 			queryClient: new QueryClient(),
 			plugins: { aiChat: aiChatClientPlugin({ mode: "public" }) },
 		});
+		expect(publicStack.provider.plugins.aiChat.config).toEqual({
+			mode: "public",
+		});
 		expect(publicStack.router.getRoute("/chat")).toBeTruthy();
 		expect(publicStack.router.getRoute("/chat/conv-1")).toBeNull();
 	});
@@ -199,6 +202,76 @@ describe("AI Chat resolved client runtime", () => {
 		expect(queryClient.getQueryState(query.queryKey)?.error).toMatchObject({
 			message: SSR_LOADER_ERROR_MESSAGE,
 		});
+	});
+
+	it("contains list source and error-hook failures without rejecting the loader", async () => {
+		const sourceError = new Error("list source failed");
+		const onErrorLoad = vi.fn(async () => {
+			throw new Error("list reporter failed");
+		});
+		const stack = createClientStack({
+			api: appApi,
+			site: appSite,
+			queryClient: new QueryClient({
+				defaultOptions: { queries: { retry: false } },
+			}),
+			plugins: {
+				aiChat: aiChatClientPlugin({
+					hooks: {
+						beforeLoadConversations: () => {
+							throw sourceError;
+						},
+						onErrorLoad,
+					},
+				}),
+			},
+		});
+
+		await expect(
+			stack.router.getRoute("/chat")?.loader?.(),
+		).resolves.toBeUndefined();
+		expect(onErrorLoad).toHaveBeenCalledOnce();
+		expect(onErrorLoad).toHaveBeenCalledWith(
+			sourceError,
+			expect.objectContaining({ path: "/chat", isSSR: true }),
+		);
+	});
+
+	it("contains detail source and error-hook failures without rejecting the loader", async () => {
+		const sourceError = new Error("detail source failed");
+		const onErrorLoad = vi.fn(async () => {
+			throw new Error("detail reporter failed");
+		});
+		const stack = createClientStack({
+			api: appApi,
+			site: appSite,
+			queryClient: new QueryClient({
+				defaultOptions: { queries: { retry: false } },
+			}),
+			plugins: {
+				aiChat: aiChatClientPlugin({
+					hooks: {
+						beforeLoadConversation: () => {
+							throw sourceError;
+						},
+						onErrorLoad,
+					},
+				}),
+			},
+		});
+
+		await expect(
+			stack.router.getRoute("/chat/conv-1")?.loader?.(),
+		).resolves.toBeUndefined();
+		expect(onErrorLoad).toHaveBeenCalledOnce();
+		expect(onErrorLoad).toHaveBeenCalledWith(
+			sourceError,
+			expect.objectContaining({
+				path: "/chat/conv-1",
+				params: { id: "conv-1" },
+				isSSR: true,
+			}),
+		);
 	});
 
 	it("sanitizes each backend failure when a detail loader also has a connection failure", async () => {

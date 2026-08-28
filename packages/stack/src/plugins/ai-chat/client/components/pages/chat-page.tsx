@@ -1,8 +1,9 @@
 "use client";
 
 import { lazy } from "react";
-import { usePluginOverrides } from "@btst/stack/context";
+import { usePluginOverrides, useStack } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../../overrides";
+import { resolveAiChatMode } from "../../overrides";
 import {
 	ComposedRoute,
 	PermissionRouteAccess,
@@ -29,11 +30,12 @@ export function ChatPageComponent({
 	conversationId,
 	mode: configuredMode,
 }: ChatPageComponentProps) {
-	const { mode: overrideMode, onRouteError } = usePluginOverrides<
+	const { onRouteError } = usePluginOverrides<
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
 	>("aiChat", {});
-	const mode = configuredMode ?? overrideMode;
+	const { plugins } = useStack();
+	const mode = resolveAiChatMode(configuredMode, plugins?.aiChat?.config);
 	return (
 		<ComposedRoute
 			path={conversationId ? `/chat/${conversationId}` : "/chat"}

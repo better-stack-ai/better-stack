@@ -24,11 +24,10 @@ import { cn } from "@workspace/ui/lib/utils";
 import {
 	PermissionCheck,
 	usePluginOverrides,
-	useBasePath,
 	useStack,
 } from "@btst/stack/context";
 import { aiChatPermissions } from "../../permissions";
-import type { AiChatPluginOverrides } from "../overrides";
+import { resolveAiChatMode, type AiChatPluginOverrides } from "../overrides";
 import { useAiChatTranslation } from "../localization";
 import { createApiClient } from "@btst/stack/plugins/client";
 import type { AiChatApiRouter } from "../../api/plugin";
@@ -260,14 +259,18 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
 	const {
 		localization: customLocalization,
-		mode: overrideMode,
 		showAttribution,
 		chatSuggestions,
 	} = usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
 		"aiChat",
 		{ showAttribution: true },
 	);
-	const { api, plugins, queryClient: stackQueryClient, router } = useStack();
+	const {
+		api,
+		basePath: legacyBasePath,
+		plugins,
+		queryClient: stackQueryClient,
+	} = useStack();
 	const aiChatApi = plugins?.aiChat?.api;
 	const apiBaseURL = aiChatApi?.baseURL ?? api?.baseURL;
 	const apiBasePath = aiChatApi?.basePath ?? api?.basePath;
@@ -275,9 +278,8 @@ export function ChatInterface({
 	const credentials = aiChatApi?.credentials;
 	const resolvedApiPath =
 		apiPath ?? `${apiBaseURL ?? ""}${apiBasePath ?? ""}/chat`;
-	const mode = configuredMode ?? overrideMode;
-	const navigate = router?.navigate;
-	const basePath = useBasePath();
+	const mode = resolveAiChatMode(configuredMode, plugins?.aiChat?.config);
+	const basePath = plugins?.aiChat?.site.basePath ?? legacyBasePath;
 	const isPublicMode = mode === "public";
 
 	// Read page AI context registered by the current page
@@ -1248,6 +1250,7 @@ export function ChatInterface({
 							<div className={cn(!isWidget && "max-w-3xl mx-auto")}>
 								<ChatInput
 									key={isPublicMode ? "public" : identityPartitionKey}
+									mode={mode}
 									input={input}
 									handleInputChange={handleInputChange}
 									handleSubmit={handleSubmit}

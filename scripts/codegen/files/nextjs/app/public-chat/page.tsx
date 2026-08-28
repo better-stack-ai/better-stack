@@ -1,6 +1,5 @@
 "use client";
 
-import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
 import { StackProvider } from "@btst/stack/context";
 import { nextRouter } from "@btst/stack/next";
@@ -14,10 +13,6 @@ const getBaseURL = () =>
 			process.env.BASE_URL ||
 			"http://localhost:3000";
 
-type PluginOverrides = {
-	aiChat: AiChatPluginOverrides;
-};
-
 /** Public AI chat backed by the explicit stateless public endpoint. */
 export default function PublicChatPage() {
 	const queryClient = getOrCreateQueryClient();
@@ -25,15 +20,14 @@ export default function PublicChatPage() {
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<StackProvider<PluginOverrides>
+			<StackProvider
 				basePath=""
 				router={nextRouter()}
 				api={{ baseURL, basePath: "/api/public-chat" }}
-				overrides={{ aiChat: { mode: "public" } }}
 			>
 				<div className="min-h-screen bg-background">
 					<main className="h-screen">
-						<ChatLayout showSidebar={false} />
+						<ChatLayout mode="public" showSidebar={false} />
 					</main>
 				</div>
 			</StackProvider>

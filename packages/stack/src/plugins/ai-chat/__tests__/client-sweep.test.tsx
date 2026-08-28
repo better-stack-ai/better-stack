@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	StackProvider,
+	useStack,
 	type StackClientAuth,
 	type StackI18nProvider,
 	type StackIdentity,
@@ -211,12 +212,18 @@ const router = () => ({
 	setSearchParams: vi.fn(),
 });
 
-function overrides(
-	mode: "authenticated" | "public" = "authenticated",
-	localization?: Record<string, string>,
-) {
+function RuntimeProbe({
+	onRuntime,
+}: {
+	onRuntime: (plugins: ReturnType<typeof useStack>["plugins"]) => void;
+}) {
+	const { plugins } = useStack();
+	onRuntime(plugins);
+	return null;
+}
+
+function overrides(localization?: Record<string, string>) {
 	return {
-		mode,
 		localization,
 	};
 }
@@ -230,7 +237,6 @@ async function render(
 			success: ReturnType<typeof vi.fn>;
 			error: ReturnType<typeof vi.fn>;
 		};
-		mode?: "authenticated" | "public";
 		localization?: Record<string, string>;
 		initialIdentity?: StackIdentity | null;
 	} = {},
@@ -243,7 +249,7 @@ async function render(
 					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
 					router={router()}
 					overrides={{
-						aiChat: overrides(options.mode, options.localization),
+						aiChat: overrides(options.localization),
 					}}
 					auth={options.auth}
 					initialIdentity={options.initialIdentity}
@@ -277,6 +283,7 @@ function menuItem(text: string) {
 
 describe("AI Chat permissions", () => {
 	it("uses the resolved AI Chat endpoint for the browser stream transport", async () => {
+		const observeRuntime = vi.fn();
 		const stack = createClientStack({
 			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
 			site: { baseURL: "https://app.example.com", basePath: "/pages" },
@@ -297,10 +304,8 @@ describe("AI Chat permissions", () => {
 		await act(async () => {
 			root.render(
 				<QueryClientProvider client={queryClient}>
-					<StackProvider
-						stack={stack}
-						overrides={{ aiChat: { mode: "public" } }}
-					>
+					<StackProvider stack={stack}>
+						<RuntimeProbe onRuntime={observeRuntime} />
 						<ChatInterface variant="widget" />
 					</StackProvider>
 				</QueryClientProvider>,
@@ -320,6 +325,54 @@ describe("AI Chat permissions", () => {
 			"ai-chat",
 		);
 		expect(transport?.credentials).toBe("omit");
+		expect(observeRuntime).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				aiChat: expect.objectContaining({ config: { mode: "public" } }),
+			}),
+		);
+		expect(mocks.useChat.mock.calls.at(-1)?.[0]?.id).toMatch(/:public$/);
+	});
+
+	it("uses the client factory mode for built-in and standalone page rendering", async () => {
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient,
+			plugins: { aiChat: aiChatClientPlugin({ mode: "public" }) },
+		});
+		const RoutePage = stack.router.getRoute("/chat")?.PageComponent;
+		// A stale JavaScript/manual override cannot replace the factory source of truth.
+		const staleModeOverride = {
+			aiChat: { mode: "authenticated" },
+		} as never;
+
+		await act(async () => {
+			root.render(
+				<QueryClientProvider client={queryClient}>
+					<StackProvider stack={stack} overrides={staleModeOverride}>
+						{RoutePage ? <RoutePage /> : null}
+					</StackProvider>
+				</QueryClientProvider>,
+			);
+			await Promise.resolve();
+		});
+		expect(mocks.chatLayout).toHaveBeenLastCalledWith(
+			expect.objectContaining({ mode: "public", showSidebar: false }),
+		);
+
+		await act(async () => {
+			root.render(
+				<QueryClientProvider client={queryClient}>
+					<StackProvider stack={stack} overrides={staleModeOverride}>
+						<ChatPage />
+					</StackProvider>
+				</QueryClientProvider>,
+			);
+			await Promise.resolve();
+		});
+		expect(mocks.chatLayout).toHaveBeenLastCalledWith(
+			expect.objectContaining({ mode: "public", showSidebar: false }),
+		);
 	});
 
 	it("keeps one stable public chat instance across a send and rerender", async () => {
@@ -344,13 +397,13 @@ describe("AI Chat permissions", () => {
 			};
 		});
 
-		await render(<ChatInterface />, { mode: "public" });
+		await render(<ChatInterface mode="public" />);
 		await act(async () => {
 			container
 				.querySelector<HTMLButtonElement>('[data-testid="chat-send"]')
 				?.click();
 		});
-		await render(<ChatInterface />, { mode: "public" });
+		await render(<ChatInterface mode="public" />);
 
 		expect(retainedId).toMatch(/:public$/);
 		expect(chatInstances).toBe(1);
@@ -675,13 +728,33 @@ describe("AI Chat permissions", () => {
 			],
 		});
 
-		await render(<ChatInterface />);
+		const stack = createClientStack({
+			api: { baseURL: "http://test.local", basePath: "/api/data" },
+			site: { baseURL: "http://test.local", basePath: "/pages" },
+			queryClient,
+			plugins: { aiChat: aiChatClientPlugin() },
+			endpoints: { aiChat: { site: { basePath: "/assistant" } } },
+		});
+		const renderChat = async () => {
+			await act(async () => {
+				root.render(
+					<QueryClientProvider client={queryClient}>
+						<StackProvider stack={stack}>
+							<ChatInterface />
+						</StackProvider>
+					</QueryClientProvider>,
+				);
+				await Promise.resolve();
+			});
+		};
+
+		await renderChat();
 		await act(async () => {
 			container
 				.querySelector<HTMLButtonElement>('[data-testid="chat-send"]')
 				?.click();
 		});
-		await render(<ChatInterface />);
+		await renderChat();
 		await act(async () => {
 			await chatOptions.transport.fetch("http://test.local/chat", {});
 			await chatOptions.onFinish();
@@ -690,8 +763,38 @@ describe("AI Chat permissions", () => {
 		expect(setMessages).toHaveBeenCalledWith([
 			{ ...clientMessages[0], id: "persisted-user" },
 		]);
-		expect(window.location.pathname).toBe("/pages/chat/persisted-conversation");
+		expect(window.location.pathname).toBe(
+			"/assistant/chat/persisted-conversation",
+		);
 		fetchMock.mockRestore();
+	});
+
+	it("uses the resolved AI Chat site path for sidebar navigation", async () => {
+		const navigate = vi.fn();
+		const stack = createClientStack({
+			api: { baseURL: "http://test.local", basePath: "/api/data" },
+			site: { baseURL: "http://test.local", basePath: "/pages" },
+			queryClient,
+			plugins: { aiChat: aiChatClientPlugin() },
+			endpoints: { aiChat: { site: { basePath: "/assistant" } } },
+		});
+
+		await act(async () => {
+			root.render(
+				<QueryClientProvider client={queryClient}>
+					<StackProvider stack={stack} router={{ navigate }}>
+						<ChatSidebar />
+					</StackProvider>
+				</QueryClientProvider>,
+			);
+			await Promise.resolve();
+		});
+		const conversationButton = Array.from(
+			container.querySelectorAll<HTMLButtonElement>("button"),
+		).find((button) => button.textContent?.includes(conversation.title));
+		await act(async () => conversationButton?.click());
+
+		expect(navigate).toHaveBeenCalledWith("/assistant/chat/conv-1");
 	});
 
 	it("does not bind a headerless new stream to unrelated cached history", async () => {

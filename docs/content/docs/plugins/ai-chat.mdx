@@ -186,7 +186,9 @@ headers such as `authorization` and `cookie` are rejected from the browser proje
 into the top-level client stack shown above. Rename the provider override key
 from `"ai-chat"` to `aiChat`, pass the resolved stack to `StackProvider`, remove
 the manual provider generic/override map, and rename the loader error hook from
-`onLoadError` to `onErrorLoad`. The package path and `/chat` URL do not change.
+`onLoadError` to `onErrorLoad`. Configure `mode` only in
+`aiChatClientPlugin()`; the resolved stack carries it to browser components.
+The package path and `/chat` URL do not change.
 </Callout>
 
 ### 3. Import Plugin CSS
@@ -227,7 +229,6 @@ and AI Chat-specific values on the provider:
             router={nextRouter()}
             overrides={{
               aiChat: {
-                mode: "authenticated", // Persistent conversation UI
                 uploadFile: async (file) => {
                   // Implement your file upload logic
                   return "https://example.com/uploads/file.pdf"
@@ -263,7 +264,6 @@ and AI Chat-specific values on the provider:
             router={reactRouter()}
             overrides={{
               aiChat: {
-                mode: "authenticated",
                 uploadFile: async (file) => {
                   return "https://example.com/uploads/file.pdf"
                 },
@@ -298,7 +298,6 @@ and AI Chat-specific values on the provider:
             router={tanstackRouter()}
             overrides={{
               aiChat: {
-                mode: "authenticated",
                 uploadFile: async (file) => {
                   return "https://example.com/uploads/file.pdf"
                 },
@@ -315,7 +314,6 @@ and AI Chat-specific values on the provider:
 </Tabs>
 
 **Optional overrides:**
-- `mode`: Plugin mode (`"authenticated"` or `"public"`)
 - `uploadFile`: Function to upload files and return their URL
 - `allowedFileTypes`: Array of allowed file type categories (default: all types)
 - `chatSuggestions`: Array of suggested prompts shown in empty chat state
@@ -534,6 +532,16 @@ const { handler, dbSchema } = stack({
 
 The client plugin accepts AI Chat-specific mode, SEO, loader hook, identity-partition, and page-component options. Shared runtime fields come from `createClientStack()`:
 
+`mode` has one source of truth: `aiChatClientPlugin()`. The resolved client
+stack carries it to both built-in routes and standalone AI Chat components, so
+do not repeat it in `StackProvider.overrides`.
+
+Route-aware tool configuration stays at its established ownership seams:
+enable page tools and register tool schemas on `aiChatBackendPlugin()`, then
+register the active page's browser handlers with
+`useRegisterPageAIContext({ clientTools })`. Neither `clientTools` nor a
+`pageTools` option belongs on `aiChatClientPlugin()`.
+
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/plugin.tsx" name="AiChatClientConfig" />
 
 **Example usage:**
@@ -600,7 +608,6 @@ Configure AI Chat-specific overrides and route lifecycle hooks. All lifecycle ho
 overrides={{
   aiChat: {
     // Optional overrides
-    mode: "authenticated",
     uploadFile: async (file) => {
       const formData = new FormData()
       formData.append("file", file)
@@ -1028,7 +1035,6 @@ aiChat: aiChatClientPlugin({
 <StackProvider
   stack={stack}
   router={nextRouter()}
-  overrides={{ aiChat: { mode: "public" } }}
 >
   {children}
 </StackProvider>

@@ -106,7 +106,6 @@ export default function Layout() {
 						),
 					},
 					aiChat: {
-						mode: "authenticated",
 						uploadFile: uploadFileForChat,
 					},
 					cms: {

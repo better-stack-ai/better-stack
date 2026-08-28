@@ -23,6 +23,13 @@ const stack = createClientStack({
 	plugins: { aiChat },
 });
 
+stack.provider.plugins.aiChat.config?.mode satisfies
+	| "authenticated"
+	| "public"
+	| undefined;
+// @ts-expect-error Provider config exposes only browser-safe AI Chat factory values.
+stack.provider.plugins.aiChat.config?.hooks;
+
 <StackProvider stack={stack} />;
 
 <StackProvider
@@ -31,6 +38,17 @@ const stack = createClientStack({
 		aiChat: {
 			uploadFile: async () => "https://cdn.example.com/file.png",
 			showAttribution: false,
+		},
+	}}
+/>;
+
+// Mode is a client-plugin factory concern, not a presentation override.
+// @ts-expect-error Configure mode once in aiChatClientPlugin().
+<StackProvider
+	stack={stack}
+	overrides={{
+		aiChat: {
+			mode: "public",
 		},
 	}}
 />;

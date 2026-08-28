@@ -15,7 +15,11 @@ import {
 } from "../query-keys";
 import type { SerializedConversation, SerializedMessage } from "../types";
 import { ChatPageComponent } from "./components/pages/chat-page";
-import type { AiChatMode, AiChatPluginOverrides } from "./overrides";
+import type {
+	AiChatMode,
+	AiChatPluginOverrides,
+	AiChatProviderConfig,
+} from "./overrides";
 
 /**
  * Context passed to route hooks
@@ -155,6 +159,22 @@ function toError(error: unknown): Error {
 	return error instanceof Error ? error : new Error(String(error));
 }
 
+function createLoadErrorReporter(
+	hooks: AiChatClientHooks | undefined,
+	context: LoaderContext,
+) {
+	let reported = false;
+	return async (error: unknown) => {
+		if (reported || !hooks?.onErrorLoad) return;
+		reported = true;
+		try {
+			await hooks.onErrorLoad(toError(error), context);
+		} catch {
+			// Loader hooks cannot make an SSR loader throw or run twice.
+		}
+	};
+}
+
 async function seedSanitizedLoaderErrors(
 	queryClient: QueryClient,
 	queryKeys: readonly QueryKey[],
@@ -199,12 +219,7 @@ function createConversationsLoader(config: ResolvedAiChatClientConfig) {
 			});
 			const queries = createAiChatQueryKeys(client, api.headers);
 			const listQuery = queries.conversations.list(identityPartition);
-			let errorReported = false;
-			const reportError = async (error: unknown) => {
-				if (errorReported || !hooks?.onErrorLoad) return;
-				errorReported = true;
-				await hooks.onErrorLoad(toError(error), context);
-			};
+			const reportError = createLoadErrorReporter(hooks, context);
 
 			try {
 				// Before hook
@@ -280,12 +295,7 @@ function createConversationLoader(
 				identityPartition,
 			);
 			const listQuery = queries.conversations.list(identityPartition);
-			let errorReported = false;
-			const reportError = async (error: unknown) => {
-				if (errorReported || !hooks?.onErrorLoad) return;
-				errorReported = true;
-				await hooks.onErrorLoad(toError(error), context);
-			};
+			const reportError = createLoadErrorReporter(hooks, context);
 
 			try {
 				// Before hook
@@ -515,6 +525,9 @@ function resolveAiChatClientPlugin(config: ResolvedAiChatClientConfig) {
 export const aiChatClientPlugin = (config: AiChatClientConfig = {}) =>
 	defineClientPlugin<AiChatPluginOverrides>()({
 		id: "aiChat",
+		providerConfig: {
+			mode: config.mode ?? "authenticated",
+		} satisfies AiChatProviderConfig,
 		resolve: (runtime) => resolveAiChatClientPlugin({ ...config, runtime }),
 	});
 

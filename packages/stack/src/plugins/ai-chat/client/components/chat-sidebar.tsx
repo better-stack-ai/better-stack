@@ -38,7 +38,6 @@ import {
 import { cn } from "@workspace/ui/lib/utils";
 import {
 	PermissionAccess,
-	useBasePath,
 	useNotify,
 	usePluginOverrides,
 	useStack,
@@ -68,9 +67,9 @@ export function ChatSidebar({
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
 	>("aiChat", {});
-	const { router } = useStack();
+	const { basePath: legacyBasePath, plugins, router } = useStack();
 	const navigate = router?.navigate;
-	const basePath = useBasePath();
+	const basePath = plugins?.aiChat?.site.basePath ?? legacyBasePath;
 	const notify = useNotify();
 	const tr = useAiChatTranslation(customLocalization);
 	const { conversations, isLoading } = useConversations();

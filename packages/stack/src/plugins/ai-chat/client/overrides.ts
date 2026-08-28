@@ -8,6 +8,21 @@ import type { AiChatLocalization } from "./localization";
  */
 export type AiChatMode = "authenticated" | "public";
 
+/** Browser-safe AI Chat factory values carried by the resolved client stack. */
+export interface AiChatProviderConfig {
+	/** Conversation behavior selected by `aiChatClientPlugin()`. */
+	readonly mode: AiChatMode;
+}
+
+/** Resolve an explicit component mode before the registered plugin default. */
+export function resolveAiChatMode(
+	configuredMode: AiChatMode | undefined,
+	providerConfig: Readonly<Record<string, unknown>> | undefined,
+): AiChatMode {
+	if (configuredMode) return configuredMode;
+	return providerConfig?.mode === "public" ? "public" : "authenticated";
+}
+
 /**
  * State of a tool call execution
  */
@@ -96,12 +111,6 @@ export interface RouteContext {
  * plugin-specific components and behavior.
  */
 export interface AiChatPluginOverrides {
-	/**
-	 * Plugin mode - should match backend config
-	 * @default 'authenticated'
-	 */
-	mode?: AiChatMode;
-
 	/**
 	 * Function used to upload a file and return its URL.
 	 * Called for images, PDFs, text files, and other supported file types.
