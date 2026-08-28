@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { Outlet, useLoaderData } from "react-router";
 import { StackProvider } from "@btst/stack/context";
 import { createReactRouterLayout, reactRouter } from "@btst/stack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client";
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
@@ -22,7 +23,6 @@ import {
 } from "@btst/stack/plugins/media/client/components";
 import { Button } from "../../components/ui/button";
 import { resolveUser, searchUsers } from "../../lib/mock-users";
-import { getOrCreateQueryClient } from "../../lib/query-client";
 import { getStackClient } from "../../lib/stack-client";
 import { clientAuth } from "../../lib/authorization.ui";
 import { hydrationAuth } from "../../lib/authorization.server";
@@ -52,7 +52,7 @@ type PluginOverrides = {
 export default function Layout() {
 	const { initialIdentity } = useLoaderData<typeof loader>();
 	const baseURL = getBaseURL();
-	const [queryClient] = useState(() => getOrCreateQueryClient());
+	const queryClient = useQueryClient();
 	const stack = useMemo(() => getStackClient(queryClient), [queryClient]);
 	const mediaClientConfig = useMemo(
 		() => ({
