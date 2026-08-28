@@ -4,11 +4,19 @@ import { QueryClient } from "@tanstack/react-query"
 {{{clientImports}}}
 {{/if}}
 
-export function getStackClient(queryClient: QueryClient) {
-{{#if clientEntries}}
+export function getStackClient(
+	queryClient: QueryClient,
+	options?: { headers?: Headers },
+) {
 	const baseURL = getBaseURL()
-{{/if}}
 	return createStackClient({
+		api: {
+			baseURL,
+			basePath: "/api/data",
+			...(options?.headers ? { headers: options.headers } : {}),
+		},
+		site: { baseURL, basePath: "/pages" },
+		queryClient,
 		plugins: {
 {{#if clientEntries}}
 {{{clientEntries}}}
@@ -18,7 +26,7 @@ export function getStackClient(queryClient: QueryClient) {
 		},
 	})
 }
-{{#if clientEntries}}
+
 function getBaseURL() {
 	if (typeof window !== "undefined") {
 		return window.location.origin
@@ -33,4 +41,3 @@ function getBaseURL() {
 
 	return "http://localhost:3000"
 }
-{{/if}}

@@ -10,6 +10,7 @@ description: Patterns for writing BTST client plugins inside the monorepo, inclu
 ```
 src/plugins/{name}/
   client/
+    constants.ts        ← one literal programmatic plugin id
     plugin.tsx           ← defineClientPlugin entry
     hooks.ts             ← "use client" React hooks only
     components/
@@ -54,8 +55,9 @@ export function createMyQueryKeys(client, headers?: HeadersInit) {
 // client/hooks.ts ("use client")
 import { createResource } from "@btst/stack/plugins/client/hooks";
 import { myResources } from "../query-keys";
+import { MY_PLUGIN_ID } from "./constants";
 
-const my = createResource({ plugin: "my-plugin", resources: myResources });
+const my = createResource({ plugin: MY_PLUGIN_ID, resources: myResources });
 
 export const usePosts = (params?: ListParams) => my.posts.list.useInfinite([params]);
 export const useSuspensePost = (slug: string) => my.posts.detail.useSuspense([slug]);
@@ -86,7 +88,7 @@ consumer.
 ## Server/client module boundary
 
 `client/plugin.tsx` must stay import-safe on the server. Next.js (including SSG build)
-can execute `createStackClient()` on the server, which calls each `*ClientPlugin()`
+can execute `createClientStack()` on the server, which resolves each `*ClientPlugin()`
 factory. If that module is marked `"use client"` or imports a client-only module, build
 can fail with "Attempted to call ... from the server".
 
@@ -132,7 +134,7 @@ const MyPage = lazy(() =>
 
 - Only execute inside `if (typeof window === "undefined")` guard
 - **Never throw** — store errors in React Query, let ErrorBoundary catch during render
-- Call `beforeLoad` / `afterLoad` / `onLoadError` hooks
+- Call `beforeLoad` / `afterLoad` / `onErrorLoad` hooks
 - Use `queryClient.prefetchQuery()` to seed data
 - Import `isConnectionError` from `@btst/stack/plugins/client` and warn on build-time failure
 
@@ -174,13 +176,13 @@ export function useMyData(id: string) {
 
 ## Provider wiring and client overrides
 
-Framework-wide values belong on `StackProvider`, not inside plugin overrides:
+Shared API, site, and QueryClient values belong on the resolved client stack,
+not inside plugin options or provider overrides:
 
 ```tsx
 <StackProvider
-  basePath="/pages"
+  stack={clientStack}
   router={nextRouter()}
-  api={{ baseURL, basePath: "/api/data" }}
   auth={createClientAuth({ authorization, getIdentity, loginPath: "/login" })}
   overrides={{ myPlugin: { uploadImage, localization } }}
 >
@@ -193,20 +195,19 @@ Plugin override types contain only plugin-specific customization:
 ```typescript
 type PluginOverrides = {
   uploadImage?: (file: File) => Promise<string>
-  headers?: HeadersInit
   localization?: Partial<Localization>
 }
 ```
 
-The client plugin factory still receives the QueryClient, absolute site/API
-URLs, optional SSR headers, SEO, and loader hooks because loaders and metadata
-run outside React Context. Keep that factory config independent from
-`StackProvider` overrides; never add a `config(overrides)` adapter that copies
-provider fields back into the plugin.
+The plugin factory receives only plugin-specific choices such as SEO and
+loader hooks. Its `resolve(runtime)` callback receives API, site, QueryClient,
+headers, and credentials from `createClientStack()`. Keep factory options
+independent from `StackProvider` overrides; never add a `config(overrides)`
+adapter that copies provider fields back into the plugin.
 
 ## Gotchas
 
-- **Framework config in plugin overrides** — `Link`, `Image`, navigation, refresh, and client API paths come from the top-level `StackProvider`.
+- **Framework config in plugin overrides** — `Link`, `Image`, navigation, and refresh come from `StackProvider`; API paths come from the resolved client stack.
 - **Building plugin config from overrides** — plugin factory config is created
   in `getStackClient(queryClient)`; provider overrides are browser-runtime
   customization only.

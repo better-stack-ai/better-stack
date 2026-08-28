@@ -10,6 +10,7 @@ import { AddPostForm } from "../forms/post-forms";
 import { PageHeader } from "../shared/page-header";
 import { PageWrapper } from "../shared/page-wrapper";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
 import { useRef, useCallback } from "react";
@@ -19,7 +20,7 @@ import { createFillBlogFormHandler } from "./fill-blog-form-handler";
 // Internal component with actual page content
 export function NewPostPage() {
 	const t = useTranslate();
-	const overrides = usePluginOverrides<BlogPluginOverrides>("blog");
+	const overrides = usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 	const { localization } = overrides;
 	const { router } = useStack();
 	const navigate = router?.navigate;

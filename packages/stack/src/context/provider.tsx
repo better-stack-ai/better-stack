@@ -5,6 +5,7 @@ import {
 	type ReactElement,
 	type ReactNode,
 } from "react";
+import type { QueryClient } from "@tanstack/react-query";
 import type {
 	ClientProviderPluginRuntime,
 	InferredPluginOverrides,
@@ -43,6 +44,8 @@ interface StackContextValue<TPluginOverrides extends Record<string, any>> {
 	api?: StackApiConfig;
 	/** Effective browser-safe runtime for each registered client plugin. */
 	plugins?: Record<string, ClientProviderPluginRuntime>;
+	/** The query client owned by the resolved client stack. */
+	queryClient?: QueryClient;
 	/** Top-level auth provider used by identity-aware components. */
 	auth?: StackClientAuth;
 }
@@ -224,6 +227,7 @@ export function StackProvider({
 		basePath: resolvedBasePath,
 		api: projection?.api ?? api,
 		plugins: projection?.plugins,
+		queryClient: projection?.queryClient,
 		auth,
 	};
 

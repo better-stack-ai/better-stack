@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { cn, slugify } from "../../../utils";
 import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import {
 	Select,
 	SelectContent,
@@ -26,7 +27,8 @@ interface OnThisPageProps {
 
 export function OnThisPage({ markdown, className }: OnThisPageProps) {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<BlogPluginOverrides>("blog");
+	const { localization } =
+		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 	const headings = useMemo(() => extractHeadings(markdown), [markdown]);
 	const activeId = useActiveHeading(headings);
 
@@ -107,7 +109,8 @@ export function OnThisPage({ markdown, className }: OnThisPageProps) {
 
 export function OnThisPageSelect({ markdown, className }: OnThisPageProps) {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<BlogPluginOverrides>("blog");
+	const { localization } =
+		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 	const headings = useMemo(() => extractHeadings(markdown), [markdown]);
 	const initialValue = useMemo(() => headings[0]?.id ?? "", [headings]);
 	const activeId = useActiveHeading(headings);

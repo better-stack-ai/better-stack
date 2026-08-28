@@ -108,28 +108,31 @@ export function createUseForm(
 			config.id !== undefined &&
 			!!detailDef;
 
-		const recordQuery = useQuery<unknown, Error>({
-			queryKey: detailDef
-				? buildQueryKey(resourceName, detailName, detailDef, detailArgs)
-				: [resourceName, detailName],
-			queryFn: () => {
-				if (!detailDef) {
-					// Unreachable: the query is disabled when detailDef is missing
-					throw new Error(
-						`Resource "${resourceName}" has no "${detailName}" query declared`,
+		const recordQuery = useQuery<unknown, Error>(
+			{
+				queryKey: detailDef
+					? buildQueryKey(resourceName, detailName, detailDef, detailArgs)
+					: [resourceName, detailName],
+				queryFn: () => {
+					if (!detailDef) {
+						// Unreachable: the query is disabled when detailDef is missing
+						throw new Error(
+							`Resource "${resourceName}" has no "${detailName}" query declared`,
+						);
+					}
+					return runResourceQuery(
+						context.client,
+						detailDef,
+						detailArgs,
+						undefined,
+						context.headers,
 					);
-				}
-				return runResourceQuery(
-					context.client,
-					detailDef,
-					detailArgs,
-					undefined,
-					context.headers,
-				);
+				},
+				...SHARED_QUERY_CONFIG,
+				enabled: detailEnabled,
 			},
-			...SHARED_QUERY_CONFIG,
-			enabled: detailEnabled,
-		});
+			context.queryClient,
+		);
 
 		const record = hasExternalRecord
 			? (config.record ?? null)

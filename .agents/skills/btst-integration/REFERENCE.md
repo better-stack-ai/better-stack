@@ -160,8 +160,7 @@ consumer routes.
 
 ## getBaseURL helper
 
-A server/client-safe URL helper for client plugin factory configuration and the
-top-level `StackProvider.api` service.
+A server/client-safe URL helper for the resolved client stack runtime.
 
 ```ts
 // Next.js
@@ -182,27 +181,28 @@ const getBaseURL = () =>
 ## lib/stack-client.tsx shape
 
 ```tsx
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { QueryClient } from "@tanstack/react-query"
 
 const getBaseURL = () => /* see above */
 
-export const getStackClient = (queryClient: QueryClient) => {
+export const getStackClient = (
+  queryClient: QueryClient,
+  options?: { headers?: HeadersInit },
+) => {
   const baseURL = getBaseURL()
-  return createStackClient({
+  return createClientStack({
+    api: { baseURL, basePath: "/api/data", headers: options?.headers },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
       blog: blogClientPlugin({
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-        queryClient,
         seo: { siteName: "My App" }, // optional
         hooks: {                     // optional client-side loader hooks
           beforeLoadPost: async (slug, ctx) => { /* ... */ },
           afterLoadPost: async (post, slug, ctx) => { /* ... */ },
-          onLoadError: async (error, ctx) => { /* ... */ },
+          onErrorLoad: async (error, ctx) => { /* ... */ },
         },
       }),
       // add more plugins…
@@ -211,18 +211,18 @@ export const getStackClient = (queryClient: QueryClient) => {
 }
 ```
 
-**Common client plugin config fields** (all plugins):
+**Shared client stack fields:**
 
 | Field | Required | Description |
 |---|---|---|
-| `apiBaseURL` | Yes | Base URL for API calls (absolute) |
-| `apiBasePath` | Yes | API route prefix, e.g. `/api/data` |
-| `siteBaseURL` | Yes | Base URL for generated page links |
-| `siteBasePath` | Yes | Pages route prefix, e.g. `/pages` |
+| `api` | Yes | API base URL/path and optional per-request headers/credentials |
+| `site` | Yes | Site base URL and pages path |
 | `queryClient` | Yes | The QueryClient for this request |
-| `headers` | No | Pass incoming request headers for SSR auth |
-| `seo` | No | `{ siteName, description, author, twitterHandle, … }` |
-| `hooks` | No | Client-side loader hooks (see per-plugin docs) |
+
+Blog and new v3 client definitions receive only plugin-specific options such
+as `seo`, `hooks`, and `pageComponents`. Unmigrated first-party plugins may
+temporarily retain shared runtime fields until their migration tickets land;
+do not use that compatibility shape for new definitions.
 
 ---
 
@@ -241,9 +241,8 @@ const clientAuth = createClientAuth({
 })
 
 <StackProvider
-  basePath="/pages"
+  stack={clientStack}
   router={nextRouter()}
-  api={{ baseURL, basePath: "/api/data" }}
   auth={clientAuth}
 >
   {children}
@@ -257,9 +256,8 @@ for routine authorization. Do not pass `currentUserId`,
 `loginHref`, request headers, API paths, or navigation functions to public
 plugin components.
 
-Optional `headers` fields declared by a client plugin belong in that plugin's
-factory config for SSR loader hooks; they are not provider overrides or
-component identity props.
+Per-request headers belong on `createClientStack({ api: { headers } })`; they
+are not plugin options, provider overrides, or component identity props.
 
 ---
 
@@ -275,23 +273,17 @@ import { QueryClientProvider } from "@tanstack/react-query"
 import { StackProvider } from "@btst/stack/context"
 import { nextRouter } from "@btst/stack/next"
 import { getOrCreateQueryClient } from "@/lib/query-client"
-import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
-
-type PluginOverrides = {
-  blog: BlogPluginOverrides
-  // add one entry per plugin
-}
+import { getStackClient } from "@/lib/stack-client"
 
 export default function PagesLayout({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => getOrCreateQueryClient())
-  const baseURL = getBaseURL()
+  const clientStack = getStackClient(queryClient)
 
   return (
     <QueryClientProvider client={queryClient}>
-      <StackProvider<PluginOverrides>
-        basePath="/pages"
+      <StackProvider
+        stack={clientStack}
         router={nextRouter()}
-        api={{ baseURL, basePath: "/api/data" }}
         overrides={{
           blog: {
             uploadImage: myUploadFn,         // optional: returns uploaded URL
@@ -312,9 +304,8 @@ export default function PagesLayout({ children }: { children: React.ReactNode })
 
 | Prop | Required | Description |
 |---|---|---|
-| `basePath` | Yes | Must match your `/pages/*` catch-all route prefix |
+| `stack` | Yes | Resolved client stack; projects API, site, QueryClient, and inferred override types |
 | `router` | No | Framework router preset shared by every plugin |
-| `api` | No | Client-side API base URL and path shared by every plugin |
 | `auth` | No | Identity, login path, and permission provider |
 | `overrides` | No | Plugin-specific override objects, keyed by plugin name |
 
@@ -322,8 +313,8 @@ export default function PagesLayout({ children }: { children: React.ReactNode })
 
 | Field | Description |
 |---|---|
+| `stack` | Resolved API, site, QueryClient, routes, and plugin registrations |
 | `router` | Framework `Link`, `Image`, `navigate`, and `refresh` implementation |
-| `api` | Client API `baseURL` and `basePath` |
 | `auth` | Identity, login path, and authorization checks |
 
 ### Lifecycle hooks (available on most plugins)

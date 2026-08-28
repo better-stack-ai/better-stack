@@ -16,7 +16,7 @@ The server handles database operations, API endpoints, data prefetching, routing
 - **API Router**: Routes incoming requests to the appropriate plugin handlers. Returns a handler function that you mount at your API path.
 - **DB Adapter**: Translates BTST's database operations to your ORM (Prisma, Drizzle, Kysely, MongoDB). Plugins define schemas that get merged and passed to the adapter.
 
-**`createStackClient`** manages the rendering layer:
+**`createClientStack`** manages the rendering layer:
 
 - **Data Fetching**: Plugins can prefetch data server-side into React Query cache before rendering, enabling instant page loads with hydrated state.
 - **Page Router**: Matches URLs to plugin routes and returns the appropriate page component, loader, and metadata.
@@ -48,7 +48,12 @@ Note: 3rd party plugins may use a different state management library.
 
 **Context & Overrides**
 
-The `StackProvider` wraps your pages and exposes framework-wide router, API, and auth services through React Context. Plugin components read router services such as `Link`, `Image`, and `navigate` through `useStack()`, while `usePluginOverrides()` is reserved for genuinely plugin-specific customization.
+The `StackProvider` wraps your pages with a resolved client stack plus
+browser-only router and auth services. API, site, QueryClient, and plugin
+endpoint values come from `createClientStack()`; plugin components read that
+projection and router services such as `Link`, `Image`, and `navigate` through
+`useStack()`. `usePluginOverrides()` is reserved for genuinely plugin-specific
+customization.
 
 ## Plugins
 
@@ -67,10 +72,15 @@ const { handler } = stack({
 })
 
 // Client: lib/stack-client.tsx
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+import { QueryClient } from "@tanstack/react-query"
 
-const stackClient = createStackClient({
+const queryClient = new QueryClient()
+const stackClient = createClientStack({
+  api: { baseURL: "https://example.com", basePath: "/api/data" },
+  site: { baseURL: "https://example.com", basePath: "/pages" },
+  queryClient,
   plugins: {
     blog: blogClientPlugin({ /* config */ })
   }
@@ -82,7 +92,7 @@ const stackClient = createStackClient({
 - Register API route handlers for CRUD operations
 - Provide post-authorization domain lifecycle hooks
 
-**Client plugins** (registered in `createStackClient`):
+**Client plugins** (registered in `createClientStack`):
 - Define page routes and components
 - Provide loaders for server-side data prefetching
 - Export components, hooks, and utilities for state management
@@ -90,18 +100,40 @@ const stackClient = createStackClient({
 
 This separation keeps server-only code (database schemas, API handlers) out of your client bundle, and allows each plugin to be configured independently for its context.
 
-## Provider Services and Plugin Overrides
+## Resolved Client Runtime and Provider Services
 
-Framework services are configured once on `StackProvider`:
+Configure shared runtime once and pass the resolved result to the provider:
+
+```tsx
+const clientStack = createClientStack({
+  api,
+  site,
+  queryClient,
+  plugins: { blog: blogClientPlugin() },
+})
+
+<StackProvider
+  stack={clientStack}
+  router={nextRouter()}
+  auth={clientAuth}
+  overrides={{ blog: { uploadImage } }}
+>
+  {children}
+</StackProvider>
+```
+
+- **`stack`**: Supplies the API and site locations, QueryClient, browser-safe
+  per-plugin endpoints, and exact plugin map. That map also infers valid
+  `overrides` keys and values.
 
 - **`router`**: Use `nextRouter()`, `reactRouter()`, or
   `tanstackRouter()` for links, images, navigation, refresh, and URL search
   state.
-- **`api`**: Configure the browser-side API `baseURL` and `basePath`.
 - **`auth`**: Resolve identity, provide a login path, and evaluate exact
   schema-backed permission descriptors.
 
 The `overrides` object is only for plugin-specific customization such as
 upload functions, component slots, localization, and route analytics. SSR
-loader and metadata values remain in each client plugin factory because those
-functions run outside React Context.
+loader hooks, page choices, and metadata customization remain plugin-specific
+factory options; their shared transport and cache runtime arrives through the
+resolved stack.

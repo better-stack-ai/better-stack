@@ -2,6 +2,7 @@
 import { useCallback, useRef } from "react";
 import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import { MarkdownEditor, type MarkdownEditorProps } from "./markdown-editor";
 
 type MarkdownEditorWithOverridesProps = Omit<
@@ -20,7 +21,7 @@ export function MarkdownEditorWithOverrides(
 		uploadImage,
 		imagePicker: ImagePickerTrigger,
 		localization,
-	} = usePluginOverrides<BlogPluginOverrides>("blog");
+	} = usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 
 	const insertImageRef = useRef<((url: string) => void) | null>(null);
 	// Holds the Crepe-image-block `setUrl` callback while the picker is open.

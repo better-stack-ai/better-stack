@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { UseMutationResult } from "@tanstack/react-query";
+import type { QueryClient, UseMutationResult } from "@tanstack/react-query";
 import { usePluginOverrides, useStack } from "../../../context";
 import { createApiClient } from "../../utils";
 import {
@@ -22,13 +22,14 @@ export interface ResourceOverrides {
 export interface ResourceContext {
 	client: ResourceClient;
 	headers?: HeadersInit;
+	queryClient?: QueryClient;
 	navigate?: (path: string) => void | Promise<void>;
 	refresh?: () => void | Promise<void>;
 }
 
 /** Resolves the plugin overrides and builds the better-call client. */
 export function useResourceContext(plugin: string): ResourceContext {
-	const { api, plugins, router } = useStack();
+	const { api, plugins, queryClient, router } = useStack();
 	const { headers: overrideHeaders } =
 		usePluginOverrides<ResourceOverrides>(plugin);
 	const pluginApi = plugins?.[plugin]?.api;
@@ -48,6 +49,7 @@ export function useResourceContext(plugin: string): ResourceContext {
 	return {
 		client,
 		headers,
+		queryClient,
 		navigate: router?.navigate,
 		refresh: router?.refresh,
 	};
@@ -75,73 +77,76 @@ export function useResourceMutationForDef(
 	resource: ResourceDef,
 	def: ResourceMutationDef<any, any> | undefined,
 ): UseMutationResult<unknown, Error, unknown> {
-	const queryClient = useQueryClient();
+	const queryClient = useQueryClient(context.queryClient);
 	const { client, headers, refresh } = context;
 
-	return useMutation<unknown, Error, unknown>({
-		mutationKey: [resourceName, mutationName],
-		mutationFn: (vars: unknown) => {
-			if (!def) {
-				throw new Error(
-					`Resource "${resourceName}" has no "${mutationName}" mutation declared`,
-				);
-			}
-			return runResourceMutation(client, def, vars, headers);
-		},
-		onSuccess: async (result, variables) => {
-			if (!def) return;
-
-			// Seed a query cache entry (e.g. detail) from the mutation result
-			if (def.setData) {
-				const keyArgs = def.setData.args(result);
-				const targetName = def.setData.query ?? "detail";
-				const targetDef = resource.queries[targetName];
-				if (keyArgs && targetDef) {
-					const key = buildQueryKey(
-						resourceName,
-						targetName,
-						targetDef,
-						keyArgs,
-					);
-					queryClient.setQueryData(key, (previous) =>
-						def.setData?.updater
-							? def.setData.updater(previous, result)
-							: result,
+	return useMutation<unknown, Error, unknown>(
+		{
+			mutationKey: [resourceName, mutationName],
+			mutationFn: (vars: unknown) => {
+				if (!def) {
+					throw new Error(
+						`Resource "${resourceName}" has no "${mutationName}" mutation declared`,
 					);
 				}
-			}
+				return runResourceMutation(client, def, vars, headers);
+			},
+			onSuccess: async (result, variables) => {
+				if (!def) return;
 
-			// Remove a cache entry tied to the successful mutation variables
-			if (def.removeData) {
-				const keyArgs = def.removeData.args(result, variables);
-				const targetName = def.removeData.query ?? "detail";
-				const targetDef = resource.queries[targetName];
-				if (keyArgs && targetDef) {
-					queryClient.removeQueries({
-						queryKey: buildQueryKey(
+				// Seed a query cache entry (e.g. detail) from the mutation result
+				if (def.setData) {
+					const keyArgs = def.setData.args(result);
+					const targetName = def.setData.query ?? "detail";
+					const targetDef = resource.queries[targetName];
+					if (keyArgs && targetDef) {
+						const key = buildQueryKey(
 							resourceName,
 							targetName,
 							targetDef,
 							keyArgs,
-						),
-						exact: true,
+						);
+						queryClient.setQueryData(key, (previous) =>
+							def.setData?.updater
+								? def.setData.updater(previous, result)
+								: result,
+						);
+					}
+				}
+
+				// Remove a cache entry tied to the successful mutation variables
+				if (def.removeData) {
+					const keyArgs = def.removeData.args(result, variables);
+					const targetName = def.removeData.query ?? "detail";
+					const targetDef = resource.queries[targetName];
+					if (keyArgs && targetDef) {
+						queryClient.removeQueries({
+							queryKey: buildQueryKey(
+								resourceName,
+								targetName,
+								targetDef,
+								keyArgs,
+							),
+							exact: true,
+						});
+					}
+				}
+
+				// Invalidate declared key prefixes — awaited, in declaration order
+				for (const target of def.invalidates ?? []) {
+					await queryClient.invalidateQueries({
+						queryKey: invalidateTargetToKey(target),
+						refetchType: def.refetchType,
 					});
 				}
-			}
 
-			// Invalidate declared key prefixes — awaited, in declaration order
-			for (const target of def.invalidates ?? []) {
-				await queryClient.invalidateQueries({
-					queryKey: invalidateTargetToKey(target),
-					refetchType: def.refetchType,
-				});
-			}
-
-			// Refresh server-side cache (e.g. Next.js router cache) unless the
-			// mutation opts out (public mutations whose success UI is client state)
-			if (refresh && def.refresh !== false) {
-				await refresh();
-			}
+				// Refresh server-side cache (e.g. Next.js router cache) unless the
+				// mutation opts out (public mutations whose success UI is client state)
+				if (refresh && def.refresh !== false) {
+					await refresh();
+				}
+			},
 		},
-	});
+		queryClient,
+	);
 }

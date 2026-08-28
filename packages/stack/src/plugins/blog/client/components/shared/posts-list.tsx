@@ -4,6 +4,7 @@ import { Button } from "@workspace/ui/components/button";
 import { EmptyList } from "./empty-list";
 import { SearchInput } from "./search-input";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import { PostCard as DefaultPostCard } from "./post-card";
 
 interface PostsListProps {
@@ -21,7 +22,7 @@ export function PostsList({
 }: PostsListProps) {
 	const t = useTranslate();
 	const { localization, PostCard } =
-		usePluginOverrides<BlogPluginOverrides>("blog");
+		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 
 	const PostCardComponent = PostCard || DefaultPostCard;
 	if (posts.length === 0) {

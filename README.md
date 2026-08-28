@@ -78,20 +78,17 @@ export const { handler, dbSchema } = stack({
 ```
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { QueryClient } from "@tanstack/react-query"
 
 export const getStackClient = (queryClient: QueryClient) =>
-  createStackClient({
+  createClientStack({
+    api: { baseURL: "http://localhost:3000", basePath: "/api/data" },
+    site: { baseURL: "http://localhost:3000", basePath: "/pages" },
+    queryClient,
     plugins: {
-      blog: blogClientPlugin({
-        apiBaseURL: "http://localhost:3000",
-        apiBasePath: "/api/data",
-        siteBaseURL: "http://localhost:3000",
-        siteBasePath: "/pages",
-        queryClient,
-      })
+      blog: blogClientPlugin()
     }
   })
 ```
@@ -122,10 +119,11 @@ export const generateMetadata = page.generateMetadata
 Wrap the pages subtree with one `StackProvider`:
 
 ```tsx
+const clientStack = getStackClient(queryClient)
+
 <StackProvider
-  basePath="/pages"
+  stack={clientStack}
   router={nextRouter()}
-  api={{ baseURL, basePath: "/api/data" }}
   auth={authProvider}
   overrides={{ blog: { uploadImage } }}
 >
@@ -133,8 +131,9 @@ Wrap the pages subtree with one `StackProvider`:
 </StackProvider>
 ```
 
-Router, API, and auth services belong at the top level; plugin overrides contain
-only plugin-specific customization. See the [full installation guide](https://www.better-stack.ai/docs/installation)
+API, site, and QueryClient runtime belong on the resolved client stack; router
+and auth services belong on the provider. Plugin overrides contain only
+plugin-specific customization. See the [full installation guide](https://www.better-stack.ai/docs/installation)
 for QueryClient wiring, database adapters, all three frameworks, and auth.
 
 ## Database schemas & migrations

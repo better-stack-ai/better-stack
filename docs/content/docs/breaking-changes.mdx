@@ -10,12 +10,14 @@ This page documents breaking changes between major versions and provides migrati
 
 ---
 
-## v2 → v3: Provider-only framework integration
+## v2 → v3: Framework entries and resolved client runtime
 
 BTST v3 has one supported framework-wiring path: framework entry factories
-own the catch-all routes, while `StackProvider` owns browser-side router, API,
-and auth services. Plugin factories still own server-loader and metadata
-configuration; plugin overrides contain only plugin-specific customization.
+own the catch-all routes, `createClientStack()` owns shared API, site, and
+QueryClient runtime, and `StackProvider` consumes that resolved stack alongside
+browser-side router and auth services. Plugin factories still own
+plugin-specific loader and metadata choices; plugin overrides contain only
+plugin-specific browser customization.
 
 <Callout type="warn">
   v3 removes the v2 compatibility fallbacks. Complete every step in this
@@ -78,50 +80,69 @@ an isomorphic `getLoaderStackClient` resolver with its loader context. Existing
 synchronous factories remain valid; see the installation guide's
 request-aware examples when SSR authorization needs headers or session state.
 
-### 2. Move shared services to `StackProvider`
+### 2. Move shared runtime to the client stack
 
-Remove framework and API fields from every built-in plugin override. Configure
-them once at the top level:
+The Blog client plugin is the first built-in migrated to the resolved runtime
+definition. Remove its shared runtime fields and configure API, site, and
+QueryClient once in a shared factory:
 
-```diff
-+ import { nextRouter } from "@btst/stack/next"
-
-  <StackProvider
-    basePath="/pages"
-+   router={nextRouter()}
-+   api={{ baseURL, basePath: "/api/data" }}
-+   auth={clientAuth}
-    overrides={{
-      blog: {
--       apiBaseURL: baseURL,
--       apiBasePath: "/api/data",
--       navigate: (path) => router.push(path),
--       refresh: () => router.refresh(),
--       Link,
--       Image,
-        uploadImage,
-      },
-    }}
-  >
-```
-
-`Link`, `Image`, `navigate`, `refresh`, `apiBaseURL`, and
-`apiBasePath` were removed from built-in plugin override types. There is no
-per-plugin precedence or fallback in v3.
-
-Client plugin factories still require `apiBaseURL`, `apiBasePath`,
-`siteBaseURL`, `siteBasePath`, and `queryClient` where declared. Their SSR
-loaders and metadata run outside React Context:
-
-```tsx
-blogClientPlugin({
-  apiBaseURL: baseURL,
-  apiBasePath: "/api/data",
-  siteBaseURL: baseURL,
-  siteBasePath: "/pages",
+```ts title="lib/stack-client.ts"
+export const getStackClient = (
+  queryClient: QueryClient,
+  options?: { headers?: HeadersInit },
+) => createClientStack({
+  api: { baseURL, basePath: "/api/data", headers: options?.headers },
+  site: { baseURL, basePath: "/pages" },
   queryClient,
+  plugins: { blog: blogClientPlugin() },
 })
 ```
+
+Create a request-specific stack for server loaders and metadata:
+
+```ts title="app/pages/[[...all]]/page.tsx"
+const page = createNextPage({
+  getQueryClient: getOrCreateQueryClient,
+  getStackClient: async (queryClient) =>
+    getStackClient(queryClient, { headers: await headers() }),
+})
+```
+
+Create a separate, stable browser stack inside the Client Component that owns
+the provider. Do not pass or serialize the request stack; it contains functions
+and server-only request headers.
+
+```tsx title="app/pages/layout.tsx"
+"use client"
+
+export default function PagesLayout({ children }) {
+  const [queryClient] = useState(() => getOrCreateQueryClient())
+  const clientStack = useMemo(
+    () => getStackClient(queryClient),
+    [queryClient],
+  )
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <StackProvider
+        stack={clientStack}
+        router={nextRouter()}
+        auth={clientAuth}
+        overrides={{ blog: { uploadImage } }}
+      >
+        {children}
+      </StackProvider>
+    </QueryClientProvider>
+  )
+}
+```
+
+For Blog, `apiBaseURL`, `apiBasePath`, site fields, `queryClient`, and request
+headers are no longer plugin options. Its SSR loaders, metadata, browser hooks,
+and mutations use the same resolved runtime. Some other first-party plugins
+temporarily retain their legacy shared-runtime factory shape until their
+follow-up migration tickets land; new plugin definitions should use the
+resolved shape shown here.
 
 ### 3. Replace render guards with `StackProvider.auth`
 
@@ -171,8 +192,8 @@ nearest provider:
   />
 ```
 
-Keep `headers` only in client plugin factory configuration when an SSR loader
-hook needs request headers; it is no longer a public component identity prop.
+Keep request `headers` on the top-level `createClientStack({ api })` runtime;
+they are no longer plugin options or public component identity props.
 The optional `loginHref` prop remains available for threads that need a
 resource-specific sign-in return URL and takes precedence over the provider's
 `loginPath`.
@@ -184,7 +205,7 @@ Parameterized `pageComponents` now receive the declarative route context
 
 ```diff
 blogClientPlugin({
-  // ...server-loader and metadata config
+  // ...Blog-specific SEO, hooks, and page choices
   pageComponents: {
     posts: MyCustomPostsPage,
 -   post: ({ slug }) => <MyCustomPostPage slug={slug} />,
@@ -290,7 +311,9 @@ behavior:
 ### Migration checklist
 
 - Replace API and page catch-all glue with the framework entry factories.
-- Add one framework router preset and API configuration to `StackProvider`.
+- Configure API, site, and QueryClient once on `createClientStack()`, then pass
+  its browser-resolved stack to `StackProvider.stack`.
+- Add one framework router preset to `StackProvider`.
 - Add `StackProvider.auth` when routes or controls require identity or permissions.
 - Delete shared router/API fields and `onBefore*PageRendered` callbacks from plugin overrides.
 - Remove API, header, and identity props from Comments components; keep

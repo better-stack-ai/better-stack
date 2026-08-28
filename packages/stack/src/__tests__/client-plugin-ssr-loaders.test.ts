@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
+import { createClientStack } from "../client";
 import { createApiClient, SSR_LOADER_ERROR_MESSAGE } from "../plugins/client";
 import { blogClientPlugin } from "../plugins/blog/client";
 import type { BlogApiRouter } from "../plugins/blog/api";
@@ -54,22 +55,27 @@ describe("client plugin SSR loaders", () => {
 		const queryClient = new QueryClient();
 		const expectedError = new Error("blog drafts blocked");
 
-		const plugin = blogClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				beforeLoadPosts: () => {
-					throw expectedError;
-				},
+			plugins: {
+				blog: blogClientPlugin({
+					hooks: {
+						beforeLoadPosts: () => {
+							throw expectedError;
+						},
+					},
+				}),
 			},
 		});
 
-		const route = plugin.routes().drafts();
-		await route.loader?.();
+		const route = stack.router.getRoute("/blog/drafts");
+		await route?.loader?.();
 
 		const client = createApiClient<BlogApiRouter>({
 			baseURL: API_BASE_URL,

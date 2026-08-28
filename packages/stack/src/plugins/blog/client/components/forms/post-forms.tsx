@@ -73,6 +73,7 @@ import {
 } from "@btst/stack/context";
 import { blogPermissions } from "../../../permissions";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import { EmptyList } from "../shared/empty-list";
 import { TagsMultiSelect } from "./tags-multiselect";
 
@@ -142,7 +143,8 @@ function PostFormBody<T extends CommonPostFormValues>({
 		| ReturnType<typeof blogPermissions.post.update>;
 }) {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<BlogPluginOverrides>("blog");
+	const { localization } =
+		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 	const [slugTouched, setSlugTouched] = useState(initialSlugTouched);
 	const requiredAsterisk =
 		localization?.BLOG_FORMS_REQUIRED_ASTERISK ??
@@ -456,7 +458,8 @@ const AddPostFormComponent = ({
 }: AddPostFormProps) => {
 	const [featuredImageUploading, setFeaturedImageUploading] = useState(false);
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<BlogPluginOverrides>("blog");
+	const { localization } =
+		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 
 	const schema = useMemo(() => {
 		const required = localizedRequiredFields(t);
@@ -576,7 +579,8 @@ const EditPostFormComponent = ({
 	const [featuredImageUploading, setFeaturedImageUploading] = useState(false);
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<BlogPluginOverrides>("blog");
+	const { localization } =
+		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 
 	const { post } = useSuspensePost(postSlug);
 	const notify = useNotify();

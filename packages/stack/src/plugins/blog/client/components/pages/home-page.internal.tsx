@@ -8,12 +8,13 @@ import { TagsList } from "../shared/tags-list";
 import { useSuspensePosts } from "../../hooks/blog-hooks";
 import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 
 // Internal component with actual page content
 export function HomePage({ published }: { published: boolean }) {
 	const t = useTranslate();
-	const overrides = usePluginOverrides<BlogPluginOverrides>("blog");
+	const overrides = usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 	const { localization } = overrides;
 
 	// Call lifecycle hooks

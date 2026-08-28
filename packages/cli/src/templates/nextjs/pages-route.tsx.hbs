@@ -4,6 +4,9 @@ import { getStackClient } from "{{alias}}lib/stack-client"
 
 export const dynamic = "force-dynamic"
 
-const page = createNextPage({ getStackClient, getQueryClient: getOrCreateQueryClient })
+const page = createNextPage({
+	getStackClient: (queryClient) => getStackClient(queryClient),
+	getQueryClient: getOrCreateQueryClient,
+})
 export default page.Page
 export const generateMetadata = page.generateMetadata

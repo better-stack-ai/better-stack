@@ -26,6 +26,7 @@ import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/cl
 import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client";
 import { clientAuth } from "../../lib/authorization.ui";
 import { getInitialIdentity } from "../../lib/authorization.identity";
+import { getStackClient } from "../../lib/stack-client";
 
 // Get base URL function - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -35,7 +36,6 @@ const getBaseURL = () =>
 		? import.meta.env.VITE_BASE_URL || window.location.origin
 		: process.env.BASE_URL || "http://localhost:3007";
 
-// Define the shape of all plugin overrides
 type PluginOverrides = {
 	"ui-builder": UIBuilderPluginOverrides;
 	blog: BlogPluginOverrides;
@@ -61,6 +61,10 @@ function Layout() {
 	const routeContext = Route.useRouteContext();
 	const { initialIdentity } = Route.useLoaderData();
 	const baseURL = getBaseURL();
+	const stack = useMemo(
+		() => getStackClient(routeContext.queryClient),
+		[routeContext.queryClient],
+	);
 	const mediaClientConfig = useMemo(
 		() => ({
 			apiBaseURL: baseURL,
@@ -94,62 +98,66 @@ function Layout() {
 	return (
 		<QueryClientProvider client={routeContext.queryClient}>
 			<ReactQueryDevtools initialIsOpen={false} />
-			<StackProvider<PluginOverrides>
-				basePath="/pages"
+			<StackProvider
+				stack={stack}
 				router={tanstackRouter()}
-				api={{ baseURL, basePath: "/api/data" }}
 				auth={clientAuth}
 				initialIdentity={initialIdentity}
-				overrides={{
-					// Only genuinely plugin-specific overrides remain — the shared
-					// Link/navigate/refresh and API wiring come from the top-level
-					// `router` and `api` props above.
-					"ui-builder": {
-						componentRegistry: defaultComponentRegistry,
-					},
-					blog: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						imageInputField: ImageInputField,
-						// Wire comments into the bottom of each blog post
-						postBottomSlot: (post) => (
-							<CommentThread
-								resourceId={post.slug}
-								resourceType="blog-post"
-								className="mt-8 pt-8 border-t"
-							/>
-						),
-					},
-					"ai-chat": {
-						mode: "authenticated",
-						uploadFile: uploadFileForChat,
-					},
-					cms: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						imageInputField: ImageInputField,
-					},
-					kanban: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						resolveUser,
-						searchUsers,
-						// Wire comments into task detail dialogs
-						taskDetailBottomSlot: (task) => (
-							<CommentThread resourceId={task.id} resourceType="kanban-task" />
-						),
-					},
-					comments: {
-						defaultCommentPageSize: 5,
-						resourceLinks: {
-							"blog-post": (slug) => `/pages/blog/${slug}`,
+				overrides={
+					{
+						// Only genuinely plugin-specific overrides remain — the shared
+						// Link/navigate/refresh and API wiring come from the top-level
+						// `router` and `api` props above.
+						"ui-builder": {
+							componentRegistry: defaultComponentRegistry,
 						},
-					},
-					media: {
-						uploadMode: "direct",
-						queryClient: routeContext.queryClient,
-					},
-				}}
+						blog: {
+							uploadImage,
+							imagePicker: ImagePicker,
+							imageInputField: ImageInputField,
+							// Wire comments into the bottom of each blog post
+							postBottomSlot: (post) => (
+								<CommentThread
+									resourceId={post.slug}
+									resourceType="blog-post"
+									className="mt-8 pt-8 border-t"
+								/>
+							),
+						},
+						"ai-chat": {
+							mode: "authenticated",
+							uploadFile: uploadFileForChat,
+						},
+						cms: {
+							uploadImage,
+							imagePicker: ImagePicker,
+							imageInputField: ImageInputField,
+						},
+						kanban: {
+							uploadImage,
+							imagePicker: ImagePicker,
+							resolveUser,
+							searchUsers,
+							// Wire comments into task detail dialogs
+							taskDetailBottomSlot: (task) => (
+								<CommentThread
+									resourceId={task.id}
+									resourceType="kanban-task"
+								/>
+							),
+						},
+						comments: {
+							defaultCommentPageSize: 5,
+							resourceLinks: {
+								"blog-post": (slug) => `/pages/blog/${slug}`,
+							},
+						},
+						media: {
+							uploadMode: "direct",
+							queryClient: routeContext.queryClient,
+						},
+					} satisfies Partial<PluginOverrides> as never
+				}
 			>
 				<Outlet />
 				{/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}

@@ -136,34 +136,56 @@ export type MyApiRouter = ReturnType<typeof myBackendPlugin.routes>
 **Minimum client shape:**
 
 ```typescript
-import { defineClientPlugin, createRoute, createApiClient } from "@btst/stack/plugins/client"
+import {
+  defineClientPlugin,
+  defineRoute,
+  type ResolvedClientPluginRuntime,
+} from "@btst/stack/plugins/client"
 import { lazy } from "react"
-import type { QueryClient } from "@tanstack/react-query"
-import type { MyApiRouter } from "../api/plugin"
+
+export const MY_PLUGIN_ID = "my-plugin" as const
 
 export interface MyClientConfig {
-  queryClient: QueryClient
-  apiBaseURL: string
-  apiBasePath: string
-  siteBaseURL: string
-  siteBasePath: string
+  title?: string
 }
 
-export const myClientPlugin = (config: MyClientConfig) =>
-  defineClientPlugin({
-    name: "my-plugin",
+const ListPage = lazy(() => import("./components/list-page"))
+
+function createResolvedPlugin(
+  config: MyClientConfig,
+  runtime: ResolvedClientPluginRuntime<typeof MY_PLUGIN_ID>,
+) {
+  const resolvedConfig = {
+    title: config.title ?? "My Plugin",
+    queryClient: runtime.queryClient,
+    apiBaseURL: runtime.api.baseURL,
+    apiBasePath: runtime.api.basePath,
+    siteBaseURL: runtime.site.baseURL,
+    siteBasePath: runtime.site.basePath,
+    headers: runtime.api.headers,
+    credentials: runtime.api.credentials,
+  }
+  return {
     routes: () => ({
-      list: createRoute("/my-plugin", () => {
-        const ListPage = lazy(() => import("./components/list-page"))
-        return {
-          PageComponent: ListPage,
-          loader: myLoader(config),
-          meta: myMeta(config),
-        }
+      list: defineRoute("/my-plugin", {
+        page: ListPage,
+        loader: myLoader(resolvedConfig),
+        meta: myMeta(resolvedConfig),
       }),
     }),
+  }
+}
+
+export const myClientPlugin = (config: MyClientConfig = {}) =>
+  defineClientPlugin()({
+    id: MY_PLUGIN_ID,
+    resolve: (runtime) => createResolvedPlugin(config, runtime),
   })
 ```
+
+API, site, QueryClient, headers, and credentials are configured once on
+`createClientStack()`. Client plugin options contain only plugin-specific
+choices; `resolve(runtime)` binds the shared runtime.
 
 **Backend hook naming conventions:**
 
@@ -402,25 +424,63 @@ export { createItem, type CreateItemInput } from "./mutations"
 
 ```typescript
 // packages/stack/src/plugins/your-plugin/client/plugin.tsx
-import { defineClientPlugin, createRoute, createApiClient, isConnectionError } from "@btst/stack/plugins/client"
+import {
+  createApiClient,
+  defineClientPlugin,
+  defineRoute,
+  isConnectionError,
+  type ResolvedClientPluginRuntime,
+} from "@btst/stack/plugins/client"
 import { lazy } from "react"
 import type { QueryClient } from "@tanstack/react-query"
 import type { MyApiRouter } from "../api/plugin"
 
+export const MY_PLUGIN_ID = "your-plugin" as const
+
 export interface MyClientConfig {
+  title?: string
+}
+
+interface ResolvedMyClientConfig {
+  title: string
   queryClient: QueryClient
   apiBaseURL: string
   apiBasePath: string
   siteBaseURL: string
   siteBasePath: string
+  headers?: Headers
+  credentials?: RequestCredentials
 }
 
-function myLoader(config: MyClientConfig) {
+function resolveMyClientConfig(
+  config: MyClientConfig,
+  runtime: ResolvedClientPluginRuntime<typeof MY_PLUGIN_ID>,
+): ResolvedMyClientConfig {
+  return {
+    title: config.title ?? "My Plugin",
+    queryClient: runtime.queryClient,
+    apiBaseURL: runtime.api.baseURL,
+    apiBasePath: runtime.api.basePath,
+    siteBaseURL: runtime.site.baseURL,
+    siteBasePath: runtime.site.basePath,
+    ...(runtime.api.headers ? { headers: runtime.api.headers } : {}),
+    ...(runtime.api.credentials
+      ? { credentials: runtime.api.credentials }
+      : {}),
+  }
+}
+
+function myLoader(config: ResolvedMyClientConfig) {
   return async () => {
     if (typeof window === "undefined") {
-      const { queryClient, apiBaseURL, apiBasePath } = config
+      const { queryClient, apiBaseURL, apiBasePath, headers, credentials } = config
       try {
-        const client = createApiClient<MyApiRouter>({ baseURL: apiBaseURL, basePath: apiBasePath })
+        const client = createApiClient<MyApiRouter>({
+          baseURL: apiBaseURL,
+          basePath: apiBasePath,
+          headers,
+          credentials,
+        })
         await queryClient.prefetchQuery({
           queryKey: ["your-plugin", "items"],
           queryFn: async () => (await client("/items", { method: "GET" })).data,
@@ -438,37 +498,47 @@ function myLoader(config: MyClientConfig) {
   }
 }
 
-function myMeta(config: MyClientConfig) {
+function myMeta(config: ResolvedMyClientConfig) {
   return () => {
     const { siteBaseURL, siteBasePath } = config
     return [
-      { title: "My Plugin" },
+      { title: config.title },
       { name: "description", content: "My plugin description." },
       { property: "og:url", content: `${siteBaseURL}${siteBasePath}/your-plugin` },
     ]
   }
 }
 
-export const myClientPlugin = (config: MyClientConfig) =>
-  defineClientPlugin({
-    name: "your-plugin",
+const ListPage = lazy(() =>
+  import("./components/pages/list-page").then((m) => ({ default: m.ListPageComponent })),
+)
+
+function createResolvedMyPlugin(config: ResolvedMyClientConfig) {
+  return {
     routes: () => ({
-      list: createRoute("/your-plugin", () => {
-        const ListPage = lazy(() =>
-          import("./components/pages/list-page").then((m) => ({ default: m.ListPageComponent })),
-        )
-        return {
-          PageComponent: ListPage,
-          loader: myLoader(config),
-          meta: myMeta(config),
-        }
+      list: defineRoute("/your-plugin", {
+        page: ListPage,
+        loader: myLoader(config),
+        meta: myMeta(config),
       }),
     }),
     sitemap: async () => [
       { url: `${config.siteBaseURL}${config.siteBasePath}/your-plugin`, lastModified: new Date(), priority: 0.7 },
     ],
+  }
+}
+
+export const myClientPlugin = (config: MyClientConfig = {}) =>
+  defineClientPlugin()({
+    id: MY_PLUGIN_ID,
+    resolve: (runtime) =>
+      createResolvedMyPlugin(resolveMyClientConfig(config, runtime)),
   })
 ```
+
+The public factory accepts only plugin-specific options. Consumers configure
+the shared API, site, QueryClient, and optional request headers once on
+`createClientStack()`.
 
 **Page component wrapper** (`list-page.tsx`) — wraps with `ComposedRoute` for Suspense + ErrorBoundary:
 

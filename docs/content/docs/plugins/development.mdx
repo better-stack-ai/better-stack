@@ -408,27 +408,57 @@ The client plugin defines routes with React components, SSR data loaders, and SE
 ### Basic Structure
 
 ```typescript
-import { createApiClient, defineClientPlugin, defineRoute } from "@btst/stack/plugins/client"
+import {
+  createApiClient,
+  defineClientPlugin,
+  defineRoute,
+  type ResolvedClientPluginRuntime,
+} from "@btst/stack/plugins/client"
 import type { QueryClient } from "@tanstack/react-query"
 import type { TodosApiRouter } from "../api/backend"
 import { lazy } from "react"
 
+export const TODOS_PLUGIN_ID = "todos" as const
+
 export interface TodosClientConfig {
+  title?: string
+}
+
+interface ResolvedTodosClientConfig {
+  title: string
   queryClient: QueryClient
   apiBaseURL: string
   apiBasePath: string
   siteBaseURL: string
   siteBasePath: string
+  headers?: Headers
+  credentials?: RequestCredentials
 }
 
 const TodosListPage = lazy(() =>
   import("./components").then((m) => ({ default: m.TodosListPage }))
 )
 
-export const todosClientPlugin = (config: TodosClientConfig) =>
-  defineClientPlugin({
-    name: "todos",
-    
+function resolveTodosClientConfig(
+  config: TodosClientConfig,
+  runtime: ResolvedClientPluginRuntime<typeof TODOS_PLUGIN_ID>,
+): ResolvedTodosClientConfig {
+  return {
+    title: config.title ?? "Todos",
+    queryClient: runtime.queryClient,
+    apiBaseURL: runtime.api.baseURL,
+    apiBasePath: runtime.api.basePath,
+    siteBaseURL: runtime.site.baseURL,
+    siteBasePath: runtime.site.basePath,
+    ...(runtime.api.headers ? { headers: runtime.api.headers } : {}),
+    ...(runtime.api.credentials
+      ? { credentials: runtime.api.credentials }
+      : {}),
+  }
+}
+
+function createResolvedTodosPlugin(config: ResolvedTodosClientConfig) {
+  return {
     routes: () => ({
       todos: defineRoute("/todos", {
         page: TodosListPage,
@@ -444,8 +474,20 @@ export const todosClientPlugin = (config: TodosClientConfig) =>
         priority: 0.7 
       },
     ],
+  }
+}
+
+export const todosClientPlugin = (config: TodosClientConfig = {}) =>
+  defineClientPlugin()({
+    id: TODOS_PLUGIN_ID,
+    resolve: (runtime) =>
+      createResolvedTodosPlugin(resolveTodosClientConfig(config, runtime)),
   })
 ```
+
+`TodosClientConfig` contains only Todo-specific choices. The plugin receives
+API, site, QueryClient, headers, and credentials from the enclosing
+`createClientStack()` through `resolve(runtime)`.
 
 ### SSR Data Loaders
 
@@ -454,11 +496,11 @@ Loaders prefetch data during server-side rendering. Always add an `isConnectionE
 ```typescript
 import { createApiClient, isConnectionError } from "@btst/stack/plugins/client"
 
-function todosLoader(config: TodosClientConfig) {
+function todosLoader(config: ResolvedTodosClientConfig) {
   return async () => {
     // Only run on server
     if (typeof window === "undefined") {
-      const { queryClient, apiBasePath, apiBaseURL } = config
+      const { queryClient, apiBasePath, apiBaseURL, headers, credentials } = config
       
       try {
         await queryClient.prefetchQuery({
@@ -467,6 +509,8 @@ function todosLoader(config: TodosClientConfig) {
             const client = createApiClient<TodosApiRouter>({
               baseURL: apiBaseURL,
               basePath: apiBasePath,
+              headers,
+              credentials,
             })
             const response = await client("/todos", { method: "GET" })
             return response.data
@@ -491,16 +535,18 @@ function todosLoader(config: TodosClientConfig) {
 Meta generators create SEO tags based on loaded data:
 
 ```typescript
-function createTodosMeta(config: TodosClientConfig, path: string) {
+function createTodosMeta(config: ResolvedTodosClientConfig, path: string) {
   return () => {
     const { queryClient, siteBaseURL, siteBasePath } = config
     const todos = queryClient.getQueryData<Todo[]>(["todos"]) ?? []
     const fullUrl = `${siteBaseURL}${siteBasePath}${path}`
     
+    const title = `${config.title} · ${todos.length}`
+
     return [
-      { name: "title", content: `${todos.length} Todos` },
+      { name: "title", content: title },
       { name: "description", content: `Track ${todos.length} todos.` },
-      { property: "og:title", content: `${todos.length} Todos` },
+      { property: "og:title", content: title },
       { property: "og:url", content: fullUrl },
       { name: "twitter:card", content: "summary" },
     ]
@@ -887,7 +933,7 @@ await myStack.api.todos.prefetchForRoute("list", queryClient)
 Register client plugins with your stack client:
 
 ```typescript
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { todosClientPlugin } from "./plugins/todo/client/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { QueryClient } from "@tanstack/react-query"
@@ -897,21 +943,13 @@ export const getStackClient = (queryClient: QueryClient) => {
     ? window.location.origin 
     : "http://localhost:3000"
     
-  return createStackClient({
+  return createClientStack({
+    api: { baseURL, basePath: "/api/data" },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
-      todos: todosClientPlugin({
-        queryClient,
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-      }),
+      todos: todosClientPlugin(),
       blog: blogClientPlugin({
-        queryClient,
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
         seo: {
           siteName: "My Blog",
           author: "Your Name",

@@ -33,6 +33,13 @@ export const getStackClient = (
 ) => {
 	const baseURL = getBaseURL();
 	return createStackClient({
+		api: {
+			baseURL,
+			basePath: "/api/data",
+			...(options?.headers ? { headers: options.headers } : {}),
+		},
+		site: { baseURL, basePath: "/pages" },
+		queryClient,
 		plugins: {
 			todos: todosClientPlugin({
 				queryClient: queryClient,
@@ -42,12 +49,6 @@ export const getStackClient = (
 				siteBasePath: "/pages",
 			}),
 			blog: blogClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
 				seo: {
 					siteName: "BTST Blog",
 					author: "BTST Team",
@@ -83,7 +84,7 @@ export const getStackClient = (
 							post?.title || "not found",
 						);
 					},
-					onLoadError: async (error, context) => {
+					onErrorLoad: async (error, context) => {
 						console.log(
 							`[${context.isSSR ? "SSR" : "CSR"}] Load error:`,
 							error.message,

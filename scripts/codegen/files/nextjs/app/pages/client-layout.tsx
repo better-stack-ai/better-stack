@@ -5,6 +5,7 @@ import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { getOrCreateQueryClient } from "@/lib/query-client";
+import { getStackClient } from "@/lib/stack-client";
 import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client";
 import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
@@ -35,7 +36,6 @@ const getBaseURL = () =>
 		? process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
 		: process.env.BASE_URL || "http://localhost:3000";
 
-// Define the shape of all plugin overrides
 type PluginOverrides = {
 	blog: BlogPluginOverrides;
 	"ai-chat": AiChatPluginOverrides;
@@ -57,6 +57,7 @@ export function BtstPagesClientLayout({
 	// fresh instance to avoid stale client cache overriding hydrated data
 	const [queryClient] = useState(() => getOrCreateQueryClient());
 	const baseURL = getBaseURL();
+	const stack = React.useMemo(() => getStackClient(queryClient), [queryClient]);
 	const mediaClientConfig = React.useMemo(
 		() => ({
 			apiBaseURL: baseURL,
@@ -90,70 +91,74 @@ export function BtstPagesClientLayout({
 	return (
 		<QueryClientProvider client={queryClient}>
 			<ReactQueryDevtools initialIsOpen={false} />
-			<StackProvider<PluginOverrides>
-				basePath="/pages"
+			<StackProvider
+				stack={stack}
 				router={nextRouter()}
-				api={{ baseURL, basePath: "/api/data" }}
 				auth={clientAuth}
 				initialIdentity={initialIdentity}
-				overrides={{
-					// Only genuinely plugin-specific overrides remain — the shared
-					// Link/navigate/refresh/Image and API wiring come from the
-					// top-level `router` and `api` props above.
-					blog: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						imageInputField: ImageInputField,
-						// Wire comments into the bottom of each blog post
-						postBottomSlot: (post) => (
-							<CommentThread
-								resourceId={post.slug}
-								resourceType="blog-post"
-								className="mt-8 pt-8 border-t"
-							/>
-						),
-					},
-					"ai-chat": {
-						mode: "authenticated", // Full chat with conversation history
-						uploadFile: uploadFileForChat,
-						chatSuggestions: [
-							"Hi, I'm Sarah, 34. I'm getting married next year and I just inherited $50,000 from my grandmother. I have no debt and about $30k in savings. I'm wondering if my current moderate-risk portfolio still makes sense.",
-							"Hi, I run a small import business and want to invest $200,000. The money came from overseas sales across multiple countries over the past few months. I'd like to move it into Canadian equities right away.",
-							"What information do I need to provide for a financial review?",
-							"I'm approaching retirement in the next few years — what should I be thinking about?",
-							"How is my risk tolerance assessed?",
-						],
-					},
-					cms: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						imageInputField: ImageInputField,
-					},
-					"ui-builder": {
-						componentRegistry: defaultComponentRegistry,
-					},
-					kanban: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						// User resolution for assignees
-						resolveUser,
-						searchUsers,
-						// Wire comments into the bottom of each task detail dialog
-						taskDetailBottomSlot: (task) => (
-							<CommentThread resourceId={task.id} resourceType="kanban-task" />
-						),
-					},
-					comments: {
-						defaultCommentPageSize: 5,
-						resourceLinks: {
-							"blog-post": (slug) => `/pages/blog/${slug}`,
+				overrides={
+					{
+						// Only genuinely plugin-specific overrides remain — the shared
+						// Link/navigate/refresh/Image and API wiring come from the
+						// top-level `router` and `api` props above.
+						blog: {
+							uploadImage,
+							imagePicker: ImagePicker,
+							imageInputField: ImageInputField,
+							// Wire comments into the bottom of each blog post
+							postBottomSlot: (post) => (
+								<CommentThread
+									resourceId={post.slug}
+									resourceType="blog-post"
+									className="mt-8 pt-8 border-t"
+								/>
+							),
 						},
-					},
-					media: {
-						uploadMode: "direct",
-						queryClient,
-					},
-				}}
+						"ai-chat": {
+							mode: "authenticated", // Full chat with conversation history
+							uploadFile: uploadFileForChat,
+							chatSuggestions: [
+								"Hi, I'm Sarah, 34. I'm getting married next year and I just inherited $50,000 from my grandmother. I have no debt and about $30k in savings. I'm wondering if my current moderate-risk portfolio still makes sense.",
+								"Hi, I run a small import business and want to invest $200,000. The money came from overseas sales across multiple countries over the past few months. I'd like to move it into Canadian equities right away.",
+								"What information do I need to provide for a financial review?",
+								"I'm approaching retirement in the next few years — what should I be thinking about?",
+								"How is my risk tolerance assessed?",
+							],
+						},
+						cms: {
+							uploadImage,
+							imagePicker: ImagePicker,
+							imageInputField: ImageInputField,
+						},
+						"ui-builder": {
+							componentRegistry: defaultComponentRegistry,
+						},
+						kanban: {
+							uploadImage,
+							imagePicker: ImagePicker,
+							// User resolution for assignees
+							resolveUser,
+							searchUsers,
+							// Wire comments into the bottom of each task detail dialog
+							taskDetailBottomSlot: (task) => (
+								<CommentThread
+									resourceId={task.id}
+									resourceType="kanban-task"
+								/>
+							),
+						},
+						comments: {
+							defaultCommentPageSize: 5,
+							resourceLinks: {
+								"blog-post": (slug) => `/pages/blog/${slug}`,
+							},
+						},
+						media: {
+							uploadMode: "direct",
+							queryClient,
+						},
+					} satisfies Partial<PluginOverrides> as never
+				}
 			>
 				{children}
 				{/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}

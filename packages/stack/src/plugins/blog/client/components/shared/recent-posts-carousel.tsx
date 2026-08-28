@@ -7,6 +7,7 @@ import {
 	useTranslate,
 } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import type { SerializedPost } from "../../../types";
 import {
 	Carousel,
@@ -27,7 +28,7 @@ export function RecentPostsCarousel({ posts }: RecentPostsCarouselProps) {
 	const { PostCard, localization } = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
-	>("blog", {
+	>(BLOG_PLUGIN_ID, {
 		PostCard: DefaultPostCard,
 	});
 	const { router } = useStack();
