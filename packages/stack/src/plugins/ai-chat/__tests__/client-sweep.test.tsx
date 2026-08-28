@@ -695,123 +695,149 @@ describe("AI Chat permissions", () => {
 		expect(container.querySelector('[data-testid="chat-input"]')).toBeTruthy();
 	});
 
-	it("discovers a new authoritative conversation from the stream response header", async () => {
-		const clientMessages = [
-			{
-				id: "client-user",
-				role: "user" as const,
-				parts: [{ type: "text" as const, text: "Hi" }],
-			},
-		];
-		const setMessages = vi.fn();
-		let sent = false;
-		let chatOptions: any;
-		mocks.useChat.mockImplementation((options) => {
-			chatOptions = options;
-			return {
-				messages: sent ? clientMessages : [],
-				sendMessage: vi.fn(() => {
-					sent = true;
-				}),
-				status: "ready",
-				error: null,
-				setMessages,
-				regenerate: vi.fn(),
-				addToolOutput: vi.fn(),
-				stop: vi.fn(),
-			};
-		});
-		mocks.useAiChatIdentityPartition.mockReturnValue({
-			id: "owner-1",
-			role: "user",
-		});
-		const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-			new Response("stream", {
-				headers: { "x-conversation-id": "persisted-conversation" },
-			}),
-		);
-		vi.spyOn(queryClient, "fetchQuery").mockResolvedValue({
-			...conversation,
-			id: "persisted-conversation",
-			messages: [
+	it.each([
+		{
+			pluginSiteBasePath: "/assistant",
+			expectedPath: "/assistant/chat/persisted-conversation",
+		},
+		{
+			pluginSiteBasePath: "/",
+			expectedPath: "/chat/persisted-conversation",
+		},
+	])(
+		"discovers a new authoritative conversation at $expectedPath",
+		async ({ pluginSiteBasePath, expectedPath }) => {
+			const clientMessages = [
 				{
-					id: "persisted-user",
-					conversationId: "persisted-conversation",
-					role: "user",
-					content: '[{"type":"text","text":"Hi"}]',
-					createdAt: new Date().toISOString(),
+					id: "client-user",
+					role: "user" as const,
+					parts: [{ type: "text" as const, text: "Hi" }],
 				},
-			],
-		});
+			];
+			const setMessages = vi.fn();
+			let sent = false;
+			let chatOptions: any;
+			mocks.useChat.mockImplementation((options) => {
+				chatOptions = options;
+				return {
+					messages: sent ? clientMessages : [],
+					sendMessage: vi.fn(() => {
+						sent = true;
+					}),
+					status: "ready",
+					error: null,
+					setMessages,
+					regenerate: vi.fn(),
+					addToolOutput: vi.fn(),
+					stop: vi.fn(),
+				};
+			});
+			mocks.useAiChatIdentityPartition.mockReturnValue({
+				id: "owner-1",
+				role: "user",
+			});
+			const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+				new Response("stream", {
+					headers: { "x-conversation-id": "persisted-conversation" },
+				}),
+			);
+			vi.spyOn(queryClient, "fetchQuery").mockResolvedValue({
+				...conversation,
+				id: "persisted-conversation",
+				messages: [
+					{
+						id: "persisted-user",
+						conversationId: "persisted-conversation",
+						role: "user",
+						content: '[{"type":"text","text":"Hi"}]',
+						createdAt: new Date().toISOString(),
+					},
+				],
+			});
 
-		const stack = createClientStack({
-			api: { baseURL: "http://test.local", basePath: "/api/data" },
-			site: { baseURL: "http://test.local", basePath: "/pages" },
-			queryClient,
-			plugins: { aiChat: aiChatClientPlugin() },
-			endpoints: { aiChat: { site: { basePath: "/assistant" } } },
-		});
-		const renderChat = async () => {
+			const stack = createClientStack({
+				api: { baseURL: "http://test.local", basePath: "/api/data" },
+				site: { baseURL: "http://test.local", basePath: "/pages" },
+				queryClient,
+				plugins: { aiChat: aiChatClientPlugin() },
+				endpoints: {
+					aiChat: { site: { basePath: pluginSiteBasePath } },
+				},
+			});
+			const renderChat = async () => {
+				await act(async () => {
+					root.render(
+						<QueryClientProvider client={queryClient}>
+							<StackProvider stack={stack}>
+								<ChatInterface />
+							</StackProvider>
+						</QueryClientProvider>,
+					);
+					await Promise.resolve();
+				});
+			};
+
+			await renderChat();
+			await act(async () => {
+				container
+					.querySelector<HTMLButtonElement>('[data-testid="chat-send"]')
+					?.click();
+			});
+			await renderChat();
+			await act(async () => {
+				await chatOptions.transport.fetch("http://test.local/chat", {});
+				await chatOptions.onFinish();
+			});
+
+			expect(setMessages).toHaveBeenCalledWith([
+				{ ...clientMessages[0], id: "persisted-user" },
+			]);
+			expect(window.location.pathname).toBe(expectedPath);
+			fetchMock.mockRestore();
+		},
+	);
+
+	it.each([
+		{
+			pluginSiteBasePath: "/assistant",
+			expectedPath: "/assistant/chat/conv-1",
+		},
+		{
+			pluginSiteBasePath: "/",
+			expectedPath: "/chat/conv-1",
+		},
+	])(
+		"uses the resolved AI Chat site path $expectedPath for sidebar navigation",
+		async ({ pluginSiteBasePath, expectedPath }) => {
+			const navigate = vi.fn();
+			const stack = createClientStack({
+				api: { baseURL: "http://test.local", basePath: "/api/data" },
+				site: { baseURL: "http://test.local", basePath: "/pages" },
+				queryClient,
+				plugins: { aiChat: aiChatClientPlugin() },
+				endpoints: {
+					aiChat: { site: { basePath: pluginSiteBasePath } },
+				},
+			});
+
 			await act(async () => {
 				root.render(
 					<QueryClientProvider client={queryClient}>
-						<StackProvider stack={stack}>
-							<ChatInterface />
+						<StackProvider stack={stack} router={{ navigate }}>
+							<ChatSidebar />
 						</StackProvider>
 					</QueryClientProvider>,
 				);
 				await Promise.resolve();
 			});
-		};
+			const conversationButton = Array.from(
+				container.querySelectorAll<HTMLButtonElement>("button"),
+			).find((button) => button.textContent?.includes(conversation.title));
+			await act(async () => conversationButton?.click());
 
-		await renderChat();
-		await act(async () => {
-			container
-				.querySelector<HTMLButtonElement>('[data-testid="chat-send"]')
-				?.click();
-		});
-		await renderChat();
-		await act(async () => {
-			await chatOptions.transport.fetch("http://test.local/chat", {});
-			await chatOptions.onFinish();
-		});
-
-		expect(setMessages).toHaveBeenCalledWith([
-			{ ...clientMessages[0], id: "persisted-user" },
-		]);
-		expect(window.location.pathname).toBe(
-			"/assistant/chat/persisted-conversation",
-		);
-		fetchMock.mockRestore();
-	});
-
-	it("uses the resolved AI Chat site path for sidebar navigation", async () => {
-		const navigate = vi.fn();
-		const stack = createClientStack({
-			api: { baseURL: "http://test.local", basePath: "/api/data" },
-			site: { baseURL: "http://test.local", basePath: "/pages" },
-			queryClient,
-			plugins: { aiChat: aiChatClientPlugin() },
-			endpoints: { aiChat: { site: { basePath: "/assistant" } } },
-		});
-
-		await act(async () => {
-			root.render(
-				<QueryClientProvider client={queryClient}>
-					<StackProvider stack={stack} router={{ navigate }}>
-						<ChatSidebar />
-					</StackProvider>
-				</QueryClientProvider>,
-			);
-			await Promise.resolve();
-		});
-		const conversationButton = Array.from(
-			container.querySelectorAll<HTMLButtonElement>("button"),
-		).find((button) => button.textContent?.includes(conversation.title));
-		await act(async () => conversationButton?.click());
-
-		expect(navigate).toHaveBeenCalledWith("/assistant/chat/conv-1");
-	});
+			expect(navigate).toHaveBeenCalledWith(expectedPath);
+		},
+	);
 
 	it("does not bind a headerless new stream to unrelated cached history", async () => {
 		const clientMessages = [

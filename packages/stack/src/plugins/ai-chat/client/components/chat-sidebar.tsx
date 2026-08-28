@@ -43,7 +43,10 @@ import {
 	useStack,
 } from "@btst/stack/context";
 import { aiChatPermissions } from "../../permissions";
-import type { AiChatPluginOverrides } from "../overrides";
+import {
+	resolveAiChatSitePath,
+	type AiChatPluginOverrides,
+} from "../overrides";
 import type { SerializedConversation } from "../../types";
 import {
 	useConversations,
@@ -93,7 +96,7 @@ export function ChatSidebar({
 		// Use the StackProvider router when available.
 		// Also run onNewChat to support "reset chat" behavior when already on /chat.
 		if (navigate) {
-			navigate(`${basePath}/chat`);
+			navigate(resolveAiChatSitePath(basePath, "chat"));
 		}
 		if (onNewChat) {
 			onNewChat();
@@ -102,7 +105,7 @@ export function ChatSidebar({
 
 	const handleConversationClick = (conversation: SerializedConversation) => {
 		if (navigate) {
-			navigate(`${basePath}/chat/${conversation.id}`);
+			navigate(resolveAiChatSitePath(basePath, "chat", conversation.id));
 		}
 	};
 
@@ -139,7 +142,7 @@ export function ChatSidebar({
 				setSelectedConversation(null);
 				// Navigate away if deleted current conversation
 				if (selectedConversation.id === currentConversationId && navigate) {
-					await navigate(`${basePath}/chat`);
+					await navigate(resolveAiChatSitePath(basePath, "chat"));
 				}
 			} catch {
 				notify.error(

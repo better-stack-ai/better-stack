@@ -15,10 +15,11 @@ import {
 } from "../query-keys";
 import type { SerializedConversation, SerializedMessage } from "../types";
 import { ChatPageComponent } from "./components/pages/chat-page";
-import type {
-	AiChatMode,
-	AiChatPluginOverrides,
-	AiChatProviderConfig,
+import {
+	resolveAiChatSitePath,
+	type AiChatMode,
+	type AiChatPluginOverrides,
+	type AiChatProviderConfig,
 } from "./overrides";
 
 /**
@@ -374,7 +375,10 @@ function createConversationLoader(
 function createChatHomeMeta(config: ResolvedAiChatClientConfig) {
 	return () => {
 		const { seo, runtime } = config;
-		const fullUrl = `${runtime.site.baseURL}${runtime.site.basePath}/chat`;
+		const fullUrl = `${runtime.site.baseURL}${resolveAiChatSitePath(
+			runtime.site.basePath,
+			"chat",
+		)}`;
 		const title = "Chat";
 		const description = seo?.description || "Start a conversation with AI";
 
@@ -425,7 +429,11 @@ function createConversationMeta(
 			SerializedConversation & { messages: SerializedMessage[] }
 		>(queries.conversations.detail(id, identityPartition).queryKey);
 
-		const fullUrl = `${site.baseURL}${site.basePath}/chat/${id}`;
+		const fullUrl = `${site.baseURL}${resolveAiChatSitePath(
+			site.basePath,
+			"chat",
+			id,
+		)}`;
 		const title = conversation?.title || "Chat";
 		const description = seo?.description || "AI conversation";
 

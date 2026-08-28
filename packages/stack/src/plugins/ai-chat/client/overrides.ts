@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { normalizePath } from "@btst/stack/client";
 import type { AiChatLocalization } from "./localization";
 
 /**
@@ -19,6 +20,14 @@ export function resolveAiChatMode(
 	providerConfig: Readonly<Record<string, unknown>> | undefined,
 ): AiChatMode {
 	return providerConfig?.mode === "public" ? "public" : "authenticated";
+}
+
+/** Join an AI Chat route onto its resolved site mount without duplicate slashes. */
+export function resolveAiChatSitePath(
+	basePath: string,
+	...segments: string[]
+): string {
+	return normalizePath([basePath, ...segments].join("/"));
 }
 
 /**

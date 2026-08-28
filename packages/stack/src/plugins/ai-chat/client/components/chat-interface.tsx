@@ -27,7 +27,11 @@ import {
 	useStack,
 } from "@btst/stack/context";
 import { aiChatPermissions } from "../../permissions";
-import { resolveAiChatMode, type AiChatPluginOverrides } from "../overrides";
+import {
+	resolveAiChatMode,
+	resolveAiChatSitePath,
+	type AiChatPluginOverrides,
+} from "../overrides";
 import { useAiChatTranslation } from "../localization";
 import { createApiClient } from "@btst/stack/plugins/client";
 import type { AiChatApiRouter } from "../../api/plugin";
@@ -652,7 +656,11 @@ export function ChatInterface({
 						// Only update the URL in full-page mode; in widget mode the chat is
 						// embedded in another page and clobbering the URL is disruptive.
 						if (variant === "full") {
-							const newUrl = `${basePath}/chat/${discoveredConversationId}`;
+							const newUrl = resolveAiChatSitePath(
+								basePath,
+								"chat",
+								discoveredConversationId,
+							);
 							if (typeof window !== "undefined") {
 								window.history.replaceState(
 									{ ...window.history.state },
@@ -771,7 +779,7 @@ export function ChatInterface({
 					window.history.replaceState(
 						{ ...window.history.state },
 						"",
-						`${basePath}/chat/${retryConversationId}`,
+						resolveAiChatSitePath(basePath, "chat", retryConversationId),
 					);
 				}
 			}

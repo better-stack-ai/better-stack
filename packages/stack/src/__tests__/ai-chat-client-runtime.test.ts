@@ -81,6 +81,24 @@ describe("AI Chat resolved client runtime", () => {
 		expect(publicStack.router.getRoute("/chat/conv-1")).toBeNull();
 	});
 
+	it("builds root-mounted chat metadata without protocol-relative paths", () => {
+		const stack = createClientStack({
+			api: appApi,
+			site: { baseURL: "https://app.example.com", basePath: "/" },
+			queryClient: new QueryClient(),
+			plugins: { aiChat: aiChatClientPlugin() },
+		});
+
+		expect(stack.router.getRoute("/chat")?.meta?.()).toContainEqual({
+			property: "og:url",
+			content: "https://app.example.com/chat",
+		});
+		expect(stack.router.getRoute("/chat/conv-1")?.meta?.()).toContainEqual({
+			property: "og:url",
+			content: "https://app.example.com/chat/conv-1",
+		});
+	});
+
 	it("uses one same-origin override and request headers for loader hydration", async () => {
 		const fetchMock = vi
 			.spyOn(globalThis, "fetch")
