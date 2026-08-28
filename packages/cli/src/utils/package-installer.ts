@@ -50,10 +50,6 @@ export async function installInitDependencies(input: {
 		adapterMeta.installSpec ?? adapterMeta.packageName,
 		...(adapterMeta.extraInstallSpecs ?? adapterMeta.extraPackages ?? []),
 		...pluginExtraPackages,
-		...(input.plugins.includes("better-auth-ui") &&
-		adapterMeta.betterAuthInstallSpec
-			? [adapterMeta.betterAuthInstallSpec]
-			: []),
 	];
 	const { command, args } = getInstallCommand(input.packageManager, packages);
 	await execa(command, args, { cwd: input.cwd, stdio: "inherit" });

@@ -646,3 +646,50 @@ stack({ auth: serverAuth, plugins: { aiChat } });
 ```
 
 The backend `mode` alias and `getUserId` callback are removed. The client plugin's `mode` still controls its real conversation UI/persistence mode; it is not a security boundary.
+
+### Lifecycle context and Comments authorship
+
+Before:
+
+```ts
+commentsBackendPlugin({
+  resolveCurrentUserId: (context: CommentsApiContext) => readSession(context.headers),
+  onBeforePost: (_input, context: CommentsApiContext) => ({
+    authorId: readAuthor(context),
+  }),
+});
+
+const onBeforeCreatePost = (_input: unknown, context: BlogApiContext) => {
+  audit(context);
+};
+```
+
+After:
+
+```ts
+const serverAuth = createServerAuth({ authorization, getIdentity: readIdentity });
+
+commentsBackendPlugin({
+  onBeforePost: async (_input, context: CommentsCreateOperationContext) => {
+    await audit(context.identity, context.facts);
+  },
+});
+
+const blogHooks: BlogBackendHooks = {
+  onBeforeCreatePost: (_input, context: BlogCreateOperationContext) =>
+    audit(context.identity, context.facts),
+};
+
+await app.internal.comments.createComment({
+  resourceId,
+  resourceType: "article",
+  body: "Automated note",
+  authorId: "system-job",
+});
+```
+
+The generic Blog and Comments lifecycle context aliases and the Comments
+identity resolver option are removed. Use each hook's operation-specific,
+deeply readonly context. Request authorship comes from `createServerAuth`
+identity; hook return values never choose an author. Explicitly trusted
+`internal` and no-auth calls may provide `authorId` in the validated input.

@@ -380,10 +380,9 @@ approval from marking spam.
 All lifecycle hooks receive validated input, server-derived facts, resolved
 identity, and request in a deeply readonly context. Authorization runs first;
 denied requests cannot invoke hooks. Move earlier v3 RC role, ownership, and
-session checks into the shared rule. Hook return values no longer select
-request authorship when server authorization is configured. Without server
-authorization, an explicit `authorId` input remains available for trusted and
-backward-compatible callers.
+session checks into the shared rule. Hook return values never select request
+authorship. Request operations use the resolved identity; trusted internal and
+no-auth callers must provide an explicit `authorId` input instead.
 </Callout>
 
 <Callout type="info">

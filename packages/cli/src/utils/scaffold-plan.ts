@@ -75,7 +75,6 @@ function buildPluginTemplateContext(
 	);
 	const hasUiBuilder = selectedPlugins.includes("ui-builder");
 	const hasCms = selectedPlugins.includes("cms");
-	const hasBetterAuthUi = selectedPlugins.includes("better-auth-ui");
 	const hasAiChat = selectedPlugins.includes("ai-chat");
 	const hasMedia = selectedPlugins.includes("media");
 	const hasFormBuilder = selectedPlugins.includes("form-builder");
@@ -118,19 +117,11 @@ function buildPluginTemplateContext(
 			.filter(Boolean)
 			.join("\n"),
 		clientImports: clientMetas
-			.map((m) => {
-				if (m.key === "better-auth-ui") {
-					return `import { authClientPlugin, accountClientPlugin, organizationClientPlugin } from "${m.clientImportPath}"`;
-				}
-				return `import { ${m.clientSymbol} } from "${m.clientImportPath}"`;
-			})
+			.map((m) => `import { ${m.clientSymbol} } from "${m.clientImportPath}"`)
 			.join("\n"),
 		backendEntries: metas
 			.map((m) => {
 				if (!m.backendSymbol) {
-					return "";
-				}
-				if (m.key === "better-auth-ui") {
 					return "";
 				}
 				if (m.key === "ai-chat") {
@@ -171,21 +162,6 @@ function buildPluginTemplateContext(
 				if (m.key === "route-docs") {
 					return `\t\t\t${m.configKey}: ${m.clientSymbol}({\n\t\t\t\tqueryClient,\n\t\t\t\tsiteBasePath: "/pages",\n\t\t\t}),`;
 				}
-				if (m.key === "better-auth-ui") {
-					const siteBase = "/pages";
-					return `\t\t\tauth: authClientPlugin({
-\t\t\t\tsiteBaseURL: baseURL,
-\t\t\t\tsiteBasePath: "${siteBase}",
-\t\t\t}),
-\t\t\taccount: accountClientPlugin({
-\t\t\t\tsiteBaseURL: baseURL,
-\t\t\t\tsiteBasePath: "${siteBase}",
-\t\t\t}),
-\t\t\torganization: organizationClientPlugin({
-\t\t\t\tsiteBaseURL: baseURL,
-\t\t\t\tsiteBasePath: "${siteBase}",
-\t\t\t}),`;
-				}
 				const siteBase = "/pages";
 				return `\t\t\t${m.configKey}: ${m.clientSymbol}({
 \t\t\t\tapiBaseURL: baseURL,
@@ -202,23 +178,6 @@ function buildPluginTemplateContext(
 					return "";
 				}
 				const layoutFile = getPagesLayoutFilePath(framework);
-				if (m.key === "better-auth-ui") {
-					return `\t\t\t\t\tauth: {
-\t\t\t\t\t\tauthClient,
-\t\t\t\t\t\tbasePath: "/pages/auth",
-\t\t\t\t\t\tredirectTo: "/pages/account/settings",
-\t\t\t\t\t},
-\t\t\t\t\taccount: {
-\t\t\t\t\t\tauthClient,
-\t\t\t\t\t\tbasePath: "/pages/account",
-\t\t\t\t\t\taccount: { fields: ["image", "name"] },
-\t\t\t\t\t},
-\t\t\t\t\torganization: {
-\t\t\t\t\t\tauthClient,
-\t\t\t\t\t\tbasePath: "/pages/org",
-\t\t\t\t\t\torganization: { basePath: "/pages/org" },
-\t\t\t\t\t},`;
-				}
 				if (m.key === "comments") {
 					return "";
 				}
@@ -252,7 +211,6 @@ function buildPluginTemplateContext(
 			})
 			.filter(Boolean)
 			.join("\n"),
-		hasBetterAuthUi,
 	};
 }
 

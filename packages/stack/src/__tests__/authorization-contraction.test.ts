@@ -152,12 +152,31 @@ describe("final authorization surface contraction", () => {
 				resolve(pluginRoot, "permissions.ts"),
 				"utf8",
 			);
+			const authorization = await readFile(
+				resolve(
+					repositoryRoot,
+					"scripts/codegen/files",
+					frameworkRoot,
+					"authorization.ts",
+				),
+				"utf8",
+			);
 
-			expect(backend).toContain("defineOperation(");
 			expect(backend).toContain("operations:");
-			expect(backend).toContain("operations.listTodos.route(");
-			expect(backend).not.toMatch(/\n\s*api:\s*\{/);
 			expect(permissions).toContain('definePermissions("todos"');
+			for (const operation of [
+				"listTodos",
+				"createTodo",
+				"updateTodo",
+				"deleteTodo",
+			] as const) {
+				expect(backend).toContain(`${operation}: defineOperation({`);
+				expect(backend).toContain(`operations.${operation}.route(`);
+			}
+			expect(backend).not.toMatch(/\bapi\s*:/);
+			for (const action of ["read", "create", "update", "delete"] as const) {
+				expect(authorization).toContain(`todos.todo.${action}.allow()`);
+			}
 		}
 	});
 });

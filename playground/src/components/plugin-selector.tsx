@@ -23,7 +23,6 @@ const PLUGIN_DESCRIPTIONS: Record<string, string> = {
 	media: "Media library with file upload and management",
 	"route-docs": "Auto-generated route documentation page",
 	"open-api": "OpenAPI spec endpoint at /api/data/reference",
-	"better-auth-ui": "Authentication UI (sign in, account, org)",
 };
 
 export function PluginSelector({

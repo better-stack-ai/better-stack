@@ -21,7 +21,6 @@
       "plugins/media",
       "plugins/open-api",
       "plugins/route-docs",
-      "plugins/better-auth-ui",
       "plugins/development",
       "---[Database]Databases---",
       "databases/adapters",
@@ -36,4 +35,3 @@
       "[Try the Playground](https://www.better-stack.ai/playground)"
     ]
   }
-  

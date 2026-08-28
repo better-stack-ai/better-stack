@@ -4,9 +4,6 @@ import { reactRouter } from "@btst/stack/react-router"
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 {{/if}}
 import { QueryClientProvider } from "@tanstack/react-query"
-{{#if hasBetterAuthUi}}
-import { createBetterAuthProvider } from "@btst/better-auth-ui"
-{{/if}}
 import { Outlet{{#if hasAiChat}}, useLocation{{/if}} } from "react-router"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 
@@ -22,16 +19,6 @@ function getBaseURL() {
 	return "http://localhost:5173"
 }
 
-{{#if hasBetterAuthUi}}
-// TODO: replace this placeholder with your Better Auth client import.
-const authClient = undefined as any
-const stackAuth = authClient
-	? createBetterAuthProvider(authClient, {
-			loginPath: "/pages/auth/sign-in",
-		})
-	: undefined
-
-{{/if}}
 export default function BtstPagesLayout() {
 	const queryClient = getOrCreateQueryClient()
 {{#if hasAiChat}}
@@ -47,9 +34,6 @@ export default function BtstPagesLayout() {
 				basePath="/pages"
 				router={reactRouter()}
 				api={{{providerApiLiteral}}}
-{{#if hasBetterAuthUi}}
-				auth={stackAuth}
-{{/if}}
 {{#if pagesLayoutOverrides}}
 				overrides={
 					{
