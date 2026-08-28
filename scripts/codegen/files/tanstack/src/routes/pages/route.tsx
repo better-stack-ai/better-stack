@@ -3,18 +3,9 @@ import { createTanStackLayout, tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useCallback, useMemo } from "react";
-import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client";
-import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
-import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client";
-import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client";
-import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
-import {
-	uploadAsset,
-	type MediaPluginOverrides,
-} from "@btst/stack/plugins/media/client";
+import { uploadAsset } from "@btst/stack/plugins/media/client";
 import {
 	MediaPicker,
 	ImageInputField,
@@ -22,10 +13,10 @@ import {
 import { Button } from "../../components/ui/button";
 import { resolveUser, searchUsers } from "../../lib/mock-users";
 import { Outlet, createFileRoute } from "@tanstack/react-router";
-import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client";
 import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client";
 import { clientAuth } from "../../lib/authorization.ui";
 import { getInitialIdentity } from "../../lib/authorization.identity";
+import { getStackClient } from "../../lib/stack-client";
 
 // Get base URL function - works on both server and client
 // On server: uses process.env.BASE_URL
@@ -34,18 +25,6 @@ const getBaseURL = () =>
 	typeof window !== "undefined"
 		? import.meta.env.VITE_BASE_URL || window.location.origin
 		: process.env.BASE_URL || "http://localhost:3007";
-
-// Define the shape of all plugin overrides
-type PluginOverrides = {
-	"ui-builder": UIBuilderPluginOverrides;
-	blog: BlogPluginOverrides;
-	"ai-chat": AiChatPluginOverrides;
-	cms: CMSPluginOverrides;
-	"form-builder": FormBuilderPluginOverrides;
-	kanban: KanbanPluginOverrides;
-	comments: CommentsPluginOverrides;
-	media: MediaPluginOverrides;
-};
 
 const layout = createTanStackLayout({ getInitialIdentity });
 
@@ -61,6 +40,10 @@ function Layout() {
 	const routeContext = Route.useRouteContext();
 	const { initialIdentity } = Route.useLoaderData();
 	const baseURL = getBaseURL();
+	const stack = useMemo(
+		() => getStackClient(routeContext.queryClient),
+		[routeContext.queryClient],
+	);
 	const mediaClientConfig = useMemo(
 		() => ({
 			apiBaseURL: baseURL,
@@ -94,10 +77,9 @@ function Layout() {
 	return (
 		<QueryClientProvider client={routeContext.queryClient}>
 			<ReactQueryDevtools initialIsOpen={false} />
-			<StackProvider<PluginOverrides>
-				basePath="/pages"
+			<StackProvider
+				stack={stack}
 				router={tanstackRouter()}
-				api={{ baseURL, basePath: "/api/data" }}
 				auth={clientAuth}
 				initialIdentity={initialIdentity}
 				overrides={{

@@ -157,6 +157,14 @@ describe("scaffold plan", () => {
 		);
 		expect(stackClientFile?.content).toContain("blogClientPlugin");
 		expect(stackClientFile?.content).toContain("const baseURL = getBaseURL()");
+		expect(stackClientFile?.content).toContain(
+			"...(options?.headers ? { headers: options.headers } : {})",
+		);
+		expect(stackClientFile?.content).toContain(
+			'site: { baseURL, basePath: "/pages" }',
+		);
+		expect(stackClientFile?.content).toContain("blog: blogClientPlugin(),");
+		expect(stackClientFile?.content).not.toContain("apiBaseURL:");
 		const pagesLayoutFile = plan.files.find(
 			(f) => f.path === "app/pages/layout.tsx",
 		);
@@ -167,9 +175,7 @@ describe("scaffold plan", () => {
 			'import { nextRouter } from "@btst/stack/next"',
 		);
 		expect(pagesLayoutFile?.content).toContain("router={nextRouter()}");
-		expect(pagesLayoutFile?.content).toContain(
-			'api={{ baseURL, basePath: "/api/data" }}',
-		);
+		expect(pagesLayoutFile?.content).toContain("stack={stack}");
 		expect(pagesLayoutFile?.content).not.toContain("navigate: (path");
 		expect(pagesLayoutFile?.content).not.toContain("Link: (");
 		expect(pagesLayoutFile?.content).not.toContain("apiBaseURL:");
@@ -221,9 +227,7 @@ describe("scaffold plan", () => {
 			);
 			expect(pagesLayoutFile?.content).toBeDefined();
 			expect(pagesLayoutFile?.content).toContain("StackProvider");
-			expect(pagesLayoutFile?.content).toContain(
-				'api={{ baseURL, basePath: "/api/data" }}',
-			);
+			expect(pagesLayoutFile?.content).toContain("stack={stack}");
 			const routerFactory =
 				framework === "nextjs"
 					? "nextRouter()"
@@ -235,7 +239,7 @@ describe("scaffold plan", () => {
 	);
 
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
-		"emits baseURL declarations when plugins are selected (%s)",
+		"emits canonical shared runtime when plugins are selected (%s)",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
 				framework,
@@ -256,6 +260,12 @@ describe("scaffold plan", () => {
 			expect(stackClientFile?.content).toContain(
 				'if (typeof window !== "undefined")',
 			);
+			expect(stackClientFile?.content).toContain(
+				'site: { baseURL, basePath: "/pages" }',
+			);
+			expect(stackClientFile?.content).toContain("queryClient,");
+			expect(stackClientFile?.content).toContain("blog: blogClientPlugin(),");
+			expect(stackClientFile?.content).not.toContain("apiBaseURL:");
 		},
 	);
 
@@ -537,9 +547,7 @@ describe("scaffold plan", () => {
 			'import { reactRouter } from "@btst/stack/react-router"',
 		);
 		expect(layoutFile?.content).toContain("router={reactRouter()}");
-		expect(layoutFile?.content).toContain(
-			'api={{ baseURL, basePath: "/api/data" }}',
-		);
+		expect(layoutFile?.content).toContain("stack={stack}");
 		expect(layoutFile?.content).not.toContain("navigate: (path");
 		expect(layoutFile?.content).not.toContain("RouterLink");
 		expect(layoutFile?.content).not.toContain("router.push");
@@ -582,9 +590,7 @@ describe("scaffold plan", () => {
 			'import { tanstackRouter } from "@btst/stack/tanstack"',
 		);
 		expect(layoutFile?.content).toContain("router={tanstackRouter()}");
-		expect(layoutFile?.content).toContain(
-			'api={{ baseURL, basePath: "/api/data" }}',
-		);
+		expect(layoutFile?.content).toContain("stack={stack}");
 		expect(layoutFile?.content).not.toContain("navigate: (path");
 		expect(layoutFile?.content).not.toContain("RouterLink");
 		expect(layoutFile?.content).toContain('createFileRoute("/pages")');
@@ -660,8 +666,8 @@ describe("scaffold plan", () => {
 			expect(providerFiles.length).toBeGreaterThan(0);
 			for (const file of providerFiles) {
 				expect(file.content, file.path).toContain(`router={${routerFactory}}`);
-				expect(file.content, file.path).toContain(
-					'api={{ baseURL, basePath: "/api/data" }}',
+				expect(file.content, file.path).toMatch(
+					/stack=\{stack\}|api=\{\{ baseURL, basePath: "\/api\/data" \}\}/,
 				);
 				expect(file.content, file.path).not.toContain("apiBaseURL: baseURL");
 				expect(file.content, file.path).not.toContain(

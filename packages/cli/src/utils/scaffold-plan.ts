@@ -159,6 +159,9 @@ function buildPluginTemplateContext(
 			.join("\n"),
 		clientEntries: clientMetas
 			.map((m) => {
+				if (m.key === "blog") {
+					return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
+				}
 				if (m.key === "route-docs") {
 					return `\t\t\t${m.configKey}: ${m.clientSymbol}({\n\t\t\t\tqueryClient,\n\t\t\t\tsiteBasePath: "/pages",\n\t\t\t}),`;
 				}

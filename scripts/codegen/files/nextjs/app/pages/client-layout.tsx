@@ -5,20 +5,11 @@ import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { getOrCreateQueryClient } from "@/lib/query-client";
-import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client";
-import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
+import { getStackClient } from "@/lib/stack-client";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
-import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client";
-import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client";
 import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client";
-import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client";
-import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
-import {
-	uploadAsset,
-	type MediaPluginOverrides,
-} from "@btst/stack/plugins/media/client";
+import { uploadAsset } from "@btst/stack/plugins/media/client";
 import {
 	MediaPicker,
 	ImageInputField,
@@ -35,18 +26,6 @@ const getBaseURL = () =>
 		? process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
 		: process.env.BASE_URL || "http://localhost:3000";
 
-// Define the shape of all plugin overrides
-type PluginOverrides = {
-	blog: BlogPluginOverrides;
-	"ai-chat": AiChatPluginOverrides;
-	cms: CMSPluginOverrides;
-	"form-builder": FormBuilderPluginOverrides;
-	"ui-builder": UIBuilderPluginOverrides;
-	kanban: KanbanPluginOverrides;
-	comments: CommentsPluginOverrides;
-	media: MediaPluginOverrides;
-};
-
 export function BtstPagesClientLayout({
 	children,
 	initialIdentity,
@@ -57,6 +36,7 @@ export function BtstPagesClientLayout({
 	// fresh instance to avoid stale client cache overriding hydrated data
 	const [queryClient] = useState(() => getOrCreateQueryClient());
 	const baseURL = getBaseURL();
+	const stack = React.useMemo(() => getStackClient(queryClient), [queryClient]);
 	const mediaClientConfig = React.useMemo(
 		() => ({
 			apiBaseURL: baseURL,
@@ -90,10 +70,9 @@ export function BtstPagesClientLayout({
 	return (
 		<QueryClientProvider client={queryClient}>
 			<ReactQueryDevtools initialIsOpen={false} />
-			<StackProvider<PluginOverrides>
-				basePath="/pages"
+			<StackProvider
+				stack={stack}
 				router={nextRouter()}
-				api={{ baseURL, basePath: "/api/data" }}
 				auth={clientAuth}
 				initialIdentity={initialIdentity}
 				overrides={{
