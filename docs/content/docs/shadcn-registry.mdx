@@ -278,9 +278,10 @@ mediaClientPlugin({
 })
 ```
 
-Keep the top-level `StackProvider.api` / `router` services and your
-media-specific upload mode and hooks configured so the ejected component uses
-the same runtime services as the built-in page.
+Keep the top-level `createClientStack({ api, site, queryClient })` runtime,
+pass its resolved browser stack to `StackProvider.stack`, and keep the provider
+router plus media-specific upload mode and hooks configured so the ejected
+component uses the same runtime services as the built-in page.
 
 ## Available `pageComponents` keys
 

@@ -84,25 +84,57 @@ request-aware examples when SSR authorization needs headers or session state.
 
 The Blog client plugin is the first built-in migrated to the resolved runtime
 definition. Remove its shared runtime fields and configure API, site, and
-QueryClient once when creating the client stack, then pass that resolved stack
-to the provider:
+QueryClient once in a shared factory:
 
-```tsx
-const clientStack = createClientStack({
-  api: { baseURL, basePath: "/api/data", headers: requestHeaders },
+```ts title="lib/stack-client.ts"
+export const getStackClient = (
+  queryClient: QueryClient,
+  options?: { headers?: HeadersInit },
+) => createClientStack({
+  api: { baseURL, basePath: "/api/data", headers: options?.headers },
   site: { baseURL, basePath: "/pages" },
   queryClient,
   plugins: { blog: blogClientPlugin() },
 })
+```
 
-<StackProvider
-  stack={clientStack}
-  router={nextRouter()}
-  auth={clientAuth}
-  overrides={{ blog: { uploadImage } }}
->
-  {children}
-</StackProvider>
+Create a request-specific stack for server loaders and metadata:
+
+```ts title="app/pages/[[...all]]/page.tsx"
+const page = createNextPage({
+  getQueryClient: getOrCreateQueryClient,
+  getStackClient: async (queryClient) =>
+    getStackClient(queryClient, { headers: await headers() }),
+})
+```
+
+Create a separate, stable browser stack inside the Client Component that owns
+the provider. Do not pass or serialize the request stack; it contains functions
+and server-only request headers.
+
+```tsx title="app/pages/layout.tsx"
+"use client"
+
+export default function PagesLayout({ children }) {
+  const [queryClient] = useState(() => getOrCreateQueryClient())
+  const clientStack = useMemo(
+    () => getStackClient(queryClient),
+    [queryClient],
+  )
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <StackProvider
+        stack={clientStack}
+        router={nextRouter()}
+        auth={clientAuth}
+        overrides={{ blog: { uploadImage } }}
+      >
+        {children}
+      </StackProvider>
+    </QueryClientProvider>
+  )
+}
 ```
 
 For Blog, `apiBaseURL`, `apiBasePath`, site fields, `queryClient`, and request
@@ -279,7 +311,9 @@ behavior:
 ### Migration checklist
 
 - Replace API and page catch-all glue with the framework entry factories.
-- Add one framework router preset and API configuration to `StackProvider`.
+- Configure API, site, and QueryClient once on `createClientStack()`, then pass
+  its browser-resolved stack to `StackProvider.stack`.
+- Add one framework router preset to `StackProvider`.
 - Add `StackProvider.auth` when routes or controls require identity or permissions.
 - Delete shared router/API fields and `onBefore*PageRendered` callbacks from plugin overrides.
 - Remove API, header, and identity props from Comments components; keep

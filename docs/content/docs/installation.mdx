@@ -435,7 +435,8 @@ In order to use BTST, your application must meet the following requirements:
     </Tabs>
 
     Keep the API path in this route, `stack({ basePath })`, and
-    `StackProvider.api.basePath` identical.
+    `createClientStack({ api: { basePath } })` identical. `StackProvider`
+    receives that browser-safe projection through its `stack` prop.
   </Step>
 
 
@@ -910,7 +911,8 @@ In order to use BTST, your application must meet the following requirements:
     - ✅ Database adapter that connects plugins to your database
     - ✅ Client-side router with SSR support
     - ✅ React Query integration for data fetching
-    - ✅ Framework router, API, and optional auth services configured once
+    - ✅ API, site, and QueryClient configured once on the resolved client stack
+    - ✅ Framework router and optional auth services configured once on the provider
 
     **Next steps:**
 

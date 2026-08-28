@@ -72,8 +72,10 @@ import { createClientStack } from "@btst/stack/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { QueryClient } from "@tanstack/react-query"
 
-const getBaseURL = () => 
-   (process.env.BASE_URL || "http://localhost:3000")
+const getBaseURL = () =>
+  typeof window !== "undefined"
+    ? window.location.origin
+    : process.env.BASE_URL || "http://localhost:3000"
 
 export const getStackClient = (
   queryClient: QueryClient,
@@ -129,34 +131,48 @@ This includes all necessary styles for the blog components, markdown rendering, 
 Pass the resolved client stack to `StackProvider`, add the framework router,
 and keep only Blog-specific values in `overrides`:
 
+Create the provider stack inside the browser layout without request headers.
+SSR page factories create a separate request stack with their request
+QueryClient and headers; never serialize that function-bearing server object
+through a Client Component prop.
+
 <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
   <Tab value="next-js">
     ```tsx title="app/pages/[[...all]]/layout.tsx"
+    "use client"
+
+    import { useMemo, useState } from "react"
+    import { QueryClientProvider } from "@tanstack/react-query"
     import { StackProvider } from "@btst/stack/context"
     import { nextRouter } from "@btst/stack/next"
     import { getStackClient } from "@/lib/stack-client"
     import { getOrCreateQueryClient } from "@/lib/query-client"
 
     export default function Layout({ children }) {
-      const queryClient = getOrCreateQueryClient()
-      const clientStack = getStackClient(queryClient)
+      const [queryClient] = useState(() => getOrCreateQueryClient())
+      const clientStack = useMemo(
+        () => getStackClient(queryClient),
+        [queryClient],
+      )
       
       return (
-        <StackProvider
-          stack={clientStack}
-          router={nextRouter()}
-          overrides={{
-            blog: {
-              uploadImage: async (file) => {
-                // Implement your image upload logic
-                // Return the URL of the uploaded image
-                return "https://example.com/uploads/image.jpg"
-              },
-            }
-          }}
-        >
-          {children}
-        </StackProvider>
+        <QueryClientProvider client={queryClient}>
+          <StackProvider
+            stack={clientStack}
+            router={nextRouter()}
+            overrides={{
+              blog: {
+                uploadImage: async (file) => {
+                  // Implement your image upload logic
+                  // Return the URL of the uploaded image
+                  return "https://example.com/uploads/image.jpg"
+                },
+              }
+            }}
+          >
+            {children}
+          </StackProvider>
+        </QueryClientProvider>
       )
     }
     ```
@@ -164,31 +180,38 @@ and keep only Blog-specific values in `overrides`:
 
   <Tab value="react-router">
     ```tsx title="app/routes/pages/_layout.tsx"
+    import { useMemo, useState } from "react"
     import { Outlet } from "react-router"
+    import { QueryClientProvider } from "@tanstack/react-query"
     import { StackProvider } from "@btst/stack/context"
     import { reactRouter } from "@btst/stack/react-router"
     import { getStackClient } from "~/lib/stack-client"
     import { getOrCreateQueryClient } from "~/lib/query-client"
 
     export default function Layout() {
-      const queryClient = getOrCreateQueryClient()
-      const clientStack = getStackClient(queryClient)
+      const [queryClient] = useState(() => getOrCreateQueryClient())
+      const clientStack = useMemo(
+        () => getStackClient(queryClient),
+        [queryClient],
+      )
       
       return (
-        <StackProvider
-          stack={clientStack}
-          router={reactRouter()}
-          overrides={{
-            blog: {
-              uploadImage: async (file) => {
-                // Implement your image upload logic
-                return "https://example.com/uploads/image.jpg"
-              },
-            }
-          }}
-        >
-          <Outlet />
-        </StackProvider>
+        <QueryClientProvider client={queryClient}>
+          <StackProvider
+            stack={clientStack}
+            router={reactRouter()}
+            overrides={{
+              blog: {
+                uploadImage: async (file) => {
+                  // Implement your image upload logic
+                  return "https://example.com/uploads/image.jpg"
+                },
+              }
+            }}
+          >
+            <Outlet />
+          </StackProvider>
+        </QueryClientProvider>
       )
     }
     ```
@@ -196,6 +219,8 @@ and keep only Blog-specific values in `overrides`:
 
   <Tab value="tanstack">
     ```tsx title="src/routes/pages/route.tsx"
+    import { useMemo } from "react"
+    import { QueryClientProvider } from "@tanstack/react-query"
     import { StackProvider } from "@btst/stack/context"
     import { tanstackRouter } from "@btst/stack/tanstack"
     import { getStackClient } from "@/lib/stack-client"
@@ -203,23 +228,28 @@ and keep only Blog-specific values in `overrides`:
 
     function Layout() {
       const { queryClient } = Route.useRouteContext()
-      const clientStack = getStackClient(queryClient)
+      const clientStack = useMemo(
+        () => getStackClient(queryClient),
+        [queryClient],
+      )
 
       return (
-        <StackProvider
-          stack={clientStack}
-          router={tanstackRouter()}
-          overrides={{
-            blog: {
-              uploadImage: async (file) => {
-                // Implement your image upload logic
-                return "https://example.com/uploads/image.jpg"
-              },
-            }
-          }}
-        >
-          <Outlet />
-        </StackProvider>
+        <QueryClientProvider client={queryClient}>
+          <StackProvider
+            stack={clientStack}
+            router={tanstackRouter()}
+            overrides={{
+              blog: {
+                uploadImage: async (file) => {
+                  // Implement your image upload logic
+                  return "https://example.com/uploads/image.jpg"
+                },
+              }
+            }}
+          >
+            <Outlet />
+          </StackProvider>
+        </QueryClientProvider>
       )
     }
     ```

@@ -219,8 +219,10 @@ export const getStackClient = (
 | `site` | Yes | Site base URL and pages path |
 | `queryClient` | Yes | The QueryClient for this request |
 
-Plugin factories receive only plugin-specific options such as Blog `seo`,
-`hooks`, and `pageComponents`.
+Blog and new v3 client definitions receive only plugin-specific options such
+as `seo`, `hooks`, and `pageComponents`. Unmigrated first-party plugins may
+temporarily retain shared runtime fields until their migration tickets land;
+do not use that compatibility shape for new definitions.
 
 ---
 
