@@ -175,7 +175,9 @@ function resolveBlogClientConfig(
 	runtime: ResolvedClientPluginRuntime<typeof BLOG_PLUGIN_ID>,
 ): ResolvedBlogClientConfig {
 	return {
-		...config,
+		seo: config.seo,
+		hooks: config.hooks,
+		pageComponents: config.pageComponents,
 		apiBaseURL: runtime.api.baseURL,
 		apiBasePath: runtime.api.basePath,
 		siteBaseURL: runtime.site.baseURL,
@@ -270,9 +272,11 @@ function createPostsLoader(
 				}
 
 				// Check if there was an error after afterLoadPosts hook
-				const queryState = queryClient.getQueryState(listQuery.queryKey);
-				if (queryState?.error) {
-					await reportError(queryState.error);
+				const listState = queryClient.getQueryState(listQuery.queryKey);
+				const tagsState = queryClient.getQueryState(tagsQuery.queryKey);
+				const queryError = listState?.error ?? tagsState?.error;
+				if (queryError) {
+					await reportError(queryError);
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR

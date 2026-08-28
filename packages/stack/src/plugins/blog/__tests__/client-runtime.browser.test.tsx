@@ -188,4 +188,70 @@ describe("Blog browser runtime", () => {
 			expect(request.credentials).toBe("include");
 		}
 	});
+
+	it("uses a same-origin path-only Blog endpoint for browser queries and mutations", async () => {
+		const requests: Array<{ url: string; method: string }> = [];
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+			const request = {
+				url: input instanceof Request ? input.url : String(input),
+				method:
+					input instanceof Request ? input.method : (init?.method ?? "GET"),
+			};
+			requests.push(request);
+			return request.method === "GET"
+				? jsonResponse({ items: [post], total: 1, limit: 1, offset: 0 })
+				: jsonResponse(post);
+		});
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient: new QueryClient(),
+			plugins: { blog: blogClientPlugin() },
+			endpoints: { blog: { api: { basePath: "/api/blog" } } },
+		});
+
+		let query: ReturnType<typeof usePost> | undefined;
+		let create: ReturnType<typeof useCreatePost> | undefined;
+		function Probe() {
+			query = usePost("runtime-post");
+			create = useCreatePost();
+			return null;
+		}
+
+		await act(async () => {
+			root.render(
+				<StackProvider stack={stack}>
+					<Probe />
+				</StackProvider>,
+			);
+		});
+		await waitFor(() => query?.isLoading === false);
+		await act(async () => {
+			await create?.mutateAsync({
+				title: post.title,
+				content: post.content,
+				excerpt: post.excerpt,
+				slug: post.slug,
+				published: true,
+				tags: [],
+			});
+		});
+
+		expect(query?.post).toEqual(post);
+		expect(requests).toHaveLength(2);
+		expect(requests).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					url: expect.stringMatching(
+						/^https:\/\/app\.example\.com\/api\/blog\/posts\?slug=runtime-post&/,
+					),
+					method: "GET",
+				}),
+				expect.objectContaining({
+					url: "https://app.example.com/api/blog/posts",
+					method: "POST",
+				}),
+			]),
+		);
+	});
 });

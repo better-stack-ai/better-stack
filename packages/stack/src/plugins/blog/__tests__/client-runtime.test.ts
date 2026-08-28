@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "../../../client";
-import { blogClientPlugin } from "../client";
+import { blogClientPlugin, type BlogClientConfig } from "../client";
 
 const post = {
 	id: "post-1",
@@ -189,6 +189,68 @@ describe("Blog resolved client runtime", () => {
 			expect(request.headers.get("x-request")).toBeNull();
 			expect(request.headers.get("x-public-client")).toBe("public-value");
 		}
+	});
+
+	it("does not revive removed config headers across a Blog origin override", async () => {
+		const requests: Headers[] = [];
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+			requests.push(requestDetails(input, init).headers);
+			return jsonResponse(blogResponse(input));
+		});
+		const legacyConfig = {
+			headers: {
+				authorization: "Bearer hidden-plugin-token",
+				cookie: "session=hidden-plugin",
+			},
+		} as unknown as BlogClientConfig;
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient: new QueryClient(),
+			plugins: { blog: blogClientPlugin(legacyConfig) },
+			endpoints: {
+				blog: {
+					api: {
+						baseURL: "https://content.example.net",
+						basePath: "/btst/blog",
+					},
+				},
+			},
+		});
+
+		await stack.router.getRoute("/blog")?.loader?.();
+
+		expect(requests.length).toBeGreaterThan(0);
+		for (const headers of requests) {
+			expect(headers.get("authorization")).toBeNull();
+			expect(headers.get("cookie")).toBeNull();
+		}
+	});
+
+	it("reports a tags-only posts loader failure exactly once", async () => {
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+			const url = new URL(input instanceof Request ? input.url : String(input));
+			return url.pathname.endsWith("/tags")
+				? jsonResponse({ message: "tags unavailable" }, 500)
+				: jsonResponse({ items: [post], total: 1, limit: 10, offset: 0 });
+		});
+		const onErrorLoad = vi.fn();
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient: new QueryClient(),
+			plugins: { blog: blogClientPlugin({ hooks: { onErrorLoad } }) },
+		});
+
+		await expect(
+			stack.router.getRoute("/blog")?.loader?.(),
+		).resolves.toBeUndefined();
+		expect(onErrorLoad).toHaveBeenCalledTimes(1);
+		expect(onErrorLoad.mock.calls[0]?.[0]).toBeInstanceOf(Error);
+		expect(onErrorLoad.mock.calls[0]?.[1]).toMatchObject({
+			path: "/blog",
+			isSSR: true,
+		});
 	});
 
 	it.each([

@@ -132,7 +132,7 @@ const MyPage = lazy(() =>
 
 - Only execute inside `if (typeof window === "undefined")` guard
 - **Never throw** — store errors in React Query, let ErrorBoundary catch during render
-- Call `beforeLoad` / `afterLoad` / `onLoadError` hooks
+- Call `beforeLoad` / `afterLoad` / `onErrorLoad` hooks
 - Use `queryClient.prefetchQuery()` to seed data
 - Import `isConnectionError` from `@btst/stack/plugins/client` and warn on build-time failure
 
