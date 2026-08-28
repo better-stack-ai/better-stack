@@ -1,5 +1,16 @@
 "use client";
-import { createContext, useContext, type ReactNode } from "react";
+import {
+	createContext,
+	useContext,
+	type ReactElement,
+	type ReactNode,
+} from "react";
+import type {
+	ClientProviderPluginRuntime,
+	InferredPluginOverrides,
+	RegisteredClientPlugins,
+	ResolvedClientStack,
+} from "../types";
 import type { StackClientAuth, StackIdentity } from "../shared/auth-types";
 import type { StackI18nProvider } from "../shared/i18n-types";
 import type { StackNotifyProvider } from "../shared/notify-types";
@@ -30,6 +41,8 @@ interface StackContextValue<TPluginOverrides extends Record<string, any>> {
 	 * Top-level API config applied to all plugins.
 	 */
 	api?: StackApiConfig;
+	/** Effective browser-safe runtime for each registered client plugin. */
+	plugins?: Record<string, ClientProviderPluginRuntime>;
 	/** Top-level auth provider used by identity-aware components. */
 	auth?: StackClientAuth;
 }
@@ -44,6 +57,46 @@ const StackContext = createContext<StackContextValue<any> | null>(null);
 export type StackProviderOverrides<
 	TPluginOverrides extends Record<string, any>,
 > = Partial<TPluginOverrides>;
+
+type StackProviderServices = {
+	children?: ReactNode;
+	router?: StackRouterConfig;
+	/**
+	 * Browser authorization created by `createClientAuth()`. When omitted,
+	 * identity is `null` and presentation-only descriptor checks remain
+	 * permissive; backend authorization is independent and authoritative.
+	 */
+	auth?: StackClientAuth;
+	/**
+	 * Request identity resolved on the server. `undefined` means no snapshot was
+	 * supplied; `null` is an explicitly hydrated anonymous identity.
+	 */
+	initialIdentity?: StackIdentity | null;
+	notify?: StackNotifyProvider;
+	i18n?: StackI18nProvider;
+};
+
+type CanonicalStackProviderProps<TStack extends ResolvedClientStack<any, any>> =
+	StackProviderServices & {
+		/** Resolved browser client stack; supplies API/site/plugin runtime once. */
+		stack: TStack;
+		overrides?: InferredPluginOverrides<
+			NoInfer<RegisteredClientPlugins<TStack>>
+		>;
+		/** Runtime paths come from `stack`. */
+		basePath?: never;
+		/** Runtime API configuration comes from `stack`. */
+		api?: never;
+	};
+
+type LegacyStackProviderProps<TPluginOverrides extends Record<string, any>> =
+	StackProviderServices & {
+		/** @deprecated Pass the resolved `stack` instead. Removed by #225. */
+		stack?: never;
+		overrides?: StackProviderOverrides<TPluginOverrides>;
+		basePath: string;
+		api?: StackApiConfig;
+	};
 
 /** Removes keys whose value is `undefined` so they don't clobber lower layers in spreads. */
 function stripUndefined<T extends Record<string, any>>(obj: T): Partial<T> {
@@ -97,18 +150,20 @@ function RouterBridge({
  * Provider component for BTST context
  * Provides type-safe access to plugin-specific overrides
  *
- * Only requires override values, not plugin objects - keeps bundle size minimal!
- *
  * @example
  * ```tsx
- * // Define the type shape (no import of plugin values needed!)
- * type MyPluginOverrides = {
- *   messages: MessagesPluginOverrides;
- * };
+ * const clientStack = createClientStack({
+ *   api,
+ *   site,
+ *   queryClient,
+ *   plugins: {
+ *     messages: messagesClientPlugin(),
+ *   },
+ * });
  *
- * <StackProvider<MyPluginOverrides>
+ * <StackProvider
+ *   stack={clientStack}
  *   router={frameworkRouter}
- *   api={{ baseURL, basePath: "/api/data" }}
  *   overrides={{
  *     messages: {
  *       MarkdownRenderer: (props) => <ReactMarkdown {...props} />,
@@ -119,20 +174,18 @@ function RouterBridge({
  * </StackProvider>
  * ```
  *
- * Framework router and API wiring live at the top level. Per-plugin overrides
- * carry only genuinely plugin-specific values:
+ * Runtime locations and plugin override types come from the resolved stack.
+ * Framework services and optional identity hydration remain provider concerns.
  *
  * @example
  * ```tsx
  * import { nextRouter } from "@btst/stack/next";
  *
- * <StackProvider<MyPluginOverrides>
- *   basePath="/pages"
+ * <StackProvider
+ *   stack={clientStack}
  *   router={nextRouter()}
- *   api={{ baseURL, basePath: "/api/data" }}
- *   overrides={{
- *     blog: { uploadImage },
- *   }}
+ *   auth={clientAuth}
+ *   initialIdentity={initialIdentity}
  * >
  *   {children}
  * </StackProvider>
@@ -140,49 +193,37 @@ function RouterBridge({
  */
 export function StackProvider<
 	TPluginOverrides extends Record<string, any> = Record<string, any>,
->({
+>(props: LegacyStackProviderProps<TPluginOverrides>): ReactElement;
+export function StackProvider<
+	const TStack extends ResolvedClientStack<any, any>,
+>(props: CanonicalStackProviderProps<TStack>): ReactElement;
+export function StackProvider({
 	children,
 	overrides,
 	basePath,
+	stack,
 	router,
 	api,
 	auth,
 	initialIdentity,
 	notify,
 	i18n,
-}: {
-	children?: ReactNode;
-	overrides?: StackProviderOverrides<TPluginOverrides>;
-	basePath: string;
-	router?: StackRouterConfig;
-	api?: StackApiConfig;
-	/**
-	 * Browser authorization created by `createClientAuth()`. When omitted,
-	 * identity is `null` and presentation-only descriptor checks remain
-	 * permissive; backend authorization is independent and authoritative.
-	 */
-	auth?: StackClientAuth;
-	/**
-	 * Request identity resolved on the server. `undefined` means no snapshot was
-	 * supplied; `null` is an explicitly hydrated anonymous identity.
-	 */
-	initialIdentity?: StackIdentity | null;
-	/**
-	 * Optional notification provider. When omitted, sonner toasts are used via
-	 * `useNotify()`.
-	 */
-	notify?: StackNotifyProvider;
-	/**
-	 * Optional i18n provider. When omitted, `useTranslate()` returns English
-	 * defaults with `{{param}}` interpolation.
-	 */
-	i18n?: StackI18nProvider;
-}) {
+}:
+	| LegacyStackProviderProps<Record<string, any>>
+	| CanonicalStackProviderProps<ResolvedClientStack<any, any>>): ReactElement {
+	const projection = stack?.provider;
+	const resolvedBasePath = projection?.site.basePath ?? basePath;
+	if (resolvedBasePath === undefined) {
+		throw new Error(
+			"StackProvider requires a resolved client stack or a legacy basePath.",
+		);
+	}
 	const staticRouter = resolveStaticRouter(router);
 	const value: Omit<StackContextValue<any>, "router"> = {
 		overrides: overrides ?? {},
-		basePath,
-		api,
+		basePath: resolvedBasePath,
+		api: projection?.api ?? api,
+		plugins: projection?.plugins,
 		auth,
 	};
 

@@ -372,7 +372,7 @@ export function generateRouteDocsSchema(
 		if (documentedRoutes.length > 0) {
 			documentedPlugins.push({
 				key: pluginKey,
-				name: plugin.name,
+				name: plugin.name ?? plugin.id ?? pluginKey,
 				routes: documentedRoutes,
 				sitemapEntries: sitemapByPlugin[pluginKey] || [],
 			});

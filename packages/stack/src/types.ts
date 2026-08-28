@@ -92,7 +92,9 @@ export interface ResolvedClientApi extends ClientLocation {
 }
 
 /** Shared runtime supplied when a client plugin definition is expanded. */
-export interface ResolvedClientPluginRuntime {
+export interface ResolvedClientPluginRuntime<TId extends string = string> {
+	/** Stable programmatic identifier bound by client-stack registration. */
+	id: TId;
 	/** Effective API endpoint and request-specific transport values. */
 	api: ResolvedClientApi;
 	/** Effective public site location for routes, metadata, and sitemap output. */
@@ -110,7 +112,9 @@ export interface ClientProviderApi extends ClientLocation {
 }
 
 /** Provider-safe endpoint view for one registered plugin. */
-export interface ClientProviderPluginRuntime {
+export interface ClientProviderPluginRuntime<TId extends string = string> {
+	/** Stable programmatic identifier bound by client-stack registration. */
+	id: TId;
 	/** Provider-safe effective API endpoint for this plugin. */
 	api: ClientProviderApi;
 	/** Effective site location for this plugin. */
@@ -169,8 +173,12 @@ export interface BackendPlugin<
 	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
 	TApi extends Record<string, (...args: any[]) => any> = never,
 	TOperations extends OperationRecord = never,
+	TId extends string = string,
 > {
-	name: string;
+	/** Canonical stable programmatic identifier. */
+	readonly id?: TId;
+	/** @deprecated Use `id`. Retained only while first-party plugins migrate. */
+	name?: string;
 
 	/**
 	 * Create API endpoints for this plugin
@@ -229,8 +237,12 @@ export interface BackendPlugin<
 export interface ClientPlugin<
 	TOverrides = Record<string, never>,
 	TRoutes extends Record<string, Route> = Record<string, Route>,
+	TId extends string = string,
 > {
-	name: string;
+	/** Canonical stable programmatic identifier. */
+	readonly id?: TId;
+	/** @deprecated Use `id`. Retained only while first-party plugins migrate. */
+	name?: string;
 
 	/**
 	 * Define routes (pages) for this plugin
@@ -254,22 +266,26 @@ export interface ClientPlugin<
 export interface ClientPluginDefinition<
 	TOverrides = Record<string, never>,
 	TRoutes extends Record<string, Route> = Record<string, Route>,
+	TId extends string = string,
 > {
-	/** Temporary intrinsic plugin name retained during the stable-ID migration. */
-	name: string;
+	/** Canonical stable programmatic identifier. */
+	readonly id?: TId;
+	/** @deprecated Use `id`. Retained only while first-party plugins migrate. */
+	name?: string;
 	/** Expand plugin-specific options against one resolved stack runtime. */
 	resolve: (
-		runtime: ResolvedClientPluginRuntime,
-	) => Omit<ClientPlugin<TOverrides, TRoutes>, "name">;
+		runtime: ResolvedClientPluginRuntime<TId>,
+	) => Omit<ClientPlugin<TOverrides, TRoutes, TId>, "id" | "name">;
 }
 
 /** Canonical definitions plus the temporary already-resolved plugin seam. */
 export type ClientPluginRegistration<
 	TOverrides = Record<string, never>,
 	TRoutes extends Record<string, Route> = Record<string, Route>,
+	TId extends string = string,
 > =
-	| ClientPlugin<TOverrides, TRoutes>
-	| ClientPluginDefinition<TOverrides, TRoutes>;
+	| ClientPlugin<TOverrides, TRoutes, TId>
+	| ClientPluginDefinition<TOverrides, TRoutes, TId>;
 
 /**
  * Utility type that maps each plugin key to the return type of its `api` factory.
@@ -379,7 +395,7 @@ export interface BackendStackConfig<
 > {
 	basePath: string;
 	dbSchema?: DatabaseDefinition;
-	plugins: TPlugins;
+	plugins: TPlugins & MatchingPluginRegistrations<TPlugins>;
 	adapter: (db: DatabaseDefinition) => Adapter;
 	/**
 	 * Server authorization created by `createServerAuth()`. When set,
@@ -403,8 +419,28 @@ export type BackendLibConfig<
 		| undefined,
 > = BackendStackConfig<TPlugins, TAuth>;
 
-type AnyClientPluginRegistration = ClientPluginRegistration<any, any>;
+type AnyClientPluginRegistration = ClientPluginRegistration<any, any, any>;
 type LegacyClientPluginMap = Record<string, ClientPlugin<any, any>>;
+
+/** @internal Extract a required canonical plugin ID, excluding legacy optional IDs. */
+type _DeclaredPluginId<TPlugin> = TPlugin extends {
+	readonly id: infer TId extends string;
+}
+	? TId
+	: never;
+
+/** Reject a registration key that differs from a plugin's declared canonical ID. */
+export type MatchingPluginRegistrations<
+	TPlugins extends Record<string, unknown>,
+> = {
+	[K in keyof TPlugins]: [_DeclaredPluginId<TPlugins[K]>] extends [never]
+		? TPlugins[K]
+		: K extends _DeclaredPluginId<TPlugins[K]>
+			? _DeclaredPluginId<TPlugins[K]> extends K
+				? TPlugins[K]
+				: never
+			: never;
+};
 
 /** Stack-owned endpoint replacements, limited to registered plugin keys. */
 export type ClientPluginEndpointOverrides<
@@ -425,7 +461,7 @@ export interface ResolvedClientStackConfig<
 	/** The one React Query client used by loaders, hydration, and browser hooks. */
 	queryClient: QueryClient;
 	/** Runtime-independent and temporary already-resolved plugin registrations. */
-	plugins: TPlugins;
+	plugins: TPlugins & MatchingPluginRegistrations<TPlugins>;
 	/** Explicit endpoint replacements keyed by a registered plugin name. */
 	endpoints?: ClientPluginEndpointOverrides<TPlugins>;
 	/** Shared origins live under `api` or `site`, never an ambiguous top level. */
@@ -486,12 +522,43 @@ export type ClientLibConfig<
 export type InferPluginOverrides<
 	TPlugins extends Record<string, AnyClientPluginRegistration>,
 > = {
-	[K in keyof TPlugins]: TPlugins[K] extends ClientPluginRegistration<
+	[K in keyof TPlugins]: TPlugins[K] extends ClientPlugin<
 		infer TOverrides,
+		any,
 		any
 	>
 		? TOverrides
-		: never;
+		: TPlugins[K] extends ClientPluginDefinition<infer TOverrides, any, any>
+			? TOverrides
+			: never;
+};
+
+type _HasNoConfigurableOverrides<TOverrides> = [TOverrides] extends [never]
+	? true
+	: [keyof TOverrides] extends [never]
+		? true
+		: TOverrides extends Record<string, never>
+			? true
+			: false;
+
+/**
+ * Provider overrides inferred from registered client definitions. Plugins with
+ * no configurable fields are omitted rather than requiring empty blocks.
+ */
+export type InferredPluginOverrides<
+	TPlugins extends Record<string, AnyClientPluginRegistration>,
+> = keyof _ConfigurablePluginOverrides<TPlugins> extends never
+	? Record<string, never>
+	: _ConfigurablePluginOverrides<TPlugins>;
+
+type _ConfigurablePluginOverrides<
+	TPlugins extends Record<string, AnyClientPluginRegistration>,
+> = {
+	[K in keyof TPlugins as _HasNoConfigurableOverrides<
+		InferPluginOverrides<TPlugins>[K]
+	> extends true
+		? never
+		: K]?: InferPluginOverrides<TPlugins>[K];
 };
 
 /**
@@ -623,6 +690,8 @@ export interface ClientStack<
 	generateSitemap: () => Promise<Sitemap>;
 }
 
+declare const resolvedClientStackPlugins: unique symbol;
+
 /** Browser-safe runtime passed to `StackProvider` by the next composition slice. */
 export interface ClientProviderProjection<
 	TPlugins extends Record<string, AnyClientPluginRegistration> = Record<
@@ -637,7 +706,13 @@ export interface ClientProviderProjection<
 	/** The one React Query client supplied to the client stack. */
 	queryClient: QueryClient;
 	/** Effective provider-safe endpoint values for every registered plugin. */
-	plugins: { [K in keyof TPlugins]: ClientProviderPluginRuntime };
+	plugins: {
+		[K in keyof TPlugins]: ClientProviderPluginRuntime<
+			[_DeclaredPluginId<TPlugins[K]>] extends [never]
+				? K & string
+				: _DeclaredPluginId<TPlugins[K]>
+		>;
+	};
 }
 
 /** Canonical client stack with a browser-safe provider projection. */
@@ -648,9 +723,15 @@ export interface ResolvedClientStack<
 		AnyClientPluginRegistration
 	>,
 > extends ClientStack<TRoutes> {
+	/** @internal Type-only registration map used for provider inference. */
+	readonly [resolvedClientStackPlugins]?: TPlugins;
 	/** Browser-safe projection for provider and browser resource consumers. */
 	provider: ClientProviderProjection<TPlugins>;
 }
+
+/** Registered plugin definitions carried by a resolved client stack type. */
+export type RegisteredClientPlugins<TStack> =
+	TStack extends ResolvedClientStack<any, infer TPlugins> ? TPlugins : never;
 
 /**
  * @deprecated Use `ClientStack`. This alias is removed by #225.

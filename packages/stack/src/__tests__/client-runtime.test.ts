@@ -224,6 +224,7 @@ describe("resolved client runtime", () => {
 			basePath: "/pages",
 		});
 		expect(stack.provider.plugins.probe).toEqual({
+			id: "probe",
 			api: {
 				baseURL: "https://app.example.com",
 				basePath: "/api/data",
@@ -337,6 +338,7 @@ describe("resolved client runtime", () => {
 			basePath: "/features",
 		});
 		expect(stack.provider.plugins.probe).toEqual({
+			id: "probe",
 			api: {
 				baseURL: "https://plugins.example.net",
 				basePath: "/btst/probe",
@@ -721,6 +723,7 @@ describe("resolved client runtime", () => {
 			endpoints: { probe: {} },
 		});
 		expect(inherited.provider.plugins.probe).toEqual({
+			id: "probe",
 			api: baseConfig.api,
 			site: baseConfig.site,
 		});

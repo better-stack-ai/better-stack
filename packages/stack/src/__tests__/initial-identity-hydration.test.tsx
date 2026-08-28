@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { QueryClient } from "@tanstack/react-query";
 import { hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +11,7 @@ import {
 	permission,
 } from "../authorization";
 import { createClientAuth } from "../authorization/client";
+import { createClientStack } from "../client";
 import { StackProvider } from "../context";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -28,6 +30,13 @@ const authorization = defineAuthorization({
 	],
 });
 
+const clientStack = createClientStack({
+	api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+	site: { baseURL: "https://app.example.com", basePath: "/pages" },
+	queryClient: new QueryClient(),
+	plugins: {},
+});
+
 let container: HTMLDivElement;
 let root: Root | undefined;
 
@@ -44,6 +53,34 @@ afterEach(async () => {
 });
 
 describe("initial identity SSR hydration", () => {
+	it("keeps an unsupplied snapshot pending while the browser resolver runs", async () => {
+		const getIdentity = vi.fn(() => new Promise<never>(() => {}));
+		const clientAuth = createClientAuth({ authorization, getIdentity });
+		const ui = (
+			<StackProvider stack={clientStack} auth={clientAuth}>
+				<clientAuth.CanAccess
+					permission={permissions.delete({ id: "document-1" })}
+					loading={<span>Checking</span>}
+					fallback={<span>No access</span>}
+				>
+					<button type="button">Delete</button>
+				</clientAuth.CanAccess>
+			</StackProvider>
+		);
+
+		const serverHtml = renderToString(ui);
+		expect(serverHtml).toContain("Checking");
+		expect(getIdentity).not.toHaveBeenCalled();
+
+		container.innerHTML = serverHtml;
+		await act(async () => {
+			root = hydrateRoot(container, ui);
+		});
+
+		expect(container.textContent).toBe("Checking");
+		expect(getIdentity).toHaveBeenCalledOnce();
+	});
+
 	it("keeps authenticated gated UI stable and skips a duplicate browser identity request", async () => {
 		const getIdentity = vi.fn(() => ({
 			id: "browser-user",
@@ -52,7 +89,7 @@ describe("initial identity SSR hydration", () => {
 		const clientAuth = createClientAuth({ authorization, getIdentity });
 		const ui = (
 			<StackProvider
-				basePath="/pages"
+				stack={clientStack}
 				auth={clientAuth}
 				initialIdentity={{ id: "server-user", role: "admin" }}
 			>
@@ -91,7 +128,11 @@ describe("initial identity SSR hydration", () => {
 		}));
 		const clientAuth = createClientAuth({ authorization, getIdentity });
 		const ui = (
-			<StackProvider basePath="/pages" auth={clientAuth} initialIdentity={null}>
+			<StackProvider
+				stack={clientStack}
+				auth={clientAuth}
+				initialIdentity={null}
+			>
 				<clientAuth.CanAccess
 					permission={permissions.delete({ id: "document-1" })}
 					loading={<span>Checking</span>}

@@ -27,6 +27,7 @@ import {
 	type ComposedEndpointInventoryEntry,
 } from "../plugins/api/endpoint-inventory";
 import { serializeValidationIssues } from "../plugins/api/create-endpoint";
+import { resolvePluginRegistrationIds } from "../plugin-registration";
 
 export { toNodeHandler } from "better-call/node";
 
@@ -97,6 +98,7 @@ export function createBackendStack<
 	},
 ): BackendStack<TRoutes, PluginApis<TPlugins>, PluginOperations<TPlugins>> {
 	const { plugins, adapter, dbSchema, basePath } = config;
+	const registrationIds = resolvePluginRegistrationIds(plugins, "backend");
 	const runtimeAuth = (
 		config as unknown as { auth?: ServerAuth<AnyAuthorization> }
 	).auth;
@@ -188,7 +190,7 @@ export function createBackendStack<
 		endpointInventory.push(
 			...composeEndpointInventory(
 				pluginKey,
-				plugin.name,
+				plugin.name ?? registrationIds[pluginKey]!,
 				pluginRoutes,
 				pluginOperations[pluginKey] ?? {},
 				plugin.operations !== undefined || runtimeAuth !== undefined,

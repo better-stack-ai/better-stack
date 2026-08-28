@@ -13,6 +13,43 @@
 import type { ClientPlugin, ClientPluginDefinition } from "../../types";
 import type { Route } from "@btst/yar";
 
+type IdentifiedClientPlugin<
+	TId extends string,
+	TOverrides,
+	TRoutes extends Record<string, Route>,
+> = ClientPlugin<TOverrides, TRoutes, TId> & { readonly id: TId };
+
+type IdentifiedClientPluginDefinition<
+	TId extends string,
+	TOverrides,
+	TRoutes extends Record<string, Route>,
+> = ClientPluginDefinition<TOverrides, TRoutes, TId> & { readonly id: TId };
+
+type LegacyClientPlugin<
+	TOverrides,
+	TRoutes extends Record<string, Route>,
+> = ClientPlugin<TOverrides, TRoutes> & {
+	name: string;
+	readonly id?: never;
+};
+
+type LegacyClientPluginDefinition<
+	TOverrides,
+	TRoutes extends Record<string, Route>,
+> = ClientPluginDefinition<TOverrides, TRoutes> & {
+	name: string;
+	readonly id?: never;
+};
+
+interface DefineClientPluginWithOverrides<TOverrides> {
+	<const TId extends string, TRoutes extends Record<string, Route>>(
+		plugin: IdentifiedClientPlugin<TId, TOverrides, TRoutes>,
+	): IdentifiedClientPlugin<TId, TOverrides, TRoutes>;
+	<const TId extends string, TRoutes extends Record<string, Route>>(
+		plugin: IdentifiedClientPluginDefinition<TId, TOverrides, TRoutes>,
+	): IdentifiedClientPluginDefinition<TId, TOverrides, TRoutes>;
+}
+
 export type {
 	ClientPlugin,
 	ClientPluginDefinition,
@@ -77,11 +114,15 @@ export { createClient } from "better-call/client";
  * @example
  * ```ts
  * const messagesPlugin = defineClientPlugin({
- *   name: "messages",
- *   routes: () => ({
- *     messagesList: createRoute("/messages", () => ({ ... }))
+ *   id: "messages",
+ *   resolve: (runtime) => ({
+ *     routes: () => ({
+ *       messagesList: createRoute("/messages", () => ({ ... }))
+ *     }),
+ *     sitemap: () => [{
+ *       url: `${runtime.site.baseURL}${runtime.site.basePath}/messages`,
+ *     }],
  *   }),
- *   sitemap: () => [{ url: "/messages", lastModified: new Date(), priority: 0.8 }]
  * });
  * ```
  *
@@ -89,24 +130,41 @@ export { createClient } from "better-call/client";
  * @template TRoutes - The exact shape of routes this plugin provides (preserves keys and route types)
  */
 export function defineClientPlugin<
-	TOverrides = Record<string, never>,
-	TRoutes extends Record<string, Route> = Record<string, Route>,
->(plugin: ClientPlugin<TOverrides, TRoutes>): ClientPlugin<TOverrides, TRoutes>;
+	TOverrides,
+>(): DefineClientPluginWithOverrides<TOverrides>;
 export function defineClientPlugin<
-	TOverrides = Record<string, never>,
+	const TId extends string,
+	TRoutes extends Record<string, Route>,
+>(
+	plugin: IdentifiedClientPlugin<TId, Record<string, never>, TRoutes>,
+): IdentifiedClientPlugin<TId, Record<string, never>, TRoutes>;
+export function defineClientPlugin<
+	const TId extends string,
+	TRoutes extends Record<string, Route>,
+>(
+	plugin: IdentifiedClientPluginDefinition<TId, Record<string, never>, TRoutes>,
+): IdentifiedClientPluginDefinition<TId, Record<string, never>, TRoutes>;
+export function defineClientPlugin<
+	TOverrides,
 	TRoutes extends Record<string, Route> = Record<string, Route>,
 >(
-	plugin: ClientPluginDefinition<TOverrides, TRoutes>,
-): ClientPluginDefinition<TOverrides, TRoutes>;
+	plugin: LegacyClientPlugin<TOverrides, TRoutes>,
+): LegacyClientPlugin<TOverrides, TRoutes>;
 export function defineClientPlugin<
-	TOverrides = Record<string, never>,
+	TOverrides,
 	TRoutes extends Record<string, Route> = Record<string, Route>,
 >(
-	plugin:
-		| ClientPlugin<TOverrides, TRoutes>
-		| ClientPluginDefinition<TOverrides, TRoutes>,
+	plugin: LegacyClientPluginDefinition<TOverrides, TRoutes>,
+): LegacyClientPluginDefinition<TOverrides, TRoutes>;
+export function defineClientPlugin(
+	plugin?: ClientPlugin<any, any> | ClientPluginDefinition<any, any>,
 ):
-	| ClientPlugin<TOverrides, TRoutes>
-	| ClientPluginDefinition<TOverrides, TRoutes> {
+	| ClientPlugin<any, any>
+	| ClientPluginDefinition<any, any>
+	| DefineClientPluginWithOverrides<any> {
+	if (plugin === undefined) {
+		return ((definition: any) =>
+			definition) as DefineClientPluginWithOverrides<any>;
+	}
 	return plugin;
 }
