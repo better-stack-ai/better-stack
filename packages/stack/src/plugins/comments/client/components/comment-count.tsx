@@ -1,7 +1,7 @@
 "use client";
 
 import { MessageSquare } from "lucide-react";
-import { PermissionAccess, useStack } from "@btst/stack/context";
+import { PermissionAccess } from "@btst/stack/context";
 import { useCommentCount } from "../hooks/use-comments";
 import { commentsPermissions } from "../../permissions";
 
@@ -64,11 +64,11 @@ function CommentCountValue({
 	className,
 }: Required<Pick<CommentCountProps, "resourceId" | "resourceType" | "status">> &
 	Pick<CommentCountProps, "className">) {
-	const { api } = useStack();
-	const { count, isLoading } = useCommentCount(
-		{ apiBaseURL: api?.baseURL ?? "", apiBasePath: api?.basePath ?? "" },
-		{ resourceId, resourceType, status },
-	);
+	const { count, isLoading } = useCommentCount({
+		resourceId,
+		resourceType,
+		status,
+	});
 
 	if (isLoading) {
 		return (

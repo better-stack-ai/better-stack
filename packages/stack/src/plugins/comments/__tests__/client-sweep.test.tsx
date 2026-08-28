@@ -354,7 +354,6 @@ describe("Comments route descriptors", () => {
 		);
 
 		expect(hooks.useSuspenseModerationComments).toHaveBeenCalledWith(
-			expect.anything(),
 			expect.objectContaining({ status: "spam" }),
 		);
 	});
@@ -376,7 +375,7 @@ describe("CommentCount permission descriptors", () => {
 		expect(
 			container.querySelector('[data-testid="comment-count"]'),
 		).toBeTruthy();
-		expect(hooks.useCommentCount).toHaveBeenCalledWith(expect.anything(), {
+		expect(hooks.useCommentCount).toHaveBeenCalledWith({
 			resourceId: "post-1",
 			resourceType: "post",
 			status: "approved",
@@ -481,7 +480,6 @@ describe("ModerationPage tab/page state (useListState)", () => {
 		});
 
 		expect(hooks.useSuspenseModerationComments).toHaveBeenLastCalledWith(
-			expect.anything(),
 			expect.objectContaining({ page: 2 }),
 		);
 		expect(texts()).not.toContain("selected");
@@ -502,7 +500,6 @@ describe("ModerationPage tab/page state (useListState)", () => {
 		});
 
 		expect(hooks.useSuspenseModerationComments).toHaveBeenLastCalledWith(
-			expect.anything(),
 			expect.objectContaining({ page: 1 }),
 		);
 		expect(texts()).not.toContain("selected");
@@ -563,7 +560,6 @@ describe("ModerationPage tab/page state (useListState)", () => {
 		);
 
 		expect(hooks.useSuspenseModerationComments).toHaveBeenLastCalledWith(
-			expect.anything(),
 			expect.objectContaining({ status: "spam", page: 3 }),
 		);
 		// Nothing is written back for a read-only render
@@ -584,7 +580,6 @@ describe("ModerationPage tab/page state (useListState)", () => {
 		);
 
 		expect(hooks.useSuspenseModerationComments).toHaveBeenLastCalledWith(
-			expect.anything(),
 			expect.objectContaining({ status: "pending", page: 1 }),
 		);
 	});
@@ -620,7 +615,6 @@ describe("ModerationPage tab/page state (useListState)", () => {
 		// page resets to the default (1) and defaults are omitted from the URL
 		expect(written.get("page")).toBeNull();
 		expect(hooks.useSuspenseModerationComments).toHaveBeenLastCalledWith(
-			expect.anything(),
 			expect.objectContaining({ status: "approved", page: 1 }),
 		);
 	});
@@ -669,7 +663,6 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 		);
 
 		expect(hooks.useSuspenseComments).toHaveBeenLastCalledWith(
-			expect.anything(),
 			expect.objectContaining({ authorId: "user-1", offset: 20 }),
 		);
 	});
@@ -679,7 +672,6 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 		await act(async () => {});
 
 		expect(hooks.useSuspenseComments).toHaveBeenLastCalledWith(
-			expect.anything(),
 			expect.objectContaining({ authorId: "provider-user" }),
 		);
 		expect(
@@ -820,10 +812,6 @@ describe("CommentThread provider wiring", () => {
 		await act(async () => {});
 
 		expect(hooks.useInfiniteComments).toHaveBeenLastCalledWith(
-			{
-				apiBaseURL: "http://provider.local",
-				apiBasePath: "/api/stack",
-			},
 			expect.objectContaining({ currentUserId: "provider-user" }),
 		);
 		expect(
@@ -856,7 +844,6 @@ describe("CommentThread provider wiring", () => {
 		});
 
 		expect(hooks.useInfiniteComments).toHaveBeenLastCalledWith(
-			expect.anything(),
 			expect.objectContaining({ currentUserId: "provider-user" }),
 		);
 	});

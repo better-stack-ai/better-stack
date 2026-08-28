@@ -36,12 +36,7 @@ import {
 } from "@workspace/ui/components/avatar";
 import { CheckCircle, ShieldOff, Trash2, Eye } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import {
-	PermissionAccess,
-	useNotify,
-	useStack,
-	useTranslate,
-} from "@btst/stack/context";
+import { PermissionAccess, useNotify, useTranslate } from "@btst/stack/context";
 import type { PermissionRequest } from "@btst/stack/authorization";
 import { useListState } from "@btst/stack/client/hooks";
 import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
@@ -95,8 +90,6 @@ function StatusBadge({ status }: { status: CommentStatus }) {
 export function ModerationPage({ localization }: ModerationPageProps) {
 	const t = useTranslate();
 	const notify = useNotify();
-	const { api } = useStack();
-
 	const [listState, setListState] = useListState(
 		"comments-moderation",
 		MODERATION_LIST_STATE_SCHEMA,
@@ -112,13 +105,8 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 	);
 	const [deleteIds, setDeleteIds] = useState<string[]>([]);
 
-	const config = {
-		apiBaseURL: api?.baseURL ?? "",
-		apiBasePath: api?.basePath ?? "",
-	};
-
 	const { comments, total, limit, offset, totalPages, refetch } =
-		useSuspenseModerationComments(config, {
+		useSuspenseModerationComments({
 			status: activeTab,
 			page: currentPage,
 		});
@@ -138,8 +126,8 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 		setDeleteIds([]);
 	}, [activeTab, currentPage]);
 
-	const updateStatus = useUpdateCommentStatus(config);
-	const deleteMutation = useDeleteComment(config);
+	const updateStatus = useUpdateCommentStatus();
+	const deleteMutation = useDeleteComment();
 
 	// Register AI context with pending comment previews
 	useRegisterPageAIContext({

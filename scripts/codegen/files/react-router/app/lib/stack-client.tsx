@@ -147,12 +147,6 @@ export const getStackClient = (
 				},
 			}),
 			comments: commentsClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
 				hooks: options?.currentUserId
 					? {
 							beforeLoadUserComments: (context) => {

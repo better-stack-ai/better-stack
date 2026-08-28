@@ -2,6 +2,7 @@
 
 import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../../overrides";
+import { COMMENTS_PLUGIN_ID } from "../../constants";
 import { PaginationControls } from "@workspace/ui/components/pagination-controls";
 
 interface PaginationProps {
@@ -23,7 +24,7 @@ export function Pagination({
 }: PaginationProps) {
 	const t = useTranslate();
 	const { localization } =
-		usePluginOverrides<CommentsPluginOverrides>("comments");
+		usePluginOverrides<CommentsPluginOverrides>(COMMENTS_PLUGIN_ID);
 
 	return (
 		<PaginationControls

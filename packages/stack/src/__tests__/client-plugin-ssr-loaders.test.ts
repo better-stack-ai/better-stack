@@ -202,22 +202,27 @@ describe("client plugin SSR loaders", () => {
 		const queryClient = new QueryClient();
 		const expectedError = new Error("comments moderation blocked");
 
-		const plugin = commentsClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				beforeLoadModeration: () => {
-					throw expectedError;
-				},
+			plugins: {
+				comments: commentsClientPlugin({
+					hooks: {
+						beforeLoadModeration: () => {
+							throw expectedError;
+						},
+					},
+				}),
 			},
 		});
 
-		const route = plugin.routes().moderation();
-		await route.loader?.();
+		const route = stack.router.getRoute("/comments/moderation");
+		await route?.loader?.();
 
 		const client = createApiClient<CommentsApiRouter>({
 			baseURL: API_BASE_URL,
@@ -240,23 +245,28 @@ describe("client plugin SSR loaders", () => {
 		const expectedError = new Error("comments user view blocked");
 		const currentUserId = "user-123";
 
-		const plugin = commentsClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				beforeLoadUserComments: (context) => {
-					context.currentUserId = currentUserId;
-					throw expectedError;
-				},
+			plugins: {
+				comments: commentsClientPlugin({
+					hooks: {
+						beforeLoadUserComments: (context) => {
+							context.currentUserId = currentUserId;
+							throw expectedError;
+						},
+					},
+				}),
 			},
 		});
 
-		const route = plugin.routes().userComments();
-		await route.loader?.();
+		const route = stack.router.getRoute("/comments");
+		await route?.loader?.();
 
 		const client = createApiClient<CommentsApiRouter>({
 			baseURL: API_BASE_URL,
@@ -275,60 +285,66 @@ describe("client plugin SSR loaders", () => {
 		);
 	});
 
-	it("comments moderation loader calls onLoadError when prefetch stores API error", async () => {
+	it("comments moderation loader calls onErrorLoad when prefetch stores API error", async () => {
 		const queryClient = new QueryClient();
 		const apiErrorMessage = "comments moderation api failed";
-		const onLoadError = vi.fn();
+		const onErrorLoad = vi.fn();
 		mockFetchApiError(apiErrorMessage);
 
-		const plugin = commentsClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				onLoadError,
+			plugins: {
+				comments: commentsClientPlugin({ hooks: { onErrorLoad } }),
 			},
 		});
 
-		const route = plugin.routes().moderation();
-		await route.loader?.();
+		const route = stack.router.getRoute("/comments/moderation");
+		await route?.loader?.();
 
-		expect(onLoadError).toHaveBeenCalledTimes(1);
-		const [errorArg] = onLoadError.mock.calls[0] ?? [];
+		expect(onErrorLoad).toHaveBeenCalledTimes(1);
+		const [errorArg] = onErrorLoad.mock.calls[0] ?? [];
 		expect(errorArg).toBeInstanceOf(Error);
 		expect((errorArg as Error).message).toBe(apiErrorMessage);
 	});
 
-	it("comments user loader calls onLoadError when user-scoped prefetch stores API error", async () => {
+	it("comments user loader calls onErrorLoad when user-scoped prefetch stores API error", async () => {
 		const queryClient = new QueryClient();
 		const apiErrorMessage = "comments user api failed";
-		const onLoadError = vi.fn();
+		const onErrorLoad = vi.fn();
 		const currentUserId = "user-123";
 		mockFetchApiError(apiErrorMessage);
 
-		const plugin = commentsClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				beforeLoadUserComments: (context) => {
-					context.currentUserId = currentUserId;
-				},
-				onLoadError,
+			plugins: {
+				comments: commentsClientPlugin({
+					hooks: {
+						beforeLoadUserComments: (context) => {
+							context.currentUserId = currentUserId;
+						},
+						onErrorLoad,
+					},
+				}),
 			},
 		});
 
-		const route = plugin.routes().userComments();
-		await route.loader?.();
+		const route = stack.router.getRoute("/comments");
+		await route?.loader?.();
 
-		expect(onLoadError).toHaveBeenCalledTimes(1);
-		const [errorArg, contextArg] = onLoadError.mock.calls[0] ?? [];
+		expect(onErrorLoad).toHaveBeenCalledTimes(1);
+		const [errorArg, contextArg] = onErrorLoad.mock.calls[0] ?? [];
 		expect(errorArg).toBeInstanceOf(Error);
 		expect((errorArg as Error).message).toBe(apiErrorMessage);
 		expect(contextArg).toMatchObject({ currentUserId });

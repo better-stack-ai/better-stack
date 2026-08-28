@@ -28,12 +28,7 @@ import {
 } from "@workspace/ui/components/avatar";
 import { Trash2, ExternalLink, LogIn, MessageSquareOff } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import {
-	PermissionAccess,
-	useNotify,
-	useStack,
-	useTranslate,
-} from "@btst/stack/context";
+import { PermissionAccess, useNotify, useTranslate } from "@btst/stack/context";
 import { useListState, type ListStateSchema } from "@btst/stack/client/hooks";
 import { PermissionRouteAccess } from "@btst/stack/client/components";
 import type { CommentsPluginOverrides } from "../../overrides";
@@ -99,7 +94,6 @@ export function UserCommentsPage({
 	localization,
 }: UserCommentsPageProps) {
 	const t = useTranslate();
-	const { api } = useStack();
 	const { currentUserId: resolvedUserId, isPending: isIdentityPending } =
 		useCurrentUserId();
 
@@ -145,8 +139,6 @@ export function UserCommentsPage({
 			})}
 		>
 			<UserCommentsList
-				apiBaseURL={api?.baseURL ?? ""}
-				apiBasePath={api?.basePath ?? ""}
 				currentUserId={resolvedUserId}
 				resourceLinks={resourceLinks}
 				localization={localization}
@@ -158,14 +150,10 @@ export function UserCommentsPage({
 // ─── List (suspense boundary is in ComposedRoute) ─────────────────────────────
 
 function UserCommentsList({
-	apiBaseURL,
-	apiBasePath,
 	currentUserId,
 	resourceLinks,
 	localization,
 }: {
-	apiBaseURL: string;
-	apiBasePath: string;
 	currentUserId: string;
 	resourceLinks?: CommentsPluginOverrides["resourceLinks"];
 	localization?: Partial<CommentsLocalization>;
@@ -182,17 +170,16 @@ function UserCommentsList({
 
 	const [deleteId, setDeleteId] = useState<string | null>(null);
 
-	const config = { apiBaseURL, apiBasePath };
 	const offset = (page - 1) * PAGE_LIMIT;
 
-	const { comments, total, refetch } = useSuspenseComments(config, {
+	const { comments, total, refetch } = useSuspenseComments({
 		authorId: currentUserId,
 		sort: "desc",
 		limit: PAGE_LIMIT,
 		offset,
 	});
 
-	const deleteMutation = useDeleteComment(config);
+	const deleteMutation = useDeleteComment();
 
 	const totalPages = Math.max(1, Math.ceil(total / PAGE_LIMIT));
 

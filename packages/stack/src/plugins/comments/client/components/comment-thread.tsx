@@ -40,6 +40,7 @@ import {
 	useTranslate,
 } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../overrides";
+import { COMMENTS_PLUGIN_ID } from "../constants";
 import { commentsPermissions } from "../../permissions";
 
 /** Custom input component props */
@@ -108,8 +109,6 @@ export interface CommentThreadProps {
 }
 
 type ResolvedCommentThreadProps = CommentThreadProps & {
-	apiBaseURL: string;
-	apiBasePath: string;
 	currentUserId?: string;
 };
 
@@ -122,8 +121,6 @@ const DEFAULT_RENDERER: ComponentType<CommentRendererProps> = ({ body }) => (
 function CommentCard({
 	comment,
 	currentUserId,
-	apiBaseURL,
-	apiBasePath,
 	resourceId,
 	resourceType,
 	components,
@@ -135,8 +132,6 @@ function CommentCard({
 }: {
 	comment: SerializedComment;
 	currentUserId?: string;
-	apiBaseURL: string;
-	apiBasePath: string;
 	resourceId: string;
 	resourceType: string;
 	components?: CommentComponents;
@@ -154,11 +149,9 @@ function CommentCard({
 	const [isEditing, setIsEditing] = useState(false);
 	const Renderer = components?.Renderer ?? DEFAULT_RENDERER;
 
-	const config = { apiBaseURL, apiBasePath };
-
-	const updateMutation = useUpdateComment(config);
-	const deleteMutation = useDeleteComment(config);
-	const toggleLikeMutation = useToggleLike(config, {
+	const updateMutation = useUpdateComment();
+	const deleteMutation = useDeleteComment();
+	const toggleLikeMutation = useToggleLike({
 		resourceId,
 		resourceType,
 		parentId: comment.parentId,
@@ -374,8 +367,6 @@ const OPTIMISTIC_ID_PREFIX = "optimistic-";
 function CommentThreadInner({
 	resourceId,
 	resourceType,
-	apiBaseURL,
-	apiBasePath,
 	currentUserId,
 	loginHref,
 	components,
@@ -389,7 +380,7 @@ function CommentThreadInner({
 	const overrides = usePluginOverrides<
 		CommentsPluginOverrides,
 		Partial<CommentsPluginOverrides>
-	>("comments", {});
+	>(COMMENTS_PLUGIN_ID, {});
 	const pageSize =
 		pageSizeProp ?? overrides.defaultCommentPageSize ?? DEFAULT_PAGE_SIZE;
 	const allowPosting = allowPostingProp ?? overrides.allowPosting ?? true;
@@ -404,8 +395,6 @@ function CommentThreadInner({
 	);
 	const [replyOffsets, setReplyOffsets] = useState<Record<string, number>>({});
 
-	const config = { apiBaseURL, apiBasePath };
-
 	const {
 		comments,
 		total,
@@ -414,7 +403,7 @@ function CommentThreadInner({
 		hasMore,
 		isLoadingMore,
 		queryKey: threadQueryKey,
-	} = useInfiniteComments(config, {
+	} = useInfiniteComments({
 		resourceId,
 		resourceType,
 		status: "approved",
@@ -424,7 +413,7 @@ function CommentThreadInner({
 		pageSize,
 	});
 
-	const postMutation = usePostComment(config, {
+	const postMutation = usePostComment({
 		resourceId,
 		resourceType,
 		currentUserId,
@@ -489,8 +478,6 @@ function CommentThreadInner({
 							<CommentCard
 								comment={comment}
 								currentUserId={currentUserId}
-								apiBaseURL={apiBaseURL}
-								apiBasePath={apiBasePath}
 								resourceId={resourceId}
 								resourceType={resourceType}
 								components={components}
@@ -508,8 +495,6 @@ function CommentThreadInner({
 								parentId={comment.id}
 								resourceId={resourceId}
 								resourceType={resourceType}
-								apiBaseURL={apiBaseURL}
-								apiBasePath={apiBasePath}
 								currentUserId={currentUserId}
 								components={components}
 								localization={localization}
@@ -656,8 +641,6 @@ function RepliesSection({
 	parentId,
 	resourceId,
 	resourceType,
-	apiBaseURL,
-	apiBasePath,
 	currentUserId,
 	components,
 	localization,
@@ -670,8 +653,6 @@ function RepliesSection({
 	parentId: string;
 	resourceId: string;
 	resourceType: string;
-	apiBaseURL: string;
-	apiBasePath: string;
 	currentUserId?: string;
 	components?: CommentComponents;
 	localization?: Partial<CommentsLocalization>;
@@ -683,7 +664,6 @@ function RepliesSection({
 	allowEditing: boolean;
 }) {
 	const t = useTranslate();
-	const config = { apiBaseURL, apiBasePath };
 	const [replyOffset, setReplyOffset] = useState(0);
 	const [loadedReplies, setLoadedReplies] = useState<SerializedComment[]>([]);
 	// Only fetch reply bodies once the section is expanded.
@@ -692,7 +672,6 @@ function RepliesSection({
 		total: repliesTotal,
 		isFetching: isFetchingReplies,
 	} = useComments(
-		config,
 		{
 			resourceId,
 			resourceType,
@@ -796,8 +775,6 @@ function RepliesSection({
 							key={reply.id}
 							comment={reply}
 							currentUserId={currentUserId}
-							apiBaseURL={apiBaseURL}
-							apiBasePath={apiBasePath}
 							resourceId={resourceId}
 							resourceType={resourceType}
 							components={components}
@@ -892,12 +869,10 @@ function CommentThreadSkeleton() {
 }
 
 export function CommentThread(props: CommentThreadProps) {
-	const { api, auth } = useStack();
+	const { auth } = useStack();
 	const { currentUserId, isPending: isIdentityPending } = useCurrentUserId();
 	const resolvedProps: ResolvedCommentThreadProps = {
 		...props,
-		apiBaseURL: api?.baseURL ?? "",
-		apiBasePath: api?.basePath ?? "",
 		currentUserId,
 		loginHref: props.loginHref ?? auth?.loginPath,
 	};

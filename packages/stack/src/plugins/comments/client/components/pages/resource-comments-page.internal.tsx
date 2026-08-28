@@ -16,12 +16,7 @@ import {
 } from "@workspace/ui/components/avatar";
 import { CheckCircle, ShieldOff, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import {
-	PermissionAccess,
-	useNotify,
-	useStack,
-	useTranslate,
-} from "@btst/stack/context";
+import { PermissionAccess, useNotify, useTranslate } from "@btst/stack/context";
 import type { CommentsLocalization } from "../../localization";
 import { getInitials } from "../../utils";
 import { commentsPermissions } from "../../../permissions";
@@ -39,24 +34,18 @@ export function ResourceCommentsPage({
 }: ResourceCommentsPageProps) {
 	const t = useTranslate();
 	const notify = useNotify();
-	const { api } = useStack();
-	const config = {
-		apiBaseURL: api?.baseURL ?? "",
-		apiBasePath: api?.basePath ?? "",
-	};
-
 	const {
 		comments: pendingComments,
 		total: pendingTotal,
 		refetch,
-	} = useSuspenseComments(config, {
+	} = useSuspenseComments({
 		resourceId,
 		resourceType,
 		status: "pending",
 	});
 
-	const updateStatus = useUpdateCommentStatus(config);
-	const deleteMutation = useDeleteComment(config);
+	const updateStatus = useUpdateCommentStatus();
+	const deleteMutation = useDeleteComment();
 
 	const handleApprove = async (id: string) => {
 		try {
