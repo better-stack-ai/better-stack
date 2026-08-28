@@ -23,6 +23,7 @@ const exampleServerAuth = createServerAuth({
 		return {
 			id,
 			role: id.startsWith("admin") ? ("admin" as const) : ("user" as const),
+			organizationIds: [],
 		};
 	},
 });

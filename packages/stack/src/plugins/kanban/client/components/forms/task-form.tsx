@@ -15,25 +15,24 @@ import {
 import { MinimalTiptapEditor } from "@workspace/ui/components/minimal-tiptap";
 import SearchSelect from "@workspace/ui/components/search-select";
 import {
-	CanAccess,
+	PermissionAccess,
 	usePluginOverrides,
 	useTranslate,
 } from "@btst/stack/context";
-import {
-	useTaskForm,
-	useTaskMutations,
-	useSearchUsers,
-} from "../../hooks/kanban-hooks";
+import { useTaskForm, useSearchUsers } from "../../hooks/kanban-hooks";
 import type { KanbanPluginOverrides } from "../../overrides";
 import type {
 	SerializedColumn,
 	SerializedTask,
 	Priority,
 } from "../../../types";
+import { kanbanPermissions } from "../../../permissions";
 
 interface TaskFormProps {
 	columnId: string;
 	boardId: string;
+	ownerId?: string;
+	organizationId?: string;
 	taskId?: string;
 	task?: SerializedTask;
 	columns: SerializedColumn[];
@@ -57,6 +56,8 @@ function firstError(error: string | string[] | undefined): string | undefined {
 export function TaskForm({
 	columnId,
 	boardId,
+	ownerId,
+	organizationId,
 	taskId,
 	task,
 	columns,
@@ -71,7 +72,6 @@ export function TaskForm({
 		localization,
 	} = usePluginOverrides<KanbanPluginOverrides>("kanban");
 	const isEditing = !!taskId;
-	const { moveTask, isMoving } = useTaskMutations();
 
 	const [title, setTitle] = useState(task?.title || "");
 	const [description, setDescription] = useState(task?.description || "");
@@ -95,50 +95,32 @@ export function TaskForm({
 			columnId: values.columnId,
 			assigneeId: values.assigneeId || undefined,
 		}),
-		toUpdateVars: (values) => ({
-			id: taskId ?? "",
-			data: {
-				title: values.title,
-				description: values.description,
-				priority: values.priority,
-				...(values.columnId === task?.columnId
-					? { columnId: values.columnId }
-					: {}),
-				assigneeId: values.assigneeId || null,
-			},
-		}),
-		onSuccess: async () => {
-			if (isEditing && taskId && selectedColumnId !== task?.columnId) {
+		toUpdateVars: (values) => {
+			const isColumnMove = values.columnId !== task?.columnId;
+			let targetOrder: number | undefined;
+			if (isColumnMove) {
 				const targetTasks =
-					columns.find((column) => column.id === selectedColumnId)?.tasks ?? [];
-				const targetOrder =
+					columns.find((column) => column.id === values.columnId)?.tasks ?? [];
+				targetOrder =
 					targetTasks.length > 0
 						? Math.max(...targetTasks.map((targetTask) => targetTask.order)) + 1
 						: 0;
-
-				try {
-					await moveTask(taskId, selectedColumnId, targetOrder);
-				} catch (error) {
-					const message =
-						error instanceof Error
-							? error.message
-							: (localization?.errorGeneric ??
-								t("kanban.common.errorGeneric", "Something went wrong"));
-					const partialErrorTemplate = localization?.taskMovePartialError;
-					throw new Error(
-						partialErrorTemplate
-							? partialErrorTemplate.replaceAll("{{message}}", message)
-							: t(
-									"kanban.forms.taskMovePartialError",
-									"Task properties were saved, but moving to the new column failed: {{message}}. You can try dragging the task to the desired column.",
-									{ message },
-								),
-					);
-				}
 			}
 
-			onSuccess();
+			return {
+				id: taskId ?? "",
+				data: {
+					title: values.title,
+					description: values.description,
+					priority: values.priority,
+					...(isColumnMove
+						? { columnId: values.columnId, order: targetOrder }
+						: {}),
+					assigneeId: values.assigneeId || null,
+				},
+			};
 		},
+		onSuccess,
 	});
 
 	const { data: users = [] } = useSearchUsers("", boardId);
@@ -172,7 +154,7 @@ export function TaskForm({
 		},
 	];
 
-	const isPending = resourceForm.isSubmitting || isMoving || isDeleting;
+	const isPending = resourceForm.isSubmitting || isDeleting;
 	const serverTitleError = firstError(resourceForm.fieldErrors.title);
 	const serverDescriptionError = firstError(
 		resourceForm.fieldErrors.description,
@@ -216,6 +198,76 @@ export function TaskForm({
 			setIsDeleting(false);
 		}
 	};
+	const columnSelect = (
+		<Select
+			value={selectedColumnId}
+			onValueChange={setSelectedColumnId}
+			disabled={isPending}
+		>
+			<SelectTrigger id="column" aria-invalid={!!serverColumnError}>
+				<SelectValue
+					placeholder={
+						localization?.selectColumn ??
+						t("kanban.forms.selectColumn", "Select column")
+					}
+				/>
+			</SelectTrigger>
+			<SelectContent>
+				{columns.map((column) => {
+					const item = (
+						<SelectItem key={column.id} value={column.id}>
+							{column.title}
+						</SelectItem>
+					);
+					if (isEditing && task?.columnId === column.id) return item;
+
+					const permission = isEditing
+						? kanbanPermissions.task.move({
+								boardId,
+								columnId: task?.columnId ?? columnId,
+								targetColumnId: column.id,
+								taskId: task?.id ?? taskId ?? "",
+								...(ownerId ? { ownerId } : {}),
+								...(organizationId ? { organizationId } : {}),
+								...(task?.assigneeId ? { assigneeId: task.assigneeId } : {}),
+								isArchived: task?.isArchived ?? false,
+							})
+						: kanbanPermissions.task.create({
+								boardId,
+								columnId: column.id,
+								...(ownerId ? { ownerId } : {}),
+								...(organizationId ? { organizationId } : {}),
+							});
+					return (
+						<PermissionAccess
+							key={column.id}
+							permission={permission}
+							legacyPermission={{
+								resource: "kanban:task",
+								action: isEditing ? "update" : "create",
+								params: {
+									boardId,
+									columnId: task?.columnId ?? column.id,
+									...(isEditing ? { targetColumnId: column.id } : {}),
+									...(task ? { id: task.id } : {}),
+									...(ownerId ? { ownerId } : {}),
+									...(organizationId ? { organizationId } : {}),
+									...(isEditing && task?.assigneeId
+										? { assigneeId: task.assigneeId }
+										: {}),
+									...(isEditing
+										? { isArchived: task?.isArchived ?? false }
+										: {}),
+								},
+							}}
+						>
+							{item}
+						</PermissionAccess>
+					);
+				})}
+			</SelectContent>
+		</Select>
+	);
 
 	return (
 		<form onSubmit={handleSubmit} className="space-y-4 overflow-x-hidden">
@@ -280,27 +332,7 @@ export function TaskForm({
 					<Label htmlFor="column">
 						{localization?.taskColumn ?? t("kanban.forms.taskColumn", "Column")}
 					</Label>
-					<Select
-						value={selectedColumnId}
-						onValueChange={setSelectedColumnId}
-						disabled={isPending}
-					>
-						<SelectTrigger id="column" aria-invalid={!!serverColumnError}>
-							<SelectValue
-								placeholder={
-									localization?.selectColumn ??
-									t("kanban.forms.selectColumn", "Select column")
-								}
-							/>
-						</SelectTrigger>
-						<SelectContent>
-							{columns.map((column) => (
-								<SelectItem key={column.id} value={column.id}>
-									{column.title}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
+					{columnSelect}
 					{serverColumnError && (
 						<p className="text-sm text-destructive">{serverColumnError}</p>
 					)}
@@ -363,7 +395,7 @@ export function TaskForm({
 			<div className="flex justify-between pt-2">
 				<div className="flex gap-2">
 					<Button type="submit" disabled={isPending}>
-						{resourceForm.isSubmitting || isMoving
+						{resourceForm.isSubmitting
 							? isEditing
 								? (localization?.updating ??
 									t("kanban.common.updating", "Updating..."))
@@ -384,11 +416,30 @@ export function TaskForm({
 						{localization?.cancel ?? t("kanban.common.cancel", "Cancel")}
 					</Button>
 				</div>
-				{isEditing && onDelete && taskId && (
-					<CanAccess
-						resource="kanban:task"
-						action="delete"
-						params={{ id: taskId, boardId, columnId }}
+				{isEditing && onDelete && taskId && task && (
+					<PermissionAccess
+						permission={kanbanPermissions.task.delete({
+							boardId,
+							columnId: task.columnId,
+							taskId: task.id,
+							...(ownerId ? { ownerId } : {}),
+							...(organizationId ? { organizationId } : {}),
+							...(task.assigneeId ? { assigneeId: task.assigneeId } : {}),
+							isArchived: task.isArchived,
+						})}
+						legacyPermission={{
+							resource: "kanban:task",
+							action: "delete",
+							params: {
+								id: task.id,
+								boardId,
+								columnId: task.columnId,
+								...(ownerId ? { ownerId } : {}),
+								...(organizationId ? { organizationId } : {}),
+								...(task.assigneeId ? { assigneeId: task.assigneeId } : {}),
+								isArchived: task.isArchived,
+							},
+						}}
 					>
 						<Button
 							type="button"
@@ -402,7 +453,7 @@ export function TaskForm({
 									t("kanban.common.deleting", "Deleting..."))
 								: (localization?.delete ?? t("kanban.common.delete", "Delete"))}
 						</Button>
-					</CanAccess>
+					</PermissionAccess>
 				)}
 			</div>
 		</form>

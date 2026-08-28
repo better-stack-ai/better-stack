@@ -272,6 +272,7 @@ const PLUGINS: PluginConfig[] = [
 			"Ejectable page components for the @btst/stack kanban plugin. " +
 			"Customize the UI layer while keeping data-fetching in @btst/stack.",
 		extraNpmDeps: [
+			"zod",
 			"date-fns",
 			"@dnd-kit/core",
 			"@dnd-kit/sortable",
@@ -281,7 +282,7 @@ const PLUGINS: PluginConfig[] = [
 		],
 		extraRegistryDeps: [],
 		// kanban/utils.ts has no external npm imports (pure utility functions)
-		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts"],
+		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts", "permissions.ts"],
 	},
 	{
 		name: "comments",

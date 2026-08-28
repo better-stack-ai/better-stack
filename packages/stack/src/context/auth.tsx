@@ -23,9 +23,11 @@ type AnyPermissionRequest = PermissionRequest;
 export interface AuthContextValue {
 	provider: StackAuthProvider;
 	identity: StackIdentity | null;
-	/** True until the initial `getIdentity()` call settles */
+	/** True while `getIdentity()` is resolving. */
 	isPending: boolean;
-	/** Identity resolution or validation failure on the one-rule auth path. */
+	/** Serializable generation for the current identity resolution. */
+	sourceGeneration: number;
+	/** Identity resolution or validation failure. */
 	error?: Error;
 	/** Re-run `getIdentity()` (e.g. after login/logout) */
 	refetch: () => Promise<void>;
@@ -37,6 +39,7 @@ export interface AuthContextValue {
  * `<CanAccess>` renders its children — preserving pre-auth behavior exactly.
  */
 const AuthContext = createContext<AuthContextValue | null>(null);
+let nextAuthSourceGeneration = 0;
 
 function createInitialAuthState(
 	provider: StackAuthProvider,
@@ -85,20 +88,28 @@ export function StackAuthBoundary({
 		identity: StackIdentity | null;
 		isPending: boolean;
 		error?: Error;
-		sourceGeneration: object;
+		sourceGeneration: { readonly id: number };
+		resolutionGeneration: number;
 	};
 
 	const hydratedState = useMemo(
 		() => createInitialAuthState(provider, initialIdentity),
 		[provider, initialIdentity],
 	);
-	const sourceGeneration = useMemo(() => ({}), [provider, initialIdentity]);
+	const sourceGeneration = useMemo(
+		() => ({ id: ++nextAuthSourceGeneration }),
+		[provider, initialIdentity],
+	);
 	const [state, setState] = useState<BoundaryState>(() => ({
 		...hydratedState,
 		sourceGeneration,
+		resolutionGeneration: sourceGeneration.id,
 	}));
 	const sourceChanged = state.sourceGeneration !== sourceGeneration;
 	const currentState = sourceChanged ? hydratedState : state;
+	const currentResolutionGeneration = sourceChanged
+		? sourceGeneration.id
+		: state.resolutionGeneration;
 	const latestResolutionGeneration = useRef(0);
 	const activeSourceGeneration = useRef<object | null>(sourceGeneration);
 
@@ -116,46 +127,69 @@ export function StackAuthBoundary({
 		setState({
 			...hydratedState,
 			sourceGeneration,
+			resolutionGeneration: sourceGeneration.id,
 		});
 	}, [hydratedState, sourceChanged, sourceGeneration]);
 
-	const refetch = useCallback(async () => {
-		const resolutionGeneration = ++latestResolutionGeneration.current;
-		const isLatestResolution = () =>
-			latestResolutionGeneration.current === resolutionGeneration &&
-			activeSourceGeneration.current === sourceGeneration;
-		try {
-			const identity = await provider.getIdentity();
-			if (!isLatestResolution()) return;
-			setState({
-				identity: identity ?? null,
-				isPending: false,
-				sourceGeneration,
-			});
-		} catch (error) {
-			if (!isLatestResolution()) return;
-			if (isSchemaBoundStackAuthProvider(provider)) {
+	const resolveIdentity = useCallback(
+		async (markPending: boolean) => {
+			if (activeSourceGeneration.current !== sourceGeneration) return;
+			const resolutionGeneration = ++latestResolutionGeneration.current;
+			const cacheGeneration = markPending
+				? ++nextAuthSourceGeneration
+				: sourceGeneration.id;
+			if (markPending) {
+				setState({
+					identity: null,
+					isPending: true,
+					sourceGeneration,
+					resolutionGeneration: cacheGeneration,
+				});
+			}
+			const isLatestResolution = () =>
+				latestResolutionGeneration.current === resolutionGeneration &&
+				activeSourceGeneration.current === sourceGeneration;
+			try {
+				const identity = await provider.getIdentity();
+				if (!isLatestResolution()) return;
+				setState({
+					identity: identity ?? null,
+					isPending: false,
+					sourceGeneration,
+					resolutionGeneration: cacheGeneration,
+				});
+			} catch (error) {
+				if (!isLatestResolution()) return;
+				const identityError =
+					error instanceof Error ? error : new Error(String(error));
+				if (isSchemaBoundStackAuthProvider(provider)) {
+					setState({
+						identity: null,
+						isPending: false,
+						error: identityError,
+						sourceGeneration,
+						resolutionGeneration: cacheGeneration,
+					});
+					return;
+				}
+				console.error("[btst/auth] getIdentity() failed:", error);
 				setState({
 					identity: null,
 					isPending: false,
-					error: error instanceof Error ? error : new Error(String(error)),
+					error: identityError,
 					sourceGeneration,
+					resolutionGeneration: cacheGeneration,
 				});
-				return;
 			}
-			console.error("[btst/auth] getIdentity() failed:", error);
-			setState({
-				identity: null,
-				isPending: false,
-				sourceGeneration,
-			});
-		}
-	}, [provider, sourceGeneration]);
+		},
+		[provider, sourceGeneration],
+	);
+	const refetch = useCallback(() => resolveIdentity(true), [resolveIdentity]);
 
 	useEffect(() => {
 		if (initialIdentity !== undefined) return;
-		void refetch();
-	}, [initialIdentity, refetch]);
+		void resolveIdentity(false);
+	}, [initialIdentity, resolveIdentity]);
 
 	return (
 		<AuthContext.Provider
@@ -163,6 +197,7 @@ export function StackAuthBoundary({
 				provider,
 				identity: currentState.identity,
 				isPending: currentState.isPending,
+				sourceGeneration: currentResolutionGeneration,
 				...(currentState.error ? { error: currentState.error } : {}),
 				refetch,
 			}}
@@ -207,6 +242,11 @@ export function useIdentity(): {
 		...(auth.error ? { error: auth.error } : {}),
 		refetch: auth.refetch,
 	};
+}
+
+/** @internal Serializable identity-resolution key for protected query caches. */
+export function useIdentitySourceGeneration(): number {
+	return useContext(AuthContext)?.sourceGeneration ?? 0;
 }
 
 type CanState = { can: boolean; isPending: boolean };

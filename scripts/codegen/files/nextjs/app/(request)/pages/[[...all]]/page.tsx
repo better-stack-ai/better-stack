@@ -17,6 +17,7 @@ const page = createNextPage({
 		return getStackClient(queryClient, {
 			headers: requestHeaders,
 			currentUserId: initialIdentity?.id,
+			identity: initialIdentity ?? undefined,
 		});
 	},
 });

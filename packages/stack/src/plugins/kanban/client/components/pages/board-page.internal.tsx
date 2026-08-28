@@ -34,8 +34,7 @@ import {
 	useTaskMutations,
 } from "../../hooks/kanban-hooks";
 import {
-	CanAccess,
-	useCan,
+	PermissionAccess,
 	useNotify,
 	usePluginOverrides,
 	useStack,
@@ -49,6 +48,8 @@ import { TaskForm } from "../forms/task-form";
 import { PageWrapper } from "../shared/page-wrapper";
 import { EmptyState } from "../shared/empty-state";
 import type { SerializedTask, SerializedColumn } from "../../../types";
+import { kanbanPermissions } from "../../../permissions";
+import { PermissionAccessAny } from "../shared/permission-access-any";
 
 interface BoardPageProps {
 	boardId: string;
@@ -87,36 +88,6 @@ export function BoardPage({ boardId }: BoardPageProps) {
 	const { deleteBoard, isDeleting } = useBoardMutations();
 	const { deleteColumn, reorderColumns } = useColumnMutations();
 	const { deleteTask, moveTask, reorderTasks } = useTaskMutations();
-	const { can: canMoveColumns, isPending: isCheckingColumnMove } = useCan({
-		resource: "kanban:column",
-		action: "update",
-		params: { boardId },
-	});
-	const { can: canMoveTasks, isPending: isCheckingTaskMove } = useCan({
-		resource: "kanban:task",
-		action: "update",
-		params: { boardId },
-	});
-	const { can: canCreateColumn, isPending: isCheckingCreateColumn } = useCan({
-		resource: "kanban:column",
-		action: "create",
-		params: { boardId },
-	});
-	const { can: canUpdateBoard, isPending: isCheckingUpdateBoard } = useCan({
-		resource: "kanban:board",
-		action: "update",
-		params: { id: boardId },
-	});
-	const { can: canDeleteBoard, isPending: isCheckingDeleteBoard } = useCan({
-		resource: "kanban:board",
-		action: "delete",
-		params: { id: boardId },
-	});
-	const showCreateColumn = !isCheckingCreateColumn && canCreateColumn;
-	const showUpdateBoard = !isCheckingUpdateBoard && canUpdateBoard;
-	const showDeleteBoard = !isCheckingDeleteBoard && canDeleteBoard;
-	const hasBoardActions =
-		showCreateColumn || showUpdateBoard || showDeleteBoard;
 
 	const [modalState, setModalState] = useState<ModalState>({ type: "none" });
 
@@ -274,18 +245,6 @@ export function BoardPage({ boardId }: BoardPageProps) {
 					for (const [columnId, taskIds] of columnsToReorder) {
 						await reorderTasks(columnId, taskIds);
 					}
-
-					// Reorder target columns of cross-column moves to fix order collisions
-					// The moveTask only sets the moved task's order, so other tasks need reordering
-					for (const targetColumnId of targetColumnsOfCrossMove) {
-						const tasks = newData[targetColumnId];
-						if (tasks) {
-							await reorderTasks(
-								targetColumnId,
-								tasks.map((t) => t.id),
-							);
-						}
-					}
 				}
 
 				// Sync with server after successful mutations
@@ -347,6 +306,43 @@ export function BoardPage({ boardId }: BoardPageProps) {
 		);
 	}
 
+	const boardFacts = {
+		boardId: board.id,
+		...(board.ownerId ? { ownerId: board.ownerId } : {}),
+		...(board.organizationId ? { organizationId: board.organizationId } : {}),
+	};
+	const boardLegacyFacts = {
+		id: board.id,
+		...(board.ownerId ? { ownerId: board.ownerId } : {}),
+		...(board.organizationId ? { organizationId: board.organizationId } : {}),
+	};
+	const boardActionChecks = [
+		{
+			permission: kanbanPermissions.column.create(boardFacts),
+			legacyPermission: {
+				resource: "kanban:column",
+				action: "create",
+				params: { ...boardLegacyFacts, boardId: board.id },
+			},
+		},
+		{
+			permission: kanbanPermissions.board.update(boardFacts),
+			legacyPermission: {
+				resource: "kanban:board",
+				action: "update",
+				params: boardLegacyFacts,
+			},
+		},
+		{
+			permission: kanbanPermissions.board.delete(boardFacts),
+			legacyPermission: {
+				resource: "kanban:board",
+				action: "delete",
+				params: boardLegacyFacts,
+			},
+		},
+	] as const;
+
 	return (
 		<PageWrapper
 			data-testid="board-page"
@@ -369,7 +365,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 						)}
 					</div>
 				</div>
-				{hasBoardActions && (
+				<PermissionAccessAny checks={boardActionChecks}>
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
 							<Button variant="outline">
@@ -378,7 +374,14 @@ export function BoardPage({ boardId }: BoardPageProps) {
 							</Button>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
-							{showCreateColumn && (
+							<PermissionAccess
+								permission={kanbanPermissions.column.create(boardFacts)}
+								legacyPermission={{
+									resource: "kanban:column",
+									action: "create",
+									params: { ...boardLegacyFacts, boardId: board.id },
+								}}
+							>
 								<DropdownMenuItem
 									onClick={() => setModalState({ type: "addColumn" })}
 								>
@@ -386,8 +389,15 @@ export function BoardPage({ boardId }: BoardPageProps) {
 									{localization?.addColumn ??
 										t("kanban.list.addColumn", "Add Column")}
 								</DropdownMenuItem>
-							)}
-							{showUpdateBoard && (
+							</PermissionAccess>
+							<PermissionAccess
+								permission={kanbanPermissions.board.update(boardFacts)}
+								legacyPermission={{
+									resource: "kanban:board",
+									action: "update",
+									params: boardLegacyFacts,
+								}}
+							>
 								<DropdownMenuItem
 									onClick={() => setModalState({ type: "editBoard" })}
 								>
@@ -395,11 +405,16 @@ export function BoardPage({ boardId }: BoardPageProps) {
 									{localization?.editBoard ??
 										t("kanban.list.editBoard", "Edit Board")}
 								</DropdownMenuItem>
-							)}
-							{showDeleteBoard && (showCreateColumn || showUpdateBoard) && (
+							</PermissionAccess>
+							<PermissionAccess
+								permission={kanbanPermissions.board.delete(boardFacts)}
+								legacyPermission={{
+									resource: "kanban:board",
+									action: "delete",
+									params: boardLegacyFacts,
+								}}
+							>
 								<DropdownMenuSeparator />
-							)}
-							{showDeleteBoard && (
 								<DropdownMenuItem
 									onClick={() => setModalState({ type: "deleteBoard" })}
 									className="text-red-600 focus:text-red-600"
@@ -408,19 +423,19 @@ export function BoardPage({ boardId }: BoardPageProps) {
 									{localization?.deleteBoard ??
 										t("kanban.forms.deleteBoard", "Delete Board")}
 								</DropdownMenuItem>
-							)}
+							</PermissionAccess>
 						</DropdownMenuContent>
 					</DropdownMenu>
-				)}
+				</PermissionAccessAny>
 			</div>
 
 			{orderedColumns.length > 0 ? (
 				<KanbanBoard
 					boardId={boardId}
+					ownerId={board.ownerId}
+					organizationId={board.organizationId}
 					columns={orderedColumns}
 					kanbanState={kanbanState}
-					canMoveColumns={!isCheckingColumnMove && canMoveColumns}
-					canMoveTasks={!isCheckingTaskMove && canMoveTasks}
 					onKanbanChange={handleKanbanChange}
 					onAddTask={(columnId) => setModalState({ type: "addTask", columnId })}
 					onEditTask={(columnId, taskId) =>
@@ -447,17 +462,20 @@ export function BoardPage({ boardId }: BoardPageProps) {
 						)
 					}
 					action={
-						<CanAccess
-							resource="kanban:column"
-							action="create"
-							params={{ boardId }}
+						<PermissionAccess
+							permission={kanbanPermissions.column.create(boardFacts)}
+							legacyPermission={{
+								resource: "kanban:column",
+								action: "create",
+								params: { ...boardLegacyFacts, boardId: board.id },
+							}}
 						>
 							<Button onClick={() => setModalState({ type: "addColumn" })}>
 								<Plus className="mr-2 h-4 w-4" />
 								{localization?.addColumn ??
 									t("kanban.list.addColumn", "Add Column")}
 							</Button>
-						</CanAccess>
+						</PermissionAccess>
 					}
 				/>
 			)}
@@ -650,6 +668,8 @@ export function BoardPage({ boardId }: BoardPageProps) {
 						<TaskForm
 							columnId={modalState.columnId}
 							boardId={boardId}
+							ownerId={board.ownerId}
+							organizationId={board.organizationId}
 							columns={board.columns || []}
 							onClose={closeModal}
 							onSuccess={closeModal}
@@ -678,6 +698,8 @@ export function BoardPage({ boardId }: BoardPageProps) {
 							<TaskForm
 								columnId={modalState.columnId}
 								boardId={boardId}
+								ownerId={board.ownerId}
+								organizationId={board.organizationId}
 								taskId={modalState.taskId}
 								task={board.columns
 									?.find((c) => c.id === modalState.columnId)

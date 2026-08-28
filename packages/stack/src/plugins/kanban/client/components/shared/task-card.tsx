@@ -10,31 +10,33 @@ import type { SerializedTask } from "../../../types";
 import { getPriorityConfig } from "../../../utils";
 import { useResolveUser } from "../../hooks/kanban-hooks";
 import { UserAvatar } from "./user-avatar";
-import { useCan, usePluginOverrides, useTranslate } from "@btst/stack/context";
+import {
+	PermissionAccess,
+	usePluginOverrides,
+	useTranslate,
+} from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
+import { kanbanPermissions } from "../../../permissions";
 
 interface TaskCardProps {
 	boardId: string;
+	ownerId?: string;
+	organizationId?: string;
 	columnId: string;
 	task: SerializedTask;
-	canMove: boolean;
 	onClick: () => void;
 }
 
 function TaskCardComponent({
 	boardId,
+	ownerId,
+	organizationId,
 	columnId,
 	task,
-	canMove,
 	onClick,
 }: TaskCardProps) {
 	const t = useTranslate();
 	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
-	const { can: canEdit, isPending: isCheckingEdit } = useCan({
-		resource: "kanban:task",
-		action: "update",
-		params: { id: task.id, boardId, columnId },
-	});
 	const priorityConfig = getPriorityConfig(task.priority);
 	const { data: assignee } = useResolveUser(task.assigneeId);
 	const priorityLabels = {
@@ -47,9 +49,29 @@ function TaskCardComponent({
 			localization?.priorityUrgent ??
 			t("kanban.common.priorityUrgent", "Urgent"),
 	};
-	const editable = !isCheckingEdit && canEdit;
+	const boardFacts = {
+		boardId,
+		...(ownerId ? { ownerId } : {}),
+		...(organizationId ? { organizationId } : {}),
+	};
+	const taskFacts = {
+		...boardFacts,
+		columnId,
+		taskId: task.id,
+		...(task.assigneeId ? { assigneeId: task.assigneeId } : {}),
+		isArchived: task.isArchived,
+	};
+	const legacyTaskFacts = {
+		id: task.id,
+		boardId,
+		columnId,
+		...(ownerId ? { ownerId } : {}),
+		...(organizationId ? { organizationId } : {}),
+		...(task.assigneeId ? { assigneeId: task.assigneeId } : {}),
+		isArchived: task.isArchived,
+	};
 
-	return (
+	const card = (editable: boolean) => (
 		<Kanban.Item value={task.id} asChild>
 			<div
 				className={`rounded-md border bg-card p-3 shadow-xs transition-shadow ${editable ? "cursor-pointer hover:shadow-md" : "cursor-default"}`}
@@ -57,16 +79,37 @@ function TaskCardComponent({
 			>
 				<div className="flex flex-col gap-2">
 					<div className="flex items-center gap-2">
-						<Kanban.ItemHandle asChild disabled={!canMove}>
-							<Button
-								variant="ghost"
-								size="icon"
-								className="h-6 w-6"
-								onClick={(e: React.MouseEvent) => e.stopPropagation()}
+						<PermissionAccess
+							permission={kanbanPermissions.task.move(taskFacts)}
+							legacyPermission={{
+								resource: "kanban:task",
+								action: "update",
+								params: legacyTaskFacts,
+							}}
+						>
+							<PermissionAccess
+								permission={kanbanPermissions.task.reorder({
+									...boardFacts,
+									columnId,
+								})}
+								legacyPermission={{
+									resource: "kanban:task",
+									action: "update",
+									params: { ...boardFacts, columnId },
+								}}
 							>
-								<GripVertical className="h-3 w-3" />
-							</Button>
-						</Kanban.ItemHandle>
+								<Kanban.ItemHandle asChild>
+									<Button
+										variant="ghost"
+										size="icon"
+										className="h-6 w-6"
+										onClick={(e: React.MouseEvent) => e.stopPropagation()}
+									>
+										<GripVertical className="h-3 w-3" />
+									</Button>
+								</Kanban.ItemHandle>
+							</PermissionAccess>
+						</PermissionAccess>
 						<span
 							className={`line-clamp-1 font-medium text-base flex-1 text-left ${editable ? "cursor-pointer hover:text-primary" : "cursor-default"}`}
 							title={task.title}
@@ -107,6 +150,20 @@ function TaskCardComponent({
 				</div>
 			</div>
 		</Kanban.Item>
+	);
+
+	return (
+		<PermissionAccess
+			permission={kanbanPermissions.task.update(taskFacts)}
+			legacyPermission={{
+				resource: "kanban:task",
+				action: "update",
+				params: legacyTaskFacts,
+			}}
+			fallback={card(false)}
+		>
+			{card(true)}
+		</PermissionAccess>
 	);
 }
 

@@ -11,7 +11,7 @@ import {
 } from "@workspace/ui/components/card";
 import { useSuspenseBoards } from "../../hooks/kanban-hooks";
 import {
-	CanAccess,
+	PermissionAccess,
 	usePluginOverrides,
 	useStack,
 	useTranslate,
@@ -20,6 +20,7 @@ import type { KanbanPluginOverrides } from "../../overrides";
 import { EmptyState } from "../shared/empty-state";
 import { PageWrapper } from "../shared/page-wrapper";
 import { format } from "date-fns";
+import { kanbanPermissions } from "../../../permissions";
 
 export function BoardsListPage() {
 	const t = useTranslate();
@@ -55,49 +56,72 @@ export function BoardsListPage() {
 							t("kanban.list.manageProjects", "Manage your projects and tasks")}
 					</p>
 				</div>
-				<CanAccess resource="kanban:board" action="create">
+				<PermissionAccess
+					permission={kanbanPermissions.board.create()}
+					legacyPermission={{ resource: "kanban:board", action: "create" }}
+				>
 					<Button onClick={handleNewBoard}>
 						<Plus className="mr-2 h-4 w-4" />
 						{localization?.newBoard ?? t("kanban.list.newBoard", "New Board")}
 					</Button>
-				</CanAccess>
+				</PermissionAccess>
 			</div>
 
 			{boards.length > 0 ? (
 				<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 					{boards.map((board) => (
-						<Link
+						<PermissionAccess
 							key={board.id}
-							href={`/pages/kanban/${board.id}`}
-							className="block group"
+							permission={kanbanPermissions.board.read({
+								scope: "record",
+								boardId: board.id,
+								...(board.ownerId ? { ownerId: board.ownerId } : {}),
+								...(board.organizationId
+									? { organizationId: board.organizationId }
+									: {}),
+								exists: true,
+							})}
+							legacyPermission={{
+								resource: "kanban:board",
+								action: "read",
+								params: {
+									id: board.id,
+									...(board.ownerId ? { ownerId: board.ownerId } : {}),
+									...(board.organizationId
+										? { organizationId: board.organizationId }
+										: {}),
+								},
+							}}
 						>
-							<Card className="h-full transition-shadow hover:shadow-md cursor-pointer">
-								<CardHeader>
-									<CardTitle className="group-hover:text-primary transition-colors">
-										{board.name}
-									</CardTitle>
-									{board.description && (
-										<CardDescription className="line-clamp-2">
-											{board.description}
-										</CardDescription>
-									)}
-								</CardHeader>
-								<CardContent>
-									<div className="flex items-center justify-between text-sm text-muted-foreground">
-										<span>
-											{localization?.columnsCount
-												? `${board.columns?.length || 0} ${localization.columnsCount}`
-												: t("kanban.list.columnsCount", "{{count}} columns", {
-														count: board.columns?.length || 0,
-													})}
-										</span>
-										<span>
-											{format(new Date(board.createdAt), "MMM d, yyyy")}
-										</span>
-									</div>
-								</CardContent>
-							</Card>
-						</Link>
+							<Link href={`/pages/kanban/${board.id}`} className="block group">
+								<Card className="h-full transition-shadow hover:shadow-md cursor-pointer">
+									<CardHeader>
+										<CardTitle className="group-hover:text-primary transition-colors">
+											{board.name}
+										</CardTitle>
+										{board.description && (
+											<CardDescription className="line-clamp-2">
+												{board.description}
+											</CardDescription>
+										)}
+									</CardHeader>
+									<CardContent>
+										<div className="flex items-center justify-between text-sm text-muted-foreground">
+											<span>
+												{localization?.columnsCount
+													? `${board.columns?.length || 0} ${localization.columnsCount}`
+													: t("kanban.list.columnsCount", "{{count}} columns", {
+															count: board.columns?.length || 0,
+														})}
+											</span>
+											<span>
+												{format(new Date(board.createdAt), "MMM d, yyyy")}
+											</span>
+										</div>
+									</CardContent>
+								</Card>
+							</Link>
+						</PermissionAccess>
 					))}
 				</div>
 			) : (
@@ -114,13 +138,19 @@ export function BoardsListPage() {
 						)
 					}
 					action={
-						<CanAccess resource="kanban:board" action="create">
+						<PermissionAccess
+							permission={kanbanPermissions.board.create()}
+							legacyPermission={{
+								resource: "kanban:board",
+								action: "create",
+							}}
+						>
 							<Button onClick={handleNewBoard}>
 								<Plus className="mr-2 h-4 w-4" />
 								{localization?.createBoard ??
 									t("kanban.forms.createBoard", "Create Board")}
 							</Button>
-						</CanAccess>
+						</PermissionAccess>
 					}
 				/>
 			)}

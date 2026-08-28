@@ -7,11 +7,29 @@ import {
 import type {
 	Priority,
 	SerializedBoard,
+	SerializedBoardSummary,
 	SerializedBoardWithColumns,
 	SerializedColumn,
 	SerializedTask,
 } from "./types";
+import type { StackIdentity } from "@btst/stack/context";
+import type { z } from "zod";
 import { boardsListDiscriminator } from "./api/query-key-defs";
+import type { createBoardSchema } from "./schemas";
+
+/**
+ * Browser authorization can change without the URL changing. Protected
+ * Kanban queries include this snapshot in their key so data authorized for
+ * one identity is never reused by another identity. Pending keys include the
+ * current identity-resolution generation, so a new resolver or failed identity
+ * check cannot reuse another resolution's response. `undefined` is shared by
+ * anonymous requests and the explicitly trusted raw SSG prefetch path so
+ * anonymous hydration works.
+ */
+export type KanbanIdentityPartition =
+	| StackIdentity
+	| `pending:${number}`
+	| `error:${number}`;
 
 export interface BoardsListParams {
 	slug?: string;
@@ -21,12 +39,7 @@ export interface BoardsListParams {
 	offset?: number;
 }
 
-export interface CreateBoardInput {
-	name: string;
-	description?: string;
-	ownerId?: string;
-	organizationId?: string;
-}
+export type CreateBoardInput = z.input<typeof createBoardSchema>;
 
 export interface UpdateBoardInput {
 	id: string;
@@ -101,38 +114,69 @@ export const kanbanResources = {
 		queries: {
 			list: {
 				path: "/boards",
-				query: (params?: BoardsListParams) => ({
+				query: (
+					params?: BoardsListParams,
+					_identityPartition?: KanbanIdentityPartition,
+				) => ({
 					slug: params?.slug,
 					ownerId: params?.ownerId,
 					organizationId: params?.organizationId,
 					limit: params?.limit ?? 50,
 					offset: params?.offset ?? 0,
 				}),
-				key: (params?: BoardsListParams) => [boardsListDiscriminator(params)],
+				key: (
+					params?: BoardsListParams,
+					identityPartition?: KanbanIdentityPartition,
+				) =>
+					identityPartition === undefined
+						? [boardsListDiscriminator(params)]
+						: [
+								boardsListDiscriminator(params),
+								{ identity: identityPartition },
+							],
 				select: (
 					data: any,
 					_params?: BoardsListParams,
-				): SerializedBoardWithColumns[] => data?.items ?? [],
+					_identityPartition?: KanbanIdentityPartition,
+				): SerializedBoardSummary[] => data?.items ?? [],
 			},
 
 			detail: {
 				path: "/boards/:id",
-				params: (boardId: string) => ({ id: boardId }),
-				key: (boardId: string) => [boardId],
+				params: (
+					boardId: string,
+					_identityPartition?: KanbanIdentityPartition,
+				) => ({ id: boardId }),
+				key: (boardId: string, identityPartition?: KanbanIdentityPartition) =>
+					identityPartition === undefined
+						? [boardId]
+						: [boardId, { identity: identityPartition }],
 				select: (
 					data: any,
 					_boardId: string,
+					_identityPartition?: KanbanIdentityPartition,
 				): SerializedBoardWithColumns | null => data ?? null,
-				skip: (boardId: string) => !boardId,
+				skip: (boardId: string, _identityPartition?: KanbanIdentityPartition) =>
+					!boardId,
 			},
 
 			bySlug: {
 				path: "/boards",
-				query: (slug: string) => ({ slug, limit: 1 }),
-				key: (slug: string) => ["slug", slug],
-				select: (data: any, _slug: string): SerializedBoardWithColumns | null =>
-					data?.items?.[0] ?? null,
-				skip: (slug: string) => !slug,
+				query: (
+					slug: string,
+					_identityPartition?: KanbanIdentityPartition,
+				) => ({ slug, limit: 1 }),
+				key: (slug: string, identityPartition?: KanbanIdentityPartition) =>
+					identityPartition === undefined
+						? ["slug", slug]
+						: ["slug", slug, { identity: identityPartition }],
+				select: (
+					data: any,
+					_slug: string,
+					_identityPartition?: KanbanIdentityPartition,
+				): SerializedBoardSummary | null => data?.items?.[0] ?? null,
+				skip: (slug: string, _identityPartition?: KanbanIdentityPartition) =>
+					!slug,
 			},
 		},
 
@@ -142,10 +186,6 @@ export const kanbanResources = {
 				method: "POST" as const,
 				input: (data: CreateBoardInput) => ({ body: data }),
 				select: (data: any) => data as SerializedBoardWithColumns,
-				setData: {
-					query: "detail",
-					args: (board: SerializedBoardWithColumns) => [board.id],
-				},
 				invalidates: ["boards.list"],
 				refresh: false,
 			},

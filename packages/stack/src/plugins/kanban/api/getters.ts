@@ -2,6 +2,7 @@ import type { DBAdapter as Adapter } from "@btst/db";
 import type {
 	BoardWithKanbanColumn,
 	BoardWithColumns,
+	BoardWithColumnsOnly,
 	ColumnWithTasks,
 	Task,
 } from "../types";
@@ -11,11 +12,56 @@ import type { BoardListQuerySchema } from "../schemas";
 /**
  * Paginated result returned by {@link getAllBoards}.
  */
-export interface BoardListResult {
-	items: BoardWithColumns[];
+export interface BoardListResult<TBoard = BoardWithColumns> {
+	items: TBoard[];
 	total: number;
 	limit?: number;
 	offset?: number;
+}
+
+async function getBoardRows(
+	adapter: Adapter,
+	params?: z.infer<typeof BoardListQuerySchema>,
+) {
+	const query = params ?? {};
+	const whereConditions: Array<{
+		field: string;
+		value: string;
+		operator: "eq";
+	}> = [];
+
+	if (query.slug) {
+		whereConditions.push({ field: "slug", value: query.slug, operator: "eq" });
+	}
+	if (query.ownerId) {
+		whereConditions.push({
+			field: "ownerId",
+			value: query.ownerId,
+			operator: "eq",
+		});
+	}
+	if (query.organizationId) {
+		whereConditions.push({
+			field: "organizationId",
+			value: query.organizationId,
+			operator: "eq",
+		});
+	}
+
+	const where = whereConditions.length > 0 ? whereConditions : undefined;
+	const [items, total] = await Promise.all([
+		adapter.findMany<BoardWithKanbanColumn>({
+			model: "kanbanBoard",
+			limit: query.limit ?? 50,
+			offset: query.offset ?? 0,
+			where,
+			sortBy: { field: "createdAt", direction: "desc" },
+			join: { kanbanColumn: true },
+		}),
+		adapter.count({ model: "kanbanBoard", where }),
+	]);
+
+	return { items, total, limit: query.limit, offset: query.offset };
 }
 
 /**
@@ -70,57 +116,26 @@ export async function getAllBoards(
 	adapter: Adapter,
 	params?: z.infer<typeof BoardListQuerySchema>,
 ): Promise<BoardListResult> {
-	const query = params ?? {};
-
-	const whereConditions: Array<{
-		field: string;
-		value: string;
-		operator: "eq";
-	}> = [];
-
-	if (query.slug) {
-		whereConditions.push({
-			field: "slug",
-			value: query.slug,
-			operator: "eq" as const,
-		});
-	}
-
-	if (query.ownerId) {
-		whereConditions.push({
-			field: "ownerId",
-			value: query.ownerId,
-			operator: "eq" as const,
-		});
-	}
-
-	if (query.organizationId) {
-		whereConditions.push({
-			field: "organizationId",
-			value: query.organizationId,
-			operator: "eq" as const,
-		});
-	}
-
-	const where = whereConditions.length > 0 ? whereConditions : undefined;
-
-	const [boards, total] = await Promise.all([
-		adapter.findMany<BoardWithKanbanColumn>({
-			model: "kanbanBoard",
-			limit: query.limit ?? 50,
-			offset: query.offset ?? 0,
-			where,
-			sortBy: { field: "createdAt", direction: "desc" },
-			join: { kanbanColumn: true },
-		}),
-		adapter.count({ model: "kanbanBoard", where }),
-	]);
-
+	const result = await getBoardRows(adapter, params);
 	const items = await Promise.all(
-		boards.map((board) => hydrateColumnsWithTasks(adapter, board)),
+		result.items.map((board) => hydrateColumnsWithTasks(adapter, board)),
 	);
+	return { ...result, items };
+}
 
-	return { items, total, limit: query.limit, offset: query.offset };
+/** Retrieve collection-safe board and column metadata without loading tasks. */
+export async function getBoardSummaries(
+	adapter: Adapter,
+	params?: z.infer<typeof BoardListQuerySchema>,
+): Promise<BoardListResult<BoardWithColumnsOnly>> {
+	const result = await getBoardRows(adapter, params);
+	return {
+		...result,
+		items: result.items.map(({ column = [], ...board }) => ({
+			...board,
+			columns: [...column].sort((left, right) => left.order - right.order),
+		})),
+	};
 }
 
 /**

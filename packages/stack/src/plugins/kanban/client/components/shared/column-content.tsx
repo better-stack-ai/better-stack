@@ -6,8 +6,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import * as Kanban from "@workspace/ui/components/kanban";
 import {
-	CanAccess,
-	useCan,
+	PermissionAccess,
 	usePluginOverrides,
 	useTranslate,
 } from "@btst/stack/context";
@@ -21,12 +20,14 @@ import {
 } from "@workspace/ui/components/dropdown-menu";
 import { TaskCard } from "./task-card";
 import type { SerializedColumn, SerializedTask } from "../../../types";
+import { kanbanPermissions } from "../../../permissions";
+import { PermissionAccessAny } from "./permission-access-any";
 
 interface ColumnContentProps {
 	boardId: string;
+	ownerId?: string;
+	organizationId?: string;
 	column: SerializedColumn & { tasks: SerializedTask[] };
-	canMoveColumn: boolean;
-	canMoveTasks: boolean;
 	onAddTask: () => void;
 	onEditTask: (taskId: string) => void;
 	onEditColumn: () => void;
@@ -35,9 +36,9 @@ interface ColumnContentProps {
 
 function ColumnContentComponent({
 	boardId,
+	ownerId,
+	organizationId,
 	column,
-	canMoveColumn,
-	canMoveTasks,
 	onAddTask,
 	onEditTask,
 	onEditColumn,
@@ -46,35 +47,62 @@ function ColumnContentComponent({
 	const t = useTranslate();
 	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
 	const hasTasks = column.tasks && column.tasks.length > 0;
-	const { can: canUpdateColumn, isPending: isCheckingUpdateColumn } = useCan({
-		resource: "kanban:column",
-		action: "update",
-		params: { id: column.id, boardId },
-	});
-	const { can: canCreateTask, isPending: isCheckingCreateTask } = useCan({
-		resource: "kanban:task",
-		action: "create",
-		params: { boardId, columnId: column.id },
-	});
-	const { can: canDeleteColumn, isPending: isCheckingDeleteColumn } = useCan({
-		resource: "kanban:column",
-		action: "delete",
-		params: { id: column.id, boardId },
-	});
-	const showUpdateColumn = !isCheckingUpdateColumn && canUpdateColumn;
-	const showCreateTask = !isCheckingCreateTask && canCreateTask;
-	const showDeleteColumn = !isCheckingDeleteColumn && canDeleteColumn;
-	const hasColumnActions =
-		showUpdateColumn || showCreateTask || showDeleteColumn;
+	const boardFacts = {
+		boardId,
+		...(ownerId ? { ownerId } : {}),
+		...(organizationId ? { organizationId } : {}),
+	};
+	const columnFacts = { ...boardFacts, columnId: column.id };
+	const legacyBoardFacts = {
+		boardId,
+		...(ownerId ? { ownerId } : {}),
+		...(organizationId ? { organizationId } : {}),
+	};
+	const legacyColumnFacts = { ...legacyBoardFacts, id: column.id };
+	const columnActionChecks = [
+		{
+			permission: kanbanPermissions.column.update(columnFacts),
+			legacyPermission: {
+				resource: "kanban:column",
+				action: "update",
+				params: legacyColumnFacts,
+			},
+		},
+		{
+			permission: kanbanPermissions.task.create(columnFacts),
+			legacyPermission: {
+				resource: "kanban:task",
+				action: "create",
+				params: columnFacts,
+			},
+		},
+		{
+			permission: kanbanPermissions.column.delete(columnFacts),
+			legacyPermission: {
+				resource: "kanban:column",
+				action: "delete",
+				params: legacyColumnFacts,
+			},
+		},
+	] as const;
 
 	return (
 		<Kanban.Column key={column.id} value={column.id}>
 			<div className="flex items-center">
-				<Kanban.ColumnHandle asChild disabled={!canMoveColumn}>
-					<Button variant="ghost" size="icon">
-						<GripVertical className="h-4 w-4" />
-					</Button>
-				</Kanban.ColumnHandle>
+				<PermissionAccess
+					permission={kanbanPermissions.column.reorder(boardFacts)}
+					legacyPermission={{
+						resource: "kanban:column",
+						action: "update",
+						params: legacyBoardFacts,
+					}}
+				>
+					<Kanban.ColumnHandle asChild>
+						<Button variant="ghost" size="icon">
+							<GripVertical className="h-4 w-4" />
+						</Button>
+					</Kanban.ColumnHandle>
+				</PermissionAccess>
 				<div className="flex items-center gap-2 flex-1">
 					<span className="font-bold text-lg line-clamp-1 flex-1 text-left">
 						{column.title}
@@ -83,7 +111,7 @@ function ColumnContentComponent({
 						{column.tasks?.length || 0}
 					</Badge>
 				</div>
-				{hasColumnActions && (
+				<PermissionAccessAny checks={columnActionChecks}>
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
 							<Button variant="ghost" size="icon">
@@ -91,24 +119,43 @@ function ColumnContentComponent({
 							</Button>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
-							{showUpdateColumn && (
+							<PermissionAccess
+								permission={kanbanPermissions.column.update(columnFacts)}
+								legacyPermission={{
+									resource: "kanban:column",
+									action: "update",
+									params: legacyColumnFacts,
+								}}
+							>
 								<DropdownMenuItem onClick={onEditColumn}>
 									<Pencil className="mr-2 h-4 w-4" />
 									{localization?.editColumn ??
 										t("kanban.list.editColumn", "Edit Column")}
 								</DropdownMenuItem>
-							)}
-							{showCreateTask && (
+							</PermissionAccess>
+							<PermissionAccess
+								permission={kanbanPermissions.task.create(columnFacts)}
+								legacyPermission={{
+									resource: "kanban:task",
+									action: "create",
+									params: columnFacts,
+								}}
+							>
 								<DropdownMenuItem onClick={onAddTask}>
 									<Plus className="mr-2 h-4 w-4" />
 									{localization?.addTask ??
 										t("kanban.list.addTask", "Add Task")}
 								</DropdownMenuItem>
-							)}
-							{showDeleteColumn && (showUpdateColumn || showCreateTask) && (
+							</PermissionAccess>
+							<PermissionAccess
+								permission={kanbanPermissions.column.delete(columnFacts)}
+								legacyPermission={{
+									resource: "kanban:column",
+									action: "delete",
+									params: legacyColumnFacts,
+								}}
+							>
 								<DropdownMenuSeparator />
-							)}
-							{showDeleteColumn && (
 								<DropdownMenuItem
 									onClick={onDeleteColumn}
 									className="text-red-600 focus:text-red-600"
@@ -117,10 +164,10 @@ function ColumnContentComponent({
 									{localization?.deleteColumn ??
 										t("kanban.forms.deleteColumn", "Delete Column")}
 								</DropdownMenuItem>
-							)}
+							</PermissionAccess>
 						</DropdownMenuContent>
 					</DropdownMenu>
-				)}
+				</PermissionAccessAny>
 			</div>
 			<div className="p-0.5 space-y-2">
 				{hasTasks ? (
@@ -128,9 +175,10 @@ function ColumnContentComponent({
 						<TaskCard
 							key={task.id}
 							boardId={boardId}
+							ownerId={ownerId}
+							organizationId={organizationId}
 							columnId={column.id}
 							task={task}
-							canMove={canMoveTasks}
 							onClick={() => onEditTask(task.id)}
 						/>
 					))
@@ -152,16 +200,19 @@ function ColumnContentComponent({
 									)}
 							</p>
 						</div>
-						<CanAccess
-							resource="kanban:task"
-							action="create"
-							params={{ boardId, columnId: column.id }}
+						<PermissionAccess
+							permission={kanbanPermissions.task.create(columnFacts)}
+							legacyPermission={{
+								resource: "kanban:task",
+								action: "create",
+								params: columnFacts,
+							}}
 						>
 							<Button onClick={onAddTask} size="sm">
 								<Plus className="mr-2 h-4 w-4" />
 								{localization?.addTask ?? t("kanban.list.addTask", "Add Task")}
 							</Button>
-						</CanAccess>
+						</PermissionAccess>
 					</div>
 				)}
 			</div>

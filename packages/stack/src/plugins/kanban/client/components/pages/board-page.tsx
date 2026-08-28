@@ -1,10 +1,15 @@
 "use client";
 
 import { lazy } from "react";
-import { ComposedRoute } from "@btst/stack/client/components";
+import {
+	ComposedRoute,
+	PermissionRouteAccess,
+} from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
 import { BoardSkeleton } from "../loading/board-skeleton";
 import { NotFoundPage } from "./404-page";
+import { useSuspenseBoard } from "../../hooks/kanban-hooks";
+import { kanbanPermissions } from "../../../permissions";
 
 const BoardPage = lazy(() =>
 	import("./board-page.internal").then((m) => ({
@@ -20,17 +25,47 @@ export function BoardPageComponent({ boardId }: BoardPageComponentProps) {
 	return (
 		<ComposedRoute
 			path={`/kanban/${boardId}`}
-			permission={{
-				resource: "kanban:board",
-				action: "read",
-				params: { id: boardId },
-			}}
-			PageComponent={BoardPage}
+			PageComponent={AuthorizedBoardPage}
 			ErrorComponent={DefaultError}
 			LoadingComponent={BoardSkeleton}
 			NotFoundComponent={NotFoundPage}
 			props={{ boardId }}
 			onError={(error) => console.error("BoardPage error:", error)}
 		/>
+	);
+}
+
+/** Load the record first, then evaluate the browser gate with returned facts. */
+function AuthorizedBoardPage({ boardId }: BoardPageComponentProps) {
+	const { data: board, error, isFetching } = useSuspenseBoard(boardId);
+	if (error && !isFetching) throw error;
+	if (!board) return <NotFoundPage />;
+
+	return (
+		<PermissionRouteAccess
+			permission={kanbanPermissions.board.read({
+				scope: "record",
+				boardId: board.id,
+				...(board.ownerId ? { ownerId: board.ownerId } : {}),
+				...(board.organizationId
+					? { organizationId: board.organizationId }
+					: {}),
+				exists: true,
+			})}
+			legacyPermission={{
+				resource: "kanban:board",
+				action: "read",
+				params: {
+					id: board.id,
+					...(board.ownerId ? { ownerId: board.ownerId } : {}),
+					...(board.organizationId
+						? { organizationId: board.organizationId }
+						: {}),
+				},
+			}}
+			LoadingComponent={BoardSkeleton}
+		>
+			<BoardPage boardId={boardId} />
+		</PermissionRouteAccess>
 	);
 }

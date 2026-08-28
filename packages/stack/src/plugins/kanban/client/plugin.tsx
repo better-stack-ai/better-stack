@@ -1,14 +1,21 @@
 import {
 	defineClientPlugin,
 	createApiClient,
+	isErrorResponse,
 	isConnectionError,
 } from "@btst/stack/plugins/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { KanbanApiRouter } from "../api";
-import { createKanbanQueryKeys } from "../query-keys";
-import type { SerializedBoardWithColumns } from "../types";
+import {
+	createKanbanQueryKeys,
+	type KanbanIdentityPartition,
+} from "../query-keys";
+import type {
+	SerializedBoardSummary,
+	SerializedBoardWithColumns,
+} from "../types";
 import { BoardsListPageComponent } from "./components/pages/boards-list-page";
 import { NewBoardPageComponent } from "./components/pages/new-board-page";
 import { BoardPageComponent } from "./components/pages/board-page";
@@ -79,6 +86,8 @@ export interface KanbanClientConfig {
 
 	/** Optional headers for SSR (e.g., forwarding cookies) */
 	headers?: Headers;
+	/** Identity snapshot used to align protected SSR prefetch and browser keys. */
+	identityPartition?: KanbanIdentityPartition;
 
 	/**
 	 * Optional page component overrides.
@@ -108,7 +117,7 @@ export interface KanbanClientHooks {
 	 * Called after boards are loaded. Throw an error to cancel further processing.
 	 */
 	afterLoadBoards?: (
-		boards: SerializedBoardWithColumns[] | null,
+		boards: SerializedBoardSummary[] | null,
 		context: LoaderContext,
 	) => Promise<void> | void;
 	/**
@@ -144,7 +153,14 @@ export interface KanbanClientHooks {
 function createBoardsLoader(config: KanbanClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const { queryClient, apiBasePath, apiBaseURL, hooks, headers } = config;
+			const {
+				queryClient,
+				apiBasePath,
+				apiBaseURL,
+				hooks,
+				headers,
+				identityPartition,
+			} = config;
 
 			const context: LoaderContext = {
 				path: "/kanban",
@@ -165,12 +181,12 @@ function createBoardsLoader(config: KanbanClientConfig) {
 				});
 
 				const queries = createKanbanQueryKeys(client, headers);
-				const listQuery = queries.boards.list({});
+				const listQuery = queries.boards.list({}, identityPartition);
 
 				await queryClient.prefetchQuery(listQuery);
 
 				if (hooks?.afterLoadBoards) {
-					const boards = queryClient.getQueryData<SerializedBoardWithColumns[]>(
+					const boards = queryClient.getQueryData<SerializedBoardSummary[]>(
 						listQuery.queryKey,
 					);
 					await hooks.afterLoadBoards(boards || null, context);
@@ -203,7 +219,14 @@ function createBoardsLoader(config: KanbanClientConfig) {
 function createBoardLoader(boardId: string, config: KanbanClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const { queryClient, apiBasePath, apiBaseURL, hooks, headers } = config;
+			const {
+				queryClient,
+				apiBasePath,
+				apiBaseURL,
+				hooks,
+				headers,
+				identityPartition,
+			} = config;
 
 			const context: LoaderContext = {
 				path: `/kanban/${boardId}`,
@@ -225,7 +248,7 @@ function createBoardLoader(boardId: string, config: KanbanClientConfig) {
 				});
 
 				const queries = createKanbanQueryKeys(client, headers);
-				const boardQuery = queries.boards.detail(boardId);
+				const boardQuery = queries.boards.detail(boardId, identityPartition);
 				await queryClient.prefetchQuery(boardQuery);
 
 				if (hooks?.afterLoadBoard) {
@@ -330,6 +353,7 @@ function createBoardMeta(boardId: string, config: KanbanClientConfig) {
 			siteBaseURL,
 			siteBasePath,
 			seo,
+			identityPartition,
 		} = config;
 		const queries = createKanbanQueryKeys(
 			createApiClient<KanbanApiRouter>({
@@ -338,7 +362,7 @@ function createBoardMeta(boardId: string, config: KanbanClientConfig) {
 			}),
 		);
 		const board = queryClient.getQueryData<SerializedBoardWithColumns>(
-			queries.boards.detail(boardId).queryKey,
+			queries.boards.detail(boardId, identityPartition).queryKey,
 		);
 
 		if (!board) {
@@ -434,34 +458,32 @@ export const kanbanClientPlugin = (config: KanbanClientConfig) =>
 				basePath: config.apiBasePath,
 			});
 
-			let boards: SerializedBoardWithColumns[] = [];
 			try {
 				const res = await client("/boards", {
 					method: "GET",
 					query: { limit: 100 },
 				});
+				if (isErrorResponse(res)) return [];
 				// /boards returns BoardListResult { items, total, limit, offset }
-				boards = ((res.data as any)?.items ??
-					[]) as SerializedBoardWithColumns[];
+				const boards = ((res.data as any)?.items ??
+					[]) as SerializedBoardSummary[];
+				return [
+					{
+						url: indexUrl,
+						lastModified: new Date(),
+						changeFrequency: "daily" as const,
+						priority: 0.7,
+					},
+					...boards.map((b) => ({
+						url: `${origin}/kanban/${b.id}`,
+						lastModified: b.updatedAt ? new Date(b.updatedAt) : undefined,
+						changeFrequency: "weekly" as const,
+						priority: 0.6,
+					})),
+				];
 			} catch {
-				// Ignore errors for sitemap
+				// Protected-by-default Kanban routes are absent from anonymous sitemaps.
+				return [];
 			}
-
-			const entries = [
-				{
-					url: indexUrl,
-					lastModified: new Date(),
-					changeFrequency: "daily" as const,
-					priority: 0.7,
-				},
-				...boards.map((b) => ({
-					url: `${origin}/kanban/${b.id}`,
-					lastModified: b.updatedAt ? new Date(b.updatedAt) : undefined,
-					changeFrequency: "weekly" as const,
-					priority: 0.6,
-				})),
-			];
-
-			return entries;
 		},
 	});

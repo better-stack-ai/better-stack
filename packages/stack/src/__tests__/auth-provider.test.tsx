@@ -118,6 +118,7 @@ describe("useIdentity", () => {
 
 		expect(captured.identity).toBeNull();
 		expect(captured.isPending).toBe(false);
+		expect(captured.error).toMatchObject({ message: "boom" });
 	});
 });
 
