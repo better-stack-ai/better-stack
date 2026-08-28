@@ -440,7 +440,9 @@ const clientAuth = createClientAuth({
 
 The built-in route, new-chat, rename, delete, send, edit, retry, attachment, and tool controls construct exact descriptors from rendered conversation/message data. Those values are presentation hints only. Every backend operation reloads the authoritative conversation owner and message state before evaluating the same rule.
 
-The streaming operation checks `stream.start` plus the exact semantic intent (`message.send`, `message.edit`, `message.retry`, attachment, tool, and conversation creation when applicable) before hooks, persistence, or provider work. A coarse stream rule cannot bypass a denied sub-operation rule.
+The streaming operation checks `stream.start` plus the exact semantic intent (`message.send`, `message.edit`, `message.retry`, attachment, tool, and conversation creation when applicable) before hooks, persistence, or provider work. A completed client-tool continuation requires both send and retry permission for its server-resolved user message, so a forged assistant transcript cannot bypass a denied retry rule. A coarse stream rule cannot bypass a denied sub-operation rule.
+
+Attachment controls evaluate the selected file's real MIME type before calling the configured upload transport. The backend independently validates and authorizes the submitted file parts again before starting the provider.
 
 Missing rules deny in authorized mode. Anonymous denials return 401 and identified denials return 403; identity, rule, schema, and fact-loading failures remain errors. BTST does not install an authorization-result cache.
 

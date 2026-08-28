@@ -225,14 +225,7 @@ export type RouteOperationApi<TOperations extends OperationRecord> = {
 	) => Promise<OperationTransportResult<TOperations[TKey]>>;
 };
 
-/**
- * Define validation, trusted fact derivation, authorization, lifecycle hooks,
- * and execution once so transports cannot accidentally bypass the pipeline.
- *
- * The operation descriptor deliberately has no public `run()` method. Stack
- * composition binds it to HTTP, `forRequest()`, and the explicit `internal`
- * namespace so callers cannot forge an internal execution flag.
- */
+/** Shared configuration shape for immutable and passthrough operations. */
 type OperationConfig<
 	TInputSchema extends z.ZodTypeAny,
 	TPermission extends AnyPermissionDescriptor,
@@ -310,6 +303,14 @@ type OperationConfig<
 	) => MaybePromise<void>;
 };
 
+/**
+ * Define validation, trusted fact derivation, authorization, lifecycle hooks,
+ * and execution once so transports cannot accidentally bypass the pipeline.
+ *
+ * The operation descriptor deliberately has no public `run()` method. Stack
+ * composition binds it to HTTP, `forRequest()`, and the explicit `internal`
+ * namespace so callers cannot forge an internal execution flag.
+ */
 export function defineOperation<
 	const TInputSchema extends z.ZodTypeAny,
 	const TPermission extends AnyPermissionDescriptor,

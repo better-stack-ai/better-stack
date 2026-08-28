@@ -15,6 +15,7 @@ import { z } from "zod";
 import { ChatInterface } from "../client/components/chat-interface";
 import { ChatSidebar } from "../client/components/chat-sidebar";
 import { ChatPage } from "../client/components/pages/chat-page.internal";
+import { ChatPageComponent } from "../client/components/pages/chat-page";
 import type { SerializedConversation } from "../types";
 import { aiChatPermissions } from "../permissions";
 
@@ -456,6 +457,24 @@ describe("AI Chat forms, notifications, and i18n", () => {
 });
 
 describe("AI Chat route lifecycle", () => {
+	it("lets conversation query failures reach the composed route boundary", async () => {
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		mocks.useConversation.mockReturnValue({
+			conversation: null,
+			isLoading: false,
+			error: new Error("conversation load failed"),
+			refetch: vi.fn(),
+		});
+
+		await render(<ChatPageComponent conversationId="conv-1" />);
+
+		expect(document.body.textContent).toContain("conversation load failed");
+		expect(document.body.textContent).not.toContain("404");
+		consoleError.mockRestore();
+	});
+
 	it("runs the conversation render hook", async () => {
 		const onRouteRender = vi.fn();
 		await act(async () => {

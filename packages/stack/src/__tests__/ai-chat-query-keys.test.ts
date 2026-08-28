@@ -27,16 +27,14 @@ describe("AI Chat resource declaration", () => {
 			"conversations",
 			"list",
 			"all",
-			{ identity: { id: identity.id } },
+			{ identity },
 		]);
 		expect([
 			...queries.conversations.detail("conv-1", identity).queryKey,
-		]).toEqual([
-			"conversations",
-			"detail",
-			"conv-1",
-			{ identity: { id: identity.id } },
-		]);
+		]).toEqual(["conversations", "detail", "conv-1", { identity }]);
+		expect(queries.conversations.list(identity).queryKey).not.toEqual(
+			queries.conversations.list({ ...identity, role: "user" }).queryKey,
+		);
 		expect([...queries.conversations.list("anonymous").queryKey]).toEqual([
 			"conversations",
 			"list",

@@ -146,13 +146,6 @@ export const aiChatBackendPlugin = <
 		}),
 
 		routes: (_adapter: Adapter, _context, operations) => {
-			const historyUnavailable = (error: EndpointErrorFactory): never => {
-				throw error(404, {
-					message: "Conversations are not available in public mode.",
-					code: "HISTORY_UNAVAILABLE",
-				});
-			};
-
 			const chat = createEndpoint(
 				"/chat",
 				{ method: "POST", body: chatRequestSchema, requireRequest: true },
@@ -166,12 +159,10 @@ export const aiChatBackendPlugin = <
 				"/chat/conversations",
 				{ method: "GET", requireRequest: true },
 				(ctx) =>
-					access === "public"
-						? historyUnavailable(ctx.error)
-						: adaptOperationToHttp(
-								() => operations.listConversations({}, ctx.request),
-								ctx.error,
-							),
+					adaptOperationToHttp(
+						() => operations.listConversations({}, ctx.request),
+						ctx.error,
+					),
 			);
 			const getConversation = createEndpoint(
 				"/chat/conversations/:id",
@@ -181,12 +172,10 @@ export const aiChatBackendPlugin = <
 					requireRequest: true,
 				},
 				(ctx) =>
-					access === "public"
-						? historyUnavailable(ctx.error)
-						: adaptOperationToHttp(
-								() => operations.getConversation(ctx.params, ctx.request),
-								ctx.error,
-							),
+					adaptOperationToHttp(
+						() => operations.getConversation(ctx.params, ctx.request),
+						ctx.error,
+					),
 			);
 			const createConversation = createEndpoint(
 				"/chat/conversations",
@@ -196,12 +185,10 @@ export const aiChatBackendPlugin = <
 					requireRequest: true,
 				},
 				(ctx) =>
-					access === "public"
-						? historyUnavailable(ctx.error)
-						: adaptOperationToHttp(
-								() => operations.createConversation(ctx.body, ctx.request),
-								ctx.error,
-							),
+					adaptOperationToHttp(
+						() => operations.createConversation(ctx.body, ctx.request),
+						ctx.error,
+					),
 			);
 			const updateConversation = createEndpoint(
 				"/chat/conversations/:id",
@@ -211,34 +198,27 @@ export const aiChatBackendPlugin = <
 					requireRequest: true,
 				},
 				(ctx) =>
-					access === "public"
-						? historyUnavailable(ctx.error)
-						: adaptOperationToHttp(
-								() =>
-									operations.updateConversation(
-										UpdateConversationOperationInputSchema.parse({
-											id: ctx.params.id,
-											data: ctx.body,
-										}),
-										ctx.request,
-									),
-								ctx.error,
+					adaptOperationToHttp(
+						() =>
+							operations.updateConversation(
+								UpdateConversationOperationInputSchema.parse({
+									id: ctx.params.id,
+									data: ctx.body,
+								}),
+								ctx.request,
 							),
+						ctx.error,
+					),
 			);
 			const deleteConversation = createEndpoint(
 				"/chat/conversations/:id",
 				{ method: "DELETE", requireRequest: true },
 				(ctx) =>
-					access === "public"
-						? historyUnavailable(ctx.error)
-						: adaptOperationToHttp(
-								() =>
-									operations.deleteConversation(
-										{ id: ctx.params.id },
-										ctx.request,
-									),
-								ctx.error,
-							),
+					adaptOperationToHttp(
+						() =>
+							operations.deleteConversation({ id: ctx.params.id }, ctx.request),
+						ctx.error,
+					),
 			);
 
 			return {

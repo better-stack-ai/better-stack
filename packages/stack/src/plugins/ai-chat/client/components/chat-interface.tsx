@@ -1,7 +1,14 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import {
+	useEffect,
+	useRef,
+	useState,
+	useMemo,
+	useCallback,
+	useLayoutEffect,
+} from "react";
 import { hashKey, useQueryClient } from "@tanstack/react-query";
 import { ChatMessage } from "./chat-message";
 import { ChatInput, type AttachedFile } from "./chat-input";
@@ -201,37 +208,6 @@ function PermissionedChatMessage({
 	);
 }
 
-function AttachmentCheck({
-	publicMode,
-	conversationId,
-	ownerId,
-	children,
-}: {
-	publicMode: boolean;
-	conversationId?: string;
-	ownerId?: string;
-	children: (allowed: boolean) => React.ReactNode;
-}) {
-	// The built-in public UI intentionally has no upload transport, although the
-	// public stream operation still validates file parts submitted by consumers.
-	if (publicMode) return <>{children(false)}</>;
-	return (
-		<PermissionCheck
-			permission={aiChatPermissions.attachment.send({
-				...(conversationId ? { conversationId } : {}),
-				...(ownerId ? { ownerId } : {}),
-				mediaTypes: [],
-			})}
-			legacyPermission={{
-				resource: "ai-chat:attachment",
-				action: "create",
-			}}
-		>
-			{(state) => children(state.can && !state.isPending && !state.error)}
-		</PermissionCheck>
-	);
-}
-
 export function ChatInterface({
 	apiPath = "/api/chat",
 	initialMessages,
@@ -265,7 +241,6 @@ export function ChatInterface({
 	const identityPartition = useAiChatIdentityPartition();
 	const identityPartitionKey = hashKey([identityPartition]);
 	const latestIdentityPartitionKey = useRef(identityPartitionKey);
-	latestIdentityPartitionKey.current = identityPartitionKey;
 	const activeStreamPartitionKey = useRef<string | undefined>(undefined);
 
 	const conversationsListQueryKey = useMemo(() => {
@@ -541,9 +516,10 @@ export function ChatInterface({
 	});
 
 	const previousIdentityPartition = useRef(identityPartitionKey);
-	useEffect(() => {
-		if (isPublicMode) return;
+	useLayoutEffect(() => {
 		const nextPartition = identityPartitionKey;
+		latestIdentityPartitionKey.current = nextPartition;
+		if (isPublicMode) return;
 		if (previousIdentityPartition.current === nextPartition) return;
 		previousIdentityPartition.current = nextPartition;
 		activeStreamPartitionKey.current = undefined;
@@ -947,29 +923,29 @@ export function ChatInterface({
 							)}
 						>
 							<div className={cn(!isWidget && "max-w-3xl mx-auto")}>
-								<AttachmentCheck
-									publicMode={isPublicMode}
-									conversationId={currentConversationId}
-									ownerId={currentConversationOwnerId}
-								>
-									{(allowAttachments) => (
-										<ChatInput
-											input={input}
-											handleInputChange={handleInputChange}
-											handleSubmit={handleSubmit}
-											isLoading={isLoading}
-											placeholder={tr(
-												"CHAT_PLACEHOLDER",
-												"aiChat.chat.placeholder",
-												"Type a message...",
-											)}
-											variant={isWidget ? "compact" : "default"}
-											onFilesAttached={setAttachedFiles}
-											attachedFiles={attachedFiles}
-											allowAttachments={allowAttachments}
-										/>
+								<ChatInput
+									input={input}
+									handleInputChange={handleInputChange}
+									handleSubmit={handleSubmit}
+									isLoading={isLoading}
+									placeholder={tr(
+										"CHAT_PLACEHOLDER",
+										"aiChat.chat.placeholder",
+										"Type a message...",
 									)}
-								</AttachmentCheck>
+									variant={isWidget ? "compact" : "default"}
+									onFilesAttached={setAttachedFiles}
+									attachedFiles={attachedFiles}
+									allowAttachments={!isPublicMode}
+									attachmentPermissionFacts={{
+										...(currentConversationId
+											? { conversationId: currentConversationId }
+											: {}),
+										...(currentConversationOwnerId
+											? { ownerId: currentConversationOwnerId }
+											: {}),
+									}}
+								/>
 								{showAttribution && <StackAttribution />}
 							</div>
 						</div>

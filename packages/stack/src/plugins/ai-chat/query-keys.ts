@@ -9,7 +9,7 @@ import type { SerializedConversation, SerializedMessage } from "./types";
 
 /** Identity partition for protected AI Chat history caches. */
 export type AiChatIdentityPartition =
-	| Pick<StackIdentity, "id">
+	| Readonly<StackIdentity>
 	| "anonymous"
 	| `pending:${number}`
 	| `error:${number}`;
@@ -17,7 +17,7 @@ export type AiChatIdentityPartition =
 function identityKey(identityPartition: AiChatIdentityPartition) {
 	return typeof identityPartition === "string"
 		? identityPartition
-		: { id: identityPartition.id };
+		: identityPartition;
 }
 
 export type ConversationWithMessages = SerializedConversation & {

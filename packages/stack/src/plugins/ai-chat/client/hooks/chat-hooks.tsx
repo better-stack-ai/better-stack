@@ -28,7 +28,7 @@ export function useAiChatIdentityPartition() {
 	const sourceGeneration = useIdentitySourceGeneration();
 	if (isPending) return `pending:${sourceGeneration}` as const;
 	if (error) return `error:${sourceGeneration}` as const;
-	return identity ? { id: identity.id } : ("anonymous" as const);
+	return identity ? { ...identity } : ("anonymous" as const);
 }
 
 function isUnresolvedIdentityPartition(
