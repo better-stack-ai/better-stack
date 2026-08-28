@@ -9,7 +9,7 @@ import {
 	usePluginOverrides,
 	useTranslate,
 } from "@btst/stack/context";
-import { useListState, type ListStateSchema } from "@btst/stack/client";
+import { useListState, type ListStateSchema } from "@btst/stack/client/hooks";
 import type { MediaPluginOverrides } from "../../overrides";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { BrowseTab } from "../media-picker/browse-tab";

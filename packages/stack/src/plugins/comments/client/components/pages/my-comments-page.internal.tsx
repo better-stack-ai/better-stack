@@ -34,7 +34,7 @@ import {
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
-import { useListState, type ListStateSchema } from "@btst/stack/client";
+import { useListState, type ListStateSchema } from "@btst/stack/client/hooks";
 import { PermissionRouteAccess } from "@btst/stack/client/components";
 import type { CommentsPluginOverrides } from "../../overrides";
 import { PaginationControls } from "@workspace/ui/components/pagination-controls";

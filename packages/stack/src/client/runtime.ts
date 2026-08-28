@@ -1,0 +1,241 @@
+import type {
+	ClientApiEndpointOverride,
+	ClientLocation,
+	ClientLocationOverride,
+	ClientPluginRegistration,
+	ClientProviderApi,
+	ClientProviderPluginRuntime,
+	ClientProviderProjection,
+	ResolvedClientPluginRuntime,
+	ResolvedClientStackConfig,
+} from "../types";
+
+type AnyPluginMap = Record<string, ClientPluginRegistration<any, any>>;
+
+interface ResolvedClientRuntime<TPlugins extends AnyPluginMap> {
+	pluginRuntimes: { [K in keyof TPlugins]: ResolvedClientPluginRuntime };
+	provider: ClientProviderProjection<TPlugins>;
+}
+
+function normalizeBaseURL(value: unknown, label: string): string {
+	if (typeof value !== "string" || value.length === 0) {
+		throw new Error(
+			`[btst/client] ${label} must be an absolute HTTP(S) origin.`,
+		);
+	}
+
+	let parsed: URL;
+	try {
+		parsed = new URL(value);
+	} catch {
+		throw new Error(
+			`[btst/client] ${label} must be an absolute HTTP(S) origin.`,
+		);
+	}
+
+	if (
+		(parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+		parsed.username ||
+		parsed.password ||
+		parsed.search ||
+		parsed.hash ||
+		(parsed.pathname !== "/" && parsed.pathname !== "")
+	) {
+		throw new Error(
+			`[btst/client] ${label} must be an absolute HTTP(S) origin without credentials, path, query, or hash. Put the mount path in basePath.`,
+		);
+	}
+
+	return parsed.origin;
+}
+
+function normalizeBasePath(value: unknown, label: string): string {
+	if (typeof value !== "string" || value.length === 0) {
+		throw new Error(`[btst/client] ${label} is required.`);
+	}
+	if (value.includes("?") || value.includes("#") || value.startsWith("//")) {
+		throw new Error(
+			`[btst/client] ${label} must be a path without an origin, query, or hash.`,
+		);
+	}
+
+	const withLeadingSlash = value.startsWith("/") ? value : `/${value}`;
+	return withLeadingSlash === "/"
+		? withLeadingSlash
+		: withLeadingSlash.replace(/\/+$/, "");
+}
+
+function normalizeLocation(
+	value: ClientLocation,
+	label: string,
+): ClientLocation {
+	if (value === null || typeof value !== "object") {
+		throw new Error(`[btst/client] ${label} endpoint is required.`);
+	}
+	return {
+		baseURL: normalizeBaseURL(value.baseURL, `${label}.baseURL`),
+		basePath: normalizeBasePath(value.basePath, `${label}.basePath`),
+	};
+}
+
+function resolveLocationOverride(
+	base: ClientLocation,
+	override: ClientLocationOverride | undefined,
+	label: string,
+): ClientLocation {
+	if (!override) return { ...base };
+	if (typeof override !== "object") {
+		throw new Error(`[btst/client] ${label} must be an endpoint object.`);
+	}
+
+	if ("baseURL" in override && override.baseURL !== undefined) {
+		if (!("basePath" in override) || override.basePath === undefined) {
+			throw new Error(
+				`[btst/client] ${label}.basePath is required when replacing baseURL.`,
+			);
+		}
+		return normalizeLocation(
+			{ baseURL: override.baseURL, basePath: override.basePath },
+			label,
+		);
+	}
+
+	return {
+		baseURL: base.baseURL,
+		basePath: normalizeBasePath(override.basePath, `${label}.basePath`),
+	};
+}
+
+function cloneHeaders(headers: HeadersInit | undefined): Headers | undefined {
+	if (headers === undefined) return undefined;
+	const copy = new Headers(headers);
+	return copy.keys().next().done ? undefined : copy;
+}
+
+function mergeHeaders(
+	inherited: Headers | undefined,
+	explicit: HeadersInit | undefined,
+): Headers | undefined {
+	const merged = new Headers(inherited);
+	if (explicit !== undefined) {
+		for (const [name, value] of new Headers(explicit)) {
+			merged.set(name, value);
+		}
+	}
+	return merged.keys().next().done ? undefined : merged;
+}
+
+function projectApi(
+	location: ClientLocation,
+	override: ClientApiEndpointOverride | undefined,
+): ClientProviderApi {
+	const headers = cloneHeaders(override?.headers);
+	return {
+		...location,
+		...(headers ? { headers } : {}),
+		...(override?.credentials !== undefined
+			? { credentials: override.credentials }
+			: {}),
+	};
+}
+
+/** Resolves one request/browser runtime and its request-data-free provider view. */
+export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
+	config: ResolvedClientStackConfig<TPlugins>,
+): ResolvedClientRuntime<TPlugins> {
+	const api = normalizeLocation(config.api, "api");
+	const site = normalizeLocation(config.site, "site");
+	if (
+		config.queryClient === null ||
+		typeof config.queryClient !== "object" ||
+		typeof config.queryClient.getQueryCache !== "function"
+	) {
+		throw new Error(
+			"[btst/client] queryClient must be one React Query QueryClient instance shared by the stack.",
+		);
+	}
+	if (
+		config.plugins === null ||
+		typeof config.plugins !== "object" ||
+		Array.isArray(config.plugins)
+	) {
+		throw new Error(`[btst/client] plugins must be a plugin registration map.`);
+	}
+
+	if (typeof window !== "undefined" && config.api.headers !== undefined) {
+		throw new Error(
+			"[btst/client] API request headers are server-only. Create the browser stack without api.headers and use an explicit per-plugin endpoint header only for browser-safe values.",
+		);
+	}
+
+	const requestHeaders = cloneHeaders(config.api.headers);
+	const endpointKeys = Object.keys(config.endpoints ?? {});
+	for (const pluginKey of endpointKeys) {
+		if (!(pluginKey in config.plugins)) {
+			throw new Error(
+				`[btst/client] Endpoint replacement "${pluginKey}" has no registered client plugin.`,
+			);
+		}
+	}
+
+	const pluginRuntimes: Record<string, ResolvedClientPluginRuntime> = {};
+	const providerPlugins: Record<string, ClientProviderPluginRuntime> = {};
+
+	for (const pluginKey of Object.keys(config.plugins)) {
+		const endpoint = config.endpoints?.[pluginKey];
+		if (
+			endpoint !== undefined &&
+			(endpoint === null || typeof endpoint !== "object")
+		) {
+			throw new Error(
+				`[btst/client] Endpoint replacement "${pluginKey}" must be an object.`,
+			);
+		}
+
+		const pluginApi = resolveLocationOverride(
+			api,
+			endpoint?.api,
+			`endpoints.${pluginKey}.api`,
+		);
+		const pluginSite = resolveLocationOverride(
+			site,
+			endpoint?.site,
+			`endpoints.${pluginKey}.site`,
+		);
+		const sameApiOrigin = pluginApi.baseURL === api.baseURL;
+		const headers = mergeHeaders(
+			sameApiOrigin ? requestHeaders : undefined,
+			endpoint?.api?.headers,
+		);
+
+		pluginRuntimes[pluginKey] = {
+			api: {
+				...pluginApi,
+				...(headers ? { headers } : {}),
+				...(endpoint?.api?.credentials !== undefined
+					? { credentials: endpoint.api.credentials }
+					: {}),
+			},
+			site: pluginSite,
+			queryClient: config.queryClient,
+		};
+		providerPlugins[pluginKey] = {
+			api: projectApi(pluginApi, endpoint?.api),
+			site: pluginSite,
+		};
+	}
+
+	return {
+		pluginRuntimes: pluginRuntimes as {
+			[K in keyof TPlugins]: ResolvedClientPluginRuntime;
+		},
+		provider: {
+			api,
+			site,
+			queryClient: config.queryClient,
+			plugins: providerPlugins as {
+				[K in keyof TPlugins]: ClientProviderPluginRuntime;
+			},
+		},
+	};
+}

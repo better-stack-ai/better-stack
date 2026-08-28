@@ -4,71 +4,138 @@ import type {
 	ClientStackConfig,
 	ClientStack,
 	ClientPlugin,
+	ClientPluginRegistration,
 	ClientStackContext,
+	LegacyClientStackConfig,
 	PluginRoutes,
+	ResolvedClientStack,
+	ResolvedClientStackConfig,
 	Sitemap,
 } from "../types";
-export type { ClientPlugin, ClientStackContext } from "../types";
+import { resolveClientRuntime } from "./runtime";
+export type {
+	ClientApiConfig,
+	ClientApiEndpointOverride,
+	ClientLocation,
+	ClientLocationOverride,
+	ClientPluginEndpointOverride,
+	ClientPluginEndpointOverrides,
+	ClientProviderApi,
+	ClientProviderPluginRuntime,
+	ClientProviderProjection,
+	ClientPlugin,
+	ClientPluginDefinition,
+	ClientPluginRegistration,
+	ClientStackContext,
+	ResolvedClientApi,
+	ResolvedClientPluginRuntime,
+	ResolvedClientStack,
+	ResolvedClientStackConfig,
+} from "../types";
+
+type AnyPluginMap = Record<string, ClientPluginRegistration<any, any>>;
+type LegacyPluginMap = Record<string, ClientPlugin<any, any>>;
+
+function hasResolvedRuntime<TPlugins extends AnyPluginMap>(
+	config: ClientStackConfig<TPlugins>,
+): config is ResolvedClientStackConfig<TPlugins> {
+	return (
+		"api" in config ||
+		"site" in config ||
+		"queryClient" in config ||
+		"endpoints" in config
+	);
+}
 
 /**
- * Creates the client stack with plugin support
+ * Resolves all registered client plugin definitions against one API location,
+ * site location, and React Query client.
+ *
+ * Create a request-specific instance with `api.headers` for SSR/SSG and a
+ * separate browser instance without request headers. The returned `provider`
+ * projection contains no request headers.
  *
  * @example
  * ```ts
- * // For Next.js with SSR:
- * const lib = createClientStack({
+ * const clientStack = createClientStack({
+ *   api: {
+ *     baseURL: "https://app.example.com",
+ *     basePath: "/api/data",
+ *     headers: requestHeaders,
+ *   },
+ *   site: {
+ *     baseURL: "https://app.example.com",
+ *     basePath: "/pages",
+ *   },
+ *   queryClient,
  *   plugins: {
- *     blog: blogPlugin.client
- *   }
+ *     example: exampleClientPlugin(),
+ *   },
  * });
- *
- * // SPA usage - just render the route
- * function Page() {
- *   return lib.resolveRoute('/blog');
- * }
- *
- * // SSR usage - prefetch data with loader, then render
- * async function Page({ params }) {
- *   const path = '/blog';
- *
- *   // Load data server-side if loader exists
- *   const loader = lib.getLoader(path);
- *   if (loader) await loader(queryClient, baseURL, basePath);
- *
- *   // Render with built-in Suspense + Error Boundary
- *   return lib.resolveRoute(path);
- * }
- *
- * // Next.js with notFound() function
- * import { notFound } from 'next/navigation';
- *
- * async function Page({ params }) {
- *   const path = '/blog';
- *   const loader = lib.getLoader(path);
- *   if (loader) await loader(queryClient, baseURL);
- *
- *   return lib.resolveRoute(path, {
- *     onNotFound: notFound // Calls Next.js notFound() instead of rendering
- *   });
- * }
- *
  * ```
  *
  * @template TPlugins - The exact plugins map (inferred from config)
  * @template TRoutes - All routes from all plugins, merged (computed automatically)
  */
 export function createClientStack<
-	TPlugins extends Record<string, ClientPlugin<any, any>>,
+	TPlugins extends AnyPluginMap,
 	TRoutes extends PluginRoutes<TPlugins> = PluginRoutes<TPlugins>,
->(config: ClientStackConfig<TPlugins>): ClientStack<TRoutes> {
-	const { plugins, basePath } = config;
+>(
+	config: ResolvedClientStackConfig<TPlugins>,
+): ResolvedClientStack<TRoutes, TPlugins>;
+export function createClientStack<
+	TPlugins extends LegacyPluginMap,
+	TRoutes extends PluginRoutes<TPlugins> = PluginRoutes<TPlugins>,
+>(config: LegacyClientStackConfig<TPlugins>): ClientStack<TRoutes>;
+export function createClientStack<
+	TPlugins extends AnyPluginMap,
+	TRoutes extends PluginRoutes<TPlugins> = PluginRoutes<TPlugins>,
+>(config: ClientStackConfig<TPlugins>): ClientStack<TRoutes>;
+export function createClientStack<
+	TPlugins extends AnyPluginMap,
+	TRoutes extends PluginRoutes<TPlugins> = PluginRoutes<TPlugins>,
+>(
+	config: ClientStackConfig<TPlugins>,
+): ClientStack<TRoutes> | ResolvedClientStack<TRoutes, TPlugins> {
+	const canonical = hasResolvedRuntime(config);
+	const runtime = canonical ? resolveClientRuntime(config) : undefined;
+	const resolvedPlugins: Record<string, ClientPlugin<any, any>> = {};
+
+	for (const [pluginKey, registration] of Object.entries(config.plugins)) {
+		if ("resolve" in registration) {
+			if (!runtime) {
+				throw new Error(
+					`[btst/client] Client plugin "${pluginKey}" is a runtime-independent definition. Configure api, site, and queryClient on createClientStack().`,
+				);
+			}
+			const resolution = registration.resolve(
+				runtime.pluginRuntimes[pluginKey]!,
+			);
+			if (!resolution || typeof resolution.routes !== "function") {
+				throw new Error(
+					`[btst/client] Client plugin "${pluginKey}" did not resolve to a routes() function.`,
+				);
+			}
+			resolvedPlugins[pluginKey] = {
+				name: registration.name,
+				...resolution,
+			};
+		} else {
+			resolvedPlugins[pluginKey] = registration;
+		}
+	}
+
+	const plugins = resolvedPlugins as Record<string, ClientPlugin<any, any>>;
+	const basePath = canonical
+		? runtime!.provider.site.basePath
+		: config.basePath;
 
 	// Collect all routes from all plugins
 	// We build this with type assertions to preserve literal keys
 	const allRoutes = {} as TRoutes;
 
 	// Create the context object to pass to plugin routes
-	const clientStackContext: ClientStackContext<TPlugins> = {
+	const clientStackContext: ClientStackContext = {
 		plugins,
 		basePath,
 	};
@@ -83,7 +150,7 @@ export function createClientStack<
 	// The router's getRoute method will return the union of all route return types
 	const router = createRouter<TRoutes, {}>(allRoutes);
 
-	return {
+	const result: ClientStack<TRoutes> = {
 		router,
 		async generateSitemap() {
 			const sitemapEntries: Sitemap = [];
@@ -105,6 +172,8 @@ export function createClientStack<
 			return deduped;
 		},
 	};
+
+	return runtime ? { ...result, provider: runtime.provider } : result;
 }
 
 /**
@@ -126,13 +195,15 @@ export { metaElementsToObject } from "./meta-utils";
 export { normalizePath } from "./path-utils";
 
 export {
-	useListState,
 	parseListStateFromSearchParams,
 	serializeListStateToSearchParams,
 	listStateParamKey,
+	resolveListStateHistoryMode,
 	type InferListState,
 	type ListStateField,
 	type ListStateSchema,
-	type SetListState,
-	type SetListStateOptions,
+} from "../shared/list-state";
+export type {
+	SetListState,
+	SetListStateOptions,
 } from "./hooks/use-list-state";

@@ -6,7 +6,7 @@ import { stripHtml, stripMarkdown } from "../../../utils";
 import { HighlightText } from "./highlight-text";
 import { SearchModal, type SearchResult } from "./search-modal";
 import { useBasePath, useStack } from "@btst/stack/context";
-import { useListState, type ListStateSchema } from "@btst/stack/client";
+import { useListState, type ListStateSchema } from "@btst/stack/client/hooks";
 
 // Simplified blog post search result interface
 interface BlogPostSearchResult extends SearchResult {

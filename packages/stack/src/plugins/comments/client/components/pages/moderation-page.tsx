@@ -1,7 +1,7 @@
 "use client";
 
 import { lazy } from "react";
-import { useListState } from "@btst/stack/client";
+import { useListState } from "@btst/stack/client/hooks";
 import { ComposedRoute } from "@btst/stack/client/components";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../../overrides";

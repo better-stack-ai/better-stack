@@ -43,7 +43,7 @@ import {
 	useTranslate,
 } from "@btst/stack/context";
 import type { PermissionRequest } from "@btst/stack/authorization";
-import { useListState } from "@btst/stack/client";
+import { useListState } from "@btst/stack/client/hooks";
 import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
 import type { SerializedComment, CommentStatus } from "../../../types";
 import {

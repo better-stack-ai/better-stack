@@ -72,6 +72,7 @@ export default defineBuildConfig({
 		"./src/index.ts",
 		"./src/api/index.ts",
 		"./src/client/index.ts",
+		"./src/client/hooks/index.ts",
 		"./src/context/index.ts",
 		"./src/authorization/index.ts",
 		"./src/authorization/client.tsx",
