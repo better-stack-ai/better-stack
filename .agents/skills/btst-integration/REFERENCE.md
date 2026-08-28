@@ -420,9 +420,9 @@ aiChatBackendPlugin({
   tools: { myTool },
   enablePageTools: true,
   hooks: {
-    onConversationCreated: async (convo) => { /* … */ },
+    onAfterCreateConversation: async (convo) => { /* … */ },
     onAfterChat: async (conversationId, messages) => { /* … */ },
-    onBeforeToolsActivated: async (toolNames, routeName, ctx) => toolNames,
+    onBeforeActivateTools: async (toolNames, routeName, ctx) => toolNames,
   },
 })
 ```
