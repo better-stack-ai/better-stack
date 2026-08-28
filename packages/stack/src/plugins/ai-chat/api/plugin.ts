@@ -28,6 +28,7 @@ export {
 	ConversationOperationInputSchema,
 	UpdateConversationOperationInputSchema,
 } from "./operations";
+export { AI_CHAT_LIFECYCLE_HOOK_MIGRATIONS } from "./lifecycle-migrations";
 
 type KnownKeys<T> = {
 	[K in keyof T]: string extends K ? never : K;

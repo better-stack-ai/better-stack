@@ -250,7 +250,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 				},
 				enablePageTools: true,
 				hooks: {
-					onConversationCreated: async (conversation) => {
+					onAfterCreateConversation: async (conversation) => {
 						console.log(
 							"Conversation created:",
 							conversation.id,
@@ -265,7 +265,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 							messages.length,
 						);
 					},
-					onBeforeToolsActivated: async (toolNames, routeName, context) => {
+					onBeforeActivateTools: async (toolNames, routeName, context) => {
 						if (context.headers?.get?.("x-btst-deny-tools") === "1") {
 							throw new AiChatOperationError(
 								403,

@@ -169,11 +169,11 @@ export const myClientPlugin = (config: MyClientConfig) =>
 
 ```typescript
 // Authorization hooks (throw to deny)
-onBeforeCreate, onBeforeUpdate, onBeforeDelete, onBeforeList
+onBeforeCreateItem, onBeforeUpdateItem, onBeforeDeleteItem, onBeforeListItems
 // Lifecycle hooks (called after success)
-onAfterCreate, onAfterUpdate, onAfterDelete, onAfterList
+onAfterCreateItem, onAfterUpdateItem, onAfterDeleteItem, onAfterListItems
 // Error hooks
-onCreateError, onUpdateError, onDeleteError, onListError
+onErrorCreateItem, onErrorUpdateItem, onErrorDeleteItem, onErrorListItems
 ```
 
 ---
@@ -322,9 +322,9 @@ import { createItemSchema, updateItemSchema } from "../schemas"
 import { listItems, getItemById } from "./getters"
 
 export interface MyBackendHooks {
-  onBeforeCreate?: (data: unknown, ctx: { headers: Headers }) => Promise<void> | void
-  onAfterCreate?: (item: unknown, ctx: { headers: Headers }) => Promise<void> | void
-  onCreateError?: (error: Error, ctx: { headers: Headers }) => Promise<void> | void
+  onBeforeCreateItem?: (data: unknown, ctx: { headers: Headers }) => Promise<void> | void
+  onAfterCreateItem?: (item: unknown, ctx: { headers: Headers }) => Promise<void> | void
+  onErrorCreateItem?: (error: Error, ctx: { headers: Headers }) => Promise<void> | void
 }
 
 export const myBackendPlugin = (hooks?: MyBackendHooks) =>
@@ -346,15 +346,15 @@ export const myBackendPlugin = (hooks?: MyBackendHooks) =>
         "/items",
         { method: "POST", body: createItemSchema },
         async (ctx) => {
-          if (hooks?.onBeforeCreate) {
+          if (hooks?.onBeforeCreateItem) {
             try {
-              await hooks.onBeforeCreate(ctx.body, { headers: ctx.headers })
+              await hooks.onBeforeCreateItem(ctx.body, { headers: ctx.headers })
             } catch (e) {
               throw ctx.error(403, { message: e instanceof Error ? e.message : "Unauthorized" })
             }
           }
           const item = await adapter.create({ model: "item", data: { ...ctx.body, createdAt: new Date(), updatedAt: new Date() } })
-          await hooks?.onAfterCreate?.(item, { headers: ctx.headers })
+          await hooks?.onAfterCreateItem?.(item, { headers: ctx.headers })
           return item
         },
       )

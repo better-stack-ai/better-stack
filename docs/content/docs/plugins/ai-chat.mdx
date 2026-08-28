@@ -488,6 +488,23 @@ Customize post-authorization domain behavior with optional lifecycle hooks. Keep
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/api/plugin.ts" name="AiChatBackendHooks" />
 
+AI Chat lifecycle names use the action-first `onBefore<Action><Entity>`, `onAfter<Action><Entity>`, and `onError<Action><Entity>` grammar. Chat completion remains the domain event `onAfterChat`.
+
+| Before RC3 | RC3 |
+|---|---|
+| `onBeforeToolsActivated` | `onBeforeActivateTools` |
+| `onConversationsRead` | `onAfterListConversations` |
+| `onConversationRead` | `onAfterGetConversation` |
+| `onConversationCreated` | `onAfterCreateConversation` |
+| `onConversationUpdated` | `onAfterUpdateConversation` |
+| `onConversationDeleted` | `onAfterDeleteConversation` |
+| `onChatError` | `onErrorChat` |
+| `onListConversationsError` | `onErrorListConversations` |
+| `onGetConversationError` | `onErrorGetConversation` |
+| `onCreateConversationError` | `onErrorCreateConversation` |
+| `onUpdateConversationError` | `onErrorUpdateConversation` |
+| `onDeleteConversationError` | `onErrorDeleteConversation` |
+
 **Example usage:**
 
 ```ts title="lib/stack.ts"
@@ -499,14 +516,14 @@ const chatHooks: AiChatBackendHooks = {
     enforceRateLimit(context.headers)
   },
   // Lifecycle hooks
-  onConversationCreated(conversation, context) {
+  onAfterCreateConversation(conversation, context) {
     console.log("Conversation created:", conversation.id)
   },
   onAfterChat(conversationId, messages, context) {
     console.log("Chat completed:", conversationId, "messages:", messages.length)
   },
   // Error hooks
-  onChatError(error, context) {
+  onErrorChat(error, context) {
     console.error("Chat error:", error.message)
   },
 }
@@ -1295,11 +1312,11 @@ useRegisterPageAIContext({
 |---|---|---|---|
 | `enablePageTools` | `boolean` | `false` | Activate page tool support |
 | `clientToolSchemas` | `Record<string, Tool>` | — | Custom tool schemas for non-BTST pages |
-| `hooks.onBeforeToolsActivated` | `(toolNames, routeName, context) => string[]` | — | Apply a final domain/safety filter after typed tool authorization |
+| `hooks.onBeforeActivateTools` | `(toolNames, routeName, context) => string[]` | — | Apply a final domain/safety filter after typed tool authorization |
 
 ### Tool Authorization Hook
 
-`onBeforeToolsActivated` runs server-side after the structural `routeName` allowlist and the exact `aiChat.tool.activate` rule have succeeded. Use the typed rule for identity, role, subscription, or ownership policy. Use this hook only for exceptional server-side domain/safety narrowing.
+`onBeforeActivateTools` runs server-side after the structural `routeName` allowlist and the exact `aiChat.tool.activate` rule have succeeded. Use the typed rule for identity, role, subscription, or ownership policy. Use this hook only for exceptional server-side domain/safety narrowing.
 
 ```ts title="lib/stack.ts"
 import type { AiChatBackendHooks } from "@btst/stack/plugins/ai-chat/api"
@@ -1307,7 +1324,7 @@ import type { AiChatBackendHooks } from "@btst/stack/plugins/ai-chat/api"
 aiChatBackendPlugin({
   enablePageTools: true,
   hooks: {
-    onBeforeToolsActivated: async (toolNames, routeName, context) => {
+    onBeforeActivateTools: async (toolNames, routeName, context) => {
       const disabled = await loadEmergencyToolDisableList()
       return toolNames.filter((name) => !disabled.has(name))
     },

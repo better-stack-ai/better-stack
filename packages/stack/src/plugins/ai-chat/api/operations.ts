@@ -299,7 +299,7 @@ export interface AiChatBackendHooks {
 	 * Post-authorization tool safety/filter hook. Structural route validation and
 	 * exact `tool.activate` authorization have already succeeded.
 	 */
-	onBeforeToolsActivated?: (
+	onBeforeActivateTools?: (
 		toolNames: readonly string[],
 		routeName: string | undefined,
 		context: ChatApiContext<
@@ -315,77 +315,77 @@ export interface AiChatBackendHooks {
 			StreamStartFacts
 		>,
 	) => Promise<void> | void;
-	onConversationsRead?: (
+	onAfterListConversations?: (
 		conversations: readonly SerializedConversation[],
 		context: ChatApiContext<
 			z.output<typeof EmptyInputSchema>,
 			ConversationReadFacts
 		>,
 	) => Promise<void> | void;
-	onConversationRead?: (
+	onAfterGetConversation?: (
 		conversation: DeepReadonly<AiChatConversationResult>,
 		context: ChatApiContext<
 			z.output<typeof ConversationOperationInputSchema>,
 			ConversationReadFacts
 		>,
 	) => Promise<void> | void;
-	onConversationCreated?: (
+	onAfterCreateConversation?: (
 		conversation: DeepReadonly<SerializedConversation>,
 		context: ChatApiContext<
 			z.output<typeof createConversationSchema>,
 			undefined
 		>,
 	) => Promise<void> | void;
-	onConversationUpdated?: (
+	onAfterUpdateConversation?: (
 		conversation: DeepReadonly<SerializedConversation>,
 		context: ChatApiContext<
 			z.output<typeof UpdateConversationOperationInputSchema>,
 			ConversationRecordFacts
 		>,
 	) => Promise<void> | void;
-	onConversationDeleted?: (
+	onAfterDeleteConversation?: (
 		conversationId: string,
 		context: ChatApiContext<
 			z.output<typeof ConversationOperationInputSchema>,
 			ConversationRecordFacts
 		>,
 	) => Promise<void> | void;
-	onChatError?: (
+	onErrorChat?: (
 		error: Error,
 		context: ChatApiContext<
 			z.output<typeof ChatOperationInputSchema>,
 			StreamStartFacts
 		>,
 	) => Promise<void> | void;
-	onListConversationsError?: (
+	onErrorListConversations?: (
 		error: Error,
 		context: ChatApiContext<
 			z.output<typeof EmptyInputSchema>,
 			ConversationReadFacts
 		>,
 	) => Promise<void> | void;
-	onGetConversationError?: (
+	onErrorGetConversation?: (
 		error: Error,
 		context: ChatApiContext<
 			z.output<typeof ConversationOperationInputSchema>,
 			ConversationReadFacts
 		>,
 	) => Promise<void> | void;
-	onCreateConversationError?: (
+	onErrorCreateConversation?: (
 		error: Error,
 		context: ChatApiContext<
 			z.output<typeof createConversationSchema>,
 			undefined
 		>,
 	) => Promise<void> | void;
-	onUpdateConversationError?: (
+	onErrorUpdateConversation?: (
 		error: Error,
 		context: ChatApiContext<
 			z.output<typeof UpdateConversationOperationInputSchema>,
 			ConversationRecordFacts
 		>,
 	) => Promise<void> | void;
-	onDeleteConversationError?: (
+	onErrorDeleteConversation?: (
 		error: Error,
 		context: ChatApiContext<
 			z.output<typeof ConversationOperationInputSchema>,
@@ -977,14 +977,14 @@ export function createAiChatOperations(
 					? allConversations.filter((conversation) => !conversation.userId)
 					: allConversations
 			).map(publicConversation);
-			await hooks?.onConversationsRead?.(
+			await hooks?.onAfterListConversations?.(
 				conversations,
 				hookContext(context, { query: context.input }),
 			);
 			return conversations;
 		},
 		onError: ({ error, ...context }) =>
-			notifyError(hooks?.onListConversationsError, error, context, {
+			notifyError(hooks?.onErrorListConversations, error, context, {
 				query: context.input,
 			}),
 	});
@@ -1053,14 +1053,14 @@ export function createAiChatOperations(
 				);
 			}
 			const result = conversationResult(conversation);
-			await hooks?.onConversationRead?.(
+			await hooks?.onAfterGetConversation?.(
 				result,
 				hookContext(context, { params: { id: context.input.id } }),
 			);
 			return result;
 		},
 		onError: ({ error, ...context }) =>
-			notifyError(hooks?.onGetConversationError, error, context, {
+			notifyError(hooks?.onErrorGetConversation, error, context, {
 				params: { id: context.input.id },
 			}),
 	});
@@ -1099,7 +1099,7 @@ export function createAiChatOperations(
 				} as Conversation,
 			});
 			const result = publicConversation(conversation);
-			await hooks?.onConversationCreated?.(
+			await hooks?.onAfterCreateConversation?.(
 				result,
 				hookContext(context, { body: context.input }),
 			);
@@ -1107,7 +1107,7 @@ export function createAiChatOperations(
 		},
 		onError: ({ error, ...context }) => {
 			markMemoryRollback(adapter, error);
-			return notifyError(hooks?.onCreateConversationError, error, context, {
+			return notifyError(hooks?.onErrorCreateConversation, error, context, {
 				body: context.input,
 			});
 		},
@@ -1209,7 +1209,7 @@ export function createAiChatOperations(
 			}
 		},
 		after: (context) =>
-			hooks?.onConversationUpdated?.(
+			hooks?.onAfterUpdateConversation?.(
 				context.result,
 				hookContext(context, {
 					body: context.input,
@@ -1218,7 +1218,7 @@ export function createAiChatOperations(
 			),
 		onError: ({ error, ...context }) => {
 			markMemoryRollback(adapter, error);
-			return notifyError(hooks?.onUpdateConversationError, error, context, {
+			return notifyError(hooks?.onErrorUpdateConversation, error, context, {
 				body: context.input,
 				params: { id: context.input.id },
 			});
@@ -1306,13 +1306,13 @@ export function createAiChatOperations(
 			}
 		},
 		after: (context) =>
-			hooks?.onConversationDeleted?.(
+			hooks?.onAfterDeleteConversation?.(
 				context.input.id,
 				hookContext(context, { params: { id: context.input.id } }),
 			),
 		onError: ({ error, ...context }) => {
 			markMemoryRollback(adapter, error);
-			return notifyError(hooks?.onDeleteConversationError, error, context, {
+			return notifyError(hooks?.onErrorDeleteConversation, error, context, {
 				params: { id: context.input.id },
 			});
 		},
@@ -1536,11 +1536,11 @@ export function createAiChatOperations(
 				);
 
 				let allowedToolNames = [...prepared.toolNames];
-				if (allowedToolNames.length > 0 && hooks?.onBeforeToolsActivated) {
-					const onBeforeToolsActivated = hooks.onBeforeToolsActivated;
+				if (allowedToolNames.length > 0 && hooks?.onBeforeActivateTools) {
+					const onBeforeActivateTools = hooks.onBeforeActivateTools;
 					const filtered = await runBeforeHook(
 						() =>
-							onBeforeToolsActivated(
+							onBeforeActivateTools(
 								allowedToolNames,
 								context.input.routeName,
 								contextForHooks,
@@ -1559,12 +1559,12 @@ export function createAiChatOperations(
 
 			const reportStreamError = async (error: unknown) => {
 				try {
-					await hooks?.onChatError?.(
+					await hooks?.onErrorChat?.(
 						normalizeError(error, "Chat provider stream failed"),
 						contextForHooks,
 					);
 				} catch (hookError) {
-					console.error("[ai-chat] Error in onChatError hook:", hookError);
+					console.error("[ai-chat] Error in onErrorChat hook:", hookError);
 				}
 			};
 
@@ -1817,13 +1817,13 @@ export function createAiChatOperations(
 						} catch (error) {
 							console.error("[ai-chat] Error in stream completion:", error);
 							try {
-								await hooks?.onChatError?.(
+								await hooks?.onErrorChat?.(
 									normalizeError(error, "Chat completion persistence failed"),
 									contextForHooks,
 								);
 							} catch (hookError) {
 								console.error(
-									"[ai-chat] Error in onChatError hook:",
+									"[ai-chat] Error in onErrorChat hook:",
 									hookError,
 								);
 							}
@@ -1848,7 +1848,7 @@ export function createAiChatOperations(
 		},
 		onError: ({ error, ...context }) => {
 			markMemoryRollback(adapter, error);
-			return notifyError(hooks?.onChatError, error, context, {
+			return notifyError(hooks?.onErrorChat, error, context, {
 				body: context.input,
 			});
 		},

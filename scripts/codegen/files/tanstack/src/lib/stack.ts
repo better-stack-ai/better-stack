@@ -246,10 +246,10 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 			},
 			enablePageTools: true,
 			hooks: {
-				onConversationCreated: async (conversation) => {
+				onAfterCreateConversation: async (conversation) => {
 					console.log("Conversation created:", conversation.id);
 				},
-				onBeforeToolsActivated: async (toolNames, _routeName, context) => {
+				onBeforeActivateTools: async (toolNames, _routeName, context) => {
 					if (context.headers?.get?.("x-btst-deny-tools") === "1") {
 						throw new AiChatOperationError(
 							403,

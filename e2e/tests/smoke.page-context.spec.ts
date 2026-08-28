@@ -237,11 +237,11 @@ test.describe("Page AI Context — structural (no OpenAI key needed)", () => {
 		expect(capturedBody!.routeName).toBe("blog-new-post");
 	});
 
-	test("onBeforeToolsActivated hook denies tools and returns 403", async ({
+	test("onBeforeActivateTools hook denies tools and returns 403", async ({
 		request,
 	}) => {
 		// POST directly to the chat API with the test sentinel header.
-		// The example app's onBeforeToolsActivated hook throws when it sees
+		// The example app's onBeforeActivateTools hook throws when it sees
 		// x-btst-deny-tools: "1", which the endpoint catches and maps to 403.
 		const response = await request.post("/api/data/chat", {
 			headers: {
