@@ -496,9 +496,11 @@ describe("scaffold plan", () => {
 		expect(pagesLayoutFile?.content).toContain(
 			"const authClient = undefined as any",
 		);
+		expect(pagesLayoutFile?.content).toContain("const stackAuth = authClient");
 		expect(pagesLayoutFile?.content).toContain(
-			"const stackAuth = createBetterAuthProvider(authClient, {",
+			"? createBetterAuthProvider(authClient, {",
 		);
+		expect(pagesLayoutFile?.content).toContain(": undefined");
 		expect(pagesLayoutFile?.content).toContain(
 			'loginPath: "/pages/auth/sign-in"',
 		);
@@ -675,6 +677,8 @@ describe("scaffold plan", () => {
 			expect(layoutFile?.content).toContain(
 				'import { createBetterAuthProvider } from "@btst/better-auth-ui"',
 			);
+			expect(layoutFile?.content).toContain("const stackAuth = authClient");
+			expect(layoutFile?.content).toContain(": undefined");
 			expect(layoutFile?.content).toContain("auth={stackAuth}");
 			expect(layoutFile?.content).not.toContain("onSessionChange:");
 			expect(layoutFile?.content).not.toContain("replace: (path: string)");

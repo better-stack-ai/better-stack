@@ -29,9 +29,11 @@ function getBaseURL() {
 {{#if hasBetterAuthUi}}
 // TODO: replace this placeholder with your Better Auth client import.
 const authClient = undefined as any
-const stackAuth = createBetterAuthProvider(authClient, {
-	loginPath: "/pages/auth/sign-in",
-})
+const stackAuth = authClient
+	? createBetterAuthProvider(authClient, {
+			loginPath: "/pages/auth/sign-in",
+		})
+	: undefined
 
 {{/if}}
 export default function BtstPagesLayout({
