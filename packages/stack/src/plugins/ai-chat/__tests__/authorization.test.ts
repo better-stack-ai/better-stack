@@ -1362,6 +1362,77 @@ describe("AI Chat operation authorization", () => {
 		expect(await app.adapter.count({ model: "message" })).toBe(1);
 	});
 
+	it("serializes raw-memory rollbacks across different conversations", async () => {
+		let enteredFirstHook: (() => void) | undefined;
+		const firstHookEntered = new Promise<void>((resolve) => {
+			enteredFirstHook = resolve;
+		});
+		let releaseFirstHook: (() => void) | undefined;
+		const firstHookBarrier = new Promise<void>((resolve) => {
+			releaseFirstHook = resolve;
+		});
+		let hookCalls = 0;
+		const before = vi.fn(async () => {
+			hookCalls += 1;
+			if (hookCalls !== 1) return;
+			enteredFirstHook?.();
+			await firstHookBarrier;
+			throw new Error("roll back first conversation");
+		});
+		const app = backend({ hooks: { onBeforeChat: before } });
+		const firstConversation = await seedConversation(app, owner.id, "First");
+		const secondConversation = await seedConversation(app, owner.id, "Second");
+
+		const rejectedStream = app
+			.forRequest(request("/first", { identity: owner }))
+			.api.aiChat.startStream({
+				...messageBody,
+				conversationId: firstConversation.id,
+			});
+		await firstHookEntered;
+		const successfulStream = app
+			.forRequest(request("/second", { identity: owner }))
+			.api.aiChat.startStream({
+				...messageBody,
+				conversationId: secondConversation.id,
+			});
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(before).toHaveBeenCalledOnce();
+
+		releaseFirstHook?.();
+		await expect(rejectedStream).rejects.toMatchObject({
+			statusCode: 403,
+			code: "HOOK_DENIED",
+		});
+		await expect(successfulStream).resolves.toBeInstanceOf(Response);
+		expect(before).toHaveBeenCalledTimes(2);
+		expect(
+			await app.adapter.count({
+				model: "message",
+				where: [
+					{
+						field: "conversationId",
+						value: firstConversation.id,
+						operator: "eq",
+					},
+				],
+			}),
+		).toBe(0);
+		expect(
+			await app.adapter.count({
+				model: "message",
+				where: [
+					{
+						field: "conversationId",
+						value: secondConversation.id,
+						operator: "eq",
+					},
+				],
+			}),
+		).toBe(1);
+	});
+
 	it("claims concurrent rename and delete snapshots before lifecycle hooks", async () => {
 		let enterUpdate: (() => void) | undefined;
 		const updateEntered = new Promise<void>((resolve) => {

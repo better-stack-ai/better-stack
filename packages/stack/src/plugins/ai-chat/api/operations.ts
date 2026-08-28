@@ -35,6 +35,8 @@ import {
 } from "./page-tools";
 import { serializeConversation, serializeMessage } from "./serializers";
 
+type TransactionAdapter = Parameters<Parameters<Adapter["transaction"]>[0]>[0];
+
 export type AiChatAccess = "authorized" | "public";
 
 /** Runtime input for one conversation operation. */
@@ -835,6 +837,24 @@ export function createAiChatOperations(
 	const scopedUserIds = new WeakMap<object, string | undefined>();
 	const pendingRequestedConversationClaims = new Set<string>();
 	const pendingConversationMutationClaims = new Set<string>();
+	let memoryTransactionTail = Promise.resolve();
+	const runConversationTransaction = async <T>(
+		callback: (transaction: TransactionAdapter) => Promise<T>,
+	): Promise<T> => {
+		const run = () => adapter.transaction(callback);
+		if (adapter.id !== "memory") return run();
+		let release = () => {};
+		const previous = memoryTransactionTail;
+		memoryTransactionTail = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await previous;
+		try {
+			return await run();
+		} finally {
+			release();
+		}
+	};
 	const claimConversationMutation = (conversationId: string) => {
 		requireAtomicConversationTransactions(adapter);
 		if (pendingConversationMutationClaims.has(conversationId)) {
@@ -1082,7 +1102,7 @@ export function createAiChatOperations(
 			);
 			const releaseMutation = claimConversationMutation(expected.id);
 			try {
-				return await adapter.transaction(async (tx) => {
+				return await runConversationTransaction(async (tx) => {
 					const current = await getConversationById(tx, context.input.id);
 					if (!sameSnapshot(current, expected)) {
 						throw new AiChatOperationError(
@@ -1201,7 +1221,7 @@ export function createAiChatOperations(
 			);
 			const releaseMutation = claimConversationMutation(expected.id);
 			try {
-				return await adapter.transaction(async (tx) => {
+				return await runConversationTransaction(async (tx) => {
 					const current = await getConversationById(tx, context.input.id);
 					if (!sameSnapshot(current, expected)) {
 						throw new AiChatOperationError(
@@ -1598,7 +1618,7 @@ export function createAiChatOperations(
 				pendingRequestedConversationClaims.add(requestedMissingConversationId);
 			}
 			try {
-				return await adapter.transaction(async (tx) => {
+				return await runConversationTransaction(async (tx) => {
 					let conversationId = context.input.conversationId;
 					let streamClaimVersion: Date | undefined;
 					const createConversation = () => {
@@ -1738,7 +1758,7 @@ export function createAiChatOperations(
 					const response = startModelStream(mergedTools, async ({ text }) => {
 						try {
 							requireAtomicConversationTransactions(adapter);
-							const persisted = await adapter.transaction(
+							const persisted = await runConversationTransaction(
 								async (completionTx) => {
 									const completedAt = nextVersion(completionClaimVersion);
 									const claimed = await completionTx.updateMany({
