@@ -177,28 +177,28 @@ const blogHooks: BlogBackendHooks = {
 			console.log("onBeforeListPosts: loading drafts");
 		}
 	},
-	onPostCreated: async (post) => {
+	onAfterCreatePost: async (post) => {
 		console.log("Post created:", post.id, post.title);
 	},
-	onPostUpdated: async (post) => {
+	onAfterUpdatePost: async (post) => {
 		console.log("Post updated:", post.id, post.title);
 	},
-	onPostDeleted: async (postId) => {
+	onAfterDeletePost: async (postId) => {
 		console.log("Post deleted:", postId);
 	},
-	onPostsRead: async (posts) => {
+	onAfterListPosts: async (posts) => {
 		console.log("Posts read:", posts.length, "items");
 	},
-	onListPostsError: async (error) => {
+	onErrorListPosts: async (error) => {
 		console.error("Failed to list posts:", error.message);
 	},
-	onCreatePostError: async (error) => {
+	onErrorCreatePost: async (error) => {
 		console.error("Failed to create post:", error.message);
 	},
-	onUpdatePostError: async (error) => {
+	onErrorUpdatePost: async (error) => {
 		console.error("Failed to update post:", error.message);
 	},
-	onDeletePostError: async (error) => {
+	onErrorDeletePost: async (error) => {
 		console.error("Failed to delete post:", error.message);
 	},
 };
@@ -328,34 +328,39 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 				return { name: `User ${authorId}` };
 			},
 			hooks: {
-				onBeforeList: async (query, ctx) => {
+				onBeforeListComments: async (query, ctx) => {
 					if (query.status && query.status !== "approved") {
-						console.log("onBeforeList: reading moderation queue");
+						console.log("onBeforeListComments: reading moderation queue");
 					}
 				},
-				onBeforePost: async (input, ctx) => {
+				onBeforeCreateComment: async (input, ctx) => {
 					console.log(
-						"onBeforePost: new comment on",
+						"onBeforeCreateComment: new comment on",
 						input.resourceType,
 						input.resourceId,
 					);
 				},
-				onBeforeEdit: async (commentId, update, ctx) => {
-					console.log("onBeforeEdit: comment", commentId);
+				onBeforeUpdateComment: async (commentId, update, ctx) => {
+					console.log("onBeforeUpdateComment: comment", commentId);
 				},
-				onBeforeLike: async (commentId, authorId, ctx) => {
+				onBeforeToggleCommentReaction: async (commentId, authorId, ctx) => {
 					console.log(
-						"onBeforeLike: user",
+						"onBeforeToggleCommentReaction: user",
 						authorId,
 						"toggling like on comment",
 						commentId,
 					);
 				},
-				onBeforeStatusChange: async (commentId, status, ctx) => {
-					console.log("onBeforeStatusChange: comment", commentId, "->", status);
+				onBeforeModerateComment: async (commentId, status, ctx) => {
+					console.log(
+						"onBeforeModerateComment: comment",
+						commentId,
+						"->",
+						status,
+					);
 				},
-				onBeforeDelete: async (commentId, ctx) => {
-					console.log("onBeforeDelete: comment", commentId);
+				onBeforeDeleteComment: async (commentId, ctx) => {
+					console.log("onBeforeDeleteComment: comment", commentId);
 				},
 			},
 		}),

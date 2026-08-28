@@ -9,6 +9,7 @@ import {
 	DEFAULT_MAX_PAGE_SIZE,
 } from "../schemas";
 import type { CMSBackendConfig, CMSBackendHooks, ContentType } from "../types";
+export { CMS_LIFECYCLE_HOOK_MIGRATIONS } from "./lifecycle-migrations";
 import {
 	getAllContentItems,
 	getAllContentTypes,

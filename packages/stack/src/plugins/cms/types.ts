@@ -378,45 +378,45 @@ export type CMSOperationLifecycleContext =
 
 /** Authorized lifecycle context supplied to the observational error hook. */
 export type CMSOperationErrorContext = CMSOperationLifecycleContext & {
-	/** Original post-authorization operation error observed by `onError`. */
+	/** Original post-authorization operation error observed by `onErrorExecuteContentOperation`. */
 	readonly error: unknown;
 };
 
 /** Domain lifecycle hooks that run only after successful CMS authorization. */
 export interface CMSBackendHooks {
 	/** Runs with validated canonical record data after authorization and before any database write. */
-	onBeforeCreate?: (
+	onBeforeCreateContent?: (
 		data: Readonly<Record<string, CMSOperationData>>,
 		context: CMSCreateOperationContext,
 	) => Promise<void> | void;
 	/** Observes the fully created record after the atomic create succeeds. */
-	onAfterCreate?: (
+	onAfterCreateContent?: (
 		item: CMSDeepReadonly<SerializedContentItemWithType>,
 		context: CMSCreateResultContext,
 	) => Promise<void> | void;
 	/** Runs for every update with the complete merged, validated record before any database write. */
-	onBeforeUpdate?: (
+	onBeforeUpdateContent?: (
 		id: string,
 		data: Readonly<Record<string, CMSOperationData>>,
 		context: CMSUpdateOperationContext,
 	) => Promise<void> | void;
 	/** Observes the fully updated record after the atomic update succeeds. */
-	onAfterUpdate?: (
+	onAfterUpdateContent?: (
 		item: CMSDeepReadonly<SerializedContentItemWithType>,
 		context: CMSUpdateResultContext,
 	) => Promise<void> | void;
 	/** Runs after authorization and before the record is deleted. */
-	onBeforeDelete?: (
+	onBeforeDeleteContent?: (
 		id: string,
 		context: CMSDeleteOperationContext,
 	) => Promise<void> | void;
 	/** Observes the deleted record ID after the atomic delete succeeds. */
-	onAfterDelete?: (
+	onAfterDeleteContent?: (
 		id: string,
 		context: CMSDeleteResultContext,
 	) => Promise<void> | void;
 	/** Observes post-authorization failures without replacing the original error. */
-	onError?: (
+	onErrorExecuteContentOperation?: (
 		error: Error,
 		operation: "create" | "update" | "delete" | "list" | "get",
 		context: CMSOperationErrorContext,

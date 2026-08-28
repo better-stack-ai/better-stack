@@ -413,6 +413,23 @@ platform objects.
 
 <AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogBackendHooks" />
 
+Blog lifecycle names use the action-first `onBefore<Action><Entity>`,
+`onAfter<Action><Entity>`, and `onError<Action><Entity>` grammar.
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeNextPreviousPosts` | `onBeforeGetNextPreviousPosts` |
+| `onPostsRead` | `onAfterListPosts` |
+| `onPostCreated` | `onAfterCreatePost` |
+| `onPostUpdated` | `onAfterUpdatePost` |
+| `onPostDeleted` | `onAfterDeletePost` |
+| `onNextPreviousPostsRead` | `onAfterGetNextPreviousPosts` |
+| `onListPostsError` | `onErrorListPosts` |
+| `onNextPreviousPostsError` | `onErrorGetNextPreviousPosts` |
+| `onCreatePostError` | `onErrorCreatePost` |
+| `onUpdatePostError` | `onErrorUpdatePost` |
+| `onDeletePostError` | `onErrorDeletePost` |
+
 **Example usage:**
 
 ```ts title="lib/stack.ts"
@@ -424,7 +441,7 @@ const blogHooks: BlogBackendHooks = {
       throw new Error("Protected posts cannot be deleted")
     auditDeleteAttempt(context.identity?.id, context.facts)
   },
-  async onPostUpdated(post, context) {
+  async onAfterUpdatePost(post, context) {
     await auditPostChange({
       actorId: context.identity?.id,
       postId: post.id,
@@ -778,15 +795,15 @@ import { revalidatePath } from "next/cache"
 import type { BlogBackendHooks } from "@btst/stack/plugins/blog"
 
 const blogHooks: BlogBackendHooks = {
-  onPostCreated: async (post) => {
+  onAfterCreatePost: async (post) => {
     revalidatePath("/blog")
     revalidatePath(`/blog/${post.slug}`)
   },
-  onPostUpdated: async (post) => {
+  onAfterUpdatePost: async (post) => {
     revalidatePath("/blog")
     revalidatePath(`/blog/${post.slug}`)
   },
-  onPostDeleted: async (postId) => {
+  onAfterDeletePost: async (postId) => {
     revalidatePath("/blog")
   },
 }

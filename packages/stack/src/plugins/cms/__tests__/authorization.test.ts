@@ -9,7 +9,11 @@ import {
 	createServerAuth,
 	type ServerAuth,
 } from "../../../authorization/server";
-import { cmsBackendPlugin, type CMSBackendHooks } from "../api";
+import {
+	cmsBackendPlugin,
+	CMS_LIFECYCLE_HOOK_MIGRATIONS,
+	type CMSBackendHooks,
+} from "../api";
 import { cmsPermissions } from "../permissions";
 import type { ContentItem, ContentRelation, ContentType } from "../types";
 
@@ -213,6 +217,18 @@ async function seedRecord(
 }
 
 describe("CMS authorization inventory", () => {
+	it("records every removed lifecycle name and canonical replacement", () => {
+		expect(CMS_LIFECYCLE_HOOK_MIGRATIONS).toEqual({
+			onBeforeCreate: "onBeforeCreateContent",
+			onAfterCreate: "onAfterCreateContent",
+			onBeforeUpdate: "onBeforeUpdateContent",
+			onAfterUpdate: "onAfterUpdateContent",
+			onBeforeDelete: "onBeforeDeleteContent",
+			onAfterDelete: "onAfterDeleteContent",
+			onError: "onErrorExecuteContentOperation",
+		});
+	});
+
 	it("binds every maintained route behavior to the CMS catalog", () => {
 		const plugin = cmsBackendPlugin({ contentTypes });
 		const adapter = memoryAdapter(defineDb({}).use(plugin.dbPlugin));
@@ -385,7 +401,7 @@ describe("CMS operation-first authorization", () => {
 		const backend = makeBackend({
 			auth: createAuth(),
 			hooks: {
-				onBeforeCreate: (_data, context) => {
+				onBeforeCreateContent: (_data, context) => {
 					if (false) {
 						// @ts-expect-error Authorized lifecycle input is immutable.
 						context.input.body.slug = "rewritten";
@@ -395,7 +411,7 @@ describe("CMS operation-first authorization", () => {
 					events.push(`create:${context.identity?.id}`);
 					expect(context.facts).toEqual({ contentType: "article" });
 				},
-				onAfterCreate: (item, context) => {
+				onAfterCreateContent: (item, context) => {
 					if (false) {
 						// @ts-expect-error Authorized lifecycle results are deeply immutable.
 						item.contentType!.slug = "rewritten";
@@ -403,17 +419,17 @@ describe("CMS operation-first authorization", () => {
 					events.push(`created:${item.authorId}`);
 					expect(context.result).toBe(item);
 				},
-				onBeforeUpdate: (_id, _data, context) => {
+				onBeforeUpdateContent: (_id, _data, context) => {
 					events.push(`update:${context.identity?.id}`);
 				},
-				onAfterUpdate: (item, context) => {
+				onAfterUpdateContent: (item, context) => {
 					events.push(`updated:${item.authorId}`);
 					expect(context.result).toBe(item);
 				},
-				onBeforeDelete: (_id, context) => {
+				onBeforeDeleteContent: (_id, context) => {
 					events.push(`delete:${context.identity?.id ?? "internal"}`);
 				},
-				onAfterDelete: (_id, context) => {
+				onAfterDeleteContent: (_id, context) => {
 					events.push(`deleted:${context.result.success}`);
 				},
 			},
@@ -478,6 +494,80 @@ describe("CMS operation-first authorization", () => {
 		).toBeFalsy();
 	});
 
+	it.each(["request", "internal"] as const)(
+		"invokes every canonical CMS mutation lifecycle through %s execution",
+		async (transport) => {
+			const events: string[] = [];
+			const record = (event: string) => {
+				events.push(event);
+			};
+			const backend = makeBackend({
+				auth: createAuth(),
+				hooks: {
+					onBeforeCreateContent: (_data, context) => {
+						if (context.input.body.slug.startsWith("rejected-")) {
+							events.push("before-error:create");
+							throw new Error("create rejected");
+						}
+						events.push("before:create");
+					},
+					onAfterCreateContent: () => record("after:create"),
+					onBeforeUpdateContent: () => record("before:update"),
+					onAfterUpdateContent: () => record("after:update"),
+					onBeforeDeleteContent: () => record("before:delete"),
+					onAfterDeleteContent: () => record("after:delete"),
+					onErrorExecuteContentOperation: (_error, operation) => {
+						events.push(`error:${operation}`);
+					},
+				},
+			});
+			const api =
+				transport === "request"
+					? backend.forRequest(
+							request("/lifecycle", {
+								identity: { id: "author-1", role: "user" },
+							}),
+						).api.cms
+					: backend.internal.cms;
+			const created = await api.createContentItem({
+				typeSlug: "article",
+				body: {
+					slug: `lifecycle-${transport}`,
+					data: { title: "Lifecycle article" },
+				},
+			});
+			await api.updateContentItem({
+				typeSlug: "article",
+				id: created.id,
+				body: { data: { title: "Lifecycle article updated" } },
+			});
+			await api.deleteContentItem({
+				typeSlug: "article",
+				id: created.id,
+			});
+			await expect(
+				api.createContentItem({
+					typeSlug: "article",
+					body: {
+						slug: `rejected-${transport}`,
+						data: { title: "Rejected article" },
+					},
+				}),
+			).rejects.toThrow("create rejected");
+
+			expect(events).toEqual([
+				"before:create",
+				"after:create",
+				"before:update",
+				"after:update",
+				"before:delete",
+				"after:delete",
+				"before-error:create",
+				"error:create",
+			]);
+		},
+	);
+
 	it("authorizes inline related-record creation for the server-derived target type", async () => {
 		const sourceOnlyAuthorization = defineAuthorization({
 			identity: z.object({ id: z.string(), role: z.literal("user") }),
@@ -501,13 +591,13 @@ describe("CMS operation-first authorization", () => {
 				getIdentity: () => ({ id: "author-1", role: "user" as const }),
 			}),
 			hooks: {
-				onBeforeCreate: () => {
+				onBeforeCreateContent: () => {
 					events.push("before");
 				},
-				onBeforeUpdate: () => {
+				onBeforeUpdateContent: () => {
 					events.push("before");
 				},
-				onError: () => {
+				onErrorExecuteContentOperation: () => {
 					events.push("error");
 				},
 			},
@@ -573,10 +663,10 @@ describe("CMS operation-first authorization", () => {
 				getIdentity: () => ({ id: "author-1", role: "user" as const }),
 			}),
 			hooks: {
-				onBeforeCreate: () => {
+				onBeforeCreateContent: () => {
 					events.push("before:create");
 				},
-				onBeforeUpdate: () => {
+				onBeforeUpdateContent: () => {
 					events.push("before:update");
 				},
 			},
@@ -628,7 +718,7 @@ describe("CMS operation-first authorization", () => {
 		backend = makeBackend({
 			auth: createAuth(),
 			hooks: {
-				onBeforeCreate: async () => {
+				onBeforeCreateContent: async () => {
 					events.push("before");
 					await backend.adapter.update<ContentItem>({
 						model: "contentItem",
@@ -636,7 +726,7 @@ describe("CMS operation-first authorization", () => {
 						update: { authorId: "other-owner" },
 					});
 				},
-				onError: (_error, operation) => {
+				onErrorExecuteContentOperation: (_error, operation) => {
 					events.push(`error:${operation}`);
 				},
 			},
@@ -717,13 +807,13 @@ describe("CMS operation-first authorization", () => {
 				getIdentity: () => ({ id: "author-1", role: "user" as const }),
 			}),
 			hooks: {
-				onBeforeCreate: () => {
+				onBeforeCreateContent: () => {
 					events.push("before:create");
 				},
-				onBeforeUpdate: () => {
+				onBeforeUpdateContent: () => {
 					events.push("before:update");
 				},
-				onError: (_error, operation) => {
+				onErrorExecuteContentOperation: (_error, operation) => {
 					events.push(`error:${operation}`);
 				},
 			},
@@ -997,7 +1087,7 @@ describe("CMS operation-first authorization", () => {
 				getIdentity: () => ({ id: "reader-1", role: "user" as const }),
 			}),
 			hooks: {
-				onError: () => {
+				onErrorExecuteContentOperation: () => {
 					events.push("error");
 				},
 			},
@@ -1031,7 +1121,7 @@ describe("CMS operation-first authorization", () => {
 				getIdentity: () => ({ id: "reader-1", role: "user" as const }),
 			}),
 			hooks: {
-				onError: () => {
+				onErrorExecuteContentOperation: () => {
 					events.push("error");
 				},
 			},
@@ -1177,7 +1267,7 @@ describe("CMS operation-first authorization", () => {
 				getIdentity: () => ({ id: "reader-1", role: "user" as const }),
 			}),
 			hooks: {
-				onError: () => {
+				onErrorExecuteContentOperation: () => {
 					events.push("error");
 				},
 			},
@@ -1234,7 +1324,7 @@ describe("CMS operation-first authorization", () => {
 				getIdentity: () => ({ id: "reader-1", role: "user" as const }),
 			}),
 			hooks: {
-				onError: (_error, operation) => {
+				onErrorExecuteContentOperation: (_error, operation) => {
 					events.push(`error:${operation}`);
 				},
 			},
@@ -1777,13 +1867,13 @@ describe("CMS operation-first authorization", () => {
 	it("keeps identity, missing-rule, policy, fact, and input failures outside hooks", async () => {
 		const events: string[] = [];
 		const hooks: CMSBackendHooks = {
-			onBeforeDelete: () => {
+			onBeforeDeleteContent: () => {
 				events.push("before");
 			},
-			onAfterDelete: () => {
+			onAfterDeleteContent: () => {
 				events.push("after");
 			},
-			onError: () => {
+			onErrorExecuteContentOperation: () => {
 				events.push("error");
 			},
 		};
@@ -1865,7 +1955,7 @@ describe("CMS operation-first authorization", () => {
 		backend = makeBackend({
 			auth: createAuth(),
 			hooks: {
-				onBeforeCreate: async (data) => {
+				onBeforeCreateContent: async (data) => {
 					expect(data).toMatchObject({
 						name: "Denied",
 						categoryIds: [{ id: expect.any(String) }],
@@ -1873,11 +1963,11 @@ describe("CMS operation-first authorization", () => {
 					expect((await allContentItems(backend, "category")).total).toBe(0);
 					throw new Error("Create denied by hook");
 				},
-				onBeforeUpdate: (_id, data) => {
+				onBeforeUpdateContent: (_id, data) => {
 					expect(data).toMatchObject({ title: "hook-protected" });
 					throw new Error("Update denied by hook");
 				},
-				onBeforeDelete: () => {
+				onBeforeDeleteContent: () => {
 					throw new Error("Delete denied by hook");
 				},
 			},
@@ -1965,7 +2055,7 @@ describe("CMS operation-first authorization", () => {
 		backend = makeBackend({
 			auth: createAuth(),
 			hooks: {
-				onBeforeUpdate: async (id) => {
+				onBeforeUpdateContent: async (id) => {
 					events.push("before");
 					expect((await allContentItems(backend, "category")).total).toBe(0);
 					await backend.adapter.update<ContentItem>({
@@ -1974,10 +2064,10 @@ describe("CMS operation-first authorization", () => {
 						update: { authorId: "other-owner" },
 					});
 				},
-				onAfterUpdate: () => {
+				onAfterUpdateContent: () => {
 					events.push("after");
 				},
-				onError: (_error, operation, context) => {
+				onErrorExecuteContentOperation: (_error, operation, context) => {
 					events.push(`error:${operation}`);
 					expect(context.error).toMatchObject({
 						code: "RECORD_STATE_CHANGED",
@@ -2042,13 +2132,13 @@ describe("CMS operation-first authorization", () => {
 		backend = makeBackend({
 			auth: racingAuth,
 			hooks: {
-				onBeforeDelete: () => {
+				onBeforeDeleteContent: () => {
 					events.push("before");
 				},
-				onAfterDelete: () => {
+				onAfterDeleteContent: () => {
 					events.push("after");
 				},
-				onError: (_error, operation, context) => {
+				onErrorExecuteContentOperation: (_error, operation, context) => {
 					events.push(`error:${operation}`);
 					expect(context.error).toMatchObject({
 						code: "RECORD_STATE_CHANGED",

@@ -1236,7 +1236,7 @@ export function createCMSOperations(
 		operation: "create" | "update" | "delete" | "list" | "get",
 		context: CMSOperationLifecycleContext,
 	) => {
-		await hooks?.onError?.(
+		await hooks?.onErrorExecuteContentOperation?.(
 			normalizeOperationError(error, `CMS ${operation} operation failed.`),
 			operation,
 			operationErrorContext(context, error),
@@ -1487,7 +1487,7 @@ export function createCMSOperations(
 			}
 			const validatedData = validation.data as Record<string, CMSOperationData>;
 			await runBeforeHook(
-				() => hooks?.onBeforeCreate?.(validatedData, lifecycleContext),
+				() => hooks?.onBeforeCreateContent?.(validatedData, lifecycleContext),
 				"Create operation denied",
 			);
 			return adapter.transaction(async (tx) => {
@@ -1542,7 +1542,7 @@ export function createCMSOperations(
 			// The serialized item type recursively contains populated relations. Keep
 			// that useful public hook type while bridging the already-frozen result
 			// without asking TypeScript to recursively compare every relation level.
-			const onAfterCreate = hooks?.onAfterCreate as
+			const onAfterCreate = hooks?.onAfterCreateContent as
 				| ((item: unknown, context: unknown) => Promise<void> | void)
 				| undefined;
 			await onAfterCreate?.(
@@ -1664,7 +1664,7 @@ export function createCMSOperations(
 			const mergedData = validation.data as Record<string, CMSOperationData>;
 			await runBeforeHook(
 				() =>
-					hooks?.onBeforeUpdate?.(
+					hooks?.onBeforeUpdateContent?.(
 						context.facts.recordId,
 						mergedData,
 						lifecycleContext,
@@ -1759,7 +1759,7 @@ export function createCMSOperations(
 		},
 		after: async (context) => {
 			const base = updateContext(context);
-			const onAfterUpdate = hooks?.onAfterUpdate as
+			const onAfterUpdate = hooks?.onAfterUpdateContent as
 				| ((item: unknown, context: unknown) => Promise<void> | void)
 				| undefined;
 			await onAfterUpdate?.(
@@ -1799,7 +1799,7 @@ export function createCMSOperations(
 			assertRecordFacts(current, context.facts);
 			await runBeforeHook(
 				() =>
-					hooks?.onBeforeDelete?.(
+					hooks?.onBeforeDeleteContent?.(
 						context.facts.recordId,
 						deleteContext(context),
 					),
@@ -1855,7 +1855,7 @@ export function createCMSOperations(
 			}),
 		after: async (context) => {
 			const base = deleteContext(context);
-			await hooks?.onAfterDelete?.(
+			await hooks?.onAfterDeleteContent?.(
 				context.facts.recordId,
 				Object.freeze({ ...base, result: context.result }),
 			);

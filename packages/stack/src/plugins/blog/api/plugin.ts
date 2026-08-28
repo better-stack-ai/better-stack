@@ -20,6 +20,7 @@ export {
 	PostListQuerySchema,
 	UpdatePostOperationInputSchema,
 } from "./operations";
+export { BLOG_LIFECYCLE_HOOK_MIGRATIONS } from "./lifecycle-migrations";
 export type {
 	BlogBackendHooks,
 	BlogCreateErrorContext,

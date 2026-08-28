@@ -285,7 +285,7 @@ const blogHooks: BlogBackendHooks = {
 			context.identity.id = "another-user";
 		}
 	},
-	onPostDeleted: (_id, context) => {
+	onAfterDeletePost: (_id, context) => {
 		const resultIsExact: Expect<
 			Equal<typeof context.result, { readonly success: true }>
 		> = true;
@@ -293,7 +293,7 @@ const blogHooks: BlogBackendHooks = {
 		// @ts-expect-error lifecycle result references are readonly
 		context.result = { success: true };
 	},
-	onDeletePostError: (_error, context) => {
+	onErrorDeletePost: (_error, context) => {
 		const errorInputIsExact: Expect<
 			Equal<typeof context.input, { readonly id: string }>
 		> = true;
@@ -422,7 +422,7 @@ commentsPermissions.comment.moderate({
 });
 
 const commentsHooks: CommentsBackendHooks = {
-	onBeforeEdit: (_id, _data, context) => {
+	onBeforeUpdateComment: (_id, _data, context) => {
 		const editFactsAreExact: Expect<
 			Equal<
 				typeof context.facts,
@@ -444,7 +444,7 @@ const commentsHooks: CommentsBackendHooks = {
 		// @ts-expect-error trusted ownership facts are readonly
 		context.facts.authorId = "spoofed-owner";
 	},
-	onBeforeStatusChange: (_id, _status, context) => {
+	onBeforeModerateComment: (_id, _status, context) => {
 		const moderationFactsAreExact: Expect<
 			Equal<
 				typeof context.facts,

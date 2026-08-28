@@ -8,13 +8,33 @@ import {
 	createServerAuth,
 	type ServerAuth,
 } from "../../../authorization/server";
-import { blogBackendPlugin, type BlogBackendHooks } from "../api";
+import {
+	blogBackendPlugin,
+	BLOG_LIFECYCLE_HOOK_MIGRATIONS,
+	type BlogBackendHooks,
+} from "../api";
 import { blogPermissions } from "../permissions";
 import type { Post } from "../types";
 
 const memoryAdapter = (db: DatabaseDefinition) => createMemoryAdapter(db)({});
 
 describe("Blog authorization inventory", () => {
+	it("records every removed lifecycle name and canonical replacement", () => {
+		expect(BLOG_LIFECYCLE_HOOK_MIGRATIONS).toEqual({
+			onBeforeNextPreviousPosts: "onBeforeGetNextPreviousPosts",
+			onPostsRead: "onAfterListPosts",
+			onPostCreated: "onAfterCreatePost",
+			onPostUpdated: "onAfterUpdatePost",
+			onPostDeleted: "onAfterDeletePost",
+			onNextPreviousPostsRead: "onAfterGetNextPreviousPosts",
+			onListPostsError: "onErrorListPosts",
+			onNextPreviousPostsError: "onErrorGetNextPreviousPosts",
+			onCreatePostError: "onErrorCreatePost",
+			onUpdatePostError: "onErrorUpdatePost",
+			onDeletePostError: "onErrorDeletePost",
+		});
+	});
+
 	it("covers every maintained HTTP and programmatic operation with a stable descriptor", () => {
 		const plugin = blogBackendPlugin();
 		const adapter = memoryAdapter(defineDb({}).use(plugin.dbPlugin));
@@ -216,13 +236,13 @@ function protectedLifecycleHooks(events: string[]): BlogBackendHooks {
 	};
 	return {
 		onBeforeListPosts: observed,
-		onListPostsError: observed,
+		onErrorListPosts: observed,
 		onBeforeCreatePost: observed,
-		onCreatePostError: observed,
+		onErrorCreatePost: observed,
 		onBeforeUpdatePost: observed,
-		onUpdatePostError: observed,
+		onErrorUpdatePost: observed,
 		onBeforeDeletePost: observed,
-		onDeletePostError: observed,
+		onErrorDeletePost: observed,
 	};
 }
 
@@ -404,11 +424,11 @@ describe("Blog operation-first authorization", () => {
 						request: expect.any(Request),
 					});
 				},
-				onPostsRead: (posts, _filter, context) => {
+				onAfterListPosts: (posts, _filter, context) => {
 					events.push(`after:${posts.length}`);
 					expect(context.result.items).toBe(posts);
 				},
-				onListPostsError: () => {
+				onErrorListPosts: () => {
 					events.push("error");
 				},
 			},
@@ -557,10 +577,10 @@ describe("Blog operation-first authorization", () => {
 		const backend = makeBackend({
 			auth: createAuth(getIdentity),
 			hooks: {
-				onBeforeNextPreviousPosts: (_query, context) => {
+				onBeforeGetNextPreviousPosts: (_query, context) => {
 					events.push(`before:${context.facts.scope}`);
 				},
-				onNextPreviousPostsRead: (_result, context) => {
+				onAfterGetNextPreviousPosts: (_result, context) => {
 					events.push(`after:${context.facts.scope}`);
 				},
 			},
@@ -610,6 +630,133 @@ describe("Blog operation-first authorization", () => {
 		expect(getIdentity).not.toHaveBeenCalled();
 	});
 
+	it.each(["request", "internal"] as const)(
+		"invokes every renamed Blog lifecycle through %s execution",
+		async (transport) => {
+			const events: string[] = [];
+			const record = (event: string) => {
+				events.push(event);
+			};
+			let failingOperation:
+				| "list"
+				| "navigation"
+				| "create"
+				| "update"
+				| "delete"
+				| undefined;
+			const rejectWhenFailing = (
+				operation: NonNullable<typeof failingOperation>,
+			) => {
+				if (failingOperation !== operation) return;
+				events.push(`before-error:${operation}`);
+				throw new Error(`${operation} rejected`);
+			};
+			const backend = makeBackend({
+				auth: createAuth(),
+				hooks: {
+					onBeforeListPosts: () => rejectWhenFailing("list"),
+					onAfterListPosts: () => record("after:list"),
+					onErrorListPosts: () => record("error:list"),
+					onBeforeGetNextPreviousPosts: () => {
+						events.push("before:navigation");
+						rejectWhenFailing("navigation");
+					},
+					onAfterGetNextPreviousPosts: () => record("after:navigation"),
+					onErrorGetNextPreviousPosts: () => record("error:navigation"),
+					onBeforeCreatePost: () => rejectWhenFailing("create"),
+					onAfterCreatePost: () => record("after:create"),
+					onErrorCreatePost: () => record("error:create"),
+					onBeforeUpdatePost: () => rejectWhenFailing("update"),
+					onAfterUpdatePost: () => record("after:update"),
+					onErrorUpdatePost: () => record("error:update"),
+					onBeforeDeletePost: () => rejectWhenFailing("delete"),
+					onAfterDeletePost: () => record("after:delete"),
+					onErrorDeletePost: () => record("error:delete"),
+				},
+			});
+			const api =
+				transport === "request"
+					? backend.forRequest(
+							request("/lifecycle", {
+								identity: { id: "author-1", role: "user" },
+							}),
+						).api.blog
+					: backend.internal.blog;
+			const postInput = {
+				title: "Lifecycle post",
+				content: "Content",
+				excerpt: "Excerpt",
+				slug: `lifecycle-${transport}`,
+				published: false,
+				tags: [],
+			};
+
+			await api.listPosts({ published: true });
+			await api.getNextPreviousPosts({ date: "2030-01-01T00:00:00.000Z" });
+			const created = await api.createPost(postInput);
+			await api.updatePost({
+				id: created.id,
+				data: { ...postInput, title: "Lifecycle post updated" },
+			});
+			await api.deletePost({ id: created.id });
+
+			const errorTarget = await seedPost(
+				backend,
+				`lifecycle-error-${transport}`,
+			);
+			for (const [operation, invoke] of [
+				["list", () => api.listPosts({ published: true })],
+				[
+					"navigation",
+					() =>
+						api.getNextPreviousPosts({
+							date: "2030-01-01T00:00:00.000Z",
+						}),
+				],
+				[
+					"create",
+					() => api.createPost({ ...postInput, slug: `rejected-${transport}` }),
+				],
+				[
+					"update",
+					() =>
+						api.updatePost({
+							id: errorTarget.id,
+							data: {
+								...postInput,
+								title: "Rejected update",
+								published: true,
+							},
+						}),
+				],
+				["delete", () => api.deletePost({ id: errorTarget.id })],
+			] as const) {
+				failingOperation = operation;
+				await expect(invoke()).rejects.toThrow(`${operation} rejected`);
+			}
+
+			expect(events).toEqual([
+				"after:list",
+				"before:navigation",
+				"after:navigation",
+				"after:create",
+				"after:update",
+				"after:delete",
+				"before-error:list",
+				"error:list",
+				"before:navigation",
+				"before-error:navigation",
+				"error:navigation",
+				"before-error:create",
+				"error:create",
+				"before-error:update",
+				"error:update",
+				"before-error:delete",
+				"error:delete",
+			]);
+		},
+	);
+
 	it("uses trusted create/update facts across HTTP, request, and internal entry points", async () => {
 		const events: string[] = [];
 		const backend = makeBackend({
@@ -621,7 +768,7 @@ describe("Blog operation-first authorization", () => {
 						publish: context.input.published ? "published" : "draft",
 					});
 				},
-				onPostCreated: (post, context) => {
+				onAfterCreatePost: (post, context) => {
 					events.push(`create:after:${post.authorId ?? "none"}`);
 					expect(context.result).toBe(post);
 				},
@@ -630,7 +777,7 @@ describe("Blog operation-first authorization", () => {
 						`update:before:${context.identity?.id ?? "internal"}:${context.facts.publish}`,
 					);
 				},
-				onPostUpdated: (post, context) => {
+				onAfterUpdatePost: (post, context) => {
 					events.push(`update:after:${String(post.published)}`);
 					expect(context.result).toBe(post);
 				},
@@ -837,10 +984,10 @@ describe("Blog delete one-rule authorization tracer", () => {
 				onBeforeDeletePost: () => {
 					lifecycleEvents.push("before");
 				},
-				onPostDeleted: () => {
+				onAfterDeletePost: () => {
 					lifecycleEvents.push("after");
 				},
-				onDeletePostError: () => {
+				onErrorDeletePost: () => {
 					lifecycleEvents.push("error");
 					throw new Error("hook must not replace denial");
 				},
@@ -974,7 +1121,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 				onBeforeDeletePost: (id) => {
 					events.push(`before:${id}`);
 				},
-				onPostDeleted: (id, context) => {
+				onAfterDeletePost: (id, context) => {
 					events.push(`after:${id}`);
 					expect(context).toMatchObject({
 						identity: null,
@@ -983,7 +1130,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 						result: { success: true },
 					});
 				},
-				onDeletePostError: (_error, context) => {
+				onErrorDeletePost: (_error, context) => {
 					events.push(`error:${context.params?.id ?? "invalid"}`);
 				},
 			},
@@ -1002,9 +1149,9 @@ describe("Blog delete one-rule authorization tracer", () => {
 	});
 
 	it("does not enter the lifecycle when trusted fact derivation fails", async () => {
-		const onDeletePostError = vi.fn();
+		const onErrorDeletePost = vi.fn();
 		const backend = makeBackend({
-			hooks: { onDeletePostError },
+			hooks: { onErrorDeletePost },
 		});
 		const post = await seedPost(backend, "fact-failure");
 		vi.spyOn(backend.adapter, "findOne").mockRejectedValueOnce(
@@ -1015,7 +1162,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 			backend.internal.blog.deletePost({ id: post.id }),
 		).rejects.toThrow("database unavailable");
 
-		expect(onDeletePostError).not.toHaveBeenCalled();
+		expect(onErrorDeletePost).not.toHaveBeenCalled();
 		expect(await postExists(backend, post.id)).toBe(true);
 	});
 
@@ -1027,7 +1174,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 				onBeforeDeletePost: (_id, context) => {
 					events.push(`before:${context.identity?.id}`);
 				},
-				onDeletePostError: (error, context) => {
+				onErrorDeletePost: (error, context) => {
 					events.push(`error:${context.identity?.id}:${error.message}`);
 					throw new Error("observability unavailable");
 				},
@@ -1055,7 +1202,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 		let observedError: Error | undefined;
 		const backend = makeBackend({
 			hooks: {
-				onDeletePostError: (error) => {
+				onErrorDeletePost: (error) => {
 					observedError = error;
 				},
 			},
@@ -1092,10 +1239,10 @@ describe("Blog delete one-rule authorization tracer", () => {
 				onBeforeDeletePost: () => {
 					identityLifecycleEvents.push("before");
 				},
-				onPostDeleted: () => {
+				onAfterDeletePost: () => {
 					identityLifecycleEvents.push("after");
 				},
-				onDeletePostError: () => {
+				onErrorDeletePost: () => {
 					identityLifecycleEvents.push("error");
 					throw new Error("hook must not replace identity failure");
 				},
@@ -1134,10 +1281,10 @@ describe("Blog delete one-rule authorization tracer", () => {
 						onBeforeDeletePost: () => {
 							ruleLifecycleEvents.push("before");
 						},
-						onPostDeleted: () => {
+						onAfterDeletePost: () => {
 							ruleLifecycleEvents.push("after");
 						},
-						onDeletePostError: () => {
+						onErrorDeletePost: () => {
 							ruleLifecycleEvents.push("error");
 							throw new Error("hook must not replace rule failure");
 						},
@@ -1182,10 +1329,10 @@ describe("Blog delete one-rule authorization tracer", () => {
 						onBeforeDeletePost: () => {
 							missingRuleLifecycleEvents.push("before");
 						},
-						onPostDeleted: () => {
+						onAfterDeletePost: () => {
 							missingRuleLifecycleEvents.push("after");
 						},
-						onDeletePostError: () => {
+						onErrorDeletePost: () => {
 							missingRuleLifecycleEvents.push("error");
 							throw new Error("hook must not replace missing-rule denial");
 						},

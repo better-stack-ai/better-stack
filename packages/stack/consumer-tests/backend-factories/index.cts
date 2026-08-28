@@ -47,7 +47,9 @@ media.mediaBackendPlugin();
 media.mediaBackendPlugin({});
 // @ts-expect-error Blog lifecycle hooks cannot be positional.
 blog.blogBackendPlugin({ onBeforeListPosts: async () => undefined });
-// @ts-expect-error Comments lifecycle hooks cannot be flat options.
-comments.commentsBackendPlugin({ onBeforePost: async () => undefined });
+comments.commentsBackendPlugin({
+	// @ts-expect-error Comments lifecycle hooks cannot be flat options.
+	onBeforeCreateComment: async () => undefined,
+});
 // @ts-expect-error Kanban lifecycle hooks cannot be positional.
 kanban.kanbanBackendPlugin({ onBeforeListBoards: async () => undefined });

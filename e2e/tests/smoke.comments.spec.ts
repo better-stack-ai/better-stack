@@ -818,14 +818,14 @@ test.describe("My Comments Page", () => {
 	test("API security — GET /comments?authorId=unknown returns 403", async ({
 		request,
 	}) => {
-		// The example app's onBeforeListByAuthor only allows "olliethedev"
+		// The example app's onBeforeListCommentsByAuthor only allows "olliethedev"
 		const response = await request.get(
 			`/api/data/comments?authorId=unknown-user-12345`,
 			{ headers: mockAuthHeaders(AUTHOR_ID) },
 		);
 		expect(
 			response.status(),
-			"Expected 403 when onBeforeListByAuthor is absent or rejects",
+			"Expected 403 when onBeforeListCommentsByAuthor is absent or rejects",
 		).toBe(403);
 	});
 

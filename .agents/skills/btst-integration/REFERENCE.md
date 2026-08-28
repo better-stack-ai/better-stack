@@ -15,8 +15,10 @@ function createStack() {
     basePath: "/api/data",
     plugins: {
       blog: blogBackendPlugin({
-        // optional domain hooks
-        onPostCreated: async (post) => { /* revalidate, notify */ },
+        hooks: {
+          // optional domain hooks
+          onAfterCreatePost: async (post) => { /* revalidate, notify */ },
+        },
       }),
       aiChat: aiChatBackendPlugin({
         model: openai("gpt-4o"),
@@ -376,18 +378,21 @@ No CSS import is needed for: `media`, `open-api`.
 
 ## Backend plugin hooks reference
 
-Backend plugins accept a hooks object as their factory argument. Common hooks:
+Backend plugins accept lifecycle callbacks under their factory's `hooks`
+option. Common hooks:
 
 **blog**
 ```ts
 blogBackendPlugin({
-  onBeforeCreatePost: async (data) => { /* domain validation */ },
-  onBeforeUpdatePost: async (postId) => { /* domain validation */ },
-  onBeforeDeletePost: async (postId) => { /* audit */ },
-  onBeforeListPosts: async (filter) => { /* telemetry */ },
-  onPostCreated: async (post) => { revalidatePath("/pages/blog") },
-  onPostUpdated: async (post) => { /* … */ },
-  onPostDeleted: async (postId) => { /* … */ },
+  hooks: {
+    onBeforeCreatePost: async (data) => { /* domain validation */ },
+    onBeforeUpdatePost: async (postId) => { /* domain validation */ },
+    onBeforeDeletePost: async (postId) => { /* audit */ },
+    onBeforeListPosts: async (filter) => { /* telemetry */ },
+    onAfterCreatePost: async (post) => { revalidatePath("/pages/blog") },
+    onAfterUpdatePost: async (post) => { /* … */ },
+    onAfterDeletePost: async (postId) => { /* … */ },
+  },
 })
 ```
 
@@ -396,9 +401,11 @@ blogBackendPlugin({
 commentsBackendPlugin({
   autoApprove: false,
   resolveUser: async (authorId) => ({ name: "…" }),
-  onBeforePost: async (input, ctx) => { /* domain validation */ },
-  onBeforeEdit: async (commentId, update, ctx) => { /* domain validation */ },
-  onBeforeStatusChange: async (commentId, status, ctx) => { /* audit */ },
+  hooks: {
+    onBeforeCreateComment: async (input, ctx) => { /* domain validation */ },
+    onBeforeUpdateComment: async (commentId, update, ctx) => { /* domain validation */ },
+    onBeforeModerateComment: async (commentId, status, ctx) => { /* audit */ },
+  },
 })
 ```
 
