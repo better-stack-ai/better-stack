@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
 import { Button } from "@workspace/ui/components/button";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { Send, Paperclip, X, Loader2, FileText } from "lucide-react";
@@ -101,6 +101,13 @@ export function ChatInput({
 	const [internalFiles, setInternalFiles] = useState<AttachedFile[]>([]);
 	const [isUploading, setIsUploading] = useState(false);
 	const [pendingFile, setPendingFile] = useState<File | null>(null);
+	const uploadGeneration = useRef(0);
+	useLayoutEffect(
+		() => () => {
+			uploadGeneration.current += 1;
+		},
+		[],
+	);
 
 	// Use controlled files if provided, otherwise use internal state
 	const attachedFiles = controlledFiles ?? internalFiles;
@@ -169,12 +176,15 @@ export function ChatInput({
 	};
 
 	const uploadSelectedFile = async (file: File) => {
+		const generation = uploadGeneration.current;
+		const isCurrentUpload = () => generation === uploadGeneration.current;
 		setPendingFile(null);
 		// Use uploadFile if available, otherwise create data URL
 		if (uploadFile) {
 			try {
 				setIsUploading(true);
 				const url = await uploadFile(file);
+				if (!isCurrentUpload()) return;
 				addFile({ url, mediaType: file.type, filename: file.name });
 				notify.success(
 					tr(
@@ -184,6 +194,7 @@ export function ChatInput({
 					),
 				);
 			} catch (error) {
+				if (!isCurrentUpload()) return;
 				console.error("Failed to upload file:", error);
 				notify.error(
 					tr(
@@ -193,17 +204,19 @@ export function ChatInput({
 					),
 				);
 			} finally {
-				setIsUploading(false);
+				if (isCurrentUpload()) setIsUploading(false);
 			}
 		} else {
 			setIsUploading(true);
 			const reader = new FileReader();
 			reader.onload = (event) => {
+				if (!isCurrentUpload()) return;
 				const dataUrl = event.target?.result as string;
 				addFile({ url: dataUrl, mediaType: file.type, filename: file.name });
 				setIsUploading(false);
 			};
 			reader.onerror = () => {
+				if (!isCurrentUpload()) return;
 				notify.error(
 					tr(
 						"FILE_UPLOAD_FAILURE",

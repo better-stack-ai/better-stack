@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { runResourceMutation } from "../plugins/client";
 import {
+	aiChatIdentityKey,
 	aiChatResources,
 	createAiChatQueryKeys,
 } from "../plugins/ai-chat/query-keys";
@@ -23,17 +24,105 @@ describe("AI Chat resource declaration", () => {
 			"conv-1",
 		]);
 		const identity = { id: "user-1", role: "admin" };
+		const identityKey = aiChatIdentityKey(identity);
 		expect([...queries.conversations.list(identity).queryKey]).toEqual([
 			"conversations",
 			"list",
 			"all",
-			{ identity },
+			{ identity: identityKey },
 		]);
 		expect([
 			...queries.conversations.detail("conv-1", identity).queryKey,
-		]).toEqual(["conversations", "detail", "conv-1", { identity }]);
+		]).toEqual([
+			"conversations",
+			"detail",
+			"conv-1",
+			{ identity: identityKey },
+		]);
 		expect(queries.conversations.list(identity).queryKey).not.toEqual(
 			queries.conversations.list({ ...identity, role: "user" }).queryKey,
+		);
+		const circular = { id: "user-1", role: "admin" } as Record<
+			string,
+			unknown
+		> & { id: string };
+		circular.self = circular;
+		expect(() => queries.conversations.list(circular).queryKey).not.toThrow();
+		expect(
+			JSON.stringify(queries.conversations.list(circular).queryKey),
+		).not.toContain("role");
+		expect(
+			queries.conversations.list({
+				id: "user-1",
+				roles: new Set(["admin"]),
+			}).queryKey,
+		).not.toEqual(
+			queries.conversations.list({
+				id: "user-1",
+				roles: new Set(["viewer"]),
+			}).queryKey,
+		);
+		class LegacyClaims {
+			role = "admin";
+			check = () => true;
+		}
+		const legacyIdentity = {
+			id: "legacy-user",
+			claims: new LegacyClaims(),
+			marker: Symbol("legacy"),
+		};
+		expect(
+			() => queries.conversations.list(legacyIdentity).queryKey,
+		).not.toThrow();
+		expect(
+			JSON.stringify(queries.conversations.list(legacyIdentity).queryKey),
+		).not.toContain("admin");
+		expect(
+			queries.conversations.list({
+				id: "legacy-user",
+				check: function sameName() {
+					return true;
+				},
+			}).queryKey,
+		).not.toEqual(
+			queries.conversations.list({
+				id: "legacy-user",
+				check: function sameName() {
+					return true;
+				},
+			}).queryKey,
+		);
+		expect(
+			queries.conversations.list({
+				id: "legacy-user",
+				claim: new ArrayBuffer(1),
+			}).queryKey,
+		).not.toEqual(
+			queries.conversations.list({
+				id: "legacy-user",
+				claim: new Uint8Array([0]),
+			}).queryKey,
+		);
+		expect(
+			queries.conversations.list({ id: "legacy-user", claims: [] }).queryKey,
+		).not.toEqual(
+			queries.conversations.list({
+				id: "legacy-user",
+				claims: new Array(1),
+			}).queryKey,
+		);
+		const firstSymbol = Symbol("same-description");
+		const secondSymbol = Symbol("same-description");
+		expect(
+			queries.conversations.list({
+				id: "legacy-user",
+				claim: firstSymbol,
+			}).queryKey,
+		).not.toEqual(
+			queries.conversations.list({
+				id: "legacy-user",
+				claim: secondSymbol,
+			}).queryKey,
 		);
 		expect([...queries.conversations.list("anonymous").queryKey]).toEqual([
 			"conversations",
@@ -41,6 +130,18 @@ describe("AI Chat resource declaration", () => {
 			"all",
 			{ identity: "anonymous" },
 		]);
+	});
+
+	it("does not request history while identity resolution is pending or failed", async () => {
+		const client = vi.fn() as any;
+		const queries = createAiChatQueryKeys(client);
+		await expect(
+			queries.conversations.list("pending:7").queryFn(),
+		).resolves.toBeNull();
+		await expect(
+			queries.conversations.detail("conv-1", "error:7").queryFn(),
+		).resolves.toBeNull();
+		expect(client).not.toHaveBeenCalled();
 	});
 
 	it("forwards headers through list and detail requests", async () => {

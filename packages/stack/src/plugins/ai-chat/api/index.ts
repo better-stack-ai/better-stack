@@ -1,7 +1,12 @@
 export * from "./plugin";
 export { getAllConversations, getConversationById } from "./getters";
-export { aiChatResources, createAiChatQueryKeys } from "../query-keys";
+export {
+	aiChatIdentityKey,
+	aiChatResources,
+	createAiChatQueryKeys,
+} from "../query-keys";
 export type {
+	AiChatIdentityPartition,
 	AiChatQueryKeys,
 	ConversationWithMessages,
 	CreateConversationInput,

@@ -9,26 +9,47 @@ import { useLayoutEffect, useRef } from "react";
 import type { ResourceFormResult } from "@btst/stack/plugins/client/hooks";
 import {
 	useIdentity,
+	useIdentityResolutionPromise,
 	useIdentitySourceGeneration,
 	usePluginOverrides,
 	useTranslate,
 } from "@btst/stack/context";
 import type {
+	AiChatIdentityPartition,
 	ConversationWithMessages,
 	CreateConversationInput,
 	RenameConversationInput,
 } from "../../query-keys";
+import { aiChatIdentityKey } from "../../query-keys";
 import type { SerializedConversation, SerializedMessage } from "../../types";
 import type { AiChatPluginOverrides } from "../overrides";
 import { aiChat } from "./ai-chat-resource";
 
+function useAiChatIdentityState(): {
+	partition: AiChatIdentityPartition;
+	isPending: boolean;
+	error?: Error;
+	refetchIdentity: () => Promise<void>;
+} {
+	const { identity, isPending, error, refetch } = useIdentity();
+	const sourceGeneration = useIdentitySourceGeneration();
+	return {
+		partition: isPending
+			? `pending:${sourceGeneration}`
+			: error
+				? `error:${sourceGeneration}`
+				: identity
+					? identity
+					: "anonymous",
+		isPending,
+		...(error ? { error } : {}),
+		refetchIdentity: refetch,
+	};
+}
+
 /** Current auth generation, used to partition protected browser caches. */
 export function useAiChatIdentityPartition() {
-	const { identity, isPending, error } = useIdentity();
-	const sourceGeneration = useIdentitySourceGeneration();
-	if (isPending) return `pending:${sourceGeneration}` as const;
-	if (error) return `error:${sourceGeneration}` as const;
-	return identity ? { ...identity } : ("anonymous" as const);
+	return useAiChatIdentityState().partition;
 }
 
 function isUnresolvedIdentityPartition(
@@ -44,7 +65,9 @@ function samePartition(
 	left: ReturnType<typeof useAiChatIdentityPartition>,
 	right: ReturnType<typeof useAiChatIdentityPartition>,
 ) {
-	return hashKey([left]) === hashKey([right]);
+	return (
+		hashKey([aiChatIdentityKey(left)]) === hashKey([aiChatIdentityKey(right)])
+	);
 }
 
 function queryBelongsToPartition(
@@ -53,12 +76,15 @@ function queryBelongsToPartition(
 ) {
 	const marker = queryKey[3] as { identity?: unknown } | undefined;
 	if (partition === undefined) return marker === undefined;
-	return Boolean(marker && hashKey([marker.identity]) === hashKey([partition]));
+	return Boolean(
+		marker &&
+			hashKey([marker.identity]) === hashKey([aiChatIdentityKey(partition)]),
+	);
 }
 
 function useCurrentHistoryRefresh() {
 	const queryClient = useQueryClient();
-	const identityPartition = useAiChatIdentityPartition();
+	const { partition: identityPartition } = useAiChatIdentityState();
 	const latestPartition = useRef(identityPartition);
 	const mounted = useRef(true);
 	useLayoutEffect(() => {
@@ -131,7 +157,12 @@ export interface UseConversationsResult {
 export function useConversations(
 	options: UseConversationsOptions = {},
 ): UseConversationsResult {
-	const identityPartition = useAiChatIdentityPartition();
+	const {
+		partition: identityPartition,
+		isPending: isIdentityPending,
+		error: identityError,
+		refetchIdentity,
+	} = useAiChatIdentityState();
 	const query = aiChat.conversations.list.use([identityPartition], {
 		enabled:
 			(options.enabled ?? true) &&
@@ -140,9 +171,15 @@ export function useConversations(
 
 	return {
 		conversations: query.data ?? [],
-		isLoading: query.isLoading,
-		error: query.error,
-		refetch: query.refetch,
+		isLoading: isIdentityPending || query.isLoading,
+		error: identityError ?? query.error,
+		refetch: () => {
+			if (isUnresolvedIdentityPartition(identityPartition)) {
+				void refetchIdentity();
+				return;
+			}
+			void query.refetch();
+		},
 	};
 }
 
@@ -151,11 +188,21 @@ export function useSuspenseConversations(): {
 	conversations: SerializedConversation[];
 	refetch: () => Promise<unknown>;
 } {
-	const identityPartition = useAiChatIdentityPartition();
+	const {
+		partition: identityPartition,
+		isPending: isIdentityPending,
+		error: identityError,
+		refetchIdentity,
+	} = useAiChatIdentityState();
+	const identityResolution = useIdentityResolutionPromise();
 	const query = aiChat.conversations.list.useSuspense([identityPartition]);
+	if (identityError) throw identityError;
+	if (isIdentityPending) throw identityResolution ?? Promise.resolve();
 	return {
 		conversations: query.data ?? [],
-		refetch: query.refetch,
+		refetch: isUnresolvedIdentityPartition(identityPartition)
+			? refetchIdentity
+			: query.refetch,
 	};
 }
 
@@ -178,7 +225,12 @@ export function useConversation(
 	id?: string,
 	options: UseConversationOptions = {},
 ): UseConversationResult {
-	const identityPartition = useAiChatIdentityPartition();
+	const {
+		partition: identityPartition,
+		isPending: isIdentityPending,
+		error: identityError,
+		refetchIdentity,
+	} = useAiChatIdentityState();
 	const query = aiChat.conversations.detail.use([id ?? "", identityPartition], {
 		enabled:
 			(options.enabled ?? true) &&
@@ -188,9 +240,15 @@ export function useConversation(
 
 	return {
 		conversation: query.data ?? null,
-		isLoading: query.isLoading,
-		error: query.error,
-		refetch: query.refetch,
+		isLoading: isIdentityPending || query.isLoading,
+		error: identityError ?? query.error,
+		refetch: () => {
+			if (isUnresolvedIdentityPartition(identityPartition)) {
+				void refetchIdentity();
+				return;
+			}
+			void query.refetch();
+		},
 	};
 }
 
@@ -199,14 +257,24 @@ export function useSuspenseConversation(id: string): {
 	conversation: ConversationWithMessages | null;
 	refetch: () => Promise<unknown>;
 } {
-	const identityPartition = useAiChatIdentityPartition();
+	const {
+		partition: identityPartition,
+		isPending: isIdentityPending,
+		error: identityError,
+		refetchIdentity,
+	} = useAiChatIdentityState();
+	const identityResolution = useIdentityResolutionPromise();
 	const query = aiChat.conversations.detail.useSuspense([
 		id,
 		identityPartition,
 	]);
+	if (identityError) throw identityError;
+	if (isIdentityPending) throw identityResolution ?? Promise.resolve();
 	return {
 		conversation: query.data ?? null,
-		refetch: query.refetch,
+		refetch: isUnresolvedIdentityPartition(identityPartition)
+			? refetchIdentity
+			: query.refetch,
 	};
 }
 

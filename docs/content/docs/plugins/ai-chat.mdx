@@ -373,6 +373,8 @@ The AI Chat plugin provides the following API endpoints (mounted at your configu
 - **PUT** `/chat/conversations/:id` - Rename a conversation; the title is trimmed and must not be empty
 - **DELETE** `/chat/conversations/:id` - Delete a conversation
 
+In authorized mode, the streaming response includes `X-Conversation-Id` as soon as the backend has resolved or created the authoritative conversation. The built-in client uses that header to bind streamed message controls to persisted IDs even when the history-list refresh is delayed or fails. A separately deployed backend that implements the BTST contract must preserve this header; cross-origin deployments must also expose it through CORS.
+
 ### Page Routes
 
 The AI Chat plugin automatically creates the following pages (mounted at your configured `siteBasePath`):
@@ -838,7 +840,7 @@ import {
 } from "@btst/stack/plugins/ai-chat/query-keys"
 ```
 
-The stable prefixes remain `['conversations', 'list', 'all']` and `['conversations', 'detail', id]`. Protected keys append only the validated identity id (or an explicit anonymous marker), never the full identity object. Pending/error identity generations use separate disabled keys, mutations refresh only the partition that started them, and an account switch stops and clears an active stream. Server loaders must pass `identityPartition` (the framework codegen does this automatically) so dehydrated data lands in the same browser partition.
+The stable prefixes remain `['conversations', 'list', 'all']` and `['conversations', 'detail', id]`. Protected keys append the validated identity id plus an opaque fingerprint (or an explicit anonymous marker), never the full identity object. Structural claims are fingerprinted deterministically; legacy non-JSON claims use conservative reference partitions because they cannot cross an SSR boundary. This keeps authorization-relevant identity changes in separate cache partitions without serializing those claims into dehydrated caches. Pending/error identity generations use separate disabled keys, mutations refresh only the partition that started them, and an account switch clears drafts, attachments, edit state, messages, and any active stream. Server loaders must pass `identityPartition` (the framework codegen does this automatically) so dehydrated data lands in the same browser partition.
 
 ## Model & Tools Configuration
 

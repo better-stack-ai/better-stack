@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -13,6 +13,11 @@ import { aiChatPermissions } from "../permissions";
 
 let container: HTMLDivElement;
 let root: Root;
+
+function LayoutCallback({ callback }: { callback?: () => void }) {
+	useLayoutEffect(() => callback?.(), [callback]);
+	return null;
+}
 
 beforeEach(() => {
 	container = document.createElement("div");
@@ -96,5 +101,82 @@ describe("AI Chat attachment authorization", () => {
 		expect(uploadFile).toHaveBeenCalledOnce();
 		expect(observedMediaTypes).toContainEqual(["text/plain"]);
 		expect(observedMediaTypes).toContainEqual(["image/png"]);
+	});
+
+	it("ignores an upload that completes after the input identity is replaced", async () => {
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [aiChatPermissions] as const,
+			rules: ({ aiChat }) => [aiChat.attachment.send.allow()],
+		});
+		const identity = { id: "owner-1" };
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => identity,
+		});
+		let finishUpload: ((url: string) => void) | undefined;
+		const uploadFile = vi.fn(
+			() =>
+				new Promise<string>((resolve) => {
+					finishUpload = resolve;
+				}),
+		);
+		const onFilesAttached = vi.fn();
+		const notify = { success: vi.fn(), error: vi.fn() };
+
+		const renderInput = async (
+			identityKey: string,
+			completeOldUploadInLayout = false,
+		) => {
+			await act(async () => {
+				root.render(
+					<StackProvider
+						basePath="/pages"
+						auth={auth}
+						initialIdentity={identity}
+						notify={notify}
+						overrides={{
+							"ai-chat": { mode: "authenticated", uploadFile },
+						}}
+					>
+						<ChatInput
+							key={identityKey}
+							handleInputChange={() => {}}
+							handleSubmit={() => {}}
+							isLoading={false}
+							attachedFiles={[]}
+							onFilesAttached={onFilesAttached}
+							attachmentPermissionFacts={{ ownerId: identity.id }}
+						/>
+						<LayoutCallback
+							callback={
+								completeOldUploadInLayout
+									? () => finishUpload?.("https://files/secret.txt")
+									: undefined
+							}
+						/>
+					</StackProvider>,
+				);
+				await Promise.resolve();
+			});
+		};
+
+		await renderInput("owner-1");
+		const input =
+			container.querySelector<HTMLInputElement>('input[type="file"]')!;
+		Object.defineProperty(input, "files", {
+			configurable: true,
+			value: [new File(["secret"], "secret.txt", { type: "text/plain" })],
+		});
+		await act(async () => {
+			input.dispatchEvent(new Event("change", { bubbles: true }));
+			await Promise.resolve();
+		});
+		expect(uploadFile).toHaveBeenCalledOnce();
+
+		await renderInput("viewer-1", true);
+
+		expect(onFilesAttached).not.toHaveBeenCalled();
+		expect(notify.success).not.toHaveBeenCalled();
 	});
 });
