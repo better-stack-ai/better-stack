@@ -36,7 +36,7 @@ import {
 } from "@btst/stack/plugins/kanban/api";
 
 // Lazy reference to the stack instance so tools can reference it before it's assigned
-let _stackRef: ReturnType<typeof stack> | undefined;
+let _stackRef: ReturnType<typeof createStack> | undefined;
 
 const stackDocsTool = tool({
 	description:
@@ -111,11 +111,14 @@ const submitIntakeAssessment = tool({
 	execute: async (params) => {
 		if (!_stackRef) throw new Error("Stack not initialized");
 		const slug = `client-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-		await _stackRef.api.cms.createContentItem("client-profile", {
-			slug,
-			data: {
-				...params,
-				lifeEvents: params.lifeEvents.join(", "),
+		await _stackRef.internal.cms.createContentItem({
+			typeSlug: "client-profile",
+			body: {
+				slug,
+				data: {
+					...params,
+					lifeEvents: params.lifeEvents.join(", "),
+				},
 			},
 		});
 

@@ -22,7 +22,6 @@ export function DashboardPageComponent() {
 		<ComposedRoute
 			path="/cms"
 			permission={cmsPermissions.contentType.read({})}
-			legacyPermission={{ resource: "cms:content", action: "read" }}
 			PageComponent={DashboardPageInternal}
 			ErrorComponent={DefaultError}
 			LoadingComponent={DashboardSkeleton}

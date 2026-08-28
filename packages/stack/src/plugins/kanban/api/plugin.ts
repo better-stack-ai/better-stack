@@ -15,12 +15,7 @@ import {
 	updateTaskSchema,
 } from "../schemas";
 import type { KanbanBackendHooks } from "../types";
-import { getAllBoards, getBoardById, getBoardSummaries } from "./getters";
-import {
-	createKanbanTask,
-	findOrCreateKanbanBoard,
-	getKanbanColumnsByBoardId,
-} from "./mutations";
+import { getBoardById, getBoardSummaries } from "./getters";
 import {
 	BoardIdOperationInputSchema,
 	createKanbanOperations,
@@ -96,16 +91,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 
 		/** Lower-level server API that intentionally bypasses auth and hooks. */
 		api: (adapter: Adapter) => ({
-			getAllBoards: (params?: Parameters<typeof getAllBoards>[1]) =>
-				getAllBoards(adapter, params),
-			getBoardById: (id: string) => getBoardById(adapter, id),
 			prefetchForRoute: createKanbanPrefetchForRoute(adapter),
-			createTask: (input: Parameters<typeof createKanbanTask>[1]) =>
-				createKanbanTask(adapter, input),
-			findOrCreateBoard: (slug: string, name: string, columnTitles: string[]) =>
-				findOrCreateKanbanBoard(adapter, slug, name, columnTitles),
-			getColumnsByBoardId: (boardId: string) =>
-				getKanbanColumnsByBoardId(adapter, boardId),
 		}),
 
 		routes: (_adapter: Adapter, _context, operations) => {

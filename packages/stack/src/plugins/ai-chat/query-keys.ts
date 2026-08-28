@@ -14,28 +14,28 @@ export type AiChatIdentityPartition =
 	| `pending:${number}`
 	| `error:${number}`;
 
-const legacyObjectTokens = new WeakMap<object, number>();
-const legacySymbolTokens = new WeakMap<symbol, number>();
-let nextLegacyIdentityToken = 0;
+const referenceObjectTokens = new WeakMap<object, number>();
+const referenceSymbolTokens = new WeakMap<symbol, number>();
+let nextIdentityReferenceToken = 0;
 
-function legacyObjectToken(value: object) {
-	let token = legacyObjectTokens.get(value);
+function referenceObjectToken(value: object) {
+	let token = referenceObjectTokens.get(value);
 	if (token === undefined) {
-		token = ++nextLegacyIdentityToken;
-		legacyObjectTokens.set(value, token);
+		token = ++nextIdentityReferenceToken;
+		referenceObjectTokens.set(value, token);
 	}
 	return token;
 }
 
-function legacySymbolToken(value: symbol) {
+function referenceSymbolToken(value: symbol) {
 	const registeredKey = Symbol.keyFor(value);
 	if (registeredKey !== undefined) {
 		return `registered:${JSON.stringify(registeredKey)}`;
 	}
-	let token = legacySymbolTokens.get(value);
+	let token = referenceSymbolTokens.get(value);
 	if (token === undefined) {
-		token = ++nextLegacyIdentityToken;
-		legacySymbolTokens.set(value, token);
+		token = ++nextIdentityReferenceToken;
+		referenceSymbolTokens.set(value, token);
 	}
 	return `local:${token}`;
 }
@@ -57,9 +57,9 @@ function stableIdentityValue(
 		case "undefined":
 			return "undefined";
 		case "symbol":
-			return `symbol:${legacySymbolToken(value)}`;
+			return `symbol:${referenceSymbolToken(value)}`;
 		case "function":
-			return `function:${legacyObjectToken(value)}`;
+			return `function:${referenceObjectToken(value)}`;
 	}
 
 	const object = value as object;
@@ -93,7 +93,7 @@ function stableIdentityValue(
 			value instanceof ArrayBuffer
 				? new Uint8Array(value)
 				: new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
-		return `bytes:${value.constructor.name}:${legacyObjectToken(value)}:${[
+		return `bytes:${value.constructor.name}:${referenceObjectToken(value)}:${[
 			...bytes,
 		]
 			.map((byte) => byte.toString(16).padStart(2, "0"))
@@ -110,7 +110,7 @@ function stableIdentityValue(
 	const kind =
 		prototype === Object.prototype || prototype === null
 			? "object"
-			: `object:${value.constructor?.name ?? "unknown"}:${legacyObjectToken(value)}`;
+			: `object:${value.constructor?.name ?? "unknown"}:${referenceObjectToken(value)}`;
 	return `${kind}:{${Object.keys(value as Record<string, unknown>)
 		.sort()
 		.map(
@@ -128,10 +128,10 @@ function identityFingerprint(identity: Readonly<StackIdentity>): string {
 	try {
 		input = stableIdentityValue(identity, new Map());
 	} catch {
-		// Legacy auth providers allow arbitrary unknown fields, including proxies
-		// and getters that cannot be inspected. Keep key construction total; the
-		// validated id remains the primary cache partition in this fallback.
-		input = `uninspectable-identity:${legacyObjectToken(identity)}`;
+		// A consumer identity schema can allow values such as proxies or getters
+		// that cannot be inspected. Keep key construction total; the validated id
+		// remains the primary cache partition in this fallback.
+		input = `uninspectable-identity:${referenceObjectToken(identity)}`;
 	}
 	let left = 0x811c9dc5;
 	let right = 0x9e3779b9;

@@ -1,10 +1,8 @@
 export * from "./provider";
 export * from "./router";
 export {
-	CanAccess,
 	PermissionAccess,
 	PermissionCheck,
-	useCan,
 	useIdentity,
 	useIdentityResolutionPromise,
 	useIdentitySourceGeneration,
@@ -13,10 +11,8 @@ export type { PermissionCheckState } from "./auth";
 export { useNotify, defaultNotifyProvider } from "./notify";
 export { useTranslate, type TranslateFn } from "./i18n";
 export type {
-	CanParams,
-	StackAuthProvider,
+	StackClientAuth,
 	StackIdentity,
-	StackServerAuthProvider,
 } from "../shared/auth-types";
 export type {
 	StackNotifyProvider,

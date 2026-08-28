@@ -57,7 +57,7 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 	const Link = router?.Link;
 	const basePath = useBasePath();
 
-	// Call lifecycle hooks for authorization
+	// Call route lifecycle hooks for telemetry and application behavior.
 	useRouteLifecycle({
 		routeName: "contentList",
 		context: {
@@ -188,11 +188,6 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 						permission={cmsPermissions.record.create({
 							contentType: typeSlug,
 						})}
-						legacyPermission={{
-							resource: "cms:content",
-							action: "create",
-							params: { typeSlug },
-						}}
 					>
 						<Button
 							onClick={() => void navigate?.(`${basePath}/cms/${typeSlug}/new`)}
@@ -254,11 +249,6 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 									permission={cmsPermissions.record.create({
 										contentType: typeSlug,
 									})}
-									legacyPermission={{
-										resource: "cms:content",
-										action: "create",
-										params: { typeSlug },
-									}}
 								>
 									<Button
 										onClick={() =>
@@ -371,11 +361,6 @@ function ContentTable({
 											recordId: item.id,
 											...(item.authorId ? { authorId: item.authorId } : {}),
 										})}
-										legacyPermission={{
-											resource: "cms:content",
-											action: "update",
-											params: { typeSlug, id: item.id },
-										}}
 									>
 										<Button
 											variant="ghost"
@@ -395,11 +380,6 @@ function ContentTable({
 											recordId: item.id,
 											...(item.authorId ? { authorId: item.authorId } : {}),
 										})}
-										legacyPermission={{
-											resource: "cms:content",
-											action: "delete",
-											params: { typeSlug, id: item.id },
-										}}
 									>
 										<Button
 											variant="ghost"

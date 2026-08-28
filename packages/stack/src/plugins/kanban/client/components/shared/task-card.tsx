@@ -81,22 +81,12 @@ function TaskCardComponent({
 					<div className="flex items-center gap-2">
 						<PermissionAccess
 							permission={kanbanPermissions.task.move(taskFacts)}
-							legacyPermission={{
-								resource: "kanban:task",
-								action: "update",
-								params: legacyTaskFacts,
-							}}
 						>
 							<PermissionAccess
 								permission={kanbanPermissions.task.reorder({
 									...boardFacts,
 									columnId,
 								})}
-								legacyPermission={{
-									resource: "kanban:task",
-									action: "update",
-									params: { ...boardFacts, columnId },
-								}}
 							>
 								<Kanban.ItemHandle asChild>
 									<Button
@@ -155,11 +145,6 @@ function TaskCardComponent({
 	return (
 		<PermissionAccess
 			permission={kanbanPermissions.task.update(taskFacts)}
-			legacyPermission={{
-				resource: "kanban:task",
-				action: "update",
-				params: legacyTaskFacts,
-			}}
 			fallback={card(false)}
 		>
 			{card(true)}

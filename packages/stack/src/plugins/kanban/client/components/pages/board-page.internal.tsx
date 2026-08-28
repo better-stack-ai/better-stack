@@ -319,27 +319,12 @@ export function BoardPage({ boardId }: BoardPageProps) {
 	const boardActionChecks = [
 		{
 			permission: kanbanPermissions.column.create(boardFacts),
-			legacyPermission: {
-				resource: "kanban:column",
-				action: "create",
-				params: { ...boardLegacyFacts, boardId: board.id },
-			},
 		},
 		{
 			permission: kanbanPermissions.board.update(boardFacts),
-			legacyPermission: {
-				resource: "kanban:board",
-				action: "update",
-				params: boardLegacyFacts,
-			},
 		},
 		{
 			permission: kanbanPermissions.board.delete(boardFacts),
-			legacyPermission: {
-				resource: "kanban:board",
-				action: "delete",
-				params: boardLegacyFacts,
-			},
 		},
 	] as const;
 
@@ -376,11 +361,6 @@ export function BoardPage({ boardId }: BoardPageProps) {
 						<DropdownMenuContent align="end">
 							<PermissionAccess
 								permission={kanbanPermissions.column.create(boardFacts)}
-								legacyPermission={{
-									resource: "kanban:column",
-									action: "create",
-									params: { ...boardLegacyFacts, boardId: board.id },
-								}}
 							>
 								<DropdownMenuItem
 									onClick={() => setModalState({ type: "addColumn" })}
@@ -392,11 +372,6 @@ export function BoardPage({ boardId }: BoardPageProps) {
 							</PermissionAccess>
 							<PermissionAccess
 								permission={kanbanPermissions.board.update(boardFacts)}
-								legacyPermission={{
-									resource: "kanban:board",
-									action: "update",
-									params: boardLegacyFacts,
-								}}
 							>
 								<DropdownMenuItem
 									onClick={() => setModalState({ type: "editBoard" })}
@@ -408,11 +383,6 @@ export function BoardPage({ boardId }: BoardPageProps) {
 							</PermissionAccess>
 							<PermissionAccess
 								permission={kanbanPermissions.board.delete(boardFacts)}
-								legacyPermission={{
-									resource: "kanban:board",
-									action: "delete",
-									params: boardLegacyFacts,
-								}}
 							>
 								<DropdownMenuSeparator />
 								<DropdownMenuItem
@@ -464,11 +434,6 @@ export function BoardPage({ boardId }: BoardPageProps) {
 					action={
 						<PermissionAccess
 							permission={kanbanPermissions.column.create(boardFacts)}
-							legacyPermission={{
-								resource: "kanban:column",
-								action: "create",
-								params: { ...boardLegacyFacts, boardId: board.id },
-							}}
 						>
 							<Button onClick={() => setModalState({ type: "addColumn" })}>
 								<Plus className="mr-2 h-4 w-4" />

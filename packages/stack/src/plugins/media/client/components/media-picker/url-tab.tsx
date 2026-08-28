@@ -4,7 +4,7 @@ import type { SerializedAsset } from "../../../types";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
 import { Loader2, Check } from "lucide-react";
-import { useCan, useTranslate } from "@btst/stack/context";
+import { useTranslate } from "@btst/stack/context";
 
 export function UrlTab({
 	folderId,
@@ -14,10 +14,6 @@ export function UrlTab({
 	onRegistered: (asset: SerializedAsset) => void;
 }) {
 	const t = useTranslate();
-	const { can: canCreate } = useCan({
-		resource: "media:asset",
-		action: "create",
-	});
 	const [url, setUrl] = useState("");
 	const form = useRegisterAssetForm({
 		folderId: folderId ?? undefined,
@@ -27,7 +23,6 @@ export function UrlTab({
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		e.stopPropagation();
-		if (!canCreate) return;
 		form.clearErrors();
 		const trimmed = url.trim();
 		if (!trimmed) return;
@@ -36,8 +31,6 @@ export function UrlTab({
 			setUrl("");
 		}
 	};
-
-	if (!canCreate) return null;
 
 	const urlError = form.fieldErrors.url;
 

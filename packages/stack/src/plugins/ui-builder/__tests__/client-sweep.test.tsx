@@ -11,7 +11,7 @@ import { createClientAuth } from "@btst/stack/authorization/client";
 import { createServerAuth } from "@btst/stack/authorization/server";
 import {
 	StackProvider,
-	type StackAuthProvider,
+	type StackClientAuth,
 	type StackI18nProvider,
 } from "@btst/stack/context";
 import { createApiClient } from "@btst/stack/plugins/client";
@@ -200,7 +200,7 @@ function overrides() {
 async function renderPage(
 	pageNode: ReactNode,
 	options: {
-		auth?: StackAuthProvider;
+		auth?: StackClientAuth;
 		initialIdentity?: { id: string; role: "user" } | null;
 		i18n?: StackI18nProvider;
 		notify?: {
@@ -264,23 +264,6 @@ describe("UI Builder page permissions", () => {
 	it("keeps create controls visible without an auth provider", async () => {
 		await renderPage(<PageListPage />);
 		expect(document.body.textContent).toContain("Create Page");
-	});
-
-	it("hides writes when the auth provider only grants read", async () => {
-		const can = vi.fn(
-			({ action }: { resource: string; action: string }) => action === "read",
-		);
-		await renderPage(<PageListPage />, {
-			auth: { getIdentity: () => ({ id: "viewer" }), can },
-		});
-
-		expect(document.body.textContent).not.toContain("Create Page");
-		expect(can).toHaveBeenCalledWith(
-			expect.objectContaining({
-				resource: "ui-builder:page",
-				action: "create",
-			}),
-		);
 	});
 
 	it("uses the CMS catalog for read, create, update, and delete controls", async () => {

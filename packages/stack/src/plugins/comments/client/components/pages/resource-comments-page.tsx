@@ -47,7 +47,6 @@ export function ResourceCommentsPageComponent({
 				resourceId,
 				resourceType,
 			})}
-			legacyPublic
 			onError={(error) =>
 				console.error("[btst/comments] Resource comments error:", error)
 			}

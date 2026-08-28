@@ -105,7 +105,7 @@ export interface CMSClientHooks {
 	) => Promise<void> | void;
 	/**
 	 * Called when a loading error occurs.
-	 * Use this for redirects on authorization failures.
+	 * Use this for loader error handling and redirects.
 	 * @param error - The error that occurred
 	 * @param context - Loader context
 	 */
@@ -128,7 +128,7 @@ export interface CMSClientConfig {
 	queryClient: QueryClient;
 	/** Optional headers for SSR (e.g., forwarding cookies) */
 	headers?: Headers;
-	/** Optional hooks for customizing behavior (authorization, redirects, etc.) */
+	/** Optional hooks for route loading, redirects, and telemetry. */
 	hooks?: CMSClientHooks;
 
 	/**
@@ -171,7 +171,7 @@ function createDashboardLoader(config: CMSClientConfig) {
 			const typesQuery = queries.cmsTypes.list();
 
 			try {
-				// Before hook - authorization check
+				// Before-load lifecycle hook
 				if (hooks?.beforeLoadDashboard) {
 					await hooks.beforeLoadDashboard(context);
 				}
@@ -245,7 +245,7 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 			const listQuery = queries.cmsContent.list({ typeSlug, limit });
 
 			try {
-				// Before hook - authorization check
+				// Before-load lifecycle hook
 				if (hooks?.beforeLoadContentList) {
 					await hooks.beforeLoadContentList(typeSlug, context);
 				}
@@ -334,7 +334,7 @@ function createContentEditorLoader(
 				: undefined;
 
 			try {
-				// Before hook - authorization check
+				// Before-load lifecycle hook
 				if (hooks?.beforeLoadContentEditor) {
 					await hooks.beforeLoadContentEditor(typeSlug, id, context);
 				}

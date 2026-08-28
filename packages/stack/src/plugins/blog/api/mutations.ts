@@ -126,7 +126,7 @@ export interface UpdatePostOptions {
  * Create a new blog post with optional tag associations.
  * Pure DB function — no hooks, no HTTP context. Safe for server-side and SSG use.
  *
- * @remarks **Security:** Authorization hooks (e.g. `onBeforeCreatePost`) are NOT
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT
  * called. The caller is responsible for any access-control checks before
  * invoking this function.
  *
@@ -180,7 +180,7 @@ export async function createPost(
  * precondition no longer matches.
  * Pure DB function — no hooks, no HTTP context. Safe for server-side use.
  *
- * @remarks **Security:** Authorization hooks (e.g. `onBeforeUpdatePost`) are NOT
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT
  * called. The caller is responsible for any access-control checks before
  * invoking this function.
  *
@@ -293,7 +293,7 @@ export async function updatePost(
  * Delete a blog post by ID.
  * Pure DB function — no hooks, no HTTP context. Safe for server-side use.
  *
- * @remarks **Security:** Authorization hooks (e.g. `onBeforeDeletePost`) are NOT
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT
  * called. The caller is responsible for any access-control checks before
  * invoking this function.
  *

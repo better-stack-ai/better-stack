@@ -290,11 +290,6 @@ function InverseRelationSection({
 												recordId: item.id,
 												...(item.authorId ? { authorId: item.authorId } : {}),
 											})}
-											legacyPermission={{
-												resource: "cms:content",
-												action: "delete",
-												params: { typeSlug: relation.sourceType, id: item.id },
-											}}
 										>
 											<Button
 												variant="ghost"
@@ -315,11 +310,6 @@ function InverseRelationSection({
 							permission={cmsPermissions.record.create({
 								contentType: relation.sourceType,
 							})}
-							legacyPermission={{
-								resource: "cms:content",
-								action: "create",
-								params: { typeSlug: relation.sourceType },
-							}}
 						>
 							<Button
 								variant="outline"

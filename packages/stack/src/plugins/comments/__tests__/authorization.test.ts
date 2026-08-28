@@ -4,8 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { stack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
-import { createServerAuth } from "../../../authorization/server";
-import type { StackServerAuthProvider } from "../../../shared/auth-types";
+import {
+	createServerAuth,
+	type ServerAuth,
+} from "../../../authorization/server";
 import { commentsBackendPlugin, type CommentsBackendOptions } from "../api";
 import { commentsPermissions } from "../permissions";
 import type { Comment, CommentLike } from "../types";
@@ -142,13 +144,13 @@ function createModeratorOnlyAuth(
 
 function makeBackend(options?: {
 	plugin?: CommentsBackendOptions;
-	auth?: StackServerAuthProvider;
+	auth?: ServerAuth<any>;
 }) {
 	return stack({
 		basePath: "/api",
 		plugins: { comments: commentsBackendPlugin(options?.plugin) },
 		adapter: memoryAdapter,
-		...(options?.auth ? { auth: options.auth } : {}),
+		...(options?.auth ? { auth: options.auth as never } : {}),
 	});
 }
 
@@ -204,10 +206,6 @@ type CommentsOperationApi = ReturnType<
 type OperationScenario = {
 	readonly name: string;
 	readonly hook: keyof CommentsBackendOptions;
-	readonly legacyPermission: {
-		readonly resource: string;
-		readonly action: string;
-	};
 	readonly prepare: (
 		backend: ReturnType<typeof makeBackend>,
 	) => Promise<(api: CommentsOperationApi) => Promise<unknown>>;
@@ -218,14 +216,12 @@ const operationScenarios: readonly OperationScenario[] = [
 	{
 		name: "listComments",
 		hook: "onBeforeList",
-		legacyPermission: { resource: "comments:thread", action: "read" },
 		prepare: async () => (api) => api.listComments({ status: "pending" }),
 		invalid: (api) => api.listComments({ limit: 0 }),
 	},
 	{
 		name: "getCommentCount",
 		hook: "onBeforeCount",
-		legacyPermission: { resource: "comments:thread", action: "read" },
 		prepare: async () => (api) =>
 			api.getCommentCount({
 				resourceId: "post-1",
@@ -238,10 +234,6 @@ const operationScenarios: readonly OperationScenario[] = [
 	{
 		name: "createComment",
 		hook: "onBeforePost",
-		legacyPermission: {
-			resource: "comments:thread",
-			action: "createComment",
-		},
 		prepare: async () => (api) =>
 			api.createComment({
 				resourceId: "post-1",
@@ -260,7 +252,6 @@ const operationScenarios: readonly OperationScenario[] = [
 	{
 		name: "updateComment",
 		hook: "onBeforeEdit",
-		legacyPermission: { resource: "comments:comment", action: "edit" },
 		prepare: async (backend) => {
 			const comment = await seedComment(backend);
 			return (api) =>
@@ -275,7 +266,6 @@ const operationScenarios: readonly OperationScenario[] = [
 	{
 		name: "toggleLike",
 		hook: "onBeforeLike",
-		legacyPermission: { resource: "comments:comment", action: "react" },
 		prepare: async (backend) => {
 			const comment = await seedComment(backend);
 			return (api) =>
@@ -286,7 +276,6 @@ const operationScenarios: readonly OperationScenario[] = [
 	{
 		name: "updateCommentStatus",
 		hook: "onBeforeStatusChange",
-		legacyPermission: { resource: "comments:comment", action: "moderate" },
 		prepare: async (backend) => {
 			const comment = await seedComment(backend, { status: "pending" });
 			return (api) =>
@@ -301,7 +290,6 @@ const operationScenarios: readonly OperationScenario[] = [
 	{
 		name: "deleteComment",
 		hook: "onBeforeDelete",
-		legacyPermission: { resource: "comments:comment", action: "delete" },
 		prepare: async (backend) => {
 			const comment = await seedComment(backend);
 			return (api) => api.deleteComment({ id: comment.id });
@@ -378,11 +366,7 @@ describe("Comments authorization inventory", () => {
 			Object.keys(backend.forRequest(request("/comments")).api.comments).sort(),
 		).toEqual(expected);
 		expect(Object.keys(backend.internal.comments).sort()).toEqual(expected);
-		expect(Object.keys(backend.api.comments).sort()).toEqual([
-			"getCommentById",
-			"getCommentCount",
-			"listComments",
-		]);
+		expect("comments" in backend.api).toBe(false);
 		expect(
 			"getCommentById" in backend.forRequest(request("/comments")).api.comments,
 		).toBe(false);
@@ -392,7 +376,6 @@ describe("Comments authorization inventory", () => {
 				backend.forRequest(request("/comments")).api.comments,
 		).toBe(false);
 		expect("toggleCommentLike" in backend.internal.comments).toBe(false);
-		expect("prefetchForRoute" in backend.api.comments).toBe(false);
 		expect(
 			"prefetchForRoute" in
 				backend.forRequest(request("/comments")).api.comments,
@@ -521,87 +504,6 @@ describe("Comments protected-operation matrix", () => {
 			}
 		},
 	);
-
-	it.each(operationScenarios)(
-		"preserves structural RC server auth compatibility for $name",
-		async (scenario) => {
-			const lifecycle = vi.fn();
-			const getIdentity = vi.fn(() => moderator);
-			const can = vi.fn(() => true);
-			const backend = makeBackend({
-				auth: {
-					getIdentity,
-					can,
-				},
-				plugin: { [scenario.hook]: lifecycle } as CommentsBackendOptions,
-			});
-			const run = await scenario.prepare(backend);
-
-			await expect(
-				run(
-					backend.forRequest(request("/comments", { identity: moderator })).api
-						.comments as CommentsOperationApi,
-				),
-			).resolves.toBeDefined();
-			expect(lifecycle).toHaveBeenCalledTimes(1);
-			expect(getIdentity).toHaveBeenCalledTimes(1);
-			expect(can).toHaveBeenCalledWith(
-				expect.objectContaining({
-					...scenario.legacyPermission,
-					identity: moderator,
-					params: expect.any(Object),
-				}),
-			);
-		},
-	);
-
-	it("fails closed before lifecycle when a structural RC rule denies trusted comment facts", async () => {
-		const lifecycle = vi.fn();
-		const can = vi.fn(() => false);
-		const backend = makeBackend({
-			auth: { getIdentity: () => viewer, can },
-			plugin: { onBeforeDelete: lifecycle },
-		});
-		const comment = await seedComment(backend, { authorId: owner.id });
-
-		await expect(
-			backend
-				.forRequest(request("/comments", { identity: viewer }))
-				.api.comments.deleteComment({ id: comment.id }),
-		).rejects.toMatchObject({ statusCode: 403 });
-		expect(lifecycle).not.toHaveBeenCalled();
-		expect(can).toHaveBeenCalledWith(
-			expect.objectContaining({
-				resource: "comments:comment",
-				action: "delete",
-				identity: viewer,
-				params: {
-					commentId: comment.id,
-					authorId: owner.id,
-				},
-			}),
-		);
-	});
-
-	it("validates trusted facts before resolving a structural RC identity", async () => {
-		const lifecycle = vi.fn();
-		const getIdentity = vi.fn(() => moderator);
-		const backend = makeBackend({
-			auth: { getIdentity, can: () => true },
-			plugin: { onBeforeEdit: lifecycle },
-		});
-
-		await expect(
-			backend
-				.forRequest(request("/comments", { identity: moderator }))
-				.api.comments.updateComment({
-					id: "missing-comment",
-					data: { body: "No row" },
-				}),
-		).rejects.toMatchObject({ code: "COMMENT_NOT_FOUND" });
-		expect(lifecycle).not.toHaveBeenCalled();
-		expect(getIdentity).not.toHaveBeenCalled();
-	});
 
 	it.each(operationScenarios)(
 		"keeps validation and $name lifecycle on trusted internal execution",
@@ -1094,7 +996,7 @@ describe("Comments operation-first authorization", () => {
 			auth: createAuth(),
 			plugin: {
 				autoApprove: true,
-				onBeforePost: () => ({ authorId: owner.id }),
+				onBeforePost: vi.fn(),
 			},
 		});
 		const comment = await seedComment(backend);
@@ -1502,13 +1404,9 @@ describe("Comments operation-first authorization", () => {
 		).rejects.toThrow();
 	});
 
-	it("preserves permissive RC operation behavior only when no auth provider is configured", async () => {
+	it("preserves permissive operation behavior only when no auth provider is configured", async () => {
 		const unauthenticatedBackend = makeBackend({ auth: createAuth() });
-		const noAuthBackend = makeBackend({
-			plugin: {
-				onBeforePost: () => ({ authorId: "legacy-session-user" }),
-			},
-		});
+		const noAuthBackend = makeBackend();
 		const protectedComment = await seedComment(unauthenticatedBackend);
 		const trustedComment = await seedComment(noAuthBackend);
 
@@ -1520,20 +1418,5 @@ describe("Comments operation-first authorization", () => {
 			request(`/comments/${trustedComment.id}`, { method: "DELETE" }),
 		);
 		expect(allowed.status).toBe(200);
-
-		const legacyCreate = await noAuthBackend.handler(
-			request("/comments", {
-				method: "POST",
-				body: {
-					resourceId: "post-1",
-					resourceType: "post",
-					body: "RC hook authorship",
-				},
-			}),
-		);
-		expect(legacyCreate.status).toBe(200);
-		expect(await legacyCreate.json()).toMatchObject({
-			authorId: "legacy-session-user",
-		});
 	});
 });

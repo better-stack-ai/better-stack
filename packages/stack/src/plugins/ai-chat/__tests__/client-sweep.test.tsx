@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	StackProvider,
-	type StackAuthProvider,
+	type StackClientAuth,
 	type StackI18nProvider,
 	type StackIdentity,
 } from "@btst/stack/context";
@@ -222,7 +222,7 @@ function overrides(
 async function render(
 	ui: React.ReactElement,
 	options: {
-		auth?: StackAuthProvider;
+		auth?: StackClientAuth;
 		i18n?: StackI18nProvider;
 		notify?: {
 			success: ReturnType<typeof vi.fn>;
@@ -274,16 +274,6 @@ function menuItem(text: string) {
 }
 
 describe("AI Chat permissions", () => {
-	it("keeps public chat writable when an auth provider denies every action", async () => {
-		const can = vi.fn(() => false);
-		await render(<ChatInterface />, {
-			mode: "public",
-			auth: { getIdentity: () => null, can },
-		});
-
-		expect(container.querySelector('[data-testid="chat-input"]')).toBeTruthy();
-	});
-
 	it("keeps one stable public chat instance across a send and rerender", async () => {
 		let retainedId: string | undefined;
 		let retainedSend: ReturnType<typeof vi.fn> | undefined;

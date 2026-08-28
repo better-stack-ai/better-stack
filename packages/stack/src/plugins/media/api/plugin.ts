@@ -14,14 +14,7 @@ import {
 	updateAssetSchema,
 	uploadTokenRequestSchema,
 } from "../schemas";
-import {
-	getAssetById,
-	getFolderById,
-	getFolderByName,
-	listAssets,
-	listFolders,
-} from "./getters";
-import { createAsset, createFolder, updateAsset } from "./mutations";
+import { listAssets, listFolders } from "./getters";
 import {
 	FolderListOperationInputSchema,
 	MediaOperationError,
@@ -170,23 +163,6 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 
 		/** Lower-level trusted server API that intentionally bypasses auth and hooks. */
 		api: (adapter: Adapter) => ({
-			listAssets: (params?: Parameters<typeof listAssets>[1]) =>
-				listAssets(adapter, params),
-			getAssetById: (id: string) => getAssetById(adapter, id),
-			createAsset: (input: Parameters<typeof createAsset>[1]) =>
-				createAsset(adapter, input),
-			updateAsset: (id: string, input: Parameters<typeof updateAsset>[2]) =>
-				updateAsset(adapter, id, input),
-			listFolders: (params?: Parameters<typeof listFolders>[1]) =>
-				listFolders(adapter, params),
-			getFolderById: (id: string) => getFolderById(adapter, id),
-			getFolderByName: (
-				name: string,
-				parentId?: string | null,
-				tenantId?: string,
-			) => getFolderByName(adapter, name, parentId, tenantId),
-			createFolder: (input: Parameters<typeof createFolder>[1]) =>
-				createFolder(adapter, input),
 			prefetchForRoute: createMediaPrefetchForRoute(adapter),
 		}),
 

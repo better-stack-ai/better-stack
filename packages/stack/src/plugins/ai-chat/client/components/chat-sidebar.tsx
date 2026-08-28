@@ -194,13 +194,7 @@ export function ChatSidebar({
 		>
 			{/* Header */}
 			<div className="p-4 border-b">
-				<PermissionAccess
-					permission={aiChatPermissions.conversation.create()}
-					legacyPermission={{
-						resource: "ai-chat:conversation",
-						action: "create",
-					}}
-				>
+				<PermissionAccess permission={aiChatPermissions.conversation.create()}>
 					<Button
 						onClick={handleNewChat}
 						className="w-full justify-start gap-2"
@@ -276,11 +270,6 @@ export function ChatSidebar({
 														? { ownerId: conversation.userId }
 														: {}),
 												})}
-												legacyPermission={{
-													resource: "ai-chat:conversation",
-													action: "update",
-													params: { id: conversation.id },
-												}}
 											>
 												<DropdownMenuItem
 													onClick={(e) => {
@@ -304,11 +293,6 @@ export function ChatSidebar({
 														? { ownerId: conversation.userId }
 														: {}),
 												})}
-												legacyPermission={{
-													resource: "ai-chat:conversation",
-													action: "delete",
-													params: { id: conversation.id },
-												}}
 											>
 												<DropdownMenuItem
 													onClick={(e) => {

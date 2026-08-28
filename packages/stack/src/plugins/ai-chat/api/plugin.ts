@@ -1,5 +1,4 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import { isServerAuth } from "../../../authorization/server";
 import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
 import type { LanguageModel, Tool } from "ai";
 import { aiChatSchema as dbSchema } from "../db";
@@ -8,11 +7,9 @@ import {
 	createConversationSchema,
 	updateConversationSchema,
 } from "../schemas";
-import { getAllConversations, getConversationById } from "./getters";
 import {
 	type AiChatAccess,
 	type AiChatBackendHooks,
-	type ChatApiContext,
 	ConversationOperationInputSchema,
 	createAiChatOperations,
 	UpdateConversationOperationInputSchema,
@@ -31,12 +28,6 @@ export {
 	ConversationOperationInputSchema,
 	UpdateConversationOperationInputSchema,
 } from "./operations";
-
-/**
- * @deprecated Use `access: "authorized" | "public"`. This alias remains for
- * the v3 release-candidate migration only.
- */
-export type AiChatMode = "authenticated" | "public";
 
 type KnownKeys<T> = {
 	[K in keyof T]: string extends K ? never : K;
@@ -62,31 +53,11 @@ export interface AiChatBackendConfig {
 	 * @default "authorized"
 	 */
 	access?: AiChatAccess;
-	/** @deprecated Use `access`; `authenticated` maps to `authorized`. */
-	mode?: AiChatMode;
-	/** Temporary v3 RC identity bridge. `createServerAuth()` identity wins. */
-	getUserId?: (
-		context: Pick<ChatApiContext, "request" | "headers" | "body" | "params">,
-	) => string | null | undefined | Promise<string | null | undefined>;
 	systemPrompt?: string;
 	tools?: Record<string, Tool>;
 	enablePageTools?: boolean;
 	clientToolSchemas?: Record<string, Tool>;
 	hooks?: AiChatBackendHooks;
-}
-
-function resolveAccess(config: Pick<AiChatBackendConfig, "access" | "mode">) {
-	const legacyAccess = config.mode
-		? config.mode === "public"
-			? "public"
-			: "authorized"
-		: undefined;
-	if (config.access && legacyAccess && config.access !== legacyAccess) {
-		throw new TypeError(
-			"AI Chat `access` and deprecated `mode` must describe the same access policy.",
-		);
-	}
-	return config.access ?? legacyAccess ?? "authorized";
 }
 
 /** AI Chat backend plugin backed by one typed operation catalog. */
@@ -99,7 +70,7 @@ export const aiChatBackendPlugin = <
 		clientToolSchemas?: NoKeyCollision<TTools, TClientTools>;
 	},
 ) => {
-	const access = resolveAccess(config);
+	const access = config.access ?? "authorized";
 	const operationsConfig = {
 		...config,
 		access,
@@ -113,23 +84,12 @@ export const aiChatBackendPlugin = <
 		name: "ai-chat",
 		dbPlugin: dbSchema,
 		operationRouteMap: { chat: "startStream" },
-		operations: (adapter: Adapter, context) =>
+		operations: (adapter: Adapter) =>
 			createAiChatOperations(adapter, {
 				...operationsConfig,
-				requestAuthorizationConfigured: Boolean(
-					context?.auth &&
-						(isServerAuth(context.auth) ||
-							typeof context.auth.can === "function"),
-				),
 			}),
 
 		/** Trusted raw data access. It intentionally bypasses operations and hooks. */
-		api: (adapter: Adapter) => ({
-			getAllConversations: (userId?: string) =>
-				getAllConversations(adapter, userId),
-			getConversationById: (id: string) => getConversationById(adapter, id),
-		}),
-
 		routes: (_adapter: Adapter, _context, operations) => {
 			const chat = createEndpoint(
 				"/chat",

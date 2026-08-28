@@ -16,15 +16,13 @@ export const myStack = g.__btst__ ??= stack({
   basePath: "/api/data",
   plugins: {
     blog: blogBackendPlugin({
-      // optional hooks — throw to deny
-      onBeforeCreatePost: async (data) => { /* auth check */ },
+      // optional domain hooks
       onPostCreated: async (post) => { /* revalidate, notify */ },
     }),
     aiChat: aiChatBackendPlugin({
       model: openai("gpt-4o"),
       systemPrompt: "You are a helpful assistant.",
-      mode: "authenticated",
-      getUserId: async (ctx) => ctx.headers?.get("x-user-id") ?? null,
+      access: "authorized",
     }),
     // add more plugins…
   },
@@ -227,27 +225,29 @@ export const getStackClient = (queryClient: QueryClient) => {
 Identity and client permissions belong on the top-level provider:
 
 ```tsx
-import type { StackAuthProvider } from "@btst/stack/context"
+import { createClientAuth } from "@btst/stack/authorization/client"
+import { authorization } from "./authorization"
 
-const authProvider = {
+const clientAuth = createClientAuth({
+  authorization,
   getIdentity: async () => (await getSession())?.user ?? null,
   loginPath: "/login",
-  can: ({ resource, action, identity }) =>
-    Boolean(identity && authorize(identity, resource, action)),
-} satisfies StackAuthProvider
+})
 
 <StackProvider
   basePath="/pages"
   router={nextRouter()}
   api={{ baseURL, basePath: "/api/data" }}
-  auth={authProvider}
+  auth={clientAuth}
 >
   {children}
 </StackProvider>
 ```
 
-Configure server identity separately on `stack({ auth })` and enforce
-authorization in backend lifecycle hooks. Do not pass `currentUserId`,
+Create the backend adapter with `createServerAuth({ authorization, getIdentity })`
+and pass it to `stack({ auth: serverAuth })`. Operations derive trusted facts and
+evaluate exact permission descriptors before lifecycle hooks. Do not use hooks
+for routine authorization. Do not pass `currentUserId`,
 `loginHref`, request headers, API paths, or navigation functions to public
 plugin components.
 
@@ -384,10 +384,10 @@ Backend plugins accept a hooks object as their factory argument. Common hooks:
 **blog**
 ```ts
 blogBackendPlugin({
-  onBeforeCreatePost: async (data) => { /* throw to deny */ },
-  onBeforeUpdatePost: async (postId) => { /* throw to deny */ },
-  onBeforeDeletePost: async (postId) => { /* throw to deny */ },
-  onBeforeListPosts: async (filter) => { /* throw to deny drafts to unauthed users */ },
+  onBeforeCreatePost: async (data) => { /* domain validation/transform */ },
+  onBeforeUpdatePost: async (postId) => { /* domain validation */ },
+  onBeforeDeletePost: async (postId) => { /* audit */ },
+  onBeforeListPosts: async (filter) => { /* telemetry */ },
   onPostCreated: async (post) => { revalidatePath("/pages/blog") },
   onPostUpdated: async (post) => { /* … */ },
   onPostDeleted: async (postId) => { /* … */ },
@@ -399,10 +399,9 @@ blogBackendPlugin({
 commentsBackendPlugin({
   autoApprove: false,
   resolveUser: async (authorId) => ({ name: "…" }),
-  resolveCurrentUserId: async (ctx) => ctx?.headers?.get("x-user-id") ?? null,
-  onBeforePost: async (input, ctx) => ({ authorId: "from-session" }),
-  onBeforeEdit: async (commentId, update, ctx) => { /* auth check */ },
-  onBeforeStatusChange: async (commentId, status, ctx) => { /* admin check */ },
+  onBeforePost: async (input, ctx) => { /* domain validation */ },
+  onBeforeEdit: async (commentId, update, ctx) => { /* domain validation */ },
+  onBeforeStatusChange: async (commentId, status, ctx) => { /* audit */ },
 })
 ```
 
@@ -411,10 +410,9 @@ commentsBackendPlugin({
 aiChatBackendPlugin({
   model: openai("gpt-4o"),
   systemPrompt: "…",
-  mode: "authenticated",
+  access: "authorized",
   tools: { myTool },
   enablePageTools: true,
-  getUserId: async (ctx) => ctx.headers?.get("x-user-id") ?? null,
   hooks: {
     onConversationCreated: async (convo) => { /* … */ },
     onAfterChat: async (conversationId, messages) => { /* … */ },

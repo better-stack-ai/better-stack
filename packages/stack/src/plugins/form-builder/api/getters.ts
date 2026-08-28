@@ -90,7 +90,7 @@ function formMatchesSearch(form: SerializedForm, searchLower: string): boolean {
  * search.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
  *
- * @remarks **Security:** Authorization hooks (e.g. `onBeforeListForms`) are NOT
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT
  * called. The caller is responsible for any access-control checks before
  * invoking this function.
  *
@@ -184,7 +184,7 @@ export async function getAllForms(
  * Returns null if the form is not found.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
  *
- * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called. The caller is
  * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter
@@ -207,7 +207,7 @@ export async function getFormById(
  * Returns null if the form is not found.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
  *
- * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called. The caller is
  * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter
@@ -234,7 +234,7 @@ export async function getFormBySlug(
  * Returns an empty result if the form does not exist.
  * Pure DB function — no hooks, no HTTP context. Safe for server-side use.
  *
- * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called. The caller is
  * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter

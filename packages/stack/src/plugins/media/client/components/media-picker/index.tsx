@@ -67,11 +67,6 @@ function AssetSelectionAccess({
 				...(asset.folderId ? { folderId: asset.folderId } : {}),
 				mimeType: asset.mimeType,
 			})}
-			legacyPermission={{
-				resource: "media:asset",
-				action: "read",
-				params: { id: asset.id },
-			}}
 		>
 			<AssetSelectionAccess assets={rest}>{children}</AssetSelectionAccess>
 		</PermissionAccess>
@@ -153,10 +148,7 @@ export function MediaPicker({
 	};
 
 	return (
-		<PermissionAccess
-			permission={mediaPermissions.library.read()}
-			legacyPermission={{ resource: "media:asset", action: "read" }}
-		>
+		<PermissionAccess permission={mediaPermissions.library.read()}>
 			<MediaUploadPermissionCheck
 				mode={uploadMode}
 				folderId={selectedFolder ?? undefined}

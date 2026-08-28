@@ -143,7 +143,6 @@ export function UserCommentsPage({
 				scope: "own",
 				authorId: resolvedUserId,
 			})}
-			legacyPublic
 		>
 			<UserCommentsList
 				apiBaseURL={api?.baseURL ?? ""}

@@ -23,8 +23,15 @@ import {
 } from "../plugins/comments/api";
 import { commentsPermissions } from "../plugins/comments/permissions";
 import { aiChatPermissions } from "../plugins/ai-chat/permissions";
-import type { KanbanBackendHooks } from "../plugins/kanban/api";
-import type { StackIdentity } from "../shared/auth-types";
+import { aiChatBackendPlugin } from "../plugins/ai-chat/api";
+import { cmsBackendPlugin } from "../plugins/cms/api";
+import { formBuilderBackendPlugin } from "../plugins/form-builder/api";
+import {
+	kanbanBackendPlugin,
+	type KanbanBackendHooks,
+} from "../plugins/kanban/api";
+import { mediaBackendPlugin } from "../plugins/media/api";
+import type { StackClientAuth, StackIdentity } from "../shared/auth-types";
 import type { DatabaseDefinition, DBAdapter } from "@btst/db";
 
 type Equal<TLeft, TRight> = (<T>() => T extends TLeft ? 1 : 2) extends <
@@ -96,6 +103,8 @@ const clientHookIsExact: Expect<
 void clientResolverIsExact;
 void clientHookIsExact;
 clientAuth.useCan(registered.article.delete({ id: "article-1" }));
+// @ts-expect-error open resource/action requests were removed
+clientAuth.useCan({ resource: "registered:article", action: "delete" });
 void clientAuth.CanAccess({
 	permission: registered.article.delete({ id: "article-1" }),
 });
@@ -104,6 +113,13 @@ const serverAuth = createServerAuth({
 	authorization,
 	getIdentity: () => ({ id: "user-1", role: "user" as const }),
 });
+
+const structuralClientAuth: StackClientAuth = {
+	getIdentity: () => null,
+	// @ts-expect-error structural client providers were removed
+	can: () => true,
+};
+void structuralClientAuth;
 
 createNextLayout({
 	// @ts-expect-error request-only server adapters cannot hydrate a headers-only Next layout
@@ -472,6 +488,9 @@ const commentsStack = stack({
 	auth: commentsServerAuth,
 });
 
+// @ts-expect-error Comments has no ambiguous raw stack.api business surface
+commentsStack.api.comments;
+
 type CommentsOperationKeys = keyof typeof commentsStack.internal.comments;
 const commentsOperationKeysAreExact: Expect<
 	Equal<
@@ -512,6 +531,37 @@ requestComments.prefetchForRoute("/comments");
 // @ts-expect-error app-authored raw prefetch is not an internal operation
 commentsStack.internal.comments.prefetchForRoute("/comments");
 
+declare const aiChatPlugin: ReturnType<typeof aiChatBackendPlugin>;
+declare const cmsPlugin: ReturnType<typeof cmsBackendPlugin>;
+declare const mediaPlugin: ReturnType<typeof mediaBackendPlugin>;
+const contractedStack = stack({
+	basePath: "/api",
+	plugins: {
+		aiChat: aiChatPlugin,
+		blog: blogBackendPlugin(),
+		cms: cmsPlugin,
+		comments: commentsBackendPlugin(),
+		formBuilder: formBuilderBackendPlugin(),
+		kanban: kanbanBackendPlugin(),
+		media: mediaPlugin,
+	},
+	adapter: fakeAdapter,
+});
+// @ts-expect-error AI Chat has no ambiguous raw stack.api business namespace
+contractedStack.api.aiChat;
+// @ts-expect-error Comments has no ambiguous raw stack.api business namespace
+contractedStack.api.comments;
+// @ts-expect-error Blog stack.api exposes only prefetchForRoute
+contractedStack.api.blog.listPosts;
+// @ts-expect-error CMS stack.api exposes only prefetchForRoute
+contractedStack.api.cms.listContentItems;
+// @ts-expect-error Form Builder stack.api exposes only prefetchForRoute
+contractedStack.api.formBuilder.listForms;
+// @ts-expect-error Kanban stack.api exposes only prefetchForRoute
+contractedStack.api.kanban.listBoards;
+// @ts-expect-error Media stack.api exposes only prefetchForRoute
+contractedStack.api.media.listAssets;
+
 stack({
 	basePath: "/api",
 	plugins: { comments: commentsBackendPlugin() },
@@ -534,6 +584,8 @@ blogStack.internal.blog.updatePost({
 		tags: [],
 	},
 });
+// @ts-expect-error Blog stack.api only exposes the narrow SSG prefetch helper
+blogStack.api.blog.getAllPosts();
 blogStack.forRequest(new Request("https://example.test")).api.blog.deletePost({
 	id: "post-1",
 	// @ts-expect-error request operations do not accept browser-supplied trusted facts
@@ -556,6 +608,14 @@ stack({
 	adapter: fakeAdapter,
 	// @ts-expect-error Blog operations require the Blog permission catalog
 	auth: unregisteredServerAuth,
+});
+
+stack({
+	basePath: "/api",
+	plugins: { blog: blogBackendPlugin() },
+	adapter: fakeAdapter,
+	// @ts-expect-error structural server providers were removed
+	auth: { getIdentity: () => null, can: () => true },
 });
 
 const operationPlugin = defineBackendPlugin({

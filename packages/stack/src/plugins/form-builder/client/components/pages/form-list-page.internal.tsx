@@ -155,10 +155,7 @@ export function FormListPage() {
 	};
 
 	const newFormButton = (
-		<PermissionAccess
-			permission={formBuilderPermissions.form.create()}
-			legacyPermission={{ resource: "form-builder:form", action: "create" }}
-		>
+		<PermissionAccess permission={formBuilderPermissions.form.create()}>
 			<Button asChild>
 				<LinkComponent href={`${basePath}/forms/new`}>
 					<Plus className="mr-2 h-4 w-4" />
@@ -296,17 +293,6 @@ export function FormListPage() {
 																	: {}),
 																status: form.status,
 															})}
-															legacyPermission={{
-																resource: "form-builder:form",
-																action: "update",
-																params: {
-																	id: form.id,
-																	...(form.createdBy
-																		? { ownerId: form.createdBy }
-																		: {}),
-																	status: form.status,
-																},
-															}}
 														>
 															<DropdownMenuItem
 																onClick={() =>
@@ -331,16 +317,6 @@ export function FormListPage() {
 																		: {}),
 																},
 															)}
-															legacyPermission={{
-																resource: "form-builder:submission",
-																action: "read",
-																params: {
-																	formId: form.id,
-																	...(form.createdBy
-																		? { ownerId: form.createdBy }
-																		: {}),
-																},
-															}}
 														>
 															<DropdownMenuItem
 																onClick={() =>
@@ -365,17 +341,6 @@ export function FormListPage() {
 																	: {}),
 																status: form.status,
 															})}
-															legacyPermission={{
-																resource: "form-builder:form",
-																action: "delete",
-																params: {
-																	id: form.id,
-																	...(form.createdBy
-																		? { ownerId: form.createdBy }
-																		: {}),
-																	status: form.status,
-																},
-															}}
 														>
 															<DropdownMenuItem
 																className="text-destructive"

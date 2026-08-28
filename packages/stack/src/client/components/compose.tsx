@@ -6,21 +6,13 @@ import type { createRouter } from "@btst/yar";
 import {
 	PermissionCheck,
 	useAuthContext,
-	useCan,
 	type PermissionCheckState,
 } from "../../context/auth";
 import { useStackOrNull } from "../../context/provider";
-import {
-	isSchemaBoundStackAuthProvider,
-	type CanParams,
-} from "../../shared/auth-types";
-import {
-	isPermissionRequest,
-	type PermissionRequest,
-} from "../../authorization";
+import type { PermissionRequest } from "../../authorization";
 import { ErrorBoundary } from "./error-boundary";
 
-type RoutePermission = CanParams | PermissionRequest;
+type RoutePermission = PermissionRequest;
 
 /**
  * Route type with optional components
@@ -92,55 +84,24 @@ export function RouteRenderer({
 export function PermissionRouteAccess({
 	permission,
 	LoadingComponent,
-	legacyPublic = false,
-	legacyPermission,
 	children,
 }: {
 	permission: RoutePermission;
 	LoadingComponent?: React.ComponentType;
-	/** Preserve an explicitly public route for string-based RC providers. */
-	legacyPublic?: boolean;
-	/** String permission used only by legacy RC providers for this descriptor. */
-	legacyPermission?: CanParams;
 	children: React.ReactNode;
 }) {
-	const auth = useAuthContext();
-	if (isPermissionRequest(permission)) {
-		if (auth && !isSchemaBoundStackAuthProvider(auth.provider)) {
-			if (legacyPublic) return <>{children}</>;
-			if (legacyPermission) {
-				return (
-					<LegacyRouteGuard
-						permission={legacyPermission}
-						LoadingComponent={LoadingComponent}
-					>
-						{children}
-					</LegacyRouteGuard>
-				);
-			}
-		}
-		return (
-			<PermissionCheck permission={permission}>
-				{(state) => (
-					<ResolvedRouteAccess
-						state={state}
-						permissionLabel={permission.id}
-						LoadingComponent={LoadingComponent}
-					>
-						{children}
-					</ResolvedRouteAccess>
-				)}
-			</PermissionCheck>
-		);
-	}
-
 	return (
-		<LegacyRouteGuard
-			permission={permission}
-			LoadingComponent={LoadingComponent}
-		>
-			{children}
-		</LegacyRouteGuard>
+		<PermissionCheck permission={permission}>
+			{(state) => (
+				<ResolvedRouteAccess
+					state={state}
+					permissionLabel={permission.id}
+					LoadingComponent={LoadingComponent}
+				>
+					{children}
+				</ResolvedRouteAccess>
+			)}
+		</PermissionCheck>
 	);
 }
 
@@ -219,27 +180,6 @@ function ComposedRouteErrorBoundary({
 	);
 }
 
-function LegacyRouteGuard({
-	permission,
-	LoadingComponent,
-	children,
-}: {
-	permission: CanParams;
-	LoadingComponent?: React.ComponentType;
-	children: React.ReactNode;
-}) {
-	const state = useCan(permission);
-	return (
-		<ResolvedRouteAccess
-			state={state}
-			permissionLabel={`${permission.resource}.${permission.action}`}
-			LoadingComponent={LoadingComponent}
-		>
-			{children}
-		</ResolvedRouteAccess>
-	);
-}
-
 function ResolvedRouteAccess({
 	state,
 	permissionLabel,
@@ -308,13 +248,7 @@ function ResolvedRouteAccess({
  *   a prop named `params` or `query` intentionally takes precedence over the
  *   router-extracted values. Only pass trusted, framework-controlled values.
  * @param onError - Error handler callback for the error boundary
- * @param permission - Optional route-level permission requirement (e.g.
- *   `{ resource: "blog:draft", action: "read" }`). Only enforced when an
- *   auth provider is configured on `StackProvider`; see `RouteGuard`.
- * @param legacyPublic - Keeps an explicitly public descriptor route ungated
- *   for string-based RC providers. One-rule providers still evaluate it.
- * @param legacyPermission - Optional string permission used instead of a
- *   descriptor only for string-based RC providers during migration.
+ * @param permission - Optional schema-backed route permission descriptor.
  */
 export function ComposedRoute({
 	path,
@@ -326,8 +260,6 @@ export function ComposedRoute({
 	props,
 	onError,
 	permission,
-	legacyPublic = false,
-	legacyPermission,
 }: {
 	path: string;
 	PageComponent: React.ComponentType<any>;
@@ -338,16 +270,12 @@ export function ComposedRoute({
 	props?: any;
 	onError: (error: Error, info: ErrorInfo) => void;
 	permission?: RoutePermission;
-	legacyPublic?: boolean;
-	legacyPermission?: CanParams;
 }) {
 	if (PageComponent) {
 		const content = permission ? (
 			<PermissionRouteAccess
 				permission={permission}
 				LoadingComponent={LoadingComponent}
-				legacyPublic={legacyPublic}
-				legacyPermission={legacyPermission}
 			>
 				<PageComponent {...props} />
 			</PermissionRouteAccess>

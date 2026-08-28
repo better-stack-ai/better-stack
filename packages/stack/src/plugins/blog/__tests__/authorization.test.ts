@@ -4,11 +4,13 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { stack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
-import { createServerAuth } from "../../../authorization/server";
+import {
+	createServerAuth,
+	type ServerAuth,
+} from "../../../authorization/server";
 import { blogBackendPlugin, type BlogBackendHooks } from "../api";
 import { blogPermissions } from "../permissions";
 import type { Post } from "../types";
-import type { StackServerAuthProvider } from "../../../shared/auth-types";
 
 const memoryAdapter = (db: DatabaseDefinition) => createMemoryAdapter(db)({});
 
@@ -117,13 +119,13 @@ function createAuth(
 
 function makeBackend(options?: {
 	hooks?: BlogBackendHooks;
-	auth?: StackServerAuthProvider;
+	auth?: ServerAuth<any>;
 }) {
 	return stack({
 		basePath: "/api",
 		plugins: { blog: blogBackendPlugin(options?.hooks) },
 		adapter: memoryAdapter,
-		...(options?.auth ? { auth: options.auth } : {}),
+		...(options?.auth ? { auth: options.auth as never } : {}),
 	});
 }
 
@@ -1076,53 +1078,6 @@ describe("Blog delete one-rule authorization tracer", () => {
 
 		expect(response.status).toBe(200);
 		expect(await postExists(backend, post.id)).toBe(false);
-	});
-
-	it("adapts trusted Blog facts to structural RC server rules", async () => {
-		const events: string[] = [];
-		const getIdentity = vi.fn(() => ({ id: "author-1" }));
-		const can = vi.fn(
-			({ resource, action }: { resource: string; action: string }) =>
-				resource === "blog:post" && action === "delete",
-		);
-		const backend = makeBackend({
-			auth: { getIdentity, can },
-			hooks: {
-				onBeforeDeletePost: (_id, context) => {
-					events.push(`before:${context.identity?.id}`);
-				},
-			},
-		});
-		const post = await seedPost(backend, "legacy-mapped", "author-1");
-
-		const response = await backend.handler(deleteRequest(post.id));
-
-		expect(response.status).toBe(200);
-		expect(getIdentity).toHaveBeenCalledTimes(1);
-		expect(can).toHaveBeenCalledWith(
-			expect.objectContaining({
-				resource: "blog:post",
-				action: "delete",
-				identity: { id: "author-1" },
-				params: { id: post.id, authorId: "author-1" },
-			}),
-		);
-		expect(events).toEqual(["before:author-1"]);
-	});
-
-	it("keeps published Blog reads explicitly public for structural RC auth", async () => {
-		const can = vi.fn(() => false);
-		const backend = makeBackend({
-			auth: { getIdentity: () => null, can },
-		});
-		await seedPost(backend, "legacy-public");
-
-		const response = await backend.handler(
-			new Request("http://localhost/api/posts?published=true"),
-		);
-
-		expect(response.status).toBe(200);
-		expect(can).not.toHaveBeenCalled();
 	});
 
 	it("keeps identity and rule failures as errors", async () => {

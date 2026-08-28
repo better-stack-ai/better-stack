@@ -14,7 +14,7 @@ import { normalizePath, metaElementsToObject } from "@btst/stack/client"
 import type { Metadata } from "next"
 
 export async function generateStaticParams() {
-	const result = await myStack.api.blog.getAllPosts({ published: true })
+	const result = await myStack.internal.blog.listPosts({ published: true })
 	return result.items.map((post: { slug: string }) => ({ slug: post.slug }))
 }
 

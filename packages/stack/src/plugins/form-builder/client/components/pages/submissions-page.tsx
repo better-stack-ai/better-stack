@@ -61,14 +61,6 @@ function AuthorizedSubmissionsPage({ formId }: SubmissionsPageProps) {
 				formExists: form !== null,
 				...(form?.createdBy ? { ownerId: form.createdBy } : {}),
 			})}
-			legacyPermission={{
-				resource: "form-builder:submission",
-				action: "read",
-				params: {
-					formId,
-					...(form.createdBy ? { ownerId: form.createdBy } : {}),
-				},
-			}}
 			LoadingComponent={SubmissionsSkeleton}
 		>
 			<SubmissionsPage formId={formId} />

@@ -1,24 +1,20 @@
 import { z } from "zod";
 import type { Endpoint } from "better-call";
 import {
+	type AnyAuthorization,
 	type AnyPermissionDescriptor,
 	type PermissionFactsFor,
 	type PermissionInputFor,
 	type PermissionRequest,
 	type PermissionRequestFor,
 } from "../../authorization";
-import { AuthorizationError, isServerAuth } from "../../authorization/server";
-import type {
-	CanParams,
-	StackIdentity,
-	StackServerAuthProvider,
-} from "../../shared/auth-types";
+import type { ServerAuth } from "../../authorization/server";
+import type { StackIdentity } from "../../shared/auth-types";
 import type { MaybePromise } from "../../shared/types";
 
 interface OperationExecutionOptions {
 	request?: Request;
-	auth?: StackServerAuthProvider;
-	resolveIdentity?: () => Promise<StackIdentity | null>;
+	auth?: ServerAuth<AnyAuthorization>;
 	skipAuthorization: boolean;
 }
 
@@ -178,51 +174,6 @@ function freezeOperationData<T>(
 	return Object.freeze(object) as DeepReadonly<T>;
 }
 
-type LegacyAuthorizationDeclaration = CanParams | { readonly public: true };
-
-async function enforceLegacyAuthorization(
-	auth: StackServerAuthProvider,
-	request: Request,
-	identity: DeepReadonly<StackIdentity> | null,
-	declaration: LegacyAuthorizationDeclaration,
-): Promise<void> {
-	if ("public" in declaration) {
-		if (declaration.public !== true) {
-			throw new TypeError(
-				"Operation RC authorization must return a valid string permission or { public: true }.",
-			);
-		}
-		return;
-	}
-	if (
-		typeof declaration.resource !== "string" ||
-		declaration.resource.length === 0 ||
-		typeof declaration.action !== "string" ||
-		declaration.action.length === 0
-	) {
-		throw new TypeError(
-			"Operation RC authorization must return a valid string permission or { public: true }.",
-		);
-	}
-	if (!auth.can) return;
-	const permission = freezeOperationData(
-		declaration,
-		new WeakSet(),
-		"legacy operation permission",
-	) as DeepReadonly<CanParams>;
-	const allowed = await auth.can({
-		...permission,
-		identity,
-		headers: request.headers,
-	});
-	if (typeof allowed !== "boolean") {
-		throw new TypeError("StackServerAuthProvider.can() must return a boolean.");
-	}
-	if (!allowed) {
-		throw new AuthorizationError(identity === null ? 401 : 403);
-	}
-}
-
 /** Validated input, trusted facts, and resolved identity passed through an operation. */
 export interface OperationContext<TInput, TFacts> {
 	readonly input: DeepReadonly<TInput>;
@@ -341,15 +292,6 @@ type OperationConfig<
 	 * @default "authorized"
 	 */
 	access?: OperationAccess;
-	/**
-	 * @deprecated Temporary v3 RC bridge removed by #193. Map trusted operation
-	 * facts to the previous string permission, or explicitly declare the RC path
-	 * public. Schema-backed authorization never reads this metadata.
-	 */
-	legacyAuthorization?: (ctx: {
-		readonly input: DeepReadonly<z.output<TInputSchema>>;
-		readonly facts: DeepReadonly<PermissionFactsFor<TPermission>>;
-	}) => LegacyAuthorizationDeclaration;
 	facts: (ctx: {
 		readonly input: DeepReadonly<z.output<TInputSchema>>;
 		readonly request?: Request;
@@ -365,13 +307,6 @@ type OperationConfig<
 		readonly facts: DeepReadonly<PermissionFactsFor<TPermission>>;
 		readonly request?: Request;
 	}) => MaybePromise<readonly PermissionRequest<string, any>[]>;
-	/**
-	 * @deprecated Temporary v3 RC bridge removed by #193. Explicitly map each
-	 * compound schema-backed permission to its former string permission.
-	 */
-	legacyAdditionalAuthorization?: (
-		permission: Pick<PermissionRequest<string, any>, "id" | "facts">,
-	) => LegacyAuthorizationDeclaration;
 	before?: (
 		ctx: OperationContext<
 			z.output<TInputSchema>,
@@ -425,10 +360,6 @@ export function defineOperation<
 	 * @default "authorized"
 	 */
 	access?: OperationAccess;
-	legacyAuthorization?: (ctx: {
-		readonly input: DeepReadonly<z.output<TInputSchema>>;
-		readonly facts: DeepReadonly<PermissionFactsFor<TPermission>>;
-	}) => LegacyAuthorizationDeclaration;
 	facts: (ctx: {
 		readonly input: DeepReadonly<z.output<TInputSchema>>;
 		readonly request?: Request;
@@ -438,9 +369,6 @@ export function defineOperation<
 		readonly facts: DeepReadonly<PermissionFactsFor<TPermission>>;
 		readonly request?: Request;
 	}) => MaybePromise<readonly PermissionRequest<string, any>[]>;
-	legacyAdditionalAuthorization?: (
-		permission: Pick<PermissionRequest<string, any>, "id" | "facts">,
-	) => LegacyAuthorizationDeclaration;
 	before?: (
 		ctx: OperationContext<
 			z.output<TInputSchema>,
@@ -551,27 +479,15 @@ function defineOperationRuntime<
 					) => Promise<StackIdentity | null>;
 			  }
 			| undefined;
-		let legacyAuthContext:
-			| {
-					auth: StackServerAuthProvider;
-					request: Request;
-					identity: DeepReadonly<StackIdentity> | null;
-			  }
-			| undefined;
 		if (
 			!options.skipAuthorization &&
 			operationAccess === "authorized" &&
-			isServerAuth(options.auth)
+			options.auth
 		) {
 			if (!options.request) {
 				throw new Error("Authorized operations require a request.");
 			}
-			runtimeAuth = options.auth as unknown as {
-				authorize: (
-					request: Request,
-					permission: unknown,
-				) => Promise<StackIdentity | null>;
-			};
+			runtimeAuth = options.auth as unknown as NonNullable<typeof runtimeAuth>;
 			const authorizedIdentity = await runtimeAuth.authorize(
 				options.request,
 				permissionRequest,
@@ -583,48 +499,6 @@ function defineOperationRuntime<
 						"operation identity",
 					)
 				: null;
-		} else if (
-			!options.skipAuthorization &&
-			operationAccess === "authorized" &&
-			options.auth
-		) {
-			if (!options.request) {
-				throw new Error("Identity-aware operations require a request.");
-			}
-			const legacyIdentity = options.resolveIdentity
-				? await options.resolveIdentity()
-				: await options.auth.getIdentity({
-						headers: options.request.headers,
-						request: options.request,
-					});
-			identity = legacyIdentity
-				? freezeOperationData(
-						legacyIdentity,
-						new WeakSet(),
-						"operation identity",
-					)
-				: null;
-
-			const legacyAuthorization = config.legacyAuthorization?.({
-				input: parsedInput,
-				facts: parsedFacts,
-			});
-			if (!legacyAuthorization) {
-				throw new TypeError(
-					"Operation does not declare RC server authorization compatibility. Use createServerAuth().",
-				);
-			}
-			await enforceLegacyAuthorization(
-				options.auth,
-				options.request,
-				identity,
-				legacyAuthorization,
-			);
-			legacyAuthContext = {
-				auth: options.auth,
-				request: options.request,
-				identity,
-			};
 		}
 
 		// Compound checks may perform trusted reads. Derive them only after the
@@ -645,24 +519,6 @@ function defineOperationRuntime<
 		if (runtimeAuth && options.request) {
 			for (const additionalPermission of additionalPermissions) {
 				await runtimeAuth.authorize(options.request, additionalPermission);
-			}
-		} else if (legacyAuthContext) {
-			for (const additionalPermission of additionalPermissions) {
-				const legacyAuthorization = config.legacyAdditionalAuthorization?.({
-					id: additionalPermission.id,
-					facts: additionalPermission.facts,
-				});
-				if (!legacyAuthorization) {
-					throw new TypeError(
-						"Operation does not map an additional permission for RC server authorization. Use createServerAuth().",
-					);
-				}
-				await enforceLegacyAuthorization(
-					legacyAuthContext.auth,
-					legacyAuthContext.request,
-					legacyAuthContext.identity,
-					legacyAuthorization,
-				);
 			}
 		}
 
@@ -723,16 +579,12 @@ export function runAuthorizedOperation<TOperation extends AnyOperation>(
 	input: OperationInput<TOperation>,
 	options: {
 		request: Request;
-		auth?: StackServerAuthProvider;
-		resolveIdentity?: () => Promise<StackIdentity | null>;
+		auth?: ServerAuth<AnyAuthorization>;
 	},
 ): Promise<OperationTransportResult<TOperation>> {
 	return getOperationExecutor(operation)(input, {
 		request: options.request,
 		...(options.auth ? { auth: options.auth } : {}),
-		...(options.resolveIdentity
-			? { resolveIdentity: options.resolveIdentity }
-			: {}),
 		skipAuthorization: false,
 	}) as Promise<OperationTransportResult<TOperation>>;
 }

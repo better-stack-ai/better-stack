@@ -53,8 +53,8 @@ export interface CreateCMSContentItemOptions {
  * Throws if the content type is not found or the slug is already taken within
  * that content type.
  *
- * @remarks **Security:** No authorization hooks (`onBeforeCreate`, `onAfterCreate`)
- * are called. The caller is responsible for any access-control checks before
+ * @remarks **Security:** Operation authorization and lifecycle hooks are not
+ * called. The caller is responsible for any access-control checks before
  * invoking this function.
  *
  * @param adapter - The database adapter

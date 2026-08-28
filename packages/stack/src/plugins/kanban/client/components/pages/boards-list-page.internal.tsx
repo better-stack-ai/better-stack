@@ -56,10 +56,7 @@ export function BoardsListPage() {
 							t("kanban.list.manageProjects", "Manage your projects and tasks")}
 					</p>
 				</div>
-				<PermissionAccess
-					permission={kanbanPermissions.board.create()}
-					legacyPermission={{ resource: "kanban:board", action: "create" }}
-				>
+				<PermissionAccess permission={kanbanPermissions.board.create()}>
 					<Button onClick={handleNewBoard}>
 						<Plus className="mr-2 h-4 w-4" />
 						{localization?.newBoard ?? t("kanban.list.newBoard", "New Board")}
@@ -81,17 +78,6 @@ export function BoardsListPage() {
 									: {}),
 								exists: true,
 							})}
-							legacyPermission={{
-								resource: "kanban:board",
-								action: "read",
-								params: {
-									id: board.id,
-									...(board.ownerId ? { ownerId: board.ownerId } : {}),
-									...(board.organizationId
-										? { organizationId: board.organizationId }
-										: {}),
-								},
-							}}
 						>
 							<Link href={`/pages/kanban/${board.id}`} className="block group">
 								<Card className="h-full transition-shadow hover:shadow-md cursor-pointer">
@@ -138,13 +124,7 @@ export function BoardsListPage() {
 						)
 					}
 					action={
-						<PermissionAccess
-							permission={kanbanPermissions.board.create()}
-							legacyPermission={{
-								resource: "kanban:board",
-								action: "create",
-							}}
-						>
+						<PermissionAccess permission={kanbanPermissions.board.create()}>
 							<Button onClick={handleNewBoard}>
 								<Plus className="mr-2 h-4 w-4" />
 								{localization?.createBoard ??

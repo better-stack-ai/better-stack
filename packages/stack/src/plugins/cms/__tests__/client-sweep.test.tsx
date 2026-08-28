@@ -10,7 +10,7 @@ import { Form, FormField } from "@workspace/ui/components/form";
 // components, which resolve `@btst/stack/*` via package self-reference.
 import {
 	StackProvider,
-	type StackAuthProvider,
+	type StackClientAuth,
 	type StackI18nProvider,
 } from "@btst/stack/context";
 import { defineAuthorization } from "@btst/stack/authorization";
@@ -267,10 +267,7 @@ describe("ContentForm inline errors", () => {
 });
 
 describe("ContentListPage row actions (CanAccess)", () => {
-	function renderListPage(
-		auth?: StackAuthProvider,
-		router = createMockRouter(),
-	) {
+	function renderListPage(auth?: StackClientAuth, router = createMockRouter()) {
 		return render(
 			<StackProvider
 				basePath="/pages"
@@ -290,44 +287,6 @@ describe("ContentListPage row actions (CanAccess)", () => {
 		expect(actionButtons).toHaveLength(2);
 		expect(texts()).toContain("New Item");
 	});
-
-	it("hides the delete button when can() denies cms:content/delete", async () => {
-		const can = vi.fn(
-			({ resource, action }: { resource: string; action: string }) =>
-				!(resource === "cms:content" && action === "delete"),
-		);
-		const auth: StackAuthProvider = {
-			getIdentity: () => ({ id: "user-1" }),
-			can,
-		};
-
-		await renderListPage(auth);
-
-		const actionButtons = container.querySelectorAll("table tbody tr button");
-		expect(actionButtons).toHaveLength(1);
-		expect(can).toHaveBeenCalledWith(
-			expect.objectContaining({
-				resource: "cms:content",
-				action: "delete",
-				params: { typeSlug: "post", id: item.id },
-			}),
-		);
-	});
-
-	it("hides the New Item button when can() denies cms:content/create", async () => {
-		const auth: StackAuthProvider = {
-			getIdentity: () => ({ id: "user-1" }),
-			can: ({ resource, action }) =>
-				!(resource === "cms:content" && action === "create"),
-		};
-
-		await renderListPage(auth);
-
-		expect(texts()).not.toContain("New Item");
-		// The list itself still renders
-		expect(texts()).toContain("hello-world");
-	});
-
 	it("uses the CMS catalog for route read and record write controls", async () => {
 		const authorization = defineAuthorization({
 			identity: z.object({ id: z.string(), role: z.literal("user") }),

@@ -181,7 +181,7 @@ Framework-wide values belong on `StackProvider`, not inside plugin overrides:
   basePath="/pages"
   router={nextRouter()}
   api={{ baseURL, basePath: "/api/data" }}
-  auth={{ getIdentity, loginPath: "/login" }}
+  auth={createClientAuth({ authorization, getIdentity, loginPath: "/login" })}
   overrides={{ myPlugin: { uploadImage, localization } }}
 >
   {children}

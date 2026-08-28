@@ -396,15 +396,11 @@ export interface AiChatBackendHooks {
 
 export interface AiChatOperationsConfig {
 	access: AiChatAccess;
-	requestAuthorizationConfigured?: boolean;
 	model: LanguageModel;
 	systemPrompt?: string;
 	tools?: Record<string, Tool>;
 	enablePageTools?: boolean;
 	clientToolSchemas?: Record<string, Tool>;
-	getUserId?: (
-		context: Pick<ChatApiContext, "request" | "headers" | "body" | "params">,
-	) => string | null | undefined | Promise<string | null | undefined>;
 	hooks?: AiChatBackendHooks;
 }
 
@@ -901,28 +897,11 @@ function requireAtomicConversationTransactions(adapter: Adapter) {
 async function scopedUserId(
 	context: OperationContext<any, any>,
 	input: object,
-	getUserId: AiChatOperationsConfig["getUserId"],
 ) {
 	if (context.identity) return context.identity.id;
 	const trustedUserId = (input as { trustedUserId?: string }).trustedUserId;
 	if (!context.request && trustedUserId) return trustedUserId;
-	if (!context.request || !getUserId) return undefined;
-	const userId = await getUserId({
-		request: context.request,
-		headers: context.request.headers,
-		body: context.input,
-		...(typeof (input as { id?: unknown }).id === "string"
-			? { params: { id: (input as { id: string }).id } }
-			: {}),
-	});
-	if (!userId) {
-		throw new AiChatOperationError(
-			403,
-			"Unauthorized: User authentication required",
-			"AUTHENTICATION_REQUIRED",
-		);
-	}
-	return userId;
+	return undefined;
 }
 
 function assertConversationScope(
@@ -975,20 +954,12 @@ export function createAiChatOperations(
 	const listConversations = defineOperation({
 		input: EmptyInputSchema,
 		permission: aiChatPermissions.conversation.read,
-		legacyAuthorization: () => ({
-			resource: "ai-chat:conversation",
-			action: "read",
-		}),
 		facts: () => {
 			assertHistoryAvailable();
 			return { scope: "collection" as const };
 		},
 		before: async (context) => {
-			const userId = await scopedUserId(
-				context,
-				context.input,
-				config.getUserId,
-			);
+			const userId = await scopedUserId(context, context.input);
 			scopedUserIds.set(context.input as object, userId);
 			await runBeforeHook(
 				() =>
@@ -1000,12 +971,12 @@ export function createAiChatOperations(
 		},
 		execute: async (context) => {
 			const userId = scopedUserIds.get(context.input as object);
-			const conversations =
-				config.requestAuthorizationConfigured && context.request && !userId
-					? []
-					: (await getAllConversations(adapter, userId)).map(
-							publicConversation,
-						);
+			const allConversations = await getAllConversations(adapter, userId);
+			const conversations = (
+				context.request && !userId
+					? allConversations.filter((conversation) => !conversation.userId)
+					: allConversations
+			).map(publicConversation);
 			await hooks?.onConversationsRead?.(
 				conversations,
 				hookContext(context, { query: context.input }),
@@ -1021,14 +992,6 @@ export function createAiChatOperations(
 	const getConversation = defineOperation({
 		input: ConversationOperationInputSchema,
 		permission: aiChatPermissions.conversation.read,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "ai-chat:conversation",
-			action: "read",
-			params:
-				facts.scope === "record"
-					? { id: facts.conversationId, ownerId: facts.ownerId }
-					: undefined,
-		}),
 		facts: async ({ input }) => {
 			assertHistoryAvailable();
 			const conversation = await getConversationById(adapter, input.id);
@@ -1040,11 +1003,7 @@ export function createAiChatOperations(
 			};
 		},
 		before: async (context) => {
-			const userId = await scopedUserId(
-				context,
-				context.input,
-				config.getUserId,
-			);
+			const userId = await scopedUserId(context, context.input);
 			assertConversationScope(
 				conversationSnapshots.get(context.input as object) ?? null,
 				context.identity ? undefined : userId,
@@ -1109,20 +1068,12 @@ export function createAiChatOperations(
 	const createConversation = defineOperation({
 		input: createConversationSchema,
 		permission: aiChatPermissions.conversation.create,
-		legacyAuthorization: () => ({
-			resource: "ai-chat:conversation",
-			action: "create",
-		}),
 		facts: () => {
 			assertHistoryAvailable();
 			return undefined;
 		},
 		before: async (context) => {
-			const userId = await scopedUserId(
-				context,
-				context.input,
-				config.getUserId,
-			);
+			const userId = await scopedUserId(context, context.input);
 			scopedUserIds.set(context.input as object, userId);
 			await runBeforeHook(
 				() =>
@@ -1165,11 +1116,6 @@ export function createAiChatOperations(
 	const updateConversation = defineOperation({
 		input: UpdateConversationOperationInputSchema,
 		permission: aiChatPermissions.conversation.update,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "ai-chat:conversation",
-			action: "update",
-			params: { id: facts.conversationId, ownerId: facts.ownerId },
-		}),
 		facts: async ({ input }) => {
 			assertHistoryAvailable();
 			const conversation = await getConversationById(adapter, input.id);
@@ -1187,11 +1133,7 @@ export function createAiChatOperations(
 					"CONVERSATION_NOT_FOUND",
 				);
 			}
-			const userId = await scopedUserId(
-				context,
-				context.input,
-				config.getUserId,
-			);
+			const userId = await scopedUserId(context, context.input);
 			assertConversationScope(
 				expected,
 				context.identity ? undefined : userId,
@@ -1286,11 +1228,6 @@ export function createAiChatOperations(
 	const deleteConversation = defineOperation({
 		input: ConversationOperationInputSchema,
 		permission: aiChatPermissions.conversation.delete,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "ai-chat:conversation",
-			action: "delete",
-			params: { id: facts.conversationId, ownerId: facts.ownerId },
-		}),
 		facts: async ({ input }) => {
 			assertHistoryAvailable();
 			const conversation = await getConversationById(adapter, input.id);
@@ -1308,11 +1245,7 @@ export function createAiChatOperations(
 					"CONVERSATION_NOT_FOUND",
 				);
 			}
-			const userId = await scopedUserId(
-				context,
-				context.input,
-				config.getUserId,
-			);
+			const userId = await scopedUserId(context, context.input);
 			assertConversationScope(
 				expected,
 				context.identity ? undefined : userId,
@@ -1389,14 +1322,6 @@ export function createAiChatOperations(
 		input: ChatOperationInputSchema,
 		permission: aiChatPermissions.stream.start,
 		access: config.access,
-		legacyAuthorization: ({ facts }) =>
-			config.access === "public"
-				? { public: true as const }
-				: {
-						resource: "ai-chat:stream",
-						action: "start",
-						params: { ...facts },
-					},
 		facts: async ({ input }) => {
 			const uiMessages = input.messages as UIMessage[];
 			if (!uiMessages[0]) {
@@ -1545,38 +1470,6 @@ export function createAiChatOperations(
 			}
 			return requests;
 		},
-		legacyAdditionalAuthorization: ({ id, facts }) => {
-			if (config.access === "public") return { public: true };
-			const mapping: Record<string, { resource: string; action: string }> = {
-				[aiChatPermissions.conversation.create.id]: {
-					resource: "ai-chat:conversation",
-					action: "create",
-				},
-				[aiChatPermissions.message.send.id]: {
-					resource: "ai-chat:message",
-					action: "create",
-				},
-				[aiChatPermissions.message.edit.id]: {
-					resource: "ai-chat:message",
-					action: "update",
-				},
-				[aiChatPermissions.message.retry.id]: {
-					resource: "ai-chat:message",
-					action: "retry",
-				},
-				[aiChatPermissions.attachment.send.id]: {
-					resource: "ai-chat:attachment",
-					action: "create",
-				},
-				[aiChatPermissions.tool.activate.id]: {
-					resource: "ai-chat:tool",
-					action: "activate",
-				},
-			};
-			const mapped = mapping[id];
-			if (!mapped) throw new TypeError(`Unknown AI Chat permission: ${id}`);
-			return { ...mapped, params: facts };
-		},
 		execute: async (context) => {
 			const prepared = streamPreparations.get(context.input as object);
 			if (!prepared) {
@@ -1590,7 +1483,7 @@ export function createAiChatOperations(
 			const firstMessage = uiMessages[0] as UIMessage;
 			const userId =
 				config.access === "authorized"
-					? await scopedUserId(context, context.input, config.getUserId)
+					? await scopedUserId(context, context.input)
 					: undefined;
 			if (config.access === "authorized") {
 				assertConversationScope(

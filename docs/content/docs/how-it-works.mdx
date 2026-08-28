@@ -80,7 +80,7 @@ const stackClient = createStackClient({
 **Backend plugins** (registered in `stack`):
 - Define database schemas (tables, columns, relations)
 - Register API route handlers for CRUD operations
-- Provide hooks for authorization and custom logic
+- Provide post-authorization domain lifecycle hooks
 
 **Client plugins** (registered in `createStackClient`):
 - Define page routes and components
@@ -98,8 +98,8 @@ Framework services are configured once on `StackProvider`:
   `tanstackRouter()` for links, images, navigation, refresh, and URL search
   state.
 - **`api`**: Configure the browser-side API `baseURL` and `basePath`.
-- **`auth`**: Resolve identity, provide a login path, and authorize
-  resource/action checks.
+- **`auth`**: Resolve identity, provide a login path, and evaluate exact
+  schema-backed permission descriptors.
 
 The `overrides` object is only for plugin-specific customization such as
 upload functions, component slots, localization, and route analytics. SSR

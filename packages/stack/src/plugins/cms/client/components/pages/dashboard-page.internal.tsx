@@ -27,7 +27,7 @@ export function DashboardPage() {
 	const navigate = router?.navigate;
 	const basePath = useBasePath();
 
-	// Call lifecycle hooks for authorization
+	// Call route lifecycle hooks for telemetry and application behavior.
 	useRouteLifecycle({
 		routeName: "dashboard",
 		context: {

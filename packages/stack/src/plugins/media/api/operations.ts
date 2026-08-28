@@ -1123,7 +1123,6 @@ export function createMediaOperations(
 	const listAssetsOperation = defineOperation({
 		input: AssetListQuerySchema,
 		permission: mediaPermissions.library.read,
-		legacyAuthorization: () => ({ resource: "media:asset", action: "read" }),
 		facts: async ({ input, request }) => {
 			await resolveTenant(input as object, request, { query: input });
 			return undefined;
@@ -1137,17 +1136,6 @@ export function createMediaOperations(
 			return result.items.map((asset) =>
 				mediaPermissions.asset.read(assetFacts(assetSnapshot(asset))),
 			);
-		},
-		legacyAdditionalAuthorization: ({ id, facts }) => {
-			if (id !== mediaPermissions.asset.read.id) {
-				throw new TypeError(`Unknown Media compound permission: ${id}`);
-			}
-			const read = facts as AssetReadFacts;
-			return {
-				resource: "media:asset",
-				action: "read",
-				params: { id: read.assetId, ...read },
-			};
 		},
 		execute: async (context) => {
 			await runDomainHook(
@@ -1185,7 +1173,6 @@ export function createMediaOperations(
 	const createAssetOperation = defineOperation({
 		input: createAssetSchema,
 		permission: mediaPermissions.asset.upload,
-		legacyAuthorization: () => ({ resource: "media:asset", action: "create" }),
 		facts: async ({ input, request }) => {
 			const tenantId = await resolveTenant(input as object, request, {
 				body: input,
@@ -1253,11 +1240,6 @@ export function createMediaOperations(
 	const updateAssetOperation = defineOperation({
 		input: UpdateAssetOperationInputSchema,
 		permission: mediaPermissions.asset.update,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "media:asset",
-			action: "update",
-			params: { id: facts.assetId, ...facts },
-		}),
 		facts: async ({ input, request }) => {
 			const tenantId = await resolveTenant(input as object, request, {
 				body: input.data,
@@ -1343,11 +1325,6 @@ export function createMediaOperations(
 	const deleteAssetOperation = defineOperation({
 		input: AssetIdOperationInputSchema,
 		permission: mediaPermissions.asset.delete,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "media:asset",
-			action: "delete",
-			params: { id: facts.assetId, ...facts },
-		}),
 		facts: async ({ input, request }) => {
 			const tenantId = await resolveTenant(input as object, request, {
 				params: { id: input.id },
@@ -1409,7 +1386,6 @@ export function createMediaOperations(
 	const listFoldersOperation = defineOperation({
 		input: FolderListOperationInputSchema,
 		permission: mediaPermissions.library.read,
-		legacyAuthorization: () => ({ resource: "media:folder", action: "read" }),
 		facts: async ({ input, request }) => {
 			await resolveTenant(input as object, request, { query: input });
 			return undefined;
@@ -1439,7 +1415,6 @@ export function createMediaOperations(
 	const createFolderOperation = defineOperation({
 		input: createFolderSchema,
 		permission: mediaPermissions.folder.create,
-		legacyAuthorization: () => ({ resource: "media:folder", action: "create" }),
 		facts: async ({ input, request }) => {
 			const tenantId = await resolveTenant(input as object, request, {
 				body: input,
@@ -1495,11 +1470,6 @@ export function createMediaOperations(
 	const deleteFolderOperation = defineOperation({
 		input: FolderIdOperationInputSchema,
 		permission: mediaPermissions.folder.delete,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "media:folder",
-			action: "delete",
-			params: { id: facts.folderId, ...facts },
-		}),
 		facts: async ({ input, request }) => {
 			const tenantId = await resolveTenant(input as object, request, {
 				params: { id: input.id },
@@ -1517,17 +1487,6 @@ export function createMediaOperations(
 			return subtree
 				.slice(1)
 				.map((folder) => mediaPermissions.folder.delete(folderFacts(folder)));
-		},
-		legacyAdditionalAuthorization: ({ id, facts }) => {
-			if (id !== mediaPermissions.folder.delete.id) {
-				throw new TypeError(`Unknown Media compound permission: ${id}`);
-			}
-			const folder = facts as FolderDeleteFacts;
-			return {
-				resource: "media:folder",
-				action: "delete",
-				params: { id: folder.folderId, ...folder },
-			};
 		},
 		execute: (context) => {
 			requireAtomicTransactions(adapter);
@@ -1577,7 +1536,6 @@ export function createMediaOperations(
 	const uploadDirectOperation = defineOperation({
 		input: DirectUploadOperationInputSchema,
 		permission: mediaPermissions.asset.upload,
-		legacyAuthorization: () => ({ resource: "media:asset", action: "create" }),
 		facts: async ({ input, request }) => {
 			const tenantId = await resolveTenant(input as object, request, {
 				body: input,
@@ -1689,7 +1647,6 @@ export function createMediaOperations(
 	const uploadTokenOperation = defineOperation({
 		input: uploadTokenRequestSchema,
 		permission: mediaPermissions.asset.upload,
-		legacyAuthorization: () => ({ resource: "media:asset", action: "create" }),
 		facts: async ({ input, request }) => {
 			const tenantId = await resolveTenant(input as object, request, {
 				body: input,
@@ -1760,10 +1717,6 @@ export function createMediaOperations(
 	const uploadVercelBlobOperation = defineOperation({
 		input: VercelBlobOperationInputSchema,
 		permission: mediaPermissions.asset.upload,
-		legacyAuthorization: ({ facts }) =>
-			facts.phase === "callback"
-				? { public: true as const }
-				: { resource: "media:asset", action: "create" },
 		facts: async ({ input, request }) => {
 			if (!isVercelBlobAdapter(storageAdapter)) {
 				throw new MediaOperationError(

@@ -221,13 +221,11 @@ function SuspensePageRendererContent({
 				recordId: page.id,
 				...(page.authorId ? { authorId: page.authorId } : {}),
 			})}
-			legacyPublic
 		>
 			<PermissionAccess
 				permission={cmsPermissions.contentType.read({
 					contentType: UI_BUILDER_TYPE_SLUG,
 				})}
-				legacyPublic
 			>
 				<LayerRenderer
 					className={className}

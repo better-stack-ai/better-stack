@@ -4,11 +4,8 @@ import { act, startTransition, Suspense, useLayoutEffect } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-	StackProvider,
-	type StackAuthProvider,
-	useIdentity,
-} from "@btst/stack/context";
+import { StackProvider, useIdentity } from "@btst/stack/context";
+import { createIdentityTestAuth } from "../../../__tests__/auth-test-utils";
 import { MEDIA_QUERY_KEYS } from "../api/query-key-defs";
 import {
 	useAssets,
@@ -78,9 +75,7 @@ describe("Media protected query identity partition", () => {
 		fetchMock
 			.mockResolvedValueOnce(responseFor("user-a"))
 			.mockResolvedValueOnce(responseFor("user-b"));
-		const auth = {
-			getIdentity: vi.fn(() => null),
-		} satisfies StackAuthProvider;
+		const auth = createIdentityTestAuth(vi.fn(() => null));
 		let filename: string | undefined;
 
 		function Probe() {
@@ -128,12 +123,12 @@ describe("Media protected query identity partition", () => {
 			.mockResolvedValueOnce(responseFor("user-a"))
 			.mockResolvedValueOnce(responseFor("user-b"));
 		let resolveIdentity: ((identity: { id: string }) => void) | undefined;
-		const auth = {
-			getIdentity: () =>
+		const auth = createIdentityTestAuth(
+			() =>
 				new Promise<{ id: string }>((resolve) => {
 					resolveIdentity = resolve;
 				}),
-		} satisfies StackAuthProvider;
+		);
 		let filename: string | undefined;
 		let refetch: (() => Promise<void>) | undefined;
 
@@ -192,9 +187,7 @@ describe("Media protected query identity partition", () => {
 				}),
 			)
 			.mockResolvedValueOnce(responseFor("user-b-updated"));
-		const auth = {
-			getIdentity: vi.fn(() => null),
-		} satisfies StackAuthProvider;
+		const auth = createIdentityTestAuth(vi.fn(() => null));
 		let filename: string | undefined;
 		let upload: ReturnType<typeof useUploadAsset>["mutateAsync"] | undefined;
 
@@ -251,9 +244,7 @@ describe("Media protected query identity partition", () => {
 				}),
 			)
 			.mockResolvedValueOnce(responseFor("user-b-updated"));
-		const auth = {
-			getIdentity: vi.fn(() => null),
-		} satisfies StackAuthProvider;
+		const auth = createIdentityTestAuth(vi.fn(() => null));
 		let filename: string | undefined;
 		let deleteAsset:
 			| ReturnType<typeof useDeleteAsset>["mutateAsync"]
@@ -316,9 +307,7 @@ describe("Media protected query identity partition", () => {
 			.mockResolvedValueOnce(responseFor("user-a"))
 			.mockReturnValueOnce(deleteResponse)
 			.mockResolvedValueOnce(responseFor("user-b"));
-		const auth = {
-			getIdentity: vi.fn(() => null),
-		} satisfies StackAuthProvider;
+		const auth = createIdentityTestAuth(vi.fn(() => null));
 		let filename: string | undefined;
 		let deleteAsset:
 			| ReturnType<typeof useDeleteAsset>["mutateAsync"]
@@ -387,9 +376,7 @@ describe("Media protected query identity partition", () => {
 					headers: { "content-type": "application/json" },
 				}),
 			);
-		const auth = {
-			getIdentity: vi.fn(() => null),
-		} satisfies StackAuthProvider;
+		const auth = createIdentityTestAuth(vi.fn(() => null));
 		let attemptedIdentity: string | undefined;
 		let deleteAsset:
 			| ReturnType<typeof useDeleteAsset>["mutateAsync"]
@@ -453,9 +440,7 @@ describe("Media protected query identity partition", () => {
 			.mockResolvedValueOnce(responseFor("user-a"))
 			.mockReturnValueOnce(deleteResponse)
 			.mockResolvedValueOnce(responseFor("user-b"));
-		const auth = {
-			getIdentity: vi.fn(() => null),
-		} satisfies StackAuthProvider;
+		const auth = createIdentityTestAuth(vi.fn(() => null));
 		let filename: string | undefined;
 		let deleteAsset:
 			| ReturnType<typeof useDeleteAsset>["mutateAsync"]
@@ -530,9 +515,7 @@ describe("Media protected query identity partition", () => {
 			.mockReturnValueOnce(firstResponse)
 			.mockReturnValueOnce(secondResponse)
 			.mockResolvedValueOnce(responseFor("user-a-updated"));
-		const auth = {
-			getIdentity: vi.fn(() => null),
-		} satisfies StackAuthProvider;
+		const auth = createIdentityTestAuth(vi.fn(() => null));
 		let filename: string | undefined;
 		let deleteAsset: ReturnType<typeof useDeleteAsset>["mutate"] | undefined;
 

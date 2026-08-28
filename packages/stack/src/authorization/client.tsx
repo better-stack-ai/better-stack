@@ -20,7 +20,7 @@ import {
 	useAuthContext,
 	useIdentity as useStackIdentity,
 } from "../context/auth";
-import type { StackAuthProvider } from "../shared/auth-types";
+import type { StackClientAuth } from "../shared/auth-types";
 import type { MaybePromise } from "../shared/types";
 
 /** Result returned by a bound browser permission check. */
@@ -40,7 +40,7 @@ export interface AuthorizationIdentityState<TIdentity> {
 
 /** Browser identity adapter and hooks bound to synchronous local rules. */
 export interface ClientAuth<TAuthorization extends AnyAuthorization>
-	extends StackAuthProvider {
+	extends StackClientAuth {
 	readonly mode: "one-rule";
 	readonly authorization: TAuthorization;
 	readonly contract: TAuthorization["contract"];
@@ -66,7 +66,7 @@ export interface EvaluatedClientAuth<
 	TIdentity extends { id: string },
 	TPermission,
 	TContract extends AnyAuthorizationContract = AnyAuthorizationContract,
-> extends StackAuthProvider {
+> extends StackClientAuth {
 	readonly mode: "one-rule";
 	readonly contract: TContract;
 	getIdentity: () => Promise<TIdentity | null>;
@@ -156,7 +156,7 @@ export function createClientAuth(config: any): any {
 				}) => MaybePromise<boolean>;
 		  }
 		| undefined;
-	let clientAuth: StackAuthProvider;
+	let clientAuth: StackClientAuth;
 
 	const useIdentity = (): AuthorizationIdentityState<{ id: string }> => {
 		const context = useAuthContext();
@@ -304,7 +304,7 @@ export function createClientAuth(config: any): any {
 		useCan: useCanRuntime,
 		usePermission: useCanRuntime,
 		CanAccess: CanAccessRuntime,
-	} as unknown as StackAuthProvider;
+	} as unknown as StackClientAuth;
 
 	return clientAuth;
 }

@@ -56,7 +56,6 @@ function AuthorizedFormBuilderPage({ id }: FormBuilderPageProps) {
 		return (
 			<PermissionRouteAccess
 				permission={formBuilderPermissions.form.create()}
-				legacyPermission={{ resource: "form-builder:form", action: "create" }}
 				LoadingComponent={FormBuilderSkeleton}
 			>
 				<FormBuilderPage />
@@ -76,15 +75,6 @@ function AuthorizedExistingFormBuilderPage({ id }: { id: string }) {
 				...(form.createdBy ? { ownerId: form.createdBy } : {}),
 				status: form.status,
 			})}
-			legacyPermission={{
-				resource: "form-builder:form",
-				action: "update",
-				params: {
-					id: form.id,
-					...(form.createdBy ? { ownerId: form.createdBy } : {}),
-					status: form.status,
-				},
-			}}
 			LoadingComponent={FormBuilderSkeleton}
 		>
 			<FormBuilderPage id={id} />

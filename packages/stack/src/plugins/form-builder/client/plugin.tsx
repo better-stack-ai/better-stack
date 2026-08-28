@@ -103,7 +103,7 @@ export interface FormBuilderClientHooks {
 	) => Promise<void> | void;
 	/**
 	 * Called when a loading error occurs.
-	 * Use this for redirects on authorization failures.
+	 * Use this for loader error handling and redirects.
 	 * @param error - The error that occurred
 	 * @param context - Loader context
 	 */
@@ -126,7 +126,7 @@ export interface FormBuilderClientConfig {
 	queryClient: QueryClient;
 	/** Optional headers for SSR (e.g., forwarding cookies) */
 	headers?: Headers;
-	/** Optional hooks for customizing behavior (authorization, redirects, etc.) */
+	/** Optional hooks for route loading, redirects, and telemetry. */
 	hooks?: FormBuilderClientHooks;
 
 	/**
@@ -170,7 +170,7 @@ function createFormListLoader(config: FormBuilderClientConfig) {
 			const listQuery = queries.forms.list({ limit });
 
 			try {
-				// Before hook - authorization check
+				// Before-load lifecycle hook
 				if (hooks?.beforeLoadFormList) {
 					await hooks.beforeLoadFormList(context);
 				}
@@ -248,7 +248,7 @@ function createFormBuilderLoader(
 			const formQuery = id ? queries.forms.forUpdate(id) : undefined;
 
 			try {
-				// Before hook - authorization check
+				// Before-load lifecycle hook
 				if (hooks?.beforeLoadFormBuilder) {
 					await hooks.beforeLoadFormBuilder(id, context);
 				}
@@ -327,7 +327,7 @@ function createSubmissionsLoader(
 			const submissionsQuery = queries.formSubmissions.list({ formId, limit });
 
 			try {
-				// Before hook - authorization check
+				// Before-load lifecycle hook
 				if (hooks?.beforeLoadSubmissions) {
 					await hooks.beforeLoadSubmissions(formId, context);
 				}

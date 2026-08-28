@@ -92,7 +92,7 @@ export function serializeContentItemWithType(
  * Retrieve all content types.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
  *
- * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called. The caller is
  * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter
@@ -136,7 +136,7 @@ function contentItemMatchesSearch(
  * and free-text search.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
  *
- * @remarks **Security:** Authorization hooks (e.g. `onBeforeListItems`) are NOT
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT
  * called. The caller is responsible for any access-control checks before
  * invoking this function.
  *
@@ -257,7 +257,7 @@ export async function getAllContentItems(
  * Returns null if the item is not found.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
  *
- * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called. The caller is
  * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter
@@ -281,7 +281,7 @@ export async function getContentItemById(
  * Returns null if the content type or item is not found.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
  *
- * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called. The caller is
  * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter

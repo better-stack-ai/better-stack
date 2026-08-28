@@ -62,27 +62,12 @@ function ColumnContentComponent({
 	const columnActionChecks = [
 		{
 			permission: kanbanPermissions.column.update(columnFacts),
-			legacyPermission: {
-				resource: "kanban:column",
-				action: "update",
-				params: legacyColumnFacts,
-			},
 		},
 		{
 			permission: kanbanPermissions.task.create(columnFacts),
-			legacyPermission: {
-				resource: "kanban:task",
-				action: "create",
-				params: columnFacts,
-			},
 		},
 		{
 			permission: kanbanPermissions.column.delete(columnFacts),
-			legacyPermission: {
-				resource: "kanban:column",
-				action: "delete",
-				params: legacyColumnFacts,
-			},
 		},
 	] as const;
 
@@ -91,11 +76,6 @@ function ColumnContentComponent({
 			<div className="flex items-center">
 				<PermissionAccess
 					permission={kanbanPermissions.column.reorder(boardFacts)}
-					legacyPermission={{
-						resource: "kanban:column",
-						action: "update",
-						params: legacyBoardFacts,
-					}}
 				>
 					<Kanban.ColumnHandle asChild>
 						<Button variant="ghost" size="icon">
@@ -121,11 +101,6 @@ function ColumnContentComponent({
 						<DropdownMenuContent align="end">
 							<PermissionAccess
 								permission={kanbanPermissions.column.update(columnFacts)}
-								legacyPermission={{
-									resource: "kanban:column",
-									action: "update",
-									params: legacyColumnFacts,
-								}}
 							>
 								<DropdownMenuItem onClick={onEditColumn}>
 									<Pencil className="mr-2 h-4 w-4" />
@@ -135,11 +110,6 @@ function ColumnContentComponent({
 							</PermissionAccess>
 							<PermissionAccess
 								permission={kanbanPermissions.task.create(columnFacts)}
-								legacyPermission={{
-									resource: "kanban:task",
-									action: "create",
-									params: columnFacts,
-								}}
 							>
 								<DropdownMenuItem onClick={onAddTask}>
 									<Plus className="mr-2 h-4 w-4" />
@@ -149,11 +119,6 @@ function ColumnContentComponent({
 							</PermissionAccess>
 							<PermissionAccess
 								permission={kanbanPermissions.column.delete(columnFacts)}
-								legacyPermission={{
-									resource: "kanban:column",
-									action: "delete",
-									params: legacyColumnFacts,
-								}}
 							>
 								<DropdownMenuSeparator />
 								<DropdownMenuItem
@@ -202,11 +167,6 @@ function ColumnContentComponent({
 						</div>
 						<PermissionAccess
 							permission={kanbanPermissions.task.create(columnFacts)}
-							legacyPermission={{
-								resource: "kanban:task",
-								action: "create",
-								params: columnFacts,
-							}}
 						>
 							<Button onClick={onAddTask} size="sm">
 								<Plus className="mr-2 h-4 w-4" />

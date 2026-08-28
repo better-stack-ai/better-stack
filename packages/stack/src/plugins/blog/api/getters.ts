@@ -28,7 +28,7 @@ export interface PostListResult {
  * Retrieve all posts matching optional filter criteria.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
  *
- * @remarks **Security:** Authorization hooks (e.g. `onBeforeListPosts`) are NOT
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT
  * called. The caller is responsible for any access-control checks before
  * invoking this function.
  *
@@ -187,7 +187,7 @@ export async function getAllPosts(
  * Returns null if no post is found.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
  *
- * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called. The caller is
  * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter
@@ -230,7 +230,7 @@ export async function getPostBySlug(
  * Retrieve all tags, sorted alphabetically by name.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
  *
- * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called. The caller is
  * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter

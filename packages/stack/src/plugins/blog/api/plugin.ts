@@ -4,13 +4,6 @@ import type { QueryClient } from "@tanstack/react-query";
 import { blogSchema as dbSchema } from "../db";
 import { getAllPosts, getAllTags, getPostBySlug } from "./getters";
 import {
-	createPost as createPostMutation,
-	deletePost as deletePostMutation,
-	type CreatePostInput,
-	type UpdatePostInput,
-	updatePost as updatePostMutation,
-} from "./mutations";
-import {
 	CreatePostOperationInputSchema,
 	NextPreviousPostsQuerySchema,
 	PostListQuerySchema,
@@ -153,16 +146,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 		 * These functions bypass authorization and lifecycle composition.
 		 */
 		api: (adapter: Adapter) => ({
-			getAllPosts: (params?: Parameters<typeof getAllPosts>[1]) =>
-				getAllPosts(adapter, params),
-			getPostBySlug: (slug: string) => getPostBySlug(adapter, slug),
-			getAllTags: () => getAllTags(adapter),
 			prefetchForRoute: createBlogPrefetchForRoute(adapter),
-			createPost: (input: CreatePostInput) =>
-				createPostMutation(adapter, input),
-			updatePost: (id: string, input: UpdatePostInput) =>
-				updatePostMutation(adapter, id, input),
-			deletePost: (id: string) => deletePostMutation(adapter, id),
 		}),
 
 		routes: (_adapter: Adapter, _context, operations) => {

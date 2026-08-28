@@ -52,17 +52,6 @@ function AuthorizedBoardPage({ boardId }: BoardPageComponentProps) {
 					: {}),
 				exists: true,
 			})}
-			legacyPermission={{
-				resource: "kanban:board",
-				action: "read",
-				params: {
-					id: board.id,
-					...(board.ownerId ? { ownerId: board.ownerId } : {}),
-					...(board.organizationId
-						? { organizationId: board.organizationId }
-						: {}),
-				},
-			}}
 			LoadingComponent={BoardSkeleton}
 		>
 			<BoardPage boardId={boardId} />

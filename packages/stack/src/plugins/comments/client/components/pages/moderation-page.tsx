@@ -45,10 +45,6 @@ export function ModerationPageComponent() {
 				scope: "moderation",
 				status,
 			})}
-			legacyPermission={{
-				resource: "comments:comment",
-				action: "moderate",
-			}}
 			onError={(error) =>
 				console.error("[btst/comments] Moderation error:", error)
 			}

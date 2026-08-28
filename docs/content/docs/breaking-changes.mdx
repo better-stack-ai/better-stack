@@ -90,7 +90,7 @@ them once at the top level:
     basePath="/pages"
 +   router={nextRouter()}
 +   api={{ baseURL, basePath: "/api/data" }}
-+   auth={{ getIdentity, loginPath: "/login", can }}
++   auth={clientAuth}
     overrides={{
       blog: {
 -       apiBaseURL: baseURL,
@@ -125,19 +125,21 @@ blogClientPlugin({
 
 ### 3. Replace render guards with `StackProvider.auth`
 
-All `onBefore*PageRendered` override callbacks were removed. Move client-side
-route decisions into one permission provider:
+All `onBefore*PageRendered` override callbacks were removed. Define exact
+permission descriptors and bind the shared authorization rule to the browser:
 
 ```diff
++ import { createClientAuth } from "@btst/stack/authorization/client"
++ import { authorization } from "@/lib/authorization"
++
++ const clientAuth = createClientAuth({
++   authorization,
++   getIdentity: () => session.user,
++   loginPath: "/login",
++ })
++
   <StackProvider
-+   auth={{
-+     getIdentity,
-+     loginPath: "/login",
-+     can: ({ resource, action, identity }) => {
-+       if (!identity) return false
-+       return authorize(identity, resource, action)
-+     },
-+   }}
++   auth={clientAuth}
     overrides={{
       blog: {
 -       onBeforeDraftsPageRendered: () => Boolean(currentUser),
@@ -148,9 +150,10 @@ route decisions into one permission provider:
   >
 ```
 
-Built-in routes declare their resource/action requirements. The auth provider
-gates client navigation and controls; backend lifecycle hooks remain the
-authoritative security boundary.
+Built-in routes declare schema-backed permission descriptors. The browser uses
+the same synchronous rule for presentation gates; `createServerAuth()` is the
+authoritative request boundary. Lifecycle hooks run afterward for domain
+validation, side effects, and telemetry—not routine authorization.
 
 ### 4. Remove manual API and identity component props
 

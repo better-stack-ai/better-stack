@@ -649,39 +649,4 @@ describe("schema-backed authorization", () => {
 		).resolves.toEqual({ success: true });
 		expect(events).toEqual(["derive", "before", "execute"]);
 	});
-
-	it("fails closed for structural RC auth when an operation has no explicit mapping", async () => {
-		const events: string[] = [];
-		const unmappedOperation = defineOperation({
-			input: z.object({}),
-			permission: blogPermissions.post.read,
-			facts: () => undefined,
-			before: () => {
-				events.push("before");
-			},
-			execute: () => ({ success: true }) as const,
-		});
-		const plugin = defineBackendPlugin({
-			name: "unmapped",
-			dbPlugin: createDbPlugin("unmapped", {}),
-			operations: () => ({ read: unmappedOperation }),
-			routes: () => ({}),
-		});
-		const backend = stack({
-			basePath: "/api",
-			plugins: { unmapped: plugin },
-			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
-			auth: {
-				getIdentity: () => ({ id: "legacy-user" }),
-				can: () => true,
-			},
-		});
-
-		await expect(
-			backend
-				.forRequest(new Request("http://localhost/api/unmapped"))
-				.api.unmapped.read({}),
-		).rejects.toThrow("does not declare RC server authorization compatibility");
-		expect(events).toEqual([]);
-	});
 });

@@ -72,7 +72,7 @@ Do not duplicate — the patcher and manual edits must both be idempotent.
   - `basePath="/pages"` (must match your pages catch-all prefix)
   - `router={nextRouter()}` / `reactRouter()` / `tanstackRouter()` for framework-wide links, images, navigation, and refresh.
   - `api={{ baseURL, basePath: "/api/data" }}` for client-side API calls.
-  - `auth={{ getIdentity, loginPath }}` when plugins need identity or permissions.
+  - `auth={createClientAuth({ authorization, getIdentity, loginPath })}` when plugins need identity or permission presentation gates.
   - `overrides={{ pluginKey: { uploadImage?, ...pluginSpecificValues } }}` only for plugin-specific customization.
   - Define a typed `PluginOverrides` interface importing `{Plugin}Overrides` from each plugin client package.
   - See [REFERENCE.md](REFERENCE.md) for provider wiring and per-plugin override shapes.

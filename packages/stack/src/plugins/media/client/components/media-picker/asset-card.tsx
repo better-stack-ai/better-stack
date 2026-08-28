@@ -78,14 +78,7 @@ export function AssetCard({
 	};
 
 	return (
-		<PermissionAccess
-			permission={mediaPermissions.asset.read(facts)}
-			legacyPermission={{
-				resource: "media:asset",
-				action: "read",
-				params: { id: asset.id },
-			}}
-		>
+		<PermissionAccess permission={mediaPermissions.asset.read(facts)}>
 			<div
 				role={selectable ? "button" : undefined}
 				tabIndex={selectable ? 0 : undefined}
@@ -167,14 +160,7 @@ export function AssetCard({
 							className="rounded bg-background/80 p-0.5 shadow hover:bg-background"
 						/>
 					) : null}
-					<PermissionAccess
-						permission={mediaPermissions.asset.delete(facts)}
-						legacyPermission={{
-							resource: "media:asset",
-							action: "delete",
-							params: { id: asset.id },
-						}}
-					>
+					<PermissionAccess permission={mediaPermissions.asset.delete(facts)}>
 						<button
 							type="button"
 							title={t("media.actions.delete", "Delete")}

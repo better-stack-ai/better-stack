@@ -9,10 +9,8 @@ import type {
 	BackendPlugin,
 	CompatibleStackAuth,
 } from "../types";
-import type {
-	StackIdentity,
-	StackServerAuthProvider,
-} from "../shared/auth-types";
+import type { AnyAuthorization } from "../authorization";
+import { isServerAuth, type ServerAuth } from "../authorization/server";
 import { defineDb } from "@btst/db";
 import { AuthorizationError } from "../authorization/server";
 import {
@@ -69,69 +67,6 @@ function throwHttpOperationError(
 }
 
 /**
- * Lazy, memoized identity resolvers keyed by the request's `Headers`
- * instance. better-call passes the same `Headers` object from the incoming
- * `Request` into every endpoint context, so lifecycle hooks can look the
- * identity up via `getRequestIdentity(ctx.headers)`. Entries are
- * garbage-collected with the request.
- */
-const identityResolvers = new WeakMap<
-	Headers,
-	() => Promise<StackIdentity | null>
->();
-
-function registerIdentityResolver(
-	request: Request,
-	auth: StackServerAuthProvider,
-): void {
-	let cached: Promise<StackIdentity | null> | undefined;
-	identityResolvers.set(request.headers, () => {
-		// Mirror the client-side StackAuthBoundary: a failing getIdentity is
-		// treated as unauthenticated (null) rather than rejecting, so hooks
-		// written without try/catch can't fail the whole request.
-		cached ??= Promise.resolve()
-			.then(() => auth.getIdentity({ headers: request.headers, request }))
-			.then((identity) => identity ?? null)
-			.catch((error) => {
-				console.error("[btst/auth] getIdentity() failed:", error);
-				return null;
-			});
-		return cached;
-	});
-}
-
-/**
- * Returns the identity of the request that carried these headers, as resolved
- * by the `auth` provider configured on `stack()`.
- *
- * The provider's `getIdentity` runs at most once per request (memoized), no
- * matter how many hooks call this. Returns `null` when no auth provider is
- * configured, when called outside a request handled by `stack().handler`, or
- * when the user is unauthenticated.
- *
- * @example
- * ```ts
- * import { getRequestIdentity } from "@btst/stack/api";
- *
- * const blogBackend = blogBackendPlugin({
- *   hooks: {
- *     onBeforeCreatePost: async (data, ctx) => {
- *       const identity = await getRequestIdentity(ctx.headers);
- *       if (!identity) throw new Error("Unauthorized");
- *     },
- *   },
- * });
- * ```
- */
-export async function getRequestIdentity(
-	// Optional because better-call types endpoint `ctx.headers` as optional.
-	headers: Headers | undefined,
-): Promise<StackIdentity | null> {
-	const resolve = headers ? identityResolvers.get(headers) : undefined;
-	return resolve ? resolve() : null;
-}
-
-/**
  * Creates the backend library with plugin support
  *
  * @example
@@ -153,7 +88,7 @@ export async function getRequestIdentity(
  */
 export function stack<
 	const TPlugins extends Record<string, BackendPlugin<any, any, any>>,
-	const TAuth extends StackServerAuthProvider | undefined,
+	const TAuth extends ServerAuth<AnyAuthorization> | undefined,
 	TRoutes extends
 		PrefixedPluginRoutes<TPlugins> = PrefixedPluginRoutes<TPlugins>,
 >(
@@ -162,8 +97,14 @@ export function stack<
 	},
 ): BackendLib<TRoutes, PluginApis<TPlugins>, PluginOperations<TPlugins>> {
 	const { plugins, adapter, dbSchema, basePath } = config;
-	const runtimeAuth = (config as unknown as { auth?: StackServerAuthProvider })
-		.auth;
+	const runtimeAuth = (
+		config as unknown as { auth?: ServerAuth<AnyAuthorization> }
+	).auth;
+	if (runtimeAuth && !isServerAuth(runtimeAuth)) {
+		throw new TypeError(
+			"stack({ auth }) requires an adapter created by createServerAuth().",
+		);
+	}
 
 	// Collect all routes from all plugins with type-safe prefixed keys
 	const allRoutes = {} as TRoutes;
@@ -210,7 +151,6 @@ export function stack<
 				runAuthorizedOperation(operation, input, {
 					request,
 					...(runtimeAuth ? { auth: runtimeAuth } : {}),
-					resolveIdentity: () => getRequestIdentity(request.headers),
 				});
 			Object.defineProperty(invoke, "route", {
 				value: (resolveInput: (context: any) => unknown) => {
@@ -282,15 +222,7 @@ export function stack<
 		openapi: { disabled: true },
 	});
 
-	// With an auth provider, register a per-request identity resolver before
-	// dispatch so hooks can call getRequestIdentity(ctx.headers). Without one,
-	// the handler is returned untouched.
-	const handler = runtimeAuth
-		? (request: Request) => {
-				registerIdentityResolver(request, runtimeAuth);
-				return router.handler(request);
-			}
-		: router.handler;
+	const handler = router.handler;
 
 	const createRequestOperationApi = (request: Request) => {
 		const result: Record<
@@ -304,7 +236,6 @@ export function stack<
 					runAuthorizedOperation(operation, input, {
 						request,
 						...(runtimeAuth ? { auth: runtimeAuth } : {}),
-						resolveIdentity: () => getRequestIdentity(request.headers),
 					});
 			}
 		}
@@ -332,7 +263,6 @@ export function stack<
 		api: pluginApis,
 		internal,
 		forRequest: (request: Request) => {
-			if (runtimeAuth) registerIdentityResolver(request, runtimeAuth);
 			return {
 				api: createRequestOperationApi(request) as PluginOperations<TPlugins>,
 			};
@@ -349,8 +279,4 @@ export type {
 	StackContext,
 } from "../types";
 
-export type {
-	CanParams,
-	StackIdentity,
-	StackServerAuthProvider,
-} from "../shared/auth-types";
+export type { StackIdentity } from "../shared/auth-types";
