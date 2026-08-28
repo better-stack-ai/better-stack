@@ -6,6 +6,7 @@ import {
 	isConnectionError,
 	type ResolvedClientPluginRuntime,
 } from "@btst/stack/plugins/client";
+import { normalizePath } from "@btst/stack/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
 import type { CommentsApiRouter } from "../api";
@@ -254,7 +255,8 @@ function createCommentsRouteMeta(
 	description: string,
 ) {
 	return () => {
-		const fullUrl = `${config.siteBaseURL}${config.siteBasePath}${path}`;
+		const sitePath = normalizePath([config.siteBasePath, path].join("/"));
+		const fullUrl = `${config.siteBaseURL}${sitePath}`;
 		return [
 			{ title },
 			{ name: "title", content: title },

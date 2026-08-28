@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe("Comments resolved client runtime", () => {
-	it("drives loaders, metadata, headers, and cache from one inherited runtime", async () => {
+	it("drives loaders, overridden metadata, inherited headers, and cache from one runtime", async () => {
 		const queryClient = new QueryClient();
 		const requests: Array<{ url: string; headers: Headers }> = [];
 		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -64,6 +64,14 @@ describe("Comments resolved client runtime", () => {
 				},
 			]),
 		);
+		expect(stack.router.getRoute("/comments")?.meta?.()).toEqual(
+			expect.arrayContaining([
+				{
+					property: "og:url",
+					content: "https://community.example.net/discussion/comments",
+				},
+			]),
+		);
 		expect(stack.provider.queryClient).toBe(queryClient);
 		expect(queryClient.getQueryCache().getAll()).toHaveLength(1);
 		expect(requests).toHaveLength(1);
@@ -76,6 +84,40 @@ describe("Comments resolved client runtime", () => {
 		expect(requests[0]?.headers.get("cookie")).toBe("session=server");
 		expect(requests[0]?.headers.get("x-request")).toBe("request-value");
 	});
+
+	it.each([
+		{
+			label: "an inherited nested site mount",
+			basePath: "/pages",
+			expectedBase: "https://www.example.com/pages",
+		},
+		{
+			label: "an inherited root site mount",
+			basePath: "/",
+			expectedBase: "https://www.example.com",
+		},
+	])(
+		"normalizes metadata for every Comments route with $label",
+		({ basePath, expectedBase }) => {
+			const stack = createClientStack({
+				api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+				site: { baseURL: "https://www.example.com", basePath },
+				queryClient: new QueryClient(),
+				plugins: { comments: commentsClientPlugin() },
+			});
+
+			for (const routePath of ["/comments/moderation", "/comments"] as const) {
+				expect(stack.router.getRoute(routePath)?.meta?.()).toEqual(
+					expect.arrayContaining([
+						{
+							property: "og:url",
+							content: `${expectedBase}${routePath}`,
+						},
+					]),
+				);
+			}
+		},
+	);
 
 	it("isolates sensitive request headers across a Comments origin override", async () => {
 		const requests: Array<{ url: string; headers: Headers }> = [];
