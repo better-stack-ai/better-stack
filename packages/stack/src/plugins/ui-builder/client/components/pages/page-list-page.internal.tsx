@@ -43,6 +43,7 @@ import {
 	useDeleteUIBuilderPage,
 } from "../../hooks/ui-builder-hooks";
 import type { UIBuilderPluginOverrides } from "../../overrides";
+import { UI_BUILDER_PLUGIN_ID } from "../../constants";
 import { uiBuilderLocalization } from "../../localization";
 import { PageWrapper } from "../shared/page-wrapper";
 import { EmptyState } from "../shared/empty-state";
@@ -52,7 +53,7 @@ export function PageListPage() {
 	const t = useTranslate();
 	const notify = useNotify();
 	const { localization } =
-		usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
 	const { router } = useStack();
 	const navigate = router?.navigate;
 	const basePath = useBasePath();

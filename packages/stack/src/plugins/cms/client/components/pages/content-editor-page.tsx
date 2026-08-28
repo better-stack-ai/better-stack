@@ -3,6 +3,7 @@
 import { lazy } from "react";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
 import {
 	ComposedRoute,
 	PermissionRouteAccess,
@@ -28,7 +29,8 @@ export function ContentEditorPageComponent({
 	typeSlug,
 	id,
 }: ContentEditorPageComponentProps) {
-	const { onRouteError } = usePluginOverrides<CMSPluginOverrides>("cms");
+	const { onRouteError } =
+		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 
 	const isNew = !id;
 	const path = isNew ? `/cms/${typeSlug}/new` : `/cms/${typeSlug}/${id}`;

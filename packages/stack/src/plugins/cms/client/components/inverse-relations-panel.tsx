@@ -30,6 +30,7 @@ import {
 	useInverseRelationItems,
 } from "../hooks";
 import type { CMSPluginOverrides } from "../overrides";
+import { CMS_PLUGIN_ID } from "../constants";
 import type {
 	InverseRelation,
 	SerializedContentItemWithType,
@@ -59,7 +60,8 @@ export function InverseRelationsPanel({
 	itemId,
 }: InverseRelationsPanelProps) {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<CMSPluginOverrides>("cms");
+	const { localization } =
+		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 	const { router } = useStack();
 	const navigate = router?.navigate;
 	const Link = router?.Link;

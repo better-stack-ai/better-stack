@@ -10,6 +10,7 @@ import {
 	useTranslate,
 } from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
 import {
 	useSuspenseContentTypes,
 	useContentItem,
@@ -135,7 +136,7 @@ interface ContentEditorPageProps {
 
 export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 	const t = useTranslate();
-	const overrides = usePluginOverrides<CMSPluginOverrides>("cms");
+	const overrides = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 	const { localization } = overrides;
 	const { router } = useStack();
 	const navigate = router?.navigate;

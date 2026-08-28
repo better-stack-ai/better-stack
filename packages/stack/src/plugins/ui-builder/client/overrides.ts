@@ -2,7 +2,6 @@ import type {
 	ComponentRegistry,
 	FunctionRegistry,
 } from "@workspace/ui/components/ui-builder/types";
-import type { UIBuilderClientHooks } from "../types";
 import type { UIBuilderLocalizationOverrides } from "./localization";
 
 /**
@@ -27,11 +26,6 @@ export interface RouteContext {
  */
 export interface UIBuilderPluginOverrides {
 	/**
-	 * Optional headers to pass with API requests (e.g., for SSR auth)
-	 */
-	headers?: HeadersInit;
-
-	/**
 	 * Whether to show the attribution
 	 */
 	showAttribution?: boolean;
@@ -49,16 +43,6 @@ export interface UIBuilderPluginOverrides {
 
 	/** Localization overrides for built-in UI Builder plugin pages. */
 	localization?: UIBuilderLocalizationOverrides;
-
-	/**
-	 * Base path for UI Builder admin pages (default: /pages/ui-builder)
-	 */
-	siteBasePath?: string;
-
-	/**
-	 * SSR route lifecycle hooks
-	 */
-	hooks?: UIBuilderClientHooks;
 
 	// Lifecycle Hooks (optional)
 

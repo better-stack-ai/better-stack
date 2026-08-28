@@ -8,10 +8,12 @@ import {
 	useTranslate,
 } from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
 
 export function NotFoundPage() {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<CMSPluginOverrides>("cms");
+	const { localization } =
+		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 	const { router } = useStack();
 	const basePath = useBasePath();
 

@@ -829,11 +829,12 @@ export const complexComponentDefinitions: ComponentRegistry = {
  * ```typescript
  * import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
  *
- * // Use as-is
- * uiBuilderClientPlugin({
- *   componentRegistry: defaultComponentRegistry,
- *   // ...
- * })
+ * // The built-in editor uses this registry by default. Override it through
+ * // the registration-inferred provider key when customization is needed.
+ * <StackProvider
+ *   stack={stack}
+ *   overrides={{ uiBuilder: { componentRegistry: defaultComponentRegistry } }}
+ * />
  *
  * // Or extend with custom components
  * import { createComponentRegistry } from "@btst/stack/plugins/ui-builder/client"

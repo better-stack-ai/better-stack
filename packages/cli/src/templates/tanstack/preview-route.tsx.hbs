@@ -7,21 +7,12 @@ import {
 	PageRenderer,
 	defaultComponentRegistry,
 } from "@btst/stack/plugins/ui-builder/client"
-import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
+import { getStackClient } from "{{alias}}lib/stack-client"
 
 export const Route = createFileRoute("/preview/$slug")({
 	component: PreviewPage,
 })
-
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? window.location.origin
-		: process.env.{{publicSiteURLVar}} || process.env.BASE_URL || "http://localhost:3000"
-
-type PluginOverrides = {
-	"ui-builder": UIBuilderPluginOverrides
-}
 
 /**
  * Renders a published UI Builder page by slug.
@@ -30,21 +21,13 @@ type PluginOverrides = {
 function PreviewPage() {
 	const { slug } = Route.useParams()
 	const [queryClient] = useState(() => getOrCreateQueryClient())
-	const baseURL = getBaseURL()
+	const stack = getStackClient(queryClient)
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<StackProvider<PluginOverrides>
-				basePath="/preview"
+			<StackProvider
+				stack={stack}
 				router={tanstackRouter()}
-				api={{{providerApiLiteral}}}
-				overrides={
-					{
-					"ui-builder": {
-						componentRegistry: defaultComponentRegistry,
-					},
-				}
-				}
 			>
 				<div className="min-h-screen">
 					<PageRenderer

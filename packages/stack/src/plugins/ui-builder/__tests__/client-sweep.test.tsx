@@ -192,7 +192,6 @@ function createMockRouter() {
 
 function overrides() {
 	return {
-		queryClient,
 		componentRegistry: {},
 	};
 }
@@ -217,7 +216,7 @@ async function renderPage(
 				api={{ baseURL: "http://test.local", basePath: "/api/data" }}
 				router={createMockRouter()}
 				overrides={{
-					"ui-builder": { ...overrides(), localization: options.localization },
+					uiBuilder: { ...overrides(), localization: options.localization },
 				}}
 				auth={options.auth}
 				initialIdentity={options.initialIdentity}
@@ -407,7 +406,7 @@ describe("UI Builder public page authorization", () => {
 				basePath="/pages"
 				auth={publicPageAuth()}
 				initialIdentity={null}
-				overrides={{ "ui-builder": overrides() }}
+				overrides={{ uiBuilder: overrides() }}
 			>
 				<SuspensePageRenderer slug="home" />
 			</StackProvider>,
@@ -417,7 +416,7 @@ describe("UI Builder public page authorization", () => {
 				basePath="/pages"
 				auth={publicPageAuth()}
 				initialIdentity={null}
-				overrides={{ "ui-builder": overrides() }}
+				overrides={{ uiBuilder: overrides() }}
 			>
 				<SuspensePageRenderer slug="home" />
 			</StackProvider>,

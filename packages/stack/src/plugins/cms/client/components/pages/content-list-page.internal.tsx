@@ -24,6 +24,7 @@ import {
 import { cmsPermissions } from "../../../permissions";
 import { useListState, type ListStateSchema } from "@btst/stack/client/hooks";
 import type { CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
 import type { SerializedContentItemWithType } from "../../../types";
 import {
 	useContent,
@@ -50,7 +51,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 export function ContentListPage({ typeSlug }: ContentListPageProps) {
 	const t = useTranslate();
 	const notify = useNotify();
-	const overrides = usePluginOverrides<CMSPluginOverrides>("cms");
+	const overrides = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 	const { localization } = overrides;
 	const { router } = useStack();
 	const navigate = router?.navigate;

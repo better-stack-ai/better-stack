@@ -5,6 +5,7 @@ import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import { useCreateContent, useContentOptions } from "../../hooks";
 import type { SerializedContentItemWithType } from "../../../types";
 import type { CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
 import MultipleSelector from "@workspace/ui/components/multi-select";
 import type { Option } from "@workspace/ui/components/multi-select";
 import { Button } from "@workspace/ui/components/button";
@@ -51,7 +52,8 @@ export function RelationField({
 	const [newItemDescription, setNewItemDescription] = useState("");
 	const [createError, setCreateError] = useState<string | null>(null);
 
-	const { localization } = usePluginOverrides<CMSPluginOverrides>("cms");
+	const { localization } =
+		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 
 	// For belongsTo (single relation), we only allow one selection
 	const isSingleSelect = relation.type === "belongsTo";

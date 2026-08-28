@@ -96,9 +96,9 @@ schemas still come from CMS.
 Register the UI Builder client plugin:
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
-import { uiBuilderClientPlugin, defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
+import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client"
 import { QueryClient } from "@tanstack/react-query"
 
 const getBaseURL = () => 
@@ -106,27 +106,19 @@ const getBaseURL = () =>
 
 export const getStackClient = (queryClient: QueryClient, options?: { headers?: Headers }) => {
   const baseURL = getBaseURL()
-  return createStackClient({
+  return createClientStack({
+    api: {
+      baseURL,
+      basePath: "/api/data",
+      ...(options?.headers ? { headers: options.headers } : {}),
+    },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
       // CMS plugin is required
-      "cms": cmsClientPlugin({
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-        queryClient,
-        headers: options?.headers,
-      }),
-      // UI Builder plugin
-      "ui-builder": uiBuilderClientPlugin({
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-        queryClient,
-        componentRegistry: defaultComponentRegistry,
-        headers: options?.headers,
-      })
+      cms: cmsClientPlugin(),
+      // Programmatic ID is camelCase; the package and route slug stay ui-builder.
+      uiBuilder: uiBuilderClientPlugin()
     }
   })
 }
@@ -134,24 +126,21 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
 
 ### 3. Configure the Provider
 
-Add UI Builder overrides to your layout:
+Pass the resolved stack to the provider. The default component registry requires
+no override. When you do customize it, the `uiBuilder` key and value are inferred
+from registration:
 
 ```tsx title="app/pages/layout.tsx"
-import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client"
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
+import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
 import { nextRouter } from "@btst/stack/next"
 
-type PluginOverrides = {
-  "cms": CMSPluginOverrides,
-  "ui-builder": UIBuilderPluginOverrides,
-}
+const stack = getStackClient(queryClient)
 
-<StackProvider<PluginOverrides>
-  basePath="/pages"
+<StackProvider
+  stack={stack}
   router={nextRouter()}
-  api={{ baseURL, basePath: "/api/data" }}
   overrides={{
-    "ui-builder": {
+    uiBuilder: {
       componentRegistry: defaultComponentRegistry,
     }
   }}
@@ -302,11 +291,13 @@ const customRegistry = createComponentRegistry({
   },
 })
 
-// Use in client plugin
-uiBuilderClientPlugin({
-  // ...
-  componentRegistry: customRegistry,
-})
+// Use as a browser presentation override
+<StackProvider
+  stack={stack}
+  overrides={{ uiBuilder: { componentRegistry: customRegistry } }}
+>
+  {children}
+</StackProvider>
 ```
 
 ### Registry Entry Properties
@@ -815,8 +806,7 @@ operation boundary and should not duplicate the authorization rule:
 ```tsx title="lib/stack-client.tsx"
 import { redirect } from "next/navigation"
 
-"ui-builder": uiBuilderClientPlugin({
-  // ... config
+uiBuilder: uiBuilderClientPlugin({
   hooks: {
     beforeLoadPageList: async (context) => {
       await warmPageListDependencies(context.headers)
@@ -830,7 +820,7 @@ import { redirect } from "next/navigation"
     afterLoadPageBuilder: async (pageId, context) => {
       console.log("Page builder loaded for:", pageId)
     },
-    onLoadError: (error, context) => {
+    onErrorLoad: (error, context) => {
       reportPageLoaderError(error, context)
     },
   },
@@ -843,12 +833,14 @@ agreement without an authorization cache.
 
 ```tsx title="app/pages/layout.tsx"
 <StackProvider
+  stack={stack}
+  router={nextRouter()}
   auth={createClientAuth({
     authorization,
     getIdentity: () => getBrowserSession()?.user ?? null,
   })}
   initialIdentity={initialIdentity}
-  // router, api, and plugin-specific overrides
+  // optional plugin-specific overrides
 >
   {children}
 </StackProvider>
@@ -862,7 +854,7 @@ agreement without an authorization cache.
 | `afterLoadPageList` | `context` | `void` | Post-load lifecycle |
 | `beforeLoadPageBuilder` | `pageId, context` | `void \| Promise<void>` | Pre-load framework lifecycle for the builder |
 | `afterLoadPageBuilder` | `pageId, context` | `void` | Post-load lifecycle |
-| `onLoadError` | `error, context` | `void` | Observe or present loader failures |
+| `onErrorLoad` | `error, context` | `void` | Observe or present loader failures |
 
 ### LoaderContext
 
@@ -969,18 +961,15 @@ Creates the client plugin with routes and SSR loaders.
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `headers` | `HeadersInit` | No | Additional headers for client API calls |
 | `componentRegistry` | `ComponentRegistry` | No | Custom component registry |
 | `functionRegistry` | `FunctionRegistry` | No | Functions available to UI Builder event bindings |
 | `localization` | `UIBuilderLocalizationOverrides` | No | Nested overrides for built-in page, editor, renderer, and notification copy |
 | `showAttribution` | `boolean` | No | Show BTST attribution |
-| `siteBasePath` | `string` | No | UI Builder admin-page base path |
-| `hooks` | `UIBuilderClientHooks` | No | SSR loader hooks |
 | `onRouteRender` | `(route, context) => void` | No | Route analytics hook |
 | `onRouteError` | `(route, error, context) => void` | No | Route error hook |
 
-Router and API services are not override fields in v3. Configure them with
-`StackProvider.router` and `StackProvider.api`.
+Router services belong to `StackProvider`. API/site/query runtime belongs to
+`createClientStack()`. Loader hooks belong to `uiBuilderClientPlugin()`.
 
 #### defaultComponentRegistry
 
@@ -1237,11 +1226,6 @@ import { PageListPage } from "@/components/btst/ui-builder/client/components/pag
 import { PageBuilderPage } from "@/components/btst/ui-builder/client/components/pages/page-builder-page"
 
 uiBuilderClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  siteBaseURL: "...",
-  siteBasePath: "/pages",
-  queryClient,
   pageComponents: {
     pageList: PageListPage, // replaces the page list page
     // Param routes receive the route context ({ params }) as props

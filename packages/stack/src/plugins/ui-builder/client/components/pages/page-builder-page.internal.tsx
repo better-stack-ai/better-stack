@@ -41,6 +41,7 @@ import {
 	useUIBuilderPageForm,
 } from "../../hooks/ui-builder-hooks";
 import type { UIBuilderPluginOverrides } from "../../overrides";
+import { UI_BUILDER_PLUGIN_ID } from "../../constants";
 import { uiBuilderLocalization } from "../../localization";
 import { defaultComponentRegistry } from "../../registry";
 import type { SerializedUIBuilderPage } from "../../../types";
@@ -231,7 +232,7 @@ function PageBuilderPageContent({
 		componentRegistry: customRegistry,
 		functionRegistry,
 		localization,
-	} = usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
+	} = usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
 	const { router } = useStack();
 	const basePath = useBasePath();
 	const LinkComponent = router?.Link ?? "a";

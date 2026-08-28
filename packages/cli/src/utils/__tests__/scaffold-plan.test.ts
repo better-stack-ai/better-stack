@@ -312,10 +312,11 @@ describe("scaffold plan", () => {
 		expect(stackFile?.content).toContain("UI_BUILDER_CONTENT_TYPE");
 		// ui-builder client plugin must be registered
 		expect(stackClientFile?.content).toContain(
-			"uiBuilder: uiBuilderClientPlugin({",
+			"uiBuilder: uiBuilderClientPlugin(),",
 		);
 		// cms client plugin must also be registered
-		expect(stackClientFile?.content).toContain("cms: cmsClientPlugin({");
+		expect(stackClientFile?.content).toContain("cms: cmsClientPlugin(),");
+		expect(stackClientFile?.content).not.toContain("apiBaseURL:");
 	});
 
 	it("wires ui-builder content type into cms backend config", async () => {
@@ -347,7 +348,7 @@ describe("scaffold plan", () => {
 		);
 		expect(stackClientFile?.content).toContain("aiChat: aiChatClientPlugin({");
 		expect(stackClientFile?.content).toContain(
-			"uiBuilder: uiBuilderClientPlugin({",
+			"uiBuilder: uiBuilderClientPlugin(),",
 		);
 		expect(stackClientFile?.content).toContain(
 			"formBuilder: formBuilderClientPlugin({",
@@ -1062,6 +1063,12 @@ describe("scaffold plan", () => {
 		);
 		expect(client?.content).toContain("PageRenderer");
 		expect(client?.content).toContain("defaultComponentRegistry");
+		expect(client?.content).toContain(
+			"const stack = getStackClient(queryClient)",
+		);
+		expect(client?.content).toContain("stack={stack}");
+		expect(client?.content).not.toContain("StackProvider<");
+		expect(client?.content).not.toContain('"ui-builder":');
 	});
 
 	it("emits preview route for react-router when ui-builder selected", async () => {
@@ -1073,6 +1080,10 @@ describe("scaffold plan", () => {
 			cssFile: "app/app.css",
 		});
 		expect(plan.files.map((f) => f.path)).toContain("app/routes/preview.tsx");
+		const preview = plan.files.find((f) => f.path === "app/routes/preview.tsx");
+		expect(preview?.content).toContain("stack={stack}");
+		expect(preview?.content).not.toContain("StackProvider<");
+		expect(preview?.content).not.toContain('"ui-builder":');
 	});
 
 	it("emits preview route for tanstack when ui-builder selected", async () => {
@@ -1086,6 +1097,12 @@ describe("scaffold plan", () => {
 		expect(plan.files.map((f) => f.path)).toContain(
 			"src/routes/preview.$slug.tsx",
 		);
+		const preview = plan.files.find(
+			(f) => f.path === "src/routes/preview.$slug.tsx",
+		);
+		expect(preview?.content).toContain("stack={stack}");
+		expect(preview?.content).not.toContain("StackProvider<");
+		expect(preview?.content).not.toContain('"ui-builder":');
 	});
 
 	it("returns cssImports for selected plugins", async () => {

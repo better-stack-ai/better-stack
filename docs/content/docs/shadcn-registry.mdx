@@ -173,9 +173,6 @@ import { DashboardPageComponent } from "@/components/btst/cms/client/components/
 import { ContentListPageComponent } from "@/components/btst/cms/client/components/pages/content-list-page"
 
 cmsClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
   pageComponents: {
     dashboard: DashboardPageComponent, // CMS dashboard
     // content list per type
@@ -214,9 +211,6 @@ import { PageListPageComponent } from "@/components/btst/ui-builder/client/compo
 import { EditPagePageComponent } from "@/components/btst/ui-builder/client/components/pages/edit-page-page"
 
 uiBuilderClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
   pageComponents: {
     pageList: PageListPageComponent, // page list
     editPage: ({ params }) => <EditPagePageComponent id={params.id} />, // page builder editor

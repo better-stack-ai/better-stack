@@ -3,6 +3,7 @@ import {
 	defineClientPlugin,
 	createApiClient,
 	isConnectionError,
+	type ResolvedClientPluginRuntime,
 } from "@btst/stack/plugins/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
@@ -10,6 +11,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createSanitizedSSRLoaderError } from "../../utils";
 import type { CMSApiRouter } from "../api";
 import { createCMSQueryKeys } from "../query-keys";
+import { CMS_PLUGIN_ID } from "./constants";
+import type { CMSPluginOverrides } from "./overrides";
 
 // Lazy load page components for code splitting
 const DashboardPageComponent = lazy(() =>
@@ -109,25 +112,14 @@ export interface CMSClientHooks {
 	 * @param error - The error that occurred
 	 * @param context - Loader context
 	 */
-	onLoadError?: (error: Error, context: LoaderContext) => Promise<void> | void;
+	onErrorLoad?: (error: Error, context: LoaderContext) => Promise<void> | void;
 }
 
 /**
- * Configuration for CMS client plugin
+ * CMS-specific client configuration. Shared API, site, query-client, and
+ * request-header values are inherited from `createClientStack()`.
  */
 export interface CMSClientConfig {
-	/** Base URL for API calls (e.g., "http://localhost:3000") */
-	apiBaseURL: string;
-	/** Path where the API is mounted (e.g., "/api/data") */
-	apiBasePath: string;
-	/** Base URL of your site */
-	siteBaseURL: string;
-	/** Path where pages are mounted (e.g., "/pages") */
-	siteBasePath: string;
-	/** React Query client instance for caching */
-	queryClient: QueryClient;
-	/** Optional headers for SSR (e.g., forwarding cookies) */
-	headers?: Headers;
 	/** Optional hooks for route loading, redirects, and telemetry. */
 	hooks?: CMSClientHooks;
 
@@ -148,10 +140,67 @@ export interface CMSClientConfig {
 	};
 }
 
+interface ResolvedCMSClientConfig extends CMSClientConfig {
+	apiBaseURL: string;
+	apiBasePath: string;
+	siteBaseURL: string;
+	siteBasePath: string;
+	queryClient: QueryClient;
+	headers?: Headers;
+	credentials?: RequestCredentials;
+}
+
+function resolveCMSClientConfig(
+	config: CMSClientConfig,
+	runtime: ResolvedClientPluginRuntime<typeof CMS_PLUGIN_ID>,
+): ResolvedCMSClientConfig {
+	return {
+		hooks: config.hooks,
+		pageComponents: config.pageComponents,
+		apiBaseURL: runtime.api.baseURL,
+		apiBasePath: runtime.api.basePath,
+		siteBaseURL: runtime.site.baseURL,
+		siteBasePath: runtime.site.basePath,
+		queryClient: runtime.queryClient,
+		...(runtime.api.headers ? { headers: runtime.api.headers } : {}),
+		...(runtime.api.credentials
+			? { credentials: runtime.api.credentials }
+			: {}),
+	};
+}
+
+function createCMSApiClient(config: ResolvedCMSClientConfig) {
+	return createApiClient<CMSApiRouter>({
+		baseURL: config.apiBaseURL,
+		basePath: config.apiBasePath,
+		headers: config.headers,
+		credentials: config.credentials,
+	});
+}
+
+function createLoadErrorReporter(
+	hooks: CMSClientHooks | undefined,
+	context: LoaderContext,
+) {
+	let reported = false;
+	return async (error: unknown) => {
+		if (reported || !hooks?.onErrorLoad) return;
+		reported = true;
+		try {
+			await hooks.onErrorLoad(
+				error instanceof Error ? error : new Error(String(error)),
+				context,
+			);
+		} catch {
+			// Loader hooks cannot make an SSR loader throw or run twice.
+		}
+	};
+}
+
 /**
  * Create dashboard loader for SSR
  */
-function createDashboardLoader(config: CMSClientConfig) {
+function createDashboardLoader(config: ResolvedCMSClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
 			const { queryClient, apiBasePath, apiBaseURL, headers, hooks } = config;
@@ -163,11 +212,8 @@ function createDashboardLoader(config: CMSClientConfig) {
 				apiBasePath,
 				headers,
 			};
-			const client = createApiClient<CMSApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
-			const queries = createCMSQueryKeys(client, headers);
+			const reportError = createLoadErrorReporter(hooks, context);
+			const queries = createCMSQueryKeys(createCMSApiClient(config));
 			const typesQuery = queries.cmsTypes.list();
 
 			try {
@@ -185,12 +231,12 @@ function createDashboardLoader(config: CMSClientConfig) {
 
 				// Check if there was an error
 				const queryState = queryClient.getQueryState(typesQuery.queryKey);
-				if (queryState?.error && hooks?.onLoadError) {
+				if (queryState?.error) {
 					const error =
 						queryState.error instanceof Error
 							? queryState.error
 							: new Error(String(queryState.error));
-					await hooks.onLoadError(error, context);
+					await reportError(error);
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
@@ -210,9 +256,7 @@ function createDashboardLoader(config: CMSClientConfig) {
 						retry: false,
 					});
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 				// Don't re-throw - let Error Boundary catch it during render
 			}
 		}
@@ -222,7 +266,10 @@ function createDashboardLoader(config: CMSClientConfig) {
 /**
  * Create content list loader for SSR
  */
-function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
+function createContentListLoader(
+	typeSlug: string,
+	config: ResolvedCMSClientConfig,
+) {
 	return async () => {
 		if (typeof window === "undefined") {
 			const { queryClient, apiBasePath, apiBaseURL, headers, hooks } = config;
@@ -235,11 +282,8 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 				apiBasePath,
 				headers,
 			};
-			const client = createApiClient<CMSApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
-			const queries = createCMSQueryKeys(client, headers);
+			const reportError = createLoadErrorReporter(hooks, context);
+			const queries = createCMSQueryKeys(createCMSApiClient(config));
 			const limit = 20;
 			const typesQuery = queries.cmsTypes.list();
 			const listQuery = queries.cmsContent.list({ typeSlug, limit });
@@ -268,12 +312,12 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 				const typesState = queryClient.getQueryState(typesQuery.queryKey);
 				const listState = queryClient.getQueryState(listQuery.queryKey);
 				const queryError = typesState?.error || listState?.error;
-				if (queryError && hooks?.onLoadError) {
+				if (queryError) {
 					const error =
 						queryError instanceof Error
 							? queryError
 							: new Error(String(queryError));
-					await hooks.onLoadError(error, context);
+					await reportError(error);
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
@@ -294,9 +338,7 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 						retry: false,
 					});
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 				// Don't re-throw - let Error Boundary catch it during render
 			}
 		}
@@ -309,7 +351,7 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 function createContentEditorLoader(
 	typeSlug: string,
 	id: string | undefined,
-	config: CMSClientConfig,
+	config: ResolvedCMSClientConfig,
 ) {
 	return async () => {
 		if (typeof window === "undefined") {
@@ -323,11 +365,8 @@ function createContentEditorLoader(
 				apiBasePath,
 				headers,
 			};
-			const client = createApiClient<CMSApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
-			const queries = createCMSQueryKeys(client, headers);
+			const reportError = createLoadErrorReporter(hooks, context);
+			const queries = createCMSQueryKeys(createCMSApiClient(config));
 			const typesQuery = queries.cmsTypes.list();
 			const detailQuery = id
 				? queries.cmsContent.detail(typeSlug, id)
@@ -356,12 +395,12 @@ function createContentEditorLoader(
 					? queryClient.getQueryState(detailQuery!.queryKey)
 					: null;
 				const queryError = typesState?.error || itemState?.error;
-				if (queryError && hooks?.onLoadError) {
+				if (queryError) {
 					const error =
 						queryError instanceof Error
 							? queryError
 							: new Error(String(queryError));
-					await hooks.onLoadError(error, context);
+					await reportError(error);
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
@@ -390,9 +429,7 @@ function createContentEditorLoader(
 						});
 					}
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 				// Don't re-throw - let Error Boundary catch it during render
 			}
 		}
@@ -416,14 +453,13 @@ function createDashboardMeta() {
 /**
  * Create content list meta generator
  */
-function createContentListMeta(typeSlug: string, config: CMSClientConfig) {
+function createContentListMeta(
+	typeSlug: string,
+	config: ResolvedCMSClientConfig,
+) {
 	return () => {
-		const { queryClient, apiBasePath, apiBaseURL } = config;
-		const client = createApiClient<CMSApiRouter>({
-			baseURL: apiBaseURL,
-			basePath: apiBasePath,
-		});
-		const queries = createCMSQueryKeys(client);
+		const { queryClient } = config;
+		const queries = createCMSQueryKeys(createCMSApiClient(config));
 		const contentTypes = queryClient.getQueryData(
 			queries.cmsTypes.list().queryKey,
 		);
@@ -449,15 +485,11 @@ function createContentListMeta(typeSlug: string, config: CMSClientConfig) {
 function createContentEditorMeta(
 	typeSlug: string,
 	id: string | undefined,
-	config: CMSClientConfig,
+	config: ResolvedCMSClientConfig,
 ) {
 	return () => {
-		const { queryClient, apiBasePath, apiBaseURL } = config;
-		const client = createApiClient<CMSApiRouter>({
-			baseURL: apiBaseURL,
-			basePath: apiBasePath,
-		});
-		const queries = createCMSQueryKeys(client);
+		const { queryClient } = config;
+		const queries = createCMSQueryKeys(createCMSApiClient(config));
 		const contentTypes = queryClient.getQueryData(
 			queries.cmsTypes.list().queryKey,
 		);
@@ -477,14 +509,8 @@ function createContentEditorMeta(
 	};
 }
 
-/**
- * CMS client plugin
- * Provides routes and components for the CMS admin interface
- */
-export const cmsClientPlugin = (config: CMSClientConfig) =>
-	defineClientPlugin({
-		name: "cms",
-
+function createResolvedCMSPlugin(config: ResolvedCMSClientConfig) {
+	return {
 		routes: () =>
 			defineRoutes(
 				{
@@ -534,4 +560,18 @@ export const cmsClientPlugin = (config: CMSClientConfig) =>
 			// CMS admin pages should NOT be in sitemap
 			return [];
 		},
+	};
+}
+
+/**
+ * CMS client plugin
+ * Provides routes and components for the CMS admin interface.
+ *
+ * @param config - Optional CMS-specific behavior and page choices.
+ */
+export const cmsClientPlugin = (config: CMSClientConfig = {}) =>
+	defineClientPlugin<CMSPluginOverrides>()({
+		id: CMS_PLUGIN_ID,
+		resolve: (runtime) =>
+			createResolvedCMSPlugin(resolveCMSClientConfig(config, runtime)),
 	});

@@ -4,6 +4,7 @@ import { AlertCircle } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { UIBuilderPluginOverrides } from "../../overrides";
+import { UI_BUILDER_PLUGIN_ID } from "../../constants";
 import { uiBuilderLocalization } from "../../localization";
 
 interface DefaultErrorProps {
@@ -14,7 +15,7 @@ interface DefaultErrorProps {
 export function DefaultError({ error, resetErrorBoundary }: DefaultErrorProps) {
 	const t = useTranslate();
 	const { localization } =
-		usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
 	const title =
 		localization?.common?.errorTitle ??
 		t("uiBuilder.common.errorTitle", uiBuilderLocalization.common.errorTitle);

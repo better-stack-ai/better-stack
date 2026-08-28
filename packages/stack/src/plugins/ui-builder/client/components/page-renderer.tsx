@@ -18,6 +18,7 @@ import { useSuspenseUIBuilderPageBySlug } from "../hooks/ui-builder-hooks";
 import { defaultComponentRegistry } from "../registry";
 import { uiBuilderLocalization } from "../localization";
 import type { UIBuilderPluginOverrides } from "../overrides";
+import { UI_BUILDER_PLUGIN_ID } from "../constants";
 import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
 import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 
@@ -27,7 +28,7 @@ import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 function DefaultLoadingComponent(): ReactNode {
 	const t = useTranslate();
 	const { localization } =
-		usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
 	return (
 		<div className="flex items-center justify-center min-h-[200px]">
 			<div className="animate-pulse text-muted-foreground">
@@ -47,7 +48,7 @@ function DefaultLoadingComponent(): ReactNode {
 function DefaultErrorComponent({ error }: { error: unknown }): ReactNode {
 	const t = useTranslate();
 	const { localization } =
-		usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
 	return (
 		<div className="flex flex-col items-center justify-center min-h-[200px] p-4">
 			<div className="text-destructive font-medium">
@@ -70,7 +71,7 @@ function DefaultErrorComponent({ error }: { error: unknown }): ReactNode {
 function DefaultNotFoundComponent(): ReactNode {
 	const t = useTranslate();
 	const { localization } =
-		usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
 	return (
 		<div className="flex items-center justify-center min-h-[200px]">
 			<div className="text-muted-foreground">

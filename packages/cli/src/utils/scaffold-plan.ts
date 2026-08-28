@@ -95,7 +95,9 @@ function buildPluginTemplateContext(
 			Boolean(m.clientImportPath) &&
 			Boolean(m.clientSymbol),
 	);
-	const hasLegacyClientPlugins = clientMetas.some((m) => m.key !== "blog");
+	const hasLegacyClientPlugins = clientMetas.some(
+		(m) => !["blog", "cms", "ui-builder"].includes(m.key),
+	);
 
 	const backendImportLines = backendMetas
 		.map((m) => `import { ${m.backendSymbol} } from "${m.backendImportPath}"`)
@@ -161,7 +163,7 @@ function buildPluginTemplateContext(
 			.join("\n"),
 		clientEntries: clientMetas
 			.map((m) => {
-				if (m.key === "blog") {
+				if (["blog", "cms", "ui-builder"].includes(m.key)) {
 					return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
 				}
 				if (m.key === "route-docs") {

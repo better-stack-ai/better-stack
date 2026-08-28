@@ -8,8 +8,6 @@ import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client";
-import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client";
-import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client";
 import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client";
 import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
@@ -39,7 +37,6 @@ const getBaseURL = () =>
 		: process.env.BASE_URL || "http://localhost:3008";
 
 type PluginOverrides = {
-	"ui-builder": UIBuilderPluginOverrides;
 	blog: BlogPluginOverrides;
 	"ai-chat": AiChatPluginOverrides;
 	cms: CMSPluginOverrides;
@@ -95,9 +92,6 @@ export default function Layout() {
 					// Only genuinely plugin-specific overrides remain — the shared
 					// Link/navigate/refresh and API wiring come from the top-level
 					// `router` and `api` props above.
-					"ui-builder": {
-						componentRegistry: defaultComponentRegistry,
-					},
 					blog: {
 						uploadImage,
 						imagePicker: ImagePicker,

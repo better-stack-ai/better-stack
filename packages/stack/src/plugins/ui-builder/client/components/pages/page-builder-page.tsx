@@ -9,6 +9,7 @@ import { usePluginOverrides } from "@btst/stack/context";
 import { PageBuilderSkeleton } from "../loading/page-builder-skeleton";
 import { DefaultError } from "../shared/default-error";
 import type { UIBuilderPluginOverrides } from "../../overrides";
+import { UI_BUILDER_PLUGIN_ID } from "../../constants";
 import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
 import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 import { useSuspenseUIBuilderPage } from "../../hooks/ui-builder-hooks";
@@ -25,7 +26,7 @@ export interface PageBuilderPageProps {
 
 export function PageBuilderPage({ id }: PageBuilderPageProps) {
 	const { onRouteError } =
-		usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
 	const path = id ? `/ui-builder/${id}/edit` : "/ui-builder/new";
 
 	return (

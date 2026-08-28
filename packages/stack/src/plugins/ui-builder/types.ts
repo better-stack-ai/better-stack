@@ -125,7 +125,7 @@ export interface UIBuilderClientHooks {
 	 * @param error - The error that occurred
 	 * @param context - Loader context
 	 */
-	onLoadError?: (error: Error, context: LoaderContext) => Promise<void> | void;
+	onErrorLoad?: (error: Error, context: LoaderContext) => Promise<void> | void;
 }
 
 // Re-export types from ui-builder for convenience
