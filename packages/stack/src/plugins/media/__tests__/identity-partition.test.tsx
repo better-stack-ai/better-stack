@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, startTransition, Suspense } from "react";
+import { act, startTransition, Suspense, useLayoutEffect } from "react";
+import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -385,8 +386,7 @@ describe("Media protected query identity partition", () => {
 					status: 200,
 					headers: { "content-type": "application/json" },
 				}),
-			)
-			.mockResolvedValueOnce(responseFor("user-a-updated"));
+			);
 		const auth = {
 			getIdentity: vi.fn(() => null),
 		} satisfies StackAuthProvider;
@@ -431,16 +431,89 @@ describe("Media protected query identity partition", () => {
 		await waitFor(() => attemptedIdentity === "user-b");
 		await act(async () => committedDelete?.("asset-user-a"));
 
-		const userA = queryClient.getQueryData<{
-			pages: Array<{ items: Array<{ filename: string }> }>;
-		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-a" }));
-		expect(userA?.pages[0]?.items[0]?.filename).toBe("user-a-updated.jpg");
+		expect(
+			queryClient.getQueryData(
+				MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-a" }),
+			),
+		).toBeUndefined();
 		expect(
 			queryClient.getQueryData(
 				MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-b" }),
 			),
 		).toBeUndefined();
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("does not refetch an unmounted identity during a replacement commit", async () => {
+		let resolveDelete: ((response: Response) => void) | undefined;
+		const deleteResponse = new Promise<Response>((resolve) => {
+			resolveDelete = resolve;
+		});
+		fetchMock
+			.mockResolvedValueOnce(responseFor("user-a"))
+			.mockReturnValueOnce(deleteResponse)
+			.mockResolvedValueOnce(responseFor("user-b"));
+		const auth = {
+			getIdentity: vi.fn(() => null),
+		} satisfies StackAuthProvider;
+		let filename: string | undefined;
+		let deleteAsset:
+			| ReturnType<typeof useDeleteAsset>["mutateAsync"]
+			| undefined;
+
+		function Probe({ completeDeletion }: { completeDeletion: boolean }) {
+			filename = useAssets({ limit: 40 }).data?.pages[0]?.items[0]?.filename;
+			deleteAsset = useDeleteAsset().mutateAsync;
+			useLayoutEffect(() => {
+				if (!completeDeletion) return;
+				resolveDelete?.(
+					new Response(JSON.stringify({ success: true }), {
+						status: 200,
+						headers: { "content-type": "application/json" },
+					}),
+				);
+			}, [completeDeletion]);
+			return null;
+		}
+
+		const tree = (identity: { id: string }, completeDeletion: boolean) => (
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://test.local", basePath: "/api" }}
+				auth={auth}
+				initialIdentity={identity}
+				overrides={{ media: { queryClient } }}
+			>
+				<QueryClientProvider client={queryClient}>
+					<Probe key={identity.id} completeDeletion={completeDeletion} />
+				</QueryClientProvider>
+			</StackProvider>
+		);
+
+		await act(async () => root.render(tree({ id: "user-a" }, false)));
+		await waitFor(() => filename === "user-a.jpg");
+		let deletion: Promise<{ success: boolean }> | undefined;
+		await act(async () => {
+			deletion = deleteAsset?.("asset-user-a");
+			await Promise.resolve();
+		});
+		await waitFor(() => fetchMock.mock.calls.length === 2);
+		await act(async () => {
+			flushSync(() => root.render(tree({ id: "user-b" }, true)));
+			await deletion;
+		});
+		await waitFor(() => filename === "user-b.jpg");
+
 		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(
+			queryClient.getQueryData(
+				MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-a" }),
+			),
+		).toBeUndefined();
+		const userB = queryClient.getQueryData<{
+			pages: Array<{ items: Array<{ filename: string }> }>;
+		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-b" }));
+		expect(userB?.pages[0]?.items[0]?.filename).toBe("user-b.jpg");
 	});
 
 	it("refreshes every successful concurrent mutate call", async () => {

@@ -6,7 +6,7 @@ import {
 	useQueryClient,
 	type UseMutationResult,
 } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import type { ResourceFormResult } from "@btst/stack/plugins/client/hooks";
 import {
 	useIdentity,
@@ -62,7 +62,7 @@ function useCurrentMediaListRefresh(resource: "mediaAssets" | "mediaFolders") {
 	useLayoutEffect(() => {
 		latestPartition.current = identityPartition;
 	}, [identityPartition]);
-	useEffect(() => {
+	useLayoutEffect(() => {
 		mounted.current = true;
 		return () => {
 			mounted.current = false;
