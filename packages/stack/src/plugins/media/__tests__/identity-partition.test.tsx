@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act } from "react";
+import { act, startTransition, Suspense } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -375,6 +375,72 @@ describe("Media protected query identity partition", () => {
 			pages: Array<{ items: Array<{ filename: string }> }>;
 		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-b" }));
 		expect(userB?.pages[0]?.items[0]?.filename).toBe("user-b.jpg");
+	});
+
+	it("ignores an identity from an abandoned concurrent render", async () => {
+		fetchMock
+			.mockResolvedValueOnce(responseFor("user-a"))
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ success: true }), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				}),
+			)
+			.mockResolvedValueOnce(responseFor("user-a-updated"));
+		const auth = {
+			getIdentity: vi.fn(() => null),
+		} satisfies StackAuthProvider;
+		let attemptedIdentity: string | undefined;
+		let deleteAsset:
+			| ReturnType<typeof useDeleteAsset>["mutateAsync"]
+			| undefined;
+		let suspend = false;
+		const never = new Promise<never>(() => {});
+
+		function Probe() {
+			attemptedIdentity = useIdentity().identity?.id;
+			useAssets({ limit: 40 });
+			deleteAsset = useDeleteAsset().mutateAsync;
+			if (suspend) throw never;
+			return null;
+		}
+
+		const tree = (initialIdentity: { id: string }) => (
+			<StackProvider
+				basePath="/pages"
+				api={{ baseURL: "http://test.local", basePath: "/api" }}
+				auth={auth}
+				initialIdentity={initialIdentity}
+				overrides={{ media: { queryClient } }}
+			>
+				<QueryClientProvider client={queryClient}>
+					<Suspense fallback={null}>
+						<Probe />
+					</Suspense>
+				</QueryClientProvider>
+			</StackProvider>
+		);
+
+		await act(async () => root.render(tree({ id: "user-a" })));
+		await waitFor(() => fetchMock.mock.calls.length === 1);
+		const committedDelete = deleteAsset;
+		suspend = true;
+		await act(() => {
+			startTransition(() => root.render(tree({ id: "user-b" })));
+		});
+		await waitFor(() => attemptedIdentity === "user-b");
+		await act(async () => committedDelete?.("asset-user-a"));
+
+		const userA = queryClient.getQueryData<{
+			pages: Array<{ items: Array<{ filename: string }> }>;
+		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-a" }));
+		expect(userA?.pages[0]?.items[0]?.filename).toBe("user-a-updated.jpg");
+		expect(
+			queryClient.getQueryData(
+				MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-b" }),
+			),
+		).toBeUndefined();
+		expect(fetchMock).toHaveBeenCalledTimes(3);
 	});
 
 	it("refreshes every successful concurrent mutate call", async () => {

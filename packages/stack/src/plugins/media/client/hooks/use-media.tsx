@@ -6,7 +6,7 @@ import {
 	useQueryClient,
 	type UseMutationResult,
 } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import type { ResourceFormResult } from "@btst/stack/plugins/client/hooks";
 import {
 	useIdentity,
@@ -59,7 +59,9 @@ function useCurrentMediaListRefresh(resource: "mediaAssets" | "mediaFolders") {
 	const identityPartition = useIdentityPartition();
 	const latestPartition = useRef(identityPartition);
 	const mounted = useRef(true);
-	latestPartition.current = identityPartition;
+	useLayoutEffect(() => {
+		latestPartition.current = identityPartition;
+	}, [identityPartition]);
 	useEffect(() => {
 		mounted.current = true;
 		return () => {
@@ -91,7 +93,10 @@ function useCurrentMediaListRefresh(resource: "mediaAssets" | "mediaFolders") {
 	};
 
 	return {
-		currentPartition: () => latestPartition.current,
+		// Event handlers retain the hook result from the committed render. Reading
+		// that closure prevents an abandoned concurrent render from changing which
+		// identity owns a newly-started mutation.
+		currentPartition: () => identityPartition,
 		refreshAfterSuccess,
 	};
 }
