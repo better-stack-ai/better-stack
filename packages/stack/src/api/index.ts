@@ -1,7 +1,7 @@
 import { createRouter } from "better-call";
 import type {
-	BackendLibConfig,
-	BackendLib,
+	BackendStackConfig,
+	BackendStack,
 	PrefixedPluginRoutes,
 	PluginApis,
 	PluginOperations,
@@ -67,11 +67,11 @@ function throwHttpOperationError(
 }
 
 /**
- * Creates the backend library with plugin support
+ * Creates the backend stack with plugin support
  *
  * @example
  * ```ts
- * const api = stack({
+ * const api = createBackendStack({
  *   plugins: {
  *     messages: messagesPlugin.backend
  *   },
@@ -86,23 +86,23 @@ function throwHttpOperationError(
  * @template TPlugins - The exact plugins map (inferred from config)
  * @template TRoutes - All routes with prefixed keys like "pluginName_routeName" (computed automatically)
  */
-export function stack<
+export function createBackendStack<
 	const TPlugins extends Record<string, BackendPlugin<any, any, any>>,
 	const TAuth extends ServerAuth<AnyAuthorization> | undefined,
 	TRoutes extends
 		PrefixedPluginRoutes<TPlugins> = PrefixedPluginRoutes<TPlugins>,
 >(
-	config: BackendLibConfig<TPlugins, TAuth> & {
+	config: BackendStackConfig<TPlugins, TAuth> & {
 		auth?: CompatibleStackAuth<TPlugins, TAuth>;
 	},
-): BackendLib<TRoutes, PluginApis<TPlugins>, PluginOperations<TPlugins>> {
+): BackendStack<TRoutes, PluginApis<TPlugins>, PluginOperations<TPlugins>> {
 	const { plugins, adapter, dbSchema, basePath } = config;
 	const runtimeAuth = (
 		config as unknown as { auth?: ServerAuth<AnyAuthorization> }
 	).auth;
 	if (runtimeAuth && !isServerAuth(runtimeAuth)) {
 		throw new TypeError(
-			"stack({ auth }) requires an adapter created by createServerAuth().",
+			"createBackendStack({ auth }) requires an adapter created by createServerAuth().",
 		);
 	}
 
@@ -270,8 +270,15 @@ export function stack<
 	};
 }
 
+/**
+ * @deprecated Use `createBackendStack`. This alias is removed by #225.
+ */
+export const stack: typeof createBackendStack = createBackendStack;
+
 export type {
 	BackendPlugin,
+	BackendStackConfig,
+	BackendStack,
 	BackendLibConfig,
 	BackendLib,
 	PluginApis,

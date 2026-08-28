@@ -1,8 +1,8 @@
 import { createRouter } from "@btst/yar";
 
 import type {
-	ClientLibConfig,
-	ClientLib,
+	ClientStackConfig,
+	ClientStack,
 	ClientPlugin,
 	ClientStackContext,
 	PluginRoutes,
@@ -11,12 +11,12 @@ import type {
 export type { ClientPlugin, ClientStackContext } from "../types";
 
 /**
- * Creates the client library with plugin support
+ * Creates the client stack with plugin support
  *
  * @example
  * ```ts
  * // For Next.js with SSR:
- * const lib = createStackClient({
+ * const lib = createClientStack({
  *   plugins: {
  *     blog: blogPlugin.client
  *   }
@@ -57,10 +57,10 @@ export type { ClientPlugin, ClientStackContext } from "../types";
  * @template TPlugins - The exact plugins map (inferred from config)
  * @template TRoutes - All routes from all plugins, merged (computed automatically)
  */
-export function createStackClient<
+export function createClientStack<
 	TPlugins extends Record<string, ClientPlugin<any, any>>,
 	TRoutes extends PluginRoutes<TPlugins> = PluginRoutes<TPlugins>,
->(config: ClientLibConfig<TPlugins>): ClientLib<TRoutes> {
+>(config: ClientStackConfig<TPlugins>): ClientStack<TRoutes> {
 	const { plugins, basePath } = config;
 
 	// Collect all routes from all plugins
@@ -107,7 +107,17 @@ export function createStackClient<
 	};
 }
 
-export type { ClientLib, ClientLibConfig };
+/**
+ * @deprecated Use `createClientStack`. This alias is removed by #225.
+ */
+export const createStackClient: typeof createClientStack = createClientStack;
+
+export type {
+	ClientStack,
+	ClientStackConfig,
+	ClientLib,
+	ClientLibConfig,
+} from "../types";
 
 export { sitemapEntryToXmlString } from "./sitemap-utils";
 

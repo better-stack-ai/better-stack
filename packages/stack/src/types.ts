@@ -37,7 +37,7 @@ export interface StackContext {
 	basePath: string;
 	/** The database adapter */
 	adapter: Adapter;
-	/** The server-side auth provider, when configured on `stack()` */
+	/** The server-side auth provider, when configured on `createBackendStack()` */
 	auth?: ServerAuth<AnyAuthorization>;
 	/** Routes already constructed for each plugin, used by introspection plugins. */
 	pluginRoutes: Record<string, Record<string, Endpoint>>;
@@ -70,9 +70,9 @@ export interface ClientStackContext<
  * You can optionally provide a base schema via the dbSchema config option.
  *
  * @template TRoutes - The exact shape of routes this plugin provides (preserves keys and endpoint types)
- * @template TApi - The shape of the server-side API surface exposed via `stack().api`.
+ * @template TApi - The shape of the server-side API surface exposed via `createBackendStack().api`.
  *   Defaults to `never` so that plugins without an `api` factory are excluded from the
- *   `stack().api` namespace entirely, preventing accidental access of `undefined` at runtime.
+ *   `createBackendStack().api` namespace entirely, preventing accidental access of `undefined` at runtime.
  */
 export interface BackendPlugin<
 	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
@@ -103,7 +103,7 @@ export interface BackendPlugin<
 
 	/**
 	 * Optional factory that returns server-side getter functions bound to the adapter.
-	 * The returned object is merged into `stack().api.<pluginName>.*` for direct
+	 * The returned object is merged into `createBackendStack().api.<pluginName>.*` for direct
 	 * server-side or SSG data access without going through HTTP.
 	 *
 	 * @param adapter - The adapter instance shared with `routes`
@@ -251,9 +251,9 @@ export type CompatibleStackAuth<
 	: TAuth;
 
 /**
- * Configuration for creating the backend library
+ * Configuration for creating the backend stack
  */
-export interface BackendLibConfig<
+export interface BackendStackConfig<
 	TPlugins extends Record<string, BackendPlugin<any, any, any>> = Record<
 		string,
 		BackendPlugin<any, any, any>
@@ -276,9 +276,22 @@ export interface BackendLibConfig<
 }
 
 /**
- * Configuration for creating the client library
+ * @deprecated Use `BackendStackConfig`. This alias is removed by #225.
  */
-export interface ClientLibConfig<
+export type BackendLibConfig<
+	TPlugins extends Record<string, BackendPlugin<any, any, any>> = Record<
+		string,
+		BackendPlugin<any, any, any>
+	>,
+	TAuth extends ServerAuth<AnyAuthorization> | undefined =
+		| ServerAuth<AnyAuthorization>
+		| undefined,
+> = BackendStackConfig<TPlugins, TAuth>;
+
+/**
+ * Configuration for creating the client stack
+ */
+export interface ClientStackConfig<
 	TPlugins extends Record<string, ClientPlugin<any, any>> = Record<
 		string,
 		ClientPlugin<any, any>
@@ -288,6 +301,16 @@ export interface ClientLibConfig<
 	baseURL?: string;
 	basePath?: string;
 }
+
+/**
+ * @deprecated Use `ClientStackConfig`. This alias is removed by #225.
+ */
+export type ClientLibConfig<
+	TPlugins extends Record<string, ClientPlugin<any, any>> = Record<
+		string,
+		ClientPlugin<any, any>
+	>,
+> = ClientStackConfig<TPlugins>;
 
 /**
  * Utility type to extract override types from plugins
@@ -343,9 +366,9 @@ export type PrefixedPluginRoutes<
 	: Record<string, Endpoint>;
 
 /**
- * Result of creating the backend library
+ * Result of creating the backend stack
  */
-export interface BackendLib<
+export interface BackendStack<
 	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
 	TApis extends Record<
 		string,
@@ -368,6 +391,21 @@ export interface BackendLib<
 	/** Trusted operations that retain validation and lifecycle hooks. */
 	internal: TOperations;
 }
+
+/**
+ * @deprecated Use `BackendStack`. This alias is removed by #225.
+ */
+export type BackendLib<
+	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
+	TApis extends Record<
+		string,
+		Record<string, (...args: any[]) => any>
+	> = Record<string, Record<string, (...args: any[]) => any>>,
+	TOperations extends Record<
+		string,
+		Record<string, (...args: any[]) => any>
+	> = Record<string, Record<string, (...args: any[]) => any>>,
+> = BackendStack<TRoutes, TApis, TOperations>;
 
 /**
  * Helper type to extract routes from a client plugin
@@ -403,14 +441,21 @@ type UnionToIntersection<U> = (
 	: never;
 
 /**
- * Result of creating the client library
+ * Result of creating the client stack
  */
-export interface ClientLib<
+export interface ClientStack<
 	TRoutes extends Record<string, Route> = Record<string, Route>,
 > {
 	router: ReturnType<typeof createRouter<TRoutes, {}>>;
 	generateSitemap: () => Promise<Sitemap>;
 }
+
+/**
+ * @deprecated Use `ClientStack`. This alias is removed by #225.
+ */
+export type ClientLib<
+	TRoutes extends Record<string, Route> = Record<string, Route>,
+> = ClientStack<TRoutes>;
 
 /**
  * Minimal sitemap entry shape aligned with Next.js MetadataRoute.Sitemap
