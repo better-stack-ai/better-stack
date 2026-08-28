@@ -1116,12 +1116,9 @@ export function createAiChatOperations(
 				(file) => file.mediaType,
 			);
 			const toolNames = structuralToolNames(input, config);
-			const toolResultNames =
-				intent.intent === "tool-result"
-					? completedToolNames(
-							(input.messages as UIMessage[])[input.messages.length - 1],
-						)
-					: [];
+			const toolResultNames = completedToolNames(
+				(input.messages as UIMessage[])[input.messages.length - 1],
+			);
 			const availableToolNames = new Set([
 				...toolNames,
 				...Object.keys(config.tools ?? {}),

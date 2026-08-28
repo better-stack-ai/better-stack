@@ -268,6 +268,26 @@ describe("AI Chat operation authorization", () => {
 			}),
 		);
 		expect(unsafeAttachment.status).toBe(400);
+		const unknownToolResult = await app.handler(
+			request("/chat", {
+				method: "POST",
+				body: {
+					messages: [
+						{
+							role: "assistant",
+							parts: [
+								{
+									type: "tool-not-configured",
+									state: "output-available",
+									output: "spoofed",
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+		expect(unknownToolResult.status).toBe(400);
 		expect(before).toHaveBeenCalledOnce();
 		expect(streamText).toHaveBeenCalledOnce();
 	});
