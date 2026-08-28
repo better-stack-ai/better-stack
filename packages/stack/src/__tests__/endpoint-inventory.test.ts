@@ -156,7 +156,7 @@ describe("composed endpoint inventory", () => {
 		const endpointNames = Object.keys(
 			(backend.router as unknown as { endpoints: Record<string, unknown> })
 				.endpoints,
-		).filter((name) => name !== "openapi");
+		);
 		const expectedEndpointNames = Object.entries(FIRST_PARTY_HTTP_ROUTES)
 			.flatMap(([pluginKey, routeKeys]) =>
 				routeKeys.map((routeKey) => `${pluginKey}_${routeKey}`),
@@ -188,6 +188,10 @@ describe("composed endpoint inventory", () => {
 		});
 		expect(schema.paths["/open-api/schema"]).toBeUndefined();
 		expect(schema.paths["/reference"]).toBeUndefined();
+		expect(
+			(await backend.handler(new Request("http://localhost/api/api/reference")))
+				.status,
+		).toBe(404);
 	});
 
 	it("rejects an undeclared endpoint with its plugin, route, method, and path", () => {
@@ -212,6 +216,29 @@ describe("composed endpoint inventory", () => {
 			}),
 		).toThrowError(
 			'[btst/endpoint-inventory] Plugin "registeredFeature" route "undeclared" (POST /records) has no same-key operation or infrastructure declaration.',
+		);
+	});
+
+	it("validates routes when an explicitly declared operation catalog is empty", () => {
+		const plugin = defineBackendPlugin({
+			name: "feature",
+			dbPlugin: createDbPlugin("feature", {}),
+			operations: () => ({}),
+			routes: () => ({
+				undeclared: createEndpoint("/records", { method: "GET" }, async () => ({
+					ok: true,
+				})),
+			}),
+		});
+
+		expect(() =>
+			stack({
+				basePath: "/api",
+				plugins: { feature: plugin },
+				adapter: memoryAdapter,
+			}),
+		).toThrowError(
+			'[btst/endpoint-inventory] Plugin "feature" route "undeclared" (GET /records) has no same-key operation or infrastructure declaration.',
 		);
 	});
 

@@ -78,7 +78,7 @@ export interface OpenAPIOptions {
  * documentation metadata rather than application business behavior, so they
  * intentionally remain public infrastructure instead of fake operations.
  */
-export const OPEN_API_INFRASTRUCTURE_ROUTES = Object.freeze({
+const OPEN_API_INFRASTRUCTURE_ROUTES = Object.freeze({
 	generateSchema: Object.freeze({
 		access: "public" as const,
 		rationale:

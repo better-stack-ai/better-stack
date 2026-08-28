@@ -189,6 +189,7 @@ export function stack<
 				plugin.name,
 				pluginRoutes,
 				pluginOperations[pluginKey] ?? {},
+				plugin.operations !== undefined,
 				plugin.infrastructureRoutes,
 				plugin.operationRouteMap,
 			),
@@ -216,6 +217,7 @@ export function stack<
 	// Create the composed router
 	const router = createRouter(allRoutes, {
 		basePath: basePath,
+		openapi: { disabled: true },
 	});
 
 	// With an auth provider, register a per-request identity resolver before

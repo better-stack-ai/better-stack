@@ -15,7 +15,7 @@ import {
 	defineBackendPlugin,
 	defineOperation,
 } from "../../api";
-import { OPEN_API_INFRASTRUCTURE_ROUTES, openApiBackendPlugin } from "../api";
+import { openApiBackendPlugin } from "../api";
 
 describe("OpenAPI route introspection", () => {
 	it("declares the schema and reference handlers as the exact public infrastructure allowlist", () => {
@@ -32,7 +32,6 @@ describe("OpenAPI route introspection", () => {
 					"Serves the documentation UI for the same public schema without executing an application business operation.",
 			},
 		});
-		expect(plugin.infrastructureRoutes).toBe(OPEN_API_INFRASTRUCTURE_ROUTES);
 	});
 
 	it("reuses constructed routes instead of forging an operation transport", async () => {
