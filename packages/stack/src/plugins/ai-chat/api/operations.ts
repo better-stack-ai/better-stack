@@ -218,6 +218,22 @@ export class AiChatOperationError extends Error {
 	}
 }
 
+async function runBeforeHook<T>(
+	hook: () => T | Promise<T>,
+	defaultMessage: string,
+): Promise<Awaited<T>> {
+	try {
+		return await hook();
+	} catch (cause) {
+		if (cause instanceof AiChatOperationError) throw cause;
+		throw new AiChatOperationError(
+			403,
+			cause instanceof Error ? cause.message : defaultMessage,
+			"HOOK_DENIED",
+		);
+	}
+}
+
 /** Typed operation context supplied to AI Chat lifecycle hooks. */
 export interface ChatApiContext<TInput = unknown, TFacts = unknown>
 	extends OperationContext<TInput, TFacts> {
@@ -832,8 +848,12 @@ export function createAiChatOperations(
 				config.getUserId,
 			);
 			scopedUserIds.set(context.input as object, userId);
-			await hooks?.onBeforeListConversations?.(
-				hookContext(context, { query: context.input }),
+			await runBeforeHook(
+				() =>
+					hooks?.onBeforeListConversations?.(
+						hookContext(context, { query: context.input }),
+					),
+				"Unauthorized: Cannot list conversations",
 			);
 		},
 		execute: async (context) => {
@@ -901,9 +921,13 @@ export function createAiChatOperations(
 					"STALE_CONVERSATION",
 				);
 			}
-			await hooks?.onBeforeGetConversation?.(
-				context.input.id,
-				hookContext(context, { params: { id: context.input.id } }),
+			await runBeforeHook(
+				() =>
+					hooks?.onBeforeGetConversation?.(
+						context.input.id,
+						hookContext(context, { params: { id: context.input.id } }),
+					),
+				"Unauthorized: Cannot get conversation",
 			);
 		},
 		execute: async (context) => {
@@ -958,9 +982,13 @@ export function createAiChatOperations(
 				config.getUserId,
 			);
 			scopedUserIds.set(context.input as object, userId);
-			await hooks?.onBeforeCreateConversation?.(
-				context.input,
-				hookContext(context, { body: context.input }),
+			await runBeforeHook(
+				() =>
+					hooks?.onBeforeCreateConversation?.(
+						context.input,
+						hookContext(context, { body: context.input }),
+					),
+				"Unauthorized: Cannot create conversation",
 			);
 		},
 		execute: async (context) => {
@@ -1034,13 +1062,17 @@ export function createAiChatOperations(
 						"STALE_CONVERSATION",
 					);
 				}
-				await hooks?.onBeforeUpdateConversation?.(
-					context.input.id,
-					context.input.data,
-					hookContext(context, {
-						body: context.input,
-						params: { id: context.input.id },
-					}),
+				await runBeforeHook(
+					() =>
+						hooks?.onBeforeUpdateConversation?.(
+							context.input.id,
+							context.input.data,
+							hookContext(context, {
+								body: context.input,
+								params: { id: context.input.id },
+							}),
+						),
+					"Unauthorized: Cannot update conversation",
 				);
 				const updatedAt = nextVersion(new Date(expected.updatedAt));
 				const matched = await tx.updateMany({
@@ -1140,9 +1172,13 @@ export function createAiChatOperations(
 						"STALE_CONVERSATION",
 					);
 				}
-				await hooks?.onBeforeDeleteConversation?.(
-					context.input.id,
-					hookContext(context, { params: { id: context.input.id } }),
+				await runBeforeHook(
+					() =>
+						hooks?.onBeforeDeleteConversation?.(
+							context.input.id,
+							hookContext(context, { params: { id: context.input.id } }),
+						),
+					"Unauthorized: Cannot delete conversation",
 				);
 				const deleted = await tx.deleteMany({
 					model: "conversation",
@@ -1426,20 +1462,29 @@ export function createAiChatOperations(
 				: modelMessages;
 			const contextForHooks = hookContext(context, { body: context.input });
 			const enterChatLifecycle = async () => {
-				await hooks?.onBeforeChat?.(
-					uiMessages.map((message) => ({
-						role: message.role,
-						content: textContent(message),
-					})),
-					contextForHooks,
+				await runBeforeHook(
+					() =>
+						hooks?.onBeforeChat?.(
+							uiMessages.map((message) => ({
+								role: message.role,
+								content: textContent(message),
+							})),
+							contextForHooks,
+						),
+					"Unauthorized: Cannot start chat",
 				);
 
 				let allowedToolNames = [...prepared.toolNames];
 				if (allowedToolNames.length > 0 && hooks?.onBeforeToolsActivated) {
-					const filtered = await hooks.onBeforeToolsActivated(
-						allowedToolNames,
-						context.input.routeName,
-						contextForHooks,
+					const onBeforeToolsActivated = hooks.onBeforeToolsActivated;
+					const filtered = await runBeforeHook(
+						() =>
+							onBeforeToolsActivated(
+								allowedToolNames,
+								context.input.routeName,
+								contextForHooks,
+							),
+						"Unauthorized: Tool activation denied",
 					);
 					const structurallyAllowed = new Set(allowedToolNames);
 					allowedToolNames = [

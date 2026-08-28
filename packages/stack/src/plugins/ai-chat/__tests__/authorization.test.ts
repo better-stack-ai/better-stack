@@ -962,6 +962,44 @@ describe("AI Chat operation authorization", () => {
 		expect(await app.adapter.count({ model: "message" })).toBe(3);
 	});
 
+	it("normalizes plain before-hook denials across every stream transport", async () => {
+		const before = vi.fn(() => {
+			throw new Error("Rate limit exceeded");
+		});
+		const app = backend({
+			access: "public",
+			hooks: { onBeforeChat: before },
+		});
+
+		const httpResponse = await app.handler(
+			request("/chat", { method: "POST", body: messageBody }),
+		);
+		expect(httpResponse.status).toBe(403);
+		expect(await httpResponse.json()).toMatchObject({
+			message: "Rate limit exceeded",
+			code: "HOOK_DENIED",
+		});
+		await expect(
+			app.forRequest(request("/chat")).api.aiChat.startStream(messageBody),
+		).rejects.toMatchObject({
+			statusCode: 403,
+			message: "Rate limit exceeded",
+			code: "HOOK_DENIED",
+		});
+		await expect(
+			app.internal.aiChat.startStream(messageBody),
+		).rejects.toMatchObject({
+			statusCode: 403,
+			message: "Rate limit exceeded",
+			code: "HOOK_DENIED",
+		});
+
+		expect(before).toHaveBeenCalledTimes(3);
+		expect(streamText).not.toHaveBeenCalled();
+		expect(await app.adapter.count({ model: "conversation" })).toBe(0);
+		expect(await app.adapter.count({ model: "message" })).toBe(0);
+	});
+
 	it("reports asynchronous provider failures for every stream transport", async () => {
 		const onChatError = vi.fn();
 		const app = backend({ hooks: { onChatError } });
