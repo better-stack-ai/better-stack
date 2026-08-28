@@ -5,7 +5,10 @@ import {
 	blogBackendPlugin,
 	type BlogBackendHooks,
 } from "@btst/stack/plugins/blog/api";
-import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api";
+import {
+	aiChatBackendPlugin,
+	AiChatOperationError,
+} from "@btst/stack/plugins/ai-chat/api";
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api";
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
@@ -245,7 +248,11 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 				},
 				onBeforeToolsActivated: async (toolNames, _routeName, context) => {
 					if (context.headers?.get?.("x-btst-deny-tools") === "1") {
-						throw new Error("Tools denied by test hook");
+						throw new AiChatOperationError(
+							403,
+							"Tools denied by test hook",
+							"TOOLS_DENIED",
+						);
 					}
 					return toolNames;
 				},
