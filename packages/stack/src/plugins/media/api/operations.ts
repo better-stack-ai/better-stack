@@ -470,10 +470,10 @@ function didAffectRow(result: unknown, id: string): boolean {
 	if (typeof result === "number" || typeof result === "bigint")
 		return positive(result);
 	if (!result || typeof result !== "object") return false;
-	if (Array.isArray(result))
-		return result.length > 0 && didAffectRow(result[0], id);
 	const record = result as Record<string, unknown>;
 	if ("count" in record) return positive(record.count);
+	if (Array.isArray(result))
+		return result.length > 0 && didAffectRow(result[0], id);
 	for (const key of AFFECTED_ROW_KEYS) {
 		if (key in record) return positive(record[key]);
 	}

@@ -24,29 +24,39 @@ import type { Asset, Folder } from "../types";
 
 const memoryAdapter = (db: DatabaseDefinition) => createMemoryAdapter(db)({});
 
-function d1ResultAdapter(db: DatabaseDefinition): DBAdapter {
-	const adapter = createMemoryAdapter(db)({});
-	const transaction = adapter.transaction.bind(adapter);
-	return {
-		...adapter,
-		transaction: ((callback) =>
-			transaction((tx) =>
-				callback({
-					...tx,
-					updateMany: (async (
-						input: Parameters<DBAdapter["updateMany"]>[0],
-					) => ({
-						meta: { changes: (await tx.updateMany(input)) ? 1 : 0 },
-					})) as unknown as DBAdapter["updateMany"],
-					deleteMany: (async (
-						input: Parameters<DBAdapter["deleteMany"]>[0],
-					) => ({
-						meta: { changes: await tx.deleteMany(input) },
-					})) as unknown as DBAdapter["deleteMany"],
-				}),
-			)) as DBAdapter["transaction"],
+function affectedRowResultAdapter(
+	shape: (changes: number) => unknown,
+): (db: DatabaseDefinition) => DBAdapter {
+	return (db) => {
+		const adapter = createMemoryAdapter(db)({});
+		const transaction = adapter.transaction.bind(adapter);
+		return {
+			...adapter,
+			transaction: ((callback) =>
+				transaction((tx) =>
+					callback({
+						...tx,
+						updateMany: (async (
+							input: Parameters<DBAdapter["updateMany"]>[0],
+						) =>
+							shape(
+								(await tx.updateMany(input)) ? 1 : 0,
+							)) as unknown as DBAdapter["updateMany"],
+						deleteMany: (async (
+							input: Parameters<DBAdapter["deleteMany"]>[0],
+						) =>
+							shape(
+								await tx.deleteMany(input),
+							)) as unknown as DBAdapter["deleteMany"],
+					}),
+				)) as DBAdapter["transaction"],
+		};
 	};
 }
+
+const d1ResultAdapter = affectedRowResultAdapter((changes) => ({
+	meta: { changes },
+}));
 
 const identitySchema = z.object({
 	id: z.string(),
@@ -832,6 +842,49 @@ describe("Media operation-first authorization", () => {
 				where: [{ field: "id", value: deletedAsset.id }],
 			}),
 		).toBeNull();
+	});
+
+	it("accepts array results with a positive count and rejects zero", async () => {
+		const positiveBackend = makeBackend({
+			adapter: affectedRowResultAdapter((changes) =>
+				Object.assign([], { count: changes }),
+			),
+			auth: createAuth(),
+			tenantId: "tenant-a",
+		});
+		const positiveAsset = await seedAsset(positiveBackend);
+		await expect(
+			positiveBackend
+				.forRequest(request("/array-count", { identity: tenantMember }))
+				.api.media.updateAsset({
+					id: positiveAsset.id,
+					data: { alt: "Updated" },
+				}),
+		).resolves.toMatchObject({ alt: "Updated" });
+
+		const zeroBackend = makeBackend({
+			adapter: affectedRowResultAdapter(() => Object.assign([], { count: 0 })),
+			auth: createAuth(),
+			tenantId: "tenant-a",
+		});
+		const zeroAsset = await seedAsset(zeroBackend);
+		await expect(
+			zeroBackend
+				.forRequest(request("/array-zero", { identity: tenantMember }))
+				.api.media.updateAsset({
+					id: zeroAsset.id,
+					data: { alt: "Must roll back" },
+				}),
+		).rejects.toMatchObject({
+			statusCode: 409,
+			code: "MEDIA_STATE_CHANGED",
+		});
+		expect(
+			await zeroBackend.adapter.findOne<Asset>({
+				model: "mediaAsset",
+				where: [{ field: "id", value: zeroAsset.id }],
+			}),
+		).not.toMatchObject({ alt: "Must roll back" });
 	});
 
 	it("rejects stale upload initialization and finalization before hooks, tokens, or writes", async () => {

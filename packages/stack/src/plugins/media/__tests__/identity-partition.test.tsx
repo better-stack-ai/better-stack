@@ -306,6 +306,157 @@ describe("Media protected query identity partition", () => {
 		expect(userB?.pages[0]?.items[0]?.filename).toBe("user-b-updated.jpg");
 	});
 
+	it("never refetches a mutation-start identity after an in-flight account switch", async () => {
+		let resolveDelete: ((response: Response) => void) | undefined;
+		const deleteResponse = new Promise<Response>((resolve) => {
+			resolveDelete = resolve;
+		});
+		fetchMock
+			.mockResolvedValueOnce(responseFor("user-a"))
+			.mockReturnValueOnce(deleteResponse)
+			.mockResolvedValueOnce(responseFor("user-b"));
+		const auth = {
+			getIdentity: vi.fn(() => null),
+		} satisfies StackAuthProvider;
+		let filename: string | undefined;
+		let deleteAsset:
+			| ReturnType<typeof useDeleteAsset>["mutateAsync"]
+			| undefined;
+
+		function Probe() {
+			filename = useAssets({ limit: 40 }).data?.pages[0]?.items[0]?.filename;
+			deleteAsset = useDeleteAsset().mutateAsync;
+			return null;
+		}
+
+		async function render(initialIdentity: { id: string }) {
+			await act(async () => {
+				root.render(
+					<StackProvider
+						basePath="/pages"
+						api={{ baseURL: "http://test.local", basePath: "/api" }}
+						auth={auth}
+						initialIdentity={initialIdentity}
+						overrides={{ media: { queryClient } }}
+					>
+						<QueryClientProvider client={queryClient}>
+							<Probe />
+						</QueryClientProvider>
+					</StackProvider>,
+				);
+			});
+		}
+
+		await render({ id: "user-a" });
+		await waitFor(() => filename === "user-a.jpg");
+		let deletion: Promise<{ success: boolean }> | undefined;
+		await act(async () => {
+			deletion = deleteAsset?.("asset-user-a");
+			await Promise.resolve();
+		});
+		await waitFor(() => fetchMock.mock.calls.length === 2);
+		await render({ id: "user-b" });
+		await waitFor(() => filename === "user-b.jpg");
+		resolveDelete?.(
+			new Response(JSON.stringify({ success: true }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+		await act(async () => deletion);
+
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(
+			queryClient.getQueryData(
+				MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-a" }),
+			),
+		).toBeUndefined();
+		const userB = queryClient.getQueryData<{
+			pages: Array<{ items: Array<{ filename: string }> }>;
+		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-b" }));
+		expect(userB?.pages[0]?.items[0]?.filename).toBe("user-b.jpg");
+	});
+
+	it("refreshes every successful concurrent mutate call", async () => {
+		let resolveFirst: ((response: Response) => void) | undefined;
+		let resolveSecond: ((response: Response) => void) | undefined;
+		const firstResponse = new Promise<Response>((resolve) => {
+			resolveFirst = resolve;
+		});
+		const secondResponse = new Promise<Response>((resolve) => {
+			resolveSecond = resolve;
+		});
+		fetchMock
+			.mockResolvedValueOnce(responseFor("user-a"))
+			.mockReturnValueOnce(firstResponse)
+			.mockReturnValueOnce(secondResponse)
+			.mockResolvedValueOnce(responseFor("user-a-updated"));
+		const auth = {
+			getIdentity: vi.fn(() => null),
+		} satisfies StackAuthProvider;
+		let filename: string | undefined;
+		let deleteAsset: ReturnType<typeof useDeleteAsset>["mutate"] | undefined;
+
+		function ListProbe() {
+			filename = useAssets({ limit: 40 }).data?.pages[0]?.items[0]?.filename;
+			return null;
+		}
+
+		function Probe({ showList }: { showList: boolean }) {
+			deleteAsset = useDeleteAsset().mutate;
+			return showList ? <ListProbe /> : null;
+		}
+
+		async function render(showList: boolean) {
+			await act(async () => {
+				root.render(
+					<StackProvider
+						basePath="/pages"
+						api={{ baseURL: "http://test.local", basePath: "/api" }}
+						auth={auth}
+						initialIdentity={{ id: "user-a" }}
+						overrides={{ media: { queryClient } }}
+					>
+						<QueryClientProvider client={queryClient}>
+							<Probe showList={showList} />
+						</QueryClientProvider>
+					</StackProvider>,
+				);
+			});
+		}
+
+		await render(true);
+		await waitFor(() => filename === "user-a.jpg");
+		await render(false);
+		await act(() => {
+			deleteAsset?.("asset-one");
+			deleteAsset?.("asset-two");
+		});
+		await waitFor(() => fetchMock.mock.calls.length === 3);
+		resolveFirst?.(
+			new Response(JSON.stringify({ success: true }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+		await waitFor(() => fetchMock.mock.calls.length === 4);
+		resolveSecond?.(
+			new Response(JSON.stringify({ message: "Rejected" }), {
+				status: 500,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+		await act(async () => {
+			await Promise.resolve();
+		});
+
+		const current = queryClient.getQueryData<{
+			pages: Array<{ items: Array<{ filename: string }> }>;
+		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-a" }));
+		expect(current?.pages[0]?.items[0]?.filename).toBe("user-a-updated.jpg");
+		expect(fetchMock).toHaveBeenCalledTimes(4);
+	});
+
 	it("keeps broad generated invalidation out of protected mutations", () => {
 		expect("invalidates" in mediaResources.mediaAssets.mutations.create).toBe(
 			false,

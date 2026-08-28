@@ -6,6 +6,7 @@ import {
 	useQueryClient,
 	type UseMutationResult,
 } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import type { ResourceFormResult } from "@btst/stack/plugins/client/hooks";
 import {
 	useIdentity,
@@ -46,43 +47,72 @@ function sameIdentityPartition(
 	);
 }
 
-function useInvalidateCurrentMediaList(
-	resource: "mediaAssets" | "mediaFolders",
+function samePartition(
+	left: ReturnType<typeof useIdentityPartition>,
+	right: ReturnType<typeof useIdentityPartition>,
 ) {
+	return hashKey([left]) === hashKey([right]);
+}
+
+function useCurrentMediaListRefresh(resource: "mediaAssets" | "mediaFolders") {
 	const queryClient = useQueryClient();
 	const identityPartition = useIdentityPartition();
-	return () =>
-		queryClient.invalidateQueries({
+	const latestPartition = useRef(identityPartition);
+	const mounted = useRef(true);
+	latestPartition.current = identityPartition;
+	useEffect(() => {
+		mounted.current = true;
+		return () => {
+			mounted.current = false;
+		};
+	}, []);
+
+	const removePartition = (partition: typeof identityPartition) =>
+		queryClient.removeQueries({
 			queryKey: [resource, "list"],
-			predicate: ({ queryKey }) =>
-				sameIdentityPartition(queryKey, identityPartition),
+			predicate: ({ queryKey }) => sameIdentityPartition(queryKey, partition),
+		});
+	const refreshAfterSuccess = async (startedAs: typeof identityPartition) => {
+		const current = latestPartition.current;
+		if (!mounted.current || !samePartition(startedAs, current)) {
+			// Never refetch an initiating account with a newer account's session.
+			// Dropping it also prevents stale mutation-era data from resurfacing.
+			removePartition(startedAs);
+			return;
+		}
+		await queryClient.invalidateQueries({
+			queryKey: [resource, "list"],
+			predicate: ({ queryKey }) => sameIdentityPartition(queryKey, current),
 			// The current tab can temporarily unmount its list. Refresh only this
 			// identity's inactive variants; never refetch a previous account's key
 			// with the current request headers.
 			refetchType: "all",
 		});
+	};
+
+	return {
+		currentPartition: () => latestPartition.current,
+		refreshAfterSuccess,
+	};
 }
 
 function withCurrentListRefresh<TData, TVariables>(
 	mutation: UseMutationResult<TData, Error, TVariables>,
-	invalidateCurrentList: () => Promise<void>,
+	listRefresh: ReturnType<typeof useCurrentMediaListRefresh>,
 ): UseMutationResult<TData, Error, TVariables> {
-	const mutate: typeof mutation.mutate = (variables, options) => {
-		mutation.mutate(variables, {
-			...options,
-			onSuccess: (...args) => {
-				void invalidateCurrentList();
-				options?.onSuccess?.(...args);
-			},
-		});
-	};
 	const mutateAsync: typeof mutation.mutateAsync = async (
 		variables,
 		options,
 	) => {
+		const startedAs = listRefresh.currentPartition();
 		const result = await mutation.mutateAsync(variables, options);
-		await invalidateCurrentList();
+		await listRefresh.refreshAfterSuccess(startedAs);
 		return result;
+	};
+	const mutate: typeof mutation.mutate = (variables, options) => {
+		// Each invocation owns an awaited promise, so a later mutation cannot
+		// detach the successful call's required cache refresh.
+		void mutateAsync(variables, options).catch(() => {});
 	};
 	return { ...mutation, mutate, mutateAsync };
 }
@@ -116,9 +146,10 @@ export function useUploadAsset() {
 	const { api } = useStack();
 	// Resource-generated asset queries use the nearest QueryClientProvider.
 	// Keep the custom upload transport on that same cache.
-	const invalidateCurrentAssets = useInvalidateCurrentMediaList("mediaAssets");
+	const listRefresh = useCurrentMediaListRefresh("mediaAssets");
 
 	return useMutation({
+		onMutate: () => listRefresh.currentPartition(),
 		mutationFn: async ({
 			file,
 			folderId,
@@ -136,8 +167,8 @@ export function useUploadAsset() {
 				},
 				{ file, folderId },
 			),
-		onSuccess: async () => {
-			await invalidateCurrentAssets();
+		onSuccess: async (_asset, _variables, startedAs) => {
+			await listRefresh.refreshAfterSuccess(startedAs);
 		},
 	});
 }
@@ -145,31 +176,29 @@ export function useUploadAsset() {
 /** Register an already-hosted asset URL. */
 export function useRegisterAsset() {
 	const mutation = media.mediaAssets.create.use();
-	const invalidateCurrentAssets = useInvalidateCurrentMediaList("mediaAssets");
-	return withCurrentListRefresh(mutation, invalidateCurrentAssets);
+	const listRefresh = useCurrentMediaListRefresh("mediaAssets");
+	return withCurrentListRefresh(mutation, listRefresh);
 }
 
 /** Delete an asset by ID. */
 export function useDeleteAsset() {
 	const mutation = media.mediaAssets.delete.use();
-	const invalidateCurrentAssets = useInvalidateCurrentMediaList("mediaAssets");
-	return withCurrentListRefresh(mutation, invalidateCurrentAssets);
+	const listRefresh = useCurrentMediaListRefresh("mediaAssets");
+	return withCurrentListRefresh(mutation, listRefresh);
 }
 
 /** Create a new folder. */
 export function useCreateFolder() {
 	const mutation = media.mediaFolders.create.use();
-	const invalidateCurrentFolders =
-		useInvalidateCurrentMediaList("mediaFolders");
-	return withCurrentListRefresh(mutation, invalidateCurrentFolders);
+	const listRefresh = useCurrentMediaListRefresh("mediaFolders");
+	return withCurrentListRefresh(mutation, listRefresh);
 }
 
 /** Delete a folder by ID. */
 export function useDeleteFolder() {
 	const mutation = media.mediaFolders.delete.use();
-	const invalidateCurrentFolders =
-		useInvalidateCurrentMediaList("mediaFolders");
-	return withCurrentListRefresh(mutation, invalidateCurrentFolders);
+	const listRefresh = useCurrentMediaListRefresh("mediaFolders");
+	return withCurrentListRefresh(mutation, listRefresh);
 }
 
 export interface RegisterAssetFormValues {
@@ -195,8 +224,8 @@ export function useRegisterAssetForm(
 	options: UseRegisterAssetFormOptions = {},
 ): ResourceFormResult<RegisterAssetFormValues, null, SerializedAsset> {
 	const t = useTranslate();
-	const invalidateCurrentAssets = useInvalidateCurrentMediaList("mediaAssets");
-	return media.mediaAssets.useForm<
+	const listRefresh = useCurrentMediaListRefresh("mediaAssets");
+	const form = media.mediaAssets.useForm<
 		RegisterAssetFormValues,
 		SerializedAsset,
 		null
@@ -211,11 +240,18 @@ export function useRegisterAssetForm(
 		successMessage: t("media.toasts.registerSuccess", "Asset added"),
 		errorMessage: (error) =>
 			error.message || t("media.toasts.registerError", "Failed to add asset"),
-		onSuccess: async (asset) => {
-			await invalidateCurrentAssets();
-			await options.onSuccess?.(asset);
-		},
 	});
+	return {
+		...form,
+		submit: async (values) => {
+			const startedAs = listRefresh.currentPartition();
+			const asset = await form.submit(values);
+			if (asset === undefined) return undefined;
+			await listRefresh.refreshAfterSuccess(startedAs);
+			await options.onSuccess?.(asset);
+			return asset;
+		},
+	};
 }
 
 export interface CreateFolderFormValues {
@@ -232,9 +268,8 @@ export function useCreateFolderForm(
 	options: UseCreateFolderFormOptions = {},
 ): ResourceFormResult<CreateFolderFormValues, null, SerializedFolder> {
 	const t = useTranslate();
-	const invalidateCurrentFolders =
-		useInvalidateCurrentMediaList("mediaFolders");
-	return media.mediaFolders.useForm<
+	const listRefresh = useCurrentMediaListRefresh("mediaFolders");
+	const form = media.mediaFolders.useForm<
 		CreateFolderFormValues,
 		SerializedFolder,
 		null
@@ -249,9 +284,16 @@ export function useCreateFolderForm(
 		errorMessage: (error) =>
 			error.message ||
 			t("media.toasts.folderCreateError", "Failed to create folder"),
-		onSuccess: async (folder) => {
-			await invalidateCurrentFolders();
-			await options.onSuccess?.(folder);
-		},
 	});
+	return {
+		...form,
+		submit: async (values) => {
+			const startedAs = listRefresh.currentPartition();
+			const folder = await form.submit(values);
+			if (folder === undefined) return undefined;
+			await listRefresh.refreshAfterSuccess(startedAs);
+			await options.onSuccess?.(folder);
+			return folder;
+		},
+	};
 }
