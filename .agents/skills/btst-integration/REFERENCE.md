@@ -4,37 +4,40 @@
 
 ```ts
 import { stack } from "@btst/stack"
-import { createDrizzleAdapter } from "@btst/adapter-drizzle"  // or prisma / kysely / mongodb / memory
+import { createMemoryAdapter } from "@btst/adapter-memory"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
 // import more plugins…
 
-// Memory adapter + Next.js: pin to globalThis to share one instance across API and page bundles
-const g = global as typeof global & { __btst__?: ReturnType<typeof stack> }
+function createStack() {
+  return stack({
+    basePath: "/api/data",
+    plugins: {
+      blog: blogBackendPlugin({
+        // optional domain hooks
+        onPostCreated: async (post) => { /* revalidate, notify */ },
+      }),
+      aiChat: aiChatBackendPlugin({
+        model: openai("gpt-4o"),
+        systemPrompt: "You are a helpful assistant.",
+        access: "authorized",
+      }),
+      // add more plugins…
+    },
+    adapter: (db) => createMemoryAdapter(db)({}),
+  })
+}
 
-export const myStack = g.__btst__ ??= stack({
-  basePath: "/api/data",
-  plugins: {
-    blog: blogBackendPlugin({
-      // optional domain hooks
-      onPostCreated: async (post) => { /* revalidate, notify */ },
-    }),
-    aiChat: aiChatBackendPlugin({
-      model: openai("gpt-4o"),
-      systemPrompt: "You are a helpful assistant.",
-      access: "authorized",
-    }),
-    // add more plugins…
-  },
-  adapter: (db) => createDrizzleAdapter(schema, db, {}),
-  // For memory adapter: adapter: (db) => createMemoryAdapter(db)({})
-})
+// Memory adapter + Next.js: pin the exact app type across API and page bundles.
+type AppStack = ReturnType<typeof createStack>
+const g = globalThis as typeof globalThis & { __btst__?: AppStack }
+export const myStack = g.__btst__ ??= createStack()
 
 export const { handler, dbSchema } = myStack
 ```
 
 **Rules:**
-- For any real DB adapter (Drizzle, Prisma, Kysely, MongoDB), just call `stack()` at module level — no `globalThis` needed.
+- For any real DB adapter (Drizzle, Prisma, Kysely, MongoDB), call the typed `createStack()` factory at module level — no `globalThis` needed.
 - Only pin to `globalThis` when using `@btst/adapter-memory` in Next.js.
 
 ---

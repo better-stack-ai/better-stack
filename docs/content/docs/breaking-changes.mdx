@@ -268,7 +268,11 @@ sign-in, account, and organization routes in your chosen authentication
 framework. Remove the retired plugin from existing `btst init` commands and
 delete its generated imports, overrides, CSS import, and package dependencies.
 
-Hooks that transform input continue to return the transformed value.
+Form Builder's `onBeforeFormCreated`, `onBeforeFormUpdated`, and
+`onBeforeSubmission` hooks receive a separate mutable-data value and may return
+its transformed replacement. Other lifecycle hooks observe their deeply
+readonly operation context and perform domain side effects; they do not
+transform operation input by returning a value.
 
 Older Form Builder documentation showed the unsupported
 `onBeforeDeleteSubmission` name. v3 exposes

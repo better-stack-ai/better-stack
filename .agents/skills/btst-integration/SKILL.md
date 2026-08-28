@@ -44,8 +44,13 @@ See [REFERENCE.md](REFERENCE.md) for full code shapes for every file.
 - Export `handler` and `dbSchema`.
 - **Memory adapter + Next.js**: pin to `globalThis` to avoid two instances in the same process:
   ```ts
-  const g = global as typeof global & { __btst__?: ReturnType<typeof stack> }
-  export const myStack = g.__btst__ ??= stack({ ... })
+  function createStack() {
+    return stack({ ... })
+  }
+
+  type AppStack = ReturnType<typeof createStack>
+  const g = globalThis as typeof globalThis & { __btst__?: AppStack }
+  export const myStack = g.__btst__ ??= createStack()
   export const { handler, dbSchema } = myStack
   ```
 
