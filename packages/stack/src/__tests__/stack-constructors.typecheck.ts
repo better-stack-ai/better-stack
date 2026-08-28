@@ -1,5 +1,8 @@
-import { createMemoryAdapter } from "@btst/adapter-memory";
-import { createDbPlugin, type DatabaseDefinition } from "@btst/db";
+import {
+	createDbPlugin,
+	type DatabaseDefinition,
+	type DBAdapter,
+} from "@btst/db";
 import { createRoute } from "@btst/yar";
 import { z } from "zod";
 import {
@@ -71,7 +74,7 @@ const backendPlugin = defineBackendPlugin({
 const backendConfig = {
 	basePath: "/api",
 	plugins: { constructorProbe: backendPlugin },
-	adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
+	adapter: (_db: DatabaseDefinition) => null as unknown as DBAdapter,
 	auth: serverAuth,
 } satisfies BackendStackConfig<
 	{ constructorProbe: typeof backendPlugin },
