@@ -49,7 +49,9 @@ const clientStack = createClientStack({
 })
 ```
 
-Use `endpoints.<plugin>.api` or `endpoints.<plugin>.site` only when one plugin implements its BTST contract at another endpoint. A path-only API replacement inherits the top-level origin and server request headers. Supplying another origin requires its own `basePath` and does not inherit request headers. Headers and credentials declared on that explicit plugin endpoint are considered browser-safe and appear in the provider projection.
+Use `endpoints.<plugin>.api` or `endpoints.<plugin>.site` only when one plugin implements its BTST contract at another endpoint. A path-only API replacement inherits the top-level origin and server request headers. Supplying another origin requires its own `basePath` and does not inherit request headers. An empty plugin endpoint block inherits both top-level locations unchanged.
+
+Headers deliberately exposed to browser code use the explicit `browserHeaders` field and appear under the same name in the provider projection. Cookie, authorization, proxy-authorization, and set-cookie values are rejected there; keep request credentials in server-only `api.headers`. Cross-origin browser `credentials` must also be explicit.
 
 The returned `provider` value contains API/site/query information for browser consumers, but never top-level server request headers. Browser-created stacks reject `api.headers` rather than silently serializing them.
 

@@ -4,7 +4,10 @@ import { readFile } from "node:fs/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "../client";
 import {
+	createResourceQueryKeys,
 	defineClientPlugin,
+	runResourceMutation,
+	type ResourceClient,
 	type ResolvedClientPluginRuntime,
 } from "../plugins/client";
 
@@ -43,6 +46,84 @@ function createProbePlugin(
 						url: `${runtime.site.baseURL}${runtime.site.basePath}/probe`,
 					},
 				],
+			};
+		},
+	});
+}
+
+const probeResources = {
+	probe: {
+		queries: {
+			detail: { path: "/probe", select: (data: any) => data.url as string },
+			ssg: { path: "/probe/ssg", select: (data: any) => data.url as string },
+			live: { path: "/probe/live", select: (data: any) => data.url as string },
+		},
+		mutations: {
+			update: {
+				path: "/probe",
+				method: "PATCH" as const,
+				input: (value: string) => ({ body: { value } }),
+				select: (data: any) => data.url as string,
+			},
+		},
+	},
+} as const;
+
+function createProbeResourceSeam(runtime: ResolvedClientPluginRuntime) {
+	const calls: Array<{
+		path: string;
+		method: string;
+		headers: Record<string, string>;
+	}> = [];
+	const client: ResourceClient = async (path, options) => {
+		calls.push({
+			path,
+			method: options?.method ?? "GET",
+			headers: headersRecord(options?.headers),
+		});
+		return {
+			data: {
+				url: `${runtime.api.baseURL}${runtime.api.basePath}${path}`,
+			},
+		};
+	};
+	const queryKeys = createResourceQueryKeys(
+		client,
+		probeResources,
+		runtime.api.headers,
+	);
+	return {
+		calls,
+		queryKeys,
+		runtime,
+		mutate: (value: string) =>
+			runResourceMutation(
+				client,
+				probeResources.probe.mutations.update,
+				value,
+				runtime.api.headers,
+			) as Promise<string>,
+	};
+}
+
+type ProbeResourceSeam = ReturnType<typeof createProbeResourceSeam>;
+
+function createResourceProbePlugin(
+	onResolve: (seam: ProbeResourceSeam) => void,
+) {
+	return defineClientPlugin({
+		name: "probeResource",
+		resolve(runtime) {
+			const seam = createProbeResourceSeam(runtime);
+			onResolve(seam);
+			return {
+				routes: () => ({
+					probe: createRoute("/probe", () => ({
+						PageComponent: () => null,
+						loader: () =>
+							runtime.queryClient.prefetchQuery(seam.queryKeys.probe.detail()),
+					})),
+				}),
 			};
 		},
 	});
@@ -153,7 +234,7 @@ describe("resolved client runtime", () => {
 				probe: {
 					api: {
 						basePath: "/api/probe",
-						headers: { "x-public-client": "browser-safe" },
+						browserHeaders: { "x-public-client": "browser-safe" },
 					},
 				},
 			},
@@ -167,7 +248,9 @@ describe("resolved client runtime", () => {
 			"x-public-client": "browser-safe",
 			"x-request-id": "request-1",
 		});
-		expect(headersRecord(stack.provider.plugins.probe.api.headers)).toEqual({
+		expect(
+			headersRecord(stack.provider.plugins.probe.api.browserHeaders),
+		).toEqual({
 			"x-public-client": "browser-safe",
 		});
 		expect(JSON.stringify(stack.provider)).not.toContain("server-secret");
@@ -201,7 +284,7 @@ describe("resolved client runtime", () => {
 					api: {
 						baseURL: "https://plugins.example.net",
 						basePath: "/btst/probe",
-						headers: { "x-public-client": "browser-safe" },
+						browserHeaders: { "x-public-client": "browser-safe" },
 						credentials: "include",
 					},
 					site: {
@@ -228,7 +311,7 @@ describe("resolved client runtime", () => {
 			api: {
 				baseURL: "https://plugins.example.net",
 				basePath: "/btst/probe",
-				headers: new Headers({ "x-public-client": "browser-safe" }),
+				browserHeaders: new Headers({ "x-public-client": "browser-safe" }),
 				credentials: "include",
 			},
 			site: {
@@ -261,7 +344,7 @@ describe("resolved client runtime", () => {
 					api: {
 						baseURL: "https://plugins.example.net",
 						basePath: "/btst/probe",
-						headers: { "x-public-client": "browser-safe" },
+						browserHeaders: { "x-public-client": "browser-safe" },
 						credentials: "include",
 					},
 					site: {
@@ -285,6 +368,7 @@ describe("resolved client runtime", () => {
 
 	it("hydrates browser reads and runs mutations and invalidation through its one query client", async () => {
 		const serverQueryClient = new QueryClient();
+		let serverResource: ProbeResourceSeam | undefined;
 		const serverStack = createClientStack({
 			api: {
 				baseURL: "https://app.example.com",
@@ -296,21 +380,37 @@ describe("resolved client runtime", () => {
 				basePath: "/pages",
 			},
 			queryClient: serverQueryClient,
-			plugins: { probe: createProbePlugin(() => undefined) },
+			plugins: {
+				probe: createResourceProbePlugin((seam) => {
+					serverResource = seam;
+				}),
+			},
 			endpoints: {
 				probe: { api: { basePath: "/api/probe" } },
 			},
 		});
 		await serverStack.router.getRoute("/probe")?.loader?.();
+		expect(serverResource).toBeDefined();
 		await serverStack.provider.queryClient.prefetchQuery({
-			queryKey: ["probe-ssg"],
-			queryFn: async () =>
-				`${serverStack.provider.plugins.probe.api.baseURL}${serverStack.provider.plugins.probe.api.basePath}`,
+			...serverResource!.queryKeys.probe.ssg(),
 		});
+		expect(serverResource?.calls).toEqual([
+			{
+				path: "/probe",
+				method: "GET",
+				headers: { cookie: "session=server" },
+			},
+			{
+				path: "/probe/ssg",
+				method: "GET",
+				headers: { cookie: "session=server" },
+			},
+		]);
 		const dehydrated = dehydrate(serverQueryClient);
 
 		vi.stubGlobal("window", {});
 		const browserQueryClient = new QueryClient();
+		let browserResource: ProbeResourceSeam | undefined;
 		const browserStack = createClientStack({
 			api: {
 				baseURL: "https://app.example.com",
@@ -321,57 +421,70 @@ describe("resolved client runtime", () => {
 				basePath: "/pages",
 			},
 			queryClient: browserQueryClient,
-			plugins: { probe: createProbePlugin(() => undefined) },
+			plugins: {
+				probe: createResourceProbePlugin((seam) => {
+					browserResource = seam;
+				}),
+			},
 			endpoints: {
 				probe: { api: { basePath: "/api/probe" } },
 			},
 		});
 		hydrate(browserStack.provider.queryClient, dehydrated);
+		expect(browserResource).toBeDefined();
 
-		const browserFetch = vi.fn(async () => "unexpected refetch");
 		await expect(
 			browserStack.provider.queryClient.fetchQuery({
-				queryKey: ["probe"],
-				queryFn: browserFetch,
+				...browserResource!.queryKeys.probe.detail(),
 				staleTime: Number.POSITIVE_INFINITY,
 			}),
-		).resolves.toBe("https://app.example.com/api/probe");
-		expect(browserFetch).not.toHaveBeenCalled();
-		const browserSsgFetch = vi.fn(async () => "unexpected SSG refetch");
+		).resolves.toBe("https://app.example.com/api/probe/probe");
 		await expect(
 			browserStack.provider.queryClient.fetchQuery({
-				queryKey: ["probe-ssg"],
-				queryFn: browserSsgFetch,
+				...browserResource!.queryKeys.probe.ssg(),
 				staleTime: Number.POSITIVE_INFINITY,
 			}),
-		).resolves.toBe("https://app.example.com/api/probe");
-		expect(browserSsgFetch).not.toHaveBeenCalled();
+		).resolves.toBe("https://app.example.com/api/probe/probe/ssg");
+		expect(browserResource?.calls).toEqual([]);
+		await expect(
+			browserStack.provider.queryClient.fetchQuery(
+				browserResource!.queryKeys.probe.live(),
+			),
+		).resolves.toBe("https://app.example.com/api/probe/probe/live");
+		expect(browserResource?.calls).toEqual([
+			{ path: "/probe/live", method: "GET", headers: {} },
+		]);
 
 		const invalidate = vi.spyOn(browserQueryClient, "invalidateQueries");
-		const mutationTransport = vi.fn(async () => {
-			const { baseURL, basePath } = browserStack.provider.plugins.probe.api;
-			return `${baseURL}${basePath}/mutate`;
-		});
 		const mutation = browserStack.provider.queryClient
 			.getMutationCache()
 			.build(browserStack.provider.queryClient, {
-				mutationFn: mutationTransport,
+				mutationFn: () => browserResource!.mutate("updated"),
 				onSuccess: async (result) => {
-					browserStack.provider.queryClient.setQueryData(["probe"], result);
+					browserStack.provider.queryClient.setQueryData(
+						browserResource!.queryKeys.probe.detail().queryKey,
+						result,
+					);
 					await browserStack.provider.queryClient.invalidateQueries({
-						queryKey: ["probe"],
+						queryKey: browserResource!.queryKeys.probe._def,
 					});
 				},
 			});
 		await expect(mutation.execute(undefined)).resolves.toBe(
-			"https://app.example.com/api/probe/mutate",
+			"https://app.example.com/api/probe/probe",
 		);
-		expect(mutationTransport).toHaveBeenCalledOnce();
-		expect(browserQueryClient.getQueryData(["probe"])).toBe(
-			"https://app.example.com/api/probe/mutate",
-		);
+		expect(browserResource?.calls.at(-1)).toEqual({
+			path: "/probe",
+			method: "PATCH",
+			headers: {},
+		});
+		expect(
+			browserQueryClient.getQueryData(
+				browserResource!.queryKeys.probe.detail().queryKey,
+			),
+		).toBe("https://app.example.com/api/probe/probe");
 		expect(invalidate).toHaveBeenCalledWith({
-			queryKey: ["probe"],
+			queryKey: browserResource!.queryKeys.probe._def,
 		});
 		expect(browserStack.provider.queryClient).toBe(browserQueryClient);
 	});
@@ -395,7 +508,7 @@ describe("resolved client runtime", () => {
 				probe: {
 					api: {
 						basePath: "/api/probe",
-						headers: { "x-public-client": "browser-safe" },
+						browserHeaders: { "x-public-client": "browser-safe" },
 					},
 				},
 			},
@@ -495,9 +608,62 @@ describe("resolved client runtime", () => {
 		expect(() =>
 			createClientStack({
 				...baseConfig,
+				api: {
+					baseURL: "https://app.example.com",
+					basePath: "https://plugins.example.net/api",
+				},
+			}),
+		).toThrowError(/api\.basePath.*path without an origin/i);
+		expect(() =>
+			createClientStack({
+				...baseConfig,
 				endpoints: { missing: { api: { basePath: "/api/missing" } } } as any,
 			}),
 		).toThrowError(/missing.*registered client plugin/i);
+		expect(() =>
+			createClientStack({
+				...baseConfig,
+				endpoints: null,
+			} as any),
+		).toThrowError(/endpoints.*plugin endpoint map/i);
+		expect(() =>
+			createClientStack({
+				...baseConfig,
+				endpoints: { probe: null } as any,
+			}),
+		).toThrowError(/probe.*object/i);
+		expect(() =>
+			createClientStack({
+				...baseConfig,
+				endpoints: { probe: { api: false } } as any,
+			}),
+		).toThrowError(/probe\.api.*endpoint object/i);
+		for (const sensitiveHeader of ["authorization", "cookie"]) {
+			expect(() =>
+				createClientStack({
+					...baseConfig,
+					endpoints: {
+						probe: {
+							api: {
+								basePath: "/api/probe",
+								browserHeaders: { [sensitiveHeader]: "server-secret" },
+							},
+						},
+					},
+				}),
+			).toThrowError(
+				new RegExp(`browserHeaders.*sensitive header.*${sensitiveHeader}`, "i"),
+			);
+		}
+
+		const inherited = createClientStack({
+			...baseConfig,
+			endpoints: { probe: {} },
+		});
+		expect(inherited.provider.plugins.probe).toEqual({
+			api: baseConfig.api,
+			site: baseConfig.site,
+		});
 	});
 
 	it("keeps legacy client plugins working during first-party migration", async () => {

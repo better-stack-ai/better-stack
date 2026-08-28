@@ -58,7 +58,7 @@ const clientStack = createClientStack({
 		consumerProbe: {
 			api: {
 				basePath: "/api/probe",
-				headers: { "x-browser-safe": "public" },
+				browserHeaders: { "x-browser-safe": "public" },
 			},
 		},
 	},
@@ -81,7 +81,7 @@ const browserClientStack = createClientStack({
 		consumerProbe: {
 			api: {
 				basePath: "/api/probe",
-				headers: { "x-browser-safe": "public" },
+				browserHeaders: { "x-browser-safe": "public" },
 			},
 		},
 	},
@@ -91,6 +91,9 @@ clientStack.provider.queryClient satisfies QueryClient;
 clientStack.provider.plugins.consumerProbe.api.basePath satisfies string;
 browserClientStack.provider.queryClient satisfies QueryClient;
 browserClientStack.provider.plugins.consumerProbe.api.basePath satisfies string;
+browserClientStack.provider.plugins.consumerProbe.api.browserHeaders satisfies
+	| Headers
+	| undefined;
 observations[0]?.api.headers satisfies Headers | undefined;
 // @ts-expect-error Request headers do not exist on the top-level provider projection.
 clientStack.provider.api.headers;

@@ -53,7 +53,12 @@ function normalizeBasePath(value: unknown, label: string): string {
 	if (typeof value !== "string" || value.length === 0) {
 		throw new Error(`[btst/client] ${label} is required.`);
 	}
-	if (value.includes("?") || value.includes("#") || value.startsWith("//")) {
+	if (
+		value.includes("?") ||
+		value.includes("#") ||
+		value.startsWith("//") ||
+		/^[a-z][a-z\d+.-]*:/i.test(value)
+	) {
 		throw new Error(
 			`[btst/client] ${label} must be a path without an origin, query, or hash.`,
 		);
@@ -83,8 +88,8 @@ function resolveLocationOverride(
 	override: ClientLocationOverride | undefined,
 	label: string,
 ): ClientLocation {
-	if (!override) return { ...base };
-	if (typeof override !== "object") {
+	if (override === undefined) return { ...base };
+	if (override === null || typeof override !== "object") {
 		throw new Error(`[btst/client] ${label} must be an endpoint object.`);
 	}
 
@@ -125,14 +130,40 @@ function mergeHeaders(
 	return merged.keys().next().done ? undefined : merged;
 }
 
+const SENSITIVE_BROWSER_HEADER_NAMES = new Set([
+	"authorization",
+	"cookie",
+	"proxy-authorization",
+	"set-cookie",
+]);
+
+function cloneBrowserHeaders(
+	headers: HeadersInit | undefined,
+	label: string,
+): Headers | undefined {
+	const copy = cloneHeaders(headers);
+	if (!copy) return undefined;
+	for (const name of copy.keys()) {
+		if (SENSITIVE_BROWSER_HEADER_NAMES.has(name.toLowerCase())) {
+			throw new Error(
+				`[btst/client] ${label} cannot include sensitive header "${name}". Keep request credentials in server-only api.headers or use explicit browser credentials with a compatible endpoint.`,
+			);
+		}
+	}
+	return copy;
+}
+
 function projectApi(
 	location: ClientLocation,
 	override: ClientApiEndpointOverride | undefined,
 ): ClientProviderApi {
-	const headers = cloneHeaders(override?.headers);
+	const browserHeaders = cloneBrowserHeaders(
+		override?.browserHeaders,
+		"endpoint browserHeaders",
+	);
 	return {
 		...location,
-		...(headers ? { headers } : {}),
+		...(browserHeaders ? { browserHeaders } : {}),
 		...(override?.credentials !== undefined
 			? { credentials: override.credentials }
 			: {}),
@@ -161,10 +192,18 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 	) {
 		throw new Error(`[btst/client] plugins must be a plugin registration map.`);
 	}
+	if (
+		config.endpoints !== undefined &&
+		(config.endpoints === null ||
+			typeof config.endpoints !== "object" ||
+			Array.isArray(config.endpoints))
+	) {
+		throw new Error(`[btst/client] endpoints must be a plugin endpoint map.`);
+	}
 
 	if (typeof window !== "undefined" && config.api.headers !== undefined) {
 		throw new Error(
-			"[btst/client] API request headers are server-only. Create the browser stack without api.headers and use an explicit per-plugin endpoint header only for browser-safe values.",
+			"[btst/client] API request headers are server-only. Create the browser stack without api.headers and use per-plugin browserHeaders only for explicitly public values.",
 		);
 	}
 
@@ -203,9 +242,13 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 			`endpoints.${pluginKey}.site`,
 		);
 		const sameApiOrigin = pluginApi.baseURL === api.baseURL;
+		const browserHeaders = cloneBrowserHeaders(
+			endpoint?.api?.browserHeaders,
+			`endpoints.${pluginKey}.api.browserHeaders`,
+		);
 		const headers = mergeHeaders(
 			sameApiOrigin ? requestHeaders : undefined,
-			endpoint?.api?.headers,
+			browserHeaders,
 		);
 
 		pluginRuntimes[pluginKey] = {

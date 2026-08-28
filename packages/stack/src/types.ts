@@ -67,12 +67,15 @@ export type ClientLocationOverride =
  */
 export type ClientApiEndpointOverride = ClientLocationOverride & {
 	/** Explicit browser-safe headers used in both server and browser transports. */
-	headers?: HeadersInit;
+	browserHeaders?: HeadersInit;
 	/** Explicit browser Fetch credentials behavior for this endpoint. */
 	credentials?: RequestCredentials;
 };
 
-/** Stack-owned endpoint replacements for one registered client plugin. */
+/**
+ * Stack-owned endpoint replacements for one registered client plugin. An empty
+ * object inherits both top-level locations unchanged.
+ */
 export interface ClientPluginEndpointOverride {
 	/** Optional replacement for the plugin's BTST API endpoint. */
 	api?: ClientApiEndpointOverride;
@@ -101,7 +104,7 @@ export interface ResolvedClientPluginRuntime {
 /** Provider-safe API transport; it can contain only explicitly public headers. */
 export interface ClientProviderApi extends ClientLocation {
 	/** Explicit browser-safe endpoint headers; never server request headers. */
-	headers?: Headers;
+	browserHeaders?: Headers;
 	/** Explicit browser Fetch credentials behavior for this endpoint. */
 	credentials?: RequestCredentials;
 }

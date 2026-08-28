@@ -54,6 +54,22 @@ canonical.provider.plugins.probe.site.basePath satisfies string;
 // @ts-expect-error Server request headers are not part of the provider projection.
 canonical.provider.api.headers;
 
+createClientStack({
+	api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+	site: { baseURL: "https://app.example.com", basePath: "/pages" },
+	queryClient,
+	plugins: { probe },
+	endpoints: {
+		probe: {
+			api: {
+				basePath: "/api/probe",
+				// @ts-expect-error Provider-visible headers must use the explicit browserHeaders field.
+				headers: { "x-public": "value" },
+			},
+		},
+	},
+});
+
 // @ts-expect-error Runtime-independent definitions require the canonical runtime.
 createClientStack({ plugins: { probe } });
 
