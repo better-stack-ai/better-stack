@@ -211,8 +211,8 @@ function createStack() {
 	const s = stack({
 		basePath: "/api/data",
 		plugins: {
-			todos: todosBackendPlugin,
-			blog: blogBackendPlugin(blogHooks),
+			todos: todosBackendPlugin(),
+			blog: blogBackendPlugin({ hooks: blogHooks }),
 			aiChat: aiChatBackendPlugin({
 				model: openai("gpt-4o"),
 				systemPrompt: `You are WealthReview — an AI-native financial intake assistant for a licensed investment advisory firm. Your job is to conduct a brief, natural intake conversation with clients and then submit a structured assessment for human advisor review via the submitIntakeAssessment tool.
@@ -360,60 +360,69 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 				resolveUser: async (authorId) => {
 					return { name: `User ${authorId}` };
 				},
-				onBeforeList: async (query, ctx) => {
-					if (query.status && query.status !== "approved") {
-						console.log("onBeforeList: reading moderation queue");
-					}
-				},
-				onBeforePost: async (input, ctx) => {
-					console.log(
-						"onBeforePost: new comment on",
-						input.resourceType,
-						input.resourceId,
-					);
-				},
-				onAfterPost: async (comment, ctx) => {
-					console.log(
-						"Comment created:",
-						comment.id,
-						"status:",
-						comment.status,
-					);
-				},
-				onBeforeEdit: async (commentId, update, ctx) => {
-					console.log("onBeforeEdit: comment", commentId);
-				},
-				onBeforeLike: async (commentId, authorId, ctx) => {
-					console.log(
-						"onBeforeLike: user",
-						authorId,
-						"toggling like on comment",
-						commentId,
-					);
-				},
-				onBeforeStatusChange: async (commentId, status, ctx) => {
-					console.log("onBeforeStatusChange: comment", commentId, "->", status);
-				},
-				onAfterApprove: async (comment, ctx) => {
-					console.log("Comment approved:", comment.id);
-				},
-				onBeforeDelete: async (commentId, ctx) => {
-					console.log("onBeforeDelete: comment", commentId);
-				},
-				onAfterDelete: async (commentId, ctx) => {
-					console.log("Comment deleted:", commentId);
+				hooks: {
+					onBeforeList: async (query, ctx) => {
+						if (query.status && query.status !== "approved") {
+							console.log("onBeforeList: reading moderation queue");
+						}
+					},
+					onBeforePost: async (input, ctx) => {
+						console.log(
+							"onBeforePost: new comment on",
+							input.resourceType,
+							input.resourceId,
+						);
+					},
+					onAfterPost: async (comment, ctx) => {
+						console.log(
+							"Comment created:",
+							comment.id,
+							"status:",
+							comment.status,
+						);
+					},
+					onBeforeEdit: async (commentId, update, ctx) => {
+						console.log("onBeforeEdit: comment", commentId);
+					},
+					onBeforeLike: async (commentId, authorId, ctx) => {
+						console.log(
+							"onBeforeLike: user",
+							authorId,
+							"toggling like on comment",
+							commentId,
+						);
+					},
+					onBeforeStatusChange: async (commentId, status, ctx) => {
+						console.log(
+							"onBeforeStatusChange: comment",
+							commentId,
+							"->",
+							status,
+						);
+					},
+					onAfterApprove: async (comment, ctx) => {
+						console.log("Comment approved:", comment.id);
+					},
+					onBeforeDelete: async (commentId, ctx) => {
+						console.log("onBeforeDelete: comment", commentId);
+					},
+					onAfterDelete: async (commentId, ctx) => {
+						console.log("Comment deleted:", commentId);
+					},
 				},
 			}),
 			kanban: kanbanBackendPlugin({
-				onBeforeListBoards: async (filter, context) => {
-					console.log("onBeforeListBoards hook called", filter);
-				},
-				onBeforeCreateBoard: async (data, context) => {
-					console.log("onBeforeCreateBoard hook called", data.name);
-				},
-				onBoardCreated: async (board, context) => {
-					console.log("Board created:", board.id, board.name);
-					revalidatePath("/pages/ssg-kanban", "page");
+				hooks: {
+					onBeforeListBoards: async (filter, context) => {
+						console.log("onBeforeListBoards hook called", filter);
+					},
+					onBeforeCreateBoard: async (data, context) => {
+						console.log("onBeforeCreateBoard hook called", data.name);
+					},
+					onBoardCreated: async (board, context) => {
+						console.log("Board created:", board.id, board.name);
+						revalidatePath("/pages/ssg-kanban", "page");
+					},
 				},
 			}),
 			media: mediaBackendPlugin({

@@ -8,7 +8,11 @@ import {
 	createServerAuth,
 	type ServerAuth,
 } from "../../../authorization/server";
-import { commentsBackendPlugin, type CommentsBackendOptions } from "../api";
+import {
+	commentsBackendPlugin,
+	type CommentsBackendHooks,
+	type CommentsBackendOptions,
+} from "../api";
 import { commentsPermissions } from "../permissions";
 import type { Comment, CommentLike } from "../types";
 
@@ -205,7 +209,7 @@ type CommentsOperationApi = ReturnType<
 
 type OperationScenario = {
 	readonly name: string;
-	readonly hook: keyof CommentsBackendOptions;
+	readonly hook: keyof CommentsBackendHooks;
 	readonly prepare: (
 		backend: ReturnType<typeof makeBackend>,
 	) => Promise<(api: CommentsOperationApi) => Promise<unknown>>;
@@ -442,7 +446,9 @@ describe("Comments protected-operation matrix", () => {
 			const lifecycle = vi.fn();
 			const backend = makeBackend({
 				auth: createModeratorOnlyAuth(),
-				plugin: { [scenario.hook]: lifecycle } as CommentsBackendOptions,
+				plugin: {
+					hooks: { [scenario.hook]: lifecycle } as CommentsBackendHooks,
+				},
 			});
 			const run = await scenario.prepare(backend);
 
@@ -491,7 +497,9 @@ describe("Comments protected-operation matrix", () => {
 				const lifecycle = vi.fn();
 				const backend = makeBackend({
 					auth,
-					plugin: { [scenario.hook]: lifecycle } as CommentsBackendOptions,
+					plugin: {
+						hooks: { [scenario.hook]: lifecycle } as CommentsBackendHooks,
+					},
 				});
 				const run = await scenario.prepare(backend);
 				await expect(
@@ -510,7 +518,9 @@ describe("Comments protected-operation matrix", () => {
 		async (scenario) => {
 			const lifecycle = vi.fn();
 			const backend = makeBackend({
-				plugin: { [scenario.hook]: lifecycle } as CommentsBackendOptions,
+				plugin: {
+					hooks: { [scenario.hook]: lifecycle } as CommentsBackendHooks,
+				},
 			});
 			const run = await scenario.prepare(backend);
 
@@ -533,7 +543,7 @@ describe("Comments protected-operation matrix", () => {
 		};
 		const backend = makeBackend({
 			auth: createModeratorOnlyAuth(),
-			plugin: hooks,
+			plugin: { hooks },
 		});
 		const api = backend.forRequest(
 			request("/comments", { identity: moderator }),
@@ -611,7 +621,7 @@ describe("Comments protected-operation matrix", () => {
 		const afterApprove = vi.fn();
 		const backend = makeBackend({
 			auth: createAuth(),
-			plugin: { onAfterApprove: afterApprove },
+			plugin: { hooks: { onAfterApprove: afterApprove } },
 		});
 		const pending = await seedComment(backend, { status: "pending" });
 		const updateMany = backend.adapter.updateMany.bind(backend.adapter);
@@ -670,7 +680,7 @@ describe("Comments protected-operation matrix", () => {
 		const afterApprove = vi.fn();
 		const backend = makeBackend({
 			auth: createAuth(),
-			plugin: { onAfterApprove: afterApprove },
+			plugin: { hooks: { onAfterApprove: afterApprove } },
 		});
 		const pending = await seedComment(backend, { status: "pending" });
 		vi.spyOn(backend.adapter, "updateMany").mockResolvedValue(result as never);
@@ -727,7 +737,7 @@ describe("Comments protected-operation matrix", () => {
 		const afterApprove = vi.fn();
 		const backend = makeBackend({
 			auth: createAuth(),
-			plugin: { onAfterApprove: afterApprove },
+			plugin: { hooks: { onAfterApprove: afterApprove } },
 		});
 		const pending = await seedComment(backend, { status: "pending" });
 		const updateMany = backend.adapter.updateMany.bind(backend.adapter);
@@ -778,7 +788,7 @@ describe("Comments protected-operation matrix", () => {
 		const afterEdit = vi.fn();
 		const backend = makeBackend({
 			auth: createAuth(),
-			plugin: { onAfterEdit: afterEdit },
+			plugin: { hooks: { onAfterEdit: afterEdit } },
 		});
 		const comment = await seedComment(backend);
 		const updateMany = backend.adapter.updateMany.bind(backend.adapter);
@@ -825,7 +835,7 @@ describe("Comments protected-operation matrix", () => {
 		const afterEdit = vi.fn();
 		const backend = makeBackend({
 			auth: createAuth(),
-			plugin: { onAfterEdit: afterEdit },
+			plugin: { hooks: { onAfterEdit: afterEdit } },
 		});
 		const comment = await seedComment(backend);
 		const updateMany = backend.adapter.updateMany.bind(backend.adapter);
@@ -953,7 +963,7 @@ describe("Comments protected-operation matrix", () => {
 		const afterDelete = vi.fn();
 		const backend = makeBackend({
 			auth: createAuth(),
-			plugin: { onAfterDelete: afterDelete },
+			plugin: { hooks: { onAfterDelete: afterDelete } },
 		});
 		const comment = await seedComment(backend);
 		const transaction = backend.adapter.transaction.bind(backend.adapter);
@@ -996,7 +1006,7 @@ describe("Comments operation-first authorization", () => {
 			auth: createAuth(),
 			plugin: {
 				autoApprove: true,
-				onBeforePost: vi.fn(),
+				hooks: { onBeforePost: vi.fn() },
 			},
 		});
 		const comment = await seedComment(backend);
@@ -1233,12 +1243,14 @@ describe("Comments operation-first authorization", () => {
 		backend = makeBackend({
 			auth: createAuth(),
 			plugin: {
-				onBeforeEdit: async (id) => {
-					await backend.adapter.update<Comment>({
-						model: "comment",
-						where: [{ field: "id", value: id }],
-						update: { authorId: viewer.id },
-					});
+				hooks: {
+					onBeforeEdit: async (id) => {
+						await backend.adapter.update<Comment>({
+							model: "comment",
+							where: [{ field: "id", value: id }],
+							update: { authorId: viewer.id },
+						});
+					},
 				},
 			},
 		});
@@ -1271,16 +1283,18 @@ describe("Comments operation-first authorization", () => {
 		const backend = makeBackend({
 			auth: createAuth(),
 			plugin: {
-				onBeforeEdit: (_id, _data, context) => {
-					events.push(
-						`before:${context.identity?.id}:${context.facts.authorId}`,
-					);
-					expect(Object.isFrozen(context)).toBe(true);
-					expect(Object.isFrozen(context.input)).toBe(true);
-				},
-				onAfterEdit: (result, context) => {
-					events.push(`after:${result.body}`);
-					expect(context.result).toBe(result);
+				hooks: {
+					onBeforeEdit: (_id, _data, context) => {
+						events.push(
+							`before:${context.identity?.id}:${context.facts.authorId}`,
+						);
+						expect(Object.isFrozen(context)).toBe(true);
+						expect(Object.isFrozen(context.input)).toBe(true);
+					},
+					onAfterEdit: (result, context) => {
+						events.push(`after:${result.body}`);
+						expect(context.result).toBe(result);
+					},
 				},
 			},
 		});
@@ -1325,7 +1339,7 @@ describe("Comments operation-first authorization", () => {
 			const lifecycle = vi.fn();
 			const backend = makeBackend({
 				auth,
-				plugin: { onBeforeDelete: lifecycle },
+				plugin: { hooks: { onBeforeDelete: lifecycle } },
 			});
 			const comment = await seedComment(backend);
 			await expect(
@@ -1354,12 +1368,14 @@ describe("Comments operation-first authorization", () => {
 		const backend = makeBackend({
 			auth: createAuth(getIdentity),
 			plugin: {
-				onBeforePost: (_input, context) => {
-					events.push(`before:${context.identity?.id ?? "internal"}`);
-				},
-				onAfterPost: (comment, context) => {
-					events.push(`after:${comment.authorId}`);
-					expect(context.result).toBe(comment);
+				hooks: {
+					onBeforePost: (_input, context) => {
+						events.push(`before:${context.identity?.id ?? "internal"}`);
+					},
+					onAfterPost: (comment, context) => {
+						events.push(`after:${comment.authorId}`);
+						expect(context.result).toBe(comment);
+					},
 				},
 			},
 		});

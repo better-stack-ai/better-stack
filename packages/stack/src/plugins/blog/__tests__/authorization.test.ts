@@ -123,7 +123,9 @@ function makeBackend(options?: {
 }) {
 	return stack({
 		basePath: "/api",
-		plugins: { blog: blogBackendPlugin(options?.hooks) },
+		plugins: {
+			blog: blogBackendPlugin(options?.hooks ? { hooks: options.hooks } : {}),
+		},
 		adapter: memoryAdapter,
 		...(options?.auth ? { auth: options.auth as never } : {}),
 	});
@@ -1128,15 +1130,17 @@ describe("Blog delete one-rule authorization tracer", () => {
 			basePath: "/api",
 			plugins: {
 				blog: blogBackendPlugin({
-					onBeforeDeletePost: () => {
-						ruleLifecycleEvents.push("before");
-					},
-					onPostDeleted: () => {
-						ruleLifecycleEvents.push("after");
-					},
-					onDeletePostError: () => {
-						ruleLifecycleEvents.push("error");
-						throw new Error("hook must not replace rule failure");
+					hooks: {
+						onBeforeDeletePost: () => {
+							ruleLifecycleEvents.push("before");
+						},
+						onPostDeleted: () => {
+							ruleLifecycleEvents.push("after");
+						},
+						onDeletePostError: () => {
+							ruleLifecycleEvents.push("error");
+							throw new Error("hook must not replace rule failure");
+						},
 					},
 				}),
 			},
@@ -1174,15 +1178,17 @@ describe("Blog delete one-rule authorization tracer", () => {
 			basePath: "/api",
 			plugins: {
 				blog: blogBackendPlugin({
-					onBeforeDeletePost: () => {
-						missingRuleLifecycleEvents.push("before");
-					},
-					onPostDeleted: () => {
-						missingRuleLifecycleEvents.push("after");
-					},
-					onDeletePostError: () => {
-						missingRuleLifecycleEvents.push("error");
-						throw new Error("hook must not replace missing-rule denial");
+					hooks: {
+						onBeforeDeletePost: () => {
+							missingRuleLifecycleEvents.push("before");
+						},
+						onPostDeleted: () => {
+							missingRuleLifecycleEvents.push("after");
+						},
+						onDeletePostError: () => {
+							missingRuleLifecycleEvents.push("error");
+							throw new Error("hook must not replace missing-rule denial");
+						},
 					},
 				}),
 			},

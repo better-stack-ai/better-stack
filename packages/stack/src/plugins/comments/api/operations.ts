@@ -236,8 +236,8 @@ export interface CommentsBackendHooks {
 	) => Promise<void> | void;
 }
 
-/** Configuration and lifecycle options for the Comments backend plugin. */
-export interface CommentsBackendOptions extends CommentsBackendHooks {
+/** Configuration for the Comments backend plugin. */
+export interface CommentsBackendOptions {
 	/** Automatically approve newly created comments. @default false */
 	autoApprove?: boolean;
 	/** Register the create-comment HTTP endpoint. @default true */
@@ -248,6 +248,8 @@ export interface CommentsBackendOptions extends CommentsBackendHooks {
 	resolveUser?: (
 		authorId: string,
 	) => Promise<{ name: string; avatarUrl?: string } | null>;
+	/** Post-authorization domain lifecycle hooks. */
+	hooks?: CommentsBackendHooks;
 }
 
 /** A domain/HTTP error raised after Comments input/fact validation. */
@@ -473,13 +475,13 @@ export function createCommentsOperations(
 		before: async (context) => {
 			const lifecycle = listContext(context);
 			if (context.input.authorId) {
-				await options.onBeforeListByAuthor?.(
+				await options.hooks?.onBeforeListByAuthor?.(
 					context.input.authorId,
 					context.input,
 					lifecycle,
 				);
 			}
-			await options.onBeforeList?.(context.input, lifecycle);
+			await options.hooks?.onBeforeList?.(context.input, lifecycle);
 		},
 		execute: async ({ input, identity }) =>
 			serializeCommentListResult(
@@ -499,7 +501,10 @@ export function createCommentsOperations(
 		permission: commentsPermissions.thread.read,
 		facts: ({ input }) => readFactsForCount(input),
 		before: async (context) => {
-			await options.onBeforeCount?.(context.input, countContext(context));
+			await options.hooks?.onBeforeCount?.(
+				context.input,
+				countContext(context),
+			);
 		},
 		execute: async ({ input }) => ({
 			count: await getCommentCount(adapter, input),
@@ -526,7 +531,7 @@ export function createCommentsOperations(
 				);
 			}
 			const { authorId: _trustedAuthorId, ...publicInput } = context.input;
-			await options.onBeforePost?.(publicInput, createContext(context));
+			await options.hooks?.onBeforePost?.(publicInput, createContext(context));
 		},
 		execute: async ({ input, identity }) => {
 			await assertReplyTarget(adapter, input);
@@ -543,7 +548,7 @@ export function createCommentsOperations(
 		},
 		after: async (context) => {
 			const base = createContext(context);
-			await options.onAfterPost?.(
+			await options.hooks?.onAfterPost?.(
 				context.result,
 				Object.freeze({ ...base, result: context.result }),
 			);
@@ -570,7 +575,7 @@ export function createCommentsOperations(
 					"COMMENT_EDITING_DISABLED",
 				);
 			}
-			await options.onBeforeEdit?.(
+			await options.hooks?.onBeforeEdit?.(
 				context.input.id,
 				context.input.data,
 				editContext(context),
@@ -599,7 +604,7 @@ export function createCommentsOperations(
 		},
 		after: async (context) => {
 			const base = editContext(context);
-			await options.onAfterEdit?.(
+			await options.hooks?.onAfterEdit?.(
 				context.result,
 				Object.freeze({ ...base, result: context.result }),
 			);
@@ -618,7 +623,7 @@ export function createCommentsOperations(
 				context.identity?.id,
 				context.input.authorId,
 			);
-			await options.onBeforeLike?.(
+			await options.hooks?.onBeforeLike?.(
 				context.input.id,
 				authorId,
 				reactContext(context),
@@ -651,7 +656,7 @@ export function createCommentsOperations(
 			};
 		},
 		before: async (context) => {
-			await options.onBeforeStatusChange?.(
+			await options.hooks?.onBeforeStatusChange?.(
 				context.input.id,
 				context.input.data.status,
 				moderateContext(context),
@@ -681,7 +686,7 @@ export function createCommentsOperations(
 		after: async (context) => {
 			if (context.input.data.status !== "approved") return;
 			const base = moderateContext(context);
-			await options.onAfterApprove?.(
+			await options.hooks?.onAfterApprove?.(
 				context.result,
 				Object.freeze({ ...base, result: context.result }),
 			);
@@ -696,7 +701,10 @@ export function createCommentsOperations(
 			return { commentId: comment.id, authorId: comment.authorId };
 		},
 		before: async (context) => {
-			await options.onBeforeDelete?.(context.input.id, deleteContext(context));
+			await options.hooks?.onBeforeDelete?.(
+				context.input.id,
+				deleteContext(context),
+			);
 		},
 		execute: async ({ input, facts }) => {
 			const deleted = await deleteCommentMutation(adapter, input.id, {
@@ -709,7 +717,7 @@ export function createCommentsOperations(
 		},
 		after: async (context) => {
 			const base = deleteContext(context);
-			await options.onAfterDelete?.(
+			await options.hooks?.onAfterDelete?.(
 				context.input.id,
 				Object.freeze({ ...base, result: context.result }),
 			);

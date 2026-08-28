@@ -140,7 +140,7 @@ export const formBuilderBackendPlugin = (
 	config: FormBuilderBackendConfig = {},
 ) =>
 	defineBackendPlugin({
-		name: "form-builder",
+		id: "formBuilder",
 		dbPlugin: dbSchema,
 		operations: (adapter: Adapter) =>
 			createFormBuilderOperations(adapter, config.hooks),

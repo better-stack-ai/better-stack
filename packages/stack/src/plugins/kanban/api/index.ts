@@ -1,6 +1,7 @@
 export {
 	kanbanBackendPlugin,
 	type KanbanApiRouter,
+	type KanbanBackendOptions,
 	type KanbanRouteKey,
 } from "./plugin";
 export {

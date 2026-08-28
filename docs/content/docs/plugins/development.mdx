@@ -179,8 +179,8 @@ import {
 import { z } from "zod"
 import { todoPermissions } from "../permissions"
 
-export const todosBackendPlugin = defineBackendPlugin({
-  name: "todos",
+export const todosBackendPlugin = () => defineBackendPlugin({
+  id: "todos",
   dbPlugin: todosSchema,
 
   operations: (adapter) => ({
@@ -224,7 +224,9 @@ export const todosBackendPlugin = defineBackendPlugin({
   }),
 })
 
-export type TodosApiRouter = ReturnType<typeof todosBackendPlugin.routes>
+export type TodosApiRouter = ReturnType<
+  ReturnType<typeof todosBackendPlugin>["routes"]
+>
 ```
 
 For compound behavior, `additionalPermissions` derives every secondary check
@@ -277,7 +279,7 @@ and a concrete rationale:
 
 ```typescript
 defineBackendPlugin({
-  name: "reference",
+  id: "reference",
   dbPlugin: referenceSchema,
   infrastructureRoutes: {
     schema: {
@@ -380,8 +382,8 @@ const operations = (adapter: Adapter) => ({
   }),
 })
 
-export const todosBackendPlugin = defineBackendPlugin({
-  name: "todos",
+export const todosBackendPlugin = () => defineBackendPlugin({
+  id: "todos",
   dbPlugin: dbSchema,
   operations,
   api: (adapter) => ({ prefetchForRoute: createTodoPrefetchForRoute(adapter) }),
@@ -589,8 +591,8 @@ function createTodosPrefetchForRoute(adapter: Adapter): TodosPrefetchForRoute {
   } as TodosPrefetchForRoute
 }
 
-export const todosBackendPlugin = defineBackendPlugin({
-  name: "todos",
+export const todosBackendPlugin = () => defineBackendPlugin({
+  id: "todos",
   dbPlugin: dbSchema,
   api: (adapter) => ({
     listTodos: () => listTodos(adapter),
@@ -868,7 +870,7 @@ This pattern ensures:
 ```ts
 export const myStack = stack({
   basePath: "/api/data",
-  plugins: { todos: todosBackendPlugin, blog: blogBackendPlugin() },
+  plugins: { todos: todosBackendPlugin(), blog: blogBackendPlugin() },
   adapter: (db) => createMemoryAdapter(db)({}),
   auth: serverAuth,
 })

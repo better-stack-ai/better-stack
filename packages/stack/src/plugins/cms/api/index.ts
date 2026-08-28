@@ -26,6 +26,7 @@ export {
 	CMSUpdateContentItemBodySchema,
 } from "./operations";
 export type {
+	CMSBackendConfig,
 	CMSBackendHooks,
 	CMSCreateOperationContext,
 	CMSCreateResultContext,

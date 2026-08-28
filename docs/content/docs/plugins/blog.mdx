@@ -426,7 +426,7 @@ const blogHooks: BlogBackendHooks = {
 
 const { handler, dbSchema } = stack({
   plugins: {
-    blog: blogBackendPlugin(blogHooks)
+    blog: blogBackendPlugin({ hooks: blogHooks })
   },
   // ...
 })

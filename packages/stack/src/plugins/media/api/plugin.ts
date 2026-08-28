@@ -157,7 +157,7 @@ function parseMultipartFile(body: unknown) {
 /** Media backend plugin backed by one operation inventory. */
 export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 	defineBackendPlugin({
-		name: "media",
+		id: "media",
 		dbPlugin: dbSchema,
 		operations: (adapter: Adapter) => createMediaOperations(adapter, config),
 

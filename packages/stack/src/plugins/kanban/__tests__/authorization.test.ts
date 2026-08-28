@@ -175,7 +175,11 @@ function makeBackend(options?: {
 }) {
 	return stack({
 		basePath: "/api",
-		plugins: { kanban: kanbanBackendPlugin(options?.hooks) },
+		plugins: {
+			kanban: kanbanBackendPlugin(
+				options?.hooks ? { hooks: options.hooks } : {},
+			),
+		},
 		adapter: options?.adapter ?? rawMemoryAdapter,
 		...(options?.auth ? { auth: options.auth as never } : {}),
 	});

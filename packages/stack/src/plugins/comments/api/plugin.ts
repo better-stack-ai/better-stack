@@ -48,7 +48,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions = {}) => {
 	const editingEnabled = options.allowEditing !== false;
 
 	return defineBackendPlugin({
-		name: "comments",
+		id: "comments",
 		dbPlugin: dbSchema,
 		operations: (adapter: Adapter) =>
 			createCommentsOperations(adapter, options),

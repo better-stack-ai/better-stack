@@ -670,8 +670,10 @@ After:
 const serverAuth = createServerAuth({ authorization, getIdentity: readIdentity });
 
 commentsBackendPlugin({
-  onBeforePost: async (_input, context: CommentsCreateOperationContext) => {
-    await audit(context.identity, context.facts);
+  hooks: {
+    onBeforePost: async (_input, context: CommentsCreateOperationContext) => {
+      await audit(context.identity, context.facts);
+    },
   },
 });
 
