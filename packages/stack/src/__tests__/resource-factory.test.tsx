@@ -3,9 +3,11 @@ import { act, Suspense } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createClientStack } from "../client";
 import { StackProvider } from "../context";
 import {
 	createResourceQueryKeys,
+	defineClientPlugin,
 	runResourceMutation,
 	type ResourcesDeclaration,
 	type StackError,
@@ -380,6 +382,64 @@ describe("createResource hooks", () => {
 		const url = String(fetchMock.mock.calls[0]?.[0]);
 		expect(url).toContain("http://test.local/api/data/items");
 		expect(url).toContain("id=1");
+	});
+
+	it("resolves a resource through its registration-bound provider runtime", async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse({ items: [{ id: "1", name: "canonical" }] }),
+		);
+		let canonicalItems!: typeof items;
+		const stack = createClientStack({
+			api: { baseURL: "http://test.local", basePath: "/api/data" },
+			site: { baseURL: "http://test.local", basePath: "/pages" },
+			queryClient,
+			plugins: {
+				canonicalProbe: defineClientPlugin({
+					id: "canonicalProbe",
+					resolve: (runtime) => {
+						canonicalItems = createResource({
+							plugin: runtime.id,
+							resources,
+						});
+						return { routes: () => ({}) };
+					},
+				}),
+			},
+			endpoints: {
+				canonicalProbe: {
+					api: {
+						basePath: "/api/canonical",
+						browserHeaders: { "x-canonical": "bound" },
+						credentials: "include",
+					},
+				},
+			},
+		});
+
+		let captured: any;
+		function Probe() {
+			captured = canonicalItems.items.detail.use(["1"]);
+			return null;
+		}
+		await act(async () => {
+			root.render(
+				<StackProvider stack={stack} router={{ refresh }}>
+					<QueryClientProvider client={stack.provider.queryClient}>
+						<Probe />
+					</QueryClientProvider>
+				</StackProvider>,
+			);
+		});
+		await waitFor(() => captured.isSuccess);
+
+		expect(captured.data).toEqual({ id: "1", name: "canonical" });
+		const [requestUrl, requestInit] = fetchMock.mock.calls[0] ?? [];
+		const init = requestInit as RequestInit | undefined;
+		expect(String(requestUrl)).toContain(
+			"http://test.local/api/canonical/items",
+		);
+		expect(new Headers(init?.headers).get("x-canonical")).toBe("bound");
+		expect(init?.credentials).toBe("include");
 	});
 
 	it("use() respects the enabled option", async () => {

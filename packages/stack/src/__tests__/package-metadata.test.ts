@@ -3,7 +3,10 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
+import { createMemoryAdapter } from "@btst/adapter-memory";
+import type { DatabaseDefinition } from "@btst/db";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 const execFileAsync = promisify(execFile);
 
@@ -149,5 +152,88 @@ describe("published symmetric stack constructors", () => {
 			],
 			{ cwd: resolve(".") },
 		);
+	}, 30_000);
+
+	it("preserves prototype-like canonical IDs across public backend surfaces", async () => {
+		const apiSpecifier = "@btst/stack/api";
+		const pluginApiSpecifier = "@btst/stack/plugins/api";
+		const authorizationSpecifier = "@btst/stack/authorization";
+		const [{ createBackendStack }, pluginApi, authorization] =
+			await Promise.all([
+				import(apiSpecifier),
+				import(pluginApiSpecifier),
+				import(authorizationSpecifier),
+			]);
+		const permissions = authorization.definePermissions("prototype-id", {
+			echo: authorization.permission(),
+		});
+		const echo = pluginApi.defineOperation({
+			access: "public",
+			input: z.object({ value: z.string() }),
+			permission: permissions.echo,
+			facts: () => undefined,
+			execute: ({ input }: { input: { value: string } }) => input.value,
+		});
+		let observedContext:
+			| {
+					pluginRoutes: Record<string, Record<string, unknown>>;
+					endpointInventory?: Array<{ pluginName: string }>;
+			  }
+			| undefined;
+		let observedRouteOperations: Record<string, unknown> | undefined;
+		const prototypePlugin = pluginApi.defineBackendPlugin({
+			id: "__proto__",
+			name: "legacy-name",
+			dbPlugin: pluginApi.createDbPlugin("prototype-id-db", {}),
+			operations: () => ({ echo }),
+			infrastructureRoutes: {
+				health: {
+					access: "public",
+					rationale: "Exercises public stack composition in the package test.",
+				},
+			},
+			routes: (
+				_adapter: unknown,
+				context: typeof observedContext,
+				operations: Record<string, any>,
+			) => {
+				observedContext = context;
+				observedRouteOperations = operations;
+				return {
+					health: pluginApi.createEndpoint(
+						"/prototype-id",
+						{ method: "GET" },
+						async () => ({ ok: true }),
+					),
+				};
+			},
+			api: () => ({ id: () => "__proto__" }),
+		});
+		const registrations: Record<string, unknown> = {
+			["__proto__"]: prototypePlugin,
+		};
+
+		const stack = createBackendStack({
+			plugins: registrations,
+			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
+		});
+		const requestApi = stack.forRequest(
+			new Request("https://app.example.com/api"),
+		).api;
+
+		expect(Object.getPrototypeOf(stack.api)).toBeNull();
+		expect(Object.hasOwn(stack.api, "__proto__")).toBe(true);
+		expect(stack.api.__proto__.id()).toBe("__proto__");
+		expect(Object.getPrototypeOf(stack.internal)).toBeNull();
+		expect(Object.getPrototypeOf(stack.internal.__proto__)).toBeNull();
+		expect(Object.getPrototypeOf(requestApi)).toBeNull();
+		expect(Object.getPrototypeOf(requestApi.__proto__)).toBeNull();
+		expect(Object.getPrototypeOf(observedContext?.pluginRoutes)).toBeNull();
+		expect(Object.getPrototypeOf(observedRouteOperations)).toBeNull();
+		expect(observedContext?.endpointInventory?.[0]?.pluginName).toBe(
+			"__proto__",
+		);
+		expect(stack.internal.__proto__.echo).toBeTypeOf("function");
+		expect(requestApi.__proto__.echo).toBeTypeOf("function");
 	}, 30_000);
 });

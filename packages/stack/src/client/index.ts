@@ -14,6 +14,10 @@ import type {
 	Sitemap,
 } from "../types";
 import { resolveClientRuntime } from "./runtime";
+import {
+	resolvePluginProgrammaticId,
+	resolvePluginRegistrationIds,
+} from "../plugin-registration";
 export type {
 	ClientApiConfig,
 	ClientApiEndpointOverride,
@@ -34,7 +38,7 @@ export type {
 	ResolvedClientStackConfig,
 } from "../types";
 
-type AnyPluginMap = Record<string, ClientPluginRegistration<any, any>>;
+type AnyPluginMap = Record<string, ClientPluginRegistration<any, any, any>>;
 type LegacyPluginMap = Record<string, ClientPlugin<any, any>>;
 
 function hasResolvedRuntime<TPlugins extends AnyPluginMap>(
@@ -46,14 +50,6 @@ function hasResolvedRuntime<TPlugins extends AnyPluginMap>(
 		Object.hasOwn(config, "queryClient") ||
 		Object.hasOwn(config, "endpoints")
 	);
-}
-
-function isPlainPluginMap(value: unknown): value is AnyPluginMap {
-	if (value === null || typeof value !== "object" || Array.isArray(value)) {
-		return false;
-	}
-	const prototype = Object.getPrototypeOf(value);
-	return prototype === Object.prototype || prototype === null;
 }
 
 /**
@@ -109,16 +105,19 @@ export function createClientStack<
 	const registrations = Object.hasOwn(config, "plugins")
 		? config.plugins
 		: undefined;
-	if (!isPlainPluginMap(registrations)) {
-		throw new Error(`[btst/client] plugins must be a plugin registration map.`);
-	}
+	const registrationIds = resolvePluginRegistrationIds(registrations, "client");
+	const validatedRegistrations = registrations as TPlugins;
 	const canonical = hasResolvedRuntime(config);
-	const runtime = canonical ? resolveClientRuntime(config) : undefined;
+	const runtime = canonical
+		? resolveClientRuntime(config, registrationIds)
+		: undefined;
 	const resolvedPlugins: Record<string, ClientPlugin<any, any>> = Object.create(
 		null,
 	);
 
-	for (const [pluginKey, registration] of Object.entries(registrations)) {
+	for (const [pluginKey, registration] of Object.entries(
+		validatedRegistrations,
+	)) {
 		if (Object.hasOwn(registration, "resolve")) {
 			if (!runtime) {
 				throw new Error(
@@ -133,8 +132,20 @@ export function createClientStack<
 				);
 			}
 			resolvedPlugins[pluginKey] = {
-				name: definition.name,
 				...resolution,
+				...(Object.hasOwn(definition, "id")
+					? { id: registrationIds[pluginKey] }
+					: {}),
+				name: resolvePluginProgrammaticId(
+					definition,
+					registrationIds[pluginKey]!,
+				),
+			};
+		} else if (Object.hasOwn(registration, "id")) {
+			resolvedPlugins[pluginKey] = {
+				...(registration as ClientPlugin<any, any>),
+				id: registrationIds[pluginKey],
+				name: registrationIds[pluginKey],
 			};
 		} else {
 			resolvedPlugins[pluginKey] = registration as ClientPlugin<any, any>;

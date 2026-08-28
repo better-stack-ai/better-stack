@@ -27,6 +27,10 @@ import {
 	type ComposedEndpointInventoryEntry,
 } from "../plugins/api/endpoint-inventory";
 import { serializeValidationIssues } from "../plugins/api/create-endpoint";
+import {
+	resolvePluginProgrammaticId,
+	resolvePluginRegistrationIds,
+} from "../plugin-registration";
 
 export { toNodeHandler } from "better-call/node";
 
@@ -97,6 +101,7 @@ export function createBackendStack<
 	},
 ): BackendStack<TRoutes, PluginApis<TPlugins>, PluginOperations<TPlugins>> {
 	const { plugins, adapter, dbSchema, basePath } = config;
+	const registrationIds = resolvePluginRegistrationIds(plugins, "backend");
 	const runtimeAuth = (
 		config as unknown as { auth?: ServerAuth<AnyAuthorization> }
 	).auth;
@@ -107,7 +112,7 @@ export function createBackendStack<
 	}
 
 	// Collect all routes from all plugins with type-safe prefixed keys
-	const allRoutes = {} as TRoutes;
+	const allRoutes = Object.create(null) as TRoutes;
 
 	let betterDbSchema = dbSchema ?? defineDb({});
 
@@ -121,10 +126,14 @@ export function createBackendStack<
 
 	// Keep the constructed route maps on the shared context so introspection
 	// plugins inspect the real routes instead of invoking factories a second time.
-	const pluginRoutesByName: Record<string, Record<string, any>> = {};
+	const pluginRoutesByName: Record<string, Record<string, any>> = Object.create(
+		null,
+	);
 
 	// Create context for plugins that need access to all plugins (e.g., openAPI)
-	const pluginOperations: Record<string, Record<string, any>> = {};
+	const pluginOperations: Record<string, Record<string, any>> = Object.create(
+		null,
+	);
 	const endpointInventory: ComposedEndpointInventoryEntry[] = [];
 	const context: StackContext = {
 		plugins,
@@ -143,9 +152,9 @@ export function createBackendStack<
 	const routeOperationApis: Record<
 		string,
 		Record<string, RouteOperation<AnyOperation>>
-	> = {};
+	> = Object.create(null);
 	for (const [pluginKey, operations] of Object.entries(pluginOperations)) {
-		routeOperationApis[pluginKey] = {};
+		routeOperationApis[pluginKey] = Object.create(null);
 		for (const [operationKey, operation] of Object.entries(operations)) {
 			const invoke = (input: unknown, request: Request) =>
 				runAuthorizedOperation(operation, input, {
@@ -182,15 +191,15 @@ export function createBackendStack<
 		const pluginRoutes = plugin.routes(
 			adapterInstance,
 			context,
-			routeOperationApis[pluginKey] ?? {},
+			routeOperationApis[pluginKey] ?? Object.create(null),
 		);
 		pluginRoutesByName[pluginKey] = pluginRoutes;
 		endpointInventory.push(
 			...composeEndpointInventory(
 				pluginKey,
-				plugin.name,
+				resolvePluginProgrammaticId(plugin, registrationIds[pluginKey]!),
 				pluginRoutes,
-				pluginOperations[pluginKey] ?? {},
+				pluginOperations[pluginKey] ?? Object.create(null),
 				plugin.operations !== undefined || runtimeAuth !== undefined,
 				plugin.infrastructureRoutes,
 				plugin.operationRouteMap,
@@ -209,7 +218,7 @@ export function createBackendStack<
 	});
 
 	// Build the typed api surface by calling each plugin's api factory
-	const pluginApis = {} as PluginApis<TPlugins>;
+	const pluginApis = Object.create(null) as PluginApis<TPlugins>;
 	for (const [pluginKey, plugin] of Object.entries(plugins)) {
 		if (plugin.api) {
 			(pluginApis as any)[pluginKey] = plugin.api(adapterInstance);
@@ -228,9 +237,9 @@ export function createBackendStack<
 		const result: Record<
 			string,
 			Record<string, (input: unknown) => unknown>
-		> = {};
+		> = Object.create(null);
 		for (const [pluginKey, operations] of Object.entries(pluginOperations)) {
-			result[pluginKey] = {};
+			result[pluginKey] = Object.create(null);
 			for (const [operationKey, operation] of Object.entries(operations)) {
 				result[pluginKey]![operationKey] = (input: unknown) =>
 					runAuthorizedOperation(operation, input, {
@@ -245,9 +254,9 @@ export function createBackendStack<
 	const internalResult: Record<
 		string,
 		Record<string, (input: unknown) => unknown>
-	> = {};
+	> = Object.create(null);
 	for (const [pluginKey, operations] of Object.entries(pluginOperations)) {
-		internalResult[pluginKey] = {};
+		internalResult[pluginKey] = Object.create(null);
 		for (const [operationKey, operation] of Object.entries(operations)) {
 			internalResult[pluginKey]![operationKey] = (input: unknown) =>
 				runInternalOperation(operation, input);

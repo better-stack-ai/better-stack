@@ -9,7 +9,7 @@ import type {
 	ResolvedClientStackConfig,
 } from "../types";
 
-type AnyPluginMap = Record<string, ClientPluginRegistration<any, any>>;
+type AnyPluginMap = Record<string, ClientPluginRegistration<any, any, any>>;
 
 interface ResolvedClientRuntime<TPlugins extends AnyPluginMap> {
 	pluginRuntimes: { [K in keyof TPlugins]: ResolvedClientPluginRuntime };
@@ -200,6 +200,7 @@ function projectApi(
 /** Resolves one request/browser runtime and its request-data-free provider view. */
 export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 	config: ResolvedClientStackConfig<TPlugins>,
+	registrationIds: Readonly<Record<string, string>>,
 ): ResolvedClientRuntime<TPlugins> {
 	const apiConfig = ownValue(config, "api");
 	const siteConfig = ownValue(config, "site");
@@ -253,6 +254,7 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 		Object.create(null);
 
 	for (const pluginKey of Object.keys(plugins)) {
+		const id = registrationIds[pluginKey]!;
 		const endpoint =
 			endpoints && Object.hasOwn(endpoints, pluginKey)
 				? endpoints[pluginKey]
@@ -298,6 +300,7 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 		);
 
 		pluginRuntimes[pluginKey] = nullRecord({
+			id,
 			api: nullRecord({
 				...pluginApi,
 				...(headers ? { headers } : {}),
@@ -307,6 +310,7 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 			queryClient,
 		});
 		providerPlugins[pluginKey] = nullRecord({
+			id,
 			api: projectApi(pluginApi, browserHeaders, credentials),
 			site: pluginSite,
 		});
@@ -320,9 +324,7 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 			api,
 			site,
 			queryClient,
-			plugins: providerPlugins as {
-				[K in keyof TPlugins]: ClientProviderPluginRuntime;
-			},
+			plugins: providerPlugins as ClientProviderProjection<TPlugins>["plugins"],
 		}),
 	});
 }

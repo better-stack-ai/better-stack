@@ -3,6 +3,7 @@ import { defineClientPlugin } from "@btst/stack/plugins/client";
 import { defineRoute } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
 import type { ClientStackContext } from "../../../types";
+import { resolvePluginProgrammaticId } from "../../../plugin-registration";
 import {
 	generateRouteDocsSchema,
 	fetchAllSitemapEntries,
@@ -65,7 +66,8 @@ export function getRegisteredRoutes(): RegisteredRoute[] {
 	for (const [pluginKey, plugin] of Object.entries(
 		moduleStoredContext.plugins,
 	)) {
-		if (pluginKey === "routeDocs" || plugin.name === "route-docs") continue;
+		const pluginId = resolvePluginProgrammaticId(plugin, pluginKey);
+		if (pluginId === "routeDocs" || pluginId === "route-docs") continue;
 		try {
 			const routes = plugin.routes(moduleStoredContext);
 			for (const [routeKey, route] of Object.entries(routes)) {
@@ -73,7 +75,7 @@ export function getRegisteredRoutes(): RegisteredRoute[] {
 				if (path) {
 					result.push({
 						path,
-						plugin: plugin.name || pluginKey,
+						plugin: pluginId,
 						key: routeKey,
 					});
 				}

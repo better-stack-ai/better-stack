@@ -60,6 +60,8 @@ import type { Router, Endpoint, Status, statusCodes } from "better-call";
 interface CreateApiClientOptions {
 	baseURL?: string;
 	basePath?: string;
+	headers?: HeadersInit;
+	credentials?: RequestCredentials;
 }
 
 /**
@@ -72,7 +74,7 @@ interface CreateApiClientOptions {
 export function createApiClient<
 	TRouter extends Router | Record<string, Endpoint> = Record<string, Endpoint>,
 >(options?: CreateApiClientOptions): ReturnType<typeof createClient<TRouter>> {
-	const { baseURL = "", basePath = "/" } = options ?? {};
+	const { baseURL = "", basePath = "/", headers, credentials } = options ?? {};
 
 	// Normalize baseURL - remove trailing slash if present
 	const normalizedBaseURL = baseURL ? baseURL.replace(/\/$/, "") : "";
@@ -87,5 +89,7 @@ export function createApiClient<
 
 	return createClient<TRouter>({
 		baseURL: apiPath,
+		...(headers !== undefined ? { headers } : {}),
+		...(credentials !== undefined ? { credentials } : {}),
 	});
 }

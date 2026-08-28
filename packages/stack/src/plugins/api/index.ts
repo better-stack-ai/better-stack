@@ -13,6 +13,22 @@
 import type { BackendPlugin } from "../../types";
 import type { Endpoint } from "better-call";
 
+type IdentifiedBackendPlugin<
+	TId extends string,
+	TRoutes extends Record<string, Endpoint>,
+	TApi extends Record<string, (...args: any[]) => any>,
+	TOperations extends import("./operation").OperationRecord,
+> = BackendPlugin<TRoutes, TApi, TOperations, TId> & { readonly id: TId };
+
+type LegacyBackendPlugin<
+	TRoutes extends Record<string, Endpoint>,
+	TApi extends Record<string, (...args: any[]) => any>,
+	TOperations extends import("./operation").OperationRecord,
+> = BackendPlugin<TRoutes, TApi, TOperations> & {
+	name: string;
+	readonly id?: never;
+};
+
 export type {
 	BackendPlugin,
 	ClientPlugin,
@@ -61,7 +77,7 @@ export {
  * @example
  * ```ts
  * const messagesPlugin = defineBackendPlugin({
- *   name: "messages",
+ *   id: "messages",
  *   dbPlugin: createDbPlugin("messages", messagesSchema),
  *   routes: (adapter) => ({
  *     list: endpoint("/messages", { method: "GET" }, async () => { ... }),
@@ -75,11 +91,29 @@ export {
  * @template TApi - The shape of the server-side api surface (auto-inferred from api factory)
  */
 export function defineBackendPlugin<
+	const TId extends string,
+	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
+	TApi extends Record<string, (...args: any[]) => any> = never,
+	TOperations extends import("./operation").OperationRecord = never,
+>(
+	plugin: IdentifiedBackendPlugin<TId, TRoutes, TApi, TOperations>,
+): IdentifiedBackendPlugin<TId, TRoutes, TApi, TOperations>;
+export function defineBackendPlugin<
+	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
+	TApi extends Record<string, (...args: any[]) => any> = never,
+	TOperations extends import("./operation").OperationRecord = never,
+>(
+	plugin: LegacyBackendPlugin<TRoutes, TApi, TOperations>,
+): LegacyBackendPlugin<TRoutes, TApi, TOperations>;
+export function defineBackendPlugin<
 	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
 	TApi extends Record<string, (...args: any[]) => any> = never,
 	TOperations extends import("./operation").OperationRecord = never,
 >(
 	plugin: BackendPlugin<TRoutes, TApi, TOperations>,
-): BackendPlugin<TRoutes, TApi, TOperations> {
+): BackendPlugin<TRoutes, TApi, TOperations>;
+export function defineBackendPlugin(
+	plugin: BackendPlugin<any, any, any>,
+): BackendPlugin<any, any, any> {
 	return plugin;
 }

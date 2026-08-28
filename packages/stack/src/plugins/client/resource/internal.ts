@@ -28,11 +28,22 @@ export interface ResourceContext {
 
 /** Resolves the plugin overrides and builds the better-call client. */
 export function useResourceContext(plugin: string): ResourceContext {
-	const { api, router } = useStack();
-	const { headers } = usePluginOverrides<ResourceOverrides>(plugin);
+	const { api, plugins, router } = useStack();
+	const { headers: overrideHeaders } =
+		usePluginOverrides<ResourceOverrides>(plugin);
+	const pluginApi = plugins?.[plugin]?.api;
+	const mergedHeaders = new Headers(pluginApi?.browserHeaders);
+	if (overrideHeaders !== undefined) {
+		for (const [name, value] of new Headers(overrideHeaders)) {
+			mergedHeaders.set(name, value);
+		}
+	}
+	const headers = mergedHeaders.keys().next().done ? undefined : mergedHeaders;
 	const client = createApiClient({
-		baseURL: api?.baseURL,
-		basePath: api?.basePath,
+		baseURL: pluginApi?.baseURL ?? api?.baseURL,
+		basePath: pluginApi?.basePath ?? api?.basePath,
+		headers,
+		credentials: pluginApi?.credentials,
 	});
 	return {
 		client,
