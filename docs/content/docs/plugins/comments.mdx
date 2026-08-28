@@ -68,29 +68,33 @@ ownership, and moderation decisions.
 Register the comments client plugin in your `stack-client.tsx` file:
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { commentsClientPlugin } from "@btst/stack/plugins/comments/client"
 import { QueryClient } from "@tanstack/react-query"
 
 const getBaseURL = () =>
   process.env.BASE_URL || "http://localhost:3000"
 
-export const getStackClient = (queryClient: QueryClient) => {
+export const getStackClient = (
+  queryClient: QueryClient,
+  headers?: Headers,
+) => {
   const baseURL = getBaseURL()
-  return createStackClient({
+  return createClientStack({
+    api: {
+      baseURL,
+      basePath: "/api/data",
+      ...(headers ? { headers } : {}),
+    },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
       comments: commentsClientPlugin({
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        queryClient,
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-        // optional headers + lifecycle hooks:
-        // headers: { cookie: request.headers.get("cookie") ?? "" },
+        // optional loader lifecycle hooks:
         // hooks: {
         //   beforeLoadModeration: async (ctx) => { ... },
         //   beforeLoadUserComments: async (ctx) => { ... },
-        //   onLoadError: async (error, ctx) => { ... },
+        //   onErrorLoad: async (error, ctx) => { ... },
         // },
       }),
     },
@@ -98,9 +102,11 @@ export const getStackClient = (queryClient: QueryClient) => {
 }
 ```
 
-The factory fields above configure SSR loaders and metadata. Do not repeat API
-paths, router functions, or identity values in `CommentsPluginOverrides` or
-component props; browser-side Comments UI reads them from `StackProvider`.
+Create a request-specific stack with request headers for SSR and a separate
+browser stack without them. `StackProvider` consumes the browser stack, so SSR
+loaders, metadata, hydration, browser hooks, and mutations share one resolved
+Comments endpoint and query client. Do not repeat transport or identity values
+in `CommentsPluginOverrides` or component props.
 
 ### 3. Add CSS Import
 
@@ -124,20 +130,16 @@ component props; browser-side Comments UI reads them from `StackProvider`.
 
 ### 4. Configure the Provider
 
-Comments read API, identity, login path, and permissions from `StackProvider`. Use the plugin override only for comments-specific behavior:
+Comments reads its resolved API and query client from the registered client
+stack. `StackProvider` adds framework routing and authorization; its inferred
+plugin override is only for Comments-specific presentation and behavior:
 
 ```tsx title="app/pages/layout.tsx"
-import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
 import { clientAuth } from "@/lib/authorization.client"
 
-type PluginOverrides = {
-  comments: CommentsPluginOverrides
-}
-
-<StackProvider<PluginOverrides>
-  basePath="/pages"
+<StackProvider
+  stack={clientStack}
   router={frameworkRouter}
-  api={{ baseURL, basePath: "/api/data" }}
   auth={clientAuth}
   initialIdentity={initialIdentity}
   overrides={{
@@ -251,7 +253,9 @@ matching `createClientAuth()` adapter and exact descriptors shown above.
 ## Embedding Comments
 
 The `CommentThread` component can be embedded anywhere — below a blog post, inside a Kanban task dialog, or on a custom page.
-It uses the `api` and `auth` values from the nearest `StackProvider`.
+Data requests use the resolved endpoint of the registered `comments` plugin;
+identity and sign-in behavior use the `auth` service from the nearest
+`StackProvider`.
 
 ```tsx
 import { CommentThread } from "@btst/stack/plugins/comments/client/components"
@@ -479,15 +483,20 @@ const { data, isLoading } = useComments({
 })
 
 // Post a new comment (includes optimistic update)
-const { mutate: postComment } = usePostComment()
-postComment({
+const { mutate: postComment } = usePostComment({
   resourceId: "my-post",
   resourceType: "blog-post",
+})
+postComment({
   body: "Great post!",
 })
 
 // Toggle like (one per user; optimistic update)
-const { mutate: toggleLike } = useToggleLike()
+const { mutate: toggleLike } = useToggleLike({
+  resourceId: "my-post",
+  resourceType: "blog-post",
+  parentId: null,
+})
 toggleLike({ commentId: "comment-id" })
 
 // Moderate a comment
@@ -508,12 +517,12 @@ The comments plugin registers a `/comments` route that shows the current user's 
 
 ### Setup
 
-Configure the generic client adapter once and keep only comments-specific
-overrides in your layout:
+Pass the resolved browser stack and keep only Comments-specific overrides in
+your layout:
 
 ```tsx title="app/pages/layout.tsx"
 <StackProvider
-  api={{ baseURL, basePath: "/api/data" }}
+  stack={clientStack}
   auth={clientAuth}
   initialIdentity={initialIdentity}
   overrides={{
@@ -541,19 +550,14 @@ query parameter.
 
 ### Client Plugin Factory
 
-`commentsClientPlugin(config)` accepts:
+`commentsClientPlugin(config?)` accepts only Comments-specific loader hooks.
+Shared runtime belongs to `createClientStack`.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `apiBaseURL` | `string` | ✓ | Base URL for API requests (e.g. `https://example.com`). |
-| `apiBasePath` | `string` | ✓ | Path prefix where API routes are mounted (e.g. `/api/data`). |
-| `siteBaseURL` | `string` | ✓ | Base URL of your site, used for route metadata/canonical URLs. |
-| `siteBasePath` | `string` | ✓ | Base path where stack pages are mounted (e.g. `/pages`). |
-| `queryClient` | `QueryClient` | ✓ | React Query client instance shared with the stack. |
-| `headers` | `Headers` | — | Optional SSR headers for authenticated loader calls. |
 | `hooks.beforeLoadModeration` | `(context) => Promise<void> \| void` | — | Called before moderation page loader logic runs. Throw to cancel. |
 | `hooks.beforeLoadUserComments` | `(context) => Promise<void> \| void` | — | Called before User Comments page loader logic runs. Throw to cancel. Optionally set `context.currentUserId` so SSR prefetch/error-seeding uses the same user-scoped cache key as the page query. |
-| `hooks.onLoadError` | `(error, context) => Promise<void> \| void` | — | Called when a loader hook throws/errors. |
+| `hooks.onErrorLoad` | `(error, context) => Promise<void> \| void` | — | Reports a loader failure once. Reporter errors are contained so SSR loaders do not reject. |
 
 ### Client Plugin Overrides
 

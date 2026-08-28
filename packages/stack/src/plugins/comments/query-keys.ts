@@ -65,9 +65,8 @@ export interface CreateCommentInput {
  *
  * Mutations declare only the HTTP mapping (path/method/input/select).
  * Cache behavior (optimistic updates, invalidation) lives in the wrapper
- * hooks in `use-comments.tsx`: the public comments hooks take an explicit
- * client config — required by the embeddable `CommentThread` — so they
- * cannot use the overrides-bound `createResource` mutation hooks.
+ * hooks in `use-comments.tsx`; their transport and QueryClient come from the
+ * resolved `comments` runtime exposed by `StackProvider`.
  */
 export const commentsResources = {
 	comments: {

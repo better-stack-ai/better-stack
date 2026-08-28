@@ -4,6 +4,7 @@ import { lazy } from "react";
 import { ComposedRoute } from "@btst/stack/client/components";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../../overrides";
+import { COMMENTS_PLUGIN_ID } from "../../constants";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { PageWrapper } from "../shared/page-wrapper";
 
@@ -37,7 +38,8 @@ export function UserCommentsPageComponent() {
 }
 
 function UserCommentsPageWrapper() {
-	const overrides = usePluginOverrides<CommentsPluginOverrides>("comments");
+	const overrides =
+		usePluginOverrides<CommentsPluginOverrides>(COMMENTS_PLUGIN_ID);
 
 	useRouteLifecycle({
 		routeName: "userComments",

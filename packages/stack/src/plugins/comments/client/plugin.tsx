@@ -1,15 +1,19 @@
 // NO "use client" here! This file runs on both server and client.
 import { lazy } from "react";
 import {
-	defineClientPlugin,
 	createApiClient,
+	defineClientPlugin,
 	isConnectionError,
+	type ResolvedClientPluginRuntime,
 } from "@btst/stack/plugins/client";
-import { defineRoute } from "@btst/yar";
+import { normalizePath } from "@btst/stack/client";
+import { defineRoute, defineRoutes } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
 import type { CommentsApiRouter } from "../api";
 import { createCommentsQueryKeys } from "../query-keys";
 import { createSanitizedSSRLoaderError } from "../../utils";
+import { COMMENTS_PLUGIN_ID } from "./constants";
+import type { CommentsPluginOverrides } from "./overrides";
 
 // Lazy load page components for code splitting
 const ModerationPageComponent = lazy(() =>
@@ -63,31 +67,77 @@ export interface CommentsClientHooks {
 	beforeLoadUserComments?: (context: LoaderContext) => Promise<void> | void;
 	/**
 	 * Called when a loading error occurs.
+	 * This reporting-only observer cannot make an SSR loader reject.
 	 */
-	onLoadError?: (error: Error, context: LoaderContext) => Promise<void> | void;
+	onErrorLoad?: (error: Error, context: LoaderContext) => Promise<void> | void;
 }
 
 /**
- * Configuration for the Comments client plugin
+ * Comments-specific client configuration. Shared API, site, query-client, and
+ * request-header values are inherited from `createClientStack()`.
  */
 export interface CommentsClientConfig {
-	/** Base URL for API calls (e.g., "http://localhost:3000") */
-	apiBaseURL: string;
-	/** Path where the API is mounted (e.g., "/api/data") */
-	apiBasePath: string;
-	/** Base URL of your site */
-	siteBaseURL: string;
-	/** Path where pages are mounted (e.g., "/pages") */
-	siteBasePath: string;
-	/** React Query client instance */
-	queryClient: QueryClient;
-	/** Optional headers for SSR */
-	headers?: Headers;
-	/** Optional lifecycle hooks */
+	/** Optional route-loader hooks and error reporting. */
 	hooks?: CommentsClientHooks;
 }
 
-function createModerationLoader(config: CommentsClientConfig) {
+interface ResolvedCommentsClientConfig extends CommentsClientConfig {
+	apiBaseURL: string;
+	apiBasePath: string;
+	siteBaseURL: string;
+	siteBasePath: string;
+	queryClient: QueryClient;
+	headers?: Headers;
+	credentials?: RequestCredentials;
+}
+
+function resolveCommentsClientConfig(
+	config: CommentsClientConfig,
+	runtime: ResolvedClientPluginRuntime<typeof COMMENTS_PLUGIN_ID>,
+): ResolvedCommentsClientConfig {
+	return {
+		hooks: config.hooks,
+		apiBaseURL: runtime.api.baseURL,
+		apiBasePath: runtime.api.basePath,
+		siteBaseURL: runtime.site.baseURL,
+		siteBasePath: runtime.site.basePath,
+		queryClient: runtime.queryClient,
+		...(runtime.api.headers ? { headers: runtime.api.headers } : {}),
+		...(runtime.api.credentials
+			? { credentials: runtime.api.credentials }
+			: {}),
+	};
+}
+
+function createCommentsApiClient(config: ResolvedCommentsClientConfig) {
+	return createApiClient<CommentsApiRouter>({
+		baseURL: config.apiBaseURL,
+		basePath: config.apiBasePath,
+		headers: config.headers,
+		credentials: config.credentials,
+	});
+}
+
+function createLoadErrorReporter(
+	hooks: CommentsClientHooks | undefined,
+	context: LoaderContext,
+) {
+	let reported = false;
+	return async (error: unknown) => {
+		if (reported || !hooks?.onErrorLoad) return;
+		reported = true;
+		try {
+			await hooks.onErrorLoad(
+				error instanceof Error ? error : new Error(String(error)),
+				context,
+			);
+		} catch {
+			// Reporting hooks cannot make an SSR loader reject or run twice.
+		}
+	};
+}
+
+function createModerationLoader(config: ResolvedCommentsClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
 			const { queryClient, apiBasePath, apiBaseURL, headers, hooks } = config;
@@ -98,11 +148,8 @@ function createModerationLoader(config: CommentsClientConfig) {
 				apiBasePath,
 				headers,
 			};
-			const client = createApiClient<CommentsApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
-			const queries = createCommentsQueryKeys(client, headers);
+			const reportError = createLoadErrorReporter(hooks, context);
+			const queries = createCommentsQueryKeys(createCommentsApiClient(config));
 			const listQuery = queries.comments.list({
 				status: "pending",
 				limit: 20,
@@ -114,12 +161,8 @@ function createModerationLoader(config: CommentsClientConfig) {
 				}
 				await queryClient.prefetchQuery(listQuery);
 				const queryState = queryClient.getQueryState(listQuery.queryKey);
-				if (queryState?.error && hooks?.onLoadError) {
-					const error =
-						queryState.error instanceof Error
-							? queryState.error
-							: new Error(String(queryState.error));
-					await hooks.onLoadError(error, context);
+				if (queryState?.error) {
+					await reportError(queryState.error);
 				}
 			} catch (error) {
 				if (isConnectionError(error)) {
@@ -136,15 +179,13 @@ function createModerationLoader(config: CommentsClientConfig) {
 						retry: false,
 					});
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 			}
 		}
 	};
 }
 
-function createUserCommentsLoader(config: CommentsClientConfig) {
+function createUserCommentsLoader(config: ResolvedCommentsClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
 			const { queryClient, apiBasePath, apiBaseURL, headers, hooks } = config;
@@ -155,11 +196,8 @@ function createUserCommentsLoader(config: CommentsClientConfig) {
 				apiBasePath,
 				headers,
 			};
-			const client = createApiClient<CommentsApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
-			const queries = createCommentsQueryKeys(client, headers);
+			const reportError = createLoadErrorReporter(hooks, context);
+			const queries = createCommentsQueryKeys(createCommentsApiClient(config));
 			const getUserListQuery = (currentUserId: string) =>
 				queries.comments.list({
 					authorId: currentUserId,
@@ -179,12 +217,8 @@ function createUserCommentsLoader(config: CommentsClientConfig) {
 					const listQuery = getUserListQuery(currentUserId);
 					await queryClient.prefetchQuery(listQuery);
 					const queryState = queryClient.getQueryState(listQuery.queryKey);
-					if (queryState?.error && hooks?.onLoadError) {
-						const error =
-							queryState.error instanceof Error
-								? queryState.error
-								: new Error(String(queryState.error));
-						await hooks.onLoadError(error, context);
+					if (queryState?.error) {
+						await reportError(queryState.error);
 					}
 				}
 			} catch (error) {
@@ -208,22 +242,21 @@ function createUserCommentsLoader(config: CommentsClientConfig) {
 						});
 					}
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 			}
 		}
 	};
 }
 
 function createCommentsRouteMeta(
-	config: CommentsClientConfig,
+	config: ResolvedCommentsClientConfig,
 	path: "/comments/moderation" | "/comments",
 	title: string,
 	description: string,
 ) {
 	return () => {
-		const fullUrl = `${config.siteBaseURL}${config.siteBasePath}${path}`;
+		const sitePath = normalizePath([config.siteBasePath, path].join("/"));
+		const fullUrl = `${config.siteBaseURL}${sitePath}`;
 		return [
 			{ title },
 			{ name: "title", content: title },
@@ -242,34 +275,42 @@ function createCommentsRouteMeta(
 /**
  * Comments client plugin — registers admin moderation routes.
  *
- * The embeddable `CommentThread` and `CommentCount` components do not require
- * this plugin to be registered, but they must render under `StackProvider` so
- * they can use its API and auth configuration.
+ * Embeddable `CommentThread` and `CommentCount` components consume this
+ * registered plugin's browser-safe runtime through `StackProvider`.
  */
-export const commentsClientPlugin = (config: CommentsClientConfig) =>
-	defineClientPlugin({
-		name: "comments",
+function createResolvedCommentsPlugin(config: ResolvedCommentsClientConfig) {
+	return {
+		routes: () =>
+			defineRoutes({
+				moderation: defineRoute("/comments/moderation", {
+					page: ModerationPageComponent,
+					loader: createModerationLoader(config),
+					meta: createCommentsRouteMeta(
+						config,
+						"/comments/moderation",
+						"Comment Moderation",
+						"Review and manage comments across all resources.",
+					),
+				}),
+				userComments: defineRoute("/comments", {
+					page: UserCommentsPageComponent,
+					loader: createUserCommentsLoader(config),
+					meta: createCommentsRouteMeta(
+						config,
+						"/comments",
+						"User Comments",
+						"View and manage your comments across resources.",
+					),
+				}),
+			}),
+	};
+}
 
-		routes: () => ({
-			moderation: defineRoute("/comments/moderation", {
-				page: ModerationPageComponent,
-				loader: createModerationLoader(config),
-				meta: createCommentsRouteMeta(
-					config,
-					"/comments/moderation",
-					"Comment Moderation",
-					"Review and manage comments across all resources.",
-				),
-			}),
-			userComments: defineRoute("/comments", {
-				page: UserCommentsPageComponent,
-				loader: createUserCommentsLoader(config),
-				meta: createCommentsRouteMeta(
-					config,
-					"/comments",
-					"User Comments",
-					"View and manage your comments across resources.",
-				),
-			}),
-		}),
+export const commentsClientPlugin = (config: CommentsClientConfig = {}) =>
+	defineClientPlugin<CommentsPluginOverrides>()({
+		id: COMMENTS_PLUGIN_ID,
+		resolve: (runtime) =>
+			createResolvedCommentsPlugin(
+				resolveCommentsClientConfig(config, runtime),
+			),
 	});
