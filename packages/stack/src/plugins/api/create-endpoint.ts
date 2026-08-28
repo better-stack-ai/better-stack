@@ -1,4 +1,5 @@
 import { APIError, createEndpoint as baseCreateEndpoint } from "better-call";
+import { bindRouteOperationEndpoint } from "./operation";
 
 /**
  * Validation issue segment shapes produced by standard-schema validators
@@ -17,7 +18,10 @@ export interface SerializedValidationIssue {
 	path: Array<string | number>;
 }
 
-function serializeIssues(issues: unknown): SerializedValidationIssue[] {
+/** @internal Convert standard-schema/Zod issues to the stable HTTP shape. */
+export function serializeValidationIssues(
+	issues: unknown,
+): SerializedValidationIssue[] {
 	if (!Array.isArray(issues)) return [];
 	return (issues as StandardIssue[])
 		.filter((issue) => typeof issue?.message === "string")
@@ -31,6 +35,28 @@ function serializeIssues(issues: unknown): SerializedValidationIssue[] {
 				return typeof key === "number" ? key : String(key);
 			}),
 		}));
+}
+
+function withValidationIssues(options: any): any {
+	if (!options || typeof options !== "object" || options.onValidationError) {
+		return options;
+	}
+	return {
+		...options,
+		onValidationError: ({
+			message,
+			issues,
+		}: {
+			message: string;
+			issues: unknown;
+		}) => {
+			throw new APIError(400, {
+				message,
+				code: "VALIDATION_ERROR",
+				issues: serializeValidationIssues(issues),
+			});
+		},
+	};
 }
 
 /**
@@ -54,29 +80,21 @@ export const createEndpoint = ((
 	const isPathForm = typeof pathOrOptions === "string";
 	const options = isPathForm ? handlerOrOptions : pathOrOptions;
 
-	const wrappedOptions =
-		options && typeof options === "object" && !options.onValidationError
-			? {
-					...options,
-					onValidationError: ({
-						message,
-						issues,
-					}: {
-						message: string;
-						issues: unknown;
-					}) => {
-						throw new APIError(400, {
-							message,
-							code: "VALIDATION_ERROR",
-							issues: serializeIssues(issues),
-						});
-					},
-				}
-			: options;
+	const wrappedOptions = withValidationIssues(options);
 
-	return isPathForm
+	const handler = isPathForm ? handlerOrNever : handlerOrOptions;
+	const endpoint = isPathForm
 		? baseCreateEndpoint(pathOrOptions, wrappedOptions, handlerOrNever)
 		: baseCreateEndpoint(wrappedOptions, handlerOrOptions);
+	return bindRouteOperationEndpoint(endpoint, handler);
 }) as typeof baseCreateEndpoint;
 
-createEndpoint.create = baseCreateEndpoint.create;
+createEndpoint.create = ((factoryOptions?: any) => {
+	const create = baseCreateEndpoint.create(factoryOptions);
+	return (path: any, options: any, handler: any) => {
+		return bindRouteOperationEndpoint(
+			create(path, withValidationIssues(options), handler),
+			handler,
+		);
+	};
+}) as typeof baseCreateEndpoint.create;

@@ -14,12 +14,59 @@ import type {
 	StackServerAuthProvider,
 } from "../shared/auth-types";
 import { defineDb } from "@btst/db";
+import { AuthorizationError } from "../authorization/server";
 import {
+	bindRouteOperationHandler,
+	isOperationInputValidationError,
+	OperationHttpError,
 	runAuthorizedOperation,
 	runInternalOperation,
+	type AnyOperation,
+	type RouteOperation,
 } from "../plugins/api/operation";
+import {
+	composeEndpointInventory,
+	type ComposedEndpointInventoryEntry,
+} from "../plugins/api/endpoint-inventory";
+import { serializeValidationIssues } from "../plugins/api/create-endpoint";
 
 export { toNodeHandler } from "better-call/node";
+
+function throwHttpOperationError(
+	cause: unknown,
+	error: (...args: any[]) => Error,
+): never {
+	if (isOperationInputValidationError(cause)) {
+		throw error(400, {
+			message: cause.message,
+			code: "VALIDATION_ERROR",
+			issues: serializeValidationIssues(cause.issues),
+		});
+	}
+	if (
+		cause instanceof AuthorizationError ||
+		cause instanceof OperationHttpError
+	) {
+		const candidate = cause;
+		if (
+			typeof candidate.statusCode === "number" &&
+			Number.isInteger(candidate.statusCode) &&
+			candidate.statusCode >= 400 &&
+			candidate.statusCode <= 599 &&
+			typeof candidate.code === "string"
+		) {
+			throw error(candidate.statusCode, {
+				message: candidate.message,
+				code: candidate.code,
+				...(candidate instanceof OperationHttpError &&
+				Array.isArray(candidate.issues)
+					? { issues: candidate.issues }
+					: {}),
+			});
+		}
+	}
+	throw cause;
+}
 
 /**
  * Lazy, memoized identity resolvers keyed by the request's `Headers`
@@ -136,6 +183,8 @@ export function stack<
 	const pluginRoutesByName: Record<string, Record<string, any>> = {};
 
 	// Create context for plugins that need access to all plugins (e.g., openAPI)
+	const pluginOperations: Record<string, Record<string, any>> = {};
+	const endpointInventory: ComposedEndpointInventoryEntry[] = [];
 	const context: StackContext = {
 		plugins,
 		basePath,
@@ -144,7 +193,6 @@ export function stack<
 		pluginRoutes: pluginRoutesByName,
 	};
 
-	const pluginOperations: Record<string, Record<string, any>> = {};
 	for (const [pluginKey, plugin] of Object.entries(plugins)) {
 		if (plugin.operations) {
 			pluginOperations[pluginKey] = plugin.operations(adapterInstance, context);
@@ -153,20 +201,39 @@ export function stack<
 
 	const routeOperationApis: Record<
 		string,
-		Record<string, (input: unknown, request: Request) => Promise<unknown>>
+		Record<string, RouteOperation<AnyOperation>>
 	> = {};
 	for (const [pluginKey, operations] of Object.entries(pluginOperations)) {
 		routeOperationApis[pluginKey] = {};
 		for (const [operationKey, operation] of Object.entries(operations)) {
-			routeOperationApis[pluginKey]![operationKey] = (
-				input: unknown,
-				request: Request,
-			) =>
+			const invoke = (input: unknown, request: Request) =>
 				runAuthorizedOperation(operation, input, {
 					request,
 					...(runtimeAuth ? { auth: runtimeAuth } : {}),
 					resolveIdentity: () => getRequestIdentity(request.headers),
 				});
+			Object.defineProperty(invoke, "route", {
+				value: (resolveInput: (context: any) => unknown) => {
+					const handler = async (context: {
+						request: Request;
+						error: (...args: any[]) => Error;
+					}) => {
+						try {
+							const input = await resolveInput(context);
+							return await invoke(input, context.request);
+						} catch (cause) {
+							throwHttpOperationError(cause, context.error);
+						}
+					};
+					return bindRouteOperationHandler(handler, {
+						pluginKey,
+						operationKey,
+						operation,
+					});
+				},
+			});
+			routeOperationApis[pluginKey]![operationKey] =
+				invoke as RouteOperation<AnyOperation>;
 		}
 	}
 
@@ -178,6 +245,17 @@ export function stack<
 			routeOperationApis[pluginKey] ?? {},
 		);
 		pluginRoutesByName[pluginKey] = pluginRoutes;
+		endpointInventory.push(
+			...composeEndpointInventory(
+				pluginKey,
+				plugin.name,
+				pluginRoutes,
+				pluginOperations[pluginKey] ?? {},
+				plugin.operations !== undefined,
+				plugin.infrastructureRoutes,
+				plugin.operationRouteMap,
+			),
+		);
 
 		// Prefix route keys with plugin name to avoid collisions
 		for (const [routeKey, endpoint] of Object.entries(pluginRoutes)) {
@@ -185,6 +263,10 @@ export function stack<
 			(allRoutes as any)[compositeKey] = endpoint;
 		}
 	}
+	Object.defineProperty(context, "endpointInventory", {
+		value: Object.freeze(endpointInventory),
+		enumerable: true,
+	});
 
 	// Build the typed api surface by calling each plugin's api factory
 	const pluginApis = {} as PluginApis<TPlugins>;
@@ -197,6 +279,7 @@ export function stack<
 	// Create the composed router
 	const router = createRouter(allRoutes, {
 		basePath: basePath,
+		openapi: { disabled: true },
 	});
 
 	// With an auth provider, register a per-request identity resolver before

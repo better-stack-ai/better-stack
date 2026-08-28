@@ -311,6 +311,36 @@ const operationScenarios: readonly OperationScenario[] = [
 ];
 
 describe("Comments authorization inventory", () => {
+	it.each([
+		{
+			allowPosting: true,
+			allowEditing: true,
+			routes: ["createComment", "updateComment"],
+		},
+		{ allowPosting: true, allowEditing: false, routes: ["createComment"] },
+		{ allowPosting: false, allowEditing: true, routes: ["updateComment"] },
+		{ allowPosting: false, allowEditing: false, routes: [] },
+	])(
+		"keeps conditional routes declared when posting=$allowPosting and editing=$allowEditing",
+		({ allowPosting, allowEditing, routes }) => {
+			const backend = makeBackend({
+				plugin: { allowPosting, allowEditing },
+			});
+			const composed = Object.keys(
+				(backend.router as unknown as { endpoints: Record<string, unknown> })
+					.endpoints,
+			)
+				.filter(
+					(name) =>
+						name === "comments_createComment" ||
+						name === "comments_updateComment",
+				)
+				.map((name) => name.replace("comments_", ""))
+				.sort();
+			expect(composed).toEqual([...routes].sort());
+		},
+	);
+
 	it("covers every maintained transport operation with one descriptor", () => {
 		const plugin = commentsBackendPlugin();
 		const adapter = memoryAdapter(defineDb({}).use(plugin.dbPlugin));

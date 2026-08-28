@@ -3,7 +3,6 @@ import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
 import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { zodToFormSchema } from "@workspace/ui/lib/schema-converter";
-import { AuthorizationError } from "../../../authorization/server";
 import { cmsSchema as dbSchema } from "../db";
 import {
 	createListContentQuerySchema,
@@ -21,7 +20,6 @@ import {
 	CMSContentItemParamsSchema,
 	CMSContentTypeParamsSchema,
 	CMSCreateContentItemBodySchema,
-	CMSOperationError,
 	CMSUpdateContentItemBodySchema,
 	createCMSOperations,
 } from "./operations";
@@ -121,31 +119,6 @@ async function syncContentTypes(
 				}`,
 			);
 		}
-	}
-}
-
-type EndpointErrorFactory = (...args: any[]) => Error;
-
-async function adaptOperationToHttp<TResult>(
-	execute: () => Promise<TResult>,
-	error: EndpointErrorFactory,
-): Promise<TResult> {
-	try {
-		return await execute();
-	} catch (cause) {
-		if (
-			cause instanceof AuthorizationError ||
-			cause instanceof CMSOperationError
-		) {
-			throw error(cause.statusCode, {
-				message: cause.message,
-				code: cause.code,
-				...(cause instanceof CMSOperationError && cause.issues
-					? { issues: cause.issues }
-					: {}),
-			});
-		}
-		throw cause;
 	}
 }
 
@@ -297,11 +270,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 			const listContentTypes = createEndpoint(
 				"/content-types",
 				{ method: "GET", requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.listContentTypes({}, ctx.request),
-						ctx.error,
-					),
+				operations.listContentTypes.route(() => ({})),
 			);
 			const getContentTypeBySlug = createEndpoint(
 				"/content-types/:slug",
@@ -310,11 +279,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					params: CMSContentTypeParamsSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.getContentTypeBySlug(ctx.params, ctx.request),
-						ctx.error,
-					),
+				operations.getContentTypeBySlug.route((ctx) => ctx.params),
 			);
 			const listContentItems = createEndpoint(
 				"/content/:typeSlug",
@@ -324,15 +289,10 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					query: listQuerySchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.listContentItems(
-								{ typeSlug: ctx.params.typeSlug, query: ctx.query },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.listContentItems.route((ctx) => ({
+					typeSlug: ctx.params.typeSlug,
+					query: ctx.query,
+				})),
 			);
 			const getContentItem = createEndpoint(
 				"/content/:typeSlug/:id",
@@ -341,11 +301,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					params: CMSContentItemParamsSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.getContentItem(ctx.params, ctx.request),
-						ctx.error,
-					),
+				operations.getContentItem.route((ctx) => ctx.params),
 			);
 			const createContentItem = createEndpoint(
 				"/content/:typeSlug",
@@ -355,15 +311,10 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					body: CMSCreateContentItemBodySchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.createContentItem(
-								{ typeSlug: ctx.params.typeSlug, body: ctx.body },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.createContentItem.route((ctx) => ({
+					typeSlug: ctx.params.typeSlug,
+					body: ctx.body,
+				})),
 			);
 			const updateContentItem = createEndpoint(
 				"/content/:typeSlug/:id",
@@ -373,15 +324,10 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					body: CMSUpdateContentItemBodySchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.updateContentItem(
-								{ ...ctx.params, body: ctx.body },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.updateContentItem.route((ctx) => ({
+					...ctx.params,
+					body: ctx.body,
+				})),
 			);
 			const deleteContentItem = createEndpoint(
 				"/content/:typeSlug/:id",
@@ -390,11 +336,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					params: CMSContentItemParamsSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.deleteContentItem(ctx.params, ctx.request),
-						ctx.error,
-					),
+				operations.deleteContentItem.route((ctx) => ctx.params),
 			);
 			const getContentItemPopulated = createEndpoint(
 				"/content/:typeSlug/:id/populated",
@@ -403,11 +345,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					params: CMSContentItemParamsSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.getContentItemPopulated(ctx.params, ctx.request),
-						ctx.error,
-					),
+				operations.getContentItemPopulated.route((ctx) => ctx.params),
 			);
 			const listContentByRelation = createEndpoint(
 				"/content/:typeSlug/by-relation",
@@ -419,15 +357,10 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 						.merge(paginationSchema),
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.listContentByRelation(
-								{ typeSlug: ctx.params.typeSlug, query: ctx.query },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.listContentByRelation.route((ctx) => ({
+					typeSlug: ctx.params.typeSlug,
+					query: ctx.query,
+				})),
 			);
 			const getInverseRelations = createEndpoint(
 				"/content-types/:slug/inverse-relations",
@@ -437,15 +370,10 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					query: z.object({ itemId: z.string().optional() }),
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.getInverseRelations(
-								{ slug: ctx.params.slug, query: ctx.query },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.getInverseRelations.route((ctx) => ({
+					slug: ctx.params.slug,
+					query: ctx.query,
+				})),
 			);
 			const listInverseRelationItems = createEndpoint(
 				"/content-types/:slug/inverse-relations/:sourceType",
@@ -460,19 +388,11 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 						.merge(paginationSchema),
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.listInverseRelationItems(
-								{
-									slug: ctx.params.slug,
-									sourceType: ctx.params.sourceType,
-									query: ctx.query,
-								},
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.listInverseRelationItems.route((ctx) => ({
+					slug: ctx.params.slug,
+					sourceType: ctx.params.sourceType,
+					query: ctx.query,
+				})),
 			);
 			return {
 				listContentTypes,

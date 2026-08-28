@@ -4,6 +4,7 @@ import {
 	type DeepReadonly,
 	type Operation,
 	type OperationData,
+	OperationHttpError,
 	type OperationContext,
 } from "@btst/stack/plugins/api";
 import type { PermissionFactsFor } from "@btst/stack/authorization";
@@ -185,22 +186,15 @@ type RequestFields = {
 };
 
 /** A domain/HTTP error raised after Form Builder authorization succeeds. */
-export class FormBuilderOperationError extends Error {
-	readonly statusCode: number;
-	readonly code: string;
-	readonly issues?: readonly unknown[];
-
+export class FormBuilderOperationError extends OperationHttpError {
 	constructor(
 		statusCode: number,
 		message: string,
 		code: string,
 		issues?: readonly unknown[],
 	) {
-		super(message);
+		super(statusCode, message, code, issues);
 		this.name = "FormBuilderOperationError";
-		this.statusCode = statusCode;
-		this.code = code;
-		this.issues = issues;
 	}
 }
 

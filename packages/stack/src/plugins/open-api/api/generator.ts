@@ -20,6 +20,10 @@ export interface PathOperation {
 		};
 	};
 	responses: Record<string, any>;
+	/** Safe BTST operation access state; omitted only for legacy custom routes. */
+	"x-btst-access"?: "permission" | "public";
+	/** Stable schema-backed permission id for protected operations. */
+	"x-btst-permission"?: string;
 }
 
 export interface OpenAPIParameter {
@@ -28,6 +32,10 @@ export interface OpenAPIParameter {
 	required?: boolean;
 	schema: Record<string, any>;
 	description?: string;
+}
+
+function compareStable(left: string, right: string): number {
+	return left < right ? -1 : left > right ? 1 : 0;
 }
 
 /**
@@ -332,8 +340,17 @@ export function generateOpenAPISchema(
 	const paths: Record<string, Record<string, PathOperation>> = {};
 	const tags: Array<{ name: string; description: string }> = [];
 
-	// Iterate over all plugins
-	for (const [pluginKey, plugin] of Object.entries(context.plugins)) {
+	const inventory = new Map(
+		(context.endpointInventory ?? []).map((entry) => [
+			`${entry.pluginKey}\0${entry.routeKey}`,
+			entry,
+		]),
+	);
+
+	// Sort plugin and route keys so registration order cannot change the schema.
+	for (const [pluginKey, plugin] of Object.entries(context.plugins).sort(
+		([left], [right]) => compareStable(left, right),
+	)) {
 		// Skip the open-api plugin itself
 		if (pluginKey === "openApi" || plugin.name === "open-api") {
 			continue;
@@ -351,7 +368,9 @@ export function generateOpenAPISchema(
 		});
 
 		// Process each endpoint
-		for (const [routeKey, endpoint] of Object.entries(pluginRoutes)) {
+		for (const [routeKey, endpoint] of Object.entries(pluginRoutes).sort(
+			([left], [right]) => compareStable(left, right),
+		)) {
 			const ep = endpoint as Endpoint;
 
 			// Access endpoint properties
@@ -387,6 +406,13 @@ export function generateOpenAPISchema(
 					...getErrorResponses(),
 				},
 			};
+			const declaration = inventory.get(`${pluginKey}\0${routeKey}`);
+			if (declaration) {
+				operation["x-btst-access"] = declaration.access;
+				if (declaration.permissionId) {
+					operation["x-btst-permission"] = declaration.permissionId;
+				}
+			}
 
 			// Add request body for POST/PUT/PATCH
 			if (["post", "put", "patch"].includes(method)) {
@@ -399,6 +425,19 @@ export function generateOpenAPISchema(
 			paths[openApiPath][method] = operation;
 		}
 	}
+
+	const deterministicPaths = Object.fromEntries(
+		Object.entries(paths)
+			.sort(([left], [right]) => compareStable(left, right))
+			.map(([path, methods]) => [
+				path,
+				Object.fromEntries(
+					Object.entries(methods).sort(([left], [right]) =>
+						compareStable(left, right),
+					),
+				),
+			]),
+	);
 
 	return {
 		openapi: "3.1.0",
@@ -415,7 +454,7 @@ export function generateOpenAPISchema(
 			},
 		],
 		tags,
-		paths,
+		paths: deterministicPaths,
 		components: {
 			securitySchemes: {
 				bearerAuth: {

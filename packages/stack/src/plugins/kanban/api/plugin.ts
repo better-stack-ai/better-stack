@@ -1,7 +1,6 @@
 import type { DBAdapter as Adapter } from "@btst/db";
 import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
 import type { QueryClient } from "@tanstack/react-query";
-import { AuthorizationError } from "../../../authorization/server";
 import { kanbanSchema as dbSchema } from "../db";
 import {
 	BoardListQuerySchema,
@@ -24,7 +23,6 @@ import {
 } from "./mutations";
 import {
 	BoardIdOperationInputSchema,
-	KanbanOperationError,
 	createKanbanOperations,
 } from "./operations";
 import { KANBAN_QUERY_KEYS } from "./query-key-defs";
@@ -89,28 +87,6 @@ function createKanbanPrefetchForRoute(
 	} as KanbanPrefetchForRoute;
 }
 
-type EndpointErrorFactory = (...args: any[]) => Error;
-
-async function adaptOperationToHttp<TResult>(
-	execute: () => Promise<TResult>,
-	error: EndpointErrorFactory,
-): Promise<TResult> {
-	try {
-		return await execute();
-	} catch (cause) {
-		if (
-			cause instanceof AuthorizationError ||
-			cause instanceof KanbanOperationError
-		) {
-			throw error(cause.statusCode, {
-				message: cause.message,
-				...(cause instanceof KanbanOperationError ? { code: cause.code } : {}),
-			});
-		}
-		throw cause;
-	}
-}
-
 /** Kanban backend plugin backed by one operation inventory. */
 export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 	defineBackendPlugin({
@@ -136,11 +112,7 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 			const listBoards = createEndpoint(
 				"/boards",
 				{ method: "GET", query: BoardListQuerySchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.listBoards(ctx.query, ctx.request),
-						ctx.error,
-					),
+				operations.listBoards.route((ctx) => ctx.query),
 			);
 			const getBoard = createEndpoint(
 				"/boards/:id",
@@ -149,20 +121,12 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 					params: BoardIdOperationInputSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.getBoard(ctx.params, ctx.request),
-						ctx.error,
-					),
+				operations.getBoard.route((ctx) => ctx.params),
 			);
 			const createBoard = createEndpoint(
 				"/boards",
 				{ method: "POST", body: createBoardSchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.createBoard(ctx.body, ctx.request),
-						ctx.error,
-					),
+				operations.createBoard.route((ctx) => ctx.body),
 			);
 			const updateBoard = createEndpoint(
 				"/boards/:id",
@@ -171,33 +135,20 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 					body: updateBoardSchema.omit({ id: true }),
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.updateBoard(
-								{ id: ctx.params.id, data: ctx.body },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.updateBoard.route((ctx) => ({
+					id: ctx.params.id,
+					data: ctx.body,
+				})),
 			);
 			const deleteBoard = createEndpoint(
 				"/boards/:id",
 				{ method: "DELETE", requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.deleteBoard({ id: ctx.params.id }, ctx.request),
-						ctx.error,
-					),
+				operations.deleteBoard.route((ctx) => ({ id: ctx.params.id })),
 			);
 			const createColumn = createEndpoint(
 				"/columns",
 				{ method: "POST", body: createColumnSchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.createColumn(ctx.body, ctx.request),
-						ctx.error,
-					),
+				operations.createColumn.route((ctx) => ctx.body),
 			);
 			const updateColumn = createEndpoint(
 				"/columns/:id",
@@ -206,42 +157,25 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 					body: updateColumnSchema.omit({ id: true }),
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.updateColumn(
-								{ id: ctx.params.id, data: ctx.body },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.updateColumn.route((ctx) => ({
+					id: ctx.params.id,
+					data: ctx.body,
+				})),
 			);
 			const deleteColumn = createEndpoint(
 				"/columns/:id",
 				{ method: "DELETE", requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.deleteColumn({ id: ctx.params.id }, ctx.request),
-						ctx.error,
-					),
+				operations.deleteColumn.route((ctx) => ({ id: ctx.params.id })),
 			);
 			const reorderColumns = createEndpoint(
 				"/columns/reorder",
 				{ method: "POST", body: reorderColumnsSchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.reorderColumns(ctx.body, ctx.request),
-						ctx.error,
-					),
+				operations.reorderColumns.route((ctx) => ctx.body),
 			);
 			const createTask = createEndpoint(
 				"/tasks",
 				{ method: "POST", body: createTaskSchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.createTask(ctx.body, ctx.request),
-						ctx.error,
-					),
+				operations.createTask.route((ctx) => ctx.body),
 			);
 			const updateTask = createEndpoint(
 				"/tasks/:id",
@@ -250,42 +184,25 @@ export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
 					body: updateTaskSchema.omit({ id: true }),
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.updateTask(
-								{ id: ctx.params.id, data: ctx.body },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.updateTask.route((ctx) => ({
+					id: ctx.params.id,
+					data: ctx.body,
+				})),
 			);
 			const deleteTask = createEndpoint(
 				"/tasks/:id",
 				{ method: "DELETE", requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.deleteTask({ id: ctx.params.id }, ctx.request),
-						ctx.error,
-					),
+				operations.deleteTask.route((ctx) => ({ id: ctx.params.id })),
 			);
 			const moveTask = createEndpoint(
 				"/tasks/move",
 				{ method: "POST", body: moveTaskSchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.moveTask(ctx.body, ctx.request),
-						ctx.error,
-					),
+				operations.moveTask.route((ctx) => ctx.body),
 			);
 			const reorderTasks = createEndpoint(
 				"/tasks/reorder",
 				{ method: "POST", body: reorderTasksSchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.reorderTasks(ctx.body, ctx.request),
-						ctx.error,
-					),
+				operations.reorderTasks.route((ctx) => ctx.body),
 			);
 
 			return {

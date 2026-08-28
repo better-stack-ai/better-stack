@@ -6,6 +6,7 @@ import {
 	type DeepReadonly,
 	defineOperation,
 	type Operation,
+	OperationHttpError,
 	type OperationContext,
 	type OperationData,
 } from "@btst/stack/plugins/api";
@@ -189,15 +190,10 @@ export type MediaOperations = {
 };
 
 /** A domain/HTTP failure raised after Media authorization succeeds. */
-export class MediaOperationError extends Error {
-	readonly statusCode: number;
-	readonly code: string;
-
+export class MediaOperationError extends OperationHttpError {
 	constructor(statusCode: number, message: string, code: string) {
-		super(message);
+		super(statusCode, message, code);
 		this.name = "MediaOperationError";
-		this.statusCode = statusCode;
-		this.code = code;
 	}
 }
 

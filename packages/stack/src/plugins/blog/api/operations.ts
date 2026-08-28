@@ -2,6 +2,7 @@ import type { DBAdapter as Adapter } from "@btst/db";
 import {
 	defineOperation,
 	type DeepReadonly,
+	OperationHttpError,
 	type OperationContext,
 	type OperationErrorContext,
 } from "@btst/stack/plugins/api";
@@ -256,19 +257,14 @@ export interface BlogBackendHooks {
 }
 
 /** A domain/HTTP error raised after authorization succeeds. */
-export class BlogOperationError extends Error {
-	readonly statusCode: number;
-	readonly code: string;
-
+export class BlogOperationError extends OperationHttpError {
 	constructor(
 		statusCode: number,
 		message: string,
 		code = "BLOG_OPERATION_ERROR",
 	) {
-		super(message);
+		super(statusCode, message, code);
 		this.name = "BlogOperationError";
-		this.statusCode = statusCode;
-		this.code = code;
 	}
 }
 

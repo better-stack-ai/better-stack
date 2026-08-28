@@ -1,7 +1,6 @@
 import type { DBAdapter as Adapter } from "@btst/db";
 import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
 import type { QueryClient } from "@tanstack/react-query";
-import { AuthorizationError } from "../../../authorization/server";
 import { formBuilderSchema as dbSchema } from "../db";
 import {
 	createFormSchema,
@@ -18,7 +17,6 @@ import {
 	serializeFormSubmissionSummary,
 } from "./getters";
 import {
-	FormBuilderOperationError,
 	GetFormByIdOperationInputSchema,
 	GetFormForUpdateOperationInputSchema,
 	GetFormBySlugOperationInputSchema,
@@ -138,33 +136,6 @@ function createFormBuilderPrefetchForRoute(
 	} as FormBuilderPrefetchForRoute;
 }
 
-type EndpointErrorFactory = (...args: any[]) => Error;
-
-async function adaptOperationToHttp<TResult>(
-	execute: () => Promise<TResult>,
-	error: EndpointErrorFactory,
-): Promise<TResult> {
-	try {
-		return await execute();
-	} catch (cause) {
-		if (
-			cause instanceof AuthorizationError ||
-			cause instanceof FormBuilderOperationError
-		) {
-			throw error(cause.statusCode, {
-				message: cause.message,
-				...(cause instanceof FormBuilderOperationError
-					? {
-							code: cause.code,
-							...(cause.issues ? { issues: cause.issues } : {}),
-						}
-					: {}),
-			});
-		}
-		throw cause;
-	}
-}
-
 /** Form Builder backend plugin backed by one operation inventory. */
 export const formBuilderBackendPlugin = (
 	config: FormBuilderBackendConfig = {},
@@ -192,11 +163,7 @@ export const formBuilderBackendPlugin = (
 			const listForms = createEndpoint(
 				"/forms",
 				{ method: "GET", query: listFormsQuerySchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.listForms(ctx.query, ctx.request),
-						ctx.error,
-					),
+				operations.listForms.route((ctx) => ctx.query),
 			);
 			const getFormBySlugEndpoint = createEndpoint(
 				"/forms/:slug",
@@ -205,11 +172,7 @@ export const formBuilderBackendPlugin = (
 					params: GetFormBySlugOperationInputSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.getFormBySlug(ctx.params, ctx.request),
-						ctx.error,
-					),
+				operations.getFormBySlug.route((ctx) => ctx.params),
 			);
 			const getFormByIdEndpoint = createEndpoint(
 				"/forms/id/:id",
@@ -218,11 +181,7 @@ export const formBuilderBackendPlugin = (
 					params: GetFormByIdOperationInputSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.getFormById(ctx.params, ctx.request),
-						ctx.error,
-					),
+				operations.getFormById.route((ctx) => ctx.params),
 			);
 			const getFormForUpdateEndpoint = createEndpoint(
 				"/forms/id/:id/edit",
@@ -231,42 +190,25 @@ export const formBuilderBackendPlugin = (
 					params: GetFormForUpdateOperationInputSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.getFormForUpdate(ctx.params, ctx.request),
-						ctx.error,
-					),
+				operations.getFormForUpdate.route((ctx) => ctx.params),
 			);
 			const createForm = createEndpoint(
 				"/forms",
 				{ method: "POST", body: createFormSchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.createForm(ctx.body, ctx.request),
-						ctx.error,
-					),
+				operations.createForm.route((ctx) => ctx.body),
 			);
 			const updateForm = createEndpoint(
 				"/forms/:id",
 				{ method: "PUT", body: updateFormSchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.updateForm(
-								{ id: ctx.params.id, data: ctx.body },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.updateForm.route((ctx) => ({
+					id: ctx.params.id,
+					data: ctx.body,
+				})),
 			);
 			const deleteForm = createEndpoint(
 				"/forms/:id",
 				{ method: "DELETE", requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.deleteForm({ id: ctx.params.id }, ctx.request),
-						ctx.error,
-					),
+				operations.deleteForm.route((ctx) => ({ id: ctx.params.id })),
 			);
 			const submitForm = createEndpoint(
 				"/forms/:slug/submit",
@@ -275,15 +217,10 @@ export const formBuilderBackendPlugin = (
 					body: SubmitFormOperationInputSchema.pick({ data: true }),
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.submitForm(
-								{ slug: ctx.params.slug, data: ctx.body.data },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.submitForm.route((ctx) => ({
+					slug: ctx.params.slug,
+					data: ctx.body.data,
+				})),
 			);
 			const listSubmissions = createEndpoint(
 				"/forms/:formId/submissions",
@@ -292,47 +229,26 @@ export const formBuilderBackendPlugin = (
 					query: listSubmissionsQuerySchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.listSubmissions(
-								{ formId: ctx.params.formId, query: ctx.query },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.listSubmissions.route((ctx) => ({
+					formId: ctx.params.formId,
+					query: ctx.query,
+				})),
 			);
 			const getSubmission = createEndpoint(
 				"/forms/:formId/submissions/:subId",
 				{ method: "GET", requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.getSubmission(
-								{
-									formId: ctx.params.formId,
-									submissionId: ctx.params.subId,
-								},
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.getSubmission.route((ctx) => ({
+					formId: ctx.params.formId,
+					submissionId: ctx.params.subId,
+				})),
 			);
 			const deleteSubmission = createEndpoint(
 				"/forms/:formId/submissions/:subId",
 				{ method: "DELETE", requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.deleteSubmission(
-								{
-									formId: ctx.params.formId,
-									submissionId: ctx.params.subId,
-								},
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.deleteSubmission.route((ctx) => ({
+					formId: ctx.params.formId,
+					submissionId: ctx.params.subId,
+				})),
 			);
 
 			return {

@@ -6,6 +6,7 @@ import {
 	definePassthroughOperation,
 	type DeepReadonly,
 	type Operation,
+	OperationHttpError,
 	type OperationContext,
 } from "@btst/stack/plugins/api";
 import {
@@ -218,15 +219,10 @@ export const AI_CHAT_RAW_ESCAPE_HATCH_INVENTORY = Object.freeze([
 ]);
 
 /** A domain/HTTP failure raised after AI Chat authorization succeeds. */
-export class AiChatOperationError extends Error {
-	readonly statusCode: number;
-	readonly code: string;
-
+export class AiChatOperationError extends OperationHttpError {
 	constructor(statusCode: number, message: string, code: string) {
-		super(message);
+		super(statusCode, message, code);
 		this.name = "AiChatOperationError";
-		this.statusCode = statusCode;
-		this.code = code;
 	}
 }
 

@@ -13,6 +13,10 @@ import type {
 	RouteOperationApi,
 } from "./plugins/api/operation";
 import type {
+	ComposedEndpointInventoryEntry,
+	InfrastructureRouteInventory,
+} from "./plugins/api/endpoint-inventory";
+import type {
 	AnyAuthorization,
 	AuthorizationPermissionRequest,
 } from "./authorization";
@@ -39,6 +43,8 @@ export interface StackContext {
 	auth?: StackServerAuthProvider;
 	/** Routes already constructed for each plugin, used by introspection plugins. */
 	pluginRoutes: Record<string, Record<string, Endpoint>>;
+	/** Validated, safe metadata for every operation-first/infrastructure route. */
+	readonly endpointInventory?: readonly ComposedEndpointInventoryEntry[];
 }
 
 /**
@@ -85,7 +91,8 @@ export interface BackendPlugin<
 	 *   create, update, updateMany, delete, deleteMany, findOne, findMany, count
 	 * @param context - Stack context with access to all plugins (for introspection)
 	 * @param operations - Request-bound operations declared by this plugin. When
-	 *   the plugin declares operations, every route call requires this argument.
+	 *   the plugin declares operations, create every business endpoint with an
+	 *   `operations.operationKey.route(ctx => input)` handler.
 	 */
 	routes(
 		adapter: Adapter,
@@ -105,8 +112,21 @@ export interface BackendPlugin<
 	 */
 	api?: (adapter: Adapter) => TApi;
 
-	/** Define operations shared by HTTP, request-scoped, and internal calls. */
+	/**
+	 * Define operations shared by HTTP, request-scoped, and internal calls.
+	 * When present, every composed route must resolve to a same-key operation,
+	 * an explicit operationRouteMap entry, or an infrastructure declaration.
+	 */
 	operations?: (adapter: Adapter, context?: StackContext) => TOperations;
+
+	/**
+	 * Explicit declarations for true infrastructure routes that cannot use a
+	 * business operation. When present, all other routes must have same-key
+	 * operations and stale declarations fail stack composition.
+	 */
+	infrastructureRoutes?: InfrastructureRouteInventory;
+	/** Explicit route-key to operation-key mapping when their public names differ. */
+	operationRouteMap?: Readonly<Record<string, string>>;
 }
 
 /**

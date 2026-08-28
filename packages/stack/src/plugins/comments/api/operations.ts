@@ -3,6 +3,7 @@ import type { PermissionFactsFor } from "@btst/stack/authorization";
 import {
 	defineOperation,
 	type DeepReadonly,
+	OperationHttpError,
 	type OperationContext,
 } from "@btst/stack/plugins/api";
 import { z } from "zod";
@@ -270,19 +271,14 @@ export interface CommentsBackendOptions extends CommentsBackendHooks {
 }
 
 /** A domain/HTTP error raised after Comments input/fact validation. */
-export class CommentsOperationError extends Error {
-	readonly statusCode: number;
-	readonly code: string;
-
+export class CommentsOperationError extends OperationHttpError {
 	constructor(
 		statusCode: number,
 		message: string,
 		code = "COMMENTS_OPERATION_ERROR",
 	) {
-		super(message);
+		super(statusCode, message, code);
 		this.name = "CommentsOperationError";
-		this.statusCode = statusCode;
-		this.code = code;
 	}
 }
 

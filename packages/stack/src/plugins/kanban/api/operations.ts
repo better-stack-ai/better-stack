@@ -4,6 +4,7 @@ import {
 	type DeepReadonly,
 	defineOperation,
 	type Operation,
+	OperationHttpError,
 	type OperationContext,
 } from "@btst/stack/plugins/api";
 import type { PermissionFactsFor } from "@btst/stack/authorization";
@@ -171,15 +172,10 @@ export type KanbanOperations = {
 };
 
 /** A domain/HTTP failure raised after Kanban authorization succeeds. */
-export class KanbanOperationError extends Error {
-	readonly statusCode: number;
-	readonly code: string;
-
+export class KanbanOperationError extends OperationHttpError {
 	constructor(statusCode: number, message: string, code: string) {
-		super(message);
+		super(statusCode, message, code);
 		this.name = "KanbanOperationError";
-		this.statusCode = statusCode;
-		this.code = code;
 	}
 }
 

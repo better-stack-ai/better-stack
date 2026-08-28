@@ -1,5 +1,8 @@
-import { defineBackendPlugin } from "@btst/stack/plugins/api";
-import { createEndpoint } from "@btst/stack/plugins/api";
+import {
+	createEndpoint,
+	defineBackendPlugin,
+	type InfrastructureRouteInventory,
+} from "@btst/stack/plugins/api";
 import { openApiSchema } from "../db";
 import { generateOpenAPISchema } from "./generator";
 import { logo } from "../logo";
@@ -69,6 +72,24 @@ export interface OpenAPIOptions {
 	 */
 	version?: string;
 }
+
+/**
+ * Exact infrastructure exception for the OpenAPI plugin. These handlers serve
+ * documentation metadata rather than application business behavior, so they
+ * intentionally remain public infrastructure instead of fake operations.
+ */
+const OPEN_API_INFRASTRUCTURE_ROUTES = Object.freeze({
+	generateSchema: Object.freeze({
+		access: "public" as const,
+		rationale:
+			"Serves deterministic API metadata and does not execute an application business operation.",
+	}),
+	reference: Object.freeze({
+		access: "public" as const,
+		rationale:
+			"Serves the documentation UI for the same public schema without executing an application business operation.",
+	}),
+}) satisfies InfrastructureRouteInventory;
 
 /**
  * Escape HTML entities to prevent XSS and ensure proper rendering
@@ -168,6 +189,7 @@ export const openApiBackendPlugin = (options?: OpenAPIOptions) => {
 	return defineBackendPlugin({
 		name: "open-api",
 		dbPlugin: openApiSchema,
+		infrastructureRoutes: OPEN_API_INFRASTRUCTURE_ROUTES,
 
 		routes: (_adapter, context) => {
 			// Store context for endpoint handlers

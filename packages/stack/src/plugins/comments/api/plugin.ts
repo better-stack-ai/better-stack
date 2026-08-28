@@ -1,6 +1,5 @@
 import type { DBAdapter as Adapter } from "@btst/db";
 import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
-import { AuthorizationError } from "../../../authorization/server";
 import { commentsSchema as dbSchema } from "../db";
 import {
 	CommentCountQuerySchema,
@@ -12,7 +11,6 @@ import {
 } from "../schemas";
 import { getCommentById, getCommentCount, listComments } from "./getters";
 import {
-	CommentsOperationError,
 	ToggleCommentLikeOperationInputSchema,
 	createCommentsOperations,
 	type CommentsBackendOptions,
@@ -43,28 +41,6 @@ export type {
 	CommentsReactOperationContext,
 	SerializedCommentListResult,
 } from "./operations";
-
-type EndpointErrorFactory = (...args: any[]) => Error;
-
-async function adaptOperationToHttp<TResult>(
-	execute: () => Promise<TResult>,
-	error: EndpointErrorFactory,
-): Promise<TResult> {
-	try {
-		return await execute();
-	} catch (cause) {
-		if (
-			cause instanceof AuthorizationError ||
-			cause instanceof CommentsOperationError
-		) {
-			throw error(cause.statusCode, {
-				message: cause.message,
-				code: cause.code,
-			});
-		}
-		throw cause;
-	}
-}
 
 /**
  * Comments backend plugin. Maintained HTTP endpoints adapt the same operation
@@ -102,11 +78,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions = {}) => {
 					query: CommentListQuerySchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.listComments(ctx.query, ctx.request),
-						ctx.error,
-					),
+				operations.listComments.route((ctx) => ctx.query),
 			);
 
 			const createCommentEndpoint = createEndpoint(
@@ -116,11 +88,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions = {}) => {
 					body: createCommentSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.createComment(ctx.body, ctx.request),
-						ctx.error,
-					),
+				operations.createComment.route((ctx) => ctx.body),
 			);
 
 			const updateCommentEndpoint = createEndpoint(
@@ -130,15 +98,10 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions = {}) => {
 					body: updateCommentSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.updateComment(
-								{ id: ctx.params.id, data: ctx.body },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.updateComment.route((ctx) => ({
+					id: ctx.params.id,
+					data: ctx.body,
+				})),
 			);
 
 			const getCommentCountEndpoint = createEndpoint(
@@ -148,11 +111,7 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions = {}) => {
 					query: CommentCountQuerySchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.getCommentCount(ctx.query, ctx.request),
-						ctx.error,
-					),
+				operations.getCommentCount.route((ctx) => ctx.query),
 			);
 
 			const toggleLikeEndpoint = createEndpoint(
@@ -162,15 +121,10 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions = {}) => {
 					body: ToggleCommentLikeOperationInputSchema.pick({ authorId: true }),
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.toggleLike(
-								{ id: ctx.params.id, ...ctx.body },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.toggleLike.route((ctx) => ({
+					id: ctx.params.id,
+					...ctx.body,
+				})),
 			);
 
 			const updateCommentStatusEndpoint = createEndpoint(
@@ -180,31 +134,26 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions = {}) => {
 					body: updateCommentStatusSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.updateCommentStatus(
-								{ id: ctx.params.id, data: ctx.body },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.updateCommentStatus.route((ctx) => ({
+					id: ctx.params.id,
+					data: ctx.body,
+				})),
 			);
 
 			const deleteCommentEndpoint = createEndpoint(
 				"/comments/:id",
 				{ method: "DELETE", requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.deleteComment({ id: ctx.params.id }, ctx.request),
-						ctx.error,
-					),
+				operations.deleteComment.route((ctx) => ({ id: ctx.params.id })),
 			);
 
 			return {
 				listComments: listCommentsEndpoint,
-				...(postingEnabled && { createComment: createCommentEndpoint }),
-				...(editingEnabled && { updateComment: updateCommentEndpoint }),
+				...(postingEnabled && {
+					createComment: createCommentEndpoint,
+				}),
+				...(editingEnabled && {
+					updateComment: updateCommentEndpoint,
+				}),
 				getCommentCount: getCommentCountEndpoint,
 				toggleLike: toggleLikeEndpoint,
 				updateCommentStatus: updateCommentStatusEndpoint,
