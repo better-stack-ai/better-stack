@@ -532,7 +532,7 @@ identity's response.
 | `media.asset.update(facts)` | Current asset plus target folder | Asset metadata update |
 | `media.asset.delete(facts)` | Current asset/storage context | Destructive asset control and deletion |
 | `media.folder.create(facts)` | Current parent and tenant | New-folder controls and creation |
-| `media.folder.delete(facts)` | Current folder, parent, tenant | Folder deletion |
+| `media.folder.delete(facts)` | Every folder in the authoritative subtree | Recursive folder deletion |
 
 Browser facts are presentation hints. The browser can, for example, hide an
 admin button from `identity.role`, but the backend reloads the asset/folder,
@@ -542,7 +542,10 @@ mutation. Query scoping remains in `resolveTenantId`; it is not a boolean rule.
 An asset-list operation first checks `library.read`, derives the scoped rows on
 the server, and then checks `asset.read` for every asset before returning any
 asset data. A caller with only the collection rule receives no asset response;
-the rules never filter rows.
+the rules never filter rows. Recursive folder deletion likewise evaluates
+`folder.delete` against the authoritative facts for the requested folder and
+every descendant before hooks or mutation. A rule that denies any member of the
+subtree denies the entire deletion.
 
 Every transport uses the same operation lifecycle:
 

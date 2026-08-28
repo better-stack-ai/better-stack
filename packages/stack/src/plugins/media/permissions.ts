@@ -55,7 +55,7 @@ export const mediaPermissions = definePermissions("media", {
 				...tenantFact,
 			}),
 		),
-		/** Delete a server-resolved folder. */
+		/** Delete a server-resolved folder after authorizing every folder in its subtree. */
 		delete: permission(z.object(folderFact)),
 	},
 });

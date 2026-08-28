@@ -887,6 +887,150 @@ describe("Media operation-first authorization", () => {
 		).not.toMatchObject({ alt: "Must roll back" });
 	});
 
+	it("authorizes every folder in a recursive delete before hooks or mutation", async () => {
+		let allowedParentId = "";
+		const evaluated: Array<{ folderId: string; parentId?: string }> = [];
+		const subtreeAuthorization = defineAuthorization({
+			identity: identitySchema,
+			permissions: [mediaPermissions] as const,
+			rules: ({ media }) => [
+				media.folder.delete.when(({ identity, facts }) => {
+					evaluated.push({
+						folderId: facts.folderId,
+						...(facts.parentId ? { parentId: facts.parentId } : {}),
+					});
+					return identity !== null && facts.parentId === allowedParentId;
+				}),
+			],
+		});
+		const beforeDelete = vi.fn();
+		const backend = makeBackend({
+			auth: createAuth(identityFromRequest, subtreeAuthorization),
+			tenantId: "tenant-a",
+			hooks: { onBeforeDeleteFolder: beforeDelete },
+		});
+		const allowedParent = await seedFolder(backend, { name: "Allowed parent" });
+		const root = await seedFolder(backend, {
+			name: "Delete root",
+			parentId: allowedParent.id,
+		});
+		const deniedChild = await seedFolder(backend, {
+			name: "Denied child",
+			parentId: root.id,
+		});
+		allowedParentId = allowedParent.id;
+
+		await expect(
+			backend
+				.forRequest(request("/delete-subtree", { identity: tenantMember }))
+				.api.media.deleteFolder({ id: root.id }),
+		).rejects.toMatchObject({ statusCode: 403 });
+		expect(evaluated).toEqual([
+			{ folderId: root.id, parentId: allowedParent.id },
+			{ folderId: deniedChild.id, parentId: root.id },
+		]);
+		expect(beforeDelete).not.toHaveBeenCalled();
+		expect(await backend.adapter.count({ model: "mediaFolder" })).toBe(3);
+	});
+
+	it("maps every recursive folder permission through the RC bridge", async () => {
+		let deniedFolderId = "";
+		const checkedIds: string[] = [];
+		const beforeDelete = vi.fn();
+		const legacyAuth: StackServerAuthProvider = {
+			getIdentity: async () => tenantMember,
+			can: ({ resource, action, params }) => {
+				expect({ resource, action }).toEqual({
+					resource: "media:folder",
+					action: "delete",
+				});
+				const id = String(params?.id);
+				checkedIds.push(id);
+				return id !== deniedFolderId;
+			},
+		};
+		const backend = makeBackend({
+			auth: legacyAuth,
+			tenantId: "tenant-a",
+			hooks: { onBeforeDeleteFolder: beforeDelete },
+		});
+		const root = await seedFolder(backend, { name: "Delete root" });
+		deniedFolderId = (
+			await seedFolder(backend, {
+				name: "Denied child",
+				parentId: root.id,
+			})
+		).id;
+
+		await expect(
+			backend
+				.forRequest(request("/legacy-delete", { identity: tenantMember }))
+				.api.media.deleteFolder({ id: root.id }),
+		).rejects.toMatchObject({ statusCode: 403 });
+		expect(checkedIds).toEqual([root.id, deniedFolderId]);
+		expect(beforeDelete).not.toHaveBeenCalled();
+		expect(await backend.adapter.count({ model: "mediaFolder" })).toBe(2);
+	});
+
+	it("rejects a recursive delete when a descendant gains a concurrent child", async () => {
+		let backend: ReturnType<typeof makeBackend>;
+		let descendantId = "";
+		let raced = false;
+		const beforeDelete = vi.fn();
+		const raceAuth = {
+			mode: "one-rule" as const,
+			getIdentity: async () => tenantMember,
+			authorize: async (
+				_request: Request,
+				permission: { id: string; facts: { folderId?: string } },
+			) => {
+				if (
+					!raced &&
+					permission.id === mediaPermissions.folder.delete.id &&
+					permission.facts.folderId === descendantId
+				) {
+					raced = true;
+					await backend.internal.media.createFolder({
+						name: "Concurrent winner",
+						parentId: descendantId,
+					});
+				}
+				return tenantMember;
+			},
+		};
+		backend = makeBackend({
+			auth: raceAuth as unknown as StackServerAuthProvider,
+			tenantId: "tenant-a",
+			hooks: { onBeforeDeleteFolder: beforeDelete },
+		});
+		const root = await seedFolder(backend, { name: "Delete root" });
+		descendantId = (
+			await seedFolder(backend, {
+				name: "Existing child",
+				parentId: root.id,
+			})
+		).id;
+
+		await expect(
+			backend
+				.forRequest(request("/delete-race", { identity: tenantMember }))
+				.api.media.deleteFolder({ id: root.id }),
+		).rejects.toMatchObject({
+			statusCode: 409,
+			code: "MEDIA_STATE_CHANGED",
+		});
+		expect(beforeDelete).not.toHaveBeenCalled();
+		expect(
+			(await backend.adapter.findMany<Folder>({ model: "mediaFolder" })).map(
+				(folder) => ({ name: folder.name, parentId: folder.parentId }),
+			),
+		).toEqual([
+			{ name: "Delete root", parentId: undefined },
+			{ name: "Existing child", parentId: root.id },
+			{ name: "Concurrent winner", parentId: descendantId },
+		]);
+	});
+
 	it("rejects stale upload initialization and finalization before hooks, tokens, or writes", async () => {
 		const storage = s3Storage();
 		const hook = vi.fn();
