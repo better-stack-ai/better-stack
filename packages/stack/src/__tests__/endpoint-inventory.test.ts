@@ -323,6 +323,33 @@ describe("composed endpoint inventory", () => {
 		).toBe(401);
 	});
 
+	it("preserves exact operation execution through createEndpoint.create", async () => {
+		const endpoint = createEndpoint.create();
+		const plugin = defineBackendPlugin({
+			name: "feature",
+			dbPlugin: createDbPlugin("feature", {}),
+			operations: () => ({ read: readOperation() }),
+			routes: (_adapter, _context, operations) => ({
+				read: endpoint(
+					"/factory-records/:id",
+					{ method: "GET", requireRequest: true },
+					operations.read.route((ctx) => ({ id: ctx.params.id })),
+				),
+			}),
+		});
+		const backend = stack({
+			basePath: "/api",
+			plugins: { feature: plugin },
+			adapter: memoryAdapter,
+		});
+
+		const response = await backend.handler(
+			new Request("http://localhost/api/factory-records/1"),
+		);
+		expect(response.status).toBe(200);
+		expect(await response.text()).toBe("1");
+	});
+
 	it("maps only explicit operation HTTP errors at the generated route boundary", async () => {
 		const factFailure = Object.assign(new Error("trusted fact load failed"), {
 			statusCode: 418,
@@ -332,6 +359,12 @@ describe("composed endpoint inventory", () => {
 			name: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			operations: () => ({
+				validationFailure: defineOperation({
+					input: z.object({ id: z.string().uuid() }),
+					permission: featurePermissions.record.read,
+					facts: ({ input }) => ({ id: input.id }),
+					execute: ({ input }) => input.id,
+				}),
 				factFailure: readOperation({
 					facts: () => {
 						throw factFailure;
@@ -348,6 +381,11 @@ describe("composed endpoint inventory", () => {
 				}),
 			}),
 			routes: (_adapter, _context, operations) => ({
+				validationFailure: createEndpoint(
+					"/validation-failure/:id",
+					{ method: "GET", requireRequest: true },
+					operations.validationFailure.route((ctx) => ({ id: ctx.params.id })),
+				),
 				factFailure: createEndpoint(
 					"/fact-failure/:id",
 					{ method: "GET", requireRequest: true },
@@ -364,6 +402,19 @@ describe("composed endpoint inventory", () => {
 			basePath: "/api",
 			plugins: { feature: plugin },
 			adapter: memoryAdapter,
+		});
+		const validationResponse = await backend.handler(
+			new Request("http://localhost/api/validation-failure/not-a-uuid"),
+		);
+		expect(validationResponse.status).toBe(400);
+		expect(await validationResponse.json()).toMatchObject({
+			code: "VALIDATION_ERROR",
+			issues: [
+				{
+					message: expect.any(String),
+					path: ["id"],
+				},
+			],
 		});
 
 		const consoleError = vi

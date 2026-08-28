@@ -58,6 +58,7 @@ type OperationExecutor = (
 ) => Promise<unknown>;
 
 const operationExecutors = new WeakMap<object, OperationExecutor>();
+const operationInputValidationErrors = new WeakSet<object>();
 interface RouteOperationBinding {
 	readonly pluginKey: string;
 	readonly operationKey: string;
@@ -96,6 +97,17 @@ export function getRouteEndpointOperationBinding(
 	endpoint: Endpoint,
 ): RouteOperationBinding | undefined {
 	return routeOperationBindings.get(endpoint);
+}
+
+/** @internal True only for the source-of-truth operation input parse. */
+export function isOperationInputValidationError(
+	cause: unknown,
+): cause is z.ZodError {
+	return (
+		typeof cause === "object" &&
+		cause !== null &&
+		operationInputValidationErrors.has(cause)
+	);
 }
 
 /** Plain values accepted at the immutable operation lifecycle boundary. */
@@ -504,8 +516,17 @@ function defineOperationRuntime<
 		// These stages establish trusted operation context. They intentionally run
 		// before the lifecycle boundary, so validation, fact, identity, and rule
 		// failures cannot be observed or replaced by post-authorization hooks.
+		let validatedInput: z.output<TInputSchema>;
+		try {
+			validatedInput = config.input.parse(input);
+		} catch (cause) {
+			if (cause instanceof z.ZodError) {
+				operationInputValidationErrors.add(cause);
+			}
+			throw cause;
+		}
 		const parsedInput = freezeOperationData(
-			config.input.parse(input),
+			validatedInput,
 			new WeakSet(),
 			"operation input",
 		);

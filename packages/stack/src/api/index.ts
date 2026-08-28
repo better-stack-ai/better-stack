@@ -17,6 +17,7 @@ import { defineDb } from "@btst/db";
 import { AuthorizationError } from "../authorization/server";
 import {
 	bindRouteOperationHandler,
+	isOperationInputValidationError,
 	OperationHttpError,
 	runAuthorizedOperation,
 	runInternalOperation,
@@ -27,6 +28,7 @@ import {
 	composeEndpointInventory,
 	type ComposedEndpointInventoryEntry,
 } from "../plugins/api/endpoint-inventory";
+import { serializeValidationIssues } from "../plugins/api/create-endpoint";
 
 export { toNodeHandler } from "better-call/node";
 
@@ -34,6 +36,13 @@ function throwHttpOperationError(
 	cause: unknown,
 	error: (...args: any[]) => Error,
 ): never {
+	if (isOperationInputValidationError(cause)) {
+		throw error(400, {
+			message: cause.message,
+			code: "VALIDATION_ERROR",
+			issues: serializeValidationIssues(cause.issues),
+		});
+	}
 	if (
 		cause instanceof AuthorizationError ||
 		cause instanceof OperationHttpError
