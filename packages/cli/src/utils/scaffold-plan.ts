@@ -265,14 +265,23 @@ function buildAdapterTemplateContext(
 	if (!meta) {
 		throw new Error(`Unsupported adapter: ${adapter}`);
 	}
-	const needsIsolatedTransactions = selectedPlugins.includes("form-builder");
+	const hasFormBuilder = selectedPlugins.includes("form-builder");
+	const hasMedia = selectedPlugins.includes("media");
+	const needsIsolatedTransactions = hasFormBuilder || hasMedia;
 
 	if (
-		needsIsolatedTransactions &&
-		(adapter === "memory" || adapter === "mongodb")
+		(hasFormBuilder && (adapter === "memory" || adapter === "mongodb")) ||
+		(hasMedia && adapter === "mongodb")
 	) {
+		const plugins = [
+			hasFormBuilder ? "Form Builder" : "",
+			hasMedia ? "Media" : "",
+		]
+			.filter(Boolean)
+			.join(" and ");
+		const verb = hasFormBuilder && hasMedia ? "require" : "requires";
 		throw new Error(
-			`Form Builder requires an adapter with isolated transaction support; ${adapter} is not supported by the generated configuration. Choose prisma, drizzle, or kysely.`,
+			`${plugins} ${verb} an adapter with isolated transaction support; ${adapter} is not supported by the generated configuration. Choose prisma, drizzle, or kysely.`,
 		);
 	}
 

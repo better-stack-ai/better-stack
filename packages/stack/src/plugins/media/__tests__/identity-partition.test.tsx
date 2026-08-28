@@ -9,7 +9,8 @@ import {
 	useIdentity,
 } from "@btst/stack/context";
 import { MEDIA_QUERY_KEYS } from "../api/query-key-defs";
-import { useAssets } from "../client/hooks/use-media";
+import { useAssets, useUploadAsset } from "../client/hooks/use-media";
+import { mediaResources } from "../query-keys";
 
 (
 	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -164,5 +165,82 @@ describe("Media protected query identity partition", () => {
 		await act(async () => resolution);
 		await waitFor(() => filename === "user-b.jpg");
 		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("refetches only the active identity partition after an upload", async () => {
+		const uploadedAsset = {
+			id: "asset-uploaded",
+			filename: "uploaded.txt",
+			originalName: "uploaded.txt",
+			mimeType: "text/plain",
+			size: 3,
+			url: "https://files.example/uploaded.txt",
+			createdAt: "2026-01-01T00:00:00.000Z",
+		};
+		fetchMock
+			.mockResolvedValueOnce(responseFor("user-a"))
+			.mockResolvedValueOnce(responseFor("user-b"))
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify(uploadedAsset), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				}),
+			)
+			.mockResolvedValueOnce(responseFor("user-b-updated"));
+		const auth = {
+			getIdentity: vi.fn(() => null),
+		} satisfies StackAuthProvider;
+		let filename: string | undefined;
+		let upload: ReturnType<typeof useUploadAsset>["mutateAsync"] | undefined;
+
+		function Probe() {
+			filename = useAssets({ limit: 40 }).data?.pages[0]?.items[0]?.filename;
+			upload = useUploadAsset().mutateAsync;
+			return null;
+		}
+
+		async function render(initialIdentity: { id: string }) {
+			await act(async () => {
+				root.render(
+					<StackProvider
+						basePath="/pages"
+						api={{ baseURL: "http://test.local", basePath: "/api" }}
+						auth={auth}
+						initialIdentity={initialIdentity}
+						overrides={{ media: { queryClient, imageCompression: false } }}
+					>
+						<QueryClientProvider client={queryClient}>
+							<Probe />
+						</QueryClientProvider>
+					</StackProvider>,
+				);
+			});
+		}
+
+		await render({ id: "user-a" });
+		await waitFor(() => filename === "user-a.jpg");
+		await render({ id: "user-b" });
+		await waitFor(() => filename === "user-b.jpg");
+		await act(async () => {
+			await upload?.({
+				file: new File(["new"], "uploaded.txt", { type: "text/plain" }),
+			});
+		});
+		await waitFor(() => filename === "user-b-updated.jpg");
+
+		expect(fetchMock).toHaveBeenCalledTimes(4);
+		const userA = queryClient.getQueryData<{
+			pages: Array<{ items: Array<{ filename: string }> }>;
+		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-a" }));
+		expect(userA?.pages[0]?.items[0]?.filename).toBe("user-a.jpg");
+	});
+
+	it("limits generated asset mutation refetches to active queries", () => {
+		expect(mediaResources.mediaAssets.mutations.create.refetchType).toBe(
+			"active",
+		);
+		expect(mediaResources.mediaAssets.mutations.delete.refetchType).toBe(
+			"active",
+		);
 	});
 });

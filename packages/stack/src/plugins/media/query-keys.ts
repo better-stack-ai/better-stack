@@ -106,7 +106,9 @@ export const mediaResources = {
 				}),
 				select: (data: any) => data as SerializedAsset,
 				invalidates: ["mediaAssets.list"],
-				refetchType: "all",
+				// Only mounted queries belong to the current identity. URL registration
+				// explicitly refreshes inactive variants for that identity in its hook.
+				refetchType: "active",
 				refresh: false,
 			},
 			delete: {
@@ -115,7 +117,7 @@ export const mediaResources = {
 				input: (id: string) => ({ params: { id } }),
 				select: (data: any) => data as { success: boolean },
 				invalidates: ["mediaAssets.list"],
-				refetchType: "all",
+				refetchType: "active",
 				refresh: false,
 			},
 		},

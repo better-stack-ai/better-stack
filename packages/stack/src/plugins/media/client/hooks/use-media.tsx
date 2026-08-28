@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { hashKey, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ResourceFormResult } from "@btst/stack/plugins/client/hooks";
 import {
 	useIdentity,
@@ -28,6 +28,34 @@ function isUnresolvedIdentityPartition(
 	partition: ReturnType<typeof useIdentityPartition>,
 ) {
 	return typeof partition === "string";
+}
+
+function sameIdentityPartition(
+	queryKey: readonly unknown[],
+	partition: ReturnType<typeof useIdentityPartition>,
+) {
+	const marker = queryKey[3] as { identity?: unknown } | undefined;
+	if (partition === undefined) return marker === undefined;
+	return (
+		marker !== undefined && hashKey([marker.identity]) === hashKey([partition])
+	);
+}
+
+function useInvalidateCurrentMediaList(
+	resource: "mediaAssets" | "mediaFolders",
+) {
+	const queryClient = useQueryClient();
+	const identityPartition = useIdentityPartition();
+	return () =>
+		queryClient.invalidateQueries({
+			queryKey: [resource, "list"],
+			predicate: ({ queryKey }) =>
+				sameIdentityPartition(queryKey, identityPartition),
+			// The current tab can temporarily unmount its list. Refresh only this
+			// identity's inactive variants; never refetch a previous account's key
+			// with the current request headers.
+			refetchType: "all",
+		});
 }
 
 /** Infinite-scroll list of assets, optionally filtered by folder, MIME type, or search. */
@@ -59,7 +87,7 @@ export function useUploadAsset() {
 	const { api } = useStack();
 	// Resource-generated asset queries use the nearest QueryClientProvider.
 	// Keep the custom upload transport on that same cache.
-	const queryClient = useQueryClient();
+	const invalidateCurrentAssets = useInvalidateCurrentMediaList("mediaAssets");
 
 	return useMutation({
 		mutationFn: async ({
@@ -80,13 +108,7 @@ export function useUploadAsset() {
 				{ file, folderId },
 			),
 		onSuccess: async () => {
-			await queryClient.invalidateQueries({
-				queryKey: ["mediaAssets", "list"],
-				// Browse unmounts while the Upload tab is active, and resource
-				// queries intentionally disable refetch-on-mount. Refresh inactive
-				// list variants so the uploaded asset is present when Browse remounts.
-				refetchType: "all",
-			});
+			await invalidateCurrentAssets();
 		},
 	});
 }
@@ -134,6 +156,7 @@ export function useRegisterAssetForm(
 	options: UseRegisterAssetFormOptions = {},
 ): ResourceFormResult<RegisterAssetFormValues, null, SerializedAsset> {
 	const t = useTranslate();
+	const invalidateCurrentAssets = useInvalidateCurrentMediaList("mediaAssets");
 	return media.mediaAssets.useForm<
 		RegisterAssetFormValues,
 		SerializedAsset,
@@ -149,7 +172,10 @@ export function useRegisterAssetForm(
 		successMessage: t("media.toasts.registerSuccess", "Asset added"),
 		errorMessage: (error) =>
 			error.message || t("media.toasts.registerError", "Failed to add asset"),
-		onSuccess: options.onSuccess,
+		onSuccess: async (asset) => {
+			await invalidateCurrentAssets();
+			await options.onSuccess?.(asset);
+		},
 	});
 }
 
