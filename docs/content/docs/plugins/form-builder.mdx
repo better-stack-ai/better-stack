@@ -637,6 +637,7 @@ Creates the backend plugin with optional hooks configuration.
 | `onAfterSubmission` | `submission, form, ctx` | `void` | Post-submission actions |
 | `onBeforeListSubmissions` | `formId, ctx` | `void` | Domain precondition before listing submissions |
 | `onBeforeDeleteSubmission` | `id, ctx` | `void` | Domain precondition before deleting a submission |
+| `onAfterDeleteSubmission` | `id, ctx` | `void` | Post-delete submission lifecycle |
 | `onError` | `error, operation, ctx` | `void` | Observe post-authorization operation errors |
 | `onErrorSubmission` | `error, slug, ctx` | `void` | Handle submission errors |
 
