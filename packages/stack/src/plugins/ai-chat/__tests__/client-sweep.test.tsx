@@ -1679,6 +1679,45 @@ describe("AI Chat forms, notifications, and i18n", () => {
 		expect(notify.error).not.toHaveBeenCalled();
 	});
 
+	it("starts current-conversation navigation before refreshing deleted history", async () => {
+		const navigate = vi.fn();
+		deleteConversation.mockImplementationOnce(
+			async (
+				_variables: { id: string },
+				options?: { onSuccess?: () => void | Promise<void> },
+			) => {
+				await options?.onSuccess?.();
+				return { success: true };
+			},
+		);
+
+		const stack = createClientStack({
+			api: { baseURL: "http://test.local", basePath: "/api/data" },
+			site: { baseURL: window.location.origin, basePath: "/pages" },
+			queryClient,
+			plugins: { aiChat: aiChatClientPlugin() },
+		});
+		await act(async () => {
+			root.render(
+				<QueryClientProvider client={queryClient}>
+					<StackProvider stack={stack} router={{ navigate }}>
+						<ChatSidebar currentConversationId={conversation.id} />
+					</StackProvider>
+				</QueryClientProvider>,
+			);
+			await Promise.resolve();
+		});
+
+		await openConversationMenu();
+		await act(async () => menuItem("Delete")?.click());
+		const confirm = Array.from(
+			document.querySelectorAll<HTMLButtonElement>("button"),
+		).find((button) => button.textContent === "Delete");
+		await act(async () => confirm?.click());
+
+		expect(navigate).toHaveBeenCalledWith("/pages/chat");
+	});
+
 	it("does not expose raw delete errors through notifications", async () => {
 		const notify = { success: vi.fn(), error: vi.fn() };
 		deleteConversation.mockRejectedValueOnce(

@@ -141,7 +141,16 @@ export function ChatSidebar({
 	const handleDeleteConfirm = async () => {
 		if (selectedConversation) {
 			try {
-				await deleteMutation.mutateAsync({ id: selectedConversation.id });
+				const deletingCurrentConversation =
+					selectedConversation.id === currentConversationId;
+				if (deletingCurrentConversation) {
+					await deleteMutation.mutateAsync(
+						{ id: selectedConversation.id },
+						{ onSuccess: () => navigateToChat() },
+					);
+				} else {
+					await deleteMutation.mutateAsync({ id: selectedConversation.id });
+				}
 				notify.success(
 					tr(
 						"CONVERSATION_DELETE_SUCCESS",
@@ -151,10 +160,6 @@ export function ChatSidebar({
 				);
 				setDeleteDialogOpen(false);
 				setSelectedConversation(null);
-				// Navigate away if deleted current conversation
-				if (selectedConversation.id === currentConversationId) {
-					await navigateToChat();
-				}
 			} catch {
 				notify.error(
 					tr(
