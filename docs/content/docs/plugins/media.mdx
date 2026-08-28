@@ -559,8 +559,9 @@ Every transport uses the same operation lifecycle:
 `stack.forRequest(request).api.media.*` follows that entire lifecycle.
 `stack.internal.media.*` is for trusted server jobs: it skips only user
 authorization and still runs validation, storage/domain hooks, cleanup, and
-ordering. Omitting `auth` remains permissive during the v3 RC compatibility
-window.
+ordering. Internal child-folder and asset writes inherit the tenant of their
+authoritatively loaded parent folder. Omitting `auth` remains permissive during
+the v3 RC compatibility window.
 
 <Callout type="warn">
 Backend hooks are workflow/lifecycle hooks, not the authorization boundary.

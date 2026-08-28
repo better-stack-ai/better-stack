@@ -634,6 +634,74 @@ describe("Media operation-first authorization", () => {
 		expect(getIdentity).toHaveBeenCalledTimes(2);
 	});
 
+	it("inherits authoritative folder tenants for internal writes and rejects cross-tenant moves", async () => {
+		const uploadFacts: unknown[] = [];
+		const backend = makeBackend({
+			tenantId: "tenant-a",
+			hooks: {
+				onBeforeUpload: (_input, context) => {
+					uploadFacts.push(context.facts);
+				},
+			},
+		});
+		const parent = await seedFolder(backend, { name: "Tenant A parent" });
+		const child = await backend.internal.media.createFolder({
+			name: "Internal child",
+			parentId: parent.id,
+		});
+		const finalized = await backend.internal.media.createAsset({
+			filename: "finalized.jpg",
+			originalName: "finalized.jpg",
+			mimeType: "image/jpeg",
+			size: 5,
+			url: "https://files.example/finalized.jpg",
+			folderId: child.id,
+		});
+		const direct = await backend.internal.media.uploadDirect({
+			filename: "direct.jpg",
+			mimeType: "image/jpeg",
+			size: 5,
+			contentBase64: Buffer.from("photo").toString("base64"),
+			folderId: child.id,
+		});
+
+		expect(
+			await backend.adapter.findOne<Folder>({
+				model: "mediaFolder",
+				where: [{ field: "id", value: child.id }],
+			}),
+		).toMatchObject({ tenantId: "tenant-a" });
+		for (const assetId of [finalized.id, direct.id]) {
+			expect(
+				await backend.adapter.findOne<Asset>({
+					model: "mediaAsset",
+					where: [{ field: "id", value: assetId }],
+				}),
+			).toMatchObject({ folderId: child.id, tenantId: "tenant-a" });
+		}
+		expect(uploadFacts).toEqual([
+			expect.objectContaining({ tenantId: "tenant-a" }),
+			expect.objectContaining({ tenantId: "tenant-a" }),
+		]);
+
+		const foreign = await seedFolder(backend, {
+			name: "Tenant B",
+			tenantId: "tenant-b",
+		});
+		await expect(
+			backend.internal.media.updateAsset({
+				id: finalized.id,
+				data: { folderId: foreign.id },
+			}),
+		).rejects.toMatchObject({ statusCode: 404, code: "FOLDER_NOT_FOUND" });
+		expect(
+			await backend.adapter.findOne<Asset>({
+				model: "mediaAsset",
+				where: [{ field: "id", value: finalized.id }],
+			}),
+		).toMatchObject({ folderId: child.id, tenantId: "tenant-a" });
+	});
+
 	it("preserves missing-rule, rule, identity, and fact failures before hooks", async () => {
 		const before = vi.fn();
 		const missing = defineAuthorization({

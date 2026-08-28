@@ -1101,6 +1101,16 @@ export function createMediaOperations(
 		return folderSnapshot(folder);
 	};
 
+	const bindFolderTenant = (
+		input: object,
+		resolvedTenantId: string | undefined,
+		folder: FolderSnapshot | undefined,
+	) => {
+		const tenantId = resolvedTenantId ?? folder?.tenantId;
+		tenants.set(input, tenantId);
+		return tenantId;
+	};
+
 	const verifyFolder = async (
 		reader: Pick<Adapter, "findOne">,
 		snapshot: FolderSnapshot | undefined,
@@ -1185,12 +1195,17 @@ export function createMediaOperations(
 				body: input,
 			});
 			const folder = await loadFolder(input.folderId, tenantId);
+			const effectiveTenantId = bindFolderTenant(
+				input as object,
+				tenantId,
+				folder,
+			);
 			folders.set(input as object, folder);
 			return {
 				phase: "finalize" as const,
 				...(folder ? { folderId: folder.id } : {}),
 				mimeType: input.mimeType,
-				...(tenantId ? { tenantId } : {}),
+				...(effectiveTenantId ? { tenantId: effectiveTenantId } : {}),
 			} satisfies AssetUploadFacts;
 		},
 		execute: (context) => {
@@ -1263,6 +1278,9 @@ export function createMediaOperations(
 				typeof input.data.folderId === "string"
 					? await loadFolder(input.data.folderId, tenantId)
 					: undefined;
+			if (target && target.tenantId !== snapshot.tenantId) {
+				throw notFound("Folder");
+			}
 			targetFolders.set(input as object, target);
 			return {
 				...assetFacts(snapshot),
@@ -1431,10 +1449,15 @@ export function createMediaOperations(
 				body: input,
 			});
 			const parent = await loadFolder(input.parentId, tenantId);
+			const effectiveTenantId = bindFolderTenant(
+				input as object,
+				tenantId,
+				parent,
+			);
 			folders.set(input as object, parent);
 			return {
 				...(parent ? { parentId: parent.id } : {}),
-				...(tenantId ? { tenantId } : {}),
+				...(effectiveTenantId ? { tenantId: effectiveTenantId } : {}),
 			} satisfies FolderCreateFacts;
 		},
 		execute: (context) => {
@@ -1564,12 +1587,17 @@ export function createMediaOperations(
 				body: input,
 			});
 			const folder = await loadFolder(input.folderId, tenantId);
+			const effectiveTenantId = bindFolderTenant(
+				input as object,
+				tenantId,
+				folder,
+			);
 			folders.set(input as object, folder);
 			return {
 				phase: "direct" as const,
 				...(folder ? { folderId: folder.id } : {}),
 				mimeType: input.mimeType,
-				...(tenantId ? { tenantId } : {}),
+				...(effectiveTenantId ? { tenantId: effectiveTenantId } : {}),
 			} satisfies AssetUploadFacts;
 		},
 		execute: async (context) => {
@@ -1671,12 +1699,17 @@ export function createMediaOperations(
 				body: input,
 			});
 			const folder = await loadFolder(input.folderId, tenantId);
+			const effectiveTenantId = bindFolderTenant(
+				input as object,
+				tenantId,
+				folder,
+			);
 			folders.set(input as object, folder);
 			return {
 				phase: "initialize" as const,
 				...(folder ? { folderId: folder.id } : {}),
 				mimeType: input.mimeType,
-				...(tenantId ? { tenantId } : {}),
+				...(effectiveTenantId ? { tenantId: effectiveTenantId } : {}),
 			} satisfies AssetUploadFacts;
 		},
 		execute: async (context) => {
@@ -1777,19 +1810,24 @@ export function createMediaOperations(
 				body: input.body,
 			});
 			const folder = await loadFolder(normalized.folderId, tenantId);
+			const effectiveTenantId = bindFolderTenant(
+				input as object,
+				tenantId,
+				folder,
+			);
 			folders.set(input as object, folder);
 			const context = {
 				phase: "initialize" as const,
 				...normalized,
 				...(folder ? { folderId: folder.id } : {}),
-				...(tenantId ? { tenantId } : {}),
+				...(effectiveTenantId ? { tenantId: effectiveTenantId } : {}),
 			};
 			vercelContexts.set(input as object, context);
 			return {
 				phase: "initialize" as const,
 				...(folder ? { folderId: folder.id } : {}),
 				mimeType: normalized.mimeType,
-				...(tenantId ? { tenantId } : {}),
+				...(effectiveTenantId ? { tenantId: effectiveTenantId } : {}),
 			} satisfies AssetUploadFacts;
 		},
 		execute: async (context) => {
