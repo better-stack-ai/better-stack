@@ -34,6 +34,7 @@ export function AssetCard({
 		assetId: asset.id,
 		...(asset.folderId ? { folderId: asset.folderId } : {}),
 		mimeType: asset.mimeType,
+		...(asset.tenantId ? { tenantId: asset.tenantId } : {}),
 	};
 
 	const copyUrl = async () => {

@@ -77,7 +77,7 @@ beforeEach(() => {
 		isLoading: false,
 	});
 	hooks.useFolders.mockImplementation((parentId?: string | null) => ({
-		data: parentId === null ? [folder] : [],
+		data: parentId === undefined || parentId === null ? [folder] : [],
 	}));
 	hooks.useUploadAsset.mockReturnValue({
 		mutateAsync: vi.fn().mockResolvedValue(asset),
@@ -328,6 +328,48 @@ describe("Media library permissions", () => {
 			id: "upload",
 			facts: { phase: "direct" },
 		});
+	});
+
+	it("includes the selected folder parent in the delete presentation gate", async () => {
+		const childFolder: SerializedFolder = {
+			id: "folder-child",
+			name: "Nested photos",
+			parentId: folder.id,
+			tenantId: "tenant-a",
+			createdAt: new Date("2024-01-02").toISOString(),
+		};
+		hooks.useFolders.mockReturnValue({ data: [folder, childFolder] });
+		const seen: unknown[] = [];
+		const definition = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [mediaPermissions] as const,
+			rules: ({ media }) => [
+				media.library.read.allow(),
+				media.asset.read.allow(),
+				media.folder.delete.when(({ facts }) => {
+					seen.push(facts);
+					return false;
+				}),
+			],
+		});
+		const clientAuth = createClientAuth({
+			authorization: definition,
+			getIdentity: () => ({ id: "viewer" }),
+		});
+
+		await renderLibrary({
+			auth: clientAuth,
+			initialIdentity: { id: "viewer" },
+			router: createMockRouter(`folder=${childFolder.id}`),
+		});
+		await waitFor(() => seen.length > 0);
+
+		expect(seen).toContainEqual({
+			folderId: childFolder.id,
+			parentId: folder.id,
+			tenantId: "tenant-a",
+		});
+		expect(document.body.textContent).not.toContain("Delete folder");
 	});
 });
 

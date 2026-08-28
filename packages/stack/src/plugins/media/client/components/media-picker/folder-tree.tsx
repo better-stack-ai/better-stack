@@ -21,14 +21,16 @@ export function FolderTree({
 }) {
 	const t = useTranslate();
 	const notify = useNotify();
-	const { data: rootFoldersRaw = [] } = useFolders(null);
-	const rootFolders =
-		rootFoldersRaw as import("../../../types").SerializedFolder[];
+	const { data: foldersRaw = [] } = useFolders();
+	const folders = foldersRaw as import("../../../types").SerializedFolder[];
+	const rootFolders = folders.filter((folder) => !folder.parentId);
+	const selectedFolder = folders.find((folder) => folder.id === selectedId);
 	const [newFolderName, setNewFolderName] = useState("");
 	const [isCreating, setIsCreating] = useState(false);
 	const { mutateAsync: deleteFolder } = useDeleteFolder();
 	const createPermission = mediaPermissions.folder.create({
 		...(selectedId ? { parentId: selectedId } : {}),
+		...(selectedFolder?.tenantId ? { tenantId: selectedFolder.tenantId } : {}),
 	});
 	const createFolderForm = useCreateFolderForm({
 		parentId: selectedId ?? undefined,
@@ -148,19 +150,36 @@ export function FolderTree({
 					<FolderTreeItem
 						key={folder.id}
 						folder={folder}
+						folders={folders}
 						selectedId={selectedId}
 						onSelect={onSelect}
 					/>
 				))}
 			</div>
 
-			{selectedId && (
+			{selectedId && selectedFolder && (
 				<PermissionAccess
-					permission={mediaPermissions.folder.delete({ folderId: selectedId })}
+					permission={mediaPermissions.folder.delete({
+						folderId: selectedId,
+						...(selectedFolder.parentId
+							? { parentId: selectedFolder.parentId }
+							: {}),
+						...(selectedFolder.tenantId
+							? { tenantId: selectedFolder.tenantId }
+							: {}),
+					})}
 					legacyPermission={{
 						resource: "media:folder",
 						action: "delete",
-						params: { id: selectedId },
+						params: {
+							id: selectedId,
+							...(selectedFolder.parentId
+								? { parentId: selectedFolder.parentId }
+								: {}),
+							...(selectedFolder.tenantId
+								? { tenantId: selectedFolder.tenantId }
+								: {}),
+						},
 					}}
 				>
 					<div className="border-t px-2 py-1">
@@ -181,17 +200,19 @@ export function FolderTree({
 
 export function FolderTreeItem({
 	folder,
+	folders,
 	selectedId,
 	onSelect,
 	depth = 0,
 }: {
 	folder: SerializedFolder;
+	folders: SerializedFolder[];
 	selectedId: string | null;
 	onSelect: (id: string | null) => void;
 	depth?: number;
 }) {
 	const [expanded, setExpanded] = useState(false);
-	const { data: children = [] } = useFolders(folder.id);
+	const children = folders.filter((child) => child.parentId === folder.id);
 
 	return (
 		<div>
@@ -229,6 +250,7 @@ export function FolderTreeItem({
 					<FolderTreeItem
 						key={child.id}
 						folder={child}
+						folders={folders}
 						selectedId={selectedId}
 						onSelect={onSelect}
 						depth={depth + 1}

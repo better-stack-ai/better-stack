@@ -50,6 +50,7 @@ const { handler, dbSchema } = stack({
   },
   adapter: (db) => createPrismaAdapter(prisma, db, {
     provider: "postgresql",
+    transaction: true,
   }),
 })
 
@@ -64,6 +65,15 @@ The `mediaBackendPlugin()` requires a `storageAdapter`. BTST currently ships wit
 
 <Callout type="info">
 Pick the backend storage adapter first, then make the client-side `uploadMode` match it. A mismatch between the two is the most common Media plugin integration mistake.
+</Callout>
+
+<Callout type="warn">
+Media writes require an isolated database transaction so the final
+authorization/CAS check and mutation commit atomically. Set `transaction: true`
+for supported Prisma, Drizzle, and Kysely adapters. Existing manual setups that
+omit it fail closed with `ATOMIC_TRANSACTION_REQUIRED`; add the option before
+upgrading to v3. The memory adapter remains available for local, serialized
+development use.
 </Callout>
 
 ### 2. Add Plugin to Client
@@ -603,7 +613,10 @@ const { handler, dbSchema } = stack({
       },
     }),
   },
-  adapter: (db) => createPrismaAdapter(prisma, db),
+  adapter: (db) => createPrismaAdapter(prisma, db, {
+    provider: "postgresql",
+    transaction: true,
+  }),
 })
 ```
 
