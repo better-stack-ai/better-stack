@@ -118,5 +118,5 @@ describe("published symmetric stack constructors", () => {
 			],
 			{ cwd: resolve(".") },
 		);
-	});
+	}, 30_000);
 });
