@@ -191,7 +191,7 @@ export function stack<
 				plugin.name,
 				pluginRoutes,
 				pluginOperations[pluginKey] ?? {},
-				plugin.operations !== undefined,
+				plugin.operations !== undefined || runtimeAuth !== undefined,
 				plugin.infrastructureRoutes,
 				plugin.operationRouteMap,
 			),

@@ -736,7 +736,7 @@ Use `app.forRequest(request).api.formBuilder` for user-driven work and `app.inte
 
 Standalone getters remain lower-level adapter primitives for plugin internals and migrations.
 
-## Static Site Generation (SSG)## Static Site Generation (SSG)
+## Static Site Generation (SSG)
 
 `route.loader()` makes HTTP requests to `apiBaseURL`, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
 

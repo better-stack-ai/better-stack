@@ -22,7 +22,6 @@ export {
 	UpdateCommentStatusOperationInputSchema,
 } from "./operations";
 export type {
-	CommentsApiContext,
 	CommentsBackendHooks,
 	CommentsBackendOptions,
 	CommentsCountOperationContext,

@@ -25,9 +25,11 @@ export const myBackendPlugin = defineBackendPlugin({
     ),
   }),
 })
+
+export type MyApiRouter = ReturnType<typeof myBackendPlugin.routes>
 ```
 
-## getters.ts## getters.ts
+## getters.ts
 
 Lower-level DB functions — no HTTP context or lifecycle composition, always accept `adapter` as first arg:
 
@@ -110,9 +112,9 @@ export { serializeItem } from "./serializers"
 
 ## Lifecycle hooks in operations
 
-Invoke domain hooks from the operation lifecycle after authorization. Hooks can validate or transform domain input, publish side effects, and observe errors; they are not the authorization policy.
+Invoke domain hooks from the operation lifecycle after authorization. Hooks can enforce domain invariants, publish side effects, and observe errors; they are not the authorization policy.
 
-## Plugin stack() wiring## Plugin stack() wiring (in stack.ts)
+## Plugin stack() wiring (in stack.ts)
 
 ```typescript
 import { stack } from "@btst/stack"
@@ -129,5 +131,5 @@ export const myStack = stack({
 export const { handler, dbSchema } = myStack
 
 // Explicitly trusted business access keeps validation and lifecycle hooks:
-const items = await myStack.internal.myPlugin.listItems({})
+const item = await myStack.internal.myPlugin.createItem({ name: "Scheduled item" })
 ```

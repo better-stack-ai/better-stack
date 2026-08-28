@@ -21,7 +21,6 @@ export {
 	UpdatePostOperationInputSchema,
 } from "./operations";
 export type {
-	BlogApiContext,
 	BlogBackendHooks,
 	BlogCreateErrorContext,
 	BlogCreateOperationContext,

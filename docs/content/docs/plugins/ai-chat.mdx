@@ -1147,7 +1147,7 @@ Rename, delete, and file-upload feedback uses the shared `notify` provider. Fiel
 
 AI Chat has no raw `stack.api.aiChat` business namespace. Use `app.forRequest(request).api.aiChat` for request-driven work and `app.internal.aiChat` for explicitly trusted jobs. Standalone conversation getters remain lower-level adapter primitives for plugin internals and migrations.
 
-## Route-Aware AI Context## Route-Aware AI Context
+## Route-Aware AI Context
 
 The AI chat plugin supports **route-aware context** — pages register contextual data and client-side tool handlers that the chat widget reads automatically. This enables:
 

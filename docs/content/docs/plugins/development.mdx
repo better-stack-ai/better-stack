@@ -141,105 +141,15 @@ export const blogSchema = createDbPlugin("blog", {
 
 ## Backend Plugin
 
-The backend plugin defines your API endpoints using the database adapter.
+The backend plugin defines schema-backed operations first, then adapts those
+same operations to HTTP routes, request-scoped calls, and trusted internal
+calls. A route-only business plugin is rejected when server authorization is
+configured because its access would be unclassified.
 
-### Basic Structure
+### Schema-backed operations
 
-```typescript
-import { type Adapter, defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api"
-import { z } from "zod"
-import { todosSchema as dbSchema } from "../schema"
-import type { Todo } from "../types"
-
-// Request validation schemas
-const createTodoSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  completed: z.boolean().optional().default(false)
-})
-
-export const todosBackendPlugin = defineBackendPlugin({
-  name: "todos",
-  dbPlugin: dbSchema,
-  
-  routes: (adapter: Adapter) => {
-    // Define endpoints here
-    return { /* endpoints */ } as const
-  }
-})
-
-// Export the router type for client-side type safety
-export type TodosApiRouter = ReturnType<typeof todosBackendPlugin.routes>
-```
-
-### Creating Endpoints
-
-Use `createEndpoint` to define type-safe API routes:
-
-```typescript
-routes: (adapter: Adapter) => {
-  // GET /todos - List all todos
-  const listTodos = createEndpoint(
-    "/todos",
-    { method: "GET" },
-    async () => {
-      const todos = await adapter.findMany<Todo>({
-        model: "todo",
-        sortBy: { field: "createdAt", direction: "desc" }
-      })
-      return todos || []
-    }
-  )
-
-  // POST /todos - Create a todo
-  const createTodo = createEndpoint(
-    "/todos",
-    { method: "POST", body: createTodoSchema },
-    async (ctx) => {
-      const { title, completed } = ctx.body
-      return await adapter.create<Todo>({
-        model: "todo",
-        data: { title, completed: completed ?? false, createdAt: new Date() }
-      })
-    }
-  )
-
-  // PUT /todos/:id - Update a todo
-  const updateTodo = createEndpoint(
-    "/todos/:id",
-    { method: "PUT", body: updateTodoSchema },
-    async (ctx) => {
-      const updated = await adapter.update({
-        model: "todo",
-        where: [{ field: "id", value: ctx.params.id }],
-        update: ctx.body
-      })
-      if (!updated) throw new Error("Todo not found")
-      return updated
-    }
-  )
-
-  // DELETE /todos/:id - Delete a todo
-  const deleteTodo = createEndpoint(
-    "/todos/:id",
-    { method: "DELETE" },
-    async (ctx) => {
-      await adapter.delete({
-        model: "todo",
-        where: [{ field: "id", value: ctx.params.id }]
-      })
-      return { success: true }
-    }
-  )
-
-  return { listTodos, createTodo, updateTodo, deleteTodo } as const
-}
-```
-
-### Schema-backed write operations
-
-For user-facing writes, define one operation and let HTTP, request-scoped, and
-trusted internal transports adapt it. Start with a browser-safe permission
-catalog:
+For every user-facing read or write, define one operation and let each server
+transport adapt it. Start with a browser-safe permission catalog:
 
 ```typescript title="permissions.ts"
 import { definePermissions, permission } from "@btst/stack/authorization"
@@ -313,6 +223,8 @@ export const todosBackendPlugin = defineBackendPlugin({
     ),
   }),
 })
+
+export type TodosApiRouter = ReturnType<typeof todosBackendPlugin.routes>
 ```
 
 For compound behavior, `additionalPermissions` derives every secondary check
@@ -446,7 +358,7 @@ The adapter provides these database operations:
 
 ### Operation-first authorization and lifecycle
 
-Publish schema-backed permission descriptors, then define one maintained operation inventory. Each protected operation validates input, derives authoritative facts, evaluates its exact descriptor through `createServerAuth`, executes domain behavior, and invokes lifecycle hooks. Hooks are for domain transforms, side effects, audit, and error reporting—not routine authorization.
+Publish schema-backed permission descriptors, then define one maintained operation inventory. Each protected operation validates input, derives authoritative facts, evaluates its exact descriptor through `createServerAuth`, executes domain behavior, and invokes lifecycle hooks. Hooks are for domain invariants, side effects, audit, and error reporting—not routine authorization or input transformation.
 
 ```ts
 const todoPermissions = definePermissions("todo", {
@@ -487,7 +399,7 @@ Use `app.forRequest(request).api.todos.*` for request-driven server work and `ap
 
 Pure getters and mutations may remain exported lower-level adapter primitives for plugin internals and migrations. They do not promise authorization, validation, or lifecycle composition and should not be duplicated onto `stack().api`.
 
-## Client Plugin## Client Plugin
+## Client Plugin
 
 The client plugin defines routes with React components, SSR data loaders, and SEO meta generators.
 
@@ -968,7 +880,7 @@ await myStack.internal.todos.createTodo({ title: "Trusted job" })
 await myStack.api.todos.prefetchForRoute("list", queryClient)
 ```
 
-### Client Registration### Client Registration
+### Client Registration
 
 Register client plugins with your stack client:
 
@@ -1021,7 +933,7 @@ export const getStackClient = (queryClient: QueryClient) => {
 
 Generated examples follow the same operation-first shape: descriptors live in `permissions.ts`, operations own validation/facts/lifecycle, routes bind the same-key operations, and `api` exposes only `prefetchForRoute`. Use the generated Todo plugin as a compact reference and the first-party Blog plugin for relations, lifecycle, SSR, and authorization examples.
 
-## AI Chat Plugin Integration## AI Chat Plugin Integration
+## AI Chat Plugin Integration
 
 Plugins can participate in the **route-aware AI context** system. When a user opens the chat widget while viewing one of your plugin's pages, it can automatically:
 

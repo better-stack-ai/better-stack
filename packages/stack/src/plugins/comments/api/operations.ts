@@ -80,18 +80,6 @@ type RequestFields = {
 	readonly headers?: Headers;
 };
 
-/** @deprecated Use the operation-specific Comments lifecycle contexts. */
-export interface CommentsApiContext extends RequestFields {
-	/** Legacy untyped request body. */
-	readonly body?: unknown;
-	/** Legacy untyped route parameters. */
-	readonly params?: unknown;
-	/** Legacy untyped query parameters. */
-	readonly query?: unknown;
-	/** Additional legacy request context values. */
-	readonly [key: string]: unknown;
-}
-
 /** Authorized context supplied before a Comments list query executes. */
 export interface CommentsListOperationContext
 	extends OperationContext<ListInput, ReadFacts>,

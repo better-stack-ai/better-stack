@@ -512,6 +512,12 @@ Server transports share the same operation:
 
 The request surface validates input, derives authoritative facts, resolves identity, evaluates the rule, then runs domain behavior and lifecycle hooks. The internal surface skips user authorization but keeps validation, fact derivation, domain behavior, and hooks. First-party `app.api` namespaces expose only narrow SSG `prefetchForRoute` helpers; raw business getters and mutations are not duplicated there.
 
+When server authorization is configured, stack composition rejects every HTTP
+route that is not bound to a same-key operation or explicitly declared as a
+public infrastructure route with a rationale. This prevents route-only custom
+plugins from silently bypassing the configured boundary. Route-only plugins
+remain supported when server authorization is omitted.
+
 When server authorization is omitted, protected request operations remain permissive for compatibility. Once it is configured:
 
 - missing or malformed credentials produce `401`
@@ -523,7 +529,7 @@ There is no authorization-result cache. Rules are boolean decisions, not row or 
 
 ## Lifecycle hooks are domain hooks
 
-Lifecycle hooks observe already-validated operation context. They are for transforming domain input, side effects, and telemetry—not routine authorization. Use descriptor rules for access control. Request and internal operations both run the documented hook sequence; raw adapter primitives are lower-level implementation tools and do not promise that lifecycle.
+Lifecycle hooks observe already-validated, deeply readonly operation context. They can enforce domain invariants, publish side effects, and record telemetry—not perform routine authorization or transform operation input. Use descriptor rules for access control. Request and internal operations both run the documented hook sequence; raw adapter primitives are lower-level implementation tools and do not promise that lifecycle.
 
 ## Managed and separate backends
 

@@ -179,17 +179,6 @@ export interface BlogNextPreviousErrorContext
 	readonly query: DeepReadonly<NextPreviousPostsInput>;
 }
 
-/** @deprecated Use the operation-specific Blog lifecycle contexts instead. */
-export interface BlogApiContext<
-	TBody = unknown,
-	TParams = unknown,
-	TQuery = unknown,
-> extends RequestFields {
-	readonly body?: DeepReadonly<TBody>;
-	readonly params?: DeepReadonly<TParams>;
-	readonly query?: DeepReadonly<TQuery>;
-}
-
 /** Domain lifecycle hooks that run only after successful Blog authorization. */
 export interface BlogBackendHooks {
 	onBeforeListPosts?: (

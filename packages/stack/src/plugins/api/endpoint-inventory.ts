@@ -93,12 +93,12 @@ export function composeEndpointInventory(
 	pluginName: string,
 	routes: Record<string, Endpoint>,
 	operations: OperationRecord,
-	declaresOperations: boolean,
+	requireCompleteInventory: boolean,
 	infrastructureRoutes?: InfrastructureRouteInventory,
 	operationRouteMap?: Readonly<Record<string, string>>,
 ): readonly ComposedEndpointInventoryEntry[] {
 	const strictInventory =
-		declaresOperations ||
+		requireCompleteInventory ||
 		infrastructureRoutes !== undefined ||
 		operationRouteMap !== undefined;
 	if (!strictInventory) return [];

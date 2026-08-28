@@ -384,7 +384,7 @@ Backend plugins accept a hooks object as their factory argument. Common hooks:
 **blog**
 ```ts
 blogBackendPlugin({
-  onBeforeCreatePost: async (data) => { /* domain validation/transform */ },
+  onBeforeCreatePost: async (data) => { /* domain validation */ },
   onBeforeUpdatePost: async (postId) => { /* domain validation */ },
   onBeforeDeletePost: async (postId) => { /* audit */ },
   onBeforeListPosts: async (filter) => { /* telemetry */ },
