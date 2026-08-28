@@ -6,6 +6,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createStackClient } from "../client";
 import {
+	getBoardSummaries,
 	serializeBoardSummary,
 	type SerializedBoardSummary,
 } from "../plugins/kanban/api";
@@ -31,6 +32,7 @@ describe("kanban query keys match SSG prefetch keys", () => {
 	});
 
 	it("exports the collection-safe serializer from the public API", () => {
+		expect(getBoardSummaries).toBeTypeOf("function");
 		expect(serializeBoardSummary).toBeTypeOf("function");
 		expectTypeOf<
 			ReturnType<typeof serializeBoardSummary>

@@ -44,7 +44,12 @@ export type {
 	TaskReorderOperationResultContext,
 	SerializedBoardSummary,
 } from "../types";
-export { getAllBoards, getBoardById, type BoardListResult } from "./getters";
+export {
+	getAllBoards,
+	getBoardById,
+	getBoardSummaries,
+	type BoardListResult,
+} from "./getters";
 export {
 	createKanbanTask,
 	findOrCreateKanbanBoard,
