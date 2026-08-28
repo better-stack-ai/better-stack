@@ -9,7 +9,7 @@ import type { Conversation, ConversationWithMessages, Message } from "../types";
  * @param userId - Optional user ID to filter conversations by owner
  */
 export async function getAllConversations(
-	adapter: Adapter,
+	adapter: Pick<Adapter, "findMany">,
 	userId?: string,
 ): Promise<Conversation[]> {
 	const whereConditions: Array<{
@@ -42,7 +42,7 @@ export async function getAllConversations(
  * @param id - The conversation ID
  */
 export async function getConversationById(
-	adapter: Adapter,
+	adapter: Pick<Adapter, "findMany">,
 	id: string,
 ): Promise<(Conversation & { messages: Message[] }) | null> {
 	const conversations = await adapter.findMany<ConversationWithMessages>({

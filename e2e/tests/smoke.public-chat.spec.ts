@@ -193,11 +193,9 @@ test.describe("AI Chat Plugin - Public Mode API", () => {
 	test("API: conversation endpoints return 404 in public mode", async ({
 		request,
 	}) => {
-		// List conversations should return empty array or 404
+		// History routes are intentionally absent from the public inventory.
 		const listResponse = await request.get(`${API_BASE}/chat/conversations`);
-		expect(listResponse.status()).toBe(200);
-		const conversations = await listResponse.json();
-		expect(conversations).toEqual([]);
+		expect(listResponse.status()).toBe(404);
 
 		// Create conversation should return 404 (not available in public mode)
 		const createResponse = await request.post(

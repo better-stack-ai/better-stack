@@ -1,15 +1,143 @@
 "use client";
 
+import {
+	hashKey,
+	useQueryClient,
+	type UseMutationResult,
+} from "@tanstack/react-query";
+import { useLayoutEffect, useRef } from "react";
 import type { ResourceFormResult } from "@btst/stack/plugins/client/hooks";
-import { usePluginOverrides, useTranslate } from "@btst/stack/context";
+import {
+	useIdentity,
+	useIdentityResolutionPromise,
+	useIdentitySourceGeneration,
+	usePluginOverrides,
+	useTranslate,
+} from "@btst/stack/context";
 import type {
+	AiChatIdentityPartition,
 	ConversationWithMessages,
 	CreateConversationInput,
 	RenameConversationInput,
 } from "../../query-keys";
+import { aiChatIdentityKey } from "../../query-keys";
 import type { SerializedConversation, SerializedMessage } from "../../types";
 import type { AiChatPluginOverrides } from "../overrides";
 import { aiChat } from "./ai-chat-resource";
+
+function useAiChatIdentityState(): {
+	partition: AiChatIdentityPartition;
+	isPending: boolean;
+	error?: Error;
+	refetchIdentity: () => Promise<void>;
+} {
+	const { identity, isPending, error, refetch } = useIdentity();
+	const sourceGeneration = useIdentitySourceGeneration();
+	return {
+		partition: isPending
+			? `pending:${sourceGeneration}`
+			: error
+				? `error:${sourceGeneration}`
+				: identity
+					? identity
+					: "anonymous",
+		isPending,
+		...(error ? { error } : {}),
+		refetchIdentity: refetch,
+	};
+}
+
+/** Current auth generation, used to partition protected browser caches. */
+export function useAiChatIdentityPartition() {
+	return useAiChatIdentityState().partition;
+}
+
+function isUnresolvedIdentityPartition(
+	partition: ReturnType<typeof useAiChatIdentityPartition>,
+) {
+	return (
+		typeof partition === "string" &&
+		(partition.startsWith("pending:") || partition.startsWith("error:"))
+	);
+}
+
+function samePartition(
+	left: ReturnType<typeof useAiChatIdentityPartition>,
+	right: ReturnType<typeof useAiChatIdentityPartition>,
+) {
+	return (
+		hashKey([aiChatIdentityKey(left)]) === hashKey([aiChatIdentityKey(right)])
+	);
+}
+
+function queryBelongsToPartition(
+	queryKey: readonly unknown[],
+	partition: ReturnType<typeof useAiChatIdentityPartition>,
+) {
+	const marker = queryKey[3] as { identity?: unknown } | undefined;
+	if (partition === undefined) return marker === undefined;
+	return Boolean(
+		marker &&
+			hashKey([marker.identity]) === hashKey([aiChatIdentityKey(partition)]),
+	);
+}
+
+function useCurrentHistoryRefresh() {
+	const queryClient = useQueryClient();
+	const { partition: identityPartition } = useAiChatIdentityState();
+	const latestPartition = useRef(identityPartition);
+	const mounted = useRef(true);
+	useLayoutEffect(() => {
+		latestPartition.current = identityPartition;
+	}, [identityPartition]);
+	useLayoutEffect(() => {
+		mounted.current = true;
+		return () => {
+			mounted.current = false;
+		};
+	}, []);
+
+	const refreshAfterSuccess = async (startedAs: typeof identityPartition) => {
+		const current = latestPartition.current;
+		if (!mounted.current || !samePartition(startedAs, current)) {
+			queryClient.removeQueries({
+				queryKey: ["conversations"],
+				predicate: ({ queryKey }) =>
+					queryBelongsToPartition(queryKey, startedAs),
+			});
+			return;
+		}
+		await queryClient.invalidateQueries({
+			queryKey: ["conversations"],
+			predicate: ({ queryKey }) => queryBelongsToPartition(queryKey, current),
+			refetchType: "all",
+		});
+	};
+
+	return {
+		currentPartition: () => identityPartition,
+		refreshAfterSuccess,
+	};
+}
+
+function withCurrentHistoryRefresh<TData, TVariables>(
+	mutation: UseMutationResult<TData, Error, TVariables>,
+	refresh: ReturnType<typeof useCurrentHistoryRefresh>,
+): UseMutationResult<TData, Error, TVariables> {
+	const mutateAsync: typeof mutation.mutateAsync = async (
+		variables,
+		options,
+	) => {
+		const startedAs = refresh.currentPartition();
+		const result = await mutation.mutateAsync(variables, options);
+		await refresh.refreshAfterSuccess(startedAs);
+		return result;
+	};
+	const mutate: typeof mutation.mutate = (variables, options) => {
+		void mutateAsync(variables, options).catch(() => {});
+	};
+	return { ...mutation, mutate, mutateAsync };
+}
 
 /** Options for the useConversations hook. */
 export interface UseConversationsOptions {
@@ -29,15 +157,29 @@ export interface UseConversationsResult {
 export function useConversations(
 	options: UseConversationsOptions = {},
 ): UseConversationsResult {
-	const query = aiChat.conversations.list.use([], {
-		enabled: options.enabled ?? true,
+	const {
+		partition: identityPartition,
+		isPending: isIdentityPending,
+		error: identityError,
+		refetchIdentity,
+	} = useAiChatIdentityState();
+	const query = aiChat.conversations.list.use([identityPartition], {
+		enabled:
+			(options.enabled ?? true) &&
+			!isUnresolvedIdentityPartition(identityPartition),
 	});
 
 	return {
 		conversations: query.data ?? [],
-		isLoading: query.isLoading,
-		error: query.error,
-		refetch: query.refetch,
+		isLoading: isIdentityPending || query.isLoading,
+		error: identityError ?? query.error,
+		refetch: () => {
+			if (isUnresolvedIdentityPartition(identityPartition)) {
+				void refetchIdentity();
+				return;
+			}
+			void query.refetch();
+		},
 	};
 }
 
@@ -46,10 +188,21 @@ export function useSuspenseConversations(): {
 	conversations: SerializedConversation[];
 	refetch: () => Promise<unknown>;
 } {
-	const query = aiChat.conversations.list.useSuspense([]);
+	const {
+		partition: identityPartition,
+		isPending: isIdentityPending,
+		error: identityError,
+		refetchIdentity,
+	} = useAiChatIdentityState();
+	const identityResolution = useIdentityResolutionPromise();
+	const query = aiChat.conversations.list.useSuspense([identityPartition]);
+	if (identityError) throw identityError;
+	if (isIdentityPending) throw identityResolution ?? Promise.resolve();
 	return {
 		conversations: query.data ?? [],
-		refetch: query.refetch,
+		refetch: isUnresolvedIdentityPartition(identityPartition)
+			? refetchIdentity
+			: query.refetch,
 	};
 }
 
@@ -72,15 +225,30 @@ export function useConversation(
 	id?: string,
 	options: UseConversationOptions = {},
 ): UseConversationResult {
-	const query = aiChat.conversations.detail.use([id ?? ""], {
-		enabled: (options.enabled ?? true) && !!id,
+	const {
+		partition: identityPartition,
+		isPending: isIdentityPending,
+		error: identityError,
+		refetchIdentity,
+	} = useAiChatIdentityState();
+	const query = aiChat.conversations.detail.use([id ?? "", identityPartition], {
+		enabled:
+			(options.enabled ?? true) &&
+			!!id &&
+			!isUnresolvedIdentityPartition(identityPartition),
 	});
 
 	return {
 		conversation: query.data ?? null,
-		isLoading: query.isLoading,
-		error: query.error,
-		refetch: query.refetch,
+		isLoading: isIdentityPending || query.isLoading,
+		error: identityError ?? query.error,
+		refetch: () => {
+			if (isUnresolvedIdentityPartition(identityPartition)) {
+				void refetchIdentity();
+				return;
+			}
+			void query.refetch();
+		},
 	};
 }
 
@@ -89,26 +257,49 @@ export function useSuspenseConversation(id: string): {
 	conversation: ConversationWithMessages | null;
 	refetch: () => Promise<unknown>;
 } {
-	const query = aiChat.conversations.detail.useSuspense([id]);
+	const {
+		partition: identityPartition,
+		isPending: isIdentityPending,
+		error: identityError,
+		refetchIdentity,
+	} = useAiChatIdentityState();
+	const identityResolution = useIdentityResolutionPromise();
+	const query = aiChat.conversations.detail.useSuspense([
+		id,
+		identityPartition,
+	]);
+	if (identityError) throw identityError;
+	if (isIdentityPending) throw identityResolution ?? Promise.resolve();
 	return {
 		conversation: query.data ?? null,
-		refetch: query.refetch,
+		refetch: isUnresolvedIdentityPartition(identityPartition)
+			? refetchIdentity
+			: query.refetch,
 	};
 }
 
 /** Create a persisted conversation. */
 export function useCreateConversation() {
-	return aiChat.conversations.create.use();
+	return withCurrentHistoryRefresh(
+		aiChat.conversations.create.use(),
+		useCurrentHistoryRefresh(),
+	);
 }
 
 /** Rename a persisted conversation. */
 export function useRenameConversation() {
-	return aiChat.conversations.rename.use();
+	return withCurrentHistoryRefresh(
+		aiChat.conversations.rename.use(),
+		useCurrentHistoryRefresh(),
+	);
 }
 
 /** Delete a persisted conversation. */
 export function useDeleteConversation() {
-	return aiChat.conversations.delete.use();
+	return withCurrentHistoryRefresh(
+		aiChat.conversations.delete.use(),
+		useCurrentHistoryRefresh(),
+	);
 }
 
 export interface RenameConversationFormValues {
@@ -132,8 +323,9 @@ export function useRenameConversationForm(
 > {
 	const t = useTranslate();
 	const { localization } = usePluginOverrides<AiChatPluginOverrides>("ai-chat");
+	const historyRefresh = useCurrentHistoryRefresh();
 
-	return aiChat.conversations.useForm<
+	const form = aiChat.conversations.useForm<
 		RenameConversationFormValues,
 		SerializedConversation | null,
 		SerializedConversation
@@ -158,6 +350,13 @@ export function useRenameConversationForm(
 			t("aiChat.toasts.renameFailure", "Failed to rename conversation"),
 		onSuccess: options.onSuccess,
 	});
+	const submit: typeof form.submit = async (values) => {
+		const startedAs = historyRefresh.currentPartition();
+		const result = await form.submit(values);
+		await historyRefresh.refreshAfterSuccess(startedAs);
+		return result;
+	};
+	return { ...form, submit };
 }
 
 export type {

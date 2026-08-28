@@ -40,6 +40,7 @@ FILES=(
   "app/(request)/pages/authorization-boundary/page.tsx"
   "app/(static)/pages/layout.tsx"
   "app/pages/client-layout.tsx"
+  "app/public-chat/page.tsx"
   "components/mode-toggle.tsx"
   "components/navbar.tsx"
   "lib/adapters-build-check.ts"

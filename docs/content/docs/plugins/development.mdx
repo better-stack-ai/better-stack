@@ -353,6 +353,36 @@ built-ins such as `Date`, `Map`, `Set`, and typed arrays before they cross this
 boundary, so lifecycle code cannot change the target or claims after the
 authorization decision.
 
+Each `Operation` also publishes its `access: OperationAccess` and
+`resultMode: OperationResultMode` metadata. Access defaults to
+`"authorized"`. Use `access: "public"` only for an intentional operation
+whose validation, trusted facts, hooks, and domain behavior still run without
+an identity rule. It never makes the rest of the plugin public and is not a
+replacement for an explicit allow rule.
+
+Ordinary operations use `resultMode: "immutable"`: their request and internal
+results are recursively frozen and HTTP routes serialize them normally. A
+transport-native value such as a streaming `Response` must opt in with
+`definePassthroughOperation`:
+
+```typescript
+import { definePassthroughOperation } from "@btst/stack/plugins/api"
+
+const streamReport = definePassthroughOperation({
+  input: z.object({ reportId: z.string() }),
+  permission: reportPermissions.report.stream,
+  access: "authorized", // or an intentional, operation-local "public"
+  facts: async ({ input }) => loadTrustedReportFacts(input.reportId),
+  execute: async () => new Response(reportStream),
+  onError: ({ error }) => reportLifecycleFailure(error),
+})
+```
+
+Passthrough preserves the exact result type and runtime identity across HTTP,
+`forRequest()`, and `internal`; input validation, authorization, lifecycle
+ordering, and error hooks are unchanged. Keep this opt-in limited to values
+that cannot be represented as immutable operation data.
+
 ### Adapter Operations
 
 The adapter provides these database operations:

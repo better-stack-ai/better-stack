@@ -83,10 +83,11 @@ async function renderProbe() {
 }
 
 describe("useRenameConversationForm", () => {
-	it("trims the title, forwards headers, refreshes, and notifies on success", async () => {
+	it("trims the title, forwards headers, refreshes current identity data, and notifies on success", async () => {
 		fetchMock.mockResolvedValue(
 			jsonResponse({ ...conversation, title: "Renamed" }),
 		);
+		const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
 		const getForm = await renderProbe();
 
 		await act(async () => {
@@ -99,7 +100,8 @@ describe("useRenameConversationForm", () => {
 		expect(JSON.parse(String(init.body))).toEqual({ title: "Renamed" });
 		expect(new Headers(init.headers).get("x-chat-test")).toBe("forwarded");
 		expect(notify.success).toHaveBeenCalledWith("Conversation renamed");
-		expect(refresh).toHaveBeenCalledTimes(1);
+		expect(invalidateQueries).toHaveBeenCalledTimes(1);
+		expect(refresh).not.toHaveBeenCalled();
 	});
 
 	it("keeps server validation errors on the title field without an error toast", async () => {

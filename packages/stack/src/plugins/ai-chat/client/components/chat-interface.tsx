@@ -1,8 +1,16 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import {
+	useEffect,
+	useRef,
+	useState,
+	useMemo,
+	useCallback,
+	useLayoutEffect,
+	useId,
+} from "react";
+import { hashKey, useQueryClient } from "@tanstack/react-query";
 import { ChatMessage } from "./chat-message";
 import { ChatInput, type AttachedFile } from "./chat-input";
 import { StackAttribution } from "@workspace/ui/components/stack-attribution";
@@ -14,20 +22,22 @@ import {
 } from "ai";
 import { cn } from "@workspace/ui/lib/utils";
 import {
-	useCan,
+	PermissionCheck,
 	usePluginOverrides,
 	useBasePath,
 	useStack,
 } from "@btst/stack/context";
+import { aiChatPermissions } from "../../permissions";
 import type { AiChatPluginOverrides } from "../overrides";
 import { useAiChatTranslation } from "../localization";
 import { createApiClient } from "@btst/stack/plugins/client";
 import type { AiChatApiRouter } from "../../api/plugin";
-import { createAiChatQueryKeys } from "../../query-keys";
+import { aiChatIdentityKey, createAiChatQueryKeys } from "../../query-keys";
 import {
 	useConversation,
 	useConversations,
-	type SerializedConversation,
+	useAiChatIdentityPartition,
+	type SerializedMessage,
 } from "../hooks/chat-hooks";
 import { usePageAIContext } from "../context/page-ai-context";
 
@@ -40,6 +50,219 @@ interface ChatInterfaceProps {
 	className?: string;
 	/** Called whenever messages change (for persistence). Only fires in public mode. */
 	onMessagesChange?: (messages: UIMessage[]) => void;
+}
+
+type ChatAction = "send" | "edit" | "retry";
+
+function reconcilePersistedMessageIds(
+	messages: UIMessage[],
+	persistedMessages: SerializedMessage[],
+): UIMessage[] | null {
+	const userMessages = messages.filter((message) => message.role === "user");
+	const persistedUserMessages = persistedMessages.filter(
+		(message) => message.role === "user",
+	);
+	if (persistedUserMessages.length !== userMessages.length) return null;
+	const persistedIds = new Map<UIMessage, string>();
+	for (let index = 0; index < userMessages.length; index++) {
+		const message = userMessages[index];
+		const persisted = persistedUserMessages[index];
+		if (!message || !persisted) return null;
+		const serializedParts = JSON.stringify(message.parts);
+		const legacyText =
+			message.parts.length === 1 && message.parts[0]?.type === "text"
+				? message.parts[0].text
+				: undefined;
+		if (
+			persisted.content !== serializedParts &&
+			persisted.content !== legacyText
+		) {
+			return null;
+		}
+		persistedIds.set(message, persisted.id);
+	}
+	return messages.map((message) => ({
+		...message,
+		id: persistedIds.get(message) ?? message.id,
+	}));
+}
+
+function persistedMessagesToUiMessages(
+	messages: readonly SerializedMessage[],
+): UIMessage[] {
+	return messages
+		.filter((message) => message.role !== "data")
+		.map((message) => {
+			let parts: UIMessage["parts"];
+			try {
+				const parsed = JSON.parse(message.content);
+				parts = Array.isArray(parsed)
+					? parsed
+					: [{ type: "text" as const, text: message.content }];
+			} catch {
+				parts = [{ type: "text" as const, text: message.content }];
+			}
+			return {
+				id: message.id,
+				role: message.role as "user" | "assistant" | "system",
+				parts,
+			};
+		});
+}
+
+function ChatActionCheck({
+	publicMode,
+	action,
+	conversationId,
+	ownerId,
+	messageId,
+	toolNames = [],
+	routeName,
+	children,
+}: {
+	publicMode: boolean;
+	action: ChatAction;
+	conversationId?: string;
+	ownerId?: string;
+	messageId?: string;
+	toolNames?: readonly string[];
+	routeName?: string;
+	children: (allowed: boolean) => React.ReactNode;
+}) {
+	if (publicMode) return <>{children(true)}</>;
+	const base = {
+		...(conversationId ? { conversationId } : {}),
+		...(ownerId ? { ownerId } : {}),
+	};
+	const streamPermission = aiChatPermissions.stream.start({
+		...base,
+		createsConversation: !conversationId,
+		intent: action,
+	});
+	const messagePermission =
+		action === "send"
+			? aiChatPermissions.message.send({
+					...base,
+					createsConversation: !conversationId,
+				})
+			: action === "edit" && conversationId && messageId
+				? aiChatPermissions.message.edit({
+						conversationId,
+						...(ownerId ? { ownerId } : {}),
+						messageId,
+					})
+				: action === "retry" && conversationId && messageId
+					? aiChatPermissions.message.retry({
+							conversationId,
+							...(ownerId ? { ownerId } : {}),
+							messageId,
+						})
+					: null;
+	if (!messagePermission) return <>{children(false)}</>;
+
+	return (
+		<PermissionCheck
+			permission={streamPermission}
+			legacyPermission={{ resource: "ai-chat:stream", action: "start" }}
+		>
+			{(streamState) => (
+				<PermissionCheck
+					permission={messagePermission}
+					legacyPermission={{
+						resource: "ai-chat:message",
+						action: action === "send" ? "create" : action,
+					}}
+				>
+					{(messageState) => {
+						const baseAllowed =
+							streamState.can &&
+							!streamState.isPending &&
+							!streamState.error &&
+							messageState.can &&
+							!messageState.isPending &&
+							!messageState.error;
+						const renderToolCheck = (allowed: boolean) => {
+							if (!allowed || toolNames.length === 0) return children(allowed);
+							return (
+								<PermissionCheck
+									permission={aiChatPermissions.tool.activate({
+										...base,
+										...(routeName ? { routeName } : {}),
+										toolNames: [...toolNames],
+									})}
+									legacyPermission={{
+										resource: "ai-chat:tool",
+										action: "activate",
+									}}
+								>
+									{(toolState) =>
+										children(
+											toolState.can && !toolState.isPending && !toolState.error,
+										)
+									}
+								</PermissionCheck>
+							);
+						};
+						if (action !== "send" || conversationId) {
+							return renderToolCheck(Boolean(baseAllowed));
+						}
+						return (
+							<PermissionCheck
+								permission={aiChatPermissions.conversation.create()}
+								legacyPermission={{
+									resource: "ai-chat:conversation",
+									action: "create",
+								}}
+							>
+								{(createState) =>
+									renderToolCheck(
+										Boolean(baseAllowed) &&
+											createState.can &&
+											!createState.isPending &&
+											!createState.error,
+									)
+								}
+							</PermissionCheck>
+						);
+					}}
+				</PermissionCheck>
+			)}
+		</PermissionCheck>
+	);
+}
+
+function PermissionedChatMessage({
+	publicMode,
+	action,
+	conversationId,
+	ownerId,
+	messageId,
+	...messageProps
+}: React.ComponentProps<typeof ChatMessage> & {
+	publicMode: boolean;
+	action?: "edit" | "retry";
+	conversationId?: string;
+	ownerId?: string;
+	messageId?: string;
+}) {
+	if (!action) return <ChatMessage {...messageProps} />;
+	return (
+		<ChatActionCheck
+			publicMode={publicMode}
+			action={action}
+			conversationId={conversationId}
+			ownerId={ownerId}
+			messageId={messageId}
+		>
+			{(allowed) => (
+				<ChatMessage
+					{...messageProps}
+					onRetry={allowed ? messageProps.onRetry : undefined}
+					onEdit={allowed ? messageProps.onEdit : undefined}
+				/>
+			)}
+		</ChatActionCheck>
+	);
 }
 
 export function ChatInterface({
@@ -72,6 +295,19 @@ export function ChatInterface({
 
 	const tr = useAiChatTranslation(customLocalization);
 	const queryClient = useQueryClient();
+	const identityPartition = useAiChatIdentityPartition();
+	const chatInstanceId = useId();
+	const identityPartitionKey = hashKey([aiChatIdentityKey(identityPartition)]);
+	const latestIdentityPartitionKey = useRef(identityPartitionKey);
+	const identitySessionGeneration = useRef(0);
+	const [identitySessionVersion, setIdentitySessionVersion] = useState(0);
+	const activeStreamPartitionKey = useRef<string | undefined>(undefined);
+	const nextStreamRequestGeneration = useRef(0);
+	const latestStreamRequestGeneration = useRef(0);
+	const pendingStreamRequests = useRef<
+		Array<{ generation: number; identityPartitionKey: string }>
+	>([]);
+	const latestMessages = useRef<UIMessage[]>([]);
 
 	const conversationsListQueryKey = useMemo(() => {
 		// In public mode, we don't need conversation queries
@@ -81,22 +317,17 @@ export function ChatInterface({
 			basePath: apiBasePath,
 		});
 		const queries = createAiChatQueryKeys(client, headers);
-		return queries.conversations.list().queryKey;
-	}, [apiBaseURL, apiBasePath, headers, isPublicMode]);
+		return queries.conversations.list(identityPartition).queryKey;
+	}, [apiBaseURL, apiBasePath, headers, identityPartition, isPublicMode]);
+	const latestIdentityPartition = useRef(identityPartition);
+	const latestConversationsListQueryKey = useRef(conversationsListQueryKey);
+	const latestHeaders = useRef(headers);
 
 	// Track the current conversation ID - initialized from prop, updated after first message
 	// In public mode, we don't track conversation IDs
 	const [currentConversationId, setCurrentConversationId] = useState<
 		string | undefined
 	>(isPublicMode ? undefined : id);
-	const { can: canPersistConversation, isPending: isPermissionPending } =
-		useCan({
-			resource: "ai-chat:conversation",
-			action: currentConversationId ? "update" : "create",
-			params: currentConversationId ? { id: currentConversationId } : undefined,
-		});
-	const canWrite =
-		isPublicMode || (!isPermissionPending && canPersistConversation);
 	// Track if we've sent the first message on a new chat (to trigger navigation)
 	const isFirstMessageSentRef = useRef(false);
 	const hasNavigatedRef = useRef(false);
@@ -120,6 +351,14 @@ export function ChatInterface({
 
 	// Fetch conversations list for navigation after first message (authenticated mode only)
 	const { conversations } = useConversations({ enabled: !isPublicMode });
+	const currentConversationOwnerId =
+		conversation?.userId ??
+		conversations.find((item) => item.id === currentConversationId)?.userId ??
+		(!isPublicMode &&
+		currentConversationId &&
+		typeof identityPartition === "object"
+			? identityPartition.id
+			: undefined);
 
 	// Use a ref to track the conversation ID for the transport body
 	// This ensures the transport always uses the latest value
@@ -147,6 +386,20 @@ export function ChatInterface({
 			// Start as initialized if there are no initialMessages to load
 			!initialMessages || initialMessages.length === 0,
 	);
+	const [input, setInput] = useState("");
+	const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+	const [pendingEdit, setPendingEdit] = useState<{
+		text: string;
+		expectedLength: number;
+		identityPartitionKey: string;
+		streamRequestGeneration: number;
+	} | null>(null);
+	const [historySyncError, setHistorySyncError] = useState<Error | null>(null);
+	const [isHistorySyncRetrying, setIsHistorySyncRetrying] = useState(false);
+	useEffect(() => {
+		setHistorySyncError(null);
+		setIsHistorySyncRetrying(false);
+	}, [id, isPublicMode]);
 
 	// Ref to always have the latest pageAIContext in the transport callback
 	// without recreating the transport on every context change
@@ -156,58 +409,85 @@ export function ChatInterface({
 	}, [pageAIContext]);
 
 	// Memoize the transport to prevent recreation on every render
-	const transport = useMemo(
-		() =>
-			new DefaultChatTransport({
-				api: apiPath,
-				// In public mode, don't send conversationId
-				body: isPublicMode
-					? undefined
-					: () => ({ conversationId: conversationIdRef.current }),
-				// Handle edit operations and inject page context
-				prepareSendMessagesRequest: ({ messages: hookMessages }) => {
-					const currentPageContext = pageAIContextRef.current;
+	const transport = useMemo(() => {
+		const trackedFetch = Object.assign(
+			async (
+				request: Parameters<typeof globalThis.fetch>[0],
+				init?: Parameters<typeof globalThis.fetch>[1],
+			) => {
+				const requestIdentityPartitionKey = latestIdentityPartitionKey.current;
+				const requestGeneration = latestStreamRequestGeneration.current;
+				const response = await globalThis.fetch(request, init);
+				if (
+					!isPublicMode &&
+					requestIdentityPartitionKey === latestIdentityPartitionKey.current &&
+					requestGeneration === latestStreamRequestGeneration.current
+				) {
+					const conversationId = response.headers.get("x-conversation-id");
+					if (conversationId) conversationIdRef.current = conversationId;
+				}
+				return response;
+			},
+			globalThis.fetch,
+		) as typeof globalThis.fetch;
+		return new DefaultChatTransport({
+			api: apiPath,
+			fetch: trackedFetch,
+			// In public mode, don't send conversationId
+			body: isPublicMode
+				? undefined
+				: () => ({ conversationId: conversationIdRef.current }),
+			// Handle edit operations and inject page context
+			prepareSendMessagesRequest: ({ messages: hookMessages }) => {
+				if (!isPublicMode) {
+					const generation = ++nextStreamRequestGeneration.current;
+					latestStreamRequestGeneration.current = generation;
+					const request = {
+						generation,
+						identityPartitionKey: latestIdentityPartitionKey.current,
+					};
+					pendingStreamRequests.current.push(request);
+					activeStreamPartitionKey.current = request.identityPartitionKey;
+				}
+				const currentPageContext = pageAIContextRef.current;
 
-					// Build page context fields to include in every request
-					const pageContextBody = currentPageContext?.pageDescription
-						? {
-								pageContext: currentPageContext.pageDescription,
-								availableTools: Object.keys(
-									currentPageContext.clientTools ?? {},
-								),
-								routeName: currentPageContext.routeName,
-							}
-						: {};
-
-					// If we're in an edit operation, use the truncated messages + new user message
-					if (editMessagesRef.current !== null) {
-						const newUserMessage = hookMessages[hookMessages.length - 1];
-						const messagesToSend = [...editMessagesRef.current];
-						if (newUserMessage) {
-							messagesToSend.push(newUserMessage);
+				// Build page context fields to include in every request
+				const pageContextBody = currentPageContext?.pageDescription
+					? {
+							pageContext: currentPageContext.pageDescription,
+							availableTools: Object.keys(currentPageContext.clientTools ?? {}),
+							routeName: currentPageContext.routeName,
 						}
-						// Clear the ref after use
-						editMessagesRef.current = null;
-						return {
-							body: {
-								messages: messagesToSend,
-								conversationId: conversationIdRef.current,
-								...pageContextBody,
-							},
-						};
+					: {};
+
+				// If we're in an edit operation, use the truncated messages + new user message
+				if (editMessagesRef.current !== null) {
+					const newUserMessage = hookMessages[hookMessages.length - 1];
+					const messagesToSend = [...editMessagesRef.current];
+					if (newUserMessage) {
+						messagesToSend.push(newUserMessage);
 					}
-					// Normal case - use the messages as-is
+					// Clear the ref after use
+					editMessagesRef.current = null;
 					return {
 						body: {
-							messages: hookMessages,
+							messages: messagesToSend,
 							conversationId: conversationIdRef.current,
 							...pageContextBody,
 						},
 					};
-				},
-			}),
-		[apiPath, isPublicMode],
-	);
+				}
+				// Normal case - use the messages as-is
+				return {
+					body: {
+						messages: hookMessages,
+						conversationId: conversationIdRef.current,
+						...pageContextBody,
+					},
+				};
+			},
+		});
+	}, [apiPath, isPublicMode]);
 
 	// Use a ref so addToolOutput is always current inside the onToolCall closure
 	const addToolOutputRef = useRef<
@@ -222,11 +502,38 @@ export function ChatInterface({
 		setMessages,
 		regenerate,
 		addToolOutput,
+		stop,
 	} = useChat({
+		id: `${chatInstanceId}:${isPublicMode ? "public" : identitySessionVersion}`,
 		transport,
 		// Automatically resubmit after all client-side tool results are provided
-		sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+		sendAutomaticallyWhen: (options) =>
+			(isPublicMode ||
+				identitySessionVersion === identitySessionGeneration.current) &&
+			lastAssistantMessageIsCompleteWithToolCalls(options),
 		onToolCall: async ({ toolCall }) => {
+			const toolRequest = pendingStreamRequests.current.at(-1);
+			if (
+				!isPublicMode &&
+				(identitySessionVersion !== identitySessionGeneration.current ||
+					!toolRequest ||
+					toolRequest.identityPartitionKey !==
+						latestIdentityPartitionKey.current ||
+					toolRequest.generation !== latestStreamRequestGeneration.current ||
+					activeStreamPartitionKey.current !== toolRequest.identityPartitionKey)
+			) {
+				return;
+			}
+			const toolIdentityPartitionKey =
+				toolRequest?.identityPartitionKey ?? latestIdentityPartitionKey.current;
+			const toolStreamRequestGeneration =
+				toolRequest?.generation ?? latestStreamRequestGeneration.current;
+			const toolRequestIsCurrent = () =>
+				isPublicMode ||
+				(identitySessionVersion === identitySessionGeneration.current &&
+					toolIdentityPartitionKey === latestIdentityPartitionKey.current &&
+					toolStreamRequestGeneration ===
+						latestStreamRequestGeneration.current);
 			// Dispatch client-side tool calls to the handler registered by the current page.
 			// In AI SDK v5, onToolCall returns void — addToolOutput must be called explicitly.
 			const toolName = toolCall.toolName;
@@ -234,6 +541,7 @@ export function ChatInterface({
 			if (handler) {
 				try {
 					const result = await handler(toolCall.input);
+					if (!toolRequestIsCurrent()) return;
 					// No await — avoids potential deadlocks with sendAutomaticallyWhen
 					addToolOutputRef.current?.({
 						tool: toolName,
@@ -241,6 +549,7 @@ export function ChatInterface({
 						output: result,
 					});
 				} catch (err) {
+					if (!toolRequestIsCurrent()) return;
 					addToolOutputRef.current?.({
 						tool: toolName,
 						toolCallId: toolCall.toolCallId,
@@ -275,45 +584,75 @@ export function ChatInterface({
 		},
 		onError: (err) => {
 			console.error("useChat onError:", err);
-			// Reset first-message tracking if the send failed before a conversation was created.
-			// Without this, isFirstMessageSentRef stays true and the next successful send
-			// skips the "first message" navigation logic, corrupting the conversation flow.
-			if (!id && !hasNavigatedRef.current) {
-				isFirstMessageSentRef.current = false;
+			if (
+				!isPublicMode &&
+				identitySessionVersion !== identitySessionGeneration.current
+			) {
+				return;
 			}
+			const failedRequest = pendingStreamRequests.current[0];
+			const failedPartitionKey =
+				failedRequest?.identityPartitionKey ?? activeStreamPartitionKey.current;
+			if (
+				!isPublicMode &&
+				failedPartitionKey !== latestIdentityPartitionKey.current
+			) {
+				return;
+			}
+			// AI SDK invokes onFinish after onError. Keep this request queued so
+			// onFinish can reconcile a user message that the backend persisted before
+			// the provider or response stream failed.
 		},
 		onFinish: async () => {
 			// In public mode, skip all persistence-related operations
-			if (isPublicMode) return;
+			if (isPublicMode) {
+				activeStreamPartitionKey.current = undefined;
+				return;
+			}
+			if (identitySessionVersion !== identitySessionGeneration.current) {
+				return;
+			}
+			const finishedRequest = pendingStreamRequests.current.shift();
+			const finishingPartitionKey =
+				finishedRequest?.identityPartitionKey ??
+				activeStreamPartitionKey.current;
+			if (finishingPartitionKey !== latestIdentityPartitionKey.current) {
+				return;
+			}
+			if (
+				!finishedRequest ||
+				finishedRequest.generation === latestStreamRequestGeneration.current
+			) {
+				activeStreamPartitionKey.current = undefined;
+			}
+			const identityIsCurrent = () =>
+				finishingPartitionKey === latestIdentityPartitionKey.current &&
+				(!finishedRequest ||
+					finishedRequest.generation === latestStreamRequestGeneration.current);
+			const finishingIdentityPartition = latestIdentityPartition.current;
+			const finishingConversationsListQueryKey =
+				latestConversationsListQueryKey.current;
+			const finishingHeaders = latestHeaders.current;
 
-			// Invalidate conversation list to show new/updated conversations
-			await queryClient.invalidateQueries({
-				queryKey: conversationsListQueryKey,
-			});
-
-			// If this was the first message on a new chat, update the URL without full navigation
-			// This avoids losing the in-memory messages during component remount
-			if (isFirstMessageSentRef.current && !id && !hasNavigatedRef.current) {
-				hasNavigatedRef.current = true;
-				// Wait for the invalidation to complete and refetch conversations
-				await queryClient.refetchQueries({
-					queryKey: conversationsListQueryKey,
+			try {
+				// Invalidate conversation list to show new/updated conversations
+				await queryClient.invalidateQueries({
+					queryKey: finishingConversationsListQueryKey,
 				});
-				// Get the updated conversations from cache
-				const cachedConversations = queryClient.getQueryData<
-					SerializedConversation[]
-				>(conversationsListQueryKey);
-				if (cachedConversations && cachedConversations.length > 0) {
-					// The most recently updated conversation should be the one we just created
-					const newConversation = cachedConversations[0];
-					if (newConversation) {
-						// Update our local state
-						setCurrentConversationId(newConversation.id);
-						conversationIdRef.current = newConversation.id;
+				if (!identityIsCurrent()) return;
+
+				// If this was the first message on a new chat, update the URL without full navigation
+				// This avoids losing the in-memory messages during component remount
+				if (isFirstMessageSentRef.current && !hasNavigatedRef.current) {
+					const discoveredConversationId = conversationIdRef.current;
+					if (discoveredConversationId) {
+						hasNavigatedRef.current = true;
+						setCurrentConversationId(discoveredConversationId);
+						conversationIdRef.current = discoveredConversationId;
 						// Only update the URL in full-page mode; in widget mode the chat is
 						// embedded in another page and clobbering the URL is disruptive.
 						if (variant === "full") {
-							const newUrl = `${basePath}/chat/${newConversation.id}`;
+							const newUrl = `${basePath}/chat/${discoveredConversationId}`;
 							if (typeof window !== "undefined") {
 								window.history.replaceState(
 									{ ...window.history.state },
@@ -324,9 +663,183 @@ export function ChatInterface({
 						}
 					}
 				}
+
+				const persistedConversationId = conversationIdRef.current;
+				if (!persistedConversationId || !identityIsCurrent()) {
+					if (isFirstMessageSentRef.current) {
+						isFirstMessageSentRef.current = false;
+						hasNavigatedRef.current = false;
+						throw new Error(
+							"The persisted conversation id could not be discovered.",
+						);
+					}
+					return;
+				}
+				const client = createApiClient<AiChatApiRouter>({
+					baseURL: apiBaseURL,
+					basePath: apiBasePath,
+				});
+				const detailQuery = createAiChatQueryKeys(
+					client,
+					finishingHeaders,
+				).conversations.detail(
+					persistedConversationId,
+					finishingIdentityPartition,
+				);
+				await queryClient.cancelQueries({
+					queryKey: detailQuery.queryKey,
+					exact: true,
+				});
+				if (!identityIsCurrent()) return;
+				queryClient.removeQueries({
+					queryKey: detailQuery.queryKey,
+					exact: true,
+				});
+				const persistedConversation = await queryClient.fetchQuery({
+					...detailQuery,
+					staleTime: 0,
+				});
+				if (!identityIsCurrent() || !persistedConversation) return;
+				const reconciled = reconcilePersistedMessageIds(
+					latestMessages.current,
+					persistedConversation.messages,
+				);
+				if (!reconciled) {
+					throw new Error(
+						"Persisted chat history did not match the streamed transcript.",
+					);
+				}
+				setMessages(reconciled);
+				setHistorySyncError(null);
+			} catch (error) {
+				if (!identityIsCurrent()) return;
+				const syncError =
+					error instanceof Error ? error : new Error(String(error));
+				console.error("Failed to reconcile persisted chat history:", syncError);
+				setHistorySyncError(syncError);
+				setMessages([]);
 			}
 		},
 	});
+	const handleHistorySyncRetry = useCallback(async () => {
+		if (isPublicMode || isHistorySyncRetrying) return;
+		const retryConversationId = conversationIdRef.current;
+		if (!retryConversationId) {
+			setHistorySyncError(null);
+			return;
+		}
+
+		const retryPartitionKey = latestIdentityPartitionKey.current;
+		const retrySessionGeneration = identitySessionGeneration.current;
+		const retryIsCurrent = () =>
+			retryPartitionKey === latestIdentityPartitionKey.current &&
+			retrySessionGeneration === identitySessionGeneration.current &&
+			retryConversationId === conversationIdRef.current;
+		setIsHistorySyncRetrying(true);
+		try {
+			const client = createApiClient<AiChatApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const detailQuery = createAiChatQueryKeys(
+				client,
+				latestHeaders.current,
+			).conversations.detail(
+				retryConversationId,
+				latestIdentityPartition.current,
+			);
+			await queryClient.cancelQueries({
+				queryKey: detailQuery.queryKey,
+				exact: true,
+			});
+			if (!retryIsCurrent()) return;
+			queryClient.removeQueries({
+				queryKey: detailQuery.queryKey,
+				exact: true,
+			});
+			const persistedConversation = await queryClient.fetchQuery({
+				...detailQuery,
+				staleTime: 0,
+			});
+			if (!retryIsCurrent() || !persistedConversation) return;
+			if (isFirstMessageSentRef.current && !hasNavigatedRef.current) {
+				hasNavigatedRef.current = true;
+				setCurrentConversationId(retryConversationId);
+				if (variant === "full" && typeof window !== "undefined") {
+					window.history.replaceState(
+						{ ...window.history.state },
+						"",
+						`${basePath}/chat/${retryConversationId}`,
+					);
+				}
+			}
+			setMessages(
+				persistedMessagesToUiMessages(persistedConversation.messages),
+			);
+			setHistorySyncError(null);
+		} catch (error) {
+			if (!retryIsCurrent()) return;
+			const syncError =
+				error instanceof Error ? error : new Error(String(error));
+			console.error("Failed to reload persisted chat history:", syncError);
+			setHistorySyncError(syncError);
+		} finally {
+			if (retryIsCurrent()) setIsHistorySyncRetrying(false);
+		}
+	}, [
+		apiBasePath,
+		apiBaseURL,
+		basePath,
+		isHistorySyncRetrying,
+		isPublicMode,
+		queryClient,
+		setMessages,
+		variant,
+	]);
+	useLayoutEffect(() => {
+		latestMessages.current = messages;
+	}, [messages]);
+
+	const previousIdentityPartition = useRef(identityPartitionKey);
+	useLayoutEffect(() => {
+		const nextPartition = identityPartitionKey;
+		latestIdentityPartitionKey.current = nextPartition;
+		latestIdentityPartition.current = identityPartition;
+		latestConversationsListQueryKey.current = conversationsListQueryKey;
+		latestHeaders.current = headers;
+		if (isPublicMode) return;
+		if (previousIdentityPartition.current === nextPartition) return;
+		previousIdentityPartition.current = nextPartition;
+		activeStreamPartitionKey.current = undefined;
+		pendingStreamRequests.current = [];
+		identitySessionGeneration.current += 1;
+		setIdentitySessionVersion(identitySessionGeneration.current);
+		latestStreamRequestGeneration.current =
+			++nextStreamRequestGeneration.current;
+		void stop();
+		setMessages([]);
+		setInput("");
+		setAttachedFiles([]);
+		setPendingEdit(null);
+		setHistorySyncError(null);
+		setIsHistorySyncRetrying(false);
+		editMessagesRef.current = null;
+		isEditInProgressRef.current = false;
+		setIsMessagesInitialized(true);
+		setCurrentConversationId(id);
+		conversationIdRef.current = id;
+		isFirstMessageSentRef.current = false;
+		hasNavigatedRef.current = false;
+	}, [
+		conversationsListQueryKey,
+		headers,
+		id,
+		identityPartition,
+		identityPartitionKey,
+		isPublicMode,
+		setMessages,
+		stop,
+	]);
 
 	// Keep addToolOutputRef in sync so onToolCall always has the latest reference
 	useEffect(() => {
@@ -344,37 +857,14 @@ export function ChatInterface({
 			conversation.messages.length > 0 &&
 			messages.length === 0
 		) {
-			// Filter out "data" role messages as UIMessage only accepts "user" | "assistant" | "system"
-			const uiMessages: UIMessage[] = conversation.messages
-				.filter((m) => m.role !== "data")
-				.map((m) => {
-					// Try to parse content as JSON parts (new format with images)
-					let parts: UIMessage["parts"];
-					try {
-						const parsed = JSON.parse(m.content);
-						if (Array.isArray(parsed)) {
-							parts = parsed;
-						} else {
-							// Fallback: wrap as text
-							parts = [{ type: "text" as const, text: m.content }];
-						}
-					} catch {
-						// Not JSON - legacy format, wrap as text
-						parts = [{ type: "text" as const, text: m.content }];
-					}
-					return {
-						id: m.id,
-						role: m.role as "user" | "assistant" | "system",
-						parts,
-					};
-				});
-			setMessages(uiMessages);
+			setMessages(persistedMessagesToUiMessages(conversation.messages));
 		}
 	}, [conversation, messages.length, setMessages]);
 
 	// Set initial messages on mount (for SSR hydration)
 	useEffect(() => {
 		if (
+			!isMessagesInitialized &&
 			initialMessages &&
 			initialMessages.length > 0 &&
 			messages.length === 0
@@ -383,10 +873,8 @@ export function ChatInterface({
 			// Mark as initialized - this is batched with setMessages so both take effect in the same render
 			setIsMessagesInitialized(true);
 		}
-	}, [initialMessages, setMessages, messages.length]);
+	}, [initialMessages, isMessagesInitialized, setMessages, messages.length]);
 
-	const [input, setInput] = useState("");
-	const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
 	const scrollRef = useRef<HTMLDivElement>(null);
 
 	// Track whether the user has manually scrolled away from the bottom.
@@ -453,7 +941,6 @@ export function ChatInterface({
 		files?: AttachedFile[],
 	) => {
 		e.preventDefault();
-		if (!canWrite) return;
 		const text = input.trim();
 		// Allow submit if there's text OR files
 		if (!text && (!files || files.length === 0)) return;
@@ -474,6 +961,8 @@ export function ChatInterface({
 		// Save current values before clearing - we'll restore them if send fails
 		const savedInput = input;
 		const savedFiles = files ? [...files] : [];
+		const sendIdentityPartitionKey = latestIdentityPartitionKey.current;
+		const sendIdentitySessionGeneration = identitySessionGeneration.current;
 
 		// Capture the message count before sending so we can restore to this
 		// exact point on failure. The SDK may append both a user message and a
@@ -485,8 +974,10 @@ export function ChatInterface({
 		// so we need to clear the input before the message appears to avoid duplicate text
 		setInput("");
 		setAttachedFiles([]);
+		setHistorySyncError(null);
 
 		try {
+			activeStreamPartitionKey.current = latestIdentityPartitionKey.current;
 			// Use AI SDK's file attachment format
 			// The SDK automatically converts supported file types (images, text) to the correct format
 			if (files && files.length > 0) {
@@ -498,14 +989,29 @@ export function ChatInterface({
 					filename: file.filename,
 				}));
 
-				await sendMessage({
+				const request = sendMessage({
 					text: text || "", // AI SDK requires text, even if empty
 					files: fileUIParts,
 				});
+				await request;
 			} else {
-				await sendMessage({ text });
+				const request = sendMessage({ text });
+				await request;
 			}
 		} catch (error) {
+			if (
+				activeStreamPartitionKey.current === sendIdentityPartitionKey &&
+				sendIdentitySessionGeneration === identitySessionGeneration.current
+			) {
+				activeStreamPartitionKey.current = undefined;
+			}
+			if (
+				!isPublicMode &&
+				(sendIdentityPartitionKey !== latestIdentityPartitionKey.current ||
+					sendIdentitySessionGeneration !== identitySessionGeneration.current)
+			) {
+				return;
+			}
 			// Restore input on failure so user can retry
 			setInput(savedInput);
 			setAttachedFiles(savedFiles);
@@ -524,23 +1030,26 @@ export function ChatInterface({
 
 	// Handler for retrying/regenerating the last AI response
 	const handleRetry = useCallback(() => {
+		setHistorySyncError(null);
+		activeStreamPartitionKey.current = latestIdentityPartitionKey.current;
 		regenerate();
 	}, [regenerate]);
 
-	// Pending edit state - stores the text to send after messages are truncated
-	const [pendingEdit, setPendingEdit] = useState<{
-		text: string;
-		expectedLength: number;
-	} | null>(null);
-
 	// Effect to send the edited message after React has processed the truncation
 	useEffect(() => {
-		if (pendingEdit && messages.length === pendingEdit.expectedLength) {
+		if (
+			pendingEdit &&
+			pendingEdit.identityPartitionKey === latestIdentityPartitionKey.current &&
+			pendingEdit.streamRequestGeneration ===
+				latestStreamRequestGeneration.current &&
+			messages.length === pendingEdit.expectedLength
+		) {
 			const textToSend = pendingEdit.text;
 			setPendingEdit(null);
 			// Clear edit in progress flag - the new message will now be sent
 			// and we want subsequent effects to work normally
 			isEditInProgressRef.current = false;
+			activeStreamPartitionKey.current = latestIdentityPartitionKey.current;
 			sendMessage({ text: textToSend });
 		}
 	}, [messages.length, pendingEdit, sendMessage]);
@@ -548,6 +1057,7 @@ export function ChatInterface({
 	// Handler for editing a user message - replaces the message and all subsequent messages
 	const handleEditMessage = useCallback(
 		(messageId: string, newText: string) => {
+			setHistorySyncError(null);
 			const messageIndex = messages.findIndex((m) => m.id === messageId);
 			if (messageIndex === -1) return;
 
@@ -565,7 +1075,12 @@ export function ChatInterface({
 			editMessagesRef.current = truncatedMessages;
 
 			// Set the pending edit - the useEffect will send after truncation is processed
-			setPendingEdit({ text: newText, expectedLength: messageIndex });
+			setPendingEdit({
+				text: newText,
+				expectedLength: messageIndex,
+				identityPartitionKey: latestIdentityPartitionKey.current,
+				streamRequestGeneration: latestStreamRequestGeneration.current,
+			});
 
 			// Truncate the messages - React will batch this and the useEffect will fire after
 			setMessages(truncatedMessages);
@@ -614,7 +1129,7 @@ export function ChatInterface({
 											...pageSuggestions,
 											...(chatSuggestions ?? []),
 										];
-										return canWrite && allSuggestions.length > 0 ? (
+										return allSuggestions.length > 0 ? (
 											<div className="flex flex-wrap justify-center gap-2 pb-4 max-w-md mx-auto">
 												{allSuggestions.map((suggestion, index) => (
 													<button
@@ -632,8 +1147,27 @@ export function ChatInterface({
 								</div>
 							) : (
 								messages.map((m, index) => (
-									<ChatMessage
+									<PermissionedChatMessage
 										key={m.id || `msg-${index}`}
+										publicMode={isPublicMode}
+										action={
+											m.role === "user"
+												? "edit"
+												: m.role === "assistant" &&
+														index === messages.length - 1
+													? "retry"
+													: undefined
+										}
+										conversationId={currentConversationId}
+										ownerId={currentConversationOwnerId}
+										messageId={
+											m.role === "assistant"
+												? [...messages]
+														.slice(0, index)
+														.reverse()
+														.find((message) => message.role === "user")?.id
+												: m.id
+										}
 										message={m}
 										isStreaming={
 											status === "streaming" &&
@@ -644,17 +1178,13 @@ export function ChatInterface({
 										onRetry={
 											// Only show retry on the last assistant message
 											m.role === "assistant" && index === messages.length - 1
-												? canWrite
-													? handleRetry
-													: undefined
+												? handleRetry
 												: undefined
 										}
 										onEdit={
 											// Allow editing user messages
 											m.role === "user"
-												? canWrite
-													? (newText) => handleEditMessage(m.id, newText)
-													: undefined
+												? (newText) => handleEditMessage(m.id, newText)
 												: undefined
 										}
 										isRetrying={isLoading && m.role === "assistant"}
@@ -669,15 +1199,26 @@ export function ChatInterface({
 										</div>
 									</div>
 								)}
-							{error && (
+							{(error || historySyncError) && (
 								<div className="flex items-center gap-2 text-destructive text-sm py-4 px-3 bg-destructive/10 rounded-md">
-									<span>
+									<span className="flex-1">
 										{tr(
 											"CHAT_ERROR",
 											"aiChat.chat.error",
 											"Something went wrong. Please try again.",
 										)}
 									</span>
+									{historySyncError && (
+										<button
+											type="button"
+											data-testid="chat-history-retry"
+											onClick={() => void handleHistorySyncRetry()}
+											disabled={isHistorySyncRetrying}
+											className="rounded-md border border-destructive/30 px-2.5 py-1 font-medium hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
+										>
+											{tr("CHAT_RETRY", "aiChat.chat.retry", "Retry")}
+										</button>
+									)}
 								</div>
 							)}
 						</div>
@@ -685,32 +1226,53 @@ export function ChatInterface({
 				</div>
 			</div>
 			{/* Input Area */}
-			{canWrite && (
-				<div
-					className={cn(
-						"border-t bg-background p-4",
-						isWidget ? "px-3 py-3" : "px-4",
-					)}
-				>
-					<div className={cn(!isWidget && "max-w-3xl mx-auto")}>
-						<ChatInput
-							input={input}
-							handleInputChange={handleInputChange}
-							handleSubmit={handleSubmit}
-							isLoading={isLoading}
-							placeholder={tr(
-								"CHAT_PLACEHOLDER",
-								"aiChat.chat.placeholder",
-								"Type a message...",
+			<ChatActionCheck
+				publicMode={isPublicMode}
+				action="send"
+				conversationId={currentConversationId}
+				ownerId={currentConversationOwnerId}
+				toolNames={Object.keys(pageAIContext?.clientTools ?? {})}
+				routeName={pageAIContext?.routeName}
+			>
+				{(allowed) =>
+					allowed && !historySyncError ? (
+						<div
+							className={cn(
+								"border-t bg-background p-4",
+								isWidget ? "px-3 py-3" : "px-4",
 							)}
-							variant={isWidget ? "compact" : "default"}
-							onFilesAttached={setAttachedFiles}
-							attachedFiles={attachedFiles}
-						/>
-						{showAttribution && <StackAttribution />}
-					</div>
-				</div>
-			)}
+						>
+							<div className={cn(!isWidget && "max-w-3xl mx-auto")}>
+								<ChatInput
+									key={isPublicMode ? "public" : identityPartitionKey}
+									input={input}
+									handleInputChange={handleInputChange}
+									handleSubmit={handleSubmit}
+									isLoading={isLoading}
+									placeholder={tr(
+										"CHAT_PLACEHOLDER",
+										"aiChat.chat.placeholder",
+										"Type a message...",
+									)}
+									variant={isWidget ? "compact" : "default"}
+									onFilesAttached={setAttachedFiles}
+									attachedFiles={attachedFiles}
+									allowAttachments={!isPublicMode}
+									attachmentPermissionFacts={{
+										...(currentConversationId
+											? { conversationId: currentConversationId }
+											: {}),
+										...(currentConversationOwnerId
+											? { ownerId: currentConversationOwnerId }
+											: {}),
+									}}
+								/>
+								{showAttribution && <StackAttribution />}
+							</div>
+						</div>
+					) : null
+				}
+			</ChatActionCheck>
 		</>
 	);
 }

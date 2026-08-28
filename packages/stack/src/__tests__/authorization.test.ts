@@ -16,6 +16,7 @@ import {
 	createDbPlugin,
 	defineBackendPlugin,
 	defineOperation,
+	definePassthroughOperation,
 } from "../plugins/api";
 import { stack } from "../api";
 
@@ -439,6 +440,8 @@ describe("schema-backed authorization", () => {
 		expect(Object.isFrozen(operation)).toBe(true);
 		expect("run" in operation).toBe(false);
 		expect(Object.getOwnPropertySymbols(operation)).toEqual([]);
+		expect(operation.access).toBe("authorized");
+		expect(operation.resultMode).toBe("immutable");
 		const navigationPlugin = defineBackendPlugin({
 			name: "navigation",
 			dbPlugin: createDbPlugin("navigation", {}),
@@ -457,6 +460,80 @@ describe("schema-backed authorization", () => {
 		expect(() => {
 			(result as { path: string }).path = "/changed";
 		}).toThrow();
+	});
+
+	it("keeps explicit public passthrough operations in the full lifecycle", async () => {
+		const publicPermissions = definePermissions("publicStream", {
+			start: permission(z.object({ requestId: z.string() })),
+		});
+		const events: string[] = [];
+		const response = new Response("stream");
+		const operation = definePassthroughOperation({
+			input: z.object({ requestId: z.string() }),
+			permission: publicPermissions.start,
+			access: "public",
+			facts: ({ input }) => {
+				events.push("facts");
+				return { requestId: input.requestId };
+			},
+			before: ({ identity }) => {
+				events.push("before");
+				expect(identity).toBeNull();
+			},
+			execute: () => {
+				events.push("execute");
+				return response;
+			},
+			after: ({ result }) => {
+				events.push("after");
+				expect(result).toBe(response);
+			},
+		});
+		const plugin = defineBackendPlugin({
+			name: "publicStream",
+			dbPlugin: createDbPlugin("publicStream", {}),
+			operations: () => ({ start: operation }),
+			routes: () => ({}),
+		});
+		const backend = stack({
+			basePath: "/api",
+			plugins: { publicStream: plugin },
+			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
+			auth: createServerAuth({
+				authorization: defineAuthorization({
+					identity: z.object({ id: z.string() }),
+					permissions: [publicPermissions] as const,
+					rules: () => [],
+				}),
+				getIdentity: () => {
+					throw new Error("public operation must not resolve identity");
+				},
+			}),
+		});
+
+		await expect(
+			backend
+				.forRequest(new Request("http://localhost/api/public-stream"))
+				.api.publicStream.start({ requestId: "request-1" }),
+		).resolves.toBe(response);
+		expect(operation.access).toBe("public");
+		expect(operation.resultMode).toBe("passthrough");
+		expect(events).toEqual(["facts", "before", "execute", "after"]);
+	});
+
+	it("rejects invalid operation access instead of treating it as public", () => {
+		const invalidAccessPermissions = definePermissions("invalidAccess", {
+			read: permission(),
+		});
+		expect(() =>
+			defineOperation({
+				input: z.object({}),
+				permission: invalidAccessPermissions.read,
+				access: "publik" as never,
+				facts: () => undefined,
+				execute: () => ({ ok: true }),
+			}),
+		).toThrow(/access/i);
 	});
 
 	it("deep-freezes validated input and trusted facts before lifecycle hooks", async () => {

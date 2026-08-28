@@ -222,8 +222,8 @@ const PLUGINS: PluginConfig[] = [
 			"remark-gfm",
 		],
 		extraRegistryDeps: [],
-		// ai-chat has no utils.ts; schemas.ts only imports zod (already a core dep)
-		pluginRootFiles: ["types.ts", "schemas.ts"],
+		// ai-chat has no utils.ts; schemas/permissions use existing core deps.
+		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
 	},
 	{
 		name: "cms",

@@ -1216,7 +1216,11 @@ export function createKanbanOperations(
 		after: async (context) => {
 			await hooks?.onBoardRead?.(
 				context.result,
-				hookContext(context, { params: { id: context.input.id } }),
+				hookContext<
+					z.output<typeof BoardIdOperationInputSchema>,
+					BoardReadFacts,
+					SerializedBoardWithColumns
+				>(context, { params: { id: context.input.id } }),
 			);
 		},
 		onError: ({ error, ...context }) =>
@@ -1287,7 +1291,11 @@ export function createKanbanOperations(
 		after: async (context) => {
 			await hooks?.onBoardCreated?.(
 				context.result,
-				hookContext(context, { body: context.input }),
+				hookContext<
+					z.output<typeof createBoardSchema>,
+					undefined,
+					SerializedBoardWithColumns
+				>(context, { body: context.input }),
 			);
 		},
 		onError: ({ error, ...context }) => {
@@ -1777,7 +1785,11 @@ export function createKanbanOperations(
 			for (const column of reorderedColumns.get(context.result) ?? []) {
 				await hooks?.onColumnUpdated?.(
 					column,
-					hookContext(context, { body: context.input }),
+					hookContext<
+						z.output<typeof reorderColumnsSchema>,
+						ColumnReorderFacts,
+						{ readonly success: true }
+					>(context, { body: context.input }),
 				);
 			}
 		},
@@ -2228,7 +2240,11 @@ export function createKanbanOperations(
 			for (const task of reorderedTasks.get(context.result) ?? []) {
 				await hooks?.onTaskUpdated?.(
 					task,
-					hookContext(context, { body: context.input }),
+					hookContext<
+						z.output<typeof reorderTasksSchema>,
+						TaskReorderFacts,
+						{ readonly success: true }
+					>(context, { body: context.input }),
 				);
 			}
 		},

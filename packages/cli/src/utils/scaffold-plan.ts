@@ -134,7 +134,7 @@ function buildPluginTemplateContext(
 					return "";
 				}
 				if (m.key === "ai-chat") {
-					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), mode: "public" as const }),`;
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), access: "public" as const }),`;
 				}
 				if (m.key === "cms") {
 					const articleType = `{
@@ -267,7 +267,8 @@ function buildAdapterTemplateContext(
 	}
 	const hasFormBuilder = selectedPlugins.includes("form-builder");
 	const hasMedia = selectedPlugins.includes("media");
-	const needsIsolatedTransactions = hasFormBuilder || hasMedia;
+	const hasAiChat = selectedPlugins.includes("ai-chat");
+	const needsIsolatedTransactions = hasFormBuilder || hasMedia || hasAiChat;
 
 	if (
 		(hasFormBuilder && (adapter === "memory" || adapter === "mongodb")) ||

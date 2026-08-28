@@ -59,6 +59,21 @@ describe("scaffold plan", () => {
 		},
 	);
 
+	it.each(["prisma", "drizzle", "kysely"] as const)(
+		"enables isolated transactions for AI Chat in the %s scaffold",
+		async (adapter) => {
+			const plan = await buildScaffoldPlan({
+				framework: "nextjs",
+				adapter,
+				plugins: ["ai-chat"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const stackFile = plan.files.find((file) => file.path === "lib/stack.ts");
+			expect(stackFile?.content).toContain("transaction: true");
+		},
+	);
+
 	it("rejects Media with the unsupported MongoDB generated configuration", async () => {
 		await expect(
 			buildScaffoldPlan({
@@ -330,7 +345,7 @@ describe("scaffold plan", () => {
 
 		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
 		expect(stackFile?.content).toContain(
-			'aiChat: aiChatBackendPlugin({ model: openai("gpt-4o-mini"), mode: "public" as const }),',
+			'aiChat: aiChatBackendPlugin({ model: openai("gpt-4o-mini"), access: "public" as const }),',
 		);
 		expect(stackFile?.content).toContain(
 			'import { openai } from "@ai-sdk/openai"',

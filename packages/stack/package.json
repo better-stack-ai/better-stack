@@ -267,6 +267,16 @@
         "default": "./dist/plugins/ai-chat/api/index.cjs"
       }
     },
+    "./plugins/ai-chat/permissions": {
+      "import": {
+        "types": "./dist/plugins/ai-chat/permissions.d.ts",
+        "default": "./dist/plugins/ai-chat/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ai-chat/permissions.d.cts",
+        "default": "./dist/plugins/ai-chat/permissions.cjs"
+      }
+    },
     "./plugins/ai-chat/client": {
       "import": {
         "types": "./dist/plugins/ai-chat/client/index.d.ts",
@@ -838,6 +848,9 @@
       ],
       "plugins/ai-chat/api": [
         "./dist/plugins/ai-chat/api/index.d.ts"
+      ],
+      "plugins/ai-chat/permissions": [
+        "./dist/plugins/ai-chat/permissions.d.ts"
       ],
       "plugins/ai-chat/client": [
         "./dist/plugins/ai-chat/client/index.d.ts"

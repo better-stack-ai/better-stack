@@ -6,6 +6,7 @@ export {
 	PermissionCheck,
 	useCan,
 	useIdentity,
+	useIdentityResolutionPromise,
 	useIdentitySourceGeneration,
 } from "./auth";
 export type { PermissionCheckState } from "./auth";

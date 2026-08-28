@@ -97,6 +97,8 @@ export const getStackClient = (
 				siteBaseURL: baseURL,
 				siteBasePath: "/pages",
 				queryClient: queryClient,
+				headers: options?.headers,
+				identityPartition: options?.identity,
 				mode: "authenticated",
 			}),
 			cms: cmsClientPlugin({

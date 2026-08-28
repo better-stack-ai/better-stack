@@ -57,6 +57,7 @@ FILES=(
   "app/routes/pages/_layout.tsx"
   "app/routes/pages/\$.tsx"
   "app/routes/pages/authorization-boundary.tsx"
+  "app/routes/public-chat.tsx"
 )
 
 COUNT=0

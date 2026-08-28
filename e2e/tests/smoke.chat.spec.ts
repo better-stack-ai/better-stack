@@ -1,4 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
+import { setMockAuthCookie } from "./helpers/mock-auth";
+
+test.beforeEach(async ({ context }) => {
+	await setMockAuthCookie(context);
+});
 
 /**
  * Wait for the chat interface to finish streaming and return to the "ready" state.

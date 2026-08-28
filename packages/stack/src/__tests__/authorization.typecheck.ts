@@ -13,6 +13,7 @@ import {
 	type DeepReadonly,
 	defineBackendPlugin,
 	defineOperation,
+	definePassthroughOperation,
 } from "../plugins/api";
 import { blogBackendPlugin, type BlogBackendHooks } from "../plugins/blog/api";
 import { blogPermissions } from "../plugins/blog/permissions";
@@ -21,6 +22,7 @@ import {
 	type CommentsBackendHooks,
 } from "../plugins/comments/api";
 import { commentsPermissions } from "../plugins/comments/permissions";
+import { aiChatPermissions } from "../plugins/ai-chat/permissions";
 import type { KanbanBackendHooks } from "../plugins/kanban/api";
 import type { StackIdentity } from "../shared/auth-types";
 import type { DatabaseDefinition, DBAdapter } from "@btst/db";
@@ -126,6 +128,14 @@ void serverResolverIsExact;
 
 // @ts-expect-error permission fact id must be a string
 registered.article.delete({ id: 1 });
+
+aiChatPermissions.message.retry({
+	conversationId: "conversation-1",
+	// @ts-expect-error AI Chat message ids are runtime-schema-backed strings
+	messageId: 1,
+});
+// @ts-expect-error stream facts must state whether persistence creates a conversation
+aiChatPermissions.stream.start({ intent: "send" });
 
 authorization.can(registered.article.delete({ id: "article-1" }), {
 	id: "user-1",
@@ -310,6 +320,37 @@ const declaredRouteOperationsAreRequired: Expect<
 void declaredRouteOperationsAreRequired;
 
 const fakeAdapter = (_db: DatabaseDefinition) => ({}) as DBAdapter;
+
+const passthroughOperation = definePassthroughOperation({
+	input: z.object({ id: z.string() }),
+	permission: registered.article.delete,
+	access: "public",
+	facts: ({ input }) => ({ id: input.id }),
+	execute: () => new Response("stream"),
+	after: ({ result }) => {
+		const exactResponse: Expect<Equal<typeof result, Response>> = true;
+		void exactResponse;
+	},
+});
+const passthroughPlugin = defineBackendPlugin({
+	name: "passthrough-fixture",
+	dbPlugin: createDbPlugin("passthrough-fixture", {}),
+	operations: () => ({ stream: passthroughOperation }),
+	routes: () => ({}),
+});
+const passthroughStack = stack({
+	basePath: "/api",
+	plugins: { passthrough: passthroughPlugin },
+	adapter: fakeAdapter,
+	auth: serverAuth,
+});
+const passthroughResponse = passthroughStack
+	.forRequest(new Request("https://example.test"))
+	.api.passthrough.stream({ id: "article-1" });
+const passthroughResponseIsExact: Expect<
+	Equal<Awaited<typeof passthroughResponse>, Response>
+> = true;
+void passthroughResponseIsExact;
 const blogAuthorization = defineAuthorization({
 	identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
 	permissions: [blogPermissions] as const,

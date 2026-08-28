@@ -245,6 +245,7 @@ test.describe("Page AI Context — structural (no OpenAI key needed)", () => {
 		// x-btst-deny-tools: "1", which the endpoint catches and maps to 403.
 		const response = await request.post("/api/data/chat", {
 			headers: {
+				...mockAuthHeaders(),
 				"Content-Type": "application/json",
 				"x-btst-deny-tools": "1",
 			},

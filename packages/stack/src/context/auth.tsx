@@ -31,6 +31,8 @@ export interface AuthContextValue {
 	error?: Error;
 	/** Re-run `getIdentity()` (e.g. after login/logout) */
 	refetch: () => Promise<void>;
+	/** Promise used by suspense consumers to wait for the active resolution. */
+	waitForResolution: () => Promise<void>;
 }
 
 /**
@@ -112,6 +114,25 @@ export function StackAuthBoundary({
 		: state.resolutionGeneration;
 	const latestResolutionGeneration = useRef(0);
 	const activeSourceGeneration = useRef<object | null>(sourceGeneration);
+	const resolutionWaiters = useRef(new Set<() => void>());
+	const settleResolutionWaiters = useCallback(() => {
+		for (const resolve of resolutionWaiters.current) resolve();
+		resolutionWaiters.current.clear();
+	}, []);
+	const waitForResolution = useCallback(
+		() =>
+			currentState.isPending
+				? new Promise<void>((resolve) => {
+						resolutionWaiters.current.add(resolve);
+					})
+				: Promise.resolve(),
+		[currentState.isPending],
+	);
+
+	useEffect(() => {
+		if (!currentState.isPending) settleResolutionWaiters();
+	}, [currentState.isPending, settleResolutionWaiters]);
+	useEffect(() => settleResolutionWaiters, [settleResolutionWaiters]);
 
 	useEffect(() => {
 		activeSourceGeneration.current = sourceGeneration;
@@ -200,6 +221,7 @@ export function StackAuthBoundary({
 				sourceGeneration: currentResolutionGeneration,
 				...(currentState.error ? { error: currentState.error } : {}),
 				refetch,
+				waitForResolution,
 			}}
 		>
 			{children}
@@ -247,6 +269,12 @@ export function useIdentity(): {
 /** @internal Serializable identity-resolution key for protected query caches. */
 export function useIdentitySourceGeneration(): number {
 	return useContext(AuthContext)?.sourceGeneration ?? 0;
+}
+
+/** @internal Promise that settles when the current identity lookup finishes. */
+export function useIdentityResolutionPromise(): Promise<void> | undefined {
+	const auth = useContext(AuthContext);
+	return auth?.isPending ? auth.waitForResolution() : undefined;
 }
 
 type CanState = { can: boolean; isPending: boolean };
