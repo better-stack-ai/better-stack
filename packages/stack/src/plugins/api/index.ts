@@ -105,6 +105,13 @@ export function defineBackendPlugin<
 >(
 	plugin: LegacyBackendPlugin<TRoutes, TApi, TOperations>,
 ): LegacyBackendPlugin<TRoutes, TApi, TOperations>;
+export function defineBackendPlugin<
+	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
+	TApi extends Record<string, (...args: any[]) => any> = never,
+	TOperations extends import("./operation").OperationRecord = never,
+>(
+	plugin: BackendPlugin<TRoutes, TApi, TOperations>,
+): BackendPlugin<TRoutes, TApi, TOperations>;
 export function defineBackendPlugin(
 	plugin: BackendPlugin<any, any, any>,
 ): BackendPlugin<any, any, any> {

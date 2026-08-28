@@ -1,5 +1,10 @@
 import type { DatabaseDefinition, DBAdapter } from "@btst/db";
 import { QueryClient } from "@tanstack/react-query";
+import type {
+	BackendPlugin,
+	ClientPlugin,
+	ClientPluginDefinition,
+} from "../types";
 import { createBackendStack } from "../api";
 import { createClientStack } from "../client";
 import { StackProvider } from "../context";
@@ -14,6 +19,25 @@ interface ConsumerOverrides {
 	label: string;
 	format?: "short" | "long";
 }
+
+const broadLegacyClient: ClientPlugin<ConsumerOverrides> = {
+	name: "broad-client",
+	routes: () => ({}),
+};
+defineClientPlugin(broadLegacyClient);
+
+const broadLegacyDefinition: ClientPluginDefinition<ConsumerOverrides> = {
+	name: "broad-definition",
+	resolve: () => ({ routes: () => ({}) }),
+};
+defineClientPlugin(broadLegacyDefinition);
+
+const broadLegacyBackend: BackendPlugin = {
+	name: "broad-backend",
+	dbPlugin: createDbPlugin("broad-backend-db", {}),
+	routes: () => ({}),
+};
+defineBackendPlugin(broadLegacyBackend);
 
 function consumerClientPlugin() {
 	return defineClientPlugin<ConsumerOverrides>()({

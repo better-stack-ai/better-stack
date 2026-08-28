@@ -14,7 +14,10 @@ import type {
 	Sitemap,
 } from "../types";
 import { resolveClientRuntime } from "./runtime";
-import { resolvePluginRegistrationIds } from "../plugin-registration";
+import {
+	resolvePluginProgrammaticId,
+	resolvePluginRegistrationIds,
+} from "../plugin-registration";
 export type {
 	ClientApiConfig,
 	ClientApiEndpointOverride,
@@ -99,8 +102,11 @@ export function createClientStack<
 >(
 	config: ClientStackConfig<TPlugins>,
 ): ClientStack<TRoutes> | ResolvedClientStack<TRoutes, TPlugins> {
-	const registrations = config.plugins;
+	const registrations = Object.hasOwn(config, "plugins")
+		? config.plugins
+		: undefined;
 	const registrationIds = resolvePluginRegistrationIds(registrations, "client");
+	const validatedRegistrations = registrations as TPlugins;
 	const canonical = hasResolvedRuntime(config);
 	const runtime = canonical
 		? resolveClientRuntime(config, registrationIds)
@@ -109,7 +115,9 @@ export function createClientStack<
 		null,
 	);
 
-	for (const [pluginKey, registration] of Object.entries(registrations)) {
+	for (const [pluginKey, registration] of Object.entries(
+		validatedRegistrations,
+	)) {
 		if (Object.hasOwn(registration, "resolve")) {
 			if (!runtime) {
 				throw new Error(
@@ -128,7 +136,16 @@ export function createClientStack<
 				...(Object.hasOwn(definition, "id")
 					? { id: registrationIds[pluginKey] }
 					: {}),
-				name: definition.name ?? registrationIds[pluginKey],
+				name: resolvePluginProgrammaticId(
+					definition,
+					registrationIds[pluginKey]!,
+				),
+			};
+		} else if (Object.hasOwn(registration, "id")) {
+			resolvedPlugins[pluginKey] = {
+				...(registration as ClientPlugin<any, any>),
+				id: registrationIds[pluginKey],
+				name: registrationIds[pluginKey],
 			};
 		} else {
 			resolvedPlugins[pluginKey] = registration as ClientPlugin<any, any>;

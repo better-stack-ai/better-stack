@@ -12,6 +12,18 @@ function isPluginObject(value: unknown): value is Record<string, unknown> {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+/** Resolve the stable programmatic ID while retaining legacy `name` support. */
+export function resolvePluginProgrammaticId(
+	plugin: object,
+	registrationId: string,
+): string {
+	if (Object.hasOwn(plugin, "id")) return registrationId;
+	const legacyName = (plugin as { name?: unknown }).name;
+	return typeof legacyName === "string" && legacyName.length > 0
+		? legacyName
+		: registrationId;
+}
+
 /**
  * Validates canonical plugin IDs before any plugin factory or adapter work.
  * Legacy plugins without an own `id` remain bound to their registration key.

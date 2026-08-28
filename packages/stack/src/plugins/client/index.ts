@@ -156,6 +156,16 @@ export function defineClientPlugin<
 >(
 	plugin: LegacyClientPluginDefinition<TOverrides, TRoutes>,
 ): LegacyClientPluginDefinition<TOverrides, TRoutes>;
+export function defineClientPlugin<
+	TOverrides = Record<string, never>,
+	TRoutes extends Record<string, Route> = Record<string, Route>,
+>(plugin: ClientPlugin<TOverrides, TRoutes>): ClientPlugin<TOverrides, TRoutes>;
+export function defineClientPlugin<
+	TOverrides = Record<string, never>,
+	TRoutes extends Record<string, Route> = Record<string, Route>,
+>(
+	plugin: ClientPluginDefinition<TOverrides, TRoutes>,
+): ClientPluginDefinition<TOverrides, TRoutes>;
 export function defineClientPlugin(
 	plugin?: ClientPlugin<any, any> | ClientPluginDefinition<any, any>,
 ):

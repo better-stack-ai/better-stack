@@ -8,6 +8,7 @@ import { createClientStack } from "../client";
 import { StackProvider, usePluginOverrides, useStack } from "../context";
 import { createDbPlugin, defineBackendPlugin } from "../plugins/api";
 import { createRoute, defineClientPlugin } from "../plugins/client";
+import { generateRouteDocsSchema } from "../plugins/route-docs/generator";
 
 function runtimeConfig<TPlugins extends Record<string, any>>(
 	plugins: TPlugins,
@@ -58,6 +59,21 @@ describe("canonical plugin registration IDs", () => {
 				}) as any,
 			),
 		).toThrowError(/client.*ID.*duplicate.*first.*second/i);
+	});
+
+	it("requires plugins to be an own client configuration property", () => {
+		const inheritedConfig = Object.assign(
+			Object.create({ plugins: { probe: identifiedClient("probe") } }),
+			{
+				api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+				site: { baseURL: "https://app.example.com", basePath: "/pages" },
+				queryClient: new QueryClient(),
+			},
+		);
+
+		expect(() => createClientStack(inheritedConfig as any)).toThrowError(
+			/plugins.*registration map/i,
+		);
 	});
 
 	it("rejects backend aliases and duplicate resolved IDs before adapter creation", () => {
@@ -135,6 +151,44 @@ describe("canonical plugin registration IDs", () => {
 		});
 		await expect(stack.generateSitemap()).resolves.toEqual([
 			{ url: "https://app.example.com/pages/probe" },
+		]);
+	});
+
+	it("uses a canonical ID instead of a conflicting legacy name in client diagnostics", () => {
+		let contextPluginName: string | undefined;
+		const canonicalDefinition = defineClientPlugin({
+			id: "canonical",
+			name: "legacy-name",
+			resolve: () => ({
+				routes: (context) => {
+					contextPluginName = context?.plugins.canonical?.name;
+					return {
+						canonical: createRoute("/canonical", () => ({
+							PageComponent: () => null,
+						})),
+					};
+				},
+			}),
+		});
+
+		createClientStack(runtimeConfig({ canonical: canonicalDefinition }));
+
+		expect(contextPluginName).toBe("canonical");
+		const schema = generateRouteDocsSchema({
+			plugins: {
+				canonical: defineClientPlugin({
+					id: "canonical",
+					name: "legacy-name",
+					routes: () => ({
+						canonical: createRoute("/canonical", () => ({
+							PageComponent: () => null,
+						})),
+					}),
+				}),
+			},
+		});
+		expect(schema.plugins).toMatchObject([
+			{ key: "canonical", name: "canonical" },
 		]);
 	});
 });
