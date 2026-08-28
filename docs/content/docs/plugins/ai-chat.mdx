@@ -488,6 +488,23 @@ Customize post-authorization domain behavior with optional lifecycle hooks. Keep
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/api/plugin.ts" name="AiChatBackendHooks" />
 
+AI Chat lifecycle names use the action-first `onBefore<Action><Entity>`, `onAfter<Action><Entity>`, and `onError<Action><Entity>` grammar. Chat completion remains the domain event `onAfterChat`.
+
+| Before RC3 | RC3 |
+|---|---|
+| `onBeforeToolsActivated` | `onBeforeActivateTools` |
+| `onConversationsRead` | `onAfterListConversations` |
+| `onConversationRead` | `onAfterGetConversation` |
+| `onConversationCreated` | `onAfterCreateConversation` |
+| `onConversationUpdated` | `onAfterUpdateConversation` |
+| `onConversationDeleted` | `onAfterDeleteConversation` |
+| `onChatError` | `onErrorChat` |
+| `onListConversationsError` | `onErrorListConversations` |
+| `onGetConversationError` | `onErrorGetConversation` |
+| `onCreateConversationError` | `onErrorCreateConversation` |
+| `onUpdateConversationError` | `onErrorUpdateConversation` |
+| `onDeleteConversationError` | `onErrorDeleteConversation` |
+
 **Example usage:**
 
 ```ts title="lib/stack.ts"

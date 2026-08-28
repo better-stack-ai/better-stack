@@ -40,19 +40,21 @@ src/plugins/{name}/
 
 ## Lifecycle hook naming
 
-Pattern: `onBefore{Entity}{Action}`, `onAfter{Entity}{Action}`, `on{Entity}{Action}Error`
+Pattern: `onBefore{Action}{Entity}`, `onAfter{Action}{Entity}`, `onError{Action}{Entity}`
 
 ```typescript
-// Examples from existing plugins:
-onBeforeListPosts, onPostsRead, onListPostsError
-onBeforeCreatePost, onPostCreated, onCreatePostError
-onBeforeUpdatePost, onPostUpdated, onUpdatePostError
-onBeforeDeletePost, onPostDeleted, onDeletePostError
-onBeforePost, onAfterPost          // comments plugin (create comment)
-onBeforeEdit, onAfterEdit          // comments plugin (edit comment)
-onBeforeDelete, onAfterDelete      // comments plugin (delete comment)
-onBeforeStatusChange, onAfterApprove
+onBeforeListPosts, onAfterListPosts, onErrorListPosts
+onBeforeCreatePost, onAfterCreatePost, onErrorCreatePost
+onBeforeUpdatePost, onAfterUpdatePost, onErrorUpdatePost
+onBeforeDeletePost, onAfterDeletePost, onErrorDeletePost
+
+// Preserve meaningful domain events instead of inventing CRUD phases.
+onBeforeChat, onAfterChat, onErrorChat
+onBeforeActivateTools
 ```
+
+Normalize names without adding lifecycle phases that the plugin does not
+already support.
 
 ## Trusted operations in AI tool execute functions
 
