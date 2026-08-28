@@ -118,7 +118,7 @@ describe("client plugin SSR loaders", () => {
 		});
 
 		const route = stack.router.getRoute(`/cms/${typeSlug}`);
-		await route.loader?.();
+		await route?.loader?.();
 
 		const client = createApiClient<CMSApiRouter>({
 			baseURL: API_BASE_URL,
@@ -193,7 +193,7 @@ describe("client plugin SSR loaders", () => {
 		});
 
 		const route = stack.router.getRoute("/ui-builder");
-		await route.loader?.();
+		await route?.loader?.();
 
 		const client = createApiClient<CMSApiRouter>({
 			baseURL: API_BASE_URL,

@@ -188,14 +188,6 @@ describe("CMS and UI Builder browser runtime", () => {
 						credentials: "include",
 					},
 				},
-				uiBuilder: {
-					api: {
-						baseURL: "https://builder.example.net",
-						basePath: "/btst/cms",
-						browserHeaders: { "x-public-client": "public-value" },
-						credentials: "include",
-					},
-				},
 			},
 		});
 
@@ -236,21 +228,18 @@ describe("CMS and UI Builder browser runtime", () => {
 		expect(cmsQuery?.contentTypes[0]?.name).toBe("Article");
 		expect(uiBuilderQuery?.page?.slug).toBe("runtime-page");
 		expect(requests.some((request) => request.method === "POST")).toBe(true);
-		expect(
-			requests.some((request) =>
-				request.url.startsWith("https://content.example.net/btst/cms/"),
-			),
-		).toBe(true);
-		expect(
-			requests.some((request) =>
-				request.url.startsWith("https://builder.example.net/btst/cms/"),
-			),
-		).toBe(true);
+		expect(requests.length).toBeGreaterThan(0);
 		for (const request of requests) {
+			expect(request.url).toMatch(
+				/^https:\/\/content\.example\.net\/btst\/cms\//,
+			);
 			expect(request.headers.get("x-public-client")).toBe("public-value");
 			expect(request.headers.get("authorization")).toBeNull();
 			expect(request.headers.get("cookie")).toBeNull();
 			expect(request.credentials).toBe("include");
 		}
+		expect(stack.provider.plugins.uiBuilder.api).toEqual(
+			stack.provider.plugins.cms.api,
+		);
 	});
 });

@@ -10,11 +10,19 @@ import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { CMSApiRouter } from "../../cms/api";
+import { CMS_PLUGIN_ID } from "../../cms/client/constants";
 import { createSanitizedSSRLoaderError } from "../../utils";
 import { createUIBuilderQueryKeys } from "../query-keys";
-import type { UIBuilderClientHooks, LoaderContext } from "../types";
+import type {
+	UIBuilderClientHooks,
+	LoaderContext,
+	ComponentRegistry,
+} from "../types";
 import { UI_BUILDER_PLUGIN_ID } from "./constants";
-import type { UIBuilderPluginOverrides } from "./overrides";
+import type {
+	UIBuilderPluginOverrides,
+	UIBuilderProviderConfig,
+} from "./overrides";
 
 // Lazy load page components for code splitting
 const PageListPageComponent = lazy(() =>
@@ -33,6 +41,8 @@ const PageBuilderPageComponent = lazy(() =>
  * and request-header values are inherited from `createClientStack()`.
  */
 export interface UIBuilderClientConfig {
+	/** Component definitions used by the editor and registered page renderers. */
+	components?: ComponentRegistry;
 	/** Optional hooks for route loading, error reporting, and telemetry. */
 	hooks?: UIBuilderClientHooks;
 
@@ -51,7 +61,8 @@ export interface UIBuilderClientConfig {
 	};
 }
 
-interface ResolvedUIBuilderClientConfig extends UIBuilderClientConfig {
+interface ResolvedUIBuilderClientConfig
+	extends Omit<UIBuilderClientConfig, "components"> {
 	apiBaseURL: string;
 	apiBasePath: string;
 	siteBaseURL: string;
@@ -358,6 +369,10 @@ function createResolvedUIBuilderPlugin(config: ResolvedUIBuilderClientConfig) {
 export const uiBuilderClientPlugin = (config: UIBuilderClientConfig = {}) =>
 	defineClientPlugin<UIBuilderPluginOverrides>()({
 		id: UI_BUILDER_PLUGIN_ID,
+		apiRuntimeFrom: CMS_PLUGIN_ID,
+		providerConfig: {
+			...(config.components ? { components: config.components } : {}),
+		} satisfies UIBuilderProviderConfig,
 		resolve: (runtime) =>
 			createResolvedUIBuilderPlugin(
 				resolveUIBuilderClientConfig(config, runtime),

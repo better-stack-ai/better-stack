@@ -70,6 +70,14 @@ const contentType: SerializedContentType & { itemCount: number } = {
 	updatedAt: new Date("2024-01-01").toISOString(),
 } as unknown as SerializedContentType & { itemCount: number };
 
+const pageContentType: SerializedContentType & { itemCount: number } = {
+	...contentType,
+	id: "ct2",
+	name: "Page",
+	slug: "page",
+	itemCount: 2,
+} as unknown as SerializedContentType & { itemCount: number };
+
 const item: SerializedContentItemWithType = {
 	id: "i1",
 	slug: "hello-world",
@@ -418,6 +426,42 @@ describe("CMS resolved site navigation", () => {
 		await act(async () => contentTypeCard?.click());
 
 		expect(router.navigate).toHaveBeenCalledWith("/content/cms/post");
+	});
+});
+
+describe("CMS registered content types", () => {
+	it("uses factory content type order in built-in pages", async () => {
+		hooks.useSuspenseContentTypes.mockReturnValue({
+			contentTypes: [contentType, pageContentType],
+			refetch: vi.fn(),
+		});
+		const clientStack = createClientStack({
+			api: { baseURL: "http://test.local", basePath: "/api/data" },
+			site: { baseURL: "http://test.local", basePath: "/pages" },
+			queryClient: new QueryClient(),
+			plugins: {
+				cms: cmsClientPlugin({
+					contentTypes: [
+						{ name: "Page", slug: "page", schema: z.object({}) },
+						{ name: "Post", slug: "post", schema: z.object({}) },
+					],
+				}),
+			},
+		});
+
+		await render(
+			<StackProvider stack={clientStack} router={createMockRouter()}>
+				<DashboardPage />
+			</StackProvider>,
+		);
+
+		const cards = Array.from(
+			container.querySelectorAll<HTMLElement>("[data-slot=card]"),
+		);
+		expect(cards.map((card) => card.textContent)).toEqual([
+			expect.stringContaining("Page"),
+			expect.stringContaining("Post"),
+		]);
 	});
 });
 

@@ -4,6 +4,22 @@ import type {
 } from "@workspace/ui/components/ui-builder/types";
 import type { UIBuilderLocalizationOverrides } from "./localization";
 
+/** Browser-safe UI Builder factory values carried by the client stack. */
+export interface UIBuilderProviderConfig {
+	/** Component definitions registered by `uiBuilderClientPlugin()`. */
+	readonly components?: ComponentRegistry;
+}
+
+/** Resolve the component registry registered with the UI Builder factory. */
+export function resolveUIBuilderComponents(
+	providerConfig: Readonly<Record<string, unknown>> | undefined,
+): ComponentRegistry | undefined {
+	const components = providerConfig?.components;
+	return components && typeof components === "object"
+		? (components as ComponentRegistry)
+		: undefined;
+}
+
 /**
  * Context passed to lifecycle hooks
  */
@@ -29,11 +45,6 @@ export interface UIBuilderPluginOverrides {
 	 * Whether to show the attribution
 	 */
 	showAttribution?: boolean;
-
-	/**
-	 * Component registry for the UI Builder
-	 */
-	componentRegistry?: ComponentRegistry;
 
 	/**
 	 * Function registry for resolving bindable event handlers (onClick, onSubmit, etc.)

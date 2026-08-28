@@ -8,7 +8,7 @@ import {
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
-import type { CMSPluginOverrides } from "../../overrides";
+import { orderCMSContentTypes, type CMSPluginOverrides } from "../../overrides";
 import { CMS_PLUGIN_ID } from "../../constants";
 import {
 	useSuspenseContentTypes,
@@ -156,7 +156,11 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 		overrides,
 	});
 
-	const { contentTypes } = useSuspenseContentTypes();
+	const { contentTypes: serverContentTypes } = useSuspenseContentTypes();
+	const contentTypes = orderCMSContentTypes(
+		serverContentTypes,
+		plugins?.[CMS_PLUGIN_ID]?.config,
+	);
 	const contentType = contentTypes.find((ct) => ct.slug === typeSlug);
 
 	const isEditing = !!id;

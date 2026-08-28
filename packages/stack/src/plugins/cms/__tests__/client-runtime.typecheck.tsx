@@ -1,4 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import { createClientStack } from "../../../client";
 import { StackProvider } from "../../../context";
 import {
@@ -12,12 +13,22 @@ import {
 	type UIBuilderClientConfig,
 	type UIBuilderPluginOverrides,
 } from "../../ui-builder/client";
+import type { ContentTypeConfig } from "../types";
 
 const queryClient = new QueryClient();
+const contentTypes = [
+	{
+		name: "Article",
+		slug: "article",
+		schema: z.object({ title: z.string() }),
+	},
+] satisfies readonly ContentTypeConfig[];
 const cmsDefinition = cmsClientPlugin({
+	contentTypes,
 	hooks: { onErrorLoad: () => undefined },
 });
 const uiBuilderDefinition = uiBuilderClientPlugin({
+	components: defaultComponentRegistry,
 	hooks: { onErrorLoad: () => undefined },
 });
 
@@ -34,6 +45,13 @@ const stack = createClientStack({
 	},
 });
 
+stack.provider.plugins.cms.config?.contentTypes satisfies
+	| readonly ContentTypeConfig[]
+	| undefined;
+stack.provider.plugins.uiBuilder.config?.components satisfies
+	| typeof defaultComponentRegistry
+	| undefined;
+
 <StackProvider stack={stack} />;
 <StackProvider
 	stack={stack}
@@ -41,16 +59,15 @@ const stack = createClientStack({
 		cms: {
 			uploadImage: async () => "https://cdn.example.com/image.png",
 		},
-		uiBuilder: { componentRegistry: defaultComponentRegistry },
 	}}
 />;
 
 // @ts-expect-error CMS override values are inferred from registration.
 StackProvider({ stack, overrides: { cms: { uploadImage: "not-a-function" } } });
-// @ts-expect-error UI Builder override values are inferred from registration.
+// @ts-expect-error UI Builder components are configured by uiBuilderClientPlugin().
 StackProvider({
 	stack,
-	overrides: { uiBuilder: { componentRegistry: false } },
+	overrides: { uiBuilder: { componentRegistry: defaultComponentRegistry } },
 });
 // @ts-expect-error Kebab-case is only a package and route slug.
 StackProvider({ stack, overrides: { "ui-builder": {} } });
@@ -75,8 +92,10 @@ createClientStack({
 	},
 });
 
-const cmsOptions: CMSClientConfig = {};
-const uiBuilderOptions: UIBuilderClientConfig = {};
+const cmsOptions: CMSClientConfig = { contentTypes };
+const uiBuilderOptions: UIBuilderClientConfig = {
+	components: defaultComponentRegistry,
+};
 void cmsOptions;
 void uiBuilderOptions;
 
@@ -136,7 +155,7 @@ uiBuilderClientPlugin({
 	headers: new Headers(),
 });
 uiBuilderClientPlugin({
-	// @ts-expect-error Component registries are inferred provider overrides.
+	// @ts-expect-error The canonical factory field is components.
 	componentRegistry: defaultComponentRegistry,
 });
 uiBuilderClientPlugin({
@@ -154,7 +173,6 @@ const cmsOverrides: CMSPluginOverrides = {
 void cmsOverrides;
 
 const uiBuilderOverrides: UIBuilderPluginOverrides = {
-	componentRegistry: defaultComponentRegistry,
 	// @ts-expect-error Transport headers are endpoint configuration, not UI Builder overrides.
 	headers: { authorization: "secret" },
 };
@@ -171,3 +189,16 @@ const uiBuilderHookOverrides: UIBuilderPluginOverrides = {
 	hooks: { onErrorLoad: () => undefined },
 };
 void uiBuilderHookOverrides;
+
+createClientStack({
+	api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+	site: { baseURL: "https://app.example.com", basePath: "/pages" },
+	queryClient,
+	plugins: { cms: cmsDefinition, uiBuilder: uiBuilderDefinition },
+	endpoints: {
+		uiBuilder: {
+			// @ts-expect-error UI Builder inherits the CMS data endpoint.
+			api: { basePath: "/api/second-cms" },
+		},
+	},
+});

@@ -43,6 +43,7 @@ Ensure you followed the general [framework installation guide](/installation) fi
 Create your content types as Zod schemas in a shared file. This allows you to use the schemas on both server (for validation) and client (for type-safe hooks). Use `.meta()` to add descriptions and placeholders that appear in the admin UI:
 
 ```ts title="lib/cms-schemas.ts"
+import type { ContentTypeConfig } from "@btst/stack/plugins/cms/api"
 import { z } from "zod";
 
 // ========== Product Schema ==========
@@ -83,6 +84,22 @@ export const TestimonialSchema = z.object({
   }),
 });
 
+// One application-owned declaration can configure both CMS factories.
+export const contentTypes = [
+  {
+    name: "Product",
+    slug: "product",
+    description: "Products for the store",
+    schema: ProductSchema,
+  },
+  {
+    name: "Testimonial",
+    slug: "testimonial",
+    description: "Customer testimonials",
+    schema: TestimonialSchema,
+  },
+] satisfies ContentTypeConfig[];
+
 // ========== Type Exports for Client Hooks ==========
 
 /** Inferred type for Product data */
@@ -108,28 +125,12 @@ Register the CMS backend plugin with your content types:
 ```ts title="lib/stack.ts"
 import { stack } from "@btst/stack"
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
-import { ProductSchema, TestimonialSchema } from "./cms-schemas"
+import { contentTypes } from "./cms-schemas"
 
 const { handler, dbSchema } = stack({
   basePath: "/api/data",
   plugins: {
-    cms: cmsBackendPlugin({
-      contentTypes: [
-        { 
-          name: "Product", 
-          slug: "product", 
-          description: "Products for the store",
-          schema: ProductSchema,
-          // Field types are defined in the schema via .meta({ fieldType: "..." })
-        },
-        { 
-          name: "Testimonial", 
-          slug: "testimonial", 
-          description: "Customer testimonials",
-          schema: TestimonialSchema,
-        },
-      ],
-    })
+    cms: cmsBackendPlugin({ contentTypes })
   },
   adapter: (db) => createMemoryAdapter(db)({})
 })
@@ -145,6 +146,7 @@ Register the CMS client plugin:
 import { createClientStack } from "@btst/stack/client"
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
 import { QueryClient } from "@tanstack/react-query"
+import { contentTypes } from "./cms-schemas"
 
 const getBaseURL = () => 
   process.env.BASE_URL || "http://localhost:3000"
@@ -160,11 +162,16 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
     site: { baseURL, basePath: "/pages" },
     queryClient,
     plugins: {
-      cms: cmsClientPlugin()
+      cms: cmsClientPlugin({ contentTypes })
     }
   })
 }
 ```
+
+The backend HTTP catalog remains authoritative for content data. Passing the
+shared declaration to `cmsClientPlugin()` preserves your application-defined
+content-type order in the admin UI. Omit it when a managed or separately
+deployed backend owns the catalog.
 
 ### 4. Configure the Provider
 

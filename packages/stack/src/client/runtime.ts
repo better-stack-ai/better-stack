@@ -9,7 +9,15 @@ import type {
 	ResolvedClientStackConfig,
 } from "../types";
 
-type AnyPluginMap = Record<string, ClientPluginRegistration<any, any, any>>;
+type AnyPluginMap = Record<
+	string,
+	ClientPluginRegistration<any, any, any, any, any>
+>;
+
+interface ResolvedPluginApi {
+	runtime: ResolvedClientPluginRuntime["api"];
+	provider: ClientProviderApi;
+}
 
 interface ResolvedClientRuntime<TPlugins extends AnyPluginMap> {
 	pluginRuntimes: { [K in keyof TPlugins]: ResolvedClientPluginRuntime };
@@ -252,9 +260,12 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 		Object.create(null);
 	const providerPlugins: Record<string, ClientProviderPluginRuntime> =
 		Object.create(null);
+	const resolvedApis: Record<string, ResolvedPluginApi> = Object.create(null);
+	const resolvingApis = new Set<string>();
 
-	for (const pluginKey of Object.keys(plugins)) {
-		const id = registrationIds[pluginKey]!;
+	const endpointConfigFor = (
+		pluginKey: string,
+	): ClientPluginEndpointOverride | undefined => {
 		const endpoint =
 			endpoints && Object.hasOwn(endpoints, pluginKey)
 				? endpoints[pluginKey]
@@ -264,23 +275,54 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 				`[btst/client] Endpoint replacement "${pluginKey}" must be an object.`,
 			);
 		}
-		const endpointConfig = endpoint as ClientPluginEndpointOverride | undefined;
+		return endpoint as ClientPluginEndpointOverride | undefined;
+	};
+
+	const resolvePluginApi = (pluginKey: string): ResolvedPluginApi => {
+		if (resolvedApis[pluginKey]) return resolvedApis[pluginKey];
+		if (resolvingApis.has(pluginKey)) {
+			throw new Error(
+				`[btst/client] Client plugin "${pluginKey}" has a circular API runtime dependency.`,
+			);
+		}
+		resolvingApis.add(pluginKey);
+
+		const registration = plugins[pluginKey];
+		const registrationRecord = isPlainRecord(registration)
+			? registration
+			: undefined;
+		const endpointConfig = endpointConfigFor(pluginKey);
 		const endpointApi = endpointConfig
 			? ownValue(endpointConfig, "api")
 			: undefined;
-		const endpointSite = endpointConfig
-			? ownValue(endpointConfig, "site")
-			: undefined;
+		const apiRuntimeFrom = ownValue(registrationRecord, "apiRuntimeFrom");
+
+		if (apiRuntimeFrom !== undefined) {
+			if (typeof apiRuntimeFrom !== "string" || apiRuntimeFrom.length === 0) {
+				throw new Error(
+					`[btst/client] Client plugin "${pluginKey}" must declare apiRuntimeFrom as a programmatic plugin ID.`,
+				);
+			}
+			if (endpointApi !== undefined) {
+				throw new Error(
+					`[btst/client] Client plugin "${pluginKey}" inherits the "${apiRuntimeFrom}" API runtime. Configure endpoints.${apiRuntimeFrom}.api instead of endpoints.${pluginKey}.api.`,
+				);
+			}
+			const sourceKey = Object.keys(plugins).find(
+				(key) => registrationIds[key] === apiRuntimeFrom,
+			);
+			if (sourceKey) {
+				const inherited: ResolvedPluginApi = resolvePluginApi(sourceKey);
+				resolvedApis[pluginKey] = inherited;
+				resolvingApis.delete(pluginKey);
+				return inherited;
+			}
+		}
 
 		const pluginApi = resolveLocationOverride(
 			api,
 			endpointApi,
 			`endpoints.${pluginKey}.api`,
-		);
-		const pluginSite = resolveLocationOverride(
-			site,
-			endpointSite,
-			`endpoints.${pluginKey}.site`,
 		);
 		const sameApiOrigin = pluginApi.baseURL === api.baseURL;
 		const endpointApiConfig = isPlainRecord(endpointApi)
@@ -298,21 +340,56 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 			sameApiOrigin ? requestHeaders : undefined,
 			browserHeaders,
 		);
-
-		pluginRuntimes[pluginKey] = nullRecord({
-			id,
-			api: nullRecord({
+		const resolved = {
+			runtime: nullRecord({
 				...pluginApi,
 				...(headers ? { headers } : {}),
 				...(credentials !== undefined ? { credentials } : {}),
 			}),
+			provider: projectApi(pluginApi, browserHeaders, credentials),
+		};
+		resolvedApis[pluginKey] = resolved;
+		resolvingApis.delete(pluginKey);
+		return resolved;
+	};
+
+	for (const pluginKey of Object.keys(plugins)) {
+		const registration = plugins[pluginKey];
+		const registrationRecord = isPlainRecord(registration)
+			? registration
+			: undefined;
+		const providerConfig = ownValue(registrationRecord, "providerConfig");
+		if (providerConfig !== undefined && !isPlainRecord(providerConfig)) {
+			throw new Error(
+				`[btst/client] Client plugin "${pluginKey}" providerConfig must be a browser-safe object.`,
+			);
+		}
+		const id = registrationIds[pluginKey]!;
+		const endpointConfig = endpointConfigFor(pluginKey);
+		const endpointSite = endpointConfig
+			? ownValue(endpointConfig, "site")
+			: undefined;
+		const pluginSite = resolveLocationOverride(
+			site,
+			endpointSite,
+			`endpoints.${pluginKey}.site`,
+		);
+		const resolvedApi = resolvePluginApi(pluginKey);
+
+		pluginRuntimes[pluginKey] = nullRecord({
+			id,
+			api: resolvedApi.runtime,
 			site: pluginSite,
 			queryClient,
 		});
 		providerPlugins[pluginKey] = nullRecord({
 			id,
-			api: projectApi(pluginApi, browserHeaders, credentials),
+			api: resolvedApi.provider,
 			site: pluginSite,
+			...(registrationRecord &&
+			Object.hasOwn(registrationRecord, "providerConfig")
+				? { config: providerConfig }
+				: {}),
 		});
 	}
 

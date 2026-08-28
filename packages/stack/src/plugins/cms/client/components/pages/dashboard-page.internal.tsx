@@ -12,7 +12,7 @@ import {
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
-import type { CMSPluginOverrides } from "../../overrides";
+import { orderCMSContentTypes, type CMSPluginOverrides } from "../../overrides";
 import { CMS_PLUGIN_ID } from "../../constants";
 import { useSuspenseContentTypes } from "../../hooks";
 import { EmptyState } from "../shared/empty-state";
@@ -36,7 +36,11 @@ export function DashboardPage() {
 		},
 		overrides,
 	});
-	const { contentTypes } = useSuspenseContentTypes();
+	const { contentTypes: serverContentTypes } = useSuspenseContentTypes();
+	const contentTypes = orderCMSContentTypes(
+		serverContentTypes,
+		plugins?.[CMS_PLUGIN_ID]?.config,
+	);
 
 	const title =
 		localization?.CMS_DASHBOARD_TITLE ?? t("cms.dashboard.title", "Content");

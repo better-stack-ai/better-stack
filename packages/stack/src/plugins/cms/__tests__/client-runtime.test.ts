@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "../../../client";
 import { cmsClientPlugin } from "../client";
 import { uiBuilderClientPlugin } from "../../ui-builder/client";
+import { z } from "zod";
 
 const contentType = {
 	id: "type-1",
@@ -66,6 +67,31 @@ afterEach(() => {
 });
 
 describe("CMS and UI Builder resolved client runtime", () => {
+	it("projects browser-safe factory concerns without provider duplication", () => {
+		const contentTypes = [
+			{ name: "Article", slug: "article", schema: z.object({}) },
+		];
+		const components = {
+			ArticleCard: { schema: z.object({}) },
+		};
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient: new QueryClient(),
+			plugins: {
+				cms: cmsClientPlugin({ contentTypes }),
+				uiBuilder: uiBuilderClientPlugin({ components }),
+			},
+		});
+
+		expect(stack.provider.plugins.cms.config?.contentTypes).toBe(contentTypes);
+		expect(stack.provider.plugins.uiBuilder.config?.components).toBe(
+			components,
+		);
+		expect(stack.provider.plugins.cms.config).not.toHaveProperty("queryClient");
+		expect(stack.provider.plugins.uiBuilder.config).not.toHaveProperty("api");
+	});
+
 	it("drives every CMS and UI Builder loader and metadata read from one inherited runtime", async () => {
 		const queryClient = new QueryClient();
 		const requests: Array<{ url: string; headers: Headers }> = [];
@@ -152,7 +178,6 @@ describe("CMS and UI Builder resolved client runtime", () => {
 			},
 			endpoints: {
 				cms: { api: { basePath: "/api/cms" } },
-				uiBuilder: { api: { basePath: "/api/cms" } },
 			},
 		});
 
@@ -163,6 +188,9 @@ describe("CMS and UI Builder resolved client runtime", () => {
 		for (const url of requests) {
 			expect(url).toMatch(/^https:\/\/app\.example\.com\/api\/cms\//);
 		}
+		expect(stack.provider.plugins.uiBuilder.api).toEqual(
+			stack.provider.plugins.cms.api,
+		);
 	});
 
 	it("isolates sensitive headers for both plugins across an origin override", async () => {
@@ -195,13 +223,6 @@ describe("CMS and UI Builder resolved client runtime", () => {
 						browserHeaders: { "x-public-client": "public-value" },
 					},
 				},
-				uiBuilder: {
-					api: {
-						baseURL: "https://content.example.net",
-						basePath: "/btst/cms",
-						browserHeaders: { "x-public-client": "public-value" },
-					},
-				},
 			},
 		});
 
@@ -218,6 +239,31 @@ describe("CMS and UI Builder resolved client runtime", () => {
 			expect(request.headers.get("x-request")).toBeNull();
 			expect(request.headers.get("x-public-client")).toBe("public-value");
 		}
+		expect(stack.provider.plugins.uiBuilder.api).toEqual(
+			stack.provider.plugins.cms.api,
+		);
+	});
+
+	it("rejects a second UI Builder data endpoint", () => {
+		expect(() =>
+			createClientStack({
+				api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+				site: { baseURL: "https://app.example.com", basePath: "/pages" },
+				queryClient: new QueryClient(),
+				plugins: {
+					cms: cmsClientPlugin(),
+					uiBuilder: uiBuilderClientPlugin(),
+				},
+				endpoints: {
+					uiBuilder: {
+						api: {
+							baseURL: "https://builder.example.net",
+							basePath: "/btst/cms",
+						},
+					},
+				} as any,
+			}),
+		).toThrowError(/uiBuilder.*inherits.*cms.*API/i);
 	});
 
 	it("reports CMS loader failures once through onErrorLoad", async () => {

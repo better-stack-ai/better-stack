@@ -22,7 +22,7 @@ import {
 } from "@btst/stack/context";
 import { cmsPermissions } from "../../../permissions";
 import { useListState, type ListStateSchema } from "@btst/stack/client/hooks";
-import type { CMSPluginOverrides } from "../../overrides";
+import { orderCMSContentTypes, type CMSPluginOverrides } from "../../overrides";
 import { CMS_PLUGIN_ID } from "../../constants";
 import type { SerializedContentItemWithType } from "../../../types";
 import {
@@ -101,7 +101,11 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 
 	const hasSearch = search.trim().length > 0;
 
-	const { contentTypes } = useSuspenseContentTypes();
+	const { contentTypes: serverContentTypes } = useSuspenseContentTypes();
+	const contentTypes = orderCMSContentTypes(
+		serverContentTypes,
+		plugins?.[CMS_PLUGIN_ID]?.config,
+	);
 	const contentType = contentTypes.find((ct) => ct.slug === typeSlug);
 
 	// The default (unsearched) list stays on the suspense hook so SSR/SSG

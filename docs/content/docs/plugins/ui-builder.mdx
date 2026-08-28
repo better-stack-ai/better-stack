@@ -124,14 +124,17 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
 }
 ```
 
+UI Builder is a CMS HTTP consumer, so it inherits the CMS plugin's effective API
+origin, path, browser headers, and credentials. Configure a CMS data replacement
+once with `endpoints.cms.api`; `endpoints.uiBuilder` may customize only the UI
+site location.
+
 ### 3. Configure the Provider
 
-Pass the resolved stack to the provider. The default component registry requires
-no override. When you do customize it, the `uiBuilder` key and value are inferred
-from registration:
+Pass the resolved stack to the provider. The component registry is a
+`uiBuilderClientPlugin()` concern, so `StackProvider` needs no duplicate override:
 
 ```tsx title="app/pages/layout.tsx"
-import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
 import { nextRouter } from "@btst/stack/next"
 
 const stack = getStackClient(queryClient)
@@ -139,11 +142,6 @@ const stack = getStackClient(queryClient)
 <StackProvider
   stack={stack}
   router={nextRouter()}
-  overrides={{
-    uiBuilder: {
-      componentRegistry: defaultComponentRegistry,
-    }
-  }}
 >
   {children}
 </StackProvider>
@@ -257,7 +255,7 @@ Extend or replace the default registry with your own components:
 import { 
   createComponentRegistry, 
   defaultComponentRegistry,
-  primitiveComponentDefinitions,
+  uiBuilderClientPlugin,
 } from "@btst/stack/plugins/ui-builder/client"
 import { z } from "zod"
 
@@ -291,13 +289,8 @@ const customRegistry = createComponentRegistry({
   },
 })
 
-// Use as a browser presentation override
-<StackProvider
-  stack={stack}
-  overrides={{ uiBuilder: { componentRegistry: customRegistry } }}
->
-  {children}
-</StackProvider>
+// Register once; the editor and PageRenderer consume the same registry.
+const uiBuilder = uiBuilderClientPlugin({ components: customRegistry })
 ```
 
 ### Registry Entry Properties
@@ -529,7 +522,7 @@ export default function PreviewPage({ params }: { params: { slug: string } }) {
 | Prop | Type | Description |
 |------|------|-------------|
 | `slug` | `string` | Page slug to fetch and render |
-| `componentRegistry` | `ComponentRegistry` | Custom registry (defaults to default) |
+| `componentRegistry` | `ComponentRegistry` | Standalone override; otherwise uses the plugin factory registry, then the built-in default |
 | `variableValues` | `Record<string, any>` | Runtime variable values |
 | `LoadingComponent` | `ComponentType` | Custom loading state |
 | `ErrorComponent` | `ComponentType<{ error }>` | Custom error state |
@@ -957,11 +950,19 @@ cms: cmsBackendPlugin({
 
 Creates the client plugin with routes and SSR loaders.
 
+#### UIBuilderClientConfig
+
+<AutoTypeTable path="../packages/stack/src/plugins/ui-builder/client/plugin.tsx" name="UIBuilderClientConfig" />
+
+Pass custom component definitions through the `components` factory field. An
+explicit `PageRenderer` `componentRegistry` prop is a standalone-renderer
+override and takes precedence; otherwise the registered factory value, then the
+built-in registry, is used.
+
 #### UIBuilderPluginOverrides
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `componentRegistry` | `ComponentRegistry` | No | Custom component registry |
 | `functionRegistry` | `FunctionRegistry` | No | Functions available to UI Builder event bindings |
 | `localization` | `UIBuilderLocalizationOverrides` | No | Nested overrides for built-in page, editor, renderer, and notification copy |
 | `showAttribution` | `boolean` | No | Show BTST attribution |

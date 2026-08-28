@@ -6,6 +6,7 @@ import { ErrorBoundary } from "react-error-boundary";
 import {
 	PermissionAccess,
 	usePluginOverrides,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import LayerRenderer from "@workspace/ui/components/ui-builder/layer-renderer";
@@ -17,7 +18,10 @@ import type {
 import { useSuspenseUIBuilderPageBySlug } from "../hooks/ui-builder-hooks";
 import { defaultComponentRegistry } from "../registry";
 import { uiBuilderLocalization } from "../localization";
-import type { UIBuilderPluginOverrides } from "../overrides";
+import {
+	resolveUIBuilderComponents,
+	type UIBuilderPluginOverrides,
+} from "../overrides";
 import { UI_BUILDER_PLUGIN_ID } from "../constants";
 import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
 import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
@@ -88,7 +92,10 @@ function DefaultNotFoundComponent(): ReactNode {
 export interface PageRendererProps {
 	/** URL slug of the UI Builder page to render */
 	slug: string;
-	/** Component registry to use for rendering (defaults to defaultComponentRegistry) */
+	/**
+	 * Standalone registry override. Takes precedence over the registry supplied to
+	 * `uiBuilderClientPlugin()`; otherwise the built-in registry is used.
+	 */
 	componentRegistry?: ComponentRegistry;
 	/** Runtime variable values to override defaults */
 	variableValues?: Record<string, PropValue>;
@@ -102,6 +109,17 @@ export interface PageRendererProps {
 	NotFoundComponent?: ComponentType;
 	/** Additional className for the container */
 	className?: string;
+}
+
+function useComponentRegistry(
+	standaloneRegistry: ComponentRegistry | undefined,
+): ComponentRegistry {
+	const { plugins } = useStack();
+	return (
+		standaloneRegistry ??
+		resolveUIBuilderComponents(plugins?.[UI_BUILDER_PLUGIN_ID]?.config) ??
+		defaultComponentRegistry
+	);
 }
 
 /**
@@ -163,7 +181,7 @@ export interface PageRendererProps {
  */
 export function PageRenderer({
 	slug,
-	componentRegistry = defaultComponentRegistry,
+	componentRegistry: standaloneRegistry,
 	variableValues,
 	functionRegistry,
 	LoadingComponent = DefaultLoadingComponent,
@@ -171,6 +189,7 @@ export function PageRenderer({
 	NotFoundComponent = DefaultNotFoundComponent,
 	className,
 }: PageRendererProps): ReactNode {
+	const componentRegistry = useComponentRegistry(standaloneRegistry);
 	return (
 		<ErrorBoundary
 			FallbackComponent={({ error }) => <ErrorComponent error={error} />}
@@ -267,12 +286,13 @@ function SuspensePageRendererContent({
  */
 export function SuspensePageRenderer({
 	slug,
-	componentRegistry = defaultComponentRegistry,
+	componentRegistry: standaloneRegistry,
 	variableValues,
 	functionRegistry,
 	NotFoundComponent = DefaultNotFoundComponent,
 	className,
 }: Omit<PageRendererProps, "LoadingComponent" | "ErrorComponent">): ReactNode {
+	const componentRegistry = useComponentRegistry(standaloneRegistry);
 	return (
 		<SuspensePageRendererContent
 			slug={slug}

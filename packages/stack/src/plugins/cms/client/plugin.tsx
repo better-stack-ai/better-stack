@@ -10,9 +10,10 @@ import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import { createSanitizedSSRLoaderError } from "../../utils";
 import type { CMSApiRouter } from "../api";
+import type { ContentTypeConfig } from "../types";
 import { createCMSQueryKeys } from "../query-keys";
 import { CMS_PLUGIN_ID } from "./constants";
-import type { CMSPluginOverrides } from "./overrides";
+import type { CMSPluginOverrides, CMSProviderConfig } from "./overrides";
 
 // Lazy load page components for code splitting
 const DashboardPageComponent = lazy(() =>
@@ -124,6 +125,12 @@ export interface CMSClientHooks {
  * request-header values are inherited from `createClientStack()`.
  */
 export interface CMSClientConfig {
+	/**
+	 * Content types declared by this application. The HTTP contract remains the
+	 * data source; this list preserves the developer-defined order in CMS pages.
+	 * Omit it when a separately managed backend owns the catalog.
+	 */
+	contentTypes?: readonly ContentTypeConfig[];
 	/** Optional hooks for route loading, error reporting, and telemetry. */
 	hooks?: CMSClientHooks;
 
@@ -144,7 +151,8 @@ export interface CMSClientConfig {
 	};
 }
 
-interface ResolvedCMSClientConfig extends CMSClientConfig {
+interface ResolvedCMSClientConfig
+	extends Omit<CMSClientConfig, "contentTypes"> {
 	apiBaseURL: string;
 	apiBasePath: string;
 	siteBaseURL: string;
@@ -576,6 +584,9 @@ function createResolvedCMSPlugin(config: ResolvedCMSClientConfig) {
 export const cmsClientPlugin = (config: CMSClientConfig = {}) =>
 	defineClientPlugin<CMSPluginOverrides>()({
 		id: CMS_PLUGIN_ID,
+		providerConfig: {
+			...(config.contentTypes ? { contentTypes: config.contentTypes } : {}),
+		} satisfies CMSProviderConfig,
 		resolve: (runtime) =>
 			createResolvedCMSPlugin(resolveCMSClientConfig(config, runtime)),
 	});

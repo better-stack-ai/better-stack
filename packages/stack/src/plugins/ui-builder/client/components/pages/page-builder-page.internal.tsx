@@ -39,7 +39,10 @@ import {
 	useSuspenseUIBuilderPage,
 	useUIBuilderPageForm,
 } from "../../hooks/ui-builder-hooks";
-import type { UIBuilderPluginOverrides } from "../../overrides";
+import {
+	resolveUIBuilderComponents,
+	type UIBuilderPluginOverrides,
+} from "../../overrides";
 import { UI_BUILDER_PLUGIN_ID } from "../../constants";
 import { uiBuilderLocalization } from "../../localization";
 import { defaultComponentRegistry } from "../../registry";
@@ -227,16 +230,15 @@ function PageBuilderPageContent({
 }: PageBuilderPageContentProps) {
 	const t = useTranslate();
 	const notify = useNotify();
-	const {
-		componentRegistry: customRegistry,
-		functionRegistry,
-		localization,
-	} = usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
+	const { functionRegistry, localization } =
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
 	const { router, plugins, basePath: legacyBasePath } = useStack();
 	const basePath =
 		plugins?.[UI_BUILDER_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
 	const LinkComponent = router?.Link ?? "a";
-	const componentRegistry = customRegistry || defaultComponentRegistry;
+	const componentRegistry =
+		resolveUIBuilderComponents(plugins?.[UI_BUILDER_PLUGIN_ID]?.config) ??
+		defaultComponentRegistry;
 	const localized = (
 		override: string | undefined,
 		key: string,
