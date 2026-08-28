@@ -3,11 +3,13 @@
 import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import { ErrorPlaceholder } from "../shared/error-placeholder";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import { PageWrapper } from "../shared/page-wrapper";
 
 export function NotFoundPage({ message }: { message: string }) {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<BlogPluginOverrides>("blog");
+	const { localization } =
+		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 	const title =
 		localization?.BLOG_PAGE_NOT_FOUND_TITLE ??
 		t("blog.common.pageNotFoundTitle", "Not Found");

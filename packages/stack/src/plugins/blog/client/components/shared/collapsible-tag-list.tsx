@@ -7,6 +7,7 @@ import {
 	useTranslate,
 } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import { DefaultLink } from "./defaults";
 import { Badge } from "@workspace/ui/components/badge";
 import { ChevronDown, ChevronUp } from "lucide-react";
@@ -28,7 +29,7 @@ export function CollapsibleTagList({
 	const { localization } = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
-	>("blog", {});
+	>(BLOG_PLUGIN_ID, {});
 	const { router } = useStack();
 	const Link = router?.Link ?? DefaultLink;
 	const basePath = useBasePath();

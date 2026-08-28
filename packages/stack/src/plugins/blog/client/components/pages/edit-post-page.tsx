@@ -3,6 +3,7 @@
 import { lazy } from "react";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import {
 	ComposedRoute,
 	PermissionRouteAccess,
@@ -39,7 +40,8 @@ function AuthorizedEditPostPage({ slug }: { slug: string }) {
 
 // Exported wrapped component with error and loading boundaries
 export function EditPostPageComponent({ slug }: { slug: string }) {
-	const { onRouteError } = usePluginOverrides<BlogPluginOverrides>("blog");
+	const { onRouteError } =
+		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 	return (
 		<ComposedRoute
 			path={`/blog/${slug}/edit`}

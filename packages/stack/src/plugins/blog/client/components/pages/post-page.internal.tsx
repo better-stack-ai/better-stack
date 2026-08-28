@@ -16,6 +16,7 @@ import { MarkdownContent } from "../shared/markdown-content";
 import { PageHeader } from "../shared/page-header";
 import { PageWrapper } from "../shared/page-wrapper";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import { DefaultImage } from "../shared/defaults";
 import { PostNavigation } from "../shared/post-navigation";
 import { RecentPostsCarousel } from "../shared/recent-posts-carousel";
@@ -31,7 +32,7 @@ import { CollapsibleTagList } from "../shared/collapsible-tag-list";
 // Internal component with actual page content
 export function PostPage({ slug }: { slug: string }) {
 	const t = useTranslate();
-	const overrides = usePluginOverrides<BlogPluginOverrides>("blog");
+	const overrides = usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 	const { localization } = overrides;
 	const { router } = useStack();
 	const Image = router?.Image ?? DefaultImage;

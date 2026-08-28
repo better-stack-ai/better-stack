@@ -16,6 +16,7 @@ import { formatDate } from "date-fns";
 import type { SerializedPost } from "../../../types";
 import { CalendarIcon } from "lucide-react";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import { DefaultLink, DefaultImage } from "./defaults";
 
 // Beautiful gradient color combinations
@@ -224,7 +225,7 @@ export function PostCard({ post }: { post: SerializedPost }) {
 	const { localization } = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
-	>("blog", {});
+	>(BLOG_PLUGIN_ID, {});
 	const { router } = useStack();
 	const Link = router?.Link ?? DefaultLink;
 	const Image = router?.Image ?? DefaultImage;

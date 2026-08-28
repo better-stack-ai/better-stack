@@ -2,6 +2,7 @@ import {
 	defineClientPlugin,
 	createApiClient,
 	isConnectionError,
+	type ResolvedClientPluginRuntime,
 } from "@btst/stack/plugins/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
@@ -15,6 +16,8 @@ import { NewPostPageComponent } from "./components/pages/new-post-page";
 import { EditPostPageComponent } from "./components/pages/edit-post-page";
 import { TagPageComponent } from "./components/pages/tag-page";
 import { PostPageComponent } from "./components/pages/post-page";
+import { BLOG_PLUGIN_ID } from "./constants";
+import type { BlogPluginOverrides } from "./overrides";
 
 /**
  * Context passed to route hooks
@@ -51,21 +54,10 @@ export interface LoaderContext {
 }
 
 /**
- * Configuration for blog client plugin
- * Note: queryClient is passed at runtime to both loader and meta (for SSR isolation)
+ * Blog-specific client configuration. Shared API, site, query-client, and
+ * request-header values are inherited from `createClientStack()`.
  */
 export interface BlogClientConfig {
-	/** Base URL for API calls (e.g., "http://localhost:3000") */
-	apiBaseURL: string;
-	/** Path where the API is mounted (e.g., "/api/data") */
-	apiBasePath: string;
-	/** Base URL of your site for SEO meta tags */
-	siteBaseURL: string;
-	/** Path where pages are mounted (e.g., "/pages") */
-	siteBasePath: string;
-	/** React Query client instance for caching */
-	queryClient: QueryClient;
-
 	/** Optional SEO configuration for meta tags */
 	seo?: {
 		/** Site name for Open Graph tags */
@@ -82,9 +74,6 @@ export interface BlogClientConfig {
 
 	/** Optional hooks for customizing behavior */
 	hooks?: BlogClientHooks;
-
-	/** Optional headers for SSR (e.g., forwarding cookies) */
-	headers?: Headers;
 
 	/**
 	 * Optional page component overrides.
@@ -168,11 +157,70 @@ export interface BlogClientHooks {
 	 * @param error - The error that occurred
 	 * @param context - Loader context
 	 */
-	onLoadError?: (error: Error, context: LoaderContext) => Promise<void> | void;
+	onErrorLoad?: (error: Error, context: LoaderContext) => Promise<void> | void;
+}
+
+interface ResolvedBlogClientConfig extends BlogClientConfig {
+	apiBaseURL: string;
+	apiBasePath: string;
+	siteBaseURL: string;
+	siteBasePath: string;
+	queryClient: QueryClient;
+	headers?: Headers;
+	credentials?: RequestCredentials;
+}
+
+function resolveBlogClientConfig(
+	config: BlogClientConfig,
+	runtime: ResolvedClientPluginRuntime<typeof BLOG_PLUGIN_ID>,
+): ResolvedBlogClientConfig {
+	return {
+		...config,
+		apiBaseURL: runtime.api.baseURL,
+		apiBasePath: runtime.api.basePath,
+		siteBaseURL: runtime.site.baseURL,
+		siteBasePath: runtime.site.basePath,
+		queryClient: runtime.queryClient,
+		...(runtime.api.headers ? { headers: runtime.api.headers } : {}),
+		...(runtime.api.credentials
+			? { credentials: runtime.api.credentials }
+			: {}),
+	};
+}
+
+function createBlogApiClient(config: ResolvedBlogClientConfig) {
+	return createApiClient<BlogApiRouter>({
+		baseURL: config.apiBaseURL,
+		basePath: config.apiBasePath,
+		headers: config.headers,
+		credentials: config.credentials,
+	});
+}
+
+function createLoadErrorReporter(
+	hooks: BlogClientHooks | undefined,
+	context: LoaderContext,
+) {
+	let reported = false;
+	return async (error: unknown) => {
+		if (reported || !hooks?.onErrorLoad) return;
+		reported = true;
+		try {
+			await hooks.onErrorLoad(
+				error instanceof Error ? error : new Error(String(error)),
+				context,
+			);
+		} catch {
+			// Loader hooks cannot make an SSR loader throw or run twice.
+		}
+	};
 }
 
 // Loader for SSR prefetching with hooks - configured once
-function createPostsLoader(published: boolean, config: BlogClientConfig) {
+function createPostsLoader(
+	published: boolean,
+	config: ResolvedBlogClientConfig,
+) {
 	return async () => {
 		if (typeof window === "undefined") {
 			const { queryClient, apiBasePath, apiBaseURL, hooks, headers } = config;
@@ -184,13 +232,11 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const reportError = createLoadErrorReporter(hooks, context);
 			const limit = 10;
-			const client = createApiClient<BlogApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
+			const client = createBlogApiClient(config);
 			// note: for a module not to be bundled with client, and to be shared by client and server we need to add it to build.config.ts as an entry
-			const queries = createBlogQueryKeys(client, headers);
+			const queries = createBlogQueryKeys(client);
 			const listQuery = queries.posts.list({
 				query: undefined,
 				limit,
@@ -226,14 +272,7 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 				// Check if there was an error after afterLoadPosts hook
 				const queryState = queryClient.getQueryState(listQuery.queryKey);
 				if (queryState?.error) {
-					// Call error hook but don't throw - let Error Boundary handle it during render
-					if (hooks?.onLoadError) {
-						const error =
-							queryState.error instanceof Error
-								? queryState.error
-								: new Error(String(queryState.error));
-						await hooks.onLoadError(error, context);
-					}
+					await reportError(queryState.error);
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
@@ -254,9 +293,7 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 						retry: false,
 					});
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 				// Don't re-throw - let Error Boundary catch it during render
 			}
 		}
@@ -265,7 +302,7 @@ function createPostsLoader(published: boolean, config: BlogClientConfig) {
 
 function createPostLoader(
 	slug: string,
-	config: BlogClientConfig,
+	config: ResolvedBlogClientConfig,
 	path?: string,
 ) {
 	return async () => {
@@ -280,6 +317,7 @@ function createPostLoader(
 				apiBasePath,
 				headers,
 			};
+			const reportError = createLoadErrorReporter(hooks, context);
 
 			try {
 				// Before hook
@@ -287,11 +325,8 @@ function createPostLoader(
 					await hooks.beforeLoadPost(slug, context);
 				}
 
-				const client = createApiClient<BlogApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
-				const queries = createBlogQueryKeys(client, headers);
+				const client = createBlogApiClient(config);
+				const queries = createBlogQueryKeys(client);
 				const postQuery = queries.posts.detail(slug);
 				await queryClient.prefetchQuery(postQuery);
 
@@ -309,14 +344,7 @@ function createPostLoader(
 				// Check if there was an error after afterLoadPost hook
 				const queryState = queryClient.getQueryState(postQuery.queryKey);
 				if (queryState?.error) {
-					// Call error hook but don't throw - let Error Boundary handle it during render
-					if (hooks?.onLoadError) {
-						const error =
-							queryState.error instanceof Error
-								? queryState.error
-								: new Error(String(queryState.error));
-						await hooks.onLoadError(error, context);
-					}
+					await reportError(queryState.error);
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
@@ -327,16 +355,14 @@ function createPostLoader(
 							"Use myStack.api.blog.prefetchForRoute() for SSG data prefetching.",
 					);
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 				// Don't re-throw - let Error Boundary catch it during render
 			}
 		}
 	};
 }
 
-function createNewPostLoader(config: BlogClientConfig) {
+function createNewPostLoader(config: ResolvedBlogClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
 			const { apiBasePath, apiBaseURL, hooks, headers } = config;
@@ -348,6 +374,7 @@ function createNewPostLoader(config: BlogClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const reportError = createLoadErrorReporter(hooks, context);
 
 			try {
 				// Before hook
@@ -362,16 +389,14 @@ function createNewPostLoader(config: BlogClientConfig) {
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
 				// Let Error Boundaries handle errors when components render
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 				// Don't re-throw - let Error Boundary catch it during render
 			}
 		}
 	};
 }
 
-function createTagLoader(tagSlug: string, config: BlogClientConfig) {
+function createTagLoader(tagSlug: string, config: ResolvedBlogClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
 			const { queryClient, apiBasePath, apiBaseURL, hooks, headers } = config;
@@ -384,15 +409,13 @@ function createTagLoader(tagSlug: string, config: BlogClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const reportError = createLoadErrorReporter(hooks, context);
 
 			try {
 				const limit = 10;
-				const client = createApiClient<BlogApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
+				const client = createBlogApiClient(config);
 
-				const queries = createBlogQueryKeys(client, headers);
+				const queries = createBlogQueryKeys(client);
 				const listQuery = queries.posts.list({
 					query: undefined,
 					limit,
@@ -412,12 +435,8 @@ function createTagLoader(tagSlug: string, config: BlogClientConfig) {
 				const listState = queryClient.getQueryState(listQuery.queryKey);
 				const tagsState = queryClient.getQueryState(tagsQuery.queryKey);
 				const queryError = listState?.error || tagsState?.error;
-				if (queryError && hooks?.onLoadError) {
-					const error =
-						queryError instanceof Error
-							? queryError
-							: new Error(String(queryError));
-					await hooks.onLoadError(error, context);
+				if (queryError) {
+					await reportError(queryError);
 				}
 			} catch (error) {
 				if (isConnectionError(error)) {
@@ -426,16 +445,17 @@ function createTagLoader(tagSlug: string, config: BlogClientConfig) {
 							"Use myStack.api.blog.prefetchForRoute() for SSG data prefetching.",
 					);
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 			}
 		}
 	};
 }
 
 // Meta generators with SEO optimization
-function createPostsListMeta(published: boolean, config: BlogClientConfig) {
+function createPostsListMeta(
+	published: boolean,
+	config: ResolvedBlogClientConfig,
+) {
 	return () => {
 		const { siteBaseURL, siteBasePath, seo } = config;
 		const path = published ? "/blog" : "/blog/drafts";
@@ -484,17 +504,12 @@ function createPostsListMeta(published: boolean, config: BlogClientConfig) {
 	};
 }
 
-function createPostMeta(slug: string, config: BlogClientConfig) {
+function createPostMeta(slug: string, config: ResolvedBlogClientConfig) {
 	return () => {
 		// Use queryClient passed at runtime (same as loader!)
 		const { queryClient } = config;
-		const { apiBaseURL, apiBasePath, siteBaseURL, siteBasePath, seo } = config;
-		const queries = createBlogQueryKeys(
-			createApiClient<BlogApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			}),
-		);
+		const { siteBaseURL, siteBasePath, seo } = config;
+		const queries = createBlogQueryKeys(createBlogApiClient(config));
 		const post = queryClient.getQueryData<Post>(
 			queries.posts.detail(slug).queryKey,
 		);
@@ -586,16 +601,11 @@ function createPostMeta(slug: string, config: BlogClientConfig) {
 	};
 }
 
-function createTagMeta(tagSlug: string, config: BlogClientConfig) {
+function createTagMeta(tagSlug: string, config: ResolvedBlogClientConfig) {
 	return () => {
 		const { queryClient } = config;
-		const { apiBaseURL, apiBasePath, siteBaseURL, siteBasePath, seo } = config;
-		const queries = createBlogQueryKeys(
-			createApiClient<BlogApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			}),
-		);
+		const { siteBaseURL, siteBasePath, seo } = config;
+		const queries = createBlogQueryKeys(createBlogApiClient(config));
 		const tags = queryClient.getQueryData<SerializedTag[]>(
 			queries.tags.list().queryKey,
 		);
@@ -635,7 +645,7 @@ function createTagMeta(tagSlug: string, config: BlogClientConfig) {
 	};
 }
 
-function createNewPostMeta(config: BlogClientConfig) {
+function createNewPostMeta(config: ResolvedBlogClientConfig) {
 	return () => {
 		const { siteBaseURL, siteBasePath } = config;
 		const fullUrl = `${siteBaseURL}${siteBasePath}/blog/new`;
@@ -664,17 +674,12 @@ function createNewPostMeta(config: BlogClientConfig) {
 	};
 }
 
-function createEditPostMeta(slug: string, config: BlogClientConfig) {
+function createEditPostMeta(slug: string, config: ResolvedBlogClientConfig) {
 	return () => {
 		// Use queryClient passed at runtime (same as loader!)
 		const { queryClient } = config;
-		const { apiBaseURL, apiBasePath, siteBaseURL, siteBasePath } = config;
-		const queries = createBlogQueryKeys(
-			createApiClient<BlogApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			}),
-		);
+		const { siteBaseURL, siteBasePath } = config;
+		const queries = createBlogQueryKeys(createBlogApiClient(config));
 		const post = queryClient.getQueryData<Post>(
 			queries.posts.detail(slug).queryKey,
 		);
@@ -700,67 +705,60 @@ function createEditPostMeta(slug: string, config: BlogClientConfig) {
 	};
 }
 
-/**
- * Blog client plugin
- * Provides routes, components, and React Query hooks for blog posts
- *
- * @param config - Configuration including queryClient, baseURL, and optional hooks
- */
-export const blogClientPlugin = (config: BlogClientConfig) =>
-	defineClientPlugin({
-		name: "blog",
-
+function createResolvedBlogPlugin(resolvedConfig: ResolvedBlogClientConfig) {
+	return {
 		routes: () =>
 			defineRoutes(
 				{
 					posts: defineRoute("/blog", {
 						page: () => <HomePageComponent published={true} />,
-						loader: createPostsLoader(true, config),
-						meta: createPostsListMeta(true, config),
+						loader: createPostsLoader(true, resolvedConfig),
+						meta: createPostsListMeta(true, resolvedConfig),
 					}),
 					drafts: defineRoute("/blog/drafts", {
 						page: () => <HomePageComponent published={false} />,
-						loader: createPostsLoader(false, config),
-						meta: createPostsListMeta(false, config),
+						loader: createPostsLoader(false, resolvedConfig),
+						meta: createPostsListMeta(false, resolvedConfig),
 					}),
 					newPost: defineRoute("/blog/new", {
 						page: NewPostPageComponent,
-						loader: createNewPostLoader(config),
-						meta: createNewPostMeta(config),
+						loader: createNewPostLoader(resolvedConfig),
+						meta: createNewPostMeta(resolvedConfig),
 					}),
 					editPost: defineRoute("/blog/:slug/edit", {
 						page: ({ params }) => <EditPostPageComponent slug={params.slug} />,
 						loader: ({ params }) =>
 							createPostLoader(
 								params.slug,
-								config,
+								resolvedConfig,
 								`/blog/${params.slug}/edit`,
 							)(),
-						meta: ({ params }) => createEditPostMeta(params.slug, config)(),
+						meta: ({ params }) =>
+							createEditPostMeta(params.slug, resolvedConfig)(),
 					}),
 					tag: defineRoute("/blog/tag/:tagSlug", {
 						page: ({ params }) => <TagPageComponent tagSlug={params.tagSlug} />,
-						loader: ({ params }) => createTagLoader(params.tagSlug, config)(),
-						meta: ({ params }) => createTagMeta(params.tagSlug, config)(),
+						loader: ({ params }) =>
+							createTagLoader(params.tagSlug, resolvedConfig)(),
+						meta: ({ params }) =>
+							createTagMeta(params.tagSlug, resolvedConfig)(),
 					}),
 					post: defineRoute("/blog/:slug", {
 						page: ({ params }) => <PostPageComponent slug={params.slug} />,
-						loader: ({ params }) => createPostLoader(params.slug, config)(),
-						meta: ({ params }) => createPostMeta(params.slug, config)(),
+						loader: ({ params }) =>
+							createPostLoader(params.slug, resolvedConfig)(),
+						meta: ({ params }) => createPostMeta(params.slug, resolvedConfig)(),
 					}),
 				},
-				{ pages: config.pageComponents },
+				{ pages: resolvedConfig.pageComponents },
 			),
 
 		sitemap: async () => {
-			const origin = `${config.siteBaseURL}${config.siteBasePath}`;
+			const origin = `${resolvedConfig.siteBaseURL}${resolvedConfig.siteBasePath}`;
 			const indexUrl = `${origin}/blog`;
 
 			// Fetch all published posts via API, with pagination
-			const client = createApiClient<BlogApiRouter>({
-				baseURL: config.apiBaseURL,
-				basePath: config.apiBasePath,
-			});
+			const client = createBlogApiClient(resolvedConfig);
 
 			const limit = 100;
 			let offset = 0;
@@ -827,4 +825,18 @@ export const blogClientPlugin = (config: BlogClientConfig) =>
 
 			return entries;
 		},
+	};
+}
+
+/**
+ * Blog client plugin
+ * Provides routes, components, and React Query hooks for blog posts
+ *
+ * @param config - Optional Blog-specific behavior and presentation choices.
+ */
+export const blogClientPlugin = (config: BlogClientConfig = {}) =>
+	defineClientPlugin<BlogPluginOverrides>()({
+		id: BLOG_PLUGIN_ID,
+		resolve: (runtime) =>
+			createResolvedBlogPlugin(resolveBlogClientConfig(config, runtime)),
 	});

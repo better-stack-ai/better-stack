@@ -3,6 +3,7 @@
 import { lazy } from "react";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import { ComposedRoute } from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
 import { PostsLoading } from "../loading";
@@ -20,7 +21,8 @@ export function HomePageComponent({
 }: {
 	published?: boolean;
 }) {
-	const { onRouteError } = usePluginOverrides<BlogPluginOverrides>("blog");
+	const { onRouteError } =
+		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 	return (
 		<ComposedRoute
 			path={published ? "/blog" : "/blog/drafts"}

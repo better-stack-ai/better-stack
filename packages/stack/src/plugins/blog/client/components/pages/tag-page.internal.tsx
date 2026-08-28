@@ -8,13 +8,14 @@ import { EmptyList } from "../shared/empty-list";
 import { useSuspensePosts } from "../../hooks/blog-hooks";
 import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import { useTags } from "../../hooks/blog-hooks";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 
 // Internal component with actual page content
 export function TagPage({ tagSlug }: { tagSlug: string }) {
 	const t = useTranslate();
-	const overrides = usePluginOverrides<BlogPluginOverrides>("blog");
+	const overrides = usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 	const { localization } = overrides;
 
 	// Call lifecycle hooks

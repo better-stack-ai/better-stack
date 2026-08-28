@@ -16,6 +16,7 @@ import {
 import { Loader2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 
 export function FeaturedImageField({
 	isRequired,
@@ -37,7 +38,7 @@ export function FeaturedImageField({
 		uploadImage,
 		localization,
 		imageInputField: ImageInput,
-	} = usePluginOverrides<BlogPluginOverrides>("blog");
+	} = usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 	const { router } = useStack();
 
 	const ImageComponent = router?.Image ?? DefaultImage;

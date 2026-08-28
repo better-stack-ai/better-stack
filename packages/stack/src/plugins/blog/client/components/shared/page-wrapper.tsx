@@ -3,6 +3,7 @@
 import { usePluginOverrides } from "@btst/stack/context";
 import { PageWrapper as SharedPageWrapper } from "@workspace/ui/components/page-wrapper";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 
 export function PageWrapper({
 	children,
@@ -16,7 +17,7 @@ export function PageWrapper({
 	const { showAttribution } = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
-	>("blog", {
+	>(BLOG_PLUGIN_ID, {
 		showAttribution: true,
 	});
 
