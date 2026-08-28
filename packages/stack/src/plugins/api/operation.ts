@@ -503,7 +503,7 @@ function defineOperationRuntime<
 
 		// Compound checks may perform trusted reads. Derive them only after the
 		// primary request is authorized so denied callers cannot trigger that work
-		// or replace the primary 401/403 with a derivation error. Internal execution
+		// or replace the primary 401/403 with a derivation error. Trusted execution
 		// still derives the requests because execute() may validate their snapshots.
 		const additionalPermissions =
 			(await config.additionalPermissions?.({

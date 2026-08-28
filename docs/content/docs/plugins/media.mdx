@@ -559,7 +559,7 @@ Every transport uses the same operation lifecycle:
 `stack.forRequest(request).operations.media.*` follows that entire lifecycle.
 `stack.trusted.media.*` is for trusted server jobs: it skips only user
 authorization and still runs validation, storage/domain hooks, cleanup, and
-ordering. Internal child-folder and asset writes inherit the tenant of their
+ordering. Nested child-folder and asset writes inherit the tenant of their
 authoritatively loaded parent folder. Omitting `auth` leaves request operations
 permissive; configure server authorization to enforce the catalog.
 

@@ -826,8 +826,9 @@ Customize client-side behavior with lifecycle hooks:
 intentionally omit `tasks`, keeping collection authorization from exposing
 record-only task data. Code that previously read tasks from a list callback
 should fetch `useBoard(board.id)` (or the authorized `getBoard` server
-operation) for the selected board. Trusted server-only code may use the raw
-helpers, which explicitly bypass operation authorization and lifecycle hooks.
+operation) for the selected board. Server-only infrastructure code may use the
+standalone lower-level helpers, which explicitly bypass operation authorization
+and lifecycle hooks.
 
 #### KanbanPluginOverrides
 

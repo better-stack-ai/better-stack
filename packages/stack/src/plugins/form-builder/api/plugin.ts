@@ -52,7 +52,7 @@ interface FormBuilderPrefetchForRoute {
 }
 
 /**
- * Trusted raw SSG path. It bypasses request authorization and seeds only the
+ * Raw SSG path. It bypasses request authorization and seeds only the
  * route data selected by the caller. Protected static output needs equivalent
  * deployment-level access controls.
  */

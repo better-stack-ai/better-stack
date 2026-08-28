@@ -650,8 +650,8 @@ You can import the hooks from `"@btst/stack/plugins/blog/client/hooks"` to use i
 
 ## Server-side Data Access
 
-The Blog plugin exposes standalone getters for trusted server reads and raw
-mutation primitives for build-time and administrative work. Raw functions
+The Blog plugin exposes standalone lower-level getters and mutation primitives
+for build-time and administrative work. These raw functions
 bypass the operation and lifecycle pipeline entirely. Keep them to SSG,
 migrations, test setup, and seed scripts; use the operation API below for
 request-time application behavior.

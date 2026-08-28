@@ -72,7 +72,7 @@ interface MediaPrefetchForRoute {
 }
 
 /**
- * Trusted raw SSG prefetch. It bypasses request authorization and is never
+ * Raw SSG prefetch. It bypasses request authorization and is never
  * reachable through HTTP or `forRequest()`. Protect generated output at the
  * deployment boundary when the Media library is not public.
  */

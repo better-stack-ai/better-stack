@@ -152,7 +152,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 		);
 	};
 
-	/** Trusted raw SSG path; unavailable from HTTP/request operation APIs. */
+	/** Raw SSG path; unavailable from HTTP/request operation APIs. */
 	const createCMSPrefetchForRoute = (adapter: Adapter): CMSPrefetchForRoute =>
 		async function prefetchForRoute(
 			key: CMSRouteKey,

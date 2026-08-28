@@ -90,7 +90,7 @@ export const aiChatBackendPlugin = <
 				...operationsConfig,
 			}),
 
-		/** Trusted raw data access. It intentionally bypasses operations and hooks. */
+		/** HTTP routes bound to the maintained operation inventory. */
 		routes: (_adapter: Adapter, _context, operations) => {
 			const chat = createEndpoint(
 				"/chat",
