@@ -110,6 +110,7 @@ afterEach(async () => {
 	container.remove();
 	document.body.innerHTML = "";
 	queryClient.clear();
+	vi.restoreAllMocks();
 	vi.clearAllMocks();
 });
 
