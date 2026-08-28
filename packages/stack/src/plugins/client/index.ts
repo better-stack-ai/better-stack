@@ -10,12 +10,15 @@
  * - Client: import type { ClientPlugin } from "@btst/stack/plugins/client"
  */
 
-import type { ClientPlugin } from "../../types";
+import type { ClientPlugin, ClientPluginDefinition } from "../../types";
 import type { Route } from "@btst/yar";
 
 export type {
 	ClientPlugin,
+	ClientPluginDefinition,
+	ClientPluginRegistration,
 	PluginOverrides,
+	ResolvedClientPluginRuntime,
 } from "../../types";
 
 export {
@@ -88,8 +91,22 @@ export { createClient } from "better-call/client";
 export function defineClientPlugin<
 	TOverrides = Record<string, never>,
 	TRoutes extends Record<string, Route> = Record<string, Route>,
+>(plugin: ClientPlugin<TOverrides, TRoutes>): ClientPlugin<TOverrides, TRoutes>;
+export function defineClientPlugin<
+	TOverrides = Record<string, never>,
+	TRoutes extends Record<string, Route> = Record<string, Route>,
 >(
-	plugin: ClientPlugin<TOverrides, TRoutes>,
-): ClientPlugin<TOverrides, TRoutes> {
+	plugin: ClientPluginDefinition<TOverrides, TRoutes>,
+): ClientPluginDefinition<TOverrides, TRoutes>;
+export function defineClientPlugin<
+	TOverrides = Record<string, never>,
+	TRoutes extends Record<string, Route> = Record<string, Route>,
+>(
+	plugin:
+		| ClientPlugin<TOverrides, TRoutes>
+		| ClientPluginDefinition<TOverrides, TRoutes>,
+):
+	| ClientPlugin<TOverrides, TRoutes>
+	| ClientPluginDefinition<TOverrides, TRoutes> {
 	return plugin;
 }

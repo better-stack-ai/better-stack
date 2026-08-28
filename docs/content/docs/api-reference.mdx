@@ -27,9 +27,43 @@ Re-exported from `better-call/node`. Converts a BTST handler to a Node.js compat
 
 ## Client (`@btst/stack/client`)
 
-### createStackClient
+### createClientStack
 
-<AutoTypeTable path="../packages/stack/src/client/index.ts" name="createStackClient" />
+Configure the shared API location, site location, React Query client, and optional server request headers once. Runtime-independent client plugin definitions receive the resolved values when the stack is created.
+
+```ts
+const clientStack = createClientStack({
+  api: {
+    baseURL: "https://app.example.com",
+    basePath: "/api/data",
+    headers: requestHeaders, // server/request stacks only
+  },
+  site: {
+    baseURL: "https://app.example.com",
+    basePath: "/pages",
+  },
+  queryClient,
+  plugins: {
+    example: exampleClientPlugin(),
+  },
+})
+```
+
+Use `endpoints.<plugin>.api` or `endpoints.<plugin>.site` only when one plugin implements its BTST contract at another endpoint. A path-only API replacement inherits the top-level origin and server request headers. Supplying another origin requires its own `basePath` and does not inherit request headers. An empty plugin endpoint block inherits both top-level locations unchanged.
+
+Headers deliberately exposed to browser code use the explicit `browserHeaders` field and appear under the same name in the provider projection. Cookie, authorization, proxy-authorization, and set-cookie values are rejected there; keep request credentials in server-only `api.headers`. Cross-origin browser `credentials` must also be explicit.
+
+The returned `provider` value contains API/site/query information for browser consumers, but never top-level server request headers. Browser-created stacks reject `api.headers` rather than silently serializing them.
+
+### ResolvedClientStackConfig
+
+<AutoTypeTable path="../packages/stack/src/types.ts" name="ResolvedClientStackConfig" />
+
+### ResolvedClientPluginRuntime
+
+<AutoTypeTable path="../packages/stack/src/types.ts" name="ResolvedClientPluginRuntime" />
+
+`createStackClient` remains a deprecated forwarding alias during the RC migration.
 
 ### ClientPlugin
 
@@ -121,7 +155,7 @@ Without an `i18n` provider, `useTranslate()` returns the English default with `{
 
 ### useListState
 
-URL-synced list state (filters, tabs, pagination) via the router's `getSearchParams` / `setSearchParams` contract. Export path: `@btst/stack/client`.
+URL-synced list state (filters, tabs, pagination) via the router's `getSearchParams` / `setSearchParams` contract. Import `useListState` from the client-only `@btst/stack/client/hooks` entry. Server-safe parsing and serialization helpers remain available from `@btst/stack/client`.
 
 For SSR loaders, read initial state with `parseListStateFromSearchParams(namespace, schema, requestSearchParams)`.
 

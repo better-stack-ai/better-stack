@@ -35,11 +35,15 @@ describe("published symmetric stack constructors", () => {
 		};
 		expect(manifest.exports).toHaveProperty("./api");
 		expect(manifest.exports).toHaveProperty("./client");
+		expect(manifest.exports).toHaveProperty("./client/hooks");
 		expect(manifest.typesVersions?.["*"]?.api).toEqual([
 			"./dist/api/index.d.ts",
 		]);
 		expect(manifest.typesVersions?.["*"]?.client).toEqual([
 			"./dist/client/index.d.ts",
+		]);
+		expect(manifest.typesVersions?.["*"]?.["client/hooks"]).toEqual([
+			"./dist/client/hooks/index.d.ts",
 		]);
 
 		const apiDeclaration = await readFile(
@@ -58,6 +62,26 @@ describe("published symmetric stack constructors", () => {
 			resolve("dist/client/index.d.cts"),
 			"utf8",
 		);
+		const clientEsm = await readFile(resolve("dist/client/index.mjs"), "utf8");
+		const clientCjs = await readFile(resolve("dist/client/index.cjs"), "utf8");
+		const pluginClientEsm = await readFile(
+			resolve("dist/plugins/client/index.mjs"),
+			"utf8",
+		);
+		const pluginClientCjs = await readFile(
+			resolve("dist/plugins/client/index.cjs"),
+			"utf8",
+		);
+		for (const serverSafeClientEntry of [
+			clientEsm,
+			clientCjs,
+			pluginClientEsm,
+			pluginClientCjs,
+		]) {
+			expect(serverSafeClientEntry).not.toContain("hooks/use-list-state");
+			expect(serverSafeClientEntry).not.toMatch(/from ['\"]react['\"]/);
+			expect(serverSafeClientEntry).not.toContain('require("react")');
+		}
 		for (const declaration of [apiDeclaration, apiCjsDeclaration]) {
 			expect(declaration).toContain("function createBackendStack");
 			expect(declaration).toContain("const stack: typeof createBackendStack");
@@ -89,16 +113,23 @@ describe("published symmetric stack constructors", () => {
 
 		const apiSpecifier = "@btst/stack/api";
 		const clientSpecifier = "@btst/stack/client";
+		const clientHooksSpecifier = "@btst/stack/client/hooks";
 		const esmApi = await import(apiSpecifier);
 		const esmClient = await import(clientSpecifier);
+		const esmClientHooks = await import(clientHooksSpecifier);
 		const require = createRequire(import.meta.url);
 		const cjsApi = require(apiSpecifier);
 		const cjsClient = require(clientSpecifier);
+		const cjsClientHooks = require(clientHooksSpecifier);
 
 		expect(esmApi.stack).toBe(esmApi.createBackendStack);
 		expect(esmClient.createStackClient).toBe(esmClient.createClientStack);
 		expect(cjsApi.stack).toBe(cjsApi.createBackendStack);
 		expect(cjsClient.createStackClient).toBe(cjsClient.createClientStack);
+		expect(esmClient.useListState).toBeUndefined();
+		expect(cjsClient.useListState).toBeUndefined();
+		expect(esmClientHooks.useListState).toBeTypeOf("function");
+		expect(cjsClientHooks.useListState).toBeTypeOf("function");
 
 		await execFileAsync(
 			process.execPath,

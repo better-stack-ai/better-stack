@@ -22,7 +22,7 @@ import {
 	type TranslateFn,
 } from "@btst/stack/context";
 import { cmsPermissions } from "../../../permissions";
-import { useListState, type ListStateSchema } from "@btst/stack/client";
+import { useListState, type ListStateSchema } from "@btst/stack/client/hooks";
 import type { CMSPluginOverrides } from "../../overrides";
 import type { SerializedContentItemWithType } from "../../../types";
 import {

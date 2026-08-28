@@ -1,4 +1,5 @@
 import type { Route, createRouter } from "@btst/yar";
+import type { QueryClient } from "@tanstack/react-query";
 import type {
 	DBAdapter as Adapter,
 	DatabaseDefinition,
@@ -25,6 +26,96 @@ export type {
 	StackClientAuth,
 	StackIdentity,
 } from "./shared/auth-types";
+
+/** An absolute origin plus the path mounted below that origin. */
+export interface ClientLocation {
+	/** Absolute HTTP(S) origin, without a pathname. */
+	baseURL: string;
+	/** Mount path below the origin, normalized with a leading slash. */
+	basePath: string;
+}
+
+/** Shared API transport configured once for a request or browser stack. */
+export interface ClientApiConfig extends ClientLocation {
+	/**
+	 * Per-request server headers. Browser-created stacks reject this field so a
+	 * request cookie or authorization value cannot enter the provider projection.
+	 */
+	headers?: HeadersInit;
+}
+
+/** A same-origin endpoint replacement that inherits the configured origin. */
+export interface ClientPathEndpointOverride {
+	/** Replacement path on the inherited top-level origin. */
+	basePath: string;
+	/** A path-only replacement cannot partially replace the origin. */
+	baseURL?: never;
+}
+
+/** A complete endpoint replacement. A new origin never inherits only a path. */
+export interface ClientAbsoluteEndpointOverride extends ClientLocation {}
+
+/** A location override must replace a path, or an origin and path together. */
+export type ClientLocationOverride =
+	| ClientPathEndpointOverride
+	| ClientAbsoluteEndpointOverride;
+
+/**
+ * Per-plugin API replacement. Headers and credentials declared here are
+ * deliberately browser-safe and are the only transport additions projected to
+ * the provider. Server request headers are resolved independently.
+ */
+export type ClientApiEndpointOverride = ClientLocationOverride & {
+	/** Explicit browser-safe headers used in both server and browser transports. */
+	browserHeaders?: HeadersInit;
+	/** Explicit browser Fetch credentials behavior for this endpoint. */
+	credentials?: RequestCredentials;
+};
+
+/**
+ * Stack-owned endpoint replacements for one registered client plugin. An empty
+ * object inherits both top-level locations unchanged.
+ */
+export interface ClientPluginEndpointOverride {
+	/** Optional replacement for the plugin's BTST API endpoint. */
+	api?: ClientApiEndpointOverride;
+	/** Optional replacement for the plugin's rendered/public site location. */
+	site?: ClientLocationOverride;
+}
+
+/** Effective API transport captured by a resolved plugin definition. */
+export interface ResolvedClientApi extends ClientLocation {
+	/** Effective request headers for this stack instance. Never provider-facing. */
+	headers?: Headers;
+	/** Explicit browser-safe cross-origin credentials behavior. */
+	credentials?: RequestCredentials;
+}
+
+/** Shared runtime supplied when a client plugin definition is expanded. */
+export interface ResolvedClientPluginRuntime {
+	/** Effective API endpoint and request-specific transport values. */
+	api: ResolvedClientApi;
+	/** Effective public site location for routes, metadata, and sitemap output. */
+	site: ClientLocation;
+	/** The one React Query client shared by every client-stack consumer. */
+	queryClient: QueryClient;
+}
+
+/** Provider-safe API transport; it can contain only explicitly public headers. */
+export interface ClientProviderApi extends ClientLocation {
+	/** Explicit browser-safe endpoint headers; never server request headers. */
+	browserHeaders?: Headers;
+	/** Explicit browser Fetch credentials behavior for this endpoint. */
+	credentials?: RequestCredentials;
+}
+
+/** Provider-safe endpoint view for one registered plugin. */
+export interface ClientProviderPluginRuntime {
+	/** Provider-safe effective API endpoint for this plugin. */
+	api: ClientProviderApi;
+	/** Effective site location for this plugin. */
+	site: ClientLocation;
+}
 
 /**
  * Context passed to backend plugins during route creation
@@ -155,6 +246,30 @@ export interface ClientPlugin<
 	 */
 	sitemap?: () => Promise<Sitemap> | Sitemap;
 }
+
+/**
+ * Runtime-independent client plugin definition. The definition remains safe to
+ * import on the server and is expanded against one resolved stack runtime.
+ */
+export interface ClientPluginDefinition<
+	TOverrides = Record<string, never>,
+	TRoutes extends Record<string, Route> = Record<string, Route>,
+> {
+	/** Temporary intrinsic plugin name retained during the stable-ID migration. */
+	name: string;
+	/** Expand plugin-specific options against one resolved stack runtime. */
+	resolve: (
+		runtime: ResolvedClientPluginRuntime,
+	) => Omit<ClientPlugin<TOverrides, TRoutes>, "name">;
+}
+
+/** Canonical definitions plus the temporary already-resolved plugin seam. */
+export type ClientPluginRegistration<
+	TOverrides = Record<string, never>,
+	TRoutes extends Record<string, Route> = Record<string, Route>,
+> =
+	| ClientPlugin<TOverrides, TRoutes>
+	| ClientPluginDefinition<TOverrides, TRoutes>;
 
 /**
  * Utility type that maps each plugin key to the return type of its `api` factory.
@@ -288,28 +403,80 @@ export type BackendLibConfig<
 		| undefined,
 > = BackendStackConfig<TPlugins, TAuth>;
 
-/**
- * Configuration for creating the client stack
- */
-export interface ClientStackConfig<
-	TPlugins extends Record<string, ClientPlugin<any, any>> = Record<
+type AnyClientPluginRegistration = ClientPluginRegistration<any, any>;
+type LegacyClientPluginMap = Record<string, ClientPlugin<any, any>>;
+
+/** Stack-owned endpoint replacements, limited to registered plugin keys. */
+export type ClientPluginEndpointOverrides<
+	TPlugins extends Record<string, AnyClientPluginRegistration>,
+> = Partial<{ [K in keyof TPlugins]: ClientPluginEndpointOverride }>;
+
+/** Canonical shared runtime configured once for the complete client stack. */
+export interface ResolvedClientStackConfig<
+	TPlugins extends Record<string, AnyClientPluginRegistration> = Record<
 		string,
-		ClientPlugin<any, any>
+		AnyClientPluginRegistration
 	>,
 > {
+	/** Shared BTST API endpoint and optional request-specific server headers. */
+	api: ClientApiConfig;
+	/** Shared location of plugin-rendered public pages. */
+	site: ClientLocation;
+	/** The one React Query client used by loaders, hydration, and browser hooks. */
+	queryClient: QueryClient;
+	/** Runtime-independent and temporary already-resolved plugin registrations. */
 	plugins: TPlugins;
-	baseURL?: string;
-	basePath?: string;
+	/** Explicit endpoint replacements keyed by a registered plugin name. */
+	endpoints?: ClientPluginEndpointOverrides<TPlugins>;
+	/** Shared origins live under `api` or `site`, never an ambiguous top level. */
+	baseURL?: never;
+	/** Shared paths live under `api` or `site`, never an ambiguous top level. */
+	basePath?: never;
 }
+
+/**
+ * Temporary compatibility shape for already-resolved first-party plugins.
+ * Canonical consumers configure `api`, `site`, and `queryClient` instead.
+ */
+export interface LegacyClientStackConfig<
+	TPlugins extends LegacyClientPluginMap = LegacyClientPluginMap,
+> {
+	/** Temporary already-resolved plugin registrations. */
+	plugins: TPlugins;
+	/** Temporary route-introspection base path retained during plugin migration. */
+	basePath?: string;
+	/** Removed ambiguous top-level origin. */
+	baseURL?: never;
+	/** Canonical runtime configuration is unavailable on the legacy branch. */
+	api?: never;
+	/** Canonical runtime configuration is unavailable on the legacy branch. */
+	site?: never;
+	/** Canonical runtime configuration is unavailable on the legacy branch. */
+	queryClient?: never;
+	/** Endpoint replacements require the canonical resolved runtime. */
+	endpoints?: never;
+}
+
+/** Configuration for creating either a canonical or compatibility client stack. */
+export type ClientStackConfig<
+	TPlugins extends Record<
+		string,
+		AnyClientPluginRegistration
+	> = LegacyClientPluginMap,
+> =
+	| ResolvedClientStackConfig<TPlugins>
+	| (TPlugins extends LegacyClientPluginMap
+			? LegacyClientStackConfig<TPlugins>
+			: never);
 
 /**
  * @deprecated Use `ClientStackConfig`. This alias is removed by #225.
  */
 export type ClientLibConfig<
-	TPlugins extends Record<string, ClientPlugin<any, any>> = Record<
+	TPlugins extends Record<
 		string,
-		ClientPlugin<any, any>
-	>,
+		AnyClientPluginRegistration
+	> = LegacyClientPluginMap,
 > = ClientStackConfig<TPlugins>;
 
 /**
@@ -317,9 +484,12 @@ export type ClientLibConfig<
  * Maps plugin names to their override types
  */
 export type InferPluginOverrides<
-	TPlugins extends Record<string, ClientPlugin<any, any>>,
+	TPlugins extends Record<string, AnyClientPluginRegistration>,
 > = {
-	[K in keyof TPlugins]: TPlugins[K] extends ClientPlugin<infer TOverrides, any>
+	[K in keyof TPlugins]: TPlugins[K] extends ClientPluginRegistration<
+		infer TOverrides,
+		any
+	>
 		? TOverrides
 		: never;
 };
@@ -329,7 +499,7 @@ export type InferPluginOverrides<
  * Allows partial overrides per plugin
  */
 export type PluginOverrides<
-	TPlugins extends Record<string, ClientPlugin<any, any>>,
+	TPlugins extends Record<string, AnyClientPluginRegistration>,
 > = {
 	[K in keyof TPlugins]?: Partial<InferPluginOverrides<TPlugins>[K]>;
 };
@@ -338,7 +508,7 @@ export type PluginOverrides<
  * Extract all routes from all client plugins, merging them into a single record
  */
 export type PluginRoutes<
-	TPlugins extends Record<string, ClientPlugin<any, any>>,
+	TPlugins extends Record<string, AnyClientPluginRegistration>,
 > = MergeAllPluginRoutes<TPlugins>;
 
 /**
@@ -410,7 +580,10 @@ export type BackendLib<
 /**
  * Helper type to extract routes from a client plugin
  */
-export type ExtractPluginRoutes<T> = T extends ClientPlugin<any, infer TRoutes>
+export type ExtractPluginRoutes<T> = T extends ClientPluginRegistration<
+	any,
+	infer TRoutes
+>
 	? TRoutes
 	: never;
 
@@ -418,7 +591,7 @@ export type ExtractPluginRoutes<T> = T extends ClientPlugin<any, infer TRoutes>
  * Helper type to merge all routes from all plugins into a single record
  */
 export type MergeAllPluginRoutes<
-	TPlugins extends Record<string, ClientPlugin<any, any>>,
+	TPlugins extends Record<string, AnyClientPluginRegistration>,
 > = UnionToIntersection<
 	{
 		[K in keyof TPlugins]: ExtractPluginRoutes<TPlugins[K]>;
@@ -448,6 +621,35 @@ export interface ClientStack<
 > {
 	router: ReturnType<typeof createRouter<TRoutes, {}>>;
 	generateSitemap: () => Promise<Sitemap>;
+}
+
+/** Browser-safe runtime passed to `StackProvider` by the next composition slice. */
+export interface ClientProviderProjection<
+	TPlugins extends Record<string, AnyClientPluginRegistration> = Record<
+		string,
+		AnyClientPluginRegistration
+	>,
+> {
+	/** Shared provider-safe API location. Never contains request headers. */
+	api: ClientLocation;
+	/** Shared provider-safe site location. */
+	site: ClientLocation;
+	/** The one React Query client supplied to the client stack. */
+	queryClient: QueryClient;
+	/** Effective provider-safe endpoint values for every registered plugin. */
+	plugins: { [K in keyof TPlugins]: ClientProviderPluginRuntime };
+}
+
+/** Canonical client stack with a browser-safe provider projection. */
+export interface ResolvedClientStack<
+	TRoutes extends Record<string, Route> = Record<string, Route>,
+	TPlugins extends Record<string, AnyClientPluginRegistration> = Record<
+		string,
+		AnyClientPluginRegistration
+	>,
+> extends ClientStack<TRoutes> {
+	/** Browser-safe projection for provider and browser resource consumers. */
+	provider: ClientProviderProjection<TPlugins>;
 }
 
 /**
