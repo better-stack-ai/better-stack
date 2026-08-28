@@ -975,7 +975,11 @@ describe("scaffold plan", () => {
 		expect(paths).toContain("app/public-chat/page.tsx");
 		const page = plan.files.find((f) => f.path === "app/public-chat/page.tsx");
 		expect(page?.content).toContain("ChatLayout");
-		expect(page?.content).toContain('mode="public"');
+		expect(page?.content).toContain(
+			'aiChat: aiChatClientPlugin({ mode: "public" }),',
+		);
+		expect(page?.content).toContain("<StackProvider stack={stack}");
+		expect(page?.content).not.toContain('<ChatLayout mode="public"');
 		expect(page?.content).not.toContain("overrides=");
 		expect(page?.content).not.toContain('"ai-chat":');
 	});
@@ -994,6 +998,10 @@ describe("scaffold plan", () => {
 			(f) => f.path === "app/routes/public-chat.tsx",
 		);
 		expect(route?.content).toContain("ChatLayout");
+		expect(route?.content).toContain(
+			'aiChat: aiChatClientPlugin({ mode: "public" }),',
+		);
+		expect(route?.content).not.toContain('<ChatLayout mode="public"');
 	});
 
 	it("emits public-chat route for tanstack when ai-chat selected", async () => {
@@ -1011,6 +1019,10 @@ describe("scaffold plan", () => {
 		);
 		expect(route?.content).toContain("createFileRoute");
 		expect(route?.content).toContain("ChatLayout");
+		expect(route?.content).toContain(
+			'aiChat: aiChatClientPlugin({ mode: "public" }),',
+		);
+		expect(route?.content).not.toContain('<ChatLayout mode="public"');
 	});
 
 	it("does NOT emit public-chat routes when ai-chat not selected", async () => {

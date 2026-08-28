@@ -1,4 +1,8 @@
-import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
+import { createClientStack } from "@btst/stack/client";
+import {
+	aiChatClientPlugin,
+	ChatLayout,
+} from "@btst/stack/plugins/ai-chat/client";
 import { StackProvider } from "@btst/stack/context";
 import { tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -20,17 +24,21 @@ const getBaseURL = () =>
 function PublicChatPage() {
 	const queryClient = getOrCreateQueryClient();
 	const baseURL = getBaseURL();
+	const stack = createClientStack({
+		api: { baseURL, basePath: "/api/public-chat" },
+		site: { baseURL, basePath: "" },
+		queryClient,
+		plugins: {
+			aiChat: aiChatClientPlugin({ mode: "public" }),
+		},
+	});
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<StackProvider
-				basePath=""
-				router={tanstackRouter()}
-				api={{ baseURL, basePath: "/api/public-chat" }}
-			>
+			<StackProvider stack={stack} router={tanstackRouter()}>
 				<div className="min-h-screen bg-background">
 					<main className="h-screen">
-						<ChatLayout mode="public" showSidebar={false} />
+						<ChatLayout />
 					</main>
 				</div>
 			</StackProvider>

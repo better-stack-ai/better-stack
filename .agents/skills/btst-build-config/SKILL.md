@@ -160,6 +160,8 @@ pnpm turbo clean && pnpm build
 - **Build cache** — run `pnpm turbo clean` if changes aren't reflected in codegen projects after `pnpm build`.
 - **CSS not loading** — ensure `"./plugins/{name}/css"` entry exists in `package.json` exports; `postbuild.cjs` handles the rest automatically.
 - **`@workspace/ui` sub-path components** — if a new component imports from a directory (not a single file), add it to `EXTERNAL_REGISTRY_COMPONENTS` in `build-registry.ts`.
-- **Stale v2 templates** — generated routes must use framework entry factories,
-  and generated layouts must keep shared `router`, `api`, and `auth` services at
-  the top level of `StackProvider`.
+- **Stale v2 templates** — generated routes must use framework entry factories.
+  Generated layouts configure `api`, `site`, and `queryClient` once in
+  `createClientStack()`, then pass the resolved stack to `StackProvider`.
+  Only provider-owned services such as `router` and `auth` remain alongside the
+  `stack` prop.

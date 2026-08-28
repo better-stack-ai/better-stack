@@ -635,6 +635,9 @@ overrides={{
 
 The `ChatLayout` component provides a ready-to-use chat interface. It can be used directly for custom integrations or public mode with persistence:
 
+`ChatLayout` always uses the mode registered by `aiChatClientPlugin()`; it does
+not accept a second component-level mode.
+
 ```tsx
 import { ChatLayout, type ChatLayoutProps, type UIMessage } from "@btst/stack/plugins/ai-chat/client"
 ```

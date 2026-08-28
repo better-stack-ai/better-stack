@@ -470,7 +470,7 @@ function resolveAiChatClientPlugin(config: ResolvedAiChatClientConfig) {
 					{
 						// Chat home - simple chat interface without history
 						chat: defineRoute("/chat", {
-							page: () => <ChatPageComponent mode={config.mode} />,
+							page: () => <ChatPageComponent />,
 							loader: createConversationsLoader(config),
 							meta: createChatHomeMeta(config),
 						}),
@@ -489,7 +489,7 @@ function resolveAiChatClientPlugin(config: ResolvedAiChatClientConfig) {
 				{
 					// Chat home - new conversation or list
 					chat: defineRoute("/chat", {
-						page: () => <ChatPageComponent mode={config.mode} />,
+						page: () => <ChatPageComponent />,
 						loader: createConversationsLoader(config),
 						meta: createChatHomeMeta(config),
 					}),
@@ -497,10 +497,7 @@ function resolveAiChatClientPlugin(config: ResolvedAiChatClientConfig) {
 					// Existing conversation
 					chatConversation: defineRoute("/chat/:id", {
 						page: ({ params }) => (
-							<ChatPageComponent
-								conversationId={params.id}
-								mode={config.mode}
-							/>
+							<ChatPageComponent conversationId={params.id} />
 						),
 						loader: ({ params }) =>
 							createConversationLoader(params.id, config)(),

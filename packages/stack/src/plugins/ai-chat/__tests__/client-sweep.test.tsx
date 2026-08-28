@@ -239,14 +239,24 @@ async function render(
 		};
 		localization?: Record<string, string>;
 		initialIdentity?: StackIdentity | null;
+		clientMode?: "authenticated" | "public";
 	} = {},
 ) {
+	const stack = createClientStack({
+		api: { baseURL: "http://test.local", basePath: "/api/data" },
+		site: { baseURL: "http://test.local", basePath: "/pages" },
+		queryClient,
+		plugins: {
+			aiChat: aiChatClientPlugin({
+				mode: options.clientMode ?? "authenticated",
+			}),
+		},
+	});
 	await act(async () => {
 		root.render(
 			<QueryClientProvider client={queryClient}>
 				<StackProvider
-					basePath="/pages"
-					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
+					stack={stack}
 					router={router()}
 					overrides={{
 						aiChat: overrides(options.localization),
@@ -357,7 +367,10 @@ describe("AI Chat permissions", () => {
 			await Promise.resolve();
 		});
 		expect(mocks.chatLayout).toHaveBeenLastCalledWith(
-			expect.objectContaining({ mode: "public", showSidebar: false }),
+			expect.objectContaining({ showSidebar: false }),
+		);
+		expect(mocks.chatLayout).toHaveBeenLastCalledWith(
+			expect.not.objectContaining({ mode: expect.anything() }),
 		);
 
 		await act(async () => {
@@ -371,7 +384,10 @@ describe("AI Chat permissions", () => {
 			await Promise.resolve();
 		});
 		expect(mocks.chatLayout).toHaveBeenLastCalledWith(
-			expect.objectContaining({ mode: "public", showSidebar: false }),
+			expect.objectContaining({ showSidebar: false }),
+		);
+		expect(mocks.chatLayout).toHaveBeenLastCalledWith(
+			expect.not.objectContaining({ mode: expect.anything() }),
 		);
 	});
 
@@ -397,13 +413,13 @@ describe("AI Chat permissions", () => {
 			};
 		});
 
-		await render(<ChatInterface mode="public" />);
+		await render(<ChatInterface />, { clientMode: "public" });
 		await act(async () => {
 			container
 				.querySelector<HTMLButtonElement>('[data-testid="chat-send"]')
 				?.click();
 		});
-		await render(<ChatInterface mode="public" />);
+		await render(<ChatInterface />, { clientMode: "public" });
 
 		expect(retainedId).toMatch(/:public$/);
 		expect(chatInstances).toBe(1);

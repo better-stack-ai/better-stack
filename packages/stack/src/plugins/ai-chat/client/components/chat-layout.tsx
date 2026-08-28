@@ -29,8 +29,6 @@ import { useAiChatTranslation } from "../localization";
 interface ChatLayoutBaseProps {
 	/** Current conversation ID (if viewing existing conversation) */
 	conversationId?: string;
-	/** Resolved plugin mode when rendered by an AI Chat route. */
-	mode?: "authenticated" | "public";
 	/** Additional class name for the container */
 	className?: string;
 	/** Whether to show the sidebar */
@@ -81,10 +79,9 @@ export type ChatLayoutProps = ChatLayoutWidgetProps | ChatLayoutFullProps;
 export function ChatLayout(props: ChatLayoutProps) {
 	const {
 		conversationId,
-		mode,
 		layout = "full",
 		className,
-		showSidebar = true,
+		showSidebar: requestedShowSidebar = true,
 		initialMessages,
 		onMessagesChange,
 		onClear,
@@ -94,7 +91,8 @@ export function ChatLayout(props: ChatLayoutProps) {
 		Partial<AiChatPluginOverrides>
 	>("aiChat", {});
 	const { api, plugins } = useStack();
-	const resolvedMode = resolveAiChatMode(mode, plugins?.aiChat?.config);
+	const resolvedMode = resolveAiChatMode(plugins?.aiChat?.config);
+	const showSidebar = requestedShowSidebar && resolvedMode !== "public";
 	const tr = useAiChatTranslation(localization);
 
 	// Widget-specific props — TypeScript narrows props to ChatLayoutWidgetProps here
@@ -204,7 +202,6 @@ export function ChatLayout(props: ChatLayoutProps) {
 							key={`widget-${conversationId ?? "new"}-${widgetResetKey}`}
 							apiPath={apiPath}
 							id={conversationId}
-							mode={resolvedMode}
 							variant="widget"
 							initialMessages={initialMessages}
 							onMessagesChange={onMessagesChange}
@@ -370,7 +367,6 @@ export function ChatLayout(props: ChatLayoutProps) {
 					key={`chat-${conversationId ?? "new"}-${chatResetKey}`}
 					apiPath={apiPath}
 					id={conversationId}
-					mode={resolvedMode}
 					variant="full"
 					initialMessages={initialMessages}
 					onMessagesChange={onMessagesChange}

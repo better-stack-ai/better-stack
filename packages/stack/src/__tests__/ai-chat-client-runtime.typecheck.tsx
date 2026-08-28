@@ -1,7 +1,13 @@
 import { QueryClient } from "@tanstack/react-query";
+import type { ComponentProps } from "react";
 import { createClientStack } from "../client";
 import { StackProvider } from "../context";
-import { aiChatClientPlugin } from "../plugins/ai-chat/client";
+import {
+	aiChatClientPlugin,
+	ChatInput,
+	ChatInterface,
+	ChatLayout,
+} from "../plugins/ai-chat/client";
 
 const queryClient = new QueryClient();
 const aiChat = aiChatClientPlugin({
@@ -31,6 +37,14 @@ stack.provider.plugins.aiChat.config?.mode satisfies
 stack.provider.plugins.aiChat.config?.hooks;
 
 <StackProvider stack={stack} />;
+
+// @ts-expect-error Mode is configured only in aiChatClientPlugin().
+<ChatLayout mode="public" />;
+// @ts-expect-error Mode is configured only in aiChatClientPlugin().
+<ChatInterface mode="public" />;
+type ChatInputProps = ComponentProps<typeof ChatInput>;
+// @ts-expect-error ChatInput has no component-level mode.
+type ChatInputMode = ChatInputProps["mode"];
 
 <StackProvider
 	stack={stack}

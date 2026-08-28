@@ -42,7 +42,6 @@ import { usePageAIContext } from "../context/page-ai-context";
 
 interface ChatInterfaceProps {
 	apiPath?: string;
-	mode?: "authenticated" | "public";
 	initialMessages?: UIMessage[];
 	id?: string;
 	/** Variant: 'full' for full-page layout, 'widget' for embedded widget */
@@ -250,7 +249,6 @@ function PermissionedChatMessage({
 
 export function ChatInterface({
 	apiPath,
-	mode: configuredMode,
 	initialMessages,
 	id,
 	variant = "full",
@@ -278,7 +276,7 @@ export function ChatInterface({
 	const credentials = aiChatApi?.credentials;
 	const resolvedApiPath =
 		apiPath ?? `${apiBaseURL ?? ""}${apiBasePath ?? ""}/chat`;
-	const mode = resolveAiChatMode(configuredMode, plugins?.aiChat?.config);
+	const mode = resolveAiChatMode(plugins?.aiChat?.config);
 	const basePath = plugins?.aiChat?.site.basePath ?? legacyBasePath;
 	const isPublicMode = mode === "public";
 
@@ -1250,7 +1248,6 @@ export function ChatInterface({
 							<div className={cn(!isWidget && "max-w-3xl mx-auto")}>
 								<ChatInput
 									key={isPublicMode ? "public" : identityPartitionKey}
-									mode={mode}
 									input={input}
 									handleInputChange={handleInputChange}
 									handleSubmit={handleSubmit}

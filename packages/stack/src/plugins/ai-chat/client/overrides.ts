@@ -14,12 +14,10 @@ export interface AiChatProviderConfig {
 	readonly mode: AiChatMode;
 }
 
-/** Resolve an explicit component mode before the registered plugin default. */
+/** Resolve the registered AI Chat client factory mode. */
 export function resolveAiChatMode(
-	configuredMode: AiChatMode | undefined,
 	providerConfig: Readonly<Record<string, unknown>> | undefined,
 ): AiChatMode {
-	if (configuredMode) return configuredMode;
 	return providerConfig?.mode === "public" ? "public" : "authenticated";
 }
 

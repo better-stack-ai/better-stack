@@ -489,6 +489,28 @@ export const todosClientPlugin = (config: TodosClientConfig = {}) =>
 API, site, QueryClient, headers, and credentials from the enclosing
 `createClientStack()` through `resolve(runtime)`.
 
+When browser components must observe a factory choice, expose only that small,
+browser-safe value through `providerConfig`:
+
+```typescript
+export const todosClientPlugin = (config: TodosClientConfig = {}) =>
+  defineClientPlugin()({
+    id: TODOS_PLUGIN_ID,
+    providerConfig: {
+      title: config.title ?? "Todos",
+    },
+    resolve: (runtime) =>
+      createResolvedTodosPlugin(resolveTodosClientConfig(config, runtime)),
+  })
+```
+
+The resolved stack preserves the exact shape at
+`useStack().plugins?.todos?.config`. `providerConfig` is not a second general
+configuration bucket: never put request headers, secrets, server-only objects,
+or shared API/site/QueryClient runtime there. Keep the full factory config in
+the server-safe definition closure and project only the plain values that
+rendered components actually need.
+
 ### SSR Data Loaders
 
 Loaders prefetch data during server-side rendering. Always add an `isConnectionError` check in the `catch` block so developers get an actionable warning if they call `route.loader()` during `next build` when no HTTP server is running (instead of a silent empty page):
