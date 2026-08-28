@@ -23,7 +23,7 @@ export default function PublicChatPage() {
 	const baseURL = getBaseURL();
 	const stack = createClientStack({
 		api: { baseURL, basePath: "/api/public-chat" },
-		site: { baseURL, basePath: "" },
+		site: { baseURL, basePath: "/" },
 		queryClient,
 		plugins: {
 			aiChat: aiChatClientPlugin({ mode: "public" }),

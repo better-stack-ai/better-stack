@@ -978,6 +978,7 @@ describe("scaffold plan", () => {
 		expect(page?.content).toContain(
 			'aiChat: aiChatClientPlugin({ mode: "public" }),',
 		);
+		expect(page?.content).toContain('site: { baseURL, basePath: "/" },');
 		expect(page?.content).toContain("<StackProvider stack={stack}");
 		expect(page?.content).not.toContain('<ChatLayout mode="public"');
 		expect(page?.content).not.toContain("overrides=");
@@ -1001,6 +1002,7 @@ describe("scaffold plan", () => {
 		expect(route?.content).toContain(
 			'aiChat: aiChatClientPlugin({ mode: "public" }),',
 		);
+		expect(route?.content).toContain('site: { baseURL, basePath: "/" },');
 		expect(route?.content).not.toContain('<ChatLayout mode="public"');
 	});
 
@@ -1022,6 +1024,7 @@ describe("scaffold plan", () => {
 		expect(route?.content).toContain(
 			'aiChat: aiChatClientPlugin({ mode: "public" }),',
 		);
+		expect(route?.content).toContain('site: { baseURL, basePath: "/" },');
 		expect(route?.content).not.toContain('<ChatLayout mode="public"');
 	});
 
