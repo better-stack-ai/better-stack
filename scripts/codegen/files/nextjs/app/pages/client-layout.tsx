@@ -36,7 +36,7 @@ const getBaseURL = () =>
 
 type PluginOverrides = {
 	blog: BlogPluginOverrides;
-	"ai-chat": AiChatPluginOverrides;
+	aiChat: AiChatPluginOverrides;
 	cms: CMSPluginOverrides;
 	"form-builder": FormBuilderPluginOverrides;
 	kanban: KanbanPluginOverrides;
@@ -111,7 +111,7 @@ export function BtstPagesClientLayout({
 								/>
 							),
 						},
-						"ai-chat": {
+						aiChat: {
 							mode: "authenticated", // Full chat with conversation history
 							uploadFile: uploadFileForChat,
 							chatSuggestions: [

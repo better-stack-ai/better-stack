@@ -90,12 +90,6 @@ export const getStackClient = (
 				},
 			}),
 			aiChat: aiChatClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
 				identityPartition: options?.identity,
 				mode: "authenticated",
 			}),

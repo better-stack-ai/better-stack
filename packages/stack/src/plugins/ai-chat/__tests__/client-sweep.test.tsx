@@ -11,11 +11,13 @@ import {
 } from "@btst/stack/context";
 import { defineAuthorization } from "@btst/stack/authorization";
 import { createClientAuth } from "@btst/stack/authorization/client";
+import { createClientStack } from "@btst/stack/client";
 import { z } from "zod";
 import { ChatInterface } from "../client/components/chat-interface";
 import { ChatSidebar } from "../client/components/chat-sidebar";
 import { ChatPage } from "../client/components/pages/chat-page.internal";
 import { ChatPageComponent } from "../client/components/pages/chat-page";
+import { aiChatClientPlugin } from "../client/plugin";
 import type { SerializedConversation } from "../types";
 import { aiChatPermissions } from "../permissions";
 import { aiChatIdentityKey } from "../query-keys";
@@ -241,7 +243,7 @@ async function render(
 					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
 					router={router()}
 					overrides={{
-						"ai-chat": overrides(options.mode, options.localization),
+						aiChat: overrides(options.mode, options.localization),
 					}}
 					auth={options.auth}
 					initialIdentity={options.initialIdentity}
@@ -274,6 +276,52 @@ function menuItem(text: string) {
 }
 
 describe("AI Chat permissions", () => {
+	it("uses the resolved AI Chat endpoint for the browser stream transport", async () => {
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient,
+			plugins: { aiChat: aiChatClientPlugin({ mode: "public" }) },
+			endpoints: {
+				aiChat: {
+					api: {
+						baseURL: "https://chat.example.com",
+						basePath: "/btst",
+						browserHeaders: { "x-public-client": "ai-chat" },
+						credentials: "omit",
+					},
+				},
+			},
+		});
+
+		await act(async () => {
+			root.render(
+				<QueryClientProvider client={queryClient}>
+					<StackProvider
+						stack={stack}
+						overrides={{ aiChat: { mode: "public" } }}
+					>
+						<ChatInterface variant="widget" />
+					</StackProvider>
+				</QueryClientProvider>,
+			);
+			await Promise.resolve();
+		});
+
+		const transport = mocks.useChat.mock.calls.at(-1)?.[0]?.transport as
+			| {
+					api?: string;
+					headers?: HeadersInit;
+					credentials?: RequestCredentials;
+			  }
+			| undefined;
+		expect(transport?.api).toBe("https://chat.example.com/btst/chat");
+		expect(new Headers(transport?.headers).get("x-public-client")).toBe(
+			"ai-chat",
+		);
+		expect(transport?.credentials).toBe("omit");
+	});
+
 	it("keeps one stable public chat instance across a send and rerender", async () => {
 		let retainedId: string | undefined;
 		let retainedSend: ReturnType<typeof vi.fn> | undefined;
@@ -1451,7 +1499,7 @@ describe("AI Chat route lifecycle", () => {
 					basePath="/pages"
 					router={router()}
 					overrides={{
-						"ai-chat": {
+						aiChat: {
 							...overrides(),
 							onRouteRender,
 						},

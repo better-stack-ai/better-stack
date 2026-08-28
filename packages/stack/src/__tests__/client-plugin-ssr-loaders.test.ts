@@ -445,21 +445,26 @@ describe("client plugin SSR loaders", () => {
 
 	it("AI Chat list loader seeds a sanitized query error when a hook throws", async () => {
 		const queryClient = new QueryClient();
-		const plugin = aiChatClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				beforeLoadConversations: () => {
-					throw new Error("private loader detail");
-				},
+			plugins: {
+				aiChat: aiChatClientPlugin({
+					hooks: {
+						beforeLoadConversations: () => {
+							throw new Error("private loader detail");
+						},
+					},
+				}),
 			},
 		});
 
-		await plugin.routes().chat().loader?.();
+		await stack.router.getRoute("/chat")?.loader?.();
 
 		const client = createApiClient<AiChatApiRouter>({
 			baseURL: API_BASE_URL,
@@ -477,29 +482,26 @@ describe("client plugin SSR loaders", () => {
 	it("AI Chat detail loader seeds sanitized detail and list errors", async () => {
 		const queryClient = new QueryClient();
 		const id = "conv-1";
-		const plugin = aiChatClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				beforeLoadConversation: () => {
-					throw new Error("private conversation detail");
-				},
+			plugins: {
+				aiChat: aiChatClientPlugin({
+					hooks: {
+						beforeLoadConversation: () => {
+							throw new Error("private conversation detail");
+						},
+					},
+				}),
 			},
 		});
 
-		const routes = plugin.routes();
-		const chatConversation = (
-			routes as unknown as {
-				chatConversation: (args: { params: { id: string } }) => {
-					loader?: () => Promise<void>;
-				};
-			}
-		).chatConversation;
-		await chatConversation({ params: { id } }).loader?.();
+		await stack.router.getRoute(`/chat/${id}`)?.loader?.();
 
 		const client = createApiClient<AiChatApiRouter>({
 			baseURL: API_BASE_URL,

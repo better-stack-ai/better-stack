@@ -20,14 +20,20 @@ const ChatPage = lazy(() =>
 
 export interface ChatPageComponentProps {
 	conversationId?: string;
+	/** Resolved plugin mode for route-owned rendering. */
+	mode?: "authenticated" | "public";
 }
 
 // Exported wrapped component with error and loading boundaries
-export function ChatPageComponent({ conversationId }: ChatPageComponentProps) {
-	const { mode, onRouteError } = usePluginOverrides<
+export function ChatPageComponent({
+	conversationId,
+	mode: configuredMode,
+}: ChatPageComponentProps) {
+	const { mode: overrideMode, onRouteError } = usePluginOverrides<
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
-	>("ai-chat", {});
+	>("aiChat", {});
+	const mode = configuredMode ?? overrideMode;
 	return (
 		<ComposedRoute
 			path={conversationId ? `/chat/${conversationId}` : "/chat"}
@@ -35,7 +41,7 @@ export function ChatPageComponent({ conversationId }: ChatPageComponentProps) {
 			ErrorComponent={DefaultError}
 			LoadingComponent={ChatLoading}
 			NotFoundComponent={NotFoundPage}
-			props={{ conversationId }}
+			props={{ conversationId, mode }}
 			onError={(error) => {
 				if (onRouteError) {
 					onRouteError(conversationId ? "chatConversation" : "chat", error, {
@@ -49,12 +55,10 @@ export function ChatPageComponent({ conversationId }: ChatPageComponentProps) {
 	);
 }
 
-function AuthorizedChatPage({ conversationId }: ChatPageComponentProps) {
-	const { mode } = usePluginOverrides<
-		AiChatPluginOverrides,
-		Partial<AiChatPluginOverrides>
-	>("ai-chat", {});
-	if (mode === "public") return <ChatPage conversationId={conversationId} />;
+function AuthorizedChatPage({ conversationId, mode }: ChatPageComponentProps) {
+	if (mode === "public") {
+		return <ChatPage conversationId={conversationId} mode={mode} />;
+	}
 	if (!conversationId) {
 		return (
 			<PermissionRouteAccess
@@ -63,17 +67,21 @@ function AuthorizedChatPage({ conversationId }: ChatPageComponentProps) {
 				})}
 				LoadingComponent={ChatLoading}
 			>
-				<ChatPage />
+				<ChatPage mode={mode} />
 			</PermissionRouteAccess>
 		);
 	}
-	return <AuthorizedConversationPage conversationId={conversationId} />;
+	return (
+		<AuthorizedConversationPage conversationId={conversationId} mode={mode} />
+	);
 }
 
 function AuthorizedConversationPage({
 	conversationId,
+	mode,
 }: {
 	conversationId: string;
+	mode?: "authenticated" | "public";
 }) {
 	const { conversation, error, isLoading } = useConversation(conversationId);
 	if (error) throw error;
@@ -89,7 +97,7 @@ function AuthorizedConversationPage({
 			})}
 			LoadingComponent={ChatLoading}
 		>
-			<ChatPage conversationId={conversationId} />
+			<ChatPage conversationId={conversationId} mode={mode} />
 		</PermissionRouteAccess>
 	);
 }

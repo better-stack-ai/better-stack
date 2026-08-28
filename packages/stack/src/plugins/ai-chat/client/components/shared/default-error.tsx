@@ -11,7 +11,7 @@ export function DefaultError({ error }: FallbackProps) {
 	const { localization } = usePluginOverrides<
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
-	>("ai-chat", {
+	>("aiChat", {
 		localization: {},
 	});
 	const tr = useAiChatTranslation(localization);

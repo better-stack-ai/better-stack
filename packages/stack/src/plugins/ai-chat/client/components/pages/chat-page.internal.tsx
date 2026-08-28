@@ -8,17 +8,21 @@ import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 
 export interface ChatPageProps {
 	conversationId?: string;
+	mode?: "authenticated" | "public";
 }
 
 /**
  * Internal chat page component - loaded lazily by ChatPageComponent
  */
-export function ChatPage({ conversationId }: ChatPageProps) {
+export function ChatPage({
+	conversationId,
+	mode: configuredMode,
+}: ChatPageProps) {
 	const overrides = usePluginOverrides<
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
-	>("ai-chat", {});
-	const { mode } = overrides;
+	>("aiChat", {});
+	const mode = configuredMode ?? overrides.mode;
 	const routeName = conversationId ? "chatConversation" : "chat";
 	const context = useMemo(
 		() => ({
@@ -39,6 +43,10 @@ export function ChatPage({ conversationId }: ChatPageProps) {
 	const showSidebar = mode !== "public";
 
 	return (
-		<ChatLayout conversationId={conversationId} showSidebar={showSidebar} />
+		<ChatLayout
+			conversationId={conversationId}
+			mode={mode}
+			showSidebar={showSidebar}
+		/>
 	);
 }

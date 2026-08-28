@@ -13,7 +13,7 @@ const getBaseURL = () =>
 		: process.env.{{publicSiteURLVar}} || process.env.BASE_URL || "http://localhost:3000"
 
 type PluginOverrides = {
-	"ai-chat": AiChatPluginOverrides
+	aiChat: AiChatPluginOverrides
 }
 
 /**
@@ -32,7 +32,7 @@ export default function PublicChatPage() {
 				api={{{providerApiLiteral}}}
 				overrides={
 					{
-					"ai-chat": {
+					aiChat: {
 						mode: "public",
 					},
 				}

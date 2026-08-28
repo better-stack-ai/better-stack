@@ -19,6 +19,7 @@ interface BuildScaffoldPlanInput {
 
 const CANONICAL_CLIENT_PLUGIN_KEYS = new Set<PluginKey>([
 	"blog",
+	"ai-chat",
 	"cms",
 	"ui-builder",
 	"comments",
@@ -217,7 +218,7 @@ function buildPluginTemplateContext(
 \t\t\t\t\t},`;
 				}
 				if (m.key === "ai-chat") {
-					return `\t\t\t\t\t"${m.key}": {
+					return `\t\t\t\t\t${m.configKey}: {
 \t\t\t\t\t\tmode: "public" as const,
 \t\t\t\t\t},`;
 				}

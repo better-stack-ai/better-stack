@@ -12,6 +12,7 @@ import {
 	useIdentityResolutionPromise,
 	useIdentitySourceGeneration,
 	usePluginOverrides,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import type {
@@ -83,7 +84,8 @@ function queryBelongsToPartition(
 }
 
 function useCurrentHistoryRefresh() {
-	const queryClient = useQueryClient();
+	const { queryClient: stackQueryClient } = useStack();
+	const queryClient = useQueryClient(stackQueryClient);
 	const { partition: identityPartition } = useAiChatIdentityState();
 	const latestPartition = useRef(identityPartition);
 	const mounted = useRef(true);
@@ -322,7 +324,7 @@ export function useRenameConversationForm(
 	SerializedConversation | null
 > {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<AiChatPluginOverrides>("ai-chat");
+	const { localization } = usePluginOverrides<AiChatPluginOverrides>("aiChat");
 	const historyRefresh = useCurrentHistoryRefresh();
 
 	const form = aiChat.conversations.useForm<

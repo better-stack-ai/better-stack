@@ -43,6 +43,7 @@ import { usePageAIContext } from "../context/page-ai-context";
 
 interface ChatInterfaceProps {
 	apiPath?: string;
+	mode?: "authenticated" | "public";
 	initialMessages?: UIMessage[];
 	id?: string;
 	/** Variant: 'full' for full-page layout, 'widget' for embedded widget */
@@ -249,7 +250,8 @@ function PermissionedChatMessage({
 }
 
 export function ChatInterface({
-	apiPath = "/api/chat",
+	apiPath,
+	mode: configuredMode,
 	initialMessages,
 	id,
 	variant = "full",
@@ -258,17 +260,22 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
 	const {
 		localization: customLocalization,
-		headers,
-		mode,
+		mode: overrideMode,
 		showAttribution,
 		chatSuggestions,
 	} = usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
-		"ai-chat",
+		"aiChat",
 		{ showAttribution: true },
 	);
-	const { api, router } = useStack();
-	const apiBaseURL = api?.baseURL;
-	const apiBasePath = api?.basePath;
+	const { api, plugins, queryClient: stackQueryClient, router } = useStack();
+	const aiChatApi = plugins?.aiChat?.api;
+	const apiBaseURL = aiChatApi?.baseURL ?? api?.baseURL;
+	const apiBasePath = aiChatApi?.basePath ?? api?.basePath;
+	const browserHeaders = aiChatApi?.browserHeaders;
+	const credentials = aiChatApi?.credentials;
+	const resolvedApiPath =
+		apiPath ?? `${apiBaseURL ?? ""}${apiBasePath ?? ""}/chat`;
+	const mode = configuredMode ?? overrideMode;
 	const navigate = router?.navigate;
 	const basePath = useBasePath();
 	const isPublicMode = mode === "public";
@@ -277,7 +284,7 @@ export function ChatInterface({
 	const pageAIContext = usePageAIContext();
 
 	const tr = useAiChatTranslation(customLocalization);
-	const queryClient = useQueryClient();
+	const queryClient = useQueryClient(stackQueryClient);
 	const identityPartition = useAiChatIdentityPartition();
 	const chatInstanceId = useId();
 	const identityPartitionKey = hashKey([aiChatIdentityKey(identityPartition)]);
@@ -298,13 +305,21 @@ export function ChatInterface({
 		const client = createApiClient<AiChatApiRouter>({
 			baseURL: apiBaseURL,
 			basePath: apiBasePath,
+			credentials,
 		});
-		const queries = createAiChatQueryKeys(client, headers);
+		const queries = createAiChatQueryKeys(client, browserHeaders);
 		return queries.conversations.list(identityPartition).queryKey;
-	}, [apiBaseURL, apiBasePath, headers, identityPartition, isPublicMode]);
+	}, [
+		apiBaseURL,
+		apiBasePath,
+		browserHeaders,
+		credentials,
+		identityPartition,
+		isPublicMode,
+	]);
 	const latestIdentityPartition = useRef(identityPartition);
 	const latestConversationsListQueryKey = useRef(conversationsListQueryKey);
-	const latestHeaders = useRef(headers);
+	const latestHeaders = useRef(browserHeaders);
 
 	// Track the current conversation ID - initialized from prop, updated after first message
 	// In public mode, we don't track conversation IDs
@@ -414,7 +429,9 @@ export function ChatInterface({
 			globalThis.fetch,
 		) as typeof globalThis.fetch;
 		return new DefaultChatTransport({
-			api: apiPath,
+			api: resolvedApiPath,
+			headers: browserHeaders,
+			credentials,
 			fetch: trackedFetch,
 			// In public mode, don't send conversationId
 			body: isPublicMode
@@ -470,7 +487,7 @@ export function ChatInterface({
 				};
 			},
 		});
-	}, [apiPath, isPublicMode]);
+	}, [browserHeaders, credentials, isPublicMode, resolvedApiPath]);
 
 	// Use a ref so addToolOutput is always current inside the onToolCall closure
 	const addToolOutputRef = useRef<
@@ -661,6 +678,7 @@ export function ChatInterface({
 				const client = createApiClient<AiChatApiRouter>({
 					baseURL: apiBaseURL,
 					basePath: apiBasePath,
+					credentials,
 				});
 				const detailQuery = createAiChatQueryKeys(
 					client,
@@ -723,6 +741,7 @@ export function ChatInterface({
 			const client = createApiClient<AiChatApiRouter>({
 				baseURL: apiBaseURL,
 				basePath: apiBasePath,
+				credentials,
 			});
 			const detailQuery = createAiChatQueryKeys(
 				client,
@@ -773,6 +792,7 @@ export function ChatInterface({
 		apiBasePath,
 		apiBaseURL,
 		basePath,
+		credentials,
 		isHistorySyncRetrying,
 		isPublicMode,
 		queryClient,
@@ -789,7 +809,7 @@ export function ChatInterface({
 		latestIdentityPartitionKey.current = nextPartition;
 		latestIdentityPartition.current = identityPartition;
 		latestConversationsListQueryKey.current = conversationsListQueryKey;
-		latestHeaders.current = headers;
+		latestHeaders.current = browserHeaders;
 		if (isPublicMode) return;
 		if (previousIdentityPartition.current === nextPartition) return;
 		previousIdentityPartition.current = nextPartition;
@@ -815,7 +835,7 @@ export function ChatInterface({
 		hasNavigatedRef.current = false;
 	}, [
 		conversationsListQueryKey,
-		headers,
+		browserHeaders,
 		id,
 		identityPartition,
 		identityPartitionKey,

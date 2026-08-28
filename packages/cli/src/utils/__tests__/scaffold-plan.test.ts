@@ -354,7 +354,13 @@ describe("scaffold plan", () => {
 		const stackClientFile = plan.files.find((file) =>
 			file.path.endsWith("stack-client.tsx"),
 		);
-		expect(stackClientFile?.content).toContain("aiChat: aiChatClientPlugin({");
+		expect(stackClientFile?.content).toContain("aiChat: aiChatClientPlugin(),");
+		expect(stackClientFile?.content).toContain('basePath: "/api/data"');
+		expect(stackClientFile?.content).toContain('basePath: "/pages"');
+		expect(stackClientFile?.content).toContain("queryClient,");
+		expect(stackClientFile?.content).not.toMatch(
+			/aiChat: aiChatClientPlugin\(\{[^}]*apiBaseURL/s,
+		);
 		expect(stackClientFile?.content).toContain(
 			"uiBuilder: uiBuilderClientPlugin(),",
 		);
@@ -393,18 +399,16 @@ describe("scaffold plan", () => {
 		);
 		expect(pagesLayoutFile?.content).toContain('layout="widget"');
 		expect(pagesLayoutFile?.content).toContain('mode: "public" as const,');
-		// Override key must match what usePluginOverrides("ai-chat") looks up at runtime
-		expect(pagesLayoutFile?.content).toContain('"ai-chat": {');
+		// Override key matches the canonical client plugin ID.
+		expect(pagesLayoutFile?.content).toContain("aiChat: {");
 		// Widget must be hidden on the chat route itself
 		expect(pagesLayoutFile?.content).toContain("usePathname");
 		expect(pagesLayoutFile?.content).toContain(
 			'pathname.startsWith("/pages/chat")',
 		);
-		// StackProvider overrides must use the plugin's runtime key ("ai-chat"), not
-		// the camelCase configKey ("aiChat"), so usePluginOverrides("ai-chat") can
-		// find the overrides at runtime.
-		expect(pagesLayoutFile?.content).toContain('"ai-chat":');
-		expect(pagesLayoutFile?.content).not.toContain("aiChat:");
+		// StackProvider overrides use the same camelCase programmatic ID as registration.
+		expect(pagesLayoutFile?.content).toContain("aiChat:");
+		expect(pagesLayoutFile?.content).not.toContain('"ai-chat":');
 		expect(pagesLayoutFile?.content).toContain("} as never");
 	});
 
@@ -973,7 +977,8 @@ describe("scaffold plan", () => {
 		expect(paths).toContain("app/public-chat/page.tsx");
 		const page = plan.files.find((f) => f.path === "app/public-chat/page.tsx");
 		expect(page?.content).toContain("ChatLayout");
-		expect(page?.content).toContain('"ai-chat"');
+		expect(page?.content).toContain("aiChat: {");
+		expect(page?.content).not.toContain('"ai-chat":');
 	});
 
 	it("emits public-chat route for react-router when ai-chat selected", async () => {

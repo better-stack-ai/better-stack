@@ -61,7 +61,7 @@ describe("AI Chat attachment authorization", () => {
 					initialIdentity={identity}
 					notify={notify}
 					overrides={{
-						"ai-chat": { mode: "authenticated", uploadFile },
+						aiChat: { mode: "authenticated", uploadFile },
 					}}
 				>
 					<ChatInput
@@ -136,7 +136,7 @@ describe("AI Chat attachment authorization", () => {
 						initialIdentity={identity}
 						notify={notify}
 						overrides={{
-							"ai-chat": { mode: "authenticated", uploadFile },
+							aiChat: { mode: "authenticated", uploadFile },
 						}}
 					>
 						<ChatInput

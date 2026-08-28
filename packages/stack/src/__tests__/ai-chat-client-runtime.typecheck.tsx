@@ -1,0 +1,96 @@
+import { QueryClient } from "@tanstack/react-query";
+import { createClientStack } from "../client";
+import { StackProvider } from "../context";
+import { aiChatClientPlugin } from "../plugins/ai-chat/client";
+
+const queryClient = new QueryClient();
+const aiChat = aiChatClientPlugin({
+	mode: "authenticated",
+	seo: { siteName: "Example" },
+	hooks: {
+		onErrorLoad: (_error, context) => {
+			context.apiBasePath satisfies string;
+		},
+	},
+});
+
+aiChat.id satisfies "aiChat";
+
+const stack = createClientStack({
+	api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+	site: { baseURL: "https://app.example.com", basePath: "/pages" },
+	queryClient,
+	plugins: { aiChat },
+});
+
+<StackProvider stack={stack} />;
+
+<StackProvider
+	stack={stack}
+	overrides={{
+		aiChat: {
+			uploadFile: async () => "https://cdn.example.com/file.png",
+			showAttribution: false,
+		},
+	}}
+/>;
+
+aiChatClientPlugin({
+	// @ts-expect-error Shared API configuration belongs to createClientStack().
+	apiBaseURL: "https://app.example.com",
+});
+
+aiChatClientPlugin({
+	// @ts-expect-error Shared API paths belong to createClientStack().
+	apiBasePath: "/api/data",
+});
+
+aiChatClientPlugin({
+	// @ts-expect-error Shared site configuration belongs to createClientStack().
+	siteBaseURL: "https://app.example.com",
+});
+
+aiChatClientPlugin({
+	// @ts-expect-error Shared site paths belong to createClientStack().
+	siteBasePath: "/pages",
+});
+
+aiChatClientPlugin({
+	// @ts-expect-error The stack owns the one shared query client.
+	queryClient,
+});
+
+aiChatClientPlugin({
+	// @ts-expect-error Request headers belong to createClientStack().api.
+	headers: new Headers(),
+});
+
+aiChatClientPlugin({
+	hooks: {
+		// @ts-expect-error The canonical loader error phase is onErrorLoad.
+		onLoadError: () => undefined,
+	},
+});
+
+createClientStack({
+	api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+	site: { baseURL: "https://app.example.com", basePath: "/pages" },
+	queryClient,
+	plugins: {
+		// @ts-expect-error Package slugs are not programmatic registration IDs.
+		"ai-chat": aiChatClientPlugin(),
+	},
+});
+
+// @ts-expect-error Provider override keys are inferred from the registered ID.
+<StackProvider stack={stack} overrides={{ "ai-chat": {} }} />;
+
+// @ts-expect-error Transport headers are stack endpoint configuration.
+<StackProvider
+	stack={stack}
+	overrides={{
+		aiChat: {
+			headers: { authorization: "secret" },
+		},
+	}}
+/>;

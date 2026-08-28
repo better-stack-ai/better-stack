@@ -67,7 +67,7 @@ export function ChatSidebar({
 	const { localization: customLocalization } = usePluginOverrides<
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
-	>("ai-chat", {});
+	>("aiChat", {});
 	const { router } = useStack();
 	const navigate = router?.navigate;
 	const basePath = useBasePath();

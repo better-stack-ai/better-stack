@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StackProvider } from "@btst/stack/context";
+import { createClientStack } from "@btst/stack/client";
 import { useRenameConversationForm } from "../client/hooks/chat-hooks";
+import { aiChatClientPlugin } from "../client/plugin";
 import type { SerializedConversation } from "../types";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -59,23 +61,28 @@ async function renderProbe() {
 		return null;
 	}
 
+	const stack = createClientStack({
+		api: { baseURL: "http://app.local", basePath: "/api/data" },
+		site: { baseURL: "http://test.local", basePath: "/pages" },
+		queryClient,
+		plugins: { aiChat: aiChatClientPlugin() },
+		endpoints: {
+			aiChat: {
+				api: {
+					baseURL: "https://chat.example.com",
+					basePath: "/btst",
+					browserHeaders: { "x-chat-test": "forwarded" },
+					credentials: "omit",
+				},
+			},
+		},
+	});
+
 	await act(async () => {
 		root.render(
-			<QueryClientProvider client={queryClient}>
-				<StackProvider
-					basePath="/pages"
-					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
-					router={{ refresh }}
-					overrides={{
-						"ai-chat": {
-							headers: { "x-chat-test": "forwarded" },
-						},
-					}}
-					notify={notify}
-				>
-					<Probe />
-				</StackProvider>
-			</QueryClientProvider>,
+			<StackProvider stack={stack} router={{ refresh }} notify={notify}>
+				<Probe />
+			</StackProvider>,
 		);
 	});
 
@@ -95,8 +102,11 @@ describe("useRenameConversationForm", () => {
 		});
 
 		const [url, init] = fetchMock.mock.calls[0] as [unknown, RequestInit];
-		expect(String(url)).toContain("/api/data/chat/conversations/conv-1");
+		expect(String(url)).toContain(
+			"https://chat.example.com/btst/chat/conversations/conv-1",
+		);
 		expect(init.method).toBe("PUT");
+		expect(init.credentials).toBe("omit");
 		expect(JSON.parse(String(init.body))).toEqual({ title: "Renamed" });
 		expect(new Headers(init.headers).get("x-chat-test")).toBe("forwarded");
 		expect(notify.success).toHaveBeenCalledWith("Conversation renamed");

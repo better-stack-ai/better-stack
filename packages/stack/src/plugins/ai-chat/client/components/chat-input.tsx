@@ -90,7 +90,7 @@ export function ChatInput({
 		mode,
 		allowedFileTypes,
 	} = usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
-		"ai-chat",
+		"aiChat",
 		{},
 	);
 

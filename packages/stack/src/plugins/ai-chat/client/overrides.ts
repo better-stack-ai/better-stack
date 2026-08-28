@@ -122,11 +122,6 @@ export interface AiChatPluginOverrides {
 	localization?: Partial<AiChatLocalization>;
 
 	/**
-	 * Optional headers to pass with API requests (e.g., for SSR auth)
-	 */
-	headers?: HeadersInit;
-
-	/**
 	 * Whether to show the attribution
 	 * @default true
 	 */

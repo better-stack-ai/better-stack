@@ -15,7 +15,7 @@ const getBaseURL = () =>
 			"http://localhost:3000";
 
 type PluginOverrides = {
-	"ai-chat": AiChatPluginOverrides;
+	aiChat: AiChatPluginOverrides;
 };
 
 /** Public AI chat backed by the explicit stateless public endpoint. */
@@ -29,7 +29,7 @@ export default function PublicChatPage() {
 				basePath=""
 				router={nextRouter()}
 				api={{ baseURL, basePath: "/api/public-chat" }}
-				overrides={{ "ai-chat": { mode: "public" } }}
+				overrides={{ aiChat: { mode: "public" } }}
 			>
 				<div className="min-h-screen bg-background">
 					<main className="h-screen">
