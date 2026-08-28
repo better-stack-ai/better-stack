@@ -46,8 +46,10 @@ const { handler, dbSchema } = stack({
           ? { name: user.displayName, avatarUrl: user.avatarUrl }
           : null
       },
-      onAfterApprove: async (comment, ctx) => {
-        await sendApprovalEmail(comment.authorId)
+      hooks: {
+        onAfterApprove: async (comment, ctx) => {
+          await sendApprovalEmail(comment.authorId)
+        },
       },
     })
   },

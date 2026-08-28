@@ -667,7 +667,7 @@ import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
 const app = stack({
   auth: serverAuth,
   plugins: {
-    kanban: kanbanBackendPlugin(hooks)
+    kanban: kanbanBackendPlugin({ hooks })
   },
   // ...
 })

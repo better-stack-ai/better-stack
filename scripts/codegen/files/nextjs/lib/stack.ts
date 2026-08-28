@@ -211,7 +211,7 @@ function createStack() {
 	const s = stack({
 		basePath: "/api/data",
 		plugins: {
-			todos: todosBackendPlugin,
+			todos: todosBackendPlugin(),
 			blog: blogBackendPlugin({ hooks: blogHooks }),
 			aiChat: aiChatBackendPlugin({
 				model: openai("gpt-4o"),

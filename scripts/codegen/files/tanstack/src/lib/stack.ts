@@ -207,7 +207,7 @@ _stackRef = stack({
 	basePath: "/api/data",
 	auth: serverAuth,
 	plugins: {
-		todos: todosBackendPlugin,
+		todos: todosBackendPlugin(),
 		blog: blogBackendPlugin({ hooks: blogHooks }),
 		aiChat: aiChatBackendPlugin({
 			model: openai("gpt-4o"),

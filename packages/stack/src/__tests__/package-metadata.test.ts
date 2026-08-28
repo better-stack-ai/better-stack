@@ -237,3 +237,90 @@ describe("published symmetric stack constructors", () => {
 		expect(requestApi.__proto__.echo).toBeTypeOf("function");
 	}, 30_000);
 });
+
+describe("published backend plugin factories", () => {
+	it("preserves all eight factory contracts through ESM, CJS and declarations", async () => {
+		const storageAdapter = {
+			type: "local" as const,
+			upload: async (_buffer: Buffer, { filename }: { filename: string }) => ({
+				url: `https://files.example/${filename}`,
+			}),
+			delete: async () => undefined,
+		};
+		const factories = [
+			{
+				specifier: "@btst/stack/plugins/ai-chat/api",
+				exportName: "aiChatBackendPlugin",
+				id: "aiChat",
+				args: [{ model: {} }],
+			},
+			{
+				specifier: "@btst/stack/plugins/blog/api",
+				exportName: "blogBackendPlugin",
+				id: "blog",
+				args: [],
+			},
+			{
+				specifier: "@btst/stack/plugins/cms/api",
+				exportName: "cmsBackendPlugin",
+				id: "cms",
+				args: [{ contentTypes: [] }],
+			},
+			{
+				specifier: "@btst/stack/plugins/comments/api",
+				exportName: "commentsBackendPlugin",
+				id: "comments",
+				args: [],
+			},
+			{
+				specifier: "@btst/stack/plugins/form-builder/api",
+				exportName: "formBuilderBackendPlugin",
+				id: "formBuilder",
+				args: [],
+			},
+			{
+				specifier: "@btst/stack/plugins/kanban/api",
+				exportName: "kanbanBackendPlugin",
+				id: "kanban",
+				args: [],
+			},
+			{
+				specifier: "@btst/stack/plugins/media/api",
+				exportName: "mediaBackendPlugin",
+				id: "media",
+				args: [{ storageAdapter }],
+			},
+			{
+				specifier: "@btst/stack/plugins/open-api/api",
+				exportName: "openApiBackendPlugin",
+				id: "openApi",
+				args: [],
+			},
+		] as const;
+		const require = createRequire(import.meta.url);
+
+		for (const factory of factories) {
+			const esm = (await import(factory.specifier)) as Record<
+				string,
+				(...args: any[]) => { id: string }
+			>;
+			const cjs = require(factory.specifier) as Record<
+				string,
+				(...args: any[]) => { id: string }
+			>;
+			expect(esm[factory.exportName]?.(...factory.args).id).toBe(factory.id);
+			expect(cjs[factory.exportName]?.(...factory.args).id).toBe(factory.id);
+		}
+
+		for (const project of [
+			"consumer-tests/backend-factories/tsconfig.json",
+			"consumer-tests/backend-factories/tsconfig.cjs.json",
+		]) {
+			await execFileAsync(
+				process.execPath,
+				[require.resolve("typescript/lib/tsc.js"), "--project", project],
+				{ cwd: resolve(".") },
+			);
+		}
+	}, 30_000);
+});
