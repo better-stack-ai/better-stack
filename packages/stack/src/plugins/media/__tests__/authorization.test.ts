@@ -1031,6 +1031,92 @@ describe("Media operation-first authorization", () => {
 		]);
 	});
 
+	it.each(["folder", "asset"] as const)(
+		"rechecks the claimed subtree after a delete hook creates a %s",
+		async (winner) => {
+			let backend: ReturnType<typeof makeBackend>;
+			let descendantId = "";
+			const beforeDelete = vi.fn(async () => {
+				if (winner === "folder") {
+					await backend.internal.media.createFolder({
+						name: "Hook child",
+						parentId: descendantId,
+					});
+					return;
+				}
+				await backend.internal.media.createAsset({
+					filename: "hook.jpg",
+					originalName: "hook.jpg",
+					mimeType: "image/jpeg",
+					size: 5,
+					url: "https://files.example/hook.jpg",
+					folderId: descendantId,
+				});
+			});
+			backend = makeBackend({
+				auth: createAuth(),
+				tenantId: "tenant-a",
+				hooks: { onBeforeDeleteFolder: beforeDelete },
+			});
+			const root = await seedFolder(backend, { name: "Delete root" });
+			descendantId = (
+				await seedFolder(backend, {
+					name: "Existing child",
+					parentId: root.id,
+				})
+			).id;
+
+			await expect(
+				backend
+					.forRequest(request("/delete-hook", { identity: tenantMember }))
+					.api.media.deleteFolder({ id: root.id }),
+			).rejects.toMatchObject({
+				statusCode: 409,
+				code: winner === "folder" ? "MEDIA_STATE_CHANGED" : "FOLDER_NOT_EMPTY",
+			});
+			expect(beforeDelete).toHaveBeenCalledOnce();
+			expect(await backend.adapter.count({ model: "mediaFolder" })).toBe(2);
+			expect(await backend.adapter.count({ model: "mediaAsset" })).toBe(0);
+		},
+	);
+
+	it("fails closed when a raw import crosses the resolved tenant subtree", async () => {
+		const beforeDelete = vi.fn();
+		const backend = makeBackend({
+			auth: createAuth(),
+			tenantId: "tenant-a",
+			hooks: { onBeforeDeleteFolder: beforeDelete },
+		});
+		const root = await seedFolder(backend, { name: "Tenant A root" });
+		const foreignChild = await seedFolder(backend, {
+			name: "Tenant B child",
+			parentId: root.id,
+			tenantId: "tenant-b",
+		});
+
+		await expect(
+			backend
+				.forRequest(request("/tenant-boundary", { identity: admin }))
+				.api.media.deleteFolder({ id: root.id }),
+		).rejects.toMatchObject({
+			statusCode: 409,
+			code: "MEDIA_STATE_CHANGED",
+		});
+		expect(beforeDelete).not.toHaveBeenCalled();
+		expect(
+			await backend.adapter.findOne<Folder>({
+				model: "mediaFolder",
+				where: [{ field: "id", value: root.id }],
+			}),
+		).not.toBeNull();
+		expect(
+			await backend.adapter.findOne<Folder>({
+				model: "mediaFolder",
+				where: [{ field: "id", value: foreignChild.id }],
+			}),
+		).not.toBeNull();
+	});
+
 	it("rejects stale upload initialization and finalization before hooks, tokens, or writes", async () => {
 		const storage = s3Storage();
 		const hook = vi.fn();

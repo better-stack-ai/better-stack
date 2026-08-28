@@ -545,7 +545,8 @@ asset data. A caller with only the collection rule receives no asset response;
 the rules never filter rows. Recursive folder deletion likewise evaluates
 `folder.delete` against the authoritative facts for the requested folder and
 every descendant before hooks or mutation. A rule that denies any member of the
-subtree denies the entire deletion.
+subtree denies the entire deletion. The backend also rejects malformed folder
+trees that cross the server-resolved tenant boundary.
 
 Every transport uses the same operation lifecycle:
 

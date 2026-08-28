@@ -947,11 +947,57 @@ async function collectFolderSubtree(
 		});
 		for (const child of children) {
 			if (seen.has(child.id)) throw staleStateError();
+			if ((child.tenantId || undefined) !== root.tenantId) {
+				throw staleStateError();
+			}
 			seen.add(child.id);
 			subtree.push(folderSnapshot(child));
 		}
 	}
 	return subtree;
+}
+
+async function verifyClaimedFolderSubtree(
+	adapter: Pick<Adapter, "findMany" | "count">,
+	subtree: readonly FolderSnapshot[],
+	claims: ReadonlyMap<string, Date>,
+) {
+	const root = subtree[0];
+	if (!root) throw staleStateError();
+	const currentSubtree = await collectFolderSubtree(adapter, {
+		...root,
+		updatedAt: claims.get(root.id)!,
+	});
+	if (currentSubtree.length !== subtree.length) throw staleStateError();
+	const expectedById = new Map(
+		subtree.map((folder) => [folder.id, folder] as const),
+	);
+	for (const current of currentSubtree) {
+		const expected = expectedById.get(current.id);
+		if (
+			!expected ||
+			!sameFolder(current, {
+				...expected,
+				updatedAt: claims.get(expected.id)!,
+			})
+		) {
+			throw staleStateError();
+		}
+	}
+	let totalAssets = 0;
+	for (const folder of subtree) {
+		totalAssets += await adapter.count({
+			model: "mediaAsset",
+			where: [{ field: "folderId", value: folder.id }],
+		});
+	}
+	if (totalAssets > 0) {
+		throw new MediaOperationError(
+			409,
+			`Cannot delete folder: it or one of its subfolders contains ${totalAssets} asset(s). Move or delete them first.`,
+			"FOLDER_NOT_EMPTY",
+		);
+	}
 }
 
 function parseVercelInitialize(
@@ -1475,40 +1521,7 @@ export function createMediaOperations(
 				for (const folder of subtree) {
 					claims.set(folder.id, await claimFolder(tx, folder));
 				}
-				const currentSubtree = await collectFolderSubtree(tx, {
-					...snapshot,
-					updatedAt: claims.get(snapshot.id)!,
-				});
-				if (currentSubtree.length !== subtree.length) throw staleStateError();
-				const expectedById = new Map(
-					subtree.map((folder) => [folder.id, folder] as const),
-				);
-				for (const current of currentSubtree) {
-					const expected = expectedById.get(current.id);
-					if (
-						!expected ||
-						!sameFolder(current, {
-							...expected,
-							updatedAt: claims.get(expected.id)!,
-						})
-					) {
-						throw staleStateError();
-					}
-				}
-				let totalAssets = 0;
-				for (const folder of subtree) {
-					totalAssets += await tx.count({
-						model: "mediaAsset",
-						where: [{ field: "folderId", value: folder.id }],
-					});
-				}
-				if (totalAssets > 0) {
-					throw new MediaOperationError(
-						409,
-						`Cannot delete folder: it or one of its subfolders contains ${totalAssets} asset(s). Move or delete them first.`,
-						"FOLDER_NOT_EMPTY",
-					);
-				}
+				await verifyClaimedFolderSubtree(tx, subtree, claims);
 				await runDomainHook(
 					() =>
 						hooks?.onBeforeDeleteFolder?.(
@@ -1520,6 +1533,7 @@ export function createMediaOperations(
 						),
 					"DELETE_FOLDER_REJECTED",
 				);
+				await verifyClaimedFolderSubtree(tx, subtree, claims);
 				for (const folder of [...subtree].reverse()) {
 					const deleted = await tx.deleteMany({
 						model: "mediaFolder",
