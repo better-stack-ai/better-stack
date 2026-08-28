@@ -348,6 +348,28 @@ describe("composed endpoint inventory", () => {
 		);
 		expect(response.status).toBe(200);
 		expect(await response.text()).toBe("1");
+
+		const undeclaredPlugin = defineBackendPlugin({
+			name: "feature",
+			dbPlugin: createDbPlugin("feature", {}),
+			operations: () => ({ read: readOperation() }),
+			routes: () => ({
+				undeclared: endpoint(
+					"/factory-undeclared",
+					{ method: "POST" },
+					async () => ({ ok: true }),
+				),
+			}),
+		});
+		expect(() =>
+			stack({
+				basePath: "/api",
+				plugins: { feature: undeclaredPlugin },
+				adapter: memoryAdapter,
+			}),
+		).toThrowError(
+			'[btst/endpoint-inventory] Plugin "feature" route "undeclared" (POST /factory-undeclared) has no same-key operation or infrastructure declaration.',
+		);
 	});
 
 	it("maps only explicit operation HTTP errors at the generated route boundary", async () => {
@@ -355,6 +377,7 @@ describe("composed endpoint inventory", () => {
 			statusCode: 418,
 			code: "FACT_FAILURE_MUST_NOT_LEAK",
 		});
+		const factValidationFailure = z.string().safeParse(1).error;
 		const plugin = defineBackendPlugin({
 			name: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
@@ -368,6 +391,11 @@ describe("composed endpoint inventory", () => {
 				factFailure: readOperation({
 					facts: () => {
 						throw factFailure;
+					},
+				}),
+				factValidationFailure: readOperation({
+					facts: () => {
+						throw factValidationFailure;
 					},
 				}),
 				httpFailure: readOperation({
@@ -390,6 +418,13 @@ describe("composed endpoint inventory", () => {
 					"/fact-failure/:id",
 					{ method: "GET", requireRequest: true },
 					operations.factFailure.route((ctx) => ({ id: ctx.params.id })),
+				),
+				factValidationFailure: createEndpoint(
+					"/fact-validation-failure/:id",
+					{ method: "GET", requireRequest: true },
+					operations.factValidationFailure.route((ctx) => ({
+						id: ctx.params.id,
+					})),
 				),
 				httpFailure: createEndpoint(
 					"/http-failure/:id",
@@ -431,6 +466,18 @@ describe("composed endpoint inventory", () => {
 			expect(consoleError).toHaveBeenCalledWith(
 				"# SERVER_ERROR: ",
 				factFailure,
+			);
+
+			const factValidationResponse = await backend.handler(
+				new Request("http://localhost/api/fact-validation-failure/1"),
+			);
+			expect(factValidationResponse.status).toBe(500);
+			expect(await factValidationResponse.text()).not.toContain(
+				"VALIDATION_ERROR",
+			);
+			expect(consoleError).toHaveBeenCalledWith(
+				"# SERVER_ERROR: ",
+				factValidationFailure,
 			);
 		} finally {
 			consoleError.mockRestore();
