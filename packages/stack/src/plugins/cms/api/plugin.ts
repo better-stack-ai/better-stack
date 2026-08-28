@@ -13,9 +13,7 @@ import {
 	getAllContentItems,
 	getAllContentTypes,
 	getContentItemById,
-	getContentItemBySlug,
 } from "./getters";
-import { createCMSContentItem } from "./mutations";
 import {
 	CMSContentItemParamsSchema,
 	CMSContentTypeParamsSchema,
@@ -226,34 +224,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 
 		/** Lower-level server API that intentionally bypasses auth and hooks. */
 		api: (adapter: Adapter) => ({
-			getAllContentTypes: async () => {
-				await ensureSynced(adapter);
-				return getAllContentTypes(adapter);
-			},
-			getAllContentItems: async (
-				contentTypeSlug: string,
-				params?: Parameters<typeof getAllContentItems>[2],
-			) => {
-				await ensureSynced(adapter);
-				return getAllContentItems(adapter, contentTypeSlug, params);
-			},
-			getContentItemBySlug: async (contentTypeSlug: string, slug: string) => {
-				await ensureSynced(adapter);
-				return getContentItemBySlug(adapter, contentTypeSlug, slug);
-			},
-			getContentItemById: async (id: string) => {
-				await ensureSynced(adapter);
-				return getContentItemById(adapter, id);
-			},
 			prefetchForRoute: createCMSPrefetchForRoute(adapter),
-			createContentItem: async (
-				typeSlug: string,
-				input: Parameters<typeof createCMSContentItem>[2],
-				options?: Parameters<typeof createCMSContentItem>[3],
-			) => {
-				await ensureSynced(adapter);
-				return createCMSContentItem(adapter, typeSlug, input, options);
-			},
 		}),
 
 		routes: (_adapter: Adapter, _context, operations) => {

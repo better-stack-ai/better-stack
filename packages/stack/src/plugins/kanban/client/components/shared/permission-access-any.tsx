@@ -5,7 +5,7 @@ import { PermissionAccess } from "@btst/stack/context";
 
 type PermissionCheck = Pick<
 	ComponentProps<typeof PermissionAccess>,
-	"permission" | "legacyPermission"
+	"permission"
 >;
 
 /** Render children when at least one exact permission is allowed. */
@@ -22,7 +22,6 @@ export function PermissionAccessAny({
 	return (
 		<PermissionAccess
 			permission={check.permission}
-			legacyPermission={check.legacyPermission}
 			fallback={
 				<PermissionAccessAny checks={rest}>{children}</PermissionAccessAny>
 			}

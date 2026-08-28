@@ -66,6 +66,20 @@ describe("seed-plan", () => {
 		expect(file?.content).toContain("handlers:");
 	});
 
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"keeps %s CMS and UI Builder seeds on the trusted operation surface",
+		(framework) => {
+			for (const plugin of ["cms", "ui-builder"] as const) {
+				const file = buildSeedRouteFile(plugin, framework);
+				expect(file?.content).toContain("myStack.internal.cms");
+				expect(file?.content).toContain("cms.listContentItems({");
+				expect(file?.content).toContain("cms.createContentItem({");
+				expect(file?.content).not.toContain("myStack.api");
+				expect(file?.content).not.toContain("api.cms");
+			}
+		},
+	);
+
 	// ── buildSeedRouteFiles ──────────────────────────────────────────────────
 
 	it("filters out plugins with no seed body", () => {

@@ -1,22 +1,23 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ComposedRoute } from "../client/components";
-import {
-	CanAccess,
-	StackProvider,
-	useCan,
-	useIdentity,
-	type StackAuthProvider,
-} from "../context";
-import { defineAuthorization } from "../authorization";
-import { createClientAuth } from "../authorization/client";
-import { blogPermissions } from "../plugins/blog/permissions";
 import { z } from "zod";
+import { defineAuthorization } from "../authorization";
+import { createClientAuth, type ClientAuth } from "../authorization/client";
+import { ComposedRoute } from "../client/components";
+import { StackProvider } from "../context";
+import { blogPermissions } from "../plugins/blog/permissions";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+
+const authorization = defineAuthorization({
+	identity: z.object({ id: z.string() }),
+	permissions: [blogPermissions] as const,
+	rules: ({ blog }) => [
+		blog.post.read.when(({ identity }) => identity?.id === "allowed"),
+	],
+});
 
 let container: HTMLDivElement;
 let root: Root;
@@ -28,312 +29,43 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-	await act(async () => {
-		root.unmount();
-	});
+	await act(async () => root.unmount());
 	container.remove();
 	vi.restoreAllMocks();
 });
 
 async function render(ui: React.ReactElement) {
-	await act(async () => {
-		root.render(ui);
+	await act(async () => root.render(ui));
+}
+
+function auth(
+	identity: { id: string } | null,
+	loginPath?: string,
+): ClientAuth<typeof authorization> {
+	return createClientAuth({
+		authorization,
+		getIdentity: () => identity,
+		...(loginPath ? { loginPath } : {}),
 	});
 }
 
-function provider(
-	overrides: Partial<StackAuthProvider> = {},
-): StackAuthProvider {
-	return {
-		getIdentity: () => ({ id: "user-1", name: "Test User" }),
-		...overrides,
-	};
-}
-
 function Providers({
-	auth,
+	auth: clientAuth,
 	router,
 	children,
 }: {
-	auth?: StackAuthProvider;
+	auth?: ClientAuth<typeof authorization>;
 	router?: { navigate?: (path: string) => void };
 	children: React.ReactNode;
 }) {
 	return (
-		<StackProvider basePath="/pages" auth={auth} router={router}>
+		<StackProvider basePath="/pages" auth={clientAuth} router={router}>
 			{children}
 		</StackProvider>
 	);
 }
 
-describe("useIdentity", () => {
-	it("returns null identity and not pending without an auth provider", async () => {
-		let captured: any;
-		function Probe() {
-			captured = useIdentity();
-			return null;
-		}
-		await render(
-			<Providers>
-				<Probe />
-			</Providers>,
-		);
-
-		expect(captured.identity).toBeNull();
-		expect(captured.isPending).toBe(false);
-	});
-
-	it("resolves identity from the provider", async () => {
-		let captured: any;
-		function Probe() {
-			captured = useIdentity();
-			return null;
-		}
-		await render(
-			<Providers auth={provider()}>
-				<Probe />
-			</Providers>,
-		);
-
-		expect(captured.identity).toEqual({ id: "user-1", name: "Test User" });
-		expect(captured.isPending).toBe(false);
-	});
-
-	it("resolves to null identity when getIdentity throws", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
-		let captured: any;
-		function Probe() {
-			captured = useIdentity();
-			return null;
-		}
-		await render(
-			<Providers
-				auth={provider({
-					getIdentity: () => Promise.reject(new Error("boom")),
-				})}
-			>
-				<Probe />
-			</Providers>,
-		);
-
-		expect(captured.identity).toBeNull();
-		expect(captured.isPending).toBe(false);
-		expect(captured.error).toMatchObject({ message: "boom" });
-	});
-});
-
-describe("useCan", () => {
-	it("allows everything without an auth provider", async () => {
-		let captured: any;
-		function Probe() {
-			captured = useCan({ resource: "blog:post", action: "delete" });
-			return null;
-		}
-		await render(
-			<Providers>
-				<Probe />
-			</Providers>,
-		);
-
-		expect(captured).toEqual({ can: true, isPending: false });
-	});
-
-	it("allows everything when the provider has no can()", async () => {
-		let captured: any;
-		function Probe() {
-			captured = useCan({ resource: "blog:post", action: "delete" });
-			return null;
-		}
-		await render(
-			<Providers auth={provider()}>
-				<Probe />
-			</Providers>,
-		);
-
-		expect(captured).toEqual({ can: true, isPending: false });
-	});
-
-	it("passes the resolved identity and params to can()", async () => {
-		const can = vi.fn().mockResolvedValue(true);
-		let captured: any;
-		function Probe() {
-			captured = useCan({
-				resource: "blog:post",
-				action: "delete",
-				params: { id: "p1" },
-			});
-			return null;
-		}
-		await render(
-			<Providers auth={provider({ can })}>
-				<Probe />
-			</Providers>,
-		);
-
-		expect(can).toHaveBeenCalledWith({
-			resource: "blog:post",
-			action: "delete",
-			params: { id: "p1" },
-			identity: { id: "user-1", name: "Test User" },
-		});
-		expect(captured).toEqual({ can: true, isPending: false });
-	});
-
-	it("denies when can() resolves false", async () => {
-		let captured: any;
-		function Probe() {
-			captured = useCan({ resource: "blog:post", action: "delete" });
-			return null;
-		}
-		await render(
-			<Providers auth={provider({ can: () => false })}>
-				<Probe />
-			</Providers>,
-		);
-
-		expect(captured).toEqual({ can: false, isPending: false });
-	});
-
-	it("does not return a stale result after the identity changes", async () => {
-		// First identity resolves to an admin whose can() allows; after
-		// refetch() the identity switches to a user whose can() never
-		// resolves — the hook must report pending, never the admin's `true`.
-		let currentUser = { id: "admin" };
-		const neverResolves = new Promise<boolean>(() => {});
-		const auth = provider({
-			getIdentity: () => currentUser,
-			can: ({ identity }) => (identity?.id === "admin" ? true : neverResolves),
-		});
-
-		let capturedCan: any;
-		let capturedIdentity: any;
-		function Probe() {
-			capturedCan = useCan({ resource: "blog:post", action: "delete" });
-			capturedIdentity = useIdentity();
-			return null;
-		}
-		await render(
-			<Providers auth={auth}>
-				<Probe />
-			</Providers>,
-		);
-
-		expect(capturedCan).toEqual({ can: true, isPending: false });
-
-		currentUser = { id: "viewer" };
-		await act(async () => {
-			await capturedIdentity.refetch();
-		});
-
-		expect(capturedIdentity.identity).toEqual({ id: "viewer" });
-		expect(capturedCan).toEqual({ can: false, isPending: true });
-	});
-
-	it("denies when can() throws", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
-		let captured: any;
-		function Probe() {
-			captured = useCan({ resource: "blog:post", action: "delete" });
-			return null;
-		}
-		await render(
-			<Providers
-				auth={provider({ can: () => Promise.reject(new Error("boom")) })}
-			>
-				<Probe />
-			</Providers>,
-		);
-
-		expect(captured).toEqual({ can: false, isPending: false });
-	});
-});
-
-describe("CanAccess", () => {
-	it("renders children without an auth provider", async () => {
-		await render(
-			<Providers>
-				<CanAccess resource="blog:post" action="delete">
-					<button type="button">Delete</button>
-				</CanAccess>
-			</Providers>,
-		);
-
-		expect(container.textContent).toBe("Delete");
-	});
-
-	it("renders children when can() allows", async () => {
-		await render(
-			<Providers auth={provider({ can: () => true })}>
-				<CanAccess resource="blog:post" action="delete">
-					<button type="button">Delete</button>
-				</CanAccess>
-			</Providers>,
-		);
-
-		expect(container.textContent).toBe("Delete");
-	});
-
-	it("hides children and renders fallback when can() denies", async () => {
-		await render(
-			<Providers auth={provider({ can: () => false })}>
-				<CanAccess
-					resource="blog:post"
-					action="delete"
-					fallback={<span>No access</span>}
-				>
-					<button type="button">Delete</button>
-				</CanAccess>
-			</Providers>,
-		);
-
-		expect(container.textContent).toBe("No access");
-	});
-
-	it("renders nothing by default when denied", async () => {
-		await render(
-			<Providers auth={provider({ can: () => false })}>
-				<CanAccess resource="blog:post" action="delete">
-					<button type="button">Delete</button>
-				</CanAccess>
-			</Providers>,
-		);
-
-		expect(container.textContent).toBe("");
-	});
-
-	it("renders the loading node while the check is pending", async () => {
-		// A can() that never resolves keeps the check pending forever.
-		const pending = new Promise<boolean>(() => {});
-		await render(
-			<Providers auth={provider({ can: () => pending })}>
-				<CanAccess
-					resource="blog:post"
-					action="delete"
-					loading={<span>Checking...</span>}
-				>
-					<button type="button">Delete</button>
-				</CanAccess>
-			</Providers>,
-		);
-
-		expect(container.textContent).toBe("Checking...");
-	});
-});
-
-describe("SSR parity (no auth provider)", () => {
-	it("renderToString output is unchanged by the auth wiring", () => {
-		const html = renderToString(
-			<StackProvider basePath="/pages">
-				<CanAccess resource="x" action="read">
-					<span>child</span>
-				</CanAccess>
-			</StackProvider>,
-		);
-		expect(html).toContain("child");
-	});
-});
-
-describe("route gating (ComposedRoute permission)", () => {
+describe("descriptor route gating", () => {
 	const Page = () => <div>secret page</div>;
 	const Loading = () => <div>loading...</div>;
 	const ErrorUi = () => <div>error page</div>;
@@ -346,169 +78,48 @@ describe("route gating (ComposedRoute permission)", () => {
 				LoadingComponent={Loading}
 				ErrorComponent={ErrorUi}
 				onError={() => {}}
-				permission={{ resource: "blog:draft", action: "read" }}
+				permission={blogPermissions.post.read({ scope: "drafts" })}
 			/>
 		);
 	}
 
-	it("renders the page unchanged when no auth provider is configured", async () => {
+	it("keeps browser presentation permissive when client auth is omitted", async () => {
 		await render(
 			<Providers>
 				<GatedRoute />
 			</Providers>,
 		);
-
 		expect(container.textContent).toBe("secret page");
 	});
 
-	it("renders the page when can() allows", async () => {
+	it("evaluates the exact descriptor through createClientAuth", async () => {
 		await render(
-			<Providers auth={provider({ can: () => true })}>
+			<Providers auth={auth({ id: "allowed" })}>
 				<GatedRoute />
 			</Providers>,
 		);
-
 		expect(container.textContent).toBe("secret page");
 	});
 
-	it("evaluates a plugin-owned descriptor through one-rule client auth", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
-		const authorization = defineAuthorization({
-			identity: z.object({ id: z.string() }),
-			permissions: [blogPermissions] as const,
-			rules: ({ blog }) => [blog.post.create.when(() => false)],
-		});
-		const auth = createClientAuth({
-			authorization,
-			getIdentity: () => ({ id: "user-1" }),
-		});
-
-		await render(
-			<Providers auth={auth}>
-				<ComposedRoute
-					path="/blog/new"
-					PageComponent={Page}
-					LoadingComponent={Loading}
-					ErrorComponent={ErrorUi}
-					onError={() => {}}
-					permission={blogPermissions.post.create({ publish: "draft" })}
-				/>
-			</Providers>,
-		);
-
-		expect(container.textContent).toBe("error page");
-	});
-
-	it("keeps an explicitly public descriptor open for legacy providers", async () => {
-		const can = vi.fn(() => false);
-
-		await render(
-			<Providers auth={provider({ can })}>
-				<ComposedRoute
-					path="/blog"
-					PageComponent={Page}
-					LoadingComponent={Loading}
-					ErrorComponent={ErrorUi}
-					onError={() => {}}
-					permission={blogPermissions.post.read({ scope: "published" })}
-					legacyPublic
-				/>
-			</Providers>,
-		);
-
-		expect(container.textContent).toBe("secret page");
-		expect(can).not.toHaveBeenCalled();
-	});
-
-	it("uses a route's legacy permission override for string providers", async () => {
-		const can = vi.fn(
-			({ resource, action }) => resource === "blog:draft" && action === "read",
-		);
-
-		await render(
-			<Providers auth={provider({ can })}>
-				<ComposedRoute
-					path="/blog/drafts"
-					PageComponent={Page}
-					LoadingComponent={Loading}
-					ErrorComponent={ErrorUi}
-					onError={() => {}}
-					permission={blogPermissions.post.read({ scope: "drafts" })}
-					legacyPermission={{ resource: "blog:draft", action: "read" }}
-				/>
-			</Providers>,
-		);
-
-		expect(container.textContent).toBe("secret page");
-		expect(can).toHaveBeenCalledWith(
-			expect.objectContaining({
-				resource: "blog:draft",
-				action: "read",
-			}),
-		);
-	});
-
-	it("ignores a legacy permission override for one-rule providers", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
-		const authorization = defineAuthorization({
-			identity: z.object({ id: z.string() }),
-			permissions: [blogPermissions] as const,
-			rules: ({ blog }) => [blog.post.read.when(() => false)],
-		});
-		const auth = createClientAuth({
-			authorization,
-			getIdentity: () => ({ id: "user-1" }),
-		});
-
-		await render(
-			<Providers auth={auth}>
-				<ComposedRoute
-					path="/blog/drafts"
-					PageComponent={Page}
-					LoadingComponent={Loading}
-					ErrorComponent={ErrorUi}
-					onError={() => {}}
-					permission={blogPermissions.post.read({ scope: "drafts" })}
-					legacyPermission={{ resource: "blog:draft", action: "read" }}
-				/>
-			</Providers>,
-		);
-
-		expect(container.textContent).toBe("error page");
-	});
-
-	it("redirects unauthenticated users to loginPath via router.navigate", async () => {
+	it("redirects an anonymous denial to the bound login path", async () => {
 		const navigate = vi.fn();
 		await render(
-			<Providers
-				auth={provider({
-					getIdentity: () => null,
-					can: () => false,
-					loginPath: "/login",
-				})}
-				router={{ navigate }}
-			>
+			<Providers auth={auth(null, "/login")} router={{ navigate }}>
 				<GatedRoute />
 			</Providers>,
 		);
-
 		expect(navigate).toHaveBeenCalledWith("/login");
-		// The gated page never renders while redirecting.
 		expect(container.textContent).toBe("loading...");
 	});
 
-	it("throws into the route ErrorBoundary when an authenticated user is denied", async () => {
+	it("sends an authenticated denial to the route error boundary", async () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		const navigate = vi.fn();
 		await render(
-			<Providers
-				auth={provider({ can: () => false, loginPath: "/login" })}
-				router={{ navigate }}
-			>
+			<Providers auth={auth({ id: "denied" }, "/login")} router={{ navigate }}>
 				<GatedRoute />
 			</Providers>,
 		);
-
 		expect(navigate).not.toHaveBeenCalled();
 		expect(container.textContent).toBe("error page");
 	});

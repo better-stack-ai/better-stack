@@ -5,7 +5,7 @@ import type {
 	DbPlugin,
 } from "@btst/db";
 import type { Endpoint, Router } from "better-call";
-import type { StackServerAuthProvider } from "./shared/auth-types";
+import type { ServerAuth } from "./authorization/server";
 import type {
 	OperationApi,
 	OperationPermissionRequest,
@@ -22,10 +22,8 @@ import type {
 } from "./authorization";
 
 export type {
-	CanParams,
-	StackAuthProvider,
+	StackClientAuth,
 	StackIdentity,
-	StackServerAuthProvider,
 } from "./shared/auth-types";
 
 /**
@@ -40,7 +38,7 @@ export interface StackContext {
 	/** The database adapter */
 	adapter: Adapter;
 	/** The server-side auth provider, when configured on `stack()` */
-	auth?: StackServerAuthProvider;
+	auth?: ServerAuth<AnyAuthorization>;
 	/** Routes already constructed for each plugin, used by introspection plugins. */
 	pluginRoutes: Record<string, Record<string, Endpoint>>;
 	/** Validated, safe metadata for every operation-first/infrastructure route. */
@@ -237,17 +235,13 @@ type _IncompatibleOperationRequests<TOperationRequest, TAuthorizationRequest> =
 		: TOperationRequest;
 
 /**
- * Reject one-rule server adapters whose registered catalogs do not cover every
- * operation descriptor in the composed stack. RC server providers remain
- * compatible until the v3 migration is complete.
+ * Reject server adapters whose registered catalogs do not cover every
+ * operation descriptor in the composed stack.
  */
 export type CompatibleStackAuth<
 	TPlugins extends Record<string, BackendPlugin<any, any, any>>,
-	TAuth extends StackServerAuthProvider | undefined,
-> = TAuth extends {
-	mode: "one-rule";
-	readonly authorization: infer TAuthorization extends AnyAuthorization;
-}
+	TAuth extends ServerAuth<AnyAuthorization> | undefined,
+> = TAuth extends ServerAuth<infer TAuthorization extends AnyAuthorization>
 	? _IncompatibleOperationRequests<
 			PluginOperationPermissionRequests<TPlugins>,
 			AuthorizationPermissionRequest<TAuthorization>
@@ -264,8 +258,8 @@ export interface BackendLibConfig<
 		string,
 		BackendPlugin<any, any, any>
 	>,
-	TAuth extends StackServerAuthProvider | undefined =
-		| StackServerAuthProvider
+	TAuth extends ServerAuth<AnyAuthorization> | undefined =
+		| ServerAuth<AnyAuthorization>
 		| undefined,
 > {
 	basePath: string;
@@ -273,10 +267,10 @@ export interface BackendLibConfig<
 	plugins: TPlugins;
 	adapter: (db: DatabaseDefinition) => Adapter;
 	/**
-	 * Optional server-side auth provider. When set, `stack()` resolves the
-	 * request identity lazily and at most once per request; plugin lifecycle
-	 * hooks and route handlers can read it via `getRequestIdentity(headers)`
-	 * from `@btst/stack/api`. When omitted, behavior is unchanged.
+	 * Server authorization created by `createServerAuth()`. When set,
+	 * request operations evaluate their schema-backed permission after trusted
+	 * facts are derived. When omitted, request operations remain permissive;
+	 * use `internal` to make trusted intent explicit.
 	 */
 	auth?: TAuth;
 }

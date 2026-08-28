@@ -3,11 +3,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-	StackProvider,
-	type StackAuthProvider,
-	useIdentity,
-} from "@btst/stack/context";
+import { StackProvider, useIdentity } from "@btst/stack/context";
+import { createIdentityTestAuth } from "../../../__tests__/auth-test-utils";
+import type { StackClientAuth } from "../../../shared/auth-types";
 import { useBoard } from "../client/hooks/kanban-hooks";
 
 (
@@ -66,8 +64,8 @@ describe("Kanban protected query identity partition", () => {
 			.mockResolvedValueOnce(responseFor("User A board"))
 			.mockResolvedValueOnce(responseFor("User B board"));
 		const pendingIdentity = () => new Promise<null>(() => {});
-		const userA = { getIdentity: pendingIdentity } satisfies StackAuthProvider;
-		const userB = { getIdentity: pendingIdentity } satisfies StackAuthProvider;
+		const userA = createIdentityTestAuth(pendingIdentity);
+		const userB = createIdentityTestAuth(pendingIdentity);
 		let boardName: string | undefined;
 
 		function Probe() {
@@ -75,7 +73,7 @@ describe("Kanban protected query identity partition", () => {
 			return null;
 		}
 
-		async function render(auth: StackAuthProvider) {
+		async function render(auth: StackClientAuth) {
 			await act(async () => {
 				root.render(
 					<StackProvider
@@ -108,12 +106,12 @@ describe("Kanban protected query identity partition", () => {
 			),
 		);
 		let finishIdentity: ((identity: { id: string }) => void) | undefined;
-		const auth = {
-			getIdentity: () =>
+		const auth = createIdentityTestAuth(
+			() =>
 				new Promise<{ id: string }>((resolve) => {
 					finishIdentity = resolve;
 				}),
-		} satisfies StackAuthProvider;
+		);
 		let boardName: string | undefined;
 		let identityPending = false;
 		let refetchIdentity: (() => Promise<void>) | undefined;
@@ -166,14 +164,14 @@ describe("Kanban protected query identity partition", () => {
 		let rejectIdentity: ((error: Error) => void) | undefined;
 		let finishLogout: ((identity: null) => void) | undefined;
 		let identityCall = 0;
-		const auth = {
-			getIdentity: () =>
+		const auth = createIdentityTestAuth(
+			() =>
 				new Promise<{ id: string } | null>((resolve, reject) => {
 					identityCall += 1;
 					if (identityCall === 1) rejectIdentity = reject;
 					else finishLogout = resolve;
 				}),
-		} satisfies StackAuthProvider;
+		);
 		let boardName: string | undefined;
 		let identityError: Error | undefined;
 		let refetchIdentity: (() => Promise<void>) | undefined;
@@ -248,6 +246,7 @@ describe("Kanban protected query identity partition", () => {
 				},
 			},
 			getIdentity: vi.fn(() => null),
+			usePermission: () => ({ can: true, isPending: false }),
 		};
 		let boardName: string | undefined;
 		let identityError: Error | undefined;

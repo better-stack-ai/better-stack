@@ -114,7 +114,7 @@ const blogHooks: BlogBackendHooks = {
 };
 
 const globalForStack = global as typeof global & {
-	__btst_stack__?: ReturnType<typeof stack>;
+	__btst_stack__?: ReturnType<typeof createStack>;
 };
 
 const submitIntakeAssessment = tool({
@@ -159,11 +159,14 @@ const submitIntakeAssessment = tool({
 	}),
 	execute: async (params) => {
 		const slug = `client-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-		await myStack.api.cms.createContentItem("client-profile", {
-			slug,
-			data: {
-				...params,
-				lifeEvents: params.lifeEvents.join(", "),
+		await myStack.internal.cms.createContentItem({
+			typeSlug: "client-profile",
+			body: {
+				slug,
+				data: {
+					...params,
+					lifeEvents: params.lifeEvents.join(", "),
+				},
 			},
 		});
 

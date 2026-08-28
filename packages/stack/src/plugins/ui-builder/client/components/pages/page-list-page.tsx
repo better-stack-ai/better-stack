@@ -26,7 +26,6 @@ export function PageListPage() {
 				contentType: UI_BUILDER_TYPE_SLUG,
 				scope: "collection",
 			})}
-			legacyPermission={{ resource: "ui-builder:page", action: "read" }}
 			PageComponent={PageListPageInternal}
 			ErrorComponent={DefaultError}
 			LoadingComponent={PageListSkeleton}

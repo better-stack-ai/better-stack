@@ -910,7 +910,6 @@ export function CommentThread(props: CommentThreadProps) {
 					resourceId: props.resourceId,
 					resourceType: props.resourceType,
 				})}
-				legacyPublic
 				loading={<CommentThreadSkeleton />}
 			>
 				<WhenVisible fallback={<CommentThreadSkeleton />} rootMargin="300px">

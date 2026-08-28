@@ -18,7 +18,6 @@ export function NewBoardPageComponent() {
 		<ComposedRoute
 			path="/kanban/new"
 			permission={kanbanPermissions.board.create()}
-			legacyPermission={{ resource: "kanban:board", action: "create" }}
 			PageComponent={NewBoardPage}
 			ErrorComponent={DefaultError}
 			LoadingComponent={BoardsListSkeleton}

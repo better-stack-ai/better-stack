@@ -241,17 +241,10 @@ and resource facts their rule authorized, so overlapping changes cannot bypass
 the rule.
 
 Once authorization is installed, a missing Comments rule denies that action.
-Omitting `stack({ auth })` preserves the v3 RC allow-all server behavior during
-the authorization migration. A structural legacy server auth provider remains
-narrowly supported through explicit operation mappings: approved public
-threads/counts stay public, while protected operations call its string `can`
-callback with the server-resolved identity and trusted Comments facts. A denied
-mapping fails before lifecycle hooks; an identity-only RC provider has no
-authorization policy and retains its prior allow-all behavior. Use
-`createServerAuth()` to enable exact descriptor enforcement and default-deny
-missing rules. The legacy string client provider remains supported through the
-same migration; schema-bound providers always evaluate the exact descriptor
-shown above.
+Omitting `stack({ auth })` preserves permissive server behavior for applications
+that do not configure authorization. Use `createServerAuth()` to enable exact
+descriptor enforcement and default-deny missing rules. Client gates use the
+matching `createClientAuth()` adapter and exact descriptors shown above.
 
 ## Embedding Comments
 
@@ -372,7 +365,7 @@ approval from marking spam.
 | `resolveUser` | `(authorId: string) => Promise<{ name: string; avatarUrl?: string } \| null>` | — | Map author IDs to display info; returns `null` → shows `"[deleted]"` |
 | `onBeforeList` | hook | — | Called after authorization and before a list query. |
 | `onBeforeCount` | hook | — | Called after authorization and before a count query. |
-| `onBeforePost` | hook | — | Called after authorization and before a comment is saved. With generic auth configured, request identity is authoritative. The returned `{ authorId }` remains only as a no-auth v3 RC fallback. |
+| `onBeforePost` | hook | — | Called after authorization and before a comment is saved. Request identity is authoritative when server authorization is configured. |
 | `onAfterPost` | hook | — | Called after a comment is saved. |
 | `onBeforeEdit` | hook | — | Called after authorization and before a comment body is updated. |
 | `onAfterEdit` | hook | — | Called after a comment body is updated. |
@@ -382,15 +375,14 @@ approval from marking spam.
 | `onBeforeDelete` | hook | — | Called after authorization and before a comment is deleted. |
 | `onAfterDelete` | hook | — | Called after a comment is deleted. |
 | `onBeforeListByAuthor` | hook | — | Called after the own-history rule allows an author-scoped query. |
-| `resolveCurrentUserId` | hook | deprecated | Retained for RC type compatibility and no longer consulted. Configure generic `stack({ auth })` identity instead. |
 
 <Callout type="warn">
 All lifecycle hooks receive validated input, server-derived facts, resolved
 identity, and request in a deeply readonly context. Authorization runs first;
 denied requests cannot invoke hooks. Move earlier v3 RC role, ownership, and
-session checks into the shared rule. Hook return values no longer select
-request authorship when generic auth is configured; the earlier `{ authorId }`
-return remains only for no-auth v3 RC compatibility.
+session checks into the shared rule. Hook return values never select request
+authorship. Request operations use the resolved identity; trusted internal and
+no-auth callers must provide an explicit `authorId` input instead.
 </Callout>
 
 <Callout type="info">
@@ -433,32 +425,9 @@ await app.internal.comments.createComment({
 })
 ```
 
-### Trusted low-level data API (`stack.api.comments`)
+### Trusted server calls
 
-The raw getter API is a lower-level escape hatch for SSG, migrations, and
-trusted data-layer code:
-
-```ts
-const items = await myStack.api.comments.listComments({
-  resourceId: "my-post",
-  resourceType: "blog-post",
-  status: "approved",
-})
-
-const count = await myStack.api.comments.getCommentCount({
-  resourceId: "my-post",
-  resourceType: "blog-post",
-})
-```
-
-<Callout type="warn">
-`stack().api.comments` and the direct getter/mutation exports bypass the
-maintained operation pipeline. App-authored prefetch code built on those raw
-data APIs is equally trusted and lower-level; the built-in Comments route/SSR
-prefetch uses the maintained HTTP operations. Raw APIs are not available
-through HTTP, `forRequest(request).api.comments`, or `internal.comments`.
-Callers own authorization and lifecycle composition.
-</Callout>
+Comments has no raw `stack.api.comments` business namespace. Use `app.internal.comments` for explicitly trusted jobs that should keep operation validation and lifecycle hooks. Standalone getter exports remain lower-level adapter primitives for plugin internals and migrations.
 
 ## React Hooks
 

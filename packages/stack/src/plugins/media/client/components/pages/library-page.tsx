@@ -34,7 +34,6 @@ export function LibraryPageComponent() {
 		<ComposedRoute
 			path="/media"
 			permission={mediaPermissions.library.read()}
-			legacyPermission={{ resource: "media:asset", action: "read" }}
 			PageComponent={LibraryPage}
 			ErrorComponent={LibraryError}
 			LoadingComponent={LibraryLoading}

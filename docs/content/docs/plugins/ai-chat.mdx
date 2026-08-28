@@ -156,7 +156,7 @@ export const getStackClient = (
         queryClient: queryClient,
         headers: options?.headers,
         identityPartition: options?.identity,
-        // Mode should match backend config
+        // Client conversation UI/persistence mode
         mode: "authenticated", // "authenticated" (default) or "public"
         // Optional: SEO configuration
         seo: {
@@ -226,7 +226,7 @@ Configure framework-wide router and API wiring on `StackProvider`; keep only AI 
             api={{ baseURL, basePath: "/api/data" }}
             overrides={{
               "ai-chat": {
-                mode: "authenticated", // Should match backend config
+                mode: "authenticated", // Persistent conversation UI
                 uploadFile: async (file) => {
                   // Implement your file upload logic
                   return "https://example.com/uploads/file.pdf"
@@ -851,7 +851,7 @@ import {
 } from "@btst/stack/plugins/ai-chat/query-keys"
 ```
 
-The stable prefixes remain `['conversations', 'list', 'all']` and `['conversations', 'detail', id]`. Protected keys append the validated identity id plus an opaque fingerprint (or an explicit anonymous marker), never the full identity object. Structural claims are fingerprinted deterministically; legacy non-JSON claims use conservative reference partitions because they cannot cross an SSR boundary. This keeps authorization-relevant identity changes in separate cache partitions without serializing those claims into dehydrated caches. Pending/error identity generations use separate disabled keys, mutations refresh only the partition that started them, and an account switch clears drafts, attachments, edit state, messages, and any active stream. Server loaders must pass `identityPartition` (the framework codegen does this automatically) so dehydrated data lands in the same browser partition.
+The stable prefixes remain `['conversations', 'list', 'all']` and `['conversations', 'detail', id]`. Protected keys append the validated identity id plus an opaque fingerprint (or an explicit anonymous marker), never the full identity object. Structural claims are fingerprinted deterministically; non-JSON claims use conservative reference partitions because they cannot cross an SSR boundary. This keeps authorization-relevant identity changes in separate cache partitions without serializing those claims into dehydrated caches. Pending/error identity generations use separate disabled keys, mutations refresh only the partition that started them, and an account switch clears drafts, attachments, edit state, messages, and any active stream. Server loaders must pass `identityPartition` (the framework codegen does this automatically) so dehydrated data lands in the same browser partition.
 
 ## Model & Tools Configuration
 
@@ -1044,7 +1044,7 @@ aiChat: aiChatClientPlugin({
   siteBaseURL: baseURL,
   siteBasePath: "/pages",
   queryClient: queryClient,
-  mode: "public", // Must match backend
+  mode: "public", // Stateless public conversation UI
 })
 ```
 
@@ -1145,47 +1145,7 @@ Rename, delete, and file-upload feedback uses the shared `notify` provider. Fiel
 
 ## Server-side Data Access
 
-The AI Chat plugin exposes standalone getter functions for deliberately low-level server data access.
-
-<Callout type="warn">
-These raw getters bypass typed authorization, identity scoping, authoritative snapshot checks, and lifecycle hooks. Prefer `app.forRequest(request).api.aiChat` for request-driven code and `app.internal.aiChat` for trusted jobs. Use raw getters only when the caller owns those responsibilities explicitly.
-</Callout>
-
-### Two patterns
-
-**Pattern 1 — via `stack().api`**
-
-```ts title="app/lib/stack.ts"
-import { myStack } from "./stack";
-
-// List all conversations (optionally scoped to a user)
-const all        = await myStack.api["ai-chat"].getAllConversations();
-const userConvs  = await myStack.api["ai-chat"].getAllConversations("user-123");
-
-// Get a conversation with its full message history
-const conv       = await myStack.api["ai-chat"].getConversationById("conv-456");
-if (conv) {
-  console.log(conv.messages); // Message[]
-}
-```
-
-**Pattern 2 — direct import**
-
-```ts
-import {
-  getAllConversations,
-  getConversationById,
-} from "@btst/stack/plugins/ai-chat/api";
-
-const conv = await getConversationById(myAdapter, conversationId);
-```
-
-### Available getters
-
-| Function | Description |
-|---|---|
-| `getAllConversations(adapter, userId?)` | Returns all conversations, optionally filtered by userId |
-| `getConversationById(adapter, id)` | Returns a conversation with messages, or `null` |
+AI Chat has no raw `stack.api.aiChat` business namespace. Use `app.forRequest(request).api.aiChat` for request-driven work and `app.internal.aiChat` for explicitly trusted jobs. Standalone conversation getters remain lower-level adapter primitives for plugin internals and migrations.
 
 ## Route-Aware AI Context
 

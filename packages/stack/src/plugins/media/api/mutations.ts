@@ -34,9 +34,9 @@ export interface CreateFolderInput {
 
 /**
  * Create an asset record in the database.
- * Pure DB function — no authorization hooks, no HTTP context.
+ * Pure DB function — no operation authorization or lifecycle hooks, no HTTP context.
  *
- * @remarks **Security:** No authorization hooks (e.g. `onBeforeUpload`) are called.
+ * @remarks **Security:** Operation authorization and lifecycle hooks are not called.
  * The caller is responsible for any access-control checks before invoking this function.
  */
 export async function createAsset(
@@ -63,9 +63,9 @@ export async function createAsset(
 
 /**
  * Update an asset's `alt` text or `folderId`.
- * Pure DB function — no authorization hooks, no HTTP context.
+ * Pure DB function — no operation authorization or lifecycle hooks, no HTTP context.
  *
- * @remarks **Security:** No authorization hooks are called.
+ * @remarks **Security:** Operation authorization and lifecycle hooks are not called.
  */
 export async function updateAsset(
 	adapter: Adapter,
@@ -95,9 +95,9 @@ export async function updateAsset(
 /**
  * Delete an asset record from the database by its ID.
  * Does NOT delete the underlying file — the caller must do that via the storage adapter.
- * Pure DB function — no authorization hooks, no HTTP context.
+ * Pure DB function — no operation authorization or lifecycle hooks, no HTTP context.
  *
- * @remarks **Security:** No authorization hooks are called.
+ * @remarks **Security:** Operation authorization and lifecycle hooks are not called.
  */
 export async function deleteAsset(adapter: Adapter, id: string): Promise<void> {
 	await adapter.delete<Asset>({
@@ -108,9 +108,9 @@ export async function deleteAsset(adapter: Adapter, id: string): Promise<void> {
 
 /**
  * Create a folder record in the database.
- * Pure DB function — no authorization hooks, no HTTP context.
+ * Pure DB function — no operation authorization or lifecycle hooks, no HTTP context.
  *
- * @remarks **Security:** No authorization hooks are called.
+ * @remarks **Security:** Operation authorization and lifecycle hooks are not called.
  */
 export async function createFolder(
 	adapter: Adapter,
@@ -134,9 +134,9 @@ export async function createFolder(
  * Child folders are cascade-deleted automatically. Throws if the folder or
  * any of its descendants contain assets (which have associated storage files
  * that must be deleted via the storage adapter first).
- * Pure DB function — no authorization hooks, no HTTP context.
+ * Pure DB function — no operation authorization or lifecycle hooks, no HTTP context.
  *
- * @remarks **Security:** No authorization hooks are called.
+ * @remarks **Security:** Operation authorization and lifecycle hooks are not called.
  */
 export async function deleteFolder(
 	adapter: Adapter,

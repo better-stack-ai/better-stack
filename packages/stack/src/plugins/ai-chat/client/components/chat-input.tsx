@@ -295,10 +295,6 @@ export function ChatInput({
 							: {}),
 						mediaTypes: [pendingFile.type],
 					})}
-					legacyPermission={{
-						resource: "ai-chat:attachment",
-						action: "create",
-					}}
 				>
 					{(state) => (
 						<AttachmentPermissionEffect

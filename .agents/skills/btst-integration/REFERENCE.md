@@ -4,40 +4,44 @@
 
 ```ts
 import { stack } from "@btst/stack"
-import { createDrizzleAdapter } from "@btst/adapter-drizzle"  // or prisma / kysely / mongodb / memory
+import { createMemoryAdapter } from "@btst/adapter-memory"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
+import { serverAuth } from "./authorization.server"
 // import more plugins…
 
-// Memory adapter + Next.js: pin to globalThis to share one instance across API and page bundles
-const g = global as typeof global & { __btst__?: ReturnType<typeof stack> }
+function createStack() {
+  return stack({
+    basePath: "/api/data",
+    plugins: {
+      blog: blogBackendPlugin({
+        // optional domain hooks
+        onPostCreated: async (post) => { /* revalidate, notify */ },
+      }),
+      aiChat: aiChatBackendPlugin({
+        model: openai("gpt-4o"),
+        systemPrompt: "You are a helpful assistant.",
+        access: "authorized",
+      }),
+      // add more plugins…
+    },
+    adapter: (db) => createMemoryAdapter(db)({}),
+    auth: serverAuth,
+  })
+}
 
-export const myStack = g.__btst__ ??= stack({
-  basePath: "/api/data",
-  plugins: {
-    blog: blogBackendPlugin({
-      // optional hooks — throw to deny
-      onBeforeCreatePost: async (data) => { /* auth check */ },
-      onPostCreated: async (post) => { /* revalidate, notify */ },
-    }),
-    aiChat: aiChatBackendPlugin({
-      model: openai("gpt-4o"),
-      systemPrompt: "You are a helpful assistant.",
-      mode: "authenticated",
-      getUserId: async (ctx) => ctx.headers?.get("x-user-id") ?? null,
-    }),
-    // add more plugins…
-  },
-  adapter: (db) => createDrizzleAdapter(schema, db, {}),
-  // For memory adapter: adapter: (db) => createMemoryAdapter(db)({})
-})
+// Memory adapter + Next.js: pin the exact app type across API and page bundles.
+type AppStack = ReturnType<typeof createStack>
+const g = globalThis as typeof globalThis & { __btst__?: AppStack }
+export const myStack = g.__btst__ ??= createStack()
 
 export const { handler, dbSchema } = myStack
 ```
 
 **Rules:**
-- For any real DB adapter (Drizzle, Prisma, Kysely, MongoDB), just call `stack()` at module level — no `globalThis` needed.
+- For any real DB adapter (Drizzle, Prisma, Kysely, MongoDB), call the typed `createStack()` factory at module level — no `globalThis` needed.
 - Only pin to `globalThis` when using `@btst/adapter-memory` in Next.js.
+- `access: "authorized"` requires a bound `serverAuth`. Omitting `stack({ auth })` intentionally preserves permissive compatibility and does not protect operations.
 
 ---
 
@@ -227,27 +231,29 @@ export const getStackClient = (queryClient: QueryClient) => {
 Identity and client permissions belong on the top-level provider:
 
 ```tsx
-import type { StackAuthProvider } from "@btst/stack/context"
+import { createClientAuth } from "@btst/stack/authorization/client"
+import { authorization } from "./authorization"
 
-const authProvider = {
+const clientAuth = createClientAuth({
+  authorization,
   getIdentity: async () => (await getSession())?.user ?? null,
   loginPath: "/login",
-  can: ({ resource, action, identity }) =>
-    Boolean(identity && authorize(identity, resource, action)),
-} satisfies StackAuthProvider
+})
 
 <StackProvider
   basePath="/pages"
   router={nextRouter()}
   api={{ baseURL, basePath: "/api/data" }}
-  auth={authProvider}
+  auth={clientAuth}
 >
   {children}
 </StackProvider>
 ```
 
-Configure server identity separately on `stack({ auth })` and enforce
-authorization in backend lifecycle hooks. Do not pass `currentUserId`,
+Create the backend adapter with `createServerAuth({ authorization, getIdentity })`
+and pass it to `stack({ auth: serverAuth })`. Operations derive trusted facts and
+evaluate exact permission descriptors before lifecycle hooks. Do not use hooks
+for routine authorization. Do not pass `currentUserId`,
 `loginHref`, request headers, API paths, or navigation functions to public
 plugin components.
 
@@ -384,10 +390,10 @@ Backend plugins accept a hooks object as their factory argument. Common hooks:
 **blog**
 ```ts
 blogBackendPlugin({
-  onBeforeCreatePost: async (data) => { /* throw to deny */ },
-  onBeforeUpdatePost: async (postId) => { /* throw to deny */ },
-  onBeforeDeletePost: async (postId) => { /* throw to deny */ },
-  onBeforeListPosts: async (filter) => { /* throw to deny drafts to unauthed users */ },
+  onBeforeCreatePost: async (data) => { /* domain validation */ },
+  onBeforeUpdatePost: async (postId) => { /* domain validation */ },
+  onBeforeDeletePost: async (postId) => { /* audit */ },
+  onBeforeListPosts: async (filter) => { /* telemetry */ },
   onPostCreated: async (post) => { revalidatePath("/pages/blog") },
   onPostUpdated: async (post) => { /* … */ },
   onPostDeleted: async (postId) => { /* … */ },
@@ -399,10 +405,9 @@ blogBackendPlugin({
 commentsBackendPlugin({
   autoApprove: false,
   resolveUser: async (authorId) => ({ name: "…" }),
-  resolveCurrentUserId: async (ctx) => ctx?.headers?.get("x-user-id") ?? null,
-  onBeforePost: async (input, ctx) => ({ authorId: "from-session" }),
-  onBeforeEdit: async (commentId, update, ctx) => { /* auth check */ },
-  onBeforeStatusChange: async (commentId, status, ctx) => { /* admin check */ },
+  onBeforePost: async (input, ctx) => { /* domain validation */ },
+  onBeforeEdit: async (commentId, update, ctx) => { /* domain validation */ },
+  onBeforeStatusChange: async (commentId, status, ctx) => { /* audit */ },
 })
 ```
 
@@ -411,10 +416,9 @@ commentsBackendPlugin({
 aiChatBackendPlugin({
   model: openai("gpt-4o"),
   systemPrompt: "…",
-  mode: "authenticated",
+  access: "authorized",
   tools: { myTool },
   enablePageTools: true,
-  getUserId: async (ctx) => ctx.headers?.get("x-user-id") ?? null,
   hooks: {
     onConversationCreated: async (convo) => { /* … */ },
     onAfterChat: async (conversationId, messages) => { /* … */ },

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // self-reference.
 import {
 	StackProvider,
-	type StackAuthProvider,
+	type StackClientAuth,
 	type StackI18nProvider,
 } from "@btst/stack/context";
 import { defineAuthorization } from "@btst/stack/authorization";
@@ -197,12 +197,19 @@ const commentsAuthorization = defineAuthorization({
 	],
 });
 
+type CommentsIdentity = { id: string; role: "user" | "moderator" };
+
 function clientAuth(
-	identity: { id: string; role: "user" | "moderator" } | null,
+	identity:
+		| CommentsIdentity
+		| null
+		| (() => CommentsIdentity | null | Promise<CommentsIdentity | null>),
+	options?: { loginPath?: string },
 ) {
 	return createClientAuth({
 		authorization: commentsAuthorization,
-		getIdentity: () => identity,
+		getIdentity: typeof identity === "function" ? identity : () => identity,
+		...options,
 	});
 }
 
@@ -218,7 +225,7 @@ function typeInto(element: HTMLElement, value: string) {
 
 describe("ModerationPage row actions (PermissionAccess)", () => {
 	function renderModerationPage(
-		auth?: StackAuthProvider,
+		auth?: StackClientAuth,
 		notify?: {
 			success: ReturnType<typeof vi.fn>;
 			error: ReturnType<typeof vi.fn>;
@@ -247,53 +254,6 @@ describe("ModerationPage row actions (PermissionAccess)", () => {
 		expect(row.querySelector('[data-testid="spam-button"]')).toBeTruthy();
 		expect(row.querySelector('[data-testid="delete-button"]')).toBeTruthy();
 	});
-
-	it("hides approve/spam when can() denies comments:comment/moderate", async () => {
-		const can = vi.fn(
-			({ resource, action }: { resource: string; action: string }) =>
-				!(resource === "comments:comment" && action === "moderate"),
-		);
-		const auth: StackAuthProvider = {
-			getIdentity: () => ({ id: "user-1" }),
-			can,
-		};
-
-		await renderModerationPage(auth);
-
-		const row = container.querySelector('[data-testid="moderation-row"]')!;
-		expect(row.querySelector('[data-testid="view-button"]')).toBeTruthy();
-		expect(row.querySelector('[data-testid="approve-button"]')).toBeNull();
-		expect(row.querySelector('[data-testid="spam-button"]')).toBeNull();
-		// Delete is a separate action and stays visible
-		expect(row.querySelector('[data-testid="delete-button"]')).toBeTruthy();
-		expect(can).toHaveBeenCalledWith(
-			expect.objectContaining({
-				resource: "comments:comment",
-				action: "moderate",
-				params: {
-					commentId: comment.id,
-					resourceId: comment.resourceId,
-					resourceType: comment.resourceType,
-					currentStatus: comment.status,
-					nextStatus: "approved",
-				},
-			}),
-		);
-		expect(can).toHaveBeenCalledWith(
-			expect.objectContaining({
-				resource: "comments:comment",
-				action: "moderate",
-				params: {
-					commentId: comment.id,
-					resourceId: comment.resourceId,
-					resourceType: comment.resourceType,
-					currentStatus: comment.status,
-					nextStatus: "spam",
-				},
-			}),
-		);
-	});
-
 	it("distinguishes approval from marking spam in the shared rule", async () => {
 		const transitionAuthorization = defineAuthorization({
 			identity: z.object({ id: z.string(), role: z.literal("moderator") }),
@@ -316,24 +276,6 @@ describe("ModerationPage row actions (PermissionAccess)", () => {
 		expect(row.querySelector('[data-testid="approve-button"]')).toBeTruthy();
 		expect(row.querySelector('[data-testid="spam-button"]')).toBeNull();
 	});
-
-	it("hides the delete button when can() denies comments:comment/delete", async () => {
-		const can = vi.fn(
-			({ resource, action }: { resource: string; action: string }) =>
-				!(resource === "comments:comment" && action === "delete"),
-		);
-		const auth: StackAuthProvider = {
-			getIdentity: () => ({ id: "user-1" }),
-			can,
-		};
-
-		await renderModerationPage(auth);
-
-		const row = container.querySelector('[data-testid="moderation-row"]')!;
-		expect(row.querySelector('[data-testid="delete-button"]')).toBeNull();
-		expect(row.querySelector('[data-testid="approve-button"]')).toBeTruthy();
-	});
-
 	it("uses the same schema-backed rule to hide routed moderation controls", async () => {
 		await renderModerationPage(clientAuth({ id: "viewer-1", role: "user" }));
 
@@ -440,27 +382,6 @@ describe("CommentCount permission descriptors", () => {
 			status: "approved",
 		});
 	});
-
-	it("keeps an approved count public for a default-deny legacy provider", async () => {
-		const can = vi.fn(() => false);
-		await render(
-			<StackProvider
-				basePath="/pages"
-				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
-				auth={{ getIdentity: () => null, can }}
-			>
-				<CommentCount resourceId="post-1" resourceType="post" />
-			</StackProvider>,
-		);
-		await act(async () => {});
-
-		expect(
-			container.querySelector('[data-testid="comment-count"]'),
-		).toBeTruthy();
-		expect(hooks.useCommentCount).toHaveBeenCalled();
-		expect(can).not.toHaveBeenCalled();
-	});
-
 	it("does not fetch a moderation count when the local rule denies it", async () => {
 		await render(
 			<StackProvider
@@ -707,7 +628,7 @@ describe("ModerationPage tab/page state (useListState)", () => {
 
 describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 	function renderUserComments(
-		auth?: StackAuthProvider,
+		auth?: StackClientAuth,
 		notify?: {
 			success: ReturnType<typeof vi.fn>;
 			error: ReturnType<typeof vi.fn>;
@@ -742,7 +663,7 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 		const router = createMockRouter("page=2");
 
 		await renderUserComments(
-			{ getIdentity: () => ({ id: "user-1" }) },
+			clientAuth({ id: "user-1", role: "user" }),
 			undefined,
 			router,
 		);
@@ -754,9 +675,7 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 	});
 
 	it("uses the top-level auth identity", async () => {
-		await renderUserComments({
-			getIdentity: () => ({ id: "provider-user" }),
-		});
+		await renderUserComments(clientAuth({ id: "provider-user", role: "user" }));
 		await act(async () => {});
 
 		expect(hooks.useSuspenseComments).toHaveBeenLastCalledWith(
@@ -771,7 +690,10 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 	it("notifies success through the notify provider after deleting", async () => {
 		const notify = { success: vi.fn(), error: vi.fn() };
 
-		await renderUserComments({ getIdentity: () => ({ id: "user-1" }) }, notify);
+		await renderUserComments(
+			clientAuth({ id: comment.authorId, role: "user" }),
+			notify,
+		);
 
 		const deleteButton = container.querySelector<HTMLButtonElement>(
 			'[data-testid="my-comment-delete-button"]',
@@ -800,22 +722,6 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 });
 
 describe("CommentThread provider wiring", () => {
-	it("keeps the approved thread public for a default-deny legacy provider", async () => {
-		const can = vi.fn(() => false);
-		await render(
-			<StackProvider
-				basePath="/pages"
-				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
-				auth={{ getIdentity: () => null, can }}
-			>
-				<CommentThread resourceId="post-1" resourceType="post" />
-			</StackProvider>,
-		);
-		await act(async () => {});
-
-		expect(hooks.useInfiniteComments).toHaveBeenCalled();
-	});
-
 	it("uses the same schema-backed rule for embedded owner controls", async () => {
 		const ownedComment = {
 			...comment,
@@ -849,58 +755,6 @@ describe("CommentThread provider wiring", () => {
 		).toBeTruthy();
 		expect(container.querySelector('[data-testid="like-button"]')).toBeTruthy();
 	});
-	it.each(["approved", "pending"] as const)(
-		"hides delete for an owned %s comment when can() denies comments:comment/delete",
-		async (status) => {
-			const ownedComment = {
-				...comment,
-				authorId: "provider-user",
-				status,
-			};
-			hooks.useInfiniteComments.mockReturnValue({
-				comments: [ownedComment],
-				total: 1,
-				isLoading: false,
-				loadMore: vi.fn(),
-				hasMore: false,
-				isLoadingMore: false,
-				queryKey: ["comments", "infinite"],
-			});
-			const can = vi.fn(
-				({ resource, action }: { resource: string; action: string }) =>
-					!(resource === "comments:comment" && action === "delete"),
-			);
-
-			await render(
-				<StackProvider
-					basePath="/pages"
-					api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
-					auth={{
-						getIdentity: () => ({ id: "provider-user" }),
-						can,
-					}}
-				>
-					<CommentThread resourceId="post-1" resourceType="blog-post" />
-				</StackProvider>,
-			);
-			await act(async () => {});
-
-			expect(
-				container.querySelector('[data-testid="delete-button"]'),
-			).toBeNull();
-			expect(can).toHaveBeenCalledWith(
-				expect.objectContaining({
-					resource: "comments:comment",
-					action: "delete",
-					params: {
-						commentId: comment.id,
-						authorId: "provider-user",
-					},
-				}),
-			);
-		},
-	);
-
 	it("notifies an error when deleting an owned comment fails", async () => {
 		const ownedComment = {
 			...comment,
@@ -928,7 +782,7 @@ describe("CommentThread provider wiring", () => {
 			<StackProvider
 				basePath="/pages"
 				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
-				auth={{ getIdentity: () => ({ id: "provider-user" }) }}
+				auth={clientAuth({ id: "provider-user", role: "user" })}
 				notify={notify}
 			>
 				<CommentThread resourceId="post-1" resourceType="blog-post" />
@@ -953,10 +807,12 @@ describe("CommentThread provider wiring", () => {
 			<StackProvider
 				basePath="/pages"
 				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
-				auth={{
-					getIdentity: () => ({ id: "provider-user" }),
-					loginPath: "/sign-in",
-				}}
+				auth={clientAuth(
+					{ id: "provider-user", role: "user" },
+					{
+						loginPath: "/sign-in",
+					},
+				)}
 			>
 				<CommentThread resourceId="post-1" resourceType="blog-post" />
 			</StackProvider>,
@@ -976,8 +832,8 @@ describe("CommentThread provider wiring", () => {
 	});
 
 	it("waits for the provider identity before mounting the thread", async () => {
-		let resolveIdentity: (identity: { id: string }) => void = () => {};
-		const identity = new Promise<{ id: string }>((resolve) => {
+		let resolveIdentity: (identity: CommentsIdentity) => void = () => {};
+		const identity = new Promise<CommentsIdentity>((resolve) => {
 			resolveIdentity = resolve;
 		});
 
@@ -985,7 +841,7 @@ describe("CommentThread provider wiring", () => {
 			<StackProvider
 				basePath="/pages"
 				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
-				auth={{ getIdentity: () => identity }}
+				auth={clientAuth(() => identity)}
 			>
 				<CommentThread resourceId="post-1" resourceType="blog-post" />
 			</StackProvider>,
@@ -995,7 +851,7 @@ describe("CommentThread provider wiring", () => {
 		expect(container.querySelector('[data-testid="login-link"]')).toBeNull();
 
 		await act(async () => {
-			resolveIdentity({ id: "provider-user" });
+			resolveIdentity({ id: "provider-user", role: "user" });
 			await identity;
 		});
 
@@ -1010,7 +866,9 @@ describe("CommentThread provider wiring", () => {
 			<StackProvider
 				basePath="/pages"
 				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
-				auth={{ getIdentity: () => null, loginPath: "/sign-in" }}
+				auth={clientAuth(null, {
+					loginPath: "/sign-in",
+				})}
 			>
 				<CommentThread resourceId="post-1" resourceType="blog-post" />
 			</StackProvider>,
@@ -1029,7 +887,9 @@ describe("CommentThread provider wiring", () => {
 			<StackProvider
 				basePath="/pages"
 				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
-				auth={{ getIdentity: () => null, loginPath: "/sign-in" }}
+				auth={clientAuth(null, {
+					loginPath: "/sign-in",
+				})}
 			>
 				<CommentThread
 					resourceId="post-1"

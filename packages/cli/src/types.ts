@@ -11,7 +11,6 @@ export type PluginKey =
 	| "kanban"
 	| "comments"
 	| "media"
-	| "better-auth-ui"
 	| "route-docs"
 	| "open-api";
 

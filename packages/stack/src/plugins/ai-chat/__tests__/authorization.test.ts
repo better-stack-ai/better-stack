@@ -442,28 +442,6 @@ describe("AI Chat operation authorization", () => {
 		]);
 	});
 
-	it("does not mistake an authentication-only provider for request authorization", async () => {
-		const app = stack({
-			basePath: "/api",
-			plugins: { aiChat: aiChatBackendPlugin({ model }) },
-			adapter: memory,
-			auth: { getIdentity: () => null },
-		});
-		const created = await app.handler(
-			request("/chat/conversations", {
-				method: "POST",
-				body: { title: "Legacy ownerless" },
-			}),
-		);
-		expect(created.status).toBe(200);
-
-		const listed = await app.handler(request("/chat/conversations"));
-		expect(listed.status).toBe(200);
-		await expect(listed.json()).resolves.toEqual([
-			expect.objectContaining({ title: "Legacy ownerless" }),
-		]);
-	});
-
 	it("fails closed before stream hooks or writes without isolated transactions", async () => {
 		const before = vi.fn();
 		const app = backend({
@@ -1730,53 +1708,5 @@ describe("AI Chat operation authorization", () => {
 			app.internal.aiChat.createConversation({ title: "Trusted" }),
 		).resolves.toMatchObject({ title: "Trusted" });
 		expect(before).toHaveBeenCalledOnce();
-	});
-
-	it("preserves deprecated getUserId scoping when one-rule auth is omitted", async () => {
-		const beforeRead = vi.fn();
-		const plugin = aiChatBackendPlugin({
-			model,
-			getUserId: ({ headers }) => headers?.get("x-user-id"),
-			hooks: { onBeforeGetConversation: beforeRead },
-		});
-		const app = stack({
-			basePath: "/api",
-			plugins: { aiChat: plugin },
-			adapter: memory,
-		});
-		const now = new Date("2026-01-01T00:00:00.000Z");
-		const conversation = await app.adapter.create<Conversation>({
-			model: "conversation",
-			data: {
-				userId: owner.id,
-				title: "Private",
-				createdAt: now,
-				updatedAt: now,
-			},
-		});
-
-		expect(
-			(
-				await app.handler(
-					request(`/chat/conversations/${conversation.id}`, {
-						identity: viewer,
-					}),
-				)
-			).status,
-		).toBe(403);
-		expect(beforeRead).not.toHaveBeenCalled();
-		expect(
-			(
-				await app.handler(
-					request(`/chat/conversations/${conversation.id}`, {
-						identity: owner,
-					}),
-				)
-			).status,
-		).toBe(200);
-		expect(beforeRead).toHaveBeenCalledOnce();
-		expect((await app.handler(request("/chat/conversations"))).status).toBe(
-			403,
-		);
 	});
 });

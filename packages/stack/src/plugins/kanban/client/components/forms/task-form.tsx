@@ -239,28 +239,7 @@ export function TaskForm({
 								...(organizationId ? { organizationId } : {}),
 							});
 					return (
-						<PermissionAccess
-							key={column.id}
-							permission={permission}
-							legacyPermission={{
-								resource: "kanban:task",
-								action: isEditing ? "update" : "create",
-								params: {
-									boardId,
-									columnId: task?.columnId ?? column.id,
-									...(isEditing ? { targetColumnId: column.id } : {}),
-									...(task ? { id: task.id } : {}),
-									...(ownerId ? { ownerId } : {}),
-									...(organizationId ? { organizationId } : {}),
-									...(isEditing && task?.assigneeId
-										? { assigneeId: task.assigneeId }
-										: {}),
-									...(isEditing
-										? { isArchived: task?.isArchived ?? false }
-										: {}),
-								},
-							}}
-						>
+						<PermissionAccess key={column.id} permission={permission}>
 							{item}
 						</PermissionAccess>
 					);
@@ -427,19 +406,6 @@ export function TaskForm({
 							...(task.assigneeId ? { assigneeId: task.assigneeId } : {}),
 							isArchived: task.isArchived,
 						})}
-						legacyPermission={{
-							resource: "kanban:task",
-							action: "delete",
-							params: {
-								id: task.id,
-								boardId,
-								columnId: task.columnId,
-								...(ownerId ? { ownerId } : {}),
-								...(organizationId ? { organizationId } : {}),
-								...(task.assigneeId ? { assigneeId: task.assigneeId } : {}),
-								isArchived: task.isArchived,
-							},
-						}}
 					>
 						<Button
 							type="button"

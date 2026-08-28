@@ -560,8 +560,8 @@ Every transport uses the same operation lifecycle:
 `stack.internal.media.*` is for trusted server jobs: it skips only user
 authorization and still runs validation, storage/domain hooks, cleanup, and
 ordering. Internal child-folder and asset writes inherit the tenant of their
-authoritatively loaded parent folder. Omitting `auth` remains permissive during
-the v3 RC compatibility window.
+authoritatively loaded parent folder. Omitting `auth` leaves request operations
+permissive; configure server authorization to enforce the catalog.
 
 <Callout type="warn">
 Backend hooks are workflow/lifecycle hooks, not the authorization boundary.
@@ -634,27 +634,41 @@ collection scope.
 
 ### Get-or-create folders per tenant
 
-A common pattern in workflow automation is to find a tenant's folder by name, creating it if it does not exist yet. Use `getFolderByName` from the server-side `api` factory:
+A common pattern in trusted workflow automation is to find a tenant's root
+folder by name, creating it if it does not exist yet. The explicit tenant ID is
+an adapter-level concern, so use the retained standalone primitives instead of
+the removed raw business API:
 
 ```ts
 import { stack } from "@btst/stack"
+import {
+  createFolder,
+  getFolderByName,
+} from "@btst/stack/plugins/media/api"
 
-const { api } = stack({ /* ... */ })
+const app = stack({ /* ... */ })
 
 async function getOrCreateProfileFolder(profileId: string) {
   const name = `blog-gen-${profileId}`
-  const existing = await api.media.getFolderByName(name, null, profileId)
+  const existing = await getFolderByName(app.adapter, name, null, profileId)
 
   if (existing) return existing
 
-  return api.media.createFolder(adapter, {
+  return createFolder(app.adapter, {
     name,
     tenantId: profileId,
   })
 }
 ```
 
-`getFolderByName(name, parentId?, tenantId?)` scopes the lookup to a name, an optional parent folder, and an optional tenant. Pass `null` for `parentId` to search only root-level folders.
+`getFolderByName(adapter, name, parentId?, tenantId?)` scopes the lookup to a
+name, an optional parent folder, and an optional tenant. Pass `null` for
+`parentId` to search only root-level folders.
+
+These lower-level primitives intentionally bypass operation authorization,
+validation, and lifecycle hooks; keep them inside trusted adapter-owned
+automation. Use `app.internal.media` for ordinary trusted business calls that
+should retain the complete operation lifecycle.
 
 ## API Reference
 
@@ -853,38 +867,9 @@ The picker deliberately uses the infinite asset resource directly instead of the
 
 ## Server-side Data Access
 
-Like other BTST plugins, the Media plugin supports two server-side access patterns:
+Use `app.forRequest(request).api.media` for user-driven calls and `app.internal.media` for explicitly trusted jobs. Both use the maintained operations; internal calls skip user authorization but retain validation, tenant resolution, authoritative facts, storage/domain behavior, and hooks. `app.api.media` contains only the tenant-free SSG `prefetchForRoute` helper.
 
-1. Use `stack().api.media.*` when you already have a configured stack instance.
-2. Import getters and mutations directly from `@btst/stack/plugins/media/api` when you want lower-level access with an adapter.
-
-**Available getters via `stack().api.media`:**
-
-| Function | Description |
-| --- | --- |
-| `listAssets(params?)` | List assets with pagination, search, MIME filtering, folder filtering, and optional tenant scoping |
-| `getAssetById(id)` | Fetch a single asset by ID |
-| `listFolders(params?)` | List folders, optionally scoped to a parent folder and/or tenant |
-| `getFolderById(id)` | Fetch a single folder by ID |
-| `getFolderByName(name, parentId?, tenantId?)` | Find a folder by name, optionally scoped to a parent and/or tenant. Returns `null` if not found. |
-
-**Available direct mutations:**
-
-| Function | Description |
-| --- | --- |
-| `createAsset(adapter, input)` | Register an asset record |
-| `updateAsset(adapter, id, input)` | Update an existing asset |
-| `deleteAsset(adapter, id)` | Delete an asset record |
-| `createFolder(adapter, input)` | Create a folder |
-| `deleteFolder(adapter, id)` | Delete a folder |
-
-<Callout type="warn">
-`stack().api.media.*`, direct getter/mutation imports, and
-`stack().api.media.prefetchForRoute()` are lower-level trusted server escape
-hatches. They bypass the operation authorization and lifecycle and are never
-exposed through HTTP, `forRequest()`, or `internal`. Enforce trust at the call
-site.
-</Callout>
+Standalone getter and mutation exports remain lower-level adapter primitives for plugin internals and migrations whose caller owns authorization and lifecycle composition.
 
 ### `AssetListParams`
 

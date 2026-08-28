@@ -45,7 +45,7 @@ export interface UIBuilderClientConfig {
 	queryClient: QueryClient;
 	/** Optional headers for SSR (e.g., forwarding cookies) */
 	headers?: Headers;
-	/** Optional hooks for customizing behavior (authorization, redirects, etc.) */
+	/** Optional hooks for route loading, redirects, and telemetry. */
 	hooks?: UIBuilderClientHooks;
 	/** Component registry to use for the UI Builder */
 	componentRegistry?: ComponentRegistry;
@@ -87,7 +87,7 @@ function createPageListLoader(config: UIBuilderClientConfig) {
 			const listQuery = queries.cmsContent.list({ limit: 10, offset: 0 });
 
 			try {
-				// Before hook - authorization check
+				// Before-load lifecycle hook
 				if (hooks?.beforeLoadPageList) {
 					await hooks.beforeLoadPageList(context);
 				}
@@ -164,7 +164,7 @@ function createPageBuilderLoader(
 			const pageQuery = id ? queries.cmsContent.detail(id) : undefined;
 
 			try {
-				// Before hook - authorization check
+				// Before-load lifecycle hook
 				if (hooks?.beforeLoadPageBuilder) {
 					await hooks.beforeLoadPageBuilder(id, context);
 				}

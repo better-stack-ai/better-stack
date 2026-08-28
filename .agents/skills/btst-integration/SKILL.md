@@ -40,12 +40,18 @@ See [REFERENCE.md](REFERENCE.md) for full code shapes for every file.
 
 ### 3) Configure backend stack
 
-- Call `stack({ basePath: "/api/data", plugins: { ... }, adapter: (db) => createXxxAdapter(..., db, {}) })`.
+- Call `stack({ basePath: "/api/data", plugins: { ... }, adapter: (db) => createXxxAdapter(..., db, {}), auth: serverAuth })` when application authorization is enabled.
+- Create `serverAuth` with `createServerAuth({ authorization, getIdentity })`. Omitting `auth` intentionally preserves permissive no-authorization compatibility; plugin labels such as AI Chat's `access: "authorized"` are not an enforcement boundary by themselves.
 - Export `handler` and `dbSchema`.
 - **Memory adapter + Next.js**: pin to `globalThis` to avoid two instances in the same process:
   ```ts
-  const g = global as typeof global & { __btst__?: ReturnType<typeof stack> }
-  export const myStack = g.__btst__ ??= stack({ ... })
+  function createStack() {
+    return stack({ ... })
+  }
+
+  type AppStack = ReturnType<typeof createStack>
+  const g = globalThis as typeof globalThis & { __btst__?: AppStack }
+  export const myStack = g.__btst__ ??= createStack()
   export const { handler, dbSchema } = myStack
   ```
 
@@ -72,7 +78,7 @@ Do not duplicate — the patcher and manual edits must both be idempotent.
   - `basePath="/pages"` (must match your pages catch-all prefix)
   - `router={nextRouter()}` / `reactRouter()` / `tanstackRouter()` for framework-wide links, images, navigation, and refresh.
   - `api={{ baseURL, basePath: "/api/data" }}` for client-side API calls.
-  - `auth={{ getIdentity, loginPath }}` when plugins need identity or permissions.
+  - `auth={createClientAuth({ authorization, getIdentity, loginPath })}` when plugins need identity or permission presentation gates.
   - `overrides={{ pluginKey: { uploadImage?, ...pluginSpecificValues } }}` only for plugin-specific customization.
   - Define a typed `PluginOverrides` interface importing `{Plugin}Overrides` from each plugin client package.
   - See [REFERENCE.md](REFERENCE.md) for provider wiring and per-plugin override shapes.
@@ -98,6 +104,7 @@ Do not duplicate — the patcher and manual edits must both be idempotent.
 ## Validation checklist
 
 - `stack.ts` exports both `handler` and `dbSchema`.
+- Protected applications pass `createServerAuth(...)` to `stack({ auth })`; omitted auth is intentionally permissive.
 - Every plugin is registered on both backend and client sides.
 - API `basePath` and `stack({ basePath })` match exactly.
 - API and page catch-all routes use the framework entry factories.

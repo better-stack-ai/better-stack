@@ -8,6 +8,7 @@ import { kanbanPermissions } from "@btst/stack/plugins/kanban/permissions";
 import { mediaPermissions } from "@btst/stack/plugins/media/permissions";
 import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 import { z } from "zod";
+import { todoPermissions } from "./plugins/todo/permissions";
 
 const identitySchema = z.object({
 	id: z.string(),
@@ -59,8 +60,13 @@ export const authorization = defineAuthorization({
 		formBuilderPermissions,
 		kanbanPermissions,
 		mediaPermissions,
+		todoPermissions,
 	] as const,
-	rules: ({ aiChat, blog, cms, comments, forms, kanban, media }) => [
+	rules: ({ aiChat, blog, cms, comments, forms, kanban, media, todos }) => [
+		todos.todo.read.allow(),
+		todos.todo.create.allow(),
+		todos.todo.update.allow(),
+		todos.todo.delete.allow(),
 		aiChat.conversation.read.when(({ identity, facts }) =>
 			facts.scope === "collection"
 				? identity !== null

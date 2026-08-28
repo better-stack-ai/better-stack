@@ -56,7 +56,7 @@ export interface UIBuilderPluginOverrides {
 	siteBasePath?: string;
 
 	/**
-	 * SSR authorization hooks
+	 * SSR route lifecycle hooks
 	 */
 	hooks?: UIBuilderClientHooks;
 

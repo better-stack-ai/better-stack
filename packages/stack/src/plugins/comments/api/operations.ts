@@ -37,7 +37,7 @@ export const UpdateCommentOperationInputSchema = z.object({
 
 export const ToggleCommentLikeOperationInputSchema = z.object({
 	id: z.string().min(1),
-	/** @deprecated Request identity is authoritative; retained for trusted internal/RC callers. */
+	/** Request identity wins; no-auth and internal callers may provide an author. */
 	authorId: z.string().min(1).optional(),
 });
 
@@ -79,18 +79,6 @@ type RequestFields = {
 	/** Headers from the request that entered the authorized transport. */
 	readonly headers?: Headers;
 };
-
-/** @deprecated Use the operation-specific Comments lifecycle contexts. */
-export interface CommentsApiContext extends RequestFields {
-	/** Legacy untyped request body. */
-	readonly body?: unknown;
-	/** Legacy untyped route parameters. */
-	readonly params?: unknown;
-	/** Legacy untyped query parameters. */
-	readonly query?: unknown;
-	/** Additional legacy request context values. */
-	readonly [key: string]: unknown;
-}
 
 /** Authorized context supplied before a Comments list query executes. */
 export interface CommentsListOperationContext
@@ -202,7 +190,7 @@ export interface CommentsBackendHooks {
 	onBeforePost?: (
 		input: DeepReadonly<z.output<typeof createCommentSchema>>,
 		context: CommentsCreateOperationContext,
-	) => Promise<{ authorId: string } | void> | { authorId: string } | void;
+	) => Promise<void> | void;
 	/** Run after a comment is created. */
 	onAfterPost?: (
 		comment: DeepReadonly<SerializedComment>,
@@ -260,14 +248,6 @@ export interface CommentsBackendOptions extends CommentsBackendHooks {
 	resolveUser?: (
 		authorId: string,
 	) => Promise<{ name: string; avatarUrl?: string } | null>;
-	/**
-	 * @deprecated Configure the generic stack server auth provider instead.
-	 * This RC field remains type-compatible until the v3 contraction and is no
-	 * longer consulted for authorization or row visibility.
-	 */
-	resolveCurrentUserId?: (
-		context: CommentsApiContext,
-	) => Promise<string | null | undefined> | string | null | undefined;
 }
 
 /** A domain/HTTP error raised after Comments input/fact validation. */
@@ -480,11 +460,6 @@ export function createCommentsOperations(
 	adapter: Adapter,
 	options: CommentsBackendOptions,
 ) {
-	// The v3 RC create hook used its return value to provide request authorship.
-	// Keep that fallback only when the generic request identity and an explicit
-	// trusted internal author are both absent. A configured auth adapter always
-	// remains authoritative.
-	const legacyHookAuthors = new WeakMap<object, string>();
 	// These are in-flight operation snapshots, not authorization-result caches:
 	// fact loading and execution share the same parsed input object, and weak
 	// keys make denied/failed operations collectible without retained state.
@@ -494,14 +469,6 @@ export function createCommentsOperations(
 	const listCommentsOperation = defineOperation({
 		input: CommentListQuerySchema,
 		permission: commentsPermissions.thread.read,
-		legacyAuthorization: ({ facts }) =>
-			facts.scope === "public"
-				? { public: true }
-				: {
-						resource: "comments:thread",
-						action: "read",
-						params: { ...facts },
-					},
 		facts: ({ input }) => readFactsForList(input),
 		before: async (context) => {
 			const lifecycle = listContext(context);
@@ -530,14 +497,6 @@ export function createCommentsOperations(
 	const getCommentCountOperation = defineOperation({
 		input: CommentCountQuerySchema,
 		permission: commentsPermissions.thread.read,
-		legacyAuthorization: ({ facts }) =>
-			facts.scope === "public"
-				? { public: true }
-				: {
-						resource: "comments:thread",
-						action: "read",
-						params: { ...facts },
-					},
 		facts: ({ input }) => readFactsForCount(input),
 		before: async (context) => {
 			await options.onBeforeCount?.(context.input, countContext(context));
@@ -550,11 +509,6 @@ export function createCommentsOperations(
 	const createCommentOperation = defineOperation({
 		input: CreateCommentOperationInputSchema,
 		permission: commentsPermissions.thread.createComment,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "comments:thread",
-			action: "createComment",
-			params: { ...facts },
-		}),
 		facts: async ({ input }) => {
 			await assertReplyTarget(adapter, input);
 			return {
@@ -572,26 +526,11 @@ export function createCommentsOperations(
 				);
 			}
 			const { authorId: _trustedAuthorId, ...publicInput } = context.input;
-			const legacyAuthorship = await options.onBeforePost?.(
-				publicInput,
-				createContext(context),
-			);
-			if (
-				!context.identity &&
-				!context.input.authorId &&
-				legacyAuthorship?.authorId
-			) {
-				legacyHookAuthors.set(context.input, legacyAuthorship.authorId);
-			}
+			await options.onBeforePost?.(publicInput, createContext(context));
 		},
 		execute: async ({ input, identity }) => {
-			const legacyHookAuthorId = legacyHookAuthors.get(input);
-			legacyHookAuthors.delete(input);
 			await assertReplyTarget(adapter, input);
-			const authorId = authoritativeAuthorId(
-				identity?.id,
-				input.authorId ?? legacyHookAuthorId,
-			);
+			const authorId = authoritativeAuthorId(identity?.id, input.authorId);
 			const created = await createCommentMutation(adapter, {
 				resourceId: input.resourceId,
 				resourceType: input.resourceType,
@@ -614,11 +553,6 @@ export function createCommentsOperations(
 	const updateCommentOperation = defineOperation({
 		input: UpdateCommentOperationInputSchema,
 		permission: commentsPermissions.comment.edit,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "comments:comment",
-			action: "edit",
-			params: { ...facts },
-		}),
 		facts: async ({ input }) => {
 			const comment = await requireComment(adapter, input.id);
 			editSnapshots.set(input, comment);
@@ -675,11 +609,6 @@ export function createCommentsOperations(
 	const toggleLikeOperation = defineOperation({
 		input: ToggleCommentLikeOperationInputSchema,
 		permission: commentsPermissions.comment.react,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "comments:comment",
-			action: "react",
-			params: { ...facts },
-		}),
 		facts: async ({ input }) => {
 			const comment = await requireComment(adapter, input.id);
 			return { commentId: comment.id, status: comment.status };
@@ -710,11 +639,6 @@ export function createCommentsOperations(
 	const updateCommentStatusOperation = defineOperation({
 		input: UpdateCommentStatusOperationInputSchema,
 		permission: commentsPermissions.comment.moderate,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "comments:comment",
-			action: "moderate",
-			params: { ...facts },
-		}),
 		facts: async ({ input }) => {
 			const comment = await requireComment(adapter, input.id);
 			moderationSnapshots.set(input, comment);
@@ -767,11 +691,6 @@ export function createCommentsOperations(
 	const deleteCommentOperation = defineOperation({
 		input: DeleteCommentOperationInputSchema,
 		permission: commentsPermissions.comment.delete,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "comments:comment",
-			action: "delete",
-			params: { ...facts },
-		}),
 		facts: async ({ input }) => {
 			const comment = await requireComment(adapter, input.id);
 			return { commentId: comment.id, authorId: comment.authorId };

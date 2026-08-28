@@ -119,7 +119,6 @@ export function PageListPage() {
 			permission={cmsPermissions.record.create({
 				contentType: UI_BUILDER_TYPE_SLUG,
 			})}
-			legacyPermission={{ resource: "ui-builder:page", action: "create" }}
 		>
 			<Button asChild>
 				<LinkComponent href={`${basePath}/ui-builder/new`}>
@@ -247,11 +246,6 @@ export function PageListPage() {
 																	? { authorId: page.authorId }
 																	: {}),
 															})}
-															legacyPermission={{
-																resource: "ui-builder:page",
-																action: "update",
-																params: { id: page.id },
-															}}
 														>
 															<DropdownMenuItem
 																onClick={() =>
@@ -276,11 +270,6 @@ export function PageListPage() {
 																	? { authorId: page.authorId }
 																	: {}),
 															})}
-															legacyPermission={{
-																resource: "ui-builder:page",
-																action: "delete",
-																params: { id: page.id },
-															}}
 														>
 															<DropdownMenuItem
 																className="text-destructive"

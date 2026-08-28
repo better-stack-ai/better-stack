@@ -54,7 +54,6 @@ function AuthorizedPageBuilderPage({ id }: PageBuilderPageProps) {
 				permission={cmsPermissions.record.create({
 					contentType: UI_BUILDER_TYPE_SLUG,
 				})}
-				legacyPermission={{ resource: "ui-builder:page", action: "create" }}
 				LoadingComponent={PageBuilderSkeleton}
 			>
 				<PageBuilderPageInternal />
@@ -74,11 +73,6 @@ function AuthorizedExistingPageBuilderPage({ id }: { id: string }) {
 				recordId: page.id,
 				...(page.authorId ? { authorId: page.authorId } : {}),
 			})}
-			legacyPermission={{
-				resource: "ui-builder:page",
-				action: "update",
-				params: { id },
-			}}
 			LoadingComponent={PageBuilderSkeleton}
 		>
 			<PageBuilderPageInternal id={id} />

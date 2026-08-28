@@ -39,6 +39,7 @@ FILES=(
   "app/lib/plugins/todo/client/client.tsx"
   "app/lib/plugins/todo/client/components.tsx"
   "app/lib/plugins/todo/client/hooks.tsx"
+  "app/lib/plugins/todo/permissions.ts"
   "app/lib/plugins/todo/schema.ts"
   "app/lib/plugins/todo/types.ts"
   "app/lib/stack-auth.ts"

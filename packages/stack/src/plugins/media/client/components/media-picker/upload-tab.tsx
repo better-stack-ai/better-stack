@@ -5,7 +5,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Loader2, Upload } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import { matchesAccept } from "./utils";
-import { useCan, useNotify, useTranslate } from "@btst/stack/context";
+import { useNotify, useTranslate } from "@btst/stack/context";
 
 export function UploadTab({
 	folderId,
@@ -18,10 +18,6 @@ export function UploadTab({
 }) {
 	const t = useTranslate();
 	const notify = useNotify();
-	const { can: canCreate } = useCan({
-		resource: "media:asset",
-		action: "create",
-	});
 	const [dragging, setDragging] = useState(false);
 	const [uploading, setUploading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -32,7 +28,6 @@ export function UploadTab({
 
 	const handleFiles = useCallback(
 		async (files: FileList | File[]) => {
-			if (!canCreate) return;
 			const fileArr = Array.from(files);
 			if (fileArr.length === 0) return;
 			setError(null);
@@ -72,16 +67,13 @@ export function UploadTab({
 				setUploading(false);
 			}
 		},
-		[accept, canCreate, folderId, notify, onUploaded, t, uploadAsset],
+		[accept, folderId, notify, onUploaded, t, uploadAsset],
 	);
-
-	if (!canCreate) return null;
 
 	return (
 		<div className="flex h-full flex-col gap-3">
 			<div
 				onDragOver={(e) => {
-					if (!canCreate) return;
 					e.preventDefault();
 					setDragging(true);
 				}}

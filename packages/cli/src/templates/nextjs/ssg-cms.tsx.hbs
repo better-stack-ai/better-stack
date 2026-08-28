@@ -14,7 +14,7 @@ import { metaElementsToObject, normalizePath } from "@btst/stack/client"
 import type { Metadata } from "next"
 
 export async function generateStaticParams() {
-	const contentTypes = await myStack.api.cms.getAllContentTypes()
+	const contentTypes = await myStack.internal.cms.listContentTypes({})
 	return contentTypes.map((ct: { slug: string }) => ({ typeSlug: ct.slug }))
 }
 

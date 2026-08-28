@@ -7,11 +7,7 @@ import { Form, FormField } from "@workspace/ui/components/form";
 // Core primitives MUST be imported from the package entry (not relative src
 // paths) so they share module identity — and React context — with the blog
 // components, which resolve `@btst/stack/*` via package self-reference.
-import {
-	StackProvider,
-	type StackAuthProvider,
-	type StackI18nProvider,
-} from "@btst/stack/context";
+import { StackProvider, type StackI18nProvider } from "@btst/stack/context";
 import { defineAuthorization } from "@btst/stack/authorization";
 import { createClientAuth } from "@btst/stack/authorization/client";
 import { ComposedRoute } from "@btst/stack/client/components";
@@ -23,10 +19,10 @@ import {
 import { PostsList } from "../client/components/shared/posts-list";
 import { SearchInput } from "../client/components/shared/search-input";
 import { DefaultError } from "../client/components/shared/default-error";
-import { HomePageComponent } from "../client/components/pages/home-page";
 import type { SerializedPost } from "../types";
 import { blogPermissions } from "../permissions";
 import { z } from "zod";
+import { createIdentityTestAuth } from "../../../__tests__/auth-test-utils";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -227,31 +223,6 @@ describe("FeaturedImageField notifications (useNotify)", () => {
 });
 
 describe("Blog route authorization errors", () => {
-	it("keeps the legacy draft-list permission for string providers", async () => {
-		const can = vi.fn(
-			({ resource, action }: { resource: string; action: string }) =>
-				resource === "blog:draft" && action === "read",
-		);
-
-		await render(
-			<StackProvider
-				basePath="/pages"
-				overrides={{ blog: {} }}
-				auth={{ getIdentity: () => ({ id: "user-1" }), can }}
-				initialIdentity={{ id: "user-1" }}
-			>
-				<HomePageComponent published={false} />
-			</StackProvider>,
-		);
-
-		expect(can).toHaveBeenCalledWith(
-			expect.objectContaining({
-				resource: "blog:draft",
-				action: "read",
-			}),
-		);
-	});
-
 	it("redirects an anonymous user when a protected route query returns 401", async () => {
 		const navigate = vi.fn();
 		vi.spyOn(console, "error").mockImplementation(() => {});
@@ -267,7 +238,7 @@ describe("Blog route authorization errors", () => {
 				basePath="/pages"
 				router={{ navigate }}
 				overrides={{ blog: {} }}
-				auth={{ getIdentity: () => null, loginPath: "/login" }}
+				auth={createIdentityTestAuth(() => null, { loginPath: "/login" })}
 				initialIdentity={null}
 			>
 				<ComposedRoute
@@ -296,10 +267,10 @@ describe("Blog route authorization errors", () => {
 				basePath="/pages"
 				router={{ navigate }}
 				overrides={{ blog: {} }}
-				auth={{
-					getIdentity: () => ({ id: "stale-user", role: "user" }),
-					loginPath: "/login",
-				}}
+				auth={createIdentityTestAuth(
+					() => ({ id: "stale-user", role: "user" }),
+					{ loginPath: "/login" },
+				)}
 				initialIdentity={{ id: "stale-user", role: "user" }}
 			>
 				<ComposedRoute
@@ -330,10 +301,9 @@ describe("Blog route authorization errors", () => {
 				basePath="/pages"
 				router={{ navigate }}
 				overrides={{ blog: {} }}
-				auth={{
-					getIdentity: () => new Promise(() => {}),
+				auth={createIdentityTestAuth(() => new Promise<null>(() => {}), {
 					loginPath: "/login",
-				}}
+				})}
 			>
 				<ComposedRoute
 					path="/blog/example/edit"
@@ -392,39 +362,6 @@ describe("EditPostForm operation descriptor controls", () => {
 
 		expect(texts()).toContain("Delete Post");
 	});
-
-	it("hides the delete button when can() denies blog:post/delete", async () => {
-		const can = vi.fn(
-			({ resource, action }: { resource: string; action: string }) =>
-				!(resource === "blog:post" && action === "delete"),
-		);
-		const auth: StackAuthProvider = {
-			getIdentity: () => ({ id: "user-1" }),
-			can,
-		};
-
-		await render(
-			<StackProvider basePath="/pages" overrides={{ blog: {} }} auth={auth}>
-				<EditPostForm
-					postSlug="hello-world"
-					onClose={() => {}}
-					onSuccess={() => {}}
-				/>
-			</StackProvider>,
-		);
-
-		// The rest of the form still renders; only the delete control is gone.
-		expect(texts()).toContain("Update Post");
-		expect(texts()).not.toContain("Delete Post");
-		expect(can).toHaveBeenCalledWith(
-			expect.objectContaining({
-				resource: "blog:post",
-				action: "delete",
-				params: { id: post.id },
-			}),
-		);
-	});
-
 	it("uses the Blog update and delete descriptors with one-rule client authorization", async () => {
 		const authorization = defineAuthorization({
 			identity: z.object({ id: z.string(), role: z.literal("user") }),

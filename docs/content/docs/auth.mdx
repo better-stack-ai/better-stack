@@ -5,7 +5,7 @@ description: Define schema-backed permissions once and enforce the same rule in 
 
 BTST's one-rule authorization path keeps a rule-free permission contract separate from the browser-safe local rule set. Client and server adapters resolve identity independently. Browser checks only control presentation; backend operations derive trusted facts and enforce the same rule before mutation.
 
-The new path is opt-in. Omitting authorization preserves allow-all behavior, and the RC auth provider described below remains available while plugins migrate.
+Authorization is opt-in. Omitting server authorization preserves permissive v2 behavior; once `serverAuth` is configured, protected operations deny missing rules and anonymous or denied requests fail closed.
 
 ## Define the shared contract
 
@@ -460,219 +460,236 @@ await myStack.forRequest(request).api.blog.updatePost({ id: postId, data });
 await myStack.internal.blog.updatePost({ id: postId, data });
 ```
 
-## RC auth provider
+## Client gates
 
-The string-based RC provider remains available for plugins and applications that have not migrated to schema-backed permissions.
-
-## Client provider
-
-Pass an auth provider to `StackProvider`:
+Use the adapter returned by `createClientAuth()`. Its hooks and component are bound to the registered catalog, so misspelled ids and invalid facts fail at compile time.
 
 ```tsx
-import { StackProvider, type StackAuthProvider } from "@btst/stack/context";
-
-const authProvider: StackAuthProvider = {
-  // Resolve the current user (null when unauthenticated)
-  getIdentity: async () => {
-    const session = await getSession();
-    return session?.user ?? null;
-  },
-  // Optional: permission check. Omit to allow everything.
-  can: ({ resource, action, identity }) => {
-    if (!identity) return false;
-    return checkPermission(identity, resource, action); // e.g. "blog:post", "delete"
-  },
-  // Optional: where to send unauthenticated users on gated routes
-  loginPath: "/login",
-};
-
-<StackProvider basePath="/pages" auth={authProvider} /* router, api, overrides */>
-  {children}
-</StackProvider>;
-```
-
-<AutoTypeTable path="../packages/stack/src/shared/auth-types.ts" name="StackAuthProvider" />
-
-### better-auth example
-
-```tsx
-import { createAuthClient } from "better-auth/react";
-import type { StackAuthProvider } from "@btst/stack/context";
-
-const authClient = createAuthClient();
-
-const authProvider: StackAuthProvider = {
-  getIdentity: async () => {
-    const { data } = await authClient.getSession();
-    return data?.user ?? null;
-  },
-  can: async ({ resource, action, identity }) => {
-    if (!identity) return false;
-    // Map resource/action onto your better-auth roles or permissions
-    return identity.role === "admin" || action === "read";
-  },
-  loginPath: "/login",
-};
-```
-
-## `useIdentity()` and `useCan()`
-
-```tsx
-import { useCan, useIdentity } from "@btst/stack/context";
-
-function Toolbar() {
-  const { identity, isPending } = useIdentity();
-  const { can: canDelete } = useCan({ resource: "blog:post", action: "delete" });
-
-  if (isPending) return null;
-  return (
-    <div>
-      {identity ? `Signed in as ${identity.name}` : "Anonymous"}
-      {canDelete && <DeleteButton />}
-    </div>
-  );
-}
-```
-
-- `useIdentity()` returns `{ identity, isPending, refetch }`. Call `refetch()` after login/logout.
-- `useCan({ resource, action, params })` returns `{ can, isPending }`. Without a provider (or without a `can` function) it resolves to `{ can: true, isPending: false }` immediately.
-
-## `<CanAccess>` — element-level gating
-
-Wrap permission-sensitive UI. Children render when `can()` allows, `fallback` (default `null`) otherwise:
-
-```tsx
-import { CanAccess } from "@btst/stack/context";
-
-<CanAccess resource="blog:post" action="delete" fallback={null}>
-  <DeletePostButton />
-</CanAccess>;
-```
-
-While the check is pending, the optional `loading` node (default `null`) renders instead — gated UI never flashes. Without an auth provider configured, `<CanAccess>` always renders its children.
-
-For schema-backed plugin permissions, use `PermissionAccess` with the exact
-descriptor published by the plugin:
-
-```tsx
-import { PermissionAccess } from "@btst/stack/context";
-import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
-
-<PermissionAccess
-  permission={blogPermissions.post.delete({
+const { identity, isPending, error, refetch } = clientAuth.useIdentity();
+const edit = clientAuth.useCan(
+  blogPermissions.post.update({
     id: post.id,
-    ...(post.authorId != null ? { authorId: post.authorId } : {}),
-  })}
-  fallback={null}
->
-  <DeletePostButton />
-</PermissionAccess>;
+    authorId: post.authorId ?? undefined,
+    publish: "unchanged",
+  }),
+);
+
+return (
+  <clientAuth.CanAccess
+    permission={blogPermissions.post.delete({
+      id: post.id,
+      authorId: post.authorId ?? undefined,
+    })}
+  >
+    <DeleteButton />
+  </clientAuth.CanAccess>
+);
 ```
 
-`PermissionAccess` renders its optional `loading` node while authorization is
-pending, `children` when allowed, and `fallback` when denied. Without an auth
-provider it remains permissive. Its lower-level `PermissionCheck` primitive
-provides the same descriptor evaluation as a render prop when a plugin needs
-custom handling for `{ can, isPending, error }`. Throw `error` before trusting
-`can`; a schema-bound provider without its required descriptor hook fails
-closed through that field. Built-in components may pass `legacyPublic` for
-content that was explicitly public before descriptor-aware client providers;
-the compatibility flag bypasses only string-based RC providers, never a
-schema-bound one-rule provider.
+Plugin components use the catalog-agnostic `PermissionAccess` and `PermissionCheck` primitives internally, but applications should prefer the bound adapter when they want exact catalog inference. Browser checks are synchronous for a local rule and affect presentation only. The backend remains authoritative.
 
-## Route gating
+When client auth is omitted, browser gates render permissively to preserve no-auth applications. This does not weaken a configured backend.
 
-`ComposedRoute` (the wrapper every plugin page uses) accepts an optional `permission`:
+## Route and operation semantics
 
-```tsx
-<ComposedRoute
-  path="/reports"
-  PageComponent={ReportsPage}
-  LoadingComponent={ReportsLoading}
-  ErrorComponent={DefaultError}
-  onError={console.error}
-  permission={{ resource: "legacy:reports", action: "read" }}
-/>
-```
-
-When an auth provider is configured and `can()` denies access:
-
-- **Unauthenticated** users are redirected to the provider's `loginPath` (via the top-level `router`'s `navigate`, falling back to `window.location.assign`), with the route's `LoadingComponent` shown in the meantime.
-- **Authenticated** users get an `Unauthorized` error thrown into the route's ErrorBoundary.
-
-The same login redirect applies when a protected route query returns HTTP 401
-before its fact-dependent descriptor gate can mount. The backend response is
-authoritative, so the redirect also happens while browser identity is pending
-or still contains a stale signed-in snapshot. Plugin-owned descriptor routes
-that were already public may set `legacyPublic` during the RC migration; that
-bypass applies only to string-based providers, while one-rule providers still
-evaluate the exact descriptor. If an RC route previously used a different
-resource/action key, set `legacyPermission` alongside the descriptor. Only a
-string-based provider receives that override; one-rule providers still receive
-the descriptor.
-
-Plugins whose route facts are available only after loading data can wrap that
-content directly with `PermissionRouteAccess` from
-`@btst/stack/client/components`. It accepts the same descriptor plus the
-route's `LoadingComponent`, then applies the same anonymous redirect and
-authenticated error behavior as `ComposedRoute`. `legacyPublic` and
-`legacyPermission` are RC migration bridges for string-based providers only;
-new one-rule integrations should not set them.
-
-Without a provider, `permission` is ignored and the route renders without client-side gating.
-
-## Legacy server-side lifecycle identity
-
-Schema-backed operation hooks receive identity directly in their operation
-context. `getRequestIdentity()` remains for RC hooks that have not migrated to
-operations; do not add a second identity lookup to an operation hook.
-
-Pass a server auth provider to `stack()`. For unmigrated RC plugins, identity
-is resolved lazily and **at most once per request**, no matter how many legacy
-hooks read it:
+Protected routes receive one exact `permission` descriptor. Public behavior is declared on the server operation with `access: "public"`; there is no parallel string permission or route-level public bridge.
 
 ```ts
-import { stack } from "@btst/stack/api";
-import type { StackServerAuthProvider } from "@btst/stack/api";
-import { auth } from "@/lib/auth"; // better-auth server instance
-
-const serverAuthProvider: StackServerAuthProvider = {
-  getIdentity: async ({ headers }) => {
-    const session = await auth.api.getSession({ headers });
-    return session?.user ?? null;
-  },
-};
-
-export const myStack = stack({
-  basePath: "/api/data",
-  adapter: memoryAdapter,
-  auth: serverAuthProvider,
-  plugins: { /* RC plugins */ },
+const listPublished = defineOperation({
+  input: listInput,
+  permission: blogPermissions.post.read,
+  access: "public",
+  facts: ({ input }) => ({ scope: "published" as const }),
+  execute: ({ input }) => listPosts(input),
 });
 ```
 
-`getRequestIdentity(headers)` remains available only for those unmigrated RC
-hooks. Blog operations receive validated identity in their readonly operation
-context and must not perform a second global identity lookup.
+Server transports share the same operation:
 
-Migrated operation-backed plugins keep structural RC server providers working
-only through explicit deprecated mappings. A protected operation maps its
-server-derived facts to the former `{ resource, action, params }` vocabulary
-and calls the provider's `can`; an ordinary denial remains 401/403 and happens
-before lifecycle hooks. Operations without a safe mapping fail closed. An
-operation's compound checks each require their own mapping and are evaluated
-before lifecycle too. An explicitly public RC operation does not call `can`.
-These mappings are a migration bridge, not a second supported authorization
-model. An identity-only RC provider has no authorization policy, so mapped
-operations retain its prior allow-all behavior; add `can` to enforce the mapped
-string permissions. The bridge is removed with the other RC interfaces in
-#193. `createServerAuth()` ignores the mappings and always evaluates the exact
-schema-backed descriptor.
+- `app.handler(request)` for HTTP
+- `app.forRequest(request).api.blog.updatePost(...)` for an authenticated request in server code
+- `app.internal.blog.updatePost(...)` for an explicitly trusted job
 
-<AutoTypeTable path="../packages/stack/src/shared/auth-types.ts" name="StackServerAuthProvider" />
+The request surface validates input, derives authoritative facts, resolves identity, evaluates the rule, then runs domain behavior and lifecycle hooks. The internal surface skips user authorization but keeps validation, fact derivation, domain behavior, and hooks. First-party `app.api` namespaces expose only narrow SSG `prefetchForRoute` helpers; raw business getters and mutations are not duplicated there.
 
-## Types
+When server authorization is configured, stack composition rejects every HTTP
+route that is not bound to a same-key operation or explicitly declared as a
+public infrastructure route with a rationale. This prevents route-only custom
+plugins from silently bypassing the configured boundary. Route-only plugins
+remain supported when server authorization is omitted.
 
-<AutoTypeTable path="../packages/stack/src/shared/auth-types.ts" name="StackIdentity" />
+When server authorization is omitted, protected request operations remain permissive for compatibility. Once it is configured:
 
-<AutoTypeTable path="../packages/stack/src/shared/auth-types.ts" name="CanParams" />
+- missing or malformed credentials produce `401`
+- an authenticated denial or missing rule produces `403`
+- identity resolver, fact derivation, and rule exceptions remain errors rather than ordinary denials
+- explicit public operations bypass identity and rule evaluation
+
+There is no authorization-result cache. Rules are boolean decisions, not row or tenant filters; derive tenant scope in the operation and adapter query.
+
+## Lifecycle hooks are domain hooks
+
+Lifecycle hooks observe already-validated, deeply readonly operation context. They can enforce domain invariants, publish side effects, and record telemetry—not perform routine authorization or transform operation input. Use descriptor rules for access control. Request and internal operations both run the documented hook sequence; raw adapter primitives are lower-level implementation tools and do not promise that lifecycle.
+
+## Managed and separate backends
+
+The frontend can share only a versioned, rule-free contract with a backend implemented elsewhere. Bind `createClientAuth` to `createRemoteAuthorizationEvaluator`; the remote service parses the same permission id, fact schema, identity schema, and contract version. Malformed JSON, invalid payloads, and version mismatches throw typed protocol errors instead of becoming denials.
+
+The managed backend does not need BTST or TypeScript. It only needs to honor the published protocol. Keep its authorization authoritative; the browser evaluator remains presentation logic.
+
+## v2 and v3 RC migration
+
+Remove the compatibility code instead of hiding it behind aliases.
+
+### Client provider and gates
+
+Before:
+
+```tsx
+const auth = {
+  getIdentity: () => session.user,
+  can: ({ resource, action, params }) => resource === "blog:post" && action === "delete",
+};
+
+const { can } = useCan({ resource: "blog:post", action: "delete", params: { id } });
+<CanAccess resource="blog:post" action="delete" params={{ id }} />
+```
+
+After:
+
+```tsx
+const clientAuth = createClientAuth({ authorization, getIdentity: () => session.user });
+const { can } = clientAuth.useCan(blogPermissions.post.delete({ id }));
+<clientAuth.CanAccess permission={blogPermissions.post.delete({ id })} />
+```
+
+`StackAuthProvider`, structural `can` callbacks, global string `useCan`, and string `CanAccess` props are removed.
+
+### Route gates
+
+Before:
+
+```tsx
+<ComposedRoute
+  legacyPermission={{ resource: "blog:post", action: "read" }}
+  legacyPublic
+/>
+```
+
+After:
+
+```tsx
+<ComposedRoute permission={blogPermissions.post.read({ scope: "drafts" })} />
+```
+
+For a truly public route, bind it to an operation declared with `access: "public"`. `legacyPermission` and `legacyPublic` are removed.
+
+### Server provider and operation metadata
+
+Before:
+
+```ts
+const auth: StackServerAuthProvider = { getIdentity, can };
+defineOperation({
+  legacyAuthorization: { resource: "blog:post", action: "update" },
+  legacyAdditionalAuthorization: (...),
+});
+const identity = await getRequestIdentity(headers);
+```
+
+After:
+
+```ts
+const serverAuth = createServerAuth({ authorization, getIdentity });
+defineOperation({
+  permission: blogPermissions.post.update,
+  facts: async ({ input }) => authoritativePostFacts(input.id),
+  additionalPermissions: async ({ input }) => relatedDescriptors(input),
+  execute: ({ identity, facts, input }) => updatePost(input, identity, facts),
+});
+```
+
+`StackServerAuthProvider`, global request identity lookup, legacy operation mappings, and hook-based authorization are removed. Identity is available in operation and lifecycle context after the server adapter resolves it.
+
+### Trusted server calls
+
+Before:
+
+```ts
+await app.api.cms.createContentItem("article", body);
+await app.api.blog.getAllPosts();
+```
+
+After:
+
+```ts
+await app.forRequest(request).api.cms.createContentItem({ typeSlug: "article", body });
+await app.internal.blog.listPosts({});
+await app.api.blog.prefetchForRoute("posts", queryClient);
+```
+
+Use `forRequest(request).api` for user-driven server work, `internal` for explicitly trusted work, and `app.api.*.prefetchForRoute` only for SSG prefetch. Lower-level exported adapter getters remain implementation primitives, not an authorization boundary.
+
+### AI Chat backend access
+
+Before:
+
+```ts
+aiChatBackendPlugin({ mode: "authenticated", getUserId });
+```
+
+After:
+
+```ts
+aiChatBackendPlugin({ access: "authorized" });
+stack({ auth: serverAuth, plugins: { aiChat } });
+```
+
+The backend `mode` alias and `getUserId` callback are removed. The client plugin's `mode` still controls its real conversation UI/persistence mode; it is not a security boundary.
+
+### Lifecycle context and Comments authorship
+
+Before:
+
+```ts
+commentsBackendPlugin({
+  resolveCurrentUserId: (context: CommentsApiContext) => readSession(context.headers),
+  onBeforePost: (_input, context: CommentsApiContext) => ({
+    authorId: readAuthor(context),
+  }),
+});
+
+const onBeforeCreatePost = (_input: unknown, context: BlogApiContext) => {
+  audit(context);
+};
+```
+
+After:
+
+```ts
+const serverAuth = createServerAuth({ authorization, getIdentity: readIdentity });
+
+commentsBackendPlugin({
+  onBeforePost: async (_input, context: CommentsCreateOperationContext) => {
+    await audit(context.identity, context.facts);
+  },
+});
+
+const blogHooks: BlogBackendHooks = {
+  onBeforeCreatePost: (_input, context: BlogCreateOperationContext) =>
+    audit(context.identity, context.facts),
+};
+
+await app.internal.comments.createComment({
+  resourceId,
+  resourceType: "article",
+  body: "Automated note",
+  authorId: "system-job",
+});
+```
+
+The generic Blog and Comments lifecycle context aliases and the Comments
+identity resolver option are removed. Use each hook's operation-specific,
+deeply readonly context. Request authorship comes from `createServerAuth`
+identity; hook return values never choose an author. Explicitly trusted
+`internal` and no-auth calls may provide `authorId` in the validated input.

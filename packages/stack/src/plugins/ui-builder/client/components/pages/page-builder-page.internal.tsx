@@ -562,11 +562,6 @@ function PageBuilderPageContent({
 							contentType: UI_BUILDER_TYPE_SLUG,
 						})
 			}
-			legacyPermission={
-				id
-					? { resource: "ui-builder:page", action: "update", params: { id } }
-					: { resource: "ui-builder:page", action: "create" }
-			}
 		>
 			<Button
 				onClick={handleSave}

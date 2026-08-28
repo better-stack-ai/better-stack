@@ -699,18 +699,7 @@ export const myStack = stack({
 })
 ```
 
-During the v3 RC migration, a structural `StackServerAuthProvider` is adapted
-through CMS's explicit deprecated mappings (`cms:content` with
-`read`/`create`/`update`/`delete`). Its `can` callback receives the
-server-resolved identity and parameters derived from trusted CMS facts; a
-denial happens before lifecycle hooks. An identity-only RC provider has no
-authorization policy and retains its prior allow-all behavior. `createServerAuth()`
-does not use this bridge and always evaluates the exact `cmsPermissions`
-descriptor. The string mapping is removed with the remaining RC authorization
-interfaces in #193. Compound inline-create, existing-relation, populated-record,
-and inverse-relation checks map every server-derived target or source separately, so a
-legacy rule can deny secondary content without allowing the primary operation
-to expose or mutate it. Record responses embed their content-type schema, so
+The exact `cmsPermissions` descriptors are evaluated before lifecycle hooks. Compound inline-create, existing-relation, populated-record, and inverse-relation checks evaluate every server-derived target or source separately, so a secondary record cannot be exposed or mutated through a permitted primary record. Record responses embed their content-type schema, so
 record list, detail, create, update, populated, and relation-list operations
 also require `cms.contentType.read` for every embedded type. Relation filters
 derive the target type from the configured relation field and authorize the
@@ -780,10 +769,7 @@ await myStack.internal.cms.deleteContentItem({
 })
 ```
 
-`myStack.api.cms` is the lower-level adapter/getter and SSG prefetch surface.
-It deliberately does not appear under `forRequest(...).api.cms` or
-`internal.cms`, and its raw helpers do not enter the authorized operation
-lifecycle. Use it only from trusted server/build code.
+`myStack.api.cms` contains only the SSG `prefetchForRoute` helper. Use `forRequest(request).api.cms` for request work and `internal.cms` for explicitly trusted jobs; both retain validation and lifecycle behavior.
 
 Inline `_new` relation values are compound writes. Request-scoped create and
 update operations authorize `cms.record.create` for every server-derived target
@@ -1431,131 +1417,23 @@ const result = zodSchema.safeParse(data)
 
 ## Server-side Data Access
 
-The CMS plugin exposes standalone getter functions for server-side and SSG use cases.
-
-### Two patterns
-
-**Pattern 1 — via `stack().api`**
-
-```ts title="app/lib/stack.ts"
-import { myStack } from "./stack";
-
-const types  = await myStack.api.cms.getAllContentTypes();
-const items  = await myStack.api.cms.getAllContentItems("posts", { limit: 10 });
-const item   = await myStack.api.cms.getContentItemBySlug("posts", "my-first-post");
-```
-
-**Pattern 2 — direct import**
+Use the operation surfaces for application business calls:
 
 ```ts
-import {
-  getAllContentTypes,
-  getAllContentItems,
-  getContentItemBySlug,
-} from "@btst/stack/plugins/cms/api";
-
-export async function generateStaticParams() {
-  const result = await getAllContentItems(myAdapter, "posts", { limit: 100 });
-  return result.items.map((item) => ({ slug: item.slug }));
-}
-```
-
-### Available getters
-
-| Function | Description |
-|---|---|
-| `getAllContentTypes(adapter)` | Returns all registered content types, sorted by name |
-| `getAllContentItems(adapter, typeSlug, params?)` | Returns paginated items for a content type |
-| `getContentItemBySlug(adapter, typeSlug, slug)` | Returns a single item by slug, or `null` |
-
-### Server-side mutation — `createContentItem`
-
-In addition to read-only getters, the CMS plugin exposes a lower-level
-**mutation function** for trusted server code that intentionally needs to
-bypass the operation lifecycle. Ordinary seeds, imports, and scheduled jobs
-should use `myStack.internal.cms.createContentItem(...)` so validation and
-lifecycle hooks still run.
-
-<Callout type="warn">
-**The raw `myStack.api.cms.createContentItem` helper bypasses authorization, lifecycle hooks, and Zod schema validation.** Hooks such as `onBeforeCreate` and `onAfterCreate` are **not** called, and the data payload is stored as-is without running the content type's schema validation. The caller is responsible for providing valid data and for any access-control checks. Inline `_new` relation creation is not supported — pre-create related items and pass their IDs. For the authoritative operation lifecycle, use the HTTP endpoint, `myStack.forRequest(request).api.cms.createContentItem(...)`, or `myStack.internal.cms.createContentItem(...)`.
-</Callout>
-
-**Via `myStack.api.cms`:**
-
-```ts
-await myStack.api.cms.createContentItem("client-profile", {
-  slug: `intake-${Date.now()}`,
-  data: {
-    clientName: "Sarah Chen",
-    age: 34,
-    riskTolerance: "moderate",
-    recommendation: "Rebalance windfall 80% equity, 20% cash.",
-    amlFlag: false,
-    confidenceScore: 94,
-  },
+const types = await myStack.internal.cms.listContentTypes({})
+const items = await myStack.internal.cms.listContentItems({
+  typeSlug: "posts",
+  query: { limit: 10 },
+})
+await myStack.forRequest(request).api.cms.createContentItem({
+  typeSlug: "client-profile",
+  body: { slug, data },
 })
 ```
 
-**Direct import:**
+`forRequest(request).api.cms` enforces authorization. `internal.cms` is the explicit trusted surface and still runs validation, authoritative fact derivation, relation planning, transactions, and lifecycle hooks. `myStack.api.cms` is reserved for `prefetchForRoute`.
 
-```ts
-import { createCMSContentItem } from "@btst/stack/plugins/cms/api"
-
-await createCMSContentItem(myStack.adapter, "client-profile", {
-  slug: `intake-${Date.now()}`,
-  data: { clientName: "Sarah Chen", age: 34, amlFlag: false },
-})
-```
-
-#### `syncRelations` option
-
-By default, `createContentItem` only writes the item's JSON payload — it does **not** populate the `contentRelation` junction table. This is a no-op for content types without relations, but for content types with `belongsTo` / `hasMany` / `manyToMany` fields it means:
-
-- The admin UI's "Related Items" / inverse-relations panel will not discover the item.
-- `useContentByRelation`, `getContentByRelation`, and `*/populated` endpoints will not return it.
-- Only the JSON `{ id: "..." }` reference on the item itself is persisted.
-
-Pass `{ syncRelations: true }` to also persist relation fields into the junction table — the same behavior the HTTP `POST /content/:typeSlug` route provides, minus inline `_new` creation.
-
-```ts
-await myStack.api.cms.createContentItem(
-  "study-reference",
-  {
-    slug: "bpc157-ref-gwyer-2019",
-    data: {
-      compoundId: { id: bpc157.id },          // belongsTo
-      categoryIds: [{ id: catPeptides.id }],  // manyToMany
-      author: "Gwyer, D. et al.",
-      year: 2019,
-      title: "BPC-157 promotes angiogenesis…",
-      quote: "…",
-      relevance: "Mechanism of Action",
-    },
-  },
-  { syncRelations: true },
-)
-```
-
-<Callout type="info">
-Enable `syncRelations: true` whenever the content type has relation fields — especially in seed scripts. Without it, seeded items appear correctly on their own detail page but are invisible to inverse-relation queries, so the admin "Related Items" panel and any `by-relation` filter will silently show zero results.
-</Callout>
-
-The same option is available on the direct import:
-
-```ts
-import { createCMSContentItem } from "@btst/stack/plugins/cms/api"
-
-await createCMSContentItem(
-  myStack.adapter,
-  "study-reference",
-  { slug: "…", data: { compoundId: { id: bpc157.id }, /* … */ } },
-  { syncRelations: true },
-)
-```
-
-Throws if:
-- The content type slug is not found (run `ensureSynced` first if calling outside a plugin request)
-- A content item with the same slug already exists in that content type
+Standalone getters and `createCMSContentItem(adapter, ...)` remain lower-level adapter primitives for plugin internals and migrations whose caller intentionally owns validation and lifecycle composition.
 
 ## Static Site Generation (SSG)
 
@@ -1586,7 +1464,7 @@ import type { Metadata } from "next"
 
 // Generate one static page per content type slug
 export async function generateStaticParams() {
-  const types = await myStack.api.cms.getAllContentTypes()
+  const types = await myStack.internal.cms.listContentTypes({})
   return types.map((t) => ({ typeSlug: t.slug }))
 }
 

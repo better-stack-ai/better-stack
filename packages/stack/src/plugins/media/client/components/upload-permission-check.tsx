@@ -25,7 +25,6 @@ function UploadPhaseCheck({
 				phase,
 				...(folderId ? { folderId } : {}),
 			})}
-			legacyPermission={{ resource: "media:asset", action: "create" }}
 		>
 			{(state) => {
 				if (state.error || state.isPending || !state.can)

@@ -16,7 +16,7 @@ export interface CreateKanbanTaskInput {
  * Create a new task in a Kanban column.
  * Computes the next order value from existing tasks in the column.
  *
- * @remarks **Security:** No authorization hooks (onBeforeCreateTask) are called.
+ * @remarks **Security:** Operation authorization and lifecycle hooks are not called.
  * The caller is responsible for any access-control checks before invoking this
  * function.
  *
@@ -74,7 +74,7 @@ const _pendingBoardCreations = new Map<string, Promise<Board>>();
  * - **Cross-instance**: the DB `unique` constraint on `slug` causes the losing
  *   write to throw; the catch block re-fetches and returns the winner's board.
  *
- * @remarks **Security:** No authorization hooks are called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are not called. The caller is
  * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter
@@ -152,7 +152,7 @@ export async function findOrCreateKanbanBoard(
  * Co-located with mutations because it is primarily used alongside
  * {@link createKanbanTask} to resolve column IDs before task creation.
  *
- * @remarks **Security:** No authorization hooks are called.
+ * @remarks **Security:** Operation authorization and lifecycle hooks are not called.
  *
  * @param adapter - The database adapter
  * @param boardId - The board ID

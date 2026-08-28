@@ -90,7 +90,7 @@ them once at the top level:
     basePath="/pages"
 +   router={nextRouter()}
 +   api={{ baseURL, basePath: "/api/data" }}
-+   auth={{ getIdentity, loginPath: "/login", can }}
++   auth={clientAuth}
     overrides={{
       blog: {
 -       apiBaseURL: baseURL,
@@ -125,19 +125,21 @@ blogClientPlugin({
 
 ### 3. Replace render guards with `StackProvider.auth`
 
-All `onBefore*PageRendered` override callbacks were removed. Move client-side
-route decisions into one permission provider:
+All `onBefore*PageRendered` override callbacks were removed. Define exact
+permission descriptors and bind the shared authorization rule to the browser:
 
 ```diff
++ import { createClientAuth } from "@btst/stack/authorization/client"
++ import { authorization } from "@/lib/authorization"
++
++ const clientAuth = createClientAuth({
++   authorization,
++   getIdentity: () => session.user,
++   loginPath: "/login",
++ })
++
   <StackProvider
-+   auth={{
-+     getIdentity,
-+     loginPath: "/login",
-+     can: ({ resource, action, identity }) => {
-+       if (!identity) return false
-+       return authorize(identity, resource, action)
-+     },
-+   }}
++   auth={clientAuth}
     overrides={{
       blog: {
 -       onBeforeDraftsPageRendered: () => Boolean(currentUser),
@@ -148,9 +150,10 @@ route decisions into one permission provider:
   >
 ```
 
-Built-in routes declare their resource/action requirements. The auth provider
-gates client navigation and controls; backend lifecycle hooks remain the
-authoritative security boundary.
+Built-in routes declare schema-backed permission descriptors. The browser uses
+the same synchronous rule for presentation gates; `createServerAuth()` is the
+authoritative request boundary. Lifecycle hooks run afterward for domain
+validation, side effects, and telemetry—not routine authorization.
 
 ### 4. Remove manual API and identity component props
 
@@ -221,7 +224,55 @@ onBeforeSubmission: async (_formSlug, data, ctx) => {
 }
 ```
 
-Hooks that transform input continue to return the transformed value.
+### 7. Replace the retired provider-specific auth scaffold
+
+The v3 CLI no longer offers `better-auth-ui`, installs
+`@btst/better-auth-ui` or Better Auth packages, or generates auth, account,
+and organization routes. BTST authorization is provider-agnostic: keep your
+authentication provider and UI in application code, then adapt its session
+through the generic client and server identity resolvers.
+
+Before:
+
+```bash
+npx @btst/codegen init --plugins blog,better-auth-ui
+```
+
+```tsx
+import { createBetterAuthProvider } from "@btst/better-auth-ui"
+
+<StackProvider auth={createBetterAuthProvider(authClient)}>
+  {children}
+</StackProvider>
+```
+
+After:
+
+```ts title="authorization.client.ts"
+export const clientAuth = createClientAuth({
+  authorization,
+  getIdentity: () => session?.user ?? null,
+  loginPath: "/sign-in",
+})
+```
+
+```ts title="authorization.server.ts"
+export const serverAuth = createServerAuth({
+  authorization,
+  getIdentity: ({ headers }) => myAuthProvider.getIdentity(headers),
+})
+```
+
+Pass `clientAuth` to `StackProvider`, pass `serverAuth` to `stack()`, and keep
+sign-in, account, and organization routes in your chosen authentication
+framework. Remove the retired plugin from existing `btst init` commands and
+delete its generated imports, overrides, CSS import, and package dependencies.
+
+Form Builder's `onBeforeFormCreated`, `onBeforeFormUpdated`, and
+`onBeforeSubmission` hooks receive a separate mutable-data value and may return
+its transformed replacement. Other lifecycle hooks observe their deeply
+readonly operation context and perform domain side effects; they do not
+transform operation input by returning a value.
 
 Older Form Builder documentation showed the unsupported
 `onBeforeDeleteSubmission` name. v3 exposes
@@ -247,6 +298,7 @@ behavior:
 - Update parameterized `pageComponents` adapters to read `params`.
 - Change backend hook denials from boolean returns to thrown errors.
 - Replace Form Builder's stale documented `onBeforeDeleteSubmission` name with `onBeforeSubmissionDeleted`.
+- Replace the provider-specific auth scaffold with application-owned identity resolvers and routes.
 - Run your framework build, TypeScript checks, and tests.
 
 ---

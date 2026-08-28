@@ -132,6 +132,45 @@ function readOperation(options?: {
 }
 
 describe("composed endpoint inventory", () => {
+	it("requires every route to be classified when server authorization is configured", () => {
+		const routeOnlyPlugin = defineBackendPlugin({
+			name: "feature",
+			dbPlugin: createDbPlugin("feature", {}),
+			routes: () => ({
+				read: createEndpoint("/records", { method: "GET" }, async () => ({
+					ok: true,
+				})),
+			}),
+		});
+
+		expect(() =>
+			stack({
+				basePath: "/api",
+				plugins: { feature: routeOnlyPlugin },
+				adapter: memoryAdapter,
+			}),
+		).not.toThrow();
+
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [featurePermissions] as const,
+			rules: ({ inventory }) => [inventory.record.read.allow()],
+		});
+		expect(() =>
+			stack({
+				basePath: "/api",
+				plugins: { feature: routeOnlyPlugin },
+				adapter: memoryAdapter,
+				auth: createServerAuth({
+					authorization,
+					getIdentity: () => null,
+				}),
+			}),
+		).toThrowError(
+			'[btst/endpoint-inventory] Plugin "feature" route "read" (GET /records) has no same-key operation or infrastructure declaration.',
+		);
+	});
+
 	it("covers the complete maintained first-party HTTP surface", async () => {
 		const storageAdapter: DirectStorageAdapter = {
 			type: "local",

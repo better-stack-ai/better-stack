@@ -6,7 +6,7 @@ import { z } from "zod";
 import {
 	StackProvider,
 	type StackIdentity,
-	type StackAuthProvider,
+	type StackClientAuth,
 	type StackI18nProvider,
 } from "@btst/stack/context";
 import { defineAuthorization } from "@btst/stack/authorization";
@@ -156,7 +156,7 @@ afterEach(async () => {
 async function render(
 	ui: React.ReactElement,
 	options: {
-		auth?: StackAuthProvider;
+		auth?: StackClientAuth;
 		initialIdentity?: StackIdentity | null;
 		i18n?: StackI18nProvider;
 		localization?: Record<string, string>;
@@ -524,111 +524,6 @@ describe("Kanban permissions", () => {
 			).toHaveLength(expected);
 		},
 	);
-
-	it("keeps legacy RC string providers working during the migration", async () => {
-		const can = vi.fn(
-			(_request: { resource: string; action: string }) => false,
-		);
-		const auth: StackAuthProvider = {
-			getIdentity: () => ({ id: "user-1" }),
-			can,
-		};
-
-		await render(<BoardPage boardId={board.id} />, { auth });
-		await waitFor(() =>
-			can.mock.calls.some(
-				([request]) =>
-					request.resource === "kanban:board" && request.action === "delete",
-			),
-		);
-
-		expect(texts()).not.toContain("Actions");
-		expect(texts()).not.toContain("Add Column");
-		expect(can).toHaveBeenCalledWith(
-			expect.objectContaining({
-				resource: "kanban:board",
-				action: "update",
-				params: expect.objectContaining({
-					id: board.id,
-					ownerId: board.ownerId,
-					organizationId: board.organizationId,
-				}),
-			}),
-		);
-	});
-
-	it("mirrors authoritative task facts in legacy target-column checks", async () => {
-		const can = vi.fn(
-			(_request: {
-				resource: string;
-				action: string;
-				params?: Record<string, unknown>;
-			}) => false,
-		);
-		const auth: StackAuthProvider = {
-			getIdentity: () => ({ id: "assignee-1" }),
-			can,
-		};
-		const assignedTask = {
-			...task,
-			assigneeId: "assignee-1",
-			isArchived: true,
-		};
-		const targetColumn = {
-			...column,
-			id: "column-2",
-			title: "Done",
-			tasks: [],
-		};
-
-		await render(
-			<TaskForm
-				boardId={board.id}
-				ownerId={board.ownerId}
-				organizationId={board.organizationId}
-				columnId={column.id}
-				taskId={assignedTask.id}
-				task={assignedTask}
-				columns={[column, targetColumn]}
-				onClose={() => {}}
-				onSuccess={() => {}}
-			/>,
-			{ auth },
-		);
-
-		const trigger = container.querySelector<HTMLButtonElement>("button#column");
-		Object.assign(trigger ?? {}, {
-			hasPointerCapture: () => false,
-			setPointerCapture: () => {},
-			releasePointerCapture: () => {},
-		});
-		await act(async () => {
-			trigger?.dispatchEvent(
-				new MouseEvent("pointerdown", { bubbles: true, button: 0 }),
-			);
-		});
-		await waitFor(() =>
-			can.mock.calls.some(
-				([request]) => request.params?.targetColumnId === targetColumn.id,
-			),
-		);
-
-		expect(can).toHaveBeenCalledWith({
-			resource: "kanban:task",
-			action: "update",
-			identity: { id: "assignee-1" },
-			params: {
-				id: task.id,
-				boardId: board.id,
-				columnId: column.id,
-				targetColumnId: targetColumn.id,
-				ownerId: board.ownerId,
-				organizationId: board.organizationId,
-				assigneeId: "assignee-1",
-				isArchived: true,
-			},
-		});
-	});
 });
 
 describe("Kanban protected query keys", () => {

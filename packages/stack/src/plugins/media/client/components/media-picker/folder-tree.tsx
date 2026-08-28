@@ -87,10 +87,7 @@ export function FolderTree({
 				<span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
 					{t("media.folders.title", "Folders")}
 				</span>
-				<PermissionAccess
-					permission={createPermission}
-					legacyPermission={{ resource: "media:folder", action: "create" }}
-				>
+				<PermissionAccess permission={createPermission}>
 					<button
 						type="button"
 						title={t("media.folders.new", "New folder")}
@@ -103,10 +100,7 @@ export function FolderTree({
 			</div>
 
 			{isCreating && (
-				<PermissionAccess
-					permission={createPermission}
-					legacyPermission={{ resource: "media:folder", action: "create" }}
-				>
+				<PermissionAccess permission={createPermission}>
 					<div className="flex gap-1 px-2 pb-1">
 						<Input
 							autoFocus
@@ -176,16 +170,6 @@ export function FolderTree({
 							? { parentId: selectedFolder.parentId }
 							: {}),
 					})}
-					legacyPermission={{
-						resource: "media:folder",
-						action: "delete",
-						params: {
-							id: selectedId,
-							...(selectedFolder.parentId
-								? { parentId: selectedFolder.parentId }
-								: {}),
-						},
-					}}
 				>
 					<div className="border-t px-2 py-1">
 						<button

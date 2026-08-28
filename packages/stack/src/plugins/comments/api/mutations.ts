@@ -90,7 +90,7 @@ export interface CreateCommentInput {
 /**
  * Create a new comment.
  *
- * @remarks **Security:** No authorization hooks are called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are not called. The caller is
  * responsible for authorization and lifecycle composition before invoking
  * this lower-level data function.
  */
@@ -117,7 +117,7 @@ export async function createComment(
 /**
  * Update the body of an existing comment and set editedAt.
  *
- * @remarks **Security:** No authorization hooks are called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are not called. The caller is
  * responsible for authorization and lifecycle composition. Pass the complete
  * authorized `expected` snapshot to make the edit conditional and construct
  * the result without a racy post-write read.
@@ -161,7 +161,7 @@ export async function updateComment(
 /**
  * Update the status of a comment (approve, reject, spam).
  *
- * @remarks **Security:** No authorization hooks are called. Callers should
+ * @remarks **Security:** Operation authorization and lifecycle hooks are not called. Callers should
  * authorize moderation before calling this lower-level data function. Pass the
  * complete authorized `expected` snapshot to make the transition conditional,
  * fail closed on concurrent changes, and avoid a racy post-write read.
@@ -227,7 +227,7 @@ async function deleteCommentTree(
  * Comments are only one level deep (the UI prevents replying to replies), so a
  * single-level cascade is sufficient — no recursive walk is needed.
  *
- * @remarks **Security:** No authorization hooks are called. Callers should
+ * @remarks **Security:** Operation authorization and lifecycle hooks are not called. Callers should
  * ensure the requesting user has permission to delete this comment. Pass the
  * authorized `expected` ownership to make deletion conditional.
  */
@@ -270,7 +270,7 @@ export async function deleteComment(
  * All reads and writes are performed inside a single transaction to prevent
  * concurrent requests from causing counter drift or duplicate like rows.
  *
- * @remarks **Security:** No authorization hooks are called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are not called. The caller is
  * responsible for ensuring the requesting user is authenticated (authorId is
  * valid). Pass the authorized `expected` status to fail closed if visibility
  * changes before the reaction is committed.

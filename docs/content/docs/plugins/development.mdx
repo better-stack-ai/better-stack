@@ -141,105 +141,15 @@ export const blogSchema = createDbPlugin("blog", {
 
 ## Backend Plugin
 
-The backend plugin defines your API endpoints using the database adapter.
+The backend plugin defines schema-backed operations first, then adapts those
+same operations to HTTP routes, request-scoped calls, and trusted internal
+calls. A route-only business plugin is rejected when server authorization is
+configured because its access would be unclassified.
 
-### Basic Structure
+### Schema-backed operations
 
-```typescript
-import { type Adapter, defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api"
-import { z } from "zod"
-import { todosSchema as dbSchema } from "../schema"
-import type { Todo } from "../types"
-
-// Request validation schemas
-const createTodoSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  completed: z.boolean().optional().default(false)
-})
-
-export const todosBackendPlugin = defineBackendPlugin({
-  name: "todos",
-  dbPlugin: dbSchema,
-  
-  routes: (adapter: Adapter) => {
-    // Define endpoints here
-    return { /* endpoints */ } as const
-  }
-})
-
-// Export the router type for client-side type safety
-export type TodosApiRouter = ReturnType<typeof todosBackendPlugin.routes>
-```
-
-### Creating Endpoints
-
-Use `createEndpoint` to define type-safe API routes:
-
-```typescript
-routes: (adapter: Adapter) => {
-  // GET /todos - List all todos
-  const listTodos = createEndpoint(
-    "/todos",
-    { method: "GET" },
-    async () => {
-      const todos = await adapter.findMany<Todo>({
-        model: "todo",
-        sortBy: { field: "createdAt", direction: "desc" }
-      })
-      return todos || []
-    }
-  )
-
-  // POST /todos - Create a todo
-  const createTodo = createEndpoint(
-    "/todos",
-    { method: "POST", body: createTodoSchema },
-    async (ctx) => {
-      const { title, completed } = ctx.body
-      return await adapter.create<Todo>({
-        model: "todo",
-        data: { title, completed: completed ?? false, createdAt: new Date() }
-      })
-    }
-  )
-
-  // PUT /todos/:id - Update a todo
-  const updateTodo = createEndpoint(
-    "/todos/:id",
-    { method: "PUT", body: updateTodoSchema },
-    async (ctx) => {
-      const updated = await adapter.update({
-        model: "todo",
-        where: [{ field: "id", value: ctx.params.id }],
-        update: ctx.body
-      })
-      if (!updated) throw new Error("Todo not found")
-      return updated
-    }
-  )
-
-  // DELETE /todos/:id - Delete a todo
-  const deleteTodo = createEndpoint(
-    "/todos/:id",
-    { method: "DELETE" },
-    async (ctx) => {
-      await adapter.delete({
-        model: "todo",
-        where: [{ field: "id", value: ctx.params.id }]
-      })
-      return { success: true }
-    }
-  )
-
-  return { listTodos, createTodo, updateTodo, deleteTodo } as const
-}
-```
-
-### Schema-backed write operations
-
-For user-facing writes, define one operation and let HTTP, request-scoped, and
-trusted internal transports adapt it. Start with a browser-safe permission
-catalog:
+For every user-facing read or write, define one operation and let each server
+transport adapt it. Start with a browser-safe permission catalog:
 
 ```typescript title="permissions.ts"
 import { definePermissions, permission } from "@btst/stack/authorization"
@@ -313,6 +223,8 @@ export const todosBackendPlugin = defineBackendPlugin({
     ),
   }),
 })
+
+export type TodosApiRouter = ReturnType<typeof todosBackendPlugin.routes>
 ```
 
 For compound behavior, `additionalPermissions` derives every secondary check
@@ -444,260 +356,48 @@ The adapter provides these database operations:
 | `delete<T>({ model, where })` | Delete matching records |
 | `transaction(async (tx) => { ... })` | Run operations in a transaction |
 
-### RC Backend Hooks and Lifecycle
+### Operation-first authorization and lifecycle
 
-Existing plugins may retain hook-based authorization while their operations are
-migrated. New schema-backed operations authorize before lifecycle hooks run.
-Treat migrated `onBefore*` hooks as post-authorization domain invariants; they
-cannot observe or replace validation, fact derivation, identity, or
-authorization failures.
+Publish schema-backed permission descriptors, then define one maintained operation inventory. Each protected operation validates input, derives authoritative facts, evaluates its exact descriptor through `createServerAuth`, executes domain behavior, and invokes lifecycle hooks. Hooks are for domain invariants, side effects, audit, and error reporting—not routine authorization or input transformation.
 
-```typescript
-export interface BlogBackendHooks {
-  // RC compatibility authorization hooks for unmigrated operations
-  onBeforeCreatePost?: (data, context) => Promise<void> | void
-  onBeforeUpdatePost?: (postId, data, context) => Promise<void> | void
-  // Migrated delete lifecycle: server authorization already succeeded
-  onBeforeDeletePost?: (postId, context) => Promise<void> | void
-  onBeforeListPosts?: (filter, context) => Promise<void> | void
-
-  // Lifecycle hooks - called after operations
-  onPostCreated?: (post, context) => Promise<void> | void
-  onPostUpdated?: (post, context) => Promise<void> | void
-  onPostDeleted?: (postId, context) => Promise<void> | void
-  onPostsRead?: (posts, filter, context) => Promise<void> | void
-
-  // Error hooks
-  onCreatePostError?: (error, context) => Promise<void> | void
-  onUpdatePostError?: (error, context) => Promise<void> | void
-  onDeletePostError?: (error, context) => Promise<void> | void
-  onListPostsError?: (error, context) => Promise<void> | void
-}
-
-export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
-  defineBackendPlugin({
-    name: "blog",
-    dbPlugin: dbSchema,
-    routes: (adapter: Adapter) => {
-      const createPost = createEndpoint("/posts", { method: "POST", body: createPostSchema },
-        async (ctx) => {
-          // Authorization check — throw to deny, return to allow
-          if (hooks?.onBeforeCreatePost) {
-            try {
-              await hooks.onBeforeCreatePost(ctx.body, { headers: ctx.headers })
-            } catch (e) {
-              throw ctx.error(403, { message: e instanceof Error ? e.message : "Unauthorized" })
-            }
-          }
-          
-          const post = await adapter.create({ model: "post", data: ctx.body })
-          
-          // Lifecycle callback
-          if (hooks?.onPostCreated) {
-            await hooks.onPostCreated(post, { headers: ctx.headers })
-          }
-          
-          return post
-        }
-      )
-      // ... more endpoints
-    }
-  })
-```
-
-### Server-side API (Getter Functions)
-
-Plugins can expose a typed `api` surface that lets server code — Server Components, `generateStaticParams`, cron jobs, scripts — query the database directly, **without going through HTTP**.
-
-<Callout type="warn">
-**Getter functions bypass authorization hooks.** Plugin hooks such as `onBeforeListPosts` or `onBeforeListForms` are **not** called when you invoke getters via `myStack.api.*`. These functions are pure database calls — the caller is fully responsible for performing any access-control checks before invoking them. Do not call getters from user-facing request handlers without adding your own authorization logic first.
-</Callout>
-
-Add an `api` factory to `defineBackendPlugin`. The factory receives the shared adapter and returns an object of async functions:
-
-```typescript
-export const todosBackendPlugin = defineBackendPlugin({
-  name: "todos",
-  dbPlugin: dbSchema,
-
-  // Expose server-side getters bound to the adapter
-  api: (adapter) => ({
-    listTodos: () =>
-      adapter.findMany<Todo>({ model: "todo", sortBy: { field: "createdAt", direction: "desc" } }),
-
-    getTodoById: (id: string) =>
-      adapter.findOne<Todo>({ model: "todo", where: [{ field: "id", value: id, operator: "eq" }] }),
-  }),
-
-  routes: (adapter: Adapter) => {
-    // ... existing HTTP endpoints
+```ts
+const todoPermissions = definePermissions("todo", {
+  item: {
+    read: permission(z.object({ id: z.string(), ownerId: z.string().optional() })),
+    create: permission(),
   },
 })
-```
 
-After calling `stack()`, the returned object exposes the combined `api` namespace — one key per plugin — plus the raw `adapter`:
-
-```typescript
-import { stack } from "@btst/stack"
-import { todosBackendPlugin } from "./plugins/todo/api/backend"
-
-export const myStack = stack({
-  basePath: "/api/data",
-  plugins: { todos: todosBackendPlugin },
-  adapter: (db) => createMemoryAdapter(db)({}),
+const operations = (adapter: Adapter) => ({
+  createTodo: defineOperation({
+    input: CreateTodoSchema,
+    permission: todoPermissions.item.create,
+    facts: () => undefined,
+    execute: async ({ input, identity }) => createTodo(adapter, {
+      ...input,
+      ownerId: identity?.id,
+    }),
+  }),
 })
-
-// Fully typed — no HTTP roundtrip
-const todos = await myStack.api.todos.listTodos()
-const todo  = await myStack.api.todos.getTodoById("abc-123")
-
-// Or use the raw adapter directly
-const raw = await myStack.adapter.findMany<Todo>({ model: "todo" })
-```
-
-**When to use this pattern:**
-
-| Use case | Approach |
-|----------|----------|
-| Server Component / RSC | `myStack.api.todos.listTodos()` |
-| `generateStaticParams` (Next.js) | Import getters directly and pass any adapter |
-| Cron job / script | `myStack.api.*` or direct getter import |
-| HTTP route handler | HTTP endpoint via `routes` as normal |
-
-**Tip — direct getter imports for SSG/build-time:**
-
-If you need access to data before your `stack()` instance is available (e.g. at build time with a separate adapter), export the getter functions independently and pass an adapter yourself:
-
-```typescript
-// api/getters.ts
-import type { Adapter } from "@btst/stack/plugins/api"
-import type { Todo } from "../types"
-
-export async function listTodos(adapter: Adapter) {
-  return adapter.findMany<Todo>({ model: "todo" })
-}
-
-// api/backend.ts
-import { listTodos } from "./getters"
 
 export const todosBackendPlugin = defineBackendPlugin({
   name: "todos",
   dbPlugin: dbSchema,
-  api: (adapter) => ({
-    listTodos: () => listTodos(adapter),
+  operations,
+  api: (adapter) => ({ prefetchForRoute: createTodoPrefetchForRoute(adapter) }),
+  routes: (_adapter, _context, operations) => ({
+    createTodo: createEndpoint(
+      "/todos",
+      { method: "POST", body: CreateTodoSchema, requireRequest: true },
+      operations.createTodo.route((ctx) => ctx.body),
+    ),
   }),
-  routes: (adapter) => { /* ... */ },
 })
-
-// In api/index.ts — re-export for consumers
-export { listTodos } from "./getters"
 ```
 
-### Raw Server-side Mutations (`mutations.ts`)
+Use `app.forRequest(request).api.todos.*` for request-driven server work and `app.internal.todos.*` for explicitly trusted jobs. Internal calls skip user authorization but retain validation, fact derivation, domain behavior, and lifecycle hooks. First-party `stack().api` namespaces are narrow SSG prefetch surfaces only.
 
-Plugins may keep low-level **write primitives** that bypass the operation layer
-for migrations, test setup, and seed scripts. Runtime application writes should
-use schema-backed operations through `forRequest(request).api` or the explicit
-trusted `internal` namespace so validation and lifecycle behavior stay intact.
-
-Keep mutations in a **separate `api/mutations.ts`** file, distinct from the read-only `getters.ts`. Both are re-exported from `api/index.ts` and exposed on the `api` factory.
-
-<Callout type="warn">
-**Raw mutation functions bypass authorization and lifecycle hooks.** Never call
-them from user-facing request handlers. Prefer a schema-backed operation for
-runtime work, including AI tools and trusted jobs.
-</Callout>
-
-```typescript
-// api/mutations.ts — write operations, no hooks, no HTTP context
-import type { Adapter } from "@btst/stack/plugins/api"
-import type { Todo } from "../types"
-
-export interface CreateTodoInput {
-  title: string
-  description?: string
-}
-
-/**
- * Create a todo directly in the database.
- *
- * @remarks Authorization hooks are NOT called. The caller is responsible for
- * access-control checks.
- */
-export async function createTodo(
-  adapter: Adapter,
-  input: CreateTodoInput,
-): Promise<Todo> {
-  return adapter.create<Todo>({
-    model: "todo",
-    data: {
-      title: input.title,
-      description: input.description,
-      completed: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-  })
-}
-```
-
-Wire mutations into the `api` factory alongside the read methods:
-
-```typescript
-// api/backend.ts
-import { listTodos } from "./getters"
-import { createTodo, type CreateTodoInput } from "./mutations"
-
-export const todosBackendPlugin = defineBackendPlugin({
-  name: "todos",
-  dbPlugin: dbSchema,
-  api: (adapter) => ({
-    // Reads
-    listTodos: () => listTodos(adapter),
-    // Mutations
-    createTodo: (input: CreateTodoInput) => createTodo(adapter, input),
-  }),
-  routes: (adapter) => { /* HTTP endpoints */ },
-})
-
-// api/index.ts — re-export both
-export { listTodos } from "./getters"
-export { createTodo, type CreateTodoInput } from "./mutations"
-```
-
-**Common use case — inside an AI tool `execute` function:**
-
-Because AI tool `execute` functions run at request time (after module initialization), the adapter can safely be captured via a module-level variable set immediately after `stack()` returns:
-
-```typescript title="lib/stack.ts"
-import { createTodo } from "./plugins/todo/api/mutations"
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _adapter: any
-
-const myTool = tool({
-  description: "Create a new task",
-  inputSchema: z.object({ title: z.string() }),
-  execute: async ({ title }) => {
-    await createTodo(_adapter, { title })
-    return { success: true }
-  },
-})
-
-export const myStack = stack({
-  plugins: {
-    todos: todosBackendPlugin,
-    aiChat: aiChatBackendPlugin({ tools: { myTool } }),
-  },
-  adapter: (db) => createMemoryAdapter(db)({}),
-})
-
-// Adapter is now available — execute() only fires during HTTP requests,
-// which occur after module initialization is complete.
-_adapter = myStack.adapter
-```
-
----
+Pure getters and mutations may remain exported lower-level adapter primitives for plugin internals and migrations. They do not promise authorization, validation, or lifecycle composition and should not be duplicated onto `stack().api`.
 
 ## Client Plugin
 
@@ -1165,43 +865,19 @@ This pattern ensures:
 
 ### Backend Registration
 
-Register plugins in your BTST configuration:
-
-```typescript
-import { stack } from "@btst/stack"
-import { createMemoryAdapter } from "@btst/adapter-memory"
-import { todosBackendPlugin } from "./plugins/todo/api/backend"
-import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
-
-// Export the full stack instance so myStack.api.* is accessible anywhere
+```ts
 export const myStack = stack({
   basePath: "/api/data",
-  plugins: {
-    todos: todosBackendPlugin,
-    blog: blogBackendPlugin({
-      onBeforeCreatePost: async (data, context) => {
-        // Throw to deny, return to allow
-        // if (!session) throw new Error("Authentication required")
-      },
-      onPostCreated: async (post) => {
-        console.log("Post created:", post.id)
-      }
-    })
-  },
-  adapter: (db) => createMemoryAdapter(db)({})
+  plugins: { todos: todosBackendPlugin, blog: blogBackendPlugin() },
+  adapter: (db) => createMemoryAdapter(db)({}),
+  auth: serverAuth,
 })
 
-// Named re-exports for the HTTP route handler and DB schema
 export const { handler, dbSchema } = myStack
 
-// myStack also exposes:
-//   myStack.adapter  — raw database adapter
-//   myStack.api      — typed server-side getters per plugin
-//
-// Usage in a Server Component or generateStaticParams:
-//   const todos = await myStack.api.todos.listTodos()
-//   const todo  = await myStack.api.todos.getTodoById("abc-123")
-//   const posts = await myStack.api.blog.getAllPosts({ published: true })
+await myStack.forRequest(request).api.todos.createTodo({ title: "Request" })
+await myStack.internal.todos.createTodo({ title: "Trusted job" })
+await myStack.api.todos.prefetchForRoute("list", queryClient)
 ```
 
 ### Client Registration
@@ -1255,239 +931,7 @@ export const getStackClient = (queryClient: QueryClient) => {
 
 ## In-Project Plugin Example
 
-Whether you're building a plugin inside your project or as a standalone npm package, the code and patterns are identical. The only difference is packaging—standalone plugins are built and published to npm, while in-project plugins are imported directly.
-
-Here's a complete example based on the Todo Plugin (found at `lib/plugins/todo/` after running `bash scripts/codegen/setup-nextjs.sh`):
-
-**File: `lib/plugins/todo/schema.ts`**
-```typescript
-import { createDbPlugin } from "@btst/stack/plugins/api"
-
-export const todosSchema = createDbPlugin("todos", {
-  todo: {
-    modelName: "todo",
-    fields: {
-      title: { type: "string", required: true },
-      completed: { type: "boolean", defaultValue: false },
-      createdAt: { type: "date", defaultValue: () => new Date() }
-    }
-  }
-})
-```
-
-**File: `lib/plugins/todo/types.ts`**
-```typescript
-export type Todo = {
-  id: string
-  title: string
-  completed: boolean
-  createdAt: Date
-}
-```
-
-**File: `lib/plugins/todo/api/getters.ts`**
-```typescript
-import type { Adapter } from "@btst/stack/plugins/api"
-import type { Todo } from "../types"
-
-/** Retrieve all todos, sorted newest-first. Safe for server-side and SSG use. */
-export async function listTodos(adapter: Adapter): Promise<Todo[]> {
-  return adapter.findMany<Todo>({
-    model: "todo",
-    sortBy: { field: "createdAt", direction: "desc" },
-  }) as Promise<Todo[]>
-}
-
-/** Retrieve a single todo by ID. Returns null if not found. */
-export async function getTodoById(
-  adapter: Adapter,
-  id: string,
-): Promise<Todo | null> {
-  return adapter.findOne<Todo>({
-    model: "todo",
-    where: [{ field: "id", value: id, operator: "eq" }],
-  })
-}
-```
-
-**File: `lib/plugins/todo/api/backend.ts`**
-```typescript
-import { type Adapter, defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api"
-import { z } from "zod"
-import { todosSchema as dbSchema } from "../schema"
-import type { Todo } from "../types"
-import { listTodos, getTodoById } from "./getters"
-
-const createTodoSchema = z.object({
-  title: z.string().min(1),
-  completed: z.boolean().optional().default(false)
-})
-
-const updateTodoSchema = z.object({
-  title: z.string().min(1).optional(),
-  completed: z.boolean().optional()
-})
-
-export const todosBackendPlugin = defineBackendPlugin({
-  name: "todos",
-  dbPlugin: dbSchema,
-
-  // Server-side getters — available as myStack.api.todos.*
-  api: (adapter) => ({
-    listTodos: () => listTodos(adapter),
-    getTodoById: (id: string) => getTodoById(adapter, id),
-  }),
-
-  routes: (adapter: Adapter) => {
-    const listTodos = createEndpoint("/todos", { method: "GET" },
-      async () => adapter.findMany<Todo>({ model: "todo" }) || []
-    )
-    
-    const createTodo = createEndpoint("/todos", { method: "POST", body: createTodoSchema },
-      async (ctx) => adapter.create<Todo>({
-        model: "todo",
-        data: { ...ctx.body, createdAt: new Date() }
-      })
-    )
-
-    const updateTodo = createEndpoint("/todos/:id", { method: "PUT", body: updateTodoSchema },
-      async (ctx) => {
-        const updated = await adapter.update({
-          model: "todo",
-          where: [{ field: "id", value: ctx.params.id }],
-          update: ctx.body
-        })
-        if (!updated) throw new Error("Todo not found")
-        return updated
-      }
-    )
-
-    const deleteTodo = createEndpoint("/todos/:id", { method: "DELETE" },
-      async (ctx) => {
-        await adapter.delete({ model: "todo", where: [{ field: "id", value: ctx.params.id }] })
-        return { success: true }
-      }
-    )
-    
-    return { listTodos, createTodo, updateTodo, deleteTodo } as const
-  }
-})
-
-export type TodosApiRouter = ReturnType<typeof todosBackendPlugin.routes>
-```
-
-**File: `lib/plugins/todo/client/client.tsx`**
-```typescript
-import { createApiClient, defineClientPlugin, defineRoute } from "@btst/stack/plugins/client"
-import type { QueryClient } from "@tanstack/react-query"
-import type { TodosApiRouter } from "../api/backend"
-import { lazy } from "react"
-import type { Todo } from "../types"
-
-export interface TodosClientConfig {
-  queryClient: QueryClient
-  apiBaseURL: string
-  apiBasePath: string
-  siteBaseURL: string
-  siteBasePath: string
-  context?: Record<string, unknown>
-}
-
-// SSR loader - prefetch data on the server
-function todosLoader(config: TodosClientConfig) {
-  return async () => {
-    if (typeof window === "undefined") {
-      const { queryClient, apiBasePath, apiBaseURL } = config
-      
-      await queryClient.prefetchQuery({
-        queryKey: ["todos"],
-        queryFn: async () => {
-          const client = createApiClient<TodosApiRouter>({
-            baseURL: apiBaseURL,
-            basePath: apiBasePath,
-          })
-          const response = await client("/todos", { method: "GET" })
-          return response.data
-        },
-      })
-    }
-  }
-}
-
-const TodosListPage = lazy(() =>
-  import("./components").then((m) => ({ default: m.TodosListPage }))
-)
-const AddTodoPage = lazy(() =>
-  import("./components").then((m) => ({ default: m.AddTodoPage }))
-)
-
-// Meta generator - create SEO tags from loaded data
-function createTodosMeta(config: TodosClientConfig, path: string) {
-  return () => {
-    const { queryClient, siteBaseURL, siteBasePath } = config
-    const todos = queryClient.getQueryData<Todo[]>(["todos"]) ?? []
-    const fullUrl = `${siteBaseURL}${siteBasePath}${path}`
-    
-    return [
-      { name: "title", content: `${todos.length} Todos` },
-      { name: "description", content: `Track ${todos.length} todos.` },
-      { property: "og:title", content: `${todos.length} Todos` },
-      { property: "og:url", content: fullUrl },
-      { name: "twitter:card", content: "summary" },
-    ]
-  }
-}
-
-export const todosClientPlugin = (config: TodosClientConfig) =>
-  defineClientPlugin({
-    name: "todos",
-
-    routes: () => ({
-      todos: defineRoute("/todos", {
-        page: TodosListPage,
-        loader: todosLoader(config),
-        meta: createTodosMeta(config, "/todos"),
-      }),
-      addTodo: defineRoute("/todos/add", {
-        page: AddTodoPage,
-        meta: createTodosMeta(config, "/todos/add"),
-      }),
-    }),
-    
-    sitemap: async () => [
-      { url: `${config.siteBaseURL}${config.siteBasePath}/todos`, lastModified: new Date(), priority: 0.7 },
-      { url: `${config.siteBaseURL}${config.siteBasePath}/todos/add`, lastModified: new Date(), priority: 0.6 },
-    ],
-  })
-```
-
-**File: `lib/plugins/todo/client/hooks.tsx`**
-```typescript
-"use client"
-import { createApiClient } from "@btst/stack/plugins/client"
-import { useSuspenseQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import type { TodosApiRouter } from "../api/backend"
-
-export function useTodos() {
-  const client = createApiClient<TodosApiRouter>({ baseURL: "/api/data" })
-  return useSuspenseQuery({
-    queryKey: ["todos"],
-    queryFn: async () => (await client("/todos", { method: "GET" })).data
-  })
-}
-
-export function useCreateTodo() {
-  const client = createApiClient<TodosApiRouter>({ baseURL: "/api/data" })
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (title: string) => 
-      (await client("@post/todos", { method: "POST", body: { title } })).data,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["todos"] })
-  })
-}
-```
-
----
+Generated examples follow the same operation-first shape: descriptors live in `permissions.ts`, operations own validation/facts/lifecycle, routes bind the same-key operations, and `api` exposes only `prefetchForRoute`. Use the generated Todo plugin as a compact reference and the first-party Blog plugin for relations, lifecycle, SSR, and authorization examples.
 
 ## AI Chat Plugin Integration
 
@@ -1635,7 +1079,7 @@ Features:
 - Database schema
 - API endpoints (list, create, update, delete)
 - Server-side getter functions (`getters.ts`)
-- `stack().api.todos.*` surface for read-only and legacy raw server access
+- operation-first request and internal server surfaces
 - Client components and hooks
 
 ### Full-Featured Plugin: Blog

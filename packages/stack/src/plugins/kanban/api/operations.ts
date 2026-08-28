@@ -1117,10 +1117,6 @@ export function createKanbanOperations(
 	const listBoards = defineOperation({
 		input: BoardListQuerySchema,
 		permission: kanbanPermissions.board.read,
-		legacyAuthorization: () => ({
-			resource: "kanban:board",
-			action: "read",
-		}),
 		facts: () => ({ scope: "collection" as const }),
 		before: async (context) => {
 			await runDomainHook(
@@ -1157,22 +1153,6 @@ export function createKanbanOperations(
 	const getBoard = defineOperation({
 		input: BoardIdOperationInputSchema,
 		permission: kanbanPermissions.board.read,
-		legacyAuthorization: ({ facts }) => {
-			if (facts.scope !== "record") {
-				throw new TypeError("Board detail requires record facts.");
-			}
-			return {
-				resource: "kanban:board",
-				action: "read",
-				params: {
-					id: facts.boardId,
-					...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-					...(facts.organizationId
-						? { organizationId: facts.organizationId }
-						: {}),
-				},
-			};
-		},
 		facts: async ({ input }) => {
 			const board = await findBoard(adapter, input.id);
 			const snapshot = board ? boardSnapshot(board) : null;
@@ -1228,10 +1208,6 @@ export function createKanbanOperations(
 	const createBoard = defineOperation({
 		input: createBoardSchema,
 		permission: kanbanPermissions.board.create,
-		legacyAuthorization: () => ({
-			resource: "kanban:board",
-			action: "create",
-		}),
 		facts: () => undefined,
 		execute: async (context) => {
 			const data = { ...context.input };
@@ -1305,17 +1281,6 @@ export function createKanbanOperations(
 	const updateBoard = defineOperation({
 		input: UpdateBoardOperationInputSchema,
 		permission: kanbanPermissions.board.update,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "kanban:board",
-			action: "update",
-			params: {
-				id: facts.boardId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-				...(facts.organizationId
-					? { organizationId: facts.organizationId }
-					: {}),
-			},
-		}),
 		facts: async ({ input }) => {
 			const board = await findBoard(adapter, input.id);
 			if (!board) throw boardNotFoundError();
@@ -1383,17 +1348,6 @@ export function createKanbanOperations(
 	const deleteBoard = defineOperation({
 		input: BoardIdOperationInputSchema,
 		permission: kanbanPermissions.board.delete,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "kanban:board",
-			action: "delete",
-			params: {
-				id: facts.boardId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-				...(facts.organizationId
-					? { organizationId: facts.organizationId }
-					: {}),
-			},
-		}),
 		facts: async ({ input }) => {
 			const board = await findBoard(adapter, input.id);
 			if (!board) throw boardNotFoundError();
@@ -1443,17 +1397,6 @@ export function createKanbanOperations(
 	const createColumn = defineOperation({
 		input: createColumnSchema,
 		permission: kanbanPermissions.column.create,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "kanban:column",
-			action: "create",
-			params: {
-				boardId: facts.boardId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-				...(facts.organizationId
-					? { organizationId: facts.organizationId }
-					: {}),
-			},
-		}),
 		facts: async ({ input }) => {
 			const board = await findBoard(adapter, input.boardId);
 			if (!board) throw boardNotFoundError();
@@ -1507,18 +1450,6 @@ export function createKanbanOperations(
 	const updateColumn = defineOperation({
 		input: UpdateColumnOperationInputSchema,
 		permission: kanbanPermissions.column.update,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "kanban:column",
-			action: "update",
-			params: {
-				id: facts.columnId,
-				boardId: facts.boardId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-				...(facts.organizationId
-					? { organizationId: facts.organizationId }
-					: {}),
-			},
-		}),
 		facts: async ({ input }) => {
 			const snapshot = await loadColumnAuthorization(adapter, input.id);
 			columnSnapshots.set(input as object, snapshot);
@@ -1532,23 +1463,6 @@ export function createKanbanOperations(
 			const snapshot = columnSnapshots.get(input as object);
 			if (!snapshot) throw staleStateError();
 			return [kanbanPermissions.column.reorder(boardFacts(snapshot.board))];
-		},
-		legacyAdditionalAuthorization: ({ id, facts }) => {
-			if (id !== kanbanPermissions.column.reorder.id) {
-				throw new TypeError(`Unknown Kanban compound permission: ${id}`);
-			}
-			const reorder = facts as ColumnReorderFacts;
-			return {
-				resource: "kanban:column",
-				action: "update",
-				params: {
-					boardId: reorder.boardId,
-					...(reorder.ownerId ? { ownerId: reorder.ownerId } : {}),
-					...(reorder.organizationId
-						? { organizationId: reorder.organizationId }
-						: {}),
-				},
-			};
 		},
 		execute: async (context) => {
 			const snapshot = columnSnapshots.get(context.input as object);
@@ -1616,18 +1530,6 @@ export function createKanbanOperations(
 	const deleteColumn = defineOperation({
 		input: ColumnIdOperationInputSchema,
 		permission: kanbanPermissions.column.delete,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "kanban:column",
-			action: "delete",
-			params: {
-				id: facts.columnId,
-				boardId: facts.boardId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-				...(facts.organizationId
-					? { organizationId: facts.organizationId }
-					: {}),
-			},
-		}),
 		facts: async ({ input }) => {
 			const snapshot = await loadColumnAuthorization(adapter, input.id);
 			columnSnapshots.set(input as object, snapshot);
@@ -1684,17 +1586,6 @@ export function createKanbanOperations(
 	const reorderColumns = defineOperation({
 		input: reorderColumnsSchema,
 		permission: kanbanPermissions.column.reorder,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "kanban:column",
-			action: "update",
-			params: {
-				boardId: facts.boardId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-				...(facts.organizationId
-					? { organizationId: facts.organizationId }
-					: {}),
-			},
-		}),
 		facts: async ({ input }) => {
 			const board = await findBoard(adapter, input.boardId);
 			if (!board) throw boardNotFoundError();
@@ -1795,18 +1686,6 @@ export function createKanbanOperations(
 	const createTask = defineOperation({
 		input: createTaskSchema,
 		permission: kanbanPermissions.task.create,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "kanban:task",
-			action: "create",
-			params: {
-				boardId: facts.boardId,
-				columnId: facts.columnId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-				...(facts.organizationId
-					? { organizationId: facts.organizationId }
-					: {}),
-			},
-		}),
 		facts: async ({ input }) => {
 			const snapshot = await loadColumnAuthorization(adapter, input.columnId);
 			columnSnapshots.set(input as object, snapshot);
@@ -1866,21 +1745,6 @@ export function createKanbanOperations(
 	const updateTask = defineOperation({
 		input: UpdateTaskOperationInputSchema,
 		permission: kanbanPermissions.task.update,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "kanban:task",
-			action: "update",
-			params: {
-				id: facts.taskId,
-				boardId: facts.boardId,
-				columnId: facts.columnId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-				...(facts.organizationId
-					? { organizationId: facts.organizationId }
-					: {}),
-				...(facts.assigneeId ? { assigneeId: facts.assigneeId } : {}),
-				isArchived: facts.isArchived,
-			},
-		}),
 		facts: async ({ input }) => {
 			const snapshot = await loadTaskAuthorization(adapter, input.id);
 			taskSnapshots.set(input as object, snapshot);
@@ -1906,28 +1770,6 @@ export function createKanbanOperations(
 					targetColumnId: moveSnapshot.targetColumn.id,
 				}),
 			];
-		},
-		legacyAdditionalAuthorization: ({ id, facts }) => {
-			if (id !== kanbanPermissions.task.move.id) {
-				throw new TypeError(`Unknown Kanban compound permission: ${id}`);
-			}
-			const move = facts as TaskMoveFacts;
-			return {
-				resource: "kanban:task",
-				action: "update",
-				params: {
-					id: move.taskId,
-					boardId: move.boardId,
-					columnId: move.columnId,
-					targetColumnId: move.targetColumnId,
-					...(move.ownerId ? { ownerId: move.ownerId } : {}),
-					...(move.organizationId
-						? { organizationId: move.organizationId }
-						: {}),
-					...(move.assigneeId ? { assigneeId: move.assigneeId } : {}),
-					isArchived: move.isArchived,
-				},
-			};
 		},
 		execute: async (context) => {
 			const snapshot = taskSnapshots.get(context.input as object);
@@ -2020,21 +1862,6 @@ export function createKanbanOperations(
 	const deleteTask = defineOperation({
 		input: TaskIdOperationInputSchema,
 		permission: kanbanPermissions.task.delete,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "kanban:task",
-			action: "delete",
-			params: {
-				id: facts.taskId,
-				boardId: facts.boardId,
-				columnId: facts.columnId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-				...(facts.organizationId
-					? { organizationId: facts.organizationId }
-					: {}),
-				...(facts.assigneeId ? { assigneeId: facts.assigneeId } : {}),
-				isArchived: facts.isArchived,
-			},
-		}),
 		facts: async ({ input }) => {
 			const snapshot = await loadTaskAuthorization(adapter, input.id);
 			taskSnapshots.set(input as object, snapshot);
@@ -2088,22 +1915,6 @@ export function createKanbanOperations(
 	const moveTask = defineOperation({
 		input: moveTaskSchema,
 		permission: kanbanPermissions.task.move,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "kanban:task",
-			action: "update",
-			params: {
-				id: facts.taskId,
-				boardId: facts.boardId,
-				columnId: facts.columnId,
-				targetColumnId: facts.targetColumnId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-				...(facts.organizationId
-					? { organizationId: facts.organizationId }
-					: {}),
-				...(facts.assigneeId ? { assigneeId: facts.assigneeId } : {}),
-				isArchived: facts.isArchived,
-			},
-		}),
 		facts: async ({ input }) => {
 			const primary = await loadTaskAuthorization(adapter, input.taskId);
 			const snapshot = await loadMoveSnapshot(
@@ -2153,18 +1964,6 @@ export function createKanbanOperations(
 	const reorderTasks = defineOperation({
 		input: reorderTasksSchema,
 		permission: kanbanPermissions.task.reorder,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "kanban:task",
-			action: "update",
-			params: {
-				boardId: facts.boardId,
-				columnId: facts.columnId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-				...(facts.organizationId
-					? { organizationId: facts.organizationId }
-					: {}),
-			},
-		}),
 		facts: async ({ input }) => {
 			const parent = await loadColumnAuthorization(adapter, input.columnId);
 			const tasks = await listTasks(adapter, input.columnId);

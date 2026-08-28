@@ -179,17 +179,6 @@ export interface BlogNextPreviousErrorContext
 	readonly query: DeepReadonly<NextPreviousPostsInput>;
 }
 
-/** @deprecated Use the operation-specific Blog lifecycle contexts instead. */
-export interface BlogApiContext<
-	TBody = unknown,
-	TParams = unknown,
-	TQuery = unknown,
-> extends RequestFields {
-	readonly body?: DeepReadonly<TBody>;
-	readonly params?: DeepReadonly<TParams>;
-	readonly query?: DeepReadonly<TQuery>;
-}
-
 /** Domain lifecycle hooks that run only after successful Blog authorization. */
 export interface BlogBackendHooks {
 	onBeforeListPosts?: (
@@ -480,15 +469,6 @@ export function createBlogOperations(
 	const listPosts = defineOperation({
 		input: PostListQuerySchema,
 		permission: blogPermissions.post.read,
-		legacyAuthorization: ({ facts }) =>
-			facts.scope === "published" ||
-			(facts.scope === "post" && (!facts.exists || facts.published))
-				? { public: true }
-				: {
-						resource: "blog:draft",
-						action: "read",
-						params: { ...facts },
-					},
 		facts: ({ input }) => readFactsForList(adapter, input),
 		before: async (context) => {
 			await hooks?.onBeforeListPosts?.(context.input, listContext(context));
@@ -522,11 +502,6 @@ export function createBlogOperations(
 	const createPost = defineOperation({
 		input: CreatePostOperationInputSchema,
 		permission: blogPermissions.post.create,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "blog:post",
-			action: "create",
-			params: { ...facts },
-		}),
 		facts: ({ input }) => ({
 			publish: input.published ? ("published" as const) : ("draft" as const),
 		}),
@@ -580,11 +555,6 @@ export function createBlogOperations(
 	const updatePost = defineOperation({
 		input: UpdatePostOperationInputSchema,
 		permission: blogPermissions.post.update,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "blog:post",
-			action: "update",
-			params: { ...facts },
-		}),
 		facts: async ({ input }) => {
 			const post = await adapter.findOne<Post>({
 				model: "post",
@@ -672,11 +642,6 @@ export function createBlogOperations(
 	const deletePost = defineOperation({
 		input: DeletePostInputSchema,
 		permission: blogPermissions.post.delete,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "blog:post",
-			action: "delete",
-			params: { ...facts },
-		}),
 		facts: async ({ input }) => {
 			const post = await adapter.findOne<Post>({
 				model: "post",
@@ -716,7 +681,6 @@ export function createBlogOperations(
 	const getNextPreviousPosts = defineOperation({
 		input: NextPreviousPostsQuerySchema,
 		permission: blogPermissions.post.read,
-		legacyAuthorization: () => ({ public: true }),
 		facts: () => ({ scope: "published" as const }),
 		before: async (context) => {
 			await hooks?.onBeforeNextPreviousPosts?.(
@@ -748,7 +712,6 @@ export function createBlogOperations(
 	const listTags = defineOperation({
 		input: EmptyInputSchema,
 		permission: blogPermissions.tag.read,
-		legacyAuthorization: () => ({ public: true }),
 		facts: () => undefined,
 		execute: async () => (await getAllTags(adapter)).map(serializeOperationTag),
 	});

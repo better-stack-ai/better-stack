@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	StackProvider,
-	type StackAuthProvider,
+	type StackClientAuth,
 	type StackI18nProvider,
 } from "@btst/stack/context";
 import { createClientAuth } from "@btst/stack/authorization/client";
@@ -134,7 +134,7 @@ const mediaOverrides = () => ({
 
 async function renderLibrary(
 	options: {
-		auth?: StackAuthProvider;
+		auth?: StackClientAuth;
 		i18n?: StackI18nProvider;
 		router?: ReturnType<typeof createMockRouter>;
 		initialIdentity?: { id: string; role?: string } | null;
@@ -280,29 +280,6 @@ describe("Media library permissions", () => {
 
 		expect(document.body.textContent).toContain(childFolder.name);
 		expect(hooks.useFolders).toHaveBeenCalledTimes(1);
-	});
-
-	it("hides asset and folder writes while leaving browsing available", async () => {
-		const can = vi.fn(
-			({ action }: { resource: string; action: string }) => action === "read",
-		);
-		await renderLibrary({
-			auth: { getIdentity: () => ({ id: "viewer" }), can },
-			router: createMockRouter("folder=folder-1"),
-		});
-
-		expect(document.body.textContent).toContain("Beach.jpg");
-		expect(document.body.textContent).not.toContain("Upload");
-		expect(container.querySelector('[title="New folder"]')).toBeNull();
-		expect(container.querySelector('[title="Delete"]')).toBeNull();
-		expect(document.body.textContent).not.toContain("Delete folder");
-		expect(can).toHaveBeenCalledWith(
-			expect.objectContaining({
-				resource: "media:asset",
-				action: "delete",
-				params: { id: asset.id },
-			}),
-		);
 	});
 
 	it("uses exact schema-backed facts for one-rule asset and upload gates", async () => {

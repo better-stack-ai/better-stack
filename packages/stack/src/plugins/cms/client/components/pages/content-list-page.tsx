@@ -31,11 +31,6 @@ export function ContentListPageComponent({
 				contentType: typeSlug,
 				scope: "collection",
 			})}
-			legacyPermission={{
-				resource: "cms:content",
-				action: "read",
-				params: { typeSlug },
-			}}
 			PageComponent={ContentListPageInternal}
 			ErrorComponent={DefaultError}
 			LoadingComponent={ListSkeleton}

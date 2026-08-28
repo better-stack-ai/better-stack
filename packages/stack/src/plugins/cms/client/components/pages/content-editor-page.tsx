@@ -62,11 +62,6 @@ function AuthorizedContentEditorPage({
 		return (
 			<PermissionRouteAccess
 				permission={cmsPermissions.record.create({ contentType: typeSlug })}
-				legacyPermission={{
-					resource: "cms:content",
-					action: "create",
-					params: { typeSlug },
-				}}
 				LoadingComponent={EditorSkeleton}
 			>
 				<ContentEditorPageInternal typeSlug={typeSlug} />
@@ -92,11 +87,6 @@ function AuthorizedExistingContentEditorPage({
 				recordId: item.id,
 				...(item.authorId ? { authorId: item.authorId } : {}),
 			})}
-			legacyPermission={{
-				resource: "cms:content",
-				action: "update",
-				params: { typeSlug, id },
-			}}
 			LoadingComponent={EditorSkeleton}
 		>
 			<ContentEditorPageInternal typeSlug={typeSlug} id={id} />

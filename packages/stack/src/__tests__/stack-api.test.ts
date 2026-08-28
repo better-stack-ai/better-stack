@@ -33,7 +33,7 @@ describe("stack.api surface", () => {
 		expect(typeof backend.adapter.create).toBe("function");
 	});
 
-	it("exposes typed api namespace for plugins with api factory", () => {
+	it("keeps stack.api narrow for SSG prefetch helpers", () => {
 		const backend = stack({
 			basePath: "/api",
 			plugins: { blog: blogBackendPlugin() },
@@ -42,9 +42,7 @@ describe("stack.api surface", () => {
 
 		expect(backend.api).toBeDefined();
 		expect(backend.api.blog).toBeDefined();
-		expect(typeof backend.api.blog.getAllPosts).toBe("function");
-		expect(typeof backend.api.blog.getPostBySlug).toBe("function");
-		expect(typeof backend.api.blog.getAllTags).toBe("function");
+		expect(Object.keys(backend.api.blog)).toEqual(["prefetchForRoute"]);
 	});
 
 	it("exposes kanban api namespace", () => {
@@ -55,8 +53,7 @@ describe("stack.api surface", () => {
 		});
 
 		expect(backend.api.kanban).toBeDefined();
-		expect(typeof backend.api.kanban.getAllBoards).toBe("function");
-		expect(typeof backend.api.kanban.getBoardById).toBe("function");
+		expect(Object.keys(backend.api.kanban)).toEqual(["prefetchForRoute"]);
 	});
 
 	it("plugins without api factory are not present in api", () => {
@@ -69,7 +66,7 @@ describe("stack.api surface", () => {
 		expect((backend.api as any).noApi).toBeUndefined();
 	});
 
-	it("api functions are bound to the shared adapter and return real data", async () => {
+	it("uses internal operations for explicitly trusted business calls", async () => {
 		const backend = stack({
 			basePath: "/api",
 			plugins: { blog: blogBackendPlugin() },
@@ -91,15 +88,9 @@ describe("stack.api surface", () => {
 			},
 		});
 
-		// Retrieve via stack.api
-		const posts = await backend.api.blog.getAllPosts();
+		const posts = await backend.internal.blog.listPosts({});
 		expect(posts.items).toHaveLength(1);
 		expect(posts.items[0]!.slug).toBe("hello-world");
-
-		// Verify same adapter - data is shared
-		const bySlug = await backend.api.blog.getPostBySlug("hello-world");
-		expect(bySlug).not.toBeNull();
-		expect(bySlug!.title).toBe("Hello World");
 	});
 
 	it("combines multiple plugins in a single stack call", () => {
@@ -112,7 +103,7 @@ describe("stack.api surface", () => {
 			adapter: testAdapter,
 		});
 
-		expect(typeof backend.api.blog.getAllPosts).toBe("function");
-		expect(typeof backend.api.kanban.getAllBoards).toBe("function");
+		expect(typeof backend.api.blog.prefetchForRoute).toBe("function");
+		expect(typeof backend.api.kanban.prefetchForRoute).toBe("function");
 	});
 });

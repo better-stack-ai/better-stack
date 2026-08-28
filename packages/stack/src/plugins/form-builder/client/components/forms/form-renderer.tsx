@@ -287,7 +287,6 @@ export function FormRenderer({
 				...(form.createdBy ? { ownerId: form.createdBy } : {}),
 				status: form.status,
 			})}
-			legacyPublic
 		>
 			<PermissionAccess
 				permission={formBuilderPermissions.submission.create({
@@ -297,7 +296,6 @@ export function FormRenderer({
 					...(form.createdBy ? { ownerId: form.createdBy } : {}),
 					status: form.status,
 				})}
-				legacyPublic
 			>
 				<div className={className} data-testid="form-renderer">
 					<SteppedAutoForm

@@ -1,6 +1,6 @@
 "use client";
 import { createContext, useContext, type ReactNode } from "react";
-import type { StackAuthProvider, StackIdentity } from "../shared/auth-types";
+import type { StackClientAuth, StackIdentity } from "../shared/auth-types";
 import type { StackI18nProvider } from "../shared/i18n-types";
 import type { StackNotifyProvider } from "../shared/notify-types";
 import { StackAuthBoundary } from "./auth";
@@ -31,7 +31,7 @@ interface StackContextValue<TPluginOverrides extends Record<string, any>> {
 	 */
 	api?: StackApiConfig;
 	/** Top-level auth provider used by identity-aware components. */
-	auth?: StackAuthProvider;
+	auth?: StackClientAuth;
 }
 
 const StackContext = createContext<StackContextValue<any> | null>(null);
@@ -157,12 +157,11 @@ export function StackProvider<
 	router?: StackRouterConfig;
 	api?: StackApiConfig;
 	/**
-	 * Optional auth provider. When set, `useIdentity()` / `useCan()` and
-	 * `<CanAccess>` resolve identity and permissions through it. When omitted,
-	 * behavior is identical to before: identity is `null` and all permission
-	 * checks pass.
+	 * Browser authorization created by `createClientAuth()`. When omitted,
+	 * identity is `null` and presentation-only descriptor checks remain
+	 * permissive; backend authorization is independent and authoritative.
 	 */
-	auth?: StackAuthProvider;
+	auth?: StackClientAuth;
 	/**
 	 * Request identity resolved on the server. `undefined` means no snapshot was
 	 * supplied; `null` is an explicitly hydrated anonymous identity.

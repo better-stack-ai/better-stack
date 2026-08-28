@@ -145,7 +145,7 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 	// This is used by the inverse relations panel to pre-fill the parent relation
 	const prefillParams = usePrefillParams();
 
-	// Call lifecycle hooks for authorization
+	// Call route lifecycle hooks for telemetry and application behavior.
 	useRouteLifecycle({
 		routeName: "contentEditor",
 		context: {

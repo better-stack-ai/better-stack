@@ -161,18 +161,9 @@ function ChatActionCheck({
 	if (!messagePermission) return <>{children(false)}</>;
 
 	return (
-		<PermissionCheck
-			permission={streamPermission}
-			legacyPermission={{ resource: "ai-chat:stream", action: "start" }}
-		>
+		<PermissionCheck permission={streamPermission}>
 			{(streamState) => (
-				<PermissionCheck
-					permission={messagePermission}
-					legacyPermission={{
-						resource: "ai-chat:message",
-						action: action === "send" ? "create" : action,
-					}}
-				>
+				<PermissionCheck permission={messagePermission}>
 					{(messageState) => {
 						const baseAllowed =
 							streamState.can &&
@@ -190,10 +181,6 @@ function ChatActionCheck({
 										...(routeName ? { routeName } : {}),
 										toolNames: [...toolNames],
 									})}
-									legacyPermission={{
-										resource: "ai-chat:tool",
-										action: "activate",
-									}}
 								>
 									{(toolState) =>
 										children(
@@ -209,10 +196,6 @@ function ChatActionCheck({
 						return (
 							<PermissionCheck
 								permission={aiChatPermissions.conversation.create()}
-								legacyPermission={{
-									resource: "ai-chat:conversation",
-									action: "create",
-								}}
 							>
 								{(createState) =>
 									renderToolCheck(

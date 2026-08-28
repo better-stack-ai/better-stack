@@ -35,7 +35,7 @@ export interface FolderListParams {
  * Retrieve all assets matching optional filter criteria.
  * Pure DB function — no hooks, no HTTP context. Safe for server-side use.
  *
- * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called. The caller is
  * responsible for any access-control checks before invoking this function.
  */
 export async function listAssets(
@@ -126,7 +126,7 @@ export async function listAssets(
  * Returns `null` if no asset is found.
  * Pure DB function — no hooks, no HTTP context.
  *
- * @remarks **Security:** Authorization hooks are NOT called.
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called.
  */
 export async function getAssetById(
 	adapter: Pick<Adapter, "findOne">,
@@ -143,7 +143,7 @@ export async function getAssetById(
  * Pass `null` to list root-level folders (those without a parent).
  * Pure DB function — no hooks, no HTTP context.
  *
- * @remarks **Security:** Authorization hooks are NOT called.
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called.
  */
 export async function listFolders(
 	adapter: Adapter,
@@ -183,7 +183,7 @@ export async function listFolders(
  * Returns `null` if no folder is found.
  * Pure DB function — no hooks, no HTTP context.
  *
- * @remarks **Security:** Authorization hooks are NOT called.
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called.
  */
 export async function getFolderById(
 	adapter: Pick<Adapter, "findOne">,

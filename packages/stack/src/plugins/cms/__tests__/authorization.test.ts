@@ -5,8 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { stack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
-import { createServerAuth } from "../../../authorization/server";
-import type { StackServerAuthProvider } from "../../../shared/auth-types";
+import {
+	createServerAuth,
+	type ServerAuth,
+} from "../../../authorization/server";
 import { cmsBackendPlugin, type CMSBackendHooks } from "../api";
 import { cmsPermissions } from "../permissions";
 import type { ContentItem, ContentRelation, ContentType } from "../types";
@@ -137,7 +139,7 @@ function createAuth(
 }
 
 function makeBackend(options?: {
-	auth?: StackServerAuthProvider;
+	auth?: ServerAuth<any>;
 	hooks?: CMSBackendHooks;
 }) {
 	return stack({
@@ -149,8 +151,19 @@ function makeBackend(options?: {
 			}),
 		},
 		adapter: memoryAdapter,
-		...(options?.auth ? { auth: options.auth } : {}),
+		...(options?.auth ? { auth: options.auth as never } : {}),
 	});
+}
+
+function allContentTypes(backend: ReturnType<typeof makeBackend>) {
+	return backend.internal.cms.listContentTypes({});
+}
+
+function allContentItems(
+	backend: ReturnType<typeof makeBackend>,
+	typeSlug: string,
+) {
+	return backend.internal.cms.listContentItems({ typeSlug, query: {} });
 }
 
 function request(
@@ -182,7 +195,7 @@ async function seedRecord(
 	options: { typeSlug?: string; slug: string; authorId?: string },
 ) {
 	const typeSlug = options.typeSlug ?? "article";
-	const contentType = (await backend.api.cms.getAllContentTypes()).find(
+	const contentType = (await allContentTypes(backend)).find(
 		(value) => value.slug === typeSlug,
 	);
 	if (!contentType) throw new Error(`Missing test content type ${typeSlug}`);
@@ -516,9 +529,7 @@ describe("CMS operation-first authorization", () => {
 
 		expect(response.status).toBe(403);
 		expect(events).toEqual([]);
-		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
-			0,
-		);
+		expect((await allContentItems(backend, "resource")).total).toBe(0);
 
 		const source = await seedRecord(backend, {
 			typeSlug: "resource",
@@ -539,9 +550,7 @@ describe("CMS operation-first authorization", () => {
 		);
 		expect(updateResponse.status).toBe(403);
 		expect(events).toEqual([]);
-		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
-			0,
-		);
+		expect((await allContentItems(backend, "category")).total).toBe(0);
 	});
 
 	it("authorizes authoritative existing relation targets before linking them", async () => {
@@ -604,9 +613,7 @@ describe("CMS operation-first authorization", () => {
 		);
 		expect(updateResponse.status).toBe(403);
 		expect(events).toEqual([]);
-		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
-			1,
-		);
+		expect((await allContentItems(backend, "resource")).total).toBe(1);
 		expect(
 			await backend.adapter.findOne<ContentRelation>({
 				model: "contentRelation",
@@ -681,9 +688,7 @@ describe("CMS operation-first authorization", () => {
 			code: "RECORD_STATE_CHANGED",
 		});
 		expect(events).toEqual(["before", "error:create"]);
-		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
-			0,
-		);
+		expect((await allContentItems(backend, "resource")).total).toBe(0);
 		expect(
 			await backend.adapter.findOne<ContentRelation>({
 				model: "contentRelation",
@@ -691,113 +696,6 @@ describe("CMS operation-first authorization", () => {
 			}),
 		).toBeFalsy();
 	});
-
-	it("maps every compound CMS check through structural RC server rules", async () => {
-		const events: string[] = [];
-		let deniedType = "category";
-		const can = vi.fn(
-			({ params }: { action: string; params?: Record<string, unknown> }) =>
-				params?.typeSlug !== deniedType,
-		);
-		const backend = makeBackend({
-			auth: {
-				getIdentity: () => ({ id: "legacy-reader" }),
-				can,
-			},
-			hooks: {
-				onBeforeCreate: () => {
-					events.push("before:create");
-				},
-				onError: () => {
-					events.push("error");
-				},
-			},
-		});
-		const source = await seedRecord(backend, {
-			typeSlug: "resource",
-			slug: "legacy-compound-source",
-		});
-		const target = await seedRecord(backend, {
-			typeSlug: "category",
-			slug: "legacy-compound-target",
-		});
-
-		const deniedInlineCreate = await backend.handler(
-			request("/content/resource", {
-				method: "POST",
-				body: {
-					slug: "legacy-compound-create",
-					data: {
-						name: "Denied source",
-						categoryIds: [{ _new: true, data: { name: "Denied target" } }],
-					},
-				},
-			}),
-		);
-		expect(deniedInlineCreate.status).toBe(403);
-		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
-			1,
-		);
-		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
-			1,
-		);
-		const deniedExistingLink = await backend.handler(
-			request("/content/resource", {
-				method: "POST",
-				body: {
-					slug: "legacy-existing-link",
-					data: {
-						name: "Denied existing link",
-						categoryIds: [{ id: target.id }],
-					},
-				},
-			}),
-		);
-		expect(deniedExistingLink.status).toBe(403);
-		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
-			1,
-		);
-
-		await backend.adapter.create<ContentRelation>({
-			model: "contentRelation",
-			data: {
-				sourceId: source.id,
-				targetId: target.id,
-				fieldName: "categoryIds",
-				createdAt: new Date(),
-			},
-		});
-		const deniedPopulatedRead = await backend.handler(
-			request(`/content/resource/${source.id}/populated`),
-		);
-		expect(deniedPopulatedRead.status).toBe(403);
-
-		deniedType = "category-note";
-		const deniedInverseSource = await backend.handler(
-			request("/content-types/category/inverse-relations"),
-		);
-		expect(deniedInverseSource.status).toBe(403);
-		expect(events).toEqual([]);
-		expect(
-			can.mock.calls.map(([permission]) => ({
-				action: permission.action,
-				typeSlug: permission.params?.typeSlug,
-			})),
-		).toEqual([
-			{ action: "create", typeSlug: "resource" },
-			{ action: "read", typeSlug: "resource" },
-			{ action: "create", typeSlug: "category" },
-			{ action: "create", typeSlug: "resource" },
-			{ action: "read", typeSlug: "resource" },
-			{ action: "read", typeSlug: "category" },
-			{ action: "read", typeSlug: "resource" },
-			{ action: "read", typeSlug: "resource" },
-			{ action: "read", typeSlug: "category" },
-			{ action: "read", typeSlug: "category" },
-			{ action: "read", typeSlug: "category-note" },
-		]);
-	});
-
 	it("does not reuse unreadable records submitted as inline new relations", async () => {
 		const createWithoutReadAuthorization = defineAuthorization({
 			identity: z.object({ id: z.string(), role: z.literal("user") }),
@@ -852,12 +750,8 @@ describe("CMS operation-first authorization", () => {
 			code: "RELATED_RECORD_SLUG_CONFLICT",
 		});
 		expect(events).toEqual(["error:create"]);
-		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
-			0,
-		);
-		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
-			1,
-		);
+		expect((await allContentItems(backend, "resource")).total).toBe(0);
+		expect((await allContentItems(backend, "category")).total).toBe(1);
 
 		const source = await seedRecord(backend, {
 			typeSlug: "resource",
@@ -918,12 +812,8 @@ describe("CMS operation-first authorization", () => {
 		expect(await response.json()).toMatchObject({
 			code: "RELATED_RECORD_SLUG_CONFLICT",
 		});
-		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
-			0,
-		);
-		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
-			0,
-		);
+		expect((await allContentItems(backend, "resource")).total).toBe(0);
+		expect((await allContentItems(backend, "category")).total).toBe(0);
 	});
 
 	it("fails closed when a relation schema changes after compound authorization", async () => {
@@ -975,7 +865,7 @@ describe("CMS operation-first authorization", () => {
 			},
 		};
 		backend = makeBackend({ auth: racingAuth });
-		await backend.api.cms.getAllContentTypes();
+		await allContentTypes(backend);
 		const originalResourceType = await backend.adapter.findOne<ContentType>({
 			model: "contentType",
 			where: [{ field: "slug", value: "resource" }],
@@ -1006,10 +896,8 @@ describe("CMS operation-first authorization", () => {
 		expect(await createResponse.json()).toMatchObject({
 			code: "RELATION_SCHEMA_CHANGED",
 		});
-		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
-			0,
-		);
-		expect((await backend.api.cms.getAllContentItems("secret")).total).toBe(0);
+		expect((await allContentItems(backend, "resource")).total).toBe(0);
+		expect((await allContentItems(backend, "secret")).total).toBe(0);
 
 		await resetResourceSchema();
 		const source = await seedRecord(backend, {
@@ -1028,10 +916,8 @@ describe("CMS operation-first authorization", () => {
 		expect(await updateResponse.json()).toMatchObject({
 			code: "RELATION_SCHEMA_CHANGED",
 		});
-		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
-			0,
-		);
-		expect((await backend.api.cms.getAllContentItems("secret")).total).toBe(0);
+		expect((await allContentItems(backend, "category")).total).toBe(0);
+		expect((await allContentItems(backend, "secret")).total).toBe(0);
 
 		changedJsonSchema = JSON.stringify(
 			zodToFormSchema(missingResourceRelationSchema),
@@ -1060,9 +946,7 @@ describe("CMS operation-first authorization", () => {
 		expect(await missingUpdateResponse.json()).toMatchObject({
 			code: "RELATION_SCHEMA_CHANGED",
 		});
-		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
-			1,
-		);
+		expect((await allContentItems(backend, "resource")).total).toBe(1);
 	});
 
 	it("ignores spoofed browser ownership and content-type facts", async () => {
@@ -1653,7 +1537,7 @@ describe("CMS operation-first authorization", () => {
 			},
 		};
 		backend = makeBackend({ auth: racingAuth });
-		await backend.api.cms.getAllContentTypes();
+		await allContentTypes(backend);
 
 		const response = await backend.handler(
 			request("/content-types/category/inverse-relations", {
@@ -1857,7 +1741,7 @@ describe("CMS operation-first authorization", () => {
 				getIdentity: () => null,
 			}),
 		});
-		const contentType = (await backend.api.cms.getAllContentTypes()).find(
+		const contentType = (await allContentTypes(backend)).find(
 			(value) => value.slug === "article",
 		);
 		if (!contentType) throw new Error("Missing article content type");
@@ -1986,9 +1870,7 @@ describe("CMS operation-first authorization", () => {
 						name: "Denied",
 						categoryIds: [{ id: expect.any(String) }],
 					});
-					expect(
-						(await backend.api.cms.getAllContentItems("category")).total,
-					).toBe(0);
+					expect((await allContentItems(backend, "category")).total).toBe(0);
 					throw new Error("Create denied by hook");
 				},
 				onBeforeUpdate: (_id, data) => {
@@ -2062,13 +1944,9 @@ describe("CMS operation-first authorization", () => {
 			});
 		}
 
-		expect((await backend.api.cms.getAllContentItems("article")).total).toBe(1);
-		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
-			0,
-		);
-		expect((await backend.api.cms.getAllContentItems("resource")).total).toBe(
-			0,
-		);
+		expect((await allContentItems(backend, "article")).total).toBe(1);
+		expect((await allContentItems(backend, "category")).total).toBe(0);
+		expect((await allContentItems(backend, "resource")).total).toBe(0);
 		expect(
 			JSON.parse(
 				(
@@ -2089,9 +1967,7 @@ describe("CMS operation-first authorization", () => {
 			hooks: {
 				onBeforeUpdate: async (id) => {
 					events.push("before");
-					expect(
-						(await backend.api.cms.getAllContentItems("category")).total,
-					).toBe(0);
+					expect((await allContentItems(backend, "category")).total).toBe(0);
 					await backend.adapter.update<ContentItem>({
 						model: "contentItem",
 						where: [{ field: "id", value: id }],
@@ -2138,9 +2014,7 @@ describe("CMS operation-first authorization", () => {
 			where: [{ field: "id", value: record.id }],
 		});
 		expect(JSON.parse(persisted?.data ?? "{}").title).toBe("stale-owner");
-		expect((await backend.api.cms.getAllContentItems("category")).total).toBe(
-			0,
-		);
+		expect((await allContentItems(backend, "category")).total).toBe(0);
 	});
 
 	it("revalidates delete ownership before entering lifecycle hooks", async () => {
@@ -2216,103 +2090,5 @@ describe("CMS operation-first authorization", () => {
 			}),
 		);
 		expect(response.status).toBe(200);
-	});
-
-	it("adapts trusted CMS facts to structural RC server rules", async () => {
-		const events: string[] = [];
-		const getIdentity = vi.fn(() => ({ id: "legacy-author" }));
-		const can = vi.fn(
-			({ action }: { action: string }) =>
-				action === "create" || action === "read",
-		);
-		const backend = makeBackend({
-			auth: { getIdentity, can },
-			hooks: {
-				onBeforeCreate: (_data, context) => {
-					events.push(`create:${context.identity?.id}`);
-				},
-				onBeforeDelete: () => {
-					events.push("delete");
-				},
-			},
-		});
-
-		const createdResponse = await backend.handler(
-			request("/content/article", {
-				method: "POST",
-				body: { slug: "legacy-mapped", data: { title: "Legacy mapped" } },
-			}),
-		);
-		expect(createdResponse.status).toBe(200);
-		const created = (await createdResponse.json()) as ContentItem;
-		expect(created.authorId).toBe("legacy-author");
-		expect(can).toHaveBeenNthCalledWith(
-			1,
-			expect.objectContaining({
-				resource: "cms:content",
-				action: "create",
-				identity: { id: "legacy-author" },
-				params: { typeSlug: "article" },
-			}),
-		);
-		expect(events).toEqual(["create:legacy-author"]);
-
-		const deniedDelete = await backend.handler(
-			request(`/content/article/${created.id}`, { method: "DELETE" }),
-		);
-		expect(deniedDelete.status).toBe(403);
-		expect(can).toHaveBeenNthCalledWith(
-			3,
-			expect.objectContaining({
-				resource: "cms:content",
-				action: "delete",
-				params: {
-					typeSlug: "article",
-					id: created.id,
-					authorId: "legacy-author",
-				},
-			}),
-		);
-		expect(getIdentity).toHaveBeenCalledTimes(2);
-		expect(events).toEqual(["create:legacy-author"]);
-	});
-
-	it("maps catalog count checks to structural RC collection reads", async () => {
-		const can = vi.fn(
-			({ params }: { action: string; params?: { typeSlug?: string } }) =>
-				params?.typeSlug !== "secret",
-		);
-		const backend = makeBackend({
-			auth: {
-				getIdentity: () => ({ id: "legacy-reader" }),
-				can,
-			},
-		});
-
-		const response = await backend.handler(request("/content-types"));
-
-		expect(response.status).toBe(403);
-		expect(
-			can.mock.calls.map(([permission]) => ({
-				action: permission.action,
-				typeSlug: permission.params?.typeSlug,
-			})),
-		).toEqual(
-			expect.arrayContaining([
-				{ action: "read", typeSlug: undefined },
-				{ action: "read", typeSlug: "article" },
-				{ action: "read", typeSlug: "secret" },
-			]),
-		);
-	});
-
-	it("keeps an identity-only structural RC provider compatible with CMS routes", async () => {
-		const getIdentity = vi.fn(() => null);
-		const backend = makeBackend({ auth: { getIdentity } });
-
-		const response = await backend.handler(request("/content-types"));
-
-		expect(response.status).toBe(200);
-		expect(getIdentity).toHaveBeenCalledTimes(1);
 	});
 });

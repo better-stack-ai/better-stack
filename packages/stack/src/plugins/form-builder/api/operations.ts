@@ -716,10 +716,6 @@ export function createFormBuilderOperations(
 	const listForms = defineOperation({
 		input: listFormsQuerySchema,
 		permission: formBuilderPermissions.form.read,
-		legacyAuthorization: () => ({
-			resource: "form-builder:form",
-			action: "read",
-		}),
 		facts: () => ({ scope: "collection" as const }),
 		before: async (context) => {
 			await runDomainHook(
@@ -737,7 +733,6 @@ export function createFormBuilderOperations(
 	const getFormBySlug = defineOperation({
 		input: GetFormBySlugOperationInputSchema,
 		permission: formBuilderPermissions.form.render,
-		legacyAuthorization: () => ({ public: true }),
 		facts: async ({ input }) => {
 			const form = await findFormBySlug(adapter, input.slug);
 			formSnapshots.set(input as object, form ? snapshotForm(form) : null);
@@ -780,19 +775,6 @@ export function createFormBuilderOperations(
 	const getFormById = defineOperation({
 		input: GetFormByIdOperationInputSchema,
 		permission: formBuilderPermissions.form.read,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "form-builder:form",
-			action: "read",
-			params: {
-				id: facts.scope === "record" ? facts.formId : "",
-				...(facts.scope === "record" && facts.ownerId
-					? { ownerId: facts.ownerId }
-					: {}),
-				...(facts.scope === "record" && facts.status
-					? { status: facts.status }
-					: {}),
-			},
-		}),
 		facts: async ({ input }) => {
 			const form = await findFormById(adapter, input.id);
 			formSnapshots.set(input as object, form ? snapshotForm(form) : null);
@@ -834,15 +816,6 @@ export function createFormBuilderOperations(
 	const getFormForUpdate = defineOperation({
 		input: GetFormForUpdateOperationInputSchema,
 		permission: formBuilderPermissions.form.update,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "form-builder:form",
-			action: "update",
-			params: {
-				id: facts.formId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-				status: facts.status,
-			},
-		}),
 		facts: async ({ input }) => {
 			const form = await findFormById(adapter, input.id);
 			if (!form) throw formNotFoundError();
@@ -889,10 +862,6 @@ export function createFormBuilderOperations(
 	const createForm = defineOperation({
 		input: createFormSchema,
 		permission: formBuilderPermissions.form.create,
-		legacyAuthorization: () => ({
-			resource: "form-builder:form",
-			action: "create",
-		}),
 		facts: () => undefined,
 		execute: async (context) => {
 			const initial: FormInput = {
@@ -957,15 +926,6 @@ export function createFormBuilderOperations(
 	const updateForm = defineOperation({
 		input: UpdateFormOperationInputSchema,
 		permission: formBuilderPermissions.form.update,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "form-builder:form",
-			action: "update",
-			params: {
-				id: facts.formId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-				status: facts.status,
-			},
-		}),
 		facts: async ({ input }) => {
 			const form = await findFormById(adapter, input.id);
 			if (!form) throw formNotFoundError();
@@ -1062,15 +1022,6 @@ export function createFormBuilderOperations(
 	const deleteForm = defineOperation({
 		input: DeleteFormOperationInputSchema,
 		permission: formBuilderPermissions.form.delete,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "form-builder:form",
-			action: "delete",
-			params: {
-				id: facts.formId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-				status: facts.status,
-			},
-		}),
 		facts: async ({ input }) => {
 			const form = await findFormById(adapter, input.id);
 			if (!form) throw formNotFoundError();
@@ -1135,7 +1086,6 @@ export function createFormBuilderOperations(
 	const submitForm = defineOperation({
 		input: SubmitFormOperationInputSchema,
 		permission: formBuilderPermissions.submission.create,
-		legacyAuthorization: () => ({ public: true }),
 		facts: async ({ input }) => {
 			const form = await findFormBySlug(adapter, input.slug);
 			formSnapshots.set(input as object, form ? snapshotForm(form) : null);
@@ -1296,14 +1246,6 @@ export function createFormBuilderOperations(
 	const listSubmissions = defineOperation({
 		input: ListSubmissionsOperationInputSchema,
 		permission: formBuilderPermissions.submission.read,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "form-builder:submission",
-			action: "read",
-			params: {
-				formId: facts.formId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-			},
-		}),
 		facts: async ({ input }) => {
 			const form = await findFormById(adapter, input.formId);
 			formSnapshots.set(input as object, form ? snapshotForm(form) : null);
@@ -1356,21 +1298,6 @@ export function createFormBuilderOperations(
 	const getSubmission = defineOperation({
 		input: GetSubmissionOperationInputSchema,
 		permission: formBuilderPermissions.submission.read,
-		legacyAuthorization: ({ facts }) => {
-			if (facts.scope !== "record") {
-				throw new TypeError("Submission detail requires record facts.");
-			}
-			return {
-				resource: "form-builder:submission",
-				action: "read",
-				params: {
-					formId: facts.formId,
-					id: facts.submissionId,
-					...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-					...(facts.submittedBy ? { submittedBy: facts.submittedBy } : {}),
-				},
-			};
-		},
 		facts: async ({ input }) => {
 			const [form, submission] = await Promise.all([
 				findFormById(adapter, input.formId),
@@ -1447,16 +1374,6 @@ export function createFormBuilderOperations(
 	const deleteSubmission = defineOperation({
 		input: GetSubmissionOperationInputSchema,
 		permission: formBuilderPermissions.submission.delete,
-		legacyAuthorization: ({ facts }) => ({
-			resource: "form-builder:submission",
-			action: "delete",
-			params: {
-				formId: facts.formId,
-				id: facts.submissionId,
-				...(facts.ownerId ? { ownerId: facts.ownerId } : {}),
-				...(facts.submittedBy ? { submittedBy: facts.submittedBy } : {}),
-			},
-		}),
 		facts: async ({ input }) => {
 			const [form, submission] = await Promise.all([
 				findFormById(adapter, input.formId),

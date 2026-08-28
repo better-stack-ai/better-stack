@@ -3,19 +3,16 @@ import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
 import { commentsSchema as dbSchema } from "../db";
 import {
 	CommentCountQuerySchema,
-	CommentListParamsSchema,
 	CommentListQuerySchema,
 	createCommentSchema,
 	updateCommentSchema,
 	updateCommentStatusSchema,
 } from "../schemas";
-import { getCommentById, getCommentCount, listComments } from "./getters";
 import {
 	ToggleCommentLikeOperationInputSchema,
 	createCommentsOperations,
 	type CommentsBackendOptions,
 } from "./operations";
-import type { z } from "zod";
 
 export {
 	CreateCommentOperationInputSchema,
@@ -25,7 +22,6 @@ export {
 	UpdateCommentStatusOperationInputSchema,
 } from "./operations";
 export type {
-	CommentsApiContext,
 	CommentsBackendHooks,
 	CommentsBackendOptions,
 	CommentsCountOperationContext,
@@ -61,15 +57,6 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions = {}) => {
 		 * Explicit lower-level data API for SSG, jobs, and migration code.
 		 * These getters bypass request authorization and lifecycle composition.
 		 */
-		api: (adapter: Adapter) => ({
-			listComments: (params: z.infer<typeof CommentListParamsSchema>) =>
-				listComments(adapter, params, options.resolveUser),
-			getCommentById: (id: string, currentUserId?: string) =>
-				getCommentById(adapter, id, options.resolveUser, currentUserId),
-			getCommentCount: (params: z.infer<typeof CommentCountQuerySchema>) =>
-				getCommentCount(adapter, params),
-		}),
-
 		routes: (_adapter: Adapter, _context, operations) => {
 			const listCommentsEndpoint = createEndpoint(
 				"/comments",

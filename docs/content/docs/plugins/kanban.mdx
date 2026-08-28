@@ -451,8 +451,8 @@ const clientAuth = createClientAuth({
 </StackProvider>
 ```
 
-Omitting stack authorization preserves permissive RC compatibility during the
-v3 migration. When authorization is configured, ordinary anonymous denials are
+Omitting stack authorization leaves request operations permissive. When
+authorization is configured, ordinary anonymous denials are
 401 responses, authenticated denials are 403 responses, and identity, fact,
 schema, or rule failures remain errors rather than being converted to denials.
 
@@ -712,9 +712,7 @@ await app.internal.kanban.moveTask({
 ```
 
 These operation namespaces intentionally contain only the maintained operation
-inventory. Raw getters, mutations, and SSG helpers are available separately on
-`app.api.kanban` and as direct imports; they bypass operation authorization and
-lifecycle composition.
+inventory. The raw `app.api.kanban` business surface was removed. It now contains only `prefetchForRoute`; use `internal.kanban` for explicitly trusted business calls.
 
 <Callout type="warning">
 Kanban writes require isolated transactions. Use a transactional production
@@ -969,63 +967,9 @@ import type {
 
 ## Server-side Data Access
 
-The Kanban plugin exposes standalone getter functions for trusted server-side
-and build-time use cases. These helpers and `app.api.kanban` are deliberately
-raw: they bypass operation authorization and lifecycle hooks. Prefer
-`app.forRequest(request).api.kanban` for any user-driven request.
+Use `app.forRequest(request).api.kanban` for user-driven server calls and `app.internal.kanban` for explicitly trusted jobs. The authorized list operation returns board/column summaries; a single-board read returns its complete tree. `app.api.kanban` is reserved for SSG `prefetchForRoute`.
 
-The authorized `listBoards` operation returns board/column summaries without
-task rows. Fetching one authorized board returns its complete column/task tree.
-The raw `getAllBoards` helper below retains its lower-level full-tree behavior.
-
-### Two patterns
-
-**Pattern 1 — via `stack().api`**
-
-```ts title="app/lib/stack.ts"
-import { myStack } from "./stack";
-
-// List all boards (with columns and tasks)
-const result = await myStack.api.kanban.getAllBoards({ ownerId: "user-123" });
-// result.items  — BoardWithColumns[]
-// result.total  — total count before pagination
-// result.limit  — applied limit
-// result.offset — applied offset
-
-// Get a single board with full column/task tree
-const board = await myStack.api.kanban.getBoardById("board-456");
-if (board) {
-  board.columns.forEach((col) => {
-    console.log(col.title, col.tasks.length, "tasks");
-  });
-}
-```
-
-**Pattern 2 — direct import**
-
-```ts
-import {
-  getAllBoards,
-  getBoardById,
-} from "@btst/stack/plugins/kanban/api";
-
-// In Next.js generateStaticParams
-export async function generateStaticParams() {
-  const { items } = await getAllBoards(myAdapter);
-  return items.map((b) => ({ slug: b.slug }));
-}
-```
-
-### Available getters
-
-| Function | Returns | Description |
-|---|---|---|
-| `getAllBoards(adapter, params?)` | `BoardListResult` | Paginated boards with columns and tasks; supports slug/ownerId/organizationId filters |
-| `getBoardById(adapter, id)` | `BoardWithColumns \| null` | Single board with full column/task tree, or `null` |
-
-### `BoardListResult`
-
-<AutoTypeTable path="../packages/stack/src/plugins/kanban/api/getters.ts" name="BoardListResult" />
+Standalone getters remain lower-level adapter primitives for plugin internals and migrations.
 
 ## Static Site Generation (SSG)
 
@@ -1113,100 +1057,14 @@ const kanbanHooks: KanbanBackendHooks = {
 
 ## Server-side Mutations
 
-In addition to the read-only getters, the Kanban plugin exposes **mutation functions** for creating boards, columns, and tasks directly from server-side code — no HTTP roundtrip required. These live in `api/mutations.ts` and are re-exported from `@btst/stack/plugins/kanban/api`.
-
-<Callout type="warn">
-These raw mutation functions bypass both operation authorization and lifecycle
-hooks. Prefer `app.internal.kanban` for trusted work that should preserve
-validation, ordering invariants, and hooks. Use a raw mutation only when the
-caller deliberately owns all those responsibilities; never expose one directly
-from a user-facing request handler.
-</Callout>
-
-### Available mutations
-
-| Function | Description |
-|---|---|
-| `createKanbanTask(adapter, input)` | Create a task in a column; auto-computes insertion order |
-| `findOrCreateKanbanBoard(adapter, slug, name, columns)` | Find a board by slug or create it with custom column titles |
-| `getKanbanColumnsByBoardId(adapter, boardId)` | List columns for a board sorted by order |
-
-### `createKanbanTask`
+Trusted jobs call the maintained internal operations:
 
 ```ts
-import { createKanbanTask } from "@btst/stack/plugins/kanban/api"
-
-await createKanbanTask(myStack.adapter, {
-  title: "Review Q1 financials",
-  columnId: "col-abc",
-  description: "See attached report",
-  priority: "HIGH",         // "LOW" | "MEDIUM" | "HIGH" | "URGENT"
-})
+const board = await app.internal.kanban.createBoard({ name: "Review Queue" })
+await app.internal.kanban.createTask({ title: "Review", columnId })
 ```
 
-### `findOrCreateKanbanBoard`
-
-Creates a board with custom column titles on first call; returns the existing board on subsequent calls. Safe to call concurrently — uses find-before-create.
-
-```ts
-import { findOrCreateKanbanBoard, getKanbanColumnsByBoardId } from "@btst/stack/plugins/kanban/api"
-
-const board = await findOrCreateKanbanBoard(
-  myStack.adapter,
-  "advisor-review-queue",           // slug (URL-safe, unique)
-  "Advisor Review Queue",           // display name (used only on creation)
-  ["New Intakes", "Under Review", "Escalated"], // column titles (used only on creation)
-)
-
-const columns = await getKanbanColumnsByBoardId(myStack.adapter, board.id)
-const target = columns.find((c) => c.title === "New Intakes")
-```
-
-### Via `myStack.api.kanban`
-
-All three functions are also available pre-bound to the stack adapter:
-
-```ts
-const board = await myStack.api.kanban.findOrCreateBoard(
-  "advisor-review-queue",
-  "Advisor Review Queue",
-  ["New Intakes", "Under Review", "Escalated"],
-)
-const columns = await myStack.api.kanban.getColumnsByBoardId(board.id)
-await myStack.api.kanban.createTask({
-  title: "Sarah Chen — Ready for Review",
-  columnId: columns[0]!.id,
-  priority: "MEDIUM",
-})
-```
-
-### Inside an AI tool `execute` function
-
-The primary use case for mutations is populating Kanban boards from server-side AI tool callbacks:
-
-```ts title="lib/stack.ts"
-import { tool } from "ai"
-import { z } from "zod"
-import { createKanbanTask, findOrCreateKanbanBoard, getKanbanColumnsByBoardId } from "@btst/stack/plugins/kanban/api"
-
-// Adapter captured after stack() returns — safe for tool execute closures
-let adapter: any
-
-const myTool = tool({
-  description: "Create a review card",
-  inputSchema: z.object({ title: z.string(), urgent: z.boolean() }),
-  execute: async ({ title, urgent }) => {
-    const board = await findOrCreateKanbanBoard(adapter, "review", "Review Queue", ["To Do", "Urgent"])
-    const columns = await getKanbanColumnsByBoardId(adapter, board.id)
-    const col = urgent ? columns.find((c) => c.title === "Urgent") : columns[0]
-    await createKanbanTask(adapter, { title, columnId: col!.id, priority: urgent ? "URGENT" : "MEDIUM" })
-    return { success: true }
-  },
-})
-
-export const myStack = stack({ plugins: { aiChat: aiChatBackendPlugin({ tools: { myTool } }), kanban: kanbanBackendPlugin() } })
-adapter = myStack.adapter
-```
+These calls skip user authorization but retain validation, domain behavior, transactions, and lifecycle hooks. Standalone mutation exports remain lower-level adapter primitives when the caller intentionally owns that composition.
 
 ## Shadcn Registry
 

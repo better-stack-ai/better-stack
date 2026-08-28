@@ -4,10 +4,7 @@ import {
 	type AuthorizationIdentityInput,
 	type AuthorizationPermissionRequest,
 } from ".";
-import type {
-	StackIdentity,
-	StackServerAuthProvider,
-} from "../shared/auth-types";
+import type { StackIdentity } from "../shared/auth-types";
 import type { MaybePromise } from "../shared/types";
 
 /** An ordinary authorization denial with its corresponding HTTP status. */
@@ -27,8 +24,7 @@ export class AuthorizationError extends Error {
 }
 
 /** Server identity adapter bound to one authorization contract. */
-export interface ServerAuth<TAuthorization extends AnyAuthorization>
-	extends StackServerAuthProvider {
+export interface ServerAuth<TAuthorization extends AnyAuthorization> {
 	readonly mode: "one-rule";
 	readonly authorization: TAuthorization;
 	readonly contract: TAuthorization["contract"];

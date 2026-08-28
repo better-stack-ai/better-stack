@@ -311,28 +311,11 @@ function FormBuilderPageContent({
 								: {}),
 							status: existingForm.status,
 						})}
-						legacyPermission={{
-							resource: "form-builder:form",
-							action: "update",
-							params: {
-								id: existingForm.id,
-								...(existingForm.createdBy
-									? { ownerId: existingForm.createdBy }
-									: {}),
-								status: existingForm.status,
-							},
-						}}
 					>
 						{saveButton}
 					</PermissionAccess>
 				) : !id ? (
-					<PermissionAccess
-						permission={formBuilderPermissions.form.create()}
-						legacyPermission={{
-							resource: "form-builder:form",
-							action: "create",
-						}}
-					>
+					<PermissionAccess permission={formBuilderPermissions.form.create()}>
 						{saveButton}
 					</PermissionAccess>
 				) : null}

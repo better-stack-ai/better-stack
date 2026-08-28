@@ -12,7 +12,6 @@ import type { FormBuilderBackendConfig } from "../types";
 import {
 	getAllForms,
 	getFormById,
-	getFormBySlug,
 	getFormSubmissions,
 	serializeFormSubmissionSummary,
 } from "./getters";
@@ -148,14 +147,6 @@ export const formBuilderBackendPlugin = (
 
 		/** Lower-level server API that intentionally bypasses auth and hooks. */
 		api: (adapter: Adapter) => ({
-			getAllForms: (params?: Parameters<typeof getAllForms>[1]) =>
-				getAllForms(adapter, params),
-			getFormById: (id: string) => getFormById(adapter, id),
-			getFormBySlug: (slug: string) => getFormBySlug(adapter, slug),
-			getFormSubmissions: (
-				formId: string,
-				params?: Parameters<typeof getFormSubmissions>[2],
-			) => getFormSubmissions(adapter, formId, params),
 			prefetchForRoute: createFormBuilderPrefetchForRoute(adapter),
 		}),
 

@@ -6,11 +6,14 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { stack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
-import { createServerAuth } from "../../../authorization/server";
-import type { StackServerAuthProvider } from "../../../shared/auth-types";
+import {
+	createServerAuth,
+	type ServerAuth,
+} from "../../../authorization/server";
 import {
 	MEDIA_QUERY_KEYS,
 	VercelBlobOperationInputSchema,
+	getAssetById,
 	mediaBackendPlugin,
 	type MediaBackendHooks,
 } from "../api";
@@ -225,7 +228,7 @@ function makeBackend(
 			| S3StorageAdapter
 			| VercelBlobStorageAdapter;
 		hooks?: MediaBackendHooks;
-		auth?: StackServerAuthProvider;
+		auth?: ServerAuth<any>;
 		adapter?: (db: DatabaseDefinition) => DBAdapter;
 		tenantId?: string;
 	} = {},
@@ -241,7 +244,7 @@ function makeBackend(
 			}),
 		},
 		adapter: options.adapter ?? memoryAdapter,
-		...(options.auth ? { auth: options.auth } : {}),
+		...(options.auth ? { auth: options.auth as never } : {}),
 	});
 }
 
@@ -442,13 +445,20 @@ describe("Media operation-first authorization", () => {
 		).toBe(403);
 		expect(beforeDelete).not.toHaveBeenCalled();
 
-		const captureAuth: StackServerAuthProvider = {
-			getIdentity: async () => tenantMember,
-			can: (input) => {
-				facts.push(input.params);
-				return true;
-			},
-		};
+		const captureAuthorization = defineAuthorization({
+			identity: identitySchema,
+			permissions: [mediaPermissions] as const,
+			rules: ({ media }) => [
+				media.asset.update.when(({ facts: trustedFacts }) => {
+					facts.push(trustedFacts);
+					return true;
+				}),
+			],
+		});
+		const captureAuth = createAuth(
+			async () => tenantMember,
+			captureAuthorization,
+		);
 		const captured = makeBackend({
 			auth: captureAuth,
 			tenantId: "tenant-a",
@@ -517,7 +527,7 @@ describe("Media operation-first authorization", () => {
 			api.updateAsset({ id: asset.id, data: { folderId: undefined } }),
 		).rejects.toMatchObject({ statusCode: 403 });
 		await expect(
-			backend.api.media.getAssetById(asset.id),
+			getAssetById(backend.adapter, asset.id),
 		).resolves.toMatchObject({
 			folderId: folder.id,
 		});
@@ -1075,58 +1085,16 @@ describe("Media operation-first authorization", () => {
 		expect(beforeDelete).not.toHaveBeenCalled();
 		expect(await backend.adapter.count({ model: "mediaFolder" })).toBe(3);
 	});
-
-	it("maps every recursive folder permission through the RC bridge", async () => {
-		let deniedFolderId = "";
-		const checkedIds: string[] = [];
-		const beforeDelete = vi.fn();
-		const legacyAuth: StackServerAuthProvider = {
-			getIdentity: async () => tenantMember,
-			can: ({ resource, action, params }) => {
-				expect({ resource, action }).toEqual({
-					resource: "media:folder",
-					action: "delete",
-				});
-				const id = String(params?.id);
-				checkedIds.push(id);
-				return id !== deniedFolderId;
-			},
-		};
-		const backend = makeBackend({
-			auth: legacyAuth,
-			tenantId: "tenant-a",
-			hooks: { onBeforeDeleteFolder: beforeDelete },
-		});
-		const root = await seedFolder(backend, { name: "Delete root" });
-		deniedFolderId = (
-			await seedFolder(backend, {
-				name: "Denied child",
-				parentId: root.id,
-			})
-		).id;
-
-		await expect(
-			backend
-				.forRequest(request("/legacy-delete", { identity: tenantMember }))
-				.api.media.deleteFolder({ id: root.id }),
-		).rejects.toMatchObject({ statusCode: 403 });
-		expect(checkedIds).toEqual([root.id, deniedFolderId]);
-		expect(beforeDelete).not.toHaveBeenCalled();
-		expect(await backend.adapter.count({ model: "mediaFolder" })).toBe(2);
-	});
-
 	it("rejects a recursive delete when a descendant gains a concurrent child", async () => {
 		let backend: ReturnType<typeof makeBackend>;
 		let descendantId = "";
 		let raced = false;
 		const beforeDelete = vi.fn();
-		const raceAuth = {
-			mode: "one-rule" as const,
-			getIdentity: async () => tenantMember,
-			authorize: async (
-				_request: Request,
-				permission: { id: string; facts: { folderId?: string } },
-			) => {
+		const raceAuth = createAuth(() => tenantMember);
+		const authorize = raceAuth.authorize.bind(raceAuth);
+		vi.spyOn(raceAuth, "authorize").mockImplementation(
+			async (authRequest, permission) => {
+				const identity = await authorize(authRequest, permission);
 				if (
 					!raced &&
 					permission.id === mediaPermissions.folder.delete.id &&
@@ -1138,11 +1106,11 @@ describe("Media operation-first authorization", () => {
 						parentId: descendantId,
 					});
 				}
-				return tenantMember;
+				return identity;
 			},
-		};
+		);
 		backend = makeBackend({
-			auth: raceAuth as unknown as StackServerAuthProvider,
+			auth: raceAuth,
 			tenantId: "tenant-a",
 			hooks: { onBeforeDeleteFolder: beforeDelete },
 		});

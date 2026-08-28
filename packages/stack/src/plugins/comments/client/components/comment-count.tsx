@@ -46,10 +46,7 @@ export function CommentCount({
 					resourceType,
 				});
 	return (
-		<PermissionAccess
-			permission={permission}
-			legacyPublic={status === "approved"}
-		>
+		<PermissionAccess permission={permission}>
 			<CommentCountValue
 				resourceId={resourceId}
 				resourceType={resourceType}

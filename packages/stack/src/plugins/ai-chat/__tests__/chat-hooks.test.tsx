@@ -3,7 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, Component, Suspense, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { StackProvider, type StackAuthProvider } from "@btst/stack/context";
+import { StackProvider } from "@btst/stack/context";
+import { createIdentityTestAuth } from "../../../__tests__/auth-test-utils";
 import {
 	type UseConversationsResult,
 	useConversations,
@@ -52,12 +53,12 @@ describe("AI Chat identity-aware hooks", () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		const identityError = new Error("identity unavailable");
 		let rejectIdentity: ((error: Error) => void) | undefined;
-		const auth: StackAuthProvider = {
-			getIdentity: () =>
-				new Promise((_resolve, reject) => {
+		const auth = createIdentityTestAuth(
+			() =>
+				new Promise<null>((_resolve, reject) => {
 					rejectIdentity = reject;
 				}),
-		};
+		);
 		const fetchMock = vi.spyOn(globalThis, "fetch");
 		let result: UseConversationsResult | undefined;
 
@@ -104,12 +105,12 @@ describe("AI Chat identity-aware hooks", () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		const identityError = new Error("suspense identity unavailable");
 		let rejectIdentity: ((error: Error) => void) | undefined;
-		const auth: StackAuthProvider = {
-			getIdentity: () =>
-				new Promise((_resolve, reject) => {
+		const auth = createIdentityTestAuth(
+			() =>
+				new Promise<null>((_resolve, reject) => {
 					rejectIdentity = reject;
 				}),
-		};
+		);
 		const fetchMock = vi.spyOn(globalThis, "fetch");
 
 		function Probe() {

@@ -61,10 +61,6 @@ function AuthorizedChatPage({ conversationId }: ChatPageComponentProps) {
 				permission={aiChatPermissions.conversation.read({
 					scope: "collection",
 				})}
-				legacyPermission={{
-					resource: "ai-chat:conversation",
-					action: "read",
-				}}
 				LoadingComponent={ChatLoading}
 			>
 				<ChatPage />
@@ -91,11 +87,6 @@ function AuthorizedConversationPage({
 				exists: true,
 				...(conversation.userId ? { ownerId: conversation.userId } : {}),
 			})}
-			legacyPermission={{
-				resource: "ai-chat:conversation",
-				action: "read",
-				params: { id: conversationId },
-			}}
 			LoadingComponent={ChatLoading}
 		>
 			<ChatPage conversationId={conversationId} />

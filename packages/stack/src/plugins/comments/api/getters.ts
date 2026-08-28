@@ -15,7 +15,7 @@ import type {
  * Resolve display info for a batch of authorIds using the consumer-supplied resolveUser hook.
  * Deduplicates lookups — each unique authorId is resolved only once per call.
  *
- * @remarks **Security:** No authorization hooks are called. The caller is responsible for
+ * @remarks **Security:** Operation authorization and lifecycle hooks are not called. The caller is responsible for
  * any access-control checks before invoking this function.
  */
 async function resolveAuthors(

@@ -5,7 +5,6 @@ export interface AdapterMeta {
 	label: string;
 	packageName: string;
 	installSpec?: string;
-	betterAuthInstallSpec?: string;
 	ormForGenerate?: "prisma" | "drizzle" | "kysely";
 	/** Additional package names required when this adapter is selected. */
 	extraPackages?: string[];
@@ -36,14 +35,12 @@ export const ADAPTERS: readonly AdapterMeta[] = [
 		label: "Memory (local dev / testing)",
 		packageName: "@btst/adapter-memory",
 		installSpec: "@btst/adapter-memory@2.2.3",
-		betterAuthInstallSpec: "@better-auth/memory-adapter@1.6.16",
 	},
 	{
 		key: "prisma",
 		label: "Prisma",
 		packageName: "@btst/adapter-prisma",
 		installSpec: "@btst/adapter-prisma@2.2.3",
-		betterAuthInstallSpec: "@better-auth/prisma-adapter@1.6.16",
 		ormForGenerate: "prisma",
 		extraPackages: ["@prisma/adapter-pg", "pg"],
 	},
@@ -52,7 +49,6 @@ export const ADAPTERS: readonly AdapterMeta[] = [
 		label: "Drizzle",
 		packageName: "@btst/adapter-drizzle",
 		installSpec: "@btst/adapter-drizzle@2.2.3",
-		betterAuthInstallSpec: "@better-auth/drizzle-adapter@1.6.16",
 		ormForGenerate: "drizzle",
 		extraPackages: ["drizzle-orm"],
 		extraInstallSpecs: ["drizzle-orm@0.45.2"],
@@ -62,7 +58,6 @@ export const ADAPTERS: readonly AdapterMeta[] = [
 		label: "Kysely",
 		packageName: "@btst/adapter-kysely",
 		installSpec: "@btst/adapter-kysely@2.2.3",
-		betterAuthInstallSpec: "@better-auth/kysely-adapter@1.6.16",
 		ormForGenerate: "kysely",
 	},
 	{
@@ -70,7 +65,6 @@ export const ADAPTERS: readonly AdapterMeta[] = [
 		label: "MongoDB",
 		packageName: "@btst/adapter-mongodb",
 		installSpec: "@btst/adapter-mongodb@2.2.3",
-		betterAuthInstallSpec: "@better-auth/mongo-adapter@1.6.16",
 	},
 ];
 
@@ -165,34 +159,6 @@ export const PLUGINS: readonly PluginMeta[] = [
 		extraPackages: ["@vercel/blob"],
 	},
 	{
-		key: "better-auth-ui",
-		label: "Better Auth UI",
-		cssImport: "@btst/better-auth-ui/css",
-		clientImportPath: "@btst/better-auth-ui/client",
-		clientSymbol: "authClientPlugin",
-		configKey: "auth",
-		extraPackages: [
-			"@btst/better-auth-ui",
-			"better-auth",
-			"@better-auth/core",
-			"@better-auth/api-key",
-			"@better-auth/passkey",
-			"@better-auth/utils",
-			"@better-fetch/fetch",
-			"better-call",
-		],
-		extraInstallSpecs: [
-			"@btst/better-auth-ui@2.0.0-rc.1",
-			"better-auth@1.6.16",
-			"@better-auth/core@1.6.16",
-			"@better-auth/api-key@1.6.16",
-			"@better-auth/passkey@1.6.16",
-			"@better-auth/utils@0.4.1",
-			"@better-fetch/fetch@1.2.2",
-			"better-call@1.3.6",
-		],
-	},
-	{
 		key: "route-docs",
 		label: "Route Docs",
 		cssImport: "@btst/stack/plugins/route-docs/css",
@@ -250,5 +216,4 @@ export const PLUGIN_ROUTES: Record<PluginKey, string[]> = {
 	"route-docs": ["/pages/route-docs"],
 	/** open-api registers an API route, not a page route */
 	"open-api": ["/api/data/reference"],
-	"better-auth-ui": ["/pages/auth", "/pages/account/settings", "/pages/org"],
 };

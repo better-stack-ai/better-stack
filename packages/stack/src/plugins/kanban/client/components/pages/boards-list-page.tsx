@@ -18,7 +18,6 @@ export function BoardsListPageComponent() {
 		<ComposedRoute
 			path="/kanban"
 			permission={kanbanPermissions.board.read({ scope: "collection" })}
-			legacyPermission={{ resource: "kanban:board", action: "read" }}
 			PageComponent={BoardsListPage}
 			ErrorComponent={DefaultError}
 			LoadingComponent={BoardsListSkeleton}
