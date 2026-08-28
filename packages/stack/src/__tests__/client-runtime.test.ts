@@ -754,6 +754,32 @@ describe("resolved client runtime", () => {
 		}
 	});
 
+	it("inherits defaults for registered prototype-like keys omitted from endpoints", () => {
+		for (const registeredName of ["__proto__", "constructor", "toString"]) {
+			let runtime: ResolvedClientPluginRuntime | undefined;
+			const stack = createClientStack({
+				api: {
+					baseURL: "https://app.example.com",
+					basePath: "/api/data",
+				},
+				site: {
+					baseURL: "https://app.example.com",
+					basePath: "/pages",
+				},
+				queryClient: new QueryClient(),
+				plugins: {
+					[registeredName]: createProbePlugin((value) => {
+						runtime = value;
+					}),
+				},
+				endpoints: {},
+			});
+
+			expect(runtime?.api.basePath).toBe("/api/data");
+			expect(Object.hasOwn(stack.provider.plugins, registeredName)).toBe(true);
+		}
+	});
+
 	it("keeps legacy client plugins working during first-party migration", async () => {
 		const legacy = defineClientPlugin({
 			name: "legacy",

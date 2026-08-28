@@ -234,7 +234,10 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 		Object.create(null);
 
 	for (const pluginKey of Object.keys(config.plugins)) {
-		const endpoint = config.endpoints?.[pluginKey];
+		const endpoint =
+			config.endpoints && Object.hasOwn(config.endpoints, pluginKey)
+				? config.endpoints[pluginKey]
+				: undefined;
 		if (endpoint !== undefined && !isPlainRecord(endpoint)) {
 			throw new Error(
 				`[btst/client] Endpoint replacement "${pluginKey}" must be an object.`,
