@@ -67,6 +67,10 @@
   ],
   "project": ["src/**/*.{ts,tsx}", "scripts/**/*.{ts,tsx,cjs}"],
   "ignore": ["src/**/*.test.{ts,tsx}", "dist/**"],
+  "ignoreIssues": {
+    "src/api/index.ts": ["duplicates"],
+    "src/client/index.ts": ["duplicates"]
+  },
   "ignoreDependencies": [
     "@radix-ui/react-dialog",
     "@radix-ui/react-label",
