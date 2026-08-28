@@ -413,6 +413,30 @@ describe("AI Chat operation authorization", () => {
 		).resolves.toEqual([]);
 	});
 
+	it("preserves ownerless history when no request authorization is configured", async () => {
+		const app = stack({
+			basePath: "/api",
+			plugins: { aiChat: aiChatBackendPlugin({ model }) },
+			adapter: memory,
+		});
+		const created = await app.handler(
+			request("/chat/conversations", {
+				method: "POST",
+				body: { title: "Ownerless" },
+			}),
+		);
+		expect(created.status).toBe(200);
+		await expect(created.json()).resolves.toMatchObject({
+			title: "Ownerless",
+		});
+
+		const listed = await app.handler(request("/chat/conversations"));
+		expect(listed.status).toBe(200);
+		await expect(listed.json()).resolves.toEqual([
+			expect.objectContaining({ title: "Ownerless" }),
+		]);
+	});
+
 	it("does not let stream.start bypass a denied exact send permission", async () => {
 		const streamOnly = defineAuthorization({
 			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
@@ -1193,6 +1217,73 @@ describe("AI Chat operation authorization", () => {
 		expect(before).toHaveBeenCalledOnce();
 		expect(streamText).toHaveBeenCalledOnce();
 		expect(await app.adapter.count({ model: "message" })).toBe(1);
+	});
+
+	it("claims concurrent rename and delete snapshots before lifecycle hooks", async () => {
+		let enterUpdate: (() => void) | undefined;
+		const updateEntered = new Promise<void>((resolve) => {
+			enterUpdate = resolve;
+		});
+		let releaseUpdate: (() => void) | undefined;
+		const updateBarrier = new Promise<void>((resolve) => {
+			releaseUpdate = resolve;
+		});
+		let enterDelete: (() => void) | undefined;
+		const deleteEntered = new Promise<void>((resolve) => {
+			enterDelete = resolve;
+		});
+		let releaseDelete: (() => void) | undefined;
+		const deleteBarrier = new Promise<void>((resolve) => {
+			releaseDelete = resolve;
+		});
+		const beforeUpdate = vi.fn(async () => {
+			enterUpdate?.();
+			await updateBarrier;
+		});
+		const beforeDelete = vi.fn(async () => {
+			enterDelete?.();
+			await deleteBarrier;
+		});
+		const app = backend({
+			hooks: {
+				onBeforeUpdateConversation: beforeUpdate,
+				onBeforeDeleteConversation: beforeDelete,
+			},
+		});
+		const updateTarget = await seedConversation(app, owner.id, "Update target");
+		const deleteTarget = await seedConversation(app, owner.id, "Delete target");
+
+		const firstUpdate = app
+			.forRequest(request("/update-1", { identity: owner }))
+			.api.aiChat.updateConversation({
+				id: updateTarget.id,
+				data: { title: "First update" },
+			});
+		await updateEntered;
+		await expect(
+			app
+				.forRequest(request("/update-2", { identity: owner }))
+				.api.aiChat.updateConversation({
+					id: updateTarget.id,
+					data: { title: "Second update" },
+				}),
+		).rejects.toMatchObject({ statusCode: 409, code: "STALE_CONVERSATION" });
+		expect(beforeUpdate).toHaveBeenCalledOnce();
+		releaseUpdate?.();
+		await expect(firstUpdate).resolves.toMatchObject({ title: "First update" });
+
+		const firstDelete = app
+			.forRequest(request("/delete-1", { identity: owner }))
+			.api.aiChat.deleteConversation({ id: deleteTarget.id });
+		await deleteEntered;
+		await expect(
+			app
+				.forRequest(request("/delete-2", { identity: owner }))
+				.api.aiChat.deleteConversation({ id: deleteTarget.id }),
+		).rejects.toMatchObject({ statusCode: 409, code: "STALE_CONVERSATION" });
+		expect(beforeDelete).toHaveBeenCalledOnce();
+		releaseDelete?.();
+		await expect(firstDelete).resolves.toEqual({ success: true });
 	});
 
 	it("does not persist a stale completion after a newer stream claim", async () => {

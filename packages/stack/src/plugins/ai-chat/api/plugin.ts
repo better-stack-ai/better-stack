@@ -135,8 +135,11 @@ export const aiChatBackendPlugin = <
 	return defineBackendPlugin({
 		name: "ai-chat",
 		dbPlugin: dbSchema,
-		operations: (adapter: Adapter) =>
-			createAiChatOperations(adapter, operationsConfig),
+		operations: (adapter: Adapter, context) =>
+			createAiChatOperations(adapter, {
+				...operationsConfig,
+				requestAuthorizationConfigured: Boolean(context?.auth),
+			}),
 
 		/** Trusted raw data access. It intentionally bypasses operations and hooks. */
 		api: (adapter: Adapter) => ({

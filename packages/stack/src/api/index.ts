@@ -147,7 +147,7 @@ export function stack<
 	const pluginOperations: Record<string, Record<string, any>> = {};
 	for (const [pluginKey, plugin] of Object.entries(plugins)) {
 		if (plugin.operations) {
-			pluginOperations[pluginKey] = plugin.operations(adapterInstance);
+			pluginOperations[pluginKey] = plugin.operations(adapterInstance, context);
 		}
 	}
 

@@ -106,7 +106,7 @@ export interface BackendPlugin<
 	api?: (adapter: Adapter) => TApi;
 
 	/** Define operations shared by HTTP, request-scoped, and internal calls. */
-	operations?: (adapter: Adapter) => TOperations;
+	operations?: (adapter: Adapter, context?: StackContext) => TOperations;
 }
 
 /**

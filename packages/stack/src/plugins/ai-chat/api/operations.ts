@@ -388,6 +388,7 @@ export interface AiChatBackendHooks {
 
 export interface AiChatOperationsConfig {
 	access: AiChatAccess;
+	requestAuthorizationConfigured?: boolean;
 	model: LanguageModel;
 	systemPrompt?: string;
 	tools?: Record<string, Tool>;
@@ -770,6 +771,19 @@ function didAffectRow(result: unknown, expectedId: string): boolean {
 	return record.id === expectedId;
 }
 
+function requireAtomicConversationTransactions(adapter: Adapter) {
+	if (
+		adapter.id !== "memory" &&
+		typeof adapter.options?.adapterConfig.transaction !== "function"
+	) {
+		throw new AiChatOperationError(
+			500,
+			"AI Chat conversation writes require an adapter with isolated transaction support.",
+			"ATOMIC_TRANSACTION_REQUIRED",
+		);
+	}
+}
+
 async function scopedUserId(
 	context: OperationContext<any, any>,
 	input: object,
@@ -820,6 +834,19 @@ export function createAiChatOperations(
 	const streamPreparations = new WeakMap<object, StreamPreparation>();
 	const scopedUserIds = new WeakMap<object, string | undefined>();
 	const pendingRequestedConversationClaims = new Set<string>();
+	const pendingConversationMutationClaims = new Set<string>();
+	const claimConversationMutation = (conversationId: string) => {
+		requireAtomicConversationTransactions(adapter);
+		if (pendingConversationMutationClaims.has(conversationId)) {
+			throw new AiChatOperationError(
+				409,
+				"Conversation changed during authorization.",
+				"STALE_CONVERSATION",
+			);
+		}
+		pendingConversationMutationClaims.add(conversationId);
+		return () => pendingConversationMutationClaims.delete(conversationId);
+	};
 	const assertHistoryAvailable = () => {
 		if (config.access === "public") {
 			throw new AiChatOperationError(
@@ -859,7 +886,7 @@ export function createAiChatOperations(
 		execute: async (context) => {
 			const userId = scopedUserIds.get(context.input as object);
 			const conversations =
-				context.request && !userId
+				config.requestAuthorizationConfigured && context.request && !userId
 					? []
 					: (await getAllConversations(adapter, userId)).map(
 							publicConversation,
@@ -1053,65 +1080,74 @@ export function createAiChatOperations(
 				context.identity ? undefined : userId,
 				"Unauthorized: Cannot update this conversation",
 			);
-			return adapter.transaction(async (tx) => {
-				const current = await getConversationById(tx, context.input.id);
-				if (!sameSnapshot(current, expected)) {
-					throw new AiChatOperationError(
-						409,
-						"Conversation changed during authorization.",
-						"STALE_CONVERSATION",
+			const releaseMutation = claimConversationMutation(expected.id);
+			try {
+				return await adapter.transaction(async (tx) => {
+					const current = await getConversationById(tx, context.input.id);
+					if (!sameSnapshot(current, expected)) {
+						throw new AiChatOperationError(
+							409,
+							"Conversation changed during authorization.",
+							"STALE_CONVERSATION",
+						);
+					}
+					await runBeforeHook(
+						() =>
+							hooks?.onBeforeUpdateConversation?.(
+								context.input.id,
+								context.input.data,
+								hookContext(context, {
+									body: context.input,
+									params: { id: context.input.id },
+								}),
+							),
+						"Unauthorized: Cannot update conversation",
 					);
-				}
-				await runBeforeHook(
-					() =>
-						hooks?.onBeforeUpdateConversation?.(
-							context.input.id,
-							context.input.data,
-							hookContext(context, {
-								body: context.input,
-								params: { id: context.input.id },
-							}),
-						),
-					"Unauthorized: Cannot update conversation",
-				);
-				const updatedAt = nextVersion(new Date(expected.updatedAt));
-				const matched = await tx.updateMany({
-					model: "conversation",
-					where: [
-						{ field: "id", value: expected.id, operator: "eq" as const },
-						{
-							field: "updatedAt",
-							value: new Date(expected.updatedAt),
-							operator: "gte" as const,
-						},
-						{
-							field: "updatedAt",
-							value: new Date(expected.updatedAt),
-							operator: "lte" as const,
-						},
-					],
-					update: { title: context.input.data.title, updatedAt },
+					const updatedAt = nextVersion(new Date(expected.updatedAt));
+					const matched = await tx.updateMany({
+						model: "conversation",
+						where: [
+							{
+								field: "id",
+								value: expected.id,
+								operator: "eq" as const,
+							},
+							{
+								field: "updatedAt",
+								value: new Date(expected.updatedAt),
+								operator: "gte" as const,
+							},
+							{
+								field: "updatedAt",
+								value: new Date(expected.updatedAt),
+								operator: "lte" as const,
+							},
+						],
+						update: { title: context.input.data.title, updatedAt },
+					});
+					if (!didAffectRow(matched, expected.id)) {
+						throw new AiChatOperationError(
+							409,
+							"Conversation changed during authorization.",
+							"STALE_CONVERSATION",
+						);
+					}
+					const updated = await tx.findOne<Conversation>({
+						model: "conversation",
+						where: [{ field: "id", value: expected.id }],
+					});
+					if (!updated) {
+						throw new AiChatOperationError(
+							404,
+							"Conversation not found.",
+							"CONVERSATION_NOT_FOUND",
+						);
+					}
+					return publicConversation(updated);
 				});
-				if (!didAffectRow(matched, expected.id)) {
-					throw new AiChatOperationError(
-						409,
-						"Conversation changed during authorization.",
-						"STALE_CONVERSATION",
-					);
-				}
-				const updated = await tx.findOne<Conversation>({
-					model: "conversation",
-					where: [{ field: "id", value: expected.id }],
-				});
-				if (!updated) {
-					throw new AiChatOperationError(
-						404,
-						"Conversation not found.",
-						"CONVERSATION_NOT_FOUND",
-					);
-				}
-				return publicConversation(updated);
-			});
+			} finally {
+				releaseMutation();
+			}
 		},
 		after: (context) =>
 			hooks?.onConversationUpdated?.(
@@ -1163,48 +1199,59 @@ export function createAiChatOperations(
 				context.identity ? undefined : userId,
 				"Unauthorized: Cannot delete this conversation",
 			);
-			return adapter.transaction(async (tx) => {
-				const current = await getConversationById(tx, context.input.id);
-				if (!sameSnapshot(current, expected)) {
-					throw new AiChatOperationError(
-						409,
-						"Conversation changed during authorization.",
-						"STALE_CONVERSATION",
+			const releaseMutation = claimConversationMutation(expected.id);
+			try {
+				return await adapter.transaction(async (tx) => {
+					const current = await getConversationById(tx, context.input.id);
+					if (!sameSnapshot(current, expected)) {
+						throw new AiChatOperationError(
+							409,
+							"Conversation changed during authorization.",
+							"STALE_CONVERSATION",
+						);
+					}
+					await runBeforeHook(
+						() =>
+							hooks?.onBeforeDeleteConversation?.(
+								context.input.id,
+								hookContext(context, {
+									params: { id: context.input.id },
+								}),
+							),
+						"Unauthorized: Cannot delete conversation",
 					);
-				}
-				await runBeforeHook(
-					() =>
-						hooks?.onBeforeDeleteConversation?.(
-							context.input.id,
-							hookContext(context, { params: { id: context.input.id } }),
-						),
-					"Unauthorized: Cannot delete conversation",
-				);
-				const deleted = await tx.deleteMany({
-					model: "conversation",
-					where: [
-						{ field: "id", value: expected.id, operator: "eq" as const },
-						{
-							field: "updatedAt",
-							value: new Date(expected.updatedAt),
-							operator: "gte" as const,
-						},
-						{
-							field: "updatedAt",
-							value: new Date(expected.updatedAt),
-							operator: "lte" as const,
-						},
-					],
+					const deleted = await tx.deleteMany({
+						model: "conversation",
+						where: [
+							{
+								field: "id",
+								value: expected.id,
+								operator: "eq" as const,
+							},
+							{
+								field: "updatedAt",
+								value: new Date(expected.updatedAt),
+								operator: "gte" as const,
+							},
+							{
+								field: "updatedAt",
+								value: new Date(expected.updatedAt),
+								operator: "lte" as const,
+							},
+						],
+					});
+					if (!didAffectRow(deleted, expected.id)) {
+						throw new AiChatOperationError(
+							409,
+							"Conversation changed during authorization.",
+							"STALE_CONVERSATION",
+						);
+					}
+					return { success: true as const };
 				});
-				if (!didAffectRow(deleted, expected.id)) {
-					throw new AiChatOperationError(
-						409,
-						"Conversation changed during authorization.",
-						"STALE_CONVERSATION",
-					);
-				}
-				return { success: true as const };
-			});
+			} finally {
+				releaseMutation();
+			}
 		},
 		after: (context) =>
 			hooks?.onConversationDeleted?.(
