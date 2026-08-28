@@ -595,7 +595,10 @@ Assets and folders each carry an optional `tenantId` column. The `resolveTenantI
 - **Guards** `PATCH /media/assets/:id`, `DELETE /media/assets/:id`, and `DELETE /media/folders/:id` — if the resolved `tenantId` does not match the resource's `tenantId`, the endpoint returns **404** (not 403, to avoid leaking that the ID exists).
 - **Guards `folderId` assignments** — supplying a `folderId` that belongs to a different tenant is rejected with 404 on all create and upload endpoints.
 
-Returning `null` or `undefined` from `resolveTenantId` disables scoping for that request, which is useful for super-admin routes.
+Returning `null` or `undefined` from `resolveTenantId` disables collection and
+record lookup scoping for that request, which is useful for super-admin routes.
+It does not allow a folder or asset to be reparented across tenant boundaries;
+use the trusted raw migration helpers for an intentional cross-tenant move.
 
 ### Configuration
 

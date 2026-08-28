@@ -702,6 +702,81 @@ describe("Media operation-first authorization", () => {
 		).toMatchObject({ folderId: child.id, tenantId: "tenant-a" });
 	});
 
+	it("binds authoritative folder tenants into unscoped upload initialization", async () => {
+		const s3Facts: unknown[] = [];
+		const s3Backend = makeBackend({
+			storage: s3Storage(),
+			hooks: {
+				onBeforeUpload: (_input, context) => {
+					s3Facts.push(context.facts);
+				},
+			},
+		});
+		const s3Folder = await seedFolder(s3Backend, { name: "S3 tenant folder" });
+		await expect(
+			s3Backend.forRequest(request("/unscoped-s3")).api.media.uploadToken({
+				filename: "token.jpg",
+				mimeType: "image/jpeg",
+				size: 5,
+				folderId: s3Folder.id,
+			}),
+		).resolves.toMatchObject({ type: "presigned-url" });
+		expect(s3Facts).toEqual([
+			expect.objectContaining({
+				phase: "initialize",
+				folderId: s3Folder.id,
+				tenantId: "tenant-a",
+			}),
+		]);
+
+		const blobFacts: unknown[] = [];
+		const blobBackend = makeBackend({
+			storage: vercelStorage(),
+			hooks: {
+				onBeforeUpload: (_input, context) => {
+					blobFacts.push(context.facts);
+				},
+			},
+		});
+		const blobFolder = await seedFolder(blobBackend, {
+			name: "Blob tenant folder",
+		});
+		const response = await blobBackend.handler(
+			request("/media/upload/vercel-blob", {
+				method: "POST",
+				body: {
+					type: "blob.generate-client-token",
+					payload: {
+						pathname: "blob.jpg",
+						multipart: false,
+						clientPayload: JSON.stringify({
+							mimeType: "image/jpeg",
+							folderId: blobFolder.id,
+						}),
+					},
+				},
+			}),
+		);
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as {
+			tokenOptions: { tokenPayload: string };
+		};
+		expect(JSON.parse(body.tokenOptions.tokenPayload)).toEqual({
+			version: 1,
+			pathname: "blob.jpg",
+			mimeType: "image/jpeg",
+			folderId: blobFolder.id,
+			tenantId: "tenant-a",
+		});
+		expect(blobFacts).toEqual([
+			expect.objectContaining({
+				phase: "initialize",
+				folderId: blobFolder.id,
+				tenantId: "tenant-a",
+			}),
+		]);
+	});
+
 	it("preserves missing-rule, rule, identity, and fact failures before hooks", async () => {
 		const before = vi.fn();
 		const missing = defineAuthorization({
