@@ -380,7 +380,7 @@ export interface BackendStack<
 	> = Record<string, Record<string, (...args: any[]) => any>>,
 > {
 	handler: (request: Request) => Promise<Response>; // API route handler
-	router: Router; // Better-call router
+	router: Omit<Router, "endpoints"> & { endpoints: TRoutes }; // Better-call router
 	dbSchema: DatabaseDefinition; // Better-db schema
 	/** The database adapter shared across all plugins */
 	adapter: Adapter;

@@ -50,16 +50,42 @@ describe("published symmetric stack constructors", () => {
 			resolve("dist/client/index.d.ts"),
 			"utf8",
 		);
-		expect(apiDeclaration).toContain("function createBackendStack");
-		expect(apiDeclaration).toContain("const stack: typeof createBackendStack");
-		expect(apiDeclaration).toContain("BackendStackConfig");
-		expect(apiDeclaration).toContain("BackendStack<");
-		expect(clientDeclaration).toContain("function createClientStack");
-		expect(clientDeclaration).toContain(
-			"const createStackClient: typeof createClientStack",
+		const apiCjsDeclaration = await readFile(
+			resolve("dist/api/index.d.cts"),
+			"utf8",
 		);
-		expect(clientDeclaration).toContain("ClientStackConfig");
-		expect(clientDeclaration).toContain("ClientStack<");
+		const clientCjsDeclaration = await readFile(
+			resolve("dist/client/index.d.cts"),
+			"utf8",
+		);
+		for (const declaration of [apiDeclaration, apiCjsDeclaration]) {
+			expect(declaration).toContain("function createBackendStack");
+			expect(declaration).toContain("const stack: typeof createBackendStack");
+			expect(declaration).toContain("BackendStackConfig");
+			expect(declaration).toContain("BackendStack<");
+			expect(declaration).toMatch(
+				/@deprecated Use `createBackendStack`[\s\S]*const stack: typeof createBackendStack/,
+			);
+			const canonicalSignature = declaration.match(
+				/function createBackendStack[\s\S]*?;/,
+			)?.[0];
+			expect(canonicalSignature).not.toContain("BackendLib");
+		}
+		for (const declaration of [clientDeclaration, clientCjsDeclaration]) {
+			expect(declaration).toContain("function createClientStack");
+			expect(declaration).toContain(
+				"const createStackClient: typeof createClientStack",
+			);
+			expect(declaration).toContain("ClientStackConfig");
+			expect(declaration).toContain("ClientStack<");
+			expect(declaration).toMatch(
+				/@deprecated Use `createClientStack`[\s\S]*const createStackClient: typeof createClientStack/,
+			);
+			const canonicalSignature = declaration.match(
+				/function createClientStack[\s\S]*?;/,
+			)?.[0];
+			expect(canonicalSignature).not.toContain("ClientLib");
+		}
 
 		const apiSpecifier = "@btst/stack/api";
 		const clientSpecifier = "@btst/stack/client";
@@ -80,6 +106,15 @@ describe("published symmetric stack constructors", () => {
 				require.resolve("typescript/lib/tsc.js"),
 				"--project",
 				"consumer-tests/constructor-exports/tsconfig.json",
+			],
+			{ cwd: resolve(".") },
+		);
+		await execFileAsync(
+			process.execPath,
+			[
+				require.resolve("typescript/lib/tsc.js"),
+				"--project",
+				"consumer-tests/constructor-exports/tsconfig.cjs.json",
 			],
 			{ cwd: resolve(".") },
 		);

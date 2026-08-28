@@ -89,6 +89,12 @@ type _BackendFactoriesMatch = Expect<
 type _BackendInferenceMatches = Expect<
 	Equal<typeof canonicalBackend, typeof temporaryBackend>
 >;
+type _CanonicalBackendRouteKeys = Expect<
+	Equal<keyof typeof canonicalBackend.router.endpoints, "constructorProbe_read">
+>;
+type _TemporaryBackendRouteKeys = Expect<
+	Equal<keyof typeof temporaryBackend.router.endpoints, "constructorProbe_read">
+>;
 const canonicalBackendConfig: BackendStackConfig = backendConfig;
 const legacyBackendConfig: BackendLibConfig = canonicalBackendConfig;
 const canonicalBackendResult: BackendStack = canonicalBackend;
