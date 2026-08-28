@@ -703,13 +703,13 @@ import { revalidatePath } from "next/cache"
 
 const myPlugin = myBackendPlugin({
   hooks: {
-    onAfterCreate: async (item) => {
+    onAfterCreateTodo: async (item) => {
       revalidatePath("/todos")
     },
-    onAfterUpdate: async (item) => {
+    onAfterUpdateTodo: async (item) => {
       revalidatePath("/todos")
     },
-    onAfterDelete: async (id) => {
+    onAfterDeleteTodo: async (id) => {
       revalidatePath("/todos")
     },
   },

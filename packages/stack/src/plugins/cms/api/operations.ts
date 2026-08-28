@@ -1542,10 +1542,10 @@ export function createCMSOperations(
 			// The serialized item type recursively contains populated relations. Keep
 			// that useful public hook type while bridging the already-frozen result
 			// without asking TypeScript to recursively compare every relation level.
-			const onAfterCreate = hooks?.onAfterCreateContent as
+			const afterCreateContent = hooks?.onAfterCreateContent as
 				| ((item: unknown, context: unknown) => Promise<void> | void)
 				| undefined;
-			await onAfterCreate?.(
+			await afterCreateContent?.(
 				context.result,
 				Object.freeze({ ...base, result: context.result }),
 			);
@@ -1759,10 +1759,10 @@ export function createCMSOperations(
 		},
 		after: async (context) => {
 			const base = updateContext(context);
-			const onAfterUpdate = hooks?.onAfterUpdateContent as
+			const afterUpdateContent = hooks?.onAfterUpdateContent as
 				| ((item: unknown, context: unknown) => Promise<void> | void)
 				| undefined;
-			await onAfterUpdate?.(
+			await afterUpdateContent?.(
 				context.result,
 				Object.freeze({ ...base, result: context.result }),
 			);
