@@ -1,5 +1,5 @@
 import { createMemoryAdapter } from "@btst/adapter-memory";
-import { type DatabaseDefinition, defineDb } from "@btst/db";
+import { type DatabaseDefinition, type DBAdapter, defineDb } from "@btst/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { stack } from "../../../api";
@@ -88,6 +88,10 @@ function request(
 
 const model = {} as never;
 const memory = (db: DatabaseDefinition) => createMemoryAdapter(db)({});
+const databaseLikeMemory = (db: DatabaseDefinition): DBAdapter => ({
+	...createMemoryAdapter(db)({}),
+	id: "database-like-memory-test",
+});
 const owner = { id: "owner-1", role: "user" } as const;
 const viewer = { id: "viewer-1", role: "user" } as const;
 const admin = { id: "admin-1", role: "admin" } as const;
@@ -100,6 +104,7 @@ const messageBody = {
 function backend(options?: {
 	access?: "authorized" | "public";
 	authorization?: typeof fullAuthorization;
+	adapter?: (db: DatabaseDefinition) => DBAdapter;
 	hooks?: Parameters<typeof aiChatBackendPlugin>[0]["hooks"];
 	tools?: Parameters<typeof aiChatBackendPlugin>[0]["tools"];
 	getIdentity?: (
@@ -116,7 +121,7 @@ function backend(options?: {
 				tools: options?.tools,
 			}),
 		},
-		adapter: memory,
+		adapter: options?.adapter ?? memory,
 		auth: createServerAuth({
 			authorization: options?.authorization ?? fullAuthorization,
 			getIdentity: ({ request }) =>
@@ -435,6 +440,93 @@ describe("AI Chat operation authorization", () => {
 		await expect(listed.json()).resolves.toEqual([
 			expect.objectContaining({ title: "Ownerless" }),
 		]);
+	});
+
+	it("does not mistake an authentication-only provider for request authorization", async () => {
+		const app = stack({
+			basePath: "/api",
+			plugins: { aiChat: aiChatBackendPlugin({ model }) },
+			adapter: memory,
+			auth: { getIdentity: () => null },
+		});
+		const created = await app.handler(
+			request("/chat/conversations", {
+				method: "POST",
+				body: { title: "Legacy ownerless" },
+			}),
+		);
+		expect(created.status).toBe(200);
+
+		const listed = await app.handler(request("/chat/conversations"));
+		expect(listed.status).toBe(200);
+		await expect(listed.json()).resolves.toEqual([
+			expect.objectContaining({ title: "Legacy ownerless" }),
+		]);
+	});
+
+	it("fails closed before stream hooks or writes without isolated transactions", async () => {
+		const before = vi.fn();
+		const app = backend({
+			adapter: databaseLikeMemory,
+			hooks: { onBeforeChat: before },
+		});
+		const adapterConfig = app.adapter.options?.adapterConfig;
+		expect(adapterConfig).toBeDefined();
+		if (!adapterConfig) throw new Error("Missing adapter config");
+		adapterConfig.transaction = false;
+
+		await expect(
+			app
+				.forRequest(request("/chat", { identity: owner }))
+				.api.aiChat.startStream(messageBody),
+		).rejects.toMatchObject({
+			statusCode: 500,
+			code: "ATOMIC_TRANSACTION_REQUIRED",
+		});
+		expect(before).not.toHaveBeenCalled();
+		expect(streamText).not.toHaveBeenCalled();
+		expect(await app.adapter.count({ model: "conversation" })).toBe(0);
+		expect(await app.adapter.count({ model: "message" })).toBe(0);
+	});
+
+	it("fails closed before completion writes if transaction isolation disappears", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const onChatError = vi.fn();
+		const app = backend({
+			adapter: databaseLikeMemory,
+			hooks: { onChatError },
+		});
+		await app
+			.forRequest(request("/chat", { identity: owner }))
+			.api.aiChat.startStream(messageBody);
+		const finish = (
+			streamText.mock.calls as unknown as Array<
+				[
+					{
+						onFinish: (completion: { text: string }) => Promise<void>;
+					},
+				]
+			>
+		)[0]?.[0].onFinish;
+		expect(finish).toBeDefined();
+		if (!finish) throw new Error("Missing stream completion callback");
+		const adapterConfig = app.adapter.options?.adapterConfig;
+		expect(adapterConfig).toBeDefined();
+		if (!adapterConfig) throw new Error("Missing adapter config");
+		adapterConfig.transaction = false;
+
+		await finish({ text: "unsafe answer" });
+
+		expect(
+			await app.adapter.count({
+				model: "message",
+				where: [{ field: "role", value: "assistant", operator: "eq" }],
+			}),
+		).toBe(0);
+		expect(onChatError).toHaveBeenCalledWith(
+			expect.objectContaining({ code: "ATOMIC_TRANSACTION_REQUIRED" }),
+			expect.any(Object),
+		);
 	});
 
 	it("does not let stream.start bypass a denied exact send permission", async () => {

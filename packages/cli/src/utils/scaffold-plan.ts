@@ -267,7 +267,8 @@ function buildAdapterTemplateContext(
 	}
 	const hasFormBuilder = selectedPlugins.includes("form-builder");
 	const hasMedia = selectedPlugins.includes("media");
-	const needsIsolatedTransactions = hasFormBuilder || hasMedia;
+	const hasAiChat = selectedPlugins.includes("ai-chat");
+	const needsIsolatedTransactions = hasFormBuilder || hasMedia || hasAiChat;
 
 	if (
 		(hasFormBuilder && (adapter === "memory" || adapter === "mongodb")) ||

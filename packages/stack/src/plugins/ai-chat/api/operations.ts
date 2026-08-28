@@ -1575,6 +1575,7 @@ export function createAiChatOperations(
 				const mergedTools = await enterChatLifecycle();
 				return startModelStream(mergedTools);
 			}
+			requireAtomicConversationTransactions(adapter);
 
 			const requestedMissingConversationId =
 				!prepared.snapshot && context.input.conversationId
@@ -1733,6 +1734,7 @@ export function createAiChatOperations(
 					const completionClaimVersion = streamClaimVersion;
 					const response = startModelStream(mergedTools, async ({ text }) => {
 						try {
+							requireAtomicConversationTransactions(adapter);
 							const persisted = await adapter.transaction(
 								async (completionTx) => {
 									const completedAt = nextVersion(completionClaimVersion);

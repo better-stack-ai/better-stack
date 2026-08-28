@@ -111,6 +111,17 @@ export { handler, dbSchema }
 
 The `aiChatBackendPlugin()` accepts optional lifecycle hooks for domain behavior, logging, rate limits, and tool safety. Identity/role/ownership policy belongs in the typed rules above.
 
+<Callout type="warn">
+Authorized AI Chat streams persist conversation and message history. Production
+database adapters must therefore provide real isolated transactions so the
+final authorization/CAS check, lifecycle hooks, and persistence commit as one
+unit. Set `transaction: true` on supported Prisma, Drizzle, and Kysely adapters;
+otherwise authorized streaming and owner-sensitive history mutations fail
+closed with `ATOMIC_TRANSACTION_REQUIRED`. The CLI enables this option when AI
+Chat is selected. The memory adapter remains available for local,
+single-process development, and explicit public mode does not persist history.
+</Callout>
+
 <Callout type="info">
 **Model Configuration:** You can use any model from the AI SDK, including OpenAI, Anthropic, Google, and more. Make sure to install the corresponding provider package (e.g., `@ai-sdk/openai`) and set up your API keys in environment variables.
 </Callout>

@@ -1,5 +1,8 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import { AuthorizationError } from "../../../authorization/server";
+import {
+	AuthorizationError,
+	isServerAuth,
+} from "../../../authorization/server";
 import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
 import type { LanguageModel, Tool } from "ai";
 import { aiChatSchema as dbSchema } from "../db";
@@ -138,7 +141,11 @@ export const aiChatBackendPlugin = <
 		operations: (adapter: Adapter, context) =>
 			createAiChatOperations(adapter, {
 				...operationsConfig,
-				requestAuthorizationConfigured: Boolean(context?.auth),
+				requestAuthorizationConfigured: Boolean(
+					context?.auth &&
+						(isServerAuth(context.auth) ||
+							typeof context.auth.can === "function"),
+				),
 			}),
 
 		/** Trusted raw data access. It intentionally bypasses operations and hooks. */
