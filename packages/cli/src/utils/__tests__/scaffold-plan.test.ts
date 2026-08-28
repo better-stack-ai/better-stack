@@ -44,6 +44,48 @@ describe("scaffold plan", () => {
 		},
 	);
 
+	it.each(["prisma", "drizzle", "kysely"] as const)(
+		"enables isolated transactions for Media in the %s scaffold",
+		async (adapter) => {
+			const plan = await buildScaffoldPlan({
+				framework: "nextjs",
+				adapter,
+				plugins: ["media"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const stackFile = plan.files.find((file) => file.path === "lib/stack.ts");
+			expect(stackFile?.content).toContain("transaction: true");
+		},
+	);
+
+	it("rejects Media with the unsupported MongoDB generated configuration", async () => {
+		await expect(
+			buildScaffoldPlan({
+				framework: "nextjs",
+				adapter: "mongodb",
+				plugins: ["media"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			}),
+		).rejects.toThrow(
+			"Media requires an adapter with isolated transaction support",
+		);
+	});
+
+	it("keeps the serialized memory adapter available for Media scaffolds", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["media"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const stackFile = plan.files.find((file) => file.path === "lib/stack.ts");
+		expect(stackFile?.content).toContain("createMemoryAdapter");
+		expect(stackFile?.content).not.toContain("transaction: true");
+	});
+
 	it("emits the required configurable provider for Drizzle without Form Builder", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
@@ -454,9 +496,11 @@ describe("scaffold plan", () => {
 		expect(pagesLayoutFile?.content).toContain(
 			"const authClient = undefined as any",
 		);
+		expect(pagesLayoutFile?.content).toContain("const stackAuth = authClient");
 		expect(pagesLayoutFile?.content).toContain(
-			"const stackAuth = createBetterAuthProvider(authClient, {",
+			"? createBetterAuthProvider(authClient, {",
 		);
+		expect(pagesLayoutFile?.content).toContain(": undefined");
 		expect(pagesLayoutFile?.content).toContain(
 			'loginPath: "/pages/auth/sign-in"',
 		);
@@ -633,6 +677,8 @@ describe("scaffold plan", () => {
 			expect(layoutFile?.content).toContain(
 				'import { createBetterAuthProvider } from "@btst/better-auth-ui"',
 			);
+			expect(layoutFile?.content).toContain("const stackAuth = authClient");
+			expect(layoutFile?.content).toContain(": undefined");
 			expect(layoutFile?.content).toContain("auth={stackAuth}");
 			expect(layoutFile?.content).not.toContain("onSessionChange:");
 			expect(layoutFile?.content).not.toContain("replace: (path: string)");

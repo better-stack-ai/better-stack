@@ -25,6 +25,20 @@ describe("media resource query keys", () => {
 		expect(assetListDiscriminator(params).query).toBe("beach");
 	});
 
+	it("aligns SSR/browser keys for the hydrated identity", () => {
+		const client = vi.fn() as any;
+		const queries = createMediaQueryKeys(client);
+		const identity = { id: "member-a", role: "member" };
+		const params = { limit: 40 };
+
+		expect(queries.mediaAssets.list(params, identity).queryKey).toEqual(
+			MEDIA_QUERY_KEYS.assetsList(params, identity),
+		);
+		expect(queries.mediaFolders.list(null, identity).queryKey).toEqual(
+			MEDIA_QUERY_KEYS.foldersList(null, identity),
+		);
+	});
+
 	it("uses distinct keys for all folders, root folders, and a parent", () => {
 		const client = vi.fn() as any;
 		const queries = createMediaQueryKeys(client);

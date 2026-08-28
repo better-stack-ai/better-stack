@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
 	useFolders,
 	useDeleteFolder,
@@ -9,7 +9,8 @@ import { FolderPlus } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
 import { Check, Folder, Trash2, ChevronRight, FolderOpen } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
-import { useCan, useNotify, useTranslate } from "@btst/stack/context";
+import { PermissionAccess, useNotify, useTranslate } from "@btst/stack/context";
+import { mediaPermissions } from "../../../permissions";
 
 export function FolderTree({
 	selectedId,
@@ -20,20 +21,27 @@ export function FolderTree({
 }) {
 	const t = useTranslate();
 	const notify = useNotify();
-	const { data: rootFoldersRaw = [] } = useFolders(null);
-	const rootFolders =
-		rootFoldersRaw as import("../../../types").SerializedFolder[];
+	const { data: foldersRaw = [] } = useFolders();
+	const folders = foldersRaw as import("../../../types").SerializedFolder[];
+	const { foldersById, foldersByParent } = useMemo(() => {
+		const byId = new Map<string, SerializedFolder>();
+		const byParent = new Map<string | null, SerializedFolder[]>();
+		for (const folder of folders) {
+			byId.set(folder.id, folder);
+			const parentId = folder.parentId ?? null;
+			const siblings = byParent.get(parentId) ?? [];
+			siblings.push(folder);
+			byParent.set(parentId, siblings);
+		}
+		return { foldersById: byId, foldersByParent: byParent };
+	}, [folders]);
+	const rootFolders = foldersByParent.get(null) ?? [];
+	const selectedFolder = selectedId ? foldersById.get(selectedId) : undefined;
 	const [newFolderName, setNewFolderName] = useState("");
 	const [isCreating, setIsCreating] = useState(false);
 	const { mutateAsync: deleteFolder } = useDeleteFolder();
-	const { can: canCreateFolder } = useCan({
-		resource: "media:folder",
-		action: "create",
-	});
-	const { can: canDeleteFolder } = useCan({
-		resource: "media:folder",
-		action: "delete",
-		params: selectedId ? { id: selectedId } : undefined,
+	const createPermission = mediaPermissions.folder.create({
+		...(selectedId ? { parentId: selectedId } : {}),
 	});
 	const createFolderForm = useCreateFolderForm({
 		parentId: selectedId ?? undefined,
@@ -44,14 +52,13 @@ export function FolderTree({
 	});
 
 	const handleCreateFolder = async () => {
-		if (!canCreateFolder) return;
 		const name = newFolderName.trim();
 		if (!name) return;
 		await createFolderForm.submit({ name });
 	};
 
 	const handleDeleteFolder = async () => {
-		if (!selectedId || !canDeleteFolder) return;
+		if (!selectedId) return;
 		if (
 			!confirm(
 				t(
@@ -80,7 +87,10 @@ export function FolderTree({
 				<span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
 					{t("media.folders.title", "Folders")}
 				</span>
-				{canCreateFolder ? (
+				<PermissionAccess
+					permission={createPermission}
+					legacyPermission={{ resource: "media:folder", action: "create" }}
+				>
 					<button
 						type="button"
 						title={t("media.folders.new", "New folder")}
@@ -89,40 +99,45 @@ export function FolderTree({
 					>
 						<FolderPlus className="size-3.5 text-muted-foreground" />
 					</button>
-				) : null}
+				</PermissionAccess>
 			</div>
 
-			{isCreating && canCreateFolder && (
-				<div className="flex gap-1 px-2 pb-1">
-					<Input
-						autoFocus
-						value={newFolderName}
-						onChange={(e) => {
-							setNewFolderName(e.target.value);
-							createFolderForm.clearErrors();
-						}}
-						placeholder={t("media.folders.namePlaceholder", "Folder name")}
-						className="h-6 text-xs"
-						onKeyDown={(e) => {
-							if (e.key === "Enter") void handleCreateFolder();
-							if (e.key === "Escape") setIsCreating(false);
-						}}
-					/>
-					<button
-						type="button"
-						onClick={handleCreateFolder}
-						disabled={createFolderForm.isSubmitting || !newFolderName.trim()}
-						title={t("media.folders.create", "Create folder")}
-						className="rounded px-1 py-0.5 text-xs hover:bg-muted"
-					>
-						<Check className="size-3" />
-					</button>
-					{createFolderForm.fieldErrors.name ? (
-						<p className="text-xs text-destructive">
-							{String(createFolderForm.fieldErrors.name)}
-						</p>
-					) : null}
-				</div>
+			{isCreating && (
+				<PermissionAccess
+					permission={createPermission}
+					legacyPermission={{ resource: "media:folder", action: "create" }}
+				>
+					<div className="flex gap-1 px-2 pb-1">
+						<Input
+							autoFocus
+							value={newFolderName}
+							onChange={(e) => {
+								setNewFolderName(e.target.value);
+								createFolderForm.clearErrors();
+							}}
+							placeholder={t("media.folders.namePlaceholder", "Folder name")}
+							className="h-6 text-xs"
+							onKeyDown={(e) => {
+								if (e.key === "Enter") void handleCreateFolder();
+								if (e.key === "Escape") setIsCreating(false);
+							}}
+						/>
+						<button
+							type="button"
+							onClick={handleCreateFolder}
+							disabled={createFolderForm.isSubmitting || !newFolderName.trim()}
+							title={t("media.folders.create", "Create folder")}
+							className="rounded px-1 py-0.5 text-xs hover:bg-muted"
+						>
+							<Check className="size-3" />
+						</button>
+						{createFolderForm.fieldErrors.name ? (
+							<p className="text-xs text-destructive">
+								{String(createFolderForm.fieldErrors.name)}
+							</p>
+						) : null}
+					</div>
+				</PermissionAccess>
 			)}
 
 			<div className="flex-1 overflow-y-auto overscroll-contain">
@@ -146,23 +161,43 @@ export function FolderTree({
 					<FolderTreeItem
 						key={folder.id}
 						folder={folder}
+						foldersByParent={foldersByParent}
 						selectedId={selectedId}
 						onSelect={onSelect}
 					/>
 				))}
 			</div>
 
-			{selectedId && canDeleteFolder && (
-				<div className="border-t px-2 py-1">
-					<button
-						type="button"
-						onClick={() => void handleDeleteFolder()}
-						className="flex items-center gap-1 text-xs text-destructive hover:underline"
-					>
-						<Trash2 className="size-3" />
-						{t("media.folders.delete", "Delete folder")}
-					</button>
-				</div>
+			{selectedId && selectedFolder && (
+				<PermissionAccess
+					permission={mediaPermissions.folder.delete({
+						folderId: selectedId,
+						...(selectedFolder.parentId
+							? { parentId: selectedFolder.parentId }
+							: {}),
+					})}
+					legacyPermission={{
+						resource: "media:folder",
+						action: "delete",
+						params: {
+							id: selectedId,
+							...(selectedFolder.parentId
+								? { parentId: selectedFolder.parentId }
+								: {}),
+						},
+					}}
+				>
+					<div className="border-t px-2 py-1">
+						<button
+							type="button"
+							onClick={() => void handleDeleteFolder()}
+							className="flex items-center gap-1 text-xs text-destructive hover:underline"
+						>
+							<Trash2 className="size-3" />
+							{t("media.folders.delete", "Delete folder")}
+						</button>
+					</div>
+				</PermissionAccess>
 			)}
 		</div>
 	);
@@ -170,17 +205,19 @@ export function FolderTree({
 
 export function FolderTreeItem({
 	folder,
+	foldersByParent,
 	selectedId,
 	onSelect,
 	depth = 0,
 }: {
 	folder: SerializedFolder;
+	foldersByParent: ReadonlyMap<string | null, readonly SerializedFolder[]>;
 	selectedId: string | null;
 	onSelect: (id: string | null) => void;
 	depth?: number;
 }) {
 	const [expanded, setExpanded] = useState(false);
-	const { data: children = [] } = useFolders(folder.id);
+	const children = foldersByParent.get(folder.id) ?? [];
 
 	return (
 		<div>
@@ -218,6 +255,7 @@ export function FolderTreeItem({
 					<FolderTreeItem
 						key={child.id}
 						folder={child}
+						foldersByParent={foldersByParent}
 						selectedId={selectedId}
 						onSelect={onSelect}
 						depth={depth + 1}

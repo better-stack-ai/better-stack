@@ -8,11 +8,23 @@ import {
 	type StackAuthProvider,
 	type StackI18nProvider,
 } from "@btst/stack/context";
+import { createClientAuth } from "@btst/stack/authorization/client";
+import { defineAuthorization } from "@btst/stack/authorization";
+import { z } from "zod";
+import { mediaPermissions } from "../permissions";
 import { LibraryPage } from "../client/components/pages/library-page.internal";
+import { LibraryPageComponent } from "../client/components/pages/library-page";
+import { MediaPicker } from "../client/components/media-picker";
 import { UrlTab } from "../client/components/media-picker/url-tab";
 import type { SerializedAsset, SerializedFolder } from "../types";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as any).ResizeObserver ??= class {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+};
+Element.prototype.scrollIntoView ??= () => {};
 
 const hooks = vi.hoisted(() => ({
 	useAssets: vi.fn(),
@@ -65,7 +77,7 @@ beforeEach(() => {
 		isLoading: false,
 	});
 	hooks.useFolders.mockImplementation((parentId?: string | null) => ({
-		data: parentId === null ? [folder] : [],
+		data: parentId === undefined || parentId === null ? [folder] : [],
 	}));
 	hooks.useUploadAsset.mockReturnValue({
 		mutateAsync: vi.fn().mockResolvedValue(asset),
@@ -98,6 +110,7 @@ afterEach(async () => {
 	container.remove();
 	document.body.innerHTML = "";
 	queryClient.clear();
+	vi.restoreAllMocks();
 	vi.clearAllMocks();
 });
 
@@ -124,6 +137,7 @@ async function renderLibrary(
 		auth?: StackAuthProvider;
 		i18n?: StackI18nProvider;
 		router?: ReturnType<typeof createMockRouter>;
+		initialIdentity?: { id: string; role?: string } | null;
 	} = {},
 ) {
 	const router = options.router ?? createMockRouter();
@@ -135,6 +149,7 @@ async function renderLibrary(
 				router={router}
 				overrides={{ media: mediaOverrides() }}
 				auth={options.auth}
+				initialIdentity={options.initialIdentity}
 				i18n={options.i18n}
 			>
 				<LibraryPage />
@@ -153,6 +168,87 @@ function typeInto(input: HTMLInputElement, value: string) {
 	input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+async function waitFor(check: () => boolean, timeout = 3000) {
+	const start = Date.now();
+	while (!check()) {
+		if (Date.now() - start > timeout) throw new Error("waitFor timed out");
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 10));
+		});
+	}
+}
+
+describe("Media library route permission", () => {
+	const routeAuthorization = defineAuthorization({
+		identity: z.object({ id: z.string(), role: z.enum(["viewer", "editor"]) }),
+		permissions: [mediaPermissions] as const,
+		rules: ({ media }) => [
+			media.library.read.when(({ identity }) => identity?.role === "editor"),
+			media.asset.read.allow(),
+		],
+	});
+
+	it.each([
+		{ label: "anonymous", identity: null },
+		{
+			label: "authenticated viewer",
+			identity: { id: "viewer-1", role: "viewer" as const },
+		},
+	])(
+		"fails closed for an $label at the real route boundary",
+		async ({ identity }) => {
+			vi.spyOn(console, "error").mockImplementation(() => {});
+			vi.spyOn(console, "warn").mockImplementation(() => {});
+			const auth = createClientAuth({
+				authorization: routeAuthorization,
+				getIdentity: () => identity,
+			});
+			await act(async () => {
+				root.render(
+					<StackProvider
+						basePath="/pages"
+						router={createMockRouter()}
+						overrides={{ media: mediaOverrides() }}
+						auth={auth}
+						initialIdentity={identity}
+					>
+						<LibraryPageComponent />
+					</StackProvider>,
+				);
+			});
+			await waitFor(
+				() => document.body.textContent?.includes("Unauthorized") ?? false,
+			);
+
+			expect(hooks.useAssets).not.toHaveBeenCalled();
+		},
+	);
+
+	it("renders the real route for an allowed authenticated identity", async () => {
+		const identity = { id: "editor-1", role: "editor" as const };
+		const auth = createClientAuth({
+			authorization: routeAuthorization,
+			getIdentity: () => identity,
+		});
+		await act(async () => {
+			root.render(
+				<StackProvider
+					basePath="/pages"
+					router={createMockRouter()}
+					overrides={{ media: mediaOverrides() }}
+					auth={auth}
+					initialIdentity={identity}
+				>
+					<LibraryPageComponent />
+				</StackProvider>,
+			);
+		});
+		await waitFor(() => hooks.useAssets.mock.calls.length > 0);
+
+		expect(document.body.textContent).toContain("Beach.jpg");
+	});
+});
+
 describe("Media library permissions", () => {
 	it("keeps all write controls visible without an auth provider", async () => {
 		await renderLibrary();
@@ -160,6 +256,30 @@ describe("Media library permissions", () => {
 		expect(document.body.textContent).toContain("Upload");
 		expect(container.querySelector('[title="New folder"]')).toBeTruthy();
 		expect(container.querySelector('[title="Delete"]')).toBeTruthy();
+	});
+
+	it("loads and renders a nested tree from one all-folders query", async () => {
+		const childFolder: SerializedFolder = {
+			id: "folder-child",
+			name: "Nested photos",
+			parentId: folder.id,
+			createdAt: new Date("2024-01-02").toISOString(),
+		};
+		hooks.useFolders.mockReturnValue({ data: [folder, childFolder] });
+
+		await renderLibrary();
+		expect(hooks.useFolders).toHaveBeenCalledTimes(1);
+		expect(hooks.useFolders).toHaveBeenCalledWith();
+		expect(document.body.textContent).not.toContain(childFolder.name);
+
+		const rootFolderButton = Array.from(
+			container.querySelectorAll("button"),
+		).find((button) => button.textContent?.includes(folder.name));
+		hooks.useFolders.mockClear();
+		await act(async () => rootFolderButton?.click());
+
+		expect(document.body.textContent).toContain(childFolder.name);
+		expect(hooks.useFolders).toHaveBeenCalledTimes(1);
 	});
 
 	it("hides asset and folder writes while leaving browsing available", async () => {
@@ -183,6 +303,95 @@ describe("Media library permissions", () => {
 				params: { id: asset.id },
 			}),
 		);
+	});
+
+	it("uses exact schema-backed facts for one-rule asset and upload gates", async () => {
+		const seen: Array<{ id: string; facts?: unknown }> = [];
+		const definition = defineAuthorization({
+			identity: z.object({
+				id: z.string(),
+				role: z.enum(["viewer", "editor"]),
+			}),
+			permissions: [mediaPermissions] as const,
+			rules: ({ media }) => [
+				media.library.read.allow(),
+				media.asset.read.when(({ facts }) => {
+					seen.push({ id: "read", facts });
+					return (
+						facts.assetId === asset.id && facts.mimeType === asset.mimeType
+					);
+				}),
+				media.asset.upload.when(({ identity, facts }) => {
+					seen.push({ id: "upload", facts });
+					return identity?.role === "editor";
+				}),
+				media.asset.delete.when(() => false),
+				media.folder.create.when(() => false),
+				media.folder.delete.when(() => false),
+			],
+		});
+		const clientAuth = createClientAuth({
+			authorization: definition,
+			getIdentity: () => ({ id: "viewer", role: "viewer" as const }),
+		});
+		await renderLibrary({
+			auth: clientAuth,
+			initialIdentity: { id: "viewer", role: "viewer" },
+		});
+
+		expect(document.body.textContent).toContain("Beach.jpg");
+		expect(document.body.textContent).not.toContain("Upload");
+		expect(seen).toContainEqual({
+			id: "read",
+			facts: {
+				assetId: asset.id,
+				mimeType: asset.mimeType,
+			},
+		});
+		expect(seen).toContainEqual({
+			id: "upload",
+			facts: { phase: "direct" },
+		});
+	});
+
+	it("includes the selected folder parent in the delete presentation gate", async () => {
+		const childFolder: SerializedFolder = {
+			id: "folder-child",
+			name: "Nested photos",
+			parentId: folder.id,
+			createdAt: new Date("2024-01-02").toISOString(),
+		};
+		hooks.useFolders.mockReturnValue({ data: [folder, childFolder] });
+		const seen: unknown[] = [];
+		const definition = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [mediaPermissions] as const,
+			rules: ({ media }) => [
+				media.library.read.allow(),
+				media.asset.read.allow(),
+				media.folder.delete.when(({ facts }) => {
+					seen.push(facts);
+					return false;
+				}),
+			],
+		});
+		const clientAuth = createClientAuth({
+			authorization: definition,
+			getIdentity: () => ({ id: "viewer" }),
+		});
+
+		await renderLibrary({
+			auth: clientAuth,
+			initialIdentity: { id: "viewer" },
+			router: createMockRouter(`folder=${childFolder.id}`),
+		});
+		await waitFor(() => seen.length > 0);
+
+		expect(seen).toContainEqual({
+			folderId: childFolder.id,
+			parentId: folder.id,
+		});
+		expect(document.body.textContent).not.toContain("Delete folder");
 	});
 });
 
@@ -233,6 +442,86 @@ describe("Media library URL state", () => {
 });
 
 describe("Media forms and i18n", () => {
+	it("requires asset.read before selecting a URL-registered asset", async () => {
+		const onSelect = vi.fn();
+		const submit = vi.fn(async () => asset);
+		hooks.useRegisterAssetForm.mockImplementation(
+			(options: { onSuccess?: (created: SerializedAsset) => void }) => ({
+				submit: vi.fn(async () => {
+					const created = await submit();
+					options.onSuccess?.(created);
+					return created;
+				}),
+				isSubmitting: false,
+				error: null,
+				fieldErrors: {},
+				clearErrors: vi.fn(),
+			}),
+		);
+		const definition = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [mediaPermissions] as const,
+			rules: ({ media }) => [
+				media.library.read.allow(),
+				media.asset.read.when(() => false),
+				media.asset.upload.allow(),
+			],
+		});
+		const auth = createClientAuth({
+			authorization: definition,
+			getIdentity: () => ({ id: "uploader" }),
+		});
+
+		await act(async () => {
+			root.render(
+				<StackProvider
+					basePath="/pages"
+					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
+					router={createMockRouter()}
+					overrides={{ media: mediaOverrides() }}
+					auth={auth}
+					initialIdentity={{ id: "uploader" }}
+				>
+					<MediaPicker
+						trigger={<button type="button">Open</button>}
+						onSelect={onSelect}
+					/>
+				</StackProvider>,
+			);
+		});
+		await act(async () => {
+			(container.querySelector("button") as HTMLButtonElement).click();
+			await Promise.resolve();
+		});
+		const urlTab = Array.from(document.body.querySelectorAll("button")).find(
+			(button) => button.textContent === "URL",
+		) as HTMLButtonElement;
+		await act(async () => {
+			urlTab.dispatchEvent(
+				new MouseEvent("mousedown", { bubbles: true, button: 0 }),
+			);
+			urlTab.click();
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		const input = document.body.querySelector(
+			'[data-testid="media-url-input"]',
+		) as HTMLInputElement;
+		await act(async () => typeInto(input, asset.url));
+		const useUrl = Array.from(document.body.querySelectorAll("button")).find(
+			(button) => button.textContent?.includes("Use URL"),
+		) as HTMLButtonElement;
+		await act(async () => {
+			useUrl.click();
+			await Promise.resolve();
+		});
+
+		expect(submit).toHaveBeenCalledOnce();
+		expect(onSelect).not.toHaveBeenCalled();
+		expect(
+			document.body.querySelector('[data-testid="media-select-button"]'),
+		).toBeNull();
+	});
+
 	it("renders server URL field errors inline", async () => {
 		hooks.useRegisterAssetForm.mockReturnValue({
 			submit: vi.fn(),

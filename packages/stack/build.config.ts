@@ -149,6 +149,7 @@ export default defineBuildConfig({
 		"./src/plugins/media/client/components/index.tsx",
 		"./src/plugins/media/client/hooks/index.tsx",
 		"./src/plugins/media/query-keys.ts",
+		"./src/plugins/media/permissions.ts",
 		"./src/components/auto-form/index.ts",
 		"./src/components/stepped-auto-form/index.ts",
 		"./src/components/multi-select/index.ts",

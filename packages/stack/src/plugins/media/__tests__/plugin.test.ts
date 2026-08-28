@@ -84,6 +84,10 @@ function createVercelBlobStorageAdapter(
 	return {
 		type: "vercel-blob",
 		urlHostnameSuffix: ".public.blob.vercel-storage.com",
+		verifyCallback: vi.fn(async () => ({
+			pathname: "photo.jpg",
+			mimeType: "image/jpeg",
+		})),
 		handleRequest: vi.fn(async (request, body, callbacks) => {
 			const parsedBody = (body ?? ((await request.json()) as unknown)) as {
 				pathname?: string;
@@ -408,6 +412,37 @@ describe("mediaBackendPlugin S3 URL validation", () => {
 });
 
 describe("mediaBackendPlugin direct upload", () => {
+	it("rejects oversized multipart metadata before reading file bytes", async () => {
+		const arrayBuffer = vi.fn(async () => new ArrayBuffer(0));
+		const backend = createBackend({ maxFileSizeBytes: 4 });
+		const request = new Request("http://localhost/api/media/upload", {
+			method: "POST",
+			headers: { "content-type": "multipart/form-data" },
+		});
+		const response = await (backend.router as any).endpoints.media_uploadDirect(
+			{
+				request,
+				headers: request.headers,
+				method: request.method,
+				params: {},
+				query: {},
+				body: {
+					file: {
+						name: "oversized.jpg",
+						type: "image/jpeg",
+						size: 5,
+						arrayBuffer,
+					},
+				},
+				asResponse: true,
+			},
+		);
+
+		expect(response.status).toBe(413);
+		expect(await response.json()).toMatchObject({ code: "FILE_TOO_LARGE" });
+		expect(arrayBuffer).not.toHaveBeenCalled();
+	});
+
 	it("uploads a file, creates an asset record, and associates it with a folder", async () => {
 		const storageAdapter = createLocalStorageAdapter({
 			upload: vi.fn(async () => ({ url: "/uploads/photo-123.jpg" })),
@@ -453,14 +488,19 @@ describe("mediaBackendPlugin direct upload", () => {
 		});
 		const failingAdapterFactory: AdapterFactory = (db) => {
 			const adapter = testAdapter(db);
+			const create: Adapter["create"] = async (args) => {
+				if (args.model === "mediaAsset") {
+					throw new Error("DB write failed");
+				}
+				return adapter.create(args);
+			};
 			return {
 				...adapter,
-				create: async (args) => {
-					if (args.model === "mediaAsset") {
-						throw new Error("DB write failed");
-					}
-					return adapter.create(args);
-				},
+				create,
+				transaction: (callback) =>
+					adapter.transaction((tx) =>
+						callback({ ...tx, create } as Parameters<typeof callback>[0]),
+					),
 			} as Adapter;
 		};
 		const backend = createBackend({
@@ -646,10 +686,16 @@ describe("mediaBackendPlugin Vercel Blob route", () => {
 			addRandomSuffix: true,
 			allowedContentTypes: ["image/png"],
 			maximumSizeInBytes: 4096,
+			tokenPayload: JSON.stringify({
+				version: 1,
+				pathname: "folder/photo.png",
+				mimeType: "image/png",
+				size: 512,
+			}),
 		});
 	});
 
-	it("falls back safely when clientPayload is invalid JSON", async () => {
+	it("rejects invalid clientPayload before hooks or provider effects", async () => {
 		const onBeforeUpload = vi.fn();
 		const storageAdapter = createVercelBlobStorageAdapter();
 		const backend = createVercelBlobBackend({
@@ -667,17 +713,9 @@ describe("mediaBackendPlugin Vercel Blob route", () => {
 			}),
 		);
 
-		expect(response.ok).toBe(true);
-		expect(onBeforeUpload).toHaveBeenCalledWith(
-			{
-				filename: "photo.png",
-				mimeType: "application/octet-stream",
-				size: undefined,
-			},
-			expect.objectContaining({
-				headers: expect.any(Headers),
-			}),
-		);
+		expect(response.status).toBe(400);
+		expect(onBeforeUpload).not.toHaveBeenCalled();
+		expect(storageAdapter.handleRequest).not.toHaveBeenCalled();
 	});
 });
 

@@ -604,6 +604,16 @@
         "default": "./dist/plugins/media/api/index.cjs"
       }
     },
+    "./plugins/media/permissions": {
+      "import": {
+        "types": "./dist/plugins/media/permissions.d.ts",
+        "default": "./dist/plugins/media/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/media/permissions.d.cts",
+        "default": "./dist/plugins/media/permissions.cjs"
+      }
+    },
     "./plugins/media/api/adapters/local": {
       "import": {
         "types": "./dist/plugins/media/api/adapters/local.d.ts",
@@ -927,6 +937,9 @@
       ],
       "plugins/media/api": [
         "./dist/plugins/media/api/index.d.ts"
+      ],
+      "plugins/media/permissions": [
+        "./dist/plugins/media/permissions.d.ts"
       ],
       "plugins/media/api/adapters/local": [
         "./dist/plugins/media/api/adapters/local.d.ts"

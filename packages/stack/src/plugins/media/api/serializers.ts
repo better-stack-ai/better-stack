@@ -10,8 +10,9 @@ import type {
  * Pure function — no DB access, no hooks.
  */
 export function serializeAsset(asset: Asset): SerializedAsset {
+	const { updatedAt: _updatedAt, ...value } = asset;
 	return {
-		...asset,
+		...value,
 		createdAt: asset.createdAt.toISOString(),
 	};
 }
@@ -21,8 +22,9 @@ export function serializeAsset(asset: Asset): SerializedAsset {
  * Pure function — no DB access, no hooks.
  */
 export function serializeFolder(folder: Folder): SerializedFolder {
+	const { updatedAt: _updatedAt, ...value } = folder;
 	return {
-		...folder,
+		...value,
 		createdAt: folder.createdAt.toISOString(),
 	};
 }

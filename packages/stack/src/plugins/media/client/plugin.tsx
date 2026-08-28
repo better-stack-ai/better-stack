@@ -9,6 +9,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { LibraryPageComponent } from "./components/pages/library-page";
 import { createMediaQueryKeys } from "../query-keys";
 import type { MediaApiRouter } from "../api/plugin";
+import type { MediaIdentityPartition } from "../api/query-key-defs";
 
 export interface MediaLoaderContext {
 	path: string;
@@ -45,6 +46,8 @@ export interface MediaClientConfig {
 	queryClient: QueryClient;
 	/** Optional headers forwarded with SSR API requests (e.g. auth cookies) */
 	headers?: HeadersInit;
+	/** Identity snapshot used to align protected SSR prefetch and browser keys. */
+	identityPartition?: MediaIdentityPartition;
 	/** Optional lifecycle hooks for the media client plugin */
 	hooks?: MediaClientHooks;
 	/**
@@ -97,7 +100,14 @@ export const mediaClientPlugin = (config: MediaClientConfig) =>
 function createMediaLibraryLoader(config: MediaClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const { queryClient, apiBasePath, apiBaseURL, hooks, headers } = config;
+			const {
+				queryClient,
+				apiBasePath,
+				apiBaseURL,
+				hooks,
+				headers,
+				identityPartition,
+			} = config;
 
 			const context: MediaLoaderContext = {
 				path: "/media",
@@ -119,33 +129,42 @@ function createMediaLibraryLoader(config: MediaClientConfig) {
 				const queries = createMediaQueryKeys(client, headers);
 
 				// Prefetch initial asset grid (infinite query — root folder, default limit)
+				const assetQuery = queries.mediaAssets.list(
+					{ limit: 40 },
+					identityPartition,
+				);
+				const folderQuery = queries.mediaFolders.list(
+					undefined,
+					identityPartition,
+				);
 				await queryClient.prefetchInfiniteQuery({
-					...queries.mediaAssets.list({ limit: 40 }),
+					...assetQuery,
 					initialPageParam: 0,
 				});
 
-				// Prefetch root-level folders for the sidebar tree
-				await queryClient.prefetchQuery(queries.mediaFolders.list(null));
+				// Prefetch the complete scoped folder tree in the exact browser key.
+				await queryClient.prefetchQuery(folderQuery);
 
 				if (hooks?.afterLoadLibrary) {
 					await hooks.afterLoadLibrary(context);
 				}
 
-				const queryState = queryClient.getQueryState(
-					queries.mediaAssets.list({ limit: 40 }).queryKey,
-				);
-				if (queryState?.error && hooks?.onLoadError) {
+				const queryError =
+					queryClient.getQueryState(assetQuery.queryKey)?.error ??
+					queryClient.getQueryState(folderQuery.queryKey)?.error;
+				if (queryError && hooks?.onLoadError) {
 					const error =
-						queryState.error instanceof Error
-							? queryState.error
-							: new Error(String(queryState.error));
+						queryError instanceof Error
+							? queryError
+							: new Error(String(queryError));
 					await hooks.onLoadError(error, context);
 				}
 			} catch (error) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/media] route.loader() failed — no server running at build time. " +
-							"The media library does not support SSG.",
+							"For an explicitly public static library, use the trusted " +
+							"stack.api.media.prefetchForRoute() server helper instead.",
 					);
 				}
 				if (hooks?.onLoadError) {

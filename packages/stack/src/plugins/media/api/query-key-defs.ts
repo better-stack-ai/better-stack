@@ -5,6 +5,13 @@
  */
 
 import type { AssetListParams } from "./getters";
+import type { StackIdentity } from "@btst/stack/context";
+
+/** Identity-aware partition used by protected Media browser and SSR queries. */
+export type MediaIdentityPartition =
+	| StackIdentity
+	| `pending:${number}`
+	| `error:${number}`;
 
 /**
  * Discriminator for the asset list cache key.
@@ -40,11 +47,31 @@ export function folderListDiscriminator(
 
 /** Full query key builders — use these with `queryClient.setQueryData()`. */
 export const MEDIA_QUERY_KEYS = {
-	assetsList: (params?: AssetListParams) =>
-		["mediaAssets", "list", assetListDiscriminator(params)] as const,
+	assetsList: (
+		params?: AssetListParams,
+		identityPartition?: MediaIdentityPartition,
+	) =>
+		identityPartition === undefined
+			? (["mediaAssets", "list", assetListDiscriminator(params)] as const)
+			: ([
+					"mediaAssets",
+					"list",
+					assetListDiscriminator(params),
+					{ identity: identityPartition },
+				] as const),
 
 	assetDetail: (id: string) => ["mediaAssets", "detail", id] as const,
 
-	foldersList: (parentId?: string | null) =>
-		["mediaFolders", "list", folderListDiscriminator(parentId)] as const,
+	foldersList: (
+		parentId?: string | null,
+		identityPartition?: MediaIdentityPartition,
+	) =>
+		identityPartition === undefined
+			? (["mediaFolders", "list", folderListDiscriminator(parentId)] as const)
+			: ([
+					"mediaFolders",
+					"list",
+					folderListDiscriminator(parentId),
+					{ identity: identityPartition },
+				] as const),
 };
