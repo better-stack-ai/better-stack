@@ -556,10 +556,10 @@ Every transport uses the same operation lifecycle:
 4. Recheck authoritative state, then run domain hooks and the storage/database work.
 5. Run after/error lifecycle hooks.
 
-`stack.forRequest(request).api.media.*` follows that entire lifecycle.
-`stack.internal.media.*` is for trusted server jobs: it skips only user
+`stack.forRequest(request).operations.media.*` follows that entire lifecycle.
+`stack.trusted.media.*` is for trusted server jobs: it skips only user
 authorization and still runs validation, storage/domain hooks, cleanup, and
-ordering. Internal child-folder and asset writes inherit the tenant of their
+ordering. Nested child-folder and asset writes inherit the tenant of their
 authoritatively loaded parent folder. Omitting `auth` leaves request operations
 permissive; configure server authorization to enforce the catalog.
 
@@ -598,7 +598,7 @@ Assets and folders each carry an optional `tenantId` column. The `resolveTenantI
 Returning `null` or `undefined` from `resolveTenantId` disables collection and
 record lookup scoping for that request, which is useful for super-admin routes.
 It does not allow a folder or asset to be reparented across tenant boundaries;
-use the trusted raw migration helpers for an intentional cross-tenant move.
+use the raw migration helpers for an intentional cross-tenant move.
 
 ### Configuration
 
@@ -667,7 +667,7 @@ name, an optional parent folder, and an optional tenant. Pass `null` for
 
 These lower-level primitives intentionally bypass operation authorization,
 validation, and lifecycle hooks; keep them inside trusted adapter-owned
-automation. Use `app.internal.media` for ordinary trusted business calls that
+automation. Use `app.trusted.media` for ordinary trusted business calls that
 should retain the complete operation lifecycle.
 
 ## API Reference
@@ -867,7 +867,7 @@ The picker deliberately uses the infinite asset resource directly instead of the
 
 ## Server-side Data Access
 
-Use `app.forRequest(request).api.media` for user-driven calls and `app.internal.media` for explicitly trusted jobs. Both use the maintained operations; internal calls skip user authorization but retain validation, tenant resolution, authoritative facts, storage/domain behavior, and hooks. `app.api.media` contains only the tenant-free SSG `prefetchForRoute` helper.
+Use `app.forRequest(request).operations.media` for user-driven calls and `app.trusted.media` for explicitly trusted jobs. Both use the maintained operations; trusted calls skip user authorization but retain validation, tenant resolution, authoritative facts, storage/domain behavior, and hooks. `app.raw.media` contains only the tenant-free SSG `prefetchForRoute` helper.
 
 Standalone getter and mutation exports remain lower-level adapter primitives for plugin internals and migrations whose caller owns authorization and lifecycle composition.
 
@@ -915,10 +915,10 @@ Standalone getter and mutation exports remain lower-level adapter primitives for
 
 ## Static Site Generation (SSG)
 
-The trusted raw API can prefetch the initial library without a live HTTP server:
+The raw SSG helper can prefetch the initial library without a live HTTP server:
 
 ```ts
-await appStack.api.media.prefetchForRoute("library", queryClient)
+await appStack.raw.media.prefetchForRoute("library", queryClient)
 ```
 
 This seeds the same anonymous asset/folder keys used by the browser and strips

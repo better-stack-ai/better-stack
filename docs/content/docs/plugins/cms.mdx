@@ -770,7 +770,7 @@ The same operation pipeline backs all authoritative application surfaces:
 
 ```ts
 // Identity comes from this request; authorization is enforced.
-await myStack.forRequest(request).api.cms.updateContentItem({
+await myStack.forRequest(request).operations.cms.updateContentItem({
   typeSlug: "product",
   id: productId,
   body: { data: { name: "Updated" } },
@@ -778,13 +778,13 @@ await myStack.forRequest(request).api.cms.updateContentItem({
 
 // Trusted application code skips only user authorization. Validation,
 // fact derivation, execution, and lifecycle hooks still run.
-await myStack.internal.cms.deleteContentItem({
+await myStack.trusted.cms.deleteContentItem({
   typeSlug: "product",
   id: productId,
 })
 ```
 
-`myStack.api.cms` contains only the SSG `prefetchForRoute` helper. Use `forRequest(request).api.cms` for request work and `internal.cms` for explicitly trusted jobs; both retain validation and lifecycle behavior.
+`myStack.raw.cms` contains only the SSG `prefetchForRoute` helper. Use `forRequest(request).operations.cms` for request work and `trusted.cms` for explicitly trusted jobs; both retain validation and lifecycle behavior.
 
 Inline `_new` relation values are compound writes. Request-scoped create and
 update operations authorize `cms.record.create` for every server-derived target
@@ -793,7 +793,7 @@ relation rows atomically. Existing `{ id }` relation values are resolved against
 the configured target content type and require `cms.record.read` for the
 authoritative target facts. The operation rejects wrong-type IDs and rechecks
 target ownership before the transaction writes a relation. Trusted
-`internal.cms` calls skip those user checks but keep the same validation and
+`trusted.cms` calls skip those user checks but keep the same validation and
 transaction lifecycle.
 
 Compound reads fail closed too. A populated-record operation authorizes every
@@ -1435,18 +1435,18 @@ const result = zodSchema.safeParse(data)
 Use the operation surfaces for application business calls:
 
 ```ts
-const types = await myStack.internal.cms.listContentTypes({})
-const items = await myStack.internal.cms.listContentItems({
+const types = await myStack.trusted.cms.listContentTypes({})
+const items = await myStack.trusted.cms.listContentItems({
   typeSlug: "posts",
   query: { limit: 10 },
 })
-await myStack.forRequest(request).api.cms.createContentItem({
+await myStack.forRequest(request).operations.cms.createContentItem({
   typeSlug: "client-profile",
   body: { slug, data },
 })
 ```
 
-`forRequest(request).api.cms` enforces authorization. `internal.cms` is the explicit trusted surface and still runs validation, authoritative fact derivation, relation planning, transactions, and lifecycle hooks. `myStack.api.cms` is reserved for `prefetchForRoute`.
+`forRequest(request).operations.cms` enforces authorization. `trusted.cms` is the explicit trusted surface and still runs validation, authoritative fact derivation, relation planning, transactions, and lifecycle hooks. `myStack.raw.cms` is reserved for `prefetchForRoute`.
 
 Standalone getters and `createCMSContentItem(adapter, ...)` remain lower-level adapter primitives for plugin internals and migrations whose caller intentionally owns validation and lifecycle composition.
 
@@ -1479,7 +1479,7 @@ import type { Metadata } from "next"
 
 // Generate one static page per content type slug
 export async function generateStaticParams() {
-  const types = await myStack.internal.cms.listContentTypes({})
+  const types = await myStack.trusted.cms.listContentTypes({})
   return types.map((t) => ({ typeSlug: t.slug }))
 }
 
@@ -1490,7 +1490,7 @@ export async function generateMetadata(
   const stackClient = getStackClient(queryClient)
   const route = stackClient.router.getRoute(normalizePath(["cms", params.typeSlug]))
   if (!route) return { title: "Content" }
-  await myStack.api.cms.prefetchForRoute("contentList", queryClient, { typeSlug: params.typeSlug })
+  await myStack.raw.cms.prefetchForRoute("contentList", queryClient, { typeSlug: params.typeSlug })
   return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
 }
 
@@ -1499,7 +1499,7 @@ export default async function ContentListPage({ params }: { params: { typeSlug: 
   const stackClient = getStackClient(queryClient)
   const route = stackClient.router.getRoute(normalizePath(["cms", params.typeSlug]))
   if (!route) return null
-  await myStack.api.cms.prefetchForRoute("contentList", queryClient, { typeSlug: params.typeSlug })
+  await myStack.raw.cms.prefetchForRoute("contentList", queryClient, { typeSlug: params.typeSlug })
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <route.PageComponent />

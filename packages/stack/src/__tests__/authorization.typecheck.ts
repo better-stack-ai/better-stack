@@ -362,7 +362,7 @@ const passthroughStack = stack({
 });
 const passthroughResponse = passthroughStack
 	.forRequest(new Request("https://example.test"))
-	.api.passthrough.stream({ id: "article-1" });
+	.operations.passthrough.stream({ id: "article-1" });
 const passthroughResponseIsExact: Expect<
 	Equal<Awaited<typeof passthroughResponse>, Response>
 > = true;
@@ -384,7 +384,7 @@ const blogStack = stack({
 	auth: blogServerAuth,
 });
 
-type BlogOperationKeys = keyof typeof blogStack.internal.blog;
+type BlogOperationKeys = keyof typeof blogStack.trusted.blog;
 const blogOperationKeysAreExact: Expect<
 	Equal<
 		BlogOperationKeys,
@@ -488,10 +488,10 @@ const commentsStack = stack({
 	auth: commentsServerAuth,
 });
 
-// @ts-expect-error Comments has no ambiguous raw stack.api business surface
-commentsStack.api.comments;
+// @ts-expect-error Comments has no ambiguous raw stack.raw business surface
+commentsStack.raw.comments;
 
-type CommentsOperationKeys = keyof typeof commentsStack.internal.comments;
+type CommentsOperationKeys = keyof typeof commentsStack.trusted.comments;
 const commentsOperationKeysAreExact: Expect<
 	Equal<
 		CommentsOperationKeys,
@@ -508,8 +508,11 @@ void commentsOperationKeysAreExact;
 
 commentsStack
 	.forRequest(new Request("https://example.test"))
-	.api.comments.updateComment({ id: "comment-1", data: { body: "Updated" } });
-commentsStack.internal.comments.createComment({
+	.operations.comments.updateComment({
+		id: "comment-1",
+		data: { body: "Updated" },
+	});
+commentsStack.trusted.comments.createComment({
 	resourceId: "post-1",
 	resourceType: "post",
 	body: "Job comment",
@@ -517,19 +520,19 @@ commentsStack.internal.comments.createComment({
 });
 const requestComments = commentsStack.forRequest(
 	new Request("https://example.test"),
-).api.comments;
+).operations.comments;
 // @ts-expect-error raw getters are not exposed through request operations
 requestComments.getCommentById("comment-1");
-// @ts-expect-error raw getters are not exposed through the internal operation namespace
-commentsStack.internal.comments.getCommentById("comment-1");
+// @ts-expect-error raw getters are not exposed through the trusted operation namespace
+commentsStack.trusted.comments.getCommentById("comment-1");
 // @ts-expect-error raw mutation exports are not exposed through request operations
 requestComments.toggleCommentLike("comment-1", "user-1");
-// @ts-expect-error raw mutation exports are not exposed through the internal operation namespace
-commentsStack.internal.comments.toggleCommentLike("comment-1", "user-1");
+// @ts-expect-error raw mutation exports are not exposed through the trusted operation namespace
+commentsStack.trusted.comments.toggleCommentLike("comment-1", "user-1");
 // @ts-expect-error app-authored raw prefetch is not a maintained request operation
 requestComments.prefetchForRoute("/comments");
-// @ts-expect-error app-authored raw prefetch is not an internal operation
-commentsStack.internal.comments.prefetchForRoute("/comments");
+// @ts-expect-error app-authored raw prefetch is not a trusted operation
+commentsStack.trusted.comments.prefetchForRoute("/comments");
 
 declare const aiChatPlugin: ReturnType<typeof aiChatBackendPlugin>;
 declare const cmsPlugin: ReturnType<typeof cmsBackendPlugin>;
@@ -547,20 +550,26 @@ const contractedStack = stack({
 	},
 	adapter: fakeAdapter,
 });
-// @ts-expect-error AI Chat has no ambiguous raw stack.api business namespace
-contractedStack.api.aiChat;
-// @ts-expect-error Comments has no ambiguous raw stack.api business namespace
-contractedStack.api.comments;
-// @ts-expect-error Blog stack.api exposes only prefetchForRoute
-contractedStack.api.blog.listPosts;
-// @ts-expect-error CMS stack.api exposes only prefetchForRoute
-contractedStack.api.cms.listContentItems;
-// @ts-expect-error Form Builder stack.api exposes only prefetchForRoute
-contractedStack.api.formBuilder.listForms;
-// @ts-expect-error Kanban stack.api exposes only prefetchForRoute
-contractedStack.api.kanban.listBoards;
-// @ts-expect-error Media stack.api exposes only prefetchForRoute
-contractedStack.api.media.listAssets;
+// @ts-expect-error removed: lower-level helpers live under stack.raw
+contractedStack.api;
+// @ts-expect-error removed: trusted operations live under stack.trusted
+contractedStack.internal;
+// @ts-expect-error removed: request operations use the explicit operations key
+contractedStack.forRequest(new Request("https://example.test")).api;
+// @ts-expect-error AI Chat has no ambiguous raw stack.raw business namespace
+contractedStack.raw.aiChat;
+// @ts-expect-error Comments has no ambiguous raw stack.raw business namespace
+contractedStack.raw.comments;
+// @ts-expect-error Blog stack.raw exposes only prefetchForRoute
+contractedStack.raw.blog.listPosts;
+// @ts-expect-error CMS stack.raw exposes only prefetchForRoute
+contractedStack.raw.cms.listContentItems;
+// @ts-expect-error Form Builder stack.raw exposes only prefetchForRoute
+contractedStack.raw.formBuilder.listForms;
+// @ts-expect-error Kanban stack.raw exposes only prefetchForRoute
+contractedStack.raw.kanban.listBoards;
+// @ts-expect-error Media stack.raw exposes only prefetchForRoute
+contractedStack.raw.media.listAssets;
 
 stack({
 	basePath: "/api",
@@ -570,10 +579,12 @@ stack({
 	auth: unregisteredServerAuth,
 });
 
-blogStack.forRequest(new Request("https://example.test")).api.blog.listPosts({
-	published: true,
-});
-blogStack.internal.blog.updatePost({
+blogStack
+	.forRequest(new Request("https://example.test"))
+	.operations.blog.listPosts({
+		published: true,
+	});
+blogStack.trusted.blog.updatePost({
 	id: "post-1",
 	data: {
 		title: "Title",
@@ -584,13 +595,15 @@ blogStack.internal.blog.updatePost({
 		tags: [],
 	},
 });
-// @ts-expect-error Blog stack.api only exposes the narrow SSG prefetch helper
-blogStack.api.blog.getAllPosts();
-blogStack.forRequest(new Request("https://example.test")).api.blog.deletePost({
-	id: "post-1",
-	// @ts-expect-error request operations do not accept browser-supplied trusted facts
-	authorId: "spoofed-owner",
-});
+// @ts-expect-error Blog stack.raw only exposes the narrow SSG prefetch helper
+blogStack.raw.blog.getAllPosts();
+blogStack
+	.forRequest(new Request("https://example.test"))
+	.operations.blog.deletePost({
+		id: "post-1",
+		// @ts-expect-error request operations do not accept browser-supplied trusted facts
+		authorId: "spoofed-owner",
+	});
 
 const unregisteredAuthorization = defineAuthorization({
 	identity: z.object({ id: z.string() }),

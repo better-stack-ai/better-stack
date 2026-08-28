@@ -23,7 +23,7 @@ import type { createBoardSchema } from "./schemas";
  * one identity is never reused by another identity. Pending keys include the
  * current identity-resolution generation, so a new resolver or failed identity
  * check cannot reuse another resolution's response. `undefined` is shared by
- * anonymous requests and the explicitly trusted raw SSG prefetch path so
+ * anonymous requests and the explicit raw SSG prefetch path so
  * anonymous hydration works.
  */
 export type KanbanIdentityPartition =

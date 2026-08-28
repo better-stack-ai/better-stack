@@ -200,7 +200,7 @@ function createFormListLoader(config: FormBuilderClientConfig) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/form-builder] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.formBuilder.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.formBuilder.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else {
 					const errToStore = createSanitizedSSRLoaderError();
@@ -279,7 +279,7 @@ function createFormBuilderLoader(
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/form-builder] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.formBuilder.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.formBuilder.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else if (formQuery) {
 					const errToStore = createSanitizedSSRLoaderError();
@@ -360,7 +360,7 @@ function createSubmissionsLoader(
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/form-builder] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.formBuilder.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.formBuilder.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else {
 					const errToStore = createSanitizedSSRLoaderError();

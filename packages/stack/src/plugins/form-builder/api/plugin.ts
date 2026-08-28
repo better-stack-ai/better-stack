@@ -52,7 +52,7 @@ interface FormBuilderPrefetchForRoute {
 }
 
 /**
- * Trusted raw SSG path. It bypasses request authorization and seeds only the
+ * Raw SSG path. It bypasses request authorization and seeds only the
  * route data selected by the caller. Protected static output needs equivalent
  * deployment-level access controls.
  */
@@ -145,8 +145,8 @@ export const formBuilderBackendPlugin = (
 		operations: (adapter: Adapter) =>
 			createFormBuilderOperations(adapter, config.hooks),
 
-		/** Lower-level server API that intentionally bypasses auth and hooks. */
-		api: (adapter: Adapter) => ({
+		/** Lower-level SSG helper that intentionally bypasses auth and hooks. */
+		raw: (adapter: Adapter) => ({
 			prefetchForRoute: createFormBuilderPrefetchForRoute(adapter),
 		}),
 

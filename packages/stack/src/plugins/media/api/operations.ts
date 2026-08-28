@@ -771,7 +771,7 @@ function markMemoryRollback(adapter: Adapter, error: unknown) {
 /**
  * The published memory adapter rolls transactions back from a whole-database
  * clone, so overlapping callbacks can otherwise overwrite a later winner.
- * Serialize every access to the shared adapter, including trusted raw API
+ * Serialize every access to the shared adapter, including raw helper
  * calls, while preserving the adapter's real transaction behavior.
  */
 function serializeMemoryOperations(adapter: Adapter): Adapter {

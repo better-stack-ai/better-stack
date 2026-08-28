@@ -462,11 +462,11 @@ Missing rules deny in authorized mode. Anonymous denials return 401 and identifi
 The operation catalog also powers both server call styles:
 
 ```ts
-await app.forRequest(request).api.aiChat.deleteConversation({ id }) // authorized
-await app.internal.aiChat.deleteConversation({ id })                // trusted
+await app.forRequest(request).operations.aiChat.deleteConversation({ id }) // authorized
+await app.trusted.aiChat.deleteConversation({ id })                // trusted
 ```
 
-`internal` skips only user authorization. Input validation, authoritative reads, lifecycle hooks, persistence, and provider/tool behavior remain active. The raw getters documented below deliberately bypass authorization and lifecycle composition.
+`trusted` skips only user authorization. Input validation, authoritative reads, lifecycle hooks, persistence, and provider/tool behavior remain active. The raw getters documented below deliberately bypass authorization and lifecycle composition.
 
 ## API Reference
 
@@ -1162,7 +1162,7 @@ Rename, delete, and file-upload feedback uses the shared `notify` provider. Fiel
 
 ## Server-side Data Access
 
-AI Chat has no raw `stack.api.aiChat` business namespace. Use `app.forRequest(request).api.aiChat` for request-driven work and `app.internal.aiChat` for explicitly trusted jobs. Standalone conversation getters remain lower-level adapter primitives for plugin internals and migrations.
+AI Chat has no raw `stack.raw.aiChat` business namespace. Use `app.forRequest(request).operations.aiChat` for request-driven work and `app.trusted.aiChat` for explicitly trusted jobs. Standalone conversation getters remain lower-level adapter primitives for plugin internals and migrations.
 
 ## Route-Aware AI Context
 

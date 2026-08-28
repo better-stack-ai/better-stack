@@ -251,7 +251,7 @@ async function invokeProtectedOperation(
 	operation: ProtectedBlogOperation,
 	operationRequest: Request,
 ) {
-	const api = backend.forRequest(operationRequest).api.blog;
+	const api = backend.forRequest(operationRequest).operations.blog;
 	switch (operation) {
 		case "listPosts":
 			return api.listPosts({ published: false });
@@ -366,7 +366,7 @@ describe("Blog operation-first authorization", () => {
 							identity: { id: "admin-1", role: "admin" },
 						}),
 					)
-					.api.blog.listPosts({ slug: "protected-detail" });
+					.operations.blog.listPosts({ slug: "protected-detail" });
 			} else if (operation === "createPost") {
 				vi.spyOn(
 					blogPermissions.post.create.schema,
@@ -380,7 +380,7 @@ describe("Blog operation-first authorization", () => {
 							identity: { id: "admin-1", role: "admin" },
 						}),
 					)
-					.api.blog.createPost(protectedCreateInput);
+					.operations.blog.createPost(protectedCreateInput);
 			} else {
 				const post = await seedPost(backend, `facts-${operation}`, "admin-1");
 				vi.spyOn(backend.adapter, "findOne").mockRejectedValueOnce(
@@ -390,7 +390,7 @@ describe("Blog operation-first authorization", () => {
 					request("/protected", {
 						identity: { id: "admin-1", role: "admin" },
 					}),
-				).api.blog;
+				).operations.blog;
 				call =
 					operation === "updatePost"
 						? api.updatePost({
@@ -502,7 +502,7 @@ describe("Blog operation-first authorization", () => {
 					identity: { id: "author-1", role: "user" },
 				}),
 			)
-			.api.blog.listPosts({ slug: "owner-draft" });
+			.operations.blog.listPosts({ slug: "owner-draft" });
 		expect(ownerResult.items).toHaveLength(1);
 
 		const missing = await backend.handler(request("/posts?slug=missing"));
@@ -537,7 +537,7 @@ describe("Blog operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/posts?slug=new-draft"))
-				.api.blog.listPosts({ slug: "new-draft" }),
+				.operations.blog.listPosts({ slug: "new-draft" }),
 		).rejects.toMatchObject({
 			statusCode: 409,
 			code: "POST_READ_STATE_CHANGED",
@@ -564,14 +564,14 @@ describe("Blog operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/posts?slug=newly-private"))
-				.api.blog.listPosts({ slug: "newly-private" }),
+				.operations.blog.listPosts({ slug: "newly-private" }),
 		).rejects.toMatchObject({
 			statusCode: 409,
 			code: "POST_READ_STATE_CHANGED",
 		});
 	});
 
-	it("keeps public navigation and tags on the same HTTP/request/internal operations", async () => {
+	it("keeps public navigation and tags on the same HTTP/request/trusted operations", async () => {
 		const events: string[] = [];
 		const getIdentity = vi.fn(() => null);
 		const backend = makeBackend({
@@ -598,12 +598,12 @@ describe("Blog operation-first authorization", () => {
 		expect(
 			await backend
 				.forRequest(request(navigationPath))
-				.api.blog.getNextPreviousPosts(navigationInput),
+				.operations.blog.getNextPreviousPosts(navigationInput),
 		).toMatchObject({ previous: { slug: "navigation-post" }, next: null });
 
 		getIdentity.mockClear();
 		expect(
-			await backend.internal.blog.getNextPreviousPosts(navigationInput),
+			await backend.trusted.blog.getNextPreviousPosts(navigationInput),
 		).toMatchObject({ previous: { slug: "navigation-post" }, next: null });
 		expect(events).toEqual([
 			"before:published",
@@ -618,19 +618,19 @@ describe("Blog operation-first authorization", () => {
 		expect(tagsResponse.status).toBe(200);
 		expect(await tagsResponse.json()).toEqual([]);
 		expect(
-			await backend.forRequest(request("/tags")).api.blog.listTags({}),
+			await backend.forRequest(request("/tags")).operations.blog.listTags({}),
 		).toEqual([]);
 		getIdentity.mockClear();
-		expect(await backend.internal.blog.listTags({})).toEqual([]);
+		expect(await backend.trusted.blog.listTags({})).toEqual([]);
 
-		const internalDrafts = await backend.internal.blog.listPosts({
+		const trustedDrafts = await backend.trusted.blog.listPosts({
 			published: false,
 		});
-		expect(internalDrafts.items).toEqual([]);
+		expect(trustedDrafts.items).toEqual([]);
 		expect(getIdentity).not.toHaveBeenCalled();
 	});
 
-	it.each(["request", "internal"] as const)(
+	it.each(["request", "trusted"] as const)(
 		"invokes every renamed Blog lifecycle through %s execution",
 		async (transport) => {
 			const events: string[] = [];
@@ -680,8 +680,8 @@ describe("Blog operation-first authorization", () => {
 							request("/lifecycle", {
 								identity: { id: "author-1", role: "user" },
 							}),
-						).api.blog
-					: backend.internal.blog;
+						).operations.blog
+					: backend.trusted.blog;
 			const postInput = {
 				title: "Lifecycle post",
 				content: "Content",
@@ -757,13 +757,13 @@ describe("Blog operation-first authorization", () => {
 		},
 	);
 
-	it("uses trusted create/update facts across HTTP, request, and internal entry points", async () => {
+	it("uses trusted create/update facts across HTTP, request, and trusted entry points", async () => {
 		const events: string[] = [];
 		const backend = makeBackend({
 			auth: createAuth(),
 			hooks: {
 				onBeforeCreatePost: (_data, context) => {
-					events.push(`create:before:${context.identity?.id ?? "internal"}`);
+					events.push(`create:before:${context.identity?.id ?? "trusted"}`);
 					expect(context.facts).toEqual({
 						publish: context.input.published ? "published" : "draft",
 					});
@@ -774,7 +774,7 @@ describe("Blog operation-first authorization", () => {
 				},
 				onBeforeUpdatePost: (_id, _data, context) => {
 					events.push(
-						`update:before:${context.identity?.id ?? "internal"}:${context.facts.publish}`,
+						`update:before:${context.identity?.id ?? "trusted"}:${context.facts.publish}`,
 					);
 				},
 				onAfterUpdatePost: (post, context) => {
@@ -817,16 +817,16 @@ describe("Blog operation-first authorization", () => {
 
 		const requestCreated = await backend
 			.forRequest(request("/posts", { method: "POST", identity: owner }))
-			.api.blog.createPost({
+			.operations.blog.createPost({
 				...createBody,
 				slug: "request-created-operation",
 			});
 		expect(requestCreated.authorId).toBe("author-1");
-		const internalCreated = await backend.internal.blog.createPost({
+		const trustedCreated = await backend.trusted.blog.createPost({
 			...createBody,
-			slug: "internal-created-operation",
+			slug: "trusted-created-operation",
 		});
-		expect(internalCreated.authorId).toBeUndefined();
+		expect(trustedCreated.authorId).toBeUndefined();
 
 		const eventsBeforeDeniedCreate = events.length;
 		const ownerPublishedCreate = await backend.handler(
@@ -893,7 +893,7 @@ describe("Blog operation-first authorization", () => {
 						identity: { id: "viewer-1", role: "user" },
 					}),
 				)
-				.api.blog.updatePost({
+				.operations.blog.updatePost({
 					id: created.id,
 					data: { ...createBody, title: "Spoofed" },
 				}),
@@ -901,7 +901,7 @@ describe("Blog operation-first authorization", () => {
 
 		await backend
 			.forRequest(request("/posts", { identity: owner }))
-			.api.blog.updatePost({
+			.operations.blog.updatePost({
 				id: created.id,
 				data: { ...createBody, title: "Owner edit" },
 			});
@@ -910,7 +910,7 @@ describe("Blog operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/posts", { identity: owner }))
-				.api.blog.updatePost({
+				.operations.blog.updatePost({
 					id: created.id,
 					data: { ...createBody, published: true },
 				}),
@@ -922,17 +922,17 @@ describe("Blog operation-first authorization", () => {
 					identity: { id: "admin-1", role: "admin" },
 				}),
 			)
-			.api.blog.updatePost({
+			.operations.blog.updatePost({
 				id: created.id,
 				data: { ...createBody, published: true },
 			});
 		expect(events).toContain("update:before:admin-1:publish");
 
-		await backend.internal.blog.updatePost({
+		await backend.trusted.blog.updatePost({
 			id: created.id,
 			data: createBody,
 		});
-		expect(events).toContain("update:before:internal:unpublish");
+		expect(events).toContain("update:before:trusted:unpublish");
 	});
 
 	it("does not apply a publish update when authoritative state changes after authorization", async () => {
@@ -958,7 +958,7 @@ describe("Blog operation-first authorization", () => {
 						identity: { id: "author-1", role: "user" },
 					}),
 				)
-				.api.blog.updatePost({
+				.operations.blog.updatePost({
 					id: post.id,
 					data: { ...protectedCreateInput, published: true },
 				}),
@@ -1060,13 +1060,13 @@ describe("Blog delete one-rule authorization tracer", () => {
 		await expect(
 			backend
 				.forRequest(deleteRequest(post.id, { id: "viewer-1", role: "user" }))
-				.api.blog.deletePost({ id: post.id }),
+				.operations.blog.deletePost({ id: post.id }),
 		).rejects.toMatchObject({ statusCode: 403 });
 		expect(await postExists(backend, post.id)).toBe(true);
 
 		await backend
 			.forRequest(deleteRequest(post.id, { id: "author-1", role: "user" }))
-			.api.blog.deletePost({ id: post.id });
+			.operations.blog.deletePost({ id: post.id });
 		expect(hookContext).toMatchObject({
 			identity: { id: "author-1", role: "user" },
 			input: { id: post.id },
@@ -1095,7 +1095,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 			id: "viewer-1",
 			role: "user",
 		});
-		const requestApi = backend.forRequest(request).api.blog;
+		const requestApi = backend.forRequest(request).operations.blog;
 
 		await expect(requestApi.deletePost({ id: viewerPost.id })).rejects.toThrow(
 			"Cannot assign to read only property",
@@ -1109,7 +1109,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 		expect(await postExists(backend, otherPost.id)).toBe(true);
 	});
 
-	it("keeps trusted internal calls validated and lifecycle-aware without resolving identity", async () => {
+	it("keeps trusted calls validated and lifecycle-aware without resolving identity", async () => {
 		const events: string[] = [];
 		const getIdentity = vi.fn(() => ({
 			id: "viewer-1",
@@ -1135,15 +1135,15 @@ describe("Blog delete one-rule authorization tracer", () => {
 				},
 			},
 		});
-		const post = await seedPost(backend, "internal-post");
+		const post = await seedPost(backend, "trusted-post");
 
-		await backend.internal.blog.deletePost({ id: post.id });
+		await backend.trusted.blog.deletePost({ id: post.id });
 
 		expect(events).toEqual([`before:${post.id}`, `after:${post.id}`]);
 		expect(getIdentity).not.toHaveBeenCalled();
 		expect(await postExists(backend, post.id)).toBe(false);
 		await expect(
-			backend.internal.blog.deletePost({ id: 1 } as never),
+			backend.trusted.blog.deletePost({ id: 1 } as never),
 		).rejects.toBeInstanceOf(z.ZodError);
 		expect(events).toEqual([`before:${post.id}`, `after:${post.id}`]);
 	});
@@ -1159,7 +1159,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 		);
 
 		await expect(
-			backend.internal.blog.deletePost({ id: post.id }),
+			backend.trusted.blog.deletePost({ id: post.id }),
 		).rejects.toThrow("database unavailable");
 
 		expect(onErrorDeletePost).not.toHaveBeenCalled();
@@ -1188,7 +1188,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 		await expect(
 			backend
 				.forRequest(deleteRequest(post.id, { id: "author-1", role: "user" }))
-				.api.blog.deletePost({ id: post.id }),
+				.operations.blog.deletePost({ id: post.id }),
 		).rejects.toThrow("delete unavailable");
 
 		expect(events).toEqual([
@@ -1212,9 +1212,9 @@ describe("Blog delete one-rule authorization tracer", () => {
 			"delete unavailable",
 		);
 
-		await expect(
-			backend.internal.blog.deletePost({ id: post.id }),
-		).rejects.toBe("delete unavailable");
+		await expect(backend.trusted.blog.deletePost({ id: post.id })).rejects.toBe(
+			"delete unavailable",
+		);
 		expect(observedError).toBeInstanceOf(Error);
 		expect(observedError?.message).toBe("delete unavailable");
 	});
@@ -1256,7 +1256,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 		await expect(
 			identityFailure
 				.forRequest(deleteRequest(identityFailurePost.id))
-				.api.blog.deletePost({ id: identityFailurePost.id }),
+				.operations.blog.deletePost({ id: identityFailurePost.id }),
 		).rejects.toThrow("session unavailable");
 		expect(await postExists(identityFailure, identityFailurePost.id)).toBe(
 			true,
@@ -1305,7 +1305,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 		await expect(
 			ruleFailure
 				.forRequest(deleteRequest(ruleFailurePost.id))
-				.api.blog.deletePost({ id: ruleFailurePost.id }),
+				.operations.blog.deletePost({ id: ruleFailurePost.id }),
 		).rejects.toThrow("policy unavailable");
 		expect(ruleLifecycleEvents).toEqual([]);
 		expect(
@@ -1353,7 +1353,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 		await expect(
 			missingRule
 				.forRequest(deleteRequest(missingRulePost.id))
-				.api.blog.deletePost({ id: missingRulePost.id }),
+				.operations.blog.deletePost({ id: missingRulePost.id }),
 		).rejects.toMatchObject({ statusCode: 403 });
 		expect(missingRuleLifecycleEvents).toEqual([]);
 		expect(

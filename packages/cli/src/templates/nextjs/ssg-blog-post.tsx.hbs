@@ -14,7 +14,7 @@ import { normalizePath, metaElementsToObject } from "@btst/stack/client"
 import type { Metadata } from "next"
 
 export async function generateStaticParams() {
-	const result = await myStack.internal.blog.listPosts({ published: true })
+	const result = await myStack.trusted.blog.listPosts({ published: true })
 	return result.items.map((post: { slug: string }) => ({ slug: post.slug }))
 }
 
@@ -30,7 +30,7 @@ export async function generateMetadata({
 	const stackClient = getStackClient(queryClient)
 	const route = stackClient.router.getRoute(normalizePath(["blog", slug]))
 	if (!route) return { title: slug }
-	await myStack.api.blog.prefetchForRoute("post", queryClient, { slug })
+	await myStack.raw.blog.prefetchForRoute("post", queryClient, { slug })
 	return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
 }
 
@@ -44,7 +44,7 @@ export default async function SsgBlogPostPage({
 	const stackClient = getStackClient(queryClient)
 	const route = stackClient.router.getRoute(normalizePath(["blog", slug]))
 	if (!route) notFound()
-	await myStack.api.blog.prefetchForRoute("post", queryClient, { slug })
+	await myStack.raw.blog.prefetchForRoute("post", queryClient, { slug })
 	return (
 		<HydrationBoundary state={dehydrate(queryClient)}>
 			{route.PageComponent && <route.PageComponent />}

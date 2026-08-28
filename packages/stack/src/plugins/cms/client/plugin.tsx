@@ -198,7 +198,7 @@ function createDashboardLoader(config: CMSClientConfig) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/cms] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.cms.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.cms.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else {
 					const errToStore = createSanitizedSSRLoaderError();
@@ -281,7 +281,7 @@ function createContentListLoader(typeSlug: string, config: CMSClientConfig) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/cms] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.cms.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.cms.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else {
 					const errToStore = createSanitizedSSRLoaderError();
@@ -369,7 +369,7 @@ function createContentEditorLoader(
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/cms] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.cms.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.cms.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else {
 					const errToStore = createSanitizedSSRLoaderError();

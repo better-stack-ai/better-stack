@@ -69,12 +69,12 @@ describe("symmetric stack constructors", () => {
 			);
 			expect(endpointNames).toContain("probe_echo");
 			await expect(
-				backend.internal.probe.echo({ value: "internal" }),
-			).resolves.toEqual({ value: "internal" });
+				backend.trusted.probe.echo({ value: "trusted" }),
+			).resolves.toEqual({ value: "trusted" });
 			await expect(
 				backend
 					.forRequest(new Request("https://example.com/api"))
-					.api.probe.echo({ value: "request" }),
+					.operations.probe.echo({ value: "request" }),
 			).resolves.toEqual({ value: "request" });
 
 			const response = await backend.handler(

@@ -153,7 +153,7 @@ describe("OpenAPI route introspection", () => {
 		).toBe(404);
 	});
 
-	it("emits deterministic safe access metadata without exposing internal operations or rule inputs", async () => {
+	it("emits deterministic safe access metadata without exposing trusted operations or rule inputs", async () => {
 		const permissions = definePermissions("metadata", {
 			read: permission(z.object({ authoritativeSecret: z.string() })),
 			publicRead: permission(),

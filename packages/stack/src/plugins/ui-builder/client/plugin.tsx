@@ -117,7 +117,7 @@ function createPageListLoader(config: UIBuilderClientConfig) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/ui-builder] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.cms.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.cms.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else {
 					const errToStore = createSanitizedSSRLoaderError();
@@ -195,7 +195,7 @@ function createPageBuilderLoader(
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/ui-builder] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.cms.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.cms.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else if (pageQuery) {
 					const errToStore = createSanitizedSSRLoaderError();

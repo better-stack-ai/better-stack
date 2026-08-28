@@ -55,10 +55,10 @@ export const CommentListQuerySchema = z.object({
 });
 
 /**
- * Internal params schema used by `listComments()` and the `api` factory.
+ * Lower-level params schema used by `listComments()`.
  * Extends the HTTP query schema with `currentUserId`, which is always injected
  * server-side (by the maintained operation from request identity, or by a
- * trusted raw data-layer caller such as a Server Component or cron job).
+ * raw data-layer caller such as a Server Component or cron job).
  */
 export const CommentListParamsSchema = CommentListQuerySchema.extend({
 	currentUserId: z.string().optional(),

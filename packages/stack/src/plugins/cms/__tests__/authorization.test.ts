@@ -160,14 +160,14 @@ function makeBackend(options?: {
 }
 
 function allContentTypes(backend: ReturnType<typeof makeBackend>) {
-	return backend.internal.cms.listContentTypes({});
+	return backend.trusted.cms.listContentTypes({});
 }
 
 function allContentItems(
 	backend: ReturnType<typeof makeBackend>,
 	typeSlug: string,
 ) {
-	return backend.internal.cms.listContentItems({ typeSlug, query: {} });
+	return backend.trusted.cms.listContentItems({ typeSlug, query: {} });
 }
 
 function request(
@@ -286,19 +286,19 @@ describe("CMS authorization inventory", () => {
 		}
 	});
 
-	it("keeps raw SSG helpers out of request and internal operation namespaces", async () => {
+	it("keeps raw SSG helpers out of request and trusted operation namespaces", async () => {
 		const backend = makeBackend();
 		const operationRequest = request("/content-types");
-		expect(typeof backend.api.cms.prefetchForRoute).toBe("function");
+		expect(typeof backend.raw.cms.prefetchForRoute).toBe("function");
 		expect(
-			"prefetchForRoute" in backend.forRequest(operationRequest).api.cms,
+			"prefetchForRoute" in backend.forRequest(operationRequest).operations.cms,
 		).toBe(false);
-		expect("prefetchForRoute" in backend.internal.cms).toBe(false);
+		expect("prefetchForRoute" in backend.trusted.cms).toBe(false);
 	});
 });
 
 describe("CMS operation-first authorization", () => {
-	it("keeps public reads explicit and preserves HTTP/request/internal parity", async () => {
+	it("keeps public reads explicit and preserves HTTP/request/trusted parity", async () => {
 		const backend = makeBackend({ auth: createAuth() });
 		const seeded = await seedRecord(backend, {
 			slug: "public-article",
@@ -310,13 +310,13 @@ describe("CMS operation-first authorization", () => {
 		expect((await http.json()).items).toHaveLength(1);
 		const requestResult = await backend
 			.forRequest(request("/content/article"))
-			.api.cms.listContentItems({ typeSlug: "article", query: {} });
+			.operations.cms.listContentItems({ typeSlug: "article", query: {} });
 		expect(requestResult.items[0]?.id).toBe(seeded.id);
-		const internalResult = await backend.internal.cms.listContentItems({
+		const trustedResult = await backend.trusted.cms.listContentItems({
 			typeSlug: "article",
 			query: {},
 		});
-		expect(internalResult.items[0]?.id).toBe(seeded.id);
+		expect(trustedResult.items[0]?.id).toBe(seeded.id);
 		const httpCatalog = await backend.handler(request("/content-types"));
 		expect(httpCatalog.status).toBe(200);
 		expect(
@@ -326,7 +326,7 @@ describe("CMS operation-first authorization", () => {
 		).toBe(1);
 		const requestCatalog = await backend
 			.forRequest(request("/content-types"))
-			.api.cms.listContentTypes({});
+			.operations.cms.listContentTypes({});
 		expect(
 			requestCatalog.find((contentType) => contentType.slug === "article")
 				?.itemCount,
@@ -373,7 +373,7 @@ describe("CMS operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/content-types"))
-				.api.cms.listContentTypes({}),
+				.operations.cms.listContentTypes({}),
 		).rejects.toMatchObject({ statusCode: 403 });
 		expect(new Set(checkedCollections)).toEqual(
 			new Set([
@@ -385,7 +385,7 @@ describe("CMS operation-first authorization", () => {
 			]),
 		);
 
-		const trustedCatalog = await backend.internal.cms.listContentTypes({});
+		const trustedCatalog = await backend.trusted.cms.listContentTypes({});
 		expect(
 			trustedCatalog.find((contentType) => contentType.slug === "article")
 				?.itemCount,
@@ -427,7 +427,7 @@ describe("CMS operation-first authorization", () => {
 					expect(context.result).toBe(item);
 				},
 				onBeforeDeleteContent: (_id, context) => {
-					events.push(`delete:${context.identity?.id ?? "internal"}`);
+					events.push(`delete:${context.identity?.id ?? "trusted"}`);
 				},
 				onAfterDeleteContent: (_id, context) => {
 					events.push(`deleted:${context.result.success}`);
@@ -469,7 +469,7 @@ describe("CMS operation-first authorization", () => {
 					identity: { id: "author-1", role: "user" },
 				}),
 			)
-			.api.cms.updateContentItem({
+			.operations.cms.updateContentItem({
 				typeSlug: "article",
 				id: created.id,
 				body: { data: { title: "Owner update" } },
@@ -480,11 +480,11 @@ describe("CMS operation-first authorization", () => {
 		).toBe("Owner update");
 		expect(events).toContain("update:author-1");
 
-		await backend.internal.cms.deleteContentItem({
+		await backend.trusted.cms.deleteContentItem({
 			typeSlug: "article",
 			id: created.id,
 		});
-		expect(events).toContain("delete:internal");
+		expect(events).toContain("delete:trusted");
 		expect(events).toContain("deleted:true");
 		expect(
 			await backend.adapter.findOne({
@@ -494,7 +494,7 @@ describe("CMS operation-first authorization", () => {
 		).toBeFalsy();
 	});
 
-	it.each(["request", "internal"] as const)(
+	it.each(["request", "trusted"] as const)(
 		"invokes every canonical CMS mutation lifecycle through %s execution",
 		async (transport) => {
 			const events: string[] = [];
@@ -527,8 +527,8 @@ describe("CMS operation-first authorization", () => {
 							request("/lifecycle", {
 								identity: { id: "author-1", role: "user" },
 							}),
-						).api.cms
-					: backend.internal.cms;
+						).operations.cms
+					: backend.trusted.cms;
 			const created = await api.createContentItem({
 				typeSlug: "article",
 				body: {
@@ -1298,11 +1298,11 @@ describe("CMS operation-first authorization", () => {
 		expect(response.status).toBe(403);
 		expect(events).toEqual([]);
 
-		const internal = await backend.internal.cms.getContentItemPopulated({
+		const trusted = await backend.trusted.cms.getContentItemPopulated({
 			typeSlug: "resource",
 			id: source.id,
 		});
-		expect(internal._relations.categoryIds?.[0]?.id).toBe(target.id);
+		expect(trusted._relations.categoryIds?.[0]?.id).toBe(target.id);
 	});
 
 	it("does not return a populated target whose trusted facts change after authorization", async () => {
@@ -1888,10 +1888,12 @@ describe("CMS operation-first authorization", () => {
 			authorId: "author-1",
 		});
 		await expect(
-			identityFailure.forRequest(request("/delete")).api.cms.deleteContentItem({
-				typeSlug: "article",
-				id: identityRecord.id,
-			}),
+			identityFailure
+				.forRequest(request("/delete"))
+				.operations.cms.deleteContentItem({
+					typeSlug: "article",
+					id: identityRecord.id,
+				}),
 		).rejects.toThrow("session unavailable");
 
 		for (const [rule, expected] of [
@@ -1922,10 +1924,12 @@ describe("CMS operation-first authorization", () => {
 				authorId: "author-1",
 			});
 			const rejection = expect(
-				backend.forRequest(request("/delete")).api.cms.deleteContentItem({
-					typeSlug: "article",
-					id: record.id,
-				}),
+				backend
+					.forRequest(request("/delete"))
+					.operations.cms.deleteContentItem({
+						typeSlug: "article",
+						id: record.id,
+					}),
 			).rejects;
 			if (typeof expected === "string") await rejection.toThrow(expected);
 			else await rejection.toMatchObject(expected);
@@ -1936,13 +1940,13 @@ describe("CMS operation-first authorization", () => {
 			new Error("facts unavailable"),
 		);
 		await expect(
-			factFailure.internal.cms.deleteContentItem({
+			factFailure.trusted.cms.deleteContentItem({
 				typeSlug: "article",
 				id: "missing",
 			}),
 		).rejects.toThrow("facts unavailable");
 		await expect(
-			factFailure.internal.cms.deleteContentItem({
+			factFailure.trusted.cms.deleteContentItem({
 				typeSlug: "article",
 				id: 1,
 			} as never),
@@ -2087,7 +2091,7 @@ describe("CMS operation-first authorization", () => {
 						identity: { id: "author-1", role: "user" },
 					}),
 				)
-				.api.cms.updateContentItem({
+				.operations.cms.updateContentItem({
 					typeSlug: "resource",
 					id: record.id,
 					body: {

@@ -165,13 +165,13 @@ export interface ClientStackContext<
  * You can optionally provide a base schema via the dbSchema config option.
  *
  * @template TRoutes - The exact shape of routes this plugin provides (preserves keys and endpoint types)
- * @template TApi - The shape of the server-side API surface exposed via `createBackendStack().api`.
- *   Defaults to `never` so that plugins without an `api` factory are excluded from the
- *   `createBackendStack().api` namespace entirely, preventing accidental access of `undefined` at runtime.
+ * @template TRaw - The shape of the lower-level server surface exposed via `createBackendStack().raw`.
+ *   Defaults to `never` so that plugins without a `raw` factory are excluded from the
+ *   `createBackendStack().raw` namespace entirely, preventing accidental access of `undefined` at runtime.
  */
 export interface BackendPlugin<
 	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
-	TApi extends Record<string, (...args: any[]) => any> = never,
+	TRaw extends Record<string, (...args: any[]) => any> = never,
 	TOperations extends OperationRecord = never,
 	TId extends string = string,
 > {
@@ -201,16 +201,16 @@ export interface BackendPlugin<
 	dbPlugin: DbPlugin;
 
 	/**
-	 * Optional factory that returns server-side getter functions bound to the adapter.
-	 * The returned object is merged into `createBackendStack().api.<pluginName>.*` for direct
-	 * server-side or SSG data access without going through HTTP.
+	 * Optional factory that returns narrow lower-level helpers bound to the adapter.
+	 * The returned object is merged into `createBackendStack().raw.<pluginName>.*` for deliberate
+	 * lower-level or SSG data access without authorization or lifecycle composition.
 	 *
 	 * @param adapter - The adapter instance shared with `routes`
 	 */
-	api?: (adapter: Adapter) => TApi;
+	raw?: (adapter: Adapter) => TRaw;
 
 	/**
-	 * Define operations shared by HTTP, request-scoped, and internal calls.
+	 * Define operations shared by HTTP, request-scoped, and trusted calls.
 	 * When present, every composed route must resolve to a same-key operation,
 	 * an explicit operationRouteMap entry, or an infrastructure declaration.
 	 */
@@ -288,31 +288,31 @@ export type ClientPluginRegistration<
 	| ClientPluginDefinition<TOverrides, TRoutes, TId>;
 
 /**
- * Utility type that maps each plugin key to the return type of its `api` factory.
- * Plugin keys whose `TApi` resolves to `never` (i.e. plugins with no `api` factory)
+ * Utility type that maps each plugin key to the return type of its `raw` factory.
+ * Plugin keys whose `TRaw` resolves to `never` (i.e. plugins with no `raw` factory)
  * are excluded from the resulting type via key remapping, preventing TypeScript from
  * suggesting callable functions on what is actually `undefined` at runtime.
  */
-export type PluginApis<
+export type PluginRaw<
 	TPlugins extends Record<string, BackendPlugin<any, any, any>>,
 > = {
-	[K in keyof TPlugins as _ApiOf<TPlugins[K]> extends never
+	[K in keyof TPlugins as _RawOf<TPlugins[K]> extends never
 		? never
-		: K]: _ApiOf<TPlugins[K]>;
+		: K]: _RawOf<TPlugins[K]>;
 };
 
-/** @internal Extract the TApi parameter from a BackendPlugin type. */
-type _ApiOf<T> = T extends BackendPlugin<
+/** @internal Extract the TRaw parameter from a BackendPlugin type. */
+type _RawOf<T> = T extends BackendPlugin<
 	infer _TRoutes,
-	infer TApi,
+	infer TRaw,
 	infer _TOps
 >
-	? TApi
+	? TRaw
 	: never;
 
 type _OperationsOf<T> = T extends BackendPlugin<
 	infer _TRoutes,
-	infer _TApi,
+	infer _TRaw,
 	infer TOperations
 >
 	? TOperations
@@ -401,7 +401,7 @@ export interface BackendStackConfig<
 	 * Server authorization created by `createServerAuth()`. When set,
 	 * request operations evaluate their schema-backed permission after trusted
 	 * facts are derived. When omitted, request operations remain permissive;
-	 * use `internal` to make trusted intent explicit.
+	 * use `trusted` to make trusted intent explicit.
 	 */
 	auth?: TAuth;
 }
@@ -607,10 +607,10 @@ export type PrefixedPluginRoutes<
  */
 export interface BackendStack<
 	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
-	TApis extends Record<
+	TRaw extends Record<string, Record<string, (...args: any[]) => any>> = Record<
 		string,
 		Record<string, (...args: any[]) => any>
-	> = Record<string, Record<string, (...args: any[]) => any>>,
+	>,
 	TOperations extends Record<
 		string,
 		Record<string, (...args: any[]) => any>
@@ -621,12 +621,12 @@ export interface BackendStack<
 	dbSchema: DatabaseDefinition; // Better-db schema
 	/** The database adapter shared across all plugins */
 	adapter: Adapter;
-	/** Fully-typed server-side getter functions, namespaced per plugin */
-	api: TApis;
+	/** Narrow lower-level/SSG helpers that bypass operation composition. */
+	raw: TRaw;
 	/** User/request-scoped operations with automatic authorization. */
-	forRequest: (request: Request) => { api: TOperations };
+	forRequest: (request: Request) => { operations: TOperations };
 	/** Trusted operations that retain validation and lifecycle hooks. */
-	internal: TOperations;
+	trusted: TOperations;
 }
 
 /**
@@ -634,15 +634,15 @@ export interface BackendStack<
  */
 export type BackendLib<
 	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
-	TApis extends Record<
+	TRaw extends Record<string, Record<string, (...args: any[]) => any>> = Record<
 		string,
 		Record<string, (...args: any[]) => any>
-	> = Record<string, Record<string, (...args: any[]) => any>>,
+	>,
 	TOperations extends Record<
 		string,
 		Record<string, (...args: any[]) => any>
 	> = Record<string, Record<string, (...args: any[]) => any>>,
-> = BackendStack<TRoutes, TApis, TOperations>;
+> = BackendStack<TRoutes, TRaw, TOperations>;
 
 /**
  * Helper type to extract routes from a client plugin

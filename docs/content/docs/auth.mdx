@@ -242,7 +242,7 @@ without constructing a synthetic `Request`. Existing backend-only adapters can
 keep the request-aware `getIdentity({ request, headers })` callback, but those
 adapters are not accepted by headers-only layout helpers until adapted.
 
-Pass it to `stack({ auth: serverAuth })`. Every Blog HTTP route and its matching `myStack.forRequest(request).api.blog.*` method use the same operation and rule. Operations load authoritative post, author, and current publish facts before authorization, so client-supplied ownership or visibility facts are never trusted. Trusted jobs can call `myStack.internal.blog.*`; internal calls skip user authorization but retain input validation, trusted fact derivation, domain behavior, and lifecycle hooks.
+Pass it to `stack({ auth: serverAuth })`. Every Blog HTTP route and its matching `myStack.forRequest(request).operations.blog.*` method use the same operation and rule. Operations load authoritative post, author, and current publish facts before authorization, so client-supplied ownership or visibility facts are never trusted. Trusted jobs can call `myStack.trusted.blog.*`; trusted calls skip user authorization but retain input validation, trusted fact derivation, domain behavior, and lifecycle hooks.
 
 Ordinary denials become HTTP 401 for anonymous identities and 403 for authenticated identities. Identity validation and rule failures remain errors instead of being converted into denials.
 
@@ -456,8 +456,8 @@ Operations have no public `run({ internal: true })` escape hatch. Use only the
 transport-bound APIs:
 
 ```ts
-await myStack.forRequest(request).api.blog.updatePost({ id: postId, data });
-await myStack.internal.blog.updatePost({ id: postId, data });
+await myStack.forRequest(request).operations.blog.updatePost({ id: postId, data });
+await myStack.trusted.blog.updatePost({ id: postId, data });
 ```
 
 ## Client gates
@@ -507,10 +507,10 @@ const listPublished = defineOperation({
 Server transports share the same operation:
 
 - `app.handler(request)` for HTTP
-- `app.forRequest(request).api.blog.updatePost(...)` for an authenticated request in server code
-- `app.internal.blog.updatePost(...)` for an explicitly trusted job
+- `app.forRequest(request).operations.blog.updatePost(...)` for an authenticated request in server code
+- `app.trusted.blog.updatePost(...)` for an explicitly trusted job
 
-The request surface validates input, derives authoritative facts, resolves identity, evaluates the rule, then runs domain behavior and lifecycle hooks. The internal surface skips user authorization but keeps validation, fact derivation, domain behavior, and hooks. First-party `app.api` namespaces expose only narrow SSG `prefetchForRoute` helpers; raw business getters and mutations are not duplicated there.
+The request surface validates input, derives authoritative facts, resolves identity, evaluates the rule, then runs domain behavior and lifecycle hooks. The `trusted` surface skips user authorization but keeps validation, fact derivation, domain behavior, and hooks. First-party `app.raw` namespaces expose only narrow SSG `prefetchForRoute` helpers; raw business getters and mutations are not duplicated there.
 
 When server authorization is configured, stack composition rejects every HTTP
 route that is not bound to a same-key operation or explicitly declared as a
@@ -529,7 +529,7 @@ There is no authorization-result cache. Rules are boolean decisions, not row or 
 
 ## Lifecycle hooks are domain hooks
 
-Lifecycle hooks observe already-validated, deeply readonly operation context. They can enforce domain invariants, publish side effects, and record telemetry—not perform routine authorization or transform operation input. Use descriptor rules for access control. Request and internal operations both run the documented hook sequence; raw adapter primitives are lower-level implementation tools and do not promise that lifecycle.
+Lifecycle hooks observe already-validated, deeply readonly operation context. They can enforce domain invariants, publish side effects, and record telemetry—not perform routine authorization or transform operation input. Use descriptor rules for access control. Request and trusted operations both run the documented hook sequence; raw adapter primitives are lower-level implementation tools and do not promise that lifecycle.
 
 ## Managed and separate backends
 
@@ -623,12 +623,12 @@ await app.api.blog.getAllPosts();
 After:
 
 ```ts
-await app.forRequest(request).api.cms.createContentItem({ typeSlug: "article", body });
-await app.internal.blog.listPosts({});
-await app.api.blog.prefetchForRoute("posts", queryClient);
+await app.forRequest(request).operations.cms.createContentItem({ typeSlug: "article", body });
+await app.trusted.blog.listPosts({});
+await app.raw.blog.prefetchForRoute("posts", queryClient);
 ```
 
-Use `forRequest(request).api` for user-driven server work, `internal` for explicitly trusted work, and `app.api.*.prefetchForRoute` only for SSG prefetch. Lower-level exported adapter getters remain implementation primitives, not an authorization boundary.
+Use `forRequest(request).operations` for user-driven server work, `trusted` for explicitly trusted work, and `app.raw.*.prefetchForRoute` only for SSG prefetch. Lower-level exported adapter getters remain implementation primitives, not an authorization boundary.
 
 ### AI Chat backend access
 
@@ -682,7 +682,7 @@ const blogHooks: BlogBackendHooks = {
     audit(context.identity, context.facts),
 };
 
-await app.internal.comments.createComment({
+await app.trusted.comments.createComment({
   resourceId,
   resourceType: "article",
   body: "Automated note",
@@ -694,4 +694,4 @@ The generic Blog and Comments lifecycle context aliases and the Comments
 identity resolver option are removed. Use each hook's operation-specific,
 deeply readonly context. Request authorship comes from `createServerAuth`
 identity; hook return values never choose an author. Explicitly trusted
-`internal` and no-auth calls may provide `authorId` in the validated input.
+`trusted` and no-auth calls may provide `authorId` in the validated input.

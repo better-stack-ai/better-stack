@@ -111,7 +111,7 @@ const submitIntakeAssessment = tool({
 	execute: async (params) => {
 		if (!_stackRef) throw new Error("Stack not initialized");
 		const slug = `client-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-		await _stackRef.internal.cms.createContentItem({
+		await _stackRef.trusted.cms.createContentItem({
 			typeSlug: "client-profile",
 			body: {
 				slug,

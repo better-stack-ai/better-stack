@@ -270,7 +270,7 @@ describe("mediaBackendPlugin create-asset URL validation", () => {
 			"Client-supplied asset URLs are not allowed with localAdapter",
 		);
 
-		const assets = await backend.internal.media.listAssets({});
+		const assets = await backend.trusted.media.listAssets({});
 		expect(assets.items).toHaveLength(0);
 	});
 
@@ -291,7 +291,7 @@ describe("mediaBackendPlugin create-asset URL validation", () => {
 
 		expect(response.status).toBe(200);
 
-		const assets = await backend.internal.media.listAssets({});
+		const assets = await backend.trusted.media.listAssets({});
 		expect(assets.items).toHaveLength(1);
 		expect(assets.items[0]?.url).toBe(
 			"https://cdn.example.com/uploads/photo.jpg",
@@ -317,7 +317,7 @@ describe("mediaBackendPlugin create-asset URL validation", () => {
 
 		expect(response.status).toBe(200);
 
-		const assets = await backend.internal.media.listAssets({});
+		const assets = await backend.trusted.media.listAssets({});
 		expect(assets.items).toHaveLength(1);
 		expect(assets.items[0]?.url).toBe(
 			"https://images.example.net/affiliate/photo.jpg",
@@ -337,7 +337,7 @@ describe("mediaBackendPlugin create-asset URL validation", () => {
 
 		expect(httpResponse.status).toBe(200);
 
-		const updatedAssets = await backend.internal.media.listAssets({});
+		const updatedAssets = await backend.trusted.media.listAssets({});
 		expect(updatedAssets.items).toHaveLength(2);
 		expect(
 			updatedAssets.items.some((asset) => asset.url.startsWith("http://")),
@@ -477,7 +477,7 @@ describe("mediaBackendPlugin direct upload", () => {
 		expect(asset.url).toBe("/uploads/photo-123.jpg");
 		expect(asset.folderId).toBe(folder.id);
 
-		const assets = await backend.internal.media.listAssets({
+		const assets = await backend.trusted.media.listAssets({
 			folderId: folder.id,
 		});
 		expect(assets.items).toHaveLength(1);
@@ -517,7 +517,7 @@ describe("mediaBackendPlugin direct upload", () => {
 			"/uploads/will-be-rolled-back.jpg",
 		);
 
-		const assets = await backend.internal.media.listAssets({});
+		const assets = await backend.trusted.media.listAssets({});
 		expect(assets.items).toHaveLength(0);
 	});
 });
@@ -546,7 +546,7 @@ describe("mediaBackendPlugin asset deletion", () => {
 			"Failed to delete file from storage",
 		);
 
-		const assets = await backend.internal.media.listAssets({});
+		const assets = await backend.trusted.media.listAssets({});
 		expect(assets.items).toHaveLength(1);
 		expect(assets.items[0]?.id).toBe(asset.id);
 	});
@@ -795,7 +795,7 @@ describe("mediaBackendPlugin folder deletion route", () => {
 		expect(response.status).toBe(409);
 		await expect(response.text()).resolves.toContain("Cannot delete folder");
 
-		const folders = await backend.internal.media.listFolders({});
+		const folders = await backend.trusted.media.listFolders({});
 		expect(folders.some((folder) => folder.id === parent.id)).toBe(true);
 		expect(folders.some((folder) => folder.id === child.id)).toBe(true);
 	});

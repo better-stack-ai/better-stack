@@ -657,7 +657,7 @@ describe("composed endpoint inventory", () => {
 		});
 
 		await expect(
-			backend.internal.feature.internalOnly({ id: "1" }),
+			backend.trusted.feature.internalOnly({ id: "1" }),
 		).resolves.toBe("hidden");
 		expect(hiddenExecute).toHaveBeenCalledOnce();
 		const endpointNames = Object.keys(
@@ -684,7 +684,7 @@ describe("operation access semantics", () => {
 		await expect(
 			withoutAuth
 				.forRequest(new Request("http://localhost/api"))
-				.api.feature.read({
+				.operations.feature.read({
 					id: "1",
 				}),
 		).resolves.toBe("1");
@@ -706,7 +706,7 @@ describe("operation access semantics", () => {
 		await expect(
 			withAuth
 				.forRequest(new Request("http://localhost/api"))
-				.api.feature.read({
+				.operations.feature.read({
 					id: "1",
 				}),
 		).rejects.toMatchObject({ name: "AuthorizationError", statusCode: 401 });
@@ -723,7 +723,7 @@ describe("operation access semantics", () => {
 		await expect(
 			identified
 				.forRequest(new Request("http://localhost/api"))
-				.api.feature.read({ id: "1" }),
+				.operations.feature.read({ id: "1" }),
 		).rejects.toMatchObject({ name: "AuthorizationError", statusCode: 403 });
 	});
 
@@ -757,8 +757,8 @@ describe("operation access semantics", () => {
 			adapter: memoryAdapter,
 			auth: createServerAuth({ authorization, getIdentity: identity }),
 		});
-		const api = backend.forRequest(new Request("http://localhost/api")).api
-			.feature;
+		const api = backend.forRequest(new Request("http://localhost/api"))
+			.operations.feature;
 
 		await expect(api.publicRead({ id: "1" })).resolves.toBe("1");
 		expect(identity).not.toHaveBeenCalled();

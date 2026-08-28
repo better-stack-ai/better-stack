@@ -24,7 +24,7 @@ export async function generateMetadata(): Promise<Metadata> {
 	const stackClient = getStackClient(queryClient)
 	const route = stackClient.router.getRoute(normalizePath(["blog"]))
 	if (!route) return { title: "Blog" }
-	await myStack.api.blog.prefetchForRoute("posts", queryClient)
+	await myStack.raw.blog.prefetchForRoute("posts", queryClient)
 	return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
 }
 
@@ -33,7 +33,7 @@ export default async function SsgBlogListPage() {
 	const stackClient = getStackClient(queryClient)
 	const route = stackClient.router.getRoute(normalizePath(["blog"]))
 	if (!route) notFound()
-	await myStack.api.blog.prefetchForRoute("posts", queryClient)
+	await myStack.raw.blog.prefetchForRoute("posts", queryClient)
 	return (
 		<HydrationBoundary state={dehydrate(queryClient)}>
 			{route.PageComponent && <route.PageComponent />}

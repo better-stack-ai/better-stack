@@ -398,7 +398,7 @@ describe("Media operation-first authorization", () => {
 			hooks: {
 				onBeforeDeleteAsset: (asset, context) => {
 					events.push(
-						`before:${asset.filename}:${context.identity?.id ?? "internal"}`,
+						`before:${asset.filename}:${context.identity?.id ?? "trusted"}`,
 					);
 					if (asset.filename === "rejected.jpg") {
 						throw new Error("retention policy rejected deletion");
@@ -408,7 +408,7 @@ describe("Media operation-first authorization", () => {
 					events.push(`after:${context.identity?.id}`);
 				},
 				onError: (_error, context) => {
-					events.push(`error:${context.identity?.id ?? "internal"}`);
+					events.push(`error:${context.identity?.id ?? "trusted"}`);
 				},
 			},
 		});
@@ -421,9 +421,9 @@ describe("Media operation-first authorization", () => {
 
 		await backend
 			.forRequest(request("/delete", { identity: tenantMember }))
-			.api.media.deleteAsset({ id: requestedAsset.id });
+			.operations.media.deleteAsset({ id: requestedAsset.id });
 		await expect(
-			backend.internal.media.deleteAsset({ id: rejectedAsset.id }),
+			backend.trusted.media.deleteAsset({ id: rejectedAsset.id }),
 		).rejects.toMatchObject({
 			code: "DELETE_ASSET_REJECTED",
 			message: "retention policy rejected deletion",
@@ -432,8 +432,8 @@ describe("Media operation-first authorization", () => {
 		expect(events).toEqual([
 			`before:photo.jpg:${tenantMember.id}`,
 			`after:${tenantMember.id}`,
-			"before:rejected.jpg:internal",
-			"error:internal",
+			"before:rejected.jpg:trusted",
+			"error:trusted",
 		]);
 		expect(storage.delete).toHaveBeenCalledTimes(1);
 		await expect(
@@ -461,7 +461,7 @@ describe("Media operation-first authorization", () => {
 		expect(await response.json()).toMatchObject({ name: "Compatible" });
 		expect(events).toEqual(["before:anonymous"]);
 		await expect(
-			backend.internal.media.createFolder({ name: "" }),
+			backend.trusted.media.createFolder({ name: "" }),
 		).rejects.toBeInstanceOf(z.ZodError);
 		expect(events).toHaveLength(1);
 	});
@@ -529,10 +529,12 @@ describe("Media operation-first authorization", () => {
 		const capturedAsset = await seedAsset(captured, {
 			folderId: capturedFolder.id,
 		});
-		await captured.forRequest(request("/authorized")).api.media.updateAsset({
-			id: capturedAsset.id,
-			data: { alt: "Trusted" },
-		});
+		await captured
+			.forRequest(request("/authorized"))
+			.operations.media.updateAsset({
+				id: capturedAsset.id,
+				data: { alt: "Trusted" },
+			});
 		expect(facts).toContainEqual(
 			expect.objectContaining({
 				assetId: capturedAsset.id,
@@ -544,7 +546,10 @@ describe("Media operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/member", { identity: tenantMember }))
-				.api.media.updateAsset({ id: asset.id, data: { alt: "Allowed" } }),
+				.operations.media.updateAsset({
+					id: asset.id,
+					data: { alt: "Allowed" },
+				}),
 		).resolves.toMatchObject({ alt: "Allowed" });
 		const adminBackend = makeBackend({
 			auth: createAuth(),
@@ -554,7 +559,7 @@ describe("Media operation-first authorization", () => {
 		await expect(
 			adminBackend
 				.forRequest(request("/admin", { identity: admin }))
-				.api.media.deleteAsset({ id: adminAsset.id }),
+				.operations.media.deleteAsset({ id: adminAsset.id }),
 		).resolves.toEqual({ success: true });
 	});
 
@@ -577,7 +582,7 @@ describe("Media operation-first authorization", () => {
 		const asset = await seedAsset(backend, { folderId: folder.id });
 		const api = backend.forRequest(
 			request("/metadata-only", { identity: tenantMember }),
-		).api.media;
+		).operations.media;
 
 		await expect(
 			api.updateAsset({ id: asset.id, data: { alt: "Allowed" } }),
@@ -672,7 +677,7 @@ describe("Media operation-first authorization", () => {
 		).toBe(401);
 	});
 
-	it("keeps HTTP, forRequest, and internal on one validated lifecycle", async () => {
+	it("keeps HTTP, forRequest, and trusted on one validated lifecycle", async () => {
 		const events: string[] = [];
 		const getIdentity = vi.fn(() => tenantMember);
 		const backend = makeBackend({
@@ -680,7 +685,7 @@ describe("Media operation-first authorization", () => {
 			tenantId: "tenant-a",
 			hooks: {
 				onBeforeCreateFolder: (_input, context) => {
-					events.push(context.identity?.id ?? "internal");
+					events.push(context.identity?.id ?? "trusted");
 				},
 			},
 		});
@@ -697,16 +702,16 @@ describe("Media operation-first authorization", () => {
 		).toBe(200);
 		await backend
 			.forRequest(request("/request", { identity: tenantMember }))
-			.api.media.createFolder({ name: "Request" });
-		await backend.internal.media.createFolder({ name: "Internal" });
+			.operations.media.createFolder({ name: "Request" });
+		await backend.trusted.media.createFolder({ name: "Trusted" });
 		await expect(
-			backend.internal.media.createFolder({ name: "" }),
+			backend.trusted.media.createFolder({ name: "" }),
 		).rejects.toBeInstanceOf(z.ZodError);
-		expect(events).toEqual([tenantMember.id, tenantMember.id, "internal"]);
+		expect(events).toEqual([tenantMember.id, tenantMember.id, "trusted"]);
 		expect(getIdentity).toHaveBeenCalledTimes(2);
 	});
 
-	it("inherits authoritative folder tenants for internal writes and rejects cross-tenant moves", async () => {
+	it("inherits authoritative folder tenants for trusted writes and rejects cross-tenant moves", async () => {
 		const uploadFacts: unknown[] = [];
 		const backend = makeBackend({
 			tenantId: "tenant-a",
@@ -717,11 +722,11 @@ describe("Media operation-first authorization", () => {
 			},
 		});
 		const parent = await seedFolder(backend, { name: "Tenant A parent" });
-		const child = await backend.internal.media.createFolder({
-			name: "Internal child",
+		const child = await backend.trusted.media.createFolder({
+			name: "Trusted child",
 			parentId: parent.id,
 		});
-		const finalized = await backend.internal.media.createAsset({
+		const finalized = await backend.trusted.media.createAsset({
 			filename: "finalized.jpg",
 			originalName: "finalized.jpg",
 			mimeType: "image/jpeg",
@@ -729,7 +734,7 @@ describe("Media operation-first authorization", () => {
 			url: "https://files.example/finalized.jpg",
 			folderId: child.id,
 		});
-		const direct = await backend.internal.media.uploadDirect({
+		const direct = await backend.trusted.media.uploadDirect({
 			filename: "direct.jpg",
 			mimeType: "image/jpeg",
 			size: 5,
@@ -761,7 +766,7 @@ describe("Media operation-first authorization", () => {
 			tenantId: "tenant-b",
 		});
 		await expect(
-			backend.internal.media.updateAsset({
+			backend.trusted.media.updateAsset({
 				id: finalized.id,
 				data: { folderId: foreign.id },
 			}),
@@ -786,12 +791,14 @@ describe("Media operation-first authorization", () => {
 		});
 		const s3Folder = await seedFolder(s3Backend, { name: "S3 tenant folder" });
 		await expect(
-			s3Backend.forRequest(request("/unscoped-s3")).api.media.uploadToken({
-				filename: "token.jpg",
-				mimeType: "image/jpeg",
-				size: 5,
-				folderId: s3Folder.id,
-			}),
+			s3Backend
+				.forRequest(request("/unscoped-s3"))
+				.operations.media.uploadToken({
+					filename: "token.jpg",
+					mimeType: "image/jpeg",
+					size: 5,
+					folderId: s3Folder.id,
+				}),
 		).resolves.toMatchObject({ type: "presigned-url" });
 		expect(s3Facts).toEqual([
 			expect.objectContaining({
@@ -865,7 +872,7 @@ describe("Media operation-first authorization", () => {
 		await expect(
 			missingBackend
 				.forRequest(request("/missing", { identity: tenantMember }))
-				.api.media.updateAsset({
+				.operations.media.updateAsset({
 					id: missingAsset.id,
 					data: { alt: "Denied" },
 				}),
@@ -880,10 +887,12 @@ describe("Media operation-first authorization", () => {
 		});
 		const identityAsset = await seedAsset(identityBackend);
 		await expect(
-			identityBackend.forRequest(request("/identity")).api.media.updateAsset({
-				id: identityAsset.id,
-				data: { alt: "Denied" },
-			}),
+			identityBackend
+				.forRequest(request("/identity"))
+				.operations.media.updateAsset({
+					id: identityAsset.id,
+					data: { alt: "Denied" },
+				}),
 		).rejects.toThrow("session unavailable");
 
 		const failingRule = defineAuthorization({
@@ -904,7 +913,7 @@ describe("Media operation-first authorization", () => {
 		await expect(
 			ruleBackend
 				.forRequest(request("/rule", { identity: tenantMember }))
-				.api.media.updateAsset({
+				.operations.media.updateAsset({
 					id: ruleAsset.id,
 					data: { alt: "Denied" },
 				}),
@@ -922,7 +931,7 @@ describe("Media operation-first authorization", () => {
 		await expect(
 			factBackend
 				.forRequest(request("/facts", { identity: tenantMember }))
-				.api.media.updateAsset({
+				.operations.media.updateAsset({
 					id: factAsset.id,
 					data: { alt: "Denied" },
 				}),
@@ -966,7 +975,7 @@ describe("Media operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/race", { identity: tenantMember }))
-				.api.media.updateAsset({ id: asset.id, data: { alt: "Loser" } }),
+				.operations.media.updateAsset({ id: asset.id, data: { alt: "Loser" } }),
 		).rejects.toMatchObject({
 			statusCode: 409,
 			code: "MEDIA_STATE_CHANGED",
@@ -991,7 +1000,7 @@ describe("Media operation-first authorization", () => {
 		const concurrentAsset = await seedAsset(concurrent);
 		const api = concurrent.forRequest(
 			request("/concurrent", { identity: tenantMember }),
-		).api.media;
+		).operations.media;
 		const settled = await Promise.allSettled([
 			api.updateAsset({ id: concurrentAsset.id, data: { alt: "First" } }),
 			api.updateAsset({ id: concurrentAsset.id, data: { alt: "Second" } }),
@@ -1030,7 +1039,10 @@ describe("Media operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/legacy", { identity: tenantMember }))
-				.api.media.updateAsset({ id: legacy.id, data: { alt: "Still works" } }),
+				.operations.media.updateAsset({
+					id: legacy.id,
+					data: { alt: "Still works" },
+				}),
 		).resolves.toMatchObject({ alt: "Still works" });
 	});
 
@@ -1043,7 +1055,7 @@ describe("Media operation-first authorization", () => {
 		const updatedAsset = await seedAsset(backend, { filename: "update.jpg" });
 		const deletedAsset = await seedAsset(backend, { filename: "delete.jpg" });
 		const api = backend.forRequest(request("/d1", { identity: tenantMember }))
-			.api.media;
+			.operations.media;
 
 		await expect(
 			api.updateAsset({ id: updatedAsset.id, data: { alt: "Updated" } }),
@@ -1071,7 +1083,7 @@ describe("Media operation-first authorization", () => {
 		await expect(
 			positiveBackend
 				.forRequest(request("/array-count", { identity: tenantMember }))
-				.api.media.updateAsset({
+				.operations.media.updateAsset({
 					id: positiveAsset.id,
 					data: { alt: "Updated" },
 				}),
@@ -1086,7 +1098,7 @@ describe("Media operation-first authorization", () => {
 		await expect(
 			zeroBackend
 				.forRequest(request("/array-zero", { identity: tenantMember }))
-				.api.media.updateAsset({
+				.operations.media.updateAsset({
 					id: zeroAsset.id,
 					data: { alt: "Must roll back" },
 				}),
@@ -1138,7 +1150,7 @@ describe("Media operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/delete-subtree", { identity: tenantMember }))
-				.api.media.deleteFolder({ id: root.id }),
+				.operations.media.deleteFolder({ id: root.id }),
 		).rejects.toMatchObject({ statusCode: 403 });
 		expect(evaluated).toEqual([
 			{ folderId: root.id, parentId: allowedParent.id },
@@ -1163,7 +1175,7 @@ describe("Media operation-first authorization", () => {
 					permission.facts.folderId === descendantId
 				) {
 					raced = true;
-					await backend.internal.media.createFolder({
+					await backend.trusted.media.createFolder({
 						name: "Concurrent winner",
 						parentId: descendantId,
 					});
@@ -1187,7 +1199,7 @@ describe("Media operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/delete-race", { identity: tenantMember }))
-				.api.media.deleteFolder({ id: root.id }),
+				.operations.media.deleteFolder({ id: root.id }),
 		).rejects.toMatchObject({
 			statusCode: 409,
 			code: "MEDIA_STATE_CHANGED",
@@ -1211,13 +1223,13 @@ describe("Media operation-first authorization", () => {
 			let descendantId = "";
 			const beforeDelete = vi.fn(async () => {
 				if (winner === "folder") {
-					await backend.internal.media.createFolder({
+					await backend.trusted.media.createFolder({
 						name: "Hook child",
 						parentId: descendantId,
 					});
 					return;
 				}
-				await backend.internal.media.createAsset({
+				await backend.trusted.media.createAsset({
 					filename: "hook.jpg",
 					originalName: "hook.jpg",
 					mimeType: "image/jpeg",
@@ -1242,7 +1254,7 @@ describe("Media operation-first authorization", () => {
 			await expect(
 				backend
 					.forRequest(request("/delete-hook", { identity: tenantMember }))
-					.api.media.deleteFolder({ id: root.id }),
+					.operations.media.deleteFolder({ id: root.id }),
 			).rejects.toMatchObject({
 				statusCode: 409,
 				code: winner === "folder" ? "MEDIA_STATE_CHANGED" : "FOLDER_NOT_EMPTY",
@@ -1270,7 +1282,7 @@ describe("Media operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/tenant-boundary", { identity: admin }))
-				.api.media.deleteFolder({ id: root.id }),
+				.operations.media.deleteFolder({ id: root.id }),
 		).rejects.toMatchObject({
 			statusCode: 409,
 			code: "MEDIA_STATE_CHANGED",
@@ -1323,7 +1335,7 @@ describe("Media operation-first authorization", () => {
 		folderId = (await seedFolder(backend)).id;
 		const api = backend.forRequest(
 			request("/upload-race", { identity: tenantMember }),
-		).api.media;
+		).operations.media;
 
 		racePhase = "initialize";
 		await expect(
@@ -1343,7 +1355,7 @@ describe("Media operation-first authorization", () => {
 		racePhase = "finalize";
 		const finalizeApi = backend.forRequest(
 			request("/finalize-race", { identity: tenantMember }),
-		).api.media;
+		).operations.media;
 		await expect(
 			finalizeApi.createAsset({
 				filename: "race.jpg",
@@ -1383,7 +1395,7 @@ describe("Media operation-first authorization", () => {
 			},
 		});
 		const api = backend.forRequest(request("/race", { identity: tenantMember }))
-			.api.media;
+			.operations.media;
 		const rejected = api.createFolder({ name: "Rejected" });
 		await rejectedStarted;
 		const now = new Date();
@@ -1421,7 +1433,7 @@ describe("Media operation-first authorization", () => {
 				onBeforeCreateFolder: async (input) => {
 					if (input.name !== "Outer") return;
 					try {
-						await backend.internal.media.createAsset({
+						await backend.trusted.media.createAsset({
 							filename: "nested.jpg",
 							originalName: "nested.jpg",
 							mimeType: "image/jpeg",
@@ -1442,7 +1454,7 @@ describe("Media operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/nested", { identity: tenantMember }))
-				.api.media.createFolder({ name: "Outer" }),
+				.operations.media.createFolder({ name: "Outer" }),
 		).rejects.toThrow("nested after rejected");
 		expect(caught).toEqual(["nested after rejected"]);
 		expect(await backend.adapter.count({ model: "mediaAsset" })).toBe(0);
@@ -1614,7 +1626,7 @@ describe("Media operation-first authorization", () => {
 		const asset = await seedAsset(backend);
 		const api = backend.forRequest(
 			request("/delete", { identity: tenantMember }),
-		).api.media;
+		).operations.media;
 		const settled = await Promise.allSettled([
 			api.deleteAsset({ id: asset.id }),
 			api.deleteAsset({ id: asset.id }),
@@ -1629,7 +1641,7 @@ describe("Media operation-first authorization", () => {
 		expect(hooks).toHaveBeenCalledOnce();
 	});
 
-	it("keeps trusted raw helpers out of request/internal namespaces and raw prefetch tenant-free", async () => {
+	it("keeps raw helpers out of request/trusted namespaces and raw prefetch tenant-free", async () => {
 		const backend = makeBackend({ auth: createAuth(), tenantId: "tenant-a" });
 		const folder = await seedFolder(backend);
 		const child = await seedFolder(backend, {
@@ -1637,14 +1649,15 @@ describe("Media operation-first authorization", () => {
 			parentId: folder.id,
 		});
 		await seedAsset(backend, { folderId: folder.id });
-		expect("prefetchForRoute" in backend.internal.media).toBe(false);
-		expect("getAssetById" in backend.internal.media).toBe(false);
+		expect("prefetchForRoute" in backend.trusted.media).toBe(false);
+		expect("getAssetById" in backend.trusted.media).toBe(false);
 		expect(
-			"prefetchForRoute" in backend.forRequest(request("/raw")).api.media,
+			"prefetchForRoute" in
+				backend.forRequest(request("/raw")).operations.media,
 		).toBe(false);
-		expect("updateAsset" in backend.internal.media).toBe(true);
+		expect("updateAsset" in backend.trusted.media).toBe(true);
 		const queryClient = new QueryClient();
-		await backend.api.media.prefetchForRoute("library", queryClient);
+		await backend.raw.media.prefetchForRoute("library", queryClient);
 		const cached = queryClient.getQueryData(
 			MEDIA_QUERY_KEYS.assetsList({ limit: 40 }),
 		);

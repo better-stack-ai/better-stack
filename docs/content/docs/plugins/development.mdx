@@ -142,7 +142,7 @@ export const blogSchema = createDbPlugin("blog", {
 ## Backend Plugin
 
 The backend plugin defines schema-backed operations first, then adapts those
-same operations to HTTP routes, request-scoped calls, and trusted internal
+same operations to HTTP routes, request-scoped calls, and trusted
 calls. A route-only business plugin is rejected when server authorization is
 configured because its access would be unclassified.
 
@@ -246,7 +246,7 @@ Every returned schema-backed request is authorized before `before` or
 permission before invoking this callback, so a primary denial cannot trigger
 secondary reads or be replaced by a callback error. The callback may load
 trusted server state to build those requests, but it must not mutate it.
-Trusted `internal` execution still derives the requests and runs the lifecycle;
+`trusted` execution still derives the requests and runs the lifecycle;
 it skips only user authorization.
 
 Once a plugin declares operations, every composed HTTP route must have a
@@ -256,7 +256,7 @@ request-bound operation and carries a private transport identity; `stack()`
 validates both the inventory and exact binding during composition. It reports
 the plugin key, route key, method, and path for an undeclared or unbound route.
 This keeps a new route from silently bypassing the operation pipeline. Extra
-operations may remain request/internal-only and are not exposed as HTTP merely
+operations may remain request/trusted-only and are not exposed as HTTP merely
 because they exist in the operation registry.
 
 The route mapper may parse or normalize already validated request data, but it
@@ -303,13 +303,13 @@ rejects catalog mismatches at typecheck time. Call the composed operation—not
 the descriptor—from application code:
 
 ```typescript
-await myStack.forRequest(request).api.todos.deleteTodo({ id: todoId })
-await myStack.internal.todos.deleteTodo({ id: todoId })
+await myStack.forRequest(request).operations.todos.deleteTodo({ id: todoId })
+await myStack.trusted.todos.deleteTodo({ id: todoId })
 ```
 
-The request-scoped API authorizes. The explicit `internal` namespace skips
+The request-scoped operations authorize. The explicit `trusted` namespace skips
 user authorization but still validates input, derives facts, and runs the
-lifecycle. Operation descriptors do not expose a forgeable `internal` run
+lifecycle. Operation descriptors do not expose a forgeable trusted run
 option. Lifecycle input, facts, identity, and results use primitives, plain
 objects, and arrays; they are deeply readonly and frozen. Serialize mutable
 built-ins such as `Date`, `Map`, `Set`, and typed arrays before they cross this
@@ -323,7 +323,7 @@ whose validation, trusted facts, hooks, and domain behavior still run without
 an identity rule. It never makes the rest of the plugin public and is not a
 replacement for an explicit allow rule.
 
-Ordinary operations use `resultMode: "immutable"`: their request and internal
+Ordinary operations use `resultMode: "immutable"`: their request and trusted
 results are recursively frozen and HTTP routes serialize them normally. A
 transport-native value such as a streaming `Response` must opt in with
 `definePassthroughOperation`:
@@ -342,7 +342,7 @@ const streamReport = definePassthroughOperation({
 ```
 
 Passthrough preserves the exact result type and runtime identity across HTTP,
-`forRequest()`, and `internal`; input validation, authorization, lifecycle
+`forRequest().operations`, and `trusted`; input validation, authorization, lifecycle
 ordering, and error hooks are unchanged. Keep this opt-in limited to values
 that cannot be represented as immutable operation data.
 
@@ -386,7 +386,7 @@ export const todosBackendPlugin = () => defineBackendPlugin({
   id: "todos",
   dbPlugin: dbSchema,
   operations,
-  api: (adapter) => ({ prefetchForRoute: createTodoPrefetchForRoute(adapter) }),
+  raw: (adapter) => ({ prefetchForRoute: createTodoPrefetchForRoute(adapter) }),
   routes: (_adapter, _context, operations) => ({
     createTodo: createEndpoint(
       "/todos",
@@ -397,9 +397,9 @@ export const todosBackendPlugin = () => defineBackendPlugin({
 })
 ```
 
-Use `app.forRequest(request).api.todos.*` for request-driven server work and `app.internal.todos.*` for explicitly trusted jobs. Internal calls skip user authorization but retain validation, fact derivation, domain behavior, and lifecycle hooks. First-party `stack().api` namespaces are narrow SSG prefetch surfaces only.
+Use `app.forRequest(request).operations.todos.*` for request-driven server work and `app.trusted.todos.*` for explicitly trusted jobs. Trusted calls skip user authorization but retain validation, fact derivation, domain behavior, and lifecycle hooks. First-party `stack().raw` namespaces are narrow SSG prefetch surfaces only.
 
-Pure getters and mutations may remain exported lower-level adapter primitives for plugin internals and migrations. They do not promise authorization, validation, or lifecycle composition and should not be duplicated onto `stack().api`.
+Pure getters and mutations may remain exported lower-level adapter primitives for plugin internals and migrations. They do not promise authorization, validation, or lifecycle composition and should not be duplicated onto `stack().raw`.
 
 ## Client Plugin
 
@@ -520,7 +520,7 @@ function todosLoader(config: ResolvedTodosClientConfig) {
         if (isConnectionError(error)) {
           console.warn(
             "[your-plugin] route.loader() failed — no server running at build time. " +
-            "Use myStack.api.todos.prefetchForRoute() for SSG data prefetching."
+            "Use myStack.raw.todos.prefetchForRoute() for SSG data prefetching."
           )
         }
         // Don't re-throw — let Error Boundaries handle it during render
@@ -556,7 +556,7 @@ function createTodosMeta(config: ResolvedTodosClientConfig, path: string) {
 
 ### Static Site Generation (SSG)
 
-`route.loader()` makes HTTP requests that **fail silently** during `next build` because no HTTP server is running. Plugins that support SSG must expose a `prefetchForRoute` method on the `api` factory so consumers can seed the query cache directly from the database at build time.
+`route.loader()` makes HTTP requests that **fail silently** during `next build` because no HTTP server is running. Plugins that support SSG must expose a `prefetchForRoute` method on the `raw` factory so consumers can seed the query cache directly from the database at build time.
 
 #### 1. Shared query key constants (`api/query-key-defs.ts`)
 
@@ -640,9 +640,7 @@ function createTodosPrefetchForRoute(adapter: Adapter): TodosPrefetchForRoute {
 export const todosBackendPlugin = () => defineBackendPlugin({
   id: "todos",
   dbPlugin: dbSchema,
-  api: (adapter) => ({
-    listTodos: () => listTodos(adapter),
-    getTodoById: (id: string) => getTodoById(adapter, id),
+  raw: (adapter) => ({
     prefetchForRoute: createTodosPrefetchForRoute(adapter), // ← SSG entry point
   }),
   routes: (adapter) => { /* ... HTTP endpoints */ },
@@ -671,7 +669,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const stackClient = getStackClient(queryClient)
   const route = stackClient.router.getRoute(normalizePath(["todos"]))
   if (!route) return { title: "Todos" }
-  await myStack.api.todos.prefetchForRoute("list", queryClient)
+  await myStack.raw.todos.prefetchForRoute("list", queryClient)
   return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
 }
 
@@ -681,7 +679,7 @@ export default async function TodosPage() {
   const route = stackClient.router.getRoute(normalizePath(["todos"]))
   if (!route) notFound()
   // Direct DB read — no HTTP server required at build time
-  await myStack.api.todos.prefetchForRoute("list", queryClient)
+  await myStack.raw.todos.prefetchForRoute("list", queryClient)
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <route.PageComponent />
@@ -923,9 +921,9 @@ export const myStack = stack({
 
 export const { handler, dbSchema } = myStack
 
-await myStack.forRequest(request).api.todos.createTodo({ title: "Request" })
-await myStack.internal.todos.createTodo({ title: "Trusted job" })
-await myStack.api.todos.prefetchForRoute("list", queryClient)
+await myStack.forRequest(request).operations.todos.createTodo({ title: "Request" })
+await myStack.trusted.todos.createTodo({ title: "Trusted job" })
+await myStack.raw.todos.prefetchForRoute("list", queryClient)
 ```
 
 ### Client Registration
@@ -1119,7 +1117,7 @@ Features:
 - Database schema
 - API endpoints (list, create, update, delete)
 - Server-side getter functions (`getters.ts`)
-- operation-first request and internal server surfaces
+- operation-first request and trusted server surfaces
 - Client components and hooks
 
 ### Full-Featured Plugin: Blog

@@ -48,7 +48,7 @@ function createMyLoader(id: string, config: ResolvedMyClientConfig) {
         }
       } catch (error) {
         if (isConnectionError(error)) {
-          console.warn("[btst/my-plugin] route.loader() failed — no server at build time. Use myStack.api.myPlugin.prefetchForRoute() for SSG.")
+          console.warn("[btst/my-plugin] route.loader() failed — no server at build time. Use myStack.raw.myPlugin.prefetchForRoute() for SSG.")
         }
         if (hooks?.onErrorLoad) {
           await hooks.onErrorLoad(error as Error, context)

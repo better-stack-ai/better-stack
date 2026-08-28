@@ -163,8 +163,8 @@ function createMediaLibraryLoader(config: MediaClientConfig) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/media] route.loader() failed — no server running at build time. " +
-							"For an explicitly public static library, use the trusted " +
-							"stack.api.media.prefetchForRoute() server helper instead.",
+							"For an explicitly public static library, use the explicit " +
+							"stack.raw.media.prefetchForRoute() server helper instead.",
 					);
 				}
 				if (hooks?.onLoadError) {

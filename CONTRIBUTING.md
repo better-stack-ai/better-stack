@@ -123,10 +123,6 @@ export const myBackendPlugin = defineBackendPlugin({
     })
     return { listItems } as const
   },
-  // Optional: server-side API surface (no HTTP roundtrip — used for SSG, scripts, Server Components)
-  api: (adapter: Adapter) => ({
-    listItems: () => adapter.findMany({ model: "item" }),
-  }),
 })
 
 // Export the inferred router type — the client plugin imports this for end-to-end type safety
@@ -354,11 +350,6 @@ export const myBackendPlugin = (hooks?: MyBackendHooks) =>
     name: "your-plugin",
     dbPlugin: mySchema,
 
-    api: (adapter) => ({
-      listItems: () => listItems(adapter),
-      getItemById: (id: string) => getItemById(adapter, id),
-    }),
-
     routes: (adapter: Adapter) => {
       const listItemsEndpoint = createEndpoint("/items", { method: "GET" }, async () => {
         return listItems(adapter)
@@ -489,7 +480,7 @@ function myLoader(config: ResolvedMyClientConfig) {
         if (isConnectionError(error)) {
           console.warn(
             "[btst/your-plugin] route.loader() failed — no server at build time. " +
-            "Use myStack.api['your-plugin'].prefetchForRoute() for SSG.",
+            "Use myStack.raw['your-plugin'].prefetchForRoute() for SSG.",
           )
         }
         // Do not re-throw — let React Query store errors and Error Boundaries handle them during render

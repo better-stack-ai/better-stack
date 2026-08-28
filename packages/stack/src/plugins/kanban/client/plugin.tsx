@@ -204,7 +204,7 @@ function createBoardsLoader(config: KanbanClientConfig) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/kanban] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.kanban.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.kanban.prefetchForRoute() for SSG data prefetching.",
 					);
 				}
 				if (hooks?.onLoadError) {
@@ -270,7 +270,7 @@ function createBoardLoader(boardId: string, config: KanbanClientConfig) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/kanban] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.kanban.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.kanban.prefetchForRoute() for SSG data prefetching.",
 					);
 				}
 				if (hooks?.onLoadError) {

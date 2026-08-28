@@ -150,7 +150,7 @@ const FORM_BUILDER_SEED_BODY = `
 `;
 
 const CMS_SEED_BODY = `
-  const cms = myStack.internal.cms
+  const cms = myStack.trusted.cms
   const existing = await cms.listContentItems({ typeSlug: "article", query: { limit: 1 } })
   if (existing.items && existing.items.length > 0) return { ok: true, skipped: true }
   await cms.createContentItem({ typeSlug: "article", body: { slug: "welcome-to-btst-cms", data: { title: "Welcome to BTST CMS", summary: "An introduction to managing structured content with the BTST CMS plugin.", body: "The BTST CMS plugin lets you define your content types as Zod schemas and get a fully functional headless CMS automatically.", publishedAt: new Date().toISOString(), published: true } } })
@@ -162,7 +162,7 @@ const CMS_SEED_BODY = `
 
 const UI_BUILDER_SEED_BODY = `
   const { UI_BUILDER_TYPE_SLUG } = await import("@btst/stack/plugins/ui-builder")
-  const cms = myStack.internal.cms
+  const cms = myStack.trusted.cms
   const existing = await cms.listContentItems({ typeSlug: UI_BUILDER_TYPE_SLUG, query: { limit: 1 } })
   if (existing.items && existing.items.length > 0) return { ok: true, skipped: true }
   const initialLayers = [{ id: "page-root", type: "div", name: "Page", props: { className: "min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-8" }, children: [{ id: "welcome-card", type: "Card", name: "Welcome Card", props: { className: "w-full max-w-md shadow-xl" }, children: [{ id: "card-content", type: "CardContent", name: "Card Content", props: {}, children: [{ id: "welcome-text", type: "CardDescription", name: "Welcome Message", props: { className: "text-base leading-relaxed" }, children: "Welcome to UI Builder! Edit this page in the visual editor." }] }] }] }]

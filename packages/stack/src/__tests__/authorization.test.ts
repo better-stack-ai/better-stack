@@ -454,7 +454,7 @@ describe("schema-backed authorization", () => {
 			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
 		});
 
-		const result = await backend.internal.navigation.visit({ path: "/docs" });
+		const result = await backend.trusted.navigation.visit({ path: "/docs" });
 		expect(result).toEqual({ path: "/docs" });
 		expect(Object.isFrozen(result)).toBe(true);
 		expect(() => {
@@ -514,7 +514,7 @@ describe("schema-backed authorization", () => {
 		await expect(
 			backend
 				.forRequest(new Request("http://localhost/api/public-stream"))
-				.api.publicStream.start({ requestId: "request-1" }),
+				.operations.publicStream.start({ requestId: "request-1" }),
 		).resolves.toBe(response);
 		expect(operation.access).toBe("public");
 		expect(operation.resultMode).toBe("passthrough");
@@ -571,7 +571,7 @@ describe("schema-backed authorization", () => {
 		});
 
 		await expect(
-			backend.internal.guarded.update({ target: { id: "record-1" } }),
+			backend.trusted.guarded.update({ target: { id: "record-1" } }),
 		).resolves.toBe("record-1");
 	});
 
@@ -629,7 +629,7 @@ describe("schema-backed authorization", () => {
 		await expect(
 			backend
 				.forRequest(new Request("http://localhost/api/compound"))
-				.api.compound.create({ targetType: "secret", allowed: true }),
+				.operations.compound.create({ targetType: "secret", allowed: true }),
 		).rejects.toMatchObject({ statusCode: 403 });
 		expect(events).toEqual(["derive"]);
 
@@ -637,12 +637,12 @@ describe("schema-backed authorization", () => {
 		await expect(
 			backend
 				.forRequest(new Request("http://localhost/api/compound"))
-				.api.compound.create({ targetType: "throws", allowed: false }),
+				.operations.compound.create({ targetType: "throws", allowed: false }),
 		).rejects.toMatchObject({ statusCode: 403 });
 		expect(events).toEqual([]);
 
 		await expect(
-			backend.internal.compound.create({
+			backend.trusted.compound.create({
 				targetType: "secret",
 				allowed: false,
 			}),

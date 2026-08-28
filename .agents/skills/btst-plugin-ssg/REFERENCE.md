@@ -78,10 +78,8 @@ function createMyPluginPrefetchForRoute(adapter: Adapter): MyPluginPrefetchForRo
   } as MyPluginPrefetchForRoute
 }
 
-// Wire into the api factory in defineBackendPlugin:
-api: (adapter) => ({
-  listItems: () => listItems(adapter),
-  getItemById: (id: string) => getItemById(adapter, id),
+// Wire into the raw factory in defineBackendPlugin:
+raw: (adapter) => ({
   prefetchForRoute: createMyPluginPrefetchForRoute(adapter),
 })
 ```
@@ -113,7 +111,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const route = stackClient.router.getRoute(normalizePath(["my-plugin"]))
   if (!route) return { title: "Fallback" }
 
-  await myStack.api.myPlugin.prefetchForRoute("list", queryClient)
+  await myStack.raw.myPlugin.prefetchForRoute("list", queryClient)
   return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
 }
 
@@ -123,7 +121,7 @@ export default async function Page() {
   const route = stackClient.router.getRoute(normalizePath(["my-plugin"]))
   if (!route) notFound()
 
-  await myStack.api.myPlugin.prefetchForRoute("list", queryClient)
+  await myStack.raw.myPlugin.prefetchForRoute("list", queryClient)
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <route.PageComponent />
