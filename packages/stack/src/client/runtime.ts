@@ -1,7 +1,7 @@
 import type {
-	ClientApiEndpointOverride,
 	ClientLocation,
 	ClientLocationOverride,
+	ClientPluginEndpointOverride,
 	ClientPluginRegistration,
 	ClientProviderApi,
 	ClientProviderPluginRuntime,
@@ -15,6 +15,14 @@ type AnyPluginMap = Record<string, ClientPluginRegistration<any, any>>;
 interface ResolvedClientRuntime<TPlugins extends AnyPluginMap> {
 	pluginRuntimes: { [K in keyof TPlugins]: ResolvedClientPluginRuntime };
 	provider: ClientProviderProjection<TPlugins>;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+	if (value === null || typeof value !== "object" || Array.isArray(value)) {
+		return false;
+	}
+	const prototype = Object.getPrototypeOf(value);
+	return prototype === Object.prototype || prototype === null;
 }
 
 function normalizeBaseURL(value: unknown, label: string): string {
@@ -74,7 +82,7 @@ function normalizeLocation(
 	value: ClientLocation,
 	label: string,
 ): ClientLocation {
-	if (value === null || typeof value !== "object") {
+	if (!isPlainRecord(value)) {
 		throw new Error(`[btst/client] ${label} endpoint is required.`);
 	}
 	return {
@@ -89,7 +97,7 @@ function resolveLocationOverride(
 	label: string,
 ): ClientLocation {
 	if (override === undefined) return { ...base };
-	if (override === null || typeof override !== "object") {
+	if (!isPlainRecord(override)) {
 		throw new Error(`[btst/client] ${label} must be an endpoint object.`);
 	}
 
@@ -153,20 +161,28 @@ function cloneBrowserHeaders(
 	return copy;
 }
 
+function resolveCredentials(
+	value: unknown,
+	label: string,
+): RequestCredentials | undefined {
+	if (value === undefined) return undefined;
+	if (value === "omit" || value === "same-origin" || value === "include") {
+		return value;
+	}
+	throw new Error(
+		`[btst/client] ${label} must be "omit", "same-origin", or "include".`,
+	);
+}
+
 function projectApi(
 	location: ClientLocation,
-	override: ClientApiEndpointOverride | undefined,
+	browserHeaders: Headers | undefined,
+	credentials: RequestCredentials | undefined,
 ): ClientProviderApi {
-	const browserHeaders = cloneBrowserHeaders(
-		override?.browserHeaders,
-		"endpoint browserHeaders",
-	);
 	return {
 		...location,
 		...(browserHeaders ? { browserHeaders } : {}),
-		...(override?.credentials !== undefined
-			? { credentials: override.credentials }
-			: {}),
+		...(credentials !== undefined ? { credentials } : {}),
 	};
 }
 
@@ -192,12 +208,7 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 	) {
 		throw new Error(`[btst/client] plugins must be a plugin registration map.`);
 	}
-	if (
-		config.endpoints !== undefined &&
-		(config.endpoints === null ||
-			typeof config.endpoints !== "object" ||
-			Array.isArray(config.endpoints))
-	) {
+	if (config.endpoints !== undefined && !isPlainRecord(config.endpoints)) {
 		throw new Error(`[btst/client] endpoints must be a plugin endpoint map.`);
 	}
 
@@ -222,29 +233,31 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 
 	for (const pluginKey of Object.keys(config.plugins)) {
 		const endpoint = config.endpoints?.[pluginKey];
-		if (
-			endpoint !== undefined &&
-			(endpoint === null || typeof endpoint !== "object")
-		) {
+		if (endpoint !== undefined && !isPlainRecord(endpoint)) {
 			throw new Error(
 				`[btst/client] Endpoint replacement "${pluginKey}" must be an object.`,
 			);
 		}
+		const endpointConfig = endpoint as ClientPluginEndpointOverride | undefined;
 
 		const pluginApi = resolveLocationOverride(
 			api,
-			endpoint?.api,
+			endpointConfig?.api,
 			`endpoints.${pluginKey}.api`,
 		);
 		const pluginSite = resolveLocationOverride(
 			site,
-			endpoint?.site,
+			endpointConfig?.site,
 			`endpoints.${pluginKey}.site`,
 		);
 		const sameApiOrigin = pluginApi.baseURL === api.baseURL;
 		const browserHeaders = cloneBrowserHeaders(
-			endpoint?.api?.browserHeaders,
+			endpointConfig?.api?.browserHeaders,
 			`endpoints.${pluginKey}.api.browserHeaders`,
+		);
+		const credentials = resolveCredentials(
+			endpointConfig?.api?.credentials,
+			`endpoints.${pluginKey}.api.credentials`,
 		);
 		const headers = mergeHeaders(
 			sameApiOrigin ? requestHeaders : undefined,
@@ -255,15 +268,13 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 			api: {
 				...pluginApi,
 				...(headers ? { headers } : {}),
-				...(endpoint?.api?.credentials !== undefined
-					? { credentials: endpoint.api.credentials }
-					: {}),
+				...(credentials !== undefined ? { credentials } : {}),
 			},
 			site: pluginSite,
 			queryClient: config.queryClient,
 		};
 		providerPlugins[pluginKey] = {
-			api: projectApi(pluginApi, endpoint?.api),
+			api: projectApi(pluginApi, browserHeaders, credentials),
 			site: pluginSite,
 		};
 	}

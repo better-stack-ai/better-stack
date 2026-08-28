@@ -629,15 +629,40 @@ describe("resolved client runtime", () => {
 		expect(() =>
 			createClientStack({
 				...baseConfig,
-				endpoints: { probe: null } as any,
+				endpoints: new Date(),
+			} as any),
+		).toThrowError(/endpoints.*plugin endpoint map/i);
+		expect(() =>
+			createClientStack({
+				...baseConfig,
+				endpoints: { probe: [] } as any,
 			}),
 		).toThrowError(/probe.*object/i);
+		expect(() =>
+			createClientStack({
+				...baseConfig,
+				endpoints: { probe: { api: new Date() } } as any,
+			}),
+		).toThrowError(/probe\.api.*endpoint object/i);
 		expect(() =>
 			createClientStack({
 				...baseConfig,
 				endpoints: { probe: { api: false } } as any,
 			}),
 		).toThrowError(/probe\.api.*endpoint object/i);
+		expect(() =>
+			createClientStack({
+				...baseConfig,
+				endpoints: {
+					probe: {
+						api: {
+							basePath: "/api/probe",
+							credentials: "server-secret",
+						},
+					},
+				} as any,
+			}),
+		).toThrowError(/probe\.api\.credentials.*omit.*same-origin.*include/i);
 		for (const sensitiveHeader of ["authorization", "cookie"]) {
 			expect(() =>
 				createClientStack({
