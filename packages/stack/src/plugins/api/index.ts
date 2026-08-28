@@ -47,6 +47,7 @@ export {
 	type OperationContext,
 	type OperationData,
 	type OperationErrorContext,
+	OperationHttpError,
 	type OperationPermissionRequest,
 	type OperationRecord,
 	type OperationResultMode,

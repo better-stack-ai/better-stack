@@ -49,10 +49,10 @@ describe("OpenAPI route introspection", () => {
 				throw new Error("bound operation is required");
 			}
 			return {
-				read: operations.read.route(
-					createEndpoint("/records/:id", { method: "GET" }, async (ctx) =>
-						operations.read({ id: ctx.params.id }, ctx.request),
-					),
+				read: createEndpoint(
+					"/records/:id",
+					{ method: "GET", requireRequest: true },
+					operations.read.route((ctx: any) => ({ id: ctx.params.id })),
 				),
 			};
 		});
@@ -106,12 +106,10 @@ describe("OpenAPI route introspection", () => {
 			dbPlugin: createDbPlugin("documented", {}),
 			operations: () => ({ read }),
 			routes: (_adapter, _context, operations) => ({
-				read: operations.read.route(
-					createEndpoint(
-						"/documented",
-						{ method: "GET", requireRequest: true },
-						(ctx) => operations.read({}, ctx.request),
-					),
+				read: createEndpoint(
+					"/documented",
+					{ method: "GET", requireRequest: true },
+					operations.read.route(() => ({})),
 				),
 			}),
 		});
@@ -185,19 +183,15 @@ describe("OpenAPI route introspection", () => {
 			dbPlugin: createDbPlugin("metadata", {}),
 			operations: () => ({ protectedRead, publicRead, internalOnly }),
 			routes: (_adapter, _context, operations) => ({
-				protectedRead: operations.protectedRead.route(
-					createEndpoint(
-						"/z-protected/:id",
-						{ method: "GET", requireRequest: true },
-						(ctx) => operations.protectedRead(ctx.params, ctx.request),
-					),
+				protectedRead: createEndpoint(
+					"/z-protected/:id",
+					{ method: "GET", requireRequest: true },
+					operations.protectedRead.route((ctx) => ctx.params),
 				),
-				publicRead: operations.publicRead.route(
-					createEndpoint(
-						"/a-public",
-						{ method: "GET", requireRequest: true },
-						(ctx) => operations.publicRead({}, ctx.request),
-					),
+				publicRead: createEndpoint(
+					"/a-public",
+					{ method: "GET", requireRequest: true },
+					operations.publicRead.route(() => ({})),
 				),
 			}),
 		});

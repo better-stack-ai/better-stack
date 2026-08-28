@@ -1,6 +1,6 @@
 import type { Endpoint } from "better-call";
 import {
-	getRouteEndpointOperationKey,
+	getRouteEndpointOperationBinding,
 	type AnyOperation,
 	type OperationRecord,
 } from "./operation";
@@ -154,21 +154,25 @@ export function composeEndpointInventory(
 				? infrastructure[routeKey]
 				: undefined;
 			const identity = endpointIdentity(endpoint);
-			const boundOperationKey = getRouteEndpointOperationKey(endpoint);
+			const binding = getRouteEndpointOperationBinding(endpoint);
 			if (operation && infrastructureDeclaration) {
 				throw new TypeError(
 					`[btst/endpoint-inventory] Plugin "${pluginKey}" route "${routeKey}" (${identity.method} ${identity.path}) cannot be both operation-backed and infrastructure.`,
 				);
 			}
 			if (operation) {
-				if (boundOperationKey === undefined) {
+				if (binding === undefined) {
 					throw new TypeError(
-						`[btst/endpoint-inventory] Plugin "${pluginKey}" route "${routeKey}" (${identity.method} ${identity.path}) must be bound through operations.${operationKey}.route(endpoint).`,
+						`[btst/endpoint-inventory] Plugin "${pluginKey}" route "${routeKey}" (${identity.method} ${identity.path}) must use an operations.${operationKey}.route(ctx => input) handler.`,
 					);
 				}
-				if (boundOperationKey !== operationKey) {
+				if (
+					binding.pluginKey !== pluginKey ||
+					binding.operationKey !== operationKey ||
+					binding.operation !== operation
+				) {
 					throw new TypeError(
-						`[btst/endpoint-inventory] Plugin "${pluginKey}" route "${routeKey}" (${identity.method} ${identity.path}) maps to operation "${operationKey}" but is bound to "${boundOperationKey}".`,
+						`[btst/endpoint-inventory] Plugin "${pluginKey}" route "${routeKey}" (${identity.method} ${identity.path}) maps to operation "${operationKey}" but is bound to "${binding.pluginKey}.${binding.operationKey}".`,
 					);
 				}
 				return operationInventoryEntry(
@@ -180,7 +184,7 @@ export function composeEndpointInventory(
 				);
 			}
 			if (infrastructureDeclaration) {
-				if (boundOperationKey !== undefined) {
+				if (binding !== undefined) {
 					throw new TypeError(
 						`[btst/endpoint-inventory] Plugin "${pluginKey}" route "${routeKey}" (${identity.method} ${identity.path}) cannot be both operation-backed and infrastructure.`,
 					);

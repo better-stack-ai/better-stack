@@ -5,7 +5,6 @@ import {
 	type OperationData,
 } from "@btst/stack/plugins/api";
 import type { QueryClient } from "@tanstack/react-query";
-import { AuthorizationError } from "../../../authorization/server";
 import { mediaSchema as dbSchema } from "../db";
 import {
 	AssetListQuerySchema,
@@ -112,28 +111,6 @@ function createMediaPrefetchForRoute(adapter: Adapter): MediaPrefetchForRoute {
 	};
 }
 
-type EndpointErrorFactory = (...args: any[]) => Error;
-
-async function adaptOperationToHttp<TResult>(
-	execute: () => Promise<TResult>,
-	error: EndpointErrorFactory,
-): Promise<TResult> {
-	try {
-		return await execute();
-	} catch (cause) {
-		if (
-			cause instanceof AuthorizationError ||
-			cause instanceof MediaOperationError
-		) {
-			throw error(cause.statusCode, {
-				message: cause.message,
-				...(cause instanceof MediaOperationError ? { code: cause.code } : {}),
-			});
-		}
-		throw cause;
-	}
-}
-
 function parseMultipartFile(body: unknown) {
 	if (!body || typeof body !== "object") {
 		throw new MediaOperationError(
@@ -214,83 +191,59 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 		}),
 
 		routes: (_adapter: Adapter, _context, operations) => {
-			// Keep the transport boundary shallow; the operation performs the runtime
-			// parse. Expanding this generated route API type exceeds TypeScript's
-			// instantiation limit for the nested Vercel body union.
-			const executeVercelBlob = operations.uploadVercelBlob as unknown as (
-				input: { body: unknown },
-				request: Request,
-			) => Promise<OperationData>;
+			// Keep the transport boundary shallow; expanding the generated route
+			// handler type exceeds TypeScript's limit for the nested Vercel body union.
+			const bindVercelBlobRoute = operations.uploadVercelBlob
+				.route as unknown as (
+				resolveInput: (ctx: {
+					body: unknown;
+					request: Request;
+					error: (...args: any[]) => Error;
+				}) => Promise<{ body: unknown }>,
+			) => (ctx: {
+				body: unknown;
+				request: Request;
+				error: (...args: any[]) => Error;
+			}) => Promise<OperationData>;
 			const listAssetsEndpoint = createEndpoint(
 				"/media/assets",
 				{ method: "GET", query: AssetListQuerySchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.listAssets(ctx.query, ctx.request),
-						ctx.error,
-					),
+				operations.listAssets.route((ctx) => ctx.query),
 			);
 			const createAssetEndpoint = createEndpoint(
 				"/media/assets",
 				{ method: "POST", body: createAssetSchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.createAsset(ctx.body, ctx.request),
-						ctx.error,
-					),
+				operations.createAsset.route((ctx) => ctx.body),
 			);
 			const updateAssetEndpoint = createEndpoint(
 				"/media/assets/:id",
 				{ method: "PATCH", body: updateAssetSchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.updateAsset(
-								{ id: ctx.params.id, data: ctx.body },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.updateAsset.route((ctx) => ({
+					id: ctx.params.id,
+					data: ctx.body,
+				})),
 			);
 			const deleteAssetEndpoint = createEndpoint(
 				"/media/assets/:id",
 				{ method: "DELETE", requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.deleteAsset({ id: ctx.params.id }, ctx.request),
-						ctx.error,
-					),
+				operations.deleteAsset.route((ctx) => ({ id: ctx.params.id })),
 			);
 			const listFoldersEndpoint = createEndpoint(
 				"/media/folders",
 				{ method: "GET", query: FolderListQuerySchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.listFolders(
-								FolderListOperationInputSchema.parse(ctx.query),
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.listFolders.route((ctx) =>
+					FolderListOperationInputSchema.parse(ctx.query),
+				),
 			);
 			const createFolderEndpoint = createEndpoint(
 				"/media/folders",
 				{ method: "POST", body: createFolderSchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.createFolder(ctx.body, ctx.request),
-						ctx.error,
-					),
+				operations.createFolder.route((ctx) => ctx.body),
 			);
 			const deleteFolderEndpoint = createEndpoint(
 				"/media/folders/:id",
 				{ method: "DELETE", requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.deleteFolder({ id: ctx.params.id }, ctx.request),
-						ctx.error,
-					),
+				operations.deleteFolder.route((ctx) => ({ id: ctx.params.id })),
 			);
 			const uploadDirectEndpoint = createEndpoint(
 				"/media/upload",
@@ -299,41 +252,26 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					requireRequest: true,
 					metadata: { allowedMediaTypes: ["multipart/form-data"] },
 				},
-				async (ctx) => {
-					try {
-						const { file, folderId } = parseMultipartFile(ctx.body);
-						const maximumSize = config.maxFileSizeBytes ?? 10 * 1024 * 1024;
-						if (file.size > maximumSize) {
-							throw new MediaOperationError(
-								413,
-								`File size ${file.size} bytes exceeds the limit of ${maximumSize} bytes`,
-								"FILE_TOO_LARGE",
-							);
-						}
-						const contentBase64 = Buffer.from(
-							await file.arrayBuffer(),
-						).toString("base64");
-						const input = {
-							filename: file.name,
-							mimeType: file.type,
-							size: file.size,
-							contentBase64,
-							folderId,
-						};
-						return await adaptOperationToHttp(
-							() => operations.uploadDirect(input, ctx.request),
-							ctx.error,
+				operations.uploadDirect.route(async (ctx) => {
+					const { file, folderId } = parseMultipartFile(ctx.body);
+					const maximumSize = config.maxFileSizeBytes ?? 10 * 1024 * 1024;
+					if (file.size > maximumSize) {
+						throw new MediaOperationError(
+							413,
+							`File size ${file.size} bytes exceeds the limit of ${maximumSize} bytes`,
+							"FILE_TOO_LARGE",
 						);
-					} catch (cause) {
-						if (cause instanceof MediaOperationError) {
-							throw ctx.error(cause.statusCode as any, {
-								message: cause.message,
-								code: cause.code,
-							});
-						}
-						throw cause;
 					}
-				},
+					return {
+						filename: file.name,
+						mimeType: file.type,
+						size: file.size,
+						contentBase64: Buffer.from(await file.arrayBuffer()).toString(
+							"base64",
+						),
+						folderId,
+					};
+				}),
 			);
 			const uploadTokenEndpoint = createEndpoint(
 				"/media/upload/token",
@@ -342,42 +280,33 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 					body: uploadTokenRequestSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.uploadToken(ctx.body, ctx.request),
-						ctx.error,
-					),
+				operations.uploadToken.route((ctx) => ctx.body),
 			);
 			const uploadVercelBlobEndpoint = createEndpoint(
 				"/media/upload/vercel-blob",
 				{ method: "POST", requireRequest: true },
-				async (ctx) => {
+				bindVercelBlobRoute(async (ctx) => {
 					const body =
 						ctx.body ??
 						(await ctx.request
 							.clone()
 							.json()
 							.catch(() => ({})));
-					return adaptOperationToHttp(
-						() => executeVercelBlob({ body }, ctx.request),
-						ctx.error,
-					);
-				},
+					return { body };
+				}),
 			);
 
 			return {
-				listAssets: operations.listAssets.route(listAssetsEndpoint),
-				createAsset: operations.createAsset.route(createAssetEndpoint),
-				updateAsset: operations.updateAsset.route(updateAssetEndpoint),
-				deleteAsset: operations.deleteAsset.route(deleteAssetEndpoint),
-				listFolders: operations.listFolders.route(listFoldersEndpoint),
-				createFolder: operations.createFolder.route(createFolderEndpoint),
-				deleteFolder: operations.deleteFolder.route(deleteFolderEndpoint),
-				uploadDirect: operations.uploadDirect.route(uploadDirectEndpoint),
-				uploadToken: operations.uploadToken.route(uploadTokenEndpoint),
-				uploadVercelBlob: operations.uploadVercelBlob.route(
-					uploadVercelBlobEndpoint,
-				),
+				listAssets: listAssetsEndpoint,
+				createAsset: createAssetEndpoint,
+				updateAsset: updateAssetEndpoint,
+				deleteAsset: deleteAssetEndpoint,
+				listFolders: listFoldersEndpoint,
+				createFolder: createFolderEndpoint,
+				deleteFolder: deleteFolderEndpoint,
+				uploadDirect: uploadDirectEndpoint,
+				uploadToken: uploadTokenEndpoint,
+				uploadVercelBlob: uploadVercelBlobEndpoint,
 			} as const;
 		},
 	});

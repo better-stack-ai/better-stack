@@ -91,8 +91,8 @@ export interface BackendPlugin<
 	 *   create, update, updateMany, delete, deleteMany, findOne, findMany, count
 	 * @param context - Stack context with access to all plugins (for introspection)
 	 * @param operations - Request-bound operations declared by this plugin. When
-	 *   the plugin declares operations, bind every business endpoint with
-	 *   `operations.operationKey.route(endpoint)`.
+	 *   the plugin declares operations, create every business endpoint with an
+	 *   `operations.operationKey.route(ctx => input)` handler.
 	 */
 	routes(
 		adapter: Adapter,

@@ -14,8 +14,10 @@ import type {
 	StackServerAuthProvider,
 } from "../shared/auth-types";
 import { defineDb } from "@btst/db";
+import { AuthorizationError } from "../authorization/server";
 import {
-	bindRouteOperationEndpoint,
+	bindRouteOperationHandler,
+	OperationHttpError,
 	runAuthorizedOperation,
 	runInternalOperation,
 	type AnyOperation,
@@ -27,6 +29,35 @@ import {
 } from "../plugins/api/endpoint-inventory";
 
 export { toNodeHandler } from "better-call/node";
+
+function throwHttpOperationError(
+	cause: unknown,
+	error: (...args: any[]) => Error,
+): never {
+	if (
+		cause instanceof AuthorizationError ||
+		cause instanceof OperationHttpError
+	) {
+		const candidate = cause;
+		if (
+			typeof candidate.statusCode === "number" &&
+			Number.isInteger(candidate.statusCode) &&
+			candidate.statusCode >= 400 &&
+			candidate.statusCode <= 599 &&
+			typeof candidate.code === "string"
+		) {
+			throw error(candidate.statusCode, {
+				message: candidate.message,
+				code: candidate.code,
+				...(candidate instanceof OperationHttpError &&
+				Array.isArray(candidate.issues)
+					? { issues: candidate.issues }
+					: {}),
+			});
+		}
+	}
+	throw cause;
+}
 
 /**
  * Lazy, memoized identity resolvers keyed by the request's `Headers`
@@ -173,8 +204,24 @@ export function stack<
 					resolveIdentity: () => getRequestIdentity(request.headers),
 				});
 			Object.defineProperty(invoke, "route", {
-				value: (endpoint: import("better-call").Endpoint) =>
-					bindRouteOperationEndpoint(endpoint, operationKey),
+				value: (resolveInput: (context: any) => unknown) => {
+					const handler = async (context: {
+						request: Request;
+						error: (...args: any[]) => Error;
+					}) => {
+						try {
+							const input = await resolveInput(context);
+							return await invoke(input, context.request);
+						} catch (cause) {
+							throwHttpOperationError(cause, context.error);
+						}
+					};
+					return bindRouteOperationHandler(handler, {
+						pluginKey,
+						operationKey,
+						operation,
+					});
+				},
 			});
 			routeOperationApis[pluginKey]![operationKey] =
 				invoke as RouteOperation<AnyOperation>;

@@ -1,4 +1,5 @@
 import { APIError, createEndpoint as baseCreateEndpoint } from "better-call";
+import { bindRouteOperationEndpoint } from "./operation";
 
 /**
  * Validation issue segment shapes produced by standard-schema validators
@@ -74,9 +75,11 @@ export const createEndpoint = ((
 				}
 			: options;
 
-	return isPathForm
+	const handler = isPathForm ? handlerOrNever : handlerOrOptions;
+	const endpoint = isPathForm
 		? baseCreateEndpoint(pathOrOptions, wrappedOptions, handlerOrNever)
 		: baseCreateEndpoint(wrappedOptions, handlerOrOptions);
+	return bindRouteOperationEndpoint(endpoint, handler);
 }) as typeof baseCreateEndpoint;
 
 createEndpoint.create = baseCreateEndpoint.create;

@@ -14,6 +14,7 @@ import {
 	createEndpoint,
 	defineBackendPlugin,
 	defineOperation,
+	OperationHttpError,
 } from "../plugins/api";
 import { aiChatBackendPlugin } from "../plugins/ai-chat/api";
 import { blogBackendPlugin } from "../plugins/blog/api";
@@ -242,7 +243,7 @@ describe("composed endpoint inventory", () => {
 		);
 	});
 
-	it("rejects endpoints missing their exact operation transport binding", () => {
+	it("rejects endpoints missing their exact operation transport binding", async () => {
 		const plugin = defineBackendPlugin({
 			name: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
@@ -261,7 +262,7 @@ describe("composed endpoint inventory", () => {
 				adapter: memoryAdapter,
 			}),
 		).toThrowError(
-			'[btst/endpoint-inventory] Plugin "feature" route "read" (GET /records/:id) must be bound through operations.read.route(endpoint).',
+			'[btst/endpoint-inventory] Plugin "feature" route "read" (GET /records/:id) must use an operations.read.route(ctx => input) handler.',
 		);
 
 		const mismatched = defineBackendPlugin({
@@ -273,10 +274,10 @@ describe("composed endpoint inventory", () => {
 			}),
 			operationRouteMap: { fetch: "read" },
 			routes: (_adapter, _context, operations) => ({
-				fetch: operations.other.route(
-					createEndpoint("/records/:id", { method: "GET" }, async () => ({
-						ok: true,
-					})),
+				fetch: createEndpoint(
+					"/records/:id",
+					{ method: "GET", requireRequest: true },
+					operations.other.route((ctx) => ({ id: ctx.params.id })),
 				),
 			}),
 		});
@@ -287,8 +288,111 @@ describe("composed endpoint inventory", () => {
 				adapter: memoryAdapter,
 			}),
 		).toThrowError(
-			'[btst/endpoint-inventory] Plugin "feature" route "fetch" (GET /records/:id) maps to operation "read" but is bound to "other".',
+			'[btst/endpoint-inventory] Plugin "feature" route "fetch" (GET /records/:id) maps to operation "read" but is bound to "feature.other".',
 		);
+
+		const protectedPlugin = defineBackendPlugin({
+			name: "feature",
+			dbPlugin: createDbPlugin("feature", {}),
+			operations: () => ({ read: readOperation() }),
+			routes: (_adapter, _context, operations) => ({
+				read: createEndpoint(
+					"/records/:id",
+					{ method: "GET", requireRequest: true },
+					operations.read.route((ctx) => ({ id: ctx.params.id })),
+				),
+			}),
+		});
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [featurePermissions] as const,
+			rules: () => [],
+		});
+		const protectedBackend = stack({
+			basePath: "/api",
+			plugins: { feature: protectedPlugin },
+			adapter: memoryAdapter,
+			auth: createServerAuth({ authorization, getIdentity: () => null }),
+		});
+		expect(
+			(
+				await protectedBackend.handler(
+					new Request("http://localhost/api/records/1"),
+				)
+			).status,
+		).toBe(401);
+	});
+
+	it("maps only explicit operation HTTP errors at the generated route boundary", async () => {
+		const factFailure = Object.assign(new Error("trusted fact load failed"), {
+			statusCode: 418,
+			code: "FACT_FAILURE_MUST_NOT_LEAK",
+		});
+		const plugin = defineBackendPlugin({
+			name: "feature",
+			dbPlugin: createDbPlugin("feature", {}),
+			operations: () => ({
+				factFailure: readOperation({
+					facts: () => {
+						throw factFailure;
+					},
+				}),
+				httpFailure: readOperation({
+					execute: () => {
+						throw new OperationHttpError(
+							409,
+							"Record changed",
+							"RECORD_CHANGED",
+						);
+					},
+				}),
+			}),
+			routes: (_adapter, _context, operations) => ({
+				factFailure: createEndpoint(
+					"/fact-failure/:id",
+					{ method: "GET", requireRequest: true },
+					operations.factFailure.route((ctx) => ({ id: ctx.params.id })),
+				),
+				httpFailure: createEndpoint(
+					"/http-failure/:id",
+					{ method: "GET", requireRequest: true },
+					operations.httpFailure.route((ctx) => ({ id: ctx.params.id })),
+				),
+			}),
+		});
+		const backend = stack({
+			basePath: "/api",
+			plugins: { feature: plugin },
+			adapter: memoryAdapter,
+		});
+
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => undefined);
+		try {
+			const factResponse = await backend.handler(
+				new Request("http://localhost/api/fact-failure/1"),
+			);
+			expect(factResponse.status).toBe(500);
+			expect(await factResponse.text()).not.toContain(
+				"FACT_FAILURE_MUST_NOT_LEAK",
+			);
+			expect(consoleError).toHaveBeenCalledWith(
+				"# SERVER_ERROR: ",
+				factFailure,
+			);
+		} finally {
+			consoleError.mockRestore();
+		}
+
+		const httpResponse = await backend.handler(
+			new Request("http://localhost/api/http-failure/1"),
+		);
+		expect(httpResponse.status).toBe(409);
+		expect(await httpResponse.json()).toMatchObject({
+			message: "Record changed",
+			code: "RECORD_CHANGED",
+		});
 	});
 
 	it("rejects stale and ambiguous infrastructure allowlist entries", () => {
@@ -402,12 +506,10 @@ describe("composed endpoint inventory", () => {
 				internalOnly: readOperation({ execute: hiddenExecute }),
 			}),
 			routes: (_adapter, _context, operations) => ({
-				read: operations.read.route(
-					createEndpoint(
-						"/records/:id",
-						{ method: "GET", requireRequest: true },
-						(ctx) => operations.read({ id: ctx.params.id }, ctx.request),
-					),
+				read: createEndpoint(
+					"/records/:id",
+					{ method: "GET", requireRequest: true },
+					operations.read.route((ctx) => ({ id: ctx.params.id })),
 				),
 			}),
 		});

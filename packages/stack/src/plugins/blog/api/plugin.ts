@@ -1,7 +1,6 @@
 import type { DBAdapter as Adapter } from "@btst/db";
 import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
 import type { QueryClient } from "@tanstack/react-query";
-import { AuthorizationError } from "../../../authorization/server";
 import { blogSchema as dbSchema } from "../db";
 import { getAllPosts, getAllTags, getPostBySlug } from "./getters";
 import {
@@ -12,7 +11,6 @@ import {
 	updatePost as updatePostMutation,
 } from "./mutations";
 import {
-	BlogOperationError,
 	CreatePostOperationInputSchema,
 	NextPreviousPostsQuerySchema,
 	PostListQuerySchema,
@@ -140,28 +138,6 @@ function createBlogPrefetchForRoute(adapter: Adapter): BlogPrefetchForRoute {
 	} as BlogPrefetchForRoute;
 }
 
-type EndpointErrorFactory = (...args: any[]) => Error;
-
-async function adaptOperationToHttp<TResult>(
-	execute: () => Promise<TResult>,
-	error: EndpointErrorFactory,
-): Promise<TResult> {
-	try {
-		return await execute();
-	} catch (cause) {
-		if (
-			cause instanceof AuthorizationError ||
-			cause instanceof BlogOperationError
-		) {
-			throw error(cause.statusCode, {
-				message: cause.message,
-				code: cause.code,
-			});
-		}
-		throw cause;
-	}
-}
-
 /**
  * Blog backend plugin. Every maintained HTTP endpoint adapts the same
  * operation exposed by `forRequest(request).api.blog` and `internal.blog`.
@@ -193,11 +169,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 			const listPosts = createEndpoint(
 				"/posts",
 				{ method: "GET", query: PostListQuerySchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.listPosts(ctx.query, ctx.request),
-						ctx.error,
-					),
+				operations.listPosts.route((ctx) => ctx.query),
 			);
 
 			const createPost = createEndpoint(
@@ -207,11 +179,7 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 					body: CreatePostOperationInputSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.createPost(ctx.body, ctx.request),
-						ctx.error,
-					),
+				operations.createPost.route((ctx) => ctx.body),
 			);
 
 			const updatePost = createEndpoint(
@@ -221,25 +189,16 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 					body: UpdatePostOperationInputSchema.shape.data,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.updatePost(
-								{ id: ctx.params.id, data: ctx.body },
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.updatePost.route((ctx) => ({
+					id: ctx.params.id,
+					data: ctx.body,
+				})),
 			);
 
 			const deletePost = createEndpoint(
 				"/posts/:id",
 				{ method: "DELETE", requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.deletePost({ id: ctx.params.id }, ctx.request),
-						ctx.error,
-					),
+				operations.deletePost.route((ctx) => ({ id: ctx.params.id })),
 			);
 
 			const getNextPreviousPosts = createEndpoint(
@@ -249,31 +208,22 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 					query: NextPreviousPostsQuerySchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.getNextPreviousPosts(ctx.query, ctx.request),
-						ctx.error,
-					),
+				operations.getNextPreviousPosts.route((ctx) => ctx.query),
 			);
 
 			const listTags = createEndpoint(
 				"/tags",
 				{ method: "GET", requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.listTags({}, ctx.request),
-						ctx.error,
-					),
+				operations.listTags.route(() => ({})),
 			);
 
 			return {
-				listPosts: operations.listPosts.route(listPosts),
-				createPost: operations.createPost.route(createPost),
-				updatePost: operations.updatePost.route(updatePost),
-				deletePost: operations.deletePost.route(deletePost),
-				getNextPreviousPosts:
-					operations.getNextPreviousPosts.route(getNextPreviousPosts),
-				listTags: operations.listTags.route(listTags),
+				listPosts,
+				createPost,
+				updatePost,
+				deletePost,
+				getNextPreviousPosts,
+				listTags,
 			} as const;
 		},
 	});

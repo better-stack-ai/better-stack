@@ -3,6 +3,7 @@ import type { PermissionFactsFor } from "@btst/stack/authorization";
 import {
 	defineOperation,
 	type DeepReadonly,
+	OperationHttpError,
 	type OperationContext,
 	type OperationData,
 } from "@btst/stack/plugins/api";
@@ -148,22 +149,15 @@ type CMSLifecycleContext<TInput, TFacts> = OperationContext<TInput, TFacts> &
 	};
 
 /** A domain/HTTP error raised by a CMS operation. */
-export class CMSOperationError extends Error {
-	readonly statusCode: number;
-	readonly code: string;
-	readonly issues?: readonly unknown[];
-
+export class CMSOperationError extends OperationHttpError {
 	constructor(
 		statusCode: number,
 		message: string,
 		code = "CMS_OPERATION_ERROR",
 		issues?: readonly unknown[],
 	) {
-		super(message);
+		super(statusCode, message, code, issues);
 		this.name = "CMSOperationError";
-		this.statusCode = statusCode;
-		this.code = code;
-		this.issues = issues;
 	}
 }
 

@@ -1,8 +1,5 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import {
-	AuthorizationError,
-	isServerAuth,
-} from "../../../authorization/server";
+import { isServerAuth } from "../../../authorization/server";
 import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
 import type { LanguageModel, Tool } from "ai";
 import { aiChatSchema as dbSchema } from "../db";
@@ -13,7 +10,6 @@ import {
 } from "../schemas";
 import { getAllConversations, getConversationById } from "./getters";
 import {
-	AiChatOperationError,
 	type AiChatAccess,
 	type AiChatBackendHooks,
 	type ChatApiContext,
@@ -79,28 +75,6 @@ export interface AiChatBackendConfig {
 	hooks?: AiChatBackendHooks;
 }
 
-type EndpointErrorFactory = (...args: any[]) => Error;
-
-async function adaptOperationToHttp<TResult>(
-	execute: () => Promise<TResult>,
-	error: EndpointErrorFactory,
-): Promise<TResult> {
-	try {
-		return await execute();
-	} catch (cause) {
-		if (
-			cause instanceof AuthorizationError ||
-			cause instanceof AiChatOperationError
-		) {
-			throw error(cause.statusCode, {
-				message: cause.message,
-				...(cause instanceof AiChatOperationError ? { code: cause.code } : {}),
-			});
-		}
-		throw cause;
-	}
-}
-
 function resolveAccess(config: Pick<AiChatBackendConfig, "access" | "mode">) {
 	const legacyAccess = config.mode
 		? config.mode === "public"
@@ -160,20 +134,12 @@ export const aiChatBackendPlugin = <
 			const chat = createEndpoint(
 				"/chat",
 				{ method: "POST", body: chatRequestSchema, requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.startStream(ctx.body, ctx.request),
-						ctx.error,
-					),
+				operations.startStream.route((ctx) => ctx.body),
 			);
 			const listConversations = createEndpoint(
 				"/chat/conversations",
 				{ method: "GET", requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.listConversations({}, ctx.request),
-						ctx.error,
-					),
+				operations.listConversations.route(() => ({})),
 			);
 			const getConversation = createEndpoint(
 				"/chat/conversations/:id",
@@ -182,11 +148,7 @@ export const aiChatBackendPlugin = <
 					params: ConversationOperationInputSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.getConversation(ctx.params, ctx.request),
-						ctx.error,
-					),
+				operations.getConversation.route((ctx) => ctx.params),
 			);
 			const createConversation = createEndpoint(
 				"/chat/conversations",
@@ -195,11 +157,7 @@ export const aiChatBackendPlugin = <
 					body: createConversationSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() => operations.createConversation(ctx.body, ctx.request),
-						ctx.error,
-					),
+				operations.createConversation.route((ctx) => ctx.body),
 			);
 			const updateConversation = createEndpoint(
 				"/chat/conversations/:id",
@@ -208,41 +166,26 @@ export const aiChatBackendPlugin = <
 					body: updateConversationSchema,
 					requireRequest: true,
 				},
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.updateConversation(
-								UpdateConversationOperationInputSchema.parse({
-									id: ctx.params.id,
-									data: ctx.body,
-								}),
-								ctx.request,
-							),
-						ctx.error,
-					),
+				operations.updateConversation.route((ctx) =>
+					UpdateConversationOperationInputSchema.parse({
+						id: ctx.params.id,
+						data: ctx.body,
+					}),
+				),
 			);
 			const deleteConversation = createEndpoint(
 				"/chat/conversations/:id",
 				{ method: "DELETE", requireRequest: true },
-				(ctx) =>
-					adaptOperationToHttp(
-						() =>
-							operations.deleteConversation({ id: ctx.params.id }, ctx.request),
-						ctx.error,
-					),
+				operations.deleteConversation.route((ctx) => ({ id: ctx.params.id })),
 			);
 
 			return {
-				chat: operations.startStream.route(chat),
-				listConversations:
-					operations.listConversations.route(listConversations),
-				getConversation: operations.getConversation.route(getConversation),
-				createConversation:
-					operations.createConversation.route(createConversation),
-				updateConversation:
-					operations.updateConversation.route(updateConversation),
-				deleteConversation:
-					operations.deleteConversation.route(deleteConversation),
+				chat,
+				listConversations,
+				getConversation,
+				createConversation,
+				updateConversation,
+				deleteConversation,
 			} as const;
 		},
 	});
