@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { DBAdapter as Adapter } from "@btst/db";
 import type { PermissionFactsFor } from "@btst/stack/authorization";
 import {
@@ -36,6 +37,15 @@ import {
 import { serializeConversation, serializeMessage } from "./serializers";
 
 type TransactionAdapter = Parameters<Parameters<Adapter["transaction"]>[0]>[0];
+type ActiveAdapter = Omit<Adapter, "transaction"> &
+	Partial<Pick<Adapter, "transaction">>;
+type MemoryHistoryLockContext = {
+	owner: object;
+	adapter: ActiveAdapter;
+	inTransaction?: boolean;
+	rollbackError?: unknown;
+	rollbackOnly?: boolean;
+};
 
 export type AiChatAccess = "authorized" | "public";
 
@@ -837,26 +847,70 @@ export function createAiChatOperations(
 	const scopedUserIds = new WeakMap<object, string | undefined>();
 	const pendingRequestedConversationClaims = new Set<string>();
 	const pendingConversationMutationClaims = new Set<string>();
+	const memoryHistoryLock = new AsyncLocalStorage<MemoryHistoryLockContext>();
 	let memoryTransactionTail = Promise.resolve();
+	let activeMemoryOwner: object | undefined;
 	const serializeMemoryHistory = async <T>(
-		run: () => Promise<T>,
+		run: (activeAdapter: ActiveAdapter) => Promise<T>,
 	): Promise<T> => {
-		if (adapter.id !== "memory") return run();
+		if (adapter.id !== "memory") return run(adapter);
+		const inherited = memoryHistoryLock.getStore();
+		if (inherited && inherited.owner === activeMemoryOwner) {
+			return run(inherited.adapter);
+		}
 		let release = () => {};
 		const previous = memoryTransactionTail;
 		memoryTransactionTail = new Promise<void>((resolve) => {
 			release = resolve;
 		});
 		await previous;
+		const owner = {};
+		activeMemoryOwner = owner;
 		try {
-			return await run();
+			return await memoryHistoryLock.run({ owner, adapter }, () =>
+				run(adapter),
+			);
 		} finally {
+			if (activeMemoryOwner === owner) activeMemoryOwner = undefined;
 			release();
 		}
 	};
 	const runConversationTransaction = <T>(
 		callback: (transaction: TransactionAdapter) => Promise<T>,
-	) => serializeMemoryHistory(() => adapter.transaction(callback));
+	) => {
+		if (adapter.id !== "memory") return adapter.transaction(callback);
+		return serializeMemoryHistory((activeAdapter) => {
+			const context = memoryHistoryLock.getStore();
+			if (!context) throw new TypeError("Missing AI Chat memory lock context.");
+			if (context.inTransaction) {
+				return callback(activeAdapter as TransactionAdapter).catch((error) => {
+					context.rollbackOnly = true;
+					context.rollbackError = error;
+					throw error;
+				});
+			}
+			if (!activeAdapter.transaction) {
+				throw new TypeError("Missing AI Chat memory transaction adapter.");
+			}
+			return activeAdapter.transaction((transaction) =>
+				memoryHistoryLock.run(
+					{
+						owner: context.owner,
+						adapter: transaction,
+						inTransaction: true,
+					},
+					async () => {
+						const transactionContext = memoryHistoryLock.getStore();
+						const result = await callback(transaction);
+						if (transactionContext?.rollbackOnly) {
+							throw transactionContext.rollbackError;
+						}
+						return result;
+					},
+				),
+			);
+		});
+	};
 	const claimConversationMutation = (conversationId: string) => {
 		requireAtomicConversationTransactions(adapter);
 		if (pendingConversationMutationClaims.has(conversationId)) {
@@ -1043,8 +1097,8 @@ export function createAiChatOperations(
 		execute: async (context) => {
 			const userId = scopedUserIds.get(context.input as object);
 			const now = new Date();
-			const conversation = await serializeMemoryHistory(() =>
-				adapter.create<Conversation>({
+			const conversation = await serializeMemoryHistory((activeAdapter) =>
+				activeAdapter.create<Conversation>({
 					model: "conversation",
 					forceAllowId: Boolean(context.input.id),
 					data: {

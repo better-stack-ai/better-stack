@@ -1445,6 +1445,43 @@ describe("AI Chat operation authorization", () => {
 		).toBe(1);
 	});
 
+	it("allows AI Chat history operations to re-enter raw-memory hooks", async () => {
+		let app: ReturnType<typeof backend>;
+		const before = vi.fn(async () => {
+			await app.internal.aiChat.createConversation({
+				title: "Created from stream hook",
+			});
+		});
+		app = backend({ hooks: { onBeforeChat: before } });
+		const conversation = await seedConversation(app);
+		let settled = false;
+		const stream = app.internal.aiChat
+			.startStream({
+				...messageBody,
+				conversationId: conversation.id,
+				trustedUserId: owner.id,
+			})
+			.then((response) => {
+				settled = true;
+				return response;
+			});
+		await vi.waitFor(() => expect(settled).toBe(true), { timeout: 1_000 });
+		await expect(stream).resolves.toBeInstanceOf(Response);
+		expect(before).toHaveBeenCalledOnce();
+		expect(
+			await app.adapter.count({
+				model: "conversation",
+				where: [
+					{
+						field: "title",
+						value: "Created from stream hook",
+						operator: "eq",
+					},
+				],
+			}),
+		).toBe(1);
+	});
+
 	it("claims concurrent rename and delete snapshots before lifecycle hooks", async () => {
 		let enterUpdate: (() => void) | undefined;
 		const updateEntered = new Promise<void>((resolve) => {
