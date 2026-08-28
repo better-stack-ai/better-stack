@@ -794,17 +794,11 @@ describe("CommentThread provider wiring", () => {
 		expect(notify.success).not.toHaveBeenCalled();
 	});
 
-	it("uses top-level API and auth", async () => {
+	it("uses the provider identity for authenticated thread rendering", async () => {
 		await render(
 			<StackProvider
 				basePath="/pages"
-				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
-				auth={clientAuth(
-					{ id: "provider-user", role: "user" },
-					{
-						loginPath: "/sign-in",
-					},
-				)}
+				auth={clientAuth({ id: "provider-user", role: "user" })}
 			>
 				<CommentThread resourceId="post-1" resourceType="blog-post" />
 			</StackProvider>,

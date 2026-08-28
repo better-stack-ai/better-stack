@@ -816,7 +816,8 @@ function RepliesSection({
  * Embeddable threaded comment section.
  *
  * Lazy-mounts when the component scrolls into the viewport (via WhenVisible).
- * Uses the top-level StackProvider API and auth configuration.
+ * Resolves data transport through the Comments plugin endpoint and identity /
+ * sign-in behavior through the StackProvider auth service.
  *
  * @example
  * ```tsx
