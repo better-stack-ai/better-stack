@@ -2,7 +2,7 @@ import { dehydrate, hydrate, QueryClient } from "@tanstack/react-query";
 import { createRoute } from "@btst/yar";
 import { readFile } from "node:fs/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createClientStack } from "../client";
+import { createClientStack, type ResolvedClientStack } from "../client";
 import {
 	createResourceQueryKeys,
 	defineClientPlugin,
@@ -864,6 +864,33 @@ describe("resolved client runtime", () => {
 				probe: createProbePlugin((runtime) => runtimes.push(runtime)),
 			},
 		};
+		const assertSafeWhilePolluted = (
+			stack: ResolvedClientStack<any, any>,
+			runtime: ResolvedClientPluginRuntime,
+		) => {
+			const providerPlugin = stack.provider.plugins.probe!;
+			expect(runtime.api.headers).toBeUndefined();
+			expect(runtime.api.credentials).toBeUndefined();
+			expect((stack.provider.api as any).headers).toBeUndefined();
+			expect((stack.provider.api as any).browserHeaders).toBeUndefined();
+			expect((stack.provider.api as any).credentials).toBeUndefined();
+			expect(providerPlugin.api.browserHeaders).toBeUndefined();
+			expect(providerPlugin.api.credentials).toBeUndefined();
+			for (const exposed of [
+				runtime,
+				runtime.api,
+				runtime.site,
+				stack.provider,
+				stack.provider.api,
+				stack.provider.site,
+				stack.provider.plugins,
+				providerPlugin,
+				providerPlugin.api,
+				providerPlugin.site,
+			]) {
+				expect(Object.getPrototypeOf(exposed)).toBeNull();
+			}
+		};
 
 		const inheritedTransportStack = withObjectPrototypePollution(
 			{
@@ -874,7 +901,11 @@ describe("resolved client runtime", () => {
 				browserHeaders: { "x-prototype": "unsafe" },
 				credentials: "include",
 			},
-			() => createClientStack(baseConfig),
+			() => {
+				const stack = createClientStack(baseConfig);
+				assertSafeWhilePolluted(stack, runtimes.at(-1)!);
+				return stack;
+			},
 		);
 
 		const inheritedNestedStack = withObjectPrototypePollution(
@@ -884,11 +915,14 @@ describe("resolved client runtime", () => {
 				browserHeaders: { "x-prototype": "unsafe" },
 				credentials: "include",
 			},
-			() =>
-				createClientStack({
+			() => {
+				const stack = createClientStack({
 					...baseConfig,
 					endpoints: { probe: {} },
-				}),
+				});
+				assertSafeWhilePolluted(stack, runtimes.at(-1)!);
+				return stack;
+			},
 		);
 
 		for (const runtime of runtimes) {

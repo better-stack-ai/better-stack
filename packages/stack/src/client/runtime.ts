@@ -30,6 +30,10 @@ function ownValue(value: object | undefined, key: PropertyKey): unknown {
 		: undefined;
 }
 
+function nullRecord<T extends object>(value: T): T {
+	return Object.assign(Object.create(null), value) as T;
+}
+
 function normalizeBaseURL(value: unknown, label: string): string {
 	if (typeof value !== "string" || value.length === 0) {
 		throw new Error(
@@ -87,13 +91,13 @@ function normalizeLocation(value: unknown, label: string): ClientLocation {
 	if (!isPlainRecord(value)) {
 		throw new Error(`[btst/client] ${label} endpoint is required.`);
 	}
-	return {
+	return nullRecord({
 		baseURL: normalizeBaseURL(ownValue(value, "baseURL"), `${label}.baseURL`),
 		basePath: normalizeBasePath(
 			ownValue(value, "basePath"),
 			`${label}.basePath`,
 		),
-	};
+	});
 }
 
 function resolveLocationOverride(
@@ -101,7 +105,7 @@ function resolveLocationOverride(
 	override: unknown,
 	label: string,
 ): ClientLocation {
-	if (override === undefined) return { ...base };
+	if (override === undefined) return nullRecord({ ...base });
 	if (!isPlainRecord(override)) {
 		throw new Error(`[btst/client] ${label} must be an endpoint object.`);
 	}
@@ -120,10 +124,10 @@ function resolveLocationOverride(
 		);
 	}
 
-	return {
+	return nullRecord({
 		baseURL: base.baseURL,
 		basePath: normalizeBasePath(overrideBasePath, `${label}.basePath`),
-	};
+	});
 }
 
 function cloneHeaders(headers: HeadersInit | undefined): Headers | undefined {
@@ -186,11 +190,11 @@ function projectApi(
 	browserHeaders: Headers | undefined,
 	credentials: RequestCredentials | undefined,
 ): ClientProviderApi {
-	return {
+	return nullRecord({
 		...location,
 		...(browserHeaders ? { browserHeaders } : {}),
 		...(credentials !== undefined ? { credentials } : {}),
-	};
+	});
 }
 
 /** Resolves one request/browser runtime and its request-data-free provider view. */
@@ -293,32 +297,32 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 			browserHeaders,
 		);
 
-		pluginRuntimes[pluginKey] = {
-			api: {
+		pluginRuntimes[pluginKey] = nullRecord({
+			api: nullRecord({
 				...pluginApi,
 				...(headers ? { headers } : {}),
 				...(credentials !== undefined ? { credentials } : {}),
-			},
+			}),
 			site: pluginSite,
 			queryClient,
-		};
-		providerPlugins[pluginKey] = {
+		});
+		providerPlugins[pluginKey] = nullRecord({
 			api: projectApi(pluginApi, browserHeaders, credentials),
 			site: pluginSite,
-		};
+		});
 	}
 
-	return {
+	return nullRecord({
 		pluginRuntimes: pluginRuntimes as {
 			[K in keyof TPlugins]: ResolvedClientPluginRuntime;
 		},
-		provider: {
+		provider: nullRecord({
 			api,
 			site,
 			queryClient,
 			plugins: providerPlugins as {
 				[K in keyof TPlugins]: ClientProviderPluginRuntime;
 			},
-		},
-	};
+		}),
+	});
 }
