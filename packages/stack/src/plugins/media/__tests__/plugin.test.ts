@@ -412,6 +412,37 @@ describe("mediaBackendPlugin S3 URL validation", () => {
 });
 
 describe("mediaBackendPlugin direct upload", () => {
+	it("rejects oversized multipart metadata before reading file bytes", async () => {
+		const arrayBuffer = vi.fn(async () => new ArrayBuffer(0));
+		const backend = createBackend({ maxFileSizeBytes: 4 });
+		const request = new Request("http://localhost/api/media/upload", {
+			method: "POST",
+			headers: { "content-type": "multipart/form-data" },
+		});
+		const response = await (backend.router as any).endpoints.media_uploadDirect(
+			{
+				request,
+				headers: request.headers,
+				method: request.method,
+				params: {},
+				query: {},
+				body: {
+					file: {
+						name: "oversized.jpg",
+						type: "image/jpeg",
+						size: 5,
+						arrayBuffer,
+					},
+				},
+				asResponse: true,
+			},
+		);
+
+		expect(response.status).toBe(413);
+		expect(await response.json()).toMatchObject({ code: "FILE_TOO_LARGE" });
+		expect(arrayBuffer).not.toHaveBeenCalled();
+	});
+
 	it("uploads a file, creates an asset record, and associates it with a folder", async () => {
 		const storageAdapter = createLocalStorageAdapter({
 			upload: vi.fn(async () => ({ url: "/uploads/photo-123.jpg" })),

@@ -10,6 +10,7 @@ import { createServerAuth } from "../../../authorization/server";
 import type { StackServerAuthProvider } from "../../../shared/auth-types";
 import {
 	MEDIA_QUERY_KEYS,
+	VercelBlobOperationInputSchema,
 	mediaBackendPlugin,
 	type MediaBackendHooks,
 } from "../api";
@@ -449,6 +450,40 @@ describe("Media operation-first authorization", () => {
 				.forRequest(request("/admin", { identity: admin }))
 				.api.media.deleteAsset({ id: adminAsset.id }),
 		).resolves.toEqual({ success: true });
+	});
+
+	it("distinguishes metadata updates from an explicit move to the root folder", async () => {
+		const metadataOnlyAuthorization = defineAuthorization({
+			identity: identitySchema,
+			permissions: [mediaPermissions] as const,
+			rules: ({ media }) => [
+				media.asset.update.when(
+					({ identity, facts }) =>
+						identity !== null && facts.targetFolderId === undefined,
+				),
+			],
+		});
+		const backend = makeBackend({
+			auth: createAuth(identityFromRequest, metadataOnlyAuthorization),
+			tenantId: "tenant-a",
+		});
+		const folder = await seedFolder(backend);
+		const asset = await seedAsset(backend, { folderId: folder.id });
+		const api = backend.forRequest(
+			request("/metadata-only", { identity: tenantMember }),
+		).api.media;
+
+		await expect(
+			api.updateAsset({ id: asset.id, data: { alt: "Allowed" } }),
+		).resolves.toMatchObject({ alt: "Allowed", folderId: folder.id });
+		await expect(
+			api.updateAsset({ id: asset.id, data: { folderId: null } }),
+		).rejects.toMatchObject({ statusCode: 403 });
+		await expect(
+			backend.api.media.getAssetById(asset.id),
+		).resolves.toMatchObject({
+			folderId: folder.id,
+		});
 	});
 
 	it("fails closed across the maintained anonymous HTTP inventory", async () => {
@@ -1135,7 +1170,10 @@ describe("Vercel callback verifier", () => {
 			payload: {
 				blob: {
 					url: "https://x.public.blob.vercel-storage.com/a",
+					downloadUrl: "https://x.public.blob.vercel-storage.com/a?download=1",
 					pathname: "a",
+					contentType: "image/png",
+					contentDisposition: 'inline; filename="a"',
 				},
 				tokenPayload: JSON.stringify({
 					version: 1,
@@ -1147,6 +1185,14 @@ describe("Vercel callback verifier", () => {
 		const signature = createHmac("sha256", token)
 			.update(JSON.stringify(body))
 			.digest("hex");
+		const parsedBody = VercelBlobOperationInputSchema.parse({ body }).body;
+		expect(JSON.stringify(parsedBody)).toBe(JSON.stringify(body));
+		if (
+			!("type" in parsedBody) ||
+			parsedBody.type !== "blob.upload-completed"
+		) {
+			throw new Error("Expected a parsed Vercel Blob callback");
+		}
 		const { vercelBlobAdapter } = await import("../api/adapters/vercel-blob");
 		const adapter = vercelBlobAdapter({ token });
 		await expect(
@@ -1154,7 +1200,7 @@ describe("Vercel callback verifier", () => {
 				new Request("http://localhost", {
 					headers: { "x-vercel-signature": signature },
 				}),
-				body,
+				parsedBody,
 			),
 		).resolves.toEqual({ pathname: "a", mimeType: "image/png" });
 		await expect(
@@ -1162,7 +1208,7 @@ describe("Vercel callback verifier", () => {
 				new Request("http://localhost", {
 					headers: { "x-vercel-signature": `${signature.slice(0, -2)}00` },
 				}),
-				body,
+				parsedBody,
 			),
 		).rejects.toThrow("Invalid Vercel Blob callback signature");
 	});

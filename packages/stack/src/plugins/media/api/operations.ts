@@ -42,15 +42,20 @@ import {
 	type VercelBlobUploadCompletedBody,
 } from "./storage-adapter";
 
+/** Runtime input for one asset operation. */
 export const AssetIdOperationInputSchema = z.object({ id: z.string() });
+/** Runtime input for an asset update operation. */
 export const UpdateAssetOperationInputSchema = z.object({
 	id: z.string(),
 	data: updateAssetSchema,
 });
+/** Runtime input for one folder operation. */
 export const FolderIdOperationInputSchema = z.object({ id: z.string() });
+/** Runtime input for a folder collection operation. */
 export const FolderListOperationInputSchema = z.object({
 	parentId: z.string().nullable().optional(),
 });
+/** Runtime input for a direct file upload operation. */
 export const DirectUploadOperationInputSchema = z.object({
 	filename: z.string().min(1),
 	mimeType: z.string(),
@@ -68,13 +73,21 @@ const VercelGenerateBodySchema = z.object({
 		callbackUrl: z.string().optional(),
 	}),
 });
-const VercelCallbackBodySchema = z.object({
+const VercelCallbackBodyShape = z.object({
 	type: z.literal("blob.upload-completed"),
 	payload: z.object({
 		blob: z.object({ url: z.string(), pathname: z.string() }),
 		tokenPayload: z.string().nullable().optional(),
 	}),
 });
+// Provider signatures cover JSON.stringify() of the exact parsed request body.
+// Validate the required shape without stripping or reordering provider fields.
+const VercelCallbackBodySchema = z.custom<
+	z.output<typeof VercelCallbackBodyShape>
+>(
+	(value) => VercelCallbackBodyShape.safeParse(value).success,
+	"Invalid Vercel Blob callback body",
+);
 const LegacyVercelGenerateBodySchema = z.object({
 	pathname: z.string(),
 	clientPayload: z.string().nullable().optional(),
@@ -84,6 +97,7 @@ const VercelClientPayloadSchema = z.object({
 	size: z.number().int().min(0).optional(),
 	folderId: z.string().min(1).optional(),
 });
+/** Runtime input for the Vercel Blob token and callback operation. */
 export const VercelBlobOperationInputSchema = z.object({
 	body: z.union([
 		VercelGenerateBodySchema,
@@ -112,6 +126,7 @@ type FolderDeleteFacts = PermissionFactsFor<
 	typeof mediaPermissions.folder.delete
 >;
 
+/** An authorized, row-filtered page of Media assets. */
 export interface MediaAssetListResult {
 	readonly items: readonly SerializedAsset[];
 	readonly total: number;
@@ -119,6 +134,7 @@ export interface MediaAssetListResult {
 	readonly offset?: number;
 }
 
+/** Complete Media operation inventory shared by every server transport. */
 export type MediaOperations = {
 	readonly listAssets: Operation<
 		typeof AssetListQuerySchema,
@@ -197,6 +213,7 @@ export interface MediaApiContext<TInput = unknown, TFacts = unknown> {
 	readonly query?: unknown;
 }
 
+/** Typed post-operation context passed to Media result lifecycle hooks. */
 export interface MediaApiResultContext<
 	TInput = unknown,
 	TFacts = unknown,
@@ -205,6 +222,19 @@ export interface MediaApiResultContext<
 	readonly result: DeepReadonly<TResult>;
 }
 
+/** Validated input passed to upload lifecycle hooks. */
+export type MediaUploadOperationInput =
+	| z.output<typeof createAssetSchema>
+	| z.output<typeof DirectUploadOperationInputSchema>
+	| z.output<typeof uploadTokenRequestSchema>
+	| z.output<typeof VercelBlobOperationInputSchema>;
+
+/** Validated input for upload operations that create an asset result. */
+export type MediaUploadResultOperationInput =
+	| z.output<typeof createAssetSchema>
+	| z.output<typeof DirectUploadOperationInputSchema>;
+
+/** Every typed Media lifecycle error context. */
 export type MediaOperationHookContext =
 	| MediaApiContext<z.output<typeof AssetListQuerySchema>, LibraryReadFacts>
 	| MediaApiContext<z.output<typeof createAssetSchema>, AssetUploadFacts>
@@ -239,11 +269,15 @@ export type MediaOperationHookContext =
 export interface MediaBackendHooks {
 	onBeforeUpload?: (
 		meta: { filename: string; mimeType: string; size?: number },
-		context: MediaApiContext<unknown, AssetUploadFacts>,
+		context: MediaApiContext<MediaUploadOperationInput, AssetUploadFacts>,
 	) => Promise<void> | void;
 	onAfterUpload?: (
 		asset: DeepReadonly<SerializedAsset>,
-		context: MediaApiResultContext<unknown, AssetUploadFacts, SerializedAsset>,
+		context: MediaApiResultContext<
+			MediaUploadResultOperationInput,
+			AssetUploadFacts,
+			SerializedAsset
+		>,
 	) => Promise<void> | void;
 	onBeforeDelete?: (
 		asset: DeepReadonly<SerializedAsset>,
@@ -312,12 +346,19 @@ interface MediaResolverContext {
 	readonly query?: unknown;
 }
 
+/** Server-only dependencies and lifecycle configuration for Media operations. */
 export interface MediaOperationsConfig {
+	/** Storage provider used for upload initialization, storage effects, and cleanup. */
 	storageAdapter: StorageAdapter;
+	/** Maximum accepted upload size in bytes. */
 	maxFileSizeBytes?: number;
+	/** Optional exact or wildcard MIME allowlist. */
 	allowedMimeTypes?: string[];
+	/** Trusted public URL prefixes accepted during asset finalization. */
 	allowedUrlPrefixes?: string[];
+	/** Post-authorization Media domain lifecycle hooks. */
 	hooks?: MediaBackendHooks;
+	/** Resolve server-only collection scope from validated input/request context. */
 	resolveTenantId?: (
 		context: MediaResolverContext,
 	) => Promise<string | null | undefined> | string | null | undefined;
@@ -1109,7 +1150,7 @@ export function createMediaOperations(
 			hooks?.onAfterUpload?.(
 				context.result,
 				hookContext(context, { body: context.input }) as MediaApiResultContext<
-					unknown,
+					z.output<typeof createAssetSchema>,
 					AssetUploadFacts,
 					SerializedAsset
 				>,
@@ -1141,14 +1182,15 @@ export function createMediaOperations(
 			}
 			const snapshot = assetSnapshot(asset);
 			assets.set(input as object, snapshot);
+			const changesFolder = input.data.folderId !== undefined;
 			const target =
-				input.data.folderId == null
-					? undefined
-					: await loadFolder(input.data.folderId, tenantId);
+				typeof input.data.folderId === "string"
+					? await loadFolder(input.data.folderId, tenantId)
+					: undefined;
 			targetFolders.set(input as object, target);
 			return {
 				...assetFacts(snapshot),
-				...(target ? { targetFolderId: target.id } : {}),
+				...(changesFolder ? { targetFolderId: target?.id ?? null } : {}),
 			} satisfies AssetUpdateFacts;
 		},
 		execute: (context) => {
@@ -1531,7 +1573,7 @@ export function createMediaOperations(
 			hooks?.onAfterUpload?.(
 				context.result,
 				hookContext(context, { body: context.input }) as MediaApiResultContext<
-					unknown,
+					z.output<typeof DirectUploadOperationInputSchema>,
 					AssetUploadFacts,
 					SerializedAsset
 				>,

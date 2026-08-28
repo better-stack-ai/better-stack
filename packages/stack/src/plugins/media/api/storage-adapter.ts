@@ -81,7 +81,6 @@ export interface VercelBlobTokenOptions {
 export interface VercelBlobCallbackBlob {
 	url: string;
 	pathname: string;
-	[key: string]: unknown;
 }
 
 export interface VercelBlobGenerateClientTokenBody {

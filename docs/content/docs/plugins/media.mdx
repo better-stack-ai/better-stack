@@ -664,9 +664,10 @@ import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local"
 mediaBackendPlugin({
   storageAdapter: localAdapter(),
   hooks: {
-    onBeforeUpload: async (_meta, context) => {
-      const session = await getSession(context.headers as Headers)
-      if (!session?.user?.isAdmin) throw new Error("Admin access required")
+    onBeforeUpload: async (meta) => {
+      if (await exceedsStorageQuota(meta.size ?? 0)) {
+        throw new Error("Storage quota exceeded")
+      }
     },
     onBeforeDelete: async (asset) => {
       if (asset.mimeType.startsWith("image/")) return

@@ -49,6 +49,8 @@ export type {
 	MediaBackendHooks,
 	MediaOperationHookContext,
 	MediaOperations,
+	MediaUploadOperationInput,
+	MediaUploadResultOperationInput,
 } from "./operations";
 
 /** Configuration for the Media backend plugin. */
@@ -300,6 +302,14 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 				async (ctx) => {
 					try {
 						const { file, folderId } = parseMultipartFile(ctx.body);
+						const maximumSize = config.maxFileSizeBytes ?? 10 * 1024 * 1024;
+						if (file.size > maximumSize) {
+							throw new MediaOperationError(
+								413,
+								`File size ${file.size} bytes exceeds the limit of ${maximumSize} bytes`,
+								"FILE_TOO_LARGE",
+							);
+						}
 						const contentBase64 = Buffer.from(
 							await file.arrayBuffer(),
 						).toString("base64");

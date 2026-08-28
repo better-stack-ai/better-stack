@@ -40,7 +40,8 @@ export const mediaPermissions = definePermissions("media", {
 		update: permission(
 			z.object({
 				...assetFact,
-				targetFolderId: z.string().optional(),
+				/** `null` means moving to root; omitted means the folder is unchanged. */
+				targetFolderId: z.string().nullable().optional(),
 			}),
 		),
 		/** Delete a server-resolved asset and its storage object. */
