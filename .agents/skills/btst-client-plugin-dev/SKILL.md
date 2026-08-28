@@ -10,6 +10,7 @@ description: Patterns for writing BTST client plugins inside the monorepo, inclu
 ```
 src/plugins/{name}/
   client/
+    constants.ts        ← one literal programmatic plugin id
     plugin.tsx           ← defineClientPlugin entry
     hooks.ts             ← "use client" React hooks only
     components/
@@ -54,8 +55,9 @@ export function createMyQueryKeys(client, headers?: HeadersInit) {
 // client/hooks.ts ("use client")
 import { createResource } from "@btst/stack/plugins/client/hooks";
 import { myResources } from "../query-keys";
+import { MY_PLUGIN_ID } from "./constants";
 
-const my = createResource({ plugin: "my-plugin", resources: myResources });
+const my = createResource({ plugin: MY_PLUGIN_ID, resources: myResources });
 
 export const usePosts = (params?: ListParams) => my.posts.list.useInfinite([params]);
 export const useSuspensePost = (slug: string) => my.posts.detail.useSuspense([slug]);

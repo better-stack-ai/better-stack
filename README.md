@@ -119,10 +119,11 @@ export const generateMetadata = page.generateMetadata
 Wrap the pages subtree with one `StackProvider`:
 
 ```tsx
+const clientStack = getStackClient(queryClient)
+
 <StackProvider
-  basePath="/pages"
+  stack={clientStack}
   router={nextRouter()}
-  api={{ baseURL, basePath: "/api/data" }}
   auth={authProvider}
   overrides={{ blog: { uploadImage } }}
 >
@@ -130,8 +131,9 @@ Wrap the pages subtree with one `StackProvider`:
 </StackProvider>
 ```
 
-Router, API, and auth services belong at the top level; plugin overrides contain
-only plugin-specific customization. See the [full installation guide](https://www.better-stack.ai/docs/installation)
+API, site, and QueryClient runtime belong on the resolved client stack; router
+and auth services belong on the provider. Plugin overrides contain only
+plugin-specific customization. See the [full installation guide](https://www.better-stack.ai/docs/installation)
 for QueryClient wiring, database adapters, all three frameworks, and auth.
 
 ## Database schemas & migrations

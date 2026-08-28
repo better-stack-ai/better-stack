@@ -35,8 +35,9 @@ See [REFERENCE.md](REFERENCE.md) for full code shapes for every file.
   - Pass hooks and config to the backend plugin factory (e.g. `blogBackendPlugin(hooks)`).
   - Use camelCase keys for plugins that have compound names: `aiChat`, `formBuilder`, `uiBuilder`.
 - **Client** (`lib/stack-client.tsx`): import `{plugin}ClientPlugin` from `@btst/stack/plugins/{plugin}/client`.
-  - Each client plugin factory receives: `{ apiBaseURL, apiBasePath, siteBaseURL, siteBasePath, queryClient, headers?, seo?, hooks? }`.
-  - Pass `headers` from the incoming request for SSR authentication.
+  - Blog and new v3 client definitions receive only plugin-specific options such as `seo`, hooks, or page components. Configure `api`, `site`, and `queryClient` once on `createClientStack()`; its resolver binds that runtime to every definition.
+  - Pass incoming SSR request headers through the top-level `createClientStack({ api: { headers } })` configuration.
+  - Some unmigrated first-party plugins temporarily still accept shared runtime fields. That compatibility shape lasts only until their migration tickets land; do not copy it into new definitions.
 
 ### 3) Configure backend stack
 
@@ -75,12 +76,11 @@ Do not duplicate — the patcher and manual edits must both be idempotent.
   `createReactRouterPage`, or `createTanStackPageOptions`. The factory
   owns route matching, loader ordering, hydration, metadata, and 404 handling.
 - **Pages layout** (`"use client"` in Next.js): wrap in `QueryClientProvider` then `StackProvider`:
-  - `basePath="/pages"` (must match your pages catch-all prefix)
+  - Pass the resolved client stack with `stack={clientStack}`. Its top-level `site.basePath` must match your pages catch-all prefix.
   - `router={nextRouter()}` / `reactRouter()` / `tanstackRouter()` for framework-wide links, images, navigation, and refresh.
-  - `api={{ baseURL, basePath: "/api/data" }}` for client-side API calls.
   - `auth={createClientAuth({ authorization, getIdentity, loginPath })}` when plugins need identity or permission presentation gates.
   - `overrides={{ pluginKey: { uploadImage?, ...pluginSpecificValues } }}` only for plugin-specific customization.
-  - Define a typed `PluginOverrides` interface importing `{Plugin}Overrides` from each plugin client package.
+  - Let the resolved plugin map infer override keys and values; do not duplicate a manual provider map.
   - See [REFERENCE.md](REFERENCE.md) for provider wiring and per-plugin override shapes.
 - **ai-chat plugin only**: wrap the **root layout** (above `StackProvider`) with `PageAIContextProvider`:
   ```tsx
@@ -109,7 +109,7 @@ Do not duplicate — the patcher and manual edits must both be idempotent.
 - API `basePath` and `stack({ basePath })` match exactly.
 - API and page catch-all routes use the framework entry factories.
 - Pages layout is `"use client"` and wraps `QueryClientProvider` then `StackProvider`.
-- `StackProvider` `basePath` matches the `/pages` catch-all route prefix.
+- The resolved client stack's `site.basePath` matches the `/pages` catch-all route prefix.
 - Global CSS has one `@import` line per selected plugin.
 - `/pages/*` routes render expected plugin pages.
 - CLI commands run with required env vars in scope.

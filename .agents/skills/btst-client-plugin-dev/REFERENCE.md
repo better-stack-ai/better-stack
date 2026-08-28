@@ -129,6 +129,12 @@ export function createMyQueryKeys(client: ResourceClient, headers?: HeadersInit)
 
 ---
 
+## Programmatic id (client/constants.ts)
+
+```typescript
+export const MY_PLUGIN_ID = "my-plugin" as const
+```
+
 ## defineClientPlugin shape (client/plugin.tsx)
 
 ```typescript
@@ -140,6 +146,7 @@ import {
 import type { ResolvedClientPluginRuntime } from "@btst/stack/plugins/client"
 import type { QueryClient } from "@tanstack/react-query"
 import { lazy } from "react"
+import { MY_PLUGIN_ID } from "./constants"
 
 export interface MyClientConfig {
   hooks?: MyClientHooks
@@ -158,7 +165,7 @@ interface ResolvedMyClientConfig extends MyClientConfig {
 
 function resolveMyClientConfig(
   config: MyClientConfig,
-  runtime: ResolvedClientPluginRuntime<"my-plugin">,
+  runtime: ResolvedClientPluginRuntime<typeof MY_PLUGIN_ID>,
 ): ResolvedMyClientConfig {
   return {
     hooks: config.hooks,
@@ -200,7 +207,7 @@ function createResolvedMyPlugin(config: ResolvedMyClientConfig) {
 
 export const myClientPlugin = (config: MyClientConfig = {}) =>
   defineClientPlugin()({
-    id: "my-plugin",
+    id: MY_PLUGIN_ID,
     resolve: (runtime) =>
       createResolvedMyPlugin(resolveMyClientConfig(config, runtime)),
   })
@@ -210,3 +217,5 @@ export const myClientPlugin = (config: MyClientConfig = {}) =>
 headers, and credentials arrive through `resolve(runtime)` from the enclosing
 client stack. Construct the resolved config from an explicit allowlist so
 removed transport fields cannot survive through JavaScript or `any` callers.
+Use the same exported literal id in the definition and every `createResource()`
+call so runtime lookup cannot drift from registration.
