@@ -691,6 +691,69 @@ describe("resolved client runtime", () => {
 		});
 	});
 
+	it("preserves computed prototype-like plugin and route keys as own entries", () => {
+		let contextOwnsPlugin = false;
+		let runtime: ResolvedClientPluginRuntime | undefined;
+		const prototypePlugin = defineClientPlugin({
+			name: "prototypePlugin",
+			resolve(value) {
+				runtime = value;
+				return {
+					routes: (context) => {
+						contextOwnsPlugin = Object.hasOwn(
+							context?.plugins ?? {},
+							"__proto__",
+						);
+						return {
+							["__proto__"]: createRoute("/prototype", () => ({
+								PageComponent: () => null,
+							})),
+						};
+					},
+				};
+			},
+		});
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient: new QueryClient(),
+			plugins: { ["__proto__"]: prototypePlugin },
+			endpoints: {
+				["__proto__"]: { api: { basePath: "/api/prototype" } },
+			},
+		});
+
+		expect(runtime?.api.basePath).toBe("/api/prototype");
+		expect(contextOwnsPlugin).toBe(true);
+		expect(Object.getPrototypeOf(stack.provider.plugins)).toBeNull();
+		expect(Object.hasOwn(stack.provider.plugins, "__proto__")).toBe(true);
+		expect(stack.router.getRoute("/prototype")).toBeTruthy();
+	});
+
+	it("rejects inherited object names as unregistered endpoint keys", () => {
+		for (const inheritedName of ["__proto__", "constructor", "toString"]) {
+			expect(() =>
+				createClientStack({
+					api: {
+						baseURL: "https://app.example.com",
+						basePath: "/api/data",
+					},
+					site: {
+						baseURL: "https://app.example.com",
+						basePath: "/pages",
+					},
+					queryClient: new QueryClient(),
+					plugins: { probe: createProbePlugin(() => undefined) },
+					endpoints: {
+						[inheritedName]: { api: { basePath: "/api/inherited" } },
+					} as any,
+				}),
+			).toThrowError(
+				new RegExp(`${inheritedName}.*registered client plugin`, "i"),
+			);
+		}
+	});
+
 	it("keeps legacy client plugins working during first-party migration", async () => {
 		const legacy = defineClientPlugin({
 			name: "legacy",

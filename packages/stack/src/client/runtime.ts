@@ -221,15 +221,17 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 	const requestHeaders = cloneHeaders(config.api.headers);
 	const endpointKeys = Object.keys(config.endpoints ?? {});
 	for (const pluginKey of endpointKeys) {
-		if (!(pluginKey in config.plugins)) {
+		if (!Object.hasOwn(config.plugins, pluginKey)) {
 			throw new Error(
 				`[btst/client] Endpoint replacement "${pluginKey}" has no registered client plugin.`,
 			);
 		}
 	}
 
-	const pluginRuntimes: Record<string, ResolvedClientPluginRuntime> = {};
-	const providerPlugins: Record<string, ClientProviderPluginRuntime> = {};
+	const pluginRuntimes: Record<string, ResolvedClientPluginRuntime> =
+		Object.create(null);
+	const providerPlugins: Record<string, ClientProviderPluginRuntime> =
+		Object.create(null);
 
 	for (const pluginKey of Object.keys(config.plugins)) {
 		const endpoint = config.endpoints?.[pluginKey];

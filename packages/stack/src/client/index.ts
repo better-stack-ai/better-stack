@@ -99,7 +99,9 @@ export function createClientStack<
 ): ClientStack<TRoutes> | ResolvedClientStack<TRoutes, TPlugins> {
 	const canonical = hasResolvedRuntime(config);
 	const runtime = canonical ? resolveClientRuntime(config) : undefined;
-	const resolvedPlugins: Record<string, ClientPlugin<any, any>> = {};
+	const resolvedPlugins: Record<string, ClientPlugin<any, any>> = Object.create(
+		null,
+	);
 
 	for (const [pluginKey, registration] of Object.entries(config.plugins)) {
 		if ("resolve" in registration) {
@@ -132,7 +134,7 @@ export function createClientStack<
 
 	// Collect all routes from all plugins
 	// We build this with type assertions to preserve literal keys
-	const allRoutes = {} as TRoutes;
+	const allRoutes = Object.create(null) as TRoutes;
 
 	// Create the context object to pass to plugin routes
 	const clientStackContext: ClientStackContext = {
