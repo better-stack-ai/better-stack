@@ -30,6 +30,11 @@ export { createRouter } from "better-call";
 // Wrapped createEndpoint that preserves Zod validation issues in 400 responses
 export { createEndpoint } from "./create-endpoint";
 export type { SerializedValidationIssue } from "./create-endpoint";
+export type {
+	ComposedEndpointInventoryEntry,
+	InfrastructureRouteDeclaration,
+	InfrastructureRouteInventory,
+} from "./endpoint-inventory";
 export { createDbPlugin } from "@btst/db";
 export {
 	defineOperation,

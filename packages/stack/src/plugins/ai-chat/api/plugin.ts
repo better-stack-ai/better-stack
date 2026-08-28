@@ -138,6 +138,7 @@ export const aiChatBackendPlugin = <
 	return defineBackendPlugin({
 		name: "ai-chat",
 		dbPlugin: dbSchema,
+		operationRouteMap: { chat: "startStream" },
 		operations: (adapter: Adapter, context) =>
 			createAiChatOperations(adapter, {
 				...operationsConfig,

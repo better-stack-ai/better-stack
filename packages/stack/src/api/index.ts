@@ -18,6 +18,10 @@ import {
 	runAuthorizedOperation,
 	runInternalOperation,
 } from "../plugins/api/operation";
+import {
+	composeEndpointInventory,
+	type ComposedEndpointInventoryEntry,
+} from "../plugins/api/endpoint-inventory";
 
 export { toNodeHandler } from "better-call/node";
 
@@ -136,6 +140,8 @@ export function stack<
 	const pluginRoutesByName: Record<string, Record<string, any>> = {};
 
 	// Create context for plugins that need access to all plugins (e.g., openAPI)
+	const pluginOperations: Record<string, Record<string, any>> = {};
+	const endpointInventory: ComposedEndpointInventoryEntry[] = [];
 	const context: StackContext = {
 		plugins,
 		basePath,
@@ -144,7 +150,6 @@ export function stack<
 		pluginRoutes: pluginRoutesByName,
 	};
 
-	const pluginOperations: Record<string, Record<string, any>> = {};
 	for (const [pluginKey, plugin] of Object.entries(plugins)) {
 		if (plugin.operations) {
 			pluginOperations[pluginKey] = plugin.operations(adapterInstance, context);
@@ -178,6 +183,16 @@ export function stack<
 			routeOperationApis[pluginKey] ?? {},
 		);
 		pluginRoutesByName[pluginKey] = pluginRoutes;
+		endpointInventory.push(
+			...composeEndpointInventory(
+				pluginKey,
+				plugin.name,
+				pluginRoutes,
+				pluginOperations[pluginKey] ?? {},
+				plugin.infrastructureRoutes,
+				plugin.operationRouteMap,
+			),
+		);
 
 		// Prefix route keys with plugin name to avoid collisions
 		for (const [routeKey, endpoint] of Object.entries(pluginRoutes)) {
@@ -185,6 +200,10 @@ export function stack<
 			(allRoutes as any)[compositeKey] = endpoint;
 		}
 	}
+	Object.defineProperty(context, "endpointInventory", {
+		value: Object.freeze(endpointInventory),
+		enumerable: true,
+	});
 
 	// Build the typed api surface by calling each plugin's api factory
 	const pluginApis = {} as PluginApis<TPlugins>;

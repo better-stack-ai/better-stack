@@ -335,6 +335,43 @@ trusted server state to build those requests, but it must not mutate it.
 Trusted `internal` execution still derives the requests and runs the lifecycle;
 it skips only user authorization.
 
+Once a plugin declares operations, every composed HTTP route must have a
+same-key operation. `stack()` validates that inventory during composition and
+reports the plugin key, route key, method, and path for an undeclared route.
+This keeps a new route from silently bypassing the operation pipeline. Extra
+operations may remain request/internal-only and are not exposed as HTTP merely
+because they exist in the operation registry.
+
+Keep route and operation keys identical by default. If an existing public
+router key cannot be renamed, declare only that mismatch explicitly with
+`operationRouteMap: { existingRouteKey: "operationKey" }`. Stale route keys and
+unknown operation targets fail composition.
+
+True infrastructure handlers should not be disguised as business operations.
+Declare the smallest possible route-key allowlist with a public access marker
+and a concrete rationale:
+
+```typescript
+defineBackendPlugin({
+  name: "reference",
+  dbPlugin: referenceSchema,
+  infrastructureRoutes: {
+    schema: {
+      access: "public",
+      rationale: "Serves generated metadata; it does not execute business behavior.",
+    },
+  },
+  routes: () => ({
+    schema: createEndpoint("/schema", { method: "GET" }, generateSchema),
+  }),
+})
+```
+
+The allowlist is exact: a missing declaration, stale key after a rename, empty
+rationale, or route declared as both operation-backed and infrastructure fails
+composition. Public infrastructure still runs the handler's validation and
+security/domain checks; the declaration does not turn other routes public.
+
 Register the same catalog in the application's server authorization. `stack()`
 rejects catalog mismatches at typecheck time. Call the composed operation—not
 the descriptor—from application code:
