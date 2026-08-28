@@ -7,6 +7,7 @@ import { defineAuthorization } from "../../../authorization";
 import { createServerAuth } from "../../../authorization/server";
 import {
 	aiChatBackendPlugin,
+	AI_CHAT_LIFECYCLE_HOOK_MIGRATIONS,
 	AI_CHAT_OPERATION_INVENTORY,
 	AI_CHAT_RAW_ESCAPE_HATCH_INVENTORY,
 } from "../api";
@@ -106,6 +107,7 @@ function backend(options?: {
 	authorization?: typeof fullAuthorization;
 	adapter?: (db: DatabaseDefinition) => DBAdapter;
 	hooks?: Parameters<typeof aiChatBackendPlugin>[0]["hooks"];
+	enablePageTools?: boolean;
 	tools?: Parameters<typeof aiChatBackendPlugin>[0]["tools"];
 	getIdentity?: (
 		request: Request,
@@ -117,6 +119,7 @@ function backend(options?: {
 			aiChat: aiChatBackendPlugin({
 				model,
 				access: options?.access ?? "authorized",
+				enablePageTools: options?.enablePageTools,
 				hooks: options?.hooks,
 				tools: options?.tools,
 			}),
@@ -199,6 +202,21 @@ describe("AI Chat operation authorization", () => {
 		expect(AI_CHAT_RAW_ESCAPE_HATCH_INVENTORY).toEqual([
 			"api.aiChat.getAllConversations",
 			"api.aiChat.getConversationById",
+		]);
+		expect(Object.keys(AI_CHAT_LIFECYCLE_HOOK_MIGRATIONS)).toHaveLength(12);
+		expect(Object.values(AI_CHAT_LIFECYCLE_HOOK_MIGRATIONS)).toEqual([
+			"onBeforeActivateTools",
+			"onAfterListConversations",
+			"onAfterGetConversation",
+			"onAfterCreateConversation",
+			"onAfterUpdateConversation",
+			"onAfterDeleteConversation",
+			"onErrorChat",
+			"onErrorListConversations",
+			"onErrorGetConversation",
+			"onErrorCreateConversation",
+			"onErrorUpdateConversation",
+			"onErrorDeleteConversation",
 		]);
 		expect(operations?.startStream.resultMode).toBe("passthrough");
 		expect(operations?.listConversations.resultMode).toBe("immutable");
@@ -385,6 +403,323 @@ describe("AI Chat operation authorization", () => {
 		expect(Object.isFrozen(result)).toBe(true);
 	});
 
+	it.each(["http", "request", "internal"] as const)(
+		"invokes every renamed history result phase through %s execution",
+		async (transport) => {
+			const phases: string[] = [];
+			const app = backend({
+				hooks: {
+					onAfterListConversations: () => {
+						phases.push("list");
+					},
+					onAfterGetConversation: () => {
+						phases.push("get");
+					},
+					onAfterCreateConversation: () => {
+						phases.push("create");
+					},
+					onAfterUpdateConversation: () => {
+						phases.push("update");
+					},
+					onAfterDeleteConversation: () => {
+						phases.push("delete");
+					},
+				},
+			});
+			const target = await seedConversation(app);
+
+			if (transport === "http") {
+				const responses = [
+					await app.handler(
+						request("/chat/conversations", { identity: owner }),
+					),
+					await app.handler(
+						request(`/chat/conversations/${target.id}`, { identity: owner }),
+					),
+					await app.handler(
+						request("/chat/conversations", {
+							method: "POST",
+							identity: owner,
+							body: { title: "Created" },
+						}),
+					),
+					await app.handler(
+						request(`/chat/conversations/${target.id}`, {
+							method: "PUT",
+							identity: owner,
+							body: { title: "Updated" },
+						}),
+					),
+					await app.handler(
+						request(`/chat/conversations/${target.id}`, {
+							method: "DELETE",
+							identity: owner,
+						}),
+					),
+				];
+				expect(responses.map((response) => response.status)).toEqual([
+					200, 200, 200, 200, 200,
+				]);
+			} else if (transport === "request") {
+				const api = app.forRequest(request("/lifecycle", { identity: owner }))
+					.api.aiChat;
+				await api.listConversations({});
+				await api.getConversation({ id: target.id });
+				await api.createConversation({ title: "Created" });
+				await api.updateConversation({
+					id: target.id,
+					data: { title: "Updated" },
+				});
+				await api.deleteConversation({ id: target.id });
+			} else {
+				await app.internal.aiChat.listConversations({});
+				await app.internal.aiChat.getConversation({ id: target.id });
+				await app.internal.aiChat.createConversation({ title: "Created" });
+				await app.internal.aiChat.updateConversation({
+					id: target.id,
+					data: { title: "Updated" },
+				});
+				await app.internal.aiChat.deleteConversation({ id: target.id });
+			}
+
+			expect(phases).toEqual(["list", "get", "create", "update", "delete"]);
+		},
+	);
+
+	it.each(["http", "request", "internal"] as const)(
+		"invokes every renamed history error phase through %s execution",
+		async (transport) => {
+			const phases: string[] = [];
+			const fail = (phase: string) => () => {
+				phases.push(`before:${phase}`);
+				throw new Error(`${phase} rejected`);
+			};
+			const observe = (phase: string) => (error: Error) => {
+				phases.push(`error:${phase}:${error.message}`);
+			};
+			const app = backend({
+				hooks: {
+					onBeforeListConversations: fail("list"),
+					onErrorListConversations: observe("list"),
+					onBeforeGetConversation: fail("get"),
+					onErrorGetConversation: observe("get"),
+					onBeforeCreateConversation: fail("create"),
+					onErrorCreateConversation: observe("create"),
+					onBeforeUpdateConversation: fail("update"),
+					onErrorUpdateConversation: observe("update"),
+					onBeforeDeleteConversation: fail("delete"),
+					onErrorDeleteConversation: observe("delete"),
+				},
+			});
+			const target = await seedConversation(app);
+
+			if (transport === "http") {
+				const responses = [
+					await app.handler(
+						request("/chat/conversations", { identity: owner }),
+					),
+					await app.handler(
+						request(`/chat/conversations/${target.id}`, { identity: owner }),
+					),
+					await app.handler(
+						request("/chat/conversations", {
+							method: "POST",
+							identity: owner,
+							body: { title: "Rejected" },
+						}),
+					),
+					await app.handler(
+						request(`/chat/conversations/${target.id}`, {
+							method: "PUT",
+							identity: owner,
+							body: { title: "Rejected" },
+						}),
+					),
+					await app.handler(
+						request(`/chat/conversations/${target.id}`, {
+							method: "DELETE",
+							identity: owner,
+						}),
+					),
+				];
+				expect(responses.map((response) => response.status)).toEqual([
+					403, 403, 403, 403, 403,
+				]);
+			} else {
+				const api =
+					transport === "request"
+						? app.forRequest(request("/lifecycle", { identity: owner })).api
+								.aiChat
+						: app.internal.aiChat;
+				for (const operation of [
+					() => api.listConversations({}),
+					() => api.getConversation({ id: target.id }),
+					() => api.createConversation({ title: "Rejected" }),
+					() =>
+						api.updateConversation({
+							id: target.id,
+							data: { title: "Rejected" },
+						}),
+					() => api.deleteConversation({ id: target.id }),
+				]) {
+					await expect(operation()).rejects.toMatchObject({ statusCode: 403 });
+				}
+			}
+
+			expect(phases).toEqual([
+				"before:list",
+				"error:list:list rejected",
+				"before:get",
+				"error:get:get rejected",
+				"before:create",
+				"error:create:create rejected",
+				"before:update",
+				"error:update:update rejected",
+				"before:delete",
+				"error:delete:delete rejected",
+			]);
+		},
+	);
+
+	it.each(["http", "request", "internal"] as const)(
+		"keeps explicit tool activation filtering on %s execution",
+		async (transport) => {
+			const activated = vi.fn(() => [] as const);
+			const app = backend({
+				enablePageTools: true,
+				hooks: { onBeforeActivateTools: activated },
+			});
+			const conversation = await seedConversation(app);
+			const input = {
+				...messageBody,
+				conversationId: conversation.id,
+				availableTools: ["fillBlogForm"],
+				routeName: "newPost",
+			};
+
+			if (transport === "http") {
+				const response = await app.handler(
+					request("/chat", {
+						method: "POST",
+						identity: owner,
+						body: input,
+					}),
+				);
+				expect(response.status).toBe(200);
+			} else if (transport === "request") {
+				await expect(
+					app
+						.forRequest(request("/chat", { identity: owner }))
+						.api.aiChat.startStream(input),
+				).resolves.toBeInstanceOf(Response);
+			} else {
+				await expect(
+					app.internal.aiChat.startStream({
+						...input,
+						trustedUserId: owner.id,
+					}),
+				).resolves.toBeInstanceOf(Response);
+			}
+
+			expect(activated).toHaveBeenCalledWith(
+				["fillBlogForm"],
+				"newPost",
+				expect.any(Object),
+			);
+			expect(streamText).toHaveBeenLastCalledWith(
+				expect.not.objectContaining({ tools: expect.anything() }),
+			);
+		},
+	);
+
+	it("preserves validation, fact, authorization, lifecycle, and domain ordering", async () => {
+		const events: string[] = [];
+		let rejectBefore = false;
+		const orderedAuthorization = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+			permissions: [aiChatPermissions] as const,
+			rules: ({ aiChat }) => [
+				aiChat.conversation.update.when(({ facts }) => {
+					events.push(`authorize:${facts.exists}`);
+					return true;
+				}),
+			],
+		});
+		const app = backend({
+			authorization: orderedAuthorization as typeof fullAuthorization,
+			hooks: {
+				onBeforeUpdateConversation: (_id, _data, context) => {
+					events.push(`before:${context.facts.exists}`);
+					if (rejectBefore) throw new Error("before rejected");
+				},
+				onAfterUpdateConversation: (conversation) => {
+					events.push(`after:${conversation.title}`);
+				},
+				onErrorUpdateConversation: (error) => {
+					events.push(`error:${error.message}`);
+				},
+			},
+		});
+		const conversation = await seedConversation(app);
+
+		await expect(
+			app
+				.forRequest(request("/invalid", { identity: owner }))
+				.api.aiChat.updateConversation({
+					id: conversation.id,
+					data: { title: "" },
+				}),
+		).rejects.toBeDefined();
+		expect(events).toEqual([]);
+
+		await app
+			.forRequest(request("/valid", { identity: owner }))
+			.api.aiChat.updateConversation({
+				id: conversation.id,
+				data: { title: "Request update" },
+			});
+		expect(events).toEqual([
+			"authorize:true",
+			"before:true",
+			"after:Request update",
+		]);
+		await expect(
+			app.adapter.findOne<Conversation>({
+				model: "conversation",
+				where: [{ field: "id", value: conversation.id }],
+			}),
+		).resolves.toMatchObject({ title: "Request update" });
+
+		events.length = 0;
+		await app.internal.aiChat.updateConversation({
+			id: conversation.id,
+			data: { title: "Trusted update" },
+		});
+		expect(events).toEqual(["before:true", "after:Trusted update"]);
+		await expect(
+			app.adapter.findOne<Conversation>({
+				model: "conversation",
+				where: [{ field: "id", value: conversation.id }],
+			}),
+		).resolves.toMatchObject({ title: "Trusted update" });
+
+		events.length = 0;
+		rejectBefore = true;
+		await expect(
+			app
+				.forRequest(request("/rejected", { identity: owner }))
+				.api.aiChat.updateConversation({
+					id: conversation.id,
+					data: { title: "Rejected update" },
+				}),
+		).rejects.toMatchObject({ statusCode: 403, message: "before rejected" });
+		expect(events).toEqual([
+			"authorize:true",
+			"before:true",
+			"error:before rejected",
+		]);
+	});
+
 	it("keeps collection scoping server-only and partitions owner histories", async () => {
 		const app = backend();
 		await seedConversation(app, owner.id, "Owner");
@@ -469,10 +804,10 @@ describe("AI Chat operation authorization", () => {
 
 	it("fails closed before completion writes if transaction isolation disappears", async () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
-		const onChatError = vi.fn();
+		const onErrorChat = vi.fn();
 		const app = backend({
 			adapter: databaseLikeMemory,
-			hooks: { onChatError },
+			hooks: { onErrorChat },
 		});
 		await app
 			.forRequest(request("/chat", { identity: owner }))
@@ -501,7 +836,7 @@ describe("AI Chat operation authorization", () => {
 				where: [{ field: "role", value: "assistant", operator: "eq" }],
 			}),
 		).toBe(0);
-		expect(onChatError).toHaveBeenCalledWith(
+		expect(onErrorChat).toHaveBeenCalledWith(
 			expect.objectContaining({ code: "ATOMIC_TRANSACTION_REQUIRED" }),
 			expect.any(Object),
 		);
@@ -902,7 +1237,7 @@ describe("AI Chat operation authorization", () => {
 		const onError = vi.fn();
 		const app = backend({
 			getIdentity,
-			hooks: { onBeforeChat: before, onChatError: onError },
+			hooks: { onBeforeChat: before, onErrorChat: onError },
 		});
 
 		await expect(
@@ -1095,8 +1430,8 @@ describe("AI Chat operation authorization", () => {
 	});
 
 	it("reports asynchronous provider failures for every stream transport", async () => {
-		const onChatError = vi.fn();
-		const app = backend({ hooks: { onChatError } });
+		const onErrorChat = vi.fn();
+		const app = backend({ hooks: { onErrorChat } });
 		await app.handler(
 			request("/chat", { method: "POST", identity: owner, body: messageBody }),
 		);
@@ -1113,8 +1448,8 @@ describe("AI Chat operation authorization", () => {
 		>) {
 			await options.onError({ error: new Error("provider failed") });
 		}
-		expect(onChatError).toHaveBeenCalledTimes(3);
-		for (const [error] of onChatError.mock.calls) {
+		expect(onErrorChat).toHaveBeenCalledTimes(3);
+		for (const [error] of onErrorChat.mock.calls) {
 			expect(error).toMatchObject({ message: "provider failed" });
 		}
 	});
@@ -1125,7 +1460,7 @@ describe("AI Chat operation authorization", () => {
 		const before = vi.fn();
 		const onError = vi.fn();
 		app = backend({
-			hooks: { onBeforeChat: before, onChatError: onError },
+			hooks: { onBeforeChat: before, onErrorChat: onError },
 			getIdentity: async () => {
 				if (conversation) {
 					await app.adapter.update({
@@ -1494,7 +1829,7 @@ describe("AI Chat operation authorization", () => {
 		app = backend({
 			hooks: {
 				onBeforeChat: before,
-				onConversationCreated: afterCreate,
+				onAfterCreateConversation: afterCreate,
 			},
 		});
 		const conversation = await seedConversation(app);
@@ -1612,8 +1947,8 @@ describe("AI Chat operation authorization", () => {
 
 	it("does not persist a stale completion after a newer stream claim", async () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
-		const onChatError = vi.fn();
-		const app = backend({ hooks: { onChatError } });
+		const onErrorChat = vi.fn();
+		const app = backend({ hooks: { onErrorChat } });
 		const conversation = await seedConversation(app);
 		const input = { ...messageBody, conversationId: conversation.id };
 
@@ -1640,7 +1975,7 @@ describe("AI Chat operation authorization", () => {
 				where: [{ field: "role", value: "assistant", operator: "eq" }],
 			}),
 		).toBe(0);
-		expect(onChatError).toHaveBeenCalledOnce();
+		expect(onErrorChat).toHaveBeenCalledOnce();
 
 		await secondFinish?.({ text: "current answer" });
 		const assistants = await app.adapter.findMany<Message>({
