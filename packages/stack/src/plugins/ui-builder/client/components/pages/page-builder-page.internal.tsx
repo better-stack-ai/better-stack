@@ -3,7 +3,6 @@
 import { useState, useCallback } from "react";
 import {
 	PermissionAccess,
-	useBasePath,
 	useNotify,
 	usePluginOverrides,
 	useStack,
@@ -233,8 +232,9 @@ function PageBuilderPageContent({
 		functionRegistry,
 		localization,
 	} = usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
-	const { router } = useStack();
-	const basePath = useBasePath();
+	const { router, plugins, basePath: legacyBasePath } = useStack();
+	const basePath =
+		plugins?.[UI_BUILDER_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
 	const LinkComponent = router?.Link ?? "a";
 	const componentRegistry = customRegistry || defaultComponentRegistry;
 	const localized = (

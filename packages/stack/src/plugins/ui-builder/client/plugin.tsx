@@ -33,7 +33,7 @@ const PageBuilderPageComponent = lazy(() =>
  * and request-header values are inherited from `createClientStack()`.
  */
 export interface UIBuilderClientConfig {
-	/** Optional hooks for route loading, redirects, and telemetry. */
+	/** Optional hooks for route loading, error reporting, and telemetry. */
 	hooks?: UIBuilderClientHooks;
 
 	/**

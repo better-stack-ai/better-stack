@@ -3,7 +3,6 @@
 import { useState } from "react";
 import {
 	PermissionAccess,
-	useBasePath,
 	useNotify,
 	usePluginOverrides,
 	useStack,
@@ -54,9 +53,10 @@ export function PageListPage() {
 	const notify = useNotify();
 	const { localization } =
 		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
-	const { router } = useStack();
+	const { router, plugins, basePath: legacyBasePath } = useStack();
 	const navigate = router?.navigate;
-	const basePath = useBasePath();
+	const basePath =
+		plugins?.[UI_BUILDER_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
 	const { pages, total, hasMore, isLoadingMore, loadMore } =
 		useSuspenseUIBuilderPages();
 	const deleteMutation = useDeleteUIBuilderPage();

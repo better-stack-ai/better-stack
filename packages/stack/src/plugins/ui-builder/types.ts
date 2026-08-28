@@ -92,7 +92,8 @@ export interface LoaderContext {
  */
 export interface UIBuilderClientHooks {
 	/**
-	 * Called before loading the page list. Throw an error to cancel loading.
+	 * Called before loading the page list. If it throws, remaining loader work
+	 * stops, `onErrorLoad` is notified, and the loader still resolves.
 	 * @param context - Loader context with path, params, etc.
 	 */
 	beforeLoadPageList?: (context: LoaderContext) => Promise<void> | void;
@@ -102,7 +103,8 @@ export interface UIBuilderClientHooks {
 	 */
 	afterLoadPageList?: (context: LoaderContext) => Promise<void> | void;
 	/**
-	 * Called before loading the page builder. Throw an error to cancel loading.
+	 * Called before loading the page builder. If it throws, remaining loader work
+	 * stops, `onErrorLoad` is notified, and the loader still resolves.
 	 * @param pageId - The page ID (undefined for new pages)
 	 * @param context - Loader context
 	 */
@@ -121,7 +123,8 @@ export interface UIBuilderClientHooks {
 	) => Promise<void> | void;
 	/**
 	 * Called when a loading error occurs.
-	 * Use this for redirects on authorization failures.
+	 * This is a reporting-only observer. Callback errors are contained and the
+	 * loader never rejects, so throwing framework redirects are not supported.
 	 * @param error - The error that occurred
 	 * @param context - Loader context
 	 */

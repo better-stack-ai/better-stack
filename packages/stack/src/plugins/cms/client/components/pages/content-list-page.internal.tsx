@@ -16,7 +16,6 @@ import {
 	PermissionAccess,
 	useNotify,
 	usePluginOverrides,
-	useBasePath,
 	useStack,
 	useTranslate,
 	type TranslateFn,
@@ -53,10 +52,10 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 	const notify = useNotify();
 	const overrides = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 	const { localization } = overrides;
-	const { router } = useStack();
+	const { router, plugins, basePath: legacyBasePath } = useStack();
 	const navigate = router?.navigate;
 	const Link = router?.Link;
-	const basePath = useBasePath();
+	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
 
 	// Call route lifecycle hooks for telemetry and application behavior.
 	useRouteLifecycle({

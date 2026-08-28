@@ -3,10 +3,7 @@ import { Link, useParams } from "react-router"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { StackProvider } from "@btst/stack/context"
 import { reactRouter } from "@btst/stack/react-router"
-import {
-	PageRenderer,
-	defaultComponentRegistry,
-} from "@btst/stack/plugins/ui-builder/client"
+import { PageRenderer } from "@btst/stack/plugins/ui-builder/client"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient } from "{{alias}}lib/stack-client"
 
@@ -31,7 +28,6 @@ export default function PreviewPage() {
 				<div className="min-h-screen">
 					<PageRenderer
 						slug={slug}
-						componentRegistry={defaultComponentRegistry}
 						className="w-full"
 						NotFoundComponent={() => (
 							<div className="flex flex-col items-center justify-center min-h-[400px] text-center p-8">

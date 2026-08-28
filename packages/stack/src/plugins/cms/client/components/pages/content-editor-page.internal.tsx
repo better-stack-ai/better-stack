@@ -5,7 +5,6 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import {
 	usePluginOverrides,
-	useBasePath,
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
@@ -138,9 +137,9 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 	const t = useTranslate();
 	const overrides = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 	const { localization } = overrides;
-	const { router } = useStack();
+	const { router, plugins, basePath: legacyBasePath } = useStack();
 	const navigate = router?.navigate;
-	const basePath = useBasePath();
+	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
 
 	// Parse prefill query parameters for pre-populating fields when creating new items
 	// This is used by the inverse relations panel to pre-fill the parent relation

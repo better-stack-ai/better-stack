@@ -802,9 +802,11 @@ relation rows. Listing the records for an inverse relation likewise authorizes
 the source collection and target record, and rederives the requested relation
 field from the current content-type schemas.
 
-Loader hooks may still prepare data or redirect for framework-specific UX, but
-they are not an authorization boundary. Use `onRouteRender` and `onRouteError`
-for presentation lifecycle and reporting.
+Loader hooks may still prepare data and report failures, but they are not an
+authorization boundary. `onErrorLoad` is reporting-only: callback errors are
+contained and the loader never rejects, so it cannot perform throwing framework
+redirects. Use `onRouteRender` and `onRouteError` for presentation lifecycle and
+reporting.
 
 ## Custom Field Components
 
@@ -1330,9 +1332,10 @@ export default function DirectoryPage() {
 
 #### CMSClientHooks
 
-Customize framework-side data loading, redirects, analytics, and error
-presentation with lifecycle hooks. The shared CMS operation rules remain the
-authorization boundary:
+Customize framework-side data loading, analytics, and error reporting with
+lifecycle hooks. The shared CMS operation rules remain the authorization
+boundary. `onErrorLoad` is an observer: exceptions from the callback are
+contained and never reject the loader.
 
 <AutoTypeTable path="../packages/stack/src/plugins/cms/client/plugin.tsx" name="CMSClientHooks" />
 

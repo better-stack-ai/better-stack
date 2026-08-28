@@ -3,7 +3,6 @@
 import { Button } from "@workspace/ui/components/button";
 import {
 	usePluginOverrides,
-	useBasePath,
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
@@ -14,8 +13,8 @@ export function NotFoundPage() {
 	const t = useTranslate();
 	const { localization } =
 		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
-	const { router } = useStack();
-	const basePath = useBasePath();
+	const { router, plugins, basePath: legacyBasePath } = useStack();
+	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
 
 	const LinkComponent = router?.Link ?? "a";
 

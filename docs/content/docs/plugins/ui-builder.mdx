@@ -801,7 +801,9 @@ stale or spoofed browser value cannot authorize a mutation.
 
 Client loader hooks remain available for framework-specific data preparation,
 analytics, and error reporting. They do not replace the backend
-operation boundary and should not duplicate the authorization rule:
+operation boundary and should not duplicate the authorization rule.
+`onErrorLoad` is reporting-only: callback errors are contained and the loader
+never rejects, so it cannot perform throwing framework redirects:
 
 ```tsx title="lib/stack-client.tsx"
 uiBuilder: uiBuilderClientPlugin({
@@ -852,7 +854,7 @@ agreement without an authorization cache.
 | `afterLoadPageList` | `context` | `void` | Post-load lifecycle |
 | `beforeLoadPageBuilder` | `pageId, context` | `void \| Promise<void>` | Pre-load framework lifecycle for the builder |
 | `afterLoadPageBuilder` | `pageId, context` | `void` | Post-load lifecycle |
-| `onErrorLoad` | `error, context` | `void` | Observe or present loader failures |
+| `onErrorLoad` | `error, context` | `void` | Report loader failures; callback errors are contained |
 
 ### LoaderContext
 

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { QueryClient } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,8 +16,11 @@ import {
 } from "@btst/stack/context";
 import { defineAuthorization } from "@btst/stack/authorization";
 import { createClientAuth } from "@btst/stack/authorization/client";
+import { createClientStack } from "../../../client";
+import { cmsClientPlugin } from "../client";
 import { CMSFileUpload } from "../client/components/forms/file-upload";
 import { ContentForm } from "../client/components/forms/content-form";
+import { DashboardPage } from "../client/components/pages/dashboard-page.internal";
 import { ContentListPage } from "../client/components/pages/content-list-page.internal";
 import { ContentListPageComponent } from "../client/components/pages/content-list-page";
 import { cmsPermissions } from "../permissions";
@@ -363,6 +367,57 @@ describe("ContentListPage row actions (CanAccess)", () => {
 		).toHaveBeenCalledWith(item.id);
 		expect(notify.success).toHaveBeenCalledWith("Item deleted successfully");
 		expect(notify.error).not.toHaveBeenCalled();
+	});
+});
+
+describe("CMS resolved site navigation", () => {
+	it("falls back to the legacy provider base path", async () => {
+		const router = createMockRouter();
+		await render(
+			<StackProvider
+				basePath="/pages"
+				router={router}
+				overrides={{ cms: cmsOverrides }}
+			>
+				<DashboardPage />
+			</StackProvider>,
+		);
+
+		const contentTypeCard = Array.from(
+			container.querySelectorAll<HTMLElement>("[data-slot=card]"),
+		).find((card) => card.textContent?.includes(contentType.name));
+		await act(async () => contentTypeCard?.click());
+
+		expect(router.navigate).toHaveBeenCalledWith("/pages/cms/post");
+	});
+
+	it("uses endpoints.cms.site for rendered dashboard navigation", async () => {
+		const router = createMockRouter();
+		const clientStack = createClientStack({
+			api: { baseURL: "http://test.local", basePath: "/api/data" },
+			site: { baseURL: "http://test.local", basePath: "/pages" },
+			queryClient: new QueryClient(),
+			plugins: { cms: cmsClientPlugin() },
+			endpoints: { cms: { site: { basePath: "/content" } } },
+		});
+
+		await render(
+			<StackProvider
+				stack={clientStack}
+				router={router}
+				overrides={{ cms: cmsOverrides }}
+			>
+				<DashboardPage />
+			</StackProvider>,
+		);
+
+		const contentTypeCard = Array.from(
+			container.querySelectorAll<HTMLElement>("[data-slot=card]"),
+		).find((card) => card.textContent?.includes(contentType.name));
+		expect(contentTypeCard).toBeTruthy();
+		await act(async () => contentTypeCard?.click());
+
+		expect(router.navigate).toHaveBeenCalledWith("/content/cms/post");
 	});
 });
 

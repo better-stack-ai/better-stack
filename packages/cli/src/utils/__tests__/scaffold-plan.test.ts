@@ -1062,7 +1062,8 @@ describe("scaffold plan", () => {
 			(f) => f.path === "app/preview/[slug]/client.tsx",
 		);
 		expect(client?.content).toContain("PageRenderer");
-		expect(client?.content).toContain("defaultComponentRegistry");
+		expect(client?.content).not.toContain("defaultComponentRegistry");
+		expect(client?.content).not.toContain("componentRegistry=");
 		expect(client?.content).toContain(
 			"const stack = getStackClient(queryClient)",
 		);
@@ -1082,6 +1083,8 @@ describe("scaffold plan", () => {
 		expect(plan.files.map((f) => f.path)).toContain("app/routes/preview.tsx");
 		const preview = plan.files.find((f) => f.path === "app/routes/preview.tsx");
 		expect(preview?.content).toContain("stack={stack}");
+		expect(preview?.content).not.toContain("defaultComponentRegistry");
+		expect(preview?.content).not.toContain("componentRegistry=");
 		expect(preview?.content).not.toContain("StackProvider<");
 		expect(preview?.content).not.toContain('"ui-builder":');
 	});
@@ -1101,6 +1104,8 @@ describe("scaffold plan", () => {
 			(f) => f.path === "src/routes/preview.$slug.tsx",
 		);
 		expect(preview?.content).toContain("stack={stack}");
+		expect(preview?.content).not.toContain("defaultComponentRegistry");
+		expect(preview?.content).not.toContain("componentRegistry=");
 		expect(preview?.content).not.toContain("StackProvider<");
 		expect(preview?.content).not.toContain('"ui-builder":');
 	});

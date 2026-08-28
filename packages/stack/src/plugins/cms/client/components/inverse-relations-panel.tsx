@@ -18,7 +18,6 @@ import {
 import {
 	PermissionAccess,
 	usePluginOverrides,
-	useBasePath,
 	useStack,
 	useTranslate,
 	type TranslateFn,
@@ -62,10 +61,10 @@ export function InverseRelationsPanel({
 	const t = useTranslate();
 	const { localization } =
 		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
-	const { router } = useStack();
+	const { router, plugins, basePath: legacyBasePath } = useStack();
 	const navigate = router?.navigate;
 	const Link = router?.Link;
-	const basePath = useBasePath();
+	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
 
 	// Fetch inverse relations metadata
 	const { inverseRelations, isLoading } = useInverseRelations(

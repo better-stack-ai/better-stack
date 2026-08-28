@@ -57,7 +57,8 @@ export interface LoaderContext {
  */
 export interface CMSClientHooks {
 	/**
-	 * Called before loading the dashboard page. Throw an error to cancel loading.
+	 * Called before loading the dashboard page. If it throws, remaining loader
+	 * work stops, `onErrorLoad` is notified, and the loader still resolves.
 	 * @param context - Loader context with path, params, etc.
 	 */
 	beforeLoadDashboard?: (context: LoaderContext) => Promise<void> | void;
@@ -67,7 +68,8 @@ export interface CMSClientHooks {
 	 */
 	afterLoadDashboard?: (context: LoaderContext) => Promise<void> | void;
 	/**
-	 * Called before loading a content list page. Throw an error to cancel loading.
+	 * Called before loading a content list page. If it throws, remaining loader
+	 * work stops, `onErrorLoad` is notified, and the loader still resolves.
 	 * @param typeSlug - The content type slug
 	 * @param context - Loader context
 	 */
@@ -85,7 +87,8 @@ export interface CMSClientHooks {
 		context: LoaderContext,
 	) => Promise<void> | void;
 	/**
-	 * Called before loading the content editor page. Throw an error to cancel loading.
+	 * Called before loading the content editor page. If it throws, remaining
+	 * loader work stops, `onErrorLoad` is notified, and the loader still resolves.
 	 * @param typeSlug - The content type slug
 	 * @param id - The content item ID (undefined for new items)
 	 * @param context - Loader context
@@ -108,7 +111,8 @@ export interface CMSClientHooks {
 	) => Promise<void> | void;
 	/**
 	 * Called when a loading error occurs.
-	 * Use this for loader error handling and redirects.
+	 * This is a reporting-only observer. Callback errors are contained and the
+	 * loader never rejects, so throwing framework redirects are not supported.
 	 * @param error - The error that occurred
 	 * @param context - Loader context
 	 */
@@ -120,7 +124,7 @@ export interface CMSClientHooks {
  * request-header values are inherited from `createClientStack()`.
  */
 export interface CMSClientConfig {
-	/** Optional hooks for route loading, redirects, and telemetry. */
+	/** Optional hooks for route loading, error reporting, and telemetry. */
 	hooks?: CMSClientHooks;
 
 	/**

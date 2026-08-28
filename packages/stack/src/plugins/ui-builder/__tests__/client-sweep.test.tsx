@@ -9,6 +9,7 @@ import { z } from "zod";
 import { defineAuthorization } from "@btst/stack/authorization";
 import { createClientAuth } from "@btst/stack/authorization/client";
 import { createServerAuth } from "@btst/stack/authorization/server";
+import { createClientStack } from "../../../client";
 import {
 	StackProvider,
 	type StackClientAuth,
@@ -23,6 +24,7 @@ import {
 	PageRenderer,
 	SuspensePageRenderer,
 } from "../client/components/page-renderer";
+import { uiBuilderClientPlugin } from "../client";
 import { PageBuilderPage } from "../client/components/pages/page-builder-page.internal";
 import { PageListPage } from "../client/components/pages/page-list-page.internal";
 import { PageListPage as PageListRoutePage } from "../client/components/pages/page-list-page";
@@ -229,6 +231,31 @@ async function renderPage(
 	});
 }
 
+async function renderResolvedPage(
+	pageNode: ReactNode,
+	router = createMockRouter(),
+) {
+	const clientStack = createClientStack({
+		api: { baseURL: "http://test.local", basePath: "/api/data" },
+		site: { baseURL: "http://test.local", basePath: "/pages" },
+		queryClient,
+		plugins: { uiBuilder: uiBuilderClientPlugin() },
+		endpoints: { uiBuilder: { site: { basePath: "/builder" } } },
+	});
+	await act(async () => {
+		root.render(
+			<StackProvider
+				stack={clientStack}
+				router={router}
+				overrides={{ uiBuilder: overrides() }}
+			>
+				{pageNode}
+			</StackProvider>,
+		);
+	});
+	return router;
+}
+
 function buttonWithText(text: string) {
 	return Array.from(
 		document.querySelectorAll<HTMLButtonElement>("button"),
@@ -263,6 +290,9 @@ describe("UI Builder page permissions", () => {
 	it("keeps create controls visible without an auth provider", async () => {
 		await renderPage(<PageListPage />);
 		expect(document.body.textContent).toContain("Create Page");
+		expect(
+			container.querySelector('a[href="/pages/ui-builder/new"]'),
+		).toBeTruthy();
 	});
 
 	it("uses the CMS catalog for read, create, update, and delete controls", async () => {
@@ -337,6 +367,43 @@ describe("UI Builder page permissions", () => {
 		).map((item) => item.textContent);
 		expect(actions).toContain("Edit");
 		expect(actions).not.toContain("Delete");
+	});
+});
+
+describe("UI Builder resolved site navigation", () => {
+	it("uses endpoints.uiBuilder.site for list links and navigation", async () => {
+		const router = await renderResolvedPage(<PageListPage />);
+
+		expect(
+			container.querySelector('a[href="/builder/ui-builder/new"]'),
+		).toBeTruthy();
+		const actionsTrigger =
+			container.querySelector<HTMLButtonElement>("tbody button")!;
+		await act(async () => {
+			actionsTrigger.dispatchEvent(
+				new MouseEvent("pointerdown", { bubbles: true, button: 0 }),
+			);
+		});
+		const editItem = Array.from(
+			document.querySelectorAll<HTMLElement>("[role=menuitem]"),
+		).find((item) => item.textContent?.includes("Edit"));
+		await act(async () => editItem?.click());
+
+		expect(router.navigate).toHaveBeenCalledWith(
+			"/builder/ui-builder/page-1/edit",
+		);
+	});
+
+	it("uses endpoints.uiBuilder.site for builder links and create redirects", async () => {
+		await renderResolvedPage(<PageBuilderPage />);
+
+		expect(
+			container.querySelector('a[href="/builder/ui-builder"]'),
+		).toBeTruthy();
+		const formOptions = hooks.useUIBuilderPageForm.mock.calls.at(-1)?.[0];
+		expect(formOptions.redirect(page, "create")).toBe(
+			"/builder/ui-builder/page-1/edit",
+		);
 	});
 });
 
