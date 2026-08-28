@@ -78,6 +78,11 @@ export type BoardWithColumns = Board & {
 	columns: ColumnWithTasks[];
 };
 
+/** Board with column metadata only, used by collection reads. */
+export type BoardWithColumnsOnly = Board & {
+	columns: Column[];
+};
+
 /**
  * Board with joined column relationships from the database
  * Note: The adapter returns joined data under the schema key name ("column"),

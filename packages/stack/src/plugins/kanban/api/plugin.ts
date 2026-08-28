@@ -16,7 +16,7 @@ import {
 	updateTaskSchema,
 } from "../schemas";
 import type { KanbanBackendHooks } from "../types";
-import { getAllBoards, getBoardById } from "./getters";
+import { getAllBoards, getBoardById, getBoardSummaries } from "./getters";
 import {
 	createKanbanTask,
 	findOrCreateKanbanBoard,
@@ -62,7 +62,10 @@ function createKanbanPrefetchForRoute(
 	): Promise<void> {
 		switch (key) {
 			case "boards": {
-				const result = await getAllBoards(adapter, { limit: 50, offset: 0 });
+				const result = await getBoardSummaries(adapter, {
+					limit: 50,
+					offset: 0,
+				});
 				queryClient.setQueryData(
 					KANBAN_QUERY_KEYS.boardsList({}),
 					result.items.map(serializeBoardSummary),

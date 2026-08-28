@@ -670,11 +670,18 @@ describe("Kanban operation-first authorization", () => {
 		const listedBoard = await seedBoard(authorizedList);
 		const listedColumn = await seedColumn(authorizedList, listedBoard.id);
 		await seedTask(authorizedList, listedColumn.id, { title: "Record secret" });
+		const listFindMany = vi.spyOn(authorizedList.adapter, "findMany");
 		const result = await authorizedList
 			.forRequest(request("/boards", { identity: admin }))
 			.api.kanban.listBoards({});
 		expect(JSON.stringify(result)).not.toContain("Record secret");
 		expect(result.items[0]?.columns[0]).not.toHaveProperty("tasks");
+		expect(
+			listFindMany.mock.calls.some(([query]) => query.model === "kanbanBoard"),
+		).toBe(true);
+		expect(
+			listFindMany.mock.calls.some(([query]) => query.model === "kanbanTask"),
+		).toBe(false);
 	});
 
 	it("ignores client-supplied ownership on board create and update", async () => {
@@ -1230,7 +1237,16 @@ describe("Kanban operation-first authorization", () => {
 			"prefetchForRoute" in backend.forRequest(request("/raw")).api.kanban,
 		).toBe(false);
 		const queryClient = new QueryClient();
+		const prefetchFindMany = vi.spyOn(backend.adapter, "findMany");
 		await backend.api.kanban.prefetchForRoute("boards", queryClient);
+		expect(
+			prefetchFindMany.mock.calls.some(([query]) => query.model === "kanbanBoard"),
+		).toBe(true);
+		expect(
+			prefetchFindMany.mock.calls.some(
+				([query]) => query.model === "kanbanTask",
+			),
+		).toBe(false);
 		expect(
 			queryClient.getQueryData<Array<{ columns: Array<unknown> }>>(
 				KANBAN_QUERY_KEYS.boardsList({}),

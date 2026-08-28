@@ -36,7 +36,7 @@ import type {
 	Task,
 } from "../types";
 import { slugify } from "../utils";
-import { getAllBoards, getBoardById } from "./getters";
+import { getBoardById, getBoardSummaries } from "./getters";
 import { serializeBoardSummary, serializeTask } from "./serializers";
 
 export const BoardIdOperationInputSchema = z.object({ id: z.string() });
@@ -827,7 +827,7 @@ function operationBoard(board: BoardWithColumns) {
 	};
 }
 
-function boardSummary(board: BoardWithColumns) {
+function boardSummary(board: Parameters<typeof serializeBoardSummary>[0]) {
 	return serializeBoardSummary(board);
 }
 
@@ -1137,7 +1137,7 @@ export function createKanbanOperations(
 			);
 		},
 		execute: async ({ input }) => {
-			const result = await getAllBoards(adapter, input);
+			const result = await getBoardSummaries(adapter, input);
 			return {
 				items: result.items.map(boardSummary),
 				total: result.total,
