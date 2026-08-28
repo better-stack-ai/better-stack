@@ -3,7 +3,7 @@ import type {
 	BackendStackConfig,
 	BackendStack,
 	PrefixedPluginRoutes,
-	PluginApis,
+	PluginRaw,
 	PluginOperations,
 	StackContext,
 	BackendPlugin,
@@ -18,7 +18,7 @@ import {
 	isOperationInputValidationError,
 	OperationHttpError,
 	runAuthorizedOperation,
-	runInternalOperation,
+	runTrustedOperation,
 	type AnyOperation,
 	type RouteOperation,
 } from "../plugins/api/operation";
@@ -99,7 +99,7 @@ export function createBackendStack<
 	config: BackendStackConfig<TPlugins, TAuth> & {
 		auth?: CompatibleStackAuth<TPlugins, TAuth>;
 	},
-): BackendStack<TRoutes, PluginApis<TPlugins>, PluginOperations<TPlugins>> {
+): BackendStack<TRoutes, PluginRaw<TPlugins>, PluginOperations<TPlugins>> {
 	const { plugins, adapter, dbSchema, basePath } = config;
 	const registrationIds = resolvePluginRegistrationIds(plugins, "backend");
 	const runtimeAuth = (
@@ -217,11 +217,11 @@ export function createBackendStack<
 		enumerable: true,
 	});
 
-	// Build the typed api surface by calling each plugin's api factory
-	const pluginApis = Object.create(null) as PluginApis<TPlugins>;
+	// Build the typed raw surface by calling each plugin's lower-level factory.
+	const pluginRaw = Object.create(null) as PluginRaw<TPlugins>;
 	for (const [pluginKey, plugin] of Object.entries(plugins)) {
-		if (plugin.api) {
-			(pluginApis as any)[pluginKey] = plugin.api(adapterInstance);
+		if (plugin.raw) {
+			(pluginRaw as any)[pluginKey] = plugin.raw(adapterInstance);
 		}
 	}
 
@@ -251,29 +251,31 @@ export function createBackendStack<
 		return result;
 	};
 
-	const internalResult: Record<
+	const trustedResult: Record<
 		string,
 		Record<string, (input: unknown) => unknown>
 	> = Object.create(null);
 	for (const [pluginKey, operations] of Object.entries(pluginOperations)) {
-		internalResult[pluginKey] = Object.create(null);
+		trustedResult[pluginKey] = Object.create(null);
 		for (const [operationKey, operation] of Object.entries(operations)) {
-			internalResult[pluginKey]![operationKey] = (input: unknown) =>
-				runInternalOperation(operation, input);
+			trustedResult[pluginKey]![operationKey] = (input: unknown) =>
+				runTrustedOperation(operation, input);
 		}
 	}
-	const internal = internalResult as PluginOperations<TPlugins>;
+	const trusted = trustedResult as PluginOperations<TPlugins>;
 
 	return {
 		handler,
 		router,
 		dbSchema: betterDbSchema,
 		adapter: adapterInstance,
-		api: pluginApis,
-		internal,
+		raw: pluginRaw,
+		trusted,
 		forRequest: (request: Request) => {
 			return {
-				api: createRequestOperationApi(request) as PluginOperations<TPlugins>,
+				operations: createRequestOperationApi(
+					request,
+				) as PluginOperations<TPlugins>,
 			};
 		},
 	};
@@ -290,7 +292,7 @@ export type {
 	BackendStack,
 	BackendLibConfig,
 	BackendLib,
-	PluginApis,
+	PluginRaw,
 	PluginOperations,
 	StackContext,
 } from "../types";

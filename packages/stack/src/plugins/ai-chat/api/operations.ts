@@ -57,7 +57,7 @@ export const UpdateConversationOperationInputSchema = z.object({
 	id: z.string(),
 	data: updateConversationSchema,
 });
-/** Runtime input accepted only from trusted internal stream callers. */
+/** Runtime input accepted only from trusted stream callers. */
 export const ChatOperationInputSchema = chatRequestSchema.extend({
 	trustedUserId: z.string().optional(),
 }) as unknown as z.ZodType<ChatOperationInput>;
@@ -142,8 +142,8 @@ export type AiChatOperations = {
 export const AI_CHAT_OPERATION_INVENTORY = Object.freeze({
 	startStream: Object.freeze({
 		http: "POST /chat",
-		request: "forRequest(request).api.aiChat.startStream",
-		internal: "internal.aiChat.startStream",
+		request: "forRequest(request).operations.aiChat.startStream",
+		trusted: "trusted.aiChat.startStream",
 		ui: Object.freeze([
 			"composer",
 			"edit",
@@ -172,50 +172,50 @@ export const AI_CHAT_OPERATION_INVENTORY = Object.freeze({
 	}),
 	listConversations: Object.freeze({
 		http: "GET /chat/conversations",
-		request: "forRequest(request).api.aiChat.listConversations",
-		internal: "internal.aiChat.listConversations",
+		request: "forRequest(request).operations.aiChat.listConversations",
+		trusted: "trusted.aiChat.listConversations",
 		ui: Object.freeze(["conversation sidebar"]),
 		semantics: Object.freeze(["conversation.read"]),
 		publicWhenConfigured: false,
 	}),
 	getConversation: Object.freeze({
 		http: "GET /chat/conversations/:id",
-		request: "forRequest(request).api.aiChat.getConversation",
-		internal: "internal.aiChat.getConversation",
+		request: "forRequest(request).operations.aiChat.getConversation",
+		trusted: "trusted.aiChat.getConversation",
 		ui: Object.freeze(["conversation route"]),
 		semantics: Object.freeze(["conversation.read"]),
 		publicWhenConfigured: false,
 	}),
 	createConversation: Object.freeze({
 		http: "POST /chat/conversations",
-		request: "forRequest(request).api.aiChat.createConversation",
-		internal: "internal.aiChat.createConversation",
+		request: "forRequest(request).operations.aiChat.createConversation",
+		trusted: "trusted.aiChat.createConversation",
 		ui: Object.freeze(["new chat"]),
 		semantics: Object.freeze(["conversation.create"]),
 		publicWhenConfigured: false,
 	}),
 	updateConversation: Object.freeze({
 		http: "PUT /chat/conversations/:id",
-		request: "forRequest(request).api.aiChat.updateConversation",
-		internal: "internal.aiChat.updateConversation",
+		request: "forRequest(request).operations.aiChat.updateConversation",
+		trusted: "trusted.aiChat.updateConversation",
 		ui: Object.freeze(["rename conversation"]),
 		semantics: Object.freeze(["conversation.update"]),
 		publicWhenConfigured: false,
 	}),
 	deleteConversation: Object.freeze({
 		http: "DELETE /chat/conversations/:id",
-		request: "forRequest(request).api.aiChat.deleteConversation",
-		internal: "internal.aiChat.deleteConversation",
+		request: "forRequest(request).operations.aiChat.deleteConversation",
+		trusted: "trusted.aiChat.deleteConversation",
 		ui: Object.freeze(["delete conversation"]),
 		semantics: Object.freeze(["conversation.delete"]),
 		publicWhenConfigured: false,
 	}),
 });
 
-/** Trusted raw getters bypassing authorization and operation lifecycle hooks. */
+/** Standalone raw getters that bypass authorization and operation lifecycle hooks. */
 export const AI_CHAT_RAW_ESCAPE_HATCH_INVENTORY = Object.freeze([
-	"api.aiChat.getAllConversations",
-	"api.aiChat.getConversationById",
+	"@btst/stack/plugins/ai-chat/api#getAllConversations",
+	"@btst/stack/plugins/ai-chat/api#getConversationById",
 ]);
 
 /** A domain/HTTP failure raised after AI Chat authorization succeeds. */

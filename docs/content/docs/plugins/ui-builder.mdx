@@ -504,7 +504,7 @@ is configured, allow `cms.record.read` when `contentType` is
 schema embedded in the record response. A record condition on the content type
 alone also makes the admin page list public. `PageRenderer` checks both CMS
 descriptors used by the backend read; its browser checks are only presentation
-gates. The raw SSG getters/prefetch helpers are trusted lower-level APIs and
+gates. The raw SSG getters/prefetch helpers are explicit lower-level APIs and
 must only be called from server/build code.
 </Callout>
 

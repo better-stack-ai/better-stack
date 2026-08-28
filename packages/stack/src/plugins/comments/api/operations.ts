@@ -26,7 +26,7 @@ import {
 } from "./mutations";
 
 export const CreateCommentOperationInputSchema = createCommentSchema.extend({
-	/** Trusted internal callers may set authorship; request identity always wins. */
+	/** Trusted callers may set authorship; request identity always wins. */
 	authorId: z.string().min(1).optional(),
 });
 
@@ -37,7 +37,7 @@ export const UpdateCommentOperationInputSchema = z.object({
 
 export const ToggleCommentLikeOperationInputSchema = z.object({
 	id: z.string().min(1),
-	/** Request identity wins; no-auth and internal callers may provide an author. */
+	/** Request identity wins; no-auth and trusted callers may provide an author. */
 	authorId: z.string().min(1).optional(),
 });
 
@@ -450,7 +450,7 @@ function authoritativeAuthorId(
 	if (!authorId) {
 		throw new CommentsOperationError(
 			401,
-			"Comment authorship requires an authenticated request identity or an explicit trusted internal authorId.",
+			"Comment authorship requires an authenticated request identity or an explicit trusted authorId.",
 			"COMMENT_AUTHOR_REQUIRED",
 		);
 	}

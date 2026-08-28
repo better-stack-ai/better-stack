@@ -342,7 +342,7 @@ describe("Kanban operation-first authorization", () => {
 				},
 				onBeforeCreateBoard: () => reject("createBoard"),
 				onAfterCreateBoard: (_board, context) => {
-					events.push(`afterCreateBoard:${context.identity?.id ?? "internal"}`);
+					events.push(`afterCreateBoard:${context.identity?.id ?? "trusted"}`);
 				},
 				onErrorCreateBoard: () => {
 					events.push("errorCreateBoard");
@@ -362,9 +362,7 @@ describe("Kanban operation-first authorization", () => {
 					events.push("errorDeleteBoard");
 				},
 				onAfterCreateColumn: (_column, context) => {
-					events.push(
-						`afterCreateColumn:${context.identity?.id ?? "internal"}`,
-					);
+					events.push(`afterCreateColumn:${context.identity?.id ?? "trusted"}`);
 				},
 				onAfterUpdateColumn: (_column, context) => {
 					events.push(`afterUpdateColumn:${context.identity?.id}`);
@@ -373,7 +371,7 @@ describe("Kanban operation-first authorization", () => {
 					events.push(`afterDeleteColumn:${context.identity?.id}`);
 				},
 				onAfterCreateTask: (_task, context) => {
-					events.push(`afterCreateTask:${context.identity?.id ?? "internal"}`);
+					events.push(`afterCreateTask:${context.identity?.id ?? "trusted"}`);
 				},
 				onAfterUpdateTask: (_task, context) => {
 					events.push(`afterUpdateTask:${context.identity?.id}`);
@@ -385,14 +383,14 @@ describe("Kanban operation-first authorization", () => {
 		});
 		const requested = backend.forRequest(
 			request("/lifecycle", { identity: admin }),
-		).api.kanban;
+		).operations.kanban;
 
 		rejectedBoardAction = "createBoard";
 		await expect(
 			requested.createBoard({ name: "Rejected" }),
 		).rejects.toMatchObject({ code: "CREATE_BOARD_REJECTED" });
 		rejectedBoardAction = undefined;
-		const board = await backend.internal.kanban.createBoard({
+		const board = await backend.trusted.kanban.createBoard({
 			name: "Lifecycle",
 		});
 
@@ -417,7 +415,7 @@ describe("Kanban operation-first authorization", () => {
 		rejectedBoardAction = undefined;
 		await requested.updateBoard({ id: board.id, data: { name: "Updated" } });
 
-		const column = await backend.internal.kanban.createColumn({
+		const column = await backend.trusted.kanban.createColumn({
 			boardId: board.id,
 			title: "Lifecycle",
 		});
@@ -425,7 +423,7 @@ describe("Kanban operation-first authorization", () => {
 			id: column.id,
 			data: { title: "Updated column" },
 		});
-		const task = await backend.internal.kanban.createTask({
+		const task = await backend.trusted.kanban.createTask({
 			columnId: column.id,
 			title: "Lifecycle",
 		});
@@ -447,16 +445,16 @@ describe("Kanban operation-first authorization", () => {
 
 		expect(events).toEqual([
 			"errorCreateBoard",
-			"afterCreateBoard:internal",
+			"afterCreateBoard:trusted",
 			"errorListBoards",
 			"afterListBoards:admin-1",
 			"errorGetBoard",
 			"afterGetBoard:admin-1",
 			"errorUpdateBoard",
 			"afterUpdateBoard:admin-1",
-			"afterCreateColumn:internal",
+			"afterCreateColumn:trusted",
 			"afterUpdateColumn:admin-1",
-			"afterCreateTask:internal",
+			"afterCreateTask:trusted",
 			"afterUpdateTask:admin-1",
 			"afterDeleteTask:admin-1",
 			"afterDeleteColumn:admin-1",
@@ -527,7 +525,7 @@ describe("Kanban operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/create", { identity: owner }))
-				.api.kanban.createBoard({ name: "Rejected" }),
+				.operations.kanban.createBoard({ name: "Rejected" }),
 		).rejects.toMatchObject({
 			message: "workflow rejected",
 			code: "CREATE_BOARD_REJECTED",
@@ -568,7 +566,7 @@ describe("Kanban operation-first authorization", () => {
 		});
 
 		await expect(
-			backend.internal.kanban.createBoard({ name: "Unsafe" }),
+			backend.trusted.kanban.createBoard({ name: "Unsafe" }),
 		).rejects.toMatchObject({
 			statusCode: 500,
 			code: "ATOMIC_TRANSACTION_REQUIRED",
@@ -584,14 +582,14 @@ describe("Kanban operation-first authorization", () => {
 			hooks: {
 				onBeforeCreateBoard: async (input) => {
 					if (input.name !== "Outer") return;
-					await backend.internal.kanban.createBoard({ name: "Nested" });
+					await backend.trusted.kanban.createBoard({ name: "Nested" });
 					throw new Error("outer rejected");
 				},
 			},
 		});
 
 		await expect(
-			backend.internal.kanban.createBoard({ name: "Outer" }),
+			backend.trusted.kanban.createBoard({ name: "Outer" }),
 		).rejects.toMatchObject({
 			statusCode: 403,
 			code: "CREATE_BOARD_REJECTED",
@@ -645,7 +643,7 @@ describe("Kanban operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/spoofed", { identity: viewer }))
-				.api.kanban.updateTask({
+				.operations.kanban.updateTask({
 					id: task.id,
 					data: { title: "Spoofed" },
 				}),
@@ -662,7 +660,7 @@ describe("Kanban operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/member", { identity: member }))
-				.api.kanban.updateTask({
+				.operations.kanban.updateTask({
 					id: task.id,
 					data: { title: "Member edit" },
 				}),
@@ -675,7 +673,7 @@ describe("Kanban operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/admin", { identity: admin }))
-				.api.kanban.listBoards({}),
+				.operations.kanban.listBoards({}),
 		).resolves.toMatchObject({ total: 1 });
 		expect(events).toEqual(["read", "task"]);
 	});
@@ -723,7 +721,7 @@ describe("Kanban operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/member", { identity: owner }))
-				.api.kanban.updateColumn({
+				.operations.kanban.updateColumn({
 					id: column.id,
 					data: { order: undefined },
 				}),
@@ -833,7 +831,7 @@ describe("Kanban operation-first authorization", () => {
 
 		const requestApi = backend.forRequest(
 			request("/programmatic", { identity: viewer }),
-		).api.kanban;
+		).operations.kanban;
 		const programmatic = await requestApi.createBoard({
 			name: "Programmatic",
 			ownerId: admin.id,
@@ -861,7 +859,7 @@ describe("Kanban operation-first authorization", () => {
 		});
 	});
 
-	it("keeps HTTP, request, and internal behavior on one validated lifecycle", async () => {
+	it("keeps HTTP, request, and trusted behavior on one validated lifecycle", async () => {
 		const getIdentity = vi.fn(({ headers }: Request) =>
 			headers.get("x-user-id"),
 		);
@@ -874,10 +872,10 @@ describe("Kanban operation-first authorization", () => {
 			}),
 			hooks: {
 				onBeforeUpdateBoard: (_id, _data, context) => {
-					events.push(`before:${context.identity?.id ?? "internal"}`);
+					events.push(`before:${context.identity?.id ?? "trusted"}`);
 				},
 				onAfterUpdateBoard: (_board, context) => {
-					events.push(`after:${context.identity?.id ?? "internal"}`);
+					events.push(`after:${context.identity?.id ?? "trusted"}`);
 				},
 			},
 		});
@@ -892,38 +890,41 @@ describe("Kanban operation-first authorization", () => {
 		expect(response.status).toBe(200);
 		await backend
 			.forRequest(request("/request", { identity: owner }))
-			.api.kanban.updateBoard({ id: board.id, data: { name: "Request" } });
+			.operations.kanban.updateBoard({
+				id: board.id,
+				data: { name: "Request" },
+			});
 		await expect(
-			backend.internal.kanban.updateBoard({ id: board.id, data: { name: "" } }),
+			backend.trusted.kanban.updateBoard({ id: board.id, data: { name: "" } }),
 		).rejects.toThrow();
-		await backend.internal.kanban.updateBoard({
+		await backend.trusted.kanban.updateBoard({
 			id: board.id,
-			data: { name: "Internal" },
+			data: { name: "Trusted" },
 		});
 		expect(events).toEqual([
 			"before:owner-1",
 			"after:owner-1",
 			"before:owner-1",
 			"after:owner-1",
-			"before:internal",
-			"after:internal",
+			"before:trusted",
+			"after:trusted",
 		]);
 		expect(getIdentity).toHaveBeenCalledTimes(2);
 	});
 
-	it("keeps task ordering and lifecycle hooks active for trusted internal jobs", async () => {
+	it("keeps task ordering and lifecycle hooks active for trusted jobs", async () => {
 		const events: string[] = [];
 		const backend = makeBackend({
 			adapter: rawMemoryAdapter,
 			auth: createAuth(() => {
-				throw new Error("internal must not resolve identity");
+				throw new Error("trusted must not resolve identity");
 			}),
 			hooks: {
 				onBeforeUpdateTask: (_id, _data, context) => {
-					events.push(`before:${context.identity?.id ?? "internal"}`);
+					events.push(`before:${context.identity?.id ?? "trusted"}`);
 				},
 				onAfterUpdateTask: (_task, context) => {
-					events.push(`after:${context.identity?.id ?? "internal"}`);
+					events.push(`after:${context.identity?.id ?? "trusted"}`);
 				},
 			},
 		});
@@ -938,7 +939,7 @@ describe("Kanban operation-first authorization", () => {
 			title: "Existing",
 			order: 0,
 		});
-		await backend.internal.kanban.moveTask({
+		await backend.trusted.kanban.moveTask({
 			taskId: moved.id,
 			targetColumnId: target.id,
 			targetOrder: 0,
@@ -952,7 +953,7 @@ describe("Kanban operation-first authorization", () => {
 			[moved.id, 0],
 			[sibling.id, 1],
 		]);
-		expect(events).toEqual(["before:internal", "after:internal"]);
+		expect(events).toEqual(["before:trusted", "after:trusted"]);
 	});
 
 	it("preserves identity/rule/fact failures and missing rules before hooks", async () => {
@@ -972,7 +973,7 @@ describe("Kanban operation-first authorization", () => {
 		await expect(
 			missingBackend
 				.forRequest(request("/missing", { identity: owner }))
-				.api.kanban.updateBoard({ id: board.id, data: { name: "No" } }),
+				.operations.kanban.updateBoard({ id: board.id, data: { name: "No" } }),
 		).rejects.toMatchObject({ statusCode: 403 });
 
 		const identityFailure = makeBackend({
@@ -984,10 +985,12 @@ describe("Kanban operation-first authorization", () => {
 			slug: "identity",
 		});
 		await expect(
-			identityFailure.forRequest(request("/identity")).api.kanban.updateBoard({
-				id: identityBoard.id,
-				data: { name: "No" },
-			}),
+			identityFailure
+				.forRequest(request("/identity"))
+				.operations.kanban.updateBoard({
+					id: identityBoard.id,
+					data: { name: "No" },
+				}),
 		).rejects.toThrow("session unavailable");
 
 		const failing = defineAuthorization({
@@ -1008,7 +1011,7 @@ describe("Kanban operation-first authorization", () => {
 		await expect(
 			ruleFailure
 				.forRequest(request("/rule", { identity: owner }))
-				.api.kanban.updateBoard({
+				.operations.kanban.updateBoard({
 					id: ruleBoard.id,
 					data: { name: "No" },
 				}),
@@ -1030,7 +1033,7 @@ describe("Kanban operation-first authorization", () => {
 		await expect(
 			factFailure
 				.forRequest(request("/facts", { identity: owner }))
-				.api.kanban.updateBoard({
+				.operations.kanban.updateBoard({
 					id: factBoard.id,
 					data: { name: "No" },
 				}),
@@ -1071,9 +1074,10 @@ describe("Kanban operation-first authorization", () => {
 		});
 		const board = await seedBoard(backend, { slug: "race" });
 		await expect(
-			backend
-				.forRequest(request("/race"))
-				.api.kanban.updateBoard({ id: board.id, data: { name: "Stale" } }),
+			backend.forRequest(request("/race")).operations.kanban.updateBoard({
+				id: board.id,
+				data: { name: "Stale" },
+			}),
 		).rejects.toMatchObject({ statusCode: 409, code: "KANBAN_STATE_CHANGED" });
 		expect(events).toEqual([]);
 		expect(
@@ -1109,8 +1113,8 @@ describe("Kanban operation-first authorization", () => {
 			},
 		});
 		const board = await seedBoard(backend);
-		const api = backend.forRequest(request("/race", { identity: owner })).api
-			.kanban;
+		const api = backend.forRequest(request("/race", { identity: owner }))
+			.operations.kanban;
 		const rejected = api.updateBoard({
 			id: board.id,
 			data: { name: "Rejected" },
@@ -1160,7 +1164,7 @@ describe("Kanban operation-first authorization", () => {
 			adapter: rawMemoryAdapter,
 			hooks: {
 				onBeforeUpdateBoard: async (id) => {
-					const nested = await backend.internal.kanban.getBoard({ id });
+					const nested = await backend.trusted.kanban.getBoard({ id });
 					nestedNames.push(nested.name);
 				},
 			},
@@ -1169,7 +1173,7 @@ describe("Kanban operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/nested", { identity: owner }))
-				.api.kanban.updateBoard({
+				.operations.kanban.updateBoard({
 					id: board.id,
 					data: { name: "Updated" },
 				}),
@@ -1189,7 +1193,7 @@ describe("Kanban operation-first authorization", () => {
 				onBeforeUpdateBoard: async (id) => {
 					if (id !== outerId) return;
 					try {
-						await backend.internal.kanban.updateBoard({
+						await backend.trusted.kanban.updateBoard({
 							id: nestedId,
 							data: { name: "Nested change" },
 						});
@@ -1212,7 +1216,7 @@ describe("Kanban operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/nested-write", { identity: owner }))
-				.api.kanban.updateBoard({
+				.operations.kanban.updateBoard({
 					id: outer.id,
 					data: { name: "Outer change" },
 				}),
@@ -1258,8 +1262,8 @@ describe("Kanban operation-first authorization", () => {
 			title: "Target sibling",
 			order: 0,
 		});
-		const api = backend.forRequest(request("/move", { identity: owner })).api
-			.kanban;
+		const api = backend.forRequest(request("/move", { identity: owner }))
+			.operations.kanban;
 		const settled = await Promise.allSettled([
 			api.moveTask({
 				taskId: moved.id,
@@ -1317,7 +1321,7 @@ describe("Kanban operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/rejected", { identity: owner }))
-				.api.kanban.moveTask({
+				.operations.kanban.moveTask({
 					taskId: task.id,
 					targetColumnId: target.id,
 					targetOrder: 0,
@@ -1331,20 +1335,21 @@ describe("Kanban operation-first authorization", () => {
 		).toMatchObject({ columnId: source.id, order: 0 });
 	});
 
-	it("keeps trusted raw helpers out of authorized namespaces and documents raw SSG data", async () => {
+	it("keeps raw helpers out of authorized namespaces and documents raw SSG data", async () => {
 		const backend = makeBackend({ auth: createAuth() });
 		const board = await seedBoard(backend);
 		const column = await seedColumn(backend, board.id);
 		await seedTask(backend, column.id);
-		expect("prefetchForRoute" in backend.internal.kanban).toBe(false);
-		expect("getAllBoards" in backend.internal.kanban).toBe(false);
-		expect("createTask" in backend.internal.kanban).toBe(true);
+		expect("prefetchForRoute" in backend.trusted.kanban).toBe(false);
+		expect("getAllBoards" in backend.trusted.kanban).toBe(false);
+		expect("createTask" in backend.trusted.kanban).toBe(true);
 		expect(
-			"prefetchForRoute" in backend.forRequest(request("/raw")).api.kanban,
+			"prefetchForRoute" in
+				backend.forRequest(request("/raw")).operations.kanban,
 		).toBe(false);
 		const queryClient = new QueryClient();
 		const prefetchFindMany = vi.spyOn(backend.adapter, "findMany");
-		await backend.api.kanban.prefetchForRoute("boards", queryClient);
+		await backend.raw.kanban.prefetchForRoute("boards", queryClient);
 		expect(
 			prefetchFindMany.mock.calls.some(
 				([query]) => query.model === "kanbanBoard",
@@ -1365,7 +1370,7 @@ describe("Kanban operation-first authorization", () => {
 				columns: [expect.not.objectContaining({ tasks: expect.anything() })],
 			}),
 		]);
-		await backend.api.kanban.prefetchForRoute("board", queryClient, {
+		await backend.raw.kanban.prefetchForRoute("board", queryClient, {
 			boardId: board.id,
 		});
 		expect(

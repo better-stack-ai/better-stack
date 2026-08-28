@@ -101,10 +101,10 @@ const canonicalBackendResult: BackendStack = canonicalBackend;
 const legacyBackendResult: BackendLib = canonicalBackendResult;
 void legacyBackendConfig;
 void legacyBackendResult;
-canonicalBackend.internal.constructorProbe.read({ id: "record-1" });
+canonicalBackend.trusted.constructorProbe.read({ id: "record-1" });
 canonicalBackend
 	.forRequest(new Request("https://example.com/api"))
-	.api.constructorProbe.read({ id: "record-1" });
+	.operations.constructorProbe.read({ id: "record-1" });
 
 const unrelatedPermissions = definePermissions("unrelated", {
 	read: permission(),

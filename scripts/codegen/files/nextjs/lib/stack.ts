@@ -159,7 +159,7 @@ const submitIntakeAssessment = tool({
 	}),
 	execute: async (params) => {
 		const slug = `client-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-		await myStack.internal.cms.createContentItem({
+		await myStack.trusted.cms.createContentItem({
 			typeSlug: "client-profile",
 			body: {
 				slug,

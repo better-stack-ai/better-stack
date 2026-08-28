@@ -71,7 +71,7 @@ describe("seed-plan", () => {
 		(framework) => {
 			for (const plugin of ["cms", "ui-builder"] as const) {
 				const file = buildSeedRouteFile(plugin, framework);
-				expect(file?.content).toContain("myStack.internal.cms");
+				expect(file?.content).toContain("myStack.trusted.cms");
 				expect(file?.content).toContain("cms.listContentItems({");
 				expect(file?.content).toContain("cms.createContentItem({");
 				expect(file?.content).not.toContain("myStack.api");

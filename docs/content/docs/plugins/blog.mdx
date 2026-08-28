@@ -664,7 +664,7 @@ routes, including input validation, trusted fact derivation, authorization, and
 lifecycle hooks:
 
 ```ts
-const blog = myStack.forRequest(request).api.blog;
+const blog = myStack.forRequest(request).operations.blog;
 
 const published = await blog.listPosts({ published: true });
 const post = await blog.createPost({
@@ -685,18 +685,18 @@ Trusted server work can bypass user authorization explicitly while preserving
 validation, trusted facts, lifecycle hooks, and domain behavior:
 
 ```ts
-await myStack.internal.blog.updatePost({
+await myStack.trusted.blog.updatePost({
   id: postId,
   data: update,
 });
 ```
 
-`internal` skips identity resolution and user authorization only. It is the
+`trusted` skips identity resolution and user authorization only. It is the
 appropriate surface for a trusted job that still needs normal Blog behavior.
 
 ### Trusted and lower-level data access
 
-Use `myStack.internal.blog` for trusted jobs that should keep normal validation, fact derivation, domain behavior, and hooks. Use `myStack.forRequest(request).api.blog` for user-driven server work. `myStack.api.blog` contains only `prefetchForRoute`.
+Use `myStack.trusted.blog` for trusted jobs that should keep normal validation, fact derivation, domain behavior, and hooks. Use `myStack.forRequest(request).operations.blog` for user-driven server work. `myStack.raw.blog` contains only `prefetchForRoute`.
 
 Standalone getters and mutations from `@btst/stack/plugins/blog/api` remain lower-level adapter primitives for plugin internals or migrations whose caller owns lifecycle composition.
 
@@ -705,7 +705,7 @@ Standalone getters and mutations from `@btst/stack/plugins/blog/api` remain lowe
 `route.loader()` makes HTTP requests to the resolved top-level API endpoint, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
 
 <Callout type="warn">
-`prefetchForRoute()` is a trusted raw-data API. It does not resolve identity,
+`prefetchForRoute()` is a raw-data escape hatch. It does not resolve identity,
 evaluate authorization rules, or run Blog lifecycle hooks. Static artifacts
 are commonly public: use `"drafts"` or `"editPost"` only when your deployment
 applies equivalent access controls to the generated output. Never publish
@@ -745,7 +745,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const stackClient = getStackClient(queryClient)
   const route = stackClient.router.getRoute(normalizePath(["blog"]))
   if (!route) return { title: "Blog" }
-  await myStack.api.blog.prefetchForRoute("posts", queryClient)
+  await myStack.raw.blog.prefetchForRoute("posts", queryClient)
   return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
 }
 
@@ -755,7 +755,7 @@ export default async function BlogListPage() {
   const route = stackClient.router.getRoute(normalizePath(["blog"]))
   if (!route) return null
   // Reads directly from DB — works at build time, no HTTP server required
-  await myStack.api.blog.prefetchForRoute("posts", queryClient)
+  await myStack.raw.blog.prefetchForRoute("posts", queryClient)
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <route.PageComponent />
@@ -768,7 +768,7 @@ For individual post pages, also generate the static params list:
 
 ```tsx title="app/pages/blog/[slug]/page.tsx"
 export async function generateStaticParams() {
-  const { items } = await myStack.internal.blog.listPosts({ published: true, limit: 1000 })
+  const { items } = await myStack.trusted.blog.listPosts({ published: true, limit: 1000 })
   return items.map((p) => ({ slug: p.slug }))
 }
 
@@ -777,7 +777,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
   const stackClient = getStackClient(queryClient)
   const route = stackClient.router.getRoute(normalizePath(["blog", params.slug]))
   if (!route) return null
-  await myStack.api.blog.prefetchForRoute("post", queryClient, { slug: params.slug })
+  await myStack.raw.blog.prefetchForRoute("post", queryClient, { slug: params.slug })
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <route.PageComponent />

@@ -300,7 +300,7 @@ type OperationConfig<
 	 * Derive any compound permission checks from validated input and trusted
 	 * primary facts after request execution authorizes the primary permission.
 	 * Every returned request is authorized before lifecycle hooks run; trusted
-	 * internal execution skips only the evaluations.
+	 * execution skips only the evaluations.
 	 */
 	additionalPermissions?: (ctx: {
 		readonly input: DeepReadonly<z.output<TInputSchema>>;
@@ -335,8 +335,8 @@ type OperationConfig<
  * and execution once so transports cannot accidentally bypass the pipeline.
  *
  * The operation descriptor deliberately has no public `run()` method. Stack
- * composition binds it to HTTP, `forRequest()`, and the explicit `internal`
- * namespace so callers cannot forge an internal execution flag.
+ * composition binds it to HTTP, `forRequest().operations`, and the explicit
+ * `trusted` namespace so callers cannot forge a trusted execution flag.
  */
 export function defineOperation<
 	const TInputSchema extends z.ZodTypeAny,
@@ -590,7 +590,7 @@ export function runAuthorizedOperation<TOperation extends AnyOperation>(
 }
 
 /** @internal Execute an operation through the trusted application namespace. */
-export function runInternalOperation<TOperation extends AnyOperation>(
+export function runTrustedOperation<TOperation extends AnyOperation>(
 	operation: TOperation,
 	input: OperationInput<TOperation>,
 ): Promise<OperationTransportResult<TOperation>> {

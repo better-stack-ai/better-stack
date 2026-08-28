@@ -284,7 +284,7 @@ function createPostsLoader(
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/blog] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.blog.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.blog.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else {
 					const errToStore = createSanitizedSSRLoaderError();
@@ -356,7 +356,7 @@ function createPostLoader(
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/blog] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.blog.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.blog.prefetchForRoute() for SSG data prefetching.",
 					);
 				}
 				await reportError(error);
@@ -446,7 +446,7 @@ function createTagLoader(tagSlug: string, config: ResolvedBlogClientConfig) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/blog] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.blog.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.blog.prefetchForRoute() for SSG data prefetching.",
 					);
 				}
 				await reportError(error);

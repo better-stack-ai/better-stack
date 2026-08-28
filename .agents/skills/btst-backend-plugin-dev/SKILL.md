@@ -1,6 +1,6 @@
 ---
 name: btst-backend-plugin-dev
-description: Patterns for writing BTST backend plugins inside the monorepo, including operation-first authorization, getters.ts/mutations.ts separation, lifecycle hooks, and narrow SSG api factories. Use when creating or modifying a backend plugin, adding DB getters or mutations, operations, permission descriptors, or lifecycle hooks in src/plugins/{name}/api/.
+description: Patterns for writing BTST backend plugins inside the monorepo, including operation-first authorization, getters.ts/mutations.ts separation, lifecycle hooks, and narrow SSG raw factories. Use when creating or modifying a backend plugin, adding DB getters or mutations, operations, permission descriptors, or lifecycle hooks in src/plugins/{name}/api/.
 ---
 
 # BTST Backend Plugin Development
@@ -25,8 +25,8 @@ src/plugins/{name}/
 - **`api/index.ts`** — re-export everything from getters + mutations for direct server-side import.
 - **`operations.ts`** — define the one maintained business inventory with input validation, exact permission descriptors, authoritative facts, domain execution, and lifecycle hooks.
 - Bind HTTP routes to same-key operations. Use `operationRouteMap` only for real route-name mismatches.
-- The optional `api` factory is narrow: first-party plugins expose only `prefetchForRoute` for SSG. Do not duplicate business getters or mutations on `stack().api`.
-- Use `myStack.forRequest(request).api.*` for request work and `myStack.internal.*` for explicitly trusted jobs.
+- The optional `raw` factory is narrow: first-party plugins expose only `prefetchForRoute` for SSG. Do not duplicate business getters or mutations on `stack().raw`.
+- Use `myStack.forRequest(request).operations.*` for request work and `myStack.trusted.*` for explicitly trusted jobs.
 
 ## Key patterns
 
@@ -65,7 +65,7 @@ export const myStack = stack({ ... })
 
 const myTool = tool({
   execute: async (params) => {
-		await myStack.internal.kanban.createTask({
+		await myStack.trusted.kanban.createTask({
 			title: params.title,
 			columnId: "col-id",
 		})
@@ -80,7 +80,7 @@ const myTool = tool({
 - **Wrong adapter type** — use `import type { DBAdapter as Adapter } from "@btst/db"` in getters/mutations/plugin files.
 - **`"GET /path"` string keys** — routes use `createEndpoint()`, not string-keyed method/path objects.
 - **`ctx.json()`** — does not exist; return data directly from route handlers.
-- **Business methods on `stack().api`** — do not add them. Keep the trusted lifecycle explicit through `internal` and reserve `api` for SSG prefetch.
+- **Business methods on `stack().raw`** — do not add them. Keep the composed lifecycle explicit through `forRequest(request).operations` or `trusted`, and reserve `raw` for narrow lower-level/SSG helpers.
 - **Authorization in lifecycle hooks** — routine access control belongs in operation descriptors and the one shared rule. Hooks receive already-authorized context.
 - **Write ops in `getters.ts`** — write functions belong in `mutations.ts`, not `getters.ts`.
 

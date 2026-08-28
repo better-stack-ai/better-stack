@@ -14,7 +14,7 @@ import { metaElementsToObject, normalizePath } from "@btst/stack/client"
 import type { Metadata } from "next"
 
 export async function generateStaticParams() {
-	const contentTypes = await myStack.internal.cms.listContentTypes({})
+	const contentTypes = await myStack.trusted.cms.listContentTypes({})
 	return contentTypes.map((ct: { slug: string }) => ({ typeSlug: ct.slug }))
 }
 
@@ -30,7 +30,7 @@ export async function generateMetadata({
 	const stackClient = getStackClient(queryClient)
 	const route = stackClient.router.getRoute(normalizePath(["cms", typeSlug]))
 	if (!route) return { title: typeSlug }
-	await myStack.api.cms.prefetchForRoute("contentList", queryClient, { typeSlug })
+	await myStack.raw.cms.prefetchForRoute("contentList", queryClient, { typeSlug })
 	return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
 }
 
@@ -44,7 +44,7 @@ export default async function SsgCmsContentListPage({
 	const stackClient = getStackClient(queryClient)
 	const route = stackClient.router.getRoute(normalizePath(["cms", typeSlug]))
 	if (!route) notFound()
-	await myStack.api.cms.prefetchForRoute("contentList", queryClient, { typeSlug })
+	await myStack.raw.cms.prefetchForRoute("contentList", queryClient, { typeSlug })
 	return (
 		<HydrationBoundary state={dehydrate(queryClient)}>
 			{route.PageComponent && <route.PageComponent />}

@@ -149,7 +149,7 @@ export interface FormBuilderHookContext<TInput = unknown, TFacts = unknown> {
 	readonly input: DeepReadonly<TInput>;
 	/** Trusted facts derived by the backend before authorization. */
 	readonly facts: DeepReadonly<TFacts>;
-	/** Authorized request identity, or `null` for anonymous/internal execution. */
+	/** Authorized request identity, or `null` for anonymous/trusted execution. */
 	readonly identity: DeepReadonly<StackIdentity> | null;
 	/** Request when invoked through HTTP or `forRequest()`. */
 	readonly request?: Request;

@@ -41,8 +41,8 @@ export type {
 
 /**
  * Comments backend plugin. Maintained HTTP endpoints adapt the same operation
- * inventory exposed by `forRequest(request).api.comments` and
- * `internal.comments`.
+ * inventory exposed by `forRequest(request).operations.comments` and
+ * `trusted.comments`.
  */
 export const commentsBackendPlugin = (options: CommentsBackendOptions = {}) => {
 	const postingEnabled = options.allowPosting !== false;

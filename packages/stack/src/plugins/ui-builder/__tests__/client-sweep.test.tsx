@@ -354,7 +354,7 @@ describe("UI Builder public page authorization", () => {
 				getIdentity: () => null,
 			}),
 		});
-		await backend.internal.cms.createContentItem({
+		await backend.trusted.cms.createContentItem({
 			typeSlug: UI_BUILDER_TYPE_SLUG,
 			body: {
 				slug: "home",

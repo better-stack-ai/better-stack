@@ -62,7 +62,7 @@ interface BlogPrefetchForRoute {
 }
 
 /**
- * SSG is a trusted raw-data path: it intentionally bypasses request
+ * SSG is a raw-data path: it intentionally bypasses request
  * authorization and seeds only the route data selected by the caller. Build
  * protected routes only when the resulting artifact has equivalent deployment
  * access controls; static output is commonly public.
@@ -133,7 +133,7 @@ function createBlogPrefetchForRoute(adapter: Adapter): BlogPrefetchForRoute {
 
 /**
  * Blog backend plugin. Every maintained HTTP endpoint adapts the same
- * operation exposed by `forRequest(request).api.blog` and `internal.blog`.
+ * operation exposed by `forRequest(request).operations.blog` and `trusted.blog`.
  */
 export interface BlogBackendOptions {
 	/** Post-authorization domain lifecycle hooks. */
@@ -148,10 +148,10 @@ export const blogBackendPlugin = (options: BlogBackendOptions = {}) =>
 			createBlogOperations(adapter, options.hooks),
 
 		/**
-		 * Explicit lower-level data API for SSG, jobs, and migration code.
+		 * Explicit lower-level helper for SSG and infrastructure code.
 		 * These functions bypass authorization and lifecycle composition.
 		 */
-		api: (adapter: Adapter) => ({
+		raw: (adapter: Adapter) => ({
 			prefetchForRoute: createBlogPrefetchForRoute(adapter),
 		}),
 

@@ -14,7 +14,7 @@ export const myBackendPlugin = defineBackendPlugin({
       execute: ({ input }) => createItem(adapter, input),
     }),
   }),
-  api: (adapter) => ({
+  raw: (adapter) => ({
     prefetchForRoute: createItemPrefetchForRoute(adapter),
   }),
   routes: (_adapter, _context, operations) => ({
@@ -131,5 +131,5 @@ export const myStack = stack({
 export const { handler, dbSchema } = myStack
 
 // Explicitly trusted business access keeps validation and lifecycle hooks:
-const item = await myStack.internal.myPlugin.createItem({ name: "Scheduled item" })
+const item = await myStack.trusted.myPlugin.createItem({ name: "Scheduled item" })
 ```

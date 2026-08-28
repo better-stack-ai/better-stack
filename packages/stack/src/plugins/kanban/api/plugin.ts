@@ -96,8 +96,8 @@ export const kanbanBackendPlugin = (options: KanbanBackendOptions = {}) =>
 		operations: (adapter: Adapter) =>
 			createKanbanOperations(adapter, options.hooks),
 
-		/** Lower-level server API that intentionally bypasses auth and hooks. */
-		api: (adapter: Adapter) => ({
+		/** Lower-level SSG helper that intentionally bypasses auth and hooks. */
+		raw: (adapter: Adapter) => ({
 			prefetchForRoute: createKanbanPrefetchForRoute(adapter),
 		}),
 

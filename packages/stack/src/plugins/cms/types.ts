@@ -267,7 +267,7 @@ interface CMSOperationContextBase<TInput, TFacts> {
 	readonly input: Readonly<TInput>;
 	/** Trusted server-derived facts used by the authorization rule. */
 	readonly facts: Readonly<TFacts>;
-	/** Authorized request identity, or `null` for anonymous and trusted internal calls. */
+	/** Authorized request identity, or `null` for anonymous and trusted calls. */
 	readonly identity: Readonly<CMSOperationIdentity> | null;
 	/** Transport request when the operation was invoked through HTTP or `forRequest()`. */
 	readonly request?: Request;

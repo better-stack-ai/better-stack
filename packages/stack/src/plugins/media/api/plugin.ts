@@ -64,7 +64,7 @@ export interface MediaBackendConfig {
 	resolveTenantId?: MediaOperationsConfig["resolveTenantId"];
 }
 
-/** Raw trusted route key exposed only on `stack.api.media`. */
+/** Raw route key exposed only on `stack.raw.media`. */
 export type MediaRouteKey = "library";
 
 interface MediaPrefetchForRoute {
@@ -161,8 +161,8 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 		dbPlugin: dbSchema,
 		operations: (adapter: Adapter) => createMediaOperations(adapter, config),
 
-		/** Lower-level trusted server API that intentionally bypasses auth and hooks. */
-		api: (adapter: Adapter) => ({
+		/** Lower-level SSG helper that intentionally bypasses auth and hooks. */
+		raw: (adapter: Adapter) => ({
 			prefetchForRoute: createMediaPrefetchForRoute(adapter),
 		}),
 

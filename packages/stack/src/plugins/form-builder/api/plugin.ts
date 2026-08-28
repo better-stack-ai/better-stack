@@ -145,8 +145,8 @@ export const formBuilderBackendPlugin = (
 		operations: (adapter: Adapter) =>
 			createFormBuilderOperations(adapter, config.hooks),
 
-		/** Lower-level server API that intentionally bypasses auth and hooks. */
-		api: (adapter: Adapter) => ({
+		/** Lower-level SSG helper that intentionally bypasses auth and hooks. */
+		raw: (adapter: Adapter) => ({
 			prefetchForRoute: createFormBuilderPrefetchForRoute(adapter),
 		}),
 

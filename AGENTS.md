@@ -33,7 +33,7 @@ Detailed patterns and reference material are in the following skills. Read the r
 
 | Skill | Domain | Trigger |
 |---|---|---|
-| [`btst-backend-plugin-dev`](.agents/skills/btst-backend-plugin-dev/SKILL.md) | Backend plugin authoring | `defineBackendPlugin`, `getters.ts`, `mutations.ts`, lifecycle hooks, api factory |
+| [`btst-backend-plugin-dev`](.agents/skills/btst-backend-plugin-dev/SKILL.md) | Backend plugin authoring | `defineBackendPlugin`, `getters.ts`, `mutations.ts`, lifecycle hooks, raw factory |
 | [`btst-client-plugin-dev`](.agents/skills/btst-client-plugin-dev/SKILL.md) | Client plugin authoring | `defineClientPlugin`, routes, SSR loaders, meta, `ComposedRoute`, `useSuspenseQuery` |
 | [`btst-plugin-ssg`](.agents/skills/btst-plugin-ssg/SKILL.md) | SSG support | `prefetchForRoute`, `query-key-defs.ts`, serializers, `next build` silent failures |
 | [`btst-build-config`](.agents/skills/btst-build-config/SKILL.md) | Build & exports | New entry points, `build.config.ts`, `exports`/`typesVersions`, example app updates |

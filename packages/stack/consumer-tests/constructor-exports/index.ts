@@ -99,20 +99,20 @@ type _BackendResultAliasMatches = Expect<
 		BackendStack<
 			ReturnType<typeof backendPlugin.routes>,
 			Record<string, never>,
-			typeof canonicalBackend.internal
+			typeof canonicalBackend.trusted
 		>,
 		BackendLib<
 			ReturnType<typeof backendPlugin.routes>,
 			Record<string, never>,
-			typeof canonicalBackend.internal
+			typeof canonicalBackend.trusted
 		>
 	>
 >;
 canonicalBackend.router.endpoints.consumerProbe_read;
-canonicalBackend.internal.consumerProbe.read({ id: "record-1" });
+canonicalBackend.trusted.consumerProbe.read({ id: "record-1" });
 canonicalBackend
 	.forRequest(new Request("https://example.com/api"))
-	.api.consumerProbe.read({ id: "record-1" });
+	.operations.consumerProbe.read({ id: "record-1" });
 
 const unrelatedPermissions = definePermissions("unrelated", {
 	read: permission(),

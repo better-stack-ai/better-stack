@@ -306,22 +306,22 @@ describe("Form Builder operation-first authorization", () => {
 					events.push(`afterCreate:${context.identity?.id}`);
 				},
 				onBeforeUpdateForm: (_id, data, context) => {
-					events.push(`beforeUpdate:${context.identity?.id ?? "internal"}`);
+					events.push(`beforeUpdate:${context.identity?.id ?? "trusted"}`);
 					return { ...data, name: "Updated by hook" };
 				},
 				onAfterUpdateForm: (_form, context) => {
-					events.push(`afterUpdate:${context.identity?.id ?? "internal"}`);
+					events.push(`afterUpdate:${context.identity?.id ?? "trusted"}`);
 				},
 				onBeforeSubmission: (_slug, data, context) => {
-					events.push(`beforeSubmission:${context.identity?.id ?? "internal"}`);
+					events.push(`beforeSubmission:${context.identity?.id ?? "trusted"}`);
 					return { ...data, normalized: true };
 				},
 				onAfterSubmission: (_submission, _form, context) => {
-					events.push(`afterSubmission:${context.identity?.id ?? "internal"}`);
+					events.push(`afterSubmission:${context.identity?.id ?? "trusted"}`);
 				},
 				onErrorSubmission: (_error, _slug, _data, context) => {
 					events.push(
-						`errorSubmission:${context.request ? "request" : "internal"}`,
+						`errorSubmission:${context.request ? "request" : "trusted"}`,
 					);
 				},
 				onBeforeDeleteSubmission: (_id, context) => {
@@ -331,16 +331,16 @@ describe("Form Builder operation-first authorization", () => {
 					events.push(`afterDeleteSubmission:${context.identity?.id}`);
 				},
 				onBeforeDeleteForm: (_id, context) => {
-					events.push(`beforeDeleteForm:${context.identity?.id ?? "internal"}`);
+					events.push(`beforeDeleteForm:${context.identity?.id ?? "trusted"}`);
 				},
 				onAfterDeleteForm: (_id, context) => {
-					events.push(`afterDeleteForm:${context.identity?.id ?? "internal"}`);
+					events.push(`afterDeleteForm:${context.identity?.id ?? "trusted"}`);
 				},
 			},
 		});
 		const requested = backend.forRequest(
 			request("/lifecycle", { identity: admin }),
-		).api.formBuilder;
+		).operations.formBuilder;
 		const created = await requested.createForm({
 			name: "Original",
 			slug: "lifecycle",
@@ -348,7 +348,7 @@ describe("Form Builder operation-first authorization", () => {
 			status: "active",
 		});
 		expect(created.name).toBe("Created by hook");
-		const updated = await backend.internal.formBuilder.updateForm({
+		const updated = await backend.trusted.formBuilder.updateForm({
 			id: created.id,
 			data: { name: "Original update" },
 		});
@@ -357,9 +357,9 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/lifecycle-submit"))
-				.api.formBuilder.submitForm({ slug: created.slug, data: {} }),
+				.operations.formBuilder.submitForm({ slug: created.slug, data: {} }),
 		).rejects.toMatchObject({ code: "SUBMISSION_VALIDATION_FAILED" });
-		const submission = await backend.internal.formBuilder.submitForm({
+		const submission = await backend.trusted.formBuilder.submitForm({
 			slug: created.slug,
 			data: { name: "Ada" },
 		});
@@ -368,20 +368,20 @@ describe("Form Builder operation-first authorization", () => {
 			formId: created.id,
 			submissionId: submission.id,
 		});
-		await backend.internal.formBuilder.deleteForm({ id: created.id });
+		await backend.trusted.formBuilder.deleteForm({ id: created.id });
 
 		expect(events).toEqual([
 			"beforeCreate:admin-1",
 			"afterCreate:admin-1",
-			"beforeUpdate:internal",
-			"afterUpdate:internal",
+			"beforeUpdate:trusted",
+			"afterUpdate:trusted",
 			"errorSubmission:request",
-			"beforeSubmission:internal",
-			"afterSubmission:internal",
+			"beforeSubmission:trusted",
+			"afterSubmission:trusted",
 			"beforeDeleteSubmission:admin-1",
 			"afterDeleteSubmission:admin-1",
-			"beforeDeleteForm:internal",
-			"afterDeleteForm:internal",
+			"beforeDeleteForm:trusted",
+			"afterDeleteForm:trusted",
 		]);
 	});
 
@@ -428,7 +428,7 @@ describe("Form Builder operation-first authorization", () => {
 			await expect(
 				backend
 					.forRequest(request(`/forms/${form.id}`, { identity: owner }))
-					.api.formBuilder.updateForm({
+					.operations.formBuilder.updateForm({
 						id: form.id,
 						data: { name: "Should not persist" },
 					}),
@@ -458,7 +458,7 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/forms", { identity: admin }))
-				.api.formBuilder.createForm({
+				.operations.formBuilder.createForm({
 					name: "Valid before hook",
 					slug: "invalid-after-hook",
 					schema: activeSchema,
@@ -470,7 +470,7 @@ describe("Form Builder operation-first authorization", () => {
 		});
 		expect(await backend.adapter.count({ model: "form", where: [] })).toBe(0);
 	});
-	it("keeps public render and submission explicitly anonymous across HTTP, request, and internal transports", async () => {
+	it("keeps public render and submission explicitly anonymous across HTTP, request, and trusted transports", async () => {
 		const events: string[] = [];
 		const backend = makeBackend({
 			auth: createAuth(),
@@ -500,10 +500,10 @@ describe("Form Builder operation-first authorization", () => {
 		expect(
 			await backend
 				.forRequest(request("/forms/contact"))
-				.api.formBuilder.getFormBySlug({ slug: "contact" }),
+				.operations.formBuilder.getFormBySlug({ slug: "contact" }),
 		).toMatchObject({ id: form.id });
 		expect(
-			await backend.internal.formBuilder.getFormBySlug({ slug: "contact" }),
+			await backend.trusted.formBuilder.getFormBySlug({ slug: "contact" }),
 		).toMatchObject({ id: form.id });
 
 		const submitResponse = await backend.handler(
@@ -518,13 +518,13 @@ describe("Form Builder operation-first authorization", () => {
 		expect(
 			await backend
 				.forRequest(request("/forms/contact/submit"))
-				.api.formBuilder.submitForm({
+				.operations.formBuilder.submitForm({
 					slug: "contact",
 					data: { name: "Grace" },
 				}),
 		).toMatchObject({ formId: form.id });
 		expect(
-			await backend.internal.formBuilder.submitForm({
+			await backend.trusted.formBuilder.submitForm({
 				slug: "contact",
 				data: { name: "Lin" },
 			}),
@@ -537,7 +537,7 @@ describe("Form Builder operation-first authorization", () => {
 		await seedForm(backend);
 
 		await expect(
-			backend.internal.formBuilder.submitForm({
+			backend.trusted.formBuilder.submitForm({
 				slug: "contact",
 				data: {},
 			}),
@@ -696,7 +696,7 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request(`/forms/${form.id}`, { identity: viewer }))
-				.api.formBuilder.updateForm({
+				.operations.formBuilder.updateForm({
 					id: form.id,
 					data: { name: "Spoofed" },
 				}),
@@ -731,12 +731,12 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request(`/forms/id/${form.id}`, { identity: owner }))
-				.api.formBuilder.getFormById({ id: form.id }),
+				.operations.formBuilder.getFormById({ id: form.id }),
 		).rejects.toMatchObject({ statusCode: 403 });
 		await expect(
 			backend
 				.forRequest(request(`/forms/id/${form.id}/edit`, { identity: owner }))
-				.api.formBuilder.getFormForUpdate({ id: form.id }),
+				.operations.formBuilder.getFormForUpdate({ id: form.id }),
 		).resolves.toMatchObject({ id: form.id, createdBy: owner.id });
 		const editorResponse = await backend.handler(
 			request(`/forms/id/${form.id}/edit`, { identity: owner }),
@@ -746,11 +746,11 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request(`/forms/id/${form.id}/edit`, { identity: viewer }))
-				.api.formBuilder.getFormForUpdate({ id: form.id }),
+				.operations.formBuilder.getFormForUpdate({ id: form.id }),
 		).rejects.toMatchObject({ statusCode: 403 });
 		const list = await backend
 			.forRequest(request(`/forms/${form.id}/submissions`, { identity: owner }))
-			.api.formBuilder.listSubmissions({
+			.operations.formBuilder.listSubmissions({
 				formId: form.id,
 				query: { limit: 20, offset: 0 },
 			});
@@ -774,7 +774,7 @@ describe("Form Builder operation-first authorization", () => {
 			"name",
 		]);
 		await expect(
-			backend.internal.formBuilder.getFormForUpdate({ id: form.id }),
+			backend.trusted.formBuilder.getFormForUpdate({ id: form.id }),
 		).resolves.toMatchObject({ id: form.id });
 	});
 
@@ -798,7 +798,7 @@ describe("Form Builder operation-first authorization", () => {
 
 		const requestList = await backend
 			.forRequest(request(`/forms/${form.id}/submissions`, { identity: owner }))
-			.api.formBuilder.listSubmissions({
+			.operations.formBuilder.listSubmissions({
 				formId: form.id,
 				query: { limit: 20, offset: 0 },
 			});
@@ -820,11 +820,11 @@ describe("Form Builder operation-first authorization", () => {
 		expect(JSON.stringify(body)).not.toContain("never-list-this");
 		expect(JSON.stringify(body)).not.toContain("203.0.113.1");
 		expect(JSON.stringify(body)).not.toContain("sensitive-agent");
-		const internalList = await backend.internal.formBuilder.listSubmissions({
+		const trustedList = await backend.trusted.formBuilder.listSubmissions({
 			formId: form.id,
 			query: { limit: 20, offset: 0 },
 		});
-		expect(internalList.items).toEqual(requestList.items);
+		expect(trustedList.items).toEqual(requestList.items);
 
 		await expect(
 			backend
@@ -833,7 +833,7 @@ describe("Form Builder operation-first authorization", () => {
 						identity: owner,
 					}),
 				)
-				.api.formBuilder.getSubmission({
+				.operations.formBuilder.getSubmission({
 					formId: form.id,
 					submissionId: submission.id,
 				}),
@@ -853,16 +853,19 @@ describe("Form Builder operation-first authorization", () => {
 
 		const updated = await backend
 			.forRequest(request(`/forms/${form.id}`, { identity: owner }))
-			.api.formBuilder.updateForm({ id: form.id, data: { name: "Owned" } });
+			.operations.formBuilder.updateForm({
+				id: form.id,
+				data: { name: "Owned" },
+			});
 		expect(updated.name).toBe("Owned");
 		await expect(
 			backend
 				.forRequest(request(`/forms/id/${form.id}`, { identity: owner }))
-				.api.formBuilder.getFormById({ id: form.id }),
+				.operations.formBuilder.getFormById({ id: form.id }),
 		).resolves.toMatchObject({ id: form.id, createdBy: owner.id });
 		const requestApi = backend.forRequest(
 			request(`/forms/${form.id}/submissions`, { identity: owner }),
-		).api.formBuilder as unknown as {
+		).operations.formBuilder as unknown as {
 			listSubmissions(input: {
 				formId: string;
 				query: { limit: number; offset: number };
@@ -892,7 +895,7 @@ describe("Form Builder operation-first authorization", () => {
 					identity: owner,
 				}),
 			)
-			.api.formBuilder.getSubmission({
+			.operations.formBuilder.getSubmission({
 				formId: form.id,
 				submissionId: submission.id,
 			});
@@ -901,7 +904,7 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/forms", { identity: admin }))
-				.api.formBuilder.createForm({
+				.operations.formBuilder.createForm({
 					name: "Admin form",
 					slug: "admin-form",
 					schema: activeSchema,
@@ -911,7 +914,7 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/forms", { identity: admin }))
-				.api.formBuilder.listForms({ limit: 20, offset: 0 }),
+				.operations.formBuilder.listForms({ limit: 20, offset: 0 }),
 		).resolves.toMatchObject({ total: 2 });
 		await expect(
 			backend
@@ -920,7 +923,7 @@ describe("Form Builder operation-first authorization", () => {
 						identity: owner,
 					}),
 				)
-				.api.formBuilder.deleteSubmission({
+				.operations.formBuilder.deleteSubmission({
 					formId: form.id,
 					submissionId: submission.id,
 				}),
@@ -928,30 +931,30 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request(`/forms/${form.id}`, { identity: owner }))
-				.api.formBuilder.deleteForm({ id: form.id }),
+				.operations.formBuilder.deleteForm({ id: form.id }),
 		).resolves.toEqual({ success: true });
 	});
 
-	it("keeps validation and hooks active for trusted internal calls without resolving identity", async () => {
+	it("keeps validation and hooks active for trusted calls without resolving identity", async () => {
 		const getIdentity = vi.fn(() => {
-			throw new Error("internal must not resolve identity");
+			throw new Error("trusted must not resolve identity");
 		});
 		const events: string[] = [];
 		const backend = makeBackend({
 			auth: createAuth(getIdentity),
 			hooks: {
 				onBeforeCreateForm: (input, context) => {
-					events.push(`before:${context.identity?.id ?? "internal"}`);
+					events.push(`before:${context.identity?.id ?? "trusted"}`);
 					return { ...input, createdBy: "system-owner" };
 				},
 				onAfterCreateForm: (_form, context) => {
-					events.push(`after:${context.identity?.id ?? "internal"}`);
+					events.push(`after:${context.identity?.id ?? "trusted"}`);
 				},
 			},
 		});
 
 		await expect(
-			backend.internal.formBuilder.createForm({
+			backend.trusted.formBuilder.createForm({
 				name: "",
 				slug: "invalid",
 				schema: activeSchema,
@@ -959,14 +962,14 @@ describe("Form Builder operation-first authorization", () => {
 			}),
 		).rejects.toThrow();
 		expect(events).toEqual([]);
-		const created = await backend.internal.formBuilder.createForm({
-			name: "Internal",
-			slug: "internal",
+		const created = await backend.trusted.formBuilder.createForm({
+			name: "Trusted",
+			slug: "trusted",
 			schema: activeSchema,
 			status: "active",
 		});
 		expect(created.createdBy).toBe("system-owner");
-		expect(events).toEqual(["before:internal", "after:internal"]);
+		expect(events).toEqual(["before:trusted", "after:trusted"]);
 		expect(getIdentity).not.toHaveBeenCalled();
 	});
 
@@ -983,7 +986,10 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			missingBackend
 				.forRequest(request(`/forms/${form.id}`, { identity: owner }))
-				.api.formBuilder.updateForm({ id: form.id, data: { name: "Denied" } }),
+				.operations.formBuilder.updateForm({
+					id: form.id,
+					data: { name: "Denied" },
+				}),
 		).rejects.toMatchObject({ statusCode: 403 });
 
 		const identityFailure = makeBackend({
@@ -995,7 +1001,7 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			identityFailure
 				.forRequest(request(`/forms/${identityForm.id}`))
-				.api.formBuilder.updateForm({
+				.operations.formBuilder.updateForm({
 					id: identityForm.id,
 					data: { name: "Nope" },
 				}),
@@ -1015,7 +1021,7 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			ruleFailure
 				.forRequest(request(`/forms/${ruleForm.id}`, { identity: owner }))
-				.api.formBuilder.updateForm({
+				.operations.formBuilder.updateForm({
 					id: ruleForm.id,
 					data: { name: "Nope" },
 				}),
@@ -1040,7 +1046,7 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			factFailure
 				.forRequest(request(`/forms/${factForm.id}`, { identity: owner }))
-				.api.formBuilder.updateForm({
+				.operations.formBuilder.updateForm({
 					id: factForm.id,
 					data: { name: "Nope" },
 				}),
@@ -1089,8 +1095,8 @@ describe("Form Builder operation-first authorization", () => {
 			});
 			const form = await seedForm(backend, { slug: `race-${operation}` });
 			const submission = await seedSubmission(backend, form.id);
-			const api = backend.forRequest(request("/race", { identity: owner })).api
-				.formBuilder;
+			const api = backend.forRequest(request("/race", { identity: owner }))
+				.operations.formBuilder;
 			const result =
 				operation === "update"
 					? api.updateForm({ id: form.id, data: { name: "Stale" } })
@@ -1158,8 +1164,8 @@ describe("Form Builder operation-first authorization", () => {
 					}),
 			);
 
-			const api = backend.forRequest(request("/cas", { identity: owner })).api
-				.formBuilder;
+			const api = backend.forRequest(request("/cas", { identity: owner }))
+				.operations.formBuilder;
 			const result =
 				operation === "update"
 					? api.updateForm({ id: form.id, data: { name: "Raced" } })
@@ -1226,7 +1232,7 @@ describe("Form Builder operation-first authorization", () => {
 			adapterConfig.transaction = false;
 			const api = backend.forRequest(
 				request("/sequential", { identity: owner }),
-			).api.formBuilder;
+			).operations.formBuilder;
 			const result =
 				operation === "update"
 					? api.updateForm({ id: form.id, data: { name: "Unsafe" } })
@@ -1284,7 +1290,7 @@ describe("Form Builder operation-first authorization", () => {
 		const form = await seedForm(backend, { slug: "post-claim-race" });
 		const pending = backend
 			.forRequest(request("/post-claim-race"))
-			.api.formBuilder.submitForm({
+			.operations.formBuilder.submitForm({
 				slug: form.slug,
 				data: { name: "Raced" },
 			});
@@ -1355,7 +1361,7 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/memory-status-race"))
-				.api.formBuilder.submitForm({
+				.operations.formBuilder.submitForm({
 					slug: form.slug,
 					data: { name: "Stale" },
 				}),
@@ -1387,7 +1393,7 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/memory-no-isolation", { identity: owner }))
-				.api.formBuilder.updateForm({
+				.operations.formBuilder.updateForm({
 					id: form.id,
 					data: { name: "Unsafe" },
 				}),
@@ -1430,7 +1436,7 @@ describe("Form Builder operation-first authorization", () => {
 
 			const api = backend.forRequest(
 				request("/delete-zero", { identity: owner }),
-			).api.formBuilder;
+			).operations.formBuilder;
 			await expect(
 				target === "form"
 					? api.deleteForm({ id: form.id })
@@ -1476,7 +1482,7 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/after-snapshot"))
-				.api.formBuilder.submitForm({
+				.operations.formBuilder.submitForm({
 					slug: form.slug,
 					data: { name: "Captured" },
 				}),
@@ -1520,7 +1526,7 @@ describe("Form Builder operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/read-race", { identity: owner }))
-				.api.formBuilder.listSubmissions({
+				.operations.formBuilder.listSubmissions({
 					formId: form.id,
 					query: { limit: 20, offset: 0 },
 				}),
@@ -1528,14 +1534,15 @@ describe("Form Builder operation-first authorization", () => {
 		expect(raced).toBe(true);
 	});
 
-	it("keeps raw SSG/data helpers outside request and internal operation namespaces", () => {
+	it("keeps raw SSG/data helpers outside request and trusted operation namespaces", () => {
 		const backend = makeBackend({ auth: createAuth() });
-		const requestApi = backend.forRequest(request("/forms")).api.formBuilder;
+		const requestApi = backend.forRequest(request("/forms")).operations
+			.formBuilder;
 		expect("prefetchForRoute" in requestApi).toBe(false);
 		expect("getAllForms" in requestApi).toBe(false);
-		expect("prefetchForRoute" in backend.internal.formBuilder).toBe(false);
+		expect("prefetchForRoute" in backend.trusted.formBuilder).toBe(false);
 		expect(Object.keys(requestApi).sort()).toEqual(
-			Object.keys(backend.internal.formBuilder).sort(),
+			Object.keys(backend.trusted.formBuilder).sort(),
 		);
 	});
 
@@ -1549,14 +1556,14 @@ describe("Form Builder operation-first authorization", () => {
 		});
 		const queryClient = new QueryClient();
 
-		await backend.api.formBuilder.prefetchForRoute("editForm", queryClient, {
+		await backend.raw.formBuilder.prefetchForRoute("editForm", queryClient, {
 			id: form.id,
 		});
 		expect(
 			queryClient.getQueryData(FORM_QUERY_KEYS.formForUpdate(form.id)),
 		).toMatchObject({ id: form.id, schema: activeSchema });
 
-		await backend.api.formBuilder.prefetchForRoute("submissions", queryClient, {
+		await backend.raw.formBuilder.prefetchForRoute("submissions", queryClient, {
 			id: form.id,
 		});
 		const data = queryClient.getQueryData<{

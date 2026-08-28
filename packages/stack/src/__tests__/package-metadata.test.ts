@@ -207,7 +207,7 @@ describe("published symmetric stack constructors", () => {
 					),
 				};
 			},
-			api: () => ({ id: () => "__proto__" }),
+			raw: () => ({ id: () => "__proto__" }),
 		});
 		const registrations: Record<string, unknown> = {
 			["__proto__"]: prototypePlugin,
@@ -219,13 +219,13 @@ describe("published symmetric stack constructors", () => {
 		});
 		const requestApi = stack.forRequest(
 			new Request("https://app.example.com/api"),
-		).api;
+		).operations;
 
-		expect(Object.getPrototypeOf(stack.api)).toBeNull();
-		expect(Object.hasOwn(stack.api, "__proto__")).toBe(true);
-		expect(stack.api.__proto__.id()).toBe("__proto__");
-		expect(Object.getPrototypeOf(stack.internal)).toBeNull();
-		expect(Object.getPrototypeOf(stack.internal.__proto__)).toBeNull();
+		expect(Object.getPrototypeOf(stack.raw)).toBeNull();
+		expect(Object.hasOwn(stack.raw, "__proto__")).toBe(true);
+		expect(stack.raw.__proto__.id()).toBe("__proto__");
+		expect(Object.getPrototypeOf(stack.trusted)).toBeNull();
+		expect(Object.getPrototypeOf(stack.trusted.__proto__)).toBeNull();
 		expect(Object.getPrototypeOf(requestApi)).toBeNull();
 		expect(Object.getPrototypeOf(requestApi.__proto__)).toBeNull();
 		expect(Object.getPrototypeOf(observedContext?.pluginRoutes)).toBeNull();
@@ -233,7 +233,7 @@ describe("published symmetric stack constructors", () => {
 		expect(observedContext?.endpointInventory?.[0]?.pluginName).toBe(
 			"__proto__",
 		);
-		expect(stack.internal.__proto__.echo).toBeTypeOf("function");
+		expect(stack.trusted.__proto__.echo).toBeTypeOf("function");
 		expect(requestApi.__proto__.echo).toBeTypeOf("function");
 	}, 30_000);
 });

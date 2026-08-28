@@ -206,7 +206,7 @@ const moderator = { id: "moderator-1", role: "moderator" } as const;
 
 type CommentsOperationApi = ReturnType<
 	typeof makeBackend
->["internal"]["comments"];
+>["trusted"]["comments"];
 
 type OperationScenario = {
 	readonly name: string;
@@ -385,24 +385,27 @@ describe("Comments authorization inventory", () => {
 
 		const backend = makeBackend({ auth: createAuth() });
 		expect(
-			Object.keys(backend.forRequest(request("/comments")).api.comments).sort(),
+			Object.keys(
+				backend.forRequest(request("/comments")).operations.comments,
+			).sort(),
 		).toEqual(expected);
-		expect(Object.keys(backend.internal.comments).sort()).toEqual(expected);
-		expect("comments" in backend.api).toBe(false);
+		expect(Object.keys(backend.trusted.comments).sort()).toEqual(expected);
+		expect("comments" in backend.raw).toBe(false);
 		expect(
-			"getCommentById" in backend.forRequest(request("/comments")).api.comments,
+			"getCommentById" in
+				backend.forRequest(request("/comments")).operations.comments,
 		).toBe(false);
-		expect("getCommentById" in backend.internal.comments).toBe(false);
+		expect("getCommentById" in backend.trusted.comments).toBe(false);
 		expect(
 			"toggleCommentLike" in
-				backend.forRequest(request("/comments")).api.comments,
+				backend.forRequest(request("/comments")).operations.comments,
 		).toBe(false);
-		expect("toggleCommentLike" in backend.internal.comments).toBe(false);
+		expect("toggleCommentLike" in backend.trusted.comments).toBe(false);
 		expect(
 			"prefetchForRoute" in
-				backend.forRequest(request("/comments")).api.comments,
+				backend.forRequest(request("/comments")).operations.comments,
 		).toBe(false);
-		expect("prefetchForRoute" in backend.internal.comments).toBe(false);
+		expect("prefetchForRoute" in backend.trusted.comments).toBe(false);
 
 		const routeNames = Object.keys(
 			(backend.router as unknown as { endpoints: Record<string, unknown> })
@@ -472,22 +475,22 @@ describe("Comments protected-operation matrix", () => {
 
 			await expect(
 				run(
-					backend.forRequest(request("/comments")).api
+					backend.forRequest(request("/comments")).operations
 						.comments as CommentsOperationApi,
 				),
 			).rejects.toMatchObject({ statusCode: 401 });
 			await expect(
 				run(
-					backend.forRequest(request("/comments", { identity: viewer })).api
-						.comments as CommentsOperationApi,
+					backend.forRequest(request("/comments", { identity: viewer }))
+						.operations.comments as CommentsOperationApi,
 				),
 			).rejects.toMatchObject({ statusCode: 403 });
 			expect(lifecycle).not.toHaveBeenCalled();
 
 			await expect(
 				run(
-					backend.forRequest(request("/comments", { identity: moderator })).api
-						.comments as CommentsOperationApi,
+					backend.forRequest(request("/comments", { identity: moderator }))
+						.operations.comments as CommentsOperationApi,
 				),
 			).resolves.toBeDefined();
 			expect(lifecycle).toHaveBeenCalledTimes(1);
@@ -522,8 +525,8 @@ describe("Comments protected-operation matrix", () => {
 				const run = await scenario.prepare(backend);
 				await expect(
 					run(
-						backend.forRequest(request("/comments", { identity: owner })).api
-							.comments as CommentsOperationApi,
+						backend.forRequest(request("/comments", { identity: owner }))
+							.operations.comments as CommentsOperationApi,
 					),
 				).rejects.toBeInstanceOf(Error);
 				expect(lifecycle).not.toHaveBeenCalled();
@@ -532,7 +535,7 @@ describe("Comments protected-operation matrix", () => {
 	);
 
 	it.each(operationScenarios)(
-		"keeps validation and $name lifecycle on trusted internal execution",
+		"keeps validation and $name lifecycle on trusted execution",
 		async (scenario) => {
 			const lifecycle = vi.fn();
 			const backend = makeBackend({
@@ -543,10 +546,10 @@ describe("Comments protected-operation matrix", () => {
 			const run = await scenario.prepare(backend);
 
 			await expect(
-				scenario.invalid(backend.internal.comments),
+				scenario.invalid(backend.trusted.comments),
 			).rejects.toThrow();
 			expect(lifecycle).not.toHaveBeenCalled();
-			await expect(run(backend.internal.comments)).resolves.toBeDefined();
+			await expect(run(backend.trusted.comments)).resolves.toBeDefined();
 			expect(lifecycle).toHaveBeenCalledTimes(1);
 		},
 	);
@@ -565,7 +568,7 @@ describe("Comments protected-operation matrix", () => {
 		});
 		const api = backend.forRequest(
 			request("/comments", { identity: moderator }),
-		).api.comments;
+		).operations.comments;
 		const failures = [
 			() =>
 				api.createComment({
@@ -619,7 +622,7 @@ describe("Comments protected-operation matrix", () => {
 		const spam = await seedComment(backend, { status: "pending" });
 		const api = backend.forRequest(
 			request("/comments", { identity: moderator }),
-		).api.comments;
+		).operations.comments;
 
 		await expect(
 			api.updateCommentStatus({
@@ -665,7 +668,7 @@ describe("Comments protected-operation matrix", () => {
 		await expect(
 			backend
 				.forRequest(request("/comments", { identity: moderator }))
-				.api.comments.updateCommentStatus({
+				.operations.comments.updateCommentStatus({
 					id: pending.id,
 					data: { status: "approved" },
 				}),
@@ -706,7 +709,7 @@ describe("Comments protected-operation matrix", () => {
 		await expect(
 			backend
 				.forRequest(request("/comments", { identity: moderator }))
-				.api.comments.updateCommentStatus({
+				.operations.comments.updateCommentStatus({
 					id: pending.id,
 					data: { status: "approved" },
 				}),
@@ -744,7 +747,7 @@ describe("Comments protected-operation matrix", () => {
 		await expect(
 			backend
 				.forRequest(request("/comments", { identity: moderator }))
-				.api.comments.updateCommentStatus({
+				.operations.comments.updateCommentStatus({
 					id: pending.id,
 					data: { status: "approved" },
 				}),
@@ -782,7 +785,7 @@ describe("Comments protected-operation matrix", () => {
 
 		const result = await backend
 			.forRequest(request("/comments", { identity: moderator }))
-			.api.comments.updateCommentStatus({
+			.operations.comments.updateCommentStatus({
 				id: pending.id,
 				data: { status: "approved" },
 			});
@@ -832,7 +835,7 @@ describe("Comments protected-operation matrix", () => {
 		await expect(
 			backend
 				.forRequest(request("/comments", { identity: owner }))
-				.api.comments.updateComment({
+				.operations.comments.updateComment({
 					id: comment.id,
 					data: { body: "Raced edit" },
 				}),
@@ -880,7 +883,7 @@ describe("Comments protected-operation matrix", () => {
 
 		const result = await backend
 			.forRequest(request("/comments", { identity: owner }))
-			.api.comments.updateComment({
+			.operations.comments.updateComment({
 				id: comment.id,
 				data: { body: "First edit" },
 			});
@@ -952,7 +955,7 @@ describe("Comments protected-operation matrix", () => {
 			await expect(
 				backend
 					.forRequest(request("/comments", { identity: viewer }))
-					.api.comments.toggleLike({ id: comment.id }),
+					.operations.comments.toggleLike({ id: comment.id }),
 			).rejects.toMatchObject({
 				statusCode: 409,
 				code: "COMMENT_STATE_CHANGED",
@@ -1003,7 +1006,7 @@ describe("Comments protected-operation matrix", () => {
 		await expect(
 			backend
 				.forRequest(request("/comments", { identity: owner }))
-				.api.comments.deleteComment({ id: comment.id }),
+				.operations.comments.deleteComment({ id: comment.id }),
 		).rejects.toMatchObject({
 			statusCode: 409,
 			code: "COMMENT_STATE_CHANGED",
@@ -1043,7 +1046,7 @@ describe("Comments operation-first authorization", () => {
 		expect(
 			await backend
 				.forRequest(request("/comments", { identity: viewer }))
-				.api.comments.createComment({
+				.operations.comments.createComment({
 					resourceId: "post-1",
 					resourceType: "post",
 					body: "Authenticated",
@@ -1053,12 +1056,15 @@ describe("Comments operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/comments", { identity: viewer }))
-				.api.comments.updateComment({ id: comment.id, data: { body: "No" } }),
+				.operations.comments.updateComment({
+					id: comment.id,
+					data: { body: "No" },
+				}),
 		).rejects.toMatchObject({ statusCode: 403 });
 		expect(
 			await backend
 				.forRequest(request("/comments", { identity: owner }))
-				.api.comments.updateComment({
+				.operations.comments.updateComment({
 					id: comment.id,
 					data: { body: "Owner edit" },
 				}),
@@ -1066,7 +1072,7 @@ describe("Comments operation-first authorization", () => {
 		expect(
 			await backend
 				.forRequest(request("/comments", { identity: moderator }))
-				.api.comments.updateComment({
+				.operations.comments.updateComment({
 					id: comment.id,
 					data: { body: "Moderator edit" },
 				}),
@@ -1079,19 +1085,19 @@ describe("Comments operation-first authorization", () => {
 		expect(
 			await backend
 				.forRequest(request("/comments", { identity: viewer }))
-				.api.comments.toggleLike({ id: comment.id }),
+				.operations.comments.toggleLike({ id: comment.id }),
 		).toEqual({ likes: 1, isLiked: true });
 
 		const pending = await seedComment(backend, { status: "pending" });
 		await expect(
 			backend
 				.forRequest(request("/comments", { identity: viewer }))
-				.api.comments.toggleLike({ id: pending.id }),
+				.operations.comments.toggleLike({ id: pending.id }),
 		).rejects.toMatchObject({ statusCode: 403 });
 		await expect(
 			backend
 				.forRequest(request("/comments", { identity: owner }))
-				.api.comments.updateCommentStatus({
+				.operations.comments.updateCommentStatus({
 					id: pending.id,
 					data: { status: "approved" },
 				}),
@@ -1099,7 +1105,7 @@ describe("Comments operation-first authorization", () => {
 		expect(
 			await backend
 				.forRequest(request("/comments", { identity: moderator }))
-				.api.comments.updateCommentStatus({
+				.operations.comments.updateCommentStatus({
 					id: pending.id,
 					data: { status: "approved" },
 				}),
@@ -1109,12 +1115,12 @@ describe("Comments operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/comments", { identity: owner }))
-				.api.comments.deleteComment({ id: viewerOwned.id }),
+				.operations.comments.deleteComment({ id: viewerOwned.id }),
 		).rejects.toMatchObject({ statusCode: 403 });
 		expect(
 			await backend
 				.forRequest(request("/comments", { identity: moderator }))
-				.api.comments.deleteComment({ id: viewerOwned.id }),
+				.operations.comments.deleteComment({ id: viewerOwned.id }),
 		).toEqual({ success: true });
 	});
 
@@ -1147,7 +1153,7 @@ describe("Comments operation-first authorization", () => {
 		expect(
 			await backend
 				.forRequest(request("/comments", { identity: moderator }))
-				.api.comments.getCommentCount({
+				.operations.comments.getCommentCount({
 					resourceId: "post-1",
 					resourceType: "post",
 					status: "pending",
@@ -1181,7 +1187,7 @@ describe("Comments operation-first authorization", () => {
 
 		const ownerResult = await backend
 			.forRequest(request("/comments", { identity: owner }))
-			.api.comments.listComments({
+			.operations.comments.listComments({
 				resourceId: "post-1",
 				resourceType: "post",
 			});
@@ -1203,18 +1209,18 @@ describe("Comments operation-first authorization", () => {
 		expect(viewerModeration.status).toBe(403);
 		const moderation = await backend
 			.forRequest(request("/comments", { identity: moderator }))
-			.api.comments.listComments({ status: "pending" });
+			.operations.comments.listComments({ status: "pending" });
 		expect(moderation.items).toHaveLength(2);
 
 		await expect(
 			backend
 				.forRequest(request("/comments", { identity: viewer }))
-				.api.comments.listComments({ authorId: owner.id }),
+				.operations.comments.listComments({ authorId: owner.id }),
 		).rejects.toMatchObject({ statusCode: 403 });
 		expect(
 			await backend
 				.forRequest(request("/comments", { identity: owner }))
-				.api.comments.listComments({ authorId: owner.id }),
+				.operations.comments.listComments({ authorId: owner.id }),
 		).toMatchObject({ total: 2 });
 	});
 
@@ -1224,7 +1230,7 @@ describe("Comments operation-first authorization", () => {
 			plugin: { autoApprove: true },
 		});
 		const api = backend.forRequest(request("/comments", { identity: viewer }))
-			.api.comments;
+			.operations.comments;
 		const created = await api.createComment({
 			resourceId: "post-1",
 			resourceType: "post",
@@ -1283,7 +1289,7 @@ describe("Comments operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/comments", { identity: owner }))
-				.api.comments.updateComment({
+				.operations.comments.updateComment({
 					id: comment.id,
 					data: { body: "Stale edit" },
 				}),
@@ -1321,7 +1327,7 @@ describe("Comments operation-first authorization", () => {
 		await expect(
 			backend
 				.forRequest(request("/comments", { identity: viewer }))
-				.api.comments.updateComment({
+				.operations.comments.updateComment({
 					id: comment.id,
 					data: { body: "Denied" },
 				}),
@@ -1330,7 +1336,7 @@ describe("Comments operation-first authorization", () => {
 
 		await backend
 			.forRequest(request("/comments", { identity: owner }))
-			.api.comments.updateComment({
+			.operations.comments.updateComment({
 				id: comment.id,
 				data: { body: "Allowed" },
 			});
@@ -1363,7 +1369,7 @@ describe("Comments operation-first authorization", () => {
 			await expect(
 				backend
 					.forRequest(request("/comments", { identity: owner }))
-					.api.comments.deleteComment({ id: comment.id }),
+					.operations.comments.deleteComment({ id: comment.id }),
 			).rejects.toSatisfy(
 				(error: unknown) =>
 					error instanceof Error &&
@@ -1374,7 +1380,7 @@ describe("Comments operation-first authorization", () => {
 		}
 	});
 
-	it("keeps HTTP, request and internal transports on the same validated lifecycle", async () => {
+	it("keeps HTTP, request and trusted transports on the same validated lifecycle", async () => {
 		const events: string[] = [];
 		const getIdentity = vi.fn((operationRequest: Request) => {
 			const id = operationRequest.headers.get("x-user-id");
@@ -1388,7 +1394,7 @@ describe("Comments operation-first authorization", () => {
 			plugin: {
 				hooks: {
 					onBeforeCreateComment: (_input, context) => {
-						events.push(`before:${context.identity?.id ?? "internal"}`);
+						events.push(`before:${context.identity?.id ?? "trusted"}`);
 					},
 					onAfterCreateComment: (comment, context) => {
 						events.push(`after:${comment.authorId}`);
@@ -1409,28 +1415,28 @@ describe("Comments operation-first authorization", () => {
 		expect(http.status).toBe(200);
 		const requestCreated = await backend
 			.forRequest(request("/comments", { identity: viewer }))
-			.api.comments.createComment(input);
+			.operations.comments.createComment(input);
 		getIdentity.mockClear();
-		const internalCreated = await backend.internal.comments.createComment({
+		const trustedCreated = await backend.trusted.comments.createComment({
 			...input,
 			authorId: "job-1",
 		});
 
 		expect((await http.json()).authorId).toBe(owner.id);
 		expect(requestCreated.authorId).toBe(viewer.id);
-		expect(internalCreated.authorId).toBe("job-1");
+		expect(trustedCreated.authorId).toBe("job-1");
 		expect(getIdentity).not.toHaveBeenCalled();
 		expect(events).toEqual([
 			"before:owner-1",
 			"after:owner-1",
 			"before:viewer-1",
 			"after:viewer-1",
-			"before:internal",
+			"before:trusted",
 			"after:job-1",
 		]);
 
 		await expect(
-			backend.internal.comments.createComment({
+			backend.trusted.comments.createComment({
 				...input,
 				body: "",
 				authorId: "job-1",
@@ -1438,7 +1444,7 @@ describe("Comments operation-first authorization", () => {
 		).rejects.toThrow();
 	});
 
-	it.each(["request", "internal"] as const)(
+	it.each(["request", "trusted"] as const)(
 		"invokes every canonical comments lifecycle through %s execution",
 		async (transport) => {
 			const events: string[] = [];
@@ -1501,8 +1507,8 @@ describe("Comments operation-first authorization", () => {
 			const api =
 				transport === "request"
 					? backend.forRequest(request("/lifecycle", { identity: moderator }))
-							.api.comments
-					: backend.internal.comments;
+							.operations.comments
+					: backend.trusted.comments;
 
 			await api.listComments({ authorId: owner.id });
 			await api.getCommentCount({
@@ -1513,7 +1519,7 @@ describe("Comments operation-first authorization", () => {
 				resourceId: "post-1",
 				resourceType: "post",
 				body: "Lifecycle create",
-				...(transport === "internal" ? { authorId: "job-1" } : {}),
+				...(transport === "trusted" ? { authorId: "job-1" } : {}),
 			});
 			await api.updateComment({
 				id: updateTarget.id,
@@ -1521,7 +1527,7 @@ describe("Comments operation-first authorization", () => {
 			});
 			await api.toggleLike({
 				id: reactionTarget.id,
-				...(transport === "internal" ? { authorId: "job-1" } : {}),
+				...(transport === "trusted" ? { authorId: "job-1" } : {}),
 			});
 			await api.updateCommentStatus({
 				id: moderationTarget.id,

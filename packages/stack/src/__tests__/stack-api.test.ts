@@ -11,15 +11,15 @@ const testAdapter = (db: DatabaseDefinition): Adapter =>
 	createMemoryAdapter(db)({});
 
 /**
- * A minimal plugin with no `api` factory, to verify backward compatibility.
+ * A minimal plugin with no `raw` factory.
  */
-const noApiPlugin = defineBackendPlugin({
-	name: "no-api",
-	dbPlugin: createDbPlugin("no-api", {}),
+const noRawPlugin = defineBackendPlugin({
+	name: "no-raw",
+	dbPlugin: createDbPlugin("no-raw", {}),
 	routes: () => ({}),
 });
 
-describe("stack.api surface", () => {
+describe("stack.raw surface", () => {
 	it("exposes adapter on the returned backend", () => {
 		const backend = stack({
 			basePath: "/api",
@@ -33,40 +33,40 @@ describe("stack.api surface", () => {
 		expect(typeof backend.adapter.create).toBe("function");
 	});
 
-	it("keeps stack.api narrow for SSG prefetch helpers", () => {
+	it("keeps stack.raw narrow for SSG prefetch helpers", () => {
 		const backend = stack({
 			basePath: "/api",
 			plugins: { blog: blogBackendPlugin() },
 			adapter: testAdapter,
 		});
 
-		expect(backend.api).toBeDefined();
-		expect(backend.api.blog).toBeDefined();
-		expect(Object.keys(backend.api.blog)).toEqual(["prefetchForRoute"]);
+		expect(backend.raw).toBeDefined();
+		expect(backend.raw.blog).toBeDefined();
+		expect(Object.keys(backend.raw.blog)).toEqual(["prefetchForRoute"]);
 	});
 
-	it("exposes kanban api namespace", () => {
+	it("exposes the Kanban raw namespace", () => {
 		const backend = stack({
 			basePath: "/api",
 			plugins: { kanban: kanbanBackendPlugin() },
 			adapter: testAdapter,
 		});
 
-		expect(backend.api.kanban).toBeDefined();
-		expect(Object.keys(backend.api.kanban)).toEqual(["prefetchForRoute"]);
+		expect(backend.raw.kanban).toBeDefined();
+		expect(Object.keys(backend.raw.kanban)).toEqual(["prefetchForRoute"]);
 	});
 
-	it("plugins without api factory are not present in api", () => {
+	it("omits plugins without a raw factory", () => {
 		const backend = stack({
 			basePath: "/api",
-			plugins: { noApi: noApiPlugin },
+			plugins: { noRaw: noRawPlugin },
 			adapter: testAdapter,
 		});
 
-		expect((backend.api as any).noApi).toBeUndefined();
+		expect((backend.raw as any).noRaw).toBeUndefined();
 	});
 
-	it("uses internal operations for explicitly trusted business calls", async () => {
+	it("uses trusted operations for explicitly trusted business calls", async () => {
 		const backend = stack({
 			basePath: "/api",
 			plugins: { blog: blogBackendPlugin() },
@@ -88,9 +88,23 @@ describe("stack.api surface", () => {
 			},
 		});
 
-		const posts = await backend.internal.blog.listPosts({});
+		const posts = await backend.trusted.blog.listPosts({});
 		expect(posts.items).toHaveLength(1);
 		expect(posts.items[0]!.slug).toBe("hello-world");
+	});
+
+	it("does not retain ambiguous server aliases", () => {
+		const backend = stack({
+			basePath: "/api",
+			plugins: { blog: blogBackendPlugin() },
+			adapter: testAdapter,
+		});
+		const request = backend.forRequest(new Request("https://example.test/api"));
+
+		expect("api" in backend).toBe(false);
+		expect("internal" in backend).toBe(false);
+		expect("api" in request).toBe(false);
+		expect(Object.keys(request)).toEqual(["operations"]);
 	});
 
 	it("combines multiple plugins in a single stack call", () => {
@@ -103,7 +117,7 @@ describe("stack.api surface", () => {
 			adapter: testAdapter,
 		});
 
-		expect(typeof backend.api.blog.prefetchForRoute).toBe("function");
-		expect(typeof backend.api.kanban.prefetchForRoute).toBe("function");
+		expect(typeof backend.raw.blog.prefetchForRoute).toBe("function");
+		expect(typeof backend.raw.kanban.prefetchForRoute).toBe("function");
 	});
 });

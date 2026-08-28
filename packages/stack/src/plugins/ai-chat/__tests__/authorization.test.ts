@@ -187,8 +187,8 @@ describe("AI Chat operation authorization", () => {
 		]);
 		expect(AI_CHAT_OPERATION_INVENTORY.startStream).toMatchObject({
 			http: "POST /chat",
-			request: "forRequest(request).api.aiChat.startStream",
-			internal: "internal.aiChat.startStream",
+			request: "forRequest(request).operations.aiChat.startStream",
+			trusted: "trusted.aiChat.startStream",
 			publicSemantics: [
 				"stream.start",
 				"message.send",
@@ -200,8 +200,8 @@ describe("AI Chat operation authorization", () => {
 			publicWhenConfigured: true,
 		});
 		expect(AI_CHAT_RAW_ESCAPE_HATCH_INVENTORY).toEqual([
-			"api.aiChat.getAllConversations",
-			"api.aiChat.getConversationById",
+			"@btst/stack/plugins/ai-chat/api#getAllConversations",
+			"@btst/stack/plugins/ai-chat/api#getConversationById",
 		]);
 		expect(Object.keys(AI_CHAT_LIFECYCLE_HOOK_MIGRATIONS)).toHaveLength(12);
 		expect(Object.values(AI_CHAT_LIFECYCLE_HOOK_MIGRATIONS)).toEqual([
@@ -258,13 +258,13 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/public-history"))
-				.api.aiChat.listConversations({}),
+				.operations.aiChat.listConversations({}),
 		).rejects.toMatchObject({
 			statusCode: 404,
 			code: "HISTORY_UNAVAILABLE",
 		});
 		await expect(
-			app.internal.aiChat.createConversation({ title: "Unavailable" }),
+			app.trusted.aiChat.createConversation({ title: "Unavailable" }),
 		).rejects.toMatchObject({
 			statusCode: 404,
 			code: "HISTORY_UNAVAILABLE",
@@ -347,7 +347,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/spoof", { identity: viewer }))
-				.api.aiChat.updateConversation({
+				.operations.aiChat.updateConversation({
 					id: conversation.id,
 					data: { title: "Spoofed" },
 				}),
@@ -355,18 +355,18 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/owner", { identity: owner }))
-				.api.aiChat.getConversation({ id: conversation.id }),
+				.operations.aiChat.getConversation({ id: conversation.id }),
 		).resolves.toMatchObject({ id: conversation.id, userId: owner.id });
 		await expect(
 			app
 				.forRequest(request("/admin", { identity: admin }))
-				.api.aiChat.getConversation({ id: conversation.id }),
+				.operations.aiChat.getConversation({ id: conversation.id }),
 		).resolves.toMatchObject({ id: conversation.id });
 		expect(beforeRead).toHaveBeenCalledTimes(2);
 		await expect(
 			app
 				.forRequest(request("/owner", { identity: owner }))
-				.api.aiChat.updateConversation({
+				.operations.aiChat.updateConversation({
 					id: conversation.id,
 					data: { title: "Renamed by owner" },
 				}),
@@ -377,7 +377,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/owner", { identity: owner }))
-				.api.aiChat.deleteConversation({ id: conversation.id }),
+				.operations.aiChat.deleteConversation({ id: conversation.id }),
 		).resolves.toEqual({ success: true });
 	});
 
@@ -398,12 +398,12 @@ describe("AI Chat operation authorization", () => {
 
 		const result = await app
 			.forRequest(request("/create", { identity: owner }))
-			.api.aiChat.createConversation({ title: "Request conversation" });
+			.operations.aiChat.createConversation({ title: "Request conversation" });
 		expect(result).toMatchObject({ title: "Request conversation" });
 		expect(Object.isFrozen(result)).toBe(true);
 	});
 
-	it.each(["http", "request", "internal"] as const)(
+	it.each(["http", "request", "trusted"] as const)(
 		"invokes every renamed history result phase through %s execution",
 		async (transport) => {
 			const phases: string[] = [];
@@ -462,7 +462,7 @@ describe("AI Chat operation authorization", () => {
 				]);
 			} else if (transport === "request") {
 				const api = app.forRequest(request("/lifecycle", { identity: owner }))
-					.api.aiChat;
+					.operations.aiChat;
 				await api.listConversations({});
 				await api.getConversation({ id: target.id });
 				await api.createConversation({ title: "Created" });
@@ -472,21 +472,21 @@ describe("AI Chat operation authorization", () => {
 				});
 				await api.deleteConversation({ id: target.id });
 			} else {
-				await app.internal.aiChat.listConversations({});
-				await app.internal.aiChat.getConversation({ id: target.id });
-				await app.internal.aiChat.createConversation({ title: "Created" });
-				await app.internal.aiChat.updateConversation({
+				await app.trusted.aiChat.listConversations({});
+				await app.trusted.aiChat.getConversation({ id: target.id });
+				await app.trusted.aiChat.createConversation({ title: "Created" });
+				await app.trusted.aiChat.updateConversation({
 					id: target.id,
 					data: { title: "Updated" },
 				});
-				await app.internal.aiChat.deleteConversation({ id: target.id });
+				await app.trusted.aiChat.deleteConversation({ id: target.id });
 			}
 
 			expect(phases).toEqual(["list", "get", "create", "update", "delete"]);
 		},
 	);
 
-	it.each(["http", "request", "internal"] as const)(
+	it.each(["http", "request", "trusted"] as const)(
 		"invokes every renamed history error phase through %s execution",
 		async (transport) => {
 			const phases: string[] = [];
@@ -548,9 +548,9 @@ describe("AI Chat operation authorization", () => {
 			} else {
 				const api =
 					transport === "request"
-						? app.forRequest(request("/lifecycle", { identity: owner })).api
-								.aiChat
-						: app.internal.aiChat;
+						? app.forRequest(request("/lifecycle", { identity: owner }))
+								.operations.aiChat
+						: app.trusted.aiChat;
 				for (const operation of [
 					() => api.listConversations({}),
 					() => api.getConversation({ id: target.id }),
@@ -581,7 +581,7 @@ describe("AI Chat operation authorization", () => {
 		},
 	);
 
-	it.each(["http", "request", "internal"] as const)(
+	it.each(["http", "request", "trusted"] as const)(
 		"keeps explicit tool activation filtering on %s execution",
 		async (transport) => {
 			const activated = vi.fn(() => [] as const);
@@ -610,11 +610,11 @@ describe("AI Chat operation authorization", () => {
 				await expect(
 					app
 						.forRequest(request("/chat", { identity: owner }))
-						.api.aiChat.startStream(input),
+						.operations.aiChat.startStream(input),
 				).resolves.toBeInstanceOf(Response);
 			} else {
 				await expect(
-					app.internal.aiChat.startStream({
+					app.trusted.aiChat.startStream({
 						...input,
 						trustedUserId: owner.id,
 					}),
@@ -665,7 +665,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/invalid", { identity: owner }))
-				.api.aiChat.updateConversation({
+				.operations.aiChat.updateConversation({
 					id: conversation.id,
 					data: { title: "" },
 				}),
@@ -674,7 +674,7 @@ describe("AI Chat operation authorization", () => {
 
 		await app
 			.forRequest(request("/valid", { identity: owner }))
-			.api.aiChat.updateConversation({
+			.operations.aiChat.updateConversation({
 				id: conversation.id,
 				data: { title: "Request update" },
 			});
@@ -691,7 +691,7 @@ describe("AI Chat operation authorization", () => {
 		).resolves.toMatchObject({ title: "Request update" });
 
 		events.length = 0;
-		await app.internal.aiChat.updateConversation({
+		await app.trusted.aiChat.updateConversation({
 			id: conversation.id,
 			data: { title: "Trusted update" },
 		});
@@ -708,7 +708,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/rejected", { identity: owner }))
-				.api.aiChat.updateConversation({
+				.operations.aiChat.updateConversation({
 					id: conversation.id,
 					data: { title: "Rejected update" },
 				}),
@@ -727,14 +727,14 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/owner", { identity: owner }))
-				.api.aiChat.listConversations({}),
+				.operations.aiChat.listConversations({}),
 		).resolves.toEqual([
 			expect.objectContaining({ title: "Owner", userId: owner.id }),
 		]);
 		await expect(
 			app
 				.forRequest(request("/admin", { identity: admin }))
-				.api.aiChat.listConversations({}),
+				.operations.aiChat.listConversations({}),
 		).resolves.toHaveLength(0);
 
 		const anonymousCollection = defineAuthorization({
@@ -749,7 +749,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			anonymousApp
 				.forRequest(request("/anonymous"))
-				.api.aiChat.listConversations({}),
+				.operations.aiChat.listConversations({}),
 		).resolves.toEqual([]);
 	});
 
@@ -791,7 +791,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream(messageBody),
+				.operations.aiChat.startStream(messageBody),
 		).rejects.toMatchObject({
 			statusCode: 500,
 			code: "ATOMIC_TRANSACTION_REQUIRED",
@@ -811,7 +811,7 @@ describe("AI Chat operation authorization", () => {
 		});
 		await app
 			.forRequest(request("/chat", { identity: owner }))
-			.api.aiChat.startStream(messageBody);
+			.operations.aiChat.startStream(messageBody);
 		const finish = (
 			streamText.mock.calls as unknown as Array<
 				[
@@ -860,7 +860,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream(messageBody),
+				.operations.aiChat.startStream(messageBody),
 		).rejects.toMatchObject({ statusCode: 403 });
 		expect(before).not.toHaveBeenCalled();
 		expect(streamText).not.toHaveBeenCalled();
@@ -906,7 +906,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream({
+				.operations.aiChat.startStream({
 					conversationId: conversation.id,
 					messages: [
 						{
@@ -930,7 +930,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream({
+				.operations.aiChat.startStream({
 					conversationId: conversation.id,
 					messages: [
 						{
@@ -978,7 +978,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream({
+				.operations.aiChat.startStream({
 					conversationId: conversation.id,
 					messages: [
 						{
@@ -998,7 +998,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream({
+				.operations.aiChat.startStream({
 					conversationId: conversation.id,
 					messages: [
 						{
@@ -1050,7 +1050,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream({
+				.operations.aiChat.startStream({
 					conversationId: conversation.id,
 					messages: [
 						{
@@ -1090,7 +1090,7 @@ describe("AI Chat operation authorization", () => {
 
 		await app
 			.forRequest(request("/chat", { identity: owner }))
-			.api.aiChat.startStream({
+			.operations.aiChat.startStream({
 				conversationId: conversation.id,
 				messages: [
 					{
@@ -1123,7 +1123,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream({
+				.operations.aiChat.startStream({
 					conversationId: conversation.id,
 					messages: [
 						{
@@ -1164,7 +1164,7 @@ describe("AI Chat operation authorization", () => {
 		const app = backend();
 		await app
 			.forRequest(request("/chat", { identity: owner }))
-			.api.aiChat.startStream(messageBody);
+			.operations.aiChat.startStream(messageBody);
 
 		const messages = await app.adapter.findMany<Message>({ model: "message" });
 		expect(messages).toHaveLength(1);
@@ -1223,7 +1223,7 @@ describe("AI Chat operation authorization", () => {
 			await expect(
 				app
 					.forRequest(request("/chat", { identity: owner }))
-					.api.aiChat.startStream(body),
+					.operations.aiChat.startStream(body),
 			).rejects.toMatchObject({ statusCode: 403 });
 			expect(before).not.toHaveBeenCalled();
 			expect(streamText).not.toHaveBeenCalled();
@@ -1243,12 +1243,12 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream({ messages: [] }),
+				.operations.aiChat.startStream({ messages: [] }),
 		).rejects.toMatchObject({ statusCode: 400, code: "EMPTY_CHAT" });
 		await expect(
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream({
+				.operations.aiChat.startStream({
 					messages: [
 						{
 							role: "user",
@@ -1293,7 +1293,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream({
+				.operations.aiChat.startStream({
 					conversationId: conversation.id,
 					messages: [
 						{
@@ -1347,7 +1347,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			authorized
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream(invalidInput),
+				.operations.aiChat.startStream(invalidInput),
 		).rejects.toMatchObject({
 			statusCode: 400,
 			code: "INVALID_MESSAGE_SEQUENCE",
@@ -1355,7 +1355,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			publicApp
 				.forRequest(request("/chat"))
-				.api.aiChat.startStream(invalidInput),
+				.operations.aiChat.startStream(invalidInput),
 		).rejects.toMatchObject({
 			statusCode: 400,
 			code: "INVALID_MESSAGE_SEQUENCE",
@@ -1374,13 +1374,13 @@ describe("AI Chat operation authorization", () => {
 		);
 		const requestResponse = await app
 			.forRequest(request("/chat", { identity: owner }))
-			.api.aiChat.startStream(messageBody);
-		const internalResponse = await app.internal.aiChat.startStream({
+			.operations.aiChat.startStream(messageBody);
+		const trustedResponse = await app.trusted.aiChat.startStream({
 			...messageBody,
 			trustedUserId: owner.id,
 		});
 
-		for (const response of [httpResponse, requestResponse, internalResponse]) {
+		for (const response of [httpResponse, requestResponse, trustedResponse]) {
 			expect(response).toBeInstanceOf(Response);
 			expect(response.status).toBe(200);
 			expect(response.headers.get("x-conversation-id")).toBeTruthy();
@@ -1409,14 +1409,16 @@ describe("AI Chat operation authorization", () => {
 			code: "HOOK_DENIED",
 		});
 		await expect(
-			app.forRequest(request("/chat")).api.aiChat.startStream(messageBody),
+			app
+				.forRequest(request("/chat"))
+				.operations.aiChat.startStream(messageBody),
 		).rejects.toMatchObject({
 			statusCode: 403,
 			message: "Rate limit exceeded",
 			code: "HOOK_DENIED",
 		});
 		await expect(
-			app.internal.aiChat.startStream(messageBody),
+			app.trusted.aiChat.startStream(messageBody),
 		).rejects.toMatchObject({
 			statusCode: 403,
 			message: "Rate limit exceeded",
@@ -1437,8 +1439,8 @@ describe("AI Chat operation authorization", () => {
 		);
 		await app
 			.forRequest(request("/chat", { identity: owner }))
-			.api.aiChat.startStream(messageBody);
-		await app.internal.aiChat.startStream({
+			.operations.aiChat.startStream(messageBody);
+		await app.trusted.aiChat.startStream({
 			...messageBody,
 			trustedUserId: owner.id,
 		});
@@ -1477,7 +1479,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream({
+				.operations.aiChat.startStream({
 					...messageBody,
 					conversationId: conversation.id,
 				}),
@@ -1517,7 +1519,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream({
+				.operations.aiChat.startStream({
 					...messageBody,
 					conversationId: "claimed-conversation",
 				}),
@@ -1551,10 +1553,10 @@ describe("AI Chat operation authorization", () => {
 		const results = await Promise.allSettled([
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream(input),
+				.operations.aiChat.startStream(input),
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream(input),
+				.operations.aiChat.startStream(input),
 		]);
 
 		expect(
@@ -1602,10 +1604,10 @@ describe("AI Chat operation authorization", () => {
 		const results = await Promise.allSettled([
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream(input),
+				.operations.aiChat.startStream(input),
 			app
 				.forRequest(request("/chat", { identity: owner }))
-				.api.aiChat.startStream(input),
+				.operations.aiChat.startStream(input),
 		]);
 
 		expect(
@@ -1647,12 +1649,12 @@ describe("AI Chat operation authorization", () => {
 
 		const rejectedStream = app
 			.forRequest(request("/first", { identity: owner }))
-			.api.aiChat.startStream(input);
+			.operations.aiChat.startStream(input);
 		await hookEntered;
 		let overlapSettled = false;
 		const overlappingStream = app
 			.forRequest(request("/overlap", { identity: owner }))
-			.api.aiChat.startStream(input)
+			.operations.aiChat.startStream(input)
 			.then((response) => {
 				overlapSettled = true;
 				return response;
@@ -1695,21 +1697,23 @@ describe("AI Chat operation authorization", () => {
 
 		const rejectedStream = app
 			.forRequest(request("/first", { identity: owner }))
-			.api.aiChat.startStream({
+			.operations.aiChat.startStream({
 				...messageBody,
 				conversationId: firstConversation.id,
 			});
 		await firstHookEntered;
 		const successfulStream = app
 			.forRequest(request("/second", { identity: owner }))
-			.api.aiChat.startStream({
+			.operations.aiChat.startStream({
 				...messageBody,
 				conversationId: secondConversation.id,
 			});
 		let createSettled = false;
 		const createdConversation = app
 			.forRequest(request("/create", { identity: owner }))
-			.api.aiChat.createConversation({ title: "Created during rollback" })
+			.operations.aiChat.createConversation({
+				title: "Created during rollback",
+			})
 			.then((conversation) => {
 				createSettled = true;
 				return conversation;
@@ -1778,14 +1782,14 @@ describe("AI Chat operation authorization", () => {
 	it("allows AI Chat history operations to re-enter raw-memory hooks", async () => {
 		let app: ReturnType<typeof backend>;
 		const before = vi.fn(async () => {
-			await app.internal.aiChat.createConversation({
+			await app.trusted.aiChat.createConversation({
 				title: "Created from stream hook",
 			});
 		});
 		app = backend({ hooks: { onBeforeChat: before } });
 		const conversation = await seedConversation(app);
 		let settled = false;
-		const stream = app.internal.aiChat
+		const stream = app.trusted.aiChat
 			.startStream({
 				...messageBody,
 				conversationId: conversation.id,
@@ -1819,7 +1823,7 @@ describe("AI Chat operation authorization", () => {
 		});
 		const before = vi.fn(async () => {
 			try {
-				await app.internal.aiChat.createConversation({
+				await app.trusted.aiChat.createConversation({
 					title: "Nested failed conversation",
 				});
 			} catch {
@@ -1835,7 +1839,7 @@ describe("AI Chat operation authorization", () => {
 		const conversation = await seedConversation(app);
 
 		await expect(
-			app.internal.aiChat.startStream({
+			app.trusted.aiChat.startStream({
 				...messageBody,
 				conversationId: conversation.id,
 				trustedUserId: owner.id,
@@ -1894,7 +1898,7 @@ describe("AI Chat operation authorization", () => {
 
 		const firstUpdate = app
 			.forRequest(request("/update-1", { identity: owner }))
-			.api.aiChat.updateConversation({
+			.operations.aiChat.updateConversation({
 				id: updateTarget.id,
 				data: { title: "First update" },
 			});
@@ -1902,7 +1906,7 @@ describe("AI Chat operation authorization", () => {
 		let secondUpdateSettled = false;
 		const secondUpdate = app
 			.forRequest(request("/update-2", { identity: owner }))
-			.api.aiChat.updateConversation({
+			.operations.aiChat.updateConversation({
 				id: updateTarget.id,
 				data: { title: "Second update" },
 			})
@@ -1923,12 +1927,12 @@ describe("AI Chat operation authorization", () => {
 
 		const firstDelete = app
 			.forRequest(request("/delete-1", { identity: owner }))
-			.api.aiChat.deleteConversation({ id: deleteTarget.id });
+			.operations.aiChat.deleteConversation({ id: deleteTarget.id });
 		await deleteEntered;
 		let secondDeleteSettled = false;
 		const secondDelete = app
 			.forRequest(request("/delete-2", { identity: owner }))
-			.api.aiChat.deleteConversation({ id: deleteTarget.id })
+			.operations.aiChat.deleteConversation({ id: deleteTarget.id })
 			.finally(() => {
 				secondDeleteSettled = true;
 			});
@@ -1954,7 +1958,7 @@ describe("AI Chat operation authorization", () => {
 
 		await app
 			.forRequest(request("/first", { identity: owner }))
-			.api.aiChat.startStream(input);
+			.operations.aiChat.startStream(input);
 		const streamCalls = streamText.mock.calls as unknown as Array<
 			[
 				{
@@ -1965,7 +1969,7 @@ describe("AI Chat operation authorization", () => {
 		const firstFinish = streamCalls[0]?.[0].onFinish;
 		await app
 			.forRequest(request("/second", { identity: owner }))
-			.api.aiChat.startStream(input);
+			.operations.aiChat.startStream(input);
 		const secondFinish = streamCalls[1]?.[0].onFinish;
 
 		await firstFinish?.({ text: "stale answer" });
@@ -2001,7 +2005,7 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			missingApp
 				.forRequest(request("/create", { identity: owner }))
-				.api.aiChat.createConversation({ title: "Missing" }),
+				.operations.aiChat.createConversation({ title: "Missing" }),
 		).rejects.toMatchObject({ statusCode: 403 });
 
 		const identityApp = backend({
@@ -2013,12 +2017,12 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			identityApp
 				.forRequest(request("/create", { identity: owner }))
-				.api.aiChat.createConversation({ title: "Identity error" }),
+				.operations.aiChat.createConversation({ title: "Identity error" }),
 		).rejects.toThrow("identity unavailable");
 		expect(before).not.toHaveBeenCalled();
 	});
 
-	it("propagates rule failures and keeps trusted internal calls in the lifecycle", async () => {
+	it("propagates rule failures and keeps trusted calls in the lifecycle", async () => {
 		const failing = defineAuthorization({
 			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
 			permissions: [aiChatPermissions] as const,
@@ -2036,11 +2040,11 @@ describe("AI Chat operation authorization", () => {
 		await expect(
 			app
 				.forRequest(request("/create", { identity: owner }))
-				.api.aiChat.createConversation({ title: "Denied" }),
+				.operations.aiChat.createConversation({ title: "Denied" }),
 		).rejects.toThrow("policy unavailable");
 		expect(before).not.toHaveBeenCalled();
 		await expect(
-			app.internal.aiChat.createConversation({ title: "Trusted" }),
+			app.trusted.aiChat.createConversation({ title: "Trusted" }),
 		).resolves.toMatchObject({ title: "Trusted" });
 		expect(before).toHaveBeenCalledOnce();
 	});
