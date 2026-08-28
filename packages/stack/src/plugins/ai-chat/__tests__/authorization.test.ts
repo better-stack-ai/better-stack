@@ -1311,7 +1311,7 @@ describe("AI Chat operation authorization", () => {
 		expect(await app.adapter.count({ model: "message" })).toBe(1);
 	});
 
-	it("holds a raw-memory stream claim until a rejected hook finishes rolling back", async () => {
+	it("queues a same-conversation stream until raw-memory rollback finishes", async () => {
 		let enteredHook: (() => void) | undefined;
 		const hookEntered = new Promise<void>((resolve) => {
 			enteredHook = resolve;
@@ -1336,28 +1336,25 @@ describe("AI Chat operation authorization", () => {
 			.forRequest(request("/first", { identity: owner }))
 			.api.aiChat.startStream(input);
 		await hookEntered;
-		await expect(
-			app
-				.forRequest(request("/overlap", { identity: owner }))
-				.api.aiChat.startStream(input),
-		).rejects.toMatchObject({
-			statusCode: 409,
-			code: "STALE_CONVERSATION",
-		});
+		let overlapSettled = false;
+		const overlappingStream = app
+			.forRequest(request("/overlap", { identity: owner }))
+			.api.aiChat.startStream(input)
+			.then((response) => {
+				overlapSettled = true;
+				return response;
+			});
+		await Promise.resolve();
+		await Promise.resolve();
 		expect(before).toHaveBeenCalledOnce();
+		expect(overlapSettled).toBe(false);
 
 		releaseHook?.();
 		await expect(rejectedStream).rejects.toMatchObject({
 			statusCode: 403,
 			code: "HOOK_DENIED",
 		});
-		expect(await app.adapter.count({ model: "message" })).toBe(0);
-
-		await expect(
-			app
-				.forRequest(request("/retry", { identity: owner }))
-				.api.aiChat.startStream(input),
-		).resolves.toBeInstanceOf(Response);
+		await expect(overlappingStream).resolves.toBeInstanceOf(Response);
 		expect(before).toHaveBeenCalledTimes(2);
 		expect(await app.adapter.count({ model: "message" })).toBe(1);
 	});
@@ -1404,10 +1401,27 @@ describe("AI Chat operation authorization", () => {
 				createSettled = true;
 				return conversation;
 			});
+		let rawWriteSettled = false;
+		const rawNow = new Date();
+		const rawConversation = app.adapter
+			.create<Conversation>({
+				model: "conversation",
+				data: {
+					userId: owner.id,
+					title: "Raw write during rollback",
+					createdAt: rawNow,
+					updatedAt: rawNow,
+				},
+			})
+			.then((conversation) => {
+				rawWriteSettled = true;
+				return conversation;
+			});
 		await Promise.resolve();
 		await Promise.resolve();
 		expect(before).toHaveBeenCalledOnce();
 		expect(createSettled).toBe(false);
+		expect(rawWriteSettled).toBe(false);
 
 		releaseFirstHook?.();
 		await expect(rejectedStream).rejects.toMatchObject({
@@ -1417,6 +1431,9 @@ describe("AI Chat operation authorization", () => {
 		await expect(successfulStream).resolves.toBeInstanceOf(Response);
 		await expect(createdConversation).resolves.toMatchObject({
 			title: "Created during rollback",
+		});
+		await expect(rawConversation).resolves.toMatchObject({
+			title: "Raw write during rollback",
 		});
 		expect(before).toHaveBeenCalledTimes(2);
 		expect(
@@ -1482,7 +1499,53 @@ describe("AI Chat operation authorization", () => {
 		).toBe(1);
 	});
 
-	it("claims concurrent rename and delete snapshots before lifecycle hooks", async () => {
+	it("rolls back a caught nested history after-hook failure", async () => {
+		let app: ReturnType<typeof backend>;
+		const afterCreate = vi.fn(() => {
+			throw new Error("reject nested after hook");
+		});
+		const before = vi.fn(async () => {
+			try {
+				await app.internal.aiChat.createConversation({
+					title: "Nested failed conversation",
+				});
+			} catch {
+				// The outer hook intentionally handles the nested operation error.
+			}
+		});
+		app = backend({
+			hooks: {
+				onBeforeChat: before,
+				onConversationCreated: afterCreate,
+			},
+		});
+		const conversation = await seedConversation(app);
+
+		await expect(
+			app.internal.aiChat.startStream({
+				...messageBody,
+				conversationId: conversation.id,
+				trustedUserId: owner.id,
+			}),
+		).rejects.toMatchObject({ message: "reject nested after hook" });
+		expect(before).toHaveBeenCalledOnce();
+		expect(afterCreate).toHaveBeenCalledOnce();
+		expect(await app.adapter.count({ model: "message" })).toBe(0);
+		expect(
+			await app.adapter.count({
+				model: "conversation",
+				where: [
+					{
+						field: "title",
+						value: "Nested failed conversation",
+						operator: "eq",
+					},
+				],
+			}),
+		).toBe(0);
+	});
+
+	it("serializes concurrent raw-memory rename and delete lifecycle hooks", async () => {
 		let enterUpdate: (() => void) | undefined;
 		const updateEntered = new Promise<void>((resolve) => {
 			enterUpdate = resolve;
@@ -1523,30 +1586,50 @@ describe("AI Chat operation authorization", () => {
 				data: { title: "First update" },
 			});
 		await updateEntered;
-		await expect(
-			app
-				.forRequest(request("/update-2", { identity: owner }))
-				.api.aiChat.updateConversation({
-					id: updateTarget.id,
-					data: { title: "Second update" },
-				}),
-		).rejects.toMatchObject({ statusCode: 409, code: "STALE_CONVERSATION" });
+		let secondUpdateSettled = false;
+		const secondUpdate = app
+			.forRequest(request("/update-2", { identity: owner }))
+			.api.aiChat.updateConversation({
+				id: updateTarget.id,
+				data: { title: "Second update" },
+			})
+			.then((conversation) => {
+				secondUpdateSettled = true;
+				return conversation;
+			});
+		await Promise.resolve();
+		await Promise.resolve();
 		expect(beforeUpdate).toHaveBeenCalledOnce();
+		expect(secondUpdateSettled).toBe(false);
 		releaseUpdate?.();
 		await expect(firstUpdate).resolves.toMatchObject({ title: "First update" });
+		await expect(secondUpdate).resolves.toMatchObject({
+			title: "Second update",
+		});
+		expect(beforeUpdate).toHaveBeenCalledTimes(2);
 
 		const firstDelete = app
 			.forRequest(request("/delete-1", { identity: owner }))
 			.api.aiChat.deleteConversation({ id: deleteTarget.id });
 		await deleteEntered;
-		await expect(
-			app
-				.forRequest(request("/delete-2", { identity: owner }))
-				.api.aiChat.deleteConversation({ id: deleteTarget.id }),
-		).rejects.toMatchObject({ statusCode: 409, code: "STALE_CONVERSATION" });
+		let secondDeleteSettled = false;
+		const secondDelete = app
+			.forRequest(request("/delete-2", { identity: owner }))
+			.api.aiChat.deleteConversation({ id: deleteTarget.id })
+			.finally(() => {
+				secondDeleteSettled = true;
+			});
+		await Promise.resolve();
+		await Promise.resolve();
 		expect(beforeDelete).toHaveBeenCalledOnce();
+		expect(secondDeleteSettled).toBe(false);
 		releaseDelete?.();
 		await expect(firstDelete).resolves.toEqual({ success: true });
+		await expect(secondDelete).rejects.toMatchObject({
+			statusCode: 403,
+			code: "FORBIDDEN",
+		});
+		expect(beforeDelete).toHaveBeenCalledOnce();
 	});
 
 	it("does not persist a stale completion after a newer stream claim", async () => {

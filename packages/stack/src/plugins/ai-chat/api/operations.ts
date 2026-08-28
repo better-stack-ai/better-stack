@@ -783,6 +783,112 @@ function didAffectRow(result: unknown, expectedId: string): boolean {
 	return record.id === expectedId;
 }
 
+const memoryRollbackMarkers = new WeakMap<Adapter, (error: unknown) => void>();
+
+function markMemoryRollback(adapter: Adapter, error: unknown) {
+	memoryRollbackMarkers.get(adapter)?.(error);
+}
+
+/**
+ * The published memory adapter rolls transactions back from a whole-database
+ * clone. Serialize every access to the shared adapter so a rejected AI Chat
+ * transaction cannot erase a concurrent operation from this or another plugin.
+ */
+function serializeMemoryOperations(adapter: Adapter): Adapter {
+	if (adapter.id !== "memory" || memoryRollbackMarkers.has(adapter)) {
+		return adapter;
+	}
+	const source: Adapter = { ...adapter };
+	const lockContext = new AsyncLocalStorage<MemoryHistoryLockContext>();
+	let tail = Promise.resolve();
+	let activeOwner: object | undefined;
+	const withLock = async <T>(
+		run: (activeAdapter: ActiveAdapter) => Promise<T>,
+	): Promise<T> => {
+		const inherited = lockContext.getStore();
+		if (inherited && inherited.owner === activeOwner) {
+			return run(inherited.adapter);
+		}
+		let release = () => {};
+		const previous = tail;
+		tail = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await previous;
+		const owner = {};
+		activeOwner = owner;
+		try {
+			return await lockContext.run({ owner, adapter: source }, () =>
+				run(source),
+			);
+		} finally {
+			if (activeOwner === owner) activeOwner = undefined;
+			release();
+		}
+	};
+	const serialized: Adapter = {
+		...source,
+		create: ((input) =>
+			withLock((active) => active.create(input))) as Adapter["create"],
+		findOne: ((input) =>
+			withLock((active) => active.findOne(input))) as Adapter["findOne"],
+		findMany: ((input) =>
+			withLock((active) => active.findMany(input))) as Adapter["findMany"],
+		count: (input) => withLock((active) => active.count(input)),
+		update: ((input) =>
+			withLock((active) => active.update(input))) as Adapter["update"],
+		updateMany: (input) => withLock((active) => active.updateMany(input)),
+		delete: ((input) =>
+			withLock((active) => active.delete(input))) as Adapter["delete"],
+		deleteMany: (input) => withLock((active) => active.deleteMany(input)),
+		consumeOne: ((input) =>
+			withLock((active) => active.consumeOne(input))) as Adapter["consumeOne"],
+		transaction: ((callback) =>
+			withLock((active) => {
+				const context = lockContext.getStore();
+				if (!context)
+					throw new TypeError("Missing AI Chat memory lock context.");
+				if (context.inTransaction) {
+					return callback(active as TransactionAdapter).catch((error) => {
+						context.rollbackOnly = true;
+						context.rollbackError = error;
+						throw error;
+					});
+				}
+				if (!active.transaction) {
+					throw new TypeError("Missing AI Chat memory transaction adapter.");
+				}
+				return active.transaction((transaction) =>
+					lockContext.run(
+						{
+							owner: context.owner,
+							adapter: transaction,
+							inTransaction: true,
+						},
+						async () => {
+							const transactionContext = lockContext.getStore();
+							const result = await callback(transaction);
+							if (transactionContext?.rollbackOnly) {
+								throw transactionContext.rollbackError;
+							}
+							return result;
+						},
+					),
+				);
+			})) as Adapter["transaction"],
+	};
+	Object.assign(adapter, serialized);
+	memoryRollbackMarkers.set(adapter, (error) => {
+		const context = lockContext.getStore();
+		if (!context || context.owner !== activeOwner || !context.inTransaction) {
+			return;
+		}
+		context.rollbackOnly = true;
+		context.rollbackError = error;
+	});
+	return adapter;
+}
+
 function requireAtomicConversationTransactions(adapter: Adapter) {
 	if (
 		adapter.id !== "memory" &&
@@ -835,9 +941,10 @@ function assertConversationScope(
 
 /** Build all AI Chat operations once for HTTP, request, and trusted execution. */
 export function createAiChatOperations(
-	adapter: Adapter,
+	sourceAdapter: Adapter,
 	config: AiChatOperationsConfig,
 ): AiChatOperations {
+	const adapter = serializeMemoryOperations(sourceAdapter);
 	const hooks = config.hooks;
 	const conversationSnapshots = new WeakMap<
 		object,
@@ -847,70 +954,6 @@ export function createAiChatOperations(
 	const scopedUserIds = new WeakMap<object, string | undefined>();
 	const pendingRequestedConversationClaims = new Set<string>();
 	const pendingConversationMutationClaims = new Set<string>();
-	const memoryHistoryLock = new AsyncLocalStorage<MemoryHistoryLockContext>();
-	let memoryTransactionTail = Promise.resolve();
-	let activeMemoryOwner: object | undefined;
-	const serializeMemoryHistory = async <T>(
-		run: (activeAdapter: ActiveAdapter) => Promise<T>,
-	): Promise<T> => {
-		if (adapter.id !== "memory") return run(adapter);
-		const inherited = memoryHistoryLock.getStore();
-		if (inherited && inherited.owner === activeMemoryOwner) {
-			return run(inherited.adapter);
-		}
-		let release = () => {};
-		const previous = memoryTransactionTail;
-		memoryTransactionTail = new Promise<void>((resolve) => {
-			release = resolve;
-		});
-		await previous;
-		const owner = {};
-		activeMemoryOwner = owner;
-		try {
-			return await memoryHistoryLock.run({ owner, adapter }, () =>
-				run(adapter),
-			);
-		} finally {
-			if (activeMemoryOwner === owner) activeMemoryOwner = undefined;
-			release();
-		}
-	};
-	const runConversationTransaction = <T>(
-		callback: (transaction: TransactionAdapter) => Promise<T>,
-	) => {
-		if (adapter.id !== "memory") return adapter.transaction(callback);
-		return serializeMemoryHistory((activeAdapter) => {
-			const context = memoryHistoryLock.getStore();
-			if (!context) throw new TypeError("Missing AI Chat memory lock context.");
-			if (context.inTransaction) {
-				return callback(activeAdapter as TransactionAdapter).catch((error) => {
-					context.rollbackOnly = true;
-					context.rollbackError = error;
-					throw error;
-				});
-			}
-			if (!activeAdapter.transaction) {
-				throw new TypeError("Missing AI Chat memory transaction adapter.");
-			}
-			return activeAdapter.transaction((transaction) =>
-				memoryHistoryLock.run(
-					{
-						owner: context.owner,
-						adapter: transaction,
-						inTransaction: true,
-					},
-					async () => {
-						const transactionContext = memoryHistoryLock.getStore();
-						const result = await callback(transaction);
-						if (transactionContext?.rollbackOnly) {
-							throw transactionContext.rollbackError;
-						}
-						return result;
-					},
-				),
-			);
-		});
-	};
 	const claimConversationMutation = (conversationId: string) => {
 		requireAtomicConversationTransactions(adapter);
 		if (pendingConversationMutationClaims.has(conversationId)) {
@@ -1097,19 +1140,17 @@ export function createAiChatOperations(
 		execute: async (context) => {
 			const userId = scopedUserIds.get(context.input as object);
 			const now = new Date();
-			const conversation = await serializeMemoryHistory((activeAdapter) =>
-				activeAdapter.create<Conversation>({
-					model: "conversation",
-					forceAllowId: Boolean(context.input.id),
-					data: {
-						...(context.input.id ? { id: context.input.id } : {}),
-						...(userId ? { userId } : {}),
-						title: context.input.title || "New Conversation",
-						createdAt: now,
-						updatedAt: now,
-					} as Conversation,
-				}),
-			);
+			const conversation = await adapter.create<Conversation>({
+				model: "conversation",
+				forceAllowId: Boolean(context.input.id),
+				data: {
+					...(context.input.id ? { id: context.input.id } : {}),
+					...(userId ? { userId } : {}),
+					title: context.input.title || "New Conversation",
+					createdAt: now,
+					updatedAt: now,
+				} as Conversation,
+			});
 			const result = publicConversation(conversation);
 			await hooks?.onConversationCreated?.(
 				result,
@@ -1117,10 +1158,12 @@ export function createAiChatOperations(
 			);
 			return result;
 		},
-		onError: ({ error, ...context }) =>
-			notifyError(hooks?.onCreateConversationError, error, context, {
+		onError: ({ error, ...context }) => {
+			markMemoryRollback(adapter, error);
+			return notifyError(hooks?.onCreateConversationError, error, context, {
 				body: context.input,
-			}),
+			});
+		},
 	});
 
 	const updateConversation = defineOperation({
@@ -1160,7 +1203,7 @@ export function createAiChatOperations(
 			);
 			const releaseMutation = claimConversationMutation(expected.id);
 			try {
-				return await runConversationTransaction(async (tx) => {
+				return await adapter.transaction(async (tx) => {
 					const current = await getConversationById(tx, context.input.id);
 					if (!sameSnapshot(current, expected)) {
 						throw new AiChatOperationError(
@@ -1235,11 +1278,13 @@ export function createAiChatOperations(
 					params: { id: context.input.id },
 				}),
 			),
-		onError: ({ error, ...context }) =>
-			notifyError(hooks?.onUpdateConversationError, error, context, {
+		onError: ({ error, ...context }) => {
+			markMemoryRollback(adapter, error);
+			return notifyError(hooks?.onUpdateConversationError, error, context, {
 				body: context.input,
 				params: { id: context.input.id },
-			}),
+			});
+		},
 	});
 
 	const deleteConversation = defineOperation({
@@ -1279,7 +1324,7 @@ export function createAiChatOperations(
 			);
 			const releaseMutation = claimConversationMutation(expected.id);
 			try {
-				return await runConversationTransaction(async (tx) => {
+				return await adapter.transaction(async (tx) => {
 					const current = await getConversationById(tx, context.input.id);
 					if (!sameSnapshot(current, expected)) {
 						throw new AiChatOperationError(
@@ -1336,10 +1381,12 @@ export function createAiChatOperations(
 				context.input.id,
 				hookContext(context, { params: { id: context.input.id } }),
 			),
-		onError: ({ error, ...context }) =>
-			notifyError(hooks?.onDeleteConversationError, error, context, {
+		onError: ({ error, ...context }) => {
+			markMemoryRollback(adapter, error);
+			return notifyError(hooks?.onDeleteConversationError, error, context, {
 				params: { id: context.input.id },
-			}),
+			});
+		},
 	});
 
 	const startStream = definePassthroughOperation({
@@ -1676,7 +1723,7 @@ export function createAiChatOperations(
 				pendingRequestedConversationClaims.add(requestedMissingConversationId);
 			}
 			try {
-				return await runConversationTransaction(async (tx) => {
+				return await adapter.transaction(async (tx) => {
 					let conversationId = context.input.conversationId;
 					let streamClaimVersion: Date | undefined;
 					const createConversation = () => {
@@ -1816,7 +1863,7 @@ export function createAiChatOperations(
 					const response = startModelStream(mergedTools, async ({ text }) => {
 						try {
 							requireAtomicConversationTransactions(adapter);
-							const persisted = await runConversationTransaction(
+							const persisted = await adapter.transaction(
 								async (completionTx) => {
 									const completedAt = nextVersion(completionClaimVersion);
 									const claimed = await completionTx.updateMany({
@@ -1910,10 +1957,12 @@ export function createAiChatOperations(
 				}
 			}
 		},
-		onError: ({ error, ...context }) =>
-			notifyError(hooks?.onChatError, error, context, {
+		onError: ({ error, ...context }) => {
+			markMemoryRollback(adapter, error);
+			return notifyError(hooks?.onChatError, error, context, {
 				body: context.input,
-			}),
+			});
+		},
 	});
 
 	return {
