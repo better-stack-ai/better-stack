@@ -336,17 +336,19 @@ export const formBuilderBackendPlugin = (
 			);
 
 			return {
-				listForms,
-				getFormBySlug: getFormBySlugEndpoint,
-				getFormById: getFormByIdEndpoint,
-				getFormForUpdate: getFormForUpdateEndpoint,
-				createForm,
-				updateForm,
-				deleteForm,
-				submitForm,
-				listSubmissions,
-				getSubmission,
-				deleteSubmission,
+				listForms: operations.listForms.route(listForms),
+				getFormBySlug: operations.getFormBySlug.route(getFormBySlugEndpoint),
+				getFormById: operations.getFormById.route(getFormByIdEndpoint),
+				getFormForUpdate: operations.getFormForUpdate.route(
+					getFormForUpdateEndpoint,
+				),
+				createForm: operations.createForm.route(createForm),
+				updateForm: operations.updateForm.route(updateForm),
+				deleteForm: operations.deleteForm.route(deleteForm),
+				submitForm: operations.submitForm.route(submitForm),
+				listSubmissions: operations.listSubmissions.route(listSubmissions),
+				getSubmission: operations.getSubmission.route(getSubmission),
+				deleteSubmission: operations.deleteSubmission.route(deleteSubmission),
 			} as const;
 		},
 	});

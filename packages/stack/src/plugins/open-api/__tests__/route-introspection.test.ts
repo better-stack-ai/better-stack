@@ -49,8 +49,10 @@ describe("OpenAPI route introspection", () => {
 				throw new Error("bound operation is required");
 			}
 			return {
-				read: createEndpoint("/records/:id", { method: "GET" }, async (ctx) =>
-					operations.read({ id: ctx.params.id }, ctx.request),
+				read: operations.read.route(
+					createEndpoint("/records/:id", { method: "GET" }, async (ctx) =>
+						operations.read({ id: ctx.params.id }, ctx.request),
+					),
 				),
 			};
 		});
@@ -104,10 +106,12 @@ describe("OpenAPI route introspection", () => {
 			dbPlugin: createDbPlugin("documented", {}),
 			operations: () => ({ read }),
 			routes: (_adapter, _context, operations) => ({
-				read: createEndpoint(
-					"/documented",
-					{ method: "GET", requireRequest: true },
-					(ctx) => operations.read({}, ctx.request),
+				read: operations.read.route(
+					createEndpoint(
+						"/documented",
+						{ method: "GET", requireRequest: true },
+						(ctx) => operations.read({}, ctx.request),
+					),
 				),
 			}),
 		});
@@ -181,15 +185,19 @@ describe("OpenAPI route introspection", () => {
 			dbPlugin: createDbPlugin("metadata", {}),
 			operations: () => ({ protectedRead, publicRead, internalOnly }),
 			routes: (_adapter, _context, operations) => ({
-				protectedRead: createEndpoint(
-					"/z-protected/:id",
-					{ method: "GET", requireRequest: true },
-					(ctx) => operations.protectedRead(ctx.params, ctx.request),
+				protectedRead: operations.protectedRead.route(
+					createEndpoint(
+						"/z-protected/:id",
+						{ method: "GET", requireRequest: true },
+						(ctx) => operations.protectedRead(ctx.params, ctx.request),
+					),
 				),
-				publicRead: createEndpoint(
-					"/a-public",
-					{ method: "GET", requireRequest: true },
-					(ctx) => operations.publicRead({}, ctx.request),
+				publicRead: operations.publicRead.route(
+					createEndpoint(
+						"/a-public",
+						{ method: "GET", requireRequest: true },
+						(ctx) => operations.publicRead({}, ctx.request),
+					),
 				),
 			}),
 		});

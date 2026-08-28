@@ -202,13 +202,21 @@ export const commentsBackendPlugin = (options: CommentsBackendOptions = {}) => {
 			);
 
 			return {
-				listComments: listCommentsEndpoint,
-				...(postingEnabled && { createComment: createCommentEndpoint }),
-				...(editingEnabled && { updateComment: updateCommentEndpoint }),
-				getCommentCount: getCommentCountEndpoint,
-				toggleLike: toggleLikeEndpoint,
-				updateCommentStatus: updateCommentStatusEndpoint,
-				deleteComment: deleteCommentEndpoint,
+				listComments: operations.listComments.route(listCommentsEndpoint),
+				...(postingEnabled && {
+					createComment: operations.createComment.route(createCommentEndpoint),
+				}),
+				...(editingEnabled && {
+					updateComment: operations.updateComment.route(updateCommentEndpoint),
+				}),
+				getCommentCount: operations.getCommentCount.route(
+					getCommentCountEndpoint,
+				),
+				toggleLike: operations.toggleLike.route(toggleLikeEndpoint),
+				updateCommentStatus: operations.updateCommentStatus.route(
+					updateCommentStatusEndpoint,
+				),
+				deleteComment: operations.deleteComment.route(deleteCommentEndpoint),
 			} as const;
 		},
 	});

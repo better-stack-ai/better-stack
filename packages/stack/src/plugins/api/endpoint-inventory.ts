@@ -1,5 +1,9 @@
 import type { Endpoint } from "better-call";
-import type { AnyOperation, OperationRecord } from "./operation";
+import {
+	getRouteEndpointOperationKey,
+	type AnyOperation,
+	type OperationRecord,
+} from "./operation";
 
 /** A true infrastructure route that intentionally bypasses business operations. */
 export interface InfrastructureRouteDeclaration {
@@ -150,12 +154,23 @@ export function composeEndpointInventory(
 				? infrastructure[routeKey]
 				: undefined;
 			const identity = endpointIdentity(endpoint);
+			const boundOperationKey = getRouteEndpointOperationKey(endpoint);
 			if (operation && infrastructureDeclaration) {
 				throw new TypeError(
 					`[btst/endpoint-inventory] Plugin "${pluginKey}" route "${routeKey}" (${identity.method} ${identity.path}) cannot be both operation-backed and infrastructure.`,
 				);
 			}
 			if (operation) {
+				if (boundOperationKey === undefined) {
+					throw new TypeError(
+						`[btst/endpoint-inventory] Plugin "${pluginKey}" route "${routeKey}" (${identity.method} ${identity.path}) must be bound through operations.${operationKey}.route(endpoint).`,
+					);
+				}
+				if (boundOperationKey !== operationKey) {
+					throw new TypeError(
+						`[btst/endpoint-inventory] Plugin "${pluginKey}" route "${routeKey}" (${identity.method} ${identity.path}) maps to operation "${operationKey}" but is bound to "${boundOperationKey}".`,
+					);
+				}
 				return operationInventoryEntry(
 					pluginKey,
 					pluginName,
@@ -165,6 +180,11 @@ export function composeEndpointInventory(
 				);
 			}
 			if (infrastructureDeclaration) {
+				if (boundOperationKey !== undefined) {
+					throw new TypeError(
+						`[btst/endpoint-inventory] Plugin "${pluginKey}" route "${routeKey}" (${identity.method} ${identity.path}) cannot be both operation-backed and infrastructure.`,
+					);
+				}
 				return Object.freeze({
 					pluginKey,
 					pluginName,

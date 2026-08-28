@@ -475,17 +475,28 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					),
 			);
 			return {
-				listContentTypes,
-				getContentTypeBySlug,
-				listContentItems,
-				getContentItem,
-				createContentItem,
-				updateContentItem,
-				deleteContentItem,
-				getContentItemPopulated,
-				listContentByRelation,
-				getInverseRelations,
-				listInverseRelationItems,
+				listContentTypes: operations.listContentTypes.route(listContentTypes),
+				getContentTypeBySlug:
+					operations.getContentTypeBySlug.route(getContentTypeBySlug),
+				listContentItems: operations.listContentItems.route(listContentItems),
+				getContentItem: operations.getContentItem.route(getContentItem),
+				createContentItem:
+					operations.createContentItem.route(createContentItem),
+				updateContentItem:
+					operations.updateContentItem.route(updateContentItem),
+				deleteContentItem:
+					operations.deleteContentItem.route(deleteContentItem),
+				getContentItemPopulated: operations.getContentItemPopulated.route(
+					getContentItemPopulated,
+				),
+				listContentByRelation: operations.listContentByRelation.route(
+					listContentByRelation,
+				),
+				getInverseRelations:
+					operations.getInverseRelations.route(getInverseRelations),
+				listInverseRelationItems: operations.listInverseRelationItems.route(
+					listInverseRelationItems,
+				),
 			} as const;
 		},
 	});

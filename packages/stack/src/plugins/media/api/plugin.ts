@@ -366,16 +366,18 @@ export const mediaBackendPlugin = (config: MediaBackendConfig) =>
 			);
 
 			return {
-				listAssets: listAssetsEndpoint,
-				createAsset: createAssetEndpoint,
-				updateAsset: updateAssetEndpoint,
-				deleteAsset: deleteAssetEndpoint,
-				listFolders: listFoldersEndpoint,
-				createFolder: createFolderEndpoint,
-				deleteFolder: deleteFolderEndpoint,
-				uploadDirect: uploadDirectEndpoint,
-				uploadToken: uploadTokenEndpoint,
-				uploadVercelBlob: uploadVercelBlobEndpoint,
+				listAssets: operations.listAssets.route(listAssetsEndpoint),
+				createAsset: operations.createAsset.route(createAssetEndpoint),
+				updateAsset: operations.updateAsset.route(updateAssetEndpoint),
+				deleteAsset: operations.deleteAsset.route(deleteAssetEndpoint),
+				listFolders: operations.listFolders.route(listFoldersEndpoint),
+				createFolder: operations.createFolder.route(createFolderEndpoint),
+				deleteFolder: operations.deleteFolder.route(deleteFolderEndpoint),
+				uploadDirect: operations.uploadDirect.route(uploadDirectEndpoint),
+				uploadToken: operations.uploadToken.route(uploadTokenEndpoint),
+				uploadVercelBlob: operations.uploadVercelBlob.route(
+					uploadVercelBlobEndpoint,
+				),
 			} as const;
 		},
 	});

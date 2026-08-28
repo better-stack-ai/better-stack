@@ -242,6 +242,55 @@ describe("composed endpoint inventory", () => {
 		);
 	});
 
+	it("rejects endpoints missing their exact operation transport binding", () => {
+		const plugin = defineBackendPlugin({
+			name: "feature",
+			dbPlugin: createDbPlugin("feature", {}),
+			operations: () => ({ read: readOperation() }),
+			routes: () => ({
+				read: createEndpoint("/records/:id", { method: "GET" }, async () => ({
+					ok: true,
+				})),
+			}),
+		});
+
+		expect(() =>
+			stack({
+				basePath: "/api",
+				plugins: { feature: plugin },
+				adapter: memoryAdapter,
+			}),
+		).toThrowError(
+			'[btst/endpoint-inventory] Plugin "feature" route "read" (GET /records/:id) must be bound through operations.read.route(endpoint).',
+		);
+
+		const mismatched = defineBackendPlugin({
+			name: "feature",
+			dbPlugin: createDbPlugin("feature", {}),
+			operations: () => ({
+				read: readOperation(),
+				other: readOperation(),
+			}),
+			operationRouteMap: { fetch: "read" },
+			routes: (_adapter, _context, operations) => ({
+				fetch: operations.other.route(
+					createEndpoint("/records/:id", { method: "GET" }, async () => ({
+						ok: true,
+					})),
+				),
+			}),
+		});
+		expect(() =>
+			stack({
+				basePath: "/api",
+				plugins: { feature: mismatched },
+				adapter: memoryAdapter,
+			}),
+		).toThrowError(
+			'[btst/endpoint-inventory] Plugin "feature" route "fetch" (GET /records/:id) maps to operation "read" but is bound to "other".',
+		);
+	});
+
 	it("rejects stale and ambiguous infrastructure allowlist entries", () => {
 		const stale = defineBackendPlugin({
 			name: "docs",
@@ -353,10 +402,12 @@ describe("composed endpoint inventory", () => {
 				internalOnly: readOperation({ execute: hiddenExecute }),
 			}),
 			routes: (_adapter, _context, operations) => ({
-				read: createEndpoint(
-					"/records/:id",
-					{ method: "GET", requireRequest: true },
-					(ctx) => operations.read({ id: ctx.params.id }, ctx.request),
+				read: operations.read.route(
+					createEndpoint(
+						"/records/:id",
+						{ method: "GET", requireRequest: true },
+						(ctx) => operations.read({ id: ctx.params.id }, ctx.request),
+					),
 				),
 			}),
 		});

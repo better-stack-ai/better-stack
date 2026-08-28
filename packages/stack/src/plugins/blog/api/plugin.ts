@@ -267,12 +267,13 @@ export const blogBackendPlugin = (hooks?: BlogBackendHooks) =>
 			);
 
 			return {
-				listPosts,
-				createPost,
-				updatePost,
-				deletePost,
-				getNextPreviousPosts,
-				listTags,
+				listPosts: operations.listPosts.route(listPosts),
+				createPost: operations.createPost.route(createPost),
+				updatePost: operations.updatePost.route(updatePost),
+				deletePost: operations.deletePost.route(deletePost),
+				getNextPreviousPosts:
+					operations.getNextPreviousPosts.route(getNextPreviousPosts),
+				listTags: operations.listTags.route(listTags),
 			} as const;
 		},
 	});

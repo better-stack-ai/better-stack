@@ -50,6 +50,7 @@ export {
 	type OperationPermissionRequest,
 	type OperationRecord,
 	type OperationResultMode,
+	type RouteOperation,
 	type RouteOperationApi,
 } from "./operation";
 

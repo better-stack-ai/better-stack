@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Endpoint } from "better-call";
 import {
 	type AnyPermissionDescriptor,
 	type PermissionFactsFor,
@@ -33,6 +34,29 @@ type OperationExecutor = (
 ) => Promise<unknown>;
 
 const operationExecutors = new WeakMap<object, OperationExecutor>();
+const routeEndpointOperationKeys = new WeakMap<object, string>();
+
+/** @internal Bind an endpoint to the operation transport that must execute it. */
+export function bindRouteOperationEndpoint<TEndpoint extends Endpoint>(
+	endpoint: TEndpoint,
+	operationKey: string,
+): TEndpoint {
+	const existingKey = routeEndpointOperationKeys.get(endpoint);
+	if (existingKey !== undefined && existingKey !== operationKey) {
+		throw new TypeError(
+			`Endpoint is already bound to operation "${existingKey}" and cannot also bind to "${operationKey}".`,
+		);
+	}
+	routeEndpointOperationKeys.set(endpoint, operationKey);
+	return endpoint;
+}
+
+/** @internal Read the non-serializable operation transport marker. */
+export function getRouteEndpointOperationKey(
+	endpoint: Endpoint,
+): string | undefined {
+	return routeEndpointOperationKeys.get(endpoint);
+}
 
 /** Plain values accepted at the immutable operation lifecycle boundary. */
 export type OperationData =
@@ -217,12 +241,19 @@ export type OperationApi<TOperations extends OperationRecord> = {
 	) => Promise<OperationTransportResult<TOperations[TKey]>>;
 };
 
+/** One request-bound operation plus its endpoint-binding helper. */
+export type RouteOperation<TOperation extends AnyOperation> = {
+	(
+		input: OperationInput<TOperation>,
+		request: Request,
+	): Promise<OperationTransportResult<TOperation>>;
+	/** Mark an endpoint as using this exact request-bound operation transport. */
+	route<TEndpoint extends Endpoint>(endpoint: TEndpoint): TEndpoint;
+};
+
 /** Operations bound to an HTTP transport; every call requires its request. */
 export type RouteOperationApi<TOperations extends OperationRecord> = {
-	[TKey in keyof TOperations]: (
-		input: OperationInput<TOperations[TKey]>,
-		request: Request,
-	) => Promise<OperationTransportResult<TOperations[TKey]>>;
+	[TKey in keyof TOperations]: RouteOperation<TOperations[TKey]>;
 };
 
 /** Shared configuration shape for immutable and passthrough operations. */

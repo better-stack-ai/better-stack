@@ -15,8 +15,11 @@ import type {
 } from "../shared/auth-types";
 import { defineDb } from "@btst/db";
 import {
+	bindRouteOperationEndpoint,
 	runAuthorizedOperation,
 	runInternalOperation,
+	type AnyOperation,
+	type RouteOperation,
 } from "../plugins/api/operation";
 import {
 	composeEndpointInventory,
@@ -158,20 +161,23 @@ export function stack<
 
 	const routeOperationApis: Record<
 		string,
-		Record<string, (input: unknown, request: Request) => Promise<unknown>>
+		Record<string, RouteOperation<AnyOperation>>
 	> = {};
 	for (const [pluginKey, operations] of Object.entries(pluginOperations)) {
 		routeOperationApis[pluginKey] = {};
 		for (const [operationKey, operation] of Object.entries(operations)) {
-			routeOperationApis[pluginKey]![operationKey] = (
-				input: unknown,
-				request: Request,
-			) =>
+			const invoke = (input: unknown, request: Request) =>
 				runAuthorizedOperation(operation, input, {
 					request,
 					...(runtimeAuth ? { auth: runtimeAuth } : {}),
 					resolveIdentity: () => getRequestIdentity(request.headers),
 				});
+			Object.defineProperty(invoke, "route", {
+				value: (endpoint: import("better-call").Endpoint) =>
+					bindRouteOperationEndpoint(endpoint, operationKey),
+			});
+			routeOperationApis[pluginKey]![operationKey] =
+				invoke as RouteOperation<AnyOperation>;
 		}
 	}
 

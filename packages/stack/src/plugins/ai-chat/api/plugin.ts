@@ -233,12 +233,16 @@ export const aiChatBackendPlugin = <
 			);
 
 			return {
-				chat,
-				listConversations,
-				getConversation,
-				createConversation,
-				updateConversation,
-				deleteConversation,
+				chat: operations.startStream.route(chat),
+				listConversations:
+					operations.listConversations.route(listConversations),
+				getConversation: operations.getConversation.route(getConversation),
+				createConversation:
+					operations.createConversation.route(createConversation),
+				updateConversation:
+					operations.updateConversation.route(updateConversation),
+				deleteConversation:
+					operations.deleteConversation.route(deleteConversation),
 			} as const;
 		},
 	});
