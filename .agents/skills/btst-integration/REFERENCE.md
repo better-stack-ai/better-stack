@@ -7,6 +7,7 @@ import { stack } from "@btst/stack"
 import { createMemoryAdapter } from "@btst/adapter-memory"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
+import { serverAuth } from "./authorization.server"
 // import more plugins…
 
 function createStack() {
@@ -25,6 +26,7 @@ function createStack() {
       // add more plugins…
     },
     adapter: (db) => createMemoryAdapter(db)({}),
+    auth: serverAuth,
   })
 }
 
@@ -39,6 +41,7 @@ export const { handler, dbSchema } = myStack
 **Rules:**
 - For any real DB adapter (Drizzle, Prisma, Kysely, MongoDB), call the typed `createStack()` factory at module level — no `globalThis` needed.
 - Only pin to `globalThis` when using `@btst/adapter-memory` in Next.js.
+- `access: "authorized"` requires a bound `serverAuth`. Omitting `stack({ auth })` intentionally preserves permissive compatibility and does not protect operations.
 
 ---
 

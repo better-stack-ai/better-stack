@@ -40,7 +40,8 @@ See [REFERENCE.md](REFERENCE.md) for full code shapes for every file.
 
 ### 3) Configure backend stack
 
-- Call `stack({ basePath: "/api/data", plugins: { ... }, adapter: (db) => createXxxAdapter(..., db, {}) })`.
+- Call `stack({ basePath: "/api/data", plugins: { ... }, adapter: (db) => createXxxAdapter(..., db, {}), auth: serverAuth })` when application authorization is enabled.
+- Create `serverAuth` with `createServerAuth({ authorization, getIdentity })`. Omitting `auth` intentionally preserves permissive no-authorization compatibility; plugin labels such as AI Chat's `access: "authorized"` are not an enforcement boundary by themselves.
 - Export `handler` and `dbSchema`.
 - **Memory adapter + Next.js**: pin to `globalThis` to avoid two instances in the same process:
   ```ts
@@ -103,6 +104,7 @@ Do not duplicate — the patcher and manual edits must both be idempotent.
 ## Validation checklist
 
 - `stack.ts` exports both `handler` and `dbSchema`.
+- Protected applications pass `createServerAuth(...)` to `stack({ auth })`; omitted auth is intentionally permissive.
 - Every plugin is registered on both backend and client sides.
 - API `basePath` and `stack({ basePath })` match exactly.
 - API and page catch-all routes use the framework entry factories.
