@@ -13,6 +13,7 @@ import { defineAuthorization } from "@btst/stack/authorization";
 import { z } from "zod";
 import { mediaPermissions } from "../permissions";
 import { LibraryPage } from "../client/components/pages/library-page.internal";
+import { LibraryPageComponent } from "../client/components/pages/library-page";
 import { MediaPicker } from "../client/components/media-picker";
 import { UrlTab } from "../client/components/media-picker/url-tab";
 import type { SerializedAsset, SerializedFolder } from "../types";
@@ -165,6 +166,87 @@ function typeInto(input: HTMLInputElement, value: string) {
 	setValue.call(input, value);
 	input.dispatchEvent(new Event("input", { bubbles: true }));
 }
+
+async function waitFor(check: () => boolean, timeout = 3000) {
+	const start = Date.now();
+	while (!check()) {
+		if (Date.now() - start > timeout) throw new Error("waitFor timed out");
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 10));
+		});
+	}
+}
+
+describe("Media library route permission", () => {
+	const routeAuthorization = defineAuthorization({
+		identity: z.object({ id: z.string(), role: z.enum(["viewer", "editor"]) }),
+		permissions: [mediaPermissions] as const,
+		rules: ({ media }) => [
+			media.library.read.when(({ identity }) => identity?.role === "editor"),
+			media.asset.read.allow(),
+		],
+	});
+
+	it.each([
+		{ label: "anonymous", identity: null },
+		{
+			label: "authenticated viewer",
+			identity: { id: "viewer-1", role: "viewer" as const },
+		},
+	])(
+		"fails closed for an $label at the real route boundary",
+		async ({ identity }) => {
+			vi.spyOn(console, "error").mockImplementation(() => {});
+			vi.spyOn(console, "warn").mockImplementation(() => {});
+			const auth = createClientAuth({
+				authorization: routeAuthorization,
+				getIdentity: () => identity,
+			});
+			await act(async () => {
+				root.render(
+					<StackProvider
+						basePath="/pages"
+						router={createMockRouter()}
+						overrides={{ media: mediaOverrides() }}
+						auth={auth}
+						initialIdentity={identity}
+					>
+						<LibraryPageComponent />
+					</StackProvider>,
+				);
+			});
+			await waitFor(
+				() => document.body.textContent?.includes("Unauthorized") ?? false,
+			);
+
+			expect(hooks.useAssets).not.toHaveBeenCalled();
+		},
+	);
+
+	it("renders the real route for an allowed authenticated identity", async () => {
+		const identity = { id: "editor-1", role: "editor" as const };
+		const auth = createClientAuth({
+			authorization: routeAuthorization,
+			getIdentity: () => identity,
+		});
+		await act(async () => {
+			root.render(
+				<StackProvider
+					basePath="/pages"
+					router={createMockRouter()}
+					overrides={{ media: mediaOverrides() }}
+					auth={auth}
+					initialIdentity={identity}
+				>
+					<LibraryPageComponent />
+				</StackProvider>,
+			);
+		});
+		await waitFor(() => hooks.useAssets.mock.calls.length > 0);
+
+		expect(document.body.textContent).toContain("Beach.jpg");
+	});
+});
 
 describe("Media library permissions", () => {
 	it("keeps all write controls visible without an auth provider", async () => {
