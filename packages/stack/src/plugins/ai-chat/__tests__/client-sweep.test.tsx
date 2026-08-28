@@ -515,7 +515,7 @@ describe("AI Chat permissions", () => {
 		]);
 	});
 
-	it("contains history reconciliation failures and hides untrusted client ids", async () => {
+	it("contains history sync failures and retries from authoritative history", async () => {
 		const clientMessages = [
 			{
 				id: "client-user",
@@ -542,9 +542,18 @@ describe("AI Chat permissions", () => {
 			id: "owner-1",
 			role: "user",
 		});
-		vi.spyOn(queryClient, "fetchQuery").mockRejectedValue(
-			new Error("history unavailable"),
-		);
+		const persistedMessages = [
+			{
+				id: "persisted-user",
+				conversationId: conversation.id,
+				role: "user" as const,
+				content: '[{"type":"text","text":"Hi"}]',
+				createdAt: new Date().toISOString(),
+			},
+		];
+		vi.spyOn(queryClient, "fetchQuery")
+			.mockRejectedValueOnce(new Error("history unavailable"))
+			.mockResolvedValue({ ...conversation, messages: persistedMessages });
 		vi.spyOn(console, "error").mockImplementation(() => {});
 
 		await render(<ChatInterface id={conversation.id} />);
@@ -559,6 +568,24 @@ describe("AI Chat permissions", () => {
 
 		expect(setMessages).toHaveBeenCalledWith([]);
 		expect(container.textContent).toContain("Something went wrong");
+		expect(container.querySelector('[data-testid="chat-input"]')).toBeNull();
+
+		await act(async () => {
+			container
+				.querySelector<HTMLButtonElement>('[data-testid="chat-history-retry"]')
+				?.click();
+			await Promise.resolve();
+		});
+
+		expect(setMessages).toHaveBeenLastCalledWith([
+			{
+				id: "persisted-user",
+				role: "user",
+				parts: [{ type: "text", text: "Hi" }],
+			},
+		]);
+		expect(container.textContent).not.toContain("Something went wrong");
+		expect(container.querySelector('[data-testid="chat-input"]')).toBeTruthy();
 	});
 
 	it("discovers a new authoritative conversation from the stream response header", async () => {

@@ -87,6 +87,29 @@ function reconcilePersistedMessageIds(
 	}));
 }
 
+function persistedMessagesToUiMessages(
+	messages: readonly SerializedMessage[],
+): UIMessage[] {
+	return messages
+		.filter((message) => message.role !== "data")
+		.map((message) => {
+			let parts: UIMessage["parts"];
+			try {
+				const parsed = JSON.parse(message.content);
+				parts = Array.isArray(parsed)
+					? parsed
+					: [{ type: "text" as const, text: message.content }];
+			} catch {
+				parts = [{ type: "text" as const, text: message.content }];
+			}
+			return {
+				id: message.id,
+				role: message.role as "user" | "assistant" | "system",
+				parts,
+			};
+		});
+}
+
 function ChatActionCheck({
 	publicMode,
 	action,
@@ -372,6 +395,11 @@ export function ChatInterface({
 		streamRequestGeneration: number;
 	} | null>(null);
 	const [historySyncError, setHistorySyncError] = useState<Error | null>(null);
+	const [isHistorySyncRetrying, setIsHistorySyncRetrying] = useState(false);
+	useEffect(() => {
+		setHistorySyncError(null);
+		setIsHistorySyncRetrying(false);
+	}, [id, isPublicMode]);
 
 	// Ref to always have the latest pageAIContext in the transport callback
 	// without recreating the transport on every context change
@@ -693,6 +721,81 @@ export function ChatInterface({
 			}
 		},
 	});
+	const handleHistorySyncRetry = useCallback(async () => {
+		if (isPublicMode || isHistorySyncRetrying) return;
+		const retryConversationId = conversationIdRef.current;
+		if (!retryConversationId) {
+			setHistorySyncError(null);
+			return;
+		}
+
+		const retryPartitionKey = latestIdentityPartitionKey.current;
+		const retrySessionGeneration = identitySessionGeneration.current;
+		const retryIsCurrent = () =>
+			retryPartitionKey === latestIdentityPartitionKey.current &&
+			retrySessionGeneration === identitySessionGeneration.current &&
+			retryConversationId === conversationIdRef.current;
+		setIsHistorySyncRetrying(true);
+		try {
+			const client = createApiClient<AiChatApiRouter>({
+				baseURL: apiBaseURL,
+				basePath: apiBasePath,
+			});
+			const detailQuery = createAiChatQueryKeys(
+				client,
+				latestHeaders.current,
+			).conversations.detail(
+				retryConversationId,
+				latestIdentityPartition.current,
+			);
+			await queryClient.cancelQueries({
+				queryKey: detailQuery.queryKey,
+				exact: true,
+			});
+			if (!retryIsCurrent()) return;
+			queryClient.removeQueries({
+				queryKey: detailQuery.queryKey,
+				exact: true,
+			});
+			const persistedConversation = await queryClient.fetchQuery({
+				...detailQuery,
+				staleTime: 0,
+			});
+			if (!retryIsCurrent() || !persistedConversation) return;
+			if (isFirstMessageSentRef.current && !hasNavigatedRef.current) {
+				hasNavigatedRef.current = true;
+				setCurrentConversationId(retryConversationId);
+				if (variant === "full" && typeof window !== "undefined") {
+					window.history.replaceState(
+						{ ...window.history.state },
+						"",
+						`${basePath}/chat/${retryConversationId}`,
+					);
+				}
+			}
+			setMessages(
+				persistedMessagesToUiMessages(persistedConversation.messages),
+			);
+			setHistorySyncError(null);
+		} catch (error) {
+			if (!retryIsCurrent()) return;
+			const syncError =
+				error instanceof Error ? error : new Error(String(error));
+			console.error("Failed to reload persisted chat history:", syncError);
+			setHistorySyncError(syncError);
+		} finally {
+			if (retryIsCurrent()) setIsHistorySyncRetrying(false);
+		}
+	}, [
+		apiBasePath,
+		apiBaseURL,
+		basePath,
+		isHistorySyncRetrying,
+		isPublicMode,
+		queryClient,
+		setMessages,
+		variant,
+	]);
 	useLayoutEffect(() => {
 		latestMessages.current = messages;
 	}, [messages]);
@@ -719,6 +822,7 @@ export function ChatInterface({
 		setAttachedFiles([]);
 		setPendingEdit(null);
 		setHistorySyncError(null);
+		setIsHistorySyncRetrying(false);
 		editMessagesRef.current = null;
 		isEditInProgressRef.current = false;
 		setIsMessagesInitialized(true);
@@ -753,31 +857,7 @@ export function ChatInterface({
 			conversation.messages.length > 0 &&
 			messages.length === 0
 		) {
-			// Filter out "data" role messages as UIMessage only accepts "user" | "assistant" | "system"
-			const uiMessages: UIMessage[] = conversation.messages
-				.filter((m) => m.role !== "data")
-				.map((m) => {
-					// Try to parse content as JSON parts (new format with images)
-					let parts: UIMessage["parts"];
-					try {
-						const parsed = JSON.parse(m.content);
-						if (Array.isArray(parsed)) {
-							parts = parsed;
-						} else {
-							// Fallback: wrap as text
-							parts = [{ type: "text" as const, text: m.content }];
-						}
-					} catch {
-						// Not JSON - legacy format, wrap as text
-						parts = [{ type: "text" as const, text: m.content }];
-					}
-					return {
-						id: m.id,
-						role: m.role as "user" | "assistant" | "system",
-						parts,
-					};
-				});
-			setMessages(uiMessages);
+			setMessages(persistedMessagesToUiMessages(conversation.messages));
 		}
 	}, [conversation, messages.length, setMessages]);
 
@@ -1121,13 +1201,24 @@ export function ChatInterface({
 								)}
 							{(error || historySyncError) && (
 								<div className="flex items-center gap-2 text-destructive text-sm py-4 px-3 bg-destructive/10 rounded-md">
-									<span>
+									<span className="flex-1">
 										{tr(
 											"CHAT_ERROR",
 											"aiChat.chat.error",
 											"Something went wrong. Please try again.",
 										)}
 									</span>
+									{historySyncError && (
+										<button
+											type="button"
+											data-testid="chat-history-retry"
+											onClick={() => void handleHistorySyncRetry()}
+											disabled={isHistorySyncRetrying}
+											className="rounded-md border border-destructive/30 px-2.5 py-1 font-medium hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
+										>
+											{tr("CHAT_RETRY", "aiChat.chat.retry", "Retry")}
+										</button>
+									)}
 								</div>
 							)}
 						</div>
