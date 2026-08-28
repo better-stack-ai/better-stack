@@ -154,4 +154,139 @@ describe("Kanban protected query identity partition", () => {
 		await act(async () => resolution);
 		await waitFor(() => boardName === "User B board");
 	});
+
+	it("does not cache an authenticated response under the anonymous key when identity resolution fails", async () => {
+		let backendAuthenticated = true;
+		fetchMock.mockImplementation(() =>
+			Promise.resolve(
+				responseFor(backendAuthenticated ? "Private board" : "Anonymous board"),
+			),
+		);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		let rejectIdentity: ((error: Error) => void) | undefined;
+		let finishLogout: ((identity: null) => void) | undefined;
+		let identityCall = 0;
+		const auth = {
+			getIdentity: () =>
+				new Promise<{ id: string } | null>((resolve, reject) => {
+					identityCall += 1;
+					if (identityCall === 1) rejectIdentity = reject;
+					else finishLogout = resolve;
+				}),
+		} satisfies StackAuthProvider;
+		let boardName: string | undefined;
+		let identityError: Error | undefined;
+		let refetchIdentity: (() => Promise<void>) | undefined;
+
+		function Probe() {
+			const identityState = useIdentity();
+			identityError = identityState.error;
+			refetchIdentity = identityState.refetch;
+			boardName = useBoard("board-1").data?.name;
+			return null;
+		}
+
+		await act(async () => {
+			root.render(
+				<StackProvider
+					basePath="/pages"
+					api={{ baseURL: "http://test.local", basePath: "/api" }}
+					auth={auth}
+				>
+					<QueryClientProvider client={queryClient}>
+						<Probe />
+					</QueryClientProvider>
+				</StackProvider>,
+			);
+		});
+		await waitFor(() => boardName === "Private board");
+
+		await act(async () => {
+			rejectIdentity?.(new Error("identity unavailable"));
+			await Promise.resolve();
+		});
+		await waitFor(
+			() =>
+				identityError?.message === "identity unavailable" &&
+				fetchMock.mock.calls.length >= 2,
+		);
+
+		backendAuthenticated = false;
+		let logoutResolution: Promise<void> | undefined;
+		await act(async () => {
+			logoutResolution = refetchIdentity?.();
+			await Promise.resolve();
+		});
+		await waitFor(() => finishLogout !== undefined);
+		finishLogout?.(null);
+		await act(async () => logoutResolution);
+		await waitFor(
+			() => fetchMock.mock.calls.length >= 4 && boardName === "Anonymous board",
+		);
+	});
+
+	it("isolates an invalid hydrated identity from a later anonymous session", async () => {
+		let backendAuthenticated = true;
+		fetchMock.mockImplementation(() =>
+			Promise.resolve(
+				responseFor(backendAuthenticated ? "Private board" : "Anonymous board"),
+			),
+		);
+		const auth = {
+			mode: "one-rule" as const,
+			contract: {
+				parseIdentity(identity: unknown) {
+					if (identity === null) return null;
+					if (
+						typeof identity === "object" &&
+						identity !== null &&
+						typeof (identity as { id?: unknown }).id === "string"
+					) {
+						return identity as { id: string };
+					}
+					throw new Error("invalid identity");
+				},
+			},
+			getIdentity: vi.fn(() => null),
+		};
+		let boardName: string | undefined;
+		let identityError: Error | undefined;
+
+		function Probe() {
+			identityError = useIdentity().error;
+			boardName = useBoard("board-1").data?.name;
+			return null;
+		}
+
+		async function render(initialIdentity: unknown) {
+			await act(async () => {
+				root.render(
+					<StackProvider
+						basePath="/pages"
+						api={{ baseURL: "http://test.local", basePath: "/api" }}
+						auth={auth}
+						initialIdentity={initialIdentity as never}
+					>
+						<QueryClientProvider client={queryClient}>
+							<Probe />
+						</QueryClientProvider>
+					</StackProvider>,
+				);
+			});
+		}
+
+		await render({ id: 123 });
+		await waitFor(
+			() =>
+				identityError?.message === "invalid identity" &&
+				boardName === "Private board",
+		);
+
+		backendAuthenticated = false;
+		await render(null);
+		await waitFor(
+			() => fetchMock.mock.calls.length >= 2 && boardName === "Anonymous board",
+		);
+		expect(auth.getIdentity).not.toHaveBeenCalled();
+	});
 });

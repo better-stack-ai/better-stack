@@ -401,7 +401,8 @@ one public, declare that policy explicitly with `.allow()`.
 Protected Kanban query keys are also partitioned by the resolved identity. While
 identity is unresolved, each auth-provider/hydration source and manual identity
 refetch gets its own pending generation, so a login, logout, or account switch
-cannot reuse a prior user's pending response.
+cannot reuse a prior user's pending response. Failed or invalid identity
+resolutions also use a distinct generation instead of the anonymous/SSG key.
 
 <Callout type="warning">
 Boolean collection authorization is not row- or tenant-level data scoping. The

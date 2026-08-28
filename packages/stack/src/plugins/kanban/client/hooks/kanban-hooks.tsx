@@ -19,14 +19,14 @@ import type {
 import { kanban } from "./kanban-resource";
 
 function useIdentityPartition() {
-	const { identity, isPending } = useIdentity();
+	const { identity, isPending, error } = useIdentity();
 	const sourceGeneration = useIdentitySourceGeneration();
-	return isPending
-		? (`pending:${sourceGeneration}` as const)
-		: (identity ?? undefined);
+	if (isPending) return `pending:${sourceGeneration}` as const;
+	if (error) return `error:${sourceGeneration}` as const;
+	return identity ?? undefined;
 }
 
-function isPendingIdentityPartition(
+function isUnresolvedIdentityPartition(
 	partition: ReturnType<typeof useIdentityPartition>,
 ) {
 	return typeof partition === "string";
@@ -208,7 +208,7 @@ export function useResolveUser(userId: string | undefined | null) {
 			if (!userId) return null;
 			return resolveUser(userId);
 		},
-		enabled: !!userId && !isPendingIdentityPartition(identityPartition),
+		enabled: !!userId && !isUnresolvedIdentityPartition(identityPartition),
 		staleTime: 5 * 60 * 1000,
 		gcTime: 10 * 60 * 1000,
 	});
@@ -222,7 +222,7 @@ export function useSearchUsers(query: string, boardId?: string) {
 	return useQuery<KanbanUser[]>({
 		queryKey: ["kanban", "users", "search", query, boardId, identityPartition],
 		queryFn: () => searchUsers(query, boardId),
-		enabled: !isPendingIdentityPartition(identityPartition),
+		enabled: !isUnresolvedIdentityPartition(identityPartition),
 		staleTime: 30_000,
 	});
 }

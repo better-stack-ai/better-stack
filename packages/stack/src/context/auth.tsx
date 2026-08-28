@@ -27,7 +27,7 @@ export interface AuthContextValue {
 	isPending: boolean;
 	/** Serializable generation for the current identity resolution. */
 	sourceGeneration: number;
-	/** Identity resolution or validation failure on the one-rule auth path. */
+	/** Identity resolution or validation failure. */
 	error?: Error;
 	/** Re-run `getIdentity()` (e.g. after login/logout) */
 	refetch: () => Promise<void>;
@@ -160,11 +160,13 @@ export function StackAuthBoundary({
 				});
 			} catch (error) {
 				if (!isLatestResolution()) return;
+				const identityError =
+					error instanceof Error ? error : new Error(String(error));
 				if (isSchemaBoundStackAuthProvider(provider)) {
 					setState({
 						identity: null,
 						isPending: false,
-						error: error instanceof Error ? error : new Error(String(error)),
+						error: identityError,
 						sourceGeneration,
 						resolutionGeneration: cacheGeneration,
 					});
@@ -174,6 +176,7 @@ export function StackAuthBoundary({
 				setState({
 					identity: null,
 					isPending: false,
+					error: identityError,
 					sourceGeneration,
 					resolutionGeneration: cacheGeneration,
 				});
