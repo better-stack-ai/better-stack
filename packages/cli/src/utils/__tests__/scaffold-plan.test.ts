@@ -182,6 +182,12 @@ describe("scaffold plan", () => {
 		expect(pagesLayoutFile?.content).not.toContain("apiBasePath:");
 		expect(pagesLayoutFile?.content).not.toContain("as never");
 		expect(plan.pagesLayoutPath).toBe("app/pages/layout.tsx");
+		const pagesRouteFile = plan.files.find(
+			(f) => f.path === "app/pages/[[...all]]/page.tsx",
+		);
+		expect(pagesRouteFile?.content).toContain(
+			"getStackClient: (queryClient) => getStackClient(queryClient)",
+		);
 	});
 
 	it("resolves src-prefixed Next.js pages layout path", async () => {
