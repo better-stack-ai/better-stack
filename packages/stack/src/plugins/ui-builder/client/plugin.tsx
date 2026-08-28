@@ -317,13 +317,11 @@ function createPageBuilderMeta(
  *
  * uiBuilder: uiBuilderClientPlugin({
  *   hooks: {
- *     beforeLoadPageList: async (ctx) => {
- *       const session = await getSession(ctx.headers)
- *       if (!session?.user?.isAdmin) throw new Error("Admin access required")
+ *     beforeLoadPageList: async (context) => {
+ *       await warmPageListDependencies(context.headers)
  *     },
- *     beforeLoadPageBuilder: async (pageId, ctx) => {
- *       const session = await getSession(ctx.headers)
- *       if (!session?.user?.isAdmin) throw new Error("Admin access required")
+ *     beforeLoadPageBuilder: async (pageId, context) => {
+ *       await recordPageBuilderLoad(pageId, context.headers)
  *     },
  *     onErrorLoad: (error, context) => {
  *       reportPageLoaderError(error, context)
