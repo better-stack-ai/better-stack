@@ -13,10 +13,17 @@ import { defineAuthorization } from "@btst/stack/authorization";
 import { z } from "zod";
 import { mediaPermissions } from "../permissions";
 import { LibraryPage } from "../client/components/pages/library-page.internal";
+import { MediaPicker } from "../client/components/media-picker";
 import { UrlTab } from "../client/components/media-picker/url-tab";
 import type { SerializedAsset, SerializedFolder } from "../types";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as any).ResizeObserver ??= class {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+};
+Element.prototype.scrollIntoView ??= () => {};
 
 const hooks = vi.hoisted(() => ({
 	useAssets: vi.fn(),
@@ -288,6 +295,86 @@ describe("Media library URL state", () => {
 });
 
 describe("Media forms and i18n", () => {
+	it("requires asset.read before selecting a URL-registered asset", async () => {
+		const onSelect = vi.fn();
+		const submit = vi.fn(async () => asset);
+		hooks.useRegisterAssetForm.mockImplementation(
+			(options: { onSuccess?: (created: SerializedAsset) => void }) => ({
+				submit: vi.fn(async () => {
+					const created = await submit();
+					options.onSuccess?.(created);
+					return created;
+				}),
+				isSubmitting: false,
+				error: null,
+				fieldErrors: {},
+				clearErrors: vi.fn(),
+			}),
+		);
+		const definition = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [mediaPermissions] as const,
+			rules: ({ media }) => [
+				media.library.read.allow(),
+				media.asset.read.when(() => false),
+				media.asset.upload.allow(),
+			],
+		});
+		const auth = createClientAuth({
+			authorization: definition,
+			getIdentity: () => ({ id: "uploader" }),
+		});
+
+		await act(async () => {
+			root.render(
+				<StackProvider
+					basePath="/pages"
+					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
+					router={createMockRouter()}
+					overrides={{ media: mediaOverrides() }}
+					auth={auth}
+					initialIdentity={{ id: "uploader" }}
+				>
+					<MediaPicker
+						trigger={<button type="button">Open</button>}
+						onSelect={onSelect}
+					/>
+				</StackProvider>,
+			);
+		});
+		await act(async () => {
+			(container.querySelector("button") as HTMLButtonElement).click();
+			await Promise.resolve();
+		});
+		const urlTab = Array.from(document.body.querySelectorAll("button")).find(
+			(button) => button.textContent === "URL",
+		) as HTMLButtonElement;
+		await act(async () => {
+			urlTab.dispatchEvent(
+				new MouseEvent("mousedown", { bubbles: true, button: 0 }),
+			);
+			urlTab.click();
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		const input = document.body.querySelector(
+			'[data-testid="media-url-input"]',
+		) as HTMLInputElement;
+		await act(async () => typeInto(input, asset.url));
+		const useUrl = Array.from(document.body.querySelectorAll("button")).find(
+			(button) => button.textContent?.includes("Use URL"),
+		) as HTMLButtonElement;
+		await act(async () => {
+			useUrl.click();
+			await Promise.resolve();
+		});
+
+		expect(submit).toHaveBeenCalledOnce();
+		expect(onSelect).not.toHaveBeenCalled();
+		expect(
+			document.body.querySelector('[data-testid="media-select-button"]'),
+		).toBeNull();
+	});
+
 	it("renders server URL field errors inline", async () => {
 		hooks.useRegisterAssetForm.mockReturnValue({
 			submit: vi.fn(),

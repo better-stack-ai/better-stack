@@ -333,8 +333,9 @@ test.describe("Media Plugin — direct upload via MediaPicker", () => {
 
 		// Confirm
 		await page.getByRole("button", { name: /use url/i }).click();
+		await page.locator('[data-testid="media-select-button"]').click();
 
-		// Popover closes and preview is shown
+		// Selection is read-authorized, then the popover closes and preview is shown
 		await expect(page.getByText("Media Library")).not.toBeVisible({
 			timeout: 5000,
 		});

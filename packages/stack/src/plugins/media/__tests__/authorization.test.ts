@@ -480,6 +480,9 @@ describe("Media operation-first authorization", () => {
 			api.updateAsset({ id: asset.id, data: { folderId: null } }),
 		).rejects.toMatchObject({ statusCode: 403 });
 		await expect(
+			api.updateAsset({ id: asset.id, data: { folderId: undefined } }),
+		).rejects.toMatchObject({ statusCode: 403 });
+		await expect(
 			backend.api.media.getAssetById(asset.id),
 		).resolves.toMatchObject({
 			folderId: folder.id,

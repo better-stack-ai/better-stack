@@ -145,10 +145,11 @@ export function MediaPicker({
 	};
 
 	const handleUrlRegistered = (asset: SerializedAsset) => {
-		// Close the popover first, then notify parent — same deferral as handleConfirm.
-		const toSelect = asset;
-		handleClose();
-		setTimeout(() => onSelect([toSelect]), 0);
+		// URL registration grants upload-finalize permission, not read/select
+		// permission. Send the result through the same asset.read-gated confirmation
+		// path as browsed and uploaded assets.
+		handleUploaded(asset);
+		setActiveTab("browse");
 	};
 
 	return (

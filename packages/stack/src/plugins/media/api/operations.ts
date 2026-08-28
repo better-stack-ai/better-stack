@@ -1182,7 +1182,7 @@ export function createMediaOperations(
 			}
 			const snapshot = assetSnapshot(asset);
 			assets.set(input as object, snapshot);
-			const changesFolder = input.data.folderId !== undefined;
+			const changesFolder = Object.hasOwn(input.data, "folderId");
 			const target =
 				typeof input.data.folderId === "string"
 					? await loadFolder(input.data.folderId, tenantId)
