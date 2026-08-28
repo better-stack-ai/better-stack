@@ -129,6 +129,35 @@ function createResourceProbePlugin(
 	});
 }
 
+function withObjectPrototypePollution<T>(
+	properties: Record<string, unknown>,
+	run: () => T,
+): T {
+	const originals = new Map<string, PropertyDescriptor | undefined>();
+	for (const key of Object.keys(properties)) {
+		originals.set(key, Object.getOwnPropertyDescriptor(Object.prototype, key));
+	}
+
+	try {
+		for (const [key, value] of Object.entries(properties)) {
+			Object.defineProperty(Object.prototype, key, {
+				configurable: true,
+				writable: true,
+				value,
+			});
+		}
+		return run();
+	} finally {
+		for (const [key, descriptor] of originals) {
+			if (descriptor) {
+				Object.defineProperty(Object.prototype, key, descriptor);
+			} else {
+				Reflect.deleteProperty(Object.prototype, key);
+			}
+		}
+	}
+}
+
 describe("resolved client runtime", () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
@@ -816,6 +845,68 @@ describe("resolved client runtime", () => {
 
 		expect(stack.router.getRoute("/legacy-with-prototype")).toBeTruthy();
 		expect("provider" in stack).toBe(false);
+	});
+
+	it("ignores prototype-polluted transport and nested endpoint fields", () => {
+		const queryClient = new QueryClient();
+		const runtimes: ResolvedClientPluginRuntime[] = [];
+		const baseConfig = {
+			api: {
+				baseURL: "https://app.example.com",
+				basePath: "/api/data",
+			},
+			site: {
+				baseURL: "https://app.example.com",
+				basePath: "/pages",
+			},
+			queryClient,
+			plugins: {
+				probe: createProbePlugin((runtime) => runtimes.push(runtime)),
+			},
+		};
+
+		const inheritedTransportStack = withObjectPrototypePollution(
+			{
+				headers: { authorization: "Bearer prototype-secret" },
+				endpoints: {
+					probe: { api: { basePath: "/prototype-api" } },
+				},
+				browserHeaders: { "x-prototype": "unsafe" },
+				credentials: "include",
+			},
+			() => createClientStack(baseConfig),
+		);
+
+		const inheritedNestedStack = withObjectPrototypePollution(
+			{
+				api: { basePath: "/prototype-api" },
+				site: { basePath: "/prototype-pages" },
+				browserHeaders: { "x-prototype": "unsafe" },
+				credentials: "include",
+			},
+			() =>
+				createClientStack({
+					...baseConfig,
+					endpoints: { probe: {} },
+				}),
+		);
+
+		for (const runtime of runtimes) {
+			expect(runtime.api).toMatchObject(baseConfig.api);
+			expect(runtime.site).toEqual(baseConfig.site);
+			expect(headersRecord(runtime.api.headers)).toEqual({});
+			expect(Object.hasOwn(runtime.api, "credentials")).toBe(false);
+		}
+		for (const stack of [inheritedTransportStack, inheritedNestedStack]) {
+			expect(stack.provider.plugins.probe.api).toMatchObject(baseConfig.api);
+			expect(stack.provider.plugins.probe.site).toEqual(baseConfig.site);
+			expect(
+				Object.hasOwn(stack.provider.plugins.probe.api, "browserHeaders"),
+			).toBe(false);
+			expect(
+				Object.hasOwn(stack.provider.plugins.probe.api, "credentials"),
+			).toBe(false);
+		}
 	});
 
 	it("keeps legacy client plugins working during first-party migration", async () => {

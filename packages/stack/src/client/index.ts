@@ -48,6 +48,14 @@ function hasResolvedRuntime<TPlugins extends AnyPluginMap>(
 	);
 }
 
+function isPlainPluginMap(value: unknown): value is AnyPluginMap {
+	if (value === null || typeof value !== "object" || Array.isArray(value)) {
+		return false;
+	}
+	const prototype = Object.getPrototypeOf(value);
+	return prototype === Object.prototype || prototype === null;
+}
+
 /**
  * Resolves all registered client plugin definitions against one API location,
  * site location, and React Query client.
@@ -98,13 +106,19 @@ export function createClientStack<
 >(
 	config: ClientStackConfig<TPlugins>,
 ): ClientStack<TRoutes> | ResolvedClientStack<TRoutes, TPlugins> {
+	const registrations = Object.hasOwn(config, "plugins")
+		? config.plugins
+		: undefined;
+	if (!isPlainPluginMap(registrations)) {
+		throw new Error(`[btst/client] plugins must be a plugin registration map.`);
+	}
 	const canonical = hasResolvedRuntime(config);
 	const runtime = canonical ? resolveClientRuntime(config) : undefined;
 	const resolvedPlugins: Record<string, ClientPlugin<any, any>> = Object.create(
 		null,
 	);
 
-	for (const [pluginKey, registration] of Object.entries(config.plugins)) {
+	for (const [pluginKey, registration] of Object.entries(registrations)) {
 		if (Object.hasOwn(registration, "resolve")) {
 			if (!runtime) {
 				throw new Error(
@@ -130,7 +144,9 @@ export function createClientStack<
 	const plugins = resolvedPlugins as Record<string, ClientPlugin<any, any>>;
 	const basePath = canonical
 		? runtime!.provider.site.basePath
-		: config.basePath;
+		: Object.hasOwn(config, "basePath")
+			? config.basePath
+			: undefined;
 
 	// Collect all routes from all plugins
 	// We build this with type assertions to preserve literal keys

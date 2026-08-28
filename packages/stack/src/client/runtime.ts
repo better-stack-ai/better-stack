@@ -1,6 +1,5 @@
 import type {
 	ClientLocation,
-	ClientLocationOverride,
 	ClientPluginEndpointOverride,
 	ClientPluginRegistration,
 	ClientProviderApi,
@@ -23,6 +22,12 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 	}
 	const prototype = Object.getPrototypeOf(value);
 	return prototype === Object.prototype || prototype === null;
+}
+
+function ownValue(value: object | undefined, key: PropertyKey): unknown {
+	return value !== undefined && Object.hasOwn(value, key)
+		? (value as Record<PropertyKey, unknown>)[key]
+		: undefined;
 }
 
 function normalizeBaseURL(value: unknown, label: string): string {
@@ -78,20 +83,14 @@ function normalizeBasePath(value: unknown, label: string): string {
 		: withLeadingSlash.replace(/\/+$/, "");
 }
 
-function normalizeLocation(
-	value: ClientLocation,
-	label: string,
-): ClientLocation {
+function normalizeLocation(value: unknown, label: string): ClientLocation {
 	if (!isPlainRecord(value)) {
 		throw new Error(`[btst/client] ${label} endpoint is required.`);
 	}
 	return {
-		baseURL: normalizeBaseURL(
-			Object.hasOwn(value, "baseURL") ? value.baseURL : undefined,
-			`${label}.baseURL`,
-		),
+		baseURL: normalizeBaseURL(ownValue(value, "baseURL"), `${label}.baseURL`),
 		basePath: normalizeBasePath(
-			Object.hasOwn(value, "basePath") ? value.basePath : undefined,
+			ownValue(value, "basePath"),
 			`${label}.basePath`,
 		),
 	};
@@ -99,7 +98,7 @@ function normalizeLocation(
 
 function resolveLocationOverride(
 	base: ClientLocation,
-	override: ClientLocationOverride | undefined,
+	override: unknown,
 	label: string,
 ): ClientLocation {
 	if (override === undefined) return { ...base };
@@ -107,12 +106,8 @@ function resolveLocationOverride(
 		throw new Error(`[btst/client] ${label} must be an endpoint object.`);
 	}
 
-	const overrideBaseURL = Object.hasOwn(override, "baseURL")
-		? override.baseURL
-		: undefined;
-	const overrideBasePath = Object.hasOwn(override, "basePath")
-		? override.basePath
-		: undefined;
+	const overrideBaseURL = ownValue(override, "baseURL");
+	const overrideBasePath = ownValue(override, "basePath");
 	if (overrideBaseURL !== undefined) {
 		if (overrideBasePath === undefined) {
 			throw new Error(
@@ -202,34 +197,46 @@ function projectApi(
 export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 	config: ResolvedClientStackConfig<TPlugins>,
 ): ResolvedClientRuntime<TPlugins> {
-	const api = normalizeLocation(config.api, "api");
-	const site = normalizeLocation(config.site, "site");
+	const apiConfig = ownValue(config, "api");
+	const siteConfig = ownValue(config, "site");
+	const queryClient = ownValue(config, "queryClient") as
+		| ResolvedClientStackConfig<TPlugins>["queryClient"]
+		| undefined;
+	const plugins = ownValue(config, "plugins");
+	const endpoints = ownValue(config, "endpoints");
+	const api = normalizeLocation(apiConfig, "api");
+	const site = normalizeLocation(siteConfig, "site");
 	if (
-		config.queryClient === null ||
-		typeof config.queryClient !== "object" ||
-		typeof config.queryClient.getQueryCache !== "function"
+		queryClient === null ||
+		typeof queryClient !== "object" ||
+		typeof queryClient.getQueryCache !== "function"
 	) {
 		throw new Error(
 			"[btst/client] queryClient must be one React Query QueryClient instance shared by the stack.",
 		);
 	}
-	if (!isPlainRecord(config.plugins)) {
+	if (!isPlainRecord(plugins)) {
 		throw new Error(`[btst/client] plugins must be a plugin registration map.`);
 	}
-	if (config.endpoints !== undefined && !isPlainRecord(config.endpoints)) {
+	if (endpoints !== undefined && !isPlainRecord(endpoints)) {
 		throw new Error(`[btst/client] endpoints must be a plugin endpoint map.`);
 	}
 
-	if (typeof window !== "undefined" && config.api.headers !== undefined) {
+	const requestHeaderInput = isPlainRecord(apiConfig)
+		? ownValue(apiConfig, "headers")
+		: undefined;
+	if (typeof window !== "undefined" && requestHeaderInput !== undefined) {
 		throw new Error(
 			"[btst/client] API request headers are server-only. Create the browser stack without api.headers and use per-plugin browserHeaders only for explicitly public values.",
 		);
 	}
 
-	const requestHeaders = cloneHeaders(config.api.headers);
-	const endpointKeys = Object.keys(config.endpoints ?? {});
+	const requestHeaders = cloneHeaders(
+		requestHeaderInput as HeadersInit | undefined,
+	);
+	const endpointKeys = Object.keys(endpoints ?? {});
 	for (const pluginKey of endpointKeys) {
-		if (!Object.hasOwn(config.plugins, pluginKey)) {
+		if (!Object.hasOwn(plugins, pluginKey)) {
 			throw new Error(
 				`[btst/client] Endpoint replacement "${pluginKey}" has no registered client plugin.`,
 			);
@@ -241,10 +248,10 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 	const providerPlugins: Record<string, ClientProviderPluginRuntime> =
 		Object.create(null);
 
-	for (const pluginKey of Object.keys(config.plugins)) {
+	for (const pluginKey of Object.keys(plugins)) {
 		const endpoint =
-			config.endpoints && Object.hasOwn(config.endpoints, pluginKey)
-				? config.endpoints[pluginKey]
+			endpoints && Object.hasOwn(endpoints, pluginKey)
+				? endpoints[pluginKey]
 				: undefined;
 		if (endpoint !== undefined && !isPlainRecord(endpoint)) {
 			throw new Error(
@@ -252,24 +259,33 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 			);
 		}
 		const endpointConfig = endpoint as ClientPluginEndpointOverride | undefined;
+		const endpointApi = endpointConfig
+			? ownValue(endpointConfig, "api")
+			: undefined;
+		const endpointSite = endpointConfig
+			? ownValue(endpointConfig, "site")
+			: undefined;
 
 		const pluginApi = resolveLocationOverride(
 			api,
-			endpointConfig?.api,
+			endpointApi,
 			`endpoints.${pluginKey}.api`,
 		);
 		const pluginSite = resolveLocationOverride(
 			site,
-			endpointConfig?.site,
+			endpointSite,
 			`endpoints.${pluginKey}.site`,
 		);
 		const sameApiOrigin = pluginApi.baseURL === api.baseURL;
+		const endpointApiConfig = isPlainRecord(endpointApi)
+			? endpointApi
+			: undefined;
 		const browserHeaders = cloneBrowserHeaders(
-			endpointConfig?.api?.browserHeaders,
+			ownValue(endpointApiConfig, "browserHeaders") as HeadersInit | undefined,
 			`endpoints.${pluginKey}.api.browserHeaders`,
 		);
 		const credentials = resolveCredentials(
-			endpointConfig?.api?.credentials,
+			ownValue(endpointApiConfig, "credentials"),
 			`endpoints.${pluginKey}.api.credentials`,
 		);
 		const headers = mergeHeaders(
@@ -284,7 +300,7 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 				...(credentials !== undefined ? { credentials } : {}),
 			},
 			site: pluginSite,
-			queryClient: config.queryClient,
+			queryClient,
 		};
 		providerPlugins[pluginKey] = {
 			api: projectApi(pluginApi, browserHeaders, credentials),
@@ -299,7 +315,7 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 		provider: {
 			api,
 			site,
-			queryClient: config.queryClient,
+			queryClient,
 			plugins: providerPlugins as {
 				[K in keyof TPlugins]: ClientProviderPluginRuntime;
 			},
