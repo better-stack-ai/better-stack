@@ -398,6 +398,10 @@ without a rule denies once authorization is enabled. Kanban declares no
 maintained operation public by default; if your application intentionally makes
 one public, declare that policy explicitly with `.allow()`.
 
+Protected Kanban query keys are also partitioned by the resolved identity. While
+identity is unresolved, each auth-provider/hydration source gets its own pending
+generation, so a new login flow cannot reuse a prior user's pending response.
+
 <Callout type="warning">
 Boolean collection authorization is not row- or tenant-level data scoping. The
 example makes collection access admin-only. If your application exposes a

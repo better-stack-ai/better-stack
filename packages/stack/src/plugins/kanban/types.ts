@@ -205,7 +205,12 @@ export type BoardListOperationContext = KanbanApiContext<
 export type BoardListOperationResultContext = KanbanApiResultContext<
 	z.output<typeof BoardListQuerySchema>,
 	BoardReadFacts,
-	{ items: readonly SerializedBoardSummary[]; total: number }
+	{
+		items: readonly SerializedBoardSummary[];
+		total: number;
+		limit?: number;
+		offset?: number;
+	}
 >;
 /** Context for reading one board. */
 export type BoardReadOperationContext = KanbanApiContext<

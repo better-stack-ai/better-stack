@@ -25,6 +25,8 @@ export interface AuthContextValue {
 	identity: StackIdentity | null;
 	/** True until the initial `getIdentity()` call settles */
 	isPending: boolean;
+	/** Serializable generation for the current provider/hydration source. */
+	sourceGeneration: number;
 	/** Identity resolution or validation failure on the one-rule auth path. */
 	error?: Error;
 	/** Re-run `getIdentity()` (e.g. after login/logout) */
@@ -37,6 +39,7 @@ export interface AuthContextValue {
  * `<CanAccess>` renders its children — preserving pre-auth behavior exactly.
  */
 const AuthContext = createContext<AuthContextValue | null>(null);
+let nextAuthSourceGeneration = 0;
 
 function createInitialAuthState(
 	provider: StackAuthProvider,
@@ -85,14 +88,17 @@ export function StackAuthBoundary({
 		identity: StackIdentity | null;
 		isPending: boolean;
 		error?: Error;
-		sourceGeneration: object;
+		sourceGeneration: { readonly id: number };
 	};
 
 	const hydratedState = useMemo(
 		() => createInitialAuthState(provider, initialIdentity),
 		[provider, initialIdentity],
 	);
-	const sourceGeneration = useMemo(() => ({}), [provider, initialIdentity]);
+	const sourceGeneration = useMemo(
+		() => ({ id: ++nextAuthSourceGeneration }),
+		[provider, initialIdentity],
+	);
 	const [state, setState] = useState<BoundaryState>(() => ({
 		...hydratedState,
 		sourceGeneration,
@@ -163,6 +169,7 @@ export function StackAuthBoundary({
 				provider,
 				identity: currentState.identity,
 				isPending: currentState.isPending,
+				sourceGeneration: sourceGeneration.id,
 				...(currentState.error ? { error: currentState.error } : {}),
 				refetch,
 			}}
@@ -207,6 +214,11 @@ export function useIdentity(): {
 		...(auth.error ? { error: auth.error } : {}),
 		refetch: auth.refetch,
 	};
+}
+
+/** @internal Serializable auth-source key for protected client query caches. */
+export function useIdentitySourceGeneration(): number {
+	return useContext(AuthContext)?.sourceGeneration ?? 0;
 }
 
 type CanState = { can: boolean; isPending: boolean };

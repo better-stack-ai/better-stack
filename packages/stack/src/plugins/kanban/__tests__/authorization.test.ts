@@ -364,6 +364,62 @@ describe("Kanban operation-first authorization", () => {
 		expect(await backend.adapter.count({ model: "kanbanBoard" })).toBe(0);
 	});
 
+	it("rejects board creation without atomic transactions before hooks or writes", async () => {
+		const beforeCreate = vi.fn();
+		const sequentialAdapter = (db: DatabaseDefinition) => {
+			const memory = rawMemoryAdapter(db);
+			const adapterConfig = memory.options?.adapterConfig;
+			if (!adapterConfig) throw new Error("Missing adapter config");
+			return {
+				...memory,
+				id: "sequential",
+				options: {
+					...memory.options,
+					adapterConfig: {
+						...adapterConfig,
+						transaction: false,
+					},
+				},
+			} satisfies DBAdapter;
+		};
+		const backend = makeBackend({
+			adapter: sequentialAdapter,
+			hooks: { onBeforeCreateBoard: beforeCreate },
+		});
+
+		await expect(
+			backend.internal.kanban.createBoard({ name: "Unsafe" }),
+		).rejects.toMatchObject({
+			statusCode: 500,
+			code: "ATOMIC_TRANSACTION_REQUIRED",
+		});
+		expect(beforeCreate).not.toHaveBeenCalled();
+		expect(await backend.adapter.count({ model: "kanbanBoard" })).toBe(0);
+		expect(await backend.adapter.count({ model: "kanbanColumn" })).toBe(0);
+	});
+
+	it("rolls back nested board creation when its outer before hook rejects", async () => {
+		let backend: ReturnType<typeof makeBackend>;
+		backend = makeBackend({
+			hooks: {
+				onBeforeCreateBoard: async (input) => {
+					if (input.name !== "Outer") return;
+					await backend.internal.kanban.createBoard({ name: "Nested" });
+					throw new Error("outer rejected");
+				},
+			},
+		});
+
+		await expect(
+			backend.internal.kanban.createBoard({ name: "Outer" }),
+		).rejects.toMatchObject({
+			statusCode: 403,
+			code: "CREATE_BOARD_REJECTED",
+		});
+		expect(await backend.adapter.count({ model: "kanbanBoard" })).toBe(0);
+		expect(await backend.adapter.count({ model: "kanbanColumn" })).toBe(0);
+	}, 1_000);
+
 	it("returns 401/403 before hooks and allows owner, member, and admin where declared", async () => {
 		const events: string[] = [];
 		const backend = makeBackend({

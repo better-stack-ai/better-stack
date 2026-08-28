@@ -1235,20 +1235,21 @@ export function createKanbanOperations(
 		facts: () => undefined,
 		execute: async (context) => {
 			const data = { ...context.input };
-			await runDomainHook(
-				() =>
-					hooks?.onBeforeCreateBoard?.(
-						data,
-						hookContext(context, { body: data }),
-					),
-				"CREATE_BOARD_REJECTED",
-			);
-			const input = {
-				...data,
-				slug: sanitizeSlug(data.slug || data.name),
-				...(context.identity ? { ownerId: context.identity.id } : {}),
-			};
+			requireAtomicTransactions(adapter);
 			return adapter.transaction(async (tx) => {
+				await runDomainHook(
+					() =>
+						hooks?.onBeforeCreateBoard?.(
+							data,
+							hookContext(context, { body: data }),
+						),
+					"CREATE_BOARD_REJECTED",
+				);
+				const input = {
+					...data,
+					slug: sanitizeSlug(data.slug || data.name),
+					...(context.identity ? { ownerId: context.identity.id } : {}),
+				};
 				const now = new Date();
 				const board = await tx.create<Board>({
 					model: "kanbanBoard",

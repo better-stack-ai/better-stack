@@ -1,7 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useIdentity, usePluginOverrides } from "@btst/stack/context";
+import {
+	useIdentity,
+	useIdentitySourceGeneration,
+	usePluginOverrides,
+} from "@btst/stack/context";
 import type {
 	ResourceFormConfig,
 	ResourceFormResult,
@@ -16,7 +20,16 @@ import { kanban } from "./kanban-resource";
 
 function useIdentityPartition() {
 	const { identity, isPending } = useIdentity();
-	return isPending ? ("pending" as const) : (identity ?? undefined);
+	const sourceGeneration = useIdentitySourceGeneration();
+	return isPending
+		? (`pending:${sourceGeneration}` as const)
+		: (identity ?? undefined);
+}
+
+function isPendingIdentityPartition(
+	partition: ReturnType<typeof useIdentityPartition>,
+) {
+	return typeof partition === "string";
 }
 
 // ============ Board Hooks ============
@@ -195,7 +208,7 @@ export function useResolveUser(userId: string | undefined | null) {
 			if (!userId) return null;
 			return resolveUser(userId);
 		},
-		enabled: !!userId && identityPartition !== "pending",
+		enabled: !!userId && !isPendingIdentityPartition(identityPartition),
 		staleTime: 5 * 60 * 1000,
 		gcTime: 10 * 60 * 1000,
 	});
@@ -209,7 +222,7 @@ export function useSearchUsers(query: string, boardId?: string) {
 	return useQuery<KanbanUser[]>({
 		queryKey: ["kanban", "users", "search", query, boardId, identityPartition],
 		queryFn: () => searchUsers(query, boardId),
-		enabled: identityPartition !== "pending",
+		enabled: !isPendingIdentityPartition(identityPartition),
 		staleTime: 30_000,
 	});
 }

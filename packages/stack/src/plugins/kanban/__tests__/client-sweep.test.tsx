@@ -646,7 +646,7 @@ describe("Kanban protected query keys", () => {
 		expect(queries.bySlug.key(board.slug, userA)).not.toEqual(
 			queries.bySlug.key(board.slug),
 		);
-		expect(queries.detail.key(board.id, "pending")).not.toEqual(
+		expect(queries.detail.key(board.id, "pending:1")).not.toEqual(
 			queries.detail.key(board.id),
 		);
 	});

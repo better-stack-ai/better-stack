@@ -21,6 +21,7 @@ import {
 	type CommentsBackendHooks,
 } from "../plugins/comments/api";
 import { commentsPermissions } from "../plugins/comments/permissions";
+import type { KanbanBackendHooks } from "../plugins/kanban/api";
 import type { StackIdentity } from "../shared/auth-types";
 import type { DatabaseDefinition, DBAdapter } from "@btst/db";
 
@@ -403,6 +404,16 @@ const commentsHooks: CommentsBackendHooks = {
 	},
 };
 void commentsHooks;
+
+const kanbanHooks: KanbanBackendHooks = {
+	onBoardsRead: (_boards, _query, context) => {
+		const limit: number | undefined = context.result.limit;
+		const offset: number | undefined = context.result.offset;
+		void limit;
+		void offset;
+	},
+};
+void kanbanHooks;
 
 const commentsAuthorization = defineAuthorization({
 	identity: z.object({ id: z.string(), role: z.enum(["user", "moderator"]) }),
