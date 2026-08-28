@@ -259,10 +259,9 @@ export async function runResourceQuery(
 /**
  * Executes a mutation declaration: fetch → error-check → unwrap.
  *
- * `headers` supports plugins whose public hooks take an explicit client
- * config (e.g. embeddable components) instead of resolving it from
- * `usePluginOverrides` — same as the `headers` parameter on
- * `createResourceQueryKeys`.
+ * `headers` forwards already-resolved request headers to the resource client,
+ * matching the `headers` parameter on `createResourceQueryKeys`. Header
+ * resolution belongs to the caller's runtime.
  */
 export async function runResourceMutation(
 	client: ResourceClient,

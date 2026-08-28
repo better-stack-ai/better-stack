@@ -253,7 +253,9 @@ matching `createClientAuth()` adapter and exact descriptors shown above.
 ## Embedding Comments
 
 The `CommentThread` component can be embedded anywhere — below a blog post, inside a Kanban task dialog, or on a custom page.
-It uses the `api` and `auth` values from the nearest `StackProvider`.
+Data requests use the resolved endpoint of the registered `comments` plugin;
+identity and sign-in behavior use the `auth` service from the nearest
+`StackProvider`.
 
 ```tsx
 import { CommentThread } from "@btst/stack/plugins/comments/client/components"
