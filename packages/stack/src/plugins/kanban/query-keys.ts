@@ -21,8 +21,8 @@ import type { createBoardSchema } from "./schemas";
  * Browser authorization can change without the URL changing. Protected
  * Kanban queries include this snapshot in their key so data authorized for
  * one identity is never reused by another identity. Pending keys include the
- * current auth-source generation, so a new resolver cannot reuse a prior
- * source's response. `undefined` is shared by anonymous browser requests and
+ * current identity-resolution generation, so a new resolver cannot reuse a
+ * prior resolution's response. `undefined` is shared by anonymous requests and
  * the explicitly trusted raw SSG prefetch path so anonymous hydration works.
  */
 export type KanbanIdentityPartition = StackIdentity | `pending:${number}`;

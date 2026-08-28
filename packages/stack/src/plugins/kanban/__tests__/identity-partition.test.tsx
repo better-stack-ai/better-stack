@@ -2,8 +2,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, it, vi } from "vitest";
-import { StackProvider, type StackAuthProvider } from "@btst/stack/context";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	StackProvider,
+	type StackAuthProvider,
+	useIdentity,
+} from "@btst/stack/context";
 import { useBoard } from "../client/hooks/kanban-hooks";
 
 (
@@ -93,5 +97,61 @@ describe("Kanban protected query identity partition", () => {
 		await waitFor(
 			() => fetchMock.mock.calls.length === 2 && boardName === "User B board",
 		);
+	});
+
+	it("stops using the resolved user's cache while a stable provider refetches", async () => {
+		fetchMock.mockImplementation(() =>
+			Promise.resolve(
+				responseFor(
+					fetchMock.mock.calls.length === 1 ? "User A board" : "User B board",
+				),
+			),
+		);
+		let finishIdentity: ((identity: { id: string }) => void) | undefined;
+		const auth = {
+			getIdentity: () =>
+				new Promise<{ id: string }>((resolve) => {
+					finishIdentity = resolve;
+				}),
+		} satisfies StackAuthProvider;
+		let boardName: string | undefined;
+		let identityPending = false;
+		let refetchIdentity: (() => Promise<void>) | undefined;
+
+		function Probe() {
+			const identityState = useIdentity();
+			refetchIdentity = identityState.refetch;
+			identityPending = identityState.isPending;
+			boardName = useBoard("board-1").data?.name;
+			return null;
+		}
+
+		await act(async () => {
+			root.render(
+				<StackProvider
+					basePath="/pages"
+					api={{ baseURL: "http://test.local", basePath: "/api" }}
+					auth={auth}
+					initialIdentity={{ id: "user-a" }}
+				>
+					<QueryClientProvider client={queryClient}>
+						<Probe />
+					</QueryClientProvider>
+				</StackProvider>,
+			);
+		});
+		await waitFor(() => boardName === "User A board");
+
+		let resolution: Promise<void> | undefined;
+		await act(async () => {
+			resolution = refetchIdentity?.();
+			await Promise.resolve();
+		});
+		expect(identityPending).toBe(true);
+		expect(boardName).not.toBe("User A board");
+		await waitFor(() => fetchMock.mock.calls.length >= 2);
+		finishIdentity?.({ id: "user-b" });
+		await act(async () => resolution);
+		await waitFor(() => boardName === "User B board");
 	});
 });
