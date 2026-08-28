@@ -180,6 +180,7 @@ describe("scaffold plan", () => {
 		expect(pagesLayoutFile?.content).not.toContain("Link: (");
 		expect(pagesLayoutFile?.content).not.toContain("apiBaseURL:");
 		expect(pagesLayoutFile?.content).not.toContain("apiBasePath:");
+		expect(pagesLayoutFile?.content).not.toContain("as never");
 		expect(plan.pagesLayoutPath).toBe("app/pages/layout.tsx");
 	});
 
@@ -389,6 +390,7 @@ describe("scaffold plan", () => {
 		// find the overrides at runtime.
 		expect(pagesLayoutFile?.content).toContain('"ai-chat":');
 		expect(pagesLayoutFile?.content).not.toContain("aiChat:");
+		expect(pagesLayoutFile?.content).toContain("} as never");
 	});
 
 	it("renders cms backend plugin with default article content type", async () => {

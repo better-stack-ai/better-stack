@@ -517,7 +517,7 @@ blog: blogClientPlugin({
     afterLoadPost: async (post, slug, context) => {
       analytics.track("Blog post loaded", { slug, path: context.path })
     },
-    onLoadError(error, context) {
+    onErrorLoad(error, context) {
       reportError(error, { path: context.path })
     },
   }

@@ -25,7 +25,7 @@ export default function BtstPagesLayout() {
 				overrides={
 					{
 {{{pagesLayoutOverrides}}}
-					}
+					}{{#if hasLegacyClientPlugins}} as never{{/if}}
 				}
 {{/if}}
 			>

@@ -3,9 +3,18 @@ import { createTanStackLayout, tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useCallback, useMemo } from "react";
+import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client";
+import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
+import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
+import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client";
+import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client";
+import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
-import { uploadAsset } from "@btst/stack/plugins/media/client";
+import {
+	uploadAsset,
+	type MediaPluginOverrides,
+} from "@btst/stack/plugins/media/client";
 import {
 	MediaPicker,
 	ImageInputField,
@@ -13,6 +22,7 @@ import {
 import { Button } from "../../components/ui/button";
 import { resolveUser, searchUsers } from "../../lib/mock-users";
 import { Outlet, createFileRoute } from "@tanstack/react-router";
+import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client";
 import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client";
 import { clientAuth } from "../../lib/authorization.ui";
 import { getInitialIdentity } from "../../lib/authorization.identity";
@@ -25,6 +35,17 @@ const getBaseURL = () =>
 	typeof window !== "undefined"
 		? import.meta.env.VITE_BASE_URL || window.location.origin
 		: process.env.BASE_URL || "http://localhost:3007";
+
+type PluginOverrides = {
+	"ui-builder": UIBuilderPluginOverrides;
+	blog: BlogPluginOverrides;
+	"ai-chat": AiChatPluginOverrides;
+	cms: CMSPluginOverrides;
+	"form-builder": FormBuilderPluginOverrides;
+	kanban: KanbanPluginOverrides;
+	comments: CommentsPluginOverrides;
+	media: MediaPluginOverrides;
+};
 
 const layout = createTanStackLayout({ getInitialIdentity });
 
@@ -82,56 +103,61 @@ function Layout() {
 				router={tanstackRouter()}
 				auth={clientAuth}
 				initialIdentity={initialIdentity}
-				overrides={{
-					// Only genuinely plugin-specific overrides remain — the shared
-					// Link/navigate/refresh and API wiring come from the top-level
-					// `router` and `api` props above.
-					"ui-builder": {
-						componentRegistry: defaultComponentRegistry,
-					},
-					blog: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						imageInputField: ImageInputField,
-						// Wire comments into the bottom of each blog post
-						postBottomSlot: (post) => (
-							<CommentThread
-								resourceId={post.slug}
-								resourceType="blog-post"
-								className="mt-8 pt-8 border-t"
-							/>
-						),
-					},
-					"ai-chat": {
-						mode: "authenticated",
-						uploadFile: uploadFileForChat,
-					},
-					cms: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						imageInputField: ImageInputField,
-					},
-					kanban: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						resolveUser,
-						searchUsers,
-						// Wire comments into task detail dialogs
-						taskDetailBottomSlot: (task) => (
-							<CommentThread resourceId={task.id} resourceType="kanban-task" />
-						),
-					},
-					comments: {
-						defaultCommentPageSize: 5,
-						resourceLinks: {
-							"blog-post": (slug) => `/pages/blog/${slug}`,
+				overrides={
+					{
+						// Only genuinely plugin-specific overrides remain — the shared
+						// Link/navigate/refresh and API wiring come from the top-level
+						// `router` and `api` props above.
+						"ui-builder": {
+							componentRegistry: defaultComponentRegistry,
 						},
-					},
-					media: {
-						uploadMode: "direct",
-						queryClient: routeContext.queryClient,
-					},
-				}}
+						blog: {
+							uploadImage,
+							imagePicker: ImagePicker,
+							imageInputField: ImageInputField,
+							// Wire comments into the bottom of each blog post
+							postBottomSlot: (post) => (
+								<CommentThread
+									resourceId={post.slug}
+									resourceType="blog-post"
+									className="mt-8 pt-8 border-t"
+								/>
+							),
+						},
+						"ai-chat": {
+							mode: "authenticated",
+							uploadFile: uploadFileForChat,
+						},
+						cms: {
+							uploadImage,
+							imagePicker: ImagePicker,
+							imageInputField: ImageInputField,
+						},
+						kanban: {
+							uploadImage,
+							imagePicker: ImagePicker,
+							resolveUser,
+							searchUsers,
+							// Wire comments into task detail dialogs
+							taskDetailBottomSlot: (task) => (
+								<CommentThread
+									resourceId={task.id}
+									resourceType="kanban-task"
+								/>
+							),
+						},
+						comments: {
+							defaultCommentPageSize: 5,
+							resourceLinks: {
+								"blog-post": (slug) => `/pages/blog/${slug}`,
+							},
+						},
+						media: {
+							uploadMode: "direct",
+							queryClient: routeContext.queryClient,
+						},
+					} satisfies Partial<PluginOverrides> as never
+				}
 			>
 				<Outlet />
 				{/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}
