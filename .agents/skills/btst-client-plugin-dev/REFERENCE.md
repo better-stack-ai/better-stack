@@ -5,7 +5,7 @@
 ```typescript
 import { isConnectionError } from "@btst/stack/plugins/client"
 
-function createMyLoader(id: string, config: MyClientConfig) {
+function createMyLoader(id: string, config: ResolvedMyClientConfig) {
   return async () => {
     if (typeof window === "undefined") {
       const { queryClient, apiBasePath, apiBaseURL, hooks, headers } = config
@@ -24,7 +24,12 @@ function createMyLoader(id: string, config: MyClientConfig) {
           await hooks.beforeLoad(id, context)
         }
 
-        const client = createApiClient<MyApiRouter>({ baseURL: apiBaseURL, basePath: apiBasePath })
+        const client = createApiClient<MyApiRouter>({
+          baseURL: apiBaseURL,
+          basePath: apiBasePath,
+          headers,
+          credentials: config.credentials,
+        })
         const queries = createMyQueryKeys(client, headers)
 
         await queryClient.prefetchQuery(queries.items.detail(id))
@@ -35,18 +40,18 @@ function createMyLoader(id: string, config: MyClientConfig) {
         }
 
         const queryState = queryClient.getQueryState(queries.items.detail(id).queryKey)
-        if (queryState?.error && hooks?.onLoadError) {
+        if (queryState?.error && hooks?.onErrorLoad) {
           const error = queryState.error instanceof Error
             ? queryState.error
             : new Error(String(queryState.error))
-          await hooks.onLoadError(error, context)
+          await hooks.onErrorLoad(error, context)
         }
       } catch (error) {
         if (isConnectionError(error)) {
           console.warn("[btst/my-plugin] route.loader() failed — no server at build time. Use myStack.api.myPlugin.prefetchForRoute() for SSG.")
         }
-        if (hooks?.onLoadError) {
-          await hooks.onLoadError(error as Error, context)
+        if (hooks?.onErrorLoad) {
+          await hooks.onErrorLoad(error as Error, context)
         }
         // Never re-throw — let React Query store errors for ErrorBoundary
       }
@@ -60,7 +65,7 @@ function createMyLoader(id: string, config: MyClientConfig) {
 ## Meta generator (createMyMeta)
 
 ```typescript
-function createMyMeta(id: string, config: MyClientConfig) {
+function createMyMeta(id: string, config: ResolvedMyClientConfig) {
   return () => {
     const { queryClient, apiBaseURL, apiBasePath, siteBaseURL, siteBasePath, seo } = config
 
@@ -132,18 +137,40 @@ import {
   defineRoute,
   defineRoutes,
 } from "@btst/stack/plugins/client"
+import type { ResolvedClientPluginRuntime } from "@btst/stack/plugins/client"
 import type { QueryClient } from "@tanstack/react-query"
 import { lazy } from "react"
 
 export interface MyClientConfig {
+  hooks?: MyClientHooks
+  seo?: MySeoConfig
+}
+
+interface ResolvedMyClientConfig extends MyClientConfig {
   queryClient: QueryClient
   apiBaseURL: string
   apiBasePath: string
   siteBaseURL: string
   siteBasePath: string
-  headers?: HeadersInit
-  hooks?: MyClientHooks
-  seo?: MySeoConfig
+  headers?: Headers
+  credentials?: RequestCredentials
+}
+
+function resolveMyClientConfig(
+  config: MyClientConfig,
+  runtime: ResolvedClientPluginRuntime<"my-plugin">,
+): ResolvedMyClientConfig {
+  return {
+    hooks: config.hooks,
+    seo: config.seo,
+    queryClient: runtime.queryClient,
+    apiBaseURL: runtime.api.baseURL,
+    apiBasePath: runtime.api.basePath,
+    siteBaseURL: runtime.site.baseURL,
+    siteBasePath: runtime.site.basePath,
+    headers: runtime.api.headers,
+    credentials: runtime.api.credentials,
+  }
 }
 
 const ListPage = lazy(() =>
@@ -153,9 +180,8 @@ const DetailPage = lazy(() =>
   import("./components/pages/detail-page").then(m => ({ default: m.DetailPageComponent }))
 )
 
-export const myClientPlugin = (config: MyClientConfig) =>
-  defineClientPlugin({
-    name: "my-plugin",
+function createResolvedMyPlugin(config: ResolvedMyClientConfig) {
+  return {
     routes: () =>
       defineRoutes({
         list: defineRoute("/my-plugin", {
@@ -169,9 +195,18 @@ export const myClientPlugin = (config: MyClientConfig) =>
           meta: ({ params }) => createDetailMeta(params.id, config)(),
         }),
       }),
+  }
+}
+
+export const myClientPlugin = (config: MyClientConfig = {}) =>
+  defineClientPlugin()({
+    id: "my-plugin",
+    resolve: (runtime) =>
+      createResolvedMyPlugin(resolveMyClientConfig(config, runtime)),
   })
 ```
 
-`MyClientConfig` is constructed in `getStackClient(queryClient)`. Do not
-derive it from `StackProvider` overrides: the plugin factory runs during SSR,
-while provider overrides are browser-runtime, plugin-specific customization.
+`MyClientConfig` contains only plugin-specific choices. API, site, QueryClient,
+headers, and credentials arrive through `resolve(runtime)` from the enclosing
+client stack. Construct the resolved config from an explicit allowlist so
+removed transport fields cannot survive through JavaScript or `any` callers.

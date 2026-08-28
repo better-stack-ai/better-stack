@@ -136,11 +136,6 @@ import { HomePageComponent } from "@/components/btst/blog/client/components/page
 import { PostPageComponent } from "@/components/btst/blog/client/components/pages/post-page"
 
 blogClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  siteBaseURL: "...",
-  siteBasePath: "/pages",
-  queryClient,
   pageComponents: {
     posts: HomePageComponent, // published posts list
     post: ({ params }) => <PostPageComponent slug={params.slug} />, // single post detail

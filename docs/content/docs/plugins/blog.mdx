@@ -68,7 +68,7 @@ for domain invariants, logging, and side effects.
 Register the blog client plugin in your `stack-client.tsx` file:
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { QueryClient } from "@tanstack/react-query"
 
@@ -80,7 +80,7 @@ export const getStackClient = (
   options?: { headers?: HeadersInit },
 ) => {
   const baseURL = getBaseURL()
-  return createStackClient({
+  return createClientStack({
     api: {
       baseURL,
       basePath: "/api/data",
@@ -104,7 +104,7 @@ export const getStackClient = (
 ```
 
 Shared API, site, query-client, and per-request header values belong on
-`createStackClient()`. `blogClientPlugin()` accepts only Blog-specific SEO,
+`createClientStack()`. `blogClientPlugin()` accepts only Blog-specific SEO,
 loader hooks, and page component choices.
 
 <Callout type="info">
@@ -126,32 +126,25 @@ This includes all necessary styles for the blog components, markdown rendering, 
 
 ### 4. Add the Context Provider
 
-Configure framework-wide router and API wiring on `StackProvider`; keep only Blog-specific values in `overrides`:
+Pass the resolved client stack to `StackProvider`, add the framework router,
+and keep only Blog-specific values in `overrides`:
 
 <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
   <Tab value="next-js">
     ```tsx title="app/pages/[[...all]]/layout.tsx"
     import { StackProvider } from "@btst/stack/context"
     import { nextRouter } from "@btst/stack/next"
-    import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
-
-    const getBaseURL = () => 
-      typeof window !== 'undefined' 
-        ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
-        : (process.env.BASE_URL || "http://localhost:3000")
-
-    type PluginOverrides = {
-      blog: BlogPluginOverrides
-    }
+    import { getStackClient } from "@/lib/stack-client"
+    import { getOrCreateQueryClient } from "@/lib/query-client"
 
     export default function Layout({ children }) {
-      const baseURL = getBaseURL()
+      const queryClient = getOrCreateQueryClient()
+      const clientStack = getStackClient(queryClient)
       
       return (
-        <StackProvider<PluginOverrides>
-          basePath="/pages"
+        <StackProvider
+          stack={clientStack}
           router={nextRouter()}
-          api={{ baseURL, basePath: "/api/data" }}
           overrides={{
             blog: {
               uploadImage: async (file) => {
@@ -174,25 +167,17 @@ Configure framework-wide router and API wiring on `StackProvider`; keep only Blo
     import { Outlet } from "react-router"
     import { StackProvider } from "@btst/stack/context"
     import { reactRouter } from "@btst/stack/react-router"
-    import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
-
-    const getBaseURL = () => 
-      typeof window !== 'undefined' 
-        ? (import.meta.env.VITE_BASE_URL || window.location.origin)
-        : (process.env.BASE_URL || "http://localhost:5173")
-
-    type PluginOverrides = {
-      blog: BlogPluginOverrides
-    }
+    import { getStackClient } from "~/lib/stack-client"
+    import { getOrCreateQueryClient } from "~/lib/query-client"
 
     export default function Layout() {
-      const baseURL = getBaseURL()
+      const queryClient = getOrCreateQueryClient()
+      const clientStack = getStackClient(queryClient)
       
       return (
-        <StackProvider<PluginOverrides>
-          basePath="/pages"
+        <StackProvider
+          stack={clientStack}
           router={reactRouter()}
-          api={{ baseURL, basePath: "/api/data" }}
           overrides={{
             blog: {
               uploadImage: async (file) => {
@@ -213,26 +198,17 @@ Configure framework-wide router and API wiring on `StackProvider`; keep only Blo
     ```tsx title="src/routes/pages/route.tsx"
     import { StackProvider } from "@btst/stack/context"
     import { tanstackRouter } from "@btst/stack/tanstack"
-    import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
+    import { getStackClient } from "@/lib/stack-client"
     import { Outlet } from "@tanstack/react-router"
 
-    const getBaseURL = () => 
-      typeof window !== 'undefined' 
-        ? (import.meta.env.VITE_BASE_URL || window.location.origin)
-        : (process.env.BASE_URL || "http://localhost:3000")
-
-    type PluginOverrides = {
-      blog: BlogPluginOverrides
-    }
-
     function Layout() {
-      const baseURL = getBaseURL()
+      const { queryClient } = Route.useRouteContext()
+      const clientStack = getStackClient(queryClient)
 
       return (
-        <StackProvider<PluginOverrides>
-          basePath="/pages"
+        <StackProvider
+          stack={clientStack}
           router={tanstackRouter()}
-          api={{ baseURL, basePath: "/api/data" }}
           overrides={{
             blog: {
               uploadImage: async (file) => {
@@ -483,7 +459,7 @@ The client plugin accepts optional Blog-specific SEO, loader hooks, and page com
 **Example usage:**
 
 ```tsx title="lib/stack-client.tsx"
-createStackClient({
+createClientStack({
   api: { baseURL, basePath: "/api/data", headers: options?.headers },
   site: { baseURL, basePath: "/pages" },
   queryClient,

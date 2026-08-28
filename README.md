@@ -78,20 +78,17 @@ export const { handler, dbSchema } = stack({
 ```
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { QueryClient } from "@tanstack/react-query"
 
 export const getStackClient = (queryClient: QueryClient) =>
-  createStackClient({
+  createClientStack({
+    api: { baseURL: "http://localhost:3000", basePath: "/api/data" },
+    site: { baseURL: "http://localhost:3000", basePath: "/pages" },
+    queryClient,
     plugins: {
-      blog: blogClientPlugin({
-        apiBaseURL: "http://localhost:3000",
-        apiBasePath: "/api/data",
-        siteBaseURL: "http://localhost:3000",
-        siteBasePath: "/pages",
-        queryClient,
-      })
+      blog: blogClientPlugin()
     }
   })
 ```

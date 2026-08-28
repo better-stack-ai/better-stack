@@ -885,7 +885,7 @@ await myStack.api.todos.prefetchForRoute("list", queryClient)
 Register client plugins with your stack client:
 
 ```typescript
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { todosClientPlugin } from "./plugins/todo/client/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { QueryClient } from "@tanstack/react-query"
@@ -895,7 +895,10 @@ export const getStackClient = (queryClient: QueryClient) => {
     ? window.location.origin 
     : "http://localhost:3000"
     
-  return createStackClient({
+  return createClientStack({
+    api: { baseURL, basePath: "/api/data" },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
       todos: todosClientPlugin({
         queryClient,
@@ -905,11 +908,6 @@ export const getStackClient = (queryClient: QueryClient) => {
         siteBasePath: "/pages",
       }),
       blog: blogClientPlugin({
-        queryClient,
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
         seo: {
           siteName: "My Blog",
           author: "Your Name",

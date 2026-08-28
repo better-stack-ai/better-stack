@@ -78,50 +78,34 @@ an isomorphic `getLoaderStackClient` resolver with its loader context. Existing
 synchronous factories remain valid; see the installation guide's
 request-aware examples when SSR authorization needs headers or session state.
 
-### 2. Move shared services to `StackProvider`
+### 2. Move shared runtime to the client stack
 
-Remove framework and API fields from every built-in plugin override. Configure
-them once at the top level:
+Remove shared runtime fields from every built-in plugin factory and override.
+Configure API, site, and QueryClient once when creating the client stack, then
+pass that resolved stack to the provider:
 
-```diff
-+ import { nextRouter } from "@btst/stack/next"
+```tsx
+const clientStack = createClientStack({
+  api: { baseURL, basePath: "/api/data", headers: requestHeaders },
+  site: { baseURL, basePath: "/pages" },
+  queryClient,
+  plugins: { blog: blogClientPlugin() },
+})
 
-  <StackProvider
-    basePath="/pages"
-+   router={nextRouter()}
-+   api={{ baseURL, basePath: "/api/data" }}
-+   auth={clientAuth}
-    overrides={{
-      blog: {
--       apiBaseURL: baseURL,
--       apiBasePath: "/api/data",
--       navigate: (path) => router.push(path),
--       refresh: () => router.refresh(),
--       Link,
--       Image,
-        uploadImage,
-      },
-    }}
-  >
+<StackProvider
+  stack={clientStack}
+  router={nextRouter()}
+  auth={clientAuth}
+  overrides={{ blog: { uploadImage } }}
+>
+  {children}
+</StackProvider>
 ```
 
 `Link`, `Image`, `navigate`, `refresh`, `apiBaseURL`, and
 `apiBasePath` were removed from built-in plugin override types. There is no
-per-plugin precedence or fallback in v3.
-
-Client plugin factories still require `apiBaseURL`, `apiBasePath`,
-`siteBaseURL`, `siteBasePath`, and `queryClient` where declared. Their SSR
-loaders and metadata run outside React Context:
-
-```tsx
-blogClientPlugin({
-  apiBaseURL: baseURL,
-  apiBasePath: "/api/data",
-  siteBaseURL: baseURL,
-  siteBasePath: "/pages",
-  queryClient,
-})
-```
+per-plugin precedence or fallback in v3. Resolved built-in plugins use the same
+runtime for SSR loaders, metadata, browser hooks, and mutations.
 
 ### 3. Replace render guards with `StackProvider.auth`
 
@@ -171,8 +155,8 @@ nearest provider:
   />
 ```
 
-Keep `headers` only in client plugin factory configuration when an SSR loader
-hook needs request headers; it is no longer a public component identity prop.
+Keep request `headers` on the top-level `createClientStack({ api })` runtime;
+they are no longer plugin options or public component identity props.
 The optional `loginHref` prop remains available for threads that need a
 resource-specific sign-in return URL and takes precedence over the provider's
 `loginPath`.
@@ -184,7 +168,7 @@ Parameterized `pageComponents` now receive the declarative route context
 
 ```diff
 blogClientPlugin({
-  // ...server-loader and metadata config
+  // ...Blog-specific SEO, hooks, and page choices
   pageComponents: {
     posts: MyCustomPostsPage,
 -   post: ({ slug }) => <MyCustomPostPage slug={slug} />,

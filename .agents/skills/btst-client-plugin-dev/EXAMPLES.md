@@ -35,23 +35,27 @@ export function MyPageComponent({ id }: { id: string }) {
 
 ```typescript
 import { useSuspenseQuery } from "@tanstack/react-query"
-import { usePluginOverrides, useStack } from "@btst/stack/context"
+import { useStack } from "@btst/stack/context"
 import { createMyQueryKeys } from "../../query-keys"
 import { createApiClient } from "@btst/stack/client"
 import type { MyApiRouter } from "../../api/plugin"
 import type { MyItem } from "../../api/types"
 
 function useMyItem(id: string) {
-  const { api } = useStack()
-  const { headers } = usePluginOverrides("my-plugin")
-  const client = createApiClient<MyApiRouter>({ baseURL: api?.baseURL, basePath: api?.basePath })
-  const queries = createMyQueryKeys(client, headers)
+  const { api, queryClient } = useStack()
+  const client = createApiClient<MyApiRouter>({
+    baseURL: api?.baseURL,
+    basePath: api?.basePath,
+    headers: api?.headers,
+    credentials: api?.credentials,
+  })
+  const queries = createMyQueryKeys(client, api?.headers)
 
   const { data, refetch, error, isFetching } = useSuspenseQuery({
     ...queries.items.detail(id),
     staleTime: 60_000,
     retry: false,
-  })
+  }, queryClient)
 
   // useSuspenseQuery only throws on initial fetch — manually re-throw for refetch errors
   if (error && !isFetching) throw error
@@ -87,7 +91,7 @@ hooks: {
     // item is the prefetched data
     analytics.track("item_viewed", { id })
   },
-  onLoadError: async (error, ctx) => {
+  onErrorLoad: async (error, ctx) => {
     Sentry.captureException(error, { extra: { path: ctx.path } })
   },
 }
