@@ -800,12 +800,10 @@ the matching content type and record before evaluating the same rule, so a
 stale or spoofed browser value cannot authorize a mutation.
 
 Client loader hooks remain available for framework-specific data preparation,
-redirect UX, analytics, and error reporting. They do not replace the backend
+analytics, and error reporting. They do not replace the backend
 operation boundary and should not duplicate the authorization rule:
 
 ```tsx title="lib/stack-client.tsx"
-import { redirect } from "next/navigation"
-
 uiBuilder: uiBuilderClientPlugin({
   hooks: {
     beforeLoadPageList: async (context) => {

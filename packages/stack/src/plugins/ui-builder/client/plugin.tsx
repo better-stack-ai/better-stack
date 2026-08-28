@@ -314,7 +314,9 @@ function createPageBuilderMeta(
  *       const session = await getSession(ctx.headers)
  *       if (!session?.user?.isAdmin) throw new Error("Admin access required")
  *     },
- *     onErrorLoad: () => redirect("/auth/sign-in"),
+ *     onErrorLoad: (error, context) => {
+ *       reportPageLoaderError(error, context)
+ *     },
  *   },
  * })
  * ```
