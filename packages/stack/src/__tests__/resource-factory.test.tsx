@@ -385,9 +385,10 @@ describe("createResource hooks", () => {
 	});
 
 	it("resolves a resource through its registration-bound provider runtime", async () => {
-		fetchMock.mockResolvedValue(
+		fetchMock.mockResolvedValueOnce(
 			jsonResponse({ items: [{ id: "1", name: "canonical" }] }),
 		);
+		fetchMock.mockResolvedValueOnce(jsonResponse({ id: "2", name: "created" }));
 		let canonicalItems!: typeof items;
 		const stack = createClientStack({
 			api: { baseURL: "http://test.local", basePath: "/api/data" },
@@ -417,22 +418,28 @@ describe("createResource hooks", () => {
 		});
 
 		let captured: any;
+		let create: any;
 		function Probe() {
 			captured = canonicalItems.items.detail.use(["1"]);
+			create = canonicalItems.items.create.use();
 			return null;
 		}
 		await act(async () => {
 			root.render(
 				<StackProvider stack={stack} router={{ refresh }}>
-					<QueryClientProvider client={stack.provider.queryClient}>
-						<Probe />
-					</QueryClientProvider>
+					<Probe />
 				</StackProvider>,
 			);
 		});
 		await waitFor(() => captured.isSuccess);
+		await act(async () => {
+			await create.mutateAsync({ name: "created" });
+		});
 
 		expect(captured.data).toEqual({ id: "1", name: "canonical" });
+		expect(
+			stack.provider.queryClient.getQueryData(["items", "detail", "2"]),
+		).toEqual({ id: "2", name: "created" });
 		const [requestUrl, requestInit] = fetchMock.mock.calls[0] ?? [];
 		const init = requestInit as RequestInit | undefined;
 		expect(String(requestUrl)).toContain(

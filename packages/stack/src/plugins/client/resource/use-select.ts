@@ -89,19 +89,22 @@ export function createUseSelect(
 		}
 
 		const listArgs = config.searchArgs(debouncedSearch);
-		const listQuery = useQuery<unknown, Error>({
-			queryKey: buildQueryKey(resourceName, listName, listDef, listArgs),
-			queryFn: () =>
-				runResourceQuery(
-					context.client,
-					listDef,
-					listArgs,
-					undefined,
-					context.headers,
-				),
-			...SHARED_QUERY_CONFIG,
-			enabled,
-		});
+		const listQuery = useQuery<unknown, Error>(
+			{
+				queryKey: buildQueryKey(resourceName, listName, listDef, listArgs),
+				queryFn: () =>
+					runResourceQuery(
+						context.client,
+						listDef,
+						listArgs,
+						undefined,
+						context.headers,
+					),
+				...SHARED_QUERY_CONFIG,
+				enabled,
+			},
+			context.queryClient,
+		);
 
 		const items = (listQuery.data as TItem[] | null | undefined) ?? [];
 
@@ -126,30 +129,33 @@ export function createUseSelect(
 				? values.filter((value) => !fetchedValues.has(value))
 				: [];
 
-		const preloadQueries = useQueries({
-			queries: missingValues.map((value) => {
-				const args = (
-					config.preload as NonNullable<typeof config.preload>
-				).args(value);
-				return {
-					queryKey: buildQueryKey(
-						resourceName,
-						preloadName,
-						preloadDef as NonNullable<typeof preloadDef>,
-						args,
-					),
-					queryFn: () =>
-						runResourceQuery(
-							context.client,
+		const preloadQueries = useQueries(
+			{
+				queries: missingValues.map((value) => {
+					const args = (
+						config.preload as NonNullable<typeof config.preload>
+					).args(value);
+					return {
+						queryKey: buildQueryKey(
+							resourceName,
+							preloadName,
 							preloadDef as NonNullable<typeof preloadDef>,
 							args,
-							undefined,
-							context.headers,
 						),
-					...SHARED_QUERY_CONFIG,
-				};
-			}),
-		});
+						queryFn: () =>
+							runResourceQuery(
+								context.client,
+								preloadDef as NonNullable<typeof preloadDef>,
+								args,
+								undefined,
+								context.headers,
+							),
+						...SHARED_QUERY_CONFIG,
+					};
+				}),
+			},
+			context.queryClient,
+		);
 
 		const preloadedItems = preloadQueries
 			.map((query) => query.data as TItem | null | undefined)

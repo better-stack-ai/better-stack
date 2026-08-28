@@ -45,7 +45,11 @@ import {
 	type ResourceQueryDef,
 	type ResourcesDeclaration,
 } from "./queries";
-import { useResourceContext, useResourceMutationForDef } from "./internal";
+import {
+	useResourceContext,
+	useResourceMutationForDef,
+	type ResourceContext,
+} from "./internal";
 import {
 	createUseForm,
 	type ResourceFormConfig,
@@ -145,8 +149,7 @@ function createQueryHooks(
 	queryName: string,
 	def: ResourceQueryDef<any, any>,
 ) {
-	const useQueryConfig = (args: readonly unknown[]) => {
-		const context = useResourceContext(plugin);
+	const queryConfig = (args: readonly unknown[], context: ResourceContext) => {
 		return {
 			queryKey: buildQueryKey(resourceName, queryName, def, args),
 			queryFn: (queryContext?: { pageParam?: unknown }) =>
@@ -178,13 +181,23 @@ function createQueryHooks(
 
 	return {
 		use(args: readonly unknown[] = [], options?: ResourceQueryOptions) {
-			return useQuery({
-				...useQueryConfig(args),
-				...(options?.enabled !== undefined ? { enabled: options.enabled } : {}),
-			});
+			const context = useResourceContext(plugin);
+			return useQuery(
+				{
+					...queryConfig(args, context),
+					...(options?.enabled !== undefined
+						? { enabled: options.enabled }
+						: {}),
+				},
+				context.queryClient,
+			);
 		},
 		useSuspense(args: readonly unknown[] = []) {
-			const result = useSuspenseQuery(useQueryConfig(args));
+			const context = useResourceContext(plugin);
+			const result = useSuspenseQuery(
+				queryConfig(args, context),
+				context.queryClient,
+			);
 			// useSuspenseQuery only throws on initial fetch — manually re-throw
 			// refetch errors so Error Boundaries catch them
 			if (result.error && !result.isFetching) {
@@ -193,17 +206,27 @@ function createQueryHooks(
 			return result;
 		},
 		useInfinite(args: readonly unknown[] = [], options?: ResourceQueryOptions) {
-			return useInfiniteQuery({
-				...useQueryConfig(args),
-				...infiniteExtras(args),
-				...(options?.enabled !== undefined ? { enabled: options.enabled } : {}),
-			});
+			const context = useResourceContext(plugin);
+			return useInfiniteQuery(
+				{
+					...queryConfig(args, context),
+					...infiniteExtras(args),
+					...(options?.enabled !== undefined
+						? { enabled: options.enabled }
+						: {}),
+				},
+				context.queryClient,
+			);
 		},
 		useSuspenseInfinite(args: readonly unknown[] = []) {
-			const result = useSuspenseInfiniteQuery({
-				...useQueryConfig(args),
-				...infiniteExtras(args),
-			});
+			const context = useResourceContext(plugin);
+			const result = useSuspenseInfiniteQuery(
+				{
+					...queryConfig(args, context),
+					...infiniteExtras(args),
+				},
+				context.queryClient,
+			);
 			if (result.error && !result.isFetching) {
 				throw result.error;
 			}
