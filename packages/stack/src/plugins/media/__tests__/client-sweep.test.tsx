@@ -258,6 +258,30 @@ describe("Media library permissions", () => {
 		expect(container.querySelector('[title="Delete"]')).toBeTruthy();
 	});
 
+	it("loads and renders a nested tree from one all-folders query", async () => {
+		const childFolder: SerializedFolder = {
+			id: "folder-child",
+			name: "Nested photos",
+			parentId: folder.id,
+			createdAt: new Date("2024-01-02").toISOString(),
+		};
+		hooks.useFolders.mockReturnValue({ data: [folder, childFolder] });
+
+		await renderLibrary();
+		expect(hooks.useFolders).toHaveBeenCalledTimes(1);
+		expect(hooks.useFolders).toHaveBeenCalledWith();
+		expect(document.body.textContent).not.toContain(childFolder.name);
+
+		const rootFolderButton = Array.from(
+			container.querySelectorAll("button"),
+		).find((button) => button.textContent?.includes(folder.name));
+		hooks.useFolders.mockClear();
+		await act(async () => rootFolderButton?.click());
+
+		expect(document.body.textContent).toContain(childFolder.name);
+		expect(hooks.useFolders).toHaveBeenCalledTimes(1);
+	});
+
 	it("hides asset and folder writes while leaving browsing available", async () => {
 		const can = vi.fn(
 			({ action }: { resource: string; action: string }) => action === "read",
@@ -335,7 +359,6 @@ describe("Media library permissions", () => {
 			id: "folder-child",
 			name: "Nested photos",
 			parentId: folder.id,
-			tenantId: "tenant-a",
 			createdAt: new Date("2024-01-02").toISOString(),
 		};
 		hooks.useFolders.mockReturnValue({ data: [folder, childFolder] });
@@ -367,7 +390,6 @@ describe("Media library permissions", () => {
 		expect(seen).toContainEqual({
 			folderId: childFolder.id,
 			parentId: folder.id,
-			tenantId: "tenant-a",
 		});
 		expect(document.body.textContent).not.toContain("Delete folder");
 	});

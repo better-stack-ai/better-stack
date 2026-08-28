@@ -88,7 +88,7 @@ function createMediaPrefetchForRoute(adapter: Adapter): MediaPrefetchForRoute {
 	return async (_key, queryClient) => {
 		const [assets, folders] = await Promise.all([
 			listAssets(adapter, { limit: 40 }),
-			listFolders(adapter, { parentId: null }),
+			listFolders(adapter),
 		]);
 		queryClient.setQueryData(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }), {
 			pages: [
@@ -103,7 +103,7 @@ function createMediaPrefetchForRoute(adapter: Adapter): MediaPrefetchForRoute {
 			pageParams: [0],
 		});
 		queryClient.setQueryData(
-			MEDIA_QUERY_KEYS.foldersList(null),
+			MEDIA_QUERY_KEYS.foldersList(),
 			folders.map((folder) => {
 				const { tenantId: _tenantId, ...safe } = serializeFolder(folder);
 				return safe;

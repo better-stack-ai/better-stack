@@ -18,6 +18,9 @@ import { createCommentsQueryKeys } from "../plugins/comments/query-keys";
 import { aiChatClientPlugin } from "../plugins/ai-chat/client";
 import type { AiChatApiRouter } from "../plugins/ai-chat/api";
 import { createAiChatQueryKeys } from "../plugins/ai-chat/query-keys";
+import { mediaClientPlugin } from "../plugins/media/client";
+import type { MediaApiRouter } from "../plugins/media/api";
+import { createMediaQueryKeys } from "../plugins/media/query-keys";
 
 const API_BASE_URL = "http://localhost:3000";
 const API_BASE_PATH = "/api/data";
@@ -323,6 +326,52 @@ describe("client plugin SSR loaders", () => {
 		expect(errorArg).toBeInstanceOf(Error);
 		expect((errorArg as Error).message).toBe(apiErrorMessage);
 		expect(contextArg).toMatchObject({ currentUserId });
+	});
+
+	it("media library loader prefetches the complete folder tree in its identity key", async () => {
+		const queryClient = new QueryClient();
+		const identity = { id: "media-user" };
+		const requestedUrls: string[] = [];
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+			const url =
+				typeof input === "string"
+					? input
+					: input instanceof URL
+						? input.href
+						: input.url;
+			requestedUrls.push(url);
+			return new Response(
+				JSON.stringify(
+					url.includes("/media/assets") ? { items: [], total: 0 } : [],
+				),
+				{ status: 200, headers: { "content-type": "application/json" } },
+			);
+		});
+		const plugin = mediaClientPlugin({
+			apiBaseURL: API_BASE_URL,
+			apiBasePath: API_BASE_PATH,
+			siteBaseURL: SITE_BASE_URL,
+			siteBasePath: SITE_BASE_PATH,
+			queryClient,
+			headers: TEST_HEADERS,
+			identityPartition: identity,
+		});
+
+		await plugin.routes().library().loader?.();
+
+		const client = createApiClient<MediaApiRouter>({
+			baseURL: API_BASE_URL,
+			basePath: API_BASE_PATH,
+		});
+		const foldersQuery = createMediaQueryKeys(
+			client,
+			TEST_HEADERS,
+		).mediaFolders.list(undefined, identity);
+		expect(queryClient.getQueryData(foldersQuery.queryKey)).toEqual([]);
+		const folderUrl = new URL(
+			requestedUrls.find((url) => url.includes("/media/folders")) ?? "",
+		);
+		expect(folderUrl.searchParams.has("parentId")).toBe(false);
 	});
 
 	it("AI Chat list loader seeds a sanitized query error when a hook throws", async () => {

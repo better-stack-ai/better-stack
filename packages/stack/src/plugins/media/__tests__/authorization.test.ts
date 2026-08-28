@@ -1229,6 +1229,10 @@ describe("Media operation-first authorization", () => {
 	it("keeps trusted raw helpers out of request/internal namespaces and raw prefetch tenant-free", async () => {
 		const backend = makeBackend({ auth: createAuth(), tenantId: "tenant-a" });
 		const folder = await seedFolder(backend);
+		const child = await seedFolder(backend, {
+			name: "Nested",
+			parentId: folder.id,
+		});
 		await seedAsset(backend, { folderId: folder.id });
 		expect("prefetchForRoute" in backend.internal.media).toBe(false);
 		expect("getAssetById" in backend.internal.media).toBe(false);
@@ -1242,9 +1246,18 @@ describe("Media operation-first authorization", () => {
 			MEDIA_QUERY_KEYS.assetsList({ limit: 40 }),
 		);
 		expect(JSON.stringify(cached)).not.toContain("tenant-a");
+		expect(queryClient.getQueryData(MEDIA_QUERY_KEYS.foldersList())).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ id: folder.id }),
+				expect.objectContaining({ id: child.id, parentId: folder.id }),
+			]),
+		);
+		expect(
+			JSON.stringify(queryClient.getQueryData(MEDIA_QUERY_KEYS.foldersList())),
+		).not.toContain("tenant-a");
 		expect(
 			queryClient.getQueryData(MEDIA_QUERY_KEYS.foldersList(null)),
-		).toEqual([expect.not.objectContaining({ tenantId: expect.anything() })]);
+		).toBeUndefined();
 	});
 
 	it("allows cold anonymous reads only through explicit library and asset public rules", async () => {

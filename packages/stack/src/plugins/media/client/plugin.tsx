@@ -133,13 +133,16 @@ function createMediaLibraryLoader(config: MediaClientConfig) {
 					{ limit: 40 },
 					identityPartition,
 				);
-				const folderQuery = queries.mediaFolders.list(null, identityPartition);
+				const folderQuery = queries.mediaFolders.list(
+					undefined,
+					identityPartition,
+				);
 				await queryClient.prefetchInfiniteQuery({
 					...assetQuery,
 					initialPageParam: 0,
 				});
 
-				// Prefetch root-level folders for the sidebar tree
+				// Prefetch the complete scoped folder tree in the exact browser key.
 				await queryClient.prefetchQuery(folderQuery);
 
 				if (hooks?.afterLoadLibrary) {

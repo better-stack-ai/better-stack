@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
 	useFolders,
 	useDeleteFolder,
@@ -23,14 +23,25 @@ export function FolderTree({
 	const notify = useNotify();
 	const { data: foldersRaw = [] } = useFolders();
 	const folders = foldersRaw as import("../../../types").SerializedFolder[];
-	const rootFolders = folders.filter((folder) => !folder.parentId);
-	const selectedFolder = folders.find((folder) => folder.id === selectedId);
+	const { foldersById, foldersByParent } = useMemo(() => {
+		const byId = new Map<string, SerializedFolder>();
+		const byParent = new Map<string | null, SerializedFolder[]>();
+		for (const folder of folders) {
+			byId.set(folder.id, folder);
+			const parentId = folder.parentId ?? null;
+			const siblings = byParent.get(parentId) ?? [];
+			siblings.push(folder);
+			byParent.set(parentId, siblings);
+		}
+		return { foldersById: byId, foldersByParent: byParent };
+	}, [folders]);
+	const rootFolders = foldersByParent.get(null) ?? [];
+	const selectedFolder = selectedId ? foldersById.get(selectedId) : undefined;
 	const [newFolderName, setNewFolderName] = useState("");
 	const [isCreating, setIsCreating] = useState(false);
 	const { mutateAsync: deleteFolder } = useDeleteFolder();
 	const createPermission = mediaPermissions.folder.create({
 		...(selectedId ? { parentId: selectedId } : {}),
-		...(selectedFolder?.tenantId ? { tenantId: selectedFolder.tenantId } : {}),
 	});
 	const createFolderForm = useCreateFolderForm({
 		parentId: selectedId ?? undefined,
@@ -150,7 +161,7 @@ export function FolderTree({
 					<FolderTreeItem
 						key={folder.id}
 						folder={folder}
-						folders={folders}
+						foldersByParent={foldersByParent}
 						selectedId={selectedId}
 						onSelect={onSelect}
 					/>
@@ -164,9 +175,6 @@ export function FolderTree({
 						...(selectedFolder.parentId
 							? { parentId: selectedFolder.parentId }
 							: {}),
-						...(selectedFolder.tenantId
-							? { tenantId: selectedFolder.tenantId }
-							: {}),
 					})}
 					legacyPermission={{
 						resource: "media:folder",
@@ -175,9 +183,6 @@ export function FolderTree({
 							id: selectedId,
 							...(selectedFolder.parentId
 								? { parentId: selectedFolder.parentId }
-								: {}),
-							...(selectedFolder.tenantId
-								? { tenantId: selectedFolder.tenantId }
 								: {}),
 						},
 					}}
@@ -200,19 +205,19 @@ export function FolderTree({
 
 export function FolderTreeItem({
 	folder,
-	folders,
+	foldersByParent,
 	selectedId,
 	onSelect,
 	depth = 0,
 }: {
 	folder: SerializedFolder;
-	folders: SerializedFolder[];
+	foldersByParent: ReadonlyMap<string | null, readonly SerializedFolder[]>;
 	selectedId: string | null;
 	onSelect: (id: string | null) => void;
 	depth?: number;
 }) {
 	const [expanded, setExpanded] = useState(false);
-	const children = folders.filter((child) => child.parentId === folder.id);
+	const children = foldersByParent.get(folder.id) ?? [];
 
 	return (
 		<div>
@@ -250,7 +255,7 @@ export function FolderTreeItem({
 					<FolderTreeItem
 						key={child.id}
 						folder={child}
-						folders={folders}
+						foldersByParent={foldersByParent}
 						selectedId={selectedId}
 						onSelect={onSelect}
 						depth={depth + 1}

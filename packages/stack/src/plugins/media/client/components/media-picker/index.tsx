@@ -66,7 +66,6 @@ function AssetSelectionAccess({
 				assetId: asset.id,
 				...(asset.folderId ? { folderId: asset.folderId } : {}),
 				mimeType: asset.mimeType,
-				...(asset.tenantId ? { tenantId: asset.tenantId } : {}),
 			})}
 			legacyPermission={{
 				resource: "media:asset",
