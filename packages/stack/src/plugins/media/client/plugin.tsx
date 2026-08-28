@@ -149,12 +149,14 @@ function createMediaLibraryLoader(config: MediaClientConfig) {
 					await hooks.afterLoadLibrary(context);
 				}
 
-				const queryState = queryClient.getQueryState(assetQuery.queryKey);
-				if (queryState?.error && hooks?.onLoadError) {
+				const queryError =
+					queryClient.getQueryState(assetQuery.queryKey)?.error ??
+					queryClient.getQueryState(folderQuery.queryKey)?.error;
+				if (queryError && hooks?.onLoadError) {
 					const error =
-						queryState.error instanceof Error
-							? queryState.error
-							: new Error(String(queryState.error));
+						queryError instanceof Error
+							? queryError
+							: new Error(String(queryError));
 					await hooks.onLoadError(error, context);
 				}
 			} catch (error) {

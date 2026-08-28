@@ -374,6 +374,44 @@ describe("client plugin SSR loaders", () => {
 		expect(folderUrl.searchParams.has("parentId")).toBe(false);
 	});
 
+	it("media library loader reports a stored folder-prefetch error", async () => {
+		const queryClient = new QueryClient();
+		const onLoadError = vi.fn();
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+			const url =
+				typeof input === "string"
+					? input
+					: input instanceof URL
+						? input.href
+						: input.url;
+			return url.includes("/media/folders")
+				? new Response(JSON.stringify({ message: "folders unavailable" }), {
+						status: 500,
+						headers: { "content-type": "application/json" },
+					})
+				: new Response(JSON.stringify({ items: [], total: 0 }), {
+						status: 200,
+						headers: { "content-type": "application/json" },
+					});
+		});
+		const plugin = mediaClientPlugin({
+			apiBaseURL: API_BASE_URL,
+			apiBasePath: API_BASE_PATH,
+			siteBaseURL: SITE_BASE_URL,
+			siteBasePath: SITE_BASE_PATH,
+			queryClient,
+			headers: TEST_HEADERS,
+			hooks: { onLoadError },
+		});
+
+		await plugin.routes().library().loader?.();
+
+		expect(onLoadError).toHaveBeenCalledTimes(1);
+		const [errorArg] = onLoadError.mock.calls[0] ?? [];
+		expect(errorArg).toBeInstanceOf(Error);
+		expect((errorArg as Error).message).toBe("folders unavailable");
+	});
+
 	it("AI Chat list loader seeds a sanitized query error when a hook throws", async () => {
 		const queryClient = new QueryClient();
 		const plugin = aiChatClientPlugin({
