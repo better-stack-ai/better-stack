@@ -232,7 +232,7 @@ function recordLifecycleProperties(
 ) {
 	for (const name of names) {
 		const propertyPattern = new RegExp(
-			`(?:^|[,{])\\s*(?:async\\s+)?\\*?\\s*${escapeRegExp(name)}\\b(?=\\s*(?:\\??:|\\(|,|\\}))`,
+			`(?:^|[,{])\\s*(?:async\\s+)?\\*?\\s*(?:${escapeRegExp(name)}\\b|["']${escapeRegExp(name)}["'])(?=\\s*(?:\\??:|\\(|,|\\}))`,
 			"gm",
 		);
 		for (const match of objectSource.matchAll(propertyPattern)) {
@@ -358,7 +358,7 @@ function checkFactoryCalls(
 		if (!object) continue;
 		if (
 			kind === "backend" &&
-			/(?:^|[,{])\s*(?:async\s+)?\*?\s*on(?:Before|After|Error)[A-Z][A-Za-z0-9]*\s*(?::|\()/.test(
+			/(?:^|[,{])\s*(?:async\s+)?\*?\s*(?:on(?:Before|After|Error)[A-Z][A-Za-z0-9]*\b|["']on(?:Before|After|Error)[A-Z][A-Za-z0-9]*["'])\s*(?::|\()/.test(
 				object.topLevel,
 			)
 		) {
@@ -370,16 +370,28 @@ function checkFactoryCalls(
 			});
 		}
 		if (kind === "backend" && contextualLifecycleNames.length > 0) {
-			const callSource = source.slice(cursor, object.end + 1);
-			recordLifecycleProperties(
-				failures,
-				file,
-				source,
-				callSource,
-				cursor,
-				factory,
-				contextualLifecycleNames,
-			);
+			const inlineHooks = object.topLevel.match(/(?:^|[,{])\s*hooks\s*:/);
+			if (inlineHooks?.index !== undefined) {
+				const openIndex = skipTrivia(
+					source,
+					cursor + inlineHooks.index + inlineHooks[0].length,
+				);
+				const hooksObject =
+					source[openIndex] === "{"
+						? readTopLevelObject(source, openIndex)
+						: undefined;
+				if (hooksObject) {
+					recordLifecycleProperties(
+						failures,
+						file,
+						source,
+						hooksObject.topLevel,
+						openIndex,
+						factory,
+						contextualLifecycleNames,
+					);
+				}
+			}
 
 			const hooksReference = object.topLevel
 				.match(/\bhooks\s*:\s*([A-Za-z_$][\w$]*)|\b(hooks)\s*(?=[,}])/)
@@ -399,7 +411,7 @@ function checkFactoryCalls(
 						failures,
 						file,
 						source,
-						source.slice(openIndex, hooksObject.end + 1),
+						hooksObject.topLevel,
 						openIndex,
 						factory,
 						contextualLifecycleNames,
@@ -409,7 +421,7 @@ function checkFactoryCalls(
 		}
 		if (
 			kind === "client" &&
-			/(?:^|[,{])\s*(?:apiBaseURL|apiBasePath|siteBaseURL|siteBasePath|queryClient|headers|credentials)\s*:/.test(
+			/(?:^|[,{])\s*(?:(?:apiBaseURL|apiBasePath|siteBaseURL|siteBasePath|queryClient|headers|credentials)\b|["'](?:apiBaseURL|apiBasePath|siteBaseURL|siteBasePath|queryClient|headers|credentials)["'])\s*(?::|,|})/.test(
 				object.topLevel,
 			)
 		) {
@@ -445,7 +457,7 @@ function checkTypedHookObjects(
 			failures,
 			file,
 			source,
-			source.slice(openIndex, object.end + 1),
+			object.topLevel,
 			openIndex,
 			factory,
 			names,
