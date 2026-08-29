@@ -180,8 +180,8 @@ test -f "app/(static)/pages/layout.tsx"
 test -f "app/pages/client-layout.tsx"
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("import { createBackendStack } from \"@btst/stack/api\"")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("mediaBackendPlugin({ storageAdapter: localAdapter() })")?0:1)'
-node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.tsx","utf8");process.exit(s.includes("createClientStack")&&!s.includes("getStackClientForRequest")?0:1)'
-node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.server.ts","utf8");process.exit(s.includes("getStackClientForRequest")&&s.includes("resolveTrustedClientOrigins")&&s.includes("filterCredentialForwardingHeaders")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.tsx","utf8");process.exit(s.includes("createClientStack")&&s.includes("NEXT_PUBLIC_BASE_URL")&&!s.includes("getStackClientForRequest")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.server.ts","utf8");process.exit(s.includes("getStackClientForRequest")&&s.includes("resolveTrustedClientOrigins")&&s.includes("filterCredentialForwardingHeaders")&&s.includes("NEXT_PUBLIC_BASE_URL")?0:1)'
 node -e 'const fs=require("fs");const request=fs.readFileSync("app/(request)/pages/layout.tsx","utf8"),staticLayout=fs.readFileSync("app/(static)/pages/layout.tsx","utf8"),client=fs.readFileSync("app/pages/client-layout.tsx","utf8");process.exit(request.includes("getServerClientOriginsFromHeaders(await headers())")&&staticLayout.includes("getServerClientOrigins()")&&!staticLayout.includes("next/headers")&&client.includes("getStackClient(queryClient, clientOrigins)")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");process.exit(s.includes("@btst/stack/plugins/ui-builder/css")?0:1)'
 node -e 'const fs=require("fs"),path=require("path");const roots=["app","lib","package.json"];const retired=["@btst","better-auth-ui"].join("/");const read=(p)=>fs.statSync(p).isDirectory()?fs.readdirSync(p).flatMap((n)=>read(path.join(p,n))):[fs.readFileSync(p,"utf8")];process.exit(roots.flatMap(read).some((s)=>s.includes(retired))?1:0)'
@@ -232,7 +232,7 @@ step "Verifying compile on the compatible memory scaffold"
 success "Keeping generated BTST CSS imports from the selected plugins"
 
 step "Compiling fixture project"
-BASE_URL=http://localhost:3000 npm run build
+NEXT_PUBLIC_BASE_URL=http://localhost:3000 npm run build
 success "Fixture build succeeded"
 
 TEST_PASSED=true

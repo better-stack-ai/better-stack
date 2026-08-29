@@ -263,11 +263,16 @@ export function getStackClient(
 function getSiteOrigin(serverOrigin?: string) {
   if (serverOrigin) return serverOrigin
   if (typeof window !== "undefined") {
-    return process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+    return (
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      process.env.NEXT_PUBLIC_BASE_URL ||
+      window.location.origin
+    )
   }
   return (
     process.env.BTST_SITE_URL ||
     process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_BASE_URL ||
     process.env.BASE_URL ||
     "http://localhost:3000"
   )
@@ -276,11 +281,16 @@ function getSiteOrigin(serverOrigin?: string) {
 function getApiOrigin(serverOrigin: string | undefined, siteOrigin: string) {
   if (serverOrigin) return serverOrigin
   if (typeof window !== "undefined") {
-    return process.env.NEXT_PUBLIC_API_URL || siteOrigin
+    return (
+      process.env.NEXT_PUBLIC_API_URL ||
+      process.env.NEXT_PUBLIC_BASE_URL ||
+      siteOrigin
+    )
   }
   return (
     process.env.BTST_API_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_BASE_URL ||
     process.env.BASE_URL ||
     siteOrigin
   )
@@ -324,6 +334,7 @@ function configuredApiOrigin() {
   return (
     process.env.BTST_API_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_BASE_URL ||
     process.env.BASE_URL
   )
 }
@@ -332,6 +343,7 @@ function configuredSiteOrigin() {
   return (
     process.env.BTST_SITE_URL ||
     process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_BASE_URL ||
     process.env.BASE_URL
   )
 }
@@ -352,8 +364,8 @@ export function getServerClientOrigins(requestOrigin?: string) {
     configuredSiteOrigin: configuredSiteOrigin(),
     requestOrigin,
     isProduction: process.env.NODE_ENV === "production",
-    apiLabel: "BTST_API_URL, NEXT_PUBLIC_API_URL, or BASE_URL",
-    siteLabel: "BTST_SITE_URL, NEXT_PUBLIC_SITE_URL, or BASE_URL",
+    apiLabel: "BTST_API_URL, NEXT_PUBLIC_API_URL, NEXT_PUBLIC_BASE_URL, or BASE_URL",
+    siteLabel: "BTST_SITE_URL, NEXT_PUBLIC_SITE_URL, NEXT_PUBLIC_BASE_URL, or BASE_URL",
   })
 }
 
@@ -377,6 +389,9 @@ export function getStackClientForRequest(
 
 Generated Vite helpers use the corresponding `VITE_PUBLIC_*` variables. Never
 serialize request headers or a resolved server stack into a provider.
+`NEXT_PUBLIC_BASE_URL` (or `VITE_PUBLIC_BASE_URL`) remains a narrow
+migration-compatible same-origin fallback; new deployments should prefer the
+separate site/API variables above.
 
 **Shared client stack fields:**
 

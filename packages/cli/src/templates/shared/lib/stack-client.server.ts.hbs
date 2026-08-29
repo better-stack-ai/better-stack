@@ -16,6 +16,7 @@ function configuredApiOrigin() {
 	return (
 		process.env.BTST_API_URL ||
 		{{{browserApiURLExpression}}} ||
+		process.env.{{legacyPublicBaseURLVar}} ||
 		process.env.BASE_URL
 	)
 }
@@ -24,6 +25,7 @@ function configuredSiteOrigin() {
 	return (
 		process.env.BTST_SITE_URL ||
 		{{{browserSiteURLExpression}}} ||
+		process.env.{{legacyPublicBaseURLVar}} ||
 		process.env.BASE_URL
 	)
 }
@@ -44,8 +46,8 @@ export function getServerClientOrigins(requestOrigin?: string) {
 		configuredSiteOrigin: configuredSiteOrigin(),
 		requestOrigin,
 		isProduction: process.env.NODE_ENV === "production",
-		apiLabel: "BTST_API_URL, {{{publicApiURLVar}}}, or BASE_URL",
-		siteLabel: "BTST_SITE_URL, {{{publicSiteURLVar}}}, or BASE_URL",
+		apiLabel: "BTST_API_URL, {{{publicApiURLVar}}}, {{{legacyPublicBaseURLVar}}}, or BASE_URL",
+		siteLabel: "BTST_SITE_URL, {{{publicSiteURLVar}}}, {{{legacyPublicBaseURLVar}}}, or BASE_URL",
 	})
 }
 

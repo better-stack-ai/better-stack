@@ -479,12 +479,14 @@ In order to use BTST, your application must meet the following requirements:
       const siteOrigin =
         options?.siteOrigin ||
         process.env.NEXT_PUBLIC_SITE_URL ||
+        process.env.NEXT_PUBLIC_BASE_URL ||
         (typeof window === "undefined"
           ? process.env.BASE_URL || "http://localhost:3000"
           : window.location.origin)
       const apiOrigin =
         options?.apiOrigin ||
         process.env.NEXT_PUBLIC_API_URL ||
+        process.env.NEXT_PUBLIC_BASE_URL ||
         siteOrigin
       const crossOriginApiEndpoint =
         apiOrigin === siteOrigin
@@ -534,6 +536,11 @@ In order to use BTST, your application must meet the following requirements:
       `credentials: "include"` only when the trusted API and site origins differ.
       A managed backend that uses cookies must allow the public site origin and
       credentialed requests in its CORS policy.
+
+      Existing Next.js scaffolds may keep `NEXT_PUBLIC_BASE_URL` as a narrow
+      same-origin migration fallback when rerunning `btst init`. Prefer
+      `NEXT_PUBLIC_SITE_URL` plus `NEXT_PUBLIC_API_URL` (or server-only
+      `BTST_SITE_URL`/`BTST_API_URL`) for new deployment configuration.
     </Callout>
   </Step>
 

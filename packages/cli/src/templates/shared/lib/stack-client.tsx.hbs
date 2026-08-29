@@ -62,13 +62,18 @@ export function getStackClient(
 function getSiteOrigin(serverOrigin?: string) {
 	if (serverOrigin) return serverOrigin
 	if (typeof window !== "undefined") {
-		return {{{browserSiteURLExpression}}} || window.location.origin
+		return (
+			{{{browserSiteURLExpression}}} ||
+			{{{legacyBrowserBaseURLExpression}}} ||
+			window.location.origin
+		)
 	}
 
 	// Use literal process.env.XXX so bundlers (Vite define, Next.js, etc.)
 	// can statically replace these at build/transform time.
 	if (process.env.BTST_SITE_URL) return process.env.BTST_SITE_URL
 	if (process.env.{{publicSiteURLVar}}) return process.env.{{publicSiteURLVar}}
+	if (process.env.{{legacyPublicBaseURLVar}}) return process.env.{{legacyPublicBaseURLVar}}
 	if (process.env.BASE_URL) return process.env.BASE_URL
 
 	return "http://localhost:3000"
@@ -77,11 +82,16 @@ function getSiteOrigin(serverOrigin?: string) {
 function getApiOrigin(serverOrigin: string | undefined, siteOrigin: string) {
 	if (serverOrigin) return serverOrigin
 	if (typeof window !== "undefined") {
-		return {{{browserApiURLExpression}}} || siteOrigin
+		return (
+			{{{browserApiURLExpression}}} ||
+			{{{legacyBrowserBaseURLExpression}}} ||
+			siteOrigin
+		)
 	}
 	return (
 		process.env.BTST_API_URL ||
 		{{{browserApiURLExpression}}} ||
+		process.env.{{legacyPublicBaseURLVar}} ||
 		process.env.BASE_URL ||
 		siteOrigin
 	)

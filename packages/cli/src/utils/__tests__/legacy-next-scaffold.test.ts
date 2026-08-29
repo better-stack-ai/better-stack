@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { migrateLegacyNextScaffold } from "../legacy-next-scaffold";
+import { LEGACY_NEXT_RENDER_HASHES } from "../legacy-next-render-hashes";
 import type { FileWritePlanItem } from "../../types";
 
 const fixtureRoots: string[] = [];
@@ -75,7 +76,7 @@ const legacyPaths = [
 	"app/pages/ssg-cms/[typeSlug]/page.tsx",
 	"app/pages/ssg-forms/page.tsx",
 	"app/pages/ssg-kanban/page.tsx",
-];
+] as const;
 
 // Recorded by executing buildScaffoldPlan() at each source ref with the
 // fixture configuration documented in scripts/fixtures/legacy-next/README.md.
@@ -98,6 +99,8 @@ const historicalRenderedHashes = {
 			"4e0badc3dc8ed42559a498939346f7ea14c132199c9a1205320fb3195079359c",
 	},
 	e9ff9448: {
+		"variants/no-plugins-tilde-layout.tsx":
+			"61aa2a94e1130be15baf740b91a9b6c51cdf9a35a781d91aa7fdcfde2b6202b6",
 		"app/pages/[[...all]]/page.tsx":
 			"db349b60eeb54c73f8cce795823574612a7da3fdf15396517e6216c800bfe021",
 		"app/pages/layout.tsx":
@@ -121,6 +124,15 @@ async function writeFixture(cwd: string, path: string, content: string) {
 }
 
 describe("legacy Next.js scaffold migration", () => {
+	it("covers the historical plugin-selection and alias matrix", () => {
+		expect(LEGACY_NEXT_RENDER_HASHES["app/pages/layout.tsx"]).toHaveLength(120);
+		for (const path of legacyPaths.filter(
+			(path) => path !== "app/pages/layout.tsx",
+		)) {
+			expect(LEGACY_NEXT_RENDER_HASHES[path]).toHaveLength(6);
+		}
+	});
+
 	it.each(
 		Object.entries(historicalRenderedHashes).flatMap(([version, hashes]) =>
 			Object.entries(hashes).map(([path, hash]) => [version, path, hash]),
@@ -178,6 +190,44 @@ describe("legacy Next.js scaffold migration", () => {
 				}),
 			),
 		);
+	});
+
+	it("recognizes every legacy route rendered with a supported alias", async () => {
+		const cwd = await createFixture();
+		for (const path of legacyPaths) {
+			const content = await readFile(
+				join(legacyFixtureRoot, "e9ff9448", path),
+				"utf8",
+			);
+			await writeFixture(
+				cwd,
+				path,
+				content.replaceAll('from "@/lib/', 'from "~/lib/'),
+			);
+		}
+
+		await expect(
+			migrateLegacyNextScaffold(cwd, currentPlan, "overwrite"),
+		).resolves.toEqual(legacyPaths);
+	});
+
+	it("recognizes a historical conditional layout variant", async () => {
+		const cwd = await createFixture();
+		await writeFixture(
+			cwd,
+			"app/pages/layout.tsx",
+			await readFile(
+				join(
+					legacyFixtureRoot,
+					"e9ff9448/variants/no-plugins-tilde-layout.tsx",
+				),
+				"utf8",
+			),
+		);
+
+		await expect(
+			migrateLegacyNextScaffold(cwd, currentPlan, "overwrite"),
+		).resolves.toEqual(["app/pages/layout.tsx"]);
 	});
 
 	it("fails before deleting when a legacy route retains markers but was customized", async () => {

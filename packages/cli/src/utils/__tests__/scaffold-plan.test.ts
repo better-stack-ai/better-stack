@@ -187,6 +187,12 @@ describe("scaffold plan", () => {
 		);
 		expect(stackClientServerFile?.content).not.toContain("VERCEL_URL");
 		expect(stackClientFile?.content).not.toContain("VERCEL_URL");
+		expect(stackClientServerFile?.content).toContain(
+			"process.env.NEXT_PUBLIC_BASE_URL",
+		);
+		expect(stackClientFile?.content).toContain(
+			"process.env.NEXT_PUBLIC_BASE_URL",
+		);
 		const pagesLayoutFile = plan.files.find(
 			(f) => f.path === "app/(request)/pages/layout.tsx",
 		);
@@ -718,6 +724,10 @@ describe("scaffold plan", () => {
 				framework === "nextjs"
 					? "process.env.NEXT_PUBLIC_SITE_URL"
 					: "import.meta.env.VITE_PUBLIC_SITE_URL";
+			const legacyBrowserBaseURLExpression =
+				framework === "nextjs"
+					? "process.env.NEXT_PUBLIC_BASE_URL"
+					: "import.meta.env.VITE_PUBLIC_BASE_URL";
 			const plan = await buildScaffoldPlan({
 				framework,
 				adapter: "memory",
@@ -739,8 +749,9 @@ describe("scaffold plan", () => {
 			);
 			expect(stackClientFile?.content).not.toContain("apiBaseURL:");
 			expect(stackClientFile?.content).not.toContain("siteBasePath:");
+			expect(stackClientFile?.content).toContain(browserSiteURLExpression);
 			expect(stackClientFile?.content).toContain(
-				`return ${browserSiteURLExpression} || window.location.origin`,
+				legacyBrowserBaseURLExpression,
 			);
 			expect(stackClientFile?.content).toContain(
 				"const siteOrigin = getSiteOrigin(options?.siteOrigin)",

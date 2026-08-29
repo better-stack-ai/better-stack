@@ -143,6 +143,8 @@ The generated `lib/stack-client.server.ts` resolves these origins from trusted
 deployment configuration (`BTST_API_URL` and `BTST_SITE_URL`), defaults the API
 to the trusted site origin, and forwards filtered credentials only to that API.
 It fails closed in production if no trusted origin is available.
+Existing same-origin Next.js installs may keep `NEXT_PUBLIC_BASE_URL` while
+migrating; new deployments should prefer the separate site/API variables.
 
 Use the v3 framework entry factories for the two catch-all routes:
 

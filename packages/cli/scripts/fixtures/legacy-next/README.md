@@ -13,6 +13,15 @@ exactly one line-feed byte. The migration test records hashes produced by
 executing `buildScaffoldPlan()` at each source ref and checks that newline
 contract independently of the runtime allowlist.
 
+`legacy-next-render-hashes.ts` records the exact bytes from every supported
+plugin-selection and `@/`, `~/`, or `./` import-alias combination at both
+historical refs. Do not normalize those bytes: even a one-character consumer
+edit must remain outside the allowlist and fail closed.
+
+The `variants/` files are also direct historical renderer outputs. They cover
+conditional plugin selections and non-default aliases without weakening the
+fail-closed check for consumer edits.
+
 `legacy-next-scaffold.ts` allowlists the SHA-256 hashes of these files. Do not
 edit a snapshot without intentionally updating the matching hash and migration
 regressions. Any consumer customization must fail closed instead of being
