@@ -643,12 +643,13 @@ In order to use BTST, your application must meet the following requirements:
         }
         ```
 
-        ```tsx title="app/pages/layout.tsx"
-        import { PagesClientLayout } from "./client-layout"
-        import { getServerClientOrigins } from "@/lib/stack-client.server"
+        ```tsx title="app/(request)/pages/layout.tsx"
+        import { headers } from "next/headers"
+        import { PagesClientLayout } from "../../pages/client-layout"
+        import { getServerClientOriginsFromHeaders } from "@/lib/stack-client.server"
 
-        export default function PagesLayout({ children }) {
-          const clientOrigins = getServerClientOrigins()
+        export default async function PagesLayout({ children }) {
+          const clientOrigins = getServerClientOriginsFromHeaders(await headers())
           return (
             <PagesClientLayout clientOrigins={clientOrigins}>
               {children}
@@ -656,6 +657,11 @@ In order to use BTST, your application must meet the following requirements:
           )
         }
         ```
+
+        Put SSG/ISR routes under `app/(static)/pages` and give that group a
+        header-free layout using `getServerClientOrigins()`. Both route groups
+        keep the `/pages/*` URL; the split prevents request headers from making
+        static routes dynamic.
       </Tab>
 
       <Tab value="react-router">
@@ -754,14 +760,21 @@ In order to use BTST, your application must meet the following requirements:
 
     <Tabs  groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist >
       <Tab value="next-js">
-        ```tsx title="app/pages/[[...all]]/page.tsx"
+        ```tsx title="app/(request)/pages/[[...all]]/page.tsx"
         import { createNextPage } from "@btst/stack/next"
+        import { headers } from "next/headers"
         import { getOrCreateQueryClient } from "@/lib/query-client"
-        import { getStackClient } from "@/lib/stack-client"
+        import { getStackClientForRequest } from "@/lib/stack-client.server"
 
         export const dynamic = "force-dynamic"
 
-        const page = createNextPage({ getStackClient, getQueryClient: getOrCreateQueryClient })
+        const page = createNextPage({
+          getStackClient: async (queryClient) =>
+            getStackClientForRequest(queryClient, {
+              headers: new Headers(await headers()),
+            }),
+          getQueryClient: getOrCreateQueryClient,
+        })
         export default page.Page
         export const generateMetadata = page.generateMetadata
         ```

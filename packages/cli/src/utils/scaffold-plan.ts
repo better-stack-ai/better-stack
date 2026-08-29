@@ -27,8 +27,9 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 			stackClientOriginsPath: undefined,
 			queryClientPath: `${prefix}lib/query-client.ts`,
 			apiRoutePath: `${prefix}app/api/data/[[...all]]/route.ts`,
-			pageRoutePath: `${prefix}app/pages/[[...all]]/page.tsx`,
-			pagesLayoutPath: `${prefix}app/pages/layout.tsx`,
+			pageRoutePath: `${prefix}app/(request)/pages/[[...all]]/page.tsx`,
+			pagesLayoutPath: `${prefix}app/(request)/pages/layout.tsx`,
+			pagesStaticLayoutPath: `${prefix}app/(static)/pages/layout.tsx`,
 			pagesClientLayoutPath: `${prefix}app/pages/client-layout.tsx`,
 			layoutPatchTarget: `${prefix}app/layout.tsx`,
 		};
@@ -44,6 +45,7 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 			apiRoutePath: "app/routes/api/data/$.ts",
 			pageRoutePath: "app/routes/pages/$.tsx",
 			pagesLayoutPath: "app/routes/pages/_layout.tsx",
+			pagesStaticLayoutPath: undefined,
 			pagesClientLayoutPath: undefined,
 			layoutPatchTarget: "app/root.tsx",
 		};
@@ -58,6 +60,7 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 		apiRoutePath: "src/routes/api/data/$.ts",
 		pageRoutePath: "src/routes/pages/$.tsx",
 		pagesLayoutPath: "src/routes/pages/route.tsx",
+		pagesStaticLayoutPath: undefined,
 		pagesClientLayoutPath: undefined,
 		layoutPatchTarget: "src/routes/__root.tsx",
 	};
@@ -84,7 +87,7 @@ function getBrowserApiURLExpression(framework: Framework) {
 }
 
 function getPagesLayoutFilePath(framework: Framework): string {
-	if (framework === "nextjs") return "app/pages/layout.tsx";
+	if (framework === "nextjs") return "app/pages/client-layout.tsx";
 	if (framework === "react-router") return "app/routes/pages/_layout.tsx";
 	return "src/routes/pages/route.tsx";
 }
@@ -420,6 +423,17 @@ export async function buildScaffoldPlan(
 		});
 	}
 
+	if (frameworkPaths.pagesStaticLayoutPath) {
+		files.push({
+			path: frameworkPaths.pagesStaticLayoutPath,
+			content: await renderTemplate(
+				"nextjs/pages-static-layout.tsx.hbs",
+				sharedContext,
+			),
+			description: "BTST static pages layout wrapper",
+		});
+	}
+
 	if (frameworkPaths.pagesClientLayoutPath) {
 		files.push({
 			path: frameworkPaths.pagesClientLayoutPath,
@@ -496,7 +510,7 @@ export async function buildScaffoldPlan(
 	if (input.framework === "nextjs") {
 		if (pluginContext.hasBlog) {
 			files.push({
-				path: `${prefix}app/pages/ssg-blog/page.tsx`,
+				path: `${prefix}app/(static)/pages/ssg-blog/page.tsx`,
 				content: await renderTemplate(
 					"nextjs/ssg-blog-list.tsx.hbs",
 					sharedContext,
@@ -504,7 +518,7 @@ export async function buildScaffoldPlan(
 				description: "SSG Blog list page",
 			});
 			files.push({
-				path: `${prefix}app/pages/ssg-blog/[slug]/page.tsx`,
+				path: `${prefix}app/(static)/pages/ssg-blog/[slug]/page.tsx`,
 				content: await renderTemplate(
 					"nextjs/ssg-blog-post.tsx.hbs",
 					sharedContext,
@@ -514,14 +528,14 @@ export async function buildScaffoldPlan(
 		}
 		if (pluginContext.hasCms) {
 			files.push({
-				path: `${prefix}app/pages/ssg-cms/[typeSlug]/page.tsx`,
+				path: `${prefix}app/(static)/pages/ssg-cms/[typeSlug]/page.tsx`,
 				content: await renderTemplate("nextjs/ssg-cms.tsx.hbs", sharedContext),
 				description: "SSG CMS content list page",
 			});
 		}
 		if (pluginContext.hasFormBuilder) {
 			files.push({
-				path: `${prefix}app/pages/ssg-forms/page.tsx`,
+				path: `${prefix}app/(static)/pages/ssg-forms/page.tsx`,
 				content: await renderTemplate(
 					"nextjs/ssg-forms.tsx.hbs",
 					sharedContext,
@@ -531,7 +545,7 @@ export async function buildScaffoldPlan(
 		}
 		if (pluginContext.hasKanban) {
 			files.push({
-				path: `${prefix}app/pages/ssg-kanban/page.tsx`,
+				path: `${prefix}app/(static)/pages/ssg-kanban/page.tsx`,
 				content: await renderTemplate(
 					"nextjs/ssg-kanban.tsx.hbs",
 					sharedContext,

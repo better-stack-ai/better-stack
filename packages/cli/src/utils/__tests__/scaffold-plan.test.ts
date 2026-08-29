@@ -133,8 +133,9 @@ describe("scaffold plan", () => {
 				"lib/stack-client.tsx",
 				"lib/query-client.ts",
 				"app/api/data/[[...all]]/route.ts",
-				"app/pages/[[...all]]/page.tsx",
-				"app/pages/layout.tsx",
+				"app/(request)/pages/[[...all]]/page.tsx",
+				"app/(request)/pages/layout.tsx",
+				"app/(static)/pages/layout.tsx",
 			]),
 		);
 		// Navbar + mode-toggle generated for all frameworks
@@ -142,8 +143,8 @@ describe("scaffold plan", () => {
 		expect(paths).toContain("components/mode-toggle.tsx");
 		// Blog triggers sitemap + SSG pages
 		expect(paths).toContain("app/sitemap.ts");
-		expect(paths).toContain("app/pages/ssg-blog/page.tsx");
-		expect(paths).toContain("app/pages/ssg-blog/[slug]/page.tsx");
+		expect(paths).toContain("app/(static)/pages/ssg-blog/page.tsx");
+		expect(paths).toContain("app/(static)/pages/ssg-blog/[slug]/page.tsx");
 
 		const stackFile = plan.files.find((f) => f.path === "lib/stack.ts");
 		expect(stackFile?.content).toContain("blogBackendPlugin()");
@@ -187,12 +188,15 @@ describe("scaffold plan", () => {
 		expect(stackClientServerFile?.content).not.toContain("VERCEL_URL");
 		expect(stackClientFile?.content).not.toContain("VERCEL_URL");
 		const pagesLayoutFile = plan.files.find(
-			(f) => f.path === "app/pages/layout.tsx",
+			(f) => f.path === "app/(request)/pages/layout.tsx",
 		);
 		const pagesClientLayoutFile = plan.files.find(
 			(f) => f.path === "app/pages/client-layout.tsx",
 		);
-		expect(pagesLayoutFile?.content).toContain("getServerClientOrigins()");
+		expect(pagesLayoutFile?.content).toContain('from "next/headers"');
+		expect(pagesLayoutFile?.content).toContain(
+			"getServerClientOriginsFromHeaders(await headers())",
+		);
 		expect(pagesLayoutFile?.content).not.toContain("force-dynamic");
 		expect(pagesClientLayoutFile?.content).toContain(
 			'import { StackProvider } from "@btst/stack/context"',
@@ -207,9 +211,9 @@ describe("scaffold plan", () => {
 		expect(pagesClientLayoutFile?.content).not.toContain("apiBaseURL:");
 		expect(pagesClientLayoutFile?.content).not.toContain("apiBasePath:");
 		expect(pagesClientLayoutFile?.content).not.toContain("as never");
-		expect(plan.pagesLayoutPath).toBe("app/pages/layout.tsx");
+		expect(plan.pagesLayoutPath).toBe("app/(request)/pages/layout.tsx");
 		const pagesRouteFile = plan.files.find(
-			(f) => f.path === "app/pages/[[...all]]/page.tsx",
+			(f) => f.path === "app/(request)/pages/[[...all]]/page.tsx",
 		);
 		expect(pagesRouteFile?.content).toContain("getStackClientForRequest");
 		expect(pagesRouteFile?.content).toContain("new Headers(await headers())");
@@ -224,7 +228,36 @@ describe("scaffold plan", () => {
 			cssFile: "src/app/globals.css",
 		});
 
-		expect(plan.pagesLayoutPath).toBe("src/app/pages/layout.tsx");
+		expect(plan.pagesLayoutPath).toBe("src/app/(request)/pages/layout.tsx");
+	});
+
+	it("hydrates a non-3000 Next.js request origin without binding SSG to headers", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["blog"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const requestLayout = plan.files.find(
+			(file) => file.path === "app/(request)/pages/layout.tsx",
+		);
+		const requestPage = plan.files.find(
+			(file) => file.path === "app/(request)/pages/[[...all]]/page.tsx",
+		);
+		const staticLayout = plan.files.find(
+			(file) => file.path === "app/(static)/pages/layout.tsx",
+		);
+
+		expect(requestLayout?.content).toContain(
+			"getServerClientOriginsFromHeaders(await headers())",
+		);
+		expect(requestPage?.content).toContain("new Headers(await headers())");
+		expect(staticLayout?.content).toContain("getServerClientOrigins()");
+		expect(staticLayout?.content).not.toContain('from "next/headers"');
+		expect(plan.files.map((file) => file.path)).toContain(
+			"app/(static)/pages/ssg-blog/page.tsx",
+		);
 	});
 
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
@@ -253,7 +286,7 @@ describe("scaffold plan", () => {
 			);
 			const layoutSuffix =
 				framework === "nextjs"
-					? "app/pages/layout.tsx"
+					? "app/(request)/pages/layout.tsx"
 					: framework === "react-router"
 						? "routes/pages/_layout.tsx"
 						: "routes/pages/route.tsx";
@@ -340,7 +373,7 @@ describe("scaffold plan", () => {
 			});
 			const pageRoute = plan.files.find(
 				(file) =>
-					file.path.endsWith("app/pages/[[...all]]/page.tsx") ||
+					file.path.endsWith("app/(request)/pages/[[...all]]/page.tsx") ||
 					file.path.endsWith("routes/pages/$.tsx"),
 			);
 			const layout = plan.files.find((file) =>
@@ -935,7 +968,7 @@ describe("scaffold plan", () => {
 			const pageRoute = plan.files.find(
 				(file) =>
 					file.path.includes("routes/pages/$.tsx") ||
-					file.path.includes("app/pages/[[...all]]/page.tsx"),
+					file.path.includes("app/(request)/pages/[[...all]]/page.tsx"),
 			);
 			const apiRoute = plan.files.find(
 				(file) =>
@@ -1145,7 +1178,7 @@ describe("scaffold plan", () => {
 			cssFile: "app/globals.css",
 		});
 		const pagesRoute = plan.files.find(
-			(f) => f.path === "app/pages/[[...all]]/page.tsx",
+			(f) => f.path === "app/(request)/pages/[[...all]]/page.tsx",
 		);
 		expect(pagesRoute?.content).toContain("generateMetadata");
 		expect(pagesRoute?.content).toContain("createNextPage");
@@ -1160,11 +1193,11 @@ describe("scaffold plan", () => {
 			cssFile: "app/globals.css",
 		});
 		const paths = plan.files.map((f) => f.path);
-		expect(paths).toContain("app/pages/ssg-blog/page.tsx");
-		expect(paths).toContain("app/pages/ssg-blog/[slug]/page.tsx");
+		expect(paths).toContain("app/(static)/pages/ssg-blog/page.tsx");
+		expect(paths).toContain("app/(static)/pages/ssg-blog/[slug]/page.tsx");
 
 		const blogList = plan.files.find(
-			(f) => f.path === "app/pages/ssg-blog/page.tsx",
+			(f) => f.path === "app/(static)/pages/ssg-blog/page.tsx",
 		);
 		expect(blogList?.content).toContain("generateStaticParams");
 		expect(blogList?.content).toContain("prefetchForRoute");
@@ -1180,8 +1213,8 @@ describe("scaffold plan", () => {
 			cssFile: "app/globals.css",
 		});
 		const paths = plan.files.map((f) => f.path);
-		expect(paths).toContain("app/pages/ssg-cms/[typeSlug]/page.tsx");
-		expect(paths).not.toContain("app/pages/ssg-blog/page.tsx");
+		expect(paths).toContain("app/(static)/pages/ssg-cms/[typeSlug]/page.tsx");
+		expect(paths).not.toContain("app/(static)/pages/ssg-blog/page.tsx");
 	});
 
 	it("emits SSG forms page for nextjs when form-builder selected", async () => {
@@ -1193,7 +1226,7 @@ describe("scaffold plan", () => {
 			cssFile: "app/globals.css",
 		});
 		expect(plan.files.map((f) => f.path)).toContain(
-			"app/pages/ssg-forms/page.tsx",
+			"app/(static)/pages/ssg-forms/page.tsx",
 		);
 	});
 
@@ -1206,7 +1239,7 @@ describe("scaffold plan", () => {
 			cssFile: "app/globals.css",
 		});
 		expect(plan.files.map((f) => f.path)).toContain(
-			"app/pages/ssg-kanban/page.tsx",
+			"app/(static)/pages/ssg-kanban/page.tsx",
 		);
 	});
 
