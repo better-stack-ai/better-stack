@@ -24,10 +24,12 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 			stackPath: `${prefix}lib/stack.ts`,
 			stackClientPath: `${prefix}lib/stack-client.tsx`,
 			stackClientServerPath: `${prefix}lib/stack-client.server.ts`,
+			stackClientOriginsPath: undefined,
 			queryClientPath: `${prefix}lib/query-client.ts`,
 			apiRoutePath: `${prefix}app/api/data/[[...all]]/route.ts`,
 			pageRoutePath: `${prefix}app/pages/[[...all]]/page.tsx`,
 			pagesLayoutPath: `${prefix}app/pages/layout.tsx`,
+			pagesClientLayoutPath: `${prefix}app/pages/client-layout.tsx`,
 			layoutPatchTarget: `${prefix}app/layout.tsx`,
 		};
 	}
@@ -37,10 +39,12 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 			stackPath: "app/lib/stack.ts",
 			stackClientPath: "app/lib/stack-client.tsx",
 			stackClientServerPath: "app/lib/stack-client.server.ts",
+			stackClientOriginsPath: undefined,
 			queryClientPath: "app/lib/query-client.ts",
 			apiRoutePath: "app/routes/api/data/$.ts",
 			pageRoutePath: "app/routes/pages/$.tsx",
 			pagesLayoutPath: "app/routes/pages/_layout.tsx",
+			pagesClientLayoutPath: undefined,
 			layoutPatchTarget: "app/root.tsx",
 		};
 	}
@@ -49,10 +53,12 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 		stackPath: "src/lib/stack.ts",
 		stackClientPath: "src/lib/stack-client.tsx",
 		stackClientServerPath: "src/lib/stack-client.server.ts",
+		stackClientOriginsPath: "src/lib/stack-client.origins.ts",
 		queryClientPath: "src/lib/query-client.ts",
 		apiRoutePath: "src/routes/api/data/$.ts",
 		pageRoutePath: "src/routes/pages/$.tsx",
 		pagesLayoutPath: "src/routes/pages/route.tsx",
+		pagesClientLayoutPath: undefined,
 		layoutPatchTarget: "src/routes/__root.tsx",
 	};
 }
@@ -361,6 +367,18 @@ export async function buildScaffoldPlan(
 			),
 			description: "BTST credentialed request stack configuration",
 		},
+		...(frameworkPaths.stackClientOriginsPath
+			? [
+					{
+						path: frameworkPaths.stackClientOriginsPath,
+						content: await renderTemplate(
+							"tanstack/stack-client.origins.ts.hbs",
+							sharedContext,
+						),
+						description: "BTST trusted client origin server function",
+					},
+				]
+			: []),
 		{
 			path: frameworkPaths.queryClientPath,
 			content: await renderTemplate(
@@ -395,6 +413,17 @@ export async function buildScaffoldPlan(
 				sharedContext,
 			),
 			description: "BTST pages layout wrapper",
+		});
+	}
+
+	if (frameworkPaths.pagesClientLayoutPath) {
+		files.push({
+			path: frameworkPaths.pagesClientLayoutPath,
+			content: await renderTemplate(
+				"nextjs/pages-client-layout.tsx.hbs",
+				sharedContext,
+			),
+			description: "BTST pages client provider",
 		});
 	}
 

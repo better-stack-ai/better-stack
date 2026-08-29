@@ -1,11 +1,41 @@
+/** Security policy used to resolve one deployment-trusted server origin. */
 export interface TrustedServerOriginOptions {
 	/** Deployment-controlled origin. This always wins when present. */
 	configuredOrigin?: string;
 	/** Request-derived origin used only for loopback development. */
 	requestOrigin?: string;
+	/** Whether missing deployment configuration must fail closed. */
 	isProduction: boolean;
+	/** Loopback-only origin used when development has no request origin. */
 	developmentFallback?: string;
+	/** Human-readable configuration name included in validation errors. */
 	label?: string;
+}
+
+/** Browser-safe API and site origins resolved from server-owned configuration. */
+export interface TrustedClientOrigins {
+	/** Trusted destination for client-stack API requests. */
+	apiOrigin: string;
+	/** Trusted public origin used to build page and asset URLs. */
+	siteOrigin: string;
+}
+
+/** Security policy used to resolve one API/site origin snapshot. */
+export interface TrustedClientOriginsOptions {
+	/** Deployment-controlled managed or same-origin API destination. */
+	configuredApiOrigin?: string;
+	/** Deployment-controlled public site origin. */
+	configuredSiteOrigin?: string;
+	/** Request-derived origin used only for loopback development. */
+	requestOrigin?: string;
+	/** Whether missing deployment configuration must fail closed. */
+	isProduction: boolean;
+	/** Loopback-only origin used when development has no request origin. */
+	developmentFallback?: string;
+	/** Human-readable API configuration name included in validation errors. */
+	apiLabel?: string;
+	/** Human-readable site configuration name included in validation errors. */
+	siteLabel?: string;
 }
 
 const ROUTING_AND_HOP_BY_HOP_HEADERS = [
@@ -114,4 +144,31 @@ export function resolveTrustedServerOrigin(
 		throw new Error("development fallback must use a loopback origin.");
 	}
 	return fallback;
+}
+
+/**
+ * Resolves the API and public site origins once on the server.
+ *
+ * A separately configured managed API remains distinct. Without one, the API
+ * safely defaults to the already-trusted site origin.
+ */
+export function resolveTrustedClientOrigins(
+	options: TrustedClientOriginsOptions,
+): TrustedClientOrigins {
+	const siteOrigin = resolveTrustedServerOrigin({
+		configuredOrigin: options.configuredSiteOrigin,
+		requestOrigin: options.requestOrigin,
+		isProduction: options.isProduction,
+		developmentFallback: options.developmentFallback,
+		label: options.siteLabel ?? "site origin",
+	});
+	const apiOrigin = resolveTrustedServerOrigin({
+		configuredOrigin: options.configuredApiOrigin ?? siteOrigin,
+		requestOrigin: options.requestOrigin,
+		isProduction: options.isProduction,
+		developmentFallback: options.developmentFallback,
+		label: options.apiLabel ?? "API origin",
+	});
+
+	return { apiOrigin, siteOrigin };
 }

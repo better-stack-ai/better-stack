@@ -511,7 +511,7 @@ In order to use BTST, your application must meet the following requirements:
       `request.url`. Set `BTST_API_URL` for a managed/custom API and
       `BTST_SITE_URL` for the public site. For a same-origin deployment,
       `BASE_URL` can provide both. Generated `stack-client.server.ts` uses
-      `resolveTrustedServerOrigin` from `@btst/stack/client/server`, fails
+      `resolveTrustedClientOrigins` from `@btst/stack/client/server`, fails
       closed when production configuration is missing, and removes routing and
       hop-by-hop headers before forwarding the remaining request credentials.
     </Callout>
@@ -588,20 +588,26 @@ In order to use BTST, your application must meet the following requirements:
 
     <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
       <Tab value="next-js">
-        ```tsx title="app/pages/layout.tsx"
+        ```tsx title="app/pages/client-layout.tsx"
         "use client"
 
-        import { useState } from "react"
+        import { useMemo, useState } from "react"
         import { QueryClientProvider } from "@tanstack/react-query"
         import { StackProvider } from "@btst/stack/context"
         import { nextRouter } from "@btst/stack/next"
         import { getOrCreateQueryClient } from "@/lib/query-client"
-        import { getStackClient } from "@/lib/stack-client"
+        import { getStackClient, type StackClientOptions } from "@/lib/stack-client"
         import { uploadImage } from "@/lib/uploads"
 
-        export default function PagesLayout({ children }) {
+        export function PagesClientLayout({ children, clientOrigins }: {
+          children: React.ReactNode
+          clientOrigins: StackClientOptions
+        }) {
           const [queryClient] = useState(() => getOrCreateQueryClient())
-          const clientStack = getStackClient(queryClient)
+          const clientStack = useMemo(
+            () => getStackClient(queryClient, clientOrigins),
+            [clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
+          )
 
           return (
             <QueryClientProvider client={queryClient}>
@@ -613,6 +619,20 @@ In order to use BTST, your application must meet the following requirements:
                 {children}
               </StackProvider>
             </QueryClientProvider>
+          )
+        }
+        ```
+
+        ```tsx title="app/pages/layout.tsx"
+        import { PagesClientLayout } from "./client-layout"
+        import { getServerClientOrigins } from "@/lib/stack-client.server"
+
+        export default function PagesLayout({ children }) {
+          const clientOrigins = getServerClientOrigins()
+          return (
+            <PagesClientLayout clientOrigins={clientOrigins}>
+              {children}
+            </PagesClientLayout>
           )
         }
         ```
@@ -660,28 +680,16 @@ In order to use BTST, your application must meet the following requirements:
       <Tab value="tanstack">
         ```tsx title="src/routes/pages/route.tsx"
         import { createFileRoute, Outlet } from "@tanstack/react-router"
-        import { createIsomorphicFn } from "@tanstack/react-start"
-        import { getRequest } from "@tanstack/react-start/server"
         import { QueryClientProvider } from "@tanstack/react-query"
         import { StackProvider } from "@btst/stack/context"
         import { tanstackRouter } from "@btst/stack/tanstack"
         import { useMemo } from "react"
         import { getStackClient } from "@/lib/stack-client"
-        import { getServerClientOrigins } from "@/lib/stack-client.server"
+        import { getTrustedClientOrigins } from "@/lib/stack-client.origins"
         import { uploadImage } from "@/lib/uploads"
 
-        const getClientOrigins = createIsomorphicFn()
-          .server(() => {
-            const request = getRequest()
-            return getServerClientOrigins(new URL(request.url).origin)
-          })
-          .client(() => ({
-            apiOrigin: import.meta.env.VITE_PUBLIC_API_URL || window.location.origin,
-            siteOrigin: import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin,
-          }))
-
         export const Route = createFileRoute("/pages")({
-          loader: async () => getClientOrigins(),
+          loader: async () => getTrustedClientOrigins(),
           component: PagesLayout,
         })
 
@@ -713,8 +721,10 @@ In order to use BTST, your application must meet the following requirements:
     application needs them. See the [auth provider guide](/auth). Never copy
     framework routing, API paths, or identity props into a plugin override. On
     Vite SSR, serialize only the trusted API/site origins into the parent loader
-    so the server provider and hydrated browser stack resolve the same endpoints; keep
-    request headers and server stack instances out of loader data.
+    so the server provider and hydrated browser stack resolve the same endpoints.
+    TanStack client-navigation loaders should call the same generated
+    `getTrustedClientOrigins()` server function. Keep request headers and server
+    stack instances out of loader data.
   </Step>
 
   <Step>

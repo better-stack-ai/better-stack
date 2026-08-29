@@ -1,6 +1,6 @@
 import {
 	filterCredentialForwardingHeaders,
-	resolveTrustedServerOrigin,
+	resolveTrustedClientOrigins,
 } from "@btst/stack/client/server";
 import type { QueryClient } from "@tanstack/react-query";
 import { serverAuth } from "./authorization.server";
@@ -28,21 +28,14 @@ function getConfiguredSiteOrigin() {
 
 export function getRequestClientOrigins(request: Request) {
 	const requestOrigin = new URL(request.url).origin;
-	const siteOrigin = resolveTrustedServerOrigin({
-		configuredOrigin: getConfiguredSiteOrigin(),
+	return resolveTrustedClientOrigins({
+		configuredApiOrigin: getConfiguredApiOrigin(),
+		configuredSiteOrigin: getConfiguredSiteOrigin(),
 		requestOrigin,
 		isProduction: process.env.NODE_ENV === "production",
-		label: "BTST_SITE_URL, VITE_PUBLIC_SITE_URL, or BASE_URL",
+		apiLabel: "BTST_API_URL, VITE_PUBLIC_API_URL, or BASE_URL",
+		siteLabel: "BTST_SITE_URL, VITE_PUBLIC_SITE_URL, or BASE_URL",
 	});
-	return {
-		apiOrigin: resolveTrustedServerOrigin({
-			configuredOrigin: getConfiguredApiOrigin() ?? siteOrigin,
-			requestOrigin,
-			isProduction: process.env.NODE_ENV === "production",
-			label: "BTST_API_URL, VITE_PUBLIC_API_URL, or BASE_URL",
-		}),
-		siteOrigin,
-	};
 }
 
 /** Creates the request-only stack used by TanStack Start route loaders. */

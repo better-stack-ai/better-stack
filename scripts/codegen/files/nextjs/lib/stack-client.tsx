@@ -20,6 +20,11 @@ export interface AppClientStackRuntime {
 	requestIdentity?: StackIdentity;
 }
 
+export interface StackClientOrigins {
+	apiOrigin?: string;
+	siteOrigin?: string;
+}
+
 const getBrowserSiteOrigin = () =>
 	process.env.NEXT_PUBLIC_SITE_URL ||
 	process.env.NEXT_PUBLIC_BASE_URL ||
@@ -182,7 +187,7 @@ export const createAppClientStack = (
 /** Browser-safe stack: public origin only, never request headers. */
 export const getStackClient = (
 	queryClient: QueryClient,
-	options?: { apiOrigin?: string; siteOrigin?: string },
+	options?: StackClientOrigins,
 ) => {
 	const siteOrigin = options?.siteOrigin ?? getBrowserSiteOrigin();
 	return createAppClientStack(queryClient, {

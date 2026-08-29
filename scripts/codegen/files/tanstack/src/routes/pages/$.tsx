@@ -5,6 +5,7 @@ import { getRequest } from "@tanstack/react-start/server";
 import type { QueryClient } from "@tanstack/react-query";
 import { getStackClient } from "@/lib/stack-client";
 import { getRequestClientStack } from "@/lib/stack-client.server";
+import { getInitialIdentity } from "@/lib/authorization.identity";
 import type { MyRouterContext } from "@/router";
 
 const getLoaderClientStack = createIsomorphicFn()
@@ -12,7 +13,10 @@ const getLoaderClientStack = createIsomorphicFn()
 		const request = getRequest();
 		return getRequestClientStack(queryClient, request);
 	})
-	.client(async (queryClient: QueryClient) => getStackClient(queryClient));
+	.client(async (queryClient: QueryClient) => {
+		const { apiOrigin, siteOrigin } = await getInitialIdentity();
+		return getStackClient(queryClient, { apiOrigin, siteOrigin });
+	});
 
 export const Route = createFileRoute("/pages/$")(
 	createTanStackPageOptions<MyRouterContext>({

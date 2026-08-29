@@ -5,7 +5,7 @@ import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { getOrCreateQueryClient } from "@/lib/query-client";
-import { getStackClient } from "@/lib/stack-client";
+import { getStackClient, type StackClientOrigins } from "@/lib/stack-client";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
 import {
@@ -22,14 +22,19 @@ import { clientAuth } from "@/lib/authorization.client";
 
 export function BtstPagesClientLayout({
 	children,
+	clientOrigins,
 	initialIdentity,
 }: {
 	children?: React.ReactNode;
+	clientOrigins?: StackClientOrigins;
 	initialIdentity?: Awaited<ReturnType<typeof clientAuth.getIdentity>>;
 }) {
 	// fresh instance to avoid stale client cache overriding hydrated data
 	const [queryClient] = useState(() => getOrCreateQueryClient());
-	const stack = React.useMemo(() => getStackClient(queryClient), [queryClient]);
+	const stack = React.useMemo(
+		() => getStackClient(queryClient, clientOrigins),
+		[clientOrigins?.apiOrigin, clientOrigins?.siteOrigin, queryClient],
+	);
 	const mediaClientConfig = React.useMemo(
 		() => createMediaUploadConfig(stack.provider.plugins.media),
 		[stack],

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	filterCredentialForwardingHeaders,
+	resolveTrustedClientOrigins,
 	resolveTrustedServerOrigin,
 } from "../server";
 
@@ -50,6 +51,34 @@ describe("resolveTrustedServerOrigin", () => {
 				label: "BTST_API_URL",
 			}),
 		).toThrow("BTST_API_URL must be an absolute HTTP(S) origin");
+	});
+});
+
+describe("resolveTrustedClientOrigins", () => {
+	it("preserves a managed API origin distinct from the public site", () => {
+		expect(
+			resolveTrustedClientOrigins({
+				configuredApiOrigin: "https://api.managed.example",
+				configuredSiteOrigin: "https://app.example",
+				requestOrigin: "https://host-header.example",
+				isProduction: true,
+			}),
+		).toEqual({
+			apiOrigin: "https://api.managed.example",
+			siteOrigin: "https://app.example",
+		});
+	});
+
+	it("defaults the API to the trusted site origin", () => {
+		expect(
+			resolveTrustedClientOrigins({
+				configuredSiteOrigin: "https://app.example",
+				isProduction: true,
+			}),
+		).toEqual({
+			apiOrigin: "https://app.example",
+			siteOrigin: "https://app.example",
+		});
 	});
 });
 

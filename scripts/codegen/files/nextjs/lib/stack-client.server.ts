@@ -2,7 +2,7 @@ import "server-only";
 
 import {
 	filterCredentialForwardingHeaders,
-	resolveTrustedServerOrigin,
+	resolveTrustedClientOrigins,
 } from "@btst/stack/client/server";
 import type { QueryClient } from "@tanstack/react-query";
 import { hydrationAuth } from "./authorization.server";
@@ -35,23 +35,19 @@ function getRequestOrigin(headers: Headers) {
 	return `${protocol.split(",")[0]?.trim()}://${host.split(",")[0]?.trim()}`;
 }
 
-export function getRequestClientOrigins(requestHeaders: Headers) {
-	const requestOrigin = getRequestOrigin(requestHeaders);
-	const siteOrigin = resolveTrustedServerOrigin({
-		configuredOrigin: getConfiguredSiteOrigin(),
+export function getServerClientOrigins(requestOrigin?: string) {
+	return resolveTrustedClientOrigins({
+		configuredApiOrigin: getConfiguredApiOrigin(),
+		configuredSiteOrigin: getConfiguredSiteOrigin(),
 		requestOrigin,
 		isProduction: process.env.NODE_ENV === "production",
-		label: "BTST_SITE_URL, NEXT_PUBLIC_SITE_URL, or BASE_URL",
+		apiLabel: "BTST_API_URL, NEXT_PUBLIC_API_URL, or BASE_URL",
+		siteLabel: "BTST_SITE_URL, NEXT_PUBLIC_SITE_URL, or BASE_URL",
 	});
-	return {
-		apiOrigin: resolveTrustedServerOrigin({
-			configuredOrigin: getConfiguredApiOrigin() ?? siteOrigin,
-			requestOrigin,
-			isProduction: process.env.NODE_ENV === "production",
-			label: "BTST_API_URL, NEXT_PUBLIC_API_URL, or BASE_URL",
-		}),
-		siteOrigin,
-	};
+}
+
+export function getRequestClientOrigins(requestHeaders: Headers) {
+	return getServerClientOrigins(getRequestOrigin(requestHeaders));
 }
 
 /** Creates the request-only stack used by Next.js route loaders and metadata. */

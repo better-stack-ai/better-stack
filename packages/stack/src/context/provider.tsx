@@ -15,6 +15,7 @@ import type {
 	ResolvedClientStack,
 } from "../types";
 import type { StackClientAuth, StackIdentity } from "../shared/auth-types";
+import type { StackClientLike } from "../shared/entry-factories";
 import type { StackI18nProvider } from "../shared/i18n-types";
 import type { StackNotifyProvider } from "../shared/notify-types";
 import { StackAuthBoundary } from "./auth";
@@ -52,6 +53,8 @@ interface StackContextValue<TPluginOverrides extends Record<string, any>> {
 	queryClient?: QueryClient;
 	/** Resolved plugin definitions used by client-only introspection helpers. */
 	clientStackContext?: ClientStackContext;
+	/** Canonical resolved stack supplied to this provider. */
+	resolvedStack?: StackClientLike;
 	/** Top-level auth provider used by identity-aware components. */
 	auth?: StackClientAuth;
 }
@@ -250,6 +253,7 @@ export function StackProvider({
 		plugins: projection?.plugins,
 		queryClient: projection?.queryClient,
 		clientStackContext: stack?.context,
+		resolvedStack: stack,
 		auth,
 	};
 

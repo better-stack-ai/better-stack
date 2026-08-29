@@ -176,7 +176,7 @@ describe("scaffold plan", () => {
 			(f) => f.path === "lib/stack-client.server.ts",
 		);
 		expect(stackClientServerFile?.content).toContain(
-			"resolveTrustedServerOrigin",
+			"resolveTrustedClientOrigins",
 		);
 		expect(stackClientServerFile?.content).toContain(
 			"export function getStackClientForRequest(",
@@ -187,19 +187,24 @@ describe("scaffold plan", () => {
 		const pagesLayoutFile = plan.files.find(
 			(f) => f.path === "app/pages/layout.tsx",
 		);
-		expect(pagesLayoutFile?.content).toContain(
+		const pagesClientLayoutFile = plan.files.find(
+			(f) => f.path === "app/pages/client-layout.tsx",
+		);
+		expect(pagesLayoutFile?.content).toContain("getServerClientOrigins()");
+		expect(pagesLayoutFile?.content).not.toContain("force-dynamic");
+		expect(pagesClientLayoutFile?.content).toContain(
 			'import { StackProvider } from "@btst/stack/context"',
 		);
-		expect(pagesLayoutFile?.content).toContain(
+		expect(pagesClientLayoutFile?.content).toContain(
 			'import { nextRouter } from "@btst/stack/next"',
 		);
-		expect(pagesLayoutFile?.content).toContain("router={nextRouter()}");
-		expect(pagesLayoutFile?.content).toContain("stack={browserStack}");
-		expect(pagesLayoutFile?.content).not.toContain("navigate: (path");
-		expect(pagesLayoutFile?.content).not.toContain("Link: (");
-		expect(pagesLayoutFile?.content).not.toContain("apiBaseURL:");
-		expect(pagesLayoutFile?.content).not.toContain("apiBasePath:");
-		expect(pagesLayoutFile?.content).not.toContain("as never");
+		expect(pagesClientLayoutFile?.content).toContain("router={nextRouter()}");
+		expect(pagesClientLayoutFile?.content).toContain("stack={browserStack}");
+		expect(pagesClientLayoutFile?.content).not.toContain("navigate: (path");
+		expect(pagesClientLayoutFile?.content).not.toContain("Link: (");
+		expect(pagesClientLayoutFile?.content).not.toContain("apiBaseURL:");
+		expect(pagesClientLayoutFile?.content).not.toContain("apiBasePath:");
+		expect(pagesClientLayoutFile?.content).not.toContain("as never");
 		expect(plan.pagesLayoutPath).toBe("app/pages/layout.tsx");
 		const pagesRouteFile = plan.files.find(
 			(f) => f.path === "app/pages/[[...all]]/page.tsx",
@@ -248,7 +253,9 @@ describe("scaffold plan", () => {
 						? "routes/pages/_layout.tsx"
 						: "routes/pages/route.tsx";
 			const pagesLayoutFile = plan.files.find((file) =>
-				file.path.endsWith(layoutSuffix),
+				framework === "nextjs"
+					? file.path.endsWith("app/pages/client-layout.tsx")
+					: file.path.endsWith(layoutSuffix),
 			);
 			expect(pagesLayoutFile?.content).toBeDefined();
 			expect(pagesLayoutFile?.content).toContain("StackProvider");
@@ -331,9 +338,9 @@ describe("scaffold plan", () => {
 			expect(pageRoute?.content).toContain("getStackClientForRequest");
 			expect(pageRoute?.content).toContain("headers:");
 			expect(pageRoute?.content).toContain("stack-client.server");
-			expect(requestStack?.content).toContain("resolveTrustedServerOrigin");
+			expect(requestStack?.content).toContain("resolveTrustedClientOrigins");
 			expect(requestStack?.content).toContain(
-				"configuredOrigin: configuredApiOrigin() || siteOrigin",
+				"configuredApiOrigin: configuredApiOrigin()",
 			);
 			expect(requestStack?.content).toContain(
 				'isProduction: process.env.NODE_ENV === "production"',
@@ -342,7 +349,9 @@ describe("scaffold plan", () => {
 				"baseURL: new URL(request.url).origin",
 			);
 			if (framework === "nextjs") {
-				expect(layout?.content).toContain("getStackClient(queryClient)");
+				expect(layout?.content).toContain(
+					"getStackClient(queryClient, clientOrigins)",
+				);
 			} else {
 				expect(layout?.content).toContain("apiOrigin");
 				expect(layout?.content).toContain("siteOrigin");
@@ -363,7 +372,9 @@ describe("scaffold plan", () => {
 			} else {
 				expect(pageRoute?.content).toContain("createIsomorphicFn");
 				expect(pageRoute?.content).toContain("getRequest()");
-				expect(pageRoute?.content).toContain(": getStackClient(queryClient)");
+				expect(pageRoute?.content).toContain(
+					"getStackClient(queryClient, await getTrustedClientOrigins())",
+				);
 			}
 		},
 	);
@@ -555,7 +566,7 @@ describe("scaffold plan", () => {
 		);
 
 		const pagesLayoutFile = plan.files.find((file) =>
-			file.path.endsWith("app/pages/layout.tsx"),
+			file.path.endsWith("app/pages/client-layout.tsx"),
 		);
 		// PageAIContextProvider belongs in the root layout, not the pages layout
 		expect(pagesLayoutFile?.content).not.toContain("PageAIContextProvider");

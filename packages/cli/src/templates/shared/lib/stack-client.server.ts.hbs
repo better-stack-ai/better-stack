@@ -1,6 +1,6 @@
 import {
 	filterCredentialForwardingHeaders,
-	resolveTrustedServerOrigin,
+	resolveTrustedClientOrigins,
 } from "@btst/stack/client/server"
 import type { QueryClient } from "@tanstack/react-query"
 import { createAppClientStack } from "./stack-client"
@@ -40,21 +40,19 @@ function requestOriginFromHeaders(headers: Headers) {
 }
 
 export function getServerClientOrigins(requestOrigin?: string) {
-	const siteOrigin = resolveTrustedServerOrigin({
-		configuredOrigin: configuredSiteOrigin(),
+	return resolveTrustedClientOrigins({
+		configuredApiOrigin: configuredApiOrigin(),
+		configuredSiteOrigin: configuredSiteOrigin(),
 		requestOrigin,
 		isProduction: process.env.NODE_ENV === "production",
-		label: "BTST_SITE_URL, {{{publicSiteURLVar}}}, or BASE_URL",
+		apiLabel: "BTST_API_URL, {{{publicApiURLVar}}}, or BASE_URL",
+		siteLabel: "BTST_SITE_URL, {{{publicSiteURLVar}}}, or BASE_URL",
 	})
-	return {
-		apiOrigin: resolveTrustedServerOrigin({
-			configuredOrigin: configuredApiOrigin() || siteOrigin,
-			requestOrigin,
-			isProduction: process.env.NODE_ENV === "production",
-			label: "BTST_API_URL, {{{publicApiURLVar}}}, or BASE_URL",
-		}),
-		siteOrigin,
-	}
+}
+
+export function getServerClientOriginsFromHeaders(headers: HeadersInit) {
+	const requestHeaders = new Headers(headers)
+	return getServerClientOrigins(requestOriginFromHeaders(requestHeaders))
 }
 
 /** Creates a fresh credentialed server stack for one trusted API origin. */
@@ -68,9 +66,9 @@ export function getStackClientForRequest(
 	} catch {
 		throw new TypeError(`${requestBoundaryMarker}: expected request headers`)
 	}
-	const origins = getServerClientOrigins(
-		options.requestOrigin || requestOriginFromHeaders(requestHeaders),
-	)
+	const origins = options.requestOrigin
+		? getServerClientOrigins(options.requestOrigin)
+		: getServerClientOriginsFromHeaders(requestHeaders)
 	const headers = filterCredentialForwardingHeaders(requestHeaders)
 	return createAppClientStack(queryClient, { ...origins, headers })
 }

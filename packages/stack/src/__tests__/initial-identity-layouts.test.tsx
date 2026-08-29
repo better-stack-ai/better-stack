@@ -40,17 +40,27 @@ describe("framework identity layout helpers", () => {
 		}));
 		const layout = createNextLayout({
 			auth: { contract: identityContract, getIdentityFromHeaders: getIdentity },
-			ClientLayout: ({ initialIdentity, children }) => (
-				<section data-user={initialIdentity?.id ?? "anonymous"}>
+			ClientLayout: ({ clientOrigins, initialIdentity, children }) => (
+				<section
+					data-api-origin={clientOrigins?.apiOrigin}
+					data-site-origin={clientOrigins?.siteOrigin}
+					data-user={initialIdentity?.id ?? "anonymous"}
+				>
 					{children}
 				</section>
 			),
+			resolveClientOrigins: () => ({
+				apiOrigin: "https://api.managed.example",
+				siteOrigin: "https://app.example",
+			}),
 		});
 
 		const tree = await layout.Layout({ children: <span>sibling page</span> });
 		const html = renderToString(tree);
 
 		expect(html).toContain('data-user="next-user"');
+		expect(html).toContain('data-api-origin="https://api.managed.example"');
+		expect(html).toContain('data-site-origin="https://app.example"');
 		expect(html).toContain("sibling page");
 		expect(nextHeaders).toHaveBeenCalledOnce();
 		expect(getIdentity).toHaveBeenCalledOnce();

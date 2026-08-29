@@ -1,0 +1,11 @@
+import { createServerFn } from "@tanstack/react-start"
+import { getRequest } from "@tanstack/react-start/server"
+import { getServerClientOrigins } from "./stack-client.server"
+
+/** Returns one deployment-trusted origin snapshot on initial load and navigation. */
+export const getTrustedClientOrigins = createServerFn({ method: "GET" }).handler(
+	() => {
+		const request = getRequest()
+		return getServerClientOrigins(new URL(request.url).origin)
+	},
+)

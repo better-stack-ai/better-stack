@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { createTanStackPageOptions } from "@btst/stack/tanstack"
+import type { QueryClient } from "@tanstack/react-query"
 import { createIsomorphicFn } from "@tanstack/react-start"
 import { getRequest } from "@tanstack/react-start/server"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient } from "{{alias}}lib/stack-client"
 import { getStackClientForRequest } from "{{alias}}lib/stack-client.server"
+import { getTrustedClientOrigins } from "{{alias}}lib/stack-client.origins"
 
 const getLoaderRequestContext = createIsomorphicFn()
 	.server(() => {
@@ -16,6 +18,9 @@ const getLoaderRequestContext = createIsomorphicFn()
 	})
 	.client(() => undefined)
 
+const getNavigationClientStack = async (queryClient: QueryClient) =>
+	getStackClient(queryClient, await getTrustedClientOrigins())
+
 export const Route = createFileRoute("/pages/$")(
 	createTanStackPageOptions({
 		getStackClient,
@@ -23,7 +28,7 @@ export const Route = createFileRoute("/pages/$")(
 			const requestContext = await getLoaderRequestContext()
 			return requestContext
 				? getStackClientForRequest(queryClient, requestContext)
-				: getStackClient(queryClient)
+				: getNavigationClientStack(queryClient)
 		},
 		getQueryClient: getOrCreateQueryClient,
 	}),

@@ -4,8 +4,11 @@ import type { QueryClient } from "@tanstack/react-query"
 {{{clientImports}}}
 {{/if}}
 
-interface StackClientOptions {
+/** Browser-safe origins resolved once by the server layout. */
+export interface StackClientOptions {
+	/** Trusted destination for browser API requests. */
 	apiOrigin?: string
+	/** Trusted public origin used to build application links. */
 	siteOrigin?: string
 }
 

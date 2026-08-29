@@ -173,7 +173,7 @@ for (const framework of frameworks) {
 	requireText(serverClient, "headers:", `${label} request client`);
 	requireText(
 		serverClient,
-		"resolveTrustedServerOrigin",
+		"resolveTrustedClientOrigins",
 		`${label} trusted server origin`,
 	);
 	requireText(
@@ -218,6 +218,24 @@ for (const framework of frameworks) {
 			`${label} SSR provider origins`,
 		);
 		rejectText(layout, "requestOrigin", `${label} raw request origin snapshot`);
+	} else {
+		requireText(
+			layout,
+			"resolveClientOrigins: getRequestClientOrigins",
+			`${label} trusted client origin hydration`,
+		);
+		requireText(
+			clientLayout,
+			"getStackClient(queryClient, clientOrigins)",
+			`${label} hydrated client origins`,
+		);
+	}
+	if (label === "TanStack Start") {
+		requireText(
+			page,
+			"await getInitialIdentity()",
+			`${label} trusted navigation origins`,
+		);
 	}
 	requireText(
 		sitemap,

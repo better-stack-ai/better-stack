@@ -176,10 +176,12 @@ test -f "lib/query-client.ts"
 test -f "app/api/data/[[...all]]/route.ts"
 test -f "app/pages/[[...all]]/page.tsx"
 test -f "app/pages/layout.tsx"
+test -f "app/pages/client-layout.tsx"
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("import { createBackendStack } from \"@btst/stack/api\"")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("mediaBackendPlugin({ storageAdapter: localAdapter() })")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.tsx","utf8");process.exit(s.includes("createClientStack")&&!s.includes("getStackClientForRequest")?0:1)'
-node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.server.ts","utf8");process.exit(s.includes("getStackClientForRequest")&&s.includes("resolveTrustedServerOrigin")&&s.includes("filterCredentialForwardingHeaders")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.server.ts","utf8");process.exit(s.includes("getStackClientForRequest")&&s.includes("resolveTrustedClientOrigins")&&s.includes("filterCredentialForwardingHeaders")?0:1)'
+node -e 'const fs=require("fs");const server=fs.readFileSync("app/pages/layout.tsx","utf8"),client=fs.readFileSync("app/pages/client-layout.tsx","utf8");process.exit(server.includes("getServerClientOrigins()")&&!server.includes("force-dynamic")&&client.includes("getStackClient(queryClient, clientOrigins)")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");process.exit(s.includes("@btst/stack/plugins/ui-builder/css")?0:1)'
 node -e 'const fs=require("fs"),path=require("path");const roots=["app","lib","package.json"];const retired=["@btst","better-auth-ui"].join("/");const read=(p)=>fs.statSync(p).isDirectory()?fs.readdirSync(p).flatMap((n)=>read(path.join(p,n))):[fs.readFileSync(p,"utf8")];process.exit(roots.flatMap(read).some((s)=>s.includes(retired))?1:0)'
 success "Generation + patch checks passed"
@@ -205,7 +207,7 @@ step "Verifying compile on the compatible memory scaffold"
 success "Keeping generated BTST CSS imports from the selected plugins"
 
 step "Compiling fixture project"
-npm run build
+BASE_URL=http://localhost:3000 npm run build
 success "Fixture build succeeded"
 
 TEST_PASSED=true
