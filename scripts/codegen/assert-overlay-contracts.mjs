@@ -176,6 +176,11 @@ for (const framework of frameworks) {
 		"resolveTrustedClientOrigins",
 		`${label} trusted server origin`,
 	);
+	rejectText(
+		serverClient,
+		"VERCEL_URL",
+		`${label} deployment hostname as public origin`,
+	);
 	requireText(
 		serverClient,
 		"filterCredentialForwardingHeaders",

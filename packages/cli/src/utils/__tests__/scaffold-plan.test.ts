@@ -184,6 +184,8 @@ describe("scaffold plan", () => {
 		expect(stackClientServerFile?.content).toContain(
 			"BTST_REQUEST_HEADERS_SERVER_MARKER",
 		);
+		expect(stackClientServerFile?.content).not.toContain("VERCEL_URL");
+		expect(stackClientFile?.content).not.toContain("VERCEL_URL");
 		const pagesLayoutFile = plan.files.find(
 			(f) => f.path === "app/pages/layout.tsx",
 		);

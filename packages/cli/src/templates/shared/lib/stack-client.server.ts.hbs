@@ -24,8 +24,7 @@ function configuredSiteOrigin() {
 	return (
 		process.env.BTST_SITE_URL ||
 		{{{browserSiteURLExpression}}} ||
-		process.env.BASE_URL ||
-		(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined)
+		process.env.BASE_URL
 	)
 }
 

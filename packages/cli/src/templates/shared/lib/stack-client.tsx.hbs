@@ -55,7 +55,6 @@ function getSiteOrigin(serverOrigin?: string) {
 	if (process.env.BTST_SITE_URL) return process.env.BTST_SITE_URL
 	if (process.env.{{publicSiteURLVar}}) return process.env.{{publicSiteURLVar}}
 	if (process.env.BASE_URL) return process.env.BASE_URL
-	if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
 
 	return "http://localhost:3000"
 }
