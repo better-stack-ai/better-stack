@@ -27,6 +27,7 @@ your-plugin/
 │   ├── query-key-defs.ts   # Shared query key shapes (prevents SSG/SSR drift)
 │   └── serializers.ts      # Convert Date fields to strings for the query cache
 ├── client/
+│   ├── constants.ts    # Literal plugin ID shared by factory and components
 │   ├── client.tsx      # Client plugin with routes
 │   ├── hooks.tsx       # React Query hooks
 │   ├── components.tsx  # Page components
@@ -407,6 +408,13 @@ The client plugin defines routes with React components, SSR data loaders, and SE
 
 ### Basic Structure
 
+Keep the literal plugin ID in a browser-safe constants module so the factory and
+plugin components use the same value:
+
+```typescript title="client/constants.ts"
+export const TODOS_PLUGIN_ID = "todos" as const
+```
+
 ```typescript
 import {
   createApiClient,
@@ -417,8 +425,7 @@ import {
 import type { QueryClient } from "@tanstack/react-query"
 import type { TodosApiRouter } from "../api/backend"
 import { lazy } from "react"
-
-export const TODOS_PLUGIN_ID = "todos" as const
+import { TODOS_PLUGIN_ID } from "./constants"
 
 export interface TodosClientConfig {
   title?: string
@@ -824,27 +831,42 @@ export function useToggleTodo() {
 }
 ```
 
-### Framework Context
+### Plugin Site Navigation
 
-Framework-wide routing is configured once on `StackProvider`. Read it through `useStack()` in plugin components; reserve plugin overrides for plugin-specific customization:
+Framework-wide routing is configured once on `StackProvider`. In plugin browser
+components, resolve links through `usePluginSiteNavigation()` with the plugin's
+literal ID. This honors both the top-level site location and a per-plugin
+`endpoints.todos.site` override:
 
-```typescript
-import { joinBasePath, useBasePath, useStack } from "@btst/stack/context"
+```tsx
+"use client"
+
+import { usePluginSiteNavigation } from "@btst/stack/context"
+import { TODOS_PLUGIN_ID } from "./constants"
 
 function TodosList() {
-  const { router } = useStack()
-  const Link = router?.Link ?? "a"
-  const basePath = useBasePath()
-  
+  const { Link, navigate, resolve } = usePluginSiteNavigation(TODOS_PLUGIN_ID)
+
   return (
-    <Link href={joinBasePath(basePath, "/todos/add")}>
-      Add Todo
-    </Link>
+    <>
+      <Link href={resolve("todos", "add").href}>Add Todo</Link>
+      <button type="button" onClick={() => void navigate("todos")}>
+        View Todos
+      </button>
+    </>
   )
 }
 ```
 
-Use `joinBasePath` for links and programmatic navigation. It keeps a root base path (`/`) from producing a protocol-relative URL such as `//todos/add`.
+For same-origin destinations, the hook uses the framework router. Cross-origin
+plugin endpoints render an absolute link and use full-page browser navigation. It
+also falls back to full-page navigation when no router adapter is installed, and
+normalizes a root base path (`/`) without producing a protocol-relative URL.
+
+Do not build plugin-owned browser links from `useBasePath()` alone: it exposes the
+top-level site base path and cannot see a plugin endpoint override. Keep
+`joinBasePath(basePath, route)` for non-hook or server-side path composition when
+the correct resolved base path is already available.
 
 ### ComposedRoute
 

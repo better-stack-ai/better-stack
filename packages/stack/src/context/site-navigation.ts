@@ -3,7 +3,13 @@
 import { normalizePath } from "../client/path-utils";
 import { useStack } from "./provider";
 
-/** Resolve one registered plugin's page links and programmatic navigation. */
+/**
+ * Resolve one registered plugin's page links and programmatic navigation.
+ *
+ * Uses the plugin's resolved site endpoint, including per-plugin overrides.
+ * Same-origin destinations use the configured router; cross-origin destinations
+ * and stacks without a router use full-page browser navigation.
+ */
 export function usePluginSiteNavigation(pluginId: string) {
 	const { basePath, plugins, router, site: stackSite } = useStack();
 	const pluginSite = plugins?.[pluginId]?.site;
