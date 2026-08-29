@@ -62,7 +62,8 @@ function samePartition(
 }
 
 function useCurrentMediaListRefresh(resource: "mediaAssets" | "mediaFolders") {
-	const queryClient = useQueryClient();
+	const { queryClient: stackQueryClient } = useStack();
+	const queryClient = useQueryClient(stackQueryClient);
 	const identityPartition = useIdentityPartition();
 	const latestPartition = useRef(identityPartition);
 	const mounted = useRef(true);
@@ -191,44 +192,48 @@ export function useFolders(parentId?: string | null) {
 export function useUploadAsset() {
 	const { imageCompression } =
 		usePluginOverrides<MediaPluginOverrides>(MEDIA_PLUGIN_ID);
-	const { api, plugins } = useStack();
+	const { api, plugins, queryClient: stackQueryClient } = useStack();
+	const queryClient = useQueryClient(stackQueryClient);
 	const pluginRuntime = plugins?.[MEDIA_PLUGIN_ID];
 	const pluginApi = pluginRuntime?.api ?? api;
 	const providerConfig = pluginRuntime?.config as
 		| MediaProviderConfig
 		| undefined;
-	// Resource-generated asset queries use the nearest QueryClientProvider.
+	// Resource-generated asset queries use the stack-owned QueryClient.
 	// Keep the custom upload transport on that same cache.
 	const listRefresh = useCurrentMediaListRefresh("mediaAssets");
 
-	return useMutation({
-		onMutate: () => listRefresh.currentPartition(),
-		mutationFn: async ({
-			file,
-			folderId,
-		}: {
-			file: File;
-			folderId?: string;
-		}): Promise<SerializedAsset> =>
-			uploadAsset(
-				createMediaUploadConfig(
-					{
-						api: {
-							baseURL: pluginApi?.baseURL ?? "",
-							basePath: pluginApi?.basePath ?? "",
-							browserHeaders: pluginRuntime?.api.browserHeaders,
-							credentials: pluginRuntime?.api.credentials,
+	return useMutation(
+		{
+			onMutate: () => listRefresh.currentPartition(),
+			mutationFn: async ({
+				file,
+				folderId,
+			}: {
+				file: File;
+				folderId?: string;
+			}): Promise<SerializedAsset> =>
+				uploadAsset(
+					createMediaUploadConfig(
+						{
+							api: {
+								baseURL: pluginApi?.baseURL ?? "",
+								basePath: pluginApi?.basePath ?? "",
+								browserHeaders: pluginRuntime?.api.browserHeaders,
+								credentials: pluginRuntime?.api.credentials,
+							},
+							config: providerConfig,
 						},
-						config: providerConfig,
-					},
-					{ imageCompression },
+						{ imageCompression },
+					),
+					{ file, folderId },
 				),
-				{ file, folderId },
-			),
-		onSuccess: async (_asset, _variables, startedAs) => {
-			await listRefresh.refreshAfterSuccess(startedAs);
+			onSuccess: async (_asset, _variables, startedAs) => {
+				await listRefresh.refreshAfterSuccess(startedAs);
+			},
 		},
-	});
+		queryClient,
+	);
 }
 
 /** Register an already-hosted asset URL. */

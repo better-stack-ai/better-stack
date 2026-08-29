@@ -416,9 +416,9 @@ describe("Media and Route Docs resolved client runtime", () => {
 
 	it("reuses Route Docs loader data across equivalent stack reconstruction", async () => {
 		const queryClient = new QueryClient();
-		const createEquivalentStack = () =>
+		const createEquivalentStack = (apiBaseURL: string, apiBasePath: string) =>
 			createClientStack({
-				api: { baseURL: "https://api.example.com", basePath: "/api" },
+				api: { baseURL: apiBaseURL, basePath: apiBasePath },
 				site: { baseURL: "https://site.example.com", basePath: "/" },
 				queryClient,
 				plugins: {
@@ -441,8 +441,14 @@ describe("Media and Route Docs resolved client runtime", () => {
 					routeDocs: routeDocsClientPlugin(),
 				},
 			});
-		const loaderStack = createEquivalentStack();
-		const pageStack = createEquivalentStack();
+		const loaderStack = createEquivalentStack(
+			"http://internal-api:3000",
+			"/internal-api",
+		);
+		const pageStack = createEquivalentStack(
+			"https://api.example.com",
+			"/public-api",
+		);
 		const getPageQueryKey = (stack: typeof loaderStack) => {
 			const route = stack.context.plugins.routeDocs!.routes(stack.context)
 				.docs as {
@@ -516,5 +522,18 @@ describe("Media and Route Docs resolved client runtime", () => {
 		expect(
 			queryClient.getQueriesData({ queryKey: ROUTE_DOCS_QUERY_KEY }),
 		).toHaveLength(2);
+
+		const reconstructedAKey = getPageQueryKey(
+			createStack("https://site.example.com/probe-a"),
+		);
+		const reconstructedBKey = getPageQueryKey(
+			createStack("https://site.example.com/probe-b"),
+		);
+		if (!reconstructedAKey || !reconstructedBKey) {
+			throw new Error("Reconstructed Route Docs key was not created");
+		}
+		expect(reconstructedAKey).not.toEqual(keyB);
+		expect(reconstructedBKey).not.toEqual(keyB);
+		expect(reconstructedAKey).not.toEqual(reconstructedBKey);
 	});
 });

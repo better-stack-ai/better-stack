@@ -78,14 +78,12 @@ export interface RouteDocsClientConfig {
 
 interface ResolvedRouteDocsClientConfig extends RouteDocsClientConfig {
 	queryClient: QueryClient;
-	apiBaseURL: string;
-	apiBasePath: string;
 	siteBaseURL: string;
 	siteBasePath: string;
 }
 
 const resolvedSchemaKeysByContext = new WeakMap<ClientStackContext, string>();
-const clientContextKeysByQueryClient = new WeakMap<
+const contextFallbackKeysByQueryClient = new WeakMap<
 	QueryClient,
 	{
 		nextKey: number;
@@ -115,8 +113,6 @@ function createRouteDocsBaseFingerprint(
 	return hashKey([
 		{
 			basePath: context?.basePath ?? null,
-			apiBaseURL: config.apiBaseURL,
-			apiBasePath: config.apiBasePath,
 			siteBaseURL: config.siteBaseURL,
 			siteBasePath: config.siteBasePath,
 			registrations,
@@ -133,14 +129,14 @@ function createSchemaKeyResolutionQueryKey(baseFingerprint: string) {
 	return [...ROUTE_DOCS_KEY_RESOLUTION, baseFingerprint] as const;
 }
 
-function getClientContextKey(
+function getContextFallbackKey(
 	queryClient: QueryClient,
 	context: ClientStackContext,
 ) {
-	let state = clientContextKeysByQueryClient.get(queryClient);
+	let state = contextFallbackKeysByQueryClient.get(queryClient);
 	if (!state) {
 		state = { nextKey: 0, keys: new WeakMap() };
-		clientContextKeysByQueryClient.set(queryClient, state);
+		contextFallbackKeysByQueryClient.set(queryClient, state);
 	}
 	let key = state.keys.get(context);
 	if (key === undefined) {
@@ -155,21 +151,23 @@ function resolveRouteDocsQueryKey(
 	context: ClientStackContext | null,
 ) {
 	const baseFingerprint = createRouteDocsBaseFingerprint(config, context);
-	// The loader records the sitemap-complete key under this deterministic alias.
-	// Its dehydrated query data lets an equivalent reconstructed page find it.
+	// Loaders record every sitemap-complete key under this deterministic alias.
+	// A single dehydrated variant lets an equivalent reconstructed page find it;
+	// ambiguous variants fall back to isolated context keys below.
+	const aliases = config.queryClient.getQueryData<string[]>(
+		createSchemaKeyResolutionQueryKey(baseFingerprint),
+	);
 	const resolvedFingerprint = context
 		? (resolvedSchemaKeysByContext.get(context) ??
-			config.queryClient.getQueryData<string>(
-				createSchemaKeyResolutionQueryKey(baseFingerprint),
-			))
+			(aliases?.length === 1 ? aliases[0] : undefined))
 		: undefined;
 	if (resolvedFingerprint) return createSchemaQueryKey(resolvedFingerprint);
-	if (typeof window !== "undefined" && context) {
+	if (context) {
 		return createSchemaQueryKey(
 			hashKey([
 				{
 					baseFingerprint,
-					clientContext: getClientContextKey(config.queryClient, context),
+					contextFallback: getContextFallbackKey(config.queryClient, context),
 				},
 			]),
 		);
@@ -185,8 +183,6 @@ function resolveRouteDocsClientConfig(
 		title: config.title,
 		description: config.description,
 		queryClient: runtime.queryClient,
-		apiBaseURL: runtime.api.baseURL,
-		apiBasePath: runtime.api.basePath,
 		siteBaseURL: runtime.site.baseURL,
 		siteBasePath: runtime.site.basePath,
 	};
@@ -244,9 +240,12 @@ function createRouteDocsLoader(
 			]);
 			const queryKey = createSchemaQueryKey(resolvedFingerprint);
 			resolvedSchemaKeysByContext.set(context, resolvedFingerprint);
-			config.queryClient.setQueryData(
+			config.queryClient.setQueryData<string[]>(
 				createSchemaKeyResolutionQueryKey(baseFingerprint),
-				resolvedFingerprint,
+				(previous = []) =>
+					previous.includes(resolvedFingerprint)
+						? previous
+						: [...previous, resolvedFingerprint],
 			);
 			config.queryClient.setQueryData<RouteDocsSchema>(queryKey, schema);
 		} catch (error) {

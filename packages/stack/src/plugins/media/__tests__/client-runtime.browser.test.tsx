@@ -1,11 +1,18 @@
 // @vitest-environment jsdom
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+	dehydrate,
+	hydrate,
+	QueryClient,
+	QueryClientProvider,
+} from "@tanstack/react-query";
 import { defineRoute } from "@btst/yar";
 import { act, Suspense } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "../../../client";
 import { StackProvider } from "@btst/stack/context";
+import { createReactRouterPage } from "../../../react-router";
 import { defineClientPlugin } from "../../client";
 import { useAssets, useRegisterAsset, useUploadAsset } from "../client/hooks";
 import {
@@ -18,6 +25,7 @@ import {
 	routeDocsClientPlugin,
 	useRegisteredRoutes,
 } from "../../route-docs/client";
+import { generateRouteDocsSchema } from "../../route-docs/generator";
 
 const { putBlob } = vi.hoisted(() => ({
 	putBlob: vi.fn(),
@@ -72,6 +80,7 @@ describe("Media and Route Docs browser runtime", () => {
 	afterEach(async () => {
 		await act(async () => root.unmount());
 		container.remove();
+		vi.unstubAllGlobals();
 		vi.restoreAllMocks();
 	});
 
@@ -99,6 +108,9 @@ describe("Media and Route Docs browser runtime", () => {
 		const queryClient = new QueryClient({
 			defaultOptions: { queries: { retry: false } },
 		});
+		const foreignQueryClient = new QueryClient();
+		const stackInvalidate = vi.spyOn(queryClient, "invalidateQueries");
+		const foreignInvalidate = vi.spyOn(foreignQueryClient, "invalidateQueries");
 		const stack = createClientStack({
 			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
 			site: { baseURL: "https://app.example.com", basePath: "/pages" },
@@ -137,7 +149,7 @@ describe("Media and Route Docs browser runtime", () => {
 		const renderProbe = async () => {
 			await act(async () => {
 				root.render(
-					<QueryClientProvider client={queryClient}>
+					<QueryClientProvider client={foreignQueryClient}>
 						<StackProvider
 							stack={stack}
 							overrides={{ media: { imageCompression: false } }}
@@ -204,6 +216,10 @@ describe("Media and Route Docs browser runtime", () => {
 		await renderProbe();
 		expect(probeRenderCount).toBeGreaterThan(renderCount);
 		expect(registerMutation?.data).toBe(mutationData);
+		expect(queryClient.getMutationCache().getAll().length).toBeGreaterThan(0);
+		expect(foreignQueryClient.getMutationCache().getAll()).toHaveLength(0);
+		expect(stackInvalidate).toHaveBeenCalled();
+		expect(foreignInvalidate).not.toHaveBeenCalled();
 		expect(requests.some((request) => request.method === "GET")).toBe(true);
 		expect(
 			requests.filter((request) => request.method === "POST").length,
@@ -363,6 +379,8 @@ describe("Media and Route Docs browser runtime", () => {
 
 	it("uses Route Docs' resolved cross-origin site for rendered navigation", async () => {
 		const queryClient = new QueryClient();
+		const foreignQueryClient = new QueryClient();
+		const sitemap = vi.fn(() => []);
 		const stack = createClientStack({
 			api: { baseURL: "https://api.example.com", basePath: "/api/data" },
 			site: { baseURL: "https://app.example.com", basePath: "/pages" },
@@ -374,7 +392,7 @@ describe("Media and Route Docs browser runtime", () => {
 						routes: () => ({
 							home: defineRoute("/probe", { page: () => null }),
 						}),
-						sitemap: () => [],
+						sitemap,
 					}),
 				}),
 				routeDocs: routeDocsClientPlugin(),
@@ -389,12 +407,23 @@ describe("Media and Route Docs browser runtime", () => {
 			},
 		});
 		const route = stack.router.getRoute("/route-docs");
+		const routeDefinition = stack.context.plugins.routeDocs!.routes(
+			stack.context,
+		).docs as {
+			def?: { page?: () => { props: { queryKey: readonly unknown[] } } };
+		};
+		const queryKey = routeDefinition.def?.page?.().props.queryKey;
+		if (!queryKey) throw new Error("Route Docs query key was not created");
+		queryClient.setQueryData(
+			queryKey,
+			generateRouteDocsSchema(stack.context, []),
+		);
 		const PageComponent = route?.PageComponent;
 		const open = vi.spyOn(window, "open").mockImplementation(() => null);
 
 		await act(async () => {
 			root.render(
-				<QueryClientProvider client={queryClient}>
+				<QueryClientProvider client={foreignQueryClient}>
 					<StackProvider stack={stack}>
 						<Suspense fallback={<span>loading</span>}>
 							{PageComponent ? <PageComponent /> : null}
@@ -415,6 +444,10 @@ describe("Media and Route Docs browser runtime", () => {
 			"_blank",
 			"noopener,noreferrer",
 		);
+		expect(sitemap).not.toHaveBeenCalled();
+		expect(
+			foreignQueryClient.getQueriesData({ queryKey: ROUTE_DOCS_QUERY_KEY }),
+		).toHaveLength(0);
 	});
 
 	it("isolates Route Docs pages that share one query client", async () => {
@@ -519,6 +552,209 @@ describe("Media and Route Docs browser runtime", () => {
 		expect(
 			queryClient.getQueriesData({ queryKey: ROUTE_DOCS_QUERY_KEY }),
 		).toHaveLength(2);
+	});
+
+	it("isolates hydrated Route Docs alias variants across reconstructed stacks", async () => {
+		const createStack = (queryClient: QueryClient, sitemapURL: string) =>
+			createClientStack({
+				api: { baseURL: "https://api.example.com", basePath: "/api" },
+				site: { baseURL: "https://app.example.com", basePath: "/" },
+				queryClient,
+				plugins: {
+					probe: defineClientPlugin({
+						id: "probe",
+						resolve: () => ({
+							routes: () => ({
+								probe: defineRoute("/probe", { page: () => null }),
+							}),
+							sitemap: async () => [{ url: sitemapURL }],
+						}),
+					}),
+					routeDocs: routeDocsClientPlugin(),
+				},
+			});
+
+		const serverQueryClient = new QueryClient();
+		const serverStackA = createStack(
+			serverQueryClient,
+			"https://app.example.com/probe-a",
+		);
+		const serverStackB = createStack(
+			serverQueryClient,
+			"https://app.example.com/probe-b",
+		);
+		vi.stubGlobal("window", undefined);
+		try {
+			await serverStackA.router.getRoute("/route-docs")?.loader?.();
+			await serverStackB.router.getRoute("/route-docs")?.loader?.();
+		} finally {
+			vi.unstubAllGlobals();
+		}
+
+		const dehydrated = dehydrate(serverQueryClient);
+		expect(() => JSON.stringify(dehydrated)).not.toThrow();
+		const alias = dehydrated.queries.find(
+			(query) =>
+				query.queryKey[0] === "route-docs" &&
+				query.queryKey[1] === "schema-key",
+		)?.state.data;
+		expect(alias).toEqual(
+			expect.arrayContaining([expect.any(String), expect.any(String)]),
+		);
+		expect(alias).toHaveLength(2);
+
+		const browserQueryClient = new QueryClient();
+		hydrate(browserQueryClient, JSON.parse(JSON.stringify(dehydrated)));
+		const browserStackA = createStack(
+			browserQueryClient,
+			"https://app.example.com/probe-a",
+		);
+		const browserStackB = createStack(
+			browserQueryClient,
+			"https://app.example.com/probe-b",
+		);
+
+		const pageProps = (stack: typeof browserStackA) => {
+			const route = stack.context.plugins.routeDocs!.routes(stack.context)
+				.docs as {
+				def?: { page?: () => { props: { queryKey: readonly unknown[] } } };
+			};
+			return route.def?.page?.().props;
+		};
+		const propsA = pageProps(browserStackA);
+		const propsB = pageProps(browserStackB);
+		expect(() => JSON.stringify(propsA)).not.toThrow();
+		expect(() => JSON.stringify(propsB)).not.toThrow();
+		expect(propsA?.queryKey).not.toEqual(propsB?.queryKey);
+
+		const renderStack = async (stack: typeof browserStackA) => {
+			const PageComponent = stack.router.getRoute("/route-docs")?.PageComponent;
+			await act(async () => {
+				root.render(
+					<QueryClientProvider client={browserQueryClient}>
+						<StackProvider stack={stack}>
+							<Suspense fallback={<span>loading</span>}>
+								{PageComponent ? <PageComponent /> : null}
+							</Suspense>
+						</StackProvider>
+					</QueryClientProvider>,
+				);
+			});
+		};
+
+		await renderStack(browserStackA);
+		await waitFor(
+			() =>
+				container.textContent?.includes("https://app.example.com/probe-a") ??
+				false,
+		);
+		await renderStack(browserStackB);
+		await waitFor(
+			() =>
+				container.textContent?.includes("https://app.example.com/probe-b") ??
+				false,
+		);
+		expect(container.textContent).not.toContain(
+			"https://app.example.com/probe-a",
+		);
+	});
+
+	it("resolves the React Router Route Docs key after its hydration boundary", async () => {
+		const createStack = (
+			queryClient: QueryClient,
+			sitemap: () => Promise<Array<{ url: string }>>,
+		) =>
+			createClientStack({
+				api: { baseURL: "https://api.example.com", basePath: "/api" },
+				site: { baseURL: "https://app.example.com", basePath: "/pages" },
+				queryClient,
+				plugins: {
+					probe: defineClientPlugin({
+						id: "probe",
+						resolve: () => ({
+							routes: () => ({
+								probe: defineRoute("/probe", { page: () => null }),
+							}),
+							sitemap,
+						}),
+					}),
+					routeDocs: routeDocsClientPlugin(),
+				},
+			});
+		const serverQueryClient = new QueryClient();
+		const serverSitemapURL = "https://app.example.com/server-probe";
+		const serverStack = createStack(serverQueryClient, async () => [
+			{ url: serverSitemapURL },
+		]);
+		vi.stubGlobal("window", undefined);
+		try {
+			await serverStack.router.getRoute("/route-docs")?.loader?.();
+		} finally {
+			vi.unstubAllGlobals();
+		}
+		const dehydratedState = JSON.parse(
+			JSON.stringify(dehydrate(serverQueryClient)),
+		);
+
+		const browserQueryClient = new QueryClient();
+		const browserSitemap = vi.fn(async () => [
+			{ url: "https://app.example.com/browser-probe" },
+		]);
+		// The layout creates its provider stack before the nested page's
+		// HydrationBoundary runs, matching generated React Router applications.
+		const layoutStack = createStack(browserQueryClient, browserSitemap);
+		const hydratedAliasCounts: number[] = [];
+		const page = createReactRouterPage({
+			getStackClient: (queryClient) => {
+				hydratedAliasCounts.push(
+					queryClient.getQueriesData({
+						queryKey: ["route-docs", "schema-key"],
+					}).length,
+				);
+				return createStack(queryClient, browserSitemap);
+			},
+			getQueryClient: () => browserQueryClient,
+		});
+		const router = createMemoryRouter(
+			[
+				{
+					id: "route-docs-page",
+					path: "/pages/*",
+					Component: page.Component,
+				},
+			],
+			{
+				initialEntries: ["/pages/route-docs"],
+				hydrationData: {
+					loaderData: {
+						"route-docs-page": {
+							path: "/route-docs",
+							dehydratedState,
+							meta: undefined,
+						},
+					},
+				},
+			},
+		);
+
+		await act(async () => {
+			root.render(
+				<QueryClientProvider client={browserQueryClient}>
+					<StackProvider stack={layoutStack}>
+						<RouterProvider router={router} />
+					</StackProvider>
+				</QueryClientProvider>,
+			);
+		});
+		await waitFor(
+			() => container.textContent?.includes(serverSitemapURL) ?? false,
+		);
+
+		expect(container.textContent).not.toContain(
+			"https://app.example.com/browser-probe",
+		);
+		expect(hydratedAliasCounts).toEqual([1]);
+		expect(browserSitemap).not.toHaveBeenCalled();
 	});
 
 	it("binds route introspection to the enclosing or explicitly supplied stack", async () => {

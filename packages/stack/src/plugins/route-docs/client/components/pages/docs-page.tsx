@@ -1119,11 +1119,14 @@ export function DocsPageComponent({
 	const stack = useStackOrNull();
 	const context = stack?.clientStackContext ?? null;
 	// Read schema from React Query (prefetched by loader on server, or generated on client)
-	const { data: schema } = useSuspenseQuery<RouteDocsSchema>({
-		queryKey,
-		queryFn: () => generateSchema(context),
-		staleTime: Infinity, // Don't refetch - schema is static for this session
-	});
+	const { data: schema } = useSuspenseQuery<RouteDocsSchema>(
+		{
+			queryKey,
+			queryFn: () => generateSchema(context),
+			staleTime: Infinity, // Don't refetch - schema is static for this session
+		},
+		stack?.queryClient,
+	);
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
 	const totalRoutes = schema.plugins.reduce(
