@@ -45,59 +45,49 @@ const backendPlugins = [
 		factory: "aiChatBackendPlugin",
 		lifecycleSlug: "ai-chat",
 		hookType: "AiChatBackendHooks",
-		configType: "AiChatBackendConfig",
 	},
 	{
 		factory: "blogBackendPlugin",
 		lifecycleSlug: "blog",
 		hookType: "BlogBackendHooks",
-		configType: "BlogBackendOptions",
 	},
 	{
 		factory: "cmsBackendPlugin",
 		lifecycleSlug: "cms",
 		hookType: "CMSBackendHooks",
-		configType: "CMSBackendConfig",
 	},
 	{
 		factory: "commentsBackendPlugin",
 		lifecycleSlug: "comments",
 		hookType: "CommentsBackendHooks",
-		configType: "CommentsBackendOptions",
 	},
 	{
 		factory: "formBuilderBackendPlugin",
 		lifecycleSlug: "form-builder",
 		hookType: "FormBuilderBackendHooks",
-		configType: "FormBuilderBackendConfig",
 	},
 	{
 		factory: "kanbanBackendPlugin",
 		lifecycleSlug: "kanban",
 		hookType: "KanbanBackendHooks",
-		configType: "KanbanBackendOptions",
 	},
 	{
 		factory: "mediaBackendPlugin",
 		lifecycleSlug: "media",
 		hookType: "MediaBackendHooks",
-		configType: "MediaBackendConfig",
 	},
-	{ factory: "openApiBackendPlugin", configType: "OpenAPIOptions" },
+	{ factory: "openApiBackendPlugin" },
 ];
 const clientPlugins = [
-	{ factory: "aiChatClientPlugin", configType: "AiChatClientConfig" },
-	{ factory: "blogClientPlugin", configType: "BlogClientConfig" },
-	{ factory: "cmsClientPlugin", configType: "CMSClientConfig" },
-	{ factory: "commentsClientPlugin", configType: "CommentsClientConfig" },
-	{
-		factory: "formBuilderClientPlugin",
-		configType: "FormBuilderClientConfig",
-	},
-	{ factory: "kanbanClientPlugin", configType: "KanbanClientConfig" },
-	{ factory: "mediaClientPlugin", configType: "MediaClientConfig" },
-	{ factory: "routeDocsClientPlugin", configType: "RouteDocsClientConfig" },
-	{ factory: "uiBuilderClientPlugin", configType: "UIBuilderClientConfig" },
+	{ factory: "aiChatClientPlugin" },
+	{ factory: "blogClientPlugin" },
+	{ factory: "cmsClientPlugin" },
+	{ factory: "commentsClientPlugin" },
+	{ factory: "formBuilderClientPlugin" },
+	{ factory: "kanbanClientPlugin" },
+	{ factory: "mediaClientPlugin" },
+	{ factory: "routeDocsClientPlugin" },
+	{ factory: "uiBuilderClientPlugin" },
 ];
 const pluginIds = [
 	"aiChat",
@@ -140,6 +130,26 @@ function collectFiles(target) {
 		}
 	}
 	return files;
+}
+
+function readGuardSource(absolute, file) {
+	const source = readFileSync(absolute, "utf8");
+	if (!/^packages\/stack\/registry\/[^/]+\.json$/.test(file)) return source;
+
+	const registry = JSON.parse(source);
+	if (!Array.isArray(registry.files)) return source;
+	const encodedSources = [];
+	const metadata = {
+		...registry,
+		files: registry.files.map(({ content, ...entry }) => {
+			if (typeof content === "string") encodedSources.push(content);
+			return entry;
+		}),
+	};
+	const isolatedSources = encodedSources
+		.map((encodedSource) => `{\n${encodedSource}\n}`)
+		.join("\n");
+	return `${JSON.stringify(metadata)}\n${isolatedSources}`;
 }
 
 function stripMigrationBlocks(source, file) {
@@ -223,7 +233,7 @@ function scanLexicalState(source, index) {
 		} else if (char === "{") blocks.push(cursor);
 		else if (char === "}") blocks.pop();
 	}
-	return { blockComment, blocks, lineComment };
+	return { blockComment, blocks, lineComment, quote };
 }
 
 function isInsideCommentProse(source, index) {
@@ -275,6 +285,12 @@ function recordLifecycleProperties(
 			});
 		}
 	}
+}
+
+function hasComputedProperty(objectSource) {
+	return /(?:^|[,{])\s*(?:(?:get|set|async)\s+)?\*?\s*\[[^\]]*\]\s*(?::|\()/m.test(
+		objectSource,
+	);
 }
 
 function readTopLevelObject(source, openIndex) {
@@ -378,33 +394,37 @@ function readTopLevelObject(source, openIndex) {
 	return undefined;
 }
 
-function isCanonicalTypeAnnotation(annotation, configType) {
-	if (!annotation || !configType) return false;
-	const compact = annotation.replace(/\s+/g, "");
-	return compact === configType || compact === `Readonly<${configType}>`;
-}
-
-function resolveIdentifierBinding(
-	source,
-	file,
-	identifier,
-	configType,
-	callIndex,
-) {
+function resolveIdentifierBinding(source, file, identifier, callIndex) {
 	const candidates = [];
-	const callBlocks = scanLexicalState(source, callIndex).blocks;
 	const markdownFence = /\.mdx?$/.test(file)
 		? source.lastIndexOf("```", callIndex)
 		: -1;
-	const searchStart = Math.max(0, markdownFence);
+	const searchStart =
+		markdownFence >= 0 ? source.indexOf("\n", markdownFence) + 1 : 0;
+	const scopedSource = source.slice(searchStart);
+	const callBlocks = scanLexicalState(
+		scopedSource,
+		callIndex - searchStart,
+	).blocks;
 	const beforeCall = source.slice(searchStart, callIndex);
 	const variablePattern = new RegExp(
-		`\\b(?:const|let|var)\\s+${escapeRegExp(identifier)}\\b(?:\\s*:\\s*([^=;\\n]+))?\\s*=`,
+		`\\b(?:const|let|var)\\s+${escapeRegExp(identifier)}\\b(?:\\s*:\\s*[^=;\\n]+)?\\s*=`,
 		"g",
 	);
 	for (const binding of beforeCall.matchAll(variablePattern)) {
 		const bindingIndex = searchStart + (binding.index ?? 0);
-		const bindingBlocks = scanLexicalState(source, bindingIndex).blocks;
+		const bindingState = scanLexicalState(
+			scopedSource,
+			bindingIndex - searchStart,
+		);
+		if (
+			bindingState.lineComment ||
+			bindingState.blockComment ||
+			bindingState.quote
+		) {
+			continue;
+		}
+		const bindingBlocks = bindingState.blocks;
 		if (
 			bindingBlocks.some(
 				(block, blockIndex) => callBlocks[blockIndex] !== block,
@@ -422,26 +442,6 @@ function resolveIdentifierBinding(
 			index: bindingIndex,
 			object,
 			openIndex: object ? valueIndex : undefined,
-			typed: isCanonicalTypeAnnotation(binding[1], configType),
-		});
-	}
-
-	const functionPattern =
-		/(?:\bfunction(?:\s+[A-Za-z_$][\w$]*)?\s*|\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:async\s*)?|(?:async\s+)?[A-Za-z_$][\w$]*\s*)\(([^()]*)\)\s*(?::[^={]+)?(?:=>\s*)?\{/g;
-	for (const signature of source.matchAll(functionPattern)) {
-		const signatureIndex = signature.index ?? 0;
-		if (signatureIndex >= callIndex) break;
-		const openIndex = signatureIndex + signature[0].lastIndexOf("{");
-		const body = readTopLevelObject(source, openIndex);
-		if (!body || callIndex <= openIndex || callIndex >= body.end) continue;
-		const parameterPattern = new RegExp(
-			`(?:^|,)\\s*(?:\\.\\.\\.\\s*)?${escapeRegExp(identifier)}\\s*\\??(?:\\s*:\\s*([^,=]+))?(?=\\s*(?:,|$))`,
-		);
-		const parameter = signature[1].match(parameterPattern);
-		if (!parameter) continue;
-		candidates.push({
-			index: signatureIndex + signature[0].indexOf(signature[1]),
-			typed: isCanonicalTypeAnnotation(parameter[1], configType),
 		});
 	}
 
@@ -465,6 +465,14 @@ function inspectFactoryObject(
 			file,
 			line: lineAt(source, reportIndex),
 			label: `${kind} factory options contain an unverifiable spread`,
+			match: factory,
+		});
+	}
+	if (hasComputedProperty(object.topLevel)) {
+		failures.push({
+			file,
+			line: lineAt(source, reportIndex),
+			label: `${kind} factory computed option key cannot be verified`,
 			match: factory,
 		});
 	}
@@ -512,10 +520,7 @@ function inspectFactoryObject(
 						match: factory,
 					});
 				}
-				if (
-					hooksObject &&
-					/(?:^|[,{])\s*\[[^\]]*\]\s*:/m.test(hooksObject.topLevel)
-				) {
+				if (hooksObject && hasComputedProperty(hooksObject.topLevel)) {
 					failures.push({
 						file,
 						line: lineAt(source, hooksValueIndex),
@@ -555,21 +560,11 @@ function inspectFactoryObject(
 			hooksReference = "hooks";
 		}
 
-		if (/(?:^|[,{])\s*\[[^\]]*\]\s*:/m.test(object.topLevel)) {
-			failures.push({
-				file,
-				line: lineAt(source, reportIndex),
-				label: "backend factory computed option key cannot be verified",
-				match: factory,
-			});
-		}
-
 		if (hooksReference) {
 			const binding = resolveIdentifierBinding(
 				source,
 				file,
 				hooksReference,
-				hookType,
 				reportIndex,
 			);
 			if (binding?.object && binding.openIndex !== undefined) {
@@ -581,7 +576,7 @@ function inspectFactoryObject(
 						match: factory,
 					});
 				}
-				if (/(?:^|[,{])\s*\[[^\]]*\]\s*:/m.test(binding.object.topLevel)) {
+				if (hasComputedProperty(binding.object.topLevel)) {
 					failures.push({
 						file,
 						line: lineAt(source, binding.openIndex),
@@ -600,7 +595,7 @@ function inspectFactoryObject(
 						contextualLifecycleNames,
 					);
 				}
-			} else if (!binding?.typed) {
+			} else {
 				if (
 					/\.mdx?$/.test(file) &&
 					isInsideMarkdownInlineCode(source, reportIndex)
@@ -618,7 +613,7 @@ function inspectFactoryObject(
 	}
 	if (
 		kind === "client" &&
-		/(?:^|[,{])\s*(?:apiBaseURL|apiBasePath|siteBaseURL|siteBasePath|queryClient|headers)\b(?=\s*(?:\??:|,|}))/.test(
+		/(?:^|[,{])\s*(?:(?:apiBaseURL|apiBasePath|siteBaseURL|siteBasePath|queryClient|headers|credentials)\b|["'](?:apiBaseURL|apiBasePath|siteBaseURL|siteBasePath|queryClient|headers|credentials)["'])(?=\s*(?:\??:|,|}))/.test(
 			object.topLevel,
 		)
 	) {
@@ -637,7 +632,6 @@ function checkFactoryCalls(
 	source,
 	factory,
 	kind,
-	configType,
 	contextualLifecycleNames = [],
 	hookType,
 ) {
@@ -674,13 +668,7 @@ function checkFactoryCalls(
 				? expression
 				: undefined;
 			const binding = identifier
-				? resolveIdentifierBinding(
-						source,
-						file,
-						identifier,
-						configType,
-						callIndex,
-					)
+				? resolveIdentifierBinding(source, file, identifier, callIndex)
 				: undefined;
 			if (!binding) {
 				if (
@@ -710,7 +698,7 @@ function checkFactoryCalls(
 					binding.openIndex,
 					binding.openIndex,
 				);
-			} else if (!binding.typed) {
+			} else {
 				failures.push({
 					file,
 					line: lineAt(source, callIndex),
@@ -763,7 +751,7 @@ function checkTypedHookObjects(
 			(declaration.index ?? 0) + declaration[0].lastIndexOf("{");
 		const object = readTopLevelObject(source, openIndex);
 		if (!object) continue;
-		if (/(?:^|[,{])\s*\[[^\]]*\]\s*:/m.test(object.topLevel)) {
+		if (hasComputedProperty(object.topLevel)) {
 			failures.push({
 				file,
 				line: lineAt(source, openIndex),
@@ -836,7 +824,7 @@ const failures = [];
 
 for (const absolute of allFiles) {
 	const file = relative(root, absolute);
-	const source = stripMigrationBlocks(readFileSync(absolute, "utf8"), file);
+	const source = stripMigrationBlocks(readGuardSource(absolute, file), file);
 
 	recordMatches(
 		failures,
@@ -907,7 +895,7 @@ for (const absolute of allFiles) {
 		),
 	);
 
-	for (const { factory, hookType, configType } of backendPlugins) {
+	for (const { factory, hookType } of backendPlugins) {
 		const contextualNames = contextualNamesByFactory.get(factory) ?? [];
 		checkFactoryCalls(
 			failures,
@@ -915,7 +903,6 @@ for (const absolute of allFiles) {
 			source,
 			factory,
 			"backend",
-			configType,
 			contextualNames,
 			hookType,
 		);
@@ -930,8 +917,8 @@ for (const absolute of allFiles) {
 			);
 		}
 	}
-	for (const { factory, configType } of clientPlugins) {
-		checkFactoryCalls(failures, file, source, factory, "client", configType);
+	for (const { factory } of clientPlugins) {
+		checkFactoryCalls(failures, file, source, factory, "client");
 	}
 	for (const name of removedLifecycleNames) {
 		recordMatches(
