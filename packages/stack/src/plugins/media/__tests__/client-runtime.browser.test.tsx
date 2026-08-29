@@ -106,9 +106,7 @@ describe("Media and Route Docs browser runtime", () => {
 		}> = [];
 		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
 			const request =
-				input instanceof Request
-					? input
-					: new Request(input, { ...init, signal: undefined });
+				input instanceof Request ? input : new Request(input, init);
 			requests.push({
 				url: request.url,
 				method: request.method,
@@ -268,9 +266,7 @@ describe("Media and Route Docs browser runtime", () => {
 		const requests: string[] = [];
 		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
 			const request =
-				input instanceof Request
-					? input
-					: new Request(input, { ...init, signal: undefined });
+				input instanceof Request ? input : new Request(input, init);
 			requests.push(`${request.method} ${request.url}`);
 			const service = request.url.includes("media-a.example") ? "a" : "b";
 			if (request.method === "POST") {
@@ -380,9 +376,7 @@ describe("Media and Route Docs browser runtime", () => {
 		}> = [];
 		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
 			const request =
-				input instanceof Request
-					? input
-					: new Request(input, { ...init, signal: undefined });
+				input instanceof Request ? input : new Request(input, init);
 			requests.push({
 				url: request.url,
 				headers: request.headers,

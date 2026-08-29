@@ -150,9 +150,7 @@ describe("CMS and UI Builder browser runtime", () => {
 		}> = [];
 		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
 			const request =
-				input instanceof Request
-					? input
-					: new Request(input, { ...init, signal: undefined });
+				input instanceof Request ? input : new Request(input, init);
 			requests.push({
 				url: request.url,
 				headers: request.headers,
