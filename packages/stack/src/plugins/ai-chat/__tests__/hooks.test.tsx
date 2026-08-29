@@ -5,11 +5,13 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StackProvider } from "@btst/stack/context";
 import { createClientStack } from "@btst/stack/client";
+import { buildQueryKey } from "@btst/stack/plugins/client";
 import {
 	useDeleteConversation,
 	useRenameConversationForm,
 } from "../client/hooks/chat-hooks";
 import { aiChatClientPlugin } from "../client/plugin";
+import { aiChatResources } from "../query-keys";
 import type { SerializedConversation } from "../types";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -175,21 +177,58 @@ describe("useRenameConversationForm", () => {
 });
 
 describe("useDeleteConversation", () => {
-	it("refreshes the conversation list without refetching the deleted active detail", async () => {
+	it("refreshes the list and evicts only the deleted detail in the starting identity partition", async () => {
+		const identityPartition = "anonymous" as const;
+		const otherConversation = { ...conversation, id: "conv-2", title: "Other" };
+		const otherIdentity = { id: "other-user", role: "user" } as const;
+		const listKey = buildQueryKey(
+			"conversations",
+			"list",
+			aiChatResources.conversations.queries.list,
+			[identityPartition],
+		);
+		const deletedDetailKey = buildQueryKey(
+			"conversations",
+			"detail",
+			aiChatResources.conversations.queries.detail,
+			[conversation.id, identityPartition],
+		);
+		const otherDetailKey = buildQueryKey(
+			"conversations",
+			"detail",
+			aiChatResources.conversations.queries.detail,
+			[otherConversation.id, identityPartition],
+		);
+		const otherIdentityDetailKey = buildQueryKey(
+			"conversations",
+			"detail",
+			aiChatResources.conversations.queries.detail,
+			[conversation.id, otherIdentity],
+		);
+		let listFetches = 0;
+		await queryClient.fetchQuery({
+			queryKey: listKey,
+			queryFn: async () => {
+				listFetches += 1;
+				return [conversation, otherConversation];
+			},
+		});
+		listFetches = 0;
+		queryClient.setQueryData(deletedDetailKey, conversation);
+		queryClient.setQueryData(otherDetailKey, otherConversation);
+		queryClient.setQueryData(otherIdentityDetailKey, conversation);
 		fetchMock.mockResolvedValue(jsonResponse({ success: true }));
-		const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
 		const getMutation = await renderDeleteProbe();
 
 		await act(async () => {
 			await getMutation().mutateAsync({ id: conversation.id });
 		});
 
-		expect(invalidateQueries).toHaveBeenCalledOnce();
-		expect(invalidateQueries).toHaveBeenCalledWith(
-			expect.objectContaining({
-				queryKey: ["conversations", "list"],
-				refetchType: "all",
-			}),
+		expect(listFetches).toBe(1);
+		expect(queryClient.getQueryData(deletedDetailKey)).toBeUndefined();
+		expect(queryClient.getQueryData(otherDetailKey)).toEqual(otherConversation);
+		expect(queryClient.getQueryData(otherIdentityDetailKey)).toEqual(
+			conversation,
 		);
 	});
 });

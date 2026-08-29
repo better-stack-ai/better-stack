@@ -6,6 +6,7 @@ import {
 	type UseMutationResult,
 } from "@tanstack/react-query";
 import { useLayoutEffect, useRef } from "react";
+import { buildQueryKey } from "@btst/stack/plugins/client";
 import type { ResourceFormResult } from "@btst/stack/plugins/client/hooks";
 import {
 	useIdentity,
@@ -21,7 +22,7 @@ import type {
 	CreateConversationInput,
 	RenameConversationInput,
 } from "../../query-keys";
-import { aiChatIdentityKey } from "../../query-keys";
+import { aiChatIdentityKey, aiChatResources } from "../../query-keys";
 import type { SerializedConversation, SerializedMessage } from "../../types";
 import type { AiChatPluginOverrides } from "../overrides";
 import { aiChat } from "./ai-chat-resource";
@@ -118,10 +119,25 @@ function useCurrentHistoryRefresh() {
 			refetchType: "all",
 		});
 	};
+	const removeConversationDetail = (
+		id: string,
+		partition: typeof identityPartition,
+	) => {
+		queryClient.removeQueries({
+			queryKey: buildQueryKey(
+				"conversations",
+				"detail",
+				aiChatResources.conversations.queries.detail,
+				[id, partition],
+			),
+			exact: true,
+		});
+	};
 
 	return {
 		currentPartition: () => identityPartition,
 		refreshAfterSuccess,
+		removeConversationDetail,
 	};
 }
 
@@ -129,6 +145,10 @@ function withCurrentHistoryRefresh<TData, TVariables>(
 	mutation: UseMutationResult<TData, Error, TVariables>,
 	refresh: ReturnType<typeof useCurrentHistoryRefresh>,
 	queryKey?: readonly unknown[],
+	afterSuccess?: (
+		variables: TVariables,
+		startedAs: ReturnType<typeof useAiChatIdentityPartition>,
+	) => void,
 ): UseMutationResult<TData, Error, TVariables> {
 	const mutateAsync: typeof mutation.mutateAsync = async (
 		variables,
@@ -136,7 +156,11 @@ function withCurrentHistoryRefresh<TData, TVariables>(
 	) => {
 		const startedAs = refresh.currentPartition();
 		const result = await mutation.mutateAsync(variables, options);
-		await refresh.refreshAfterSuccess(startedAs, queryKey);
+		try {
+			await refresh.refreshAfterSuccess(startedAs, queryKey);
+		} finally {
+			afterSuccess?.(variables, startedAs);
+		}
 		return result;
 	};
 	const mutate: typeof mutation.mutate = (variables, options) => {
@@ -302,10 +326,13 @@ export function useRenameConversation() {
 
 /** Delete a persisted conversation. */
 export function useDeleteConversation() {
+	const historyRefresh = useCurrentHistoryRefresh();
 	return withCurrentHistoryRefresh(
 		aiChat.conversations.delete.use(),
-		useCurrentHistoryRefresh(),
+		historyRefresh,
 		["conversations", "list"],
+		({ id }, startedAs) =>
+			historyRefresh.removeConversationDetail(id, startedAs),
 	);
 }
 
