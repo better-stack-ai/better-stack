@@ -10,6 +10,403 @@ This page documents breaking changes between major versions and provides migrati
 
 ---
 
+## v3 RC2 → RC3: Canonical stack and plugin DX
+
+RC3 removes the remaining duplicate runtime configuration and historical naming
+seams. The migration is mechanical: rename the constructors, move shared client
+runtime to one client stack, nest backend hooks, update programmatic IDs and
+lifecycle names, and select the server surface whose trust contract matches the
+caller.
+
+### 1. Rename both stack constructors
+
+{/* canonical-dx-guard: migration:start reason="removed constructor example" */}
+
+Before:
+
+```ts
+import { stack } from "@btst/stack"
+import { createStackClient } from "@btst/stack/client"
+
+const backend = stack({ /* ... */ })
+const client = createStackClient({ /* ... */ })
+```
+
+{/* canonical-dx-guard: migration:end */}
+
+After:
+
+```ts
+import { createBackendStack } from "@btst/stack/api"
+import { createClientStack } from "@btst/stack/client"
+
+const backend = createBackendStack({ /* ... */ })
+const client = createClientStack({ /* ... */ })
+```
+
+{/* canonical-dx-guard: migration:start reason="removed constructor names in migration prose" */}
+
+Use only `createBackendStack` and `createClientStack` in maintained code. The
+earlier `stack` and `createStackClient` names are migration inputs, not parallel
+constructor stories.
+
+{/* canonical-dx-guard: migration:end */}
+
+### 2. Move shared client runtime to one resolved stack
+
+{/* canonical-dx-guard: migration:start reason="duplicated client runtime example" */}
+
+Before, every client plugin and the provider repeated transport, site, cache,
+and request values:
+
+```tsx
+const blog = blogClientPlugin({
+  apiBaseURL: baseURL,
+  apiBasePath: "/api/data",
+  siteBaseURL: baseURL,
+  siteBasePath: "/pages",
+  queryClient,
+  headers: requestHeaders,
+})
+
+<StackProvider
+  api={{ baseURL, basePath: "/api/data" }}
+  basePath="/pages"
+  router={router}
+>
+  {children}
+</StackProvider>
+```
+
+{/* canonical-dx-guard: migration:end */}
+
+After, create one request-specific stack for loaders and metadata by supplying
+`api.headers`, and a separate stable browser stack without request headers:
+
+```tsx
+const clientStack = createClientStack({
+  api: { baseURL, basePath: "/api/data" },
+  site: { baseURL, basePath: "/pages" },
+  queryClient,
+  plugins: {
+    blog: blogClientPlugin(),
+  },
+})
+
+<StackProvider
+  stack={clientStack}
+  router={router}
+  auth={clientAuth}
+  initialIdentity={initialIdentity}
+  overrides={{ blog: { uploadImage } }}
+>
+  {children}
+</StackProvider>
+```
+
+`createClientStack` is the only owner of API location, site location,
+QueryClient, request headers, registered plugin definitions, and endpoint
+replacement. `StackProvider` owns browser/framework services (`router`,
+`auth`, `notify`, and `i18n`) plus genuine plugin browser customization.
+
+Never serialize the request-specific stack into the browser. Construct the SSR
+stack with filtered request headers, then construct the browser stack from
+browser-safe origins and the hydrated QueryClient.
+
+### 3. Delete manual provider generics and override maps
+
+{/* canonical-dx-guard: migration:start reason="removed provider generic example" */}
+
+Before:
+
+```tsx
+type AppPluginOverrides = {
+  "ai-chat": AiChatPluginOverrides
+  blog: BlogPluginOverrides
+}
+
+<StackProvider<AppPluginOverrides>
+  basePath="/pages"
+  overrides={overrides}
+>
+  {children}
+</StackProvider>
+```
+
+{/* canonical-dx-guard: migration:end */}
+
+After, the resolved definitions registered in `createClientStack({ plugins })`
+infer the valid override keys and each value shape:
+
+```tsx
+<StackProvider
+  stack={clientStack}
+  router={router}
+  overrides={{ aiChat: { /* AI Chat browser customization */ } }}
+>
+  {children}
+</StackProvider>
+```
+
+Omit `overrides` entirely when no plugin needs customization.
+`usePluginOverrides()` supplies a safe empty value for an omitted optional
+block; genuinely required plugin customization remains required by the
+registered definition's inferred type.
+
+### 4. Rename programmatic plugin IDs to camelCase
+
+Package paths and URL slugs remain kebab-case. Only programmatic registration
+IDs, provider keys, resource namespaces, and diagnostics change:
+
+| Package or URL slug | Removed programmatic ID | Canonical programmatic ID |
+| --- | --- | --- |
+| `ai-chat` | `ai-chat` | `aiChat` |
+| `blog` | `blog` | `blog` |
+| `cms` | `cms` | `cms` |
+| `comments` | `comments` | `comments` |
+| `form-builder` | `form-builder` | `formBuilder` |
+| `kanban` | `kanban` | `kanban` |
+| `media` | `media` | `media` |
+| `open-api` | `open-api` | `openApi` |
+| `route-docs` | `route-docs` | `routeDocs` |
+| `ui-builder` | `ui-builder` | `uiBuilder` |
+
+{/* canonical-dx-guard: migration:start reason="removed plugin ID example" */}
+
+```diff
+plugins: {
+- "ai-chat": aiChatClientPlugin(),
+- "form-builder": formBuilderClientPlugin(),
+- "route-docs": routeDocsClientPlugin(),
+- "ui-builder": uiBuilderClientPlugin(),
++ aiChat: aiChatClientPlugin(),
++ formBuilder: formBuilderClientPlugin(),
++ routeDocs: routeDocsClientPlugin(),
++ uiBuilder: uiBuilderClientPlugin(),
+}
+```
+
+{/* canonical-dx-guard: migration:end */}
+
+### 5. Use one backend options object with nested hooks
+
+{/* canonical-dx-guard: migration:start reason="removed backend factory forms" */}
+
+Before:
+
+```ts
+blogBackendPlugin(blogHooks)
+commentsBackendPlugin({ allowEditing: false, onAfterPost })
+kanbanBackendPlugin(resolveUser, searchUsers, kanbanHooks)
+```
+
+{/* canonical-dx-guard: migration:end */}
+
+After:
+
+```ts
+blogBackendPlugin({ hooks: blogHooks })
+commentsBackendPlugin({
+  allowEditing: false,
+  resolveUser,
+  hooks: { onAfterCreateComment },
+})
+kanbanBackendPlugin({ resolveUser, searchUsers, hooks: kanbanHooks })
+```
+
+Every backend plugin is a factory receiving at most one options object.
+Optional-only factories allow `plugin()`. Required domain configuration stays
+required and adjacent to `hooks`: AI Chat keeps its model, tools, and access
+mode; CMS keeps content types; Comments keeps behavior and user resolution;
+Kanban keeps user resolution and search; Media keeps storage, tenant, and
+upload configuration; OpenAPI keeps its presentation/schema options.
+
+OpenAPI is intentionally backend-only. Route Docs is intentionally client-only.
+UI Builder is intentionally client-only and composes over the registered CMS
+backend/client contract; do not invent matching halves for symmetry.
+
+### 6. Rename every backend lifecycle callback
+
+The tables below come from the structured `*_LIFECYCLE_HOOK_MIGRATIONS`
+inventories shipped by each plugin. Names absent from these tables did not
+change. Keep all callbacks under the plugin factory's `hooks` field.
+
+{/* canonical-dx-guard: migration:start reason="complete removed lifecycle inventory" */}
+
+#### AI Chat
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeToolsActivated` | `onBeforeActivateTools` |
+| `onConversationsRead` | `onAfterListConversations` |
+| `onConversationRead` | `onAfterGetConversation` |
+| `onConversationCreated` | `onAfterCreateConversation` |
+| `onConversationUpdated` | `onAfterUpdateConversation` |
+| `onConversationDeleted` | `onAfterDeleteConversation` |
+| `onChatError` | `onErrorChat` |
+| `onListConversationsError` | `onErrorListConversations` |
+| `onGetConversationError` | `onErrorGetConversation` |
+| `onCreateConversationError` | `onErrorCreateConversation` |
+| `onUpdateConversationError` | `onErrorUpdateConversation` |
+| `onDeleteConversationError` | `onErrorDeleteConversation` |
+
+#### Blog
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeNextPreviousPosts` | `onBeforeGetNextPreviousPosts` |
+| `onPostsRead` | `onAfterListPosts` |
+| `onPostCreated` | `onAfterCreatePost` |
+| `onPostUpdated` | `onAfterUpdatePost` |
+| `onPostDeleted` | `onAfterDeletePost` |
+| `onNextPreviousPostsRead` | `onAfterGetNextPreviousPosts` |
+| `onListPostsError` | `onErrorListPosts` |
+| `onNextPreviousPostsError` | `onErrorGetNextPreviousPosts` |
+| `onCreatePostError` | `onErrorCreatePost` |
+| `onUpdatePostError` | `onErrorUpdatePost` |
+| `onDeletePostError` | `onErrorDeletePost` |
+
+#### CMS
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeCreate` | `onBeforeCreateContent` |
+| `onAfterCreate` | `onAfterCreateContent` |
+| `onBeforeUpdate` | `onBeforeUpdateContent` |
+| `onAfterUpdate` | `onAfterUpdateContent` |
+| `onBeforeDelete` | `onBeforeDeleteContent` |
+| `onAfterDelete` | `onAfterDeleteContent` |
+| `onError` | `onErrorExecuteContentOperation` |
+
+#### Comments
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeList` | `onBeforeListComments` |
+| `onBeforeCount` | `onBeforeCountComments` |
+| `onBeforeListByAuthor` | `onBeforeListCommentsByAuthor` |
+| `onBeforePost` | `onBeforeCreateComment` |
+| `onAfterPost` | `onAfterCreateComment` |
+| `onBeforeEdit` | `onBeforeUpdateComment` |
+| `onAfterEdit` | `onAfterUpdateComment` |
+| `onBeforeLike` | `onBeforeToggleCommentReaction` |
+| `onBeforeStatusChange` | `onBeforeModerateComment` |
+| `onAfterApprove` | `onAfterApproveComment` |
+| `onBeforeDelete` | `onBeforeDeleteComment` |
+| `onAfterDelete` | `onAfterDeleteComment` |
+
+#### Form Builder
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeFormCreated` | `onBeforeCreateForm` |
+| `onAfterFormCreated` | `onAfterCreateForm` |
+| `onBeforeFormUpdated` | `onBeforeUpdateForm` |
+| `onAfterFormUpdated` | `onAfterUpdateForm` |
+| `onBeforeFormDeleted` | `onBeforeDeleteForm` |
+| `onAfterFormDeleted` | `onAfterDeleteForm` |
+| `onSubmissionError` | `onErrorSubmission` |
+| `onBeforeSubmissionDeleted` | `onBeforeDeleteSubmission` |
+| `onAfterSubmissionDeleted` | `onAfterDeleteSubmission` |
+
+#### Kanban
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeReadBoard` | `onBeforeGetBoard` |
+| `onBoardsRead` | `onAfterListBoards` |
+| `onBoardRead` | `onAfterGetBoard` |
+| `onBoardCreated` | `onAfterCreateBoard` |
+| `onBoardUpdated` | `onAfterUpdateBoard` |
+| `onBoardDeleted` | `onAfterDeleteBoard` |
+| `onListBoardsError` | `onErrorListBoards` |
+| `onReadBoardError` | `onErrorGetBoard` |
+| `onCreateBoardError` | `onErrorCreateBoard` |
+| `onUpdateBoardError` | `onErrorUpdateBoard` |
+| `onDeleteBoardError` | `onErrorDeleteBoard` |
+| `onColumnCreated` | `onAfterCreateColumn` |
+| `onColumnUpdated` | `onAfterUpdateColumn` |
+| `onColumnDeleted` | `onAfterDeleteColumn` |
+| `onTaskCreated` | `onAfterCreateTask` |
+| `onTaskUpdated` | `onAfterUpdateTask` |
+| `onTaskDeleted` | `onAfterDeleteTask` |
+
+#### Media
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeDelete` | `onBeforeDeleteAsset` |
+| `onAfterDelete` | `onAfterDeleteAsset` |
+| `onOperationError` | `onError` |
+
+{/* canonical-dx-guard: migration:end */}
+
+The lifecycle grammar is `onBefore<Action><Entity>`,
+`onAfter<Action><Entity>`, and `onError<Action><Entity>`. Meaningful domain
+events such as chat, submission receipt, moderation approval, and upload
+finalization retain their domain vocabulary. Media storage-adapter callbacks
+are transport contracts and are not part of this mapping.
+
+### 7. Select an explicit server trust surface
+
+{/* canonical-dx-guard: migration:start reason="removed ambiguous server namespaces" */}
+
+Before:
+
+```ts
+await app.api.blog.updatePost(input)
+await app.forRequest(request).api.blog.updatePost(input)
+await app.internal.blog.updatePost(input)
+```
+
+{/* canonical-dx-guard: migration:end */}
+
+After:
+
+```ts
+await app.forRequest(request).operations.blog.updatePost(input)
+await app.trusted.blog.updatePost(input)
+await app.raw.blog.prefetchForRoute("post", queryClient, { slug })
+```
+
+`forRequest(request).operations` runs validation, trusted-fact derivation,
+configured server authorization, domain behavior, and lifecycle hooks.
+`trusted` skips only user authorization and keeps the rest of that operation
+pipeline. `raw` is the explicit lower-level escape hatch and first-party
+plugins expose only narrow SSG prefetch helpers there. Standalone exported
+getters and mutations are also lower-level primitives whose caller owns
+validation, authorization, and lifecycle composition.
+
+Omitting `createBackendStack({ auth })` preserves permissive compatibility.
+Once server auth is configured, its schema-bound rules are authoritative and
+missing or denied rules fail closed. Browser checks remain presentation only;
+derive authorization facts from server data rather than client input.
+
+### 8. Apply endpoint and identity boundaries
+
+A path-only `endpoints.<plugin>.api` replacement inherits the top-level API
+origin and request headers. A replacement `baseURL` must include a replacement
+`basePath` and establishes a new transport boundary: server cookies,
+authorization, proxy-authorization, and other request headers are not
+inherited. Add only explicitly browser-safe `browserHeaders` or an explicit
+Fetch `credentials` mode, and only when the destination implements that
+plugin's BTST HTTP contract. Site endpoints follow the same path-only versus
+complete-replacement rule independently.
+
+`initialIdentity` is tri-state: `undefined` means no server snapshot was
+supplied and the client resolver may run immediately; `null` is an explicitly
+hydrated anonymous snapshot; an identity object is an explicitly hydrated
+authenticated snapshot. Serialize only schema-validated identity and trusted
+deployment origins, never a server stack or request headers.
+
+BTST core is authentication-provider agnostic. Better Auth and Better Auth UI
+are not core dependencies or hidden identity bridges; adapt the provider your
+application already uses through `createClientAuth` and `createServerAuth`.
+The separate Better Auth UI companion migration happens downstream of the
+completed core DX migration.
+
+---
+
 ## v2 → v3: Framework entries and resolved client runtime
 
 BTST v3 has one supported framework-wiring path: framework entry factories
@@ -82,9 +479,9 @@ request-aware examples when SSR authorization needs headers or session state.
 
 ### 2. Move shared runtime to the client stack
 
-The Blog client plugin is the first built-in migrated to the resolved runtime
-definition. Remove its shared runtime fields and configure API, site, and
-QueryClient once in a shared factory:
+Every maintained client plugin now uses the resolved runtime definition.
+Remove shared runtime fields from each plugin factory and configure API, site,
+and QueryClient once in a shared factory:
 
 ```ts title="lib/stack-client.ts"
 export const getStackClient = (
@@ -147,12 +544,9 @@ Wrap this client provider from `app/(request)/pages/layout.tsx` using
 `app/(static)/pages` and use header-free `getServerClientOrigins()` there. Both
 route groups keep the `/pages/*` URL.
 
-For Blog, `apiBaseURL`, `apiBasePath`, site fields, `queryClient`, and request
-headers are no longer plugin options. Its SSR loaders, metadata, browser hooks,
-and mutations use the same resolved runtime. Some other first-party plugins
-temporarily retain their legacy shared-runtime factory shape until their
-follow-up migration tickets land; new plugin definitions should use the
-resolved shape shown here.
+`apiBaseURL`, `apiBasePath`, site fields, `queryClient`, and request headers are
+no longer built-in plugin options. SSR loaders, metadata, browser hooks, and
+mutations use the same resolved runtime for every maintained client plugin.
 
 ### 3. Replace render guards with `StackProvider.auth`
 
@@ -257,78 +651,11 @@ onBeforeSubmission: async (_formSlug, data, ctx) => {
 
 ### 7. Rename normalized backend lifecycle hooks
 
-RC3 removes the lifecycle spellings used by earlier v3 prereleases. Rename
-each configured hook key using the tables below; callback parameters and return
-values are otherwise unchanged. JavaScript applications must make the same
-updates because removed hook keys are not invoked at runtime.
-
-#### Form Builder
-
-| Earlier v3 spelling | RC3 spelling |
-| --- | --- |
-| `onBeforeFormCreated` | `onBeforeCreateForm` |
-| `onAfterFormCreated` | `onAfterCreateForm` |
-| `onBeforeFormUpdated` | `onBeforeUpdateForm` |
-| `onAfterFormUpdated` | `onAfterUpdateForm` |
-| `onBeforeFormDeleted` | `onBeforeDeleteForm` |
-| `onAfterFormDeleted` | `onAfterDeleteForm` |
-| `onSubmissionError` | `onErrorSubmission` |
-| `onBeforeSubmissionDeleted` | `onBeforeDeleteSubmission` |
-| `onAfterSubmissionDeleted` | `onAfterDeleteSubmission` |
-
-Form Builder's `onBeforeCreateForm`, `onBeforeUpdateForm`, and
-`onBeforeSubmission` hooks receive a separate mutable-data value and may return
-its transformed replacement. Other lifecycle hooks observe their deeply
-readonly operation context and perform domain side effects; they do not
-transform operation input by returning a value. Submission receipt hooks such
-as `onBeforeSubmission` and `onAfterSubmission` keep their domain-event names.
-
-Keep hook denials exception-based while renaming them:
-
-```diff
-- onBeforeSubmissionDeleted: async (submissionId, ctx) => {
--   if (!isAdmin(ctx.headers)) return false
-+ onBeforeDeleteSubmission: async (submissionId, ctx) => {
-+   if (!isAdmin(ctx.headers)) throw new Error("Admin access required")
-  }
-```
-
-#### Kanban
-
-| Earlier v3 spelling | RC3 spelling |
-| --- | --- |
-| `onBeforeReadBoard` | `onBeforeGetBoard` |
-| `onBoardsRead` | `onAfterListBoards` |
-| `onBoardRead` | `onAfterGetBoard` |
-| `onBoardCreated` | `onAfterCreateBoard` |
-| `onBoardUpdated` | `onAfterUpdateBoard` |
-| `onBoardDeleted` | `onAfterDeleteBoard` |
-| `onListBoardsError` | `onErrorListBoards` |
-| `onReadBoardError` | `onErrorGetBoard` |
-| `onCreateBoardError` | `onErrorCreateBoard` |
-| `onUpdateBoardError` | `onErrorUpdateBoard` |
-| `onDeleteBoardError` | `onErrorDeleteBoard` |
-| `onColumnCreated` | `onAfterCreateColumn` |
-| `onColumnUpdated` | `onAfterUpdateColumn` |
-| `onColumnDeleted` | `onAfterDeleteColumn` |
-| `onTaskCreated` | `onAfterCreateTask` |
-| `onTaskUpdated` | `onAfterUpdateTask` |
-| `onTaskDeleted` | `onAfterDeleteTask` |
-
-Task and column reorder or move operations continue to use the corresponding
-update lifecycle; RC3 does not add separate reorder or move hook phases.
-
-#### Media
-
-| Earlier v3 spelling | RC3 spelling |
-| --- | --- |
-| `onBeforeDelete` | `onBeforeDeleteAsset` |
-| `onAfterDelete` | `onAfterDeleteAsset` |
-| `onOperationError` | `onError` |
-
-Media upload hooks keep their domain-event names. Storage-adapter callbacks are
-transport contracts rather than public plugin lifecycle hooks and are not part
-of this rename.
+Use the complete seven-plugin mapping in
+[Rename every backend lifecycle callback](#6-rename-every-backend-lifecycle-callback)
+above. JavaScript applications must update removed keys too; removed callback
+names are not invoked at runtime. Keep hook denials exception-based while
+renaming them.
 
 ### 8. Replace the retired provider-specific auth scaffold
 
@@ -369,7 +696,8 @@ export const serverAuth = createServerAuth({
 })
 ```
 
-Pass `clientAuth` to `StackProvider`, pass `serverAuth` to `stack()`, and keep
+Pass `clientAuth` to `StackProvider`, pass `serverAuth` to
+`createBackendStack({ auth: serverAuth })`, and keep
 sign-in, account, and organization routes in your chosen authentication
 framework. Remove the retired plugin from existing `btst init` commands and
 delete its generated imports, overrides, CSS import, and package dependencies.
@@ -434,6 +762,8 @@ pnpm add @btst/stack@latest
 
 Update your backend configuration file (commonly `lib/better-stack.ts` → `lib/stack.ts`):
 
+{/* canonical-dx-guard: migration:start reason="historical v2 constructor example" */}
+
 ```diff
 - import { betterStack } from "@btst/stack";
 + import { stack } from "@btst/stack";
@@ -443,6 +773,8 @@ Update your backend configuration file (commonly `lib/better-stack.ts` → `lib/
     // ... your configuration
   });
 ```
+
+{/* canonical-dx-guard: migration:end */}
 </Step>
 
 <Step>

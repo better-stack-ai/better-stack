@@ -117,21 +117,14 @@ built-in plugin override. Configure `api`, `site`, and `queryClient` once in
 accept only plugin-specific options; their loaders and metadata receive shared
 runtime through the stack resolver.
 
-### Override type registration (in each layout)
-
-```typescript
-import type { YourPluginOverrides } from "@btst/stack/plugins/{name}/client"
-
-type LegacyPluginOverrides = {
-  "{name}": YourPluginOverrides,
-}
-```
+### Override type inference
 
 Resolved definitions contribute their public override type automatically under
-their canonical programmatic ID (`blog`, `aiChat`). Keep a manual map only for
-an unmigrated compatibility plugin, and delete it when that plugin adopts the
-resolved contract. Do not recreate removed v2 framework, API, guard, or identity
-fields in local intersection types.
+their canonical programmatic ID (`blog`, `aiChat`). Register the definition in
+`createClientStack({ plugins })` and pass that resolved stack to
+`StackProvider`; never recreate a manual application override map or provider
+generic. Do not restore removed framework, API, guard, or identity fields in
+local intersection types.
 
 ## Adding shared UI components (@workspace/ui)
 

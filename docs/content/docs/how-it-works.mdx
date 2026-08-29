@@ -11,7 +11,7 @@ Here's a high-level overview of how BTST works:
 
 The server handles database operations, API endpoints, data prefetching, routing, and server-side rendering.
 
-**`stack`** manages the backend layer:
+**`createBackendStack`** manages the backend layer:
 
 - **API Router**: Routes incoming requests to the appropriate plugin handlers. Returns a handler function that you mount at your API path.
 - **DB Adapter**: Translates BTST's database operations to your ORM (Prisma, Drizzle, Kysely, MongoDB). Plugins define schemas that get merged and passed to the adapter.
@@ -57,14 +57,15 @@ customization.
 
 ## Plugins
 
-Plugins are the building blocks of BTST. Each feature (like Blog) ships as **two separate plugins**—one for the backend, one for the client—that you register independently:
+Plugins are the building blocks of BTST. Full-stack features such as Blog ship
+separate backend and client definitions that you register independently:
 
 ```ts
 // Backend: lib/stack.ts
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 
-const { handler } = stack({
+const { handler } = createBackendStack({
   plugins: {
     blog: blogBackendPlugin({ /* config */ })
   },
@@ -87,7 +88,7 @@ const stackClient = createClientStack({
 })
 ```
 
-**Backend plugins** (registered in `stack`):
+**Backend plugins** (registered in `createBackendStack`):
 - Define database schemas (tables, columns, relations)
 - Register API route handlers for CRUD operations
 - Provide post-authorization domain lifecycle hooks
@@ -99,6 +100,10 @@ const stackClient = createClientStack({
 - Generate SEO metadata and sitemaps
 
 This separation keeps server-only code (database schemas, API handlers) out of your client bundle, and allows each plugin to be configured independently for its context.
+
+One-sided plugins are intentional: OpenAPI is backend-only, Route Docs is
+client-only, and UI Builder is client-only over the CMS backend/client
+contract. Register only the side that exists; do not add a placeholder half.
 
 ## Resolved Client Runtime and Provider Services
 

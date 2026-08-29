@@ -242,11 +242,11 @@ without constructing a synthetic `Request`. Existing backend-only adapters can
 keep the request-aware `getIdentity({ request, headers })` callback, but those
 adapters are not accepted by headers-only layout helpers until adapted.
 
-Pass it to `stack({ auth: serverAuth })`. Every Blog HTTP route and its matching `myStack.forRequest(request).operations.blog.*` method use the same operation and rule. Operations load authoritative post, author, and current publish facts before authorization, so client-supplied ownership or visibility facts are never trusted. Trusted jobs can call `myStack.trusted.blog.*`; trusted calls skip user authorization but retain input validation, trusted fact derivation, domain behavior, and lifecycle hooks.
+Pass it to `createBackendStack({ auth: serverAuth })`. Every Blog HTTP route and its matching `myStack.forRequest(request).operations.blog.*` method use the same operation and rule. Operations load authoritative post, author, and current publish facts before authorization, so client-supplied ownership or visibility facts are never trusted. Trusted jobs can call `myStack.trusted.blog.*`; trusted calls skip user authorization but retain input validation, trusted fact derivation, domain behavior, and lifecycle hooks.
 
 Ordinary denials become HTTP 401 for anonymous identities and 403 for authenticated identities. Identity validation and rule failures remain errors instead of being converted into denials.
 
-`stack()` also checks the operation catalog at typecheck time. A server adapter
+`createBackendStack()` also checks the operation catalog at typecheck time. A server adapter
 that registers a different permission catalog—or reuses the same stable id
 with an incompatible fact schema—cannot be composed with Blog operations.
 
@@ -674,12 +674,16 @@ defineOperation({
 
 ### Trusted server calls
 
+{/* canonical-dx-guard: migration:start reason="removed server namespace example" */}
+
 Before:
 
 ```ts
 await app.api.cms.createContentItem("article", body);
 await app.api.blog.getAllPosts();
 ```
+
+{/* canonical-dx-guard: migration:end */}
 
 After:
 
@@ -703,12 +707,14 @@ After:
 
 ```ts
 aiChatBackendPlugin({ access: "authorized" });
-stack({ auth: serverAuth, plugins: { aiChat } });
+createBackendStack({ auth: serverAuth, plugins: { aiChat } });
 ```
 
 The backend `mode` alias and `getUserId` callback are removed. The client plugin's `mode` still controls its real conversation UI/persistence mode; it is not a security boundary.
 
 ### Lifecycle context and Comments authorship
+
+{/* canonical-dx-guard: migration:start reason="removed lifecycle and identity bridge example" */}
 
 Before:
 
@@ -724,6 +730,8 @@ const onBeforeCreatePost = (_input: unknown, context: BlogApiContext) => {
   audit(context);
 };
 ```
+
+{/* canonical-dx-guard: migration:end */}
 
 After:
 

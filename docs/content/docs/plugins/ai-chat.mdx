@@ -34,7 +34,7 @@ Follow these steps to add the AI Chat plugin to your BTST setup.
 Import and register the AI Chat backend plugin in your `stack.ts` file:
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { defineAuthorization } from "@btst/stack/authorization"
 import { createServerAuth } from "@btst/stack/authorization/server"
 import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
@@ -92,7 +92,7 @@ const serverAuth = createServerAuth({
   },
 })
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   auth: serverAuth,
   plugins: {
@@ -481,6 +481,8 @@ Customize post-authorization domain behavior with optional lifecycle hooks. Keep
 
 AI Chat lifecycle names use the action-first `onBefore<Action><Entity>`, `onAfter<Action><Entity>`, and `onError<Action><Entity>` grammar. Chat completion remains the domain event `onAfterChat`.
 
+{/* canonical-dx-guard: migration:start reason="plugin lifecycle migration table" */}
+
 | Before RC3 | RC3 |
 |---|---|
 | `onBeforeToolsActivated` | `onBeforeActivateTools` |
@@ -495,6 +497,8 @@ AI Chat lifecycle names use the action-first `onBefore<Action><Entity>`, `onAfte
 | `onCreateConversationError` | `onErrorCreateConversation` |
 | `onUpdateConversationError` | `onErrorUpdateConversation` |
 | `onDeleteConversationError` | `onErrorDeleteConversation` |
+
+{/* canonical-dx-guard: migration:end */}
 
 **Example usage:**
 
@@ -519,7 +523,7 @@ const chatHooks: AiChatBackendHooks = {
   },
 }
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   plugins: {
     aiChat: aiChatBackendPlugin({
       model: openai("gpt-4o"),
@@ -1006,14 +1010,14 @@ For public chatbots without user authentication:
 ### Backend Setup
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
 import { openai } from "@ai-sdk/openai"
 
 // Example rate limiter (implement your own)
 const rateLimiter = new Map<string, number>()
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   plugins: {
     aiChat: aiChatBackendPlugin({

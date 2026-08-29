@@ -14,7 +14,7 @@ import { expect, test, type BrowserContext } from "@playwright/test";
  */
 
 // Mock auth cookie name (replace with your actual auth cookie name)
-const AUTH_COOKIE_NAME = "better-auth.session_token";
+const AUTH_COOKIE_NAME = "btst.example_session";
 
 // API base path for authenticated endpoints
 // Note: Blog plugin defines routes at /posts, /tags, etc.

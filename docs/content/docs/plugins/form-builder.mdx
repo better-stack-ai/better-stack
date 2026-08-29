@@ -49,14 +49,14 @@ Ensure you followed the general [framework installation guide](/installation) fi
 Register the Form Builder backend plugin:
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { createPrismaAdapter } from "@btst/adapter-prisma"
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
 import { PrismaClient } from "@prisma/client"
 
 const prisma = new PrismaClient()
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   plugins: {
     formBuilder: formBuilderBackendPlugin({
@@ -438,7 +438,7 @@ export const serverAuth = createServerAuth({
 })
 ```
 
-Pass `serverAuth` as `stack({ auth: serverAuth, ... })`. On the client, create a
+Pass `serverAuth` as `createBackendStack({ auth: serverAuth, ... })`. On the client, create a
 client binding from the same rule set and hydrate the request identity in the
 layout:
 

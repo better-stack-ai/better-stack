@@ -102,31 +102,43 @@ If you want to publish a plugin as a standalone npm package (not merged into thi
 
 ### Plugin anatomy
 
-A plugin has two halves that must be kept in sync:
+A plugin may expose either or both of these independent halves:
 
 | Half | Entry point | Factory function | Import path |
 |------|-------------|------------------|-------------|
 | Backend | `api/plugin.ts` | `defineBackendPlugin` | `@btst/stack/plugins/api` |
 | Client | `client/plugin.tsx` | `defineClientPlugin` | `@btst/stack/plugins/client` |
 
+Do not add a placeholder half for symmetry. OpenAPI is backend-only, Route Docs
+is client-only, and UI Builder is client-only over CMS. When both halves exist,
+their camelCase programmatic ID and registration key must agree; package and
+URL slugs may remain kebab-case.
+
 **Minimum backend shape:**
 
 ```typescript
-import { defineBackendPlugin, createDbPlugin, createEndpoint, type Adapter } from "@btst/stack/plugins/api"
+import { defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api"
 
-export const myBackendPlugin = defineBackendPlugin({
-  name: "my-plugin",          // unique key — must match the key used in stack({ plugins: { ... } })
-  dbPlugin: mySchema,         // from createDbPlugin(...)
-  routes: (adapter: Adapter) => {
-    const listItems = createEndpoint("/items", { method: "GET" }, async () => {
-      return adapter.findMany({ model: "item" })
-    })
-    return { listItems } as const
-  },
-})
+export interface MyBackendPluginOptions {
+  hooks?: MyBackendHooks
+}
+
+export const myBackendPlugin = (options: MyBackendPluginOptions = {}) =>
+  defineBackendPlugin({
+    id: "myPlugin", // camelCase programmatic ID; package and URL slugs may stay kebab-case
+    dbPlugin: mySchema,
+    operations: (adapter) => createMyOperations(adapter, options.hooks),
+    routes: (_adapter, _context, operations) => ({
+      listItems: createEndpoint(
+        "/items",
+        { method: "GET", requireRequest: true },
+        operations.listItems.route(() => ({})),
+      ),
+    }),
+  })
 
 // Export the inferred router type — the client plugin imports this for end-to-end type safety
-export type MyApiRouter = ReturnType<typeof myBackendPlugin.routes>
+export type MyApiRouter = ReturnType<ReturnType<typeof myBackendPlugin>["routes"]>
 ```
 
 **Minimum client shape:**
@@ -139,7 +151,7 @@ import {
 } from "@btst/stack/plugins/client"
 import { lazy } from "react"
 
-export const MY_PLUGIN_ID = "my-plugin" as const
+export const MY_PLUGIN_ID = "myPlugin" as const
 
 export interface MyClientConfig {
   title?: string
@@ -334,10 +346,10 @@ export async function createItem(adapter: Adapter, input: CreateItemInput): Prom
 
 ```typescript
 // packages/stack/src/plugins/your-plugin/api/plugin.ts
-import { defineBackendPlugin, createEndpoint, type Adapter } from "@btst/stack/plugins/api"
+import { defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api"
 import { mySchema } from "../db"
 import { createItemSchema, updateItemSchema } from "../schemas"
-import { listItems, getItemById } from "./getters"
+import { createMyOperations } from "./operations"
 
 export interface MyBackendHooks {
   onBeforeCreateItem?: (data: unknown, ctx: { headers: Headers }) => Promise<void> | void
@@ -345,54 +357,37 @@ export interface MyBackendHooks {
   onErrorCreateItem?: (error: Error, ctx: { headers: Headers }) => Promise<void> | void
 }
 
-export const myBackendPlugin = (hooks?: MyBackendHooks) =>
+export interface MyBackendPluginOptions {
+  hooks?: MyBackendHooks
+}
+
+export const myBackendPlugin = (options: MyBackendPluginOptions = {}) =>
   defineBackendPlugin({
-    name: "your-plugin",
+    id: "yourPlugin",
     dbPlugin: mySchema,
-
-    routes: (adapter: Adapter) => {
-      const listItemsEndpoint = createEndpoint("/items", { method: "GET" }, async () => {
-        return listItems(adapter)
-      })
-
-      const createItemEndpoint = createEndpoint(
+    operations: (adapter) => createMyOperations(adapter, options.hooks),
+    routes: (_adapter, _context, operations) => ({
+      listItemsEndpoint: createEndpoint(
         "/items",
-        { method: "POST", body: createItemSchema },
-        async (ctx) => {
-          if (hooks?.onBeforeCreateItem) {
-            try {
-              await hooks.onBeforeCreateItem(ctx.body, { headers: ctx.headers })
-            } catch (e) {
-              throw ctx.error(403, { message: e instanceof Error ? e.message : "Unauthorized" })
-            }
-          }
-          const item = await adapter.create({ model: "item", data: { ...ctx.body, createdAt: new Date(), updatedAt: new Date() } })
-          await hooks?.onAfterCreateItem?.(item, { headers: ctx.headers })
-          return item
-        },
-      )
-
-      const updateItemEndpoint = createEndpoint(
+        { method: "GET", requireRequest: true },
+        operations.listItems.route(() => ({})),
+      ),
+      createItemEndpoint: createEndpoint(
+        "/items",
+        { method: "POST", body: createItemSchema, requireRequest: true },
+        operations.createItem.route((ctx) => ctx.body),
+      ),
+      updateItemEndpoint: createEndpoint(
         "/items/:id",
-        { method: "PUT", body: updateItemSchema },
-        async (ctx) => {
-          const updated = await adapter.update({
-            model: "item",
-            where: [{ field: "id", value: ctx.params.id }],
-            update: { ...ctx.body, updatedAt: new Date() },
-          })
-          if (!updated) throw ctx.error(404, { message: "Item not found" })
-          return updated
-        },
-      )
-
-      const deleteItemEndpoint = createEndpoint("/items/:id", { method: "DELETE" }, async (ctx) => {
-        await adapter.delete({ model: "item", where: [{ field: "id", value: ctx.params.id }] })
-        return { success: true }
-      })
-
-      return { listItemsEndpoint, createItemEndpoint, updateItemEndpoint, deleteItemEndpoint } as const
-    },
+        { method: "PUT", body: updateItemSchema, requireRequest: true },
+        operations.updateItem.route((ctx) => ({ id: ctx.params.id, data: ctx.body })),
+      ),
+      deleteItemEndpoint: createEndpoint(
+        "/items/:id",
+        { method: "DELETE", requireRequest: true },
+        operations.deleteItem.route((ctx) => ({ id: ctx.params.id })),
+      ),
+    }),
   })
 
 export type MyApiRouter = ReturnType<ReturnType<typeof myBackendPlugin>["routes"]>
@@ -426,7 +421,7 @@ import { lazy } from "react"
 import type { QueryClient } from "@tanstack/react-query"
 import type { MyApiRouter } from "../api/plugin"
 
-export const MY_PLUGIN_ID = "your-plugin" as const
+export const MY_PLUGIN_ID = "yourPlugin" as const
 
 export interface MyClientConfig {
   title?: string
@@ -480,7 +475,7 @@ function myLoader(config: ResolvedMyClientConfig) {
         if (isConnectionError(error)) {
           console.warn(
             "[btst/your-plugin] route.loader() failed — no server at build time. " +
-            "Use myStack.raw['your-plugin'].prefetchForRoute() for SSG.",
+            "Use myStack.raw.yourPlugin.prefetchForRoute() for SSG.",
           )
         }
         // Do not re-throw — let React Query store errors and Error Boundaries handle them during render
