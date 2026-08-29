@@ -717,6 +717,19 @@ function namedImportDeclarations(source, file) {
 	return declarations;
 }
 
+function factoryModuleMatches(moduleName, factory) {
+	const pluginSlug = factory
+		.replace(/(?:Backend|Client)Plugin$/, "")
+		.replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+		.toLowerCase();
+	return (
+		moduleName === "@btst/stack" ||
+		moduleName === "@btst/stack/plugins/api" ||
+		moduleName === `@btst/stack/plugins/${pluginSlug}` ||
+		moduleName.startsWith(`@btst/stack/plugins/${pluginSlug}/`)
+	);
+}
+
 function factoryLocalNames(source, file, factory) {
 	const names = [{ name: factory }];
 	const trivia = String.raw`(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\n]*(?:\n|$))*`;
@@ -725,19 +738,7 @@ function factoryLocalNames(source, file, factory) {
 		"g",
 	);
 	for (const importDeclaration of namedImportDeclarations(source, file)) {
-		const moduleName = importDeclaration.moduleName;
-		const pluginSlug = factory
-			.replace(/(?:Backend|Client)Plugin$/, "")
-			.replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-			.toLowerCase();
-		if (
-			moduleName !== "@btst/stack" &&
-			moduleName !== "@btst/stack/plugins/api" &&
-			moduleName !== `@btst/stack/plugins/${pluginSlug}` &&
-			!moduleName.startsWith(`@btst/stack/plugins/${pluginSlug}/`)
-		) {
-			continue;
-		}
+		if (!factoryModuleMatches(importDeclaration.moduleName, factory)) continue;
 		for (const alias of importDeclaration.specifiers.matchAll(aliasPattern)) {
 			names.push({
 				fenceStart: importDeclaration.fenceStart,
@@ -750,6 +751,39 @@ function factoryLocalNames(source, file, factory) {
 }
 
 let typeScriptScopeCache;
+
+function factoryScriptKind(file, source, factoryScope, callIndex) {
+	const extension = extname(file);
+	if (/^\.(?:cts|mts|ts)$/.test(extension)) return ts.ScriptKind.TS;
+	if (extension === ".tsx") return ts.ScriptKind.TSX;
+	if (/^\.(?:cjs|js|mjs)$/.test(extension)) return ts.ScriptKind.JS;
+	if (extension === ".jsx") return ts.ScriptKind.JSX;
+	if (factoryScope.fenceStart !== undefined) {
+		const openingEnd = factoryScope.fenceStart - 1;
+		const openingStart = source.lastIndexOf("\n", openingEnd - 1) + 1;
+		const language = source
+			.slice(openingStart, openingEnd)
+			.match(/```\s*([A-Za-z0-9-]+)/)?.[1]
+			?.toLowerCase();
+		if (language === "ts" || language === "typescript") {
+			return ts.ScriptKind.TS;
+		}
+		if (language === "js" || language === "javascript") {
+			return ts.ScriptKind.JS;
+		}
+		if (language === "jsx") return ts.ScriptKind.JSX;
+		if (language === "tsx") return ts.ScriptKind.TSX;
+	}
+	const lexicalStart =
+		factoryScope.fenceStart ?? factoryScope.registryStart ?? 0;
+	const callPrefix = source.slice(
+		Math.max(lexicalStart, callIndex - 200),
+		callIndex,
+	);
+	return /<[^<>\n]+>\s*$/.test(callPrefix)
+		? ts.ScriptKind.TS
+		: ts.ScriptKind.TSX;
+}
 
 function aliasScopeBounds(source, alias) {
 	if (alias.fenceStart !== undefined) {
@@ -784,7 +818,8 @@ function typeScriptScope(source, alias) {
 	if (
 		typeScriptScopeCache?.source === source &&
 		typeScriptScopeCache.start === start &&
-		typeScriptScopeCache.end === end
+		typeScriptScopeCache.end === end &&
+		typeScriptScopeCache.scriptKind === alias.scriptKind
 	) {
 		return typeScriptScopeCache;
 	}
@@ -802,7 +837,7 @@ function typeScriptScope(source, alias) {
 		text,
 		options.target,
 		true,
-		ts.ScriptKind.TSX,
+		alias.scriptKind,
 	);
 	const host = {
 		fileExists: (candidate) => candidate === fileName,
@@ -823,37 +858,93 @@ function typeScriptScope(source, alias) {
 		end,
 		source,
 		sourceFile,
+		scriptKind: alias.scriptKind,
 		start,
 	};
 	return typeScriptScopeCache;
 }
 
-function identifierAt(sourceFile, index, name) {
-	let identifier;
+function factoryReferenceAt(sourceFile, index, name) {
+	let reference;
 	function visit(node) {
 		if (
-			ts.isIdentifier(node) &&
+			((ts.isIdentifier(node) && node.getStart(sourceFile) === index) ||
+				(ts.isStringLiteralLike(node) &&
+					node.getStart(sourceFile) + 1 === index)) &&
 			node.text === name &&
-			node.getStart(sourceFile) === index
+			!reference
 		) {
-			identifier = node;
+			reference = node;
 			return;
 		}
 		ts.forEachChild(node, visit);
 	}
 	visit(sourceFile);
-	return identifier;
+	return reference;
+}
+
+function namespaceFactoryAccess(scope, reference, factory) {
+	const parent = reference.parent;
+	const access =
+		ts.isIdentifier(reference) &&
+		ts.isPropertyAccessExpression(parent) &&
+		parent.name === reference
+			? parent
+			: ts.isStringLiteralLike(reference) &&
+					ts.isElementAccessExpression(parent) &&
+					parent.argumentExpression === reference
+				? parent
+				: undefined;
+	if (!access) return undefined;
+	let receiver = access.expression;
+	while (
+		ts.isPropertyAccessExpression(receiver) ||
+		ts.isElementAccessExpression(receiver) ||
+		ts.isParenthesizedExpression(receiver) ||
+		ts.isNonNullExpression(receiver) ||
+		ts.isAsExpression(receiver)
+	) {
+		receiver = receiver.expression;
+	}
+	if (!ts.isIdentifier(receiver)) return undefined;
+	const declarations =
+		scope.checker.getSymbolAtLocation(receiver)?.declarations ?? [];
+	const namespaceImports = declarations.filter((declaration) => {
+		if (!ts.isNamespaceImport(declaration)) return false;
+		const importDeclaration = declaration.parent.parent;
+		return (
+			ts.isImportDeclaration(importDeclaration) &&
+			ts.isStringLiteralLike(importDeclaration.moduleSpecifier) &&
+			factoryModuleMatches(importDeclaration.moduleSpecifier.text, factory)
+		);
+	});
+	return namespaceImports.length > 0
+		? { declarations: namespaceImports, expression: access }
+		: undefined;
 }
 
 function factoryCall(source, factoryScope, callIndex) {
 	const scope = typeScriptScope(source, factoryScope);
-	const identifier = identifierAt(
+	const reference = factoryReferenceAt(
 		scope.sourceFile,
 		callIndex - scope.start,
 		factoryScope.name,
 	);
-	if (!identifier) return undefined;
-	let expression = identifier;
+	if (!reference) return undefined;
+	const namespaceAccess = namespaceFactoryAccess(
+		scope,
+		reference,
+		factoryScope.factory,
+	);
+	if (
+		!namespaceAccess &&
+		(!ts.isIdentifier(reference) ||
+			ts.isPropertyAccessExpression(reference.parent) ||
+			ts.isElementAccessExpression(reference.parent))
+	) {
+		return undefined;
+	}
+	let expression = namespaceAccess?.expression ?? reference;
 	while (
 		ts.isParenthesizedExpression(expression.parent) ||
 		ts.isNonNullExpression(expression.parent) ||
@@ -871,7 +962,9 @@ function factoryCall(source, factoryScope, callIndex) {
 		return undefined;
 	}
 	return {
-		declarations: scope.checker.getSymbolAtLocation(identifier)?.declarations,
+		declarations:
+			namespaceAccess?.declarations ??
+			scope.checker.getSymbolAtLocation(reference)?.declarations,
 		openIndex: scope.start + call.arguments.pos - 1,
 	};
 }
@@ -879,7 +972,10 @@ function factoryCall(source, factoryScope, callIndex) {
 function isFactoryNameShadowed(call) {
 	const declarations = call.declarations;
 	if (!declarations || declarations.length === 0) return false;
-	return declarations.some((declaration) => !ts.isImportSpecifier(declaration));
+	return declarations.some(
+		(declaration) =>
+			!ts.isImportSpecifier(declaration) && !ts.isNamespaceImport(declaration),
+	);
 }
 
 function resolveIdentifierBinding(source, file, identifier, callIndex) {
@@ -1173,11 +1269,19 @@ function checkFactoryCalls(
 			if (callState.lineComment || callState.blockComment) {
 				continue;
 			}
-			const call = factoryCall(
+			const factoryScope = {
+				factory,
+				fenceStart,
+				name: localFactory.name,
+				registryStart,
+			};
+			factoryScope.scriptKind = factoryScriptKind(
+				file,
 				source,
-				{ fenceStart, name: localFactory.name, registryStart },
+				factoryScope,
 				callIndex,
 			);
+			const call = factoryCall(source, factoryScope, callIndex);
 			if (!call || isFactoryNameShadowed(call)) continue;
 			let cursor = skipLexicalTrivia(source, call.openIndex + 1);
 			if (source[cursor] === ")") continue;
