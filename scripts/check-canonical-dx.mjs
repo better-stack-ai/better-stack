@@ -198,8 +198,12 @@ function isInsideMarkdownInlineCode(source, index) {
 	return (prefix.match(/(?<!`)`(?!`)/g)?.length ?? 0) % 2 === 1;
 }
 
+function markdownFences(source) {
+	return source.matchAll(/^ {0,3}```[^\n]*$/gm);
+}
+
 function markdownFenceContentStart(source, index) {
-	const fences = [...source.slice(0, index).matchAll(/^ {0,3}```[^\n]*$/gm)];
+	const fences = [...markdownFences(source.slice(0, index))];
 	if (fences.length % 2 === 0) return undefined;
 	const openingFence = fences.at(-1);
 	return openingFence?.index === undefined
@@ -741,11 +745,13 @@ let typeScriptScopeCache;
 
 function aliasScopeBounds(source, alias) {
 	if (alias.fenceStart !== undefined) {
-		const fencePattern = /^ {0,3}```[^\n]*$/gm;
-		fencePattern.lastIndex = alias.fenceStart;
-		const closingFence = fencePattern.exec(source);
+		const closingFence = markdownFences(source.slice(alias.fenceStart)).next()
+			.value;
 		return {
-			end: closingFence?.index ?? source.length,
+			end:
+				closingFence?.index === undefined
+					? source.length
+					: alias.fenceStart + closingFence.index,
 			start: alias.fenceStart,
 		};
 	}

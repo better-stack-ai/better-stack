@@ -119,7 +119,9 @@ URL slugs may remain kebab-case.
 ```typescript
 import { defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api"
 
+/** Configuration accepted by `myBackendPlugin`. */
 export interface MyBackendPluginOptions {
+  /** Lifecycle callbacks composed around plugin operations. */
   hooks?: MyBackendHooks
 }
 
@@ -138,7 +140,7 @@ export const myBackendPlugin = (options: MyBackendPluginOptions = {}) =>
     },
   })
 
-// Export the inferred router type — the client plugin imports this for end-to-end type safety
+/** Inferred router contract imported by the client plugin for end-to-end type safety. */
 export type MyApiRouter = ReturnType<ReturnType<typeof myBackendPlugin>["routes"]>
 ```
 
@@ -354,8 +356,21 @@ export async function getItemById(adapter: Adapter, id: string): Promise<Item | 
 import type { DBAdapter as Adapter } from "@btst/db"
 import type { Item } from "../types"
 
-export interface CreateItemInput { title: string; published?: boolean }
-export interface UpdateItemInput { title?: string; published?: boolean }
+/** Fields accepted when creating an item. */
+export interface CreateItemInput {
+  /** Item title. */
+  title: string
+  /** Whether the item is publicly visible. */
+  published?: boolean
+}
+
+/** Fields accepted when updating an item. */
+export interface UpdateItemInput {
+  /** Replacement item title. */
+  title?: string
+  /** Replacement publication state. */
+  published?: boolean
+}
 
 /**
  * Create an item directly in the database.
@@ -421,9 +436,13 @@ import {
   updateItem,
 } from "./mutations"
 
+/** Lifecycle callbacks composed around the item operations. */
 export interface MyBackendHooks {
+  /** Runs before an item is created. */
   onBeforeCreateItem?: (data: unknown, ctx: { headers?: Headers }) => Promise<void> | void
+  /** Runs after an item is created. */
   onAfterCreateItem?: (item: unknown, ctx: { headers?: Headers }) => Promise<void> | void
+  /** Runs when item creation fails. */
   onErrorCreateItem?: (error: Error, ctx: { headers?: Headers }) => Promise<void> | void
 }
 
@@ -512,7 +531,9 @@ import { mySchema } from "../db"
 import { createItemSchema, updateItemSchema } from "../schemas"
 import { createMyOperations, type MyBackendHooks } from "./operations"
 
+/** Configuration accepted by `myBackendPlugin`. */
 export interface MyBackendPluginOptions {
+  /** Lifecycle callbacks composed around plugin operations. */
   hooks?: MyBackendHooks
 }
 

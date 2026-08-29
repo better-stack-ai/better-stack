@@ -3,7 +3,9 @@
 ## defineBackendPlugin shape (api/plugin.ts)
 
 ```typescript
+/** Configuration accepted by `myBackendPlugin`. */
 export interface MyBackendPluginOptions {
+  /** Lifecycle callbacks composed around plugin operations. */
   hooks?: MyBackendHooks
 }
 
@@ -25,6 +27,7 @@ export const myBackendPlugin = (options: MyBackendPluginOptions = {}) =>
     },
   })
 
+/** Inferred router contract imported by the client plugin. */
 export type MyApiRouter = ReturnType<
   ReturnType<typeof myBackendPlugin>["routes"]
 >
