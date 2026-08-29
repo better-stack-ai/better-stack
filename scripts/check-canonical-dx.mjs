@@ -467,6 +467,14 @@ function hasExecutableIdentifierReference(source, start, end, identifier) {
 	return false;
 }
 
+function hasExecutableSpread(source) {
+	for (const spread of source.matchAll(/\.\.\./g)) {
+		const state = scanLexicalState(source, spread.index ?? 0);
+		if (!state.lineComment && !state.blockComment && !state.quote) return true;
+	}
+	return false;
+}
+
 function readTopLevelObject(source, openIndex) {
 	let depth = 0;
 	let roundDepth = 0;
@@ -837,16 +845,39 @@ function identifierAt(sourceFile, index, name) {
 	return identifier;
 }
 
-function isImportedAliasShadowed(source, alias, callIndex) {
-	const scope = typeScriptScope(source, alias);
+function factoryCall(source, factoryScope, callIndex) {
+	const scope = typeScriptScope(source, factoryScope);
 	const identifier = identifierAt(
 		scope.sourceFile,
 		callIndex - scope.start,
-		alias.name,
+		factoryScope.name,
 	);
-	const declarations = identifier
-		? scope.checker.getSymbolAtLocation(identifier)?.declarations
-		: undefined;
+	if (!identifier) return undefined;
+	let expression = identifier;
+	while (
+		ts.isParenthesizedExpression(expression.parent) ||
+		ts.isNonNullExpression(expression.parent) ||
+		ts.isAsExpression(expression.parent) ||
+		ts.isTypeAssertionExpression(expression.parent) ||
+		ts.isSatisfiesExpression(expression.parent) ||
+		(ts.isBinaryExpression(expression.parent) &&
+			expression.parent.operatorToken.kind === ts.SyntaxKind.CommaToken &&
+			expression.parent.right === expression)
+	) {
+		expression = expression.parent;
+	}
+	const call = expression.parent;
+	if (!ts.isCallExpression(call) || call.expression !== expression) {
+		return undefined;
+	}
+	return {
+		declarations: scope.checker.getSymbolAtLocation(identifier)?.declarations,
+		openIndex: scope.start + call.arguments.pos - 1,
+	};
+}
+
+function isFactoryNameShadowed(call) {
+	const declarations = call.declarations;
 	if (!declarations || declarations.length === 0) return false;
 	return declarations.some((declaration) => !ts.isImportSpecifier(declaration));
 }
@@ -936,7 +967,7 @@ function inspectFactoryObject(
 	reportIndex,
 	resolutionIndex = reportIndex,
 ) {
-	if (/\.\.\./.test(object.topLevel)) {
+	if (hasExecutableSpread(object.topLevel)) {
 		failures.push({
 			file,
 			line: lineAt(source, reportIndex),
@@ -988,7 +1019,7 @@ function inspectFactoryObject(
 			while (/\s/.test(source[hooksValueIndex] ?? "")) hooksValueIndex += 1;
 			if (source[hooksValueIndex] === "{") {
 				const hooksObject = readTopLevelObject(source, hooksValueIndex);
-				if (hooksObject && /\.\.\./.test(hooksObject.topLevel)) {
+				if (hooksObject && hasExecutableSpread(hooksObject.topLevel)) {
 					failures.push({
 						file,
 						line: lineAt(source, hooksValueIndex),
@@ -1048,7 +1079,7 @@ function inspectFactoryObject(
 				binding.openIndex !== undefined &&
 				!binding.referencedBeforeCall
 			) {
-				if (/\.\.\./.test(binding.object.topLevel)) {
+				if (hasExecutableSpread(binding.object.topLevel)) {
 					failures.push({
 						file,
 						line: lineAt(source, binding.openIndex),
@@ -1125,6 +1156,7 @@ function checkFactoryCalls(
 			const fenceStart = /\.mdx?$/.test(file)
 				? markdownFenceContentStart(source, callIndex)
 				: undefined;
+			const registryStart = registrySourceStart(source, file, callIndex);
 			if (
 				Object.hasOwn(localFactory, "fenceStart") &&
 				fenceStart !== localFactory.fenceStart
@@ -1132,7 +1164,6 @@ function checkFactoryCalls(
 				continue;
 			}
 			if (Object.hasOwn(localFactory, "registryStart")) {
-				const registryStart = registrySourceStart(source, file, callIndex);
 				if (registryStart !== localFactory.registryStart) continue;
 			}
 			const callState =
@@ -1142,15 +1173,13 @@ function checkFactoryCalls(
 			if (callState.lineComment || callState.blockComment) {
 				continue;
 			}
-			if (
-				localFactory.name !== factory &&
-				isImportedAliasShadowed(source, localFactory, callIndex)
-			) {
-				continue;
-			}
-			let cursor = skipLexicalTrivia(source, callIndex + match[0].length);
-			if (source[cursor] !== "(") continue;
-			cursor = skipLexicalTrivia(source, cursor + 1);
+			const call = factoryCall(
+				source,
+				{ fenceStart, name: localFactory.name, registryStart },
+				callIndex,
+			);
+			if (!call || isFactoryNameShadowed(call)) continue;
+			let cursor = skipLexicalTrivia(source, call.openIndex + 1);
 			if (source[cursor] === ")") continue;
 			if (source[cursor] !== "{") {
 				const expression = source
