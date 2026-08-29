@@ -367,7 +367,7 @@ describe("scaffold plan", () => {
 			"uiBuilder: uiBuilderClientPlugin(),",
 		);
 		expect(stackClientFile?.content).toContain(
-			"formBuilder: formBuilderClientPlugin({",
+			"formBuilder: formBuilderClientPlugin(),",
 		);
 		expect(stackClientFile?.content).not.toContain('"ai-chat":');
 		expect(stackClientFile?.content).not.toContain('"ui-builder":');

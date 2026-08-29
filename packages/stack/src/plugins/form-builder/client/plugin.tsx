@@ -4,6 +4,7 @@ import {
 	defineClientPlugin,
 	createApiClient,
 	isConnectionError,
+	type ResolvedClientPluginRuntime,
 } from "@btst/stack/plugins/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
@@ -12,6 +13,8 @@ import { createSanitizedSSRLoaderError } from "../../utils";
 import type { FormBuilderApiRouter } from "../api";
 import { createFormBuilderQueryKeys } from "../query-keys";
 import type { PaginatedFormSubmissions } from "../types";
+import { FORM_BUILDER_PLUGIN_ID } from "./constants";
+import type { FormBuilderPluginOverrides } from "./overrides";
 
 // Lazy load page components for code splitting
 const FormListPageComponent = lazy(() =>
@@ -103,29 +106,17 @@ export interface FormBuilderClientHooks {
 	) => Promise<void> | void;
 	/**
 	 * Called when a loading error occurs.
-	 * Use this for loader error handling and redirects.
+	 * Use this to report loader failures. Router error handling remains authoritative.
 	 * @param error - The error that occurred
 	 * @param context - Loader context
 	 */
-	onLoadError?: (error: Error, context: LoaderContext) => Promise<void> | void;
+	onErrorLoad?: (error: Error, context: LoaderContext) => Promise<void> | void;
 }
 
 /**
  * Configuration for Form Builder client plugin
  */
 export interface FormBuilderClientConfig {
-	/** Base URL for API calls (e.g., "http://localhost:3000") */
-	apiBaseURL: string;
-	/** Path where the API is mounted (e.g., "/api/data") */
-	apiBasePath: string;
-	/** Base URL of your site */
-	siteBaseURL: string;
-	/** Path where pages are mounted (e.g., "/pages") */
-	siteBasePath: string;
-	/** React Query client instance for caching */
-	queryClient: QueryClient;
-	/** Optional headers for SSR (e.g., forwarding cookies) */
-	headers?: Headers;
 	/** Optional hooks for route loading, redirects, and telemetry. */
 	hooks?: FormBuilderClientHooks;
 
@@ -146,10 +137,67 @@ export interface FormBuilderClientConfig {
 	};
 }
 
+interface ResolvedFormBuilderClientConfig extends FormBuilderClientConfig {
+	apiBaseURL: string;
+	apiBasePath: string;
+	siteBaseURL: string;
+	siteBasePath: string;
+	queryClient: QueryClient;
+	headers?: Headers;
+	credentials?: RequestCredentials;
+}
+
+function resolveFormBuilderClientConfig(
+	config: FormBuilderClientConfig,
+	runtime: ResolvedClientPluginRuntime<typeof FORM_BUILDER_PLUGIN_ID>,
+): ResolvedFormBuilderClientConfig {
+	return {
+		hooks: config.hooks,
+		pageComponents: config.pageComponents,
+		apiBaseURL: runtime.api.baseURL,
+		apiBasePath: runtime.api.basePath,
+		siteBaseURL: runtime.site.baseURL,
+		siteBasePath: runtime.site.basePath,
+		queryClient: runtime.queryClient,
+		...(runtime.api.headers ? { headers: runtime.api.headers } : {}),
+		...(runtime.api.credentials
+			? { credentials: runtime.api.credentials }
+			: {}),
+	};
+}
+
+function createFormBuilderApiClient(config: ResolvedFormBuilderClientConfig) {
+	return createApiClient<FormBuilderApiRouter>({
+		baseURL: config.apiBaseURL,
+		basePath: config.apiBasePath,
+		headers: config.headers,
+		credentials: config.credentials,
+	});
+}
+
+function createLoadErrorReporter(
+	hooks: FormBuilderClientHooks | undefined,
+	context: LoaderContext,
+) {
+	let reported = false;
+	return async (error: unknown) => {
+		if (reported || !hooks?.onErrorLoad) return;
+		reported = true;
+		try {
+			await hooks.onErrorLoad(
+				error instanceof Error ? error : new Error(String(error)),
+				context,
+			);
+		} catch {
+			// Reporting hooks cannot make an SSR loader reject or run twice.
+		}
+	};
+}
+
 /**
  * Create form list loader for SSR
  */
-function createFormListLoader(config: FormBuilderClientConfig) {
+function createFormListLoader(config: ResolvedFormBuilderClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
 			const { queryClient, apiBasePath, apiBaseURL, headers, hooks } = config;
@@ -161,11 +209,10 @@ function createFormListLoader(config: FormBuilderClientConfig) {
 				apiBasePath,
 				headers,
 			};
-			const client = createApiClient<FormBuilderApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
-			const queries = createFormBuilderQueryKeys(client, headers);
+			const reportError = createLoadErrorReporter(hooks, context);
+			const queries = createFormBuilderQueryKeys(
+				createFormBuilderApiClient(config),
+			);
 			const limit = 20;
 			const listQuery = queries.forms.list({ limit });
 
@@ -188,12 +235,8 @@ function createFormListLoader(config: FormBuilderClientConfig) {
 
 				// Check if there was an error
 				const queryState = queryClient.getQueryState(listQuery.queryKey);
-				if (queryState?.error && hooks?.onLoadError) {
-					const error =
-						queryState.error instanceof Error
-							? queryState.error
-							: new Error(String(queryState.error));
-					await hooks.onLoadError(error, context);
+				if (queryState?.error) {
+					await reportError(queryState.error);
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
@@ -213,9 +256,7 @@ function createFormListLoader(config: FormBuilderClientConfig) {
 						retry: false,
 					});
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 			}
 		}
 	};
@@ -226,7 +267,7 @@ function createFormListLoader(config: FormBuilderClientConfig) {
  */
 function createFormBuilderLoader(
 	id: string | undefined,
-	config: FormBuilderClientConfig,
+	config: ResolvedFormBuilderClientConfig,
 ) {
 	return async () => {
 		if (typeof window === "undefined") {
@@ -240,11 +281,10 @@ function createFormBuilderLoader(
 				apiBasePath,
 				headers,
 			};
-			const client = createApiClient<FormBuilderApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
-			const queries = createFormBuilderQueryKeys(client, headers);
+			const reportError = createLoadErrorReporter(hooks, context);
+			const queries = createFormBuilderQueryKeys(
+				createFormBuilderApiClient(config),
+			);
 			const formQuery = id ? queries.forms.forUpdate(id) : undefined;
 
 			try {
@@ -266,12 +306,8 @@ function createFormBuilderLoader(
 				// Check if there was an error
 				if (id) {
 					const queryState = queryClient.getQueryState(formQuery!.queryKey);
-					if (queryState?.error && hooks?.onLoadError) {
-						const error =
-							queryState.error instanceof Error
-								? queryState.error
-								: new Error(String(queryState.error));
-						await hooks.onLoadError(error, context);
+					if (queryState?.error) {
+						await reportError(queryState.error);
 					}
 				}
 			} catch (error) {
@@ -291,9 +327,7 @@ function createFormBuilderLoader(
 						retry: false,
 					});
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 			}
 		}
 	};
@@ -304,7 +338,7 @@ function createFormBuilderLoader(
  */
 function createSubmissionsLoader(
 	formId: string,
-	config: FormBuilderClientConfig,
+	config: ResolvedFormBuilderClientConfig,
 ) {
 	return async () => {
 		if (typeof window === "undefined") {
@@ -318,11 +352,10 @@ function createSubmissionsLoader(
 				apiBasePath,
 				headers,
 			};
-			const client = createApiClient<FormBuilderApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
-			const queries = createFormBuilderQueryKeys(client, headers);
+			const reportError = createLoadErrorReporter(hooks, context);
+			const queries = createFormBuilderQueryKeys(
+				createFormBuilderApiClient(config),
+			);
 			const limit = 20;
 			const submissionsQuery = queries.formSubmissions.list({ formId, limit });
 
@@ -348,12 +381,8 @@ function createSubmissionsLoader(
 					submissionsQuery.queryKey,
 				);
 				const queryError = submissionsState?.error;
-				if (queryError && hooks?.onLoadError) {
-					const error =
-						queryError instanceof Error
-							? queryError
-							: new Error(String(queryError));
-					await hooks.onLoadError(error, context);
+				if (queryError) {
+					await reportError(queryError);
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
@@ -373,9 +402,7 @@ function createSubmissionsLoader(
 						retry: false,
 					});
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 			}
 		}
 	};
@@ -400,18 +427,16 @@ function createFormListMeta() {
  */
 function createFormBuilderMeta(
 	id: string | undefined,
-	config: FormBuilderClientConfig,
+	config: ResolvedFormBuilderClientConfig,
 ) {
 	return () => {
-		const { queryClient, apiBasePath, apiBaseURL } = config;
+		const { queryClient } = config;
 
 		let formName = "";
 		if (id) {
-			const client = createApiClient<FormBuilderApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
-			const queries = createFormBuilderQueryKeys(client);
+			const queries = createFormBuilderQueryKeys(
+				createFormBuilderApiClient(config),
+			);
 			const form = queryClient.getQueryData(
 				queries.forms.forUpdate(id).queryKey,
 			) as { name: string } | undefined;
@@ -433,15 +458,13 @@ function createFormBuilderMeta(
  */
 function createSubmissionsMeta(
 	formId: string,
-	config: FormBuilderClientConfig,
+	config: ResolvedFormBuilderClientConfig,
 ) {
 	return () => {
-		const { queryClient, apiBasePath, apiBaseURL } = config;
-		const client = createApiClient<FormBuilderApiRouter>({
-			baseURL: apiBaseURL,
-			basePath: apiBasePath,
-		});
-		const queries = createFormBuilderQueryKeys(client);
+		const { queryClient } = config;
+		const queries = createFormBuilderQueryKeys(
+			createFormBuilderApiClient(config),
+		);
 		const data = queryClient.getQueryData(
 			queries.formSubmissions.list({ formId, limit: 20 }).queryKey,
 		) as { pages?: PaginatedFormSubmissions[] } | undefined;
@@ -461,10 +484,10 @@ function createSubmissionsMeta(
  * Form Builder client plugin
  * Provides routes and components for the Form Builder admin interface
  */
-export const formBuilderClientPlugin = (config: FormBuilderClientConfig) =>
-	defineClientPlugin({
-		name: "form-builder",
-
+function createResolvedFormBuilderPlugin(
+	config: ResolvedFormBuilderClientConfig,
+) {
+	return {
 		routes: () =>
 			defineRoutes(
 				{
@@ -503,4 +526,14 @@ export const formBuilderClientPlugin = (config: FormBuilderClientConfig) =>
 			// Form Builder admin pages should NOT be in sitemap
 			return [];
 		},
+	};
+}
+
+export const formBuilderClientPlugin = (config: FormBuilderClientConfig = {}) =>
+	defineClientPlugin<FormBuilderPluginOverrides>()({
+		id: FORM_BUILDER_PLUGIN_ID,
+		resolve: (runtime) =>
+			createResolvedFormBuilderPlugin(
+				resolveFormBuilderClientConfig(config, runtime),
+			),
 	});

@@ -105,18 +105,21 @@ describe("Kanban authenticated SSR hydration", () => {
 				headers: { "content-type": "application/json" },
 			}),
 		);
-		const plugin = kanbanClientPlugin({
-			apiBaseURL: "http://test.local",
-			apiBasePath: "/api/data",
-			siteBaseURL: "http://test.local",
-			siteBasePath: "/pages",
+		const stack = createStackClient({
+			api: {
+				baseURL: "http://test.local",
+				basePath: "/api/data",
+				headers,
+			},
+			site: { baseURL: "http://test.local", basePath: "/pages" },
 			queryClient,
-			headers,
-			identityPartition: identity,
+			plugins: {
+				kanban: kanbanClientPlugin({ identityPartition: identity }),
+			},
 		});
 
-		const route = plugin.routes().board({ params: { boardId: board.id } });
-		await route.loader?.();
+		const route = stack.router.getRoute(`/kanban/${board.id}`);
+		await route?.loader?.();
 
 		const queries = createKanbanQueryKeys(client);
 		expect(
@@ -127,7 +130,7 @@ describe("Kanban authenticated SSR hydration", () => {
 		expect(
 			queryClient.getQueryData(queries.boards.detail(board.id).queryKey),
 		).toBeUndefined();
-		expect(route.meta?.()).toContainEqual({ title: board.name });
+		expect(route?.meta?.()).toContainEqual({ title: board.name });
 		const [, init] = fetchMock.mock.calls[0] ?? [];
 		expect(new Headers(init?.headers).get("cookie")).toBe(
 			"session=request-session",
@@ -155,15 +158,11 @@ describe("Kanban authenticated SSR hydration", () => {
 
 		const stackClient = (identityPartition?: typeof identity) =>
 			createStackClient({
+				api: { baseURL: "http://test.local", basePath: "/api/data" },
+				site: { baseURL: "http://test.local", basePath: "/pages" },
+				queryClient,
 				plugins: {
-					kanban: kanbanClientPlugin({
-						apiBaseURL: "http://test.local",
-						apiBasePath: "/api/data",
-						siteBaseURL: "http://test.local",
-						siteBasePath: "/pages",
-						queryClient,
-						identityPartition,
-					}),
+					kanban: kanbanClientPlugin({ identityPartition }),
 				},
 			});
 		const page = createTanStackPageOptions<{ queryClient: QueryClient }>({
@@ -189,14 +188,11 @@ describe("Kanban anonymous sitemap", () => {
 
 	function createClient() {
 		return createStackClient({
+			api: { baseURL: "http://test.local", basePath: "/api/data" },
+			site: { baseURL: "http://test.local", basePath: "/pages" },
+			queryClient: new QueryClient(),
 			plugins: {
-				kanban: kanbanClientPlugin({
-					apiBaseURL: "http://test.local",
-					apiBasePath: "/api/data",
-					siteBaseURL: "http://test.local",
-					siteBasePath: "/pages",
-					queryClient: new QueryClient(),
-				}),
+				kanban: kanbanClientPlugin(),
 			},
 		});
 	}

@@ -11,6 +11,7 @@ import { DefaultError } from "../shared/default-error";
 import { SubmissionsSkeleton } from "../loading/submissions-skeleton";
 import { NotFoundPage } from "./404-page";
 import { formBuilderPermissions } from "../../../permissions";
+import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
 import { useSuspenseSubmissions } from "../../hooks";
 
 const SubmissionsPage = lazy(() =>
@@ -24,8 +25,9 @@ export interface SubmissionsPageProps {
 }
 
 export function SubmissionsPageComponent({ formId }: SubmissionsPageProps) {
-	const { onRouteError } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
+	const { onRouteError } = usePluginOverrides<FormBuilderPluginOverrides>(
+		FORM_BUILDER_PLUGIN_ID,
+	);
 
 	const path = `/forms/${formId}/submissions`;
 

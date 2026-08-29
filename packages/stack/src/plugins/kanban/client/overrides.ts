@@ -43,11 +43,6 @@ export interface KanbanPluginOverrides {
 	 */
 	showAttribution?: boolean;
 	/**
-	 * Optional headers to pass with API requests (e.g., for SSR auth)
-	 */
-	headers?: HeadersInit;
-
-	/**
 	 * Function used to upload a new image file from the task description editor
 	 * and return its URL. This is separate from `imagePicker`, which selects an
 	 * existing asset URL.

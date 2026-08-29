@@ -1,22 +1,17 @@
 "use client";
 
 import { Button } from "@workspace/ui/components/button";
-import {
-	usePluginOverrides,
-	useBasePath,
-	useStack,
-	useTranslate,
-} from "@btst/stack/context";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { FormBuilderPluginOverrides } from "../../overrides";
+import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
+import { useFormBuilderSiteLocation } from "../../navigation";
 
 export function NotFoundPage() {
 	const t = useTranslate();
-	const { localization } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const { router } = useStack();
-	const basePath = useBasePath();
-
-	const LinkComponent = router?.Link ?? "a";
+	const { localization } = usePluginOverrides<FormBuilderPluginOverrides>(
+		FORM_BUILDER_PLUGIN_ID,
+	);
+	const { Link: LinkComponent, resolve } = useFormBuilderSiteLocation();
 
 	return (
 		<div className="flex flex-col items-center justify-center py-12 px-4 text-center">
@@ -33,7 +28,7 @@ export function NotFoundPage() {
 					)}
 			</p>
 			<Button asChild>
-				<LinkComponent href={`${basePath}/forms`}>
+				<LinkComponent href={resolve("forms").href}>
 					{localization?.FORM_BUILDER_404_BACK ??
 						t("formBuilder.common.404Back", "Back to Forms")}
 				</LinkComponent>

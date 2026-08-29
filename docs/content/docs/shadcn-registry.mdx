@@ -188,10 +188,7 @@ import { FormListPageComponent } from "@/components/btst/form-builder/client/com
 import { EditFormPageComponent } from "@/components/btst/form-builder/client/components/pages/edit-form-page"
 
 formBuilderClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
-  pageComponents: {
+	pageComponents: {
     formList: FormListPageComponent, // form list page
     editForm: ({ params }) => <EditFormPageComponent id={params.id} />, // form editor
     // newForm | submissions — omit to keep defaults
@@ -223,10 +220,7 @@ import { BoardsPageComponent } from "@/components/btst/kanban/client/components/
 import { BoardPageComponent } from "@/components/btst/kanban/client/components/pages/board-page"
 
 kanbanClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
-  pageComponents: {
+	pageComponents: {
     boards: BoardsPageComponent, // boards list
     board: ({ params }) => <BoardPageComponent boardId={params.boardId} />, // board detail
     // newBoard — omit to keep default

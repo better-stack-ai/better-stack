@@ -17,6 +17,7 @@ import type {
 	SerializedTask,
 } from "../../types";
 import { kanban } from "./kanban-resource";
+import { KANBAN_PLUGIN_ID } from "../constants";
 
 function useIdentityPartition() {
 	const { identity, isPending, error } = useIdentity();
@@ -199,7 +200,8 @@ export function useTaskMutations() {
 
 /** Resolve a user from the consumer-provided callback. */
 export function useResolveUser(userId: string | undefined | null) {
-	const { resolveUser } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { resolveUser } =
+		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
 	const identityPartition = useIdentityPartition();
 
 	return useQuery<KanbanUser | null>({
@@ -216,7 +218,8 @@ export function useResolveUser(userId: string | undefined | null) {
 
 /** Search for assignable users through the consumer-provided callback. */
 export function useSearchUsers(query: string, boardId?: string) {
-	const { searchUsers } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { searchUsers } =
+		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
 	const identityPartition = useIdentityPartition();
 
 	return useQuery<KanbanUser[]>({

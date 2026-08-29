@@ -108,14 +108,7 @@ export const getStackClient = (
 				},
 			}),
 			cms: cmsClientPlugin(),
-			"form-builder": formBuilderClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
-			}),
+			formBuilder: formBuilderClientPlugin(),
 			uiBuilder: uiBuilderClientPlugin({
 				hooks: {
 					beforeLoadPageList: async (context) => {
@@ -138,12 +131,6 @@ export const getStackClient = (
 				siteBasePath: "/pages",
 			}),
 			kanban: kanbanClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
 				identityPartition: options?.identity,
 				seo: {
 					siteName: "BTST Kanban",

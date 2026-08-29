@@ -96,7 +96,7 @@ export { handler, dbSchema }
 Register the Form Builder client plugin:
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
 import { QueryClient } from "@tanstack/react-query"
 
@@ -105,17 +105,18 @@ const getBaseURL = () =>
 
 export const getStackClient = (queryClient: QueryClient, options?: { headers?: Headers }) => {
   const baseURL = getBaseURL()
-  return createStackClient({
+  return createClientStack({
+    api: {
+      baseURL,
+      basePath: "/api/data",
+      headers: options?.headers,
+    },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
-      "form-builder": formBuilderClientPlugin({
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-        queryClient: queryClient,
-        headers: options?.headers,
+      formBuilder: formBuilderClientPlugin({
         hooks: {
-          onLoadError: (error, context) => {
+          onErrorLoad: (error, context) => {
             reportRouteLoadError(error, context)
           },
         },
@@ -130,19 +131,13 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
 Add Form Builder overrides to your layout:
 
 ```tsx title="app/pages/layout.tsx"
-import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
 import { nextRouter } from "@btst/stack/next"
 
-type PluginOverrides = {
-  "form-builder": FormBuilderPluginOverrides,
-}
-
-<StackProvider<PluginOverrides>
-  basePath="/pages"
+<StackProvider
+  stack={clientStack}
   router={nextRouter()}
-  api={{ baseURL, basePath: "/api/data" }}
   overrides={{
-    "form-builder": {
+    formBuilder: {
       // Optional custom field implementations
       fieldComponents: {
         file: MyFileField,
@@ -654,12 +649,12 @@ Creates the client plugin with routes and SSR loaders.
 | `fieldComponents` | `Record<string, ComponentType>` | No | Custom field components |
 | `localization` | `FormBuilderLocalization` | No | Custom labels |
 | `showAttribution` | `boolean` | No | Show BTST attribution |
-| `headers` | `HeadersInit` | No | Additional headers for client API calls |
 | `onRouteRender` | `(route, context) => void` | No | Lifecycle hook |
 | `onRouteError` | `(route, error, context) => void` | No | Error hook |
 
-Router and API services are not override fields in v3. Configure them with
-`StackProvider.router` and `StackProvider.api`.
+API, site, query-client, and request-header values come from
+`createClientStack()`. `StackProvider` infers the `formBuilder` override shape
+from the registered plugin.
 
 #### FormBuilderClientHooks
 
@@ -671,7 +666,7 @@ Router and API services are not override fields in v3. Configure them with
 | `afterLoadFormBuilder` | `form, context` | `void` | Post-load hook |
 | `beforeLoadSubmissions` | `formId, context` | `void \| Promise<void>` | SSR preparation for submissions — throw to abort loading |
 | `afterLoadSubmissions` | `submissions, context` | `void` | Post-load hook |
-| `onLoadError` | `error, context` | `void` | Handle auth failures |
+| `onErrorLoad` | `error, context` | `void` | Report a loader failure once; reporter failures are contained |
 
 ### Schema Converter Utilities (`@btst/stack/plugins/form-builder/client`)
 
@@ -739,7 +734,7 @@ Standalone getters remain lower-level adapter primitives for plugin internals an
 
 ## Static Site Generation (SSG)
 
-`route.loader()` makes HTTP requests to `apiBaseURL`, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
+`route.loader()` uses the API endpoint resolved by `createClientStack()`, which may be unavailable during `next build`. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
 
 <Callout type="warn">
 `prefetchForRoute()` is a raw-data escape hatch. It does not run the
@@ -858,9 +853,6 @@ import { FormListPageComponent } from "@/components/btst/form-builder/client/com
 import { EditFormPageComponent } from "@/components/btst/form-builder/client/components/pages/edit-form-page"
 
 formBuilderClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
   pageComponents: {
     formList: FormListPageComponent, // replaces the form list page
     // Param routes receive the route context ({ params }) as props

@@ -61,11 +61,6 @@ export interface FormBuilderPluginOverrides {
 	 */
 	showAttribution?: boolean;
 
-	/**
-	 * Optional headers to pass with API requests (e.g., for SSR auth)
-	 */
-	headers?: HeadersInit;
-
 	// Lifecycle Hooks (optional)
 
 	/**

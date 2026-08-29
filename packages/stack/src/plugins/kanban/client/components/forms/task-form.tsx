@@ -27,6 +27,7 @@ import type {
 	Priority,
 } from "../../../types";
 import { kanbanPermissions } from "../../../permissions";
+import { KANBAN_PLUGIN_ID } from "../../constants";
 
 interface TaskFormProps {
 	columnId: string;
@@ -70,7 +71,7 @@ export function TaskForm({
 		uploadImage,
 		imagePicker: imagePickerTrigger,
 		localization,
-	} = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	} = usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
 	const isEditing = !!taskId;
 
 	const [title, setTitle] = useState(task?.title || "");

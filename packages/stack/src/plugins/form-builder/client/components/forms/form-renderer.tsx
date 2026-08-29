@@ -17,6 +17,7 @@ import { useFormBySlug, useSubmitForm } from "../../hooks/form-builder-hooks";
 import type { FormBuilderPluginOverrides } from "../../overrides";
 import type { SerializedFormSubmission } from "../../../types";
 import { formBuilderPermissions } from "../../../permissions";
+import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
 
 export interface FormRendererProps {
 	/** Form slug to render */
@@ -56,8 +57,9 @@ function DefaultLoadingComponent() {
 
 function DefaultErrorComponent({ error }: { error: Error }) {
 	const t = useTranslate();
-	const { localization } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
+	const { localization } = usePluginOverrides<FormBuilderPluginOverrides>(
+		FORM_BUILDER_PLUGIN_ID,
+	);
 
 	return (
 		<div className="flex flex-col items-center justify-center py-8 text-center">
@@ -82,8 +84,9 @@ function DefaultErrorComponent({ error }: { error: Error }) {
 
 function DefaultSuccessComponent({ message }: { message: React.ReactNode }) {
 	const t = useTranslate();
-	const { localization } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
+	const { localization } = usePluginOverrides<FormBuilderPluginOverrides>(
+		FORM_BUILDER_PLUGIN_ID,
+	);
 
 	return (
 		<div className="flex flex-col items-center justify-center py-8 text-center">
@@ -130,7 +133,7 @@ export function FormRenderer({
 }: FormRendererProps) {
 	const t = useTranslate();
 	const { fieldComponents: overrideFieldComponents, localization } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
+		usePluginOverrides<FormBuilderPluginOverrides>(FORM_BUILDER_PLUGIN_ID);
 
 	const { form, isLoading, error } = useFormBySlug(slug);
 	const submitMutation = useSubmitForm(slug);

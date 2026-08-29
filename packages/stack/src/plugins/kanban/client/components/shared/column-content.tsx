@@ -22,6 +22,7 @@ import { TaskCard } from "./task-card";
 import type { SerializedColumn, SerializedTask } from "../../../types";
 import { kanbanPermissions } from "../../../permissions";
 import { PermissionAccessAny } from "./permission-access-any";
+import { KANBAN_PLUGIN_ID } from "../../constants";
 
 interface ColumnContentProps {
 	boardId: string;
@@ -45,7 +46,8 @@ function ColumnContentComponent({
 	onDeleteColumn,
 }: ColumnContentProps) {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { localization } =
+		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
 	const hasTasks = column.tasks && column.tasks.length > 0;
 	const boardFacts = {
 		boardId,

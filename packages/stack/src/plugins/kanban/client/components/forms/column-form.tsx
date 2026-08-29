@@ -8,6 +8,7 @@ import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import { useColumnForm } from "../../hooks/kanban-hooks";
 import type { KanbanPluginOverrides } from "../../overrides";
 import type { SerializedColumn } from "../../../types";
+import { KANBAN_PLUGIN_ID } from "../../constants";
 
 interface ColumnFormProps {
 	boardId: string;
@@ -33,7 +34,8 @@ export function ColumnForm({
 	onSuccess,
 }: ColumnFormProps) {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { localization } =
+		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
 	const isEditing = !!columnId;
 	const [title, setTitle] = useState(column?.title || "");
 	const [titleError, setTitleError] = useState<string | null>(null);

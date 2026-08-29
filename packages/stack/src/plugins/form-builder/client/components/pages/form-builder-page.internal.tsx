@@ -5,8 +5,6 @@ import {
 	useNotify,
 	PermissionAccess,
 	usePluginOverrides,
-	useBasePath,
-	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
@@ -29,6 +27,8 @@ import { slugify } from "../../../utils";
 import type { SerializedForm } from "../../../types";
 import { formBuilderPermissions } from "../../../permissions";
 import { NotFoundPage } from "./404-page";
+import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
+import { useFormBuilderSiteLocation } from "../../navigation";
 
 export interface FormBuilderPageProps {
 	id?: string;
@@ -82,12 +82,14 @@ function FormBuilderPageContent({
 }: FormBuilderPageContentProps) {
 	const t = useTranslate();
 	const notify = useNotify();
-	const { localization } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const { router } = useStack();
-	const basePath = useBasePath();
-
-	const LinkComponent = router?.Link ?? "a";
+	const { localization } = usePluginOverrides<FormBuilderPluginOverrides>(
+		FORM_BUILDER_PLUGIN_ID,
+	);
+	const {
+		Link: LinkComponent,
+		navigate,
+		resolve,
+	} = useFormBuilderSiteLocation();
 
 	// Form state
 	const [name, setName] = useState(existingForm?.name || "");
@@ -152,10 +154,9 @@ function FormBuilderPageContent({
 				status: values.status,
 			},
 		}),
-		redirect: (result, action) =>
-			action === "create" && result
-				? `${basePath}/forms/${result.id}/edit`
-				: false,
+		onSuccess: (result) => {
+			if (!id && result) return navigate("forms", result.id, "edit");
+		},
 	});
 
 	const handleSave = async () => {
@@ -221,7 +222,7 @@ function FormBuilderPageContent({
 			{/* Header */}
 			<div className="flex items-center gap-4 border-b p-4">
 				<Button variant="ghost" size="icon" asChild>
-					<LinkComponent href={`${basePath}/forms`}>
+					<LinkComponent href={resolve("forms").href}>
 						<ArrowLeft className="h-4 w-4" />
 					</LinkComponent>
 				</Button>

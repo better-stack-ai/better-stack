@@ -67,7 +67,7 @@ ordinary role and ownership rules do not belong in hooks.
 Register the kanban client plugin in your `stack-client.tsx` file:
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
 import type { StackIdentity } from "@btst/stack/context"
 import { QueryClient } from "@tanstack/react-query"
@@ -80,18 +80,18 @@ export const getStackClient = (
   request?: { headers?: Headers; identity?: StackIdentity },
 ) => {
   const baseURL = getBaseURL()
-  return createStackClient({
+  return createClientStack({
+    api: {
+      baseURL,
+      basePath: "/api/data",
+      headers: request?.headers,
+    },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
       kanban: kanbanClientPlugin({
-        // Required configuration
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-        queryClient: queryClient,
-        // Forward request credentials to SSR loaders and use the same
-        // validated identity that hydrates StackProvider in the browser.
-        headers: request?.headers,
+        // Use the same validated identity that hydrates StackProvider so
+        // protected SSR and browser query keys match.
         identityPartition: request?.identity,
         // Optional: SEO configuration
         seo: {
@@ -104,21 +104,15 @@ export const getStackClient = (
 }
 ```
 
-**Required configuration:**
-- `apiBaseURL`: Base URL for API calls during SSR data prefetching
-- `apiBasePath`: Path where your API is mounted (e.g., `/api/data`)
-- `siteBaseURL`: Base URL of your site
-- `siteBasePath`: Path where your pages are mounted (e.g., `/pages`)
-- `queryClient`: React Query client instance
-
-For request-time SSR, also pass `headers` so the backend can authenticate the
-loader and `identityPartition` so its protected cache key exactly matches the
-browser's hydrated identity. Anonymous and trusted static generation omit both.
+API, site, query-client, and request headers are configured once on
+`createClientStack()`. For request-time SSR, pass `identityPartition` to the
+plugin so its protected cache key exactly matches the browser's hydrated
+identity. Anonymous and trusted static generation omit the identity.
 
 <Callout type="info">
-These values configure the client plugin's SSR loaders and metadata. Browser
-routing and API access come from the top-level `StackProvider.router` and
-`StackProvider.api` values below.
+The resolved runtime drives SSR loaders, metadata, sitemap generation, and
+browser reads and mutations. A per-plugin endpoint override, when needed, is
+configured in `createClientStack({ endpoints: { kanban: ... } })`.
 </Callout>
 
 ### 3. Import Plugin CSS
@@ -140,26 +134,13 @@ Configure top-level framework wiring and kanban-specific overrides in your `Stac
     ```tsx title="app/pages/[[...all]]/layout.tsx"
     import { StackProvider } from "@btst/stack/context"
     import { nextRouter } from "@btst/stack/next"
-    import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
     import { resolveUser, searchUsers } from "@/lib/users" // Your user resolver
 
-    const getBaseURL = () => 
-      typeof window !== 'undefined' 
-        ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
-        : (process.env.BASE_URL || "http://localhost:3000")
-
-    type PluginOverrides = {
-      kanban: KanbanPluginOverrides
-    }
-
     export default function Layout({ children }) {
-      const baseURL = getBaseURL()
-      
       return (
-        <StackProvider<PluginOverrides>
-          basePath="/pages"
+        <StackProvider
+          stack={clientStack}
           router={nextRouter()}
-          api={{ baseURL, basePath: "/api/data" }}
           overrides={{
             kanban: {
               // Required: User resolution for assignees
@@ -180,26 +161,13 @@ Configure top-level framework wiring and kanban-specific overrides in your `Stac
     import { Outlet } from "react-router"
     import { StackProvider } from "@btst/stack/context"
     import { reactRouter } from "@btst/stack/react-router"
-    import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
     import { resolveUser, searchUsers } from "../lib/users" // Your user resolver
 
-    const getBaseURL = () => 
-      typeof window !== 'undefined' 
-        ? (import.meta.env.VITE_BASE_URL || window.location.origin)
-        : (process.env.BASE_URL || "http://localhost:5173")
-
-    type PluginOverrides = {
-      kanban: KanbanPluginOverrides
-    }
-
     export default function Layout() {
-      const baseURL = getBaseURL()
-      
       return (
-        <StackProvider<PluginOverrides>
-          basePath="/pages"
+        <StackProvider
+          stack={clientStack}
           router={reactRouter()}
-          api={{ baseURL, basePath: "/api/data" }}
           overrides={{
             kanban: {
               // Required: User resolution for assignees
@@ -219,27 +187,14 @@ Configure top-level framework wiring and kanban-specific overrides in your `Stac
     ```tsx title="src/routes/pages/route.tsx"
     import { StackProvider } from "@btst/stack/context"
     import { tanstackRouter } from "@btst/stack/tanstack"
-    import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
     import { Outlet } from "@tanstack/react-router"
     import { resolveUser, searchUsers } from "../../lib/users" // Your user resolver
 
-    const getBaseURL = () => 
-      typeof window !== 'undefined' 
-        ? (import.meta.env.VITE_BASE_URL || window.location.origin)
-        : (process.env.BASE_URL || "http://localhost:3000")
-
-    type PluginOverrides = {
-      kanban: KanbanPluginOverrides
-    }
-
     function Layout() {
-      const baseURL = getBaseURL()
-
       return (
-        <StackProvider<PluginOverrides>
-          basePath="/pages"
+        <StackProvider
+          stack={clientStack}
           router={tanstackRouter()}
-          api={{ baseURL, basePath: "/api/data" }}
           overrides={{
             kanban: {
               // Required: User resolution for assignees
@@ -256,9 +211,14 @@ Configure top-level framework wiring and kanban-specific overrides in your `Stac
   </Tab>
 </Tabs>
 
-The only required Kanban overrides are `resolveUser` and `searchUsers` for
+In these snippets, `clientStack` is the browser-safe resolved stack returned by
+`getStackClient(queryClient)`. Its registered `kanban` definition lets
+`StackProvider` infer the override type without a provider generic.
+
+The only required fields when a Kanban override block is supplied are
+`resolveUser` and `searchUsers` for
 assignee display and selection. Optional overrides include `uploadImage`,
-`imagePicker`, localization, attribution, headers, route lifecycle hooks, and
+`imagePicker`, localization, attribution, route lifecycle hooks, and
 `taskDetailBottomSlot`. Router and API fields are not plugin overrides in v3.
 
 ### 5. Generate Database Schema
@@ -277,7 +237,8 @@ Your kanban plugin is now fully configured and ready to use! Here's a quick refe
 
 ### API Endpoints
 
-The kanban plugin provides the following API endpoints (mounted at your configured `apiBasePath`):
+The kanban plugin provides the following API endpoints, mounted under the API
+base path resolved by `createClientStack()`:
 
 **Boards:**
 - **GET** `/boards` - List boards with optional filtering
@@ -301,7 +262,8 @@ The kanban plugin provides the following API endpoints (mounted at your configur
 
 ### Page Routes
 
-The kanban plugin automatically creates the following pages (mounted at your configured `siteBasePath`):
+The kanban plugin automatically creates the following pages, mounted under the
+site base path resolved by `createClientStack()`:
 
 - `/kanban` - Boards list page
 - `/kanban/new` - Create new board page
@@ -778,12 +740,6 @@ Creates the kanban client plugin with routes, loaders, and meta generators.
 
 ```tsx title="lib/stack-client.tsx"
 kanban: kanbanClientPlugin({
-  // Required configuration
-  apiBaseURL: baseURL,
-  apiBasePath: "/api/data",
-  siteBaseURL: baseURL,
-  siteBasePath: "/pages",
-  queryClient: queryClient,
   // Optional SEO configuration
   seo: {
     siteName: "My Kanban App",
@@ -817,7 +773,7 @@ Customize client-side behavior with lifecycle hooks:
 | `afterLoadBoard` | Called after a board is loaded. |
 | `beforeLoadNewBoard` | Called before loading the new board page. Throw to cancel. |
 | `afterLoadNewBoard` | Called after the new board page is loaded. |
-| `onLoadError` | Called when a loading error occurs. |
+| `onErrorLoad` | Reports a loading error once; reporter failures are contained. |
 
 #### v3 board-list migration
 
@@ -974,7 +930,7 @@ Standalone getters remain lower-level adapter primitives for plugin internals an
 
 ## Static Site Generation (SSG)
 
-`route.loader()` makes HTTP requests to `apiBaseURL`, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
+`route.loader()` uses the API endpoint resolved by `createClientStack()`, which may be unavailable during `next build`. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
 
 <Callout type="warning">
 `prefetchForRoute()` is a raw-data escape hatch. It does not run the
@@ -1106,9 +1062,6 @@ import { BoardsPageComponent } from "@/components/btst/kanban/client/components/
 import { BoardPageComponent } from "@/components/btst/kanban/client/components/pages/board-page"
 
 kanbanClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
   pageComponents: {
     boards: BoardsPageComponent, // replaces the boards list page
     // Param routes receive the route context ({ params }) as props

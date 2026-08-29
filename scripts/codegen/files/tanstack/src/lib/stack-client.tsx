@@ -94,14 +94,7 @@ export const getStackClient = (
 				mode: "authenticated",
 			}),
 			cms: cmsClientPlugin(),
-			"form-builder": formBuilderClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
-			}),
+			formBuilder: formBuilderClientPlugin(),
 			uiBuilder: uiBuilderClientPlugin(),
 			routeDocs: routeDocsClientPlugin({
 				queryClient: queryClient,
@@ -110,12 +103,6 @@ export const getStackClient = (
 				siteBasePath: "/pages",
 			}),
 			kanban: kanbanClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
 				identityPartition: options?.identity,
 				seo: {
 					siteName: "BTST Kanban",

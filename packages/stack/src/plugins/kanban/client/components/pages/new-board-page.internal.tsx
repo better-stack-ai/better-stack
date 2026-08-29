@@ -8,35 +8,28 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@workspace/ui/components/card";
-import {
-	usePluginOverrides,
-	useStack,
-	useTranslate,
-} from "@btst/stack/context";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
 import { BoardForm } from "../forms/board-form";
 import { PageWrapper } from "../shared/page-wrapper";
+import { KANBAN_PLUGIN_ID } from "../../constants";
+import { useKanbanSiteLocation } from "../../navigation";
 
 export function NewBoardPage() {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
-	const { router } = useStack();
-	const navigate =
-		router?.navigate ||
-		((path: string) => {
-			window.location.href = path;
-		});
-	const Link = router?.Link ?? "a";
+	const { localization } =
+		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
+	const { Link, navigate, resolve } = useKanbanSiteLocation();
 
 	const handleSuccess = (boardId: string) => {
-		navigate(`/pages/kanban/${boardId}`);
+		navigate("kanban", boardId);
 	};
 
 	return (
 		<PageWrapper data-testid="new-board-page">
 			<div className="flex items-center gap-4 mb-8">
 				<Link
-					href="/pages/kanban"
+					href={resolve("kanban").href}
 					className="text-muted-foreground hover:text-foreground"
 				>
 					<ArrowLeft className="h-5 w-5" />
@@ -72,7 +65,7 @@ export function NewBoardPage() {
 				</CardHeader>
 				<CardContent>
 					<BoardForm
-						onClose={() => navigate("/pages/kanban")}
+						onClose={() => navigate("kanban")}
 						onSuccess={handleSuccess}
 					/>
 				</CardContent>
