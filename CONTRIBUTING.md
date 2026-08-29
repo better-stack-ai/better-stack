@@ -128,13 +128,14 @@ export const myBackendPlugin = (options: MyBackendPluginOptions = {}) =>
     id: "myPlugin", // camelCase programmatic ID; package and URL slugs may stay kebab-case
     dbPlugin: mySchema,
     operations: (adapter) => createMyOperations(adapter, options.hooks),
-    routes: (_adapter, _context, operations) => ({
-      listItems: createEndpoint(
+    routes: (_adapter, _context, operations) => {
+      const listItems = createEndpoint(
         "/items",
         { method: "GET", requireRequest: true },
         operations.listItems.route(() => ({})),
-      ),
-    }),
+      )
+      return { listItems } as const
+    },
   })
 
 // Export the inferred router type — the client plugin imports this for end-to-end type safety
@@ -366,28 +367,29 @@ export const myBackendPlugin = (options: MyBackendPluginOptions = {}) =>
     id: "yourPlugin",
     dbPlugin: mySchema,
     operations: (adapter) => createMyOperations(adapter, options.hooks),
-    routes: (_adapter, _context, operations) => ({
-      listItemsEndpoint: createEndpoint(
+    routes: (_adapter, _context, operations) => {
+      const listItems = createEndpoint(
         "/items",
         { method: "GET", requireRequest: true },
         operations.listItems.route(() => ({})),
-      ),
-      createItemEndpoint: createEndpoint(
+      )
+      const createItem = createEndpoint(
         "/items",
         { method: "POST", body: createItemSchema, requireRequest: true },
         operations.createItem.route((ctx) => ctx.body),
-      ),
-      updateItemEndpoint: createEndpoint(
+      )
+      const updateItem = createEndpoint(
         "/items/:id",
         { method: "PUT", body: updateItemSchema, requireRequest: true },
         operations.updateItem.route((ctx) => ({ id: ctx.params.id, data: ctx.body })),
-      ),
-      deleteItemEndpoint: createEndpoint(
+      )
+      const deleteItem = createEndpoint(
         "/items/:id",
         { method: "DELETE", requireRequest: true },
         operations.deleteItem.route((ctx) => ({ id: ctx.params.id })),
-      ),
-    }),
+      )
+      return { listItems, createItem, updateItem, deleteItem } as const
+    },
   })
 
 export type MyApiRouter = ReturnType<ReturnType<typeof myBackendPlugin>["routes"]>

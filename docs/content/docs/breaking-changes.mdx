@@ -211,15 +211,24 @@ commentsBackendPlugin({
   resolveUser,
   hooks: { onAfterCreateComment },
 })
-kanbanBackendPlugin({ resolveUser, searchUsers, hooks: kanbanHooks })
+kanbanBackendPlugin({ hooks: kanbanHooks })
+
+<StackProvider
+  stack={clientStack}
+  router={router}
+  overrides={{ kanban: { resolveUser, searchUsers } }}
+>
+  {children}
+</StackProvider>
 ```
 
 Every backend plugin is a factory receiving at most one options object.
-Optional-only factories allow `plugin()`. Required domain configuration stays
-required and adjacent to `hooks`: AI Chat keeps its model, tools, and access
-mode; CMS keeps content types; Comments keeps behavior and user resolution;
-Kanban keeps user resolution and search; Media keeps storage, tenant, and
-upload configuration; OpenAPI keeps its presentation/schema options.
+Optional-only factories allow `plugin()`. Required plugin configuration stays
+required on its owning surface: AI Chat backend options keep its model, tools,
+and access mode; CMS keeps content types; Comments keeps behavior and user
+resolution; Media keeps storage, tenant, and upload configuration; OpenAPI
+keeps its presentation/schema options. Kanban user resolution and search are
+browser services and move to the inferred `StackProvider` override shown above.
 
 OpenAPI is intentionally backend-only. Route Docs is intentionally client-only.
 UI Builder is intentionally client-only and composes over the registered CMS
@@ -730,6 +739,8 @@ BTST v2 introduces a rebranding from "Better Stack" to "BTST". This guide covers
 
 ### Summary of Changes
 
+{/* canonical-dx-guard: migration:start reason="historical v2 constructor summary" */}
+
 | v1 (Better Stack) | v2 (BTST) |
 |-------------------|-----------|
 | `betterStack()` | `stack()` |
@@ -740,6 +751,8 @@ BTST v2 introduces a rebranding from "Better Stack" to "BTST". This guide covers
 | `better-stack.ts` | `stack.ts` |
 | `better-stack-client.tsx` | `stack-client.tsx` |
 | `"Powered by Better Stack"` | `"Powered by BTST"` |
+
+{/* canonical-dx-guard: migration:end */}
 
 ### Migration Steps
 
@@ -882,6 +895,8 @@ mv lib/better-stack-auth.ts lib/stack-auth.ts
 
 You can use these find-and-replace patterns to quickly update your codebase:
 
+{/* canonical-dx-guard: migration:start reason="historical v2 constructor replacement" */}
+
 | Find | Replace |
 |------|---------|
 | `betterStack(` | `stack(` |
@@ -894,6 +909,8 @@ You can use these find-and-replace patterns to quickly update your codebase:
 | `from "@/lib/better-stack-client"` | `from "@/lib/stack-client"` |
 | `from "./better-stack"` | `from "./stack"` |
 | `from "./better-stack-client"` | `from "./stack-client"` |
+
+{/* canonical-dx-guard: migration:end */}
 
 ### TypeScript Types
 

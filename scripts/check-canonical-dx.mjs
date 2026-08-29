@@ -25,11 +25,20 @@ const generatedTargets = [
 	"scripts/codegen/README.md",
 	"scripts/codegen/files",
 	"packages/cli/src/templates",
-	"packages/cli/scripts/fixtures/third-party-plugin.tsx",
+	"packages/cli/scripts/fixtures",
 	"packages/stack/scripts/fixtures/registry/README.md",
 	"packages/stack/registry",
 	"playground/src",
 ];
+
+// Exact historical inputs are immutable negative fixtures, not maintained
+// examples. Their README and hash allowlist fail closed if their bytes change.
+const guardExclusions = new Map([
+	[
+		"packages/cli/scripts/fixtures/legacy-next",
+		"immutable pre-migration CLI inputs documented by the fixture README",
+	],
+]);
 
 const backendFactories = [
 	"aiChatBackendPlugin",
@@ -77,6 +86,9 @@ const pluginIdPattern = pluginIds.map(escapeRegExp).join("|");
 const removedPluginIdPattern = removedPluginIds.map(escapeRegExp).join("|");
 
 function collectFiles(target) {
+	for (const excluded of guardExclusions.keys()) {
+		if (target === excluded || target.startsWith(`${excluded}/`)) return [];
+	}
 	const absolute = join(root, target);
 	if (!statSync(absolute).isDirectory()) return [absolute];
 	const files = [];
@@ -209,21 +221,25 @@ function readTopLevelObject(source, openIndex) {
 	return undefined;
 }
 
-function checkFactoryCalls(failures, file, source, factory, kind) {
-	const callPattern = new RegExp(`\\b${factory}\\s*\\(`, "g");
+function checkFactoryCalls(
+	failures,
+	file,
+	source,
+	factory,
+	kind,
+	contextualLifecycleNames = [],
+) {
+	const callPattern = new RegExp(`\\b${factory}\\(`, "g");
 	for (const match of source.matchAll(callPattern)) {
 		let cursor = (match.index ?? 0) + match[0].length;
 		while (/\s/.test(source[cursor] ?? "")) cursor += 1;
 		if (source[cursor] === ")") continue;
 		if (source[cursor] !== "{") {
-			const positionalArgument = source
-				.slice(cursor)
-				.match(/^[A-Za-z_$][\w$]*\s*(?=[,)])/);
-			if (kind === "client" || !positionalArgument) continue;
+			if (kind === "client") continue;
 			failures.push({
 				file,
 				line: lineAt(source, match.index ?? 0),
-				label: `${kind} factory must receive one options object`,
+				label: `${kind} factory example must use one inline options object`,
 				match: factory,
 			});
 			continue;
@@ -240,6 +256,23 @@ function checkFactoryCalls(failures, file, source, factory, kind) {
 				label: "backend lifecycle callbacks must be nested under hooks",
 				match: factory,
 			});
+		}
+		if (kind === "backend" && contextualLifecycleNames.length > 0) {
+			const callSource = source.slice(cursor, object.end + 1);
+			for (const name of contextualLifecycleNames) {
+				const propertyPattern = new RegExp(
+					`\\b${escapeRegExp(name)}\\b(?=\\s*(?:\\??:|,|\\}))`,
+					"g",
+				);
+				for (const lifecycleMatch of callSource.matchAll(propertyPattern)) {
+					failures.push({
+						file,
+						line: lineAt(source, cursor + (lifecycleMatch.index ?? 0)),
+						label: `${factory} uses a removed lifecycle callback`,
+						match: name,
+					});
+				}
+			}
 		}
 		if (
 			kind === "client" &&
@@ -259,16 +292,17 @@ function checkFactoryCalls(failures, file, source, factory, kind) {
 
 function lifecycleInventory() {
 	const inventories = [
-		"ai-chat",
-		"blog",
-		"cms",
-		"comments",
-		"form-builder",
-		"kanban",
-		"media",
+		["ai-chat", "aiChatBackendPlugin"],
+		["blog", "blogBackendPlugin"],
+		["cms", "cmsBackendPlugin"],
+		["comments", "commentsBackendPlugin"],
+		["form-builder", "formBuilderBackendPlugin"],
+		["kanban", "kanbanBackendPlugin"],
+		["media", "mediaBackendPlugin"],
 	];
 	const names = new Set();
-	for (const plugin of inventories) {
+	const namesByFactory = new Map();
+	for (const [plugin, factory] of inventories) {
 		const source = readFileSync(
 			join(
 				root,
@@ -281,29 +315,38 @@ function lifecycleInventory() {
 		)?.[1];
 		if (!object)
 			throw new Error(`Unable to read ${plugin} lifecycle inventory`);
-		for (const match of object.matchAll(/^\s*([A-Za-z0-9]+):/gm)) {
-			names.add(match[1]);
-		}
+		const pluginNames = [...object.matchAll(/^\s*([A-Za-z0-9]+):/gm)].map(
+			(match) => match[1],
+		);
+		for (const name of pluginNames) names.add(name);
+		namesByFactory.set(factory, pluginNames);
 	}
-	return [...names].filter(
-		(name) =>
-			![
-				"onBeforeCreate",
-				"onAfterCreate",
-				"onBeforeUpdate",
-				"onAfterUpdate",
-				"onBeforeDelete",
-				"onAfterDelete",
-				"onError",
-			].includes(name),
-	);
+	const contextualNames = new Set([
+		"onBeforeCreate",
+		"onAfterCreate",
+		"onBeforeUpdate",
+		"onAfterUpdate",
+		"onBeforeDelete",
+		"onAfterDelete",
+		"onError",
+	]);
+	return {
+		globalNames: [...names].filter((name) => !contextualNames.has(name)),
+		contextualNamesByFactory: new Map(
+			[...namesByFactory].map(([factory, pluginNames]) => [
+				factory,
+				pluginNames.filter((name) => contextualNames.has(name)),
+			]),
+		),
+	};
 }
 
 const guidanceFiles = guidanceTargets.flatMap(collectFiles);
 const generatedFiles = generatedTargets.flatMap(collectFiles);
 const allFiles = [...new Set([...guidanceFiles, ...generatedFiles])];
 const generatedSet = new Set(generatedFiles);
-const removedLifecycleNames = lifecycleInventory();
+const { globalNames: removedLifecycleNames, contextualNamesByFactory } =
+	lifecycleInventory();
 const failures = [];
 
 for (const absolute of allFiles) {
@@ -315,7 +358,7 @@ for (const absolute of allFiles) {
 		file,
 		source,
 		"removed constructor",
-		/\bcreateStackClient\b|\bstack\s*\(\s*\{/g,
+		/\bcreateStackClient\b|\bstack\s*\(|import\s*\{[^}\n]*\bstack\b[^}\n]*\}\s*from\s*["']@btst\/stack(?:\/api)?["']/g,
 	);
 	recordMatches(
 		failures,
@@ -380,7 +423,14 @@ for (const absolute of allFiles) {
 	);
 
 	for (const factory of backendFactories) {
-		checkFactoryCalls(failures, file, source, factory, "backend");
+		checkFactoryCalls(
+			failures,
+			file,
+			source,
+			factory,
+			"backend",
+			contextualNamesByFactory.get(factory),
+		);
 	}
 	for (const factory of clientFactories) {
 		checkFactoryCalls(failures, file, source, factory, "client");

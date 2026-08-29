@@ -15,13 +15,14 @@ export const myBackendPlugin = (options: MyBackendPluginOptions = {}) =>
     raw: (adapter) => ({
       prefetchForRoute: createItemPrefetchForRoute(adapter),
     }),
-    routes: (_adapter, _context, operations) => ({
-      createItem: createEndpoint(
+    routes: (_adapter, _context, operations) => {
+      const createItem = createEndpoint(
         "/items",
         { method: "POST", body: CreateItemSchema, requireRequest: true },
         operations.createItem.route((ctx) => ctx.body),
-      ),
-    }),
+      )
+      return { createItem } as const
+    },
   })
 
 export type MyApiRouter = ReturnType<

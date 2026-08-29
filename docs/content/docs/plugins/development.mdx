@@ -403,9 +403,9 @@ export const todosBackendPlugin = () => defineBackendPlugin({
 })
 ```
 
-Use `app.forRequest(request).operations.todos.*` for request-driven server work and `app.trusted.todos.*` for explicitly trusted jobs. Trusted calls skip user authorization but retain validation, fact derivation, domain behavior, and lifecycle hooks. First-party `stack().raw` namespaces are narrow SSG prefetch surfaces only.
+Use `app.forRequest(request).operations.todos.*` for request-driven server work and `app.trusted.todos.*` for explicitly trusted jobs. Trusted calls skip user authorization but retain validation, fact derivation, domain behavior, and lifecycle hooks. First-party backend stack `raw` namespaces are narrow SSG prefetch surfaces only.
 
-Pure getters and mutations may remain exported lower-level adapter primitives for plugin internals and migrations. They do not promise authorization, validation, or lifecycle composition and should not be duplicated onto `stack().raw`.
+Pure getters and mutations may remain exported lower-level adapter primitives for plugin internals and migrations. They do not promise authorization, validation, or lifecycle composition and should not be duplicated onto the backend stack's `raw` surface.
 
 ## Client Plugin
 
