@@ -7,7 +7,7 @@ import {
 	createEndpoint,
 	defineBackendPlugin,
 } from "@btst/stack/plugins/api";
-import { createRoute, defineClientPlugin } from "@btst/stack/plugins/client";
+import { defineClientPlugin, defineRoute } from "@btst/stack/plugins/client";
 import { QueryClient } from "@tanstack/react-query";
 
 interface ThirdPartyProbeOverrides {
@@ -29,9 +29,7 @@ const thirdPartyProbeClientPlugin =
 		id: "thirdPartyProbe",
 		resolve: () => ({
 			routes: () => ({
-				probe: createRoute("/third-party-probe", () => ({
-					PageComponent: () => null,
-				})),
+				probe: defineRoute("/third-party-probe", { page: () => null }),
 			}),
 		}),
 	});

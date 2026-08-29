@@ -9,6 +9,11 @@ if (typeof window !== "undefined") {
 }
 
 function serializeAdapter(adapter: Adapter): Adapter {
+	if (typeof adapter.create !== "function") {
+		throw new Error(
+			"BTST_SERVER_STORAGE_ADAPTER_MARKER: invalid storage adapter",
+		);
+	}
 	let tail = Promise.resolve();
 	const lockContext = new AsyncLocalStorage<{ active: boolean }>();
 	const withLock = async <T>(run: () => Promise<T>): Promise<T> => {

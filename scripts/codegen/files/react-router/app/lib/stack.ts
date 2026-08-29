@@ -222,7 +222,7 @@ const blogHooks: BlogBackendHooks = {
 };
 
 function createStack() {
-	return createBackendStack({
+	const stack = createBackendStack({
 		basePath: "/api/data",
 		auth: serverAuth,
 		plugins: {
@@ -394,6 +394,10 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 		},
 		adapter: (db) => createMemoryAdapter(db)({}),
 	});
+	if (typeof stack.handler !== "function") {
+		throw new Error("BTST_SERVER_STACK_MODULE_MARKER: missing API handler");
+	}
+	return stack;
 }
 
 _stackRef = createStack();
