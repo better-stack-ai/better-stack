@@ -1,5 +1,8 @@
-import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
-import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
+import { createClientStack } from "@btst/stack/client";
+import {
+	aiChatClientPlugin,
+	ChatLayout,
+} from "@btst/stack/plugins/ai-chat/client";
 import { StackProvider } from "@btst/stack/context";
 import { tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -17,26 +20,25 @@ const getBaseURL = () =>
 			process.env.BASE_URL ||
 			"http://localhost:3000";
 
-type PluginOverrides = {
-	"ai-chat": AiChatPluginOverrides;
-};
-
 /** Public AI chat backed by the explicit stateless public endpoint. */
 function PublicChatPage() {
 	const queryClient = getOrCreateQueryClient();
 	const baseURL = getBaseURL();
+	const stack = createClientStack({
+		api: { baseURL, basePath: "/api/public-chat" },
+		site: { baseURL, basePath: "/" },
+		queryClient,
+		plugins: {
+			aiChat: aiChatClientPlugin({ mode: "public" }),
+		},
+	});
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<StackProvider<PluginOverrides>
-				basePath=""
-				router={tanstackRouter()}
-				api={{ baseURL, basePath: "/api/public-chat" }}
-				overrides={{ "ai-chat": { mode: "public" } }}
-			>
+			<StackProvider stack={stack} router={tanstackRouter()}>
 				<div className="min-h-screen bg-background">
 					<main className="h-screen">
-						<ChatLayout showSidebar={false} />
+						<ChatLayout />
 					</main>
 				</div>
 			</StackProvider>

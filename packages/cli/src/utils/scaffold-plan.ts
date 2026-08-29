@@ -19,6 +19,7 @@ interface BuildScaffoldPlanInput {
 
 const CANONICAL_CLIENT_PLUGIN_KEYS = new Set<PluginKey>([
 	"blog",
+	"ai-chat",
 	"cms",
 	"ui-builder",
 	"comments",
@@ -170,6 +171,9 @@ function buildPluginTemplateContext(
 			.join("\n"),
 		clientEntries: clientMetas
 			.map((m) => {
+				if (m.key === "ai-chat") {
+					return `\t\t\t${m.configKey}: ${m.clientSymbol}({ mode: "public" as const }),`;
+				}
 				if (CANONICAL_CLIENT_PLUGIN_KEYS.has(m.key)) {
 					return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
 				}
@@ -216,11 +220,7 @@ function buildPluginTemplateContext(
 \t\t\t\t\t\tsearchUsers: async () => [],
 \t\t\t\t\t},`;
 				}
-				if (m.key === "ai-chat") {
-					return `\t\t\t\t\t"${m.key}": {
-\t\t\t\t\t\tmode: "public" as const,
-\t\t\t\t\t},`;
-				}
+				if (m.key === "ai-chat") return "";
 				return "";
 			})
 			.filter(Boolean)

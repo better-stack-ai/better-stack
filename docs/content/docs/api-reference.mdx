@@ -63,6 +63,24 @@ The returned `provider` value contains API/site/query information for browser co
 
 <AutoTypeTable path="../packages/stack/src/types.ts" name="ResolvedClientPluginRuntime" />
 
+### ClientPluginDefinition
+
+<AutoTypeTable path="../packages/stack/src/types.ts" name="ClientPluginDefinition" />
+
+A definition may declare `providerConfig` when its browser components need a
+small subset of plugin factory values. The resolved provider projection exposes
+the exact inferred shape as `plugins.<id>.config`. These values must be safe to
+expose in the browser: do not include secrets, request headers, server-only
+objects, or the shared API/site/QueryClient runtime.
+
+### ClientProviderPluginRuntime
+
+<AutoTypeTable path="../packages/stack/src/types.ts" name="ClientProviderPluginRuntime" />
+
+`config` is present only for definitions that project browser-safe factory
+values through `providerConfig`; it is not a provider override and applications
+do not configure it on `StackProvider`.
+
 `createStackClient` remains a deprecated forwarding alias during the RC migration.
 
 ### ClientPlugin

@@ -38,13 +38,15 @@ import {
 import { cn } from "@workspace/ui/lib/utils";
 import {
 	PermissionAccess,
-	useBasePath,
 	useNotify,
 	usePluginOverrides,
 	useStack,
 } from "@btst/stack/context";
 import { aiChatPermissions } from "../../permissions";
-import type { AiChatPluginOverrides } from "../overrides";
+import {
+	resolveAiChatSiteLocation,
+	type AiChatPluginOverrides,
+} from "../overrides";
 import type { SerializedConversation } from "../../types";
 import {
 	useConversations,
@@ -52,6 +54,7 @@ import {
 	useDeleteConversation,
 } from "../hooks/chat-hooks";
 import { useAiChatTranslation } from "../localization";
+import { navigateAiChatCrossOrigin } from "../navigation";
 
 interface ChatSidebarProps {
 	currentConversationId?: string;
@@ -67,10 +70,11 @@ export function ChatSidebar({
 	const { localization: customLocalization } = usePluginOverrides<
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
-	>("ai-chat", {});
-	const { router } = useStack();
+	>("aiChat", {});
+	const { basePath: legacyBasePath, plugins, router } = useStack();
 	const navigate = router?.navigate;
-	const basePath = useBasePath();
+	const siteBaseURL = plugins?.aiChat?.site.baseURL;
+	const siteBasePath = plugins?.aiChat?.site.basePath ?? legacyBasePath;
 	const notify = useNotify();
 	const tr = useAiChatTranslation(customLocalization);
 	const { conversations, isLoading } = useConversations();
@@ -89,22 +93,31 @@ export function ChatSidebar({
 			setNewTitle("");
 		},
 	});
+	const navigateToChat = (...segments: string[]) => {
+		const location = resolveAiChatSiteLocation(
+			{ baseURL: siteBaseURL, basePath: siteBasePath },
+			typeof window === "undefined" ? undefined : window.location.origin,
+			"chat",
+			...segments,
+		);
+		if (location.crossOrigin && typeof window !== "undefined") {
+			navigateAiChatCrossOrigin(location.href);
+			return;
+		}
+		return navigate?.(location.path);
+	};
 
 	const handleNewChat = () => {
 		// Use the StackProvider router when available.
 		// Also run onNewChat to support "reset chat" behavior when already on /chat.
-		if (navigate) {
-			navigate(`${basePath}/chat`);
-		}
+		void navigateToChat();
 		if (onNewChat) {
 			onNewChat();
 		}
 	};
 
 	const handleConversationClick = (conversation: SerializedConversation) => {
-		if (navigate) {
-			navigate(`${basePath}/chat/${conversation.id}`);
-		}
+		void navigateToChat(conversation.id);
 	};
 
 	const handleRenameClick = (conversation: SerializedConversation) => {
@@ -128,7 +141,16 @@ export function ChatSidebar({
 	const handleDeleteConfirm = async () => {
 		if (selectedConversation) {
 			try {
-				await deleteMutation.mutateAsync({ id: selectedConversation.id });
+				const deletingCurrentConversation =
+					selectedConversation.id === currentConversationId;
+				if (deletingCurrentConversation) {
+					await deleteMutation.mutateAsync(
+						{ id: selectedConversation.id },
+						{ onSuccess: () => navigateToChat() },
+					);
+				} else {
+					await deleteMutation.mutateAsync({ id: selectedConversation.id });
+				}
 				notify.success(
 					tr(
 						"CONVERSATION_DELETE_SUCCESS",
@@ -138,10 +160,6 @@ export function ChatSidebar({
 				);
 				setDeleteDialogOpen(false);
 				setSelectedConversation(null);
-				// Navigate away if deleted current conversation
-				if (selectedConversation.id === currentConversationId && navigate) {
-					await navigate(`${basePath}/chat`);
-				}
 			} catch {
 				notify.error(
 					tr(

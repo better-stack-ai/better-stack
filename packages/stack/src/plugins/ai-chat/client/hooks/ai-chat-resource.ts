@@ -5,6 +5,6 @@ import { aiChatResources } from "../../query-keys";
 
 /** Factory-generated hooks shared by the public AI Chat hook wrappers. */
 export const aiChat = createResource({
-	plugin: "ai-chat",
+	plugin: "aiChat",
 	resources: aiChatResources,
 });

@@ -1,8 +1,9 @@
 "use client";
 
 import { lazy } from "react";
-import { usePluginOverrides } from "@btst/stack/context";
+import { usePluginOverrides, useStack } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../../overrides";
+import { resolveAiChatMode } from "../../overrides";
 import {
 	ComposedRoute,
 	PermissionRouteAccess,
@@ -24,10 +25,10 @@ export interface ChatPageComponentProps {
 
 // Exported wrapped component with error and loading boundaries
 export function ChatPageComponent({ conversationId }: ChatPageComponentProps) {
-	const { mode, onRouteError } = usePluginOverrides<
+	const { onRouteError } = usePluginOverrides<
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
-	>("ai-chat", {});
+	>("aiChat", {});
 	return (
 		<ComposedRoute
 			path={conversationId ? `/chat/${conversationId}` : "/chat"}
@@ -50,11 +51,11 @@ export function ChatPageComponent({ conversationId }: ChatPageComponentProps) {
 }
 
 function AuthorizedChatPage({ conversationId }: ChatPageComponentProps) {
-	const { mode } = usePluginOverrides<
-		AiChatPluginOverrides,
-		Partial<AiChatPluginOverrides>
-	>("ai-chat", {});
-	if (mode === "public") return <ChatPage conversationId={conversationId} />;
+	const { plugins } = useStack();
+	const mode = resolveAiChatMode(plugins?.aiChat?.config);
+	if (mode === "public") {
+		return <ChatPage conversationId={conversationId} />;
+	}
 	if (!conversationId) {
 		return (
 			<PermissionRouteAccess

@@ -36,7 +36,7 @@ const getBaseURL = () =>
 
 type PluginOverrides = {
 	blog: BlogPluginOverrides;
-	"ai-chat": AiChatPluginOverrides;
+	aiChat: AiChatPluginOverrides;
 	cms: CMSPluginOverrides;
 	"form-builder": FormBuilderPluginOverrides;
 	kanban: KanbanPluginOverrides;
@@ -118,8 +118,7 @@ function Layout() {
 								/>
 							),
 						},
-						"ai-chat": {
-							mode: "authenticated",
+						aiChat: {
 							uploadFile: uploadFileForChat,
 						},
 						cms: {

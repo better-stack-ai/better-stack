@@ -1,10 +1,17 @@
 // @vitest-environment jsdom
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StackProvider } from "@btst/stack/context";
-import { useRenameConversationForm } from "../client/hooks/chat-hooks";
+import { createClientStack } from "@btst/stack/client";
+import { buildQueryKey } from "@btst/stack/plugins/client";
+import {
+	useDeleteConversation,
+	useRenameConversationForm,
+} from "../client/hooks/chat-hooks";
+import { aiChatClientPlugin } from "../client/plugin";
+import { aiChatResources } from "../query-keys";
 import type { SerializedConversation } from "../types";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -52,7 +59,26 @@ function jsonResponse(body: unknown, status = 200) {
 	});
 }
 
-async function renderProbe() {
+function createTestStack() {
+	return createClientStack({
+		api: { baseURL: "http://app.local", basePath: "/api/data" },
+		site: { baseURL: "http://test.local", basePath: "/pages" },
+		queryClient,
+		plugins: { aiChat: aiChatClientPlugin() },
+		endpoints: {
+			aiChat: {
+				api: {
+					baseURL: "https://chat.example.com",
+					basePath: "/btst",
+					browserHeaders: { "x-chat-test": "forwarded" },
+					credentials: "omit",
+				},
+			},
+		},
+	});
+}
+
+async function renderRenameProbe() {
 	let captured: ReturnType<typeof useRenameConversationForm>;
 	function Probe() {
 		captured = useRenameConversationForm({ conversation });
@@ -61,21 +87,35 @@ async function renderProbe() {
 
 	await act(async () => {
 		root.render(
-			<QueryClientProvider client={queryClient}>
-				<StackProvider
-					basePath="/pages"
-					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
-					router={{ refresh }}
-					overrides={{
-						"ai-chat": {
-							headers: { "x-chat-test": "forwarded" },
-						},
-					}}
-					notify={notify}
-				>
-					<Probe />
-				</StackProvider>
-			</QueryClientProvider>,
+			<StackProvider
+				stack={createTestStack()}
+				router={{ refresh }}
+				notify={notify}
+			>
+				<Probe />
+			</StackProvider>,
+		);
+	});
+
+	return () => captured!;
+}
+
+async function renderDeleteProbe() {
+	let captured: ReturnType<typeof useDeleteConversation>;
+	function Probe() {
+		captured = useDeleteConversation();
+		return null;
+	}
+
+	await act(async () => {
+		root.render(
+			<StackProvider
+				stack={createTestStack()}
+				router={{ refresh }}
+				notify={notify}
+			>
+				<Probe />
+			</StackProvider>,
 		);
 	});
 
@@ -88,19 +128,28 @@ describe("useRenameConversationForm", () => {
 			jsonResponse({ ...conversation, title: "Renamed" }),
 		);
 		const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
-		const getForm = await renderProbe();
+		const getForm = await renderRenameProbe();
 
 		await act(async () => {
 			await getForm().submit({ title: "  Renamed  " });
 		});
 
 		const [url, init] = fetchMock.mock.calls[0] as [unknown, RequestInit];
-		expect(String(url)).toContain("/api/data/chat/conversations/conv-1");
+		expect(String(url)).toContain(
+			"https://chat.example.com/btst/chat/conversations/conv-1",
+		);
 		expect(init.method).toBe("PUT");
+		expect(init.credentials).toBe("omit");
 		expect(JSON.parse(String(init.body))).toEqual({ title: "Renamed" });
 		expect(new Headers(init.headers).get("x-chat-test")).toBe("forwarded");
 		expect(notify.success).toHaveBeenCalledWith("Conversation renamed");
 		expect(invalidateQueries).toHaveBeenCalledTimes(1);
+		expect(invalidateQueries).toHaveBeenCalledWith(
+			expect.objectContaining({
+				queryKey: ["conversations"],
+				refetchType: "all",
+			}),
+		);
 		expect(refresh).not.toHaveBeenCalled();
 	});
 
@@ -115,7 +164,7 @@ describe("useRenameConversationForm", () => {
 				400,
 			),
 		);
-		const getForm = await renderProbe();
+		const getForm = await renderRenameProbe();
 
 		await act(async () => {
 			await getForm().submit({ title: "   " });
@@ -124,5 +173,62 @@ describe("useRenameConversationForm", () => {
 		expect(getForm().fieldErrors).toEqual({ title: "Title is required" });
 		expect(notify.error).not.toHaveBeenCalled();
 		expect(refresh).not.toHaveBeenCalled();
+	});
+});
+
+describe("useDeleteConversation", () => {
+	it("refreshes the list and evicts only the deleted detail in the starting identity partition", async () => {
+		const identityPartition = "anonymous" as const;
+		const otherConversation = { ...conversation, id: "conv-2", title: "Other" };
+		const otherIdentity = { id: "other-user", role: "user" } as const;
+		const listKey = buildQueryKey(
+			"conversations",
+			"list",
+			aiChatResources.conversations.queries.list,
+			[identityPartition],
+		);
+		const deletedDetailKey = buildQueryKey(
+			"conversations",
+			"detail",
+			aiChatResources.conversations.queries.detail,
+			[conversation.id, identityPartition],
+		);
+		const otherDetailKey = buildQueryKey(
+			"conversations",
+			"detail",
+			aiChatResources.conversations.queries.detail,
+			[otherConversation.id, identityPartition],
+		);
+		const otherIdentityDetailKey = buildQueryKey(
+			"conversations",
+			"detail",
+			aiChatResources.conversations.queries.detail,
+			[conversation.id, otherIdentity],
+		);
+		let listFetches = 0;
+		await queryClient.fetchQuery({
+			queryKey: listKey,
+			queryFn: async () => {
+				listFetches += 1;
+				return [conversation, otherConversation];
+			},
+		});
+		listFetches = 0;
+		queryClient.setQueryData(deletedDetailKey, conversation);
+		queryClient.setQueryData(otherDetailKey, otherConversation);
+		queryClient.setQueryData(otherIdentityDetailKey, conversation);
+		fetchMock.mockResolvedValue(jsonResponse({ success: true }));
+		const getMutation = await renderDeleteProbe();
+
+		await act(async () => {
+			await getMutation().mutateAsync({ id: conversation.id });
+		});
+
+		expect(listFetches).toBe(1);
+		expect(queryClient.getQueryData(deletedDetailKey)).toBeUndefined();
+		expect(queryClient.getQueryData(otherDetailKey)).toEqual(otherConversation);
+		expect(queryClient.getQueryData(otherIdentityDetailKey)).toEqual(
+			conversation,
+		);
 	});
 });

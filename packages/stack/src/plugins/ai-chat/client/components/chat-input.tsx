@@ -9,9 +9,14 @@ import {
 	PermissionCheck,
 	useNotify,
 	usePluginOverrides,
+	useStack,
 } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../overrides";
-import { DEFAULT_ALLOWED_FILE_TYPES, FILE_TYPE_MIME_MAP } from "../overrides";
+import {
+	DEFAULT_ALLOWED_FILE_TYPES,
+	FILE_TYPE_MIME_MAP,
+	resolveAiChatMode,
+} from "../overrides";
 import { useAiChatTranslation } from "../localization";
 import type { FormEvent } from "react";
 import { aiChatPermissions } from "../../permissions";
@@ -87,12 +92,13 @@ export function ChatInput({
 	const {
 		uploadFile,
 		localization: customLocalization,
-		mode,
 		allowedFileTypes,
 	} = usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
-		"ai-chat",
+		"aiChat",
 		{},
 	);
+	const { plugins } = useStack();
+	const mode = resolveAiChatMode(plugins?.aiChat?.config);
 
 	const notify = useNotify();
 	const tr = useAiChatTranslation(customLocalization);

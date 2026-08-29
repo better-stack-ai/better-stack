@@ -104,7 +104,7 @@ export function ToolCallDisplay({
 	const { localization } = usePluginOverrides<
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
-	>("ai-chat", {});
+	>("aiChat", {});
 	const tr = useAiChatTranslation(localization);
 	const displayName = formatToolName(toolName);
 	const statusLabel =

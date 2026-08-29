@@ -335,7 +335,9 @@ export default function PagesLayout({ children }: { children: React.ReactNode })
 - `imagePicker`, `imageInputField` — custom image picker components
 
 **ai-chat**
-- `mode: "authenticated" | "public"` — conversation persistence mode
+- `aiChatClientPlugin({ mode: "authenticated" | "public" })` — the single
+  conversation persistence-mode configuration; do not repeat it in provider
+  overrides or component props
 - `uploadFile(file): Promise<string>` — for chat file attachments
 - `chatSuggestions: string[]` — pre-filled prompt suggestions
 - **Root layout requirement**: wrap the root layout (above all `StackProvider` instances) with `PageAIContextProvider` from `@btst/stack/plugins/ai-chat/client/context`. Individual pages then call `useRegisterPageAIContext()` — see the `btst-ai-context` skill.

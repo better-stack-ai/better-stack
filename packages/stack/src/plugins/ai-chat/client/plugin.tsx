@@ -3,10 +3,11 @@ import {
 	createApiClient,
 	createSanitizedSSRLoaderError,
 	isConnectionError,
+	type ResolvedClientPluginRuntime,
 } from "@btst/stack/plugins/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
+import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import type { ComponentType } from "react";
-import type { QueryClient } from "@tanstack/react-query";
 import type { AiChatApiRouter } from "../api";
 import {
 	createAiChatQueryKeys,
@@ -14,7 +15,12 @@ import {
 } from "../query-keys";
 import type { SerializedConversation, SerializedMessage } from "../types";
 import { ChatPageComponent } from "./components/pages/chat-page";
-import type { AiChatMode } from "./overrides";
+import {
+	resolveAiChatSitePath,
+	type AiChatMode,
+	type AiChatPluginOverrides,
+	type AiChatProviderConfig,
+} from "./overrides";
 
 /**
  * Context passed to route hooks
@@ -54,17 +60,6 @@ export interface LoaderContext {
  * Configuration for AI Chat client plugin
  */
 export interface AiChatClientConfig {
-	/** Base URL for API calls (e.g., "http://localhost:3000") */
-	apiBaseURL: string;
-	/** Path where the API is mounted (e.g., "/api/data") */
-	apiBasePath: string;
-	/** Base URL of your site for SEO meta tags */
-	siteBaseURL: string;
-	/** Path where pages are mounted (e.g., "/pages") */
-	siteBasePath: string;
-	/** React Query client instance for caching */
-	queryClient: QueryClient;
-
 	/**
 	 * Plugin mode - should match backend config
 	 * - 'authenticated': Full chat with conversation history (default)
@@ -88,8 +83,6 @@ export interface AiChatClientConfig {
 	/** Optional hooks for customizing behavior */
 	hooks?: AiChatClientHooks;
 
-	/** Optional headers for SSR (e.g., forwarding cookies) */
-	headers?: Headers;
 	/** Identity hydrated for this SSR request's protected query partition. */
 	identityPartition?: AiChatIdentityPartition;
 
@@ -152,15 +145,77 @@ export interface AiChatClientHooks {
 	) => Promise<void> | void;
 
 	/**
-	 * Called when a loading error occurs
+	 * Reports an SSR loader error. Errors thrown here are contained by the loader.
 	 * @param error - The error that occurred
 	 * @param context - Loader context
 	 */
-	onLoadError?: (error: Error, context: LoaderContext) => Promise<void> | void;
+	onErrorLoad?: (error: Error, context: LoaderContext) => Promise<void> | void;
+}
+
+interface ResolvedAiChatClientConfig extends AiChatClientConfig {
+	runtime: ResolvedClientPluginRuntime<"aiChat">;
+}
+
+function toError(error: unknown): Error {
+	return error instanceof Error ? error : new Error(String(error));
+}
+
+function createLoadErrorReporter(
+	hooks: AiChatClientHooks | undefined,
+	context: LoaderContext,
+) {
+	let reported = false;
+	return async (error: unknown) => {
+		if (reported || !hooks?.onErrorLoad) return;
+		reported = true;
+		try {
+			await hooks.onErrorLoad(toError(error), context);
+		} catch {
+			// Loader hooks cannot make an SSR loader throw or run twice.
+		}
+	};
+}
+
+async function seedSanitizedLoaderErrors(
+	queryClient: QueryClient,
+	queryKeys: readonly QueryKey[],
+) {
+	const errToStore = createSanitizedSSRLoaderError();
+	await Promise.all(
+		queryKeys.map((queryKey) =>
+			queryClient.prefetchQuery({
+				queryKey,
+				queryFn: () => {
+					throw errToStore;
+				},
+				retry: false,
+			}),
+		),
+	);
+}
+
+function getLoaderQueryFailures(
+	queryClient: QueryClient,
+	queryKeys: readonly QueryKey[],
+) {
+	const failedQueries = queryKeys.flatMap((queryKey) => {
+		const error = queryClient.getQueryState(queryKey)?.error;
+		return error == null ? [] : [{ queryKey, error }];
+	});
+	return {
+		hasFailure: failedQueries.length > 0,
+		firstError: failedQueries[0]?.error,
+		hasConnectionFailure: failedQueries.some(({ error }) =>
+			isConnectionError(error),
+		),
+		backendQueryKeys: failedQueries
+			.filter(({ error }) => !isConnectionError(error))
+			.map(({ queryKey }) => queryKey),
+	};
 }
 
 // Loader for chat home page (list conversations)
-function createConversationsLoader(config: AiChatClientConfig) {
+function createConversationsLoader(config: ResolvedAiChatClientConfig) {
 	return async () => {
 		// Skip loading in public mode - no persistence
 		if (config.mode === "public") {
@@ -168,28 +223,24 @@ function createConversationsLoader(config: AiChatClientConfig) {
 		}
 
 		if (typeof window === "undefined") {
-			const {
-				queryClient,
-				apiBasePath,
-				apiBaseURL,
-				hooks,
-				headers,
-				identityPartition = "anonymous",
-			} = config;
+			const { hooks, identityPartition = "anonymous", runtime } = config;
+			const { api, queryClient } = runtime;
 
 			const context: LoaderContext = {
 				path: "/chat",
 				isSSR: true,
-				apiBaseURL,
-				apiBasePath,
-				headers,
+				apiBaseURL: api.baseURL,
+				apiBasePath: api.basePath,
+				headers: api.headers,
 			};
 			const client = createApiClient<AiChatApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
+				baseURL: api.baseURL,
+				basePath: api.basePath,
+				credentials: api.credentials,
 			});
-			const queries = createAiChatQueryKeys(client, headers);
+			const queries = createAiChatQueryKeys(client, api.headers);
 			const listQuery = queries.conversations.list(identityPartition);
+			const reportError = createLoadErrorReporter(hooks, context);
 
 			try {
 				// Before hook
@@ -209,69 +260,77 @@ function createConversationsLoader(config: AiChatClientConfig) {
 				}
 
 				// Check for errors
-				const queryState = queryClient.getQueryState(listQuery.queryKey);
-				if (queryState?.error && hooks?.onLoadError) {
-					const error =
-						queryState.error instanceof Error
-							? queryState.error
-							: new Error(String(queryState.error));
-					await hooks.onLoadError(error, context);
+				const failures = getLoaderQueryFailures(queryClient, [
+					listQuery.queryKey,
+				]);
+				if (failures.hasFailure) {
+					if (failures.hasConnectionFailure) {
+						console.warn(
+							"[btst/ai-chat] route.loader() failed — no server running at build time. " +
+								"AI Chat conversation history does not support SSG.",
+						);
+					}
+					if (failures.backendQueryKeys.length > 0) {
+						await seedSanitizedLoaderErrors(
+							queryClient,
+							failures.backendQueryKeys,
+						);
+					}
+					await reportError(failures.firstError);
 				}
 			} catch (error) {
-				if (isConnectionError(error)) {
+				const failures = getLoaderQueryFailures(queryClient, [
+					listQuery.queryKey,
+				]);
+				const caughtConnectionFailure = isConnectionError(error);
+				if (caughtConnectionFailure || failures.hasConnectionFailure) {
 					console.warn(
 						"[btst/ai-chat] route.loader() failed — no server running at build time. " +
 							"AI Chat conversation history does not support SSG.",
 					);
-				} else {
-					const errToStore = createSanitizedSSRLoaderError();
-					await queryClient.prefetchQuery({
-						queryKey: listQuery.queryKey,
-						queryFn: () => {
-							throw errToStore;
-						},
-						retry: false,
-					});
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
+				const queryKeysToSanitize = caughtConnectionFailure
+					? failures.backendQueryKeys
+					: [listQuery.queryKey];
+				if (queryKeysToSanitize.length > 0) {
+					await seedSanitizedLoaderErrors(queryClient, queryKeysToSanitize);
 				}
+				await reportError(error);
 			}
 		}
 	};
 }
 
 // Loader for single conversation page
-function createConversationLoader(id: string, config: AiChatClientConfig) {
+function createConversationLoader(
+	id: string,
+	config: ResolvedAiChatClientConfig,
+) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const {
-				queryClient,
-				apiBasePath,
-				apiBaseURL,
-				hooks,
-				headers,
-				identityPartition = "anonymous",
-			} = config;
+			const { hooks, identityPartition = "anonymous", runtime } = config;
+			const { api, queryClient } = runtime;
 
 			const context: LoaderContext = {
 				path: `/chat/${id}`,
 				params: { id },
 				isSSR: true,
-				apiBaseURL,
-				apiBasePath,
-				headers,
+				apiBaseURL: api.baseURL,
+				apiBasePath: api.basePath,
+				headers: api.headers,
 			};
 			const client = createApiClient<AiChatApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
+				baseURL: api.baseURL,
+				basePath: api.basePath,
+				credentials: api.credentials,
 			});
-			const queries = createAiChatQueryKeys(client, headers);
+			const queries = createAiChatQueryKeys(client, api.headers);
 			const conversationQuery = queries.conversations.detail(
 				id,
 				identityPartition,
 			);
 			const listQuery = queries.conversations.list(identityPartition);
+			const reportError = createLoadErrorReporter(hooks, context);
 
 			try {
 				// Before hook
@@ -295,54 +354,59 @@ function createConversationLoader(id: string, config: AiChatClientConfig) {
 				}
 
 				// Check for errors
-				const queryState = queryClient.getQueryState(
+				const loaderQueryKeys = [
 					conversationQuery.queryKey,
-				);
-				if (queryState?.error && hooks?.onLoadError) {
-					const error =
-						queryState.error instanceof Error
-							? queryState.error
-							: new Error(String(queryState.error));
-					await hooks.onLoadError(error, context);
+					listQuery.queryKey,
+				];
+				const failures = getLoaderQueryFailures(queryClient, loaderQueryKeys);
+				if (failures.hasFailure) {
+					if (failures.hasConnectionFailure) {
+						console.warn(
+							"[btst/ai-chat] route.loader() failed — no server running at build time. " +
+								"AI Chat conversations do not support SSG.",
+						);
+					}
+					if (failures.backendQueryKeys.length > 0) {
+						await seedSanitizedLoaderErrors(
+							queryClient,
+							failures.backendQueryKeys,
+						);
+					}
+					await reportError(failures.firstError);
 				}
 			} catch (error) {
-				if (isConnectionError(error)) {
+				const loaderQueryKeys = [
+					conversationQuery.queryKey,
+					listQuery.queryKey,
+				];
+				const failures = getLoaderQueryFailures(queryClient, loaderQueryKeys);
+				const caughtConnectionFailure = isConnectionError(error);
+				if (caughtConnectionFailure || failures.hasConnectionFailure) {
 					console.warn(
 						"[btst/ai-chat] route.loader() failed — no server running at build time. " +
 							"AI Chat conversations do not support SSG.",
 					);
-				} else {
-					const errToStore = createSanitizedSSRLoaderError();
-					await Promise.all([
-						queryClient.prefetchQuery({
-							queryKey: conversationQuery.queryKey,
-							queryFn: () => {
-								throw errToStore;
-							},
-							retry: false,
-						}),
-						queryClient.prefetchQuery({
-							queryKey: listQuery.queryKey,
-							queryFn: () => {
-								throw errToStore;
-							},
-							retry: false,
-						}),
-					]);
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
+				const queryKeysToSanitize = caughtConnectionFailure
+					? failures.backendQueryKeys
+					: loaderQueryKeys;
+				if (queryKeysToSanitize.length > 0) {
+					await seedSanitizedLoaderErrors(queryClient, queryKeysToSanitize);
 				}
+				await reportError(error);
 			}
 		}
 	};
 }
 
 // Meta generator for chat home page
-function createChatHomeMeta(config: AiChatClientConfig) {
+function createChatHomeMeta(config: ResolvedAiChatClientConfig) {
 	return () => {
-		const { siteBaseURL, siteBasePath, seo } = config;
-		const fullUrl = `${siteBaseURL}${siteBasePath}/chat`;
+		const { seo, runtime } = config;
+		const fullUrl = `${runtime.site.baseURL}${resolveAiChatSitePath(
+			runtime.site.basePath,
+			"chat",
+		)}`;
 		const title = "Chat";
 		const description = seo?.description || "Start a conversation with AI";
 
@@ -374,21 +438,18 @@ function createChatHomeMeta(config: AiChatClientConfig) {
 }
 
 // Meta generator for single conversation page
-function createConversationMeta(id: string, config: AiChatClientConfig) {
+function createConversationMeta(
+	id: string,
+	config: ResolvedAiChatClientConfig,
+) {
 	return () => {
-		const {
-			queryClient,
-			apiBaseURL,
-			apiBasePath,
-			siteBaseURL,
-			siteBasePath,
-			seo,
-			identityPartition = "anonymous",
-		} = config;
+		const { seo, identityPartition = "anonymous", runtime } = config;
+		const { api, queryClient, site } = runtime;
 		const queries = createAiChatQueryKeys(
 			createApiClient<AiChatApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
+				baseURL: api.baseURL,
+				basePath: api.basePath,
+				credentials: api.credentials,
 			}),
 		);
 
@@ -396,7 +457,11 @@ function createConversationMeta(id: string, config: AiChatClientConfig) {
 			SerializedConversation & { messages: SerializedMessage[] }
 		>(queries.conversations.detail(id, identityPartition).queryKey);
 
-		const fullUrl = `${siteBaseURL}${siteBasePath}/chat/${id}`;
+		const fullUrl = `${site.baseURL}${resolveAiChatSitePath(
+			site.basePath,
+			"chat",
+			id,
+		)}`;
 		const title = conversation?.title || "Chat";
 		const description = seo?.description || "AI conversation";
 
@@ -426,18 +491,16 @@ function createConversationMeta(id: string, config: AiChatClientConfig) {
  * AI Chat client plugin
  * Provides routes, components, and React Query hooks for AI chat
  *
- * @param config - Configuration including queryClient, baseURL, and optional hooks
+ * @param config - Resolved plugin-specific configuration and stack runtime
  */
-export const aiChatClientPlugin = (config: AiChatClientConfig) => {
+function resolveAiChatClientPlugin(config: ResolvedAiChatClientConfig) {
 	const isPublicMode = config.mode === "public";
 
 	// Define routes based on mode
 	// In public mode, only the base chat route is available
 	// In authenticated mode, conversation routes are also available
 	if (isPublicMode) {
-		return defineClientPlugin({
-			name: "ai-chat",
-
+		return {
 			routes: () =>
 				defineRoutes(
 					{
@@ -452,13 +515,11 @@ export const aiChatClientPlugin = (config: AiChatClientConfig) => {
 				),
 
 			sitemap: async () => [],
-		});
+		};
 	}
 
 	// Authenticated mode - full chat with conversation history
-	return defineClientPlugin({
-		name: "ai-chat",
-
+	return {
 		routes: () =>
 			defineRoutes(
 				{
@@ -487,8 +548,21 @@ export const aiChatClientPlugin = (config: AiChatClientConfig) => {
 			// Return empty array - chat conversations are private and shouldn't be indexed
 			return [];
 		},
+	};
+}
+
+/**
+ * Runtime-independent AI Chat client definition. Shared API/site/query values
+ * are supplied once by `createClientStack()` when the definition is resolved.
+ */
+export const aiChatClientPlugin = (config: AiChatClientConfig = {}) =>
+	defineClientPlugin<AiChatPluginOverrides>()({
+		id: "aiChat",
+		providerConfig: {
+			mode: config.mode ?? "authenticated",
+		} satisfies AiChatProviderConfig,
+		resolve: (runtime) => resolveAiChatClientPlugin({ ...config, runtime }),
 	});
-};
 
 export type { SerializedConversation, SerializedMessage } from "../types";
 export type { AiChatMode } from "./overrides";

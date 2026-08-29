@@ -23,6 +23,7 @@ import type { UIMessage } from "ai";
 import { usePageAIContext } from "../context/page-ai-context";
 import { usePluginOverrides, useStack } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../overrides";
+import { resolveAiChatMode } from "../overrides";
 import { useAiChatTranslation } from "../localization";
 
 interface ChatLayoutBaseProps {
@@ -80,7 +81,7 @@ export function ChatLayout(props: ChatLayoutProps) {
 		conversationId,
 		layout = "full",
 		className,
-		showSidebar = true,
+		showSidebar: requestedShowSidebar = true,
 		initialMessages,
 		onMessagesChange,
 		onClear,
@@ -88,8 +89,10 @@ export function ChatLayout(props: ChatLayoutProps) {
 	const { localization } = usePluginOverrides<
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
-	>("ai-chat", {});
-	const { api } = useStack();
+	>("aiChat", {});
+	const { plugins } = useStack();
+	const resolvedMode = resolveAiChatMode(plugins?.aiChat?.config);
+	const showSidebar = requestedShowSidebar && resolvedMode !== "public";
 	const tr = useAiChatTranslation(localization);
 
 	// Widget-specific props — TypeScript narrows props to ChatLayoutWidgetProps here
@@ -118,8 +121,6 @@ export function ChatLayout(props: ChatLayoutProps) {
 
 	// Read page AI context to show badge in header
 	const pageAIContext = usePageAIContext();
-
-	const apiPath = `${api?.baseURL ?? ""}${api?.basePath ?? ""}/chat`;
 
 	// Handler for "New chat" button - increments key to force remount
 	const handleNewChat = useCallback(() => {
@@ -196,7 +197,6 @@ export function ChatLayout(props: ChatLayoutProps) {
 					{widgetEverOpened && (
 						<ChatInterface
 							key={`widget-${conversationId ?? "new"}-${widgetResetKey}`}
-							apiPath={apiPath}
 							id={conversationId}
 							variant="widget"
 							initialMessages={initialMessages}
@@ -361,7 +361,6 @@ export function ChatLayout(props: ChatLayoutProps) {
 
 				<ChatInterface
 					key={`chat-${conversationId ?? "new"}-${chatResetKey}`}
-					apiPath={apiPath}
 					id={conversationId}
 					variant="full"
 					initialMessages={initialMessages}

@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { normalizePath } from "@btst/stack/client";
 import type { AiChatLocalization } from "./localization";
 
 /**
@@ -7,6 +8,52 @@ import type { AiChatLocalization } from "./localization";
  * - 'public': Stateless chat, no persistence (ideal for public chatbots)
  */
 export type AiChatMode = "authenticated" | "public";
+
+/** Browser-safe AI Chat factory values carried by the resolved client stack. */
+export interface AiChatProviderConfig {
+	/** Conversation behavior selected by `aiChatClientPlugin()`. */
+	readonly mode: AiChatMode;
+}
+
+/** Resolve the registered AI Chat client factory mode. */
+export function resolveAiChatMode(
+	providerConfig: Readonly<Record<string, unknown>> | undefined,
+): AiChatMode {
+	return providerConfig?.mode === "public" ? "public" : "authenticated";
+}
+
+/** Join an AI Chat route onto its resolved site mount without duplicate slashes. */
+export function resolveAiChatSitePath(
+	basePath: string,
+	...segments: string[]
+): string {
+	return normalizePath([basePath, ...segments].join("/"));
+}
+
+/** Resolve the browser streaming URL from the effective AI Chat API mount. */
+export function resolveAiChatApiUrl(
+	baseURL: string | undefined,
+	basePath: string | undefined,
+): string {
+	return `${baseURL ?? ""}${normalizePath([basePath ?? "", "chat"].join("/"))}`;
+}
+
+/** Resolve path and absolute URL forms for an AI Chat page destination. */
+export function resolveAiChatSiteLocation(
+	site: { baseURL?: string; basePath: string },
+	currentOrigin: string | undefined,
+	...segments: string[]
+): { path: string; href: string; crossOrigin: boolean } {
+	const path = resolveAiChatSitePath(site.basePath, ...segments);
+	const href = site.baseURL ? `${site.baseURL}${path}` : path;
+	return {
+		path,
+		href,
+		crossOrigin:
+			Boolean(site.baseURL && currentOrigin) &&
+			new URL(href).origin !== currentOrigin,
+	};
+}
 
 /**
  * State of a tool call execution
@@ -97,12 +144,6 @@ export interface RouteContext {
  */
 export interface AiChatPluginOverrides {
 	/**
-	 * Plugin mode - should match backend config
-	 * @default 'authenticated'
-	 */
-	mode?: AiChatMode;
-
-	/**
 	 * Function used to upload a file and return its URL.
 	 * Called for images, PDFs, text files, and other supported file types.
 	 */
@@ -120,11 +161,6 @@ export interface AiChatPluginOverrides {
 	 * Localization object for the AI Chat plugin
 	 */
 	localization?: Partial<AiChatLocalization>;
-
-	/**
-	 * Optional headers to pass with API requests (e.g., for SSR auth)
-	 */
-	headers?: HeadersInit;
 
 	/**
 	 * Whether to show the attribution

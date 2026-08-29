@@ -135,7 +135,7 @@ export function ChatMessage({
 
 	const { localization: customLocalization, toolRenderers } =
 		usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
-			"ai-chat",
+			"aiChat",
 			{},
 		);
 	const { router } = useStack();

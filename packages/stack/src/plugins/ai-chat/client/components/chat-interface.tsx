@@ -24,11 +24,15 @@ import { cn } from "@workspace/ui/lib/utils";
 import {
 	PermissionCheck,
 	usePluginOverrides,
-	useBasePath,
 	useStack,
 } from "@btst/stack/context";
 import { aiChatPermissions } from "../../permissions";
-import type { AiChatPluginOverrides } from "../overrides";
+import {
+	resolveAiChatApiUrl,
+	resolveAiChatMode,
+	resolveAiChatSiteLocation,
+	type AiChatPluginOverrides,
+} from "../overrides";
 import { useAiChatTranslation } from "../localization";
 import { createApiClient } from "@btst/stack/plugins/client";
 import type { AiChatApiRouter } from "../../api/plugin";
@@ -40,9 +44,9 @@ import {
 	type SerializedMessage,
 } from "../hooks/chat-hooks";
 import { usePageAIContext } from "../context/page-ai-context";
+import { navigateAiChatCrossOrigin } from "../navigation";
 
 interface ChatInterfaceProps {
-	apiPath?: string;
 	initialMessages?: UIMessage[];
 	id?: string;
 	/** Variant: 'full' for full-page layout, 'widget' for embedded widget */
@@ -249,7 +253,6 @@ function PermissionedChatMessage({
 }
 
 export function ChatInterface({
-	apiPath = "/api/chat",
 	initialMessages,
 	id,
 	variant = "full",
@@ -258,26 +261,34 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
 	const {
 		localization: customLocalization,
-		headers,
-		mode,
 		showAttribution,
 		chatSuggestions,
 	} = usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
-		"ai-chat",
+		"aiChat",
 		{ showAttribution: true },
 	);
-	const { api, router } = useStack();
-	const apiBaseURL = api?.baseURL;
-	const apiBasePath = api?.basePath;
-	const navigate = router?.navigate;
-	const basePath = useBasePath();
+	const {
+		api,
+		basePath: legacyBasePath,
+		plugins,
+		queryClient: stackQueryClient,
+	} = useStack();
+	const aiChatApi = plugins?.aiChat?.api;
+	const apiBaseURL = aiChatApi?.baseURL ?? api?.baseURL;
+	const apiBasePath = aiChatApi?.basePath ?? api?.basePath;
+	const browserHeaders = aiChatApi?.browserHeaders;
+	const credentials = aiChatApi?.credentials;
+	const resolvedApiPath = resolveAiChatApiUrl(apiBaseURL, apiBasePath);
+	const mode = resolveAiChatMode(plugins?.aiChat?.config);
+	const siteBaseURL = plugins?.aiChat?.site.baseURL;
+	const siteBasePath = plugins?.aiChat?.site.basePath ?? legacyBasePath;
 	const isPublicMode = mode === "public";
 
 	// Read page AI context registered by the current page
 	const pageAIContext = usePageAIContext();
 
 	const tr = useAiChatTranslation(customLocalization);
-	const queryClient = useQueryClient();
+	const queryClient = useQueryClient(stackQueryClient);
 	const identityPartition = useAiChatIdentityPartition();
 	const chatInstanceId = useId();
 	const identityPartitionKey = hashKey([aiChatIdentityKey(identityPartition)]);
@@ -298,13 +309,21 @@ export function ChatInterface({
 		const client = createApiClient<AiChatApiRouter>({
 			baseURL: apiBaseURL,
 			basePath: apiBasePath,
+			credentials,
 		});
-		const queries = createAiChatQueryKeys(client, headers);
+		const queries = createAiChatQueryKeys(client, browserHeaders);
 		return queries.conversations.list(identityPartition).queryKey;
-	}, [apiBaseURL, apiBasePath, headers, identityPartition, isPublicMode]);
+	}, [
+		apiBaseURL,
+		apiBasePath,
+		browserHeaders,
+		credentials,
+		identityPartition,
+		isPublicMode,
+	]);
 	const latestIdentityPartition = useRef(identityPartition);
 	const latestConversationsListQueryKey = useRef(conversationsListQueryKey);
-	const latestHeaders = useRef(headers);
+	const latestHeaders = useRef(browserHeaders);
 
 	// Track the current conversation ID - initialized from prop, updated after first message
 	// In public mode, we don't track conversation IDs
@@ -414,7 +433,9 @@ export function ChatInterface({
 			globalThis.fetch,
 		) as typeof globalThis.fetch;
 		return new DefaultChatTransport({
-			api: apiPath,
+			api: resolvedApiPath,
+			headers: browserHeaders,
+			credentials,
 			fetch: trackedFetch,
 			// In public mode, don't send conversationId
 			body: isPublicMode
@@ -470,7 +491,7 @@ export function ChatInterface({
 				};
 			},
 		});
-	}, [apiPath, isPublicMode]);
+	}, [browserHeaders, credentials, isPublicMode, resolvedApiPath]);
 
 	// Use a ref so addToolOutput is always current inside the onToolCall closure
 	const addToolOutputRef = useRef<
@@ -635,13 +656,26 @@ export function ChatInterface({
 						// Only update the URL in full-page mode; in widget mode the chat is
 						// embedded in another page and clobbering the URL is disruptive.
 						if (variant === "full") {
-							const newUrl = `${basePath}/chat/${discoveredConversationId}`;
+							const newLocation = resolveAiChatSiteLocation(
+								{ baseURL: siteBaseURL, basePath: siteBasePath },
+								typeof window === "undefined"
+									? undefined
+									: window.location.origin,
+								"chat",
+								discoveredConversationId,
+							);
 							if (typeof window !== "undefined") {
-								window.history.replaceState(
-									{ ...window.history.state },
-									"",
-									newUrl,
-								);
+								if (newLocation.crossOrigin) {
+									navigateAiChatCrossOrigin(newLocation.href, {
+										replace: true,
+									});
+								} else {
+									window.history.replaceState(
+										{ ...window.history.state },
+										"",
+										newLocation.path,
+									);
+								}
 							}
 						}
 					}
@@ -661,6 +695,7 @@ export function ChatInterface({
 				const client = createApiClient<AiChatApiRouter>({
 					baseURL: apiBaseURL,
 					basePath: apiBasePath,
+					credentials,
 				});
 				const detailQuery = createAiChatQueryKeys(
 					client,
@@ -723,6 +758,7 @@ export function ChatInterface({
 			const client = createApiClient<AiChatApiRouter>({
 				baseURL: apiBaseURL,
 				basePath: apiBasePath,
+				credentials,
 			});
 			const detailQuery = createAiChatQueryKeys(
 				client,
@@ -749,11 +785,21 @@ export function ChatInterface({
 				hasNavigatedRef.current = true;
 				setCurrentConversationId(retryConversationId);
 				if (variant === "full" && typeof window !== "undefined") {
-					window.history.replaceState(
-						{ ...window.history.state },
-						"",
-						`${basePath}/chat/${retryConversationId}`,
+					const newLocation = resolveAiChatSiteLocation(
+						{ baseURL: siteBaseURL, basePath: siteBasePath },
+						window.location.origin,
+						"chat",
+						retryConversationId,
 					);
+					if (newLocation.crossOrigin) {
+						navigateAiChatCrossOrigin(newLocation.href, { replace: true });
+					} else {
+						window.history.replaceState(
+							{ ...window.history.state },
+							"",
+							newLocation.path,
+						);
+					}
 				}
 			}
 			setMessages(
@@ -772,11 +818,13 @@ export function ChatInterface({
 	}, [
 		apiBasePath,
 		apiBaseURL,
-		basePath,
+		credentials,
 		isHistorySyncRetrying,
 		isPublicMode,
 		queryClient,
 		setMessages,
+		siteBasePath,
+		siteBaseURL,
 		variant,
 	]);
 	useLayoutEffect(() => {
@@ -789,7 +837,7 @@ export function ChatInterface({
 		latestIdentityPartitionKey.current = nextPartition;
 		latestIdentityPartition.current = identityPartition;
 		latestConversationsListQueryKey.current = conversationsListQueryKey;
-		latestHeaders.current = headers;
+		latestHeaders.current = browserHeaders;
 		if (isPublicMode) return;
 		if (previousIdentityPartition.current === nextPartition) return;
 		previousIdentityPartition.current = nextPartition;
@@ -815,7 +863,7 @@ export function ChatInterface({
 		hasNavigatedRef.current = false;
 	}, [
 		conversationsListQueryKey,
-		headers,
+		browserHeaders,
 		id,
 		identityPartition,
 		identityPartitionKey,

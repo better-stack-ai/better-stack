@@ -354,7 +354,15 @@ describe("scaffold plan", () => {
 		const stackClientFile = plan.files.find((file) =>
 			file.path.endsWith("stack-client.tsx"),
 		);
-		expect(stackClientFile?.content).toContain("aiChat: aiChatClientPlugin({");
+		expect(stackClientFile?.content).toContain(
+			'aiChat: aiChatClientPlugin({ mode: "public" as const }),',
+		);
+		expect(stackClientFile?.content).toContain('basePath: "/api/data"');
+		expect(stackClientFile?.content).toContain('basePath: "/pages"');
+		expect(stackClientFile?.content).toContain("queryClient,");
+		expect(stackClientFile?.content).not.toMatch(
+			/aiChat: aiChatClientPlugin\(\{[^}]*apiBaseURL/s,
+		);
 		expect(stackClientFile?.content).toContain(
 			"uiBuilder: uiBuilderClientPlugin(),",
 		);
@@ -392,20 +400,14 @@ describe("scaffold plan", () => {
 			'import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"',
 		);
 		expect(pagesLayoutFile?.content).toContain('layout="widget"');
-		expect(pagesLayoutFile?.content).toContain('mode: "public" as const,');
-		// Override key must match what usePluginOverrides("ai-chat") looks up at runtime
-		expect(pagesLayoutFile?.content).toContain('"ai-chat": {');
+		expect(pagesLayoutFile?.content).not.toContain('mode: "public" as const,');
+		expect(pagesLayoutFile?.content).not.toContain("overrides=");
 		// Widget must be hidden on the chat route itself
 		expect(pagesLayoutFile?.content).toContain("usePathname");
 		expect(pagesLayoutFile?.content).toContain(
 			'pathname.startsWith("/pages/chat")',
 		);
-		// StackProvider overrides must use the plugin's runtime key ("ai-chat"), not
-		// the camelCase configKey ("aiChat"), so usePluginOverrides("ai-chat") can
-		// find the overrides at runtime.
-		expect(pagesLayoutFile?.content).toContain('"ai-chat":');
-		expect(pagesLayoutFile?.content).not.toContain("aiChat:");
-		expect(pagesLayoutFile?.content).toContain("} as never");
+		expect(pagesLayoutFile?.content).not.toContain('"ai-chat":');
 	});
 
 	it("renders cms backend plugin with default article content type", async () => {
@@ -973,7 +975,14 @@ describe("scaffold plan", () => {
 		expect(paths).toContain("app/public-chat/page.tsx");
 		const page = plan.files.find((f) => f.path === "app/public-chat/page.tsx");
 		expect(page?.content).toContain("ChatLayout");
-		expect(page?.content).toContain('"ai-chat"');
+		expect(page?.content).toContain(
+			'aiChat: aiChatClientPlugin({ mode: "public" }),',
+		);
+		expect(page?.content).toContain('site: { baseURL, basePath: "/" },');
+		expect(page?.content).toContain("<StackProvider stack={stack}");
+		expect(page?.content).not.toContain('<ChatLayout mode="public"');
+		expect(page?.content).not.toContain("overrides=");
+		expect(page?.content).not.toContain('"ai-chat":');
 	});
 
 	it("emits public-chat route for react-router when ai-chat selected", async () => {
@@ -990,6 +999,11 @@ describe("scaffold plan", () => {
 			(f) => f.path === "app/routes/public-chat.tsx",
 		);
 		expect(route?.content).toContain("ChatLayout");
+		expect(route?.content).toContain(
+			'aiChat: aiChatClientPlugin({ mode: "public" }),',
+		);
+		expect(route?.content).toContain('site: { baseURL, basePath: "/" },');
+		expect(route?.content).not.toContain('<ChatLayout mode="public"');
 	});
 
 	it("emits public-chat route for tanstack when ai-chat selected", async () => {
@@ -1007,6 +1021,11 @@ describe("scaffold plan", () => {
 		);
 		expect(route?.content).toContain("createFileRoute");
 		expect(route?.content).toContain("ChatLayout");
+		expect(route?.content).toContain(
+			'aiChat: aiChatClientPlugin({ mode: "public" }),',
+		);
+		expect(route?.content).toContain('site: { baseURL, basePath: "/" },');
+		expect(route?.content).not.toContain('<ChatLayout mode="public"');
 	});
 
 	it("does NOT emit public-chat routes when ai-chat not selected", async () => {

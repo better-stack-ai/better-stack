@@ -5,17 +5,20 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	StackProvider,
+	useStack,
 	type StackClientAuth,
 	type StackI18nProvider,
 	type StackIdentity,
 } from "@btst/stack/context";
 import { defineAuthorization } from "@btst/stack/authorization";
 import { createClientAuth } from "@btst/stack/authorization/client";
+import { createClientStack } from "@btst/stack/client";
 import { z } from "zod";
 import { ChatInterface } from "../client/components/chat-interface";
 import { ChatSidebar } from "../client/components/chat-sidebar";
 import { ChatPage } from "../client/components/pages/chat-page.internal";
 import { ChatPageComponent } from "../client/components/pages/chat-page";
+import { aiChatClientPlugin } from "../client/plugin";
 import type { SerializedConversation } from "../types";
 import { aiChatPermissions } from "../permissions";
 import { aiChatIdentityKey } from "../query-keys";
@@ -43,6 +46,7 @@ const mocks = vi.hoisted(() => ({
 		  }
 		| undefined,
 	chatLayout: vi.fn(),
+	navigateCrossOrigin: vi.fn(),
 }));
 
 vi.mock("@ai-sdk/react", () => ({ useChat: mocks.useChat }));
@@ -134,6 +138,9 @@ vi.mock("../client/components/chat-layout", () => ({
 vi.mock("../client/context/page-ai-context", () => ({
 	usePageAIContext: () => mocks.pageAIContext,
 }));
+vi.mock("../client/navigation", () => ({
+	navigateAiChatCrossOrigin: mocks.navigateCrossOrigin,
+}));
 
 const conversation: SerializedConversation = {
 	id: "conv-1",
@@ -209,12 +216,18 @@ const router = () => ({
 	setSearchParams: vi.fn(),
 });
 
-function overrides(
-	mode: "authenticated" | "public" = "authenticated",
-	localization?: Record<string, string>,
-) {
+function RuntimeProbe({
+	onRuntime,
+}: {
+	onRuntime: (plugins: ReturnType<typeof useStack>["plugins"]) => void;
+}) {
+	const { plugins } = useStack();
+	onRuntime(plugins);
+	return null;
+}
+
+function overrides(localization?: Record<string, string>) {
 	return {
-		mode,
 		localization,
 	};
 }
@@ -228,20 +241,29 @@ async function render(
 			success: ReturnType<typeof vi.fn>;
 			error: ReturnType<typeof vi.fn>;
 		};
-		mode?: "authenticated" | "public";
 		localization?: Record<string, string>;
 		initialIdentity?: StackIdentity | null;
+		clientMode?: "authenticated" | "public";
 	} = {},
 ) {
+	const stack = createClientStack({
+		api: { baseURL: "http://test.local", basePath: "/api/data" },
+		site: { baseURL: window.location.origin, basePath: "/pages" },
+		queryClient,
+		plugins: {
+			aiChat: aiChatClientPlugin({
+				mode: options.clientMode ?? "authenticated",
+			}),
+		},
+	});
 	await act(async () => {
 		root.render(
 			<QueryClientProvider client={queryClient}>
 				<StackProvider
-					basePath="/pages"
-					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
+					stack={stack}
 					router={router()}
 					overrides={{
-						"ai-chat": overrides(options.mode, options.localization),
+						aiChat: overrides(options.localization),
 					}}
 					auth={options.auth}
 					initialIdentity={options.initialIdentity}
@@ -274,6 +296,130 @@ function menuItem(text: string) {
 }
 
 describe("AI Chat permissions", () => {
+	it("uses the resolved AI Chat endpoint for the browser stream transport", async () => {
+		const observeRuntime = vi.fn();
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient,
+			plugins: { aiChat: aiChatClientPlugin({ mode: "public" }) },
+			endpoints: {
+				aiChat: {
+					api: {
+						baseURL: "https://chat.example.com",
+						basePath: "/btst",
+						browserHeaders: { "x-public-client": "ai-chat" },
+						credentials: "omit",
+					},
+				},
+			},
+		});
+
+		await act(async () => {
+			root.render(
+				<QueryClientProvider client={queryClient}>
+					<StackProvider stack={stack}>
+						<RuntimeProbe onRuntime={observeRuntime} />
+						<ChatInterface variant="widget" />
+					</StackProvider>
+				</QueryClientProvider>,
+			);
+			await Promise.resolve();
+		});
+
+		const transport = mocks.useChat.mock.calls.at(-1)?.[0]?.transport as
+			| {
+					api?: string;
+					headers?: HeadersInit;
+					credentials?: RequestCredentials;
+			  }
+			| undefined;
+		expect(transport?.api).toBe("https://chat.example.com/btst/chat");
+		expect(new Headers(transport?.headers).get("x-public-client")).toBe(
+			"ai-chat",
+		);
+		expect(transport?.credentials).toBe("omit");
+		expect(observeRuntime).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				aiChat: expect.objectContaining({ config: { mode: "public" } }),
+			}),
+		);
+		expect(mocks.useChat.mock.calls.at(-1)?.[0]?.id).toMatch(/:public$/);
+	});
+
+	it("normalizes a root-mounted browser stream endpoint", async () => {
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: window.location.origin, basePath: "/pages" },
+			queryClient,
+			plugins: { aiChat: aiChatClientPlugin({ mode: "public" }) },
+			endpoints: { aiChat: { api: { basePath: "/" } } },
+		});
+
+		await act(async () => {
+			root.render(
+				<QueryClientProvider client={queryClient}>
+					<StackProvider stack={stack}>
+						<ChatInterface variant="widget" />
+					</StackProvider>
+				</QueryClientProvider>,
+			);
+			await Promise.resolve();
+		});
+
+		expect(mocks.useChat.mock.calls.at(-1)?.[0]?.transport.api).toBe(
+			"https://app.example.com/chat",
+		);
+	});
+
+	it("uses the client factory mode for built-in and standalone page rendering", async () => {
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient,
+			plugins: { aiChat: aiChatClientPlugin({ mode: "public" }) },
+		});
+		const RoutePage = stack.router.getRoute("/chat")?.PageComponent;
+		// A stale JavaScript/manual override cannot replace the factory source of truth.
+		const staleModeOverride = {
+			aiChat: { mode: "authenticated" },
+		} as never;
+
+		await act(async () => {
+			root.render(
+				<QueryClientProvider client={queryClient}>
+					<StackProvider stack={stack} overrides={staleModeOverride}>
+						{RoutePage ? <RoutePage /> : null}
+					</StackProvider>
+				</QueryClientProvider>,
+			);
+			await Promise.resolve();
+		});
+		expect(mocks.chatLayout).toHaveBeenLastCalledWith(
+			expect.objectContaining({ showSidebar: false }),
+		);
+		expect(mocks.chatLayout).toHaveBeenLastCalledWith(
+			expect.not.objectContaining({ mode: expect.anything() }),
+		);
+
+		await act(async () => {
+			root.render(
+				<QueryClientProvider client={queryClient}>
+					<StackProvider stack={stack} overrides={staleModeOverride}>
+						<ChatPage />
+					</StackProvider>
+				</QueryClientProvider>,
+			);
+			await Promise.resolve();
+		});
+		expect(mocks.chatLayout).toHaveBeenLastCalledWith(
+			expect.objectContaining({ showSidebar: false }),
+		);
+		expect(mocks.chatLayout).toHaveBeenLastCalledWith(
+			expect.not.objectContaining({ mode: expect.anything() }),
+		);
+	});
+
 	it("keeps one stable public chat instance across a send and rerender", async () => {
 		let retainedId: string | undefined;
 		let retainedSend: ReturnType<typeof vi.fn> | undefined;
@@ -296,13 +442,13 @@ describe("AI Chat permissions", () => {
 			};
 		});
 
-		await render(<ChatInterface />, { mode: "public" });
+		await render(<ChatInterface />, { clientMode: "public" });
 		await act(async () => {
 			container
 				.querySelector<HTMLButtonElement>('[data-testid="chat-send"]')
 				?.click();
 		});
-		await render(<ChatInterface />, { mode: "public" });
+		await render(<ChatInterface />, { clientMode: "public" });
 
 		expect(retainedId).toMatch(/:public$/);
 		expect(chatInstances).toBe(1);
@@ -578,73 +724,201 @@ describe("AI Chat permissions", () => {
 		expect(container.querySelector('[data-testid="chat-input"]')).toBeTruthy();
 	});
 
-	it("discovers a new authoritative conversation from the stream response header", async () => {
-		const clientMessages = [
-			{
-				id: "client-user",
-				role: "user" as const,
-				parts: [{ type: "text" as const, text: "Hi" }],
-			},
-		];
-		const setMessages = vi.fn();
-		let sent = false;
-		let chatOptions: any;
-		mocks.useChat.mockImplementation((options) => {
-			chatOptions = options;
-			return {
-				messages: sent ? clientMessages : [],
-				sendMessage: vi.fn(() => {
-					sent = true;
-				}),
-				status: "ready",
-				error: null,
-				setMessages,
-				regenerate: vi.fn(),
-				addToolOutput: vi.fn(),
-				stop: vi.fn(),
-			};
-		});
-		mocks.useAiChatIdentityPartition.mockReturnValue({
-			id: "owner-1",
-			role: "user",
-		});
-		const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-			new Response("stream", {
-				headers: { "x-conversation-id": "persisted-conversation" },
-			}),
-		);
-		vi.spyOn(queryClient, "fetchQuery").mockResolvedValue({
-			...conversation,
-			id: "persisted-conversation",
-			messages: [
+	it.each([
+		{
+			pluginSiteBasePath: "/assistant",
+			expectedPath: "/assistant/chat/persisted-conversation",
+		},
+		{
+			pluginSiteBasePath: "/",
+			expectedPath: "/chat/persisted-conversation",
+		},
+		{
+			pluginSiteBaseURL: "https://assistant.example.com",
+			pluginSiteBasePath: "/",
+			expectedPath: "/",
+			expectedCrossOriginURL:
+				"https://assistant.example.com/chat/persisted-conversation",
+		},
+	])(
+		"discovers a new authoritative conversation using the resolved site location",
+		async ({
+			pluginSiteBaseURL,
+			pluginSiteBasePath,
+			expectedPath,
+			expectedCrossOriginURL,
+		}) => {
+			const clientMessages = [
 				{
-					id: "persisted-user",
-					conversationId: "persisted-conversation",
-					role: "user",
-					content: '[{"type":"text","text":"Hi"}]',
-					createdAt: new Date().toISOString(),
+					id: "client-user",
+					role: "user" as const,
+					parts: [{ type: "text" as const, text: "Hi" }],
 				},
-			],
-		});
+			];
+			const setMessages = vi.fn();
+			let sent = false;
+			let chatOptions: any;
+			mocks.useChat.mockImplementation((options) => {
+				chatOptions = options;
+				return {
+					messages: sent ? clientMessages : [],
+					sendMessage: vi.fn(() => {
+						sent = true;
+					}),
+					status: "ready",
+					error: null,
+					setMessages,
+					regenerate: vi.fn(),
+					addToolOutput: vi.fn(),
+					stop: vi.fn(),
+				};
+			});
+			mocks.useAiChatIdentityPartition.mockReturnValue({
+				id: "owner-1",
+				role: "user",
+			});
+			const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+				new Response("stream", {
+					headers: { "x-conversation-id": "persisted-conversation" },
+				}),
+			);
+			vi.spyOn(queryClient, "fetchQuery").mockResolvedValue({
+				...conversation,
+				id: "persisted-conversation",
+				messages: [
+					{
+						id: "persisted-user",
+						conversationId: "persisted-conversation",
+						role: "user",
+						content: '[{"type":"text","text":"Hi"}]',
+						createdAt: new Date().toISOString(),
+					},
+				],
+			});
 
-		await render(<ChatInterface />);
-		await act(async () => {
-			container
-				.querySelector<HTMLButtonElement>('[data-testid="chat-send"]')
-				?.click();
-		});
-		await render(<ChatInterface />);
-		await act(async () => {
-			await chatOptions.transport.fetch("http://test.local/chat", {});
-			await chatOptions.onFinish();
-		});
+			const stack = createClientStack({
+				api: { baseURL: "http://test.local", basePath: "/api/data" },
+				site: { baseURL: window.location.origin, basePath: "/pages" },
+				queryClient,
+				plugins: { aiChat: aiChatClientPlugin() },
+				endpoints: {
+					aiChat: {
+						site: pluginSiteBaseURL
+							? {
+									baseURL: pluginSiteBaseURL,
+									basePath: pluginSiteBasePath,
+								}
+							: { basePath: pluginSiteBasePath },
+					},
+				},
+			});
+			const renderChat = async () => {
+				await act(async () => {
+					root.render(
+						<QueryClientProvider client={queryClient}>
+							<StackProvider stack={stack}>
+								<ChatInterface />
+							</StackProvider>
+						</QueryClientProvider>,
+					);
+					await Promise.resolve();
+				});
+			};
 
-		expect(setMessages).toHaveBeenCalledWith([
-			{ ...clientMessages[0], id: "persisted-user" },
-		]);
-		expect(window.location.pathname).toBe("/pages/chat/persisted-conversation");
-		fetchMock.mockRestore();
-	});
+			await renderChat();
+			await act(async () => {
+				container
+					.querySelector<HTMLButtonElement>('[data-testid="chat-send"]')
+					?.click();
+			});
+			await renderChat();
+			await act(async () => {
+				await chatOptions.transport.fetch("http://test.local/chat", {});
+				await chatOptions.onFinish();
+			});
+
+			expect(setMessages).toHaveBeenCalledWith([
+				{ ...clientMessages[0], id: "persisted-user" },
+			]);
+			expect(window.location.pathname).toBe(expectedPath);
+			if (expectedCrossOriginURL) {
+				expect(mocks.navigateCrossOrigin).toHaveBeenCalledWith(
+					expectedCrossOriginURL,
+					{ replace: true },
+				);
+			} else {
+				expect(mocks.navigateCrossOrigin).not.toHaveBeenCalled();
+			}
+			fetchMock.mockRestore();
+		},
+	);
+
+	it.each([
+		{
+			pluginSiteBasePath: "/assistant",
+			expectedPath: "/assistant/chat/conv-1",
+		},
+		{
+			pluginSiteBasePath: "/",
+			expectedPath: "/chat/conv-1",
+		},
+		{
+			pluginSiteBaseURL: "https://assistant.example.com",
+			pluginSiteBasePath: "/",
+			expectedCrossOriginURL: "https://assistant.example.com/chat/conv-1",
+		},
+	])(
+		"uses the resolved AI Chat site location for sidebar navigation",
+		async ({
+			pluginSiteBaseURL,
+			pluginSiteBasePath,
+			expectedPath,
+			expectedCrossOriginURL,
+		}) => {
+			const navigate = vi.fn();
+			const stack = createClientStack({
+				api: { baseURL: "http://test.local", basePath: "/api/data" },
+				site: { baseURL: window.location.origin, basePath: "/pages" },
+				queryClient,
+				plugins: { aiChat: aiChatClientPlugin() },
+				endpoints: {
+					aiChat: {
+						site: pluginSiteBaseURL
+							? {
+									baseURL: pluginSiteBaseURL,
+									basePath: pluginSiteBasePath,
+								}
+							: { basePath: pluginSiteBasePath },
+					},
+				},
+			});
+
+			await act(async () => {
+				root.render(
+					<QueryClientProvider client={queryClient}>
+						<StackProvider stack={stack} router={{ navigate }}>
+							<ChatSidebar />
+						</StackProvider>
+					</QueryClientProvider>,
+				);
+				await Promise.resolve();
+			});
+			const conversationButton = Array.from(
+				container.querySelectorAll<HTMLButtonElement>("button"),
+			).find((button) => button.textContent?.includes(conversation.title));
+			await act(async () => conversationButton?.click());
+
+			if (expectedCrossOriginURL) {
+				expect(mocks.navigateCrossOrigin).toHaveBeenCalledWith(
+					expectedCrossOriginURL,
+				);
+				expect(navigate).not.toHaveBeenCalled();
+			} else {
+				expect(navigate).toHaveBeenCalledWith(expectedPath);
+				expect(mocks.navigateCrossOrigin).not.toHaveBeenCalled();
+			}
+		},
+	);
 
 	it("does not bind a headerless new stream to unrelated cached history", async () => {
 		const clientMessages = [
@@ -1405,6 +1679,45 @@ describe("AI Chat forms, notifications, and i18n", () => {
 		expect(notify.error).not.toHaveBeenCalled();
 	});
 
+	it("starts current-conversation navigation before refreshing deleted history", async () => {
+		const navigate = vi.fn();
+		deleteConversation.mockImplementationOnce(
+			async (
+				_variables: { id: string },
+				options?: { onSuccess?: () => void | Promise<void> },
+			) => {
+				await options?.onSuccess?.();
+				return { success: true };
+			},
+		);
+
+		const stack = createClientStack({
+			api: { baseURL: "http://test.local", basePath: "/api/data" },
+			site: { baseURL: window.location.origin, basePath: "/pages" },
+			queryClient,
+			plugins: { aiChat: aiChatClientPlugin() },
+		});
+		await act(async () => {
+			root.render(
+				<QueryClientProvider client={queryClient}>
+					<StackProvider stack={stack} router={{ navigate }}>
+						<ChatSidebar currentConversationId={conversation.id} />
+					</StackProvider>
+				</QueryClientProvider>,
+			);
+			await Promise.resolve();
+		});
+
+		await openConversationMenu();
+		await act(async () => menuItem("Delete")?.click());
+		const confirm = Array.from(
+			document.querySelectorAll<HTMLButtonElement>("button"),
+		).find((button) => button.textContent === "Delete");
+		await act(async () => confirm?.click());
+
+		expect(navigate).toHaveBeenCalledWith("/pages/chat");
+	});
+
 	it("does not expose raw delete errors through notifications", async () => {
 		const notify = { success: vi.fn(), error: vi.fn() };
 		deleteConversation.mockRejectedValueOnce(
@@ -1451,7 +1764,7 @@ describe("AI Chat route lifecycle", () => {
 					basePath="/pages"
 					router={router()}
 					overrides={{
-						"ai-chat": {
+						aiChat: {
 							...overrides(),
 							onRouteRender,
 						},
