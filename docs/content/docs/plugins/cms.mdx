@@ -188,10 +188,10 @@ deployed backend owns the catalog.
 Pass the resolved client stack to the provider. Override inference comes from the
 registered CMS definition, so no manual override map or provider generic is needed:
 
-```tsx title="app/pages/layout.tsx"
+```tsx title="app/pages/client-layout.tsx"
 import { nextRouter } from "@btst/stack/next"
 
-const stack = getStackClient(queryClient)
+const stack = getStackClient(queryClient, clientOrigins)
 
 <StackProvider
   stack={stack}
@@ -737,7 +737,7 @@ authoritative target record before reading junction rows.
 Bind it in the browser for immediate presentation checks. Browser facts only
 control what is shown; they are never trusted by the backend.
 
-```tsx title="app/pages/layout.tsx"
+```tsx title="app/pages/client-layout.tsx"
 import { createClientAuth } from "@btst/stack/authorization/client"
 import { authorization } from "@/lib/authorization"
 

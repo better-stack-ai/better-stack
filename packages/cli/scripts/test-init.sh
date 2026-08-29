@@ -193,14 +193,10 @@ cp "$PACKAGE_DIR/scripts/fixtures/third-party-plugin.tsx" lib/fixtures/third-par
 success "Third-party fixture uses public plugin definitions and inferred overrides"
 
 step "Migrating the previous Next.js scaffold on rerun"
-mkdir -p "app/pages/[[...all]]"
-mv "app/(request)/pages/[[...all]]/page.tsx" "app/pages/[[...all]]/page.tsx"
-cp "app/(request)/pages/layout.tsx" "app/pages/layout.tsx"
-rm "app/(request)/pages/layout.tsx"
-mv "app/(static)/pages/ssg-blog" "app/pages/ssg-blog"
-mv "app/(static)/pages/ssg-cms" "app/pages/ssg-cms"
-mv "app/(static)/pages/ssg-kanban" "app/pages/ssg-kanban"
-rm "app/(static)/pages/layout.tsx"
+rm -r "app/(request)/pages" "app/(static)/pages"
+rm "app/pages/client-layout.tsx"
+cp -R "$PACKAGE_DIR/scripts/fixtures/legacy-next/e9ff9448/app/pages/." "app/pages/"
+rm -r "app/pages/ssg-forms"
 
 npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins "$MEMORY_PLUGIN_LIST" --skip-install > "$TEST_DIR/init-migration.log" 2>&1
 

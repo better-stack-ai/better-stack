@@ -65,6 +65,7 @@
       "!**/.btst-stack-ui/**",
       "!**/packages/stack/registry/**",
       "!**/packages/stack/scripts/fixtures/registry/**",
+      "!**/packages/cli/scripts/fixtures/legacy-next/**",
       "!**/codegen-projects/**",
       "!**/playwright-report-codegen/trace/**"
     ]

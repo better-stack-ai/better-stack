@@ -685,7 +685,7 @@ Then register it in the codegen project overlay files:
 
 **`scripts/codegen/files/nextjs/lib/stack-client.tsx`** — add the client plugin registration.
 
-**`scripts/codegen/files/nextjs/app/pages/layout.tsx`** — add the `StackProvider` override entry.
+**`scripts/codegen/files/nextjs/app/pages/client-layout.tsx`** — add the shared client `StackProvider` override entry. Keep trusted request-origin hydration in `app/(request)/pages/layout.tsx` and the header-free SSG/ISR wrapper in `app/(static)/pages/layout.tsx`.
 
 Add the plugin CSS to `app/globals.css` if it ships styles:
 
@@ -912,7 +912,7 @@ Before opening a pull request for a new plugin, verify every item:
 - [ ] `packages/cli/src/utils/constants.ts` — `PLUGINS` array updated with new plugin entry
 - [ ] `scripts/codegen/files/nextjs/lib/stack.ts` — backend plugin registered
 - [ ] `scripts/codegen/files/nextjs/lib/stack-client.tsx` — client plugin registered
-- [ ] `scripts/codegen/files/nextjs/app/pages/layout.tsx` — StackProvider overrides added
+- [ ] `scripts/codegen/files/nextjs/app/pages/client-layout.tsx` — StackProvider overrides added; request/static wrappers remain origin-safe
 - [ ] Codegen project rebuilt and E2E passes: `bash scripts/codegen/setup-nextjs.sh && pnpm -F e2e codegen:e2e:nextjs`
 
 **Tests**

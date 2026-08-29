@@ -103,18 +103,27 @@ export const { GET, POST, PUT, PATCH, DELETE } =
   toNextRouteHandlers(handler)
 ```
 
-```tsx title="app/pages/[[...all]]/page.tsx"
+```tsx title="app/(request)/pages/[[...all]]/page.tsx"
 import { createNextPage } from "@btst/stack/next"
-import { getStackClient } from "@/lib/stack-client"
+import { headers } from "next/headers"
+import { getStackClientForRequest } from "@/lib/stack-client.server"
 import { getOrCreateQueryClient } from "@/lib/query-client"
 
 const page = createNextPage({
-  getStackClient,
+  getStackClient: async (queryClient) =>
+    getStackClientForRequest(queryClient, {
+      headers: new Headers(await headers()),
+    }),
   getQueryClient: getOrCreateQueryClient,
 })
 export default page.Page
 export const generateMetadata = page.generateMetadata
 ```
+
+The request layout at `app/(request)/pages/layout.tsx` hydrates trusted client
+origins into the shared provider in `app/pages/client-layout.tsx`. Put SSG/ISR
+routes under `app/(static)/pages` with a header-free layout; route groups do not
+change the public `/pages/*` URLs.
 
 Wrap the pages subtree with one `StackProvider`:
 

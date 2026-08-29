@@ -109,16 +109,20 @@ export const Route = createFileRoute("/api/data/$")({
 
 ## Pages catch-all route
 
-**Next.js** (`app/pages/[[...all]]/page.tsx`):
+**Next.js** (`app/(request)/pages/[[...all]]/page.tsx`):
 
 ```tsx
 import { createNextPage } from "@btst/stack/next"
+import { headers } from "next/headers"
 import { getOrCreateQueryClient } from "@/lib/query-client"
-import { getStackClient } from "@/lib/stack-client"
+import { getStackClientForRequest } from "@/lib/stack-client.server"
 
 export const dynamic = "force-dynamic"
 const page = createNextPage({
-  getStackClient,
+  getStackClient: async (queryClient) =>
+    getStackClientForRequest(queryClient, {
+      headers: new Headers(await headers()),
+    }),
   getQueryClient: getOrCreateQueryClient,
 })
 export default page.Page
@@ -263,23 +267,31 @@ are not plugin options, provider overrides, or component identity props.
 
 ---
 
-## StackProvider — pages layout
+## StackProvider — shared client layout
 
-The pages layout must be `"use client"` and wrap `QueryClientProvider` then `StackProvider`.
+The shared provider must be `"use client"` and wrap `QueryClientProvider` then
+`StackProvider`. It receives only the trusted, serializable client origins from
+the server wrapper.
 
 ```tsx
-// Next.js: app/pages/layout.tsx
+// Next.js: app/pages/client-layout.tsx
 "use client"
-import { useState } from "react"
+import { useMemo } from "react"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { StackProvider } from "@btst/stack/context"
 import { nextRouter } from "@btst/stack/next"
 import { getOrCreateQueryClient } from "@/lib/query-client"
-import { getStackClient } from "@/lib/stack-client"
+import { getStackClient, type StackClientOptions } from "@/lib/stack-client"
 
-export default function PagesLayout({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => getOrCreateQueryClient())
-  const clientStack = getStackClient(queryClient)
+export default function PagesClientLayout({ children, clientOrigins }: {
+  children: React.ReactNode
+  clientOrigins: StackClientOptions
+}) {
+  const queryClient = getOrCreateQueryClient()
+  const clientStack = useMemo(
+    () => getStackClient(queryClient, clientOrigins),
+    [clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
+  )
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -301,6 +313,12 @@ export default function PagesLayout({ children }: { children: React.ReactNode })
   )
 }
 ```
+
+The request wrapper at `app/(request)/pages/layout.tsx` calls
+`getServerClientOriginsFromHeaders(await headers())`. The header-free wrapper at
+`app/(static)/pages/layout.tsx` calls `getServerClientOrigins()` for SSG/ISR.
+Both groups publish the same `/pages/*` URLs; never serialize the resolved
+request stack or request headers into the client layout.
 
 ### StackProvider props
 

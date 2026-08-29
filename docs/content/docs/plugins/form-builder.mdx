@@ -145,7 +145,7 @@ server call site.
 
 Add Form Builder overrides to your layout:
 
-```tsx title="app/pages/layout.tsx"
+```tsx title="app/pages/client-layout.tsx"
 import { nextRouter } from "@btst/stack/next"
 
 <StackProvider
@@ -442,7 +442,7 @@ Pass `serverAuth` as `stack({ auth: serverAuth, ... })`. On the client, create a
 client binding from the same rule set and hydrate the request identity in the
 layout:
 
-```tsx title="app/pages/layout.tsx"
+```tsx title="app/pages/client-layout.tsx"
 const clientAuth = createClientAuth({
   authorization,
   getIdentity: () => session?.user ?? null,

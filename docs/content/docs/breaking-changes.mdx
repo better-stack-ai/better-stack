@@ -89,10 +89,10 @@ QueryClient once in a shared factory:
 ```ts title="lib/stack-client.ts"
 export const getStackClient = (
   queryClient: QueryClient,
-  options?: { headers?: HeadersInit },
+  options: { apiOrigin: string; siteOrigin: string },
 ) => createClientStack({
-  api: { baseURL, basePath: "/api/data", headers: options?.headers },
-  site: { baseURL, basePath: "/pages" },
+  api: { baseURL: options.apiOrigin, basePath: "/api/data" },
+  site: { baseURL: options.siteOrigin, basePath: "/pages" },
   queryClient,
   plugins: { blog: blogClientPlugin() },
 })
@@ -100,11 +100,16 @@ export const getStackClient = (
 
 Create a request-specific stack for server loaders and metadata:
 
-```ts title="app/pages/[[...all]]/page.tsx"
+```ts title="app/(request)/pages/[[...all]]/page.tsx"
+import { headers } from "next/headers"
+import { getStackClientForRequest } from "@/lib/stack-client.server"
+
 const page = createNextPage({
   getQueryClient: getOrCreateQueryClient,
   getStackClient: async (queryClient) =>
-    getStackClient(queryClient, { headers: await headers() }),
+    getStackClientForRequest(queryClient, {
+      headers: new Headers(await headers()),
+    }),
 })
 ```
 
@@ -112,14 +117,14 @@ Create a separate, stable browser stack inside the Client Component that owns
 the provider. Do not pass or serialize the request stack; it contains functions
 and server-only request headers.
 
-```tsx title="app/pages/layout.tsx"
+```tsx title="app/pages/client-layout.tsx"
 "use client"
 
-export default function PagesLayout({ children }) {
+export default function PagesClientLayout({ children, clientOrigins }) {
   const [queryClient] = useState(() => getOrCreateQueryClient())
   const clientStack = useMemo(
-    () => getStackClient(queryClient),
-    [queryClient],
+    () => getStackClient(queryClient, clientOrigins),
+    [clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
   )
 
   return (
@@ -136,6 +141,11 @@ export default function PagesLayout({ children }) {
   )
 }
 ```
+
+Wrap this client provider from `app/(request)/pages/layout.tsx` using
+`getServerClientOriginsFromHeaders(await headers())`. Put SSG/ISR routes under
+`app/(static)/pages` and use header-free `getServerClientOrigins()` there. Both
+route groups keep the `/pages/*` URL.
 
 For Blog, `apiBaseURL`, `apiBasePath`, site fields, `queryClient`, and request
 headers are no longer plugin options. Its SSR loaders, metadata, browser hooks,

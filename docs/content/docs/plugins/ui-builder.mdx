@@ -144,10 +144,10 @@ site location.
 Pass the resolved stack to the provider. The component registry is a
 `uiBuilderClientPlugin()` concern, so `StackProvider` needs no duplicate override:
 
-```tsx title="app/pages/layout.tsx"
+```tsx title="app/pages/client-layout.tsx"
 import { nextRouter } from "@btst/stack/next"
 
-const stack = getStackClient(queryClient)
+const stack = getStackClient(queryClient, clientOrigins)
 
 <StackProvider
   stack={stack}
@@ -834,7 +834,7 @@ Bind the shared rules with `createClientAuth` for client navigation and controls
 Hydrating `initialIdentity` keeps the first server and browser render in
 agreement without an authorization cache.
 
-```tsx title="app/pages/layout.tsx"
+```tsx title="app/pages/client-layout.tsx"
 <StackProvider
   stack={stack}
   router={nextRouter()}
