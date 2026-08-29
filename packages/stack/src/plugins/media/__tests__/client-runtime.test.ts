@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as z from "zod";
 import { createClientStack } from "../../../client";
 import { defineClientPlugin } from "../../client";
 import { defineRoute } from "@btst/yar";
@@ -391,5 +392,57 @@ describe("Media and Route Docs resolved client runtime", () => {
 				sitemap: "https://stack-b.example.com/probe",
 			},
 		]);
+	});
+
+	it("reuses Route Docs loader data across equivalent stack reconstruction", async () => {
+		const queryClient = new QueryClient();
+		const createEquivalentStack = () =>
+			createClientStack({
+				api: { baseURL: "https://api.example.com", basePath: "/api" },
+				site: { baseURL: "https://site.example.com", basePath: "/" },
+				queryClient,
+				plugins: {
+					probe: defineClientPlugin({
+						id: "probe",
+						resolve: () => ({
+							routes: () => ({
+								probe: defineRoute(
+									"/probe/:id",
+									{ page: () => null },
+									{ query: z.object({ view: z.string().optional() }) },
+									{ title: "Equivalent probe" },
+								),
+							}),
+							sitemap: () => [
+								{ url: "https://site.example.com/probe/example" },
+							],
+						}),
+					}),
+					routeDocs: routeDocsClientPlugin(),
+				},
+			});
+		const loaderStack = createEquivalentStack();
+		const pageStack = createEquivalentStack();
+		const getPageQueryKey = (stack: typeof loaderStack) => {
+			const route = stack.context.plugins.routeDocs!.routes(stack.context)
+				.docs as {
+				def?: { page?: () => { props: { queryKey: readonly unknown[] } } };
+			};
+			return route.def?.page?.().props.queryKey;
+		};
+
+		await loaderStack.router.getRoute("/route-docs")?.loader?.();
+		const loaderKey = getPageQueryKey(loaderStack);
+		const pageKey = getPageQueryKey(pageStack);
+		if (!loaderKey || !pageKey)
+			throw new Error("Route Docs key was not created");
+
+		expect(pageKey).toEqual(loaderKey);
+		expect(queryClient.getQueryData(pageKey)).toBe(
+			queryClient.getQueryData(loaderKey),
+		);
+		expect(
+			queryClient.getQueriesData({ queryKey: ROUTE_DOCS_QUERY_KEY }),
+		).toHaveLength(1);
 	});
 });

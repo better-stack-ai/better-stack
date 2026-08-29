@@ -5,7 +5,7 @@ import {
 } from "@btst/stack/plugins/client";
 import { normalizePath } from "@btst/stack/client";
 import { defineRoute } from "@btst/yar";
-import type { QueryClient } from "@tanstack/react-query";
+import { hashKey, type QueryClient } from "@tanstack/react-query";
 import type { ClientStackContext } from "../../../types";
 import { resolvePluginProgrammaticId } from "../../../plugin-registration";
 import {
@@ -77,62 +77,44 @@ export interface RouteDocsClientConfig {
 
 interface ResolvedRouteDocsClientConfig extends RouteDocsClientConfig {
 	queryClient: QueryClient;
+	apiBaseURL: string;
+	apiBasePath: string;
 	siteBaseURL: string;
 	siteBasePath: string;
-}
-
-interface RouteDocsContextIdentityRegistry {
-	nextIdentity: number;
-	identities: WeakMap<ClientStackContext, number>;
-}
-
-const contextIdentitiesByQueryClient = new WeakMap<
-	QueryClient,
-	RouteDocsContextIdentityRegistry
->();
-
-function getContextIdentity(
-	queryClient: QueryClient,
-	context: ClientStackContext,
-): number {
-	let registry = contextIdentitiesByQueryClient.get(queryClient);
-	if (!registry) {
-		registry = {
-			nextIdentity: 0,
-			identities: new WeakMap<ClientStackContext, number>(),
-		};
-		contextIdentitiesByQueryClient.set(queryClient, registry);
-	}
-
-	let identity = registry.identities.get(context);
-	if (identity === undefined) {
-		identity = registry.nextIdentity;
-		registry.nextIdentity += 1;
-		registry.identities.set(context, identity);
-	}
-	return identity;
 }
 
 function createRouteDocsQueryKey(
 	config: ResolvedRouteDocsClientConfig,
 	context: ClientStackContext | null,
 ) {
-	const routeSet = getRegisteredRoutes(context).sort((left, right) =>
-		`${left.plugin}:${left.key}:${left.path}`.localeCompare(
-			`${right.plugin}:${right.key}:${right.path}`,
-		),
-	);
+	// Framework entry factories may reconstruct the same stack between the loader
+	// and render. Hash schema inputs, never process-local object identities.
+	const schemaInputs = context
+		? generateRouteDocsSchema(context, []).plugins.map(
+				({ sitemapEntries: _sitemapEntries, ...plugin }) => plugin,
+			)
+		: [];
+	const registrations = context
+		? Object.entries(context.plugins)
+				.map(([key, plugin]) => ({
+					key,
+					id: resolvePluginProgrammaticId(plugin, key),
+				}))
+				.sort((left, right) => left.key.localeCompare(right.key))
+		: [];
 	return [
 		...ROUTE_DOCS_QUERY_KEY,
-		JSON.stringify({
-			contextIdentity: context
-				? getContextIdentity(config.queryClient, context)
-				: null,
-			basePath: context?.basePath ?? null,
-			siteBaseURL: config.siteBaseURL,
-			siteBasePath: config.siteBasePath,
-			routeSet,
-		}),
+		hashKey([
+			{
+				basePath: context?.basePath ?? null,
+				apiBaseURL: config.apiBaseURL,
+				apiBasePath: config.apiBasePath,
+				siteBaseURL: config.siteBaseURL,
+				siteBasePath: config.siteBasePath,
+				registrations,
+				schemaInputs,
+			},
+		]),
 	] as const;
 }
 
@@ -144,6 +126,8 @@ function resolveRouteDocsClientConfig(
 		title: config.title,
 		description: config.description,
 		queryClient: runtime.queryClient,
+		apiBaseURL: runtime.api.baseURL,
+		apiBasePath: runtime.api.basePath,
 		siteBaseURL: runtime.site.baseURL,
 		siteBasePath: runtime.site.basePath,
 	};
