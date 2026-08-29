@@ -64,34 +64,87 @@ You keep your codebase, database, and deployment.
 ## Minimal setup (Next.js)
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 import { createMemoryAdapter } from "@btst/adapter-memory"
 
-export const { handler, dbSchema } = stack({
-  basePath: "/api/data",
-  plugins: {
-    blog: blogBackendPlugin()
-  },
-  adapter: (db) => createMemoryAdapter(db)({})
-})
+function createAppStack() {
+  return createBackendStack({
+    basePath: "/api/data",
+    plugins: {
+      blog: blogBackendPlugin()
+    },
+    adapter: (db) => createMemoryAdapter(db)({})
+  })
+}
+
+type AppStack = ReturnType<typeof createAppStack>
+const globalForStack = globalThis as typeof globalThis & {
+  __btst_stack__?: AppStack
+}
+export const myStack = globalForStack.__btst_stack__ ??= createAppStack()
+export const { handler, dbSchema } = myStack
 ```
 
 ```tsx title="lib/stack-client.tsx"
-import { createClientStack } from "@btst/stack/client"
+import {
+  createClientStack,
+  type ClientPluginEndpointOverride,
+} from "@btst/stack/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
-import { QueryClient } from "@tanstack/react-query"
+import type { QueryClient } from "@tanstack/react-query"
 
-export const getStackClient = (queryClient: QueryClient) =>
-  createClientStack({
-    api: { baseURL: "http://localhost:3000", basePath: "/api/data" },
-    site: { baseURL: "http://localhost:3000", basePath: "/pages" },
+export interface StackClientOptions {
+  apiOrigin: string
+  siteOrigin: string
+}
+
+export function createAppClientStack(
+  queryClient: QueryClient,
+  options: StackClientOptions & { headers?: HeadersInit },
+) {
+  const { apiOrigin, siteOrigin } = options
+  const crossOriginBlogEndpoint = apiOrigin === siteOrigin
+    ? undefined
+    : {
+        api: {
+          baseURL: apiOrigin,
+          basePath: "/api/data",
+          credentials: "include",
+        },
+      } satisfies ClientPluginEndpointOverride
+
+  return createClientStack({
+    api: {
+      baseURL: apiOrigin,
+      basePath: "/api/data",
+      ...(options.headers ? { headers: options.headers } : {}),
+    },
+    site: { baseURL: siteOrigin, basePath: "/pages" },
     queryClient,
     plugins: {
       blog: blogClientPlugin()
-    }
+    },
+    ...(crossOriginBlogEndpoint
+      ? { endpoints: { blog: crossOriginBlogEndpoint } }
+      : {}),
   })
+}
+
+export function getStackClient(
+  queryClient: QueryClient,
+  options: StackClientOptions,
+) {
+  return createAppClientStack(queryClient, options)
+}
 ```
+
+The generated `lib/stack-client.server.ts` resolves these origins from trusted
+deployment configuration (`BTST_API_URL` and `BTST_SITE_URL`), defaults the API
+to the trusted site origin, and forwards filtered credentials only to that API.
+It fails closed in production if no trusted origin is available.
+Existing same-origin Next.js installs may keep `NEXT_PUBLIC_BASE_URL` while
+migrating; new deployments should prefer the separate site/API variables.
 
 Use the v3 framework entry factories for the two catch-all routes:
 
@@ -103,32 +156,59 @@ export const { GET, POST, PUT, PATCH, DELETE } =
   toNextRouteHandlers(handler)
 ```
 
-```tsx title="app/pages/[[...all]]/page.tsx"
+```tsx title="app/(request)/pages/[[...all]]/page.tsx"
 import { createNextPage } from "@btst/stack/next"
-import { getStackClient } from "@/lib/stack-client"
+import { headers } from "next/headers"
+import { getStackClientForRequest } from "@/lib/stack-client.server"
 import { getOrCreateQueryClient } from "@/lib/query-client"
 
+export const dynamic = "force-dynamic"
+
 const page = createNextPage({
-  getStackClient,
+  getStackClient: async (queryClient) =>
+    getStackClientForRequest(queryClient, {
+      headers: new Headers(await headers()),
+    }),
   getQueryClient: getOrCreateQueryClient,
 })
 export default page.Page
 export const generateMetadata = page.generateMetadata
 ```
 
+The request layout at `app/(request)/pages/layout.tsx` hydrates trusted client
+origins into the shared provider in `app/pages/client-layout.tsx`. Put SSG/ISR
+routes under `app/(static)/pages` with a header-free layout; route groups do not
+change the public `/pages/*` URLs.
+
 Wrap the pages subtree with one `StackProvider`:
 
 ```tsx
-const clientStack = getStackClient(queryClient)
+// app/pages/client-layout.tsx
+"use client"
 
-<StackProvider
-  stack={clientStack}
-  router={nextRouter()}
-  auth={authProvider}
-  overrides={{ blog: { uploadImage } }}
->
-  {children}
-</StackProvider>
+function PagesClientLayout({ children, clientOrigins }: {
+  children: React.ReactNode
+  clientOrigins: StackClientOptions
+}) {
+  const queryClient = getOrCreateQueryClient()
+  const clientStack = useMemo(
+    () => getStackClient(queryClient, clientOrigins),
+    [clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
+  )
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <StackProvider
+        stack={clientStack}
+        router={nextRouter()}
+        auth={authProvider}
+        overrides={{ blog: { uploadImage } }}
+      >
+        {children}
+      </StackProvider>
+    </QueryClientProvider>
+  )
+}
 ```
 
 API, site, and QueryClient runtime belong on the resolved client stack; router

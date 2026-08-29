@@ -1,0 +1,75 @@
+import {
+	filterCredentialForwardingHeaders,
+	resolveTrustedClientOrigins,
+} from "@btst/stack/client/server"
+import type { QueryClient } from "@tanstack/react-query"
+import { createAppClientStack } from "./stack-client"
+
+const requestBoundaryMarker = "BTST_REQUEST_HEADERS_SERVER_MARKER"
+
+interface RequestStackClientOptions {
+	headers: HeadersInit
+	requestOrigin?: string
+}
+
+function configuredApiOrigin() {
+	return (
+		process.env.BTST_API_URL ||
+		{{{browserApiURLExpression}}} ||
+		{{{migrationServerBaseURLExpression}}} ||
+		process.env.BASE_URL
+	)
+}
+
+function configuredSiteOrigin() {
+	return (
+		process.env.BTST_SITE_URL ||
+		{{{browserSiteURLExpression}}} ||
+		{{{migrationServerBaseURLExpression}}} ||
+		process.env.BASE_URL
+	)
+}
+
+function requestOriginFromHeaders(headers: Headers) {
+	const host = (headers.get("x-forwarded-host") || headers.get("host"))
+		?.split(",")[0]
+		?.trim()
+	if (!host) return undefined
+	const protocol =
+		headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || "http"
+	return `${protocol}://${host}`
+}
+
+export function getServerClientOrigins(requestOrigin?: string) {
+	return resolveTrustedClientOrigins({
+		configuredApiOrigin: configuredApiOrigin(),
+		configuredSiteOrigin: configuredSiteOrigin(),
+		requestOrigin,
+		isProduction: process.env.NODE_ENV === "production",
+		apiLabel: "BTST_API_URL, {{{publicApiURLVar}}}, {{{migrationBaseURLVar}}}, or BASE_URL",
+		siteLabel: "BTST_SITE_URL, {{{publicSiteURLVar}}}, {{{migrationBaseURLVar}}}, or BASE_URL",
+	})
+}
+
+export function getServerClientOriginsFromHeaders(headers: HeadersInit) {
+	const requestHeaders = new Headers(headers)
+	return getServerClientOrigins(requestOriginFromHeaders(requestHeaders))
+}
+
+/** Creates a fresh credentialed server stack for one trusted API origin. */
+export function getStackClientForRequest(
+	queryClient: QueryClient,
+	options: RequestStackClientOptions,
+) {
+	let requestHeaders: Headers
+	try {
+		requestHeaders = new Headers(options.headers)
+	} catch {
+		throw new TypeError(`${requestBoundaryMarker}: expected request headers`)
+	}
+	const origins = options.requestOrigin
+		? getServerClientOrigins(options.requestOrigin)
+		: getServerClientOriginsFromHeaders(requestHeaders)
+	const headers = filterCredentialForwardingHeaders(requestHeaders)
+	return createAppClientStack(queryClient, { ...origins, headers })
+}

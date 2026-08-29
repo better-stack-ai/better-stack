@@ -10,6 +10,7 @@ interface PluginSelectorProps {
 	seededPlugins: PluginKey[];
 	onSeedChange: (seeded: PluginKey[]) => void;
 	disabled?: boolean;
+	unsupportedPlugins?: Partial<Record<PluginKey, string>>;
 }
 
 const PLUGIN_DESCRIPTIONS: Record<string, string> = {
@@ -32,6 +33,7 @@ export function PluginSelector({
 	seededPlugins,
 	onSeedChange,
 	disabled,
+	unsupportedPlugins = {},
 }: PluginSelectorProps) {
 	function toggle(key: PluginKey) {
 		if (selected.includes(key)) {
@@ -53,8 +55,10 @@ export function PluginSelector({
 		<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
 			{plugins.map((plugin) => {
 				const isRouteDocs = plugin.key === "route-docs";
+				const unsupportedReason = unsupportedPlugins[plugin.key as PluginKey];
 				const isSelected =
-					isRouteDocs || selected.includes(plugin.key as PluginKey);
+					isRouteDocs ||
+					(!unsupportedReason && selected.includes(plugin.key as PluginKey));
 				const isSeedable =
 					Boolean(plugin.hasSeedData) && isSelected && !isRouteDocs;
 				const isSeeded =
@@ -63,14 +67,18 @@ export function PluginSelector({
 					<button
 						key={plugin.key}
 						type="button"
-						onClick={() => !isRouteDocs && toggle(plugin.key as PluginKey)}
-						disabled={disabled || isRouteDocs}
+						onClick={() =>
+							!isRouteDocs &&
+							!unsupportedReason &&
+							toggle(plugin.key as PluginKey)
+						}
+						disabled={disabled || isRouteDocs || Boolean(unsupportedReason)}
 						className={[
 							"flex items-start gap-3 rounded-lg border p-3 text-left transition-all",
 							isSelected
 								? "border-blue-500 bg-blue-50 dark:bg-blue-950/40 dark:border-blue-400"
 								: "border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600",
-							disabled
+							disabled || unsupportedReason
 								? "opacity-60 cursor-not-allowed"
 								: isRouteDocs
 									? "cursor-default"
@@ -113,10 +121,20 @@ export function PluginSelector({
 										(always included)
 									</span>
 								)}
+								{unsupportedReason && (
+									<span className="ml-1.5 text-xs text-zinc-400">
+										(unavailable in WebContainer)
+									</span>
+								)}
 							</span>
 							{PLUGIN_DESCRIPTIONS[plugin.key] && (
 								<span className="block text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
 									{PLUGIN_DESCRIPTIONS[plugin.key]}
+								</span>
+							)}
+							{unsupportedReason && (
+								<span className="block text-xs text-amber-600 dark:text-amber-400 mt-1">
+									{unsupportedReason}
 								</span>
 							)}
 							{isSeedable && (

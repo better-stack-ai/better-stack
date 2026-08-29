@@ -65,6 +65,8 @@
     "build": "unbuild --clean",
     "stub": "unbuild --stub",
     "dev": "tsx src/index.ts",
+    "legacy-next-hashes:check": "node scripts/generate-legacy-next-render-hashes.mjs --check",
+    "legacy-next-hashes:generate": "node scripts/generate-legacy-next-render-hashes.mjs",
     "typecheck": "tsc --project tsconfig.json",
     "test": "vitest run",
     "test:init": "bash scripts/test-init.sh"

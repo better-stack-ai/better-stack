@@ -1,5 +1,5 @@
 import { createMemoryAdapter } from "@btst/adapter-memory";
-import { stack } from "@btst/stack";
+import { createBackendStack } from "@btst/stack";
 import { createServerAuth } from "@btst/stack/authorization/server";
 import {
 	blogBackendPlugin,
@@ -67,7 +67,7 @@ const blogLifecycleHooks: BlogBackendHooks = {
 	},
 };
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
 	basePath: "/api/example-auth",
 	auth: exampleServerAuth,
 	plugins: { blog: blogBackendPlugin({ hooks: blogLifecycleHooks }) },

@@ -5,6 +5,7 @@ import type {
 	AnyAuthorizationContract,
 } from "../authorization";
 import type { StackIdentity } from "../shared/auth-types";
+import type { MaybePromise } from "../shared/types";
 import {
 	type HeadersFrameworkIdentitySource,
 	resolveInitialIdentityFromHeaders,
@@ -14,6 +15,14 @@ import {
 export interface NextClientLayoutProps<TIdentity extends StackIdentity> {
 	/** Validated request identity. `null` means the server resolved anonymous. */
 	initialIdentity: TIdentity | null;
+	/** Deployment-trusted API/site origins serialized for the client provider. */
+	clientOrigins?: {
+		/** Trusted destination for browser API requests. */
+		apiOrigin: string;
+		/** Trusted public origin used to build page and asset URLs. */
+		siteOrigin: string;
+	};
+	/** Nested route content rendered inside the client provider. */
 	children?: ReactNode;
 }
 
@@ -27,6 +36,14 @@ export interface CreateNextLayoutOptions<
 	ClientLayout: ComponentType<
 		NextClientLayoutProps<AuthorizationContractIdentity<TContract>>
 	>;
+	/**
+	 * Resolves deployment-trusted API/site origins from the original request
+	 * headers. The returned browser-safe values are serialized with identity.
+	 */
+	resolveClientOrigins?: (requestHeaders: Headers) => MaybePromise<{
+		apiOrigin: string;
+		siteOrigin: string;
+	}>;
 }
 
 /**
@@ -49,8 +66,12 @@ export function createNextLayout<TContract extends AnyAuthorizationContract>(
 			options.auth,
 			{ headers: requestHeaders },
 		);
+		const clientOrigins = await options.resolveClientOrigins?.(requestHeaders);
 		return (
-			<options.ClientLayout initialIdentity={initialIdentity}>
+			<options.ClientLayout
+				initialIdentity={initialIdentity}
+				clientOrigins={clientOrigins}
+			>
 				{children}
 			</options.ClientLayout>
 		);

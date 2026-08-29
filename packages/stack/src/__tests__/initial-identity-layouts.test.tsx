@@ -40,17 +40,27 @@ describe("framework identity layout helpers", () => {
 		}));
 		const layout = createNextLayout({
 			auth: { contract: identityContract, getIdentityFromHeaders: getIdentity },
-			ClientLayout: ({ initialIdentity, children }) => (
-				<section data-user={initialIdentity?.id ?? "anonymous"}>
+			ClientLayout: ({ clientOrigins, initialIdentity, children }) => (
+				<section
+					data-api-origin={clientOrigins?.apiOrigin}
+					data-site-origin={clientOrigins?.siteOrigin}
+					data-user={initialIdentity?.id ?? "anonymous"}
+				>
 					{children}
 				</section>
 			),
+			resolveClientOrigins: () => ({
+				apiOrigin: "https://api.managed.example",
+				siteOrigin: "https://app.example",
+			}),
 		});
 
 		const tree = await layout.Layout({ children: <span>sibling page</span> });
 		const html = renderToString(tree);
 
 		expect(html).toContain('data-user="next-user"');
+		expect(html).toContain('data-api-origin="https://api.managed.example"');
+		expect(html).toContain('data-site-origin="https://app.example"');
 		expect(html).toContain("sibling page");
 		expect(nextHeaders).toHaveBeenCalledOnce();
 		expect(getIdentity).toHaveBeenCalledOnce();
@@ -128,8 +138,8 @@ describe("framework identity layout helpers", () => {
 		const request = new Request("http://test.local/pages", {
 			headers: { "x-user-id": "tanstack-user" },
 		});
-		const getInitialIdentity = vi.fn(() =>
-			resolveTanStackInitialIdentity({
+		const getInitialIdentity = vi.fn(async () => ({
+			...(await resolveTanStackInitialIdentity({
 				auth: {
 					contract: identityContract,
 					getIdentity: (currentRequest: Request) => ({
@@ -138,14 +148,22 @@ describe("framework identity layout helpers", () => {
 					}),
 				},
 				request,
-			}),
-		);
+			})),
+			siteOrigin: "http://trusted.test",
+		}));
 		const layout = createTanStackLayout({ getInitialIdentity });
+		const explicitlyTypedLayout = createTanStackLayout<Identity>({
+			getInitialIdentity,
+		});
 
 		await expect(layout.loader()).resolves.toEqual({
 			initialIdentity: { id: "tanstack-user", role: "admin" },
+			siteOrigin: "http://trusted.test",
 		});
-		expect(getInitialIdentity).toHaveBeenCalledOnce();
+		await expect(explicitlyTypedLayout.loader()).resolves.toMatchObject({
+			initialIdentity: { id: "tanstack-user" },
+		});
+		expect(getInitialIdentity).toHaveBeenCalledTimes(2);
 	});
 
 	it("rejects invalid and non-serializable TanStack server identities", async () => {

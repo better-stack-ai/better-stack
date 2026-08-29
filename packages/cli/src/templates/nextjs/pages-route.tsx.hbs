@@ -1,11 +1,15 @@
 import { createNextPage } from "@btst/stack/next"
+import { headers } from "next/headers"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
-import { getStackClient } from "{{alias}}lib/stack-client"
+import { getStackClientForRequest } from "{{alias}}lib/stack-client.server"
 
 export const dynamic = "force-dynamic"
 
 const page = createNextPage({
-	getStackClient: (queryClient) => getStackClient(queryClient),
+	getStackClient: async (queryClient) =>
+		getStackClientForRequest(queryClient, {
+			headers: new Headers(await headers()),
+		}),
 	getQueryClient: getOrCreateQueryClient,
 })
 export default page.Page

@@ -17,28 +17,20 @@ interface BuildScaffoldPlanInput {
 	cssFile: string;
 }
 
-const CANONICAL_CLIENT_PLUGIN_KEYS = new Set<PluginKey>([
-	"blog",
-	"ai-chat",
-	"cms",
-	"ui-builder",
-	"comments",
-	"form-builder",
-	"kanban",
-	"media",
-	"route-docs",
-]);
-
 function getFrameworkPaths(framework: Framework, cssFile: string) {
 	if (framework === "nextjs") {
 		const prefix = cssFile.startsWith("src/") ? "src/" : "";
 		return {
 			stackPath: `${prefix}lib/stack.ts`,
 			stackClientPath: `${prefix}lib/stack-client.tsx`,
+			stackClientServerPath: `${prefix}lib/stack-client.server.ts`,
+			stackClientOriginsPath: undefined,
 			queryClientPath: `${prefix}lib/query-client.ts`,
 			apiRoutePath: `${prefix}app/api/data/[[...all]]/route.ts`,
-			pageRoutePath: `${prefix}app/pages/[[...all]]/page.tsx`,
-			pagesLayoutPath: `${prefix}app/pages/layout.tsx`,
+			pageRoutePath: `${prefix}app/(request)/pages/[[...all]]/page.tsx`,
+			pagesLayoutPath: `${prefix}app/(request)/pages/layout.tsx`,
+			pagesStaticLayoutPath: `${prefix}app/(static)/pages/layout.tsx`,
+			pagesClientLayoutPath: `${prefix}app/pages/client-layout.tsx`,
 			layoutPatchTarget: `${prefix}app/layout.tsx`,
 		};
 	}
@@ -47,10 +39,14 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 		return {
 			stackPath: "app/lib/stack.ts",
 			stackClientPath: "app/lib/stack-client.tsx",
+			stackClientServerPath: "app/lib/stack-client.server.ts",
+			stackClientOriginsPath: undefined,
 			queryClientPath: "app/lib/query-client.ts",
 			apiRoutePath: "app/routes/api/data/$.ts",
 			pageRoutePath: "app/routes/pages/$.tsx",
 			pagesLayoutPath: "app/routes/pages/_layout.tsx",
+			pagesStaticLayoutPath: undefined,
+			pagesClientLayoutPath: undefined,
 			layoutPatchTarget: "app/root.tsx",
 		};
 	}
@@ -58,10 +54,14 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 	return {
 		stackPath: "src/lib/stack.ts",
 		stackClientPath: "src/lib/stack-client.tsx",
+		stackClientServerPath: "src/lib/stack-client.server.ts",
+		stackClientOriginsPath: "src/lib/stack-client.origins.ts",
 		queryClientPath: "src/lib/query-client.ts",
 		apiRoutePath: "src/routes/api/data/$.ts",
 		pageRoutePath: "src/routes/pages/$.tsx",
 		pagesLayoutPath: "src/routes/pages/route.tsx",
+		pagesStaticLayoutPath: undefined,
+		pagesClientLayoutPath: undefined,
 		layoutPatchTarget: "src/routes/__root.tsx",
 	};
 }
@@ -71,13 +71,38 @@ function getPublicSiteURLVar(framework: Framework) {
 	return "VITE_PUBLIC_SITE_URL";
 }
 
+function getPublicApiURLVar(framework: Framework) {
+	if (framework === "nextjs") return "NEXT_PUBLIC_API_URL";
+	return "VITE_PUBLIC_API_URL";
+}
+
+function getMigrationBaseURLVar(framework: Framework) {
+	if (framework === "nextjs") return "NEXT_PUBLIC_BASE_URL";
+	return "VITE_BASE_URL";
+}
+
 function getBrowserSiteURLExpression(framework: Framework) {
 	if (framework === "nextjs") return "process.env.NEXT_PUBLIC_SITE_URL";
 	return "import.meta.env.VITE_PUBLIC_SITE_URL";
 }
 
+function getBrowserApiURLExpression(framework: Framework) {
+	if (framework === "nextjs") return "process.env.NEXT_PUBLIC_API_URL";
+	return "import.meta.env.VITE_PUBLIC_API_URL";
+}
+
+function getMigrationBrowserBaseURLExpression(framework: Framework) {
+	if (framework === "nextjs") return "process.env.NEXT_PUBLIC_BASE_URL";
+	return "import.meta.env.VITE_BASE_URL";
+}
+
+function getMigrationServerBaseURLExpression(framework: Framework) {
+	if (framework === "nextjs") return "process.env.NEXT_PUBLIC_BASE_URL";
+	return "import.meta.env.VITE_BASE_URL";
+}
+
 function getPagesLayoutFilePath(framework: Framework): string {
-	if (framework === "nextjs") return "app/pages/layout.tsx";
+	if (framework === "nextjs") return "app/pages/client-layout.tsx";
 	if (framework === "react-router") return "app/routes/pages/_layout.tsx";
 	return "src/routes/pages/route.tsx";
 }
@@ -111,10 +136,6 @@ function buildPluginTemplateContext(
 			Boolean(m.clientImportPath) &&
 			Boolean(m.clientSymbol),
 	);
-	const hasLegacyClientPlugins = clientMetas.some(
-		(m) => !CANONICAL_CLIENT_PLUGIN_KEYS.has(m.key),
-	);
-
 	const backendImportLines = backendMetas
 		.map((m) => `import { ${m.backendSymbol} } from "${m.backendImportPath}"`)
 		.join("\n");
@@ -132,20 +153,22 @@ function buildPluginTemplateContext(
 			backendImportLines,
 			hasAiChat ? `import { openai } from "@ai-sdk/openai"` : "",
 			hasCms ? `import { z } from "zod"` : "",
+			hasMedia
+				? `import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local"`
+				: "",
 		]
 			.filter(Boolean)
 			.join("\n"),
 		clientImports: clientMetas
 			.map((m) => `import { ${m.clientSymbol} } from "${m.clientImportPath}"`)
 			.join("\n"),
-		hasLegacyClientPlugins,
 		backendEntries: metas
 			.map((m) => {
 				if (!m.backendSymbol) {
 					return "";
 				}
 				if (m.key === "ai-chat") {
-					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), access: "public" as const }),`;
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), access: "public" }),`;
 				}
 				if (m.key === "cms") {
 					const articleType = `{
@@ -168,7 +191,7 @@ function buildPluginTemplateContext(
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ allowPosting: false }),`;
 				}
 				if (m.key === "media") {
-					return `\t\t${m.configKey}: ${m.backendSymbol}({ storageAdapter: undefined as any }),`;
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ storageAdapter: localAdapter() }),`;
 				}
 				if (m.key === "ui-builder") {
 					return "";
@@ -180,20 +203,14 @@ function buildPluginTemplateContext(
 		clientEntries: clientMetas
 			.map((m) => {
 				if (m.key === "ai-chat") {
-					return `\t\t\t${m.configKey}: ${m.clientSymbol}({ mode: "public" as const }),`;
+					return `\t\t\t${m.configKey}: ${m.clientSymbol}({ mode: "public" }),`;
 				}
-				if (CANONICAL_CLIENT_PLUGIN_KEYS.has(m.key)) {
-					return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
-				}
-				const siteBase = "/pages";
-				return `\t\t\t${m.configKey}: ${m.clientSymbol}({
-\t\t\t\tapiBaseURL: baseURL,
-\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\tsiteBaseURL: baseURL,
-\t\t\t\tsiteBasePath: "${siteBase}",
-\t\t\t\tqueryClient,
-\t\t\t}),`;
+				return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
 			})
+			.join("\n"),
+		clientApiEndpointEntries: clientMetas
+			.filter((m) => m.backendSymbol && m.key !== "ui-builder")
+			.map((m) => `\t\t\t\t${m.configKey}: crossOriginApiEndpoint,`)
 			.join("\n"),
 		pagesLayoutOverrides: clientMetas
 			.map((m) => {
@@ -205,14 +222,14 @@ function buildPluginTemplateContext(
 					return "";
 				}
 				if (m.key === "blog") {
-					return `\t\t\t\t\t"${m.key}": {
+					return `\t\t\t\t\t${m.configKey}: {
 \t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in ${layoutFile}")
 \t\t\t\t\t\t},
 \t\t\t\t\t},`;
 				}
 				if (m.key === "kanban") {
-					return `\t\t\t\t\t"${m.key}": {
+					return `\t\t\t\t\t${m.configKey}: {
 \t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement kanban.uploadImage override in ${layoutFile}")
 \t\t\t\t\t\t},
@@ -326,8 +343,16 @@ export async function buildScaffoldPlan(
 
 	const sharedContext = {
 		alias: input.alias,
-		providerApiLiteral: '{{ baseURL, basePath: "/api/data" }}',
+		browserApiURLExpression: getBrowserApiURLExpression(input.framework),
 		browserSiteURLExpression: getBrowserSiteURLExpression(input.framework),
+		migrationBrowserBaseURLExpression: getMigrationBrowserBaseURLExpression(
+			input.framework,
+		),
+		migrationServerBaseURLExpression: getMigrationServerBaseURLExpression(
+			input.framework,
+		),
+		migrationBaseURLVar: getMigrationBaseURLVar(input.framework),
+		publicApiURLVar: getPublicApiURLVar(input.framework),
 		publicSiteURLVar: getPublicSiteURLVar(input.framework),
 		useGlobalSingleton:
 			input.framework === "nextjs" && input.adapter === "memory",
@@ -364,6 +389,26 @@ export async function buildScaffoldPlan(
 			description: "BTST client stack configuration",
 		},
 		{
+			path: frameworkPaths.stackClientServerPath,
+			content: await renderTemplate(
+				"shared/lib/stack-client.server.ts.hbs",
+				sharedContext,
+			),
+			description: "BTST credentialed request stack configuration",
+		},
+		...(frameworkPaths.stackClientOriginsPath
+			? [
+					{
+						path: frameworkPaths.stackClientOriginsPath,
+						content: await renderTemplate(
+							"tanstack/stack-client.origins.ts.hbs",
+							sharedContext,
+						),
+						description: "BTST trusted client origin server function",
+					},
+				]
+			: []),
+		{
 			path: frameworkPaths.queryClientPath,
 			content: await renderTemplate(
 				"shared/lib/query-client.ts.hbs",
@@ -397,6 +442,28 @@ export async function buildScaffoldPlan(
 				sharedContext,
 			),
 			description: "BTST pages layout wrapper",
+		});
+	}
+
+	if (frameworkPaths.pagesStaticLayoutPath) {
+		files.push({
+			path: frameworkPaths.pagesStaticLayoutPath,
+			content: await renderTemplate(
+				"nextjs/pages-static-layout.tsx.hbs",
+				sharedContext,
+			),
+			description: "BTST static pages layout wrapper",
+		});
+	}
+
+	if (frameworkPaths.pagesClientLayoutPath) {
+		files.push({
+			path: frameworkPaths.pagesClientLayoutPath,
+			content: await renderTemplate(
+				"nextjs/pages-client-layout.tsx.hbs",
+				sharedContext,
+			),
+			description: "BTST pages client provider",
 		});
 	}
 
@@ -465,7 +532,7 @@ export async function buildScaffoldPlan(
 	if (input.framework === "nextjs") {
 		if (pluginContext.hasBlog) {
 			files.push({
-				path: `${prefix}app/pages/ssg-blog/page.tsx`,
+				path: `${prefix}app/(static)/pages/ssg-blog/page.tsx`,
 				content: await renderTemplate(
 					"nextjs/ssg-blog-list.tsx.hbs",
 					sharedContext,
@@ -473,7 +540,7 @@ export async function buildScaffoldPlan(
 				description: "SSG Blog list page",
 			});
 			files.push({
-				path: `${prefix}app/pages/ssg-blog/[slug]/page.tsx`,
+				path: `${prefix}app/(static)/pages/ssg-blog/[slug]/page.tsx`,
 				content: await renderTemplate(
 					"nextjs/ssg-blog-post.tsx.hbs",
 					sharedContext,
@@ -483,14 +550,14 @@ export async function buildScaffoldPlan(
 		}
 		if (pluginContext.hasCms) {
 			files.push({
-				path: `${prefix}app/pages/ssg-cms/[typeSlug]/page.tsx`,
+				path: `${prefix}app/(static)/pages/ssg-cms/[typeSlug]/page.tsx`,
 				content: await renderTemplate("nextjs/ssg-cms.tsx.hbs", sharedContext),
 				description: "SSG CMS content list page",
 			});
 		}
 		if (pluginContext.hasFormBuilder) {
 			files.push({
-				path: `${prefix}app/pages/ssg-forms/page.tsx`,
+				path: `${prefix}app/(static)/pages/ssg-forms/page.tsx`,
 				content: await renderTemplate(
 					"nextjs/ssg-forms.tsx.hbs",
 					sharedContext,
@@ -500,7 +567,7 @@ export async function buildScaffoldPlan(
 		}
 		if (pluginContext.hasKanban) {
 			files.push({
-				path: `${prefix}app/pages/ssg-kanban/page.tsx`,
+				path: `${prefix}app/(static)/pages/ssg-kanban/page.tsx`,
 				content: await renderTemplate(
 					"nextjs/ssg-kanban.tsx.hbs",
 					sharedContext,
@@ -520,6 +587,14 @@ export async function buildScaffoldPlan(
 					sharedContext,
 				),
 				description: "Public AI chat page",
+			});
+			files.push({
+				path: `${prefix}app/public-chat/client.tsx`,
+				content: await renderTemplate(
+					"nextjs/public-chat-client.tsx.hbs",
+					sharedContext,
+				),
+				description: "Public AI chat client component",
 			});
 		} else if (input.framework === "react-router") {
 			files.push({
@@ -552,6 +627,14 @@ export async function buildScaffoldPlan(
 					sharedContext,
 				),
 				description: "Public form demo page",
+			});
+			files.push({
+				path: `${prefix}app/form-demo/[slug]/client.tsx`,
+				content: await renderTemplate(
+					"nextjs/form-demo-client.tsx.hbs",
+					sharedContext,
+				),
+				description: "Public form demo client component",
 			});
 		} else if (input.framework === "react-router") {
 			files.push({

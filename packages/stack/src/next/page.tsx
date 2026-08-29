@@ -49,16 +49,29 @@ export interface CreateNextPageOptions {
  *
  * @example
  * ```tsx
- * // app/pages/[[...all]]/page.tsx
+ * // app/(request)/pages/[[...all]]/page.tsx
  * import { createNextPage } from "@btst/stack/next";
+ * import { headers } from "next/headers";
  * import { getOrCreateQueryClient } from "@/lib/query-client";
- * import { getStackClient } from "@/lib/stack-client";
+ * import { getStackClientForRequest } from "@/lib/stack-client.server";
  *
  * export const dynamic = "force-dynamic";
- * const page = createNextPage({ getStackClient, getQueryClient: getOrCreateQueryClient });
+ * const page = createNextPage({
+ *   getStackClient: async (queryClient) =>
+ *     getStackClientForRequest(queryClient, {
+ *       headers: new Headers(await headers()),
+ *     }),
+ *   getQueryClient: getOrCreateQueryClient,
+ * });
  * export default page.Page;
  * export const generateMetadata = page.generateMetadata;
  * ```
+ *
+ * Keep this request-aware catch-all under `app/(request)/pages`. Put SSG/ISR
+ * pages under `app/(static)/pages`; both groups retain `/pages/*` URLs. Their
+ * layouts should wrap the shared client provider from
+ * `app/pages/client-layout.tsx`, with request origins resolved only in the
+ * request group.
  */
 export function createNextPage(options: CreateNextPageOptions) {
 	const {

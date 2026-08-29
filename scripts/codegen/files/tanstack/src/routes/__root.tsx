@@ -14,8 +14,11 @@ import { ThemeProvider } from "next-themes";
 import { Navbar } from "@/components/navbar";
 import { Toaster } from "sonner";
 import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context";
+import { ClientOriginsProvider } from "@/lib/client-origins";
+import { getTrustedClientOrigins } from "@/lib/stack-client.origins";
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
+	loader: async () => getTrustedClientOrigins(),
 	head: () => ({
 		meta: [
 			{
@@ -82,10 +85,13 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 });
 
 function RootComponent() {
+	const origins = Route.useLoaderData();
 	return (
-		<RootDocument>
-			<Outlet />
-		</RootDocument>
+		<ClientOriginsProvider origins={origins}>
+			<RootDocument>
+				<Outlet />
+			</RootDocument>
+		</ClientOriginsProvider>
 	);
 }
 

@@ -74,6 +74,11 @@ export interface RouteDocsClientConfig {
 	title?: string;
 	/** Description for the documentation page. */
 	description?: string;
+	/** Optional replacement for the Route Docs page. */
+	pageComponents?: {
+		/** Replaces the interactive route documentation page. */
+		docs?: ComponentType<DocsPageProps>;
+	};
 }
 
 interface ResolvedRouteDocsClientConfig extends RouteDocsClientConfig {
@@ -182,6 +187,7 @@ function resolveRouteDocsClientConfig(
 	return {
 		title: config.title,
 		description: config.description,
+		pageComponents: config.pageComponents,
 		queryClient: runtime.queryClient,
 		siteBaseURL: runtime.site.baseURL,
 		siteBasePath: runtime.site.basePath,
@@ -265,15 +271,19 @@ function createResolvedRouteDocsPlugin(config: ResolvedRouteDocsClientConfig) {
 			const resolvedContext = context ?? null;
 			return {
 				docs: defineRoute("/route-docs", {
-					page: () => (
-						<DocsPageComponent
-							title={config.title}
-							description={config.description}
-							siteBaseURL={config.siteBaseURL}
-							siteBasePath={config.siteBasePath}
-							queryKey={resolveRouteDocsQueryKey(config, resolvedContext)}
-						/>
-					),
+					page: () => {
+						const PageComponent =
+							config.pageComponents?.docs ?? DocsPageComponent;
+						return (
+							<PageComponent
+								title={config.title}
+								description={config.description}
+								siteBaseURL={config.siteBaseURL}
+								siteBasePath={config.siteBasePath}
+								queryKey={resolveRouteDocsQueryKey(config, resolvedContext)}
+							/>
+						);
+					},
 					loading: DocsPageSkeleton,
 					error: DocsErrorComponent,
 					loader: createRouteDocsLoader(config, resolvedContext),

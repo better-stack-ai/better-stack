@@ -42,6 +42,7 @@ command -v pnpm >/dev/null 2>&1 || die "pnpm not found"
 command -v node >/dev/null 2>&1 || die "node not found"
 NODE_VERSION=$(node --version | cut -d. -f1 | tr -d 'v')
 [ "$NODE_VERSION" -ge 22 ] || warn "Node.js v22+ recommended (current: $(node --version))"
+node "$SCRIPT_DIR/assert-overlay-contracts.mjs"
 success "Prerequisites OK"
 
 # ── Guard: already exists ────────────────────────────────────────────────────
@@ -97,24 +98,12 @@ cd "$DEST"
 pnpm dlx shadcn@latest add checkbox label skeleton input sonner dropdown-menu separator empty field item --yes --overwrite
 success "shadcn components added"
 
-# Request-aware identity hydration and full-route static rendering cannot share
-# one Next.js layout. Preserve the generated SSG/ISR pages in a static route
-# group; the request group is supplied by the E2E overlay below.
-step "Separating request-aware and static page route groups"
-STATIC_PAGES_DIR="$DEST/app/(static)/pages"
-mkdir -p "$STATIC_PAGES_DIR"
-for static_route in ssg-blog ssg-cms ssg-forms ssg-kanban; do
-  static_source="$DEST/app/pages/$static_route"
-  if [ -d "$static_source" ]; then
-    mv "$static_source" "$STATIC_PAGES_DIR/$static_route"
-  fi
-done
-rm -f "$DEST/app/pages/layout.tsx"
-GENERATED_PAGES_ROUTE="$DEST/app/pages/[[...all]]"
-if [ -d "$GENERATED_PAGES_ROUTE" ]; then
-  rm -r "$GENERATED_PAGES_ROUTE"
-fi
-success "Request-aware and static page route groups separated"
+# Request-aware hydration and SSG/ISR use distinct generated layouts. The E2E
+# overlay below replaces those files in place without moving generated routes.
+step "Verifying generated request-aware and static page route groups"
+test -d "$DEST/app/(request)/pages/[[...all]]"
+test -d "$DEST/app/(static)/pages"
+success "Request-aware and static page route groups verified"
 
 # ── Step 5: Copy E2E overlay files ────────────────────────────────────────────
 

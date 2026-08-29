@@ -6,14 +6,10 @@ import { StackProvider } from "@btst/stack/context";
 import { tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
+import { useMemo } from "react";
 import type { CMSTypes } from "@/lib/cms-schemas";
-
-// Get base URL function
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? import.meta.env.VITE_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3007";
+import { getCmsBrowserClientStack } from "@/lib/stack-client";
+import { useClientOrigins } from "@/lib/client-origins";
 
 // Mock file upload function
 async function mockUploadFile(file: File): Promise<string> {
@@ -22,10 +18,6 @@ async function mockUploadFile(file: File): Promise<string> {
 	}
 	return "https://example-files.online-convert.com/document/txt/example.txt";
 }
-
-type PluginOverrides = {
-	cms: CMSPluginOverrides;
-};
 
 export const Route = createFileRoute("/cms-example")({
 	component: CMSExamplePage,
@@ -191,15 +183,18 @@ function CMSExampleContent() {
 }
 
 function CMSExamplePage() {
+	const origins = useClientOrigins();
 	const context = Route.useRouteContext();
-	const baseURL = getBaseURL();
+	const stack = useMemo(
+		() => getCmsBrowserClientStack(context.queryClient, origins),
+		[context.queryClient, origins.apiOrigin, origins.siteOrigin],
+	);
 
 	return (
 		<QueryClientProvider client={context.queryClient}>
-			<StackProvider<PluginOverrides>
-				basePath="/cms-example"
+			<StackProvider
+				stack={stack}
 				router={tanstackRouter()}
-				api={{ baseURL, basePath: "/api/data" }}
 				overrides={{
 					cms: {
 						uploadImage: mockUploadFile,

@@ -2,7 +2,18 @@ import { createMemoryAdapter as createRawMemoryAdapter } from "@btst/adapter-mem
 import type { Adapter } from "@btst/stack/plugins/api";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+if (typeof window !== "undefined") {
+	throw new Error(
+		"BTST_SERVER_STORAGE_ADAPTER_MARKER: storage adapter in browser",
+	);
+}
+
 function serializeAdapter(adapter: Adapter): Adapter {
+	if (typeof adapter.create !== "function") {
+		throw new Error(
+			"BTST_SERVER_STORAGE_ADAPTER_MARKER: invalid storage adapter",
+		);
+	}
 	let tail = Promise.resolve();
 	const lockContext = new AsyncLocalStorage<{ active: boolean }>();
 	const withLock = async <T>(run: () => Promise<T>): Promise<T> => {

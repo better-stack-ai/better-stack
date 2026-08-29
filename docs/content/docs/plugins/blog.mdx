@@ -138,21 +138,24 @@ through a Client Component prop.
 
 <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
   <Tab value="next-js">
-    ```tsx title="app/pages/[[...all]]/layout.tsx"
+    ```tsx title="app/pages/client-layout.tsx"
     "use client"
 
-    import { useMemo, useState } from "react"
+    import { useMemo } from "react"
     import { QueryClientProvider } from "@tanstack/react-query"
     import { StackProvider } from "@btst/stack/context"
     import { nextRouter } from "@btst/stack/next"
-    import { getStackClient } from "@/lib/stack-client"
+    import { getStackClient, type StackClientOptions } from "@/lib/stack-client"
     import { getOrCreateQueryClient } from "@/lib/query-client"
 
-    export default function Layout({ children }) {
-      const [queryClient] = useState(() => getOrCreateQueryClient())
+    export default function Layout({ children, clientOrigins }: {
+      children: React.ReactNode
+      clientOrigins: StackClientOptions
+    }) {
+      const queryClient = getOrCreateQueryClient()
       const clientStack = useMemo(
-        () => getStackClient(queryClient),
-        [queryClient],
+        () => getStackClient(queryClient, clientOrigins),
+        [clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
       )
       
       return (

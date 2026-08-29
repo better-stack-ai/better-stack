@@ -2,28 +2,20 @@ import { createTanStackPageOptions } from "@btst/stack/tanstack";
 import { createFileRoute } from "@tanstack/react-router";
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
+import type { QueryClient } from "@tanstack/react-query";
 import { getStackClient } from "@/lib/stack-client";
-import { serverAuth } from "@/lib/authorization.server";
+import { getRequestClientStack } from "@/lib/stack-client.server";
 import { getInitialIdentity } from "@/lib/authorization.identity";
 import type { MyRouterContext } from "@/router";
 
-const getLoaderAuthContext = createIsomorphicFn()
-	.server(async () => {
+const getLoaderClientStack = createIsomorphicFn()
+	.server(async (queryClient: QueryClient) => {
 		const request = getRequest();
-		const identity = await serverAuth.getIdentity(request);
-		return {
-			headers: request.headers,
-			currentUserId: identity?.id,
-			identity: identity ?? undefined,
-		};
+		return getRequestClientStack(queryClient, request);
 	})
-	.client(async () => {
-		const { initialIdentity } = await getInitialIdentity();
-		return {
-			headers: undefined,
-			currentUserId: initialIdentity?.id,
-			identity: initialIdentity ?? undefined,
-		};
+	.client(async (queryClient: QueryClient) => {
+		const { apiOrigin, siteOrigin } = await getInitialIdentity();
+		return getStackClient(queryClient, { apiOrigin, siteOrigin });
 	});
 
 export const Route = createFileRoute("/pages/$")(
@@ -31,12 +23,7 @@ export const Route = createFileRoute("/pages/$")(
 		getStackClient,
 		getLoaderStackClient: async (queryClient, { context }) => {
 			void context.queryClient.getQueryCache();
-			const { headers, currentUserId, identity } = await getLoaderAuthContext();
-			return getStackClient(queryClient, {
-				headers,
-				currentUserId,
-				identity,
-			});
+			return getLoaderClientStack(queryClient);
 		},
 	}),
 );

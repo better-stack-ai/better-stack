@@ -35,24 +35,24 @@ See [REFERENCE.md](REFERENCE.md) for full code shapes for every file.
   - Pass hooks and config in the backend plugin options object (e.g. `blogBackendPlugin({ hooks })`).
   - Use camelCase keys for plugins that have compound names: `aiChat`, `formBuilder`, `uiBuilder`.
 - **Client** (`lib/stack-client.tsx`): import `{plugin}ClientPlugin` from `@btst/stack/plugins/{plugin}/client`.
-  - Blog and new v3 client definitions receive only plugin-specific options such as `seo`, hooks, or page components. Configure `api`, `site`, and `queryClient` once on `createClientStack()`; its resolver binds that runtime to every definition.
+  - Client definitions receive only plugin-specific options such as `seo`, hooks, or page components. Configure `api`, `site`, and `queryClient` once on `createClientStack()`; its resolver binds that runtime to every definition.
   - Pass incoming SSR request headers through the top-level `createClientStack({ api: { headers } })` configuration.
-  - Some unmigrated first-party plugins temporarily still accept shared runtime fields. That compatibility shape lasts only until their migration tickets land; do not copy it into new definitions.
+  - Resolve one trusted API/site origin snapshot on the server and hydrate it into the provider. A managed backend may use a distinct `BTST_API_URL`; never reconstruct it from `window.location` after hydration.
 
 ### 3) Configure backend stack
 
-- Call `stack({ basePath: "/api/data", plugins: { ... }, adapter: (db) => createXxxAdapter(..., db, {}), auth: serverAuth })` when application authorization is enabled.
+- Call `createBackendStack({ basePath: "/api/data", plugins: { ... }, adapter: (db) => createXxxAdapter(..., db, {}), auth: serverAuth })` when application authorization is enabled.
 - Create `serverAuth` with `createServerAuth({ authorization, getIdentity })`. Omitting `auth` intentionally preserves permissive no-authorization compatibility; plugin labels such as AI Chat's `access: "authorized"` are not an enforcement boundary by themselves.
 - Export `handler` and `dbSchema`.
 - **Memory adapter + Next.js**: pin to `globalThis` to avoid two instances in the same process:
   ```ts
-  function createStack() {
-    return stack({ ... })
+  function createAppStack() {
+    return createBackendStack({ ... })
   }
 
-  type AppStack = ReturnType<typeof createStack>
+  type AppStack = ReturnType<typeof createAppStack>
   const g = globalThis as typeof globalThis & { __btst__?: AppStack }
-  export const myStack = g.__btst__ ??= createStack()
+  export const myStack = g.__btst__ ??= createAppStack()
   export const { handler, dbSchema } = myStack
   ```
 
@@ -104,9 +104,9 @@ Do not duplicate — the patcher and manual edits must both be idempotent.
 ## Validation checklist
 
 - `stack.ts` exports both `handler` and `dbSchema`.
-- Protected applications pass `createServerAuth(...)` to `stack({ auth })`; omitted auth is intentionally permissive.
+- Protected applications pass `createServerAuth(...)` to `createBackendStack({ auth })`; omitted auth is intentionally permissive.
 - Every plugin is registered on both backend and client sides.
-- API `basePath` and `stack({ basePath })` match exactly.
+- API `basePath` and `createBackendStack({ basePath })` match exactly.
 - API and page catch-all routes use the framework entry factories.
 - Pages layout is `"use client"` and wraps `QueryClientProvider` then `StackProvider`.
 - The resolved client stack's `site.basePath` matches the `/pages` catch-all route prefix.

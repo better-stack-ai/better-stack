@@ -1,3 +1,5 @@
+import { headers } from "next/headers"
+import { getServerClientOriginsFromHeaders } from "{{alias}}lib/stack-client.server"
 import PreviewPageClient from "./client"
 
 /**
@@ -9,6 +11,7 @@ export default async function PreviewPage({
 }: {
 	params: Promise<{ slug: string }>
 }) {
-	const { slug } = await params
-	return <PreviewPageClient slug={slug} />
+	const [{ slug }, requestHeaders] = await Promise.all([params, headers()])
+	const clientOrigins = getServerClientOriginsFromHeaders(requestHeaders)
+	return <PreviewPageClient slug={slug} clientOrigins={clientOrigins} />
 }

@@ -8,22 +8,13 @@ import { StackProvider } from "@btst/stack/context";
 import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import { getOrCreateQueryClient } from "@/lib/query-client";
+import { getCmsBrowserClientStack } from "@/lib/stack-client";
+import { useClientOrigins } from "@/lib/client-origins";
 import type { CMSTypes } from "@/lib/cms-schemas";
 import { ArrowLeft } from "lucide-react";
-
-// Get base URL
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3000";
-
-type PluginOverrides = {
-	cms: CMSPluginOverrides;
-};
 
 function CategoryContent({ categoryId }: { categoryId: string }) {
 	// Fetch the category
@@ -161,19 +152,19 @@ function CategoryContent({ categoryId }: { categoryId: string }) {
 }
 
 export default function CategoryPage() {
+	const origins = useClientOrigins();
 	const params = useParams();
 	const [queryClient] = useState(() => getOrCreateQueryClient());
-	const baseURL = getBaseURL();
+	const stack = useMemo(
+		() => getCmsBrowserClientStack(queryClient, origins),
+		[origins.apiOrigin, origins.siteOrigin, queryClient],
+	);
 
 	const categoryId = params.categoryId as string;
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<StackProvider<PluginOverrides>
-				basePath="/directory"
-				router={nextRouter()}
-				api={{ baseURL, basePath: "/api/data" }}
-			>
+			<StackProvider stack={stack} router={nextRouter()}>
 				<CategoryContent categoryId={categoryId} />
 			</StackProvider>
 		</QueryClientProvider>

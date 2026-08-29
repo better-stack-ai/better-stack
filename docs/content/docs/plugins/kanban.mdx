@@ -143,7 +143,7 @@ Configure top-level framework wiring and kanban-specific overrides in your `Stac
 
 <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
   <Tab value="next-js">
-    ```tsx title="app/pages/[[...all]]/layout.tsx"
+    ```tsx title="app/pages/client-layout.tsx"
     import { StackProvider } from "@btst/stack/context"
     import { nextRouter } from "@btst/stack/next"
     import { resolveUser, searchUsers } from "@/lib/users" // Your user resolver
@@ -401,30 +401,32 @@ export const serverAuth = createServerAuth({
 ```
 
 Pass `serverAuth` to `stack({ auth: serverAuth, ... })`. Create the client
-binding from the same browser-safe definition. In your framework page helper,
-resolve the request identity once, pass its headers and identity to
-`getStackClient`, and hydrate that exact identity at the provider boundary:
+binding from the same browser-safe definition. Resolve the request identity and
+trusted client origins in the request layout, then serialize only those plain
+values to the client provider. Request headers and the resolved request stack
+stay server-only:
 
-```tsx title="app/pages/layout.tsx"
-const requestHeaders = new Headers(await frameworkHeaders())
+```tsx title="app/(request)/pages/layout.tsx"
+import { headers } from "next/headers"
+import { getServerClientOriginsFromHeaders } from "@/lib/stack-client.server"
+
+const requestHeaders = await headers()
 const initialIdentity = await serverAuth.getIdentityFromHeaders({
   headers: requestHeaders,
 })
-const stackClient = getStackClient(queryClient, {
-  headers: requestHeaders,
-  identity: initialIdentity ?? undefined,
-})
+const clientOrigins = getServerClientOriginsFromHeaders(requestHeaders)
 
-const clientAuth = createClientAuth({
-  authorization,
-  getIdentity: () => session?.user ?? null,
-  loginPath: "/sign-in",
-})
-
-<StackProvider auth={clientAuth} initialIdentity={initialIdentity}>
+<PagesClientLayout
+  clientOrigins={clientOrigins}
+  initialIdentity={initialIdentity}
+>
   {children}
-</StackProvider>
+</PagesClientLayout>
 ```
+
+Inside `app/pages/client-layout.tsx`, create the browser stack from
+`clientOrigins` and pass `initialIdentity` to `StackProvider` with the
+browser-safe `clientAuth` binding.
 
 Omitting stack authorization leaves request operations permissive. When
 authorization is configured, ordinary anonymous denials are

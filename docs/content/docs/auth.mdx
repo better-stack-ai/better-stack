@@ -286,15 +286,24 @@ layout through the server-only framework entry:
 
 import { StackProvider } from "@btst/stack/context";
 import { clientAuth } from "@/lib/authorization.client";
+import { getOrCreateQueryClient } from "@/lib/query-client";
+import { getStackClient, type StackClientOrigins } from "@/lib/stack-client";
 import type { ReactNode } from "react";
+import { useMemo } from "react";
 
-export function BtstPagesClientLayout({ children, initialIdentity }: {
+export function BtstPagesClientLayout({ children, clientOrigins, initialIdentity }: {
   children?: ReactNode;
+  clientOrigins?: StackClientOrigins;
   initialIdentity?: Awaited<ReturnType<typeof clientAuth.getIdentity>>;
 }) {
+  const queryClient = getOrCreateQueryClient();
+  const stack = useMemo(
+    () => getStackClient(queryClient, clientOrigins),
+    [clientOrigins?.apiOrigin, clientOrigins?.siteOrigin, queryClient],
+  );
   return (
     <StackProvider
-      basePath="/pages"
+      stack={stack}
       auth={clientAuth}
       initialIdentity={initialIdentity}
     >
@@ -308,18 +317,21 @@ export function BtstPagesClientLayout({ children, initialIdentity }: {
 import { createNextLayout } from "@btst/stack/next/server";
 import { serverAuth } from "@/lib/authorization.server";
 import { BtstPagesClientLayout } from "@/app/pages/client-layout";
+import { getRequestClientOrigins } from "@/lib/stack-client.server";
 
 export const dynamic = "force-dynamic";
 
 const layout = createNextLayout({
   auth: serverAuth,
   ClientLayout: BtstPagesClientLayout,
+  resolveClientOrigins: getRequestClientOrigins,
 });
 
 export default layout.Layout;
 ```
 
-Only the schema-validated identity crosses the Server Component boundary.
+Only the schema-validated identity and deployment-trusted API/site origins
+cross the Server Component boundary.
 `next/headers`, the session provider, and database dependencies stay in the
 server graph. Because the layout reads request headers, Next.js must render its
 subtree per request. If the application also has SSG/ISR pages, put them in a
@@ -330,18 +342,24 @@ subtree.
 
 ```tsx title="app/(static)/pages/layout.tsx"
 import { BtstPagesClientLayout } from "@/app/pages/client-layout";
+import { getServerClientOrigins } from "@/lib/stack-client.server";
 import type { ReactNode } from "react";
 
 export default function StaticPagesLayout({ children }: { children?: ReactNode }) {
-  // Omitting the prop preserves `undefined`: pending, then browser resolution.
-  return <BtstPagesClientLayout>{children}</BtstPagesClientLayout>;
+  // Identity stays undefined; trusted origins are embedded in static output.
+  return (
+    <BtstPagesClientLayout clientOrigins={getServerClientOrigins()}>
+      {children}
+    </BtstPagesClientLayout>
+  );
 }
 ```
 
 Route-group folders do not change URLs: both subtrees still render under
 `/pages`. True static output cannot contain a per-request identity; choosing the
 static group intentionally chooses the `undefined` branch of the tri-state
-contract.
+contract. Both route groups still hydrate the same server-resolved API/site
+snapshot, including when `BTST_API_URL` points at a managed backend.
 
 This integration targets conventional Next.js route-segment caching with
 `cacheComponents` disabled. Cache Components ignores `dynamic` segment config
@@ -356,23 +374,40 @@ subtree:
 ```tsx title="app/routes/pages/_layout.tsx"
 import { StackProvider } from "@btst/stack/context";
 import { createReactRouterLayout } from "@btst/stack/react-router";
-import { Outlet, useLoaderData } from "react-router";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { Outlet, useLoaderData, type LoaderFunctionArgs } from "react-router";
 import { clientAuth } from "~/lib/authorization.ui";
 import { serverAuth } from "~/lib/authorization.server";
+import { getOrCreateQueryClient } from "~/lib/query-client";
+import { getStackClient } from "~/lib/stack-client";
+import { getRequestClientOrigins } from "~/lib/stack-client.server";
 
 const layout = createReactRouterLayout({ auth: serverAuth });
-export const loader = layout.loader;
+export async function loader(args: LoaderFunctionArgs) {
+  return {
+    ...(await layout.loader(args)),
+    ...getRequestClientOrigins(args.request),
+  };
+}
 
 export default function BtstPagesLayout() {
-  const { initialIdentity } = useLoaderData<typeof loader>();
+  const { apiOrigin, initialIdentity, siteOrigin } = useLoaderData<typeof loader>();
+  const queryClient = getOrCreateQueryClient();
+  const stack = useMemo(
+    () => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+    [apiOrigin, queryClient, siteOrigin],
+  );
   return (
-    <StackProvider
-      basePath="/pages"
-      auth={clientAuth}
-      initialIdentity={initialIdentity}
-    >
-      <Outlet />
-    </StackProvider>
+    <QueryClientProvider client={queryClient}>
+      <StackProvider
+        stack={stack}
+        auth={clientAuth}
+        initialIdentity={initialIdentity}
+      >
+        <Outlet />
+      </StackProvider>
+    </QueryClientProvider>
   );
 }
 ```
@@ -388,21 +423,31 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { resolveTanStackInitialIdentity } from "@btst/stack/tanstack/server";
 import { serverAuth } from "./authorization.server";
+import { getRequestClientOrigins } from "./stack-client.server";
 
 export const getInitialIdentity = createServerFn({ method: "GET" }).handler(
-  () => resolveTanStackInitialIdentity({
-    auth: serverAuth,
-    request: getRequest(),
-  }),
+  async () => {
+    const request = getRequest();
+    return {
+      ...(await resolveTanStackInitialIdentity({
+        auth: serverAuth,
+        request,
+      })),
+      ...getRequestClientOrigins(request),
+    };
+  },
 );
 ```
 
 ```tsx title="src/routes/pages/route.tsx"
 import { StackProvider } from "@btst/stack/context";
 import { createTanStackLayout } from "@btst/stack/tanstack";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Outlet, createFileRoute } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { clientAuth } from "../../lib/authorization.ui";
 import { getInitialIdentity } from "../../lib/authorization.identity";
+import { getStackClient } from "../../lib/stack-client";
 
 const layout = createTanStackLayout({ getInitialIdentity });
 
@@ -412,21 +457,37 @@ export const Route = createFileRoute("/pages")({
 });
 
 function BtstPagesLayout() {
-  const { initialIdentity } = Route.useLoaderData();
+  const { queryClient } = Route.useRouteContext();
+  const { apiOrigin, initialIdentity, siteOrigin } = Route.useLoaderData();
+  const stack = useMemo(
+    () => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+    [apiOrigin, queryClient, siteOrigin],
+  );
   return (
-    <StackProvider
-      basePath="/pages"
-      auth={clientAuth}
-      initialIdentity={initialIdentity}
-    >
-      <Outlet />
-    </StackProvider>
+    <QueryClientProvider client={queryClient}>
+      <StackProvider
+        stack={stack}
+        auth={clientAuth}
+        initialIdentity={initialIdentity}
+      >
+        <Outlet />
+      </StackProvider>
+    </QueryClientProvider>
   );
 }
 ```
 
-This is identity hydration only. BTST does not cache authorization results or
-require framework middleware.
+Only the validated identity and deployment-trusted API/site origins cross the
+server boundary. Raw `Host`/forwarding values, request headers, and the resolved
+server stack stay server-only. Configure `BTST_API_URL` and `BTST_SITE_URL`, or
+use `BASE_URL` when both are same-origin; production fails closed without a
+trusted site origin. BTST does not cache authorization results or require
+framework middleware.
+
+TanStack catch-all loaders should also call `getInitialIdentity()` from their
+client navigation branch and pass its `apiOrigin`/`siteOrigin` to
+`getStackClient`. That server function keeps later navigations on the same
+trusted managed API selected during SSR.
 
 ## Operation lifecycle ordering
 

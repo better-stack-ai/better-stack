@@ -460,23 +460,55 @@ In order to use BTST, your application must meet the following requirements:
     Create a client instance that routes requests to plugin pages, prefetches their data on the server, and renders them with instant hydration on the client:
 
     ```tsx title="lib/stack-client.tsx"
-    import { createClientStack } from "@btst/stack/client"
+    import {
+      createClientStack,
+      type ClientPluginEndpointOverride,
+    } from "@btst/stack/client"
     import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
-    import { QueryClient } from "@tanstack/react-query"
+    import type { QueryClient } from "@tanstack/react-query"
 
-    export const getStackClient = (queryClient: QueryClient) => {
-      const baseURL =
-        typeof window === "undefined"
+    interface StackClientOptions {
+      apiOrigin?: string
+      siteOrigin?: string
+    }
+
+    export const getStackClient = (
+      queryClient: QueryClient,
+      options?: StackClientOptions,
+    ) => {
+      const siteOrigin =
+        options?.siteOrigin ||
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        process.env.NEXT_PUBLIC_BASE_URL ||
+        (typeof window === "undefined"
           ? process.env.BASE_URL || "http://localhost:3000"
-          : window.location.origin
+          : window.location.origin)
+      const apiOrigin =
+        options?.apiOrigin ||
+        process.env.NEXT_PUBLIC_API_URL ||
+        process.env.NEXT_PUBLIC_BASE_URL ||
+        siteOrigin
+      const crossOriginApiEndpoint =
+        apiOrigin === siteOrigin
+          ? undefined
+          : ({
+              api: {
+                baseURL: apiOrigin,
+                basePath: "/api/data",
+                credentials: "include",
+              },
+            } satisfies ClientPluginEndpointOverride)
 
       return createClientStack({
-        api: { baseURL, basePath: "/api/data" },
-        site: { baseURL, basePath: "/pages" },
+        api: { baseURL: apiOrigin, basePath: "/api/data" },
+        site: { baseURL: siteOrigin, basePath: "/pages" },
         queryClient,
         plugins: {
           blog: blogClientPlugin(),
-        }
+        },
+        ...(crossOriginApiEndpoint
+          ? { endpoints: { blog: crossOriginApiEndpoint } }
+          : {}),
       })
     }
     ```
@@ -489,6 +521,26 @@ In order to use BTST, your application must meet the following requirements:
       client stack so SSR loaders, metadata, and browser hooks resolve the same
       runtime. Do not copy those services into plugin configuration or provider
       overrides.
+    </Callout>
+
+    <Callout type="warn">
+      Credentialed SSR stacks must resolve their API destination from
+      deployment configuration, never from `Host`, forwarding headers, or
+      `request.url`. Set `BTST_API_URL` for a managed/custom API and
+      `BTST_SITE_URL` for the public site. For a same-origin deployment,
+      `BASE_URL` can provide both. Generated `stack-client.server.ts` uses
+      `resolveTrustedClientOrigins` from `@btst/stack/client/server`, fails
+      closed when production configuration is missing, and removes routing and
+      hop-by-hop headers before forwarding the remaining request credentials.
+      The browser stack above separately opts each API-owning plugin into
+      `credentials: "include"` only when the trusted API and site origins differ.
+      A managed backend that uses cookies must allow the public site origin and
+      credentialed requests in its CORS policy.
+
+      Existing Next.js scaffolds may keep `NEXT_PUBLIC_BASE_URL` as a narrow
+      same-origin migration fallback when rerunning `btst init`. Prefer
+      `NEXT_PUBLIC_SITE_URL` plus `NEXT_PUBLIC_API_URL` (or server-only
+      `BTST_SITE_URL`/`BTST_API_URL`) for new deployment configuration.
     </Callout>
   </Step>
 
@@ -563,20 +615,26 @@ In order to use BTST, your application must meet the following requirements:
 
     <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
       <Tab value="next-js">
-        ```tsx title="app/pages/layout.tsx"
+        ```tsx title="app/pages/client-layout.tsx"
         "use client"
 
-        import { useState } from "react"
+        import { useMemo, useState } from "react"
         import { QueryClientProvider } from "@tanstack/react-query"
         import { StackProvider } from "@btst/stack/context"
         import { nextRouter } from "@btst/stack/next"
         import { getOrCreateQueryClient } from "@/lib/query-client"
-        import { getStackClient } from "@/lib/stack-client"
+        import { getStackClient, type StackClientOptions } from "@/lib/stack-client"
         import { uploadImage } from "@/lib/uploads"
 
-        export default function PagesLayout({ children }) {
+        export function PagesClientLayout({ children, clientOrigins }: {
+          children: React.ReactNode
+          clientOrigins: StackClientOptions
+        }) {
           const [queryClient] = useState(() => getOrCreateQueryClient())
-          const clientStack = getStackClient(queryClient)
+          const clientStack = useMemo(
+            () => getStackClient(queryClient, clientOrigins),
+            [clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
+          )
 
           return (
             <QueryClientProvider client={queryClient}>
@@ -591,22 +649,51 @@ In order to use BTST, your application must meet the following requirements:
           )
         }
         ```
+
+        ```tsx title="app/(request)/pages/layout.tsx"
+        import { headers } from "next/headers"
+        import { PagesClientLayout } from "../../pages/client-layout"
+        import { getServerClientOriginsFromHeaders } from "@/lib/stack-client.server"
+
+        export default async function PagesLayout({ children }) {
+          const clientOrigins = getServerClientOriginsFromHeaders(await headers())
+          return (
+            <PagesClientLayout clientOrigins={clientOrigins}>
+              {children}
+            </PagesClientLayout>
+          )
+        }
+        ```
+
+        Put SSG/ISR routes under `app/(static)/pages` and give that group a
+        header-free layout using `getServerClientOrigins()`. Both route groups
+        keep the `/pages/*` URL; the split prevents request headers from making
+        static routes dynamic.
       </Tab>
 
       <Tab value="react-router">
         ```tsx title="app/routes/pages/_layout.tsx"
-        import { useState } from "react"
-        import { Outlet } from "react-router"
+        import { useMemo, useState } from "react"
+        import { Outlet, useLoaderData, type LoaderFunctionArgs } from "react-router"
         import { QueryClientProvider } from "@tanstack/react-query"
         import { StackProvider } from "@btst/stack/context"
         import { reactRouter } from "@btst/stack/react-router"
         import { getOrCreateQueryClient } from "~/lib/query-client"
         import { getStackClient } from "~/lib/stack-client"
+        import { getServerClientOrigins } from "~/lib/stack-client.server"
         import { uploadImage } from "~/lib/uploads"
+
+        export function loader({ request }: LoaderFunctionArgs) {
+          return getServerClientOrigins(new URL(request.url).origin)
+        }
 
         export default function PagesLayout() {
           const [queryClient] = useState(() => getOrCreateQueryClient())
-          const clientStack = getStackClient(queryClient)
+          const { apiOrigin, siteOrigin } = useLoaderData<typeof loader>()
+          const clientStack = useMemo(
+            () => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+            [apiOrigin, queryClient, siteOrigin],
+          )
 
           return (
             <QueryClientProvider client={queryClient}>
@@ -629,16 +716,23 @@ In order to use BTST, your application must meet the following requirements:
         import { QueryClientProvider } from "@tanstack/react-query"
         import { StackProvider } from "@btst/stack/context"
         import { tanstackRouter } from "@btst/stack/tanstack"
+        import { useMemo } from "react"
         import { getStackClient } from "@/lib/stack-client"
+        import { getTrustedClientOrigins } from "@/lib/stack-client.origins"
         import { uploadImage } from "@/lib/uploads"
 
         export const Route = createFileRoute("/pages")({
+          loader: async () => getTrustedClientOrigins(),
           component: PagesLayout,
         })
 
         function PagesLayout() {
           const { queryClient } = Route.useRouteContext()
-          const clientStack = getStackClient(queryClient)
+          const { apiOrigin, siteOrigin } = Route.useLoaderData()
+          const clientStack = useMemo(
+            () => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+            [apiOrigin, queryClient, siteOrigin],
+          )
 
           return (
             <QueryClientProvider client={queryClient}>
@@ -658,7 +752,12 @@ In order to use BTST, your application must meet the following requirements:
 
     Add `auth`, `notify`, or `i18n` beside `stack` and `router` when your
     application needs them. See the [auth provider guide](/auth). Never copy
-    framework routing, API paths, or identity props into a plugin override.
+    framework routing, API paths, or identity props into a plugin override. On
+    Vite SSR, serialize only the trusted API/site origins into the parent loader
+    so the server provider and hydrated browser stack resolve the same endpoints.
+    TanStack client-navigation loaders should call the same generated
+    `getTrustedClientOrigins()` server function. Keep request headers and server
+    stack instances out of loader data.
   </Step>
 
   <Step>
@@ -668,14 +767,21 @@ In order to use BTST, your application must meet the following requirements:
 
     <Tabs  groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist >
       <Tab value="next-js">
-        ```tsx title="app/pages/[[...all]]/page.tsx"
+        ```tsx title="app/(request)/pages/[[...all]]/page.tsx"
         import { createNextPage } from "@btst/stack/next"
+        import { headers } from "next/headers"
         import { getOrCreateQueryClient } from "@/lib/query-client"
-        import { getStackClient } from "@/lib/stack-client"
+        import { getStackClientForRequest } from "@/lib/stack-client.server"
 
         export const dynamic = "force-dynamic"
 
-        const page = createNextPage({ getStackClient, getQueryClient: getOrCreateQueryClient })
+        const page = createNextPage({
+          getStackClient: async (queryClient) =>
+            getStackClientForRequest(queryClient, {
+              headers: new Headers(await headers()),
+            }),
+          getQueryClient: getOrCreateQueryClient,
+        })
         export default page.Page
         export const generateMetadata = page.generateMetadata
         ```
@@ -738,7 +844,7 @@ In order to use BTST, your application must meet the following requirements:
           import { headers } from "next/headers"
           import { createNextPage } from "@btst/stack/next"
           import { getOrCreateQueryClient } from "@/lib/query-client"
-          import { getStackClientForRequest } from "@/lib/stack-client"
+          import { getStackClientForRequest } from "@/lib/stack-client.server"
 
           const page = createNextPage({
             getQueryClient: getOrCreateQueryClient,
@@ -776,6 +882,7 @@ In order to use BTST, your application must meet the following requirements:
             async (queryClient, { request, context, params }) =>
               getStackClientForRequest(queryClient, {
                 headers: request.headers,
+                requestOrigin: new URL(request.url).origin,
                 context,
                 params,
               }),

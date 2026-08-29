@@ -7,3 +7,10 @@ export {
 	type RegisteredRoute,
 } from "./plugin";
 export { useRegisteredRoutes } from "./hooks";
+export type {
+	RouteDocsSchema,
+	DocumentedPlugin,
+	DocumentedRoute,
+	RouteParameter,
+	PluginSitemapEntry,
+} from "../generator";

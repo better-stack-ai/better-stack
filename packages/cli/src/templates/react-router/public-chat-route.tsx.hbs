@@ -1,16 +1,18 @@
 "use client"
 
-import { createClientStack } from "@btst/stack/client"
-import { aiChatClientPlugin, ChatLayout } from "@btst/stack/plugins/ai-chat/client"
+import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 import { StackProvider } from "@btst/stack/context"
 import { reactRouter } from "@btst/stack/react-router"
 import { QueryClientProvider } from "@tanstack/react-query"
+import { useMemo } from "react"
+import { useLoaderData, type LoaderFunctionArgs } from "react-router"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
+import { getStackClient } from "{{alias}}lib/stack-client"
+import { getServerClientOrigins } from "{{alias}}lib/stack-client.server"
 
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? window.location.origin
-		: process.env.{{publicSiteURLVar}} || process.env.BASE_URL || "http://localhost:5173"
+export function loader({ request }: LoaderFunctionArgs) {
+	return getServerClientOrigins(new URL(request.url).origin)
+}
 
 /**
  * Public Chat Page — AI chat in public mode (no login required).
@@ -20,19 +22,25 @@ const getBaseURL = () =>
  */
 export default function PublicChatPage() {
 	const queryClient = getOrCreateQueryClient()
-	const baseURL = getBaseURL()
-	const stack = createClientStack({
-		api: { baseURL, basePath: "/api/data" },
-		site: { baseURL, basePath: "/" },
-		queryClient,
-		plugins: {
-			aiChat: aiChatClientPlugin({ mode: "public" }),
-		},
-	})
+	const { apiOrigin, siteOrigin } = useLoaderData<typeof loader>()
+	const browserStack = useMemo(
+		() => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+		[apiOrigin, queryClient, siteOrigin],
+	)
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<StackProvider stack={stack} router={reactRouter()}>
+			<StackProvider
+				stack={browserStack}
+				router={reactRouter()}
+{{#if pagesLayoutOverrides}}
+				overrides={
+					{
+{{{pagesLayoutOverrides}}}
+					}
+				}
+{{/if}}
+			>
 				<div className="min-h-screen bg-background">
 					<main className="h-screen">
 						<ChatLayout />

@@ -171,17 +171,52 @@ success "Ran @btst/cli@2.2.3 without adding it to the consumer graph"
 step "Asserting generated files and patches"
 test -f "lib/stack.ts"
 test -f "lib/stack-client.tsx"
+test -f "lib/stack-client.server.ts"
 test -f "lib/query-client.ts"
 test -f "app/api/data/[[...all]]/route.ts"
-test -f "app/pages/[[...all]]/page.tsx"
-test -f "app/pages/layout.tsx"
-node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("import { stack } from \"@btst/stack\"")?0:1)'
-node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("mediaBackendPlugin({ storageAdapter: undefined as any })")?0:1)'
+test -f "app/(request)/pages/[[...all]]/page.tsx"
+test -f "app/(request)/pages/layout.tsx"
+test -f "app/(static)/pages/layout.tsx"
+test -f "app/pages/client-layout.tsx"
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("import { createBackendStack } from \"@btst/stack/api\"")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("mediaBackendPlugin({ storageAdapter: localAdapter() })")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.tsx","utf8");process.exit(s.includes("createClientStack")&&s.includes("NEXT_PUBLIC_BASE_URL")&&!s.includes("getStackClientForRequest")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.server.ts","utf8");process.exit(s.includes("getStackClientForRequest")&&s.includes("resolveTrustedClientOrigins")&&s.includes("filterCredentialForwardingHeaders")&&s.includes("NEXT_PUBLIC_BASE_URL")?0:1)'
+node -e 'const fs=require("fs");const request=fs.readFileSync("app/(request)/pages/layout.tsx","utf8"),staticLayout=fs.readFileSync("app/(static)/pages/layout.tsx","utf8"),client=fs.readFileSync("app/pages/client-layout.tsx","utf8");process.exit(request.includes("getServerClientOriginsFromHeaders(await headers())")&&staticLayout.includes("getServerClientOrigins()")&&!staticLayout.includes("next/headers")&&client.includes("getStackClient(queryClient, clientOrigins)")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");process.exit(s.includes("@btst/stack/plugins/ui-builder/css")?0:1)'
 node -e 'const fs=require("fs"),path=require("path");const roots=["app","lib","package.json"];const retired=["@btst","better-auth-ui"].join("/");const read=(p)=>fs.statSync(p).isDirectory()?fs.readdirSync(p).flatMap((n)=>read(path.join(p,n))):[fs.readFileSync(p,"utf8")];process.exit(roots.flatMap(read).some((s)=>s.includes(retired))?1:0)'
 success "Generation + patch checks passed"
 
-step "Idempotency check (second pass)"
+step "Adding third-party public extension fixture"
+mkdir -p lib/fixtures
+cp "$PACKAGE_DIR/scripts/fixtures/third-party-plugin.tsx" lib/fixtures/third-party-plugin.tsx
+success "Third-party fixture uses public plugin definitions and inferred overrides"
+
+step "Migrating the previous Next.js scaffold on rerun"
+rm -r "app/(request)/pages" "app/(static)/pages"
+rm "app/pages/client-layout.tsx"
+cp -R "$PACKAGE_DIR/scripts/fixtures/legacy-next/e9ff9448/app/pages/." "app/pages/"
+
+npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins "$MEMORY_PLUGIN_LIST" --skip-install > "$TEST_DIR/init-migration.log" 2>&1
+
+test ! -e "app/pages/[[...all]]/page.tsx"
+test ! -e "app/pages/layout.tsx"
+test ! -e "app/pages/ssg-blog/page.tsx"
+test ! -e "app/pages/ssg-blog/[slug]/page.tsx"
+test ! -e "app/pages/ssg-cms/[typeSlug]/page.tsx"
+test ! -e "app/pages/ssg-forms/page.tsx"
+test ! -e "app/pages/ssg-kanban/page.tsx"
+test -f "app/(request)/pages/[[...all]]/page.tsx"
+test -f "app/(request)/pages/layout.tsx"
+test -f "app/(static)/pages/layout.tsx"
+test -f "app/(static)/pages/ssg-blog/page.tsx"
+test -f "app/(static)/pages/ssg-blog/[slug]/page.tsx"
+test -f "app/(static)/pages/ssg-cms/[typeSlug]/page.tsx"
+test -f "app/(static)/pages/ssg-kanban/page.tsx"
+grep -q "Legacy Next.js files removed: 7" "$TEST_DIR/init-migration.log"
+success "Previous scaffold migrated without duplicate /pages routes"
+
+step "Idempotency check after migration"
 write_project_hash "$TEST_DIR/init-before.hash"
 
 npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins "$MEMORY_PLUGIN_LIST" --skip-install > "$TEST_DIR/init-second.log" 2>&1
@@ -197,7 +232,7 @@ step "Verifying compile on the compatible memory scaffold"
 success "Keeping generated BTST CSS imports from the selected plugins"
 
 step "Compiling fixture project"
-npm run build
+NEXT_PUBLIC_BASE_URL=http://localhost:3000 npm run build
 success "Fixture build succeeded"
 
 TEST_PASSED=true

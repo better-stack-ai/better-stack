@@ -5,14 +5,8 @@ import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { getOrCreateQueryClient } from "@/lib/query-client";
-import { getStackClient } from "@/lib/stack-client";
-import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client";
-import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
+import { getStackClient, type StackClientOrigins } from "@/lib/stack-client";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
-import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client";
-import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client";
-import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
 import {
 	createMediaUploadConfig,
@@ -26,25 +20,21 @@ import { resolveUser, searchUsers } from "@/lib/mock-users";
 import { Button } from "@/components/ui/button";
 import { clientAuth } from "@/lib/authorization.client";
 
-type PluginOverrides = {
-	blog: BlogPluginOverrides;
-	aiChat: AiChatPluginOverrides;
-	cms: CMSPluginOverrides;
-	formBuilder: FormBuilderPluginOverrides;
-	kanban: KanbanPluginOverrides;
-	comments: CommentsPluginOverrides;
-};
-
 export function BtstPagesClientLayout({
 	children,
+	clientOrigins,
 	initialIdentity,
 }: {
 	children?: React.ReactNode;
+	clientOrigins?: StackClientOrigins;
 	initialIdentity?: Awaited<ReturnType<typeof clientAuth.getIdentity>>;
 }) {
 	// fresh instance to avoid stale client cache overriding hydrated data
 	const [queryClient] = useState(() => getOrCreateQueryClient());
-	const stack = React.useMemo(() => getStackClient(queryClient), [queryClient]);
+	const stack = React.useMemo(
+		() => getStackClient(queryClient, clientOrigins),
+		[clientOrigins?.apiOrigin, clientOrigins?.siteOrigin, queryClient],
+	);
 	const mediaClientConfig = React.useMemo(
 		() => createMediaUploadConfig(stack.provider.plugins.media),
 		[stack],
@@ -79,61 +69,55 @@ export function BtstPagesClientLayout({
 				router={nextRouter()}
 				auth={clientAuth}
 				initialIdentity={initialIdentity}
-				overrides={
-					{
-						// Only genuinely plugin-specific overrides remain — the shared
-						// Link/navigate/refresh/Image and API wiring come from the
-						// top-level `router` and `api` props above.
-						blog: {
-							uploadImage,
-							imagePicker: ImagePicker,
-							imageInputField: ImageInputField,
-							// Wire comments into the bottom of each blog post
-							postBottomSlot: (post) => (
-								<CommentThread
-									resourceId={post.slug}
-									resourceType="blog-post"
-									className="mt-8 pt-8 border-t"
-								/>
-							),
+				overrides={{
+					// Only genuinely plugin-specific overrides remain — the shared
+					// router and resolved runtime come from the provider props above.
+					blog: {
+						uploadImage,
+						imagePicker: ImagePicker,
+						imageInputField: ImageInputField,
+						// Wire comments into the bottom of each blog post
+						postBottomSlot: (post) => (
+							<CommentThread
+								resourceId={post.slug}
+								resourceType="blog-post"
+								className="mt-8 pt-8 border-t"
+							/>
+						),
+					},
+					aiChat: {
+						uploadFile: uploadFileForChat,
+						chatSuggestions: [
+							"Hi, I'm Sarah, 34. I'm getting married next year and I just inherited $50,000 from my grandmother. I have no debt and about $30k in savings. I'm wondering if my current moderate-risk portfolio still makes sense.",
+							"Hi, I run a small import business and want to invest $200,000. The money came from overseas sales across multiple countries over the past few months. I'd like to move it into Canadian equities right away.",
+							"What information do I need to provide for a financial review?",
+							"I'm approaching retirement in the next few years — what should I be thinking about?",
+							"How is my risk tolerance assessed?",
+						],
+					},
+					cms: {
+						uploadImage,
+						imagePicker: ImagePicker,
+						imageInputField: ImageInputField,
+					},
+					kanban: {
+						uploadImage,
+						imagePicker: ImagePicker,
+						// User resolution for assignees
+						resolveUser,
+						searchUsers,
+						// Wire comments into the bottom of each task detail dialog
+						taskDetailBottomSlot: (task) => (
+							<CommentThread resourceId={task.id} resourceType="kanban-task" />
+						),
+					},
+					comments: {
+						defaultCommentPageSize: 5,
+						resourceLinks: {
+							"blog-post": (slug) => `/pages/blog/${slug}`,
 						},
-						aiChat: {
-							uploadFile: uploadFileForChat,
-							chatSuggestions: [
-								"Hi, I'm Sarah, 34. I'm getting married next year and I just inherited $50,000 from my grandmother. I have no debt and about $30k in savings. I'm wondering if my current moderate-risk portfolio still makes sense.",
-								"Hi, I run a small import business and want to invest $200,000. The money came from overseas sales across multiple countries over the past few months. I'd like to move it into Canadian equities right away.",
-								"What information do I need to provide for a financial review?",
-								"I'm approaching retirement in the next few years — what should I be thinking about?",
-								"How is my risk tolerance assessed?",
-							],
-						},
-						cms: {
-							uploadImage,
-							imagePicker: ImagePicker,
-							imageInputField: ImageInputField,
-						},
-						kanban: {
-							uploadImage,
-							imagePicker: ImagePicker,
-							// User resolution for assignees
-							resolveUser,
-							searchUsers,
-							// Wire comments into the bottom of each task detail dialog
-							taskDetailBottomSlot: (task) => (
-								<CommentThread
-									resourceId={task.id}
-									resourceType="kanban-task"
-								/>
-							),
-						},
-						comments: {
-							defaultCommentPageSize: 5,
-							resourceLinks: {
-								"blog-post": (slug) => `/pages/blog/${slug}`,
-							},
-						},
-					} satisfies Partial<PluginOverrides> as never
-				}
+					},
+				}}
 			>
 				{children}
 				{/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}

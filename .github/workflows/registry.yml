@@ -8,6 +8,7 @@ on:
       - 'packages/stack/scripts/build-registry.ts'
       - 'packages/stack/scripts/schema.ts'
       - 'packages/stack/scripts/test-registry.sh'
+      - 'packages/stack/scripts/fixtures/registry/**'
       - 'packages/ui/src/components/**'
       - 'packages/ui/src/hooks/**'
       - 'packages/ui/src/lib/**'

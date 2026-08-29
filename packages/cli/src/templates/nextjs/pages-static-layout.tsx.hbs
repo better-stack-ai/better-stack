@@ -1,0 +1,16 @@
+import type { ReactNode } from "react"
+import { BtstPagesClientLayout } from "../../pages/client-layout"
+import { getServerClientOrigins } from "{{alias}}lib/stack-client.server"
+
+export default function BtstStaticPagesLayout({
+	children,
+}: {
+	children: ReactNode
+}) {
+	const clientOrigins = getServerClientOrigins()
+	return (
+		<BtstPagesClientLayout clientOrigins={clientOrigins}>
+			{children}
+		</BtstPagesClientLayout>
+	)
+}

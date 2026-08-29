@@ -42,6 +42,7 @@ command -v pnpm >/dev/null 2>&1 || die "pnpm not found"
 command -v node >/dev/null 2>&1 || die "node not found"
 NODE_VERSION=$(node --version | cut -d. -f1 | tr -d 'v')
 [ "$NODE_VERSION" -ge 22 ] || warn "Node.js v22+ recommended (current: $(node --version))"
+node "$SCRIPT_DIR/assert-overlay-contracts.mjs"
 success "Prerequisites OK"
 
 # ── Guard: already exists ────────────────────────────────────────────────────

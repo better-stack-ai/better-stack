@@ -8,6 +8,7 @@ import type { ComponentType, ReactNode } from "react";
 import { useMemo } from "react";
 import { useLoaderData, useRouteError } from "react-router";
 import { normalizePath } from "../client/path-utils";
+import { useStackOrNull } from "../context/provider";
 import {
 	type GetStackClient,
 	type ResolveStackClient,
@@ -121,14 +122,16 @@ export function createReactRouterPage(options: CreateReactRouterPageOptions) {
 
 	function PageContent({ path }: { path: string }) {
 		const queryClient = useQueryClient();
+		const providerStack = useStackOrNull()?.resolvedStack;
 		// Memoized so PageComponent keeps a stable identity across re-renders:
 		// getRoute() invokes the route handler, which produces new component
 		// references each call. Without the memo, any router state change that
 		// re-renders this component (e.g. a search-param update) would remount
 		// the whole page subtree, losing component state such as open dialogs.
 		const route = useMemo(
-			() => getStackClient(queryClient).router.getRoute(path),
-			[queryClient, path],
+			() =>
+				(providerStack ?? getStackClient(queryClient)).router.getRoute(path),
+			[providerStack, queryClient, path],
 		);
 		const page = route?.PageComponent ? (
 			<route.PageComponent />

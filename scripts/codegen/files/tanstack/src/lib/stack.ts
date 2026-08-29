@@ -1,5 +1,5 @@
 import { createMemoryAdapter } from "./adapters-build-check";
-import { stack } from "@btst/stack";
+import { createBackendStack } from "@btst/stack";
 import { todosBackendPlugin } from "./plugins/todo/api/backend";
 import {
 	blogBackendPlugin,
@@ -29,11 +29,10 @@ import {
 	CommentSchema,
 	ClientProfileSchema,
 } from "./cms-schemas";
-import {
-	createKanbanTask,
-	findOrCreateKanbanBoard,
-	getKanbanColumnsByBoardId,
-} from "@btst/stack/plugins/kanban/api";
+
+if (typeof window !== "undefined") {
+	throw new Error("BTST_SERVER_STACK_MODULE_MARKER: backend stack in browser");
+}
 
 // Lazy reference to the stack instance so tools can reference it before it's assigned
 let _stackRef: ReturnType<typeof createStack> | undefined;
@@ -122,28 +121,97 @@ const submitIntakeAssessment = tool({
 			},
 		});
 
-		const board = await findOrCreateKanbanBoard(
-			_stackRef.adapter,
-			"advisor-review-queue",
-			"Advisor Review Queue",
-			["New Intakes", "Under Review", "Escalated"],
-		);
+		const kanban = _stackRef.trusted.kanban;
+		const matchingBoards = await kanban.listBoards({
+			slug: "advisor-review-queue",
+			limit: 1,
+		});
+		let board = matchingBoards.items[0];
+		if (!board) {
+			try {
+				board = await kanban.createBoard({
+					name: "Advisor Review Queue",
+					slug: "advisor-review-queue",
+				});
+			} catch (error) {
+				const existing = await kanban.listBoards({
+					slug: "advisor-review-queue",
+					limit: 1,
+				});
+				board = existing.items[0];
+				if (!board) throw error;
+			}
+		}
 
-		const columns = await getKanbanColumnsByBoardId(
-			_stackRef.adapter,
-			board.id,
+		const requiredColumnTitles = [
+			"New Intakes",
+			"Under Review",
+			"Escalated",
+		] as const;
+		const availableColumns = [...board.columns].sort(
+			(left, right) => left.order - right.order,
 		);
-		const targetColumn = params.amlFlag
-			? (columns.find((c: { title: string }) => c.title === "Escalated") ??
-				columns[columns.length - 1])
-			: (columns.find((c: { title: string }) => c.title === "New Intakes") ??
-				columns[0]);
+		if (availableColumns.length < requiredColumnTitles.length) {
+			throw new Error(
+				"[WealthReview] Review board must retain its three default columns",
+			);
+		}
+		const assignedColumnIds = new Set<string>();
+		const assignments = requiredColumnTitles.map((title) => {
+			const column =
+				board.columns.find(
+					(candidate) =>
+						candidate.title === title && !assignedColumnIds.has(candidate.id),
+				) ??
+				availableColumns.find(
+					(candidate) => !assignedColumnIds.has(candidate.id),
+				);
+			if (!column) {
+				throw new Error("[WealthReview] No column available for review queue");
+			}
+			assignedColumnIds.add(column.id);
+			return { column, title };
+		});
+		const columns = [];
+		for (const { column, title } of assignments) {
+			if (column.title === title) {
+				columns.push(column);
+				continue;
+			}
+			try {
+				columns.push(
+					await kanban.updateColumn({ id: column.id, data: { title } }),
+				);
+			} catch (error) {
+				const refreshedBoards = await kanban.listBoards({
+					slug: "advisor-review-queue",
+					limit: 1,
+				});
+				const refreshedBoard = refreshedBoards.items[0];
+				const reconciled = refreshedBoard?.columns.find(
+					(candidate) => candidate.title === title,
+				);
+				if (reconciled) {
+					columns.push(reconciled);
+					continue;
+				}
+				const retryColumn = refreshedBoard?.columns.find(
+					(candidate) => candidate.id === column.id,
+				);
+				if (!retryColumn) throw error;
+				columns.push(
+					await kanban.updateColumn({ id: retryColumn.id, data: { title } }),
+				);
+			}
+		}
+		const targetTitle = params.amlFlag ? "Escalated" : "New Intakes";
+		const targetColumn = columns.find((column) => column.title === targetTitle);
 
 		if (!targetColumn) {
 			throw new Error("[WealthReview] No columns found on review board");
 		}
 
-		await createKanbanTask(_stackRef.adapter, {
+		await kanban.createTask({
 			title: `${params.clientName}${params.amlFlag ? " — ⚠️ ESCALATED" : " — Ready for Review"}`,
 			columnId: targetColumn.id,
 			priority: params.amlFlag ? "URGENT" : "MEDIUM",
@@ -203,15 +271,16 @@ const blogHooks: BlogBackendHooks = {
 	},
 };
 
-_stackRef = stack({
-	basePath: "/api/data",
-	auth: serverAuth,
-	plugins: {
-		todos: todosBackendPlugin(),
-		blog: blogBackendPlugin({ hooks: blogHooks }),
-		aiChat: aiChatBackendPlugin({
-			model: openai("gpt-4o"),
-			systemPrompt: `You are WealthReview — an AI-native financial intake assistant for a licensed investment advisory firm. Your job is to conduct a brief, natural intake conversation with clients and then submit a structured assessment for human advisor review via the submitIntakeAssessment tool.
+function createStack() {
+	const stack = createBackendStack({
+		basePath: "/api/data",
+		auth: serverAuth,
+		plugins: {
+			todos: todosBackendPlugin(),
+			blog: blogBackendPlugin({ hooks: blogHooks }),
+			aiChat: aiChatBackendPlugin({
+				model: openai("gpt-4o"),
+				systemPrompt: `You are WealthReview — an AI-native financial intake assistant for a licensed investment advisory firm. Your job is to conduct a brief, natural intake conversation with clients and then submit a structured assessment for human advisor review via the submitIntakeAssessment tool.
 
 ## How to conduct intake
 
@@ -239,138 +308,149 @@ When AML signals are present:
  Escalated case: confirm that a compliance review is required before proceeding and they'll be contacted.
 
 Keep all responses concise. Do not discuss the technology stack or internal tools.`,
-			access: "authorized",
-			tools: {
-				stackDocs: stackDocsTool,
-				submitIntakeAssessment,
-			},
-			enablePageTools: true,
-			hooks: {
-				onAfterCreateConversation: async (conversation) => {
-					console.log("Conversation created:", conversation.id);
+				access: "authorized",
+				tools: {
+					stackDocs: stackDocsTool,
+					submitIntakeAssessment,
 				},
-				onBeforeActivateTools: async (toolNames, _routeName, context) => {
-					if (context.headers?.get?.("x-btst-deny-tools") === "1") {
-						throw new AiChatOperationError(
-							403,
-							"Tools denied by test hook",
-							"TOOLS_DENIED",
+				enablePageTools: true,
+				hooks: {
+					onAfterCreateConversation: async (conversation) => {
+						console.log("Conversation created:", conversation.id);
+					},
+					onBeforeActivateTools: async (toolNames, _routeName, context) => {
+						if (context.headers?.get?.("x-btst-deny-tools") === "1") {
+							throw new AiChatOperationError(
+								403,
+								"Tools denied by test hook",
+								"TOOLS_DENIED",
+							);
+						}
+						return toolNames;
+					},
+				},
+			}),
+			cms: cmsBackendPlugin({
+				contentTypes: [
+					{ name: "Product", slug: "product", schema: ProductSchema },
+					{
+						name: "Testimonial",
+						slug: "testimonial",
+						schema: TestimonialSchema,
+					},
+					{
+						name: "Category",
+						slug: "category",
+						description: "Categories for organizing resources",
+						schema: CategorySchema,
+					},
+					{
+						name: "Resource",
+						slug: "resource",
+						description: "Directory of resources with category relationships",
+						schema: ResourceSchema,
+					},
+					{
+						name: "Comment",
+						slug: "comment",
+						description: "Comments on resources (one-to-many relationship)",
+						schema: CommentSchema,
+					},
+					{
+						name: "Client Profile",
+						slug: "client-profile",
+						description:
+							"WealthReview AI — financial intake assessments submitted by the AI advisor",
+						schema: ClientProfileSchema,
+					},
+					UI_BUILDER_CONTENT_TYPE,
+				],
+			}),
+			formBuilder: formBuilderBackendPlugin({
+				hooks: {
+					onAfterCreateForm: async (form) => {
+						console.log("Form created:", form.name, form.slug);
+					},
+					onAfterUpdateForm: async (form) => {
+						console.log("Form updated:", form.name);
+					},
+					onAfterSubmission: async (submission, form, context) => {
+						console.log("Form submission received:", form.name, submission.id);
+						console.log("Submission data:", JSON.parse(submission.data));
+						console.log("IP Address:", context.ipAddress);
+					},
+				},
+			}),
+			openApi: openApiBackendPlugin({
+				title: "BTST TanStack API",
+				theme: "kepler",
+			}),
+			kanban: kanbanBackendPlugin({
+				hooks: {
+					onBeforeListBoards: async (filter) => {
+						console.log("onBeforeListBoards hook called", filter);
+					},
+					onAfterCreateBoard: async (board) => {
+						console.log("Board created:", board.id, board.name);
+					},
+				},
+			}),
+			comments: commentsBackendPlugin({
+				autoApprove: false,
+				resolveUser: async (authorId) => {
+					return { name: `User ${authorId}` };
+				},
+				hooks: {
+					onBeforeListComments: async (query) => {
+						if (query.status && query.status !== "approved") {
+							console.log("onBeforeListComments: reading moderation queue");
+						}
+					},
+					onBeforeCreateComment: async (input) => {
+						console.log(
+							"onBeforeCreateComment: new comment on",
+							input.resourceType,
+							input.resourceId,
 						);
-					}
-					return toolNames;
+					},
+					onBeforeUpdateComment: async (commentId) => {
+						console.log("onBeforeUpdateComment: comment", commentId);
+					},
+					onBeforeToggleCommentReaction: async (commentId, authorId) => {
+						console.log(
+							"onBeforeToggleCommentReaction: user",
+							authorId,
+							"toggling like on comment",
+							commentId,
+						);
+					},
+					onBeforeModerateComment: async (commentId, status) => {
+						console.log(
+							"onBeforeModerateComment: comment",
+							commentId,
+							"->",
+							status,
+						);
+					},
+					onBeforeDeleteComment: async (commentId) => {
+						console.log("onBeforeDeleteComment: comment", commentId);
+					},
 				},
-			},
-		}),
-		cms: cmsBackendPlugin({
-			contentTypes: [
-				{ name: "Product", slug: "product", schema: ProductSchema },
-				{ name: "Testimonial", slug: "testimonial", schema: TestimonialSchema },
-				{
-					name: "Category",
-					slug: "category",
-					description: "Categories for organizing resources",
-					schema: CategorySchema,
-				},
-				{
-					name: "Resource",
-					slug: "resource",
-					description: "Directory of resources with category relationships",
-					schema: ResourceSchema,
-				},
-				{
-					name: "Comment",
-					slug: "comment",
-					description: "Comments on resources (one-to-many relationship)",
-					schema: CommentSchema,
-				},
-				{
-					name: "Client Profile",
-					slug: "client-profile",
-					description:
-						"WealthReview AI — financial intake assessments submitted by the AI advisor",
-					schema: ClientProfileSchema,
-				},
-				UI_BUILDER_CONTENT_TYPE,
-			],
-		}),
-		formBuilder: formBuilderBackendPlugin({
-			hooks: {
-				onAfterCreateForm: async (form, context) => {
-					console.log("Form created:", form.name, form.slug);
-				},
-				onAfterUpdateForm: async (form, context) => {
-					console.log("Form updated:", form.name);
-				},
-				onAfterSubmission: async (submission, form, context) => {
-					console.log("Form submission received:", form.name, submission.id);
-					console.log("Submission data:", JSON.parse(submission.data));
-					console.log("IP Address:", context.ipAddress);
-				},
-			},
-		}),
-		openApi: openApiBackendPlugin({
-			title: "BTST TanStack API",
-			theme: "kepler",
-		}),
-		kanban: kanbanBackendPlugin({
-			hooks: {
-				onBeforeListBoards: async (filter, context) => {
-					console.log("onBeforeListBoards hook called", filter);
-				},
-				onAfterCreateBoard: async (board, context) => {
-					console.log("Board created:", board.id, board.name);
-				},
-			},
-		}),
-		comments: commentsBackendPlugin({
-			autoApprove: false,
-			resolveUser: async (authorId) => {
-				return { name: `User ${authorId}` };
-			},
-			hooks: {
-				onBeforeListComments: async (query, ctx) => {
-					if (query.status && query.status !== "approved") {
-						console.log("onBeforeListComments: reading moderation queue");
-					}
-				},
-				onBeforeCreateComment: async (input, ctx) => {
-					console.log(
-						"onBeforeCreateComment: new comment on",
-						input.resourceType,
-						input.resourceId,
-					);
-				},
-				onBeforeUpdateComment: async (commentId, update, ctx) => {
-					console.log("onBeforeUpdateComment: comment", commentId);
-				},
-				onBeforeToggleCommentReaction: async (commentId, authorId, ctx) => {
-					console.log(
-						"onBeforeToggleCommentReaction: user",
-						authorId,
-						"toggling like on comment",
-						commentId,
-					);
-				},
-				onBeforeModerateComment: async (commentId, status, ctx) => {
-					console.log(
-						"onBeforeModerateComment: comment",
-						commentId,
-						"->",
-						status,
-					);
-				},
-				onBeforeDeleteComment: async (commentId, ctx) => {
-					console.log("onBeforeDeleteComment: comment", commentId);
-				},
-			},
-		}),
-		media: mediaBackendPlugin({
-			storageAdapter: localAdapter(),
-			allowedUrlPrefixes: ["https://placehold.co"],
-		}),
-	},
-	adapter: (db) => createMemoryAdapter(db)({}),
-});
+			}),
+			media: mediaBackendPlugin({
+				storageAdapter: localAdapter(),
+				allowedUrlPrefixes: ["https://placehold.co"],
+			}),
+		},
+		adapter: (db) => createMemoryAdapter(db)({}),
+	});
+	if (typeof stack.handler !== "function") {
+		throw new Error("BTST_SERVER_STACK_MODULE_MARKER: missing API handler");
+	}
+	return stack;
+}
+
+_stackRef = createStack();
 
 export const myStack = _stackRef!;
 export const { handler, dbSchema } = _stackRef!;

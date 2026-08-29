@@ -156,15 +156,22 @@ required for the built-in experience:
 ```tsx title="app/pages/client-layout.tsx"
 "use client"
 
-import { useMemo, useState } from "react"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { useMemo } from "react"
+import { QueryClientProvider } from "@tanstack/react-query"
 import { StackProvider } from "@btst/stack/context"
 import { nextRouter } from "@btst/stack/next"
-import { getStackClient } from "@/lib/stack-client"
+import { getOrCreateQueryClient } from "@/lib/query-client"
+import { getStackClient, type StackClientOptions } from "@/lib/stack-client"
 
-export function ClientLayout({ children }) {
-  const [queryClient] = useState(() => new QueryClient())
-  const stack = useMemo(() => getStackClient(queryClient), [queryClient])
+export function ClientLayout({ children, clientOrigins }: {
+  children: React.ReactNode
+  clientOrigins: StackClientOptions
+}) {
+  const queryClient = getOrCreateQueryClient()
+  const stack = useMemo(
+    () => getStackClient(queryClient, clientOrigins),
+    [clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
+  )
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -241,7 +248,7 @@ Your media plugin is now configured and ready to use. Here is a quick reference 
 When you need to upload an image outside React hooks, bind `uploadAsset()` to
 the Media runtime already resolved by your client stack:
 
-```tsx title="app/pages/layout.tsx"
+```tsx title="app/pages/client-layout.tsx"
 import {
   createMediaUploadConfig,
   uploadAsset,

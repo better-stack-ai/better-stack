@@ -6,7 +6,7 @@ description: Eject and fully customize plugin UI components using the shadcn reg
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
 import { Card, Cards } from "fumadocs-ui/components/card";
-import { BookOpen, Bot, Database, FileText, Layout, Columns3, MessageSquare, ImageIcon } from "lucide-react";
+import { BookOpen, Bot, Database, FileText, Layout, Columns3, MessageSquare, ImageIcon, Route } from "lucide-react";
 
 Every BTST plugin ships its page components as a [shadcn v4 registry](https://ui.shadcn.com/docs/registry) block. This lets you **eject the entire view layer** into your own codebase and customize it freely — while all data-fetching, API logic, hooks, and routing stay untouched inside `@btst/stack`.
 
@@ -34,6 +34,7 @@ Pick the plugin you want to customize:
   <Card title="Kanban" href="/plugins/kanban#shadcn-registry" icon={<Columns3 size={20} />} description="Boards list, board detail page" />
   <Card title="Comments" href="/plugins/comments" icon={<MessageSquare size={20} />} description="Moderation pages, user comments pages, and reusable thread UI" />
   <Card title="Media" href="/plugins/media#shadcn-registry" icon={<ImageIcon size={20} />} description="Media library page and reusable picker UI" />
+  <Card title="Route Docs" href="/plugins/route-docs#shadcn-registry" icon={<Route size={20} />} description="Client-only interactive route reference" />
 </Cards>
 
 Or install a single plugin's UI directly:
@@ -64,6 +65,9 @@ Or install a single plugin's UI directly:
 
     # Media
     npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-media.json
+
+    # Route Docs
+    npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-route-docs.json
     ```
   </Tab>
   <Tab value="pnpm">
@@ -91,6 +95,9 @@ Or install a single plugin's UI directly:
 
     # Media
     pnpx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-media.json
+
+    # Route Docs
+    pnpx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-route-docs.json
     ```
   </Tab>
   <Tab value="bunx">
@@ -118,6 +125,9 @@ Or install a single plugin's UI directly:
 
     # Media
     bunx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-media.json
+
+    # Route Docs
+    bunx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-route-docs.json
     ```
   </Tab>
 </Tabs>
@@ -264,6 +274,25 @@ router configured so the ejected component uses the same runtime services as
 the built-in page. Upload mode belongs to `mediaClientPlugin()`; optional image
 compression and route lifecycle callbacks remain inferred provider overrides.
 
+### Route Docs
+
+Route Docs is client-only. Eject its page and wire it back through the client
+plugin without inventing a backend registration:
+
+```tsx title="lib/stack-client.tsx"
+import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
+import { DocsPageComponent } from "@/components/btst/route-docs/client/components/pages/docs-page"
+
+routeDocsClientPlugin({
+  pageComponents: {
+    docs: DocsPageComponent,
+  },
+})
+```
+
+Route introspection, schema generation, and caching remain package-owned; the
+registry installs only the customizable page.
+
 ## Available `pageComponents` keys
 
 The table below covers the plugins that currently support `pageComponents` overrides directly. Comments still use the direct-import pattern shown above.
@@ -293,6 +322,7 @@ The table below covers the plugins that currently support `pageComponents` overr
 | Kanban | `newBoard` | — | New board |
 | Kanban | `board` | `{ params: { boardId: string } }` | Board detail |
 | Media | `library` | — | Media library page |
+| Route Docs | `docs` | — | Interactive route documentation page |
 
 ## What the registry installs
 

@@ -141,7 +141,7 @@ Comments reads its resolved API and query client from the registered client
 stack. `StackProvider` adds framework routing and authorization; its inferred
 plugin override is only for Comments-specific presentation and behavior:
 
-```tsx title="app/pages/layout.tsx"
+```tsx title="app/pages/client-layout.tsx"
 import { clientAuth } from "@/lib/authorization.client"
 
 <StackProvider
@@ -527,7 +527,7 @@ The comments plugin registers a `/comments` route that shows the current user's 
 Pass the resolved browser stack and keep only Comments-specific overrides in
 your layout:
 
-```tsx title="app/pages/layout.tsx"
+```tsx title="app/pages/client-layout.tsx"
 <StackProvider
   stack={clientStack}
   auth={clientAuth}
