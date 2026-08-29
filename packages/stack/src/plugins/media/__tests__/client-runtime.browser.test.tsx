@@ -6,12 +6,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "../../../client";
 import { StackProvider } from "@btst/stack/context";
 import { useAssets, useRegisterAsset, useUploadAsset } from "../client/hooks";
-import { mediaClientPlugin } from "../client";
+import { mediaClientPlugin, uploadAsset } from "../client";
 import {
 	ROUTE_DOCS_QUERY_KEY,
 	routeDocsClientPlugin,
 } from "../../route-docs/client";
 import type { RouteDocsSchema } from "../../route-docs/generator";
+
+const { putBlob } = vi.hoisted(() => ({
+	putBlob: vi.fn(),
+}));
+
+vi.mock("@vercel/blob/client", () => ({ put: putBlob }));
 
 (
 	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -49,6 +55,8 @@ describe("Media and Route Docs browser runtime", () => {
 	let root: Root;
 
 	beforeEach(() => {
+		putBlob.mockReset();
+		putBlob.mockResolvedValue({ url: "https://blob.example/runtime.txt" });
 		container = document.createElement("div");
 		document.body.appendChild(container);
 		root = createRoot(container);
@@ -152,6 +160,69 @@ describe("Media and Route Docs browser runtime", () => {
 			expect(request.headers.get("cookie")).toBeNull();
 			expect(request.credentials).toBe("include");
 		}
+	});
+
+	it("forwards resolved transport to the Vercel Blob token exchange", async () => {
+		const requests: Array<{
+			url: string;
+			headers: Headers;
+			credentials: RequestCredentials;
+			body: unknown;
+		}> = [];
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+			const request =
+				input instanceof Request ? input : new Request(input, init);
+			requests.push({
+				url: request.url,
+				headers: request.headers,
+				credentials: request.credentials,
+				body: await request.clone().json(),
+			});
+			return request.url.endsWith("/media/upload/vercel-blob")
+				? jsonResponse({ clientToken: "vercel_blob_client_runtime" })
+				: jsonResponse(asset);
+		});
+
+		const result = await uploadAsset(
+			{
+				apiBaseURL: "https://media.example.net",
+				apiBasePath: "/btst/media",
+				headers: { "x-public-client": "public-value" },
+				credentials: "include",
+				uploadMode: "vercel-blob",
+				imageCompression: false,
+			},
+			{
+				file: new File(["runtime"], "runtime.txt", { type: "text/plain" }),
+				folderId: "folder-1",
+			},
+		);
+
+		expect(result).toEqual(asset);
+		expect(requests).toHaveLength(2);
+		expect(requests[0]).toMatchObject({
+			url: "https://media.example.net/btst/media/media/upload/vercel-blob",
+			credentials: "include",
+			body: {
+				type: "blob.generate-client-token",
+				payload: {
+					pathname: "runtime.txt",
+					callbackUrl:
+						"https://media.example.net/btst/media/media/upload/vercel-blob",
+					multipart: false,
+				},
+			},
+		});
+		expect(requests[0]?.headers.get("x-public-client")).toBe("public-value");
+		expect(requests[1]).toMatchObject({
+			url: "https://media.example.net/btst/media/media/assets",
+			credentials: "include",
+		});
+		expect(requests[1]?.headers.get("x-public-client")).toBe("public-value");
+		expect(putBlob).toHaveBeenCalledWith("runtime.txt", expect.any(File), {
+			access: "public",
+			token: "vercel_blob_client_runtime",
+		});
 	});
 
 	it("uses Route Docs' resolved cross-origin site for rendered navigation", async () => {

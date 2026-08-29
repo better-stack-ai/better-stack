@@ -141,16 +141,49 @@ export async function uploadAsset(
 	}
 
 	if (uploadMode === "vercel-blob") {
-		// Dynamic import keeps @vercel/blob/client optional.
-		const { upload } = await import("@vercel/blob/client");
-		const blob = await upload(processedFile.name, processedFile, {
-			access: "public",
-			handleUploadUrl: `${base}/media/upload/vercel-blob`,
-			clientPayload: JSON.stringify({
-				mimeType: processedFile.type,
-				size: processedFile.size,
-				...(folderId ? { folderId } : {}),
+		const handleUploadUrl = `${base}/media/upload/vercel-blob`;
+		const clientPayload = JSON.stringify({
+			mimeType: processedFile.type,
+			size: processedFile.size,
+			...(folderId ? { folderId } : {}),
+		});
+		const tokenRes = await fetch(handleUploadUrl, {
+			method: "POST",
+			headers: {
+				...Object.fromEntries(headersObj.entries()),
+				"Content-Type": "application/json",
+			},
+			credentials,
+			body: JSON.stringify({
+				type: "blob.generate-client-token",
+				payload: {
+					pathname: processedFile.name,
+					callbackUrl: handleUploadUrl,
+					clientPayload,
+					multipart: false,
+				},
 			}),
+		});
+		if (!tokenRes.ok) {
+			const err = await tokenRes
+				.json()
+				.catch(() => ({ message: tokenRes.statusText }));
+			throw new Error(err.message ?? "Failed to get Vercel Blob upload token");
+		}
+		const { clientToken } = (await tokenRes.json()) as {
+			clientToken?: string;
+		};
+		if (!clientToken) {
+			throw new Error("Failed to get Vercel Blob upload token");
+		}
+
+		// Dynamic import keeps @vercel/blob/client optional. The app-authenticated
+		// token exchange stays under our fetch control; the scoped token alone is
+		// then sent to Vercel's storage origin.
+		const { put } = await import("@vercel/blob/client");
+		const blob = await put(processedFile.name, processedFile, {
+			access: "public",
+			token: clientToken,
 		});
 
 		const assetRes = await fetch(`${base}/media/assets`, {
