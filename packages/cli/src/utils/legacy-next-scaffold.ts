@@ -6,7 +6,6 @@ import type { FileWritePlanItem } from "../types";
 
 interface LegacyNextFile {
 	legacyPath: string;
-	targetPath: string;
 	knownHashes: string[];
 }
 
@@ -16,58 +15,51 @@ function getLegacyNextFiles(prefix: string): LegacyNextFile[] {
 	return [
 		{
 			legacyPath: `${prefix}app/pages/[[...all]]/page.tsx`,
-			targetPath: `${prefix}app/(request)/pages/[[...all]]/page.tsx`,
 			knownHashes: [
-				"c13368465de8d139d7c2399cc915442b07de8939932de65c2a58eba92b37b7b2",
-				"e2fb4e96a905e0cb3719050f70b303b6482c88903abb95ef0c53093fb953419f",
+				"38abcd08846a16815c207c7367aabf7f79f4675c7965dd0309658ef5a4c3027f",
+				"db349b60eeb54c73f8cce795823574612a7da3fdf15396517e6216c800bfe021",
 			],
 		},
 		{
 			legacyPath: `${prefix}app/pages/layout.tsx`,
-			targetPath: `${prefix}app/(request)/pages/layout.tsx`,
 			knownHashes: [
-				"ac2b707a3aadfe3c124aa82f2d6072696dff558c2a8eae19ca2f60865eeff401",
-				"0f24f2464df6e049325ee33d3ff2bc3b6117f96ab6ead034dd919f550393c7c6",
+				"4706db333fcae7432b87e6dfc4b5a83a12396cd707f358a659ce90c5c3e01caa",
+				"798a8e0d3f9fe76d53503f1428d23ba876e577a8165e0c9f0d7217c0fe182fd9",
 			],
 		},
 		{
 			legacyPath: `${prefix}app/pages/ssg-blog/page.tsx`,
-			targetPath: `${prefix}app/(static)/pages/ssg-blog/page.tsx`,
 			knownHashes: [
-				"c72d80f0c59b497ed8bcfbdd0f7456c154165a6da4e97b0f08283ec9a3dd10ed",
-				"1c9c019b60774c5a30cb07309cee12bbacf9578fef3be2a91ba7b0af88eb9176",
+				"4ef38357ea2ed3a7541ad2b10c35b1a8574b8d0496c9be6656d96d40f9b48439",
+				"0a00499fa4978b192dea04a7b19053b101bed8724389bc88707aba87323d85d1",
 			],
 		},
 		{
 			legacyPath: `${prefix}app/pages/ssg-blog/[slug]/page.tsx`,
-			targetPath: `${prefix}app/(static)/pages/ssg-blog/[slug]/page.tsx`,
 			knownHashes: [
-				"c94f5d2db0efca632eb252682589d920aa6c9c7da002a95b71ec3acbeb635c5a",
-				"553fb0f2cdd124cc96ea8943b5fbffbdfae02c2054321b8cb83c0134381ccbf8",
+				"cac8a2fbc2f94444e39bd3690bbcf0cbc34320bf711d74c9b5a3d01a991987a2",
+				"1a31a3817d8bd95857f324f7ee1dc39152cc644bc34772edcdfacb315852f630",
 			],
 		},
 		{
 			legacyPath: `${prefix}app/pages/ssg-cms/[typeSlug]/page.tsx`,
-			targetPath: `${prefix}app/(static)/pages/ssg-cms/[typeSlug]/page.tsx`,
 			knownHashes: [
-				"a5ecad718ae1c5cc92dfbbc07c91db78c41e768d92329fef6e2b284d759b2c5e",
-				"bc57505b564eed2dca857e74e59552e5f37deb1f4ddd188f1b5d8aeb84cb2f9a",
+				"15eedc602de124a00594b4f7794fdd702fd9c9f9fb84a127f0cf9549ea252d6f",
+				"b396d4a8fd2648858ba25cb1fdf651061fd5a3fc7c27b10918fa8ef5cfc6ea96",
 			],
 		},
 		{
 			legacyPath: `${prefix}app/pages/ssg-forms/page.tsx`,
-			targetPath: `${prefix}app/(static)/pages/ssg-forms/page.tsx`,
 			knownHashes: [
-				"be18c139238689c1bdc786856df8b7ef2dda8977d9d3eda26b1d6aa5e7634dc8",
-				"6517af3b4c67040eede04ead0f9f4f91007225d7c8a5633fd256a1b9a304fe97",
+				"4861ae658a70ccb056f5dc7d6c3e114c95b817c444213aa6ebf3f9acb63aa13a",
+				"da127e6104f8e9c0dcf7cee82adbeafbd6c34527b82b1ff5ea113ef09735cbce",
 			],
 		},
 		{
 			legacyPath: `${prefix}app/pages/ssg-kanban/page.tsx`,
-			targetPath: `${prefix}app/(static)/pages/ssg-kanban/page.tsx`,
 			knownHashes: [
-				"d056db155576aaf1519a4db2f6257e53f8aaa52e62e79195beca8761105f6fb2",
-				"6164d07e1489befbe2ee4b67f46dd409b6dc7484c4f8983193875d58ac9781d4",
+				"4e0badc3dc8ed42559a498939346f7ea14c132199c9a1205320fb3195079359c",
+				"49efbf31b982bad7f1b4e874eeb2454abaeeaf6cb2ab6b3ff767eba5dec8359a",
 			],
 		},
 	];
@@ -92,11 +84,9 @@ export async function migrateLegacyNextScaffold(
 		0,
 		requestLayout.path.length - "app/(request)/pages/layout.tsx".length,
 	);
-	const targetPaths = new Set(files.map((file) => file.path));
 	const found: Array<LegacyNextFile & { content: string }> = [];
 
 	for (const legacyFile of getLegacyNextFiles(prefix)) {
-		if (!targetPaths.has(legacyFile.targetPath)) continue;
 		try {
 			const content = await readFile(join(cwd, legacyFile.legacyPath), "utf8");
 			found.push({ ...legacyFile, content });

@@ -51,4 +51,3 @@ export default async function SsgBlogPostPage({
 		</HydrationBoundary>
 	)
 }
-

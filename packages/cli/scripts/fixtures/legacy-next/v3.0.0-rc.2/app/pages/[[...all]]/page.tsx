@@ -7,4 +7,3 @@ export const dynamic = "force-dynamic"
 const page = createNextPage({ getStackClient, getQueryClient: getOrCreateQueryClient })
 export default page.Page
 export const generateMetadata = page.generateMetadata
-

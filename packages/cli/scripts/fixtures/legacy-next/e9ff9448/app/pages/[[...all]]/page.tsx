@@ -10,4 +10,3 @@ const page = createNextPage({
 })
 export default page.Page
 export const generateMetadata = page.generateMetadata
-

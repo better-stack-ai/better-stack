@@ -39,4 +39,3 @@ export default async function SsgKanbanBoardsPage() {
 		</HydrationBoundary>
 	)
 }
-
