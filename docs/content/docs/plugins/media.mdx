@@ -791,10 +791,45 @@ The Media plugin exposes React Query-powered hooks for reading and mutating asse
 
 ### Query keys (`@btst/stack/plugins/media/query-keys`)
 
-`mediaResources` is the shared declaration used by client hooks and SSR query factories. `createMediaQueryKeys(client, headers?)` returns these corrected v3 cache prefixes:
+`mediaResources` is the shared declaration used by client hooks and SSR query factories. Media list keys include the resolved service location so stacks that share a `QueryClient` cannot read or invalidate another Media endpoint's data:
 
-- Asset lists: `["mediaAssets", "list", discriminator]`
-- Folder lists: `["mediaFolders", "list", "all" | "root" | parentId]`
+- Asset lists: `["mediaAssets", "list", discriminator, { identity?, endpoint: { baseURL, basePath } }]`
+- Folder lists: `["mediaFolders", "list", "all" | "root" | parentId, { identity?, endpoint: { baseURL, basePath } }]`
+
+Pass the same browser-safe endpoint partition to resource factories and raw key builders:
+
+```ts
+import {
+  MEDIA_QUERY_KEYS,
+  type MediaEndpointPartition,
+} from "@btst/stack/plugins/media/api"
+import { createMediaQueryKeys } from "@btst/stack/plugins/media/query-keys"
+
+const endpoint: MediaEndpointPartition = {
+  baseURL: "https://media.example.com",
+  basePath: "/api/data",
+}
+
+const queries = createMediaQueryKeys(client, headers)
+const assetsQuery = queries.mediaAssets.list(
+  { limit: 40 },
+  undefined, // anonymous identity partition
+  endpoint,
+)
+const foldersQuery = queries.mediaFolders.list(undefined, undefined, endpoint)
+
+const assetsKey = MEDIA_QUERY_KEYS.assetsList(
+  { limit: 40 },
+  undefined,
+  endpoint,
+)
+```
+
+In v3, the endpoint is a required third list argument. When migrating manual SSR or SSG prefetch code, use the exact `baseURL` and `basePath` resolved for Media in the browser stack so hydration reuses the same cache. The partition deliberately accepts no headers, credentials, or API client; keep those transport values in the client/factory configuration. For authenticated data, pass the same identity partition used by `MediaClientConfig.identityPartition` as the second argument.
+
+#### MediaEndpointPartition
+
+<AutoTypeTable path="../packages/stack/src/plugins/media/api/query-key-defs.ts" name="MediaEndpointPartition" />
 
 `useFolders(undefined)` lists all folders, while `useFolders(null)` lists only root folders. The two calls intentionally have distinct cache keys and HTTP semantics.
 
