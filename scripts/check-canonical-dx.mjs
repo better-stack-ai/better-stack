@@ -50,6 +50,15 @@ const backendFactories = [
 	"mediaBackendPlugin",
 	"openApiBackendPlugin",
 ];
+const backendHookTypes = new Map([
+	["aiChatBackendPlugin", "AiChatBackendHooks"],
+	["blogBackendPlugin", "BlogBackendHooks"],
+	["cmsBackendPlugin", "CMSBackendHooks"],
+	["commentsBackendPlugin", "CommentsBackendHooks"],
+	["formBuilderBackendPlugin", "FormBuilderBackendHooks"],
+	["kanbanBackendPlugin", "KanbanBackendHooks"],
+	["mediaBackendPlugin", "MediaBackendHooks"],
+]);
 const clientFactories = [
 	"aiChatClientPlugin",
 	"blogClientPlugin",
@@ -154,6 +163,33 @@ function recordMatches(failures, file, source, label, pattern) {
 	}
 }
 
+function recordLifecycleProperties(
+	failures,
+	file,
+	fullSource,
+	objectSource,
+	baseIndex,
+	factory,
+	names,
+) {
+	for (const name of names) {
+		const propertyPattern = new RegExp(
+			`(?:^|[,{])\\s*${escapeRegExp(name)}\\b(?=\\s*(?:\\??:|\\(|,|\\}))`,
+			"gm",
+		);
+		for (const match of objectSource.matchAll(propertyPattern)) {
+			const absoluteIndex =
+				baseIndex + (match.index ?? 0) + match[0].indexOf(name);
+			failures.push({
+				file,
+				line: lineAt(fullSource, absoluteIndex),
+				label: `${factory} uses a removed lifecycle callback`,
+				match: name,
+			});
+		}
+	}
+}
+
 function readTopLevelObject(source, openIndex) {
 	let depth = 0;
 	let quote;
@@ -229,13 +265,25 @@ function checkFactoryCalls(
 	kind,
 	contextualLifecycleNames = [],
 ) {
-	const callPattern = new RegExp(`\\b${factory}\\(`, "g");
+	const callPattern = new RegExp(`\\b${factory}[ \\t\\n]*\\(`, "g");
 	for (const match of source.matchAll(callPattern)) {
 		let cursor = (match.index ?? 0) + match[0].length;
 		while (/\s/.test(source[cursor] ?? "")) cursor += 1;
 		if (source[cursor] === ")") continue;
 		if (source[cursor] !== "{") {
-			if (kind === "client") continue;
+			const expression = source
+				.slice(cursor)
+				.match(
+					/^[A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*(?:\s*\([^()\n]*\))?\s*(?=[,)])/,
+				)?.[0]
+				.trim();
+			if (kind === "client" || !expression) continue;
+			if (
+				/^[A-Za-z_$][\w$]*$/.test(expression) &&
+				/(?:options?|config|opts)$/i.test(expression)
+			) {
+				continue;
+			}
 			failures.push({
 				file,
 				line: lineAt(source, match.index ?? 0),
@@ -259,18 +307,39 @@ function checkFactoryCalls(
 		}
 		if (kind === "backend" && contextualLifecycleNames.length > 0) {
 			const callSource = source.slice(cursor, object.end + 1);
-			for (const name of contextualLifecycleNames) {
-				const propertyPattern = new RegExp(
-					`\\b${escapeRegExp(name)}\\b(?=\\s*(?:\\??:|,|\\}))`,
+			recordLifecycleProperties(
+				failures,
+				file,
+				source,
+				callSource,
+				cursor,
+				factory,
+				contextualLifecycleNames,
+			);
+
+			const hooksReference = object.topLevel
+				.match(/\bhooks\s*:\s*([A-Za-z_$][\w$]*)|\b(hooks)\s*(?=[,}])/)
+				?.slice(1)
+				.find(Boolean);
+			if (hooksReference) {
+				const declarationPattern = new RegExp(
+					`\\b(?:const|let|var)\\s+${escapeRegExp(hooksReference)}(?:\\s*:[^=;]+)?\\s*=\\s*\\{`,
 					"g",
 				);
-				for (const lifecycleMatch of callSource.matchAll(propertyPattern)) {
-					failures.push({
+				for (const declaration of source.matchAll(declarationPattern)) {
+					const openIndex =
+						(declaration.index ?? 0) + declaration[0].lastIndexOf("{");
+					const hooksObject = readTopLevelObject(source, openIndex);
+					if (!hooksObject) continue;
+					recordLifecycleProperties(
+						failures,
 						file,
-						line: lineAt(source, cursor + (lifecycleMatch.index ?? 0)),
-						label: `${factory} uses a removed lifecycle callback`,
-						match: name,
-					});
+						source,
+						source.slice(openIndex, hooksObject.end + 1),
+						openIndex,
+						factory,
+						contextualLifecycleNames,
+					);
 				}
 			}
 		}
@@ -287,6 +356,36 @@ function checkFactoryCalls(
 				match: factory,
 			});
 		}
+	}
+}
+
+function checkTypedHookObjects(
+	failures,
+	file,
+	source,
+	factory,
+	typeName,
+	names,
+) {
+	if (names.length === 0) return;
+	const declarationPattern = new RegExp(
+		`:\\s*${escapeRegExp(typeName)}\\s*=\\s*\\{`,
+		"g",
+	);
+	for (const declaration of source.matchAll(declarationPattern)) {
+		const openIndex =
+			(declaration.index ?? 0) + declaration[0].lastIndexOf("{");
+		const object = readTopLevelObject(source, openIndex);
+		if (!object) continue;
+		recordLifecycleProperties(
+			failures,
+			file,
+			source,
+			source.slice(openIndex, object.end + 1),
+			openIndex,
+			factory,
+			names,
+		);
 	}
 }
 
@@ -423,14 +522,26 @@ for (const absolute of allFiles) {
 	);
 
 	for (const factory of backendFactories) {
+		const contextualNames = contextualNamesByFactory.get(factory) ?? [];
 		checkFactoryCalls(
 			failures,
 			file,
 			source,
 			factory,
 			"backend",
-			contextualNamesByFactory.get(factory),
+			contextualNames,
 		);
+		const hookType = backendHookTypes.get(factory);
+		if (hookType) {
+			checkTypedHookObjects(
+				failures,
+				file,
+				source,
+				factory,
+				hookType,
+				contextualNames,
+			);
+		}
 	}
 	for (const factory of clientFactories) {
 		checkFactoryCalls(failures, file, source, factory, "client");
