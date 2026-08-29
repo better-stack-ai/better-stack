@@ -168,9 +168,7 @@ describe("scaffold plan", () => {
 		expect(stackClientFile?.content).toContain(
 			"...(options?.headers ? { headers: options.headers } : {})",
 		);
-		expect(stackClientFile?.content).toContain(
-			"export function getStackClient(queryClient: QueryClient)",
-		);
+		expect(stackClientFile?.content).toContain("options?: StackClientOptions");
 		expect(stackClientFile?.content).toContain(
 			"export function getStackClientForRequest(",
 		);
@@ -322,7 +320,14 @@ describe("scaffold plan", () => {
 
 			expect(pageRoute?.content).toContain("getStackClientForRequest");
 			expect(pageRoute?.content).toContain("headers:");
-			expect(layout?.content).toContain("getStackClient(queryClient)");
+			if (framework === "nextjs") {
+				expect(layout?.content).toContain("getStackClient(queryClient)");
+			} else {
+				expect(layout?.content).toContain("requestOrigin");
+				expect(layout?.content).toContain(
+					"getStackClient(queryClient, { origin: requestOrigin })",
+				);
+			}
 			expect(layout?.content).not.toContain("getStackClientForRequest");
 			expect(layout?.content).not.toContain("request.headers");
 
@@ -394,8 +399,12 @@ describe("scaffold plan", () => {
 
 		expect(source).toContain('from "@btst/stack/plugins/api"');
 		expect(source).toContain('from "@btst/stack/plugins/client"');
+		expect(source).toContain("function thirdPartyProbeBackendPlugin()");
+		expect(source).toContain("function thirdPartyProbeClientPlugin()");
 		expect(source).toContain("defineBackendPlugin({");
 		expect(source).toContain("defineClientPlugin<ThirdPartyProbeOverrides>()");
+		expect(source).toContain("thirdPartyProbe: thirdPartyProbeBackendPlugin()");
+		expect(source).toContain("thirdPartyProbe: thirdPartyProbeClientPlugin()");
 		expect(source).toContain("createBackendStack({");
 		expect(source).toContain("createClientStack({");
 		expect(source).toContain(
@@ -642,7 +651,7 @@ describe("scaffold plan", () => {
 			);
 			expect(pagesLayoutFile?.content).not.toContain("as never");
 			expect(pagesLayoutFile?.content).not.toContain('"media": {');
-			expect(pagesLayoutFile?.content).not.toContain("queryClient,");
+			expect(pagesLayoutFile?.content).not.toContain("queryClient:");
 		},
 	);
 

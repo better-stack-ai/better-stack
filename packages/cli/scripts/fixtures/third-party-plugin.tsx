@@ -14,18 +14,20 @@ interface ThirdPartyProbeOverrides {
 	label: string;
 }
 
-const thirdPartyProbeBackendPlugin = defineBackendPlugin({
-	id: "thirdPartyProbe",
-	dbPlugin: createDbPlugin("third-party-probe", {}),
-	routes: () => ({
-		ping: createEndpoint("/ping", { method: "GET" }, async () => ({
-			ok: true,
-		})),
-	}),
-});
+function thirdPartyProbeBackendPlugin() {
+	return defineBackendPlugin({
+		id: "thirdPartyProbe",
+		dbPlugin: createDbPlugin("third-party-probe", {}),
+		routes: () => ({
+			ping: createEndpoint("/ping", { method: "GET" }, async () => ({
+				ok: true,
+			})),
+		}),
+	});
+}
 
-const thirdPartyProbeClientPlugin =
-	defineClientPlugin<ThirdPartyProbeOverrides>()({
+function thirdPartyProbeClientPlugin() {
+	return defineClientPlugin<ThirdPartyProbeOverrides>()({
 		id: "thirdPartyProbe",
 		resolve: () => ({
 			routes: () => ({
@@ -33,10 +35,11 @@ const thirdPartyProbeClientPlugin =
 			}),
 		}),
 	});
+}
 
 export const thirdPartyBackendStack = createBackendStack({
 	basePath: "/api/data",
-	plugins: { thirdPartyProbe: thirdPartyProbeBackendPlugin },
+	plugins: { thirdPartyProbe: thirdPartyProbeBackendPlugin() },
 	adapter: (db) => createMemoryAdapter(db)({}),
 });
 
@@ -45,7 +48,7 @@ const thirdPartyClientStack = createClientStack({
 	api: { baseURL: "http://localhost:3000", basePath: "/api/data" },
 	site: { baseURL: "http://localhost:3000", basePath: "/pages" },
 	queryClient,
-	plugins: { thirdPartyProbe: thirdPartyProbeClientPlugin },
+	plugins: { thirdPartyProbe: thirdPartyProbeClientPlugin() },
 });
 
 export function ThirdPartyPluginFixture() {
