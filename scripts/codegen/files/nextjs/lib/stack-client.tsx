@@ -133,7 +133,7 @@ export const createAppClientStack = (
 				},
 			}),
 			aiChat: aiChatClientPlugin({
-				...(requestIdentity ? { identityPartition: requestIdentity } : {}),
+				identityPartition: requestIdentity ?? undefined,
 				mode: "authenticated",
 				seo: {
 					siteName: "BTST Chat",
@@ -175,7 +175,7 @@ export const createAppClientStack = (
 				description: "Documentation for all client routes in this application",
 			}),
 			kanban: kanbanClientPlugin({
-				...(requestIdentity ? { identityPartition: requestIdentity } : {}),
+				identityPartition: requestIdentity ?? undefined,
 				seo: {
 					siteName: "BTST Kanban",
 					description: "Manage your projects with kanban boards",
@@ -203,7 +203,7 @@ export const createAppClientStack = (
 			}),
 			media: mediaClientPlugin({
 				uploadMode: "direct",
-				...(requestIdentity ? { identityPartition: requestIdentity } : {}),
+				identityPartition: requestIdentity ?? undefined,
 			}),
 		},
 		...(crossOriginApiEndpoint

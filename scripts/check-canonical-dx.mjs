@@ -188,15 +188,48 @@ function isInsideMarkdownInlineCode(source, index) {
 }
 
 function isInsideCommentProse(source, index) {
-	return /(?:\/\/|\/\*|\*)[^*\n]{0,200}$/.test(
-		source.slice(Math.max(0, index - 200), index),
-	);
-}
+	let quote;
+	let escaped = false;
+	let lineComment = false;
+	let blockComment = false;
+	for (let cursor = 0; cursor < index; cursor += 1) {
+		const char = source[cursor];
+		const next = source[cursor + 1];
+		if (lineComment) {
+			if (char === "\n") lineComment = false;
+			continue;
+		}
+		if (blockComment) {
+			if (char === "*" && next === "/") {
+				blockComment = false;
+				cursor += 1;
+			}
+			continue;
+		}
+		if (quote) {
+			if (escaped) escaped = false;
+			else if (char === "\\") escaped = true;
+			else if (char === quote) quote = undefined;
+			continue;
+		}
+		if (char === '"' || char === "'" || char === "`") quote = char;
+		else if (char === "/" && next === "/") {
+			lineComment = true;
+			cursor += 1;
+		} else if (char === "/" && next === "*") {
+			blockComment = true;
+			cursor += 1;
+		}
+	}
+	if (lineComment || blockComment) return true;
 
-function hasCanonicalConfigType(source, identifier, configType) {
-	return new RegExp(
-		`\\b${escapeRegExp(identifier)}\\s*:\\s*(?:Readonly\\s*<\\s*)?${escapeRegExp(configType)}\\s*>?`,
-	).test(source);
+	// Registry JSON stores source comments with encoded newlines and tabs.
+	const encodedLineStart = source.lastIndexOf("\\n", index);
+	if (encodedLineStart < 0) return false;
+	const encodedPrefix = source
+		.slice(encodedLineStart + 2, index)
+		.replaceAll("\\t", "\t");
+	return /^\s*(?:\/\/|\*)/.test(encodedPrefix);
 }
 
 function recordMatches(failures, file, source, label, pattern) {
@@ -239,6 +272,8 @@ function recordLifecycleProperties(
 
 function readTopLevelObject(source, openIndex) {
 	let depth = 0;
+	let roundDepth = 0;
+	let squareDepth = 0;
 	let quote;
 	let escaped = false;
 	let lineComment = false;
@@ -266,7 +301,7 @@ function readTopLevelObject(source, openIndex) {
 			if (escaped) escaped = false;
 			else if (char === "\\") escaped = true;
 			else if (char === quote) quote = undefined;
-			if (depth <= 1) topLevel += char;
+			if (depth <= 1 && roundDepth === 0 && squareDepth === 0) topLevel += char;
 			else if (char === "\n") topLevel += "\n";
 			continue;
 		}
@@ -284,39 +319,113 @@ function readTopLevelObject(source, openIndex) {
 		}
 		if (char === '"' || char === "'" || char === "`") {
 			quote = char;
-			if (depth <= 1) topLevel += char;
+			if (depth <= 1 && roundDepth === 0 && squareDepth === 0) topLevel += char;
+			continue;
+		}
+		if (char === "(") {
+			if (depth <= 1 && roundDepth === 0 && squareDepth === 0) topLevel += char;
+			else topLevel += " ";
+			roundDepth += 1;
+			continue;
+		}
+		if (char === ")") {
+			roundDepth = Math.max(0, roundDepth - 1);
+			if (depth <= 1 && roundDepth === 0 && squareDepth === 0) topLevel += char;
+			else topLevel += " ";
+			continue;
+		}
+		if (char === "[") {
+			if (depth <= 1 && roundDepth === 0 && squareDepth === 0) topLevel += char;
+			else topLevel += " ";
+			squareDepth += 1;
+			continue;
+		}
+		if (char === "]") {
+			squareDepth = Math.max(0, squareDepth - 1);
+			if (depth <= 1 && roundDepth === 0 && squareDepth === 0) topLevel += char;
+			else topLevel += " ";
 			continue;
 		}
 		if (char === "{") {
 			depth += 1;
-			topLevel += depth <= 1 ? char : " ";
+			topLevel +=
+				depth <= 1 && roundDepth === 0 && squareDepth === 0 ? char : " ";
 			continue;
 		}
 		if (char === "}") {
 			depth -= 1;
-			topLevel += depth <= 1 ? char : " ";
+			topLevel +=
+				depth <= 1 && roundDepth === 0 && squareDepth === 0 ? char : " ";
 			if (depth === 0) return { end: index, topLevel };
 			continue;
 		}
-		topLevel += depth <= 1 || char === "\n" ? char : " ";
+		topLevel +=
+			(depth <= 1 && roundDepth === 0 && squareDepth === 0) || char === "\n"
+				? char
+				: " ";
 	}
 
 	return undefined;
 }
 
-function findObjectDeclarations(source, identifier) {
-	const declarations = [];
-	const declarationPattern = new RegExp(
-		`\\b(?:const|let|var)\\s+${escapeRegExp(identifier)}(?:\\s*:[^=;]+)?\\s*=\\s*\\{`,
+function isCanonicalTypeAnnotation(annotation, configType) {
+	if (!annotation || !configType) return false;
+	const compact = annotation.replace(/\s+/g, "");
+	return compact === configType || compact === `Readonly<${configType}>`;
+}
+
+function resolveIdentifierBinding(
+	source,
+	file,
+	identifier,
+	configType,
+	callIndex,
+) {
+	const candidates = [];
+	const markdownFence = /\.mdx?$/.test(file)
+		? source.lastIndexOf("```", callIndex)
+		: -1;
+	const searchStart = Math.max(0, markdownFence);
+	const beforeCall = source.slice(searchStart, callIndex);
+	const variablePattern = new RegExp(
+		`\\b(?:const|let|var)\\s+${escapeRegExp(identifier)}\\b(?:\\s*:\\s*([^=;\\n]+))?\\s*=`,
 		"g",
 	);
-	for (const declaration of source.matchAll(declarationPattern)) {
-		const openIndex =
-			(declaration.index ?? 0) + declaration[0].lastIndexOf("{");
-		const object = readTopLevelObject(source, openIndex);
-		if (object) declarations.push({ object, openIndex });
+	for (const binding of beforeCall.matchAll(variablePattern)) {
+		let valueIndex = searchStart + (binding.index ?? 0) + binding[0].length;
+		while (/\s/.test(source[valueIndex] ?? "")) valueIndex += 1;
+		const object =
+			source[valueIndex] === "{"
+				? readTopLevelObject(source, valueIndex)
+				: undefined;
+		candidates.push({
+			index: searchStart + (binding.index ?? 0),
+			object,
+			openIndex: object ? valueIndex : undefined,
+			typed: isCanonicalTypeAnnotation(binding[1], configType),
+		});
 	}
-	return declarations;
+
+	const functionPattern =
+		/(?:\bfunction(?:\s+[A-Za-z_$][\w$]*)?\s*|\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:async\s*)?|(?:async\s+)?[A-Za-z_$][\w$]*\s*)\(([^()]*)\)\s*(?::[^={]+)?(?:=>\s*)?\{/g;
+	for (const signature of source.matchAll(functionPattern)) {
+		const signatureIndex = signature.index ?? 0;
+		if (signatureIndex >= callIndex) break;
+		const openIndex = signatureIndex + signature[0].lastIndexOf("{");
+		const body = readTopLevelObject(source, openIndex);
+		if (!body || callIndex <= openIndex || callIndex >= body.end) continue;
+		const parameterPattern = new RegExp(
+			`(?:^|,)\\s*(?:\\.\\.\\.\\s*)?${escapeRegExp(identifier)}\\s*\\??(?:\\s*:\\s*([^,=]+))?(?=\\s*(?:,|$))`,
+		);
+		const parameter = signature[1].match(parameterPattern);
+		if (!parameter) continue;
+		candidates.push({
+			index: signatureIndex + signature[0].indexOf(signature[1]),
+			typed: isCanonicalTypeAnnotation(parameter[1], configType),
+		});
+	}
+
+	return candidates.sort((left, right) => right.index - left.index)[0];
 }
 
 function inspectFactoryObject(
@@ -330,7 +439,7 @@ function inspectFactoryObject(
 	openIndex,
 	reportIndex,
 ) {
-	if (/\.\.\.\s*[A-Za-z_$]/.test(object.topLevel)) {
+	if (/\.\.\./.test(object.topLevel)) {
 		failures.push({
 			file,
 			line: lineAt(source, reportIndex),
@@ -368,16 +477,20 @@ function inspectFactoryObject(
 			?.slice(1)
 			.find(Boolean);
 		if (hooksReference) {
-			for (const declaration of findObjectDeclarations(
+			const binding = resolveIdentifierBinding(
 				source,
+				file,
 				hooksReference,
-			)) {
+				undefined,
+				reportIndex,
+			);
+			if (binding?.object && binding.openIndex !== undefined) {
 				recordLifecycleProperties(
 					failures,
 					file,
 					source,
-					source.slice(declaration.openIndex, declaration.object.end + 1),
-					declaration.openIndex,
+					source.slice(binding.openIndex, binding.object.end + 1),
+					binding.openIndex,
 					factory,
 					contextualLifecycleNames,
 				);
@@ -440,19 +553,19 @@ function checkFactoryCalls(
 			const identifier = /^[A-Za-z_$][\w$]*$/.test(expression)
 				? expression
 				: undefined;
-			const declarations = identifier
-				? findObjectDeclarations(source, identifier)
-				: [];
-			if (declarations.length === 0) {
+			const binding = identifier
+				? resolveIdentifierBinding(
+						source,
+						file,
+						identifier,
+						configType,
+						callIndex,
+					)
+				: undefined;
+			if (!binding) {
 				if (
 					/\.mdx?$/.test(file) &&
 					isInsideMarkdownInlineCode(source, callIndex)
-				) {
-					continue;
-				}
-				if (
-					identifier &&
-					hasCanonicalConfigType(source, identifier, configType)
 				) {
 					continue;
 				}
@@ -464,7 +577,7 @@ function checkFactoryCalls(
 				});
 				continue;
 			}
-			for (const declaration of declarations) {
+			if (binding.object && binding.openIndex !== undefined) {
 				inspectFactoryObject(
 					failures,
 					file,
@@ -472,10 +585,17 @@ function checkFactoryCalls(
 					factory,
 					kind,
 					contextualLifecycleNames,
-					declaration.object,
-					declaration.openIndex,
-					declaration.openIndex,
+					binding.object,
+					binding.openIndex,
+					binding.openIndex,
 				);
+			} else if (!binding.typed) {
+				failures.push({
+					file,
+					line: lineAt(source, callIndex),
+					label: `${kind} factory options binding cannot be verified`,
+					match: `${factory}(${expression})`,
+				});
 			}
 			continue;
 		}
