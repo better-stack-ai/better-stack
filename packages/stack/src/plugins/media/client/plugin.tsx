@@ -25,11 +25,17 @@ const LibraryPageComponent = lazy(() =>
 	})),
 );
 
+/** Resolved request context supplied to Media SSR loader hooks. */
 export interface MediaLoaderContext {
+	/** Normalized Media route path being loaded. */
 	path: string;
+	/** Whether the hook is running during server-side rendering. */
 	isSSR: boolean;
+	/** Resolved absolute origin for the Media backend. */
 	apiBaseURL: string;
+	/** Resolved path where the Media backend is mounted. */
 	apiBasePath: string;
+	/** Request-scoped server headers used by the Media SSR loader. */
 	headers?: Headers;
 }
 
