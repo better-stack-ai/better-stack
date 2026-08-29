@@ -125,11 +125,11 @@ async function writeFixture(cwd: string, path: string, content: string) {
 
 describe("legacy Next.js scaffold migration", () => {
 	it("covers the historical plugin-selection and alias matrix", () => {
-		expect(LEGACY_NEXT_RENDER_HASHES["app/pages/layout.tsx"]).toHaveLength(120);
+		expect(LEGACY_NEXT_RENDER_HASHES["app/pages/layout.tsx"]).toHaveLength(240);
 		for (const path of legacyPaths.filter(
 			(path) => path !== "app/pages/layout.tsx",
 		)) {
-			expect(LEGACY_NEXT_RENDER_HASHES[path]).toHaveLength(6);
+			expect(LEGACY_NEXT_RENDER_HASHES[path]).toHaveLength(12);
 		}
 	});
 
@@ -211,6 +211,21 @@ describe("legacy Next.js scaffold migration", () => {
 		).resolves.toEqual(legacyPaths);
 	});
 
+	it("recognizes an untouched legacy scaffold checked out with CRLF", async () => {
+		const cwd = await createFixture();
+		for (const path of legacyPaths) {
+			const content = await readFile(
+				join(legacyFixtureRoot, "e9ff9448", path),
+				"utf8",
+			);
+			await writeFixture(cwd, path, content.replaceAll("\n", "\r\n"));
+		}
+
+		await expect(
+			migrateLegacyNextScaffold(cwd, currentPlan, "overwrite"),
+		).resolves.toEqual(legacyPaths);
+	});
+
 	it("recognizes a historical conditional layout variant", async () => {
 		const cwd = await createFixture();
 		await writeFixture(
@@ -256,6 +271,30 @@ describe("legacy Next.js scaffold migration", () => {
 		await expect(
 			readFile(join(cwd, "app/pages/layout.tsx"), "utf8"),
 		).resolves.toContain("Keep my custom StackProvider behavior");
+	});
+
+	it("keeps the legacy layout when consumer-authored child routes remain", async () => {
+		const cwd = await createFixture();
+		const layout = await readFile(
+			join(legacyFixtureRoot, "e9ff9448/app/pages/layout.tsx"),
+			"utf8",
+		);
+		await writeFixture(cwd, "app/pages/layout.tsx", layout);
+		await writeFixture(
+			cwd,
+			"app/pages/custom/page.tsx",
+			"export default function CustomPage() { return null }\n",
+		);
+
+		await expect(
+			migrateLegacyNextScaffold(cwd, currentPlan, "overwrite"),
+		).rejects.toThrow("consumer-owned routes remain");
+		await expect(
+			readFile(join(cwd, "app/pages/layout.tsx"), "utf8"),
+		).resolves.toBe(layout);
+		await expect(
+			readFile(join(cwd, "app/pages/custom/page.tsx"), "utf8"),
+		).resolves.toContain("CustomPage");
 	});
 
 	it("fails closed when overwrite was not selected", async () => {

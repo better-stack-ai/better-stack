@@ -15,10 +15,11 @@ contract independently of the runtime allowlist.
 
 `legacy-next-render-hashes.ts` records the exact bytes from every supported
 plugin-selection and `@/`, `~/`, or `./` import-alias combination at both
-historical refs. Regenerate it with `pnpm legacy-next-hashes:generate`; CI runs
-the corresponding `legacy-next-hashes:check` verifier against the immutable
-historical renderers. Do not normalize those bytes: even a one-character
-consumer edit must remain outside the allowlist and fail closed.
+historical refs, including the exact LF and CRLF checkout variants. Regenerate
+it with `pnpm legacy-next-hashes:generate`; CI runs the corresponding
+`legacy-next-hashes:check` verifier against the immutable historical renderers.
+Do not normalize those bytes: even a one-character consumer edit must remain
+outside the allowlist and fail closed.
 
 The `variants/` files are also direct historical renderer outputs. They cover
 conditional plugin selections and non-default aliases without weakening the
