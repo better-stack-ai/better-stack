@@ -5,7 +5,7 @@ import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { getOrCreateQueryClient } from "@/lib/query-client";
-import { getBrowserClientStack } from "@/lib/stack-client";
+import { getStackClient } from "@/lib/stack-client";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
 import {
@@ -29,10 +29,7 @@ export function BtstPagesClientLayout({
 }) {
 	// fresh instance to avoid stale client cache overriding hydrated data
 	const [queryClient] = useState(() => getOrCreateQueryClient());
-	const stack = React.useMemo(
-		() => getBrowserClientStack(queryClient),
-		[queryClient],
-	);
+	const stack = React.useMemo(() => getStackClient(queryClient), [queryClient]);
 	const mediaClientConfig = React.useMemo(
 		() => createMediaUploadConfig(stack.provider.plugins.media),
 		[stack],

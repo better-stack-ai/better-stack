@@ -130,7 +130,7 @@ export const createAppClientStack = (
 };
 
 /** Browser-safe stack: public origin only, never request headers. */
-export const getBrowserClientStack = (queryClient: QueryClient) =>
+export const getStackClient = (queryClient: QueryClient) =>
 	createAppClientStack(queryClient, {
 		baseURL: getBrowserBaseURL(),
 	});

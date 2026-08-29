@@ -15,7 +15,7 @@ import {
 } from "@btst/stack/plugins/media/client/components";
 import { Button } from "../../components/ui/button";
 import { resolveUser, searchUsers } from "../../lib/mock-users";
-import { getBrowserClientStack } from "../../lib/stack-client";
+import { getStackClient } from "../../lib/stack-client";
 import { clientAuth } from "../../lib/authorization.ui";
 import { hydrationAuth } from "../../lib/authorization.server";
 
@@ -25,10 +25,7 @@ export const loader = layout.loader;
 export default function Layout() {
 	const { initialIdentity } = useLoaderData<typeof loader>();
 	const queryClient = useQueryClient();
-	const stack = useMemo(
-		() => getBrowserClientStack(queryClient),
-		[queryClient],
-	);
+	const stack = useMemo(() => getStackClient(queryClient), [queryClient]);
 	const mediaClientConfig = useMemo(
 		() => createMediaUploadConfig(stack.provider.plugins.media),
 		[stack],

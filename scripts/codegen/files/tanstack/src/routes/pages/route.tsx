@@ -18,7 +18,7 @@ import { resolveUser, searchUsers } from "../../lib/mock-users";
 import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { clientAuth } from "../../lib/authorization.ui";
 import { getInitialIdentity } from "../../lib/authorization.identity";
-import { getBrowserClientStack } from "../../lib/stack-client";
+import { getStackClient } from "../../lib/stack-client";
 
 const layout = createTanStackLayout({ getInitialIdentity });
 
@@ -34,7 +34,7 @@ function Layout() {
 	const routeContext = Route.useRouteContext();
 	const { initialIdentity } = Route.useLoaderData();
 	const stack = useMemo(
-		() => getBrowserClientStack(routeContext.queryClient),
+		() => getStackClient(routeContext.queryClient),
 		[routeContext.queryClient],
 	);
 	const mediaClientConfig = useMemo(

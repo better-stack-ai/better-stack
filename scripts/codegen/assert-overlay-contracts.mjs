@@ -42,6 +42,7 @@ const frameworks = [
 		page: "nextjs/app/(request)/pages/[[...all]]/page.tsx",
 		layout: "nextjs/app/(request)/pages/layout.tsx",
 		clientLayout: "nextjs/app/pages/client-layout.tsx",
+		sitemap: "nextjs/app/sitemap.ts",
 		pageFactory: "createNextPage",
 		layoutFactory: "createNextLayout",
 	},
@@ -55,6 +56,7 @@ const frameworks = [
 		page: "react-router/app/routes/pages/$.tsx",
 		layout: "react-router/app/routes/pages/_layout.tsx",
 		clientLayout: "react-router/app/routes/pages/_layout.tsx",
+		sitemap: "react-router/app/routes/sitemap.xml.ts",
 		pageFactory: "createReactRouterPage",
 		layoutFactory: "createReactRouterLayout",
 	},
@@ -68,22 +70,32 @@ const frameworks = [
 		page: "tanstack/src/routes/pages/$.tsx",
 		layout: "tanstack/src/routes/pages/route.tsx",
 		clientLayout: "tanstack/src/routes/pages/route.tsx",
+		sitemap: "tanstack/src/routes/sitemap[.]xml.ts",
 		pageFactory: "createTanStackPageOptions",
 		layoutFactory: "createTanStackLayout",
 	},
 ];
 
 for (const framework of frameworks) {
-	const [backend, client, serverClient, todo, page, layout, clientLayout] =
-		await Promise.all([
-			source(framework.backend),
-			source(framework.client),
-			source(framework.serverClient),
-			source(framework.todo),
-			source(framework.page),
-			source(framework.layout),
-			source(framework.clientLayout),
-		]);
+	const [
+		backend,
+		client,
+		serverClient,
+		todo,
+		page,
+		layout,
+		clientLayout,
+		sitemap,
+	] = await Promise.all([
+		source(framework.backend),
+		source(framework.client),
+		source(framework.serverClient),
+		source(framework.todo),
+		source(framework.page),
+		source(framework.layout),
+		source(framework.clientLayout),
+		source(framework.sitemap),
+	]);
 	const label = framework.name;
 
 	requireText(backend, "createBackendStack({", `${label} backend`);
@@ -102,7 +114,7 @@ for (const framework of frameworks) {
 
 	requireText(client, "createClientStack({", `${label} client runtime`);
 	requireText(client, "createAppClientStack", `${label} client runtime`);
-	requireText(client, "getBrowserClientStack", `${label} client runtime`);
+	requireText(client, "getStackClient", `${label} client runtime`);
 	requireText(client, "routeDocs: routeDocsClientPlugin", `${label} client`);
 	requireText(client, "uiBuilder: uiBuilderClientPlugin", `${label} client`);
 	requireText(
@@ -125,7 +137,7 @@ for (const framework of frameworks) {
 		rejectText(client, serverOnly, `${label} browser client module`);
 	}
 	const browserHelper = client.slice(
-		client.indexOf("export const getBrowserClientStack"),
+		client.indexOf("export const getStackClient"),
 		client.indexOf("/** Focused browser stack"),
 	);
 	rejectText(browserHelper, "headers", `${label} browser stack helper`);
@@ -150,6 +162,16 @@ for (const framework of frameworks) {
 	requireText(layout, framework.layoutFactory, `${label} identity layout`);
 	requireText(clientLayout, "initialIdentity", `${label} client layout`);
 	requireText(clientLayout, "stack={stack}", `${label} client layout`);
+	requireText(
+		sitemap,
+		"stack-client.server",
+		`${label} request-only sitemap stack`,
+	);
+	rejectText(
+		sitemap,
+		"getStackClientForRequest",
+		`${label} request-only sitemap stack`,
+	);
 
 	const maintainedSources = await sourceFiles(
 		resolve(filesDirectory, framework.root),
