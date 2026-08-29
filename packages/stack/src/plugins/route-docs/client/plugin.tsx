@@ -187,6 +187,7 @@ function resolveRouteDocsClientConfig(
 	return {
 		title: config.title,
 		description: config.description,
+		pageComponents: config.pageComponents,
 		queryClient: runtime.queryClient,
 		siteBaseURL: runtime.site.baseURL,
 		siteBasePath: runtime.site.basePath,

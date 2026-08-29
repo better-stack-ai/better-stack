@@ -582,6 +582,34 @@ describe("Media and Route Docs browser runtime", () => {
 		).toHaveLength(0);
 	});
 
+	it("renders the configured Route Docs page component", async () => {
+		const queryClient = new QueryClient();
+		const CustomDocsPage = () => <p>Ejected Route Docs page</p>;
+		const stack = createClientStack({
+			api: { baseURL: "https://api.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient,
+			plugins: {
+				routeDocs: routeDocsClientPlugin({
+					pageComponents: { docs: CustomDocsPage },
+				}),
+			},
+		});
+		const PageComponent = stack.router.getRoute("/route-docs")?.PageComponent;
+
+		await act(async () => {
+			root.render(
+				<QueryClientProvider client={queryClient}>
+					<StackProvider stack={stack}>
+						{PageComponent ? <PageComponent /> : null}
+					</StackProvider>
+				</QueryClientProvider>,
+			);
+		});
+
+		expect(container.textContent).toContain("Ejected Route Docs page");
+	});
+
 	it("isolates Route Docs pages that share one query client", async () => {
 		const queryClient = new QueryClient();
 		const createStack = (path: string) =>
