@@ -170,6 +170,8 @@ interface PluginConfig {
 	 * consumer project layouts).
 	 */
 	pluginRootFiles: string[];
+	/** Client data-layer files that remain package-owned instead of ejectable. */
+	excludedClientFiles?: string[];
 }
 
 const PLUGINS: PluginConfig[] = [
@@ -326,6 +328,17 @@ const PLUGINS: PluginConfig[] = [
 			"permissions.ts",
 			"asset-url.ts",
 		],
+	},
+	{
+		name: "route-docs",
+		title: "Route Docs Plugin Page",
+		description:
+			"Ejectable page components for the client-only @btst/stack route-docs plugin. " +
+			"Customize the view while route introspection and caching stay in @btst/stack.",
+		extraNpmDeps: [],
+		extraRegistryDeps: [],
+		pluginRootFiles: [],
+		excludedClientFiles: ["constants.ts", "hooks.ts", "schema.ts"],
 	},
 ];
 
@@ -522,6 +535,28 @@ function rewriteApiAndQueryKeyImports(
 				return `from ${q}@btst/stack/plugins/${pluginName}/api${q}`;
 			}
 
+			return match;
+		},
+	);
+}
+
+/** Keep Route Docs introspection and schema generation in the npm package. */
+function rewriteRouteDocsDataImports(
+	content: string,
+	absPath: string,
+	pluginDir: string,
+): string {
+	const fileDir = dirname(absPath);
+	const generatorFile = join(pluginDir, "generator");
+	const schemaFile = join(pluginDir, "client/schema");
+
+	return content.replace(
+		/from\s+(['"])(\.\.?\/[^'"]+)\1/g,
+		(match, quote, importPath) => {
+			const resolved = resolve(fileDir, importPath);
+			if (resolved === generatorFile || resolved === schemaFile) {
+				return `from ${quote}@btst/stack/plugins/route-docs/client${quote}`;
+			}
 			return match;
 		},
 	);
@@ -1133,7 +1168,10 @@ async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 		const stats = await stat(absPathCheck);
 		if (!stats.isFile()) continue;
 
-		if (shouldExclude(relPath)) {
+		if (
+			config.excludedClientFiles?.includes(relPath) ||
+			shouldExclude(relPath)
+		) {
 			console.log(`  skip  ${relPath}`);
 			continue;
 		}
@@ -1158,6 +1196,9 @@ async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 			pluginDir,
 			pluginName,
 		);
+		if (pluginName === "route-docs") {
+			content = rewriteRouteDocsDataImports(content, absPath, pluginDir);
+		}
 
 		const fileType = classifyClientFile(relPath);
 

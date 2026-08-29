@@ -129,6 +129,29 @@ createClientStack({
 })
 ```
 
+## Shadcn Registry
+
+Eject the Route Docs view layer while keeping route introspection and cache
+behavior inside `@btst/stack`:
+
+```bash
+npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-route-docs.json
+```
+
+Then pass the ejected page back to the client plugin. Route Docs remains
+client-only; do not add a matching backend plugin.
+
+```tsx title="lib/stack-client.tsx"
+import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
+import { DocsPageComponent } from "@/components/btst/route-docs/client/components/pages/docs-page"
+
+routeDocsClientPlugin({
+  pageComponents: {
+    docs: DocsPageComponent,
+  },
+})
+```
+
 ## Page Layout
 
 The documentation page includes several sections:

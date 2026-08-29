@@ -14,7 +14,10 @@ import type {
 	Framework,
 } from "@btst/codegen/meta";
 import { generateProject } from "@/app/actions";
-import { getEffectivePlugins } from "@/lib/plugin-selection";
+import {
+	getEffectivePlugins,
+	PLAYGROUND_UNSUPPORTED_PLUGINS,
+} from "@/lib/plugin-selection";
 import { PluginSelector } from "./plugin-selector";
 import { RouteDrawer } from "./route-drawer";
 import { StackBlitzEmbed } from "./stackblitz-embed";
@@ -247,7 +250,13 @@ export function PlaygroundClient({
 											onClick={() =>
 												setSelected(
 													plugins
-														.filter((p) => p.key !== "route-docs")
+														.filter(
+															(p) =>
+																p.key !== "route-docs" &&
+																!PLAYGROUND_UNSUPPORTED_PLUGINS[
+																	p.key as PluginKey
+																],
+														)
 														.map((p) => p.key as PluginKey),
 												)
 											}
@@ -264,6 +273,7 @@ export function PlaygroundClient({
 									onChange={setSelected}
 									seededPlugins={seededPlugins}
 									onSeedChange={(keys) => setSeededRaw(keys)}
+									unsupportedPlugins={PLAYGROUND_UNSUPPORTED_PLUGINS}
 								/>
 							</CardContent>
 						</Card>

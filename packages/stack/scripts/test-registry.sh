@@ -47,7 +47,9 @@ SERVER_PORT=8766
 SERVER_PID=""
 TEST_PASSED=false
 
-PLUGIN_NAMES=("ui-builder" "blog" "ai-chat" "cms" "form-builder" "kanban" "comments" "media")
+# Includes a representative data plugin (blog), client-only plugin (route-docs),
+# and composed client plugin (ui-builder over CMS) in the install/build matrix.
+PLUGIN_NAMES=("ui-builder" "blog" "ai-chat" "cms" "form-builder" "kanban" "comments" "media" "route-docs")
 
 # ---------------------------------------------------------------------------
 # Cleanup
@@ -345,6 +347,7 @@ import { BoardsListPageComponent } from "@/components/btst/kanban/client/compone
 import { ModerationPageComponent } from "@/components/btst/comments/client/components/pages/moderation-page";
 import { PageListPage } from "@/components/btst/ui-builder/client/components/pages/page-list-page";
 import { LibraryPageComponent } from "@/components/btst/media/client/components/pages/library-page";
+import { DocsPageComponent } from "@/components/btst/route-docs/client/components/pages/docs-page";
 
 // Suppress unused-import warnings while still forcing TS to resolve everything.
 void HomePageComponent;
@@ -355,6 +358,7 @@ void BoardsListPageComponent;
 void ModerationPageComponent;
 void PageListPage;
 void LibraryPageComponent;
+void DocsPageComponent;
 
 export default function SmokeTestPage() {
   return <div data-testid="btst-smoke-test">Registry smoke test — all plugin imports resolved.</div>;
@@ -374,6 +378,7 @@ SMOKE_EOF
             kanban) FAILED_SYMBOL="BoardsListPageComponent" ;;
             comments) FAILED_SYMBOL="ModerationPageComponent" ;;
             media) FAILED_SYMBOL="LibraryPageComponent" ;;
+            route-docs) FAILED_SYMBOL="DocsPageComponent" ;;
             *) continue ;;
         esac
         sed -i "/${FAILED_SYMBOL}/d" src/app/btst-smoke-test/page.tsx
