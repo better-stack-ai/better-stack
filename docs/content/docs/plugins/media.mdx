@@ -78,45 +78,64 @@ development use.
 
 ### 2. Add Plugin to Client
 
-Register the media client plugin in your `stack-client.tsx` file:
+Configure the shared client runtime once, then give Media only its own upload
+and lifecycle choices:
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { mediaClientPlugin } from "@btst/stack/plugins/media/client"
 import { QueryClient } from "@tanstack/react-query"
 
-const getBaseURL = () =>
-  process.env.BASE_URL || "http://localhost:3000"
+const getBaseURL = (serverOrigin?: string) =>
+  typeof window !== "undefined"
+    ? process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+    : serverOrigin ||
+      process.env.BTST_SITE_URL ||
+      process.env.BASE_URL ||
+      "http://localhost:3000"
 
-export const getStackClient = (queryClient: QueryClient) => {
-  const baseURL = getBaseURL()
+export const getStackClient = (
+  queryClient: QueryClient,
+  options?: {
+    headers?: Headers
+    identity?: { readonly id: string; readonly [key: string]: unknown }
+    origin?: string
+  },
+) => {
+  const baseURL = getBaseURL(options?.origin)
 
-  return createStackClient({
+  return createClientStack({
+    api: {
+      baseURL,
+      basePath: "/api/data",
+      ...(options?.headers ? { headers: options.headers } : {}),
+    },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
       media: mediaClientPlugin({
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-        queryClient,
+        uploadMode: "direct",
+        identityPartition: options?.identity,
       }),
     },
   })
 }
 ```
 
-**Required configuration:**
-- `apiBaseURL`: Base URL for server-side API requests
-- `apiBasePath`: Path where your BTST API is mounted
-- `siteBaseURL`: Base URL of your site for route metadata
-- `siteBasePath`: Path where your BTST pages are mounted
-- `queryClient`: React Query client used for prefetching and caching
+`uploadMode` must match the backend storage adapter. `identityPartition` is the
+optional request identity snapshot used to align protected SSR cache keys with
+the browser's hydrated identity. API/site locations, request headers, and the
+React Query client belong to `createClientStack()` and are inherited by Media.
+Pass the request URL's origin as `options.origin` during SSR when a canonical
+`BTST_SITE_URL` or `BASE_URL` is not configured; browser stacks use the public
+site variable or `window.location.origin`.
 
 <Callout type="info">
 The media client plugin registers the `/media` page route and prefetches the
-initial asset grid and folder tree during SSR. Browser-side API calls and
-navigation use the top-level `StackProvider.api` and
-`StackProvider.router` values below.
+initial asset grid and folder tree during SSR. Create a request-specific stack
+with `headers` on the server, and a separate browser stack without request
+headers. The browser projection never serializes cookies or authorization
+headers.
 </Callout>
 
 ### 3. Import Plugin CSS
@@ -131,137 +150,42 @@ This includes the built-in media library UI, picker layout, folder tree, upload 
 
 ### 4. Configure the Provider
 
-Configure top-level framework wiring and media-specific overrides in your `StackProvider`:
+Pass the resolved browser stack to `StackProvider`. No Media override block is
+required for the built-in experience:
 
-<Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
-  <Tab value="next-js">
-    ```tsx title="app/pages/layout.tsx"
-    import { StackProvider } from "@btst/stack/context"
-    import { nextRouter } from "@btst/stack/next"
-    import type { MediaPluginOverrides } from "@btst/stack/plugins/media/client"
-    import { useQueryClient } from "@tanstack/react-query"
+```tsx title="app/pages/client-layout.tsx"
+"use client"
 
-    const getBaseURL = () =>
-      typeof window !== "undefined"
-        ? process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
-        : process.env.BASE_URL || "http://localhost:3000"
+import { useMemo, useState } from "react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { StackProvider } from "@btst/stack/context"
+import { nextRouter } from "@btst/stack/next"
+import { getStackClient } from "@/lib/stack-client"
 
-    type PluginOverrides = {
-      media: MediaPluginOverrides
-    }
+export function ClientLayout({ children }) {
+  const [queryClient] = useState(() => new QueryClient())
+  const stack = useMemo(() => getStackClient(queryClient), [queryClient])
 
-    export default function Layout({ children }) {
-      const queryClient = useQueryClient()
-      const baseURL = getBaseURL()
+  return (
+    <QueryClientProvider client={queryClient}>
+      <StackProvider
+        stack={stack}
+        router={nextRouter()}
+      >
+        {children}
+      </StackProvider>
+    </QueryClientProvider>
+  )
+}
+```
 
-      return (
-        <StackProvider<PluginOverrides>
-          basePath="/pages"
-          router={nextRouter()}
-          api={{ baseURL, basePath: "/api/data" }}
-          overrides={{
-            media: {
-              queryClient,
-              uploadMode: "direct",
-            },
-          }}
-        >
-          {children}
-        </StackProvider>
-      )
-    }
-    ```
-  </Tab>
-
-  <Tab value="react-router">
-    ```tsx title="app/routes/pages/_layout.tsx"
-    import { Outlet } from "react-router"
-    import { StackProvider } from "@btst/stack/context"
-    import { reactRouter } from "@btst/stack/react-router"
-    import type { MediaPluginOverrides } from "@btst/stack/plugins/media/client"
-    import { useQueryClient } from "@tanstack/react-query"
-
-    const getBaseURL = () =>
-      typeof window !== "undefined"
-        ? import.meta.env.VITE_BASE_URL || window.location.origin
-        : process.env.BASE_URL || "http://localhost:5173"
-
-    type PluginOverrides = {
-      media: MediaPluginOverrides
-    }
-
-    export default function Layout() {
-      const queryClient = useQueryClient()
-      const baseURL = getBaseURL()
-
-      return (
-        <StackProvider<PluginOverrides>
-          basePath="/pages"
-          router={reactRouter()}
-          api={{ baseURL, basePath: "/api/data" }}
-          overrides={{
-            media: {
-              queryClient,
-              uploadMode: "direct",
-            },
-          }}
-        >
-          <Outlet />
-        </StackProvider>
-      )
-    }
-    ```
-  </Tab>
-
-  <Tab value="tanstack">
-    ```tsx title="src/routes/pages/route.tsx"
-    import { StackProvider } from "@btst/stack/context"
-    import { tanstackRouter } from "@btst/stack/tanstack"
-    import type { MediaPluginOverrides } from "@btst/stack/plugins/media/client"
-    import { Outlet } from "@tanstack/react-router"
-    import { useQueryClient } from "@tanstack/react-query"
-
-    const getBaseURL = () =>
-      typeof window !== "undefined"
-        ? import.meta.env.VITE_BASE_URL || window.location.origin
-        : process.env.BASE_URL || "http://localhost:3000"
-
-    type PluginOverrides = {
-      media: MediaPluginOverrides
-    }
-
-    function Layout() {
-      const queryClient = useQueryClient()
-      const baseURL = getBaseURL()
-
-      return (
-        <StackProvider<PluginOverrides>
-          basePath="/pages"
-          router={tanstackRouter()}
-          api={{ baseURL, basePath: "/api/data" }}
-          overrides={{
-            media: {
-              queryClient,
-              uploadMode: "direct",
-            },
-          }}
-        >
-          <Outlet />
-        </StackProvider>
-      )
-    }
-    ```
-  </Tab>
-</Tabs>
-
-**Required overrides:**
-- `queryClient`
-
-**Optional overrides:**
-- `uploadMode`: Must match your backend storage adapter
-- `headers`: Additional request headers
-- `imageCompression`: Compression settings or `false` to disable compression
-- `onRouteRender`, `onRouteError`: Route lifecycle hooks
+Use the corresponding `reactRouter()` or `tanstackRouter()` adapter in those
+frameworks. `overrides.media` is reserved for genuine browser presentation and
+behavior choices such as `imageCompression`, `onRouteRender`, and
+`onRouteError`; it no longer accepts query clients, transport headers, or the
+upload mode. For a protected library, follow the [Permissions](#permissions)
+example below, which supplies both `auth={clientAuth}` and `initialIdentity`;
+an identity snapshot is intentionally ignored when no auth adapter is present.
 
 ### 5. Generate and Apply Database Changes
 
@@ -305,6 +229,7 @@ Your media plugin is now configured and ready to use. Here is a quick reference 
 | --- | --- |
 | `MediaPicker` | Embed the full media browser in your own forms and editors |
 | `ImageInputField` | Drop-in image field with preview, change, and remove actions |
+| `createMediaUploadConfig()` | Binds imperative uploads to the Media runtime resolved by the client stack |
 | `uploadAsset()` | Imperative upload helper for editors and non-React callbacks |
 | `useRegisterAssetForm()` | URL registration lifecycle with inline server field errors |
 | `useCreateFolderForm()` | Folder form lifecycle with notification and invalidation handling |
@@ -313,16 +238,18 @@ Your media plugin is now configured and ready to use. Here is a quick reference 
 
 ### Imperative uploads for editor callbacks
 
-When you need to upload an image outside React hooks, use `uploadAsset()`:
+When you need to upload an image outside React hooks, bind `uploadAsset()` to
+the Media runtime already resolved by your client stack:
 
 ```tsx title="app/pages/layout.tsx"
-import { uploadAsset } from "@btst/stack/plugins/media/client"
+import {
+  createMediaUploadConfig,
+  uploadAsset,
+} from "@btst/stack/plugins/media/client"
 
-const mediaClientConfig = {
-  apiBaseURL: baseURL,
-  apiBasePath: "/api/data",
-  uploadMode: "direct" as const,
-}
+const mediaClientConfig = createMediaUploadConfig(
+  stack.provider.plugins.media,
+)
 
 const uploadImage = async (file: File) => {
   const asset = await uploadAsset(mediaClientConfig, { file })
@@ -330,7 +257,9 @@ const uploadImage = async (file: File) => {
 }
 ```
 
-This is the same pattern used in the example apps to connect Blog, CMS, and Kanban image uploads to the shared Media plugin.
+This preserves Media endpoint overrides, public browser headers, explicit
+credentials, and the configured upload mode. The generated apps use the same
+pattern to connect Blog, CMS, and Kanban image uploads to Media.
 
 ### Embedding the picker in your own UI
 
@@ -504,17 +433,23 @@ export const clientAuth = createClientAuth({
 })
 
 // Framework layout helpers resolve this once on the server. Pass the same
-// snapshot both to StackProvider and the Media SSR query partition.
-<StackProvider auth={clientAuth} initialIdentity={initialIdentity}>
+// snapshot to the Media SSR query partition.
+const requestStack = getStackClient(queryClient, {
+  headers: requestHeaders,
+  identity: initialIdentity ?? undefined,
+})
+await requestStack.router.getRoute("/media")?.loader?.()
+
+// Create a separate, header-free stack for the browser provider.
+const browserStack = getStackClient(queryClient)
+
+<StackProvider
+  stack={browserStack}
+  auth={clientAuth}
+  initialIdentity={initialIdentity}
+>
   {children}
 </StackProvider>
-
-mediaClientPlugin({
-  // ...route and API configuration
-  queryClient,
-  headers: requestHeaders,
-  identityPartition: initialIdentity ?? undefined,
-})
 ```
 
 The Next.js, React Router, and TanStack framework helpers hydrate
@@ -744,13 +679,17 @@ BTST's Vercel Blob adapter uses `handleUpload` from `@vercel/blob/client` for th
 
 #### MediaClientConfig
 
-The client plugin accepts the required route, site, and React Query configuration:
+The factory accepts only Media-specific choices. Shared transport, site, and
+React Query values come from `createClientStack()`.
 
 <AutoTypeTable path="../packages/stack/src/plugins/media/client/plugin.tsx" name="MediaClientConfig" />
 
 #### MediaClientHooks
 
 These hooks run around the media library SSR loader:
+
+In v3, rename `onLoadError` to `onErrorLoad`. The error observer runs at most
+once per loader execution, and observer failures cannot make SSR reject.
 
 <AutoTypeTable path="../packages/stack/src/plugins/media/client/plugin.tsx" name="MediaClientHooks" />
 
@@ -852,10 +791,45 @@ The Media plugin exposes React Query-powered hooks for reading and mutating asse
 
 ### Query keys (`@btst/stack/plugins/media/query-keys`)
 
-`mediaResources` is the shared declaration used by client hooks and SSR query factories. `createMediaQueryKeys(client, headers?)` returns these corrected v3 cache prefixes:
+`mediaResources` is the shared declaration used by client hooks and SSR query factories. Media list keys include the resolved service location so stacks that share a `QueryClient` cannot read or invalidate another Media endpoint's data:
 
-- Asset lists: `["mediaAssets", "list", discriminator]`
-- Folder lists: `["mediaFolders", "list", "all" | "root" | parentId]`
+- Asset lists: `["mediaAssets", "list", discriminator, { identity?, endpoint: { baseURL, basePath } }]`
+- Folder lists: `["mediaFolders", "list", "all" | "root" | parentId, { identity?, endpoint: { baseURL, basePath } }]`
+
+Pass the same browser-safe endpoint partition to resource factories and raw key builders:
+
+```ts
+import {
+  MEDIA_QUERY_KEYS,
+  type MediaEndpointPartition,
+} from "@btst/stack/plugins/media/api"
+import { createMediaQueryKeys } from "@btst/stack/plugins/media/query-keys"
+
+const endpoint: MediaEndpointPartition = {
+  baseURL: "https://media.example.com",
+  basePath: "/api/data",
+}
+
+const queries = createMediaQueryKeys(client, headers)
+const assetsQuery = queries.mediaAssets.list(
+  { limit: 40 },
+  undefined, // anonymous identity partition
+  endpoint,
+)
+const foldersQuery = queries.mediaFolders.list(undefined, undefined, endpoint)
+
+const assetsKey = MEDIA_QUERY_KEYS.assetsList(
+  { limit: 40 },
+  undefined,
+  endpoint,
+)
+```
+
+In v3, the endpoint is a required third list argument. When migrating manual SSR or SSG prefetch code, use the exact `baseURL` and `basePath` resolved for Media in the browser stack so hydration reuses the same cache. The partition deliberately accepts no headers, credentials, or API client; keep those transport values in the client/factory configuration. For authenticated data, pass the same identity partition used by `MediaClientConfig.identityPartition` as the second argument.
+
+#### MediaEndpointPartition
+
+<AutoTypeTable path="../packages/stack/src/plugins/media/api/query-key-defs.ts" name="MediaEndpointPartition" />
 
 `useFolders(undefined)` lists all folders, while `useFolders(null)` lists only root folders. The two calls intentionally have distinct cache keys and HTTP semantics.
 
@@ -918,13 +892,19 @@ Standalone getter and mutation exports remain lower-level adapter primitives for
 The raw SSG helper can prefetch the initial library without a live HTTP server:
 
 ```ts
-await appStack.raw.media.prefetchForRoute("library", queryClient)
+await appStack.raw.media.prefetchForRoute("library", queryClient, {
+  baseURL: "https://app.example.com",
+  basePath: "/api/data",
+})
 ```
 
 This seeds the same anonymous asset/folder keys used by the browser and strips
-tenant fields. It deliberately performs no request authorization. Use it only
-when the generated page is intentionally public and protected at the deployment
-boundary; never put private or per-user Media data into a shared static build.
+tenant fields. The endpoint must exactly match the Media API location resolved
+by the browser stack; it scopes the cache and resolves local-adapter asset URLs,
+but accepts no headers or credentials. The helper deliberately performs no
+request authorization. Use it only when the generated page is intentionally
+public and protected at the deployment boundary; never put private or per-user
+Media data into a shared static build.
 Authenticated SSR should instead forward request headers, hydrate
 `initialIdentity`, and pass that identity as `MediaClientConfig.identityPartition`.
 
@@ -965,17 +945,13 @@ import { mediaClientPlugin } from "@btst/stack/plugins/media/client"
 import { LibraryPageComponent } from "@/components/btst/media/client/components/pages/library-page"
 
 mediaClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  siteBaseURL: "...",
-  siteBasePath: "/pages",
-  queryClient,
+  uploadMode: "direct",
   pageComponents: {
     library: LibraryPageComponent, // replaces the media library page
   },
 })
 ```
 
-The ejected library page reads API and navigation services from the top-level
-`StackProvider` and media-specific upload mode, headers, and hooks from the
-`media` override.
+The ejected library page reads the resolved API/site/query runtime and upload
+mode from the registered stack. Optional image compression and route lifecycle
+customization remain in the inferred `media` provider override.

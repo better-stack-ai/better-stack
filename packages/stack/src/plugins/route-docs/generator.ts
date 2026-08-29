@@ -1,5 +1,6 @@
 import type { ClientStackContext, SitemapEntry } from "../../types";
 import { resolvePluginProgrammaticId } from "../../plugin-registration";
+import { ROUTE_DOCS_PLUGIN_ID } from "./client/constants";
 import type { Route } from "@btst/yar";
 import * as z from "zod";
 
@@ -289,7 +290,7 @@ export async function fetchAllSitemapEntries(
 	for (const [pluginKey, plugin] of Object.entries(context.plugins)) {
 		const pluginId = resolvePluginProgrammaticId(plugin, pluginKey);
 		// Skip route-docs plugin
-		if (pluginId === "routeDocs" || pluginId === "route-docs") {
+		if (pluginId === ROUTE_DOCS_PLUGIN_ID) {
 			continue;
 		}
 
@@ -334,7 +335,7 @@ export function generateRouteDocsSchema(
 	for (const [pluginKey, plugin] of Object.entries(context.plugins)) {
 		const pluginId = resolvePluginProgrammaticId(plugin, pluginKey);
 		// Skip the route-docs plugin itself
-		if (pluginId === "routeDocs" || pluginId === "route-docs") {
+		if (pluginId === ROUTE_DOCS_PLUGIN_ID) {
 			continue;
 		}
 

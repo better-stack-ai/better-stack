@@ -15,8 +15,8 @@ import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client";
 import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
 import {
+	createMediaUploadConfig,
 	uploadAsset,
-	type MediaPluginOverrides,
 } from "@btst/stack/plugins/media/client";
 import {
 	MediaPicker,
@@ -26,14 +26,6 @@ import { resolveUser, searchUsers } from "@/lib/mock-users";
 import { Button } from "@/components/ui/button";
 import { clientAuth } from "@/lib/authorization.client";
 
-// Get base URL - works on both server and client
-// On server: uses process.env.BASE_URL
-// On client: uses NEXT_PUBLIC_BASE_URL or falls back to window.location.origin (which will be correct)
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3000";
-
 type PluginOverrides = {
 	blog: BlogPluginOverrides;
 	aiChat: AiChatPluginOverrides;
@@ -41,7 +33,6 @@ type PluginOverrides = {
 	formBuilder: FormBuilderPluginOverrides;
 	kanban: KanbanPluginOverrides;
 	comments: CommentsPluginOverrides;
-	media: MediaPluginOverrides;
 };
 
 export function BtstPagesClientLayout({
@@ -53,15 +44,10 @@ export function BtstPagesClientLayout({
 }) {
 	// fresh instance to avoid stale client cache overriding hydrated data
 	const [queryClient] = useState(() => getOrCreateQueryClient());
-	const baseURL = getBaseURL();
 	const stack = React.useMemo(() => getStackClient(queryClient), [queryClient]);
 	const mediaClientConfig = React.useMemo(
-		() => ({
-			apiBaseURL: baseURL,
-			apiBasePath: "/api/data",
-			uploadMode: "direct" as const,
-		}),
-		[baseURL],
+		() => createMediaUploadConfig(stack.provider.plugins.media),
+		[stack],
 	);
 
 	const uploadImage = React.useCallback(
@@ -145,10 +131,6 @@ export function BtstPagesClientLayout({
 							resourceLinks: {
 								"blog-post": (slug) => `/pages/blog/${slug}`,
 							},
-						},
-						media: {
-							uploadMode: "direct",
-							queryClient,
 						},
 					} satisfies Partial<PluginOverrides> as never
 				}

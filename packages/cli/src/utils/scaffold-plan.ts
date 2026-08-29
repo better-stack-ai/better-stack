@@ -25,6 +25,8 @@ const CANONICAL_CLIENT_PLUGIN_KEYS = new Set<PluginKey>([
 	"comments",
 	"form-builder",
 	"kanban",
+	"media",
+	"route-docs",
 ]);
 
 function getFrameworkPaths(framework: Framework, cssFile: string) {
@@ -66,8 +68,12 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 
 function getPublicSiteURLVar(framework: Framework) {
 	if (framework === "nextjs") return "NEXT_PUBLIC_SITE_URL";
-	if (framework === "react-router") return "PUBLIC_SITE_URL";
 	return "VITE_PUBLIC_SITE_URL";
+}
+
+function getBrowserSiteURLExpression(framework: Framework) {
+	if (framework === "nextjs") return "process.env.NEXT_PUBLIC_SITE_URL";
+	return "import.meta.env.VITE_PUBLIC_SITE_URL";
 }
 
 function getPagesLayoutFilePath(framework: Framework): string {
@@ -179,9 +185,6 @@ function buildPluginTemplateContext(
 				if (CANONICAL_CLIENT_PLUGIN_KEYS.has(m.key)) {
 					return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
 				}
-				if (m.key === "route-docs") {
-					return `\t\t\t${m.configKey}: ${m.clientSymbol}({\n\t\t\t\tqueryClient,\n\t\t\t\tsiteBasePath: "/pages",\n\t\t\t}),`;
-				}
 				const siteBase = "/pages";
 				return `\t\t\t${m.configKey}: ${m.clientSymbol}({
 \t\t\t\tapiBaseURL: baseURL,
@@ -194,17 +197,12 @@ function buildPluginTemplateContext(
 			.join("\n"),
 		pagesLayoutOverrides: clientMetas
 			.map((m) => {
-				if (m.key === "route-docs") {
+				if (m.key === "route-docs" || m.key === "media") {
 					return "";
 				}
 				const layoutFile = getPagesLayoutFilePath(framework);
 				if (m.key === "comments") {
 					return "";
-				}
-				if (m.key === "media") {
-					return `\t\t\t\t\t"${m.key}": {
-\t\t\t\t\t\tqueryClient,
-\t\t\t\t\t},`;
 				}
 				if (m.key === "blog") {
 					return `\t\t\t\t\t"${m.key}": {
@@ -329,6 +327,7 @@ export async function buildScaffoldPlan(
 	const sharedContext = {
 		alias: input.alias,
 		providerApiLiteral: '{{ baseURL, basePath: "/api/data" }}',
+		browserSiteURLExpression: getBrowserSiteURLExpression(input.framework),
 		publicSiteURLVar: getPublicSiteURLVar(input.framework),
 		useGlobalSingleton:
 			input.framework === "nextjs" && input.adapter === "memory",

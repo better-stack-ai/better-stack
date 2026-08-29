@@ -29,6 +29,7 @@ export {
 	MEDIA_QUERY_KEYS,
 	assetListDiscriminator,
 	folderListDiscriminator,
+	type MediaEndpointPartition,
 	type MediaIdentityPartition,
 } from "./query-key-defs";
 

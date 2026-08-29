@@ -13,6 +13,43 @@ export type MediaIdentityPartition =
 	| `pending:${number}`
 	| `error:${number}`;
 
+/** Resolved Media service location that partitions shared React Query caches. */
+export interface MediaEndpointPartition {
+	/** Absolute origin of the resolved Media API. */
+	baseURL: string;
+	/** Path where the resolved Media API is mounted. */
+	basePath: string;
+}
+
+/** Stable structured endpoint discriminator used in Media query keys. */
+export function mediaEndpointDiscriminator(
+	endpoint: MediaEndpointPartition,
+): MediaEndpointPartition {
+	return {
+		baseURL: endpoint.baseURL,
+		basePath: endpoint.basePath,
+	};
+}
+
+/** Identity and endpoint scope shared by Media browser, SSR, and SSG keys. */
+export interface MediaQueryScope {
+	/** Optional identity partition for protected Media data. */
+	identity?: MediaIdentityPartition;
+	/** Browser-safe resolved Media service location. */
+	endpoint: MediaEndpointPartition;
+}
+
+/** Creates the browser-safe scope cell appended to Media list query keys. */
+export function mediaQueryScope(
+	identityPartition: MediaIdentityPartition | undefined,
+	endpoint: MediaEndpointPartition,
+): MediaQueryScope {
+	return {
+		...(identityPartition === undefined ? {} : { identity: identityPartition }),
+		endpoint: mediaEndpointDiscriminator(endpoint),
+	};
+}
+
 /**
  * Discriminator for the asset list cache key.
  */
@@ -48,30 +85,28 @@ export function folderListDiscriminator(
 /** Full query key builders — use these with `queryClient.setQueryData()`. */
 export const MEDIA_QUERY_KEYS = {
 	assetsList: (
-		params?: AssetListParams,
-		identityPartition?: MediaIdentityPartition,
+		params: AssetListParams | undefined,
+		identityPartition: MediaIdentityPartition | undefined,
+		endpoint: MediaEndpointPartition,
 	) =>
-		identityPartition === undefined
-			? (["mediaAssets", "list", assetListDiscriminator(params)] as const)
-			: ([
-					"mediaAssets",
-					"list",
-					assetListDiscriminator(params),
-					{ identity: identityPartition },
-				] as const),
+		[
+			"mediaAssets",
+			"list",
+			assetListDiscriminator(params),
+			mediaQueryScope(identityPartition, endpoint),
+		] as const,
 
 	assetDetail: (id: string) => ["mediaAssets", "detail", id] as const,
 
 	foldersList: (
-		parentId?: string | null,
-		identityPartition?: MediaIdentityPartition,
+		parentId: string | null | undefined,
+		identityPartition: MediaIdentityPartition | undefined,
+		endpoint: MediaEndpointPartition,
 	) =>
-		identityPartition === undefined
-			? (["mediaFolders", "list", folderListDiscriminator(parentId)] as const)
-			: ([
-					"mediaFolders",
-					"list",
-					folderListDiscriminator(parentId),
-					{ identity: identityPartition },
-				] as const),
+		[
+			"mediaFolders",
+			"list",
+			folderListDiscriminator(parentId),
+			mediaQueryScope(identityPartition, endpoint),
+		] as const,
 };

@@ -4,6 +4,7 @@ import type { FallbackProps } from "react-error-boundary";
 import { usePluginOverrides } from "@btst/stack/context";
 import { ComposedRoute } from "@btst/stack/client/components";
 import type { MediaPluginOverrides } from "../../overrides";
+import { MEDIA_PLUGIN_ID } from "../../constants";
 import { Loader2 } from "lucide-react";
 import { mediaPermissions } from "../../../permissions";
 
@@ -29,7 +30,7 @@ function LibraryError({ error }: FallbackProps) {
 }
 
 export function LibraryPageComponent() {
-	usePluginOverrides<MediaPluginOverrides>("media");
+	usePluginOverrides<MediaPluginOverrides>(MEDIA_PLUGIN_ID);
 	return (
 		<ComposedRoute
 			path="/media"

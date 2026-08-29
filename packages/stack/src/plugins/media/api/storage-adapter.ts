@@ -151,9 +151,8 @@ export interface VercelBlobStorageAdapter {
 		body: VercelBlobUploadCompletedBody,
 	): Promise<VerifiedVercelBlobCallback>;
 	/**
-	 * Process a raw request from `@vercel/blob/client`'s `upload()` or from
-	 * Vercel Blob's upload-completion webhook. Returns a JSON-serialisable object
-	 * that should be sent back as the response body.
+	 * Process a client-token request or Vercel Blob's upload-completion webhook.
+	 * Returns a JSON-serialisable object that should be sent as the response body.
 	 */
 	handleRequest(
 		request: Request,

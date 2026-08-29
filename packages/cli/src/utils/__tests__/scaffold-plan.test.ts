@@ -156,7 +156,9 @@ describe("scaffold plan", () => {
 			(f) => f.path === "lib/stack-client.tsx",
 		);
 		expect(stackClientFile?.content).toContain("blogClientPlugin");
-		expect(stackClientFile?.content).toContain("const baseURL = getBaseURL()");
+		expect(stackClientFile?.content).toContain(
+			"const baseURL = getBaseURL(options?.origin)",
+		);
 		expect(stackClientFile?.content).toContain(
 			"...(options?.headers ? { headers: options.headers } : {})",
 		);
@@ -262,7 +264,7 @@ describe("scaffold plan", () => {
 			);
 			expect(stackClientFile?.content).toBeDefined();
 			expect(stackClientFile?.content).toContain(
-				"const baseURL = getBaseURL()",
+				"const baseURL = getBaseURL(options?.origin)",
 			);
 			expect(stackClientFile?.content).toContain(
 				'if (typeof window !== "undefined")',
@@ -474,6 +476,52 @@ describe("scaffold plan", () => {
 			"media: mediaBackendPlugin({ storageAdapter: undefined as any }),",
 		);
 	});
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"emits plugin-only Media and Route Docs factories for %s",
+		async (framework) => {
+			const browserSiteURLExpression =
+				framework === "nextjs"
+					? "process.env.NEXT_PUBLIC_SITE_URL"
+					: "import.meta.env.VITE_PUBLIC_SITE_URL";
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["media", "route-docs"],
+				alias: "@/",
+				cssFile:
+					framework === "nextjs" ? "app/globals.css" : "src/styles/app.css",
+			});
+			const stackClientFile = plan.files.find((file) =>
+				file.path.endsWith("stack-client.tsx"),
+			);
+			const pagesLayoutFile = plan.files.find((file) =>
+				file.content.includes("<StackProvider"),
+			);
+
+			expect(stackClientFile?.content).toContain("media: mediaClientPlugin(),");
+			expect(stackClientFile?.content).toContain(
+				"routeDocs: routeDocsClientPlugin(),",
+			);
+			expect(stackClientFile?.content).not.toContain("apiBaseURL:");
+			expect(stackClientFile?.content).not.toContain("siteBasePath:");
+			expect(stackClientFile?.content).toContain(
+				`return ${browserSiteURLExpression} || window.location.origin`,
+			);
+			expect(stackClientFile?.content).toContain(
+				"const baseURL = getBaseURL(options?.origin)",
+			);
+			expect(stackClientFile?.content).toContain(
+				"if (serverOrigin) return serverOrigin",
+			);
+			expect(stackClientFile?.content).toContain(
+				"if (process.env.BTST_SITE_URL) return process.env.BTST_SITE_URL",
+			);
+			expect(pagesLayoutFile?.content).not.toContain("as never");
+			expect(pagesLayoutFile?.content).not.toContain('"media": {');
+			expect(pagesLayoutFile?.content).not.toContain("queryClient,");
+		},
+	);
 
 	it("uses shared query client utility in react-router pages route template", async () => {
 		const plan = await buildScaffoldPlan({

@@ -12,8 +12,8 @@ import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client";
 import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
 import {
+	createMediaUploadConfig,
 	uploadAsset,
-	type MediaPluginOverrides,
 } from "@btst/stack/plugins/media/client";
 import {
 	MediaPicker,
@@ -28,14 +28,6 @@ import { hydrationAuth } from "../../lib/authorization.server";
 const layout = createReactRouterLayout({ auth: hydrationAuth });
 export const loader = layout.loader;
 
-// Get base URL function - works on both server and client
-// On server: uses process.env.BASE_URL
-// On client: uses import.meta.env.VITE_BASE_URL or falls back to window.location.origin
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? import.meta.env.VITE_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3008";
-
 type PluginOverrides = {
 	blog: BlogPluginOverrides;
 	aiChat: AiChatPluginOverrides;
@@ -43,21 +35,15 @@ type PluginOverrides = {
 	formBuilder: FormBuilderPluginOverrides;
 	kanban: KanbanPluginOverrides;
 	comments: CommentsPluginOverrides;
-	media: MediaPluginOverrides;
 };
 
 export default function Layout() {
 	const { initialIdentity } = useLoaderData<typeof loader>();
-	const baseURL = getBaseURL();
 	const queryClient = useQueryClient();
 	const stack = useMemo(() => getStackClient(queryClient), [queryClient]);
 	const mediaClientConfig = useMemo(
-		() => ({
-			apiBaseURL: baseURL,
-			apiBasePath: "/api/data",
-			uploadMode: "direct" as const,
-		}),
-		[baseURL],
+		() => createMediaUploadConfig(stack.provider.plugins.media),
+		[stack],
 	);
 
 	const uploadImage = useCallback(
@@ -128,10 +114,6 @@ export default function Layout() {
 						resourceLinks: {
 							"blog-post": (slug) => `/pages/blog/${slug}`,
 						},
-					},
-					media: {
-						uploadMode: "direct",
-						queryClient,
 					},
 				} satisfies Partial<PluginOverrides> as never
 			}

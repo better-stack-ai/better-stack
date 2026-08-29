@@ -119,8 +119,7 @@ export function createReactRouterPage(options: CreateReactRouterPageOptions) {
 		return (args.loaderData ?? args.data)?.meta;
 	}
 
-	function Component() {
-		const data = useLoaderData<typeof loader>();
+	function PageContent({ path }: { path: string }) {
 		const queryClient = useQueryClient();
 		// Memoized so PageComponent keeps a stable identity across re-renders:
 		// getRoute() invokes the route handler, which produces new component
@@ -128,8 +127,8 @@ export function createReactRouterPage(options: CreateReactRouterPageOptions) {
 		// re-renders this component (e.g. a search-param update) would remount
 		// the whole page subtree, losing component state such as open dialogs.
 		const route = useMemo(
-			() => getStackClient(queryClient).router.getRoute(data.path),
-			[queryClient, data.path],
+			() => getStackClient(queryClient).router.getRoute(path),
+			[queryClient, path],
 		);
 		const page = route?.PageComponent ? (
 			<route.PageComponent />
@@ -138,10 +137,15 @@ export function createReactRouterPage(options: CreateReactRouterPageOptions) {
 		) : (
 			<div>Route not found</div>
 		);
+		return wrapPage ? wrapPage(page) : page;
+	}
+
+	function Component() {
+		const data = useLoaderData<typeof loader>();
 
 		return (
 			<HydrationBoundary state={data.dehydratedState}>
-				{wrapPage ? wrapPage(page) : page}
+				<PageContent path={data.path} />
 			</HydrationBoundary>
 		);
 	}

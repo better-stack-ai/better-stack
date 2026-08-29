@@ -189,6 +189,7 @@ export function createClientStack<
 	const router = createRouter<TRoutes, {}>(allRoutes);
 
 	const result: ClientStack<TRoutes> = {
+		context: clientStackContext,
 		router,
 		async generateSitemap() {
 			const sitemapEntries: Sitemap = [];

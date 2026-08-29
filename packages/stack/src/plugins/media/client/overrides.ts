@@ -1,4 +1,3 @@
-import type { QueryClient } from "@tanstack/react-query";
 import type { ImageCompressionOptions } from "./utils/image-compression";
 
 /**
@@ -9,6 +8,12 @@ import type { ImageCompressionOptions } from "./utils/image-compression";
  */
 export type MediaUploadMode = "direct" | "s3" | "vercel-blob";
 
+/** Browser-safe Media factory values carried by the resolved client stack. */
+export interface MediaProviderConfig {
+	/** Upload transport matching the server-side storage adapter. */
+	readonly uploadMode?: MediaUploadMode;
+}
+
 /**
  * Overridable components and functions for the Media plugin.
  *
@@ -16,22 +21,6 @@ export type MediaUploadMode = "direct" | "s3" | "vercel-blob";
  * via the StackProvider overrides.
  */
 export interface MediaPluginOverrides {
-	/**
-	 * React Query client — used by the MediaPicker to cache and fetch assets.
-	 */
-	queryClient: QueryClient;
-
-	/**
-	 * Upload mode — must match the storageAdapter configured in mediaBackendPlugin.
-	 * @default "direct"
-	 */
-	uploadMode?: MediaUploadMode;
-
-	/**
-	 * Optional headers to pass with API requests (e.g., for SSR auth).
-	 */
-	headers?: HeadersInit;
-
 	/**
 	 * Client-side image compression applied before upload via the Canvas API.
 	 *

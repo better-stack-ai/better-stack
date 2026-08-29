@@ -378,32 +378,64 @@ describe("client plugin SSR loaders", () => {
 			requestedUrls.push(url);
 			return new Response(
 				JSON.stringify(
-					url.includes("/media/assets") ? { items: [], total: 0 } : [],
+					url.includes("/media/assets")
+						? {
+								items: [
+									{
+										id: "asset-ssr",
+										filename: "ssr.jpg",
+										originalName: "ssr.jpg",
+										mimeType: "image/jpeg",
+										size: 1,
+										url: "/uploads/ssr.jpg",
+										createdAt: "2026-01-01T00:00:00.000Z",
+									},
+								],
+								total: 1,
+							}
+						: [],
 				),
 				{ status: 200, headers: { "content-type": "application/json" } },
 			);
 		});
-		const plugin = mediaClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			identityPartition: identity,
+			plugins: {
+				media: mediaClientPlugin({ identityPartition: identity }),
+			},
 		});
 
-		await plugin.routes().library().loader?.();
+		await stack.router.getRoute("/media")?.loader?.();
 
 		const client = createApiClient<MediaApiRouter>({
 			baseURL: API_BASE_URL,
 			basePath: API_BASE_PATH,
 		});
+		const endpoint = {
+			baseURL: API_BASE_URL,
+			basePath: API_BASE_PATH,
+		};
 		const foldersQuery = createMediaQueryKeys(
 			client,
 			TEST_HEADERS,
-		).mediaFolders.list(undefined, identity);
+		).mediaFolders.list(undefined, identity, endpoint);
 		expect(queryClient.getQueryData(foldersQuery.queryKey)).toEqual([]);
+		const assetsQuery = createMediaQueryKeys(
+			client,
+			TEST_HEADERS,
+		).mediaAssets.list({ limit: 40 }, identity, endpoint);
+		const assets = queryClient.getQueryData<{
+			pages: Array<{ items: Array<{ url: string }> }>;
+		}>(assetsQuery.queryKey);
+		expect(assets?.pages[0]?.items[0]?.url).toBe(
+			"http://localhost:3000/uploads/ssr.jpg",
+		);
 		const folderUrl = new URL(
 			requestedUrls.find((url) => url.includes("/media/folders")) ?? "",
 		);
@@ -412,7 +444,7 @@ describe("client plugin SSR loaders", () => {
 
 	it("media library loader reports a stored folder-prefetch error", async () => {
 		const queryClient = new QueryClient();
-		const onLoadError = vi.fn();
+		const onErrorLoad = vi.fn();
 		vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
 			const url =
 				typeof input === "string"
@@ -430,20 +462,23 @@ describe("client plugin SSR loaders", () => {
 						headers: { "content-type": "application/json" },
 					});
 		});
-		const plugin = mediaClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: { onLoadError },
+			plugins: {
+				media: mediaClientPlugin({ hooks: { onErrorLoad } }),
+			},
 		});
 
-		await plugin.routes().library().loader?.();
+		await stack.router.getRoute("/media")?.loader?.();
 
-		expect(onLoadError).toHaveBeenCalledTimes(1);
-		const [errorArg] = onLoadError.mock.calls[0] ?? [];
+		expect(onErrorLoad).toHaveBeenCalledTimes(1);
+		const [errorArg] = onErrorLoad.mock.calls[0] ?? [];
 		expect(errorArg).toBeInstanceOf(Error);
 		expect((errorArg as Error).message).toBe("folders unavailable");
 	});

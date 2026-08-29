@@ -1648,7 +1648,10 @@ describe("Media operation-first authorization", () => {
 			name: "Nested",
 			parentId: folder.id,
 		});
-		await seedAsset(backend, { folderId: folder.id });
+		await seedAsset(backend, {
+			folderId: folder.id,
+			url: "/uploads/photo.jpg",
+		});
 		expect("prefetchForRoute" in backend.trusted.media).toBe(false);
 		expect("getAssetById" in backend.trusted.media).toBe(false);
 		expect(
@@ -1657,22 +1660,39 @@ describe("Media operation-first authorization", () => {
 		).toBe(false);
 		expect("updateAsset" in backend.trusted.media).toBe(true);
 		const queryClient = new QueryClient();
-		await backend.raw.media.prefetchForRoute("library", queryClient);
+		const endpoint = {
+			baseURL: "https://media.example.com",
+			basePath: "/api/data",
+		};
+		await backend.raw.media.prefetchForRoute("library", queryClient, endpoint);
 		const cached = queryClient.getQueryData(
-			MEDIA_QUERY_KEYS.assetsList({ limit: 40 }),
+			MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, undefined, endpoint),
 		);
 		expect(JSON.stringify(cached)).not.toContain("tenant-a");
-		expect(queryClient.getQueryData(MEDIA_QUERY_KEYS.foldersList())).toEqual(
+		expect(JSON.stringify(cached)).toContain(
+			"https://media.example.com/uploads/photo.jpg",
+		);
+		expect(
+			queryClient.getQueryData(
+				MEDIA_QUERY_KEYS.foldersList(undefined, undefined, endpoint),
+			),
+		).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({ id: folder.id }),
 				expect.objectContaining({ id: child.id, parentId: folder.id }),
 			]),
 		);
 		expect(
-			JSON.stringify(queryClient.getQueryData(MEDIA_QUERY_KEYS.foldersList())),
+			JSON.stringify(
+				queryClient.getQueryData(
+					MEDIA_QUERY_KEYS.foldersList(undefined, undefined, endpoint),
+				),
+			),
 		).not.toContain("tenant-a");
 		expect(
-			queryClient.getQueryData(MEDIA_QUERY_KEYS.foldersList(null)),
+			queryClient.getQueryData(
+				MEDIA_QUERY_KEYS.foldersList(null, undefined, endpoint),
+			),
 		).toBeUndefined();
 	});
 
