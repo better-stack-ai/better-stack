@@ -97,7 +97,7 @@ function stripMigrationBlocks(source, file) {
 		/^\s*\{\/\* canonical-dx-guard: migration:start reason="[^"]+" \*\/\}\s*$/;
 	const endPattern = /^\s*\{\/\* canonical-dx-guard: migration:end \*\/\}\s*$/;
 	let insideMigration = false;
-	return source
+	const stripped = source
 		.split("\n")
 		.map((line, index) => {
 			if (startPattern.test(line)) {
@@ -121,6 +121,10 @@ function stripMigrationBlocks(source, file) {
 			return insideMigration ? "" : line;
 		})
 		.join("\n");
+	if (insideMigration) {
+		throw new Error(`${file}: unclosed canonical DX migration marker`);
+	}
+	return stripped;
 }
 
 function lineAt(source, index) {
