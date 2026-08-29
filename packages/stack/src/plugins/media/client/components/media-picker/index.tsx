@@ -18,14 +18,10 @@ import { FolderTree } from "./folder-tree";
 import { BrowseTab } from "./browse-tab";
 import { UploadTab } from "./upload-tab";
 import { UrlTab } from "./url-tab";
-import {
-	PermissionAccess,
-	usePluginOverrides,
-	useStack,
-	useTranslate,
-} from "@btst/stack/context";
+import { PermissionAccess, useStack, useTranslate } from "@btst/stack/context";
 import { mediaPermissions } from "../../../permissions";
-import type { MediaPluginOverrides } from "../../overrides";
+import type { MediaProviderConfig } from "../../overrides";
+import { MEDIA_PLUGIN_ID } from "../../constants";
 import {
 	MediaFinalizePermissionCheck,
 	MediaUploadPermissionCheck,
@@ -94,8 +90,11 @@ export function MediaPicker({
 	accept,
 }: MediaPickerProps) {
 	const t = useTranslate();
-	const { uploadMode = "direct" } =
-		usePluginOverrides<MediaPluginOverrides>("media");
+	const { plugins } = useStack();
+	const providerConfig = plugins?.[MEDIA_PLUGIN_ID]?.config as
+		| MediaProviderConfig
+		| undefined;
+	const uploadMode = providerConfig?.uploadMode ?? "direct";
 	const [open, setOpen] = useState(false);
 	const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 	const [selectedAssets, setSelectedAssets] = useState<SerializedAsset[]>([]);

@@ -9,6 +9,7 @@ export interface MediaUploadClientConfig {
 	apiBaseURL: string;
 	apiBasePath: string;
 	headers?: HeadersInit;
+	credentials?: RequestCredentials;
 	uploadMode?: MediaUploadMode;
 	imageCompression?: ImageCompressionOptions | false;
 }
@@ -39,6 +40,7 @@ export async function uploadAsset(
 		apiBaseURL,
 		apiBasePath,
 		headers,
+		credentials,
 		uploadMode = "direct",
 		imageCompression,
 	} = config;
@@ -63,6 +65,7 @@ export async function uploadAsset(
 		const res = await fetch(`${base}/media/upload`, {
 			method: "POST",
 			headers: headersObj,
+			credentials,
 			body: formData,
 		});
 		if (!res.ok) {
@@ -79,6 +82,7 @@ export async function uploadAsset(
 				...Object.fromEntries(headersObj.entries()),
 				"Content-Type": "application/json",
 			},
+			credentials,
 			body: JSON.stringify({
 				filename: processedFile.name,
 				mimeType: processedFile.type,
@@ -117,6 +121,7 @@ export async function uploadAsset(
 				...Object.fromEntries(headersObj.entries()),
 				"Content-Type": "application/json",
 			},
+			credentials,
 			body: JSON.stringify({
 				filename: processedFile.name,
 				originalName: file.name,
@@ -154,6 +159,7 @@ export async function uploadAsset(
 				...Object.fromEntries(headersObj.entries()),
 				"Content-Type": "application/json",
 			},
+			credentials,
 			body: JSON.stringify({
 				filename: processedFile.name,
 				originalName: file.name,

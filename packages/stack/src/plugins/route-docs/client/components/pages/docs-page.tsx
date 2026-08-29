@@ -40,6 +40,7 @@ import {
 	Navigation,
 } from "lucide-react";
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { joinBasePath } from "@btst/stack/context";
 import type {
 	RouteDocsSchema,
 	DocumentedPlugin,
@@ -48,6 +49,14 @@ import type {
 	PluginSitemapEntry,
 } from "../../../generator";
 import { ROUTE_DOCS_QUERY_KEY, generateSchema } from "../../plugin";
+
+function createSiteUrl(
+	siteBaseURL: string,
+	siteBasePath: string,
+	path: string,
+): string {
+	return `${siteBaseURL}${joinBasePath(siteBasePath, path)}`;
+}
 
 /**
  * Escapes regex special characters in a string, except for placeholders
@@ -211,9 +220,11 @@ function ParametersSection({
  */
 function NavigationForm({
 	route,
+	siteBaseURL,
 	siteBasePath,
 }: {
 	route: DocumentedRoute;
+	siteBaseURL: string;
 	siteBasePath: string;
 }) {
 	const [paramValues, setParamValues] = useState<Record<string, string>>({});
@@ -238,7 +249,7 @@ function NavigationForm({
 				url = url.replace(`:${param.name}`, value);
 			}
 		}
-		return `${siteBasePath}${url}`;
+		return createSiteUrl(siteBaseURL, siteBasePath, url);
 	};
 
 	const handleVisit = () => {
@@ -300,12 +311,14 @@ function NavigationForm({
 				) : (
 					<div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
 						<code className="flex-1 text-sm bg-muted px-3 py-2 rounded-md font-mono break-all">
-							{siteBasePath}
-							{route.path}
+							{createSiteUrl(siteBaseURL, siteBasePath, route.path)}
 						</code>
 						<Button
 							onClick={() =>
-								window.open(`${siteBasePath}${route.path}`, "_blank")
+								window.open(
+									createSiteUrl(siteBaseURL, siteBasePath, route.path),
+									"_blank",
+								)
 							}
 							className="shrink-0"
 						>
@@ -475,11 +488,13 @@ function RouteDetail({
 	route,
 	pluginName,
 	sitemapEntries,
+	siteBaseURL,
 	siteBasePath,
 }: {
 	route: DocumentedRoute;
 	pluginName: string;
 	sitemapEntries: PluginSitemapEntry[];
+	siteBaseURL: string;
 	siteBasePath: string;
 }) {
 	return (
@@ -525,7 +540,11 @@ function RouteDetail({
 			</div>
 
 			{/* Navigation form */}
-			<NavigationForm route={route} siteBasePath={siteBasePath} />
+			<NavigationForm
+				route={route}
+				siteBaseURL={siteBaseURL}
+				siteBasePath={siteBasePath}
+			/>
 
 			{/* Path parameters */}
 			<ParametersSection params={route.pathParams} title="Path Parameters" />
@@ -879,9 +898,11 @@ function SitemapSection({
  */
 function AllRoutesSection({
 	schema,
+	siteBaseURL,
 	siteBasePath,
 }: {
 	schema: RouteDocsSchema;
+	siteBaseURL: string;
 	siteBasePath: string;
 }) {
 	const scrollToRoute = (pluginKey: string, routeKey: string) => {
@@ -937,14 +958,16 @@ function AllRoutesSection({
 					pluginName: plugin.name,
 					route,
 					hasParams,
-					staticUrl: hasParams ? null : `${siteBasePath}${route.path}`,
+					staticUrl: hasParams
+						? null
+						: createSiteUrl(siteBaseURL, siteBasePath, route.path),
 					sitemapCount,
 				});
 			}
 		}
 
 		return routes;
-	}, [schema, siteBasePath]);
+	}, [schema, siteBaseURL, siteBasePath]);
 
 	if (allRoutes.length === 0) return null;
 
@@ -1078,12 +1101,14 @@ function AllRoutesSection({
 export interface DocsPageProps {
 	title?: string;
 	description?: string;
+	siteBaseURL?: string;
 	siteBasePath?: string;
 }
 
 export function DocsPageComponent({
 	title = "Route Documentation",
 	description = "Documentation for all client routes in your application",
+	siteBaseURL = "",
 	siteBasePath = "/pages",
 }: DocsPageProps) {
 	// Read schema from React Query (prefetched by loader on server, or generated on client)
@@ -1180,7 +1205,11 @@ export function DocsPageComponent({
 								</div>
 
 								{/* All routes overview table */}
-								<AllRoutesSection schema={schema} siteBasePath={siteBasePath} />
+								<AllRoutesSection
+									schema={schema}
+									siteBaseURL={siteBaseURL}
+									siteBasePath={siteBasePath}
+								/>
 
 								{/* All route details - one after another */}
 								{schema.plugins.map((plugin) => (
@@ -1205,6 +1234,7 @@ export function DocsPageComponent({
 													route={route}
 													pluginName={plugin.name}
 													sitemapEntries={plugin.sitemapEntries}
+													siteBaseURL={siteBaseURL}
 													siteBasePath={siteBasePath}
 												/>
 											</div>

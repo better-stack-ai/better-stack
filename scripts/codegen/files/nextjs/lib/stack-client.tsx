@@ -125,10 +125,8 @@ export const getStackClient = (
 				},
 			}),
 			routeDocs: routeDocsClientPlugin({
-				queryClient: queryClient,
 				title: "Client Route Documentation",
 				description: "Documentation for all client routes in this application",
-				siteBasePath: "/pages",
 			}),
 			kanban: kanbanClientPlugin({
 				identityPartition: options?.identity,
@@ -158,12 +156,7 @@ export const getStackClient = (
 					: undefined,
 			}),
 			media: mediaClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
+				uploadMode: "direct",
 				identityPartition: options?.identity,
 			}),
 		},

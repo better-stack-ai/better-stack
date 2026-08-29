@@ -7,10 +7,15 @@ import { cn } from "@workspace/ui/lib/utils";
 import {
 	useNotify,
 	usePluginOverrides,
+	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import { useListState, type ListStateSchema } from "@btst/stack/client/hooks";
-import type { MediaPluginOverrides } from "../../overrides";
+import type {
+	MediaPluginOverrides,
+	MediaProviderConfig,
+} from "../../overrides";
+import { MEDIA_PLUGIN_ID } from "../../constants";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { BrowseTab } from "../media-picker/browse-tab";
 import { FolderTree } from "../media-picker/folder-tree";
@@ -22,7 +27,12 @@ export function LibraryPage() {
 	const overrides = usePluginOverrides<
 		MediaPluginOverrides,
 		Partial<MediaPluginOverrides>
-	>("media", {});
+	>(MEDIA_PLUGIN_ID, {});
+	const { plugins } = useStack();
+	const providerConfig = plugins?.[MEDIA_PLUGIN_ID]?.config as
+		| MediaProviderConfig
+		| undefined;
+	const uploadMode = providerConfig?.uploadMode ?? "direct";
 	useRouteLifecycle({
 		routeName: "library",
 		context: {
@@ -103,7 +113,7 @@ export function LibraryPage() {
 
 	return (
 		<MediaUploadPermissionCheck
-			mode={overrides.uploadMode ?? "direct"}
+			mode={uploadMode}
 			folderId={selectedFolder ?? undefined}
 		>
 			{({ can: canUpload, isPending, error }) => {

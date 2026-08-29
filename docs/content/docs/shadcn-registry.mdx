@@ -251,11 +251,7 @@ import { mediaClientPlugin } from "@btst/stack/plugins/media/client"
 import { LibraryPageComponent } from "@/components/btst/media/client/components/pages/library-page"
 
 mediaClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  siteBaseURL: "...",
-  siteBasePath: "/pages",
-  queryClient,
+  uploadMode: "direct",
   pageComponents: {
     library: LibraryPageComponent, // media library page
   },
@@ -264,8 +260,9 @@ mediaClientPlugin({
 
 Keep the top-level `createClientStack({ api, site, queryClient })` runtime,
 pass its resolved browser stack to `StackProvider.stack`, and keep the provider
-router plus media-specific upload mode and hooks configured so the ejected
-component uses the same runtime services as the built-in page.
+router configured so the ejected component uses the same runtime services as
+the built-in page. Upload mode belongs to `mediaClientPlugin()`; optional image
+compression and route lifecycle callbacks remain inferred provider overrides.
 
 ## Available `pageComponents` keys
 

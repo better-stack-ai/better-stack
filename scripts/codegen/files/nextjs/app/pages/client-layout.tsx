@@ -14,10 +14,7 @@ import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builde
 import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client";
 import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
-import {
-	uploadAsset,
-	type MediaPluginOverrides,
-} from "@btst/stack/plugins/media/client";
+import { uploadAsset } from "@btst/stack/plugins/media/client";
 import {
 	MediaPicker,
 	ImageInputField,
@@ -41,7 +38,6 @@ type PluginOverrides = {
 	formBuilder: FormBuilderPluginOverrides;
 	kanban: KanbanPluginOverrides;
 	comments: CommentsPluginOverrides;
-	media: MediaPluginOverrides;
 };
 
 export function BtstPagesClientLayout({
@@ -145,10 +141,6 @@ export function BtstPagesClientLayout({
 							resourceLinks: {
 								"blog-post": (slug) => `/pages/blog/${slug}`,
 							},
-						},
-						media: {
-							uploadMode: "direct",
-							queryClient,
 						},
 					} satisfies Partial<PluginOverrides> as never
 				}

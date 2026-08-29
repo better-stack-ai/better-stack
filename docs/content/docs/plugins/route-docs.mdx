@@ -37,17 +37,21 @@ Ensure you followed the general [framework installation guide](/installation) fi
 Import and register the Route Docs client plugin in your client configuration:
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
 import type { QueryClient } from "@tanstack/react-query"
 
-export const getStackClient = (queryClient: QueryClient) =>
-  createStackClient({
+export const getStackClient = (
+  queryClient: QueryClient,
+  baseURL: string,
+) =>
+  createClientStack({
+    api: { baseURL, basePath: "/api/data" },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
       // Keep your other client plugin entries here. Route Docs introspects them.
       routeDocs: routeDocsClientPlugin({
-        queryClient,
-        siteBasePath: "/pages",
         title: "Client Route Documentation",
         description: "Documentation for all client routes in this application",
       }),
@@ -59,9 +63,20 @@ export const getStackClient = (queryClient: QueryClient) =>
 The Route Docs plugin is client-only. There is no backend plugin required.
 </Callout>
 
-Render it under the standard provider-only layout from the
-[installation guide](/installation): one top-level router and API config, with
-no Route Docs override block.
+Route Docs consumes only the resolved query client, site location, and
+registered client definitions it needs for introspection. It does not call a
+Route Docs API, require a fake backend plugin, or accept transport configuration
+for symmetry.
+
+Render it under the standard layout from the [installation guide](/installation)
+by passing the resolved stack to `StackProvider`. No Route Docs override block
+is required:
+
+```tsx
+<StackProvider stack={stack} router={frameworkRouter}>
+  {children}
+</StackProvider>
+```
 
 ## Accessing the Documentation
 
@@ -77,20 +92,29 @@ Replace `/pages` with your configured `siteBasePath`.
 
 ```tsx
 routeDocsClientPlugin({
-  // React Query client for data fetching
-  queryClient: queryClient,
-  
   // Custom title for the documentation page
   title: "Client Route Documentation",
-  
+
   // Description shown on the page
   description: "Documentation for all client routes",
-  
-  // Base path for generating URLs (default: "/pages")
-  siteBasePath: "/pages",
-  
-  // Custom route path (default: "/route-docs")
-  basePath: "/docs/routes",
+})
+```
+
+The canonical programmatic ID is `routeDocs`; the npm package and route keep
+the `route-docs` slug. Site-origin and mount-path replacements belong to the
+stack endpoint map and drive metadata plus every rendered Visit link together:
+
+```tsx
+createClientStack({
+  api,
+  site,
+  queryClient,
+  plugins: { routeDocs: routeDocsClientPlugin() },
+  endpoints: {
+    routeDocs: {
+      site: { baseURL: "https://docs.example.com", basePath: "/" },
+    },
+  },
 })
 ```
 
@@ -143,14 +167,14 @@ The Route Docs page exposes your application's route structure. Consider these m
 const routeDocs =
   process.env.NODE_ENV === "development"
     ? {
-        routeDocs: routeDocsClientPlugin({
-          queryClient,
-          siteBasePath: "/pages",
-        }),
+        routeDocs: routeDocsClientPlugin(),
       }
     : {}
 
-createStackClient({
+createClientStack({
+  api,
+  site,
+  queryClient,
   plugins: {
     // ...your other client plugins,
     ...routeDocs,

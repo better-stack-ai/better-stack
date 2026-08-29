@@ -18,7 +18,8 @@ import {
 import type { AssetListParams } from "../../api/getters";
 import type { RegisterAssetInput } from "../../query-keys";
 import type { SerializedAsset, SerializedFolder } from "../../types";
-import type { MediaPluginOverrides } from "../overrides";
+import { MEDIA_PLUGIN_ID } from "../constants";
+import type { MediaPluginOverrides, MediaProviderConfig } from "../overrides";
 import { uploadAsset } from "../upload";
 import { media } from "./media-resource";
 
@@ -143,12 +144,14 @@ export function useFolders(parentId?: string | null) {
  * This remains custom because the resource factory models JSON requests only.
  */
 export function useUploadAsset() {
-	const {
-		headers,
-		uploadMode = "direct",
-		imageCompression,
-	} = usePluginOverrides<MediaPluginOverrides>("media");
-	const { api } = useStack();
+	const { imageCompression } =
+		usePluginOverrides<MediaPluginOverrides>(MEDIA_PLUGIN_ID);
+	const { api, plugins } = useStack();
+	const pluginRuntime = plugins?.[MEDIA_PLUGIN_ID];
+	const pluginApi = pluginRuntime?.api ?? api;
+	const providerConfig = pluginRuntime?.config as
+		| MediaProviderConfig
+		| undefined;
 	// Resource-generated asset queries use the nearest QueryClientProvider.
 	// Keep the custom upload transport on that same cache.
 	const listRefresh = useCurrentMediaListRefresh("mediaAssets");
@@ -164,10 +167,11 @@ export function useUploadAsset() {
 		}): Promise<SerializedAsset> =>
 			uploadAsset(
 				{
-					apiBaseURL: api?.baseURL ?? "",
-					apiBasePath: api?.basePath ?? "",
-					headers,
-					uploadMode,
+					apiBaseURL: pluginApi?.baseURL ?? "",
+					apiBasePath: pluginApi?.basePath ?? "",
+					headers: pluginRuntime?.api.browserHeaders,
+					credentials: pluginRuntime?.api.credentials,
+					uploadMode: providerConfig?.uploadMode ?? "direct",
 					imageCompression,
 				},
 				{ file, folderId },
