@@ -5,7 +5,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StackProvider } from "@btst/stack/context";
 import { createClientStack } from "@btst/stack/client";
-import { useRenameConversationForm } from "../client/hooks/chat-hooks";
+import {
+	useDeleteConversation,
+	useRenameConversationForm,
+} from "../client/hooks/chat-hooks";
 import { aiChatClientPlugin } from "../client/plugin";
 import type { SerializedConversation } from "../types";
 
@@ -54,14 +57,8 @@ function jsonResponse(body: unknown, status = 200) {
 	});
 }
 
-async function renderProbe() {
-	let captured: ReturnType<typeof useRenameConversationForm>;
-	function Probe() {
-		captured = useRenameConversationForm({ conversation });
-		return null;
-	}
-
-	const stack = createClientStack({
+function createTestStack() {
+	return createClientStack({
 		api: { baseURL: "http://app.local", basePath: "/api/data" },
 		site: { baseURL: "http://test.local", basePath: "/pages" },
 		queryClient,
@@ -77,10 +74,44 @@ async function renderProbe() {
 			},
 		},
 	});
+}
+
+async function renderRenameProbe() {
+	let captured: ReturnType<typeof useRenameConversationForm>;
+	function Probe() {
+		captured = useRenameConversationForm({ conversation });
+		return null;
+	}
 
 	await act(async () => {
 		root.render(
-			<StackProvider stack={stack} router={{ refresh }} notify={notify}>
+			<StackProvider
+				stack={createTestStack()}
+				router={{ refresh }}
+				notify={notify}
+			>
+				<Probe />
+			</StackProvider>,
+		);
+	});
+
+	return () => captured!;
+}
+
+async function renderDeleteProbe() {
+	let captured: ReturnType<typeof useDeleteConversation>;
+	function Probe() {
+		captured = useDeleteConversation();
+		return null;
+	}
+
+	await act(async () => {
+		root.render(
+			<StackProvider
+				stack={createTestStack()}
+				router={{ refresh }}
+				notify={notify}
+			>
 				<Probe />
 			</StackProvider>,
 		);
@@ -95,7 +126,7 @@ describe("useRenameConversationForm", () => {
 			jsonResponse({ ...conversation, title: "Renamed" }),
 		);
 		const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
-		const getForm = await renderProbe();
+		const getForm = await renderRenameProbe();
 
 		await act(async () => {
 			await getForm().submit({ title: "  Renamed  " });
@@ -111,6 +142,12 @@ describe("useRenameConversationForm", () => {
 		expect(new Headers(init.headers).get("x-chat-test")).toBe("forwarded");
 		expect(notify.success).toHaveBeenCalledWith("Conversation renamed");
 		expect(invalidateQueries).toHaveBeenCalledTimes(1);
+		expect(invalidateQueries).toHaveBeenCalledWith(
+			expect.objectContaining({
+				queryKey: ["conversations"],
+				refetchType: "all",
+			}),
+		);
 		expect(refresh).not.toHaveBeenCalled();
 	});
 
@@ -125,7 +162,7 @@ describe("useRenameConversationForm", () => {
 				400,
 			),
 		);
-		const getForm = await renderProbe();
+		const getForm = await renderRenameProbe();
 
 		await act(async () => {
 			await getForm().submit({ title: "   " });
@@ -134,5 +171,25 @@ describe("useRenameConversationForm", () => {
 		expect(getForm().fieldErrors).toEqual({ title: "Title is required" });
 		expect(notify.error).not.toHaveBeenCalled();
 		expect(refresh).not.toHaveBeenCalled();
+	});
+});
+
+describe("useDeleteConversation", () => {
+	it("refreshes the conversation list without refetching the deleted active detail", async () => {
+		fetchMock.mockResolvedValue(jsonResponse({ success: true }));
+		const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+		const getMutation = await renderDeleteProbe();
+
+		await act(async () => {
+			await getMutation().mutateAsync({ id: conversation.id });
+		});
+
+		expect(invalidateQueries).toHaveBeenCalledOnce();
+		expect(invalidateQueries).toHaveBeenCalledWith(
+			expect.objectContaining({
+				queryKey: ["conversations", "list"],
+				refetchType: "all",
+			}),
+		);
 	});
 });

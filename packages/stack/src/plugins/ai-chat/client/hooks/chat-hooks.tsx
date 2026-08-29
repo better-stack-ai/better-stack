@@ -99,7 +99,10 @@ function useCurrentHistoryRefresh() {
 		};
 	}, []);
 
-	const refreshAfterSuccess = async (startedAs: typeof identityPartition) => {
+	const refreshAfterSuccess = async (
+		startedAs: typeof identityPartition,
+		queryKey: readonly unknown[] = ["conversations"],
+	) => {
 		const current = latestPartition.current;
 		if (!mounted.current || !samePartition(startedAs, current)) {
 			queryClient.removeQueries({
@@ -110,7 +113,7 @@ function useCurrentHistoryRefresh() {
 			return;
 		}
 		await queryClient.invalidateQueries({
-			queryKey: ["conversations"],
+			queryKey,
 			predicate: ({ queryKey }) => queryBelongsToPartition(queryKey, current),
 			refetchType: "all",
 		});
@@ -125,6 +128,7 @@ function useCurrentHistoryRefresh() {
 function withCurrentHistoryRefresh<TData, TVariables>(
 	mutation: UseMutationResult<TData, Error, TVariables>,
 	refresh: ReturnType<typeof useCurrentHistoryRefresh>,
+	queryKey?: readonly unknown[],
 ): UseMutationResult<TData, Error, TVariables> {
 	const mutateAsync: typeof mutation.mutateAsync = async (
 		variables,
@@ -132,7 +136,7 @@ function withCurrentHistoryRefresh<TData, TVariables>(
 	) => {
 		const startedAs = refresh.currentPartition();
 		const result = await mutation.mutateAsync(variables, options);
-		await refresh.refreshAfterSuccess(startedAs);
+		await refresh.refreshAfterSuccess(startedAs, queryKey);
 		return result;
 	};
 	const mutate: typeof mutation.mutate = (variables, options) => {
@@ -301,6 +305,7 @@ export function useDeleteConversation() {
 	return withCurrentHistoryRefresh(
 		aiChat.conversations.delete.use(),
 		useCurrentHistoryRefresh(),
+		["conversations", "list"],
 	);
 }
 
