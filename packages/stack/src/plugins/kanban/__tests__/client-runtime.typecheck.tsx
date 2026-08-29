@@ -17,6 +17,7 @@ const stack = createClientStack({
 	plugins: { kanban: definition },
 });
 
+// @ts-expect-error Kanban requires its inferred user workflow override block.
 <StackProvider stack={stack} />;
 <StackProvider
 	stack={stack}

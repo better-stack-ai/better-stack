@@ -21,6 +21,7 @@ import type {
 import { createSanitizedSSRLoaderError } from "../../utils";
 import { KANBAN_PLUGIN_ID } from "./constants";
 import type { KanbanPluginOverrides } from "./overrides";
+import type { RequiredClientPluginOverrides } from "../../../types";
 
 const BoardsListPageComponent = lazy(() =>
 	import("./components/pages/boards-list-page").then((module) => ({
@@ -547,7 +548,7 @@ function createResolvedKanbanPlugin(config: ResolvedKanbanClientConfig) {
 }
 
 export const kanbanClientPlugin = (config: KanbanClientConfig = {}) =>
-	defineClientPlugin<KanbanPluginOverrides>()({
+	defineClientPlugin<RequiredClientPluginOverrides<KanbanPluginOverrides>>()({
 		id: KANBAN_PLUGIN_ID,
 		resolve: (runtime) =>
 			createResolvedKanbanPlugin(resolveKanbanClientConfig(config, runtime)),

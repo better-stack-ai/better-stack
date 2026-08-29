@@ -100,11 +100,21 @@ import { createClientStack } from "@btst/stack/client"
 import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
 import { QueryClient } from "@tanstack/react-query"
 
-const getBaseURL = () => 
-  process.env.BASE_URL || "http://localhost:3000"
+function getBaseURL(serverOrigin?: string) {
+  if (typeof window !== "undefined") return window.location.origin
+  return (
+    serverOrigin ||
+    process.env.BTST_SITE_URL ||
+    process.env.BASE_URL ||
+    "http://localhost:3000"
+  )
+}
 
-export const getStackClient = (queryClient: QueryClient, options?: { headers?: Headers }) => {
-  const baseURL = getBaseURL()
+export const getStackClient = (
+  queryClient: QueryClient,
+  options?: { headers?: Headers; origin?: string },
+) => {
+  const baseURL = getBaseURL(options?.origin)
   return createClientStack({
     api: {
       baseURL,
@@ -125,6 +135,11 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
   })
 }
 ```
+
+Browser stacks derive their origin from `window.location.origin`. Server callers
+may pass the framework request origin, or configure a public deployment URL in
+`BTST_SITE_URL`/`BASE_URL`; keep request headers and server-only auth data in the
+server call site.
 
 ### 3. Configure the Provider
 

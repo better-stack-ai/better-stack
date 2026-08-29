@@ -72,19 +72,26 @@ import { createClientStack } from "@btst/stack/client"
 import { commentsClientPlugin } from "@btst/stack/plugins/comments/client"
 import { QueryClient } from "@tanstack/react-query"
 
-const getBaseURL = () =>
-  process.env.BASE_URL || "http://localhost:3000"
+function getBaseURL(serverOrigin?: string) {
+  if (typeof window !== "undefined") return window.location.origin
+  return (
+    serverOrigin ||
+    process.env.BTST_SITE_URL ||
+    process.env.BASE_URL ||
+    "http://localhost:3000"
+  )
+}
 
 export const getStackClient = (
   queryClient: QueryClient,
-  headers?: Headers,
+  options?: { headers?: Headers; origin?: string },
 ) => {
-  const baseURL = getBaseURL()
+  const baseURL = getBaseURL(options?.origin)
   return createClientStack({
     api: {
       baseURL,
       basePath: "/api/data",
-      ...(headers ? { headers } : {}),
+      ...(options?.headers ? { headers: options.headers } : {}),
     },
     site: { baseURL, basePath: "/pages" },
     queryClient,

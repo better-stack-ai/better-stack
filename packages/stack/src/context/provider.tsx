@@ -82,18 +82,32 @@ type StackProviderServices = {
 	i18n?: StackI18nProvider;
 };
 
+type CanonicalStackProviderOverrideProps<
+	TStack extends ResolvedClientStack<any, any>,
+> = InferredPluginOverrides<
+	NoInfer<RegisteredClientPlugins<TStack>>
+> extends infer TOverrides extends Record<string, any>
+	? {} extends TOverrides
+		? { overrides?: TOverrides }
+		: { overrides: TOverrides }
+	: never;
+
 type CanonicalStackProviderProps<TStack extends ResolvedClientStack<any, any>> =
 	StackProviderServices & {
 		/** Resolved browser client stack; supplies API/site/plugin runtime once. */
 		stack: TStack;
-		overrides?: InferredPluginOverrides<
-			NoInfer<RegisteredClientPlugins<TStack>>
-		>;
 		/** Runtime paths come from `stack`. */
 		basePath?: never;
 		/** Runtime API configuration comes from `stack`. */
 		api?: never;
-	};
+	} & CanonicalStackProviderOverrideProps<TStack>;
+
+type CanonicalStackProviderImplementationProps = StackProviderServices & {
+	stack: ResolvedClientStack<any, any>;
+	overrides?: Record<string, any>;
+	basePath?: never;
+	api?: never;
+};
 
 type LegacyStackProviderProps<TPluginOverrides extends Record<string, any>> =
 	StackProviderServices & {
@@ -216,7 +230,7 @@ export function StackProvider({
 	i18n,
 }:
 	| LegacyStackProviderProps<Record<string, any>>
-	| CanonicalStackProviderProps<ResolvedClientStack<any, any>>): ReactElement {
+	| CanonicalStackProviderImplementationProps): ReactElement {
 	const projection = stack?.provider;
 	const resolvedBasePath = projection?.site.basePath ?? basePath;
 	if (resolvedBasePath === undefined) {

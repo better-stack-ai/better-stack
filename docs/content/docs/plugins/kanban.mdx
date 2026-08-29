@@ -72,14 +72,21 @@ import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
 import type { StackIdentity } from "@btst/stack/context"
 import { QueryClient } from "@tanstack/react-query"
 
-const getBaseURL = () => 
-   (process.env.BASE_URL || "http://localhost:3000")
+function getBaseURL(serverOrigin?: string) {
+  if (typeof window !== "undefined") return window.location.origin
+  return (
+    serverOrigin ||
+    process.env.BTST_SITE_URL ||
+    process.env.BASE_URL ||
+    "http://localhost:3000"
+  )
+}
 
 export const getStackClient = (
   queryClient: QueryClient,
-  request?: { headers?: Headers; identity?: StackIdentity },
+  request?: { headers?: Headers; identity?: StackIdentity; origin?: string },
 ) => {
-  const baseURL = getBaseURL()
+  const baseURL = getBaseURL(request?.origin)
   return createClientStack({
     api: {
       baseURL,
@@ -108,6 +115,11 @@ API, site, query-client, and request headers are configured once on
 `createClientStack()`. For request-time SSR, pass `identityPartition` to the
 plugin so its protected cache key exactly matches the browser's hydrated
 identity. Anonymous and trusted static generation omit the identity.
+
+Browser stacks derive their origin from `window.location.origin`. Server callers
+may pass the framework request origin, or configure a public deployment URL in
+`BTST_SITE_URL`/`BASE_URL`; keep request headers and server-only auth data in the
+server call site.
 
 <Callout type="info">
 The resolved runtime drives SSR loaders, metadata, sitemap generation, and
@@ -215,11 +227,12 @@ In these snippets, `clientStack` is the browser-safe resolved stack returned by
 `getStackClient(queryClient)`. Its registered `kanban` definition lets
 `StackProvider` infer the override type without a provider generic.
 
-The only required fields when a Kanban override block is supplied are
-`resolveUser` and `searchUsers` for
-assignee display and selection. Optional overrides include `uploadImage`,
-`imagePicker`, localization, attribution, route lifecycle hooks, and
-`taskDetailBottomSlot`. Router and API fields are not plugin overrides in v3.
+The inferred `kanban` override block is required whenever the resolved stack
+registers Kanban. It must provide `resolveUser` and `searchUsers` for assignee
+display and selection; no provider generic is needed. Optional fields include
+`uploadImage`, `imagePicker`, localization, attribution, route lifecycle hooks,
+and `taskDetailBottomSlot`. Router and API fields are not plugin overrides in
+v3.
 
 ### 5. Generate Database Schema
 

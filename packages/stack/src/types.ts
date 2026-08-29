@@ -587,24 +587,34 @@ export type ClientLibConfig<
  * Utility type to extract override types from plugins
  * Maps plugin names to their override types
  */
+declare const requiredClientPluginOverrides: unique symbol;
+
+/** @internal Marks a client plugin's entire provider override block as required. */
+export type RequiredClientPluginOverrides<TOverrides> = TOverrides & {
+	readonly [requiredClientPluginOverrides]: true;
+};
+
+type _DeclaredPluginOverrides<TPlugin> = TPlugin extends ClientPlugin<
+	infer TOverrides,
+	any,
+	any
+>
+	? TOverrides
+	: TPlugin extends ClientPluginDefinition<infer TOverrides, any, any, any, any>
+		? TOverrides
+		: never;
+
+type _PublicPluginOverrides<TOverrides> = Omit<
+	TOverrides,
+	typeof requiredClientPluginOverrides
+>;
+
 export type InferPluginOverrides<
 	TPlugins extends Record<string, AnyClientPluginRegistration>,
 > = {
-	[K in keyof TPlugins]: TPlugins[K] extends ClientPlugin<
-		infer TOverrides,
-		any,
-		any
-	>
-		? TOverrides
-		: TPlugins[K] extends ClientPluginDefinition<
-					infer TOverrides,
-					any,
-					any,
-					any,
-					any
-				>
-			? TOverrides
-			: never;
+	[K in keyof TPlugins]: _PublicPluginOverrides<
+		_DeclaredPluginOverrides<TPlugins[K]>
+	>;
 };
 
 type _HasNoConfigurableOverrides<TOverrides> = [TOverrides] extends [never]
@@ -614,6 +624,15 @@ type _HasNoConfigurableOverrides<TOverrides> = [TOverrides] extends [never]
 		: TOverrides extends Record<string, never>
 			? true
 			: false;
+
+type _RequiresProviderOverrideBlock<TPlugin> = 0 extends 1 &
+	_DeclaredPluginOverrides<TPlugin>
+	? false
+	: [_DeclaredPluginOverrides<TPlugin>] extends [
+				{ readonly [requiredClientPluginOverrides]: true },
+			]
+		? true
+		: false;
 
 /**
  * Provider overrides inferred from registered client definitions. Plugins with
@@ -627,12 +646,31 @@ export type InferredPluginOverrides<
 
 type _ConfigurablePluginOverrides<
 	TPlugins extends Record<string, AnyClientPluginRegistration>,
+> = _RequiredConfigurablePluginOverrides<TPlugins> &
+	_OptionalConfigurablePluginOverrides<TPlugins>;
+
+type _RequiredConfigurablePluginOverrides<
+	TPlugins extends Record<string, AnyClientPluginRegistration>,
 > = {
 	[K in keyof TPlugins as _HasNoConfigurableOverrides<
 		InferPluginOverrides<TPlugins>[K]
 	> extends true
 		? never
-		: K]?: InferPluginOverrides<TPlugins>[K];
+		: _RequiresProviderOverrideBlock<TPlugins[K]> extends true
+			? K
+			: never]-?: InferPluginOverrides<TPlugins>[K];
+};
+
+type _OptionalConfigurablePluginOverrides<
+	TPlugins extends Record<string, AnyClientPluginRegistration>,
+> = {
+	[K in keyof TPlugins as _HasNoConfigurableOverrides<
+		InferPluginOverrides<TPlugins>[K]
+	> extends true
+		? never
+		: _RequiresProviderOverrideBlock<TPlugins[K]> extends true
+			? never
+			: K]?: InferPluginOverrides<TPlugins>[K];
 };
 
 /**

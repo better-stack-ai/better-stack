@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 import { QueryClient } from "@tanstack/react-query";
-import { act } from "react";
+import { act, type ComponentType, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "../../../client";
 import { StackProvider, usePluginSiteNavigation } from "@btst/stack/context";
-import { kanbanClientPlugin } from "../client";
+import { kanbanClientPlugin, type KanbanPluginOverrides } from "../client";
 import { BoardsListPage } from "../client/components/pages/boards-list-page.internal";
-import { useBoardMutations, useBoards } from "../client/hooks";
+import { useBoardMutations, useBoards, useResolveUser } from "../client/hooks";
 import { KANBAN_PLUGIN_ID } from "../client/constants";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -24,6 +24,11 @@ const board = {
 	createdAt: "2026-01-01T00:00:00.000Z",
 	updatedAt: "2026-01-01T00:00:00.000Z",
 };
+
+const requiredKanbanOverrides = {
+	resolveUser: () => null,
+	searchUsers: () => [],
+} satisfies KanbanPluginOverrides;
 
 function jsonResponse(value: unknown) {
 	return new Response(JSON.stringify(value), {
@@ -142,7 +147,10 @@ describe("Kanban browser runtime", () => {
 
 			await act(async () => {
 				root.render(
-					<StackProvider stack={stack}>
+					<StackProvider
+						stack={stack}
+						overrides={{ kanban: requiredKanbanOverrides }}
+					>
 						<Probe />
 					</StackProvider>,
 				);
@@ -191,7 +199,10 @@ describe("Kanban browser runtime", () => {
 
 			await act(async () => {
 				root.render(
-					<StackProvider stack={stack}>
+					<StackProvider
+						stack={stack}
+						overrides={{ kanban: requiredKanbanOverrides }}
+					>
 						<BoardsListPage />
 					</StackProvider>,
 				);
@@ -230,7 +241,10 @@ describe("Kanban browser runtime", () => {
 		});
 		try {
 			serverHTML = renderToString(
-				<StackProvider stack={stack}>
+				<StackProvider
+					stack={stack}
+					overrides={{ kanban: requiredKanbanOverrides }}
+				>
 					<LinkProbe />
 				</StackProvider>,
 			);
@@ -246,13 +260,43 @@ describe("Kanban browser runtime", () => {
 		);
 		await act(async () => {
 			root.render(
-				<StackProvider stack={stack}>
+				<StackProvider
+					stack={stack}
+					overrides={{ kanban: requiredKanbanOverrides }}
+				>
 					<LinkProbe />
 				</StackProvider>,
 			);
 		});
 		expect(container.querySelector("a")?.getAttribute("href")).toBe(
 			"https://boards.example.net/workspace/kanban/board-1",
+		);
+	});
+
+	it("explains missing required user workflow callbacks to untyped consumers", () => {
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient: new QueryClient(),
+			plugins: { kanban: kanbanClientPlugin() },
+		});
+		const UnsafeStackProvider = StackProvider as unknown as ComponentType<{
+			stack: typeof stack;
+			children?: ReactNode;
+		}>;
+		function Probe() {
+			useResolveUser("user-1");
+			return null;
+		}
+
+		expect(() =>
+			renderToString(
+				<UnsafeStackProvider stack={stack}>
+					<Probe />
+				</UnsafeStackProvider>,
+			),
+		).toThrowError(
+			/Configure overrides=\{\{ kanban: \{ resolveUser, searchUsers \} \}\}/,
 		);
 	});
 });
