@@ -475,6 +475,34 @@ describe("scaffold plan", () => {
 		);
 	});
 
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"emits plugin-only Media and Route Docs factories for %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["media", "route-docs"],
+				alias: "@/",
+				cssFile:
+					framework === "nextjs" ? "app/globals.css" : "src/styles/app.css",
+			});
+			const stackClientFile = plan.files.find((file) =>
+				file.path.endsWith("stack-client.tsx"),
+			);
+			const pagesLayoutFile = plan.files.find((file) =>
+				file.content.includes("<StackProvider"),
+			);
+
+			expect(stackClientFile?.content).toContain("media: mediaClientPlugin(),");
+			expect(stackClientFile?.content).toContain(
+				"routeDocs: routeDocsClientPlugin(),",
+			);
+			expect(stackClientFile?.content).not.toContain("apiBaseURL:");
+			expect(stackClientFile?.content).not.toContain("siteBasePath:");
+			expect(pagesLayoutFile?.content).not.toContain("as never");
+		},
+	);
+
 	it("uses shared query client utility in react-router pages route template", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "react-router",

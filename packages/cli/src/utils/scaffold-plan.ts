@@ -25,6 +25,8 @@ const CANONICAL_CLIENT_PLUGIN_KEYS = new Set<PluginKey>([
 	"comments",
 	"form-builder",
 	"kanban",
+	"media",
+	"route-docs",
 ]);
 
 function getFrameworkPaths(framework: Framework, cssFile: string) {
@@ -178,9 +180,6 @@ function buildPluginTemplateContext(
 				}
 				if (CANONICAL_CLIENT_PLUGIN_KEYS.has(m.key)) {
 					return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
-				}
-				if (m.key === "route-docs") {
-					return `\t\t\t${m.configKey}: ${m.clientSymbol}({\n\t\t\t\tqueryClient,\n\t\t\t\tsiteBasePath: "/pages",\n\t\t\t}),`;
 				}
 				const siteBase = "/pages";
 				return `\t\t\t${m.configKey}: ${m.clientSymbol}({
