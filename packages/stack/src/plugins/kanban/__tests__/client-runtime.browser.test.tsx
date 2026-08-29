@@ -97,7 +97,9 @@ describe("Kanban browser runtime", () => {
 			}> = [];
 			vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
 				const request =
-					input instanceof Request ? input : new Request(input, init);
+					input instanceof Request
+						? input
+						: new Request(input, { ...init, signal: undefined });
 				requests.push({
 					url: request.url,
 					method: request.method,

@@ -11,7 +11,7 @@ import { z } from "zod";
 const execFileAsync = promisify(execFile);
 
 describe("published dependency alignment", () => {
-	it("uses the Better DB release that shares the Better Auth 1.6.16 cohort", async () => {
+	it("uses the coordinated RC3 dependency cohort", async () => {
 		const manifest = JSON.parse(
 			await readFile(resolve("package.json"), "utf8"),
 		) as {
@@ -24,7 +24,7 @@ describe("published dependency alignment", () => {
 		expect(manifest.devDependencies?.["@btst/adapter-memory"]).toBe("2.2.3");
 		expect(manifest.devDependencies?.["@btst/yar"]).toBe("1.3.2");
 		expect(manifest.peerDependencies?.["@btst/yar"]).toBe(">=1.3.2");
-		expect(manifest.peerDependencies?.["better-call"]).toBe("1.3.6");
+		expect(manifest.peerDependencies?.["better-call"]).toBe("1.4.0");
 	});
 });
 
