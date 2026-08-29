@@ -162,7 +162,7 @@ import { StackProvider } from "@btst/stack/context"
 import { nextRouter } from "@btst/stack/next"
 import { getStackClient } from "@/lib/stack-client"
 
-export function ClientLayout({ children, initialIdentity }) {
+export function ClientLayout({ children }) {
   const [queryClient] = useState(() => new QueryClient())
   const stack = useMemo(() => getStackClient(queryClient), [queryClient])
 
@@ -171,7 +171,6 @@ export function ClientLayout({ children, initialIdentity }) {
       <StackProvider
         stack={stack}
         router={nextRouter()}
-        initialIdentity={initialIdentity}
       >
         {children}
       </StackProvider>
@@ -184,7 +183,9 @@ Use the corresponding `reactRouter()` or `tanstackRouter()` adapter in those
 frameworks. `overrides.media` is reserved for genuine browser presentation and
 behavior choices such as `imageCompression`, `onRouteRender`, and
 `onRouteError`; it no longer accepts query clients, transport headers, or the
-upload mode.
+upload mode. For a protected library, follow the [Permissions](#permissions)
+example below, which supplies both `auth={clientAuth}` and `initialIdentity`;
+an identity snapshot is intentionally ignored when no auth adapter is present.
 
 ### 5. Generate and Apply Database Changes
 
