@@ -246,12 +246,12 @@ describe("scaffold plan", () => {
 	);
 
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
-		"emits canonical shared runtime when plugins are selected (%s)",
+		"emits canonical shared runtime for mixed canonical plugins (%s)",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
 				framework,
 				adapter: "memory",
-				plugins: ["blog"],
+				plugins: ["blog", "comments"],
 				alias: "@/",
 				cssFile:
 					framework === "nextjs" ? "app/globals.css" : "src/styles/app.css",
@@ -272,7 +272,15 @@ describe("scaffold plan", () => {
 			);
 			expect(stackClientFile?.content).toContain("queryClient,");
 			expect(stackClientFile?.content).toContain("blog: blogClientPlugin(),");
+			expect(stackClientFile?.content).toContain(
+				"comments: commentsClientPlugin(),",
+			);
 			expect(stackClientFile?.content).not.toContain("apiBaseURL:");
+
+			const pagesLayoutFile = plan.files.find((file) =>
+				file.content.includes("<StackProvider"),
+			);
+			expect(pagesLayoutFile?.content).not.toContain("as never");
 		},
 	);
 

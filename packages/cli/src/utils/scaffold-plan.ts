@@ -17,6 +17,13 @@ interface BuildScaffoldPlanInput {
 	cssFile: string;
 }
 
+const CANONICAL_CLIENT_PLUGIN_KEYS = new Set<PluginKey>([
+	"blog",
+	"cms",
+	"ui-builder",
+	"comments",
+]);
+
 function getFrameworkPaths(framework: Framework, cssFile: string) {
 	if (framework === "nextjs") {
 		const prefix = cssFile.startsWith("src/") ? "src/" : "";
@@ -96,7 +103,7 @@ function buildPluginTemplateContext(
 			Boolean(m.clientSymbol),
 	);
 	const hasLegacyClientPlugins = clientMetas.some(
-		(m) => !["blog", "cms", "ui-builder"].includes(m.key),
+		(m) => !CANONICAL_CLIENT_PLUGIN_KEYS.has(m.key),
 	);
 
 	const backendImportLines = backendMetas
@@ -163,7 +170,7 @@ function buildPluginTemplateContext(
 			.join("\n"),
 		clientEntries: clientMetas
 			.map((m) => {
-				if (["blog", "cms", "ui-builder", "comments"].includes(m.key)) {
+				if (CANONICAL_CLIENT_PLUGIN_KEYS.has(m.key)) {
 					return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
 				}
 				if (m.key === "route-docs") {
