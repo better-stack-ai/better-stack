@@ -358,7 +358,7 @@ function checkFactoryCalls(
 		if (!object) continue;
 		if (
 			kind === "backend" &&
-			/(?:^|[,{])\s*(?:async\s+)?\*?\s*(?:on(?:Before|After|Error)[A-Z][A-Za-z0-9]*\b|["']on(?:Before|After|Error)[A-Z][A-Za-z0-9]*["'])\s*(?::|\()/.test(
+			/(?:^|[,{])\s*(?:async\s+)?\*?\s*(?:on(?:Before|After)[A-Z][A-Za-z0-9]*\b|onError(?:[A-Z][A-Za-z0-9]*)?\b|["'](?:on(?:Before|After)[A-Z][A-Za-z0-9]*|onError(?:[A-Z][A-Za-z0-9]*)?)["'])\s*(?::|\()/.test(
 				object.topLevel,
 			)
 		) {
