@@ -675,13 +675,13 @@ from the registered plugin.
 
 | Hook | Parameters | Return | Description |
 |------|------------|--------|-------------|
-| `beforeLoadFormList` | `context` | `void \| Promise<void>` | SSR preparation for forms list — throw to abort loading |
-| `afterLoadFormList` | `forms, context` | `void` | Post-load hook |
-| `beforeLoadFormBuilder` | `formId, context` | `void \| Promise<void>` | SSR preparation for builder — throw to abort loading |
-| `afterLoadFormBuilder` | `form, context` | `void` | Post-load hook |
-| `beforeLoadSubmissions` | `formId, context` | `void \| Promise<void>` | SSR preparation for submissions — throw to abort loading |
-| `afterLoadSubmissions` | `submissions, context` | `void` | Post-load hook |
-| `onErrorLoad` | `error, context` | `void` | Report a loader failure once; reporter failures are contained |
+| `beforeLoadFormList` | `context: LoaderContext` | `void \| Promise<void>` | SSR preparation for forms list — throw to abort loading |
+| `afterLoadFormList` | `context: LoaderContext` | `void \| Promise<void>` | Post-load hook |
+| `beforeLoadFormBuilder` | `id: string \| undefined, context: LoaderContext` | `void \| Promise<void>` | SSR preparation for builder — throw to abort loading |
+| `afterLoadFormBuilder` | `id: string \| undefined, context: LoaderContext` | `void \| Promise<void>` | Post-load hook |
+| `beforeLoadSubmissions` | `formId: string, context: LoaderContext` | `void \| Promise<void>` | SSR preparation for submissions — throw to abort loading |
+| `afterLoadSubmissions` | `formId: string, context: LoaderContext` | `void \| Promise<void>` | Post-load hook |
+| `onErrorLoad` | `error: Error, context: LoaderContext` | `void \| Promise<void>` | Report a loader failure once; reporter failures are contained |
 
 ### Schema Converter Utilities (`@btst/stack/plugins/form-builder/client`)
 
