@@ -1,4 +1,4 @@
-import type { SerializedAsset } from "../types";
+import type { SerializedAsset } from "./types";
 
 export function resolveMediaAsset(
 	asset: SerializedAsset,

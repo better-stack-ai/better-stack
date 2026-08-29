@@ -3,7 +3,7 @@
 import { normalizePath } from "@btst/stack/client";
 import type { SerializedAsset } from "../types";
 import type { MediaProviderConfig, MediaUploadMode } from "./overrides";
-import { resolveMediaAsset } from "./asset-url";
+import { resolveMediaAsset } from "../asset-url";
 import { compressImage } from "./utils/image-compression";
 import type { ImageCompressionOptions } from "./utils/image-compression";
 

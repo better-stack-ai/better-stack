@@ -25,6 +25,8 @@ import {
 import { MEDIA_QUERY_KEYS } from "./query-key-defs";
 import { serializeAsset, serializeFolder } from "./serializers";
 import type { StorageAdapter } from "./storage-adapter";
+import { resolveMediaAsset } from "../asset-url";
+import type { MediaEndpointPartition } from "./query-key-defs";
 
 export {
 	AssetIdOperationInputSchema,
@@ -68,7 +70,11 @@ export interface MediaBackendConfig {
 export type MediaRouteKey = "library";
 
 interface MediaPrefetchForRoute {
-	(key: "library", queryClient: QueryClient): Promise<void>;
+	(
+		key: "library",
+		queryClient: QueryClient,
+		endpoint: MediaEndpointPartition,
+	): Promise<void>;
 }
 
 /**
@@ -77,25 +83,28 @@ interface MediaPrefetchForRoute {
  * deployment boundary when the Media library is not public.
  */
 function createMediaPrefetchForRoute(adapter: Adapter): MediaPrefetchForRoute {
-	return async (_key, queryClient) => {
+	return async (_key, queryClient, endpoint) => {
 		const [assets, folders] = await Promise.all([
 			listAssets(adapter, { limit: 40 }),
 			listFolders(adapter),
 		]);
-		queryClient.setQueryData(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }), {
-			pages: [
-				{
-					...assets,
-					items: assets.items.map((asset) => {
-						const { tenantId: _tenantId, ...safe } = serializeAsset(asset);
-						return safe;
-					}),
-				},
-			],
-			pageParams: [0],
-		});
 		queryClient.setQueryData(
-			MEDIA_QUERY_KEYS.foldersList(),
+			MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, undefined, endpoint),
+			{
+				pages: [
+					{
+						...assets,
+						items: assets.items.map((asset) => {
+							const { tenantId: _tenantId, ...safe } = serializeAsset(asset);
+							return resolveMediaAsset(safe, endpoint.baseURL);
+						}),
+					},
+				],
+				pageParams: [0],
+			},
+		);
+		queryClient.setQueryData(
+			MEDIA_QUERY_KEYS.foldersList(undefined, undefined, endpoint),
 			folders.map((folder) => {
 				const { tenantId: _tenantId, ...safe } = serializeFolder(folder);
 				return safe;

@@ -16,17 +16,28 @@ import {
 	useTranslate,
 } from "@btst/stack/context";
 import type { AssetListParams } from "../../api/getters";
+import type {
+	MediaEndpointPartition,
+	MediaQueryScope,
+} from "../../api/query-key-defs";
 import type { RegisterAssetInput } from "../../query-keys";
 import type { SerializedAsset, SerializedFolder } from "../../types";
 import { MEDIA_PLUGIN_ID } from "../constants";
 import type { MediaPluginOverrides, MediaProviderConfig } from "../overrides";
 import { createMediaUploadConfig, uploadAsset } from "../upload";
-import { resolveMediaAsset } from "../asset-url";
+import { resolveMediaAsset } from "../../asset-url";
 import { media } from "./media-resource";
 
-function useMediaApiBaseURL() {
+function useMediaEndpointPartition(): MediaEndpointPartition {
 	const { api, plugins } = useStack();
-	return plugins?.[MEDIA_PLUGIN_ID]?.api.baseURL ?? api?.baseURL;
+	const pluginApi = plugins?.[MEDIA_PLUGIN_ID]?.api;
+	const baseURL = pluginApi?.baseURL ?? api?.baseURL ?? "";
+	const basePath = pluginApi?.basePath ?? api?.basePath ?? "";
+	return useMemo(() => ({ baseURL, basePath }), [baseURL, basePath]);
+}
+
+function useMediaApiBaseURL() {
+	return useMediaEndpointPartition().baseURL;
 }
 
 function useIdentityPartition() {
@@ -47,11 +58,18 @@ function sameIdentityPartition(
 	queryKey: readonly unknown[],
 	partition: ReturnType<typeof useIdentityPartition>,
 ) {
-	const marker = queryKey[3] as { identity?: unknown } | undefined;
-	if (partition === undefined) return marker === undefined;
-	return (
-		marker !== undefined && hashKey([marker.identity]) === hashKey([partition])
-	);
+	const scope = queryKey[3] as MediaQueryScope | undefined;
+	const hasIdentity = scope !== undefined && Object.hasOwn(scope, "identity");
+	if (partition === undefined) return !hasIdentity;
+	return hasIdentity && hashKey([scope.identity]) === hashKey([partition]);
+}
+
+function sameEndpointPartition(
+	queryKey: readonly unknown[],
+	partition: MediaEndpointPartition,
+) {
+	const scope = queryKey[3] as MediaQueryScope | undefined;
+	return hashKey([scope?.endpoint]) === hashKey([partition]);
 }
 
 function samePartition(
@@ -61,15 +79,35 @@ function samePartition(
 	return hashKey([left]) === hashKey([right]);
 }
 
+interface CurrentMediaListScope {
+	identity: ReturnType<typeof useIdentityPartition>;
+	endpoint: MediaEndpointPartition;
+}
+
+function sameListScope(
+	left: CurrentMediaListScope,
+	right: CurrentMediaListScope,
+) {
+	return (
+		samePartition(left.identity, right.identity) &&
+		hashKey([left.endpoint]) === hashKey([right.endpoint])
+	);
+}
+
 function useCurrentMediaListRefresh(resource: "mediaAssets" | "mediaFolders") {
 	const { queryClient: stackQueryClient } = useStack();
 	const queryClient = useQueryClient(stackQueryClient);
+	const endpointPartition = useMediaEndpointPartition();
 	const identityPartition = useIdentityPartition();
-	const latestPartition = useRef(identityPartition);
+	const currentScope = useMemo<CurrentMediaListScope>(
+		() => ({ identity: identityPartition, endpoint: endpointPartition }),
+		[identityPartition, endpointPartition],
+	);
+	const latestScope = useRef(currentScope);
 	const mounted = useRef(true);
 	useLayoutEffect(() => {
-		latestPartition.current = identityPartition;
-	}, [identityPartition]);
+		latestScope.current = currentScope;
+	}, [currentScope]);
 	useLayoutEffect(() => {
 		mounted.current = true;
 		return () => {
@@ -77,22 +115,26 @@ function useCurrentMediaListRefresh(resource: "mediaAssets" | "mediaFolders") {
 		};
 	}, []);
 
-	const removePartition = (partition: typeof identityPartition) =>
+	const removeScope = (scope: CurrentMediaListScope) =>
 		queryClient.removeQueries({
 			queryKey: [resource, "list"],
-			predicate: ({ queryKey }) => sameIdentityPartition(queryKey, partition),
+			predicate: ({ queryKey }) =>
+				sameIdentityPartition(queryKey, scope.identity) &&
+				sameEndpointPartition(queryKey, scope.endpoint),
 		});
-	const refreshAfterSuccess = async (startedAs: typeof identityPartition) => {
-		const current = latestPartition.current;
-		if (!mounted.current || !samePartition(startedAs, current)) {
+	const refreshAfterSuccess = async (startedAs: CurrentMediaListScope) => {
+		const current = latestScope.current;
+		if (!mounted.current || !sameListScope(startedAs, current)) {
 			// Never refetch an initiating account with a newer account's session.
-			// Dropping it also prevents stale mutation-era data from resurfacing.
-			removePartition(startedAs);
+			// The endpoint is part of that ownership boundary for shared caches.
+			removeScope(startedAs);
 			return;
 		}
 		await queryClient.invalidateQueries({
 			queryKey: [resource, "list"],
-			predicate: ({ queryKey }) => sameIdentityPartition(queryKey, current),
+			predicate: ({ queryKey }) =>
+				sameIdentityPartition(queryKey, current.identity) &&
+				sameEndpointPartition(queryKey, current.endpoint),
 			// The current tab can temporarily unmount its list. Refresh only this
 			// identity's inactive variants; never refetch a previous account's key
 			// with the current request headers.
@@ -103,8 +145,8 @@ function useCurrentMediaListRefresh(resource: "mediaAssets" | "mediaFolders") {
 	return {
 		// Event handlers retain the hook result from the committed render. Reading
 		// that closure prevents an abandoned concurrent render from changing which
-		// identity owns a newly-started mutation.
-		currentPartition: () => identityPartition,
+		// identity and endpoint own a newly-started mutation.
+		currentScope: () => currentScope,
 		refreshAfterSuccess,
 	};
 }
@@ -119,7 +161,7 @@ function withCurrentListRefresh<TData, TVariables>(
 		variables,
 		options,
 	) => {
-		const startedAs = listRefresh.currentPartition();
+		const startedAs = listRefresh.currentScope();
 		const result = await mutation.mutateAsync(variables, {
 			...options,
 			onSuccess: options?.onSuccess
@@ -152,37 +194,26 @@ function withCurrentListRefresh<TData, TVariables>(
 /** Infinite-scroll list of assets, optionally filtered by folder, MIME type, or search. */
 export function useAssets(params: AssetListParams = {}) {
 	const identityPartition = useIdentityPartition();
-	const apiBaseURL = useMediaApiBaseURL();
+	const endpointPartition = useMediaEndpointPartition();
 	const result = media.mediaAssets.list.useInfinite(
-		[params, identityPartition],
+		[params, identityPartition, endpointPartition],
 		{
 			enabled: !isUnresolvedIdentityPartition(identityPartition),
 		},
 	);
-	const data = useMemo(
-		() =>
-			result.data
-				? {
-						...result.data,
-						pages: result.data.pages.map((page) => ({
-							...page,
-							items: page.items.map((asset) =>
-								resolveMediaAsset(asset, apiBaseURL),
-							),
-						})),
-					}
-				: undefined,
-		[result.data, apiBaseURL],
-	);
-	return { ...result, data };
+	return result;
 }
 
 /** Pass `null` for root-level folders and `undefined` for all folders. */
 export function useFolders(parentId?: string | null) {
 	const identityPartition = useIdentityPartition();
-	return media.mediaFolders.list.use([parentId, identityPartition], {
-		enabled: !isUnresolvedIdentityPartition(identityPartition),
-	});
+	const endpointPartition = useMediaEndpointPartition();
+	return media.mediaFolders.list.use(
+		[parentId, identityPartition, endpointPartition],
+		{
+			enabled: !isUnresolvedIdentityPartition(identityPartition),
+		},
+	);
 }
 
 /**
@@ -205,7 +236,7 @@ export function useUploadAsset() {
 
 	return useMutation(
 		{
-			onMutate: () => listRefresh.currentPartition(),
+			onMutate: () => listRefresh.currentScope(),
 			mutationFn: async ({
 				file,
 				folderId,
@@ -321,7 +352,7 @@ export function useRegisterAssetForm(
 	return {
 		...form,
 		submit: async (values) => {
-			const startedAs = listRefresh.currentPartition();
+			const startedAs = listRefresh.currentScope();
 			const submittedAsset = await form.submit(values);
 			if (submittedAsset === undefined) return undefined;
 			const asset = resolveMediaAsset(submittedAsset, apiBaseURL);
@@ -366,7 +397,7 @@ export function useCreateFolderForm(
 	return {
 		...form,
 		submit: async (values) => {
-			const startedAs = listRefresh.currentPartition();
+			const startedAs = listRefresh.currentScope();
 			const folder = await form.submit(values);
 			if (folder === undefined) return undefined;
 			await listRefresh.refreshAfterSuccess(startedAs);

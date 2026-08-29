@@ -14,6 +14,11 @@ import {
 } from "../client/hooks/use-media";
 import { mediaResources } from "../query-keys";
 
+const MEDIA_ENDPOINT = {
+	baseURL: "http://test.local",
+	basePath: "/api",
+};
+
 (
 	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -108,12 +113,20 @@ describe("Media protected query identity partition", () => {
 		await waitFor(() => filename === "user-b.jpg");
 		expect(
 			queryClient.getQueryData(
-				MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-a" }),
+				MEDIA_QUERY_KEYS.assetsList(
+					{ limit: 40 },
+					{ id: "user-a" },
+					MEDIA_ENDPOINT,
+				),
 			),
 		).toBeDefined();
 		expect(
 			queryClient.getQueryData(
-				MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-b" }),
+				MEDIA_QUERY_KEYS.assetsList(
+					{ limit: 40 },
+					{ id: "user-b" },
+					MEDIA_ENDPOINT,
+				),
 			),
 		).toBeDefined();
 	});
@@ -229,7 +242,13 @@ describe("Media protected query identity partition", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(4);
 		const userA = queryClient.getQueryData<{
 			pages: Array<{ items: Array<{ filename: string }> }>;
-		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-a" }));
+		}>(
+			MEDIA_QUERY_KEYS.assetsList(
+				{ limit: 40 },
+				{ id: "user-a" },
+				MEDIA_ENDPOINT,
+			),
+		);
 		expect(userA?.pages[0]?.items[0]?.filename).toBe("user-a.jpg");
 	});
 
@@ -290,10 +309,22 @@ describe("Media protected query identity partition", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(4);
 		const userA = queryClient.getQueryData<{
 			pages: Array<{ items: Array<{ filename: string }> }>;
-		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-a" }));
+		}>(
+			MEDIA_QUERY_KEYS.assetsList(
+				{ limit: 40 },
+				{ id: "user-a" },
+				MEDIA_ENDPOINT,
+			),
+		);
 		const userB = queryClient.getQueryData<{
 			pages: Array<{ items: Array<{ filename: string }> }>;
-		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-b" }));
+		}>(
+			MEDIA_QUERY_KEYS.assetsList(
+				{ limit: 40 },
+				{ id: "user-b" },
+				MEDIA_ENDPOINT,
+			),
+		);
 		expect(userA?.pages[0]?.items[0]?.filename).toBe("user-a.jpg");
 		expect(userB?.pages[0]?.items[0]?.filename).toBe("user-b-updated.jpg");
 	});
@@ -358,13 +389,101 @@ describe("Media protected query identity partition", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(3);
 		expect(
 			queryClient.getQueryData(
-				MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-a" }),
+				MEDIA_QUERY_KEYS.assetsList(
+					{ limit: 40 },
+					{ id: "user-a" },
+					MEDIA_ENDPOINT,
+				),
 			),
 		).toBeUndefined();
 		const userB = queryClient.getQueryData<{
 			pages: Array<{ items: Array<{ filename: string }> }>;
-		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-b" }));
+		}>(
+			MEDIA_QUERY_KEYS.assetsList(
+				{ limit: 40 },
+				{ id: "user-b" },
+				MEDIA_ENDPOINT,
+			),
+		);
 		expect(userB?.pages[0]?.items[0]?.filename).toBe("user-b.jpg");
+	});
+
+	it("never refetches a mutation-start endpoint after an in-flight endpoint switch", async () => {
+		let resolveDelete: ((response: Response) => void) | undefined;
+		const deleteResponse = new Promise<Response>((resolve) => {
+			resolveDelete = resolve;
+		});
+		fetchMock
+			.mockResolvedValueOnce(responseFor("endpoint-a"))
+			.mockReturnValueOnce(deleteResponse)
+			.mockResolvedValueOnce(responseFor("endpoint-b"));
+		const auth = createIdentityTestAuth(vi.fn(() => null));
+		const identity = { id: "user-a" };
+		const endpointA = {
+			baseURL: "http://media-a.local",
+			basePath: "/api-a",
+		};
+		const endpointB = {
+			baseURL: "http://media-b.local",
+			basePath: "/api-b",
+		};
+		let filename: string | undefined;
+		let deleteAsset:
+			| ReturnType<typeof useDeleteAsset>["mutateAsync"]
+			| undefined;
+
+		function Probe() {
+			filename = useAssets({ limit: 40 }).data?.pages[0]?.items[0]?.filename;
+			deleteAsset = useDeleteAsset().mutateAsync;
+			return null;
+		}
+
+		async function render(endpoint: typeof endpointA) {
+			await act(async () => {
+				root.render(
+					<StackProvider
+						basePath="/pages"
+						api={endpoint}
+						auth={auth}
+						initialIdentity={identity}
+						overrides={{ media: { queryClient } }}
+					>
+						<QueryClientProvider client={queryClient}>
+							<Probe />
+						</QueryClientProvider>
+					</StackProvider>,
+				);
+			});
+		}
+
+		await render(endpointA);
+		await waitFor(() => filename === "endpoint-a.jpg");
+		let deletion: Promise<{ success: boolean }> | undefined;
+		await act(async () => {
+			deletion = deleteAsset?.("asset-endpoint-a");
+			await Promise.resolve();
+		});
+		await waitFor(() => fetchMock.mock.calls.length === 2);
+		await render(endpointB);
+		await waitFor(() => filename === "endpoint-b.jpg");
+		resolveDelete?.(
+			new Response(JSON.stringify({ success: true }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+		await act(async () => deletion);
+
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(
+			queryClient.getQueryData(
+				MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, identity, endpointA),
+			),
+		).toBeUndefined();
+		const endpointBData = queryClient.getQueryData<{
+			pages: Array<{ items: Array<{ filename: string }> }>;
+		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, identity, endpointB));
+		expect(endpointBData?.pages[0]?.items[0]?.filename).toBe("endpoint-b.jpg");
 	});
 
 	it("ignores an identity from an abandoned concurrent render", async () => {
@@ -420,12 +539,20 @@ describe("Media protected query identity partition", () => {
 
 		expect(
 			queryClient.getQueryData(
-				MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-a" }),
+				MEDIA_QUERY_KEYS.assetsList(
+					{ limit: 40 },
+					{ id: "user-a" },
+					MEDIA_ENDPOINT,
+				),
 			),
 		).toBeUndefined();
 		expect(
 			queryClient.getQueryData(
-				MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-b" }),
+				MEDIA_QUERY_KEYS.assetsList(
+					{ limit: 40 },
+					{ id: "user-b" },
+					MEDIA_ENDPOINT,
+				),
 			),
 		).toBeUndefined();
 		expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -492,12 +619,22 @@ describe("Media protected query identity partition", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(3);
 		expect(
 			queryClient.getQueryData(
-				MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-a" }),
+				MEDIA_QUERY_KEYS.assetsList(
+					{ limit: 40 },
+					{ id: "user-a" },
+					MEDIA_ENDPOINT,
+				),
 			),
 		).toBeUndefined();
 		const userB = queryClient.getQueryData<{
 			pages: Array<{ items: Array<{ filename: string }> }>;
-		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-b" }));
+		}>(
+			MEDIA_QUERY_KEYS.assetsList(
+				{ limit: 40 },
+				{ id: "user-b" },
+				MEDIA_ENDPOINT,
+			),
+		);
 		expect(userB?.pages[0]?.items[0]?.filename).toBe("user-b.jpg");
 	});
 
@@ -574,7 +711,13 @@ describe("Media protected query identity partition", () => {
 
 		const current = queryClient.getQueryData<{
 			pages: Array<{ items: Array<{ filename: string }> }>;
-		}>(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, { id: "user-a" }));
+		}>(
+			MEDIA_QUERY_KEYS.assetsList(
+				{ limit: 40 },
+				{ id: "user-a" },
+				MEDIA_ENDPOINT,
+			),
+		);
 		expect(current?.pages[0]?.items[0]?.filename).toBe("user-a-updated.jpg");
 		expect(fetchMock).toHaveBeenCalledTimes(4);
 	});

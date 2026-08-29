@@ -153,11 +153,17 @@ function createMediaLibraryLoader(config: ResolvedMediaClientConfig) {
 		};
 		const reportError = createLoadErrorReporter(hooks, context);
 		const queries = createMediaQueryKeys(createMediaApiClient(config));
+		const endpointPartition = { baseURL: apiBaseURL, basePath: apiBasePath };
 		const assetQuery = queries.mediaAssets.list(
 			{ limit: 40 },
 			identityPartition,
+			endpointPartition,
 		);
-		const folderQuery = queries.mediaFolders.list(undefined, identityPartition);
+		const folderQuery = queries.mediaFolders.list(
+			undefined,
+			identityPartition,
+			endpointPartition,
+		);
 
 		try {
 			await hooks?.beforeLoadLibrary?.(context);

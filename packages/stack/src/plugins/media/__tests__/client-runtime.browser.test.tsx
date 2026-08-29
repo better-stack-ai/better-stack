@@ -14,7 +14,13 @@ import { createClientStack } from "../../../client";
 import { StackProvider } from "@btst/stack/context";
 import { createReactRouterPage } from "../../../react-router";
 import { defineClientPlugin } from "../../client";
-import { useAssets, useRegisterAsset, useUploadAsset } from "../client/hooks";
+import {
+	useAssets,
+	useCreateFolder,
+	useFolders,
+	useRegisterAsset,
+	useUploadAsset,
+} from "../client/hooks";
 import {
 	createMediaUploadConfig,
 	mediaClientPlugin,
@@ -47,6 +53,13 @@ const asset = {
 	createdAt: "2026-01-01T00:00:00.000Z",
 };
 const relativeAsset = { ...asset, url: "/uploads/runtime.txt" };
+const secondRelativeAsset = {
+	...relativeAsset,
+	id: "asset-2",
+	filename: "runtime-2.txt",
+	originalName: "runtime-2.txt",
+	url: "/uploads/runtime-2.txt",
+};
 
 function jsonResponse(value: unknown) {
 	return new Response(JSON.stringify(value), {
@@ -101,7 +114,11 @@ describe("Media and Route Docs browser runtime", () => {
 				credentials: request.credentials,
 			});
 			if (request.method === "GET") {
-				return jsonResponse({ items: [relativeAsset], total: 1 });
+				const offset = new URL(request.url).searchParams.get("offset");
+				return jsonResponse({
+					items: [offset === "1" ? secondRelativeAsset : relativeAsset],
+					total: 2,
+				});
 			}
 			return jsonResponse(relativeAsset);
 		});
@@ -162,6 +179,14 @@ describe("Media and Route Docs browser runtime", () => {
 		};
 		await renderProbe();
 		await waitFor(() => assetsQuery?.isLoading === false);
+		let refetchedURL: string | undefined;
+		let nextPageURL: string | undefined;
+		await act(async () => {
+			const refetched = await assetsQuery?.refetch();
+			refetchedURL = refetched?.data?.pages[0]?.items[0]?.url;
+			const nextPage = await assetsQuery?.fetchNextPage();
+			nextPageURL = nextPage?.data?.pages[1]?.items[0]?.url;
+		});
 		await act(async () => {
 			registeredAsset = await register?.({
 				url: asset.url,
@@ -175,6 +200,8 @@ describe("Media and Route Docs browser runtime", () => {
 		});
 
 		const resolvedURL = "https://media.example.net/uploads/runtime.txt";
+		expect(refetchedURL).toBe(resolvedURL);
+		expect(nextPageURL).toBe("https://media.example.net/uploads/runtime-2.txt");
 		expect(assetsQuery?.data?.pages[0]?.items[0]).toMatchObject({
 			filename: "runtime.txt",
 			url: resolvedURL,
@@ -233,6 +260,111 @@ describe("Media and Route Docs browser runtime", () => {
 			expect(request.headers.get("cookie")).toBeNull();
 			expect(request.credentials).toBe("include");
 		}
+	});
+
+	it("isolates Media lists and invalidation by resolved endpoint", async () => {
+		const requests: string[] = [];
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+			const request =
+				input instanceof Request ? input : new Request(input, init);
+			requests.push(`${request.method} ${request.url}`);
+			const service = request.url.includes("media-a.example") ? "a" : "b";
+			if (request.method === "POST") {
+				return jsonResponse({
+					id: `folder-${service}-created`,
+					name: "Created",
+				});
+			}
+			if (request.url.includes("/media/folders")) {
+				return jsonResponse([
+					{ id: `folder-${service}`, name: `Folder ${service}` },
+				]);
+			}
+			return jsonResponse({
+				items: [
+					{
+						...relativeAsset,
+						id: `asset-${service}`,
+						filename: `${service}.txt`,
+					},
+				],
+				total: 1,
+			});
+		});
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		const createStack = (service: "a" | "b") =>
+			createClientStack({
+				api: { baseURL: "https://app.example.com", basePath: "/api" },
+				site: { baseURL: "https://app.example.com", basePath: "/pages" },
+				queryClient,
+				plugins: { media: mediaClientPlugin() },
+				endpoints: {
+					media: {
+						api: {
+							baseURL: `https://media-${service}.example`,
+							basePath: `/api-${service}`,
+						},
+					},
+				},
+			});
+		const stackA = createStack("a");
+		const stackB = createStack("b");
+		const filenames: Record<string, string | undefined> = {};
+		const folderNames: Record<string, string | undefined> = {};
+		let createFolderA:
+			| ReturnType<typeof useCreateFolder>["mutateAsync"]
+			| undefined;
+		function Probe({ service }: { service: "a" | "b" }) {
+			filenames[service] = useAssets({
+				limit: 1,
+			}).data?.pages[0]?.items[0]?.filename;
+			folderNames[service] = useFolders().data?.[0]?.name;
+			const createFolder = useCreateFolder().mutateAsync;
+			if (service === "a") createFolderA = createFolder;
+			return null;
+		}
+
+		await act(async () => {
+			root.render(
+				<QueryClientProvider client={queryClient}>
+					<StackProvider stack={stackA}>
+						<Probe service="a" />
+					</StackProvider>
+					<StackProvider stack={stackB}>
+						<Probe service="b" />
+					</StackProvider>
+				</QueryClientProvider>,
+			);
+		});
+		await waitFor(
+			() =>
+				filenames.a === "a.txt" &&
+				filenames.b === "b.txt" &&
+				folderNames.a === "Folder a" &&
+				folderNames.b === "Folder b",
+		);
+		await act(async () => {
+			await createFolderA?.({ name: "Created" });
+		});
+
+		expect(
+			requests.filter((request) =>
+				request.startsWith("GET https://media-a.example/api-a/media/folders"),
+			),
+		).toHaveLength(2);
+		expect(
+			requests.filter((request) =>
+				request.startsWith("GET https://media-b.example/api-b/media/folders"),
+			),
+		).toHaveLength(1);
+		expect(
+			queryClient.getQueriesData({ queryKey: ["mediaAssets", "list"] }),
+		).toHaveLength(2);
+		expect(
+			queryClient.getQueriesData({ queryKey: ["mediaFolders", "list"] }),
+		).toHaveLength(2);
 	});
 
 	it("forwards resolved transport to the Vercel Blob token exchange", async () => {

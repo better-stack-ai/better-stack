@@ -378,7 +378,22 @@ describe("client plugin SSR loaders", () => {
 			requestedUrls.push(url);
 			return new Response(
 				JSON.stringify(
-					url.includes("/media/assets") ? { items: [], total: 0 } : [],
+					url.includes("/media/assets")
+						? {
+								items: [
+									{
+										id: "asset-ssr",
+										filename: "ssr.jpg",
+										originalName: "ssr.jpg",
+										mimeType: "image/jpeg",
+										size: 1,
+										url: "/uploads/ssr.jpg",
+										createdAt: "2026-01-01T00:00:00.000Z",
+									},
+								],
+								total: 1,
+							}
+						: [],
 				),
 				{ status: 200, headers: { "content-type": "application/json" } },
 			);
@@ -402,11 +417,25 @@ describe("client plugin SSR loaders", () => {
 			baseURL: API_BASE_URL,
 			basePath: API_BASE_PATH,
 		});
+		const endpoint = {
+			baseURL: API_BASE_URL,
+			basePath: API_BASE_PATH,
+		};
 		const foldersQuery = createMediaQueryKeys(
 			client,
 			TEST_HEADERS,
-		).mediaFolders.list(undefined, identity);
+		).mediaFolders.list(undefined, identity, endpoint);
 		expect(queryClient.getQueryData(foldersQuery.queryKey)).toEqual([]);
+		const assetsQuery = createMediaQueryKeys(
+			client,
+			TEST_HEADERS,
+		).mediaAssets.list({ limit: 40 }, identity, endpoint);
+		const assets = queryClient.getQueryData<{
+			pages: Array<{ items: Array<{ url: string }> }>;
+		}>(assetsQuery.queryKey);
+		expect(assets?.pages[0]?.items[0]?.url).toBe(
+			"http://localhost:3000/uploads/ssr.jpg",
+		);
 		const folderUrl = new URL(
 			requestedUrls.find((url) => url.includes("/media/folders")) ?? "",
 		);

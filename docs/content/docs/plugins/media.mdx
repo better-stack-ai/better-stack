@@ -857,13 +857,19 @@ Standalone getter and mutation exports remain lower-level adapter primitives for
 The raw SSG helper can prefetch the initial library without a live HTTP server:
 
 ```ts
-await appStack.raw.media.prefetchForRoute("library", queryClient)
+await appStack.raw.media.prefetchForRoute("library", queryClient, {
+  baseURL: "https://app.example.com",
+  basePath: "/api/data",
+})
 ```
 
 This seeds the same anonymous asset/folder keys used by the browser and strips
-tenant fields. It deliberately performs no request authorization. Use it only
-when the generated page is intentionally public and protected at the deployment
-boundary; never put private or per-user Media data into a shared static build.
+tenant fields. The endpoint must exactly match the Media API location resolved
+by the browser stack; it scopes the cache and resolves local-adapter asset URLs,
+but accepts no headers or credentials. The helper deliberately performs no
+request authorization. Use it only when the generated page is intentionally
+public and protected at the deployment boundary; never put private or per-user
+Media data into a shared static build.
 Authenticated SSR should instead forward request headers, hydrate
 `initialIdentity`, and pass that identity as `MediaClientConfig.identityPartition`.
 

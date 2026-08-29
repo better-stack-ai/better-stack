@@ -320,7 +320,12 @@ const PLUGINS: PluginConfig[] = [
 		// the package must be present at build time.
 		extraNpmDeps: ["@vercel/blob"],
 		extraRegistryDeps: [],
-		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
+		pluginRootFiles: [
+			"types.ts",
+			"schemas.ts",
+			"permissions.ts",
+			"asset-url.ts",
+		],
 	},
 ];
 
