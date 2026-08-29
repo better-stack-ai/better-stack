@@ -67,18 +67,50 @@ describe("seed-plan", () => {
 	});
 
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
-		"keeps %s CMS and UI Builder seeds on the trusted operation surface",
+		"keeps every %s seed on its intended trusted operation surface",
 		(framework) => {
-			for (const plugin of ["cms", "ui-builder"] as const) {
+			const trustSurfaces = [
+				["blog", "blog"],
+				["kanban", "kanban"],
+				["form-builder", "formBuilder"],
+				["cms", "cms"],
+				["ui-builder", "cms"],
+			] as const;
+
+			for (const [plugin, trustSurface] of trustSurfaces) {
 				const file = buildSeedRouteFile(plugin, framework);
-				expect(file?.content).toContain("myStack.trusted.cms");
-				expect(file?.content).toContain("cms.listContentItems({");
-				expect(file?.content).toContain("cms.createContentItem({");
+				expect(file?.content).toContain(`myStack.trusted.${trustSurface}`);
+				expect(file?.content).not.toContain("myStack.adapter");
 				expect(file?.content).not.toContain("myStack.api");
-				expect(file?.content).not.toContain("api.cms");
 			}
 		},
 	);
+
+	it("uses canonical operation names and inputs in generated seed bodies", () => {
+		const blog = buildSeedRouteFile("blog", "nextjs")?.content;
+		expect(blog).toContain("blog.listPosts({ limit: 1 })");
+		expect(blog).toContain("blog.createPost({");
+
+		const kanban = buildSeedRouteFile("kanban", "nextjs")?.content;
+		expect(kanban).toContain(
+			'kanban.listBoards({ slug: "demo-board", limit: 1 })',
+		);
+		expect(kanban).toContain("kanban.getBoard({ id:");
+		expect(kanban).toContain("kanban.createBoard({");
+		expect(kanban).toContain("kanban.createColumn({");
+		expect(kanban).toContain("kanban.createTask({");
+		expect(kanban).not.toContain("@btst/stack/plugins/kanban/api");
+
+		const formBuilder = buildSeedRouteFile("form-builder", "nextjs")?.content;
+		expect(formBuilder).toContain("formBuilder.listForms({ limit: 1 })");
+		expect(formBuilder).toContain("formBuilder.createForm({");
+
+		for (const plugin of ["cms", "ui-builder"] as const) {
+			const file = buildSeedRouteFile(plugin, "nextjs")?.content;
+			expect(file).toContain("cms.listContentItems({");
+			expect(file).toContain("cms.createContentItem({");
+		}
+	});
 
 	// ── buildSeedRouteFiles ──────────────────────────────────────────────────
 

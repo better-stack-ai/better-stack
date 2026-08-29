@@ -20,16 +20,14 @@ export function seedApiPath(pluginKey: PluginKey): string {
 // Each value is a function body string using `myStack` from the stack import.
 
 const BLOG_SEED_BODY = `
-  const adapter = myStack.adapter
-  const existing = await adapter.findMany({ model: "post", limit: 1 })
-  if (existing.length > 0) return { ok: true, skipped: true }
+  const blog = myStack.trusted.blog
+  const existing = await blog.listPosts({ limit: 1 })
+  if (existing.items.length > 0) return { ok: true, skipped: true }
   const now = new Date()
-  await adapter.create({
-    model: "post",
-    data: {
-      title: "Getting Started with BTST Blog",
-      slug: "getting-started",
-      content: \`# Getting Started with BTST Blog
+  await blog.createPost({
+    title: "Getting Started with BTST Blog",
+    slug: "getting-started",
+    content: \`# Getting Started with BTST Blog
 
 Welcome to the **BTST Blog plugin** demo! This post was seeded automatically when the server started.
 
@@ -45,19 +43,14 @@ Welcome to the **BTST Blog plugin** demo! This post was seeded automatically whe
 The editor supports full **Markdown** including code blocks, blockquotes, tables, lists, and headings.
 
 Try creating a new post to see the editor in action!\`,
-      excerpt: "An introduction to the BTST blog plugin — browse posts, create new ones, and explore the Markdown editor.",
-      published: true,
-      publishedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    },
+    excerpt: "An introduction to the BTST blog plugin — browse posts, create new ones, and explore the Markdown editor.",
+    published: true,
+    publishedAt: now,
   })
-  await adapter.create({
-    model: "post",
-    data: {
-      title: "Building Full-Stack Apps with Plugins",
-      slug: "full-stack-plugins",
-      content: \`# Building Full-Stack Apps with Plugins
+  await blog.createPost({
+    title: "Building Full-Stack Apps with Plugins",
+    slug: "full-stack-plugins",
+    content: \`# Building Full-Stack Apps with Plugins
 
 BTST takes a plugin-first approach to full-stack development. Each plugin ships with backend API routes, database schema, React components, and React Query hooks.
 
@@ -69,59 +62,67 @@ BTST takes a plugin-first approach to full-stack development. Each plugin ships 
 | Kanban | Project boards and task tracking |
 | Form Builder | Dynamic forms with submissions |
 | UI Builder | Visual drag-and-drop page builder |\`,
-      excerpt: "Explore how BTST plugins combine backend APIs, database schemas, and React components into one cohesive system.",
-      published: true,
-      publishedAt: new Date(now.getTime() - 86400000),
-      createdAt: new Date(now.getTime() - 86400000),
-      updatedAt: new Date(now.getTime() - 86400000),
-    },
+    excerpt: "Explore how BTST plugins combine backend APIs, database schemas, and React components into one cohesive system.",
+    published: true,
+    publishedAt: new Date(now.getTime() - 86400000),
   })
-  await adapter.create({
-    model: "post",
-    data: {
-      title: "SEO and Meta Tags in BTST",
-      slug: "seo-and-meta-tags",
-      content: \`# SEO and Meta Tags in BTST
+  await blog.createPost({
+    title: "SEO and Meta Tags in BTST",
+    slug: "seo-and-meta-tags",
+    content: \`# SEO and Meta Tags in BTST
 
 BTST plugins generate proper meta tags for every page automatically including title, description, Open Graph, and Twitter card tags.\`,
-      excerpt: "BTST plugins generate Open Graph and Twitter card meta tags for every page automatically.",
-      published: true,
-      publishedAt: new Date(now.getTime() - 172800000),
-      createdAt: new Date(now.getTime() - 172800000),
-      updatedAt: new Date(now.getTime() - 172800000),
-    },
+    excerpt: "BTST plugins generate Open Graph and Twitter card meta tags for every page automatically.",
+    published: true,
+    publishedAt: new Date(now.getTime() - 172800000),
   })
   console.log("[seed] blog: 3 posts created")
   return { ok: true }
 `;
 
 const KANBAN_SEED_BODY = `
-  const { findOrCreateKanbanBoard, getKanbanColumnsByBoardId, createKanbanTask } = await import("@btst/stack/plugins/kanban/api")
-  const adapter = myStack.adapter
-  const board = await findOrCreateKanbanBoard(adapter, "demo-board", "BTST Demo Board", ["To Do", "In Progress", "In Review", "Done"])
-  const columns = await getKanbanColumnsByBoardId(adapter, board.id)
-  if (!columns || columns.length === 0) return { ok: true, skipped: true }
+  const kanban = myStack.trusted.kanban
+  const existingBoards = await kanban.listBoards({ slug: "demo-board", limit: 1 })
+  const board = existingBoards.items[0]
+    ? await kanban.getBoard({ id: existingBoards.items[0].id })
+    : await kanban.createBoard({ slug: "demo-board", name: "BTST Demo Board" })
+  const columns = [...board.columns]
   const todoCol = columns.find((c) => c.title === "To Do")
   const inProgressCol = columns.find((c) => c.title === "In Progress")
   const doneCol = columns.find((c) => c.title === "Done")
   if (!todoCol || !inProgressCol || !doneCol) return { ok: true, skipped: true }
-  const existingTasks = await adapter.findMany({ model: "kanbanTask", where: [{ field: "columnId", value: todoCol.id, operator: "eq" }], limit: 1 })
-  if (existingTasks.length > 0) return { ok: true, skipped: true }
-  await createKanbanTask(adapter, { title: "Set up the BTST stack", columnId: doneCol.id, description: "Install @btst/stack and configure the adapter", priority: "HIGH" })
-  await createKanbanTask(adapter, { title: "Add the Kanban plugin", columnId: doneCol.id, description: "Register kanbanBackendPlugin and kanbanClientPlugin", priority: "HIGH" })
-  await createKanbanTask(adapter, { title: "Configure custom columns", columnId: inProgressCol.id, description: "Customize the board columns to fit the team workflow", priority: "MEDIUM" })
-  await createKanbanTask(adapter, { title: "Invite team members", columnId: inProgressCol.id, description: "Add colleagues to the demo board", priority: "LOW" })
-  await createKanbanTask(adapter, { title: "Connect to a real database", columnId: todoCol.id, description: "Replace the in-memory adapter with Prisma, Drizzle, or another supported ORM", priority: "MEDIUM" })
-  await createKanbanTask(adapter, { title: "Add authentication", columnId: todoCol.id, description: "Protect the kanban routes with your auth solution", priority: "HIGH" })
-  await createKanbanTask(adapter, { title: "Deploy to production", columnId: todoCol.id, description: "Deploy the app to Vercel, Fly.io, or your preferred hosting", priority: "URGENT" })
+  let inReviewCol = columns.find((c) => c.title === "In Review")
+  if (!inReviewCol) {
+    inReviewCol = await kanban.createColumn({ title: "In Review", boardId: board.id })
+    columns.push(inReviewCol)
+  }
+  const primaryColumnIds = new Set([todoCol.id, inProgressCol.id, inReviewCol.id, doneCol.id])
+  await kanban.reorderColumns({
+    boardId: board.id,
+    columnIds: [
+      todoCol.id,
+      inProgressCol.id,
+      inReviewCol.id,
+      doneCol.id,
+      ...columns.filter((column) => !primaryColumnIds.has(column.id)).map((column) => column.id),
+    ],
+  })
+  if (todoCol.tasks && todoCol.tasks.length > 0) return { ok: true, skipped: true }
+  await kanban.createTask({ title: "Set up the BTST stack", columnId: doneCol.id, description: "Install @btst/stack and configure the adapter", priority: "HIGH" })
+  await kanban.createTask({ title: "Add the Kanban plugin", columnId: doneCol.id, description: "Register kanbanBackendPlugin and kanbanClientPlugin", priority: "HIGH" })
+  await kanban.createTask({ title: "Configure custom columns", columnId: inProgressCol.id, description: "Customize the board columns to fit the team workflow", priority: "MEDIUM" })
+  await kanban.createTask({ title: "Invite team members", columnId: inProgressCol.id, description: "Add colleagues to the demo board", priority: "LOW" })
+  await kanban.createTask({ title: "Connect to a real database", columnId: todoCol.id, description: "Replace the in-memory adapter with Prisma, Drizzle, or another supported ORM", priority: "MEDIUM" })
+  await kanban.createTask({ title: "Add authentication", columnId: todoCol.id, description: "Protect the kanban routes with your auth solution", priority: "HIGH" })
+  await kanban.createTask({ title: "Deploy to production", columnId: todoCol.id, description: "Deploy the app to Vercel, Fly.io, or your preferred hosting", priority: "URGENT" })
   console.log("[seed] kanban: 1 board, 4 columns, 7 tasks created")
   return { ok: true }
 `;
 
 const FORM_BUILDER_SEED_BODY = `
-  const adapter = myStack.adapter
-  const existing = await adapter.findMany({ model: "form", limit: 1 })
-  if (existing.length > 0) return { ok: true, skipped: true }
+  const formBuilder = myStack.trusted.formBuilder
+  const existing = await formBuilder.listForms({ limit: 1 })
+  if (existing.items.length > 0) return { ok: true, skipped: true }
   const contactFormSchema = JSON.stringify({
     type: "object",
     properties: {
@@ -142,9 +143,8 @@ const FORM_BUILDER_SEED_BODY = `
     },
     required: ["rating", "category"],
   })
-  const now = new Date()
-  await adapter.create({ model: "form", data: { name: "Contact Us", slug: "contact-us", description: "A simple contact form for getting in touch.", schema: contactFormSchema, successMessage: "Thanks for reaching out! We'll get back to you soon.", status: "active", createdAt: now, updatedAt: now } })
-  await adapter.create({ model: "form", data: { name: "Feedback Form", slug: "feedback", description: "Share your feedback about our product and services.", schema: feedbackFormSchema, successMessage: "Thank you for your feedback!", status: "active", createdAt: new Date(now.getTime() - 86400000), updatedAt: new Date(now.getTime() - 86400000) } })
+  await formBuilder.createForm({ name: "Contact Us", slug: "contact-us", description: "A simple contact form for getting in touch.", schema: contactFormSchema, successMessage: "Thanks for reaching out! We'll get back to you soon.", status: "active" })
+  await formBuilder.createForm({ name: "Feedback Form", slug: "feedback", description: "Share your feedback about our product and services.", schema: feedbackFormSchema, successMessage: "Thank you for your feedback!", status: "active" })
   console.log("[seed] form-builder: 2 forms created")
   return { ok: true }
 `;
