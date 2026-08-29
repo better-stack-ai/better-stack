@@ -118,7 +118,19 @@ function withCurrentListRefresh<TData, TVariables>(
 		options,
 	) => {
 		const startedAs = listRefresh.currentPartition();
-		const result = await mutation.mutateAsync(variables, options);
+		const result = await mutation.mutateAsync(variables, {
+			...options,
+			onSuccess: options?.onSuccess
+				? (data, ...args) => options.onSuccess?.(mapResult(data), ...args)
+				: undefined,
+			onSettled: options?.onSettled
+				? (data, ...args) =>
+						options.onSettled?.(
+							data === undefined ? undefined : mapResult(data),
+							...args,
+						)
+				: undefined,
+		});
 		await listRefresh.refreshAfterSuccess(startedAs);
 		return mapResult(result);
 	};
@@ -127,7 +139,12 @@ function withCurrentListRefresh<TData, TVariables>(
 		// detach the successful call's required cache refresh.
 		void mutateAsync(variables, options).catch(() => {});
 	};
-	return { ...mutation, mutate, mutateAsync };
+	return {
+		...mutation,
+		data: mutation.data === undefined ? undefined : mapResult(mutation.data),
+		mutate,
+		mutateAsync,
+	} as UseMutationResult<TData, Error, TVariables>;
 }
 
 /** Infinite-scroll list of assets, optionally filtered by folder, MIME type, or search. */

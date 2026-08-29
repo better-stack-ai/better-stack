@@ -119,12 +119,14 @@ describe("Media and Route Docs browser runtime", () => {
 		let register:
 			| ReturnType<typeof useRegisterAsset>["mutateAsync"]
 			| undefined;
+		let registerMutation: ReturnType<typeof useRegisterAsset> | undefined;
 		let upload: ReturnType<typeof useUploadAsset>["mutateAsync"] | undefined;
 		let registeredAsset: typeof asset | undefined;
 		let uploadedAsset: typeof asset | undefined;
 		function Probe() {
 			assetsQuery = useAssets({ limit: 1 });
-			register = useRegisterAsset().mutateAsync;
+			registerMutation = useRegisterAsset();
+			register = registerMutation.mutateAsync;
 			upload = useUploadAsset().mutateAsync;
 			return null;
 		}
@@ -161,6 +163,36 @@ describe("Media and Route Docs browser runtime", () => {
 		});
 		expect(registeredAsset?.url).toBe(resolvedURL);
 		expect(uploadedAsset?.url).toBe(resolvedURL);
+
+		let callbackAsset: typeof asset | undefined;
+		let settledAsset: typeof asset | undefined;
+		await act(async () => {
+			registerMutation?.mutate(
+				{
+					url: asset.url,
+					filename: asset.filename,
+					mimeType: asset.mimeType,
+					size: asset.size,
+				},
+				{
+					onSuccess: (created) => {
+						callbackAsset = created;
+					},
+					onSettled: (created) => {
+						settledAsset = created;
+					},
+				},
+			);
+		});
+		await waitFor(
+			() =>
+				registerMutation?.isSuccess === true &&
+				callbackAsset !== undefined &&
+				settledAsset !== undefined,
+		);
+		expect(registerMutation?.data?.url).toBe(resolvedURL);
+		expect(callbackAsset?.url).toBe(resolvedURL);
+		expect(settledAsset?.url).toBe(resolvedURL);
 		expect(requests.some((request) => request.method === "GET")).toBe(true);
 		expect(
 			requests.filter((request) => request.method === "POST").length,
