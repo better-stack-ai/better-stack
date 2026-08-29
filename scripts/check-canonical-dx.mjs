@@ -187,11 +187,12 @@ function isInsideMarkdownInlineCode(source, index) {
 	return (prefix.match(/(?<!`)`(?!`)/g)?.length ?? 0) % 2 === 1;
 }
 
-function isInsideCommentProse(source, index) {
+function scanLexicalState(source, index) {
 	let quote;
 	let escaped = false;
 	let lineComment = false;
 	let blockComment = false;
+	const blocks = [];
 	for (let cursor = 0; cursor < index; cursor += 1) {
 		const char = source[cursor];
 		const next = source[cursor + 1];
@@ -219,9 +220,15 @@ function isInsideCommentProse(source, index) {
 		} else if (char === "/" && next === "*") {
 			blockComment = true;
 			cursor += 1;
-		}
+		} else if (char === "{") blocks.push(cursor);
+		else if (char === "}") blocks.pop();
 	}
-	if (lineComment || blockComment) return true;
+	return { blockComment, blocks, lineComment };
+}
+
+function isInsideCommentProse(source, index) {
+	const state = scanLexicalState(source, index);
+	if (state.lineComment || state.blockComment) return true;
 
 	// Registry JSON stores source comments with encoded newlines and tabs.
 	const encodedLineStart = source.lastIndexOf("\\n", index);
@@ -382,6 +389,7 @@ function resolveIdentifierBinding(
 	callIndex,
 ) {
 	const candidates = [];
+	const callBlocks = scanLexicalState(source, callIndex).blocks;
 	const markdownFence = /\.mdx?$/.test(file)
 		? source.lastIndexOf("```", callIndex)
 		: -1;
@@ -392,14 +400,23 @@ function resolveIdentifierBinding(
 		"g",
 	);
 	for (const binding of beforeCall.matchAll(variablePattern)) {
-		let valueIndex = searchStart + (binding.index ?? 0) + binding[0].length;
+		const bindingIndex = searchStart + (binding.index ?? 0);
+		const bindingBlocks = scanLexicalState(source, bindingIndex).blocks;
+		if (
+			bindingBlocks.some(
+				(block, blockIndex) => callBlocks[blockIndex] !== block,
+			)
+		) {
+			continue;
+		}
+		let valueIndex = bindingIndex + binding[0].length;
 		while (/\s/.test(source[valueIndex] ?? "")) valueIndex += 1;
 		const object =
 			source[valueIndex] === "{"
 				? readTopLevelObject(source, valueIndex)
 				: undefined;
 		candidates.push({
-			index: searchStart + (binding.index ?? 0),
+			index: bindingIndex,
 			object,
 			openIndex: object ? valueIndex : undefined,
 			typed: isCanonicalTypeAnnotation(binding[1], configType),
