@@ -261,7 +261,7 @@ function recordLifecycleProperties(
 ) {
 	for (const name of names) {
 		const propertyPattern = new RegExp(
-			`(?:^|[,{])\\s*${escapeRegExp(name)}\\b(?=\\s*(?:\\??:|\\(|,|\\}))`,
+			`(?:^|[,{])\\s*(?:async\\s+)?\\*?\\s*(?:${escapeRegExp(name)}\\b|["']${escapeRegExp(name)}["'])(?=\\s*(?:\\??:|\\(|,|\\}))`,
 			"gm",
 		);
 		for (const match of objectSource.matchAll(propertyPattern)) {
@@ -293,15 +293,17 @@ function readTopLevelObject(source, openIndex) {
 
 		if (lineComment) {
 			if (char === "\n") lineComment = false;
-			if (depth <= 1) topLevel += char === "\n" ? "\n" : " ";
+			topLevel += char === "\n" ? "\n" : " ";
 			continue;
 		}
 		if (blockComment) {
 			if (char === "*" && next === "/") {
 				blockComment = false;
+				topLevel += "  ";
 				index += 1;
+				continue;
 			}
-			if (depth <= 1) topLevel += char === "\n" ? "\n" : " ";
+			topLevel += char === "\n" ? "\n" : " ";
 			continue;
 		}
 		if (quote) {
@@ -309,24 +311,25 @@ function readTopLevelObject(source, openIndex) {
 			else if (char === "\\") escaped = true;
 			else if (char === quote) quote = undefined;
 			if (depth <= 1 && roundDepth === 0 && squareDepth === 0) topLevel += char;
-			else if (char === "\n") topLevel += "\n";
+			else topLevel += char === "\n" ? "\n" : " ";
 			continue;
 		}
 		if (char === "/" && next === "/") {
 			lineComment = true;
-			if (depth <= 1) topLevel += "  ";
+			topLevel += "  ";
 			index += 1;
 			continue;
 		}
 		if (char === "/" && next === "*") {
 			blockComment = true;
-			if (depth <= 1) topLevel += "  ";
+			topLevel += "  ";
 			index += 1;
 			continue;
 		}
 		if (char === '"' || char === "'" || char === "`") {
 			quote = char;
-			if (depth <= 1 && roundDepth === 0 && squareDepth === 0) topLevel += char;
+			topLevel +=
+				depth <= 1 && roundDepth === 0 && squareDepth === 0 ? char : " ";
 			continue;
 		}
 		if (char === "(") {
@@ -452,6 +455,7 @@ function inspectFactoryObject(
 	factory,
 	kind,
 	contextualLifecycleNames,
+	hookType,
 	object,
 	openIndex,
 	reportIndex,
@@ -464,8 +468,36 @@ function inspectFactoryObject(
 			match: factory,
 		});
 	}
-	if (kind === "backend") {
-		const hooksProperty = object.topLevel.match(/\bhooks\s*:/);
+	if (
+		kind === "backend" &&
+		/(?:^|[,{])\s*(?:async\s+)?\*?\s*(?:(?:on(?:Before|After)[A-Z][A-Za-z0-9]*|onError(?:[A-Z][A-Za-z0-9]*)?)\b|["'](?:on(?:Before|After)[A-Z][A-Za-z0-9]*|onError(?:[A-Z][A-Za-z0-9]*)?)["'])(?=\s*(?:\??:|\(|,|}))/.test(
+			object.topLevel,
+		)
+	) {
+		failures.push({
+			file,
+			line: lineAt(source, reportIndex),
+			label: "backend lifecycle callbacks must be nested under hooks",
+			match: factory,
+		});
+	}
+	if (kind === "backend" && contextualLifecycleNames.length > 0) {
+		recordLifecycleProperties(
+			failures,
+			file,
+			source,
+			object.topLevel,
+			openIndex,
+			factory,
+			contextualLifecycleNames,
+		);
+	}
+
+	if (kind === "backend" && hookType) {
+		let hooksReference;
+		const hooksProperty = object.topLevel.match(
+			/(?:^|[,{])\s*(?:hooks|["']hooks["'])\s*:/m,
+		);
 		if (hooksProperty?.index !== undefined) {
 			let hooksValueIndex =
 				openIndex + hooksProperty.index + hooksProperty[0].length;
@@ -480,56 +512,107 @@ function inspectFactoryObject(
 						match: factory,
 					});
 				}
+				if (
+					hooksObject &&
+					/(?:^|[,{])\s*\[[^\]]*\]\s*:/m.test(hooksObject.topLevel)
+				) {
+					failures.push({
+						file,
+						line: lineAt(source, hooksValueIndex),
+						label: "backend hooks computed key cannot be verified",
+						match: factory,
+					});
+				}
+				if (hooksObject && contextualLifecycleNames.length > 0) {
+					recordLifecycleProperties(
+						failures,
+						file,
+						source,
+						hooksObject.topLevel,
+						hooksValueIndex,
+						factory,
+						contextualLifecycleNames,
+					);
+				}
+			} else if (
+				!/^undefined\s*(?=[,}])/.test(
+					object.topLevel.slice(hooksValueIndex - openIndex),
+				)
+			) {
+				hooksReference = source
+					.slice(hooksValueIndex)
+					.match(/^([A-Za-z_$][\w$]*)\b/)?.[1];
+				if (!hooksReference) {
+					failures.push({
+						file,
+						line: lineAt(source, hooksValueIndex),
+						label: "backend hooks value cannot be verified",
+						match: factory,
+					});
+				}
 			}
+		} else if (/(?:^|[,{])\s*(hooks)\s*(?=[,}])/m.test(object.topLevel)) {
+			hooksReference = "hooks";
 		}
-	}
-	if (
-		kind === "backend" &&
-		/(?:^|[,{])\s*(?:on(?:Before|After)[A-Z][A-Za-z0-9]*|onError(?:[A-Z][A-Za-z0-9]*)?)\b(?=\s*(?:\??:|\(|,|}))/.test(
-			object.topLevel,
-		)
-	) {
-		failures.push({
-			file,
-			line: lineAt(source, reportIndex),
-			label: "backend lifecycle callbacks must be nested under hooks",
-			match: factory,
-		});
-	}
-	if (kind === "backend" && contextualLifecycleNames.length > 0) {
-		const objectSource = source.slice(openIndex, object.end + 1);
-		recordLifecycleProperties(
-			failures,
-			file,
-			source,
-			objectSource,
-			openIndex,
-			factory,
-			contextualLifecycleNames,
-		);
 
-		const hooksReference = object.topLevel
-			.match(/\bhooks\s*:\s*([A-Za-z_$][\w$]*)|\b(hooks)\s*(?=[,}])/)
-			?.slice(1)
-			.find(Boolean);
+		if (/(?:^|[,{])\s*\[[^\]]*\]\s*:/m.test(object.topLevel)) {
+			failures.push({
+				file,
+				line: lineAt(source, reportIndex),
+				label: "backend factory computed option key cannot be verified",
+				match: factory,
+			});
+		}
+
 		if (hooksReference) {
 			const binding = resolveIdentifierBinding(
 				source,
 				file,
 				hooksReference,
-				undefined,
+				hookType,
 				reportIndex,
 			);
 			if (binding?.object && binding.openIndex !== undefined) {
-				recordLifecycleProperties(
-					failures,
+				if (/\.\.\./.test(binding.object.topLevel)) {
+					failures.push({
+						file,
+						line: lineAt(source, binding.openIndex),
+						label: "backend hooks contain an unverifiable spread",
+						match: factory,
+					});
+				}
+				if (/(?:^|[,{])\s*\[[^\]]*\]\s*:/m.test(binding.object.topLevel)) {
+					failures.push({
+						file,
+						line: lineAt(source, binding.openIndex),
+						label: "backend hooks computed key cannot be verified",
+						match: factory,
+					});
+				}
+				if (contextualLifecycleNames.length > 0) {
+					recordLifecycleProperties(
+						failures,
+						file,
+						source,
+						binding.object.topLevel,
+						binding.openIndex,
+						factory,
+						contextualLifecycleNames,
+					);
+				}
+			} else if (!binding?.typed) {
+				if (
+					/\.mdx?$/.test(file) &&
+					isInsideMarkdownInlineCode(source, reportIndex)
+				) {
+					return;
+				}
+				failures.push({
 					file,
-					source,
-					source.slice(binding.openIndex, binding.object.end + 1),
-					binding.openIndex,
-					factory,
-					contextualLifecycleNames,
-				);
+					line: lineAt(source, reportIndex),
+					label: "backend hooks binding cannot be verified",
+					match: `${factory}(${hooksReference})`,
+				});
 			}
 		}
 	}
@@ -556,6 +639,7 @@ function checkFactoryCalls(
 	kind,
 	configType,
 	contextualLifecycleNames = [],
+	hookType,
 ) {
 	const callPattern = new RegExp(`\\b${factory}[ \\t\\n]*\\(`, "g");
 	for (const match of source.matchAll(callPattern)) {
@@ -621,6 +705,7 @@ function checkFactoryCalls(
 					factory,
 					kind,
 					contextualLifecycleNames,
+					hookType,
 					binding.object,
 					binding.openIndex,
 					binding.openIndex,
@@ -652,6 +737,7 @@ function checkFactoryCalls(
 			factory,
 			kind,
 			contextualLifecycleNames,
+			hookType,
 			object,
 			cursor,
 			callIndex,
@@ -677,11 +763,19 @@ function checkTypedHookObjects(
 			(declaration.index ?? 0) + declaration[0].lastIndexOf("{");
 		const object = readTopLevelObject(source, openIndex);
 		if (!object) continue;
+		if (/(?:^|[,{])\s*\[[^\]]*\]\s*:/m.test(object.topLevel)) {
+			failures.push({
+				file,
+				line: lineAt(source, openIndex),
+				label: "backend hooks computed key cannot be verified",
+				match: factory,
+			});
+		}
 		recordLifecycleProperties(
 			failures,
 			file,
 			source,
-			source.slice(openIndex, object.end + 1),
+			object.topLevel,
 			openIndex,
 			factory,
 			names,
@@ -823,6 +917,7 @@ for (const absolute of allFiles) {
 			"backend",
 			configType,
 			contextualNames,
+			hookType,
 		);
 		if (hookType) {
 			checkTypedHookObjects(

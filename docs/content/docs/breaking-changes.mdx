@@ -205,6 +205,16 @@ kanbanBackendPlugin(resolveUser, searchUsers, kanbanHooks)
 After:
 
 ```ts
+import type { BlogBackendHooks } from "@btst/stack/plugins/blog/api"
+import type { KanbanBackendHooks } from "@btst/stack/plugins/kanban/api"
+
+const blogHooks: BlogBackendHooks = {
+  // Use the canonical Blog hook names from the tables below.
+}
+const kanbanHooks: KanbanBackendHooks = {
+  // Use the canonical Kanban hook names from the tables below.
+}
+
 blogBackendPlugin({ hooks: blogHooks })
 commentsBackendPlugin({
   allowEditing: false,

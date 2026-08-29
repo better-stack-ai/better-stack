@@ -639,7 +639,14 @@ HTTP endpoints, request-scoped calls, and trusted calls all adapt these
 same operations.
 
 ```ts
-import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
+import {
+  kanbanBackendPlugin,
+  type KanbanBackendHooks,
+} from "@btst/stack/plugins/kanban/api"
+
+const hooks: KanbanBackendHooks = {
+  // Add canonical lifecycle callbacks here.
+}
 
 const app = createBackendStack({
   auth: serverAuth,
