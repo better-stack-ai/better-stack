@@ -13,29 +13,36 @@ import type { StackIdentity } from "@btst/stack/context";
 import type { QueryClient } from "@tanstack/react-query";
 
 export interface AppClientStackRuntime {
-	baseURL: string;
+	apiOrigin: string;
+	siteOrigin: string;
 	headers?: Headers;
 	/** Request-only identity used to align protected SSR query keys. */
 	requestIdentity?: StackIdentity;
 }
 
-const getBrowserBaseURL = () =>
+const getBrowserSiteOrigin = () =>
+	process.env.NEXT_PUBLIC_SITE_URL ||
 	process.env.NEXT_PUBLIC_BASE_URL ||
 	(typeof window === "undefined"
 		? "http://localhost:3000"
 		: window.location.origin);
 
+const getBrowserApiOrigin = (siteOrigin: string) =>
+	process.env.NEXT_PUBLIC_API_URL ||
+	process.env.NEXT_PUBLIC_BASE_URL ||
+	siteOrigin;
+
 function resolveSharedClientRuntime(
 	queryClient: QueryClient,
-	{ baseURL, headers }: AppClientStackRuntime,
+	{ apiOrigin, siteOrigin, headers }: AppClientStackRuntime,
 ) {
 	return {
 		api: {
-			baseURL,
+			baseURL: apiOrigin,
 			basePath: "/api/data",
 			...(headers ? { headers } : {}),
 		},
-		site: { baseURL, basePath: "/pages" },
+		site: { baseURL: siteOrigin, basePath: "/pages" },
 		queryClient,
 	};
 }
@@ -45,7 +52,7 @@ export const createAppClientStack = (
 	queryClient: QueryClient,
 	runtime: AppClientStackRuntime,
 ) => {
-	const { baseURL, requestIdentity } = runtime;
+	const { siteOrigin, requestIdentity } = runtime;
 	return createClientStack({
 		...resolveSharedClientRuntime(queryClient, runtime),
 		plugins: {
@@ -56,7 +63,7 @@ export const createAppClientStack = (
 					author: "BTST Team",
 					twitterHandle: "@olliethedev",
 					locale: "en_US",
-					defaultImage: `${baseURL}/og-image.png`,
+					defaultImage: `${siteOrigin}/og-image.png`,
 				},
 				hooks: {
 					beforeLoadPosts: async (filter, context) => {
@@ -173,16 +180,23 @@ export const createAppClientStack = (
 };
 
 /** Browser-safe stack: public origin only, never request headers. */
-export const getStackClient = (queryClient: QueryClient) =>
-	createAppClientStack(queryClient, {
-		baseURL: getBrowserBaseURL(),
+export const getStackClient = (
+	queryClient: QueryClient,
+	options?: { apiOrigin?: string; siteOrigin?: string },
+) => {
+	const siteOrigin = options?.siteOrigin ?? getBrowserSiteOrigin();
+	return createAppClientStack(queryClient, {
+		apiOrigin: options?.apiOrigin ?? getBrowserApiOrigin(siteOrigin),
+		siteOrigin,
 	});
+};
 
 /** Focused browser stack for standalone CMS hook examples. */
 export const getCmsBrowserClientStack = (queryClient: QueryClient) =>
 	createClientStack({
 		...resolveSharedClientRuntime(queryClient, {
-			baseURL: getBrowserBaseURL(),
+			apiOrigin: getBrowserApiOrigin(getBrowserSiteOrigin()),
+			siteOrigin: getBrowserSiteOrigin(),
 		}),
 		plugins: { cms: cmsClientPlugin() },
 	});

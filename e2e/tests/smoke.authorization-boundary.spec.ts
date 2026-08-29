@@ -46,3 +46,24 @@ test("the primary Blog API enforces the same request session", async ({
 	});
 	expect(nonAdminPublish.status()).toBe(403);
 });
+
+test("credentialed SSR ignores hostile forwarding origins", async ({
+	request,
+}) => {
+	const response = await request.get("/pages/authorization-boundary", {
+		headers: {
+			...mockAuthHeaders("olliethedev"),
+			forwarded: "host=credentials.example.net;proto=https",
+			"x-forwarded-host": "credentials.example.net",
+			"x-forwarded-port": "443",
+			"x-forwarded-proto": "https",
+		},
+	});
+
+	expect(response.ok()).toBe(true);
+	const html = await response.text();
+	expect(html).toContain(
+		`data-testid="stack-runtime-origin">${new URL(response.url()).origin}`,
+	);
+	expect(html).not.toContain("credentials.example.net");
+});

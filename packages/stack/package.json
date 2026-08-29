@@ -67,6 +67,16 @@
         "default": "./dist/client/index.cjs"
       }
     },
+    "./client/server": {
+      "import": {
+        "types": "./dist/client/server.d.ts",
+        "default": "./dist/client/server.mjs"
+      },
+      "require": {
+        "types": "./dist/client/server.d.cts",
+        "default": "./dist/client/server.cjs"
+      }
+    },
     "./client/hooks": {
       "import": {
         "types": "./dist/client/hooks/index.d.ts",
@@ -801,6 +811,9 @@
       ],
       "client": [
         "./dist/client/index.d.ts"
+      ],
+      "client/server": [
+        "./dist/client/server.d.ts"
       ],
       "client/hooks": [
         "./dist/client/hooks/index.d.ts"

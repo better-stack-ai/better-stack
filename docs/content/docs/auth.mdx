@@ -358,21 +358,27 @@ import { StackProvider } from "@btst/stack/context";
 import { createReactRouterLayout } from "@btst/stack/react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { Outlet, useLoaderData } from "react-router";
+import { Outlet, useLoaderData, type LoaderFunctionArgs } from "react-router";
 import { clientAuth } from "~/lib/authorization.ui";
 import { serverAuth } from "~/lib/authorization.server";
 import { getOrCreateQueryClient } from "~/lib/query-client";
 import { getStackClient } from "~/lib/stack-client";
+import { getRequestClientOrigins } from "~/lib/stack-client.server";
 
 const layout = createReactRouterLayout({ auth: serverAuth });
-export const loader = layout.loader;
+export async function loader(args: LoaderFunctionArgs) {
+  return {
+    ...(await layout.loader(args)),
+    ...getRequestClientOrigins(args.request),
+  };
+}
 
 export default function BtstPagesLayout() {
-  const { initialIdentity, requestOrigin } = useLoaderData<typeof loader>();
+  const { apiOrigin, initialIdentity, siteOrigin } = useLoaderData<typeof loader>();
   const queryClient = getOrCreateQueryClient();
   const stack = useMemo(
-    () => getStackClient(queryClient, { origin: requestOrigin }),
-    [queryClient, requestOrigin],
+    () => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+    [apiOrigin, queryClient, siteOrigin],
   );
   return (
     <QueryClientProvider client={queryClient}>
@@ -399,6 +405,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { resolveTanStackInitialIdentity } from "@btst/stack/tanstack/server";
 import { serverAuth } from "./authorization.server";
+import { getRequestClientOrigins } from "./stack-client.server";
 
 export const getInitialIdentity = createServerFn({ method: "GET" }).handler(
   async () => {
@@ -408,7 +415,7 @@ export const getInitialIdentity = createServerFn({ method: "GET" }).handler(
         auth: serverAuth,
         request,
       })),
-      requestOrigin: new URL(request.url).origin,
+      ...getRequestClientOrigins(request),
     };
   },
 );
@@ -433,10 +440,10 @@ export const Route = createFileRoute("/pages")({
 
 function BtstPagesLayout() {
   const { queryClient } = Route.useRouteContext();
-  const { initialIdentity, requestOrigin } = Route.useLoaderData();
+  const { apiOrigin, initialIdentity, siteOrigin } = Route.useLoaderData();
   const stack = useMemo(
-    () => getStackClient(queryClient, { origin: requestOrigin }),
-    [queryClient, requestOrigin],
+    () => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+    [apiOrigin, queryClient, siteOrigin],
   );
   return (
     <QueryClientProvider client={queryClient}>
@@ -452,9 +459,12 @@ function BtstPagesLayout() {
 }
 ```
 
-Only the validated identity and browser-safe request origin cross the server
-boundary. Request headers and the resolved server stack stay server-only. BTST
-does not cache authorization results or require framework middleware.
+Only the validated identity and deployment-trusted API/site origins cross the
+server boundary. Raw `Host`/forwarding values, request headers, and the resolved
+server stack stay server-only. Configure `BTST_API_URL` and `BTST_SITE_URL`, or
+use `BASE_URL` when both are same-origin; production fails closed without a
+trusted site origin. BTST does not cache authorization results or require
+framework middleware.
 
 ## Operation lifecycle ordering
 

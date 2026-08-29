@@ -3,14 +3,15 @@ import { createTanStackPageOptions } from "@btst/stack/tanstack"
 import { createIsomorphicFn } from "@tanstack/react-start"
 import { getRequest } from "@tanstack/react-start/server"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
-import { getStackClient, getStackClientForRequest } from "{{alias}}lib/stack-client"
+import { getStackClient } from "{{alias}}lib/stack-client"
+import { getStackClientForRequest } from "{{alias}}lib/stack-client.server"
 
 const getLoaderRequestContext = createIsomorphicFn()
 	.server(() => {
 		const request = getRequest()
 		return {
 			headers: request.headers,
-			origin: new URL(request.url).origin,
+			requestOrigin: new URL(request.url).origin,
 		}
 	})
 	.client(() => undefined)

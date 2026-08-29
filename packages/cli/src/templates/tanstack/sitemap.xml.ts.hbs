@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { QueryClient } from "@tanstack/react-query"
-import { getStackClientForRequest } from "{{alias}}lib/stack-client"
+import { getStackClientForRequest } from "{{alias}}lib/stack-client.server"
 import { sitemapEntryToXmlString } from "@btst/stack/client"
 
 export const Route = createFileRoute("/sitemap.xml")({
@@ -10,7 +10,7 @@ export const Route = createFileRoute("/sitemap.xml")({
 				const queryClient = new QueryClient()
 				const stack = getStackClientForRequest(queryClient, {
 					headers: request.headers,
-					origin: new URL(request.url).origin,
+					requestOrigin: new URL(request.url).origin,
 				})
 				const entries = await stack.generateSitemap()
 				const xml = sitemapEntryToXmlString(entries)

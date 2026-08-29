@@ -1,18 +1,57 @@
 import "server-only";
 
+import {
+	filterCredentialForwardingHeaders,
+	resolveTrustedServerOrigin,
+} from "@btst/stack/client/server";
 import type { QueryClient } from "@tanstack/react-query";
 import { hydrationAuth } from "./authorization.server";
 import { createAppClientStack } from "./stack-client";
 
 const requestBoundaryMarker = "BTST_REQUEST_HEADERS_SERVER_MARKER";
 
-function getRequestBaseURL(headers: Headers) {
-	const host = headers.get("x-forwarded-host") ?? headers.get("host");
-	const protocol = headers.get("x-forwarded-proto") ?? "http";
+function getConfiguredApiOrigin() {
 	return (
-		process.env.BASE_URL ??
-		(host ? `${protocol}://${host}` : "http://localhost:3000")
+		process.env.BTST_API_URL ??
+		process.env.NEXT_PUBLIC_API_URL ??
+		process.env.BASE_URL
 	);
+}
+
+function getConfiguredSiteOrigin() {
+	return (
+		process.env.BTST_SITE_URL ??
+		process.env.NEXT_PUBLIC_SITE_URL ??
+		process.env.NEXT_PUBLIC_BASE_URL ??
+		process.env.BASE_URL ??
+		(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined)
+	);
+}
+
+function getRequestOrigin(headers: Headers) {
+	const host = headers.get("x-forwarded-host") ?? headers.get("host");
+	if (!host) return undefined;
+	const protocol = headers.get("x-forwarded-proto") ?? "http";
+	return `${protocol.split(",")[0]?.trim()}://${host.split(",")[0]?.trim()}`;
+}
+
+export function getRequestClientOrigins(requestHeaders: Headers) {
+	const requestOrigin = getRequestOrigin(requestHeaders);
+	const siteOrigin = resolveTrustedServerOrigin({
+		configuredOrigin: getConfiguredSiteOrigin(),
+		requestOrigin,
+		isProduction: process.env.NODE_ENV === "production",
+		label: "BTST_SITE_URL, NEXT_PUBLIC_SITE_URL, or BASE_URL",
+	});
+	return {
+		apiOrigin: resolveTrustedServerOrigin({
+			configuredOrigin: getConfiguredApiOrigin() ?? siteOrigin,
+			requestOrigin,
+			isProduction: process.env.NODE_ENV === "production",
+			label: "BTST_API_URL, NEXT_PUBLIC_API_URL, or BASE_URL",
+		}),
+		siteOrigin,
+	};
 }
 
 /** Creates the request-only stack used by Next.js route loaders and metadata. */
@@ -26,9 +65,10 @@ export async function getRequestClientStack(
 	const identity = await hydrationAuth.getIdentityFromHeaders({
 		headers: requestHeaders,
 	});
+	const origins = getRequestClientOrigins(requestHeaders);
 	return createAppClientStack(queryClient, {
-		baseURL: getRequestBaseURL(requestHeaders),
-		headers: requestHeaders,
+		...origins,
+		headers: filterCredentialForwardingHeaders(requestHeaders),
 		...(identity ? { requestIdentity: identity } : {}),
 	});
 }

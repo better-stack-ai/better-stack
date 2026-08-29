@@ -173,6 +173,31 @@ for (const framework of frameworks) {
 	requireText(serverClient, "headers:", `${label} request client`);
 	requireText(
 		serverClient,
+		"resolveTrustedServerOrigin",
+		`${label} trusted server origin`,
+	);
+	requireText(
+		serverClient,
+		"filterCredentialForwardingHeaders",
+		`${label} credential header filter`,
+	);
+	requireText(
+		serverClient,
+		"getConfiguredApiOrigin",
+		`${label} configured API origin`,
+	);
+	requireText(
+		serverClient,
+		"getConfiguredSiteOrigin",
+		`${label} configured site origin`,
+	);
+	rejectText(
+		serverClient,
+		"baseURL: new URL(request.url).origin",
+		`${label} request-derived credential destination`,
+	);
+	requireText(
+		serverClient,
 		"requestIdentity:",
 		`${label} request identity partition`,
 	);
@@ -182,14 +207,17 @@ for (const framework of frameworks) {
 	requireText(layout, framework.layoutFactory, `${label} identity layout`);
 	requireText(clientLayout, "initialIdentity", `${label} client layout`);
 	requireText(clientLayout, "stack={stack}", `${label} client layout`);
+	requireText(client, "options?.apiOrigin", `${label} explicit API origin`);
+	requireText(client, "options?.siteOrigin", `${label} explicit site origin`);
 	if (label !== "Next.js") {
-		requireText(client, "options?.origin", `${label} SSR provider origin`);
-		requireText(layout, "requestOrigin", `${label} SSR provider origin`);
+		requireText(layout, "apiOrigin", `${label} SSR provider API origin`);
+		requireText(layout, "siteOrigin", `${label} SSR provider site origin`);
 		requireText(
 			layout,
-			"origin: requestOrigin",
-			`${label} SSR provider origin`,
+			"{ apiOrigin, siteOrigin }",
+			`${label} SSR provider origins`,
 		);
+		rejectText(layout, "requestOrigin", `${label} raw request origin snapshot`);
 	}
 	requireText(
 		sitemap,

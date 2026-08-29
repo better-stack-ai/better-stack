@@ -23,6 +23,7 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 		return {
 			stackPath: `${prefix}lib/stack.ts`,
 			stackClientPath: `${prefix}lib/stack-client.tsx`,
+			stackClientServerPath: `${prefix}lib/stack-client.server.ts`,
 			queryClientPath: `${prefix}lib/query-client.ts`,
 			apiRoutePath: `${prefix}app/api/data/[[...all]]/route.ts`,
 			pageRoutePath: `${prefix}app/pages/[[...all]]/page.tsx`,
@@ -35,6 +36,7 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 		return {
 			stackPath: "app/lib/stack.ts",
 			stackClientPath: "app/lib/stack-client.tsx",
+			stackClientServerPath: "app/lib/stack-client.server.ts",
 			queryClientPath: "app/lib/query-client.ts",
 			apiRoutePath: "app/routes/api/data/$.ts",
 			pageRoutePath: "app/routes/pages/$.tsx",
@@ -46,6 +48,7 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 	return {
 		stackPath: "src/lib/stack.ts",
 		stackClientPath: "src/lib/stack-client.tsx",
+		stackClientServerPath: "src/lib/stack-client.server.ts",
 		queryClientPath: "src/lib/query-client.ts",
 		apiRoutePath: "src/routes/api/data/$.ts",
 		pageRoutePath: "src/routes/pages/$.tsx",
@@ -59,9 +62,19 @@ function getPublicSiteURLVar(framework: Framework) {
 	return "VITE_PUBLIC_SITE_URL";
 }
 
+function getPublicApiURLVar(framework: Framework) {
+	if (framework === "nextjs") return "NEXT_PUBLIC_API_URL";
+	return "VITE_PUBLIC_API_URL";
+}
+
 function getBrowserSiteURLExpression(framework: Framework) {
 	if (framework === "nextjs") return "process.env.NEXT_PUBLIC_SITE_URL";
 	return "import.meta.env.VITE_PUBLIC_SITE_URL";
+}
+
+function getBrowserApiURLExpression(framework: Framework) {
+	if (framework === "nextjs") return "process.env.NEXT_PUBLIC_API_URL";
+	return "import.meta.env.VITE_PUBLIC_API_URL";
 }
 
 function getPagesLayoutFilePath(framework: Framework): string {
@@ -302,7 +315,9 @@ export async function buildScaffoldPlan(
 
 	const sharedContext = {
 		alias: input.alias,
+		browserApiURLExpression: getBrowserApiURLExpression(input.framework),
 		browserSiteURLExpression: getBrowserSiteURLExpression(input.framework),
+		publicApiURLVar: getPublicApiURLVar(input.framework),
 		publicSiteURLVar: getPublicSiteURLVar(input.framework),
 		useGlobalSingleton:
 			input.framework === "nextjs" && input.adapter === "memory",
@@ -337,6 +352,14 @@ export async function buildScaffoldPlan(
 				sharedContext,
 			),
 			description: "BTST client stack configuration",
+		},
+		{
+			path: frameworkPaths.stackClientServerPath,
+			content: await renderTemplate(
+				"shared/lib/stack-client.server.ts.hbs",
+				sharedContext,
+			),
+			description: "BTST credentialed request stack configuration",
 		},
 		{
 			path: frameworkPaths.queryClientPath,

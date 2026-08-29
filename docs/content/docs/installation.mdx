@@ -465,21 +465,28 @@ In order to use BTST, your application must meet the following requirements:
     import { QueryClient } from "@tanstack/react-query"
 
     interface StackClientOptions {
-      origin?: string
+      apiOrigin?: string
+      siteOrigin?: string
     }
 
     export const getStackClient = (
       queryClient: QueryClient,
       options?: StackClientOptions,
     ) => {
-      const baseURL =
-        typeof window === "undefined"
-          ? options?.origin || process.env.BASE_URL || "http://localhost:3000"
-          : window.location.origin
+      const siteOrigin =
+        options?.siteOrigin ||
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        (typeof window === "undefined"
+          ? process.env.BASE_URL || "http://localhost:3000"
+          : window.location.origin)
+      const apiOrigin =
+        options?.apiOrigin ||
+        process.env.NEXT_PUBLIC_API_URL ||
+        siteOrigin
 
       return createClientStack({
-        api: { baseURL, basePath: "/api/data" },
-        site: { baseURL, basePath: "/pages" },
+        api: { baseURL: apiOrigin, basePath: "/api/data" },
+        site: { baseURL: siteOrigin, basePath: "/pages" },
         queryClient,
         plugins: {
           blog: blogClientPlugin(),
@@ -496,6 +503,17 @@ In order to use BTST, your application must meet the following requirements:
       client stack so SSR loaders, metadata, and browser hooks resolve the same
       runtime. Do not copy those services into plugin configuration or provider
       overrides.
+    </Callout>
+
+    <Callout type="warn">
+      Credentialed SSR stacks must resolve their API destination from
+      deployment configuration, never from `Host`, forwarding headers, or
+      `request.url`. Set `BTST_API_URL` for a managed/custom API and
+      `BTST_SITE_URL` for the public site. For a same-origin deployment,
+      `BASE_URL` can provide both. Generated `stack-client.server.ts` uses
+      `resolveTrustedServerOrigin` from `@btst/stack/client/server`, fails
+      closed when production configuration is missing, and removes routing and
+      hop-by-hop headers before forwarding the remaining request credentials.
     </Callout>
   </Step>
 
@@ -609,18 +627,19 @@ In order to use BTST, your application must meet the following requirements:
         import { reactRouter } from "@btst/stack/react-router"
         import { getOrCreateQueryClient } from "~/lib/query-client"
         import { getStackClient } from "~/lib/stack-client"
+        import { getServerClientOrigins } from "~/lib/stack-client.server"
         import { uploadImage } from "~/lib/uploads"
 
         export function loader({ request }: LoaderFunctionArgs) {
-          return { requestOrigin: new URL(request.url).origin }
+          return getServerClientOrigins(new URL(request.url).origin)
         }
 
         export default function PagesLayout() {
           const [queryClient] = useState(() => getOrCreateQueryClient())
-          const { requestOrigin } = useLoaderData<typeof loader>()
+          const { apiOrigin, siteOrigin } = useLoaderData<typeof loader>()
           const clientStack = useMemo(
-            () => getStackClient(queryClient, { origin: requestOrigin }),
-            [queryClient, requestOrigin],
+            () => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+            [apiOrigin, queryClient, siteOrigin],
           )
 
           return (
@@ -648,23 +667,30 @@ In order to use BTST, your application must meet the following requirements:
         import { tanstackRouter } from "@btst/stack/tanstack"
         import { useMemo } from "react"
         import { getStackClient } from "@/lib/stack-client"
+        import { getServerClientOrigins } from "@/lib/stack-client.server"
         import { uploadImage } from "@/lib/uploads"
 
-        const getRequestOrigin = createIsomorphicFn()
-          .server(() => new URL(getRequest().url).origin)
-          .client(() => window.location.origin)
+        const getClientOrigins = createIsomorphicFn()
+          .server(() => {
+            const request = getRequest()
+            return getServerClientOrigins(new URL(request.url).origin)
+          })
+          .client(() => ({
+            apiOrigin: import.meta.env.VITE_PUBLIC_API_URL || window.location.origin,
+            siteOrigin: import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin,
+          }))
 
         export const Route = createFileRoute("/pages")({
-          loader: async () => ({ requestOrigin: await getRequestOrigin() }),
+          loader: async () => getClientOrigins(),
           component: PagesLayout,
         })
 
         function PagesLayout() {
           const { queryClient } = Route.useRouteContext()
-          const { requestOrigin } = Route.useLoaderData()
+          const { apiOrigin, siteOrigin } = Route.useLoaderData()
           const clientStack = useMemo(
-            () => getStackClient(queryClient, { origin: requestOrigin }),
-            [queryClient, requestOrigin],
+            () => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+            [apiOrigin, queryClient, siteOrigin],
           )
 
           return (
@@ -686,8 +712,8 @@ In order to use BTST, your application must meet the following requirements:
     Add `auth`, `notify`, or `i18n` beside `stack` and `router` when your
     application needs them. See the [auth provider guide](/auth). Never copy
     framework routing, API paths, or identity props into a plugin override. On
-    Vite SSR, serialize only the request origin into the parent loader so the
-    server provider and hydrated browser stack resolve the same endpoint; keep
+    Vite SSR, serialize only the trusted API/site origins into the parent loader
+    so the server provider and hydrated browser stack resolve the same endpoints; keep
     request headers and server stack instances out of loader data.
   </Step>
 
@@ -768,7 +794,7 @@ In order to use BTST, your application must meet the following requirements:
           import { headers } from "next/headers"
           import { createNextPage } from "@btst/stack/next"
           import { getOrCreateQueryClient } from "@/lib/query-client"
-          import { getStackClientForRequest } from "@/lib/stack-client"
+          import { getStackClientForRequest } from "@/lib/stack-client.server"
 
           const page = createNextPage({
             getQueryClient: getOrCreateQueryClient,
@@ -806,6 +832,7 @@ In order to use BTST, your application must meet the following requirements:
             async (queryClient, { request, context, params }) =>
               getStackClientForRequest(queryClient, {
                 headers: request.headers,
+                requestOrigin: new URL(request.url).origin,
                 context,
                 params,
               }),

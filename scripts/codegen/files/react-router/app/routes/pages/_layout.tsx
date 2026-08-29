@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { Outlet, useLoaderData } from "react-router";
+import { Outlet, useLoaderData, type LoaderFunctionArgs } from "react-router";
 import { StackProvider } from "@btst/stack/context";
 import { createReactRouterLayout, reactRouter } from "@btst/stack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -18,16 +18,23 @@ import { resolveUser, searchUsers } from "../../lib/mock-users";
 import { getStackClient } from "../../lib/stack-client";
 import { clientAuth } from "../../lib/authorization.ui";
 import { hydrationAuth } from "../../lib/authorization.server";
+import { getRequestClientOrigins } from "../../lib/stack-client.server";
 
 const layout = createReactRouterLayout({ auth: hydrationAuth });
-export const loader = layout.loader;
+export async function loader(args: LoaderFunctionArgs) {
+	return {
+		...(await layout.loader(args)),
+		...getRequestClientOrigins(args.request),
+	};
+}
 
 export default function Layout() {
-	const { initialIdentity, requestOrigin } = useLoaderData<typeof loader>();
+	const { apiOrigin, initialIdentity, siteOrigin } =
+		useLoaderData<typeof loader>();
 	const queryClient = useQueryClient();
 	const stack = useMemo(
-		() => getStackClient(queryClient, { origin: requestOrigin }),
-		[queryClient, requestOrigin],
+		() => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+		[apiOrigin, queryClient, siteOrigin],
 	);
 	const mediaClientConfig = useMemo(
 		() => createMediaUploadConfig(stack.provider.plugins.media),

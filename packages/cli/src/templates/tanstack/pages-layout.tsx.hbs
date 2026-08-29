@@ -10,22 +10,29 @@ import { getRequest } from "@tanstack/react-start/server"
 import { useMemo } from "react"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient } from "{{alias}}lib/stack-client"
+import { getServerClientOrigins } from "{{alias}}lib/stack-client.server"
 
-const getRequestOrigin = createIsomorphicFn()
-	.server(() => new URL(getRequest().url).origin)
-	.client(() => window.location.origin)
+const getClientOrigins = createIsomorphicFn()
+	.server(() => {
+		const request = getRequest()
+		return getServerClientOrigins(new URL(request.url).origin)
+	})
+	.client(() => ({
+		apiOrigin: {{{browserApiURLExpression}}} || window.location.origin,
+		siteOrigin: {{{browserSiteURLExpression}}} || window.location.origin,
+	}))
 
 export const Route = createFileRoute("/pages")({
-	loader: async () => ({ requestOrigin: await getRequestOrigin() }),
+	loader: async () => getClientOrigins(),
 	component: BtstPagesLayout,
 })
 
 function BtstPagesLayout() {
 	const queryClient = getOrCreateQueryClient()
-	const { requestOrigin } = Route.useLoaderData()
+	const { apiOrigin, siteOrigin } = Route.useLoaderData()
 	const browserStack = useMemo(
-		() => getStackClient(queryClient, { origin: requestOrigin }),
-		[queryClient, requestOrigin],
+		() => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+		[apiOrigin, queryClient, siteOrigin],
 	)
 {{#if hasAiChat}}
 	const hasApiKey = !!import.meta.env.VITE_HAS_OPENAI_KEY

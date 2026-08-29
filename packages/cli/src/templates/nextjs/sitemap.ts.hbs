@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next"
 import { headers } from "next/headers"
 import { QueryClient } from "@tanstack/react-query"
-import { getStackClientForRequest } from "{{alias}}lib/stack-client"
+import { getStackClientForRequest } from "{{alias}}lib/stack-client.server"
 
 // Force dynamic rendering so the sitemap is always fresh
 export const dynamic = "force-dynamic"

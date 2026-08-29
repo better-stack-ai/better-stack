@@ -165,18 +165,25 @@ describe("scaffold plan", () => {
 		expect(stackClientFile?.content).toContain("blogClientPlugin");
 		expect(stackClientFile?.content).toContain("createClientStack({");
 		expect(stackClientFile?.content).not.toContain("createStackClient");
-		expect(stackClientFile?.content).toContain(
-			"...(options?.headers ? { headers: options.headers } : {})",
-		);
 		expect(stackClientFile?.content).toContain("options?: StackClientOptions");
+		expect(stackClientFile?.content).not.toContain("getStackClientForRequest");
 		expect(stackClientFile?.content).toContain(
-			"export function getStackClientForRequest(",
-		);
-		expect(stackClientFile?.content).toContain(
-			'site: { baseURL, basePath: "/pages" }',
+			'site: { baseURL: siteOrigin, basePath: "/pages" }',
 		);
 		expect(stackClientFile?.content).toContain("blog: blogClientPlugin(),");
 		expect(stackClientFile?.content).not.toContain("apiBaseURL:");
+		const stackClientServerFile = plan.files.find(
+			(f) => f.path === "lib/stack-client.server.ts",
+		);
+		expect(stackClientServerFile?.content).toContain(
+			"resolveTrustedServerOrigin",
+		);
+		expect(stackClientServerFile?.content).toContain(
+			"export function getStackClientForRequest(",
+		);
+		expect(stackClientServerFile?.content).toContain(
+			"BTST_REQUEST_HEADERS_SERVER_MARKER",
+		);
 		const pagesLayoutFile = plan.files.find(
 			(f) => f.path === "app/pages/layout.tsx",
 		);
@@ -276,13 +283,13 @@ describe("scaffold plan", () => {
 			);
 			expect(stackClientFile?.content).toBeDefined();
 			expect(stackClientFile?.content).toContain(
-				"const baseURL = getBaseURL(options?.origin)",
+				"const siteOrigin = getSiteOrigin(options?.siteOrigin)",
 			);
 			expect(stackClientFile?.content).toContain(
 				'if (typeof window !== "undefined")',
 			);
 			expect(stackClientFile?.content).toContain(
-				'site: { baseURL, basePath: "/pages" }',
+				'site: { baseURL: siteOrigin, basePath: "/pages" }',
 			);
 			expect(stackClientFile?.content).toContain("queryClient,");
 			expect(stackClientFile?.content).toContain("blog: blogClientPlugin(),");
@@ -317,15 +324,30 @@ describe("scaffold plan", () => {
 			const layout = plan.files.find((file) =>
 				file.content.includes("<StackProvider"),
 			);
+			const requestStack = plan.files.find((file) =>
+				file.path.endsWith("stack-client.server.ts"),
+			);
 
 			expect(pageRoute?.content).toContain("getStackClientForRequest");
 			expect(pageRoute?.content).toContain("headers:");
+			expect(pageRoute?.content).toContain("stack-client.server");
+			expect(requestStack?.content).toContain("resolveTrustedServerOrigin");
+			expect(requestStack?.content).toContain(
+				"configuredOrigin: configuredApiOrigin() || siteOrigin",
+			);
+			expect(requestStack?.content).toContain(
+				'isProduction: process.env.NODE_ENV === "production"',
+			);
+			expect(requestStack?.content).not.toContain(
+				"baseURL: new URL(request.url).origin",
+			);
 			if (framework === "nextjs") {
 				expect(layout?.content).toContain("getStackClient(queryClient)");
 			} else {
-				expect(layout?.content).toContain("requestOrigin");
+				expect(layout?.content).toContain("apiOrigin");
+				expect(layout?.content).toContain("siteOrigin");
 				expect(layout?.content).toContain(
-					"getStackClient(queryClient, { origin: requestOrigin })",
+					"getStackClient(queryClient, { apiOrigin, siteOrigin })",
 				);
 			}
 			expect(layout?.content).not.toContain("getStackClientForRequest");
@@ -641,7 +663,7 @@ describe("scaffold plan", () => {
 				`return ${browserSiteURLExpression} || window.location.origin`,
 			);
 			expect(stackClientFile?.content).toContain(
-				"const baseURL = getBaseURL(options?.origin)",
+				"const siteOrigin = getSiteOrigin(options?.siteOrigin)",
 			);
 			expect(stackClientFile?.content).toContain(
 				"if (serverOrigin) return serverOrigin",

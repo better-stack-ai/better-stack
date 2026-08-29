@@ -96,7 +96,6 @@ describe("framework identity layout helpers", () => {
 			layout.loader({ request, params: {}, context: undefined }),
 		).resolves.toEqual({
 			initialIdentity: { id: "router-user", role: "admin" },
-			requestOrigin: "http://test.local",
 		});
 		expect(getIdentity).toHaveBeenCalledWith(request);
 	});
@@ -140,13 +139,13 @@ describe("framework identity layout helpers", () => {
 				},
 				request,
 			})),
-			requestOrigin: new URL(request.url).origin,
+			siteOrigin: "http://trusted.test",
 		}));
 		const layout = createTanStackLayout({ getInitialIdentity });
 
 		await expect(layout.loader()).resolves.toEqual({
 			initialIdentity: { id: "tanstack-user", role: "admin" },
-			requestOrigin: "http://test.local",
+			siteOrigin: "http://trusted.test",
 		});
 		expect(getInitialIdentity).toHaveBeenCalledOnce();
 	});

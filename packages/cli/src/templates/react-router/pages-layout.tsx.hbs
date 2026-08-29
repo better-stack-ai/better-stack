@@ -8,17 +8,18 @@ import { useMemo } from "react"
 import { Outlet{{#if hasAiChat}}, useLocation{{/if}}, useLoaderData, type LoaderFunctionArgs } from "react-router"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient } from "{{alias}}lib/stack-client"
+import { getServerClientOrigins } from "{{alias}}lib/stack-client.server"
 
 export function loader({ request }: LoaderFunctionArgs) {
-	return { requestOrigin: new URL(request.url).origin }
+	return getServerClientOrigins(new URL(request.url).origin)
 }
 
 export default function BtstPagesLayout() {
 	const queryClient = getOrCreateQueryClient()
-	const { requestOrigin } = useLoaderData<typeof loader>()
+	const { apiOrigin, siteOrigin } = useLoaderData<typeof loader>()
 	const browserStack = useMemo(
-		() => getStackClient(queryClient, { origin: requestOrigin }),
-		[queryClient, requestOrigin],
+		() => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+		[apiOrigin, queryClient, siteOrigin],
 	)
 {{#if hasAiChat}}
 	const hasApiKey = !!import.meta.env.VITE_HAS_OPENAI_KEY

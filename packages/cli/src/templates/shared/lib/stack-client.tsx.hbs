@@ -5,25 +5,23 @@ import type { QueryClient } from "@tanstack/react-query"
 {{/if}}
 
 interface StackClientOptions {
-	origin?: string
+	apiOrigin?: string
+	siteOrigin?: string
 }
 
-interface RequestStackClientOptions extends StackClientOptions {
-	headers: HeadersInit
-}
-
-function createAppClientStack(
+export function createAppClientStack(
 	queryClient: QueryClient,
 	options?: StackClientOptions & { headers?: HeadersInit },
 ) {
-	const baseURL = getBaseURL(options?.origin)
+	const siteOrigin = getSiteOrigin(options?.siteOrigin)
+	const apiOrigin = getApiOrigin(options?.apiOrigin, siteOrigin)
 	return createClientStack({
 		api: {
-			baseURL,
+			baseURL: apiOrigin,
 			basePath: "/api/data",
 			...(options?.headers ? { headers: options.headers } : {}),
 		},
-		site: { baseURL, basePath: "/pages" },
+		site: { baseURL: siteOrigin, basePath: "/pages" },
 		queryClient,
 		plugins: {
 {{#if clientEntries}}
@@ -43,19 +41,11 @@ export function getStackClient(
 	return createAppClientStack(queryClient, options)
 }
 
-/** Creates a fresh server stack for one request. Never serialize this result. */
-export function getStackClientForRequest(
-	queryClient: QueryClient,
-	options: RequestStackClientOptions,
-) {
-	return createAppClientStack(queryClient, options)
-}
-
-function getBaseURL(serverOrigin?: string) {
+function getSiteOrigin(serverOrigin?: string) {
+	if (serverOrigin) return serverOrigin
 	if (typeof window !== "undefined") {
 		return {{{browserSiteURLExpression}}} || window.location.origin
 	}
-	if (serverOrigin) return serverOrigin
 
 	// Use literal process.env.XXX so bundlers (Vite define, Next.js, etc.)
 	// can statically replace these at build/transform time.
@@ -65,4 +55,17 @@ function getBaseURL(serverOrigin?: string) {
 	if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
 
 	return "http://localhost:3000"
+}
+
+function getApiOrigin(serverOrigin: string | undefined, siteOrigin: string) {
+	if (serverOrigin) return serverOrigin
+	if (typeof window !== "undefined") {
+		return {{{browserApiURLExpression}}} || siteOrigin
+	}
+	return (
+		process.env.BTST_API_URL ||
+		{{{browserApiURLExpression}}} ||
+		process.env.BASE_URL ||
+		siteOrigin
+	)
 }
