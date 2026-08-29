@@ -171,6 +171,12 @@ function lineAt(source, index) {
 	return source.slice(0, index).split("\n").length;
 }
 
+function isInsideMarkdownInlineCode(source, index) {
+	const lineStart = source.lastIndexOf("\n", index - 1) + 1;
+	const prefix = source.slice(lineStart, index);
+	return (prefix.match(/(?<!`)`(?!`)/g)?.length ?? 0) % 2 === 1;
+}
+
 function recordMatches(failures, file, source, label, pattern) {
 	for (const match of source.matchAll(pattern)) {
 		failures.push({
@@ -276,6 +282,91 @@ function readTopLevelObject(source, openIndex) {
 	return undefined;
 }
 
+function findObjectDeclarations(source, identifier) {
+	const declarations = [];
+	const declarationPattern = new RegExp(
+		`\\b(?:const|let|var)\\s+${escapeRegExp(identifier)}(?:\\s*:[^=;]+)?\\s*=\\s*\\{`,
+		"g",
+	);
+	for (const declaration of source.matchAll(declarationPattern)) {
+		const openIndex =
+			(declaration.index ?? 0) + declaration[0].lastIndexOf("{");
+		const object = readTopLevelObject(source, openIndex);
+		if (object) declarations.push({ object, openIndex });
+	}
+	return declarations;
+}
+
+function inspectFactoryObject(
+	failures,
+	file,
+	source,
+	factory,
+	kind,
+	contextualLifecycleNames,
+	object,
+	openIndex,
+	reportIndex,
+) {
+	if (
+		kind === "backend" &&
+		/\bon(?:Before|After|Error)[A-Z][A-Za-z0-9]*\s*:/.test(object.topLevel)
+	) {
+		failures.push({
+			file,
+			line: lineAt(source, reportIndex),
+			label: "backend lifecycle callbacks must be nested under hooks",
+			match: factory,
+		});
+	}
+	if (kind === "backend" && contextualLifecycleNames.length > 0) {
+		const objectSource = source.slice(openIndex, object.end + 1);
+		recordLifecycleProperties(
+			failures,
+			file,
+			source,
+			objectSource,
+			openIndex,
+			factory,
+			contextualLifecycleNames,
+		);
+
+		const hooksReference = object.topLevel
+			.match(/\bhooks\s*:\s*([A-Za-z_$][\w$]*)|\b(hooks)\s*(?=[,}])/)
+			?.slice(1)
+			.find(Boolean);
+		if (hooksReference) {
+			for (const declaration of findObjectDeclarations(
+				source,
+				hooksReference,
+			)) {
+				recordLifecycleProperties(
+					failures,
+					file,
+					source,
+					source.slice(declaration.openIndex, declaration.object.end + 1),
+					declaration.openIndex,
+					factory,
+					contextualLifecycleNames,
+				);
+			}
+		}
+	}
+	if (
+		kind === "client" &&
+		/(?:^|[,{])\s*(?:apiBaseURL|apiBasePath|siteBaseURL|siteBasePath|queryClient|headers)\b(?=\s*(?:\??:|,|}))/.test(
+			object.topLevel,
+		)
+	) {
+		failures.push({
+			file,
+			line: lineAt(source, reportIndex),
+			label: "client plugin duplicates stack-owned runtime",
+			match: factory,
+		});
+	}
+}
+
 function checkFactoryCalls(
 	failures,
 	file,
@@ -286,7 +377,8 @@ function checkFactoryCalls(
 ) {
 	const callPattern = new RegExp(`\\b${factory}[ \\t\\n]*\\(`, "g");
 	for (const match of source.matchAll(callPattern)) {
-		let cursor = (match.index ?? 0) + match[0].length;
+		const callIndex = match.index ?? 0;
+		let cursor = callIndex + match[0].length;
 		while (/\s/.test(source[cursor] ?? "")) cursor += 1;
 		if (source[cursor] === ")") continue;
 		if (source[cursor] !== "{") {
@@ -296,85 +388,56 @@ function checkFactoryCalls(
 					/^[A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*(?:\s*\([^()\n]*\))?\s*(?=[,)])/,
 				)?.[0]
 				.trim();
-			if (kind === "client" || !expression) continue;
-			if (
-				/^[A-Za-z_$][\w$]*$/.test(expression) &&
-				/(?:options?|config|opts)$/i.test(expression)
-			) {
+			if (!expression) continue;
+			const identifier = /^[A-Za-z_$][\w$]*$/.test(expression)
+				? expression
+				: undefined;
+			const declarations = identifier
+				? findObjectDeclarations(source, identifier)
+				: [];
+			if (declarations.length === 0) {
+				if (
+					/\.mdx?$/.test(file) &&
+					isInsideMarkdownInlineCode(source, callIndex)
+				) {
+					continue;
+				}
+				failures.push({
+					file,
+					line: lineAt(source, callIndex),
+					label: `${kind} factory options expression cannot be verified`,
+					match: `${factory}(${expression})`,
+				});
 				continue;
 			}
-			failures.push({
-				file,
-				line: lineAt(source, match.index ?? 0),
-				label: `${kind} factory must receive one options object, not positional hooks`,
-				match: factory,
-			});
+			for (const declaration of declarations) {
+				inspectFactoryObject(
+					failures,
+					file,
+					source,
+					factory,
+					kind,
+					contextualLifecycleNames,
+					declaration.object,
+					declaration.openIndex,
+					declaration.openIndex,
+				);
+			}
 			continue;
 		}
 		const object = readTopLevelObject(source, cursor);
 		if (!object) continue;
-		if (
-			kind === "backend" &&
-			/\bon(?:Before|After|Error)[A-Z][A-Za-z0-9]*\s*:/.test(object.topLevel)
-		) {
-			failures.push({
-				file,
-				line: lineAt(source, match.index ?? 0),
-				label: "backend lifecycle callbacks must be nested under hooks",
-				match: factory,
-			});
-		}
-		if (kind === "backend" && contextualLifecycleNames.length > 0) {
-			const callSource = source.slice(cursor, object.end + 1);
-			recordLifecycleProperties(
-				failures,
-				file,
-				source,
-				callSource,
-				cursor,
-				factory,
-				contextualLifecycleNames,
-			);
-
-			const hooksReference = object.topLevel
-				.match(/\bhooks\s*:\s*([A-Za-z_$][\w$]*)|\b(hooks)\s*(?=[,}])/)
-				?.slice(1)
-				.find(Boolean);
-			if (hooksReference) {
-				const declarationPattern = new RegExp(
-					`\\b(?:const|let|var)\\s+${escapeRegExp(hooksReference)}(?:\\s*:[^=;]+)?\\s*=\\s*\\{`,
-					"g",
-				);
-				for (const declaration of source.matchAll(declarationPattern)) {
-					const openIndex =
-						(declaration.index ?? 0) + declaration[0].lastIndexOf("{");
-					const hooksObject = readTopLevelObject(source, openIndex);
-					if (!hooksObject) continue;
-					recordLifecycleProperties(
-						failures,
-						file,
-						source,
-						source.slice(openIndex, hooksObject.end + 1),
-						openIndex,
-						factory,
-						contextualLifecycleNames,
-					);
-				}
-			}
-		}
-		if (
-			kind === "client" &&
-			/\b(?:apiBaseURL|apiBasePath|siteBaseURL|siteBasePath|queryClient|headers)\s*:/.test(
-				object.topLevel,
-			)
-		) {
-			failures.push({
-				file,
-				line: lineAt(source, match.index ?? 0),
-				label: "client plugin duplicates stack-owned runtime",
-				match: factory,
-			});
-		}
+		inspectFactoryObject(
+			failures,
+			file,
+			source,
+			factory,
+			kind,
+			contextualLifecycleNames,
+			object,
+			cursor,
+			callIndex,
+		);
 	}
 }
 
