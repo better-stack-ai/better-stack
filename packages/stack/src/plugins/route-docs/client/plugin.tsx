@@ -28,7 +28,7 @@ const DocsPageSkeleton = lazy(() =>
 	})),
 );
 
-/** Query key for the route documentation schema. */
+/** Query-key prefix for Route Docs schema caches. */
 export const ROUTE_DOCS_QUERY_KEY = ["route-docs", "schema"] as const;
 
 export interface RegisteredRoute {
@@ -103,6 +103,26 @@ interface ResolvedRouteDocsClientConfig extends RouteDocsClientConfig {
 	siteBasePath: string;
 }
 
+function createRouteDocsQueryKey(
+	config: ResolvedRouteDocsClientConfig,
+	context: ClientStackContext | null,
+) {
+	const routeSet = getRegisteredRoutes(context).sort((left, right) =>
+		`${left.plugin}:${left.key}:${left.path}`.localeCompare(
+			`${right.plugin}:${right.key}:${right.path}`,
+		),
+	);
+	return [
+		...ROUTE_DOCS_QUERY_KEY,
+		JSON.stringify({
+			basePath: context?.basePath ?? null,
+			siteBaseURL: config.siteBaseURL,
+			siteBasePath: config.siteBasePath,
+			routeSet,
+		}),
+	] as const;
+}
+
 function resolveRouteDocsClientConfig(
 	config: RouteDocsClientConfig,
 	runtime: ResolvedClientPluginRuntime<typeof ROUTE_DOCS_PLUGIN_ID>,
@@ -155,6 +175,7 @@ function DocsErrorComponent() {
 function createRouteDocsLoader(
 	config: ResolvedRouteDocsClientConfig,
 	context: ClientStackContext | null,
+	queryKey: ReturnType<typeof createRouteDocsQueryKey>,
 ) {
 	return async () => {
 		if (typeof window !== "undefined" || !context) return;
@@ -162,14 +183,11 @@ function createRouteDocsLoader(
 		try {
 			const sitemapEntries = await fetchAllSitemapEntries(context);
 			const schema = generateRouteDocsSchema(context, sitemapEntries);
-			config.queryClient.setQueryData<RouteDocsSchema>(
-				ROUTE_DOCS_QUERY_KEY,
-				schema,
-			);
+			config.queryClient.setQueryData<RouteDocsSchema>(queryKey, schema);
 		} catch (error) {
 			console.warn("Failed to load route docs schema:", error);
 			config.queryClient.setQueryData<RouteDocsSchema>(
-				ROUTE_DOCS_QUERY_KEY,
+				queryKey,
 				createEmptySchema(),
 			);
 		}
@@ -180,6 +198,7 @@ function createResolvedRouteDocsPlugin(config: ResolvedRouteDocsClientConfig) {
 	return {
 		routes: (context?: ClientStackContext) => {
 			const resolvedContext = context ?? null;
+			const queryKey = createRouteDocsQueryKey(config, resolvedContext);
 			return {
 				docs: defineRoute("/route-docs", {
 					page: () => (
@@ -188,12 +207,13 @@ function createResolvedRouteDocsPlugin(config: ResolvedRouteDocsClientConfig) {
 							description={config.description}
 							siteBaseURL={config.siteBaseURL}
 							siteBasePath={config.siteBasePath}
+							queryKey={queryKey}
 							loadSchema={() => generateSchema(resolvedContext)}
 						/>
 					),
 					loading: DocsPageSkeleton,
 					error: DocsErrorComponent,
-					loader: createRouteDocsLoader(config, resolvedContext),
+					loader: createRouteDocsLoader(config, resolvedContext, queryKey),
 					meta: createDocsMeta(config),
 				}),
 			};

@@ -14,11 +14,9 @@ import {
 	uploadAsset,
 } from "../client";
 import {
-	ROUTE_DOCS_QUERY_KEY,
 	routeDocsClientPlugin,
 	useRegisteredRoutes,
 } from "../../route-docs/client";
-import type { RouteDocsSchema } from "../../route-docs/generator";
 
 const { putBlob } = vi.hoisted(() => ({
 	putBlob: vi.fn(),
@@ -322,30 +320,22 @@ describe("Media and Route Docs browser runtime", () => {
 
 	it("uses Route Docs' resolved cross-origin site for rendered navigation", async () => {
 		const queryClient = new QueryClient();
-		queryClient.setQueryData<RouteDocsSchema>(ROUTE_DOCS_QUERY_KEY, {
-			plugins: [
-				{
-					key: "probe",
-					name: "probe",
-					routes: [
-						{
-							key: "home",
-							path: "/probe",
-							pathParams: [],
-							queryParams: [],
-						},
-					],
-					sitemapEntries: [],
-				},
-			],
-			generatedAt: "2026-01-01T00:00:00.000Z",
-			allSitemapEntries: [],
-		});
 		const stack = createClientStack({
 			api: { baseURL: "https://api.example.com", basePath: "/api/data" },
 			site: { baseURL: "https://app.example.com", basePath: "/pages" },
 			queryClient,
-			plugins: { routeDocs: routeDocsClientPlugin() },
+			plugins: {
+				probe: defineClientPlugin({
+					id: "probe",
+					resolve: () => ({
+						routes: () => ({
+							home: defineRoute("/probe", { page: () => null }),
+						}),
+						sitemap: () => [],
+					}),
+				}),
+				routeDocs: routeDocsClientPlugin(),
+			},
 			endpoints: {
 				routeDocs: {
 					site: {
@@ -382,6 +372,51 @@ describe("Media and Route Docs browser runtime", () => {
 			"_blank",
 			"noopener,noreferrer",
 		);
+	});
+
+	it("isolates Route Docs pages that share one query client", async () => {
+		const queryClient = new QueryClient();
+		const createStack = (path: string) =>
+			createClientStack({
+				api: { baseURL: "https://api.example.com", basePath: "/api" },
+				site: { baseURL: "https://app.example.com", basePath: "/" },
+				queryClient,
+				plugins: {
+					probe: defineClientPlugin({
+						id: "probe",
+						resolve: () => ({
+							routes: () => ({
+								probe: defineRoute(path, { page: () => null }),
+							}),
+							sitemap: () => [],
+						}),
+					}),
+					routeDocs: routeDocsClientPlugin(),
+				},
+			});
+		const stackA = createStack("/probe-a");
+		const stackB = createStack("/probe-b");
+
+		const renderStack = async (stack: typeof stackA) => {
+			const PageComponent = stack.router.getRoute("/route-docs")?.PageComponent;
+			await act(async () => {
+				root.render(
+					<QueryClientProvider client={queryClient}>
+						<StackProvider stack={stack}>
+							<Suspense fallback={<span>loading</span>}>
+								{PageComponent ? <PageComponent /> : null}
+							</Suspense>
+						</StackProvider>
+					</QueryClientProvider>,
+				);
+			});
+		};
+
+		await renderStack(stackA);
+		await waitFor(() => container.textContent?.includes("/probe-a") ?? false);
+		await renderStack(stackB);
+		await waitFor(() => container.textContent?.includes("/probe-b") ?? false);
+		expect(container.textContent).not.toContain("/probe-a");
 	});
 
 	it("binds route introspection to the enclosing or explicitly supplied stack", async () => {

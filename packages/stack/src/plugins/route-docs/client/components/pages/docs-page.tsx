@@ -39,7 +39,7 @@ import {
 	Menu,
 	Navigation,
 } from "lucide-react";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery, type QueryKey } from "@tanstack/react-query";
 import { joinBasePath } from "@btst/stack/context";
 import type {
 	RouteDocsSchema,
@@ -48,7 +48,6 @@ import type {
 	RouteParameter,
 	PluginSitemapEntry,
 } from "../../../generator";
-import { ROUTE_DOCS_QUERY_KEY } from "../../plugin";
 
 function createSiteUrl(
 	siteBaseURL: string,
@@ -1106,6 +1105,7 @@ export interface DocsPageProps {
 	description?: string;
 	siteBaseURL?: string;
 	siteBasePath?: string;
+	queryKey: QueryKey;
 	loadSchema: () => Promise<RouteDocsSchema>;
 }
 
@@ -1114,11 +1114,12 @@ export function DocsPageComponent({
 	description = "Documentation for all client routes in your application",
 	siteBaseURL = "",
 	siteBasePath = "/pages",
+	queryKey,
 	loadSchema,
 }: DocsPageProps) {
 	// Read schema from React Query (prefetched by loader on server, or generated on client)
 	const { data: schema } = useSuspenseQuery<RouteDocsSchema>({
-		queryKey: ROUTE_DOCS_QUERY_KEY,
+		queryKey,
 		queryFn: loadSchema,
 		staleTime: Infinity, // Don't refetch - schema is static for this session
 	});

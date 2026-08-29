@@ -4,7 +4,11 @@ import { createClientStack } from "../../../client";
 import { defineClientPlugin } from "../../client";
 import { defineRoute } from "@btst/yar";
 import { mediaClientPlugin } from "../client";
-import { routeDocsClientPlugin } from "../../route-docs/client";
+import {
+	ROUTE_DOCS_QUERY_KEY,
+	routeDocsClientPlugin,
+} from "../../route-docs/client";
+import type { RouteDocsSchema } from "../../route-docs/generator";
 
 function jsonResponse(value: unknown, status = 200) {
 	return new Response(JSON.stringify(value), {
@@ -279,9 +283,9 @@ describe("Media and Route Docs resolved client runtime", () => {
 		const route = stack.router.getRoute("/route-docs");
 		await route?.loader?.();
 		const metadata = await route?.meta?.();
-		const schema = queryClient.getQueryData<{
-			plugins: Array<{ key: string }>;
-		}>(["route-docs", "schema"]);
+		const schema = queryClient.getQueriesData<RouteDocsSchema>({
+			queryKey: ROUTE_DOCS_QUERY_KEY,
+		})[0]?.[1];
 
 		expect(schema?.plugins.map((plugin) => plugin.key)).toEqual(["probe"]);
 		expect(metadata).toContainEqual({
@@ -294,7 +298,7 @@ describe("Media and Route Docs resolved client runtime", () => {
 		});
 	});
 
-	it("isolates Route Docs loaders and query clients across resolved stacks", async () => {
+	it("isolates Route Docs loader caches across resolved stacks", async () => {
 		const createProbe = <const TId extends string>(id: TId) =>
 			defineClientPlugin({
 				id,
@@ -305,12 +309,11 @@ describe("Media and Route Docs resolved client runtime", () => {
 					sitemap: () => [{ url: `https://${id}.example.com/${id}` }],
 				}),
 			});
-		const queryClientA = new QueryClient();
-		const queryClientB = new QueryClient();
+		const queryClient = new QueryClient();
 		const stackA = createClientStack({
 			api: { baseURL: "https://api-a.example.com", basePath: "/api" },
 			site: { baseURL: "https://site-a.example.com", basePath: "/" },
-			queryClient: queryClientA,
+			queryClient,
 			plugins: {
 				probeA: createProbe("probeA"),
 				routeDocs: routeDocsClientPlugin(),
@@ -319,7 +322,7 @@ describe("Media and Route Docs resolved client runtime", () => {
 		const stackB = createClientStack({
 			api: { baseURL: "https://api-b.example.com", basePath: "/api" },
 			site: { baseURL: "https://site-b.example.com", basePath: "/" },
-			queryClient: queryClientB,
+			queryClient,
 			plugins: {
 				probeB: createProbe("probeB"),
 				routeDocs: routeDocsClientPlugin(),
@@ -328,31 +331,18 @@ describe("Media and Route Docs resolved client runtime", () => {
 
 		await stackA.router.getRoute("/route-docs")?.loader?.();
 		expect(
-			queryClientA
-				.getQueryData<{ plugins: Array<{ key: string }> }>([
-					"route-docs",
-					"schema",
-				])
-				?.plugins.map((plugin) => plugin.key),
-		).toEqual(["probeA"]);
-		expect(queryClientB.getQueryData(["route-docs", "schema"])).toBeUndefined();
+			queryClient
+				.getQueriesData<RouteDocsSchema>({ queryKey: ROUTE_DOCS_QUERY_KEY })
+				.map(([, schema]) => schema?.plugins.map((plugin) => plugin.key)),
+		).toEqual([["probeA"]]);
+		expect(queryClient.getQueryData(ROUTE_DOCS_QUERY_KEY)).toBeUndefined();
 
 		await stackB.router.getRoute("/route-docs")?.loader?.();
 		expect(
-			queryClientB
-				.getQueryData<{ plugins: Array<{ key: string }> }>([
-					"route-docs",
-					"schema",
-				])
-				?.plugins.map((plugin) => plugin.key),
-		).toEqual(["probeB"]);
-		expect(
-			queryClientA
-				.getQueryData<{ plugins: Array<{ key: string }> }>([
-					"route-docs",
-					"schema",
-				])
-				?.plugins.map((plugin) => plugin.key),
-		).toEqual(["probeA"]);
+			queryClient
+				.getQueriesData<RouteDocsSchema>({ queryKey: ROUTE_DOCS_QUERY_KEY })
+				.map(([, schema]) => schema?.plugins.map((plugin) => plugin.key))
+				.sort(),
+		).toEqual([["probeA"], ["probeB"]]);
 	});
 });
