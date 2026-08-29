@@ -138,9 +138,9 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 	const t = useTranslate();
 	const overrides = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 	const { localization } = overrides;
-	const { router, plugins, basePath: legacyBasePath } = useStack();
+	const { router, plugins, basePath: stackBasePath } = useStack();
 	const navigate = router?.navigate;
-	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
+	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? stackBasePath;
 
 	// Parse prefill query parameters for pre-populating fields when creating new items
 	// This is used by the inverse relations panel to pre-fill the parent relation

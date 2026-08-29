@@ -165,7 +165,7 @@ function getScalarHTML(
  *
  * @example
  * ```ts
- * const { handler } = stack({
+ * const { handler } = createBackendStack({
  *   basePath: "/api/data",
  *   plugins: {
  *     blog: blogBackendPlugin(),

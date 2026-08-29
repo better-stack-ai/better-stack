@@ -15,11 +15,12 @@ function headersRecord(headers: HeadersInit | undefined) {
 	return Object.fromEntries(new Headers(headers).entries());
 }
 
-function createProbePlugin(
+function createProbePlugin<const TId extends string = "probe">(
 	onResolve: (runtime: ResolvedClientPluginRuntime) => void,
+	id = "probe" as TId,
 ) {
 	return defineClientPlugin({
-		name: "probe",
+		id,
 		resolve(runtime) {
 			onResolve(runtime);
 			return {
@@ -112,7 +113,7 @@ function createResourceProbePlugin(
 	onResolve: (seam: ProbeResourceSeam) => void,
 ) {
 	return defineClientPlugin({
-		name: "probeResource",
+		id: "probe",
 		resolve(runtime) {
 			const seam = createProbeResourceSeam(runtime);
 			onResolve(seam);
@@ -623,6 +624,18 @@ describe("resolved client runtime", () => {
 		expect(() =>
 			createClientStack({
 				...baseConfig,
+				baseURL: "https://ignored.example.com",
+			} as any),
+		).toThrowError(/top-level baseURL.*api or site/i);
+		expect(() =>
+			createClientStack({
+				...baseConfig,
+				basePath: "/ignored",
+			} as any),
+		).toThrowError(/top-level basePath.*api or site/i);
+		expect(() =>
+			createClientStack({
+				...baseConfig,
 				endpoints: {
 					probe: {
 						api: { baseURL: "https://plugins.example.net" },
@@ -733,7 +746,7 @@ describe("resolved client runtime", () => {
 		let contextOwnsPlugin = false;
 		let runtime: ResolvedClientPluginRuntime | undefined;
 		const prototypePlugin = defineClientPlugin({
-			name: "prototypePlugin",
+			id: "__proto__",
 			resolve(value) {
 				runtime = value;
 				return {
@@ -808,7 +821,7 @@ describe("resolved client runtime", () => {
 				plugins: {
 					[registeredName]: createProbePlugin((value) => {
 						runtime = value;
-					}),
+					}, registeredName),
 				},
 				endpoints: {},
 			});
@@ -818,20 +831,17 @@ describe("resolved client runtime", () => {
 		}
 	});
 
-	it("ignores inherited runtime and plugin-definition discriminator fields", () => {
-		const legacyPlugin = Object.assign(
+	it("requires canonical runtime and plugin-definition fields to be own properties", () => {
+		let inheritedResolveCalled = false;
+		const inheritedDefinition = Object.assign(
 			Object.create({
 				resolve: () => {
-					throw new Error("inherited resolve must not run");
+					inheritedResolveCalled = true;
+					return { routes: () => ({}) };
 				},
 			}),
 			{
-				name: "legacyWithPrototype",
-				routes: () => ({
-					legacyWithPrototype: createRoute("/legacy-with-prototype", () => ({
-						PageComponent: () => null,
-					})),
-				}),
+				id: "inheritedDefinition",
 			},
 		);
 		const inheritedCanonicalRuntime = {
@@ -839,15 +849,21 @@ describe("resolved client runtime", () => {
 			site: { baseURL: "https://inherited.example.com", basePath: "/pages" },
 			queryClient: new QueryClient(),
 		};
-		const legacyConfig = Object.assign(
+		const inheritedConfig = Object.assign(
 			Object.create(inheritedCanonicalRuntime),
-			{ plugins: { legacyWithPrototype: legacyPlugin } },
+			{ plugins: { inheritedDefinition } },
 		);
 
-		const stack = createClientStack(legacyConfig as any);
-
-		expect(stack.router.getRoute("/legacy-with-prototype")).toBeTruthy();
-		expect("provider" in stack).toBe(false);
+		expect(() => createClientStack(inheritedConfig as any)).toThrowError(
+			/api endpoint is required/i,
+		);
+		expect(() =>
+			createClientStack({
+				...inheritedCanonicalRuntime,
+				plugins: { inheritedDefinition },
+			} as any),
+		).toThrowError(/own resolve\(\) function/i);
+		expect(inheritedResolveCalled).toBe(false);
 	});
 
 	it("ignores prototype-polluted transport and nested endpoint fields", () => {
@@ -946,22 +962,24 @@ describe("resolved client runtime", () => {
 		}
 	});
 
-	it("keeps legacy client plugins working during first-party migration", async () => {
-		const legacy = defineClientPlugin({
-			name: "legacy",
+	it("rejects already-resolved client plugins", () => {
+		const resolved = {
+			id: "resolved",
 			routes: () => ({
-				legacy: createRoute("/legacy", () => ({
+				resolved: createRoute("/resolved", () => ({
 					PageComponent: () => null,
 				})),
 			}),
-			sitemap: () => [{ url: "https://legacy.example.com/legacy" }],
-		});
-		const stack = createClientStack({ plugins: { legacy } });
+		};
 
-		expect(stack.router.getRoute("/legacy")).toBeTruthy();
-		await expect(stack.generateSitemap()).resolves.toEqual([
-			{ url: "https://legacy.example.com/legacy" },
-		]);
+		expect(() =>
+			createClientStack({
+				api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+				site: { baseURL: "https://app.example.com", basePath: "/pages" },
+				queryClient: new QueryClient(),
+				plugins: { resolved },
+			} as any),
+		).toThrowError(/resolve/i);
 	});
 
 	it("keeps definition and request stack modules server-import-safe", async () => {

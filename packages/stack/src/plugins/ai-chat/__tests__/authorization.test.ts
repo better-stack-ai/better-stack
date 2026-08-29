@@ -2,7 +2,7 @@ import { createMemoryAdapter } from "@btst/adapter-memory";
 import { type DatabaseDefinition, type DBAdapter, defineDb } from "@btst/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { stack } from "../../../api";
+import { createBackendStack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
 import { createServerAuth } from "../../../authorization/server";
 import {
@@ -113,7 +113,7 @@ function backend(options?: {
 		request: Request,
 	) => Identity | null | Promise<Identity | null>;
 }) {
-	return stack({
+	return createBackendStack({
 		basePath: "/api",
 		plugins: {
 			aiChat: aiChatBackendPlugin({
@@ -754,7 +754,7 @@ describe("AI Chat operation authorization", () => {
 	});
 
 	it("preserves ownerless history when no request authorization is configured", async () => {
-		const app = stack({
+		const app = createBackendStack({
 			basePath: "/api",
 			plugins: { aiChat: aiChatBackendPlugin({ model }) },
 			adapter: memory,

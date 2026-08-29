@@ -5,11 +5,17 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StackProvider } from "@btst/stack/context";
 import { createIdentityTestAuth } from "../../../__tests__/auth-test-utils";
+import { createTestClientStack } from "../../../__tests__/client-stack-test-utils";
 import {
 	type UseConversationsResult,
 	useConversations,
 	useSuspenseConversations,
 } from "../client/hooks/chat-hooks";
+import { aiChatClientPlugin } from "../client/plugin";
+
+function createAiChatStack(queryClient: QueryClient) {
+	return createTestClientStack({ aiChat: aiChatClientPlugin() }, queryClient);
+}
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -69,11 +75,7 @@ describe("AI Chat identity-aware hooks", () => {
 
 		await act(async () => {
 			root.render(
-				<StackProvider
-					basePath="/pages"
-					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
-					auth={auth}
-				>
+				<StackProvider stack={createAiChatStack(queryClient)} auth={auth}>
 					<QueryClientProvider client={queryClient}>
 						<Probe />
 					</QueryClientProvider>
@@ -120,11 +122,7 @@ describe("AI Chat identity-aware hooks", () => {
 
 		await act(async () => {
 			root.render(
-				<StackProvider
-					basePath="/pages"
-					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
-					auth={auth}
-				>
+				<StackProvider stack={createAiChatStack(queryClient)} auth={auth}>
 					<QueryClientProvider client={queryClient}>
 						<ErrorBoundary>
 							<Suspense fallback="identity pending">

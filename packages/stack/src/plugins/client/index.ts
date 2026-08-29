@@ -10,14 +10,8 @@
  * - Client: import type { ClientPlugin } from "@btst/stack/plugins/client"
  */
 
-import type { ClientPlugin, ClientPluginDefinition } from "../../types";
+import type { ClientPluginDefinition } from "../../types";
 import type { Route } from "@btst/yar";
-
-type IdentifiedClientPlugin<
-	TId extends string,
-	TOverrides,
-	TRoutes extends Record<string, Route>,
-> = ClientPlugin<TOverrides, TRoutes, TId> & { readonly id: TId };
 
 type IdentifiedClientPluginDefinition<
 	TId extends string,
@@ -33,27 +27,10 @@ type IdentifiedClientPluginDefinition<
 	TId,
 	TProviderConfig,
 	TApiRuntimeFrom
-> & {
-	readonly id: TId;
-} & ([TApiRuntimeFrom] extends [never]
+> &
+	([TApiRuntimeFrom] extends [never]
 		? unknown
 		: { readonly apiRuntimeFrom: TApiRuntimeFrom });
-
-type LegacyClientPlugin<
-	TOverrides,
-	TRoutes extends Record<string, Route>,
-> = ClientPlugin<TOverrides, TRoutes> & {
-	name: string;
-	readonly id?: never;
-};
-
-type LegacyClientPluginDefinition<
-	TOverrides,
-	TRoutes extends Record<string, Route>,
-> = ClientPluginDefinition<TOverrides, TRoutes> & {
-	name: string;
-	readonly id?: never;
-};
 
 interface DefineClientPluginWithOverrides<TOverrides> {
 	<
@@ -78,9 +55,6 @@ interface DefineClientPluginWithOverrides<TOverrides> {
 		TProviderConfig,
 		TApiRuntimeFrom
 	>;
-	<const TId extends string, TRoutes extends Record<string, Route>>(
-		plugin: IdentifiedClientPlugin<TId, TOverrides, TRoutes>,
-	): IdentifiedClientPlugin<TId, TOverrides, TRoutes>;
 }
 
 export type {
@@ -168,12 +142,6 @@ export function defineClientPlugin<
 export function defineClientPlugin<
 	const TId extends string,
 	TRoutes extends Record<string, Route>,
->(
-	plugin: IdentifiedClientPlugin<TId, Record<string, never>, TRoutes>,
-): IdentifiedClientPlugin<TId, Record<string, never>, TRoutes>;
-export function defineClientPlugin<
-	const TId extends string,
-	TRoutes extends Record<string, Route>,
 	const TProviderConfig extends Readonly<Record<string, unknown>> = Readonly<
 		Record<string, never>
 	>,
@@ -193,22 +161,6 @@ export function defineClientPlugin<
 	TProviderConfig,
 	TApiRuntimeFrom
 >;
-export function defineClientPlugin<
-	TOverrides,
-	TRoutes extends Record<string, Route> = Record<string, Route>,
->(
-	plugin: LegacyClientPlugin<TOverrides, TRoutes>,
-): LegacyClientPlugin<TOverrides, TRoutes>;
-export function defineClientPlugin<
-	TOverrides,
-	TRoutes extends Record<string, Route> = Record<string, Route>,
->(
-	plugin: LegacyClientPluginDefinition<TOverrides, TRoutes>,
-): LegacyClientPluginDefinition<TOverrides, TRoutes>;
-export function defineClientPlugin<
-	TOverrides = Record<string, never>,
-	TRoutes extends Record<string, Route> = Record<string, Route>,
->(plugin: ClientPlugin<TOverrides, TRoutes>): ClientPlugin<TOverrides, TRoutes>;
 export function defineClientPlugin<
 	TOverrides = Record<string, never>,
 	TRoutes extends Record<string, Route> = Record<string, Route>,
@@ -232,11 +184,8 @@ export function defineClientPlugin<
 	TApiRuntimeFrom
 >;
 export function defineClientPlugin(
-	plugin?:
-		| ClientPlugin<any, any>
-		| ClientPluginDefinition<any, any, any, any, any>,
+	plugin?: ClientPluginDefinition<any, any, any, any, any>,
 ):
-	| ClientPlugin<any, any>
 	| ClientPluginDefinition<any, any, any, any, any>
 	| DefineClientPluginWithOverrides<any> {
 	if (plugin === undefined) {

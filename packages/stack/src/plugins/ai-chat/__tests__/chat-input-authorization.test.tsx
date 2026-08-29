@@ -8,6 +8,12 @@ import { createClientAuth } from "@btst/stack/authorization/client";
 import { StackProvider } from "@btst/stack/context";
 import { ChatInput } from "../client/components/chat-input";
 import { aiChatPermissions } from "../permissions";
+import { createTestClientStack } from "../../../__tests__/client-stack-test-utils";
+import { aiChatClientPlugin } from "../client/plugin";
+
+function createAiChatStack() {
+	return createTestClientStack({ aiChat: aiChatClientPlugin() });
+}
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -56,7 +62,7 @@ describe("AI Chat attachment authorization", () => {
 		await act(async () => {
 			root.render(
 				<StackProvider
-					basePath="/pages"
+					stack={createAiChatStack()}
 					auth={auth}
 					initialIdentity={identity}
 					notify={notify}
@@ -131,7 +137,7 @@ describe("AI Chat attachment authorization", () => {
 			await act(async () => {
 				root.render(
 					<StackProvider
-						basePath="/pages"
+						stack={createAiChatStack()}
 						auth={auth}
 						initialIdentity={identity}
 						notify={notify}

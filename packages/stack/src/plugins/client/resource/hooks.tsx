@@ -138,7 +138,7 @@ export type Resource<TResources extends ResourcesDeclaration> = {
 };
 
 export interface CreateResourceConfig<TResources extends ResourcesDeclaration> {
-	/** Plugin name used to resolve plugin-specific request headers. */
+	/** Plugin ID used to resolve plugin-specific request headers. */
 	plugin: string;
 	resources: TResources;
 }

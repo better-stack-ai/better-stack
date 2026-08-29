@@ -2,7 +2,7 @@ import { createMemoryAdapter } from "@btst/adapter-memory";
 import type { DatabaseDefinition } from "@btst/db";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { stack } from "../../../api";
+import { createBackendStack } from "../../../api";
 import {
 	defineAuthorization,
 	definePermissions,
@@ -57,12 +57,12 @@ describe("OpenAPI route introspection", () => {
 			};
 		});
 		const feature = defineBackendPlugin({
-			name: "introspection",
+			id: "feature",
 			dbPlugin: createDbPlugin("introspection", {}),
 			operations: () => ({ read }),
 			routes,
 		});
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: {
 				openApi: openApiBackendPlugin(),
@@ -102,7 +102,7 @@ describe("OpenAPI route introspection", () => {
 			execute: () => ({ ok: true as const }),
 		});
 		const feature = defineBackendPlugin({
-			name: "documented",
+			id: "documented",
 			dbPlugin: createDbPlugin("documented", {}),
 			operations: () => ({ read }),
 			routes: (_adapter, _context, operations) => ({
@@ -121,9 +121,9 @@ describe("OpenAPI route introspection", () => {
 		const getIdentity = vi.fn(() => {
 			throw new Error("public infrastructure must not resolve identity");
 		});
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
-			plugins: { openApi: openApiBackendPlugin(), feature },
+			plugins: { openApi: openApiBackendPlugin(), documented: feature },
 			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
 			auth: createServerAuth({ authorization, getIdentity }),
 		});
@@ -139,11 +139,11 @@ describe("OpenAPI route introspection", () => {
 		expect(reference.headers.get("content-type")).toContain("text/html");
 		expect(getIdentity).not.toHaveBeenCalled();
 
-		const disabled = stack({
+		const disabled = createBackendStack({
 			basePath: "/api",
 			plugins: {
 				openApi: openApiBackendPlugin({ disableDefaultReference: true }),
-				feature,
+				documented: feature,
 			},
 			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
 		});
@@ -179,7 +179,7 @@ describe("OpenAPI route introspection", () => {
 			execute: () => "internal",
 		});
 		const feature = defineBackendPlugin({
-			name: "metadata",
+			id: "feature",
 			dbPlugin: createDbPlugin("metadata", {}),
 			operations: () => ({ protectedRead, publicRead, internalOnly }),
 			routes: (_adapter, _context, operations) => ({
@@ -196,13 +196,16 @@ describe("OpenAPI route introspection", () => {
 			}),
 		});
 		const build = (plugins: Record<string, any>) =>
-			stack({
+			createBackendStack({
 				basePath: "/api",
 				plugins,
 				adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
 			});
 		const first = build({ openApi: openApiBackendPlugin(), feature });
-		const second = build({ feature, openApi: openApiBackendPlugin() });
+		const second = build({
+			feature,
+			openApi: openApiBackendPlugin(),
+		});
 		const readSchema = async (backend: typeof first) => {
 			const response = await backend.handler(
 				new Request("http://localhost/api/open-api/schema"),

@@ -233,9 +233,9 @@ function PageBuilderPageContent({
 	const notify = useNotify();
 	const { functionRegistry, localization } =
 		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
-	const { router, plugins, basePath: legacyBasePath } = useStack();
+	const { router, plugins, basePath: stackBasePath } = useStack();
 	const basePath =
-		plugins?.[UI_BUILDER_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
+		plugins?.[UI_BUILDER_PLUGIN_ID]?.site.basePath ?? stackBasePath;
 	const LinkComponent = router?.Link ?? "a";
 	const componentRegistry =
 		resolveUIBuilderComponents(plugins?.[UI_BUILDER_PLUGIN_ID]?.config) ??

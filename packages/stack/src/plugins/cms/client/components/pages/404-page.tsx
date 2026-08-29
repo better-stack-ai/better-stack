@@ -14,8 +14,8 @@ export function NotFoundPage() {
 	const t = useTranslate();
 	const { localization } =
 		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
-	const { router, plugins, basePath: legacyBasePath } = useStack();
-	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
+	const { router, plugins, basePath: stackBasePath } = useStack();
+	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? stackBasePath;
 
 	const LinkComponent = router?.Link ?? "a";
 

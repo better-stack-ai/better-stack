@@ -52,7 +52,7 @@ function useReactRouterStackRouter(): StackRouter {
  * ```tsx
  * import { reactRouter } from "@btst/stack/react-router";
  *
- * <StackProvider basePath="/pages" router={reactRouter()} api={{ baseURL, basePath: "/api/data" }}>
+ * <StackProvider stack={clientStack} router={reactRouter()}>
  * ```
  */
 export function reactRouter(): StackRouterConfig {

@@ -24,9 +24,9 @@ export function DashboardPage() {
 	const t = useTranslate();
 	const overrides = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 	const { localization } = overrides;
-	const { router, plugins, basePath: legacyBasePath } = useStack();
+	const { router, plugins, basePath: stackBasePath } = useStack();
 	const navigate = router?.navigate;
-	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
+	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? stackBasePath;
 
 	// Call route lifecycle hooks for telemetry and application behavior.
 	useRouteLifecycle({

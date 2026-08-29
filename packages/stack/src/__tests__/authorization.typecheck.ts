@@ -7,7 +7,7 @@ import {
 import { createClientAuth } from "../authorization/client";
 import { createServerAuth } from "../authorization/server";
 import { createNextLayout } from "../next/server";
-import { stack } from "../api";
+import { createBackendStack } from "../api";
 import {
 	createDbPlugin,
 	type DeepReadonly,
@@ -349,12 +349,12 @@ const passthroughOperation = definePassthroughOperation({
 	},
 });
 const passthroughPlugin = defineBackendPlugin({
-	name: "passthrough-fixture",
+	id: "passthrough",
 	dbPlugin: createDbPlugin("passthrough-fixture", {}),
 	operations: () => ({ stream: passthroughOperation }),
 	routes: () => ({}),
 });
-const passthroughStack = stack({
+const passthroughStack = createBackendStack({
 	basePath: "/api",
 	plugins: { passthrough: passthroughPlugin },
 	adapter: fakeAdapter,
@@ -377,7 +377,7 @@ const blogServerAuth = createServerAuth({
 	getIdentity: () => ({ id: "user-1", role: "user" as const }),
 });
 
-const blogStack = stack({
+const blogStack = createBackendStack({
 	basePath: "/api",
 	plugins: { blog: blogBackendPlugin() },
 	adapter: fakeAdapter,
@@ -481,7 +481,7 @@ const commentsServerAuth = createServerAuth({
 	authorization: commentsAuthorization,
 	getIdentity: () => ({ id: "user-1", role: "user" as const }),
 });
-const commentsStack = stack({
+const commentsStack = createBackendStack({
 	basePath: "/api",
 	plugins: { comments: commentsBackendPlugin() },
 	adapter: fakeAdapter,
@@ -537,7 +537,7 @@ commentsStack.trusted.comments.prefetchForRoute("/comments");
 declare const aiChatPlugin: ReturnType<typeof aiChatBackendPlugin>;
 declare const cmsPlugin: ReturnType<typeof cmsBackendPlugin>;
 declare const mediaPlugin: ReturnType<typeof mediaBackendPlugin>;
-const contractedStack = stack({
+const contractedStack = createBackendStack({
 	basePath: "/api",
 	plugins: {
 		aiChat: aiChatPlugin,
@@ -571,7 +571,7 @@ contractedStack.raw.kanban.listBoards;
 // @ts-expect-error Media stack.raw exposes only prefetchForRoute
 contractedStack.raw.media.listAssets;
 
-stack({
+createBackendStack({
 	basePath: "/api",
 	plugins: { comments: commentsBackendPlugin() },
 	adapter: fakeAdapter,
@@ -615,7 +615,7 @@ const unregisteredServerAuth = createServerAuth({
 	getIdentity: () => ({ id: "user-1" }),
 });
 
-stack({
+createBackendStack({
 	basePath: "/api",
 	plugins: { blog: blogBackendPlugin() },
 	adapter: fakeAdapter,
@@ -623,7 +623,7 @@ stack({
 	auth: unregisteredServerAuth,
 });
 
-stack({
+createBackendStack({
 	basePath: "/api",
 	plugins: { blog: blogBackendPlugin() },
 	adapter: fakeAdapter,
@@ -632,13 +632,13 @@ stack({
 });
 
 const operationPlugin = defineBackendPlugin({
-	name: "operation-fixture",
+	id: "operationFixture",
 	dbPlugin: createDbPlugin("operation-fixture", {}),
 	operations: () => ({ deleteArticle: operation }),
 	routes: () => ({}),
 });
 
-stack({
+createBackendStack({
 	basePath: "/api",
 	plugins: { operationFixture: operationPlugin },
 	adapter: fakeAdapter,
@@ -662,7 +662,7 @@ const incompatibleServerAuth = createServerAuth({
 	getIdentity: () => ({ id: "user-1" }),
 });
 
-stack({
+createBackendStack({
 	basePath: "/api",
 	plugins: { operationFixture: operationPlugin },
 	adapter: fakeAdapter,

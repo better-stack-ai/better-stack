@@ -4,7 +4,7 @@ import { createClientStack } from "../client";
 import { defineClientPlugin } from "../plugins/client";
 
 const probe = defineClientPlugin({
-	name: "probe",
+	id: "probe",
 	resolve: (runtime) => ({
 		routes: () => ({
 			probe: createRoute("/probe", () => ({

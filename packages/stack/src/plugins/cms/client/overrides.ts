@@ -168,7 +168,7 @@ export interface CMSPluginOverrides {
 	/**
 	 * Localization object for the CMS plugin
 	 */
-	localization?: CMSLocalization;
+	localization?: Partial<CMSLocalization>;
 
 	/**
 	 * Whether to show the attribution

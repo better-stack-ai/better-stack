@@ -1,27 +1,14 @@
 import type { DatabaseDefinition, DBAdapter } from "@btst/db";
+import { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import {
-	createBackendStack,
-	stack,
-	type BackendLib,
-	type BackendLibConfig,
-	type BackendStack,
-	type BackendStackConfig,
-} from "@btst/stack/api";
+import { createBackendStack, type BackendStackConfig } from "@btst/stack/api";
 import {
 	defineAuthorization,
 	definePermissions,
 	permission,
 } from "@btst/stack/authorization";
 import { createServerAuth } from "@btst/stack/authorization/server";
-import {
-	createClientStack,
-	createStackClient,
-	type ClientLib,
-	type ClientLibConfig,
-	type ClientStack,
-	type ClientStackConfig,
-} from "@btst/stack/client";
+import { createClientStack, type ClientStackConfig } from "@btst/stack/client";
 import {
 	createDbPlugin,
 	createEndpoint,
@@ -56,7 +43,7 @@ const read = defineOperation({
 	execute: ({ input }) => ({ id: input.id }),
 });
 const backendPlugin = defineBackendPlugin({
-	name: "consumerProbe",
+	id: "consumerProbe",
 	dbPlugin: createDbPlugin("consumerProbe", {}),
 	operations: () => ({ read }),
 	routes: (_adapter, _context, operations) => ({
@@ -76,41 +63,14 @@ const backendConfig = {
 	{ consumerProbe: typeof backendPlugin },
 	typeof auth
 >;
-const canonicalBackend = createBackendStack(backendConfig);
-const temporaryBackend = stack(backendConfig);
+const backend = createBackendStack(backendConfig);
 
-type _BackendFactoriesMatch = Expect<
-	Equal<typeof createBackendStack, typeof stack>
->;
-type _BackendInferenceMatches = Expect<
-	Equal<typeof canonicalBackend, typeof temporaryBackend>
->;
 type _BackendRouteInference = Expect<
-	Equal<keyof typeof canonicalBackend.router.endpoints, "consumerProbe_read">
+	Equal<keyof typeof backend.router.endpoints, "consumerProbe_read">
 >;
-type _BackendConfigAliasMatches = Expect<
-	Equal<
-		BackendStackConfig<{ consumerProbe: typeof backendPlugin }, typeof auth>,
-		BackendLibConfig<{ consumerProbe: typeof backendPlugin }, typeof auth>
-	>
->;
-type _BackendResultAliasMatches = Expect<
-	Equal<
-		BackendStack<
-			ReturnType<typeof backendPlugin.routes>,
-			Record<string, never>,
-			typeof canonicalBackend.trusted
-		>,
-		BackendLib<
-			ReturnType<typeof backendPlugin.routes>,
-			Record<string, never>,
-			typeof canonicalBackend.trusted
-		>
-	>
->;
-canonicalBackend.router.endpoints.consumerProbe_read;
-canonicalBackend.trusted.consumerProbe.read({ id: "record-1" });
-canonicalBackend
+backend.router.endpoints.consumerProbe_read;
+backend.trusted.consumerProbe.read({ id: "record-1" });
+backend
 	.forRequest(new Request("https://example.com/api"))
 	.operations.consumerProbe.read({ id: "record-1" });
 
@@ -127,46 +87,26 @@ const incompatibleAuth = createServerAuth({
 });
 createBackendStack({
 	...backendConfig,
-	// @ts-expect-error public canonical constructor rejects incompatible catalogs
-	auth: incompatibleAuth,
-});
-stack({
-	...backendConfig,
-	// @ts-expect-error public temporary constructor preserves catalog inference
+	// @ts-expect-error the public constructor rejects incompatible catalogs
 	auth: incompatibleAuth,
 });
 
 const clientPlugin = defineClientPlugin({
-	name: "consumerProbe",
-	routes: () => ({
-		read: createRoute("/consumer-probe/:id", ({ params }) => ({
-			PageComponent: () => null,
-			loader: async () => ({ recordId: params.id }),
-		})),
+	id: "consumerProbe",
+	resolve: () => ({
+		routes: () => ({
+			read: createRoute("/consumer-probe/:id", ({ params }) => ({
+				PageComponent: () => null,
+				loader: async () => ({ recordId: params.id }),
+			})),
+		}),
 	}),
 });
 const clientConfig = {
+	api: { baseURL: "https://example.com", basePath: "/api" },
+	site: { baseURL: "https://example.com", basePath: "/pages" },
+	queryClient: new QueryClient(),
 	plugins: { consumerProbe: clientPlugin },
 } satisfies ClientStackConfig<{ consumerProbe: typeof clientPlugin }>;
-const canonicalClient = createClientStack(clientConfig);
-const temporaryClient = createStackClient(clientConfig);
-
-type _ClientFactoriesMatch = Expect<
-	Equal<typeof createClientStack, typeof createStackClient>
->;
-type _ClientInferenceMatches = Expect<
-	Equal<typeof canonicalClient, typeof temporaryClient>
->;
-type _ClientConfigAliasMatches = Expect<
-	Equal<
-		ClientStackConfig<{ consumerProbe: typeof clientPlugin }>,
-		ClientLibConfig<{ consumerProbe: typeof clientPlugin }>
-	>
->;
-type _ClientResultAliasMatches = Expect<
-	Equal<
-		ClientStack<ReturnType<typeof clientPlugin.routes>>,
-		ClientLib<ReturnType<typeof clientPlugin.routes>>
-	>
->;
-canonicalClient.router.getRoute("/consumer-probe/record-1")?.loader?.();
+const client = createClientStack(clientConfig);
+client.router.getRoute("/consumer-probe/record-1")?.loader?.();

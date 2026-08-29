@@ -2,22 +2,16 @@ import { createRouter } from "@btst/yar";
 
 import type {
 	ClientStackConfig,
-	ClientStack,
 	ClientPlugin,
 	ClientPluginDefinition,
 	ClientPluginRegistration,
 	ClientStackContext,
-	LegacyClientStackConfig,
 	PluginRoutes,
 	ResolvedClientStack,
-	ResolvedClientStackConfig,
 	Sitemap,
 } from "../types";
 import { resolveClientRuntime } from "./runtime";
-import {
-	resolvePluginProgrammaticId,
-	resolvePluginRegistrationIds,
-} from "../plugin-registration";
+import { resolvePluginRegistrationIds } from "../plugin-registration";
 export type {
 	ClientApiConfig,
 	ClientApiEndpointOverride,
@@ -42,18 +36,6 @@ type AnyPluginMap = Record<
 	string,
 	ClientPluginRegistration<any, any, any, any, any>
 >;
-type LegacyPluginMap = Record<string, ClientPlugin<any, any>>;
-
-function hasResolvedRuntime<TPlugins extends AnyPluginMap>(
-	config: ClientStackConfig<TPlugins>,
-): config is ResolvedClientStackConfig<TPlugins> {
-	return (
-		Object.hasOwn(config, "api") ||
-		Object.hasOwn(config, "site") ||
-		Object.hasOwn(config, "queryClient") ||
-		Object.hasOwn(config, "endpoints")
-	);
-}
 
 /**
  * Resolves all registered client plugin definitions against one API location,
@@ -88,32 +70,11 @@ function hasResolvedRuntime<TPlugins extends AnyPluginMap>(
 export function createClientStack<
 	TPlugins extends AnyPluginMap,
 	TRoutes extends PluginRoutes<TPlugins> = PluginRoutes<TPlugins>,
->(
-	config: ResolvedClientStackConfig<TPlugins>,
-): ResolvedClientStack<TRoutes, TPlugins>;
-export function createClientStack<
-	TPlugins extends LegacyPluginMap,
-	TRoutes extends PluginRoutes<TPlugins> = PluginRoutes<TPlugins>,
->(config: LegacyClientStackConfig<TPlugins>): ClientStack<TRoutes>;
-export function createClientStack<
-	TPlugins extends AnyPluginMap,
-	TRoutes extends PluginRoutes<TPlugins> = PluginRoutes<TPlugins>,
->(config: ClientStackConfig<TPlugins>): ClientStack<TRoutes>;
-export function createClientStack<
-	TPlugins extends AnyPluginMap,
-	TRoutes extends PluginRoutes<TPlugins> = PluginRoutes<TPlugins>,
->(
-	config: ClientStackConfig<TPlugins>,
-): ClientStack<TRoutes> | ResolvedClientStack<TRoutes, TPlugins> {
-	const registrations = Object.hasOwn(config, "plugins")
-		? config.plugins
-		: undefined;
+>(config: ClientStackConfig<TPlugins>): ResolvedClientStack<TRoutes, TPlugins> {
+	const registrations = config.plugins;
 	const registrationIds = resolvePluginRegistrationIds(registrations, "client");
 	const validatedRegistrations = registrations as TPlugins;
-	const canonical = hasResolvedRuntime(config);
-	const runtime = canonical
-		? resolveClientRuntime(config, registrationIds)
-		: undefined;
+	const runtime = resolveClientRuntime(config, registrationIds);
 	const resolvedPlugins: Record<string, ClientPlugin<any, any>> = Object.create(
 		null,
 	);
@@ -121,52 +82,35 @@ export function createClientStack<
 	for (const [pluginKey, registration] of Object.entries(
 		validatedRegistrations,
 	)) {
-		if (Object.hasOwn(registration, "resolve")) {
-			if (!runtime) {
-				throw new Error(
-					`[btst/client] Client plugin "${pluginKey}" is a runtime-independent definition. Configure api, site, and queryClient on createClientStack().`,
-				);
-			}
-			const definition = registration as ClientPluginDefinition<
-				any,
-				any,
-				any,
-				any,
-				any
-			>;
-			const resolution = definition.resolve(runtime.pluginRuntimes[pluginKey]!);
-			if (!resolution || typeof resolution.routes !== "function") {
-				throw new Error(
-					`[btst/client] Client plugin "${pluginKey}" did not resolve to a routes() function.`,
-				);
-			}
-			resolvedPlugins[pluginKey] = {
-				...resolution,
-				...(Object.hasOwn(definition, "id")
-					? { id: registrationIds[pluginKey] }
-					: {}),
-				name: resolvePluginProgrammaticId(
-					definition,
-					registrationIds[pluginKey]!,
-				),
-			};
-		} else if (Object.hasOwn(registration, "id")) {
-			resolvedPlugins[pluginKey] = {
-				...(registration as ClientPlugin<any, any>),
-				id: registrationIds[pluginKey],
-				name: registrationIds[pluginKey],
-			};
-		} else {
-			resolvedPlugins[pluginKey] = registration as ClientPlugin<any, any>;
+		const definition = registration as ClientPluginDefinition<
+			any,
+			any,
+			any,
+			any,
+			any
+		>;
+		if (
+			!Object.hasOwn(definition, "resolve") ||
+			typeof definition.resolve !== "function"
+		) {
+			throw new Error(
+				`[btst/client] Client plugin "${pluginKey}" must declare an own resolve() function.`,
+			);
 		}
+		const resolution = definition.resolve(runtime.pluginRuntimes[pluginKey]!);
+		if (!resolution || typeof resolution.routes !== "function") {
+			throw new Error(
+				`[btst/client] Client plugin "${pluginKey}" did not resolve to a routes() function.`,
+			);
+		}
+		resolvedPlugins[pluginKey] = {
+			...resolution,
+			id: registrationIds[pluginKey]!,
+		};
 	}
 
 	const plugins = resolvedPlugins as Record<string, ClientPlugin<any, any>>;
-	const basePath = canonical
-		? runtime!.provider.site.basePath
-		: Object.hasOwn(config, "basePath")
-			? config.basePath
-			: undefined;
+	const basePath = runtime.provider.site.basePath;
 
 	// Collect all routes from all plugins
 	// We build this with type assertions to preserve literal keys
@@ -188,7 +132,7 @@ export function createClientStack<
 	// The router's getRoute method will return the union of all route return types
 	const router = createRouter<TRoutes, {}>(allRoutes);
 
-	const result: ClientStack<TRoutes> = {
+	const result = {
 		context: clientStackContext,
 		router,
 		async generateSitemap() {
@@ -210,21 +154,14 @@ export function createClientStack<
 			}
 			return deduped;
 		},
-	};
+	} as const;
 
-	return runtime ? { ...result, provider: runtime.provider } : result;
+	return { ...result, provider: runtime.provider };
 }
-
-/**
- * @deprecated Use `createClientStack`. This alias is removed by #225.
- */
-export const createStackClient: typeof createClientStack = createClientStack;
 
 export type {
 	ClientStack,
 	ClientStackConfig,
-	ClientLib,
-	ClientLibConfig,
 } from "../types";
 
 export { sitemapEntryToXmlString } from "./sitemap-utils";

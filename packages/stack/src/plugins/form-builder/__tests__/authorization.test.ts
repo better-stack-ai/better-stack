@@ -3,7 +3,7 @@ import { type DBAdapter, defineDb, type DatabaseDefinition } from "@btst/db";
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { stack } from "../../../api";
+import { createBackendStack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
 import {
 	createServerAuth,
@@ -215,7 +215,7 @@ function makeBackend(options?: {
 	auth?: ServerAuth<any>;
 	adapter?: (db: DatabaseDefinition) => DBAdapter;
 }) {
-	return stack({
+	return createBackendStack({
 		basePath: "/api",
 		plugins: {
 			formBuilder: formBuilderBackendPlugin({ hooks: options?.hooks }),

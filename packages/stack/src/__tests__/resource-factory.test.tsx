@@ -335,11 +335,21 @@ describe("createResource hooks", () => {
 	}
 
 	async function render(ui: React.ReactElement) {
+		const stack = createClientStack({
+			api: { baseURL: "http://test.local", basePath: "/api/data" },
+			site: { baseURL: "http://test.local", basePath: "/pages" },
+			queryClient,
+			plugins: {
+				"test-plugin": defineClientPlugin<{ headers?: HeadersInit }>()({
+					id: "test-plugin",
+					resolve: () => ({ routes: () => ({}) }),
+				}),
+			},
+		});
 		await act(async () => {
 			root.render(
 				<StackProvider
-					basePath="/pages"
-					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
+					stack={stack}
 					router={{ refresh }}
 					overrides={{
 						"test-plugin": {

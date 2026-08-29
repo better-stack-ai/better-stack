@@ -449,7 +449,11 @@ const clientAuth = createClientAuth({
   loginPath: "/auth/sign-in",
 })
 
-<StackProvider auth={clientAuth} initialIdentity={initialIdentity}>
+<StackProvider
+  stack={clientStack}
+  auth={clientAuth}
+  initialIdentity={initialIdentity}
+>
   {children}
 </StackProvider>
 ```
@@ -662,7 +666,7 @@ Creates the client plugin with routes and SSR loaders.
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `fieldComponents` | `Record<string, ComponentType>` | No | Custom field components |
-| `localization` | `FormBuilderLocalization` | No | Custom labels |
+| `localization` | `Partial<FormBuilderLocalization>` | No | Custom labels |
 | `showAttribution` | `boolean` | No | Show BTST attribution |
 | `onRouteRender` | `(route, context) => void` | No | Lifecycle hook |
 | `onRouteError` | `(route, error, context) => void` | No | Error hook |

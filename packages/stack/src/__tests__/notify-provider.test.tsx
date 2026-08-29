@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StackProvider, useNotify, type StackNotifyProvider } from "../context";
+import { createEmptyTestClientStack } from "./client-stack-test-utils";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -55,7 +56,7 @@ describe("useNotify", () => {
 			return null;
 		}
 		await render(
-			<StackProvider basePath="/pages">
+			<StackProvider stack={createEmptyTestClientStack()}>
 				<Probe />
 			</StackProvider>,
 		);
@@ -81,7 +82,7 @@ describe("useNotify", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createEmptyTestClientStack()}
 				notify={{ success: customSuccess, error: customError }}
 			>
 				<Probe />

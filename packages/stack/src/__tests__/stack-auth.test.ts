@@ -2,7 +2,7 @@ import { createMemoryAdapter } from "@btst/adapter-memory";
 import { createDbPlugin, type DatabaseDefinition } from "@btst/db";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { stack } from "../api";
+import { createBackendStack } from "../api";
 import {
 	defineAuthorization,
 	definePermissions,
@@ -19,7 +19,7 @@ const authorization = defineAuthorization({
 	rules: ({ probe }) => [probe.read.allow()],
 });
 
-describe("stack() server authorization boundary", () => {
+describe("createBackendStack() server authorization boundary", () => {
 	it("exposes only a createServerAuth adapter to plugin composition", () => {
 		const auth = createServerAuth({
 			authorization,
@@ -27,7 +27,7 @@ describe("stack() server authorization boundary", () => {
 		});
 		let seenAuth: ServerAuth<typeof authorization> | undefined;
 		const probePlugin = defineBackendPlugin({
-			name: "probe",
+			id: "probe",
 			dbPlugin: createDbPlugin("probe", {}),
 			routes: (_adapter, context) => {
 				seenAuth = context?.auth as ServerAuth<typeof authorization>;
@@ -35,7 +35,7 @@ describe("stack() server authorization boundary", () => {
 			},
 		});
 
-		stack({
+		createBackendStack({
 			basePath: "/api",
 			plugins: { probe: probePlugin },
 			adapter: testAdapter,
@@ -47,13 +47,13 @@ describe("stack() server authorization boundary", () => {
 
 	it("rejects the removed structural provider shape at runtime", () => {
 		const plugin = defineBackendPlugin({
-			name: "probe",
+			id: "probe",
 			dbPlugin: createDbPlugin("probe", {}),
 			routes: () => ({}),
 		});
 
 		expect(() =>
-			stack({
+			createBackendStack({
 				basePath: "/api",
 				plugins: { probe: plugin },
 				adapter: testAdapter,

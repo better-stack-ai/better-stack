@@ -771,7 +771,7 @@ function SitemapSection({
 }) {
 	const [isExpanded, setIsExpanded] = useState(false);
 
-	// Get plugin name from schema
+	// Get the canonical plugin ID from the schema.
 	const getPluginName = (pluginKey: string): string => {
 		const plugin = schema.plugins.find((p) => p.key === pluginKey);
 		return plugin?.name || pluginKey;

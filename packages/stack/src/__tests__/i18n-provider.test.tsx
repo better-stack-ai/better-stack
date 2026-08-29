@@ -7,6 +7,7 @@ import {
 	useTranslate,
 	type StackI18nProvider,
 } from "../context";
+import { createEmptyTestClientStack } from "./client-stack-test-utils";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -41,7 +42,7 @@ describe("useTranslate", () => {
 			return null;
 		}
 		await render(
-			<StackProvider basePath="/pages">
+			<StackProvider stack={createEmptyTestClientStack()}>
 				<Probe />
 			</StackProvider>,
 		);
@@ -56,7 +57,7 @@ describe("useTranslate", () => {
 			return null;
 		}
 		await render(
-			<StackProvider basePath="/pages">
+			<StackProvider stack={createEmptyTestClientStack()}>
 				<Probe />
 			</StackProvider>,
 		);
@@ -80,7 +81,7 @@ describe("useTranslate", () => {
 		}
 
 		await render(
-			<StackProvider basePath="/pages" i18n={i18n}>
+			<StackProvider stack={createEmptyTestClientStack()} i18n={i18n}>
 				<Probe />
 			</StackProvider>,
 		);

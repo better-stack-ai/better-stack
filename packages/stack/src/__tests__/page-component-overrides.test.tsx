@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { defineClientPlugin } from "../plugins/client";
 import type { ComponentType, ReactElement } from "react";
 import { defineRoute, defineRoutes } from "@btst/yar";
 
@@ -38,8 +37,8 @@ function createTestPlugin(config: {
 		detail?: ComponentType<{ params: { id: string } }>;
 	};
 }) {
-	return defineClientPlugin({
-		name: "test",
+	return {
+		id: "test",
 		routes: () =>
 			defineRoutes(
 				{
@@ -50,7 +49,7 @@ function createTestPlugin(config: {
 				},
 				{ pages: config.pageComponents },
 			),
-	});
+	};
 }
 
 describe("pageComponents overrides", () => {

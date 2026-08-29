@@ -8,14 +8,41 @@ import { browserClientStack } from "./index";
 
 <StackProvider stack={browserClientStack} />;
 
-// @ts-expect-error Override values are inferred from the registered plugin factory.
+// @ts-expect-error Provider paths come from the resolved stack.
+<StackProvider stack={browserClientStack} basePath="/ignored" />;
+
+// @ts-expect-error Provider API configuration comes from the resolved stack.
+<StackProvider stack={browserClientStack} api={{ basePath: "/ignored" }} />;
+
+const propsWithLegacyBasePath = {
+	stack: browserClientStack,
+	basePath: "/ignored",
+};
+// @ts-expect-error Spread provider props cannot override resolved stack paths.
+<StackProvider {...propsWithLegacyBasePath} />;
+
+const propsWithLegacyApi = {
+	stack: browserClientStack,
+	api: { basePath: "/ignored" },
+};
+// @ts-expect-error Spread provider props cannot override resolved stack API configuration.
+<StackProvider {...propsWithLegacyApi} />;
+
 <StackProvider
 	stack={browserClientStack}
-	overrides={{ consumerProbe: { label: "Consumer", format: "wide" } }}
+	overrides={{
+		consumerProbe: {
+			label: "Consumer",
+			// @ts-expect-error Override values are inferred from the registered plugin factory.
+			format: "wide",
+		},
+	}}
 />;
 
-// @ts-expect-error Unknown plugins are not valid provider override keys.
 <StackProvider
 	stack={browserClientStack}
-	overrides={{ missing: { label: "Missing" } }}
+	overrides={{
+		// @ts-expect-error Unknown plugins are not valid provider override keys.
+		missing: { label: "Missing" },
+	}}
 />;

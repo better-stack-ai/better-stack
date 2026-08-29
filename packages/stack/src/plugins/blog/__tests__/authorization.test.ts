@@ -2,7 +2,7 @@ import { createMemoryAdapter } from "@btst/adapter-memory";
 import { defineDb, type DatabaseDefinition } from "@btst/db";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { stack } from "../../../api";
+import { createBackendStack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
 import {
 	createServerAuth,
@@ -141,7 +141,7 @@ function makeBackend(options?: {
 	hooks?: BlogBackendHooks;
 	auth?: ServerAuth<any>;
 }) {
-	return stack({
+	return createBackendStack({
 		basePath: "/api",
 		plugins: {
 			blog: blogBackendPlugin(options?.hooks ? { hooks: options.hooks } : {}),
@@ -1273,7 +1273,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 			],
 		});
 		const ruleLifecycleEvents: string[] = [];
-		const ruleFailure = stack({
+		const ruleFailure = createBackendStack({
 			basePath: "/api",
 			plugins: {
 				blog: blogBackendPlugin({
@@ -1321,7 +1321,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 			rules: () => [],
 		});
 		const missingRuleLifecycleEvents: string[] = [];
-		const missingRule = stack({
+		const missingRule = createBackendStack({
 			basePath: "/api",
 			plugins: {
 				blog: blogBackendPlugin({

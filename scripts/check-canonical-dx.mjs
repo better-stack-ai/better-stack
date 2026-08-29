@@ -30,6 +30,15 @@ const generatedTargets = [
 	"packages/stack/registry",
 	"playground/src",
 ];
+const publicContractTargets = [
+	"packages/stack/src/api/index.ts",
+	"packages/stack/src/client/index.ts",
+	"packages/stack/src/context/provider.tsx",
+	"packages/stack/src/plugin-registration.ts",
+	"packages/stack/src/plugins/api/index.ts",
+	"packages/stack/src/plugins/client/index.ts",
+	"packages/stack/src/types.ts",
+];
 
 // Exact historical inputs are immutable negative fixtures, not maintained
 // examples. Their README and hash allowlist fail closed if their bytes change.
@@ -632,6 +641,25 @@ for (const absolute of allFiles) {
 			/better-auth\.session_token|@btst\/better-auth-ui|\bcreateBetterAuth\w*/g,
 		);
 	}
+}
+
+for (const target of publicContractTargets) {
+	const absolute = join(root, target);
+	const source = readFileSync(absolute, "utf8");
+	recordMatches(
+		failures,
+		target,
+		source,
+		"removed public contract",
+		/\b(?:createStackClient|BackendLibConfig|ClientLibConfig|BackendLib|ClientLib|StackProviderOverrides|resolvePluginProgrammaticId)\b|\bexport\s+(?:const|function)\s+stack\b/g,
+	);
+	recordMatches(
+		failures,
+		target,
+		source,
+		"legacy plugin name fallback",
+		/^\s*(?:readonly\s+)?name\??\s*:/gm,
+	);
 }
 
 if (failures.length > 0) {

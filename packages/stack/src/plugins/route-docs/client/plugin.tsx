@@ -7,7 +7,6 @@ import { normalizePath } from "@btst/stack/client";
 import { defineRoute } from "@btst/yar";
 import { hashKey, type QueryClient } from "@tanstack/react-query";
 import type { ClientStackContext } from "../../../types";
-import { resolvePluginProgrammaticId } from "../../../plugin-registration";
 import {
 	generateRouteDocsSchema,
 	fetchAllSitemapEntries,
@@ -51,7 +50,7 @@ export function getRegisteredRoutes(
 	if (!context) return [];
 	const result: RegisteredRoute[] = [];
 	for (const [pluginKey, plugin] of Object.entries(context.plugins)) {
-		const pluginId = resolvePluginProgrammaticId(plugin, pluginKey);
+		const pluginId = plugin.id;
 		if (pluginId === ROUTE_DOCS_PLUGIN_ID) continue;
 		try {
 			const routes = plugin.routes(context);
@@ -111,7 +110,7 @@ function createRouteDocsBaseFingerprint(
 		? Object.entries(context.plugins)
 				.map(([key, plugin]) => ({
 					key,
-					id: resolvePluginProgrammaticId(plugin, key),
+					id: plugin.id,
 				}))
 				.sort((left, right) => left.key.localeCompare(right.key))
 		: [];

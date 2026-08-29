@@ -17,6 +17,7 @@ import {
 import { defineAuthorization } from "@btst/stack/authorization";
 import { createClientAuth } from "@btst/stack/authorization/client";
 import { createClientStack } from "../../../client";
+import { createTestClientStack } from "../../../__tests__/client-stack-test-utils";
 import { cmsClientPlugin } from "../client";
 import { CMSFileUpload } from "../client/components/forms/file-upload";
 import { ContentForm } from "../client/components/forms/content-form";
@@ -141,6 +142,10 @@ async function render(ui: React.ReactElement) {
 	});
 }
 
+function createCmsStack() {
+	return createTestClientStack({ cms: cmsClientPlugin() });
+}
+
 function texts(): string {
 	return container.textContent ?? "";
 }
@@ -212,7 +217,7 @@ describe("CMSFileUpload notifications (useNotify)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCmsStack()}
 				notify={notify}
 				overrides={{ cms: cmsOverrides }}
 			>
@@ -233,7 +238,7 @@ describe("CMSFileUpload notifications (useNotify)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCmsStack()}
 				notify={notify}
 				overrides={{ cms: cmsOverrides }}
 			>
@@ -251,7 +256,7 @@ describe("CMSFileUpload notifications (useNotify)", () => {
 describe("ContentForm inline errors", () => {
 	it("shows a non-field error message above the form", async () => {
 		await render(
-			<StackProvider basePath="/pages" overrides={{ cms: cmsOverrides }}>
+			<StackProvider stack={createCmsStack()} overrides={{ cms: cmsOverrides }}>
 				<ContentForm
 					contentType={contentType}
 					onSubmit={async () => {}}
@@ -265,7 +270,7 @@ describe("ContentForm inline errors", () => {
 
 	it("lists server field errors in the banner when no form instance was captured", async () => {
 		await render(
-			<StackProvider basePath="/pages" overrides={{ cms: cmsOverrides }}>
+			<StackProvider stack={createCmsStack()} overrides={{ cms: cmsOverrides }}>
 				<ContentForm
 					contentType={contentType}
 					onSubmit={async () => {}}
@@ -282,7 +287,7 @@ describe("ContentListPage row actions (CanAccess)", () => {
 	function renderListPage(auth?: StackClientAuth, router = createMockRouter()) {
 		return render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCmsStack()}
 				router={router}
 				overrides={{ cms: cmsOverrides }}
 				auth={auth}
@@ -323,7 +328,7 @@ describe("ContentListPage row actions (CanAccess)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCmsStack()}
 				router={createMockRouter()}
 				overrides={{ cms: cmsOverrides }}
 				auth={auth}
@@ -353,7 +358,7 @@ describe("ContentListPage row actions (CanAccess)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCmsStack()}
 				router={router}
 				notify={notify}
 				overrides={{ cms: cmsOverrides }}
@@ -414,11 +419,11 @@ describe("CMS resolved site navigation", () => {
 		expect(router.navigate).toHaveBeenCalledWith("/cms/post/new");
 	});
 
-	it("falls back to the legacy provider base path", async () => {
+	it("falls back to the shared stack site path", async () => {
 		const router = createMockRouter();
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCmsStack()}
 				router={router}
 				overrides={{ cms: cmsOverrides }}
 			>
@@ -506,7 +511,7 @@ describe("ContentListPage search (useListState)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCmsStack()}
 				router={router}
 				overrides={{ cms: cmsOverrides }}
 			>
@@ -531,7 +536,7 @@ describe("ContentListPage search (useListState)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCmsStack()}
 				router={router}
 				overrides={{ cms: cmsOverrides }}
 			>
@@ -575,7 +580,7 @@ describe("ContentListPage search (useListState)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCmsStack()}
 				router={router}
 				overrides={{ cms: cmsOverrides }}
 			>
@@ -624,7 +629,7 @@ describe("cms i18n precedence (useTranslate + overrides.localization)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCmsStack()}
 				router={createMockRouter()}
 				overrides={{ cms: cmsOverrides }}
 			>
@@ -651,7 +656,7 @@ describe("cms i18n precedence (useTranslate + overrides.localization)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCmsStack()}
 				router={createMockRouter()}
 				overrides={{ cms: cmsOverrides }}
 				i18n={i18n}
@@ -678,7 +683,7 @@ describe("cms i18n precedence (useTranslate + overrides.localization)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCmsStack()}
 				router={createMockRouter()}
 				overrides={{
 					cms: {

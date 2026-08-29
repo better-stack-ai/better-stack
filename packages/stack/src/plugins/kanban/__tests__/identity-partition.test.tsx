@@ -5,8 +5,23 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StackProvider, useIdentity } from "@btst/stack/context";
 import { createIdentityTestAuth } from "../../../__tests__/auth-test-utils";
+import { createTestClientStack } from "../../../__tests__/client-stack-test-utils";
 import type { StackClientAuth } from "../../../shared/auth-types";
 import { useBoard } from "../client/hooks/kanban-hooks";
+import { kanbanClientPlugin } from "../client/plugin";
+
+const kanbanProviderOverrides = {
+	kanban: {
+		resolveUser: () => null,
+		searchUsers: () => [],
+	},
+};
+
+function createKanbanStack(queryClient: QueryClient) {
+	return createTestClientStack({ kanban: kanbanClientPlugin() }, queryClient, {
+		api: { baseURL: "http://test.local", basePath: "/api" },
+	});
+}
 
 (
 	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -77,8 +92,8 @@ describe("Kanban protected query identity partition", () => {
 			await act(async () => {
 				root.render(
 					<StackProvider
-						basePath="/pages"
-						api={{ baseURL: "http://test.local", basePath: "/api" }}
+						stack={createKanbanStack(queryClient)}
+						overrides={kanbanProviderOverrides}
 						auth={auth}
 					>
 						<QueryClientProvider client={queryClient}>
@@ -127,8 +142,8 @@ describe("Kanban protected query identity partition", () => {
 		await act(async () => {
 			root.render(
 				<StackProvider
-					basePath="/pages"
-					api={{ baseURL: "http://test.local", basePath: "/api" }}
+					stack={createKanbanStack(queryClient)}
+					overrides={kanbanProviderOverrides}
 					auth={auth}
 					initialIdentity={{ id: "user-a" }}
 				>
@@ -187,8 +202,8 @@ describe("Kanban protected query identity partition", () => {
 		await act(async () => {
 			root.render(
 				<StackProvider
-					basePath="/pages"
-					api={{ baseURL: "http://test.local", basePath: "/api" }}
+					stack={createKanbanStack(queryClient)}
+					overrides={kanbanProviderOverrides}
 					auth={auth}
 				>
 					<QueryClientProvider client={queryClient}>
@@ -261,8 +276,8 @@ describe("Kanban protected query identity partition", () => {
 			await act(async () => {
 				root.render(
 					<StackProvider
-						basePath="/pages"
-						api={{ baseURL: "http://test.local", basePath: "/api" }}
+						stack={createKanbanStack(queryClient)}
+						overrides={kanbanProviderOverrides}
 						auth={auth}
 						initialIdentity={initialIdentity as never}
 					>

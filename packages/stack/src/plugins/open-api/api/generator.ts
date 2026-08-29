@@ -1,6 +1,5 @@
 import type { Endpoint } from "better-call";
 import type { StackContext } from "../../../types";
-import { resolvePluginProgrammaticId } from "../../../plugin-registration";
 import * as z from "zod";
 
 /**
@@ -352,9 +351,9 @@ export function generateOpenAPISchema(
 	for (const [pluginKey, plugin] of Object.entries(context.plugins).sort(
 		([left], [right]) => compareStable(left, right),
 	)) {
-		const pluginId = resolvePluginProgrammaticId(plugin, pluginKey);
-		// Skip the open-api plugin itself
-		if (pluginId === "openApi" || pluginId === "open-api") {
+		const pluginId = plugin.id;
+		// Skip the OpenAPI plugin itself.
+		if (pluginId === "openApi") {
 			continue;
 		}
 

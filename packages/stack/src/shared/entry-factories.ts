@@ -7,7 +7,7 @@ import type { ComponentType } from "react";
 
 /**
  * Minimal structural view of a route returned by
- * `createStackClient(...).router.getRoute(path)`. The framework entry
+ * `createClientStack(...).router.getRoute(path)`. The framework entry
  * factories only need these three fields.
  */
 export interface StackRouteLike {
@@ -17,8 +17,8 @@ export interface StackRouteLike {
 }
 
 /**
- * Minimal structural view of the object returned by `createStackClient`.
- * Any concrete `ClientLib<TRoutes>` is assignable to this shape.
+ * Minimal structural view of the object returned by `createClientStack`.
+ * Any concrete `ClientStack<TRoutes>` is assignable to this shape.
  */
 export interface StackClientLike {
 	router: {

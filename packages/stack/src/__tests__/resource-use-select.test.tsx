@@ -7,6 +7,7 @@ import { StackProvider } from "../context";
 import type { ResourcesDeclaration } from "../plugins/client";
 import { createResource } from "../plugins/client/hooks";
 import type { ResourceSelectResult } from "../plugins/client/hooks";
+import { createEmptyTestClientStack } from "./client-stack-test-utils";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -97,10 +98,7 @@ describe("resource useSelect", () => {
 		}
 		await act(async () => {
 			root.render(
-				<StackProvider
-					basePath="/pages"
-					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
-				>
+				<StackProvider stack={createEmptyTestClientStack(queryClient)}>
 					<QueryClientProvider client={queryClient}>
 						<Probe />
 					</QueryClientProvider>

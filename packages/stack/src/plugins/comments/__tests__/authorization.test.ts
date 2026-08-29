@@ -2,7 +2,7 @@ import { createMemoryAdapter } from "@btst/adapter-memory";
 import { defineDb, type DatabaseDefinition } from "@btst/db";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { stack } from "../../../api";
+import { createBackendStack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
 import {
 	createServerAuth,
@@ -151,7 +151,7 @@ function makeBackend(options?: {
 	plugin?: CommentsBackendOptions;
 	auth?: ServerAuth<any>;
 }) {
-	return stack({
+	return createBackendStack({
 		basePath: "/api",
 		plugins: { comments: commentsBackendPlugin(options?.plugin) },
 		adapter: memoryAdapter,

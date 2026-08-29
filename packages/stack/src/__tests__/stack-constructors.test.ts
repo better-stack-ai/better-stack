@@ -1,11 +1,12 @@
 import { createMemoryAdapter } from "@btst/adapter-memory";
 import { createDbPlugin, type DatabaseDefinition } from "@btst/db";
+import { QueryClient } from "@tanstack/react-query";
 import { createRoute } from "@btst/yar";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createBackendStack, stack } from "../api";
+import { createBackendStack } from "../api";
 import { definePermissions, permission } from "../authorization";
-import { createClientStack, createStackClient } from "../client";
+import { createClientStack } from "../client";
 import {
 	createEndpoint,
 	defineBackendPlugin,
@@ -25,7 +26,7 @@ const probeOperation = defineOperation({
 	execute: ({ input }) => ({ value: input.value }),
 });
 const backendPlugin = defineBackendPlugin({
-	name: "probe",
+	id: "probe",
 	dbPlugin: createDbPlugin("probe", {}),
 	operations: () => ({ echo: probeOperation }),
 	routes: (_adapter, _context, operations) => ({
@@ -37,67 +38,59 @@ const backendPlugin = defineBackendPlugin({
 	}),
 });
 const clientPlugin = defineClientPlugin({
-	name: "probe",
-	routes: () => ({
-		probe: createRoute("/probe", () => ({
-			PageComponent: () => null,
-		})),
+	id: "probe",
+	resolve: () => ({
+		routes: () => ({
+			probe: createRoute("/probe", () => ({
+				PageComponent: () => null,
+			})),
+		}),
+		sitemap: () => [{ url: "https://example.com/probe" }],
 	}),
-	sitemap: () => [{ url: "https://example.com/probe" }],
 });
 
-describe("symmetric stack constructors", () => {
-	it("keeps the legacy constructor names as exact forwarding aliases", () => {
-		expect(stack).toBe(createBackendStack);
-		expect(createStackClient).toBe(createClientStack);
+describe("canonical stack constructors", () => {
+	it("preserves backend routes and operation surfaces", async () => {
+		const backend = createBackendStack({
+			basePath: "/api",
+			plugins: { probe: backendPlugin },
+			adapter,
+		});
+
+		const endpointNames = Object.keys(
+			(backend.router as unknown as { endpoints: Record<string, unknown> })
+				.endpoints,
+		);
+		expect(endpointNames).toContain("probe_echo");
+		await expect(
+			backend.trusted.probe.echo({ value: "trusted" }),
+		).resolves.toEqual({ value: "trusted" });
+		await expect(
+			backend
+				.forRequest(new Request("https://example.com/api"))
+				.operations.probe.echo({ value: "request" }),
+		).resolves.toEqual({ value: "request" });
+
+		const response = await backend.handler(
+			new Request("https://example.com/api/echo/handler"),
+		);
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ value: "handler" });
 	});
 
-	for (const [name, factory] of [
-		["canonical", createBackendStack],
-		["temporary alias", stack],
-	] as const) {
-		it(`preserves backend routes and operation surfaces through the ${name} name`, async () => {
-			const backend = factory({
-				basePath: "/api",
-				plugins: { probe: backendPlugin },
-				adapter,
-			});
-
-			const endpointNames = Object.keys(
-				(backend.router as unknown as { endpoints: Record<string, unknown> })
-					.endpoints,
-			);
-			expect(endpointNames).toContain("probe_echo");
-			await expect(
-				backend.trusted.probe.echo({ value: "trusted" }),
-			).resolves.toEqual({ value: "trusted" });
-			await expect(
-				backend
-					.forRequest(new Request("https://example.com/api"))
-					.operations.probe.echo({ value: "request" }),
-			).resolves.toEqual({ value: "request" });
-
-			const response = await backend.handler(
-				new Request("https://example.com/api/echo/handler"),
-			);
-			expect(response.status).toBe(200);
-			expect(await response.json()).toEqual({ value: "handler" });
+	it("preserves client routes and sitemap behavior", async () => {
+		const client = createClientStack({
+			api: { baseURL: "https://example.com", basePath: "/api" },
+			site: { baseURL: "https://example.com", basePath: "/pages" },
+			queryClient: new QueryClient(),
+			plugins: { probe: clientPlugin },
 		});
-	}
 
-	for (const [name, factory] of [
-		["canonical", createClientStack],
-		["temporary alias", createStackClient],
-	] as const) {
-		it(`preserves client routes and sitemap behavior through the ${name} name`, async () => {
-			const client = factory({ plugins: { probe: clientPlugin } });
-
-			expect(typeof client.router.getRoute("/probe")?.PageComponent).toBe(
-				"function",
-			);
-			await expect(client.generateSitemap()).resolves.toEqual([
-				{ url: "https://example.com/probe" },
-			]);
-		});
-	}
+		expect(typeof client.router.getRoute("/probe")?.PageComponent).toBe(
+			"function",
+		);
+		await expect(client.generateSitemap()).resolves.toEqual([
+			{ url: "https://example.com/probe" },
+		]);
+	});
 });

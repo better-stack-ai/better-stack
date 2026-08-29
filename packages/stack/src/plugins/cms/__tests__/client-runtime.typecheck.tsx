@@ -64,10 +64,14 @@ stack.provider.plugins.uiBuilder.config?.components satisfies
 
 // @ts-expect-error CMS override values are inferred from registration.
 StackProvider({ stack, overrides: { cms: { uploadImage: "not-a-function" } } });
-// @ts-expect-error UI Builder components are configured by uiBuilderClientPlugin().
 StackProvider({
 	stack,
-	overrides: { uiBuilder: { componentRegistry: defaultComponentRegistry } },
+	overrides: {
+		uiBuilder: {
+			// @ts-expect-error UI Builder components are configured by uiBuilderClientPlugin().
+			componentRegistry: defaultComponentRegistry,
+		},
+	},
 });
 // @ts-expect-error Kebab-case is only a package and route slug.
 StackProvider({ stack, overrides: { "ui-builder": {} } });

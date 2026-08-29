@@ -50,7 +50,7 @@ function useTanStackStackRouter(): StackRouter {
  * ```tsx
  * import { tanstackRouter } from "@btst/stack/tanstack";
  *
- * <StackProvider basePath="/pages" router={tanstackRouter()} api={{ baseURL, basePath: "/api/data" }}>
+ * <StackProvider stack={clientStack} router={tanstackRouter()}>
  * ```
  */
 export function tanstackRouter(): StackRouterConfig {

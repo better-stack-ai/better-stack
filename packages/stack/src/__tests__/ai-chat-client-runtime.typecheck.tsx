@@ -59,11 +59,11 @@ type ChatInputMode = ChatInputProps["mode"];
 />;
 
 // Mode is a client-plugin factory concern, not a presentation override.
-// @ts-expect-error Configure mode once in aiChatClientPlugin().
 <StackProvider
 	stack={stack}
 	overrides={{
 		aiChat: {
+			// @ts-expect-error Configure mode once in aiChatClientPlugin().
 			mode: "public",
 		},
 	}}
@@ -119,11 +119,11 @@ createClientStack({
 // @ts-expect-error Provider override keys are inferred from the registered ID.
 <StackProvider stack={stack} overrides={{ "ai-chat": {} }} />;
 
-// @ts-expect-error Transport headers are stack endpoint configuration.
 <StackProvider
 	stack={stack}
 	overrides={{
 		aiChat: {
+			// @ts-expect-error Transport headers are stack endpoint configuration.
 			headers: { authorization: "secret" },
 		},
 	}}

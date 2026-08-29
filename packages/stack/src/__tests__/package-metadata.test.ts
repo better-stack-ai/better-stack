@@ -28,8 +28,8 @@ describe("published dependency alignment", () => {
 	});
 });
 
-describe("published symmetric stack constructors", () => {
-	it("exposes canonical and temporary names through ESM, CJS, declarations and typesVersions", async () => {
+describe("published canonical stack constructors", () => {
+	it("exposes only canonical names through ESM, CJS, declarations and typesVersions", async () => {
 		const manifest = JSON.parse(
 			await readFile(resolve("package.json"), "utf8"),
 		) as {
@@ -87,31 +87,17 @@ describe("published symmetric stack constructors", () => {
 		}
 		for (const declaration of [apiDeclaration, apiCjsDeclaration]) {
 			expect(declaration).toContain("function createBackendStack");
-			expect(declaration).toContain("const stack: typeof createBackendStack");
 			expect(declaration).toContain("BackendStackConfig");
 			expect(declaration).toContain("BackendStack<");
-			expect(declaration).toMatch(
-				/@deprecated Use `createBackendStack`[\s\S]*const stack: typeof createBackendStack/,
-			);
-			const canonicalSignature = declaration.match(
-				/function createBackendStack[\s\S]*?;/,
-			)?.[0];
-			expect(canonicalSignature).not.toContain("BackendLib");
+			expect(declaration).not.toContain("const stack:");
+			expect(declaration).not.toContain("BackendLib");
 		}
 		for (const declaration of [clientDeclaration, clientCjsDeclaration]) {
 			expect(declaration).toContain("function createClientStack");
-			expect(declaration).toContain(
-				"const createStackClient: typeof createClientStack",
-			);
 			expect(declaration).toContain("ClientStackConfig");
 			expect(declaration).toContain("ClientStack<");
-			expect(declaration).toMatch(
-				/@deprecated Use `createClientStack`[\s\S]*const createStackClient: typeof createClientStack/,
-			);
-			const canonicalSignature = declaration.match(
-				/function createClientStack[\s\S]*?;/,
-			)?.[0];
-			expect(canonicalSignature).not.toContain("ClientLib");
+			expect(declaration).not.toContain("createStackClient");
+			expect(declaration).not.toContain("ClientLib");
 		}
 
 		const apiSpecifier = "@btst/stack/api";
@@ -125,10 +111,14 @@ describe("published symmetric stack constructors", () => {
 		const cjsClient = require(clientSpecifier);
 		const cjsClientHooks = require(clientHooksSpecifier);
 
-		expect(esmApi.stack).toBe(esmApi.createBackendStack);
-		expect(esmClient.createStackClient).toBe(esmClient.createClientStack);
-		expect(cjsApi.stack).toBe(cjsApi.createBackendStack);
-		expect(cjsClient.createStackClient).toBe(cjsClient.createClientStack);
+		expect(esmApi.createBackendStack).toBeTypeOf("function");
+		expect(esmClient.createClientStack).toBeTypeOf("function");
+		expect(cjsApi.createBackendStack).toBeTypeOf("function");
+		expect(cjsClient.createClientStack).toBeTypeOf("function");
+		expect("stack" in esmApi).toBe(false);
+		expect("createStackClient" in esmClient).toBe(false);
+		expect("stack" in cjsApi).toBe(false);
+		expect("createStackClient" in cjsClient).toBe(false);
 		expect(esmClient.useListState).toBeUndefined();
 		expect(cjsClient.useListState).toBeUndefined();
 		expect(esmClientHooks.useListState).toBeTypeOf("function");
@@ -183,7 +173,6 @@ describe("published symmetric stack constructors", () => {
 		let observedRouteOperations: Record<string, unknown> | undefined;
 		const prototypePlugin = pluginApi.defineBackendPlugin({
 			id: "__proto__",
-			name: "legacy-name",
 			dbPlugin: pluginApi.createDbPlugin("prototype-id-db", {}),
 			operations: () => ({ echo }),
 			infrastructureRoutes: {
