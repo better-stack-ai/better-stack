@@ -190,6 +190,10 @@ function buildPluginTemplateContext(
 				return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
 			})
 			.join("\n"),
+		clientApiEndpointEntries: clientMetas
+			.filter((m) => m.backendSymbol && m.key !== "ui-builder")
+			.map((m) => `\t\t\t\t${m.configKey}: crossOriginApiEndpoint,`)
+			.join("\n"),
 		pagesLayoutOverrides: clientMetas
 			.map((m) => {
 				if (m.key === "route-docs" || m.key === "media") {

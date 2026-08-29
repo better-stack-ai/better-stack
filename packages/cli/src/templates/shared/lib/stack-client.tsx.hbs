@@ -1,4 +1,7 @@
 import { createClientStack } from "@btst/stack/client"
+{{#if clientApiEndpointEntries}}
+import type { ClientPluginEndpointOverride } from "@btst/stack/client"
+{{/if}}
 import type { QueryClient } from "@tanstack/react-query"
 {{#if clientImports}}
 {{{clientImports}}}
@@ -18,6 +21,9 @@ export function createAppClientStack(
 ) {
 	const siteOrigin = getSiteOrigin(options?.siteOrigin)
 	const apiOrigin = getApiOrigin(options?.apiOrigin, siteOrigin)
+{{#if clientApiEndpointEntries}}
+	const crossOriginApiEndpoint = getCrossOriginApiEndpoint(apiOrigin, siteOrigin)
+{{/if}}
 	return createClientStack({
 		api: {
 			baseURL: apiOrigin,
@@ -33,6 +39,15 @@ export function createAppClientStack(
 			// Add client plugins here.
 {{/if}}
 		},
+{{#if clientApiEndpointEntries}}
+		...(crossOriginApiEndpoint
+			? {
+				endpoints: {
+{{{clientApiEndpointEntries}}}
+				},
+			}
+			: {}),
+{{/if}}
 	})
 }
 
@@ -71,3 +86,16 @@ function getApiOrigin(serverOrigin: string | undefined, siteOrigin: string) {
 		siteOrigin
 	)
 }
+
+{{#if clientApiEndpointEntries}}
+function getCrossOriginApiEndpoint(apiOrigin: string, siteOrigin: string) {
+	if (apiOrigin === siteOrigin) return undefined
+	return {
+		api: {
+			baseURL: apiOrigin,
+			basePath: "/api/data",
+			credentials: "include",
+		},
+	} satisfies ClientPluginEndpointOverride
+}
+{{/if}}

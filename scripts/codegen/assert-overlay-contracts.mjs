@@ -142,8 +142,18 @@ for (const framework of frameworks) {
 	);
 	requireText(
 		backend,
-		"!board.columns.some((column) => column.title === title)",
+		"await kanban.updateColumn({ id: column.id, data: { title } })",
 		`${label} WealthReview column reconciliation`,
+	);
+	requireText(
+		backend,
+		"const refreshedBoards = await kanban.listBoards({",
+		`${label} WealthReview concurrent reconciliation`,
+	);
+	rejectText(
+		backend,
+		"kanban.createColumn({",
+		`${label} WealthReview duplicate column guard`,
 	);
 	requireText(
 		backend,
@@ -170,6 +180,21 @@ for (const framework of frameworks) {
 	requireText(client, "getStackClient", `${label} client runtime`);
 	requireText(client, "routeDocs: routeDocsClientPlugin", `${label} client`);
 	requireText(client, "uiBuilder: uiBuilderClientPlugin", `${label} client`);
+	requireText(
+		client,
+		'credentials: "include"',
+		`${label} managed API browser credentials`,
+	);
+	requireText(
+		client,
+		"cms: crossOriginApiEndpoint",
+		`${label} managed API endpoint projection`,
+	);
+	rejectText(
+		client,
+		"uiBuilder: crossOriginApiEndpoint",
+		`${label} inherited UI Builder API runtime`,
+	);
 	requireText(
 		client,
 		"identityPartition: requestIdentity",

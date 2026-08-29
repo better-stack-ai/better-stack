@@ -248,6 +248,9 @@ describe("scaffold plan", () => {
 			expect(stackClientFile?.content).not.toContain(
 				'const baseURL = "http://localhost:3000"',
 			);
+			expect(stackClientFile?.content).not.toContain(
+				"getCrossOriginApiEndpoint",
+			);
 			const layoutSuffix =
 				framework === "nextjs"
 					? "app/pages/layout.tsx"
@@ -305,6 +308,16 @@ describe("scaffold plan", () => {
 			expect(stackClientFile?.content).toContain(
 				"comments: commentsClientPlugin(),",
 			);
+			expect(stackClientFile?.content).toContain(
+				"const crossOriginApiEndpoint = getCrossOriginApiEndpoint(",
+			);
+			expect(stackClientFile?.content).toContain(
+				"blog: crossOriginApiEndpoint,",
+			);
+			expect(stackClientFile?.content).toContain(
+				"comments: crossOriginApiEndpoint,",
+			);
+			expect(stackClientFile?.content).toContain('credentials: "include"');
 			expect(stackClientFile?.content).not.toContain("apiBaseURL:");
 
 			const pagesLayoutFile = plan.files.find((file) =>
@@ -398,6 +411,27 @@ describe("scaffold plan", () => {
 		expect(backend?.content).not.toContain("routeDocs:");
 		expect(client?.content).toContain("routeDocs: routeDocsClientPlugin()");
 		expect(client?.content).not.toContain("openApi:");
+	});
+
+	it("inherits managed API credentials only through the owning CMS runtime", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["cms", "ui-builder", "route-docs"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const stackClientFile = plan.files.find(
+			(file) => file.path === "lib/stack-client.tsx",
+		);
+
+		expect(stackClientFile?.content).toContain("cms: crossOriginApiEndpoint,");
+		expect(stackClientFile?.content).not.toContain(
+			"uiBuilder: crossOriginApiEndpoint,",
+		);
+		expect(stackClientFile?.content).not.toContain(
+			"routeDocs: crossOriginApiEndpoint,",
+		);
 	});
 
 	it("keeps generated static work on explicit trusted and raw surfaces", async () => {

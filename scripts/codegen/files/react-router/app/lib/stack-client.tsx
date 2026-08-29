@@ -1,4 +1,7 @@
-import { createClientStack } from "@btst/stack/client";
+import {
+	createClientStack,
+	type ClientPluginEndpointOverride,
+} from "@btst/stack/client";
 import { todosClientPlugin } from "~/lib/plugins/todo/client/client";
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client";
 import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client";
@@ -57,12 +60,27 @@ function resolveSharedClientRuntime(
 	};
 }
 
+function getCrossOriginApiEndpoint(apiOrigin: string, siteOrigin: string) {
+	if (apiOrigin === siteOrigin) return undefined;
+	return {
+		api: {
+			baseURL: apiOrigin,
+			basePath: "/api/data",
+			credentials: "include",
+		},
+	} satisfies ClientPluginEndpointOverride;
+}
+
 /** One canonical plugin/runtime composition shared by SSR and browser stacks. */
 export const createAppClientStack = (
 	queryClient: QueryClient,
 	runtime: AppClientStackRuntime,
 ) => {
-	const { siteOrigin, requestIdentity } = runtime;
+	const { apiOrigin, siteOrigin, requestIdentity } = runtime;
+	const crossOriginApiEndpoint = getCrossOriginApiEndpoint(
+		apiOrigin,
+		siteOrigin,
+	);
 	return createClientStack({
 		...resolveSharedClientRuntime(queryClient, runtime),
 		plugins: {
@@ -143,6 +161,20 @@ export const createAppClientStack = (
 				...(requestIdentity ? { identityPartition: requestIdentity } : {}),
 			}),
 		},
+		...(crossOriginApiEndpoint
+			? {
+					endpoints: {
+						todos: crossOriginApiEndpoint,
+						blog: crossOriginApiEndpoint,
+						aiChat: crossOriginApiEndpoint,
+						cms: crossOriginApiEndpoint,
+						formBuilder: crossOriginApiEndpoint,
+						kanban: crossOriginApiEndpoint,
+						comments: crossOriginApiEndpoint,
+						media: crossOriginApiEndpoint,
+					},
+				}
+			: {}),
 	});
 };
 
@@ -162,10 +194,22 @@ export const getStackClient = (
 export const getCmsBrowserClientStack = (
 	queryClient: QueryClient,
 	origins: ResolvedStackClientOrigins,
-) =>
-	createClientStack({
+) => {
+	const crossOriginApiEndpoint = getCrossOriginApiEndpoint(
+		origins.apiOrigin,
+		origins.siteOrigin,
+	);
+	return createClientStack({
 		...resolveSharedClientRuntime(queryClient, {
 			...origins,
 		}),
 		plugins: { cms: cmsClientPlugin() },
+		...(crossOriginApiEndpoint
+			? {
+					endpoints: {
+						cms: crossOriginApiEndpoint,
+					},
+				}
+			: {}),
 	});
+};

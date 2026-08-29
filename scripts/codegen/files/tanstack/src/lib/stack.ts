@@ -148,25 +148,62 @@ const submitIntakeAssessment = tool({
 			"Under Review",
 			"Escalated",
 		] as const;
-		const nextColumnOrder =
-			board.columns.reduce(
-				(maxOrder, column) => Math.max(maxOrder, column.order),
-				-1,
-			) + 1;
-		const createdColumns = await Promise.all(
-			requiredColumnTitles
-				.filter(
-					(title) => !board.columns.some((column) => column.title === title),
-				)
-				.map((title, index) =>
-					kanban.createColumn({
-						boardId: board.id,
-						title,
-						order: nextColumnOrder + index,
-					}),
-				),
+		const availableColumns = [...board.columns].sort(
+			(left, right) => left.order - right.order,
 		);
-		const columns = [...board.columns, ...createdColumns];
+		if (availableColumns.length < requiredColumnTitles.length) {
+			throw new Error(
+				"[WealthReview] Review board must retain its three default columns",
+			);
+		}
+		const assignedColumnIds = new Set<string>();
+		const assignments = requiredColumnTitles.map((title) => {
+			const column =
+				board.columns.find(
+					(candidate) =>
+						candidate.title === title && !assignedColumnIds.has(candidate.id),
+				) ??
+				availableColumns.find(
+					(candidate) => !assignedColumnIds.has(candidate.id),
+				);
+			if (!column) {
+				throw new Error("[WealthReview] No column available for review queue");
+			}
+			assignedColumnIds.add(column.id);
+			return { column, title };
+		});
+		const columns = [];
+		for (const { column, title } of assignments) {
+			if (column.title === title) {
+				columns.push(column);
+				continue;
+			}
+			try {
+				columns.push(
+					await kanban.updateColumn({ id: column.id, data: { title } }),
+				);
+			} catch (error) {
+				const refreshedBoards = await kanban.listBoards({
+					slug: "advisor-review-queue",
+					limit: 1,
+				});
+				const refreshedBoard = refreshedBoards.items[0];
+				const reconciled = refreshedBoard?.columns.find(
+					(candidate) => candidate.title === title,
+				);
+				if (reconciled) {
+					columns.push(reconciled);
+					continue;
+				}
+				const retryColumn = refreshedBoard?.columns.find(
+					(candidate) => candidate.id === column.id,
+				);
+				if (!retryColumn) throw error;
+				columns.push(
+					await kanban.updateColumn({ id: retryColumn.id, data: { title } }),
+				);
+			}
+		}
 		const targetTitle = params.amlFlag ? "Escalated" : "New Intakes";
 		const targetColumn = columns.find((column) => column.title === targetTitle);
 
