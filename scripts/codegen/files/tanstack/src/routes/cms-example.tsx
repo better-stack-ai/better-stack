@@ -9,6 +9,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import type { CMSTypes } from "@/lib/cms-schemas";
 import { getCmsBrowserClientStack } from "@/lib/stack-client";
+import { useClientOrigins } from "@/lib/client-origins";
 
 // Mock file upload function
 async function mockUploadFile(file: File): Promise<string> {
@@ -182,10 +183,11 @@ function CMSExampleContent() {
 }
 
 function CMSExamplePage() {
+	const origins = useClientOrigins();
 	const context = Route.useRouteContext();
 	const stack = useMemo(
-		() => getCmsBrowserClientStack(context.queryClient),
-		[context.queryClient],
+		() => getCmsBrowserClientStack(context.queryClient, origins),
+		[context.queryClient, origins.apiOrigin, origins.siteOrigin],
 	);
 
 	return (

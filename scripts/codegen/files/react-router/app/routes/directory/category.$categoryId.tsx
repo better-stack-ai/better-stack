@@ -10,6 +10,7 @@ import { useMemo } from "react";
 import type { CMSTypes } from "../../lib/cms-schemas";
 import { ArrowLeft } from "lucide-react";
 import { getCmsBrowserClientStack } from "../../lib/stack-client";
+import { useClientOrigins } from "../../lib/client-origins";
 
 function CategoryContent({ categoryId }: { categoryId: string }) {
 	const { item: category, isLoading: categoryLoading } = useContentItem<
@@ -145,11 +146,12 @@ function CategoryContent({ categoryId }: { categoryId: string }) {
 }
 
 export default function CategoryPage() {
+	const origins = useClientOrigins();
 	const params = useParams();
 	const queryClient = useQueryClient();
 	const stack = useMemo(
-		() => getCmsBrowserClientStack(queryClient),
-		[queryClient],
+		() => getCmsBrowserClientStack(queryClient, origins),
+		[origins.apiOrigin, origins.siteOrigin, queryClient],
 	);
 	const categoryId = params.categoryId as string;
 

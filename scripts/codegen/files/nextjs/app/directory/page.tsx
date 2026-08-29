@@ -8,6 +8,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { getOrCreateQueryClient } from "@/lib/query-client";
 import { getCmsBrowserClientStack } from "@/lib/stack-client";
+import { useClientOrigins } from "@/lib/client-origins";
 import type { CMSTypes } from "@/lib/cms-schemas";
 
 function DirectoryContent() {
@@ -166,10 +167,11 @@ function DirectoryContent() {
 }
 
 export default function DirectoryPage() {
+	const origins = useClientOrigins();
 	const [queryClient] = useState(() => getOrCreateQueryClient());
 	const stack = useMemo(
-		() => getCmsBrowserClientStack(queryClient),
-		[queryClient],
+		() => getCmsBrowserClientStack(queryClient, origins),
+		[origins.apiOrigin, origins.siteOrigin, queryClient],
 	);
 
 	return (

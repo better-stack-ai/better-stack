@@ -8,6 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import type { CMSTypes } from "../lib/cms-schemas";
 import { getCmsBrowserClientStack } from "../lib/stack-client";
+import { useClientOrigins } from "../lib/client-origins";
 
 // Mock file upload function
 async function mockUploadFile(file: File): Promise<string> {
@@ -177,10 +178,11 @@ function CMSExampleContent() {
 }
 
 export default function CMSExamplePage() {
+	const origins = useClientOrigins();
 	const queryClient = useQueryClient();
 	const stack = useMemo(
-		() => getCmsBrowserClientStack(queryClient),
-		[queryClient],
+		() => getCmsBrowserClientStack(queryClient, origins),
+		[origins.apiOrigin, origins.siteOrigin, queryClient],
 	);
 
 	return (

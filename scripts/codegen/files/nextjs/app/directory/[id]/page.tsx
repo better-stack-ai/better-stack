@@ -9,6 +9,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { getOrCreateQueryClient } from "@/lib/query-client";
 import { getCmsBrowserClientStack } from "@/lib/stack-client";
+import { useClientOrigins } from "@/lib/client-origins";
 import type { CMSTypes } from "@/lib/cms-schemas";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 
@@ -144,11 +145,12 @@ function ResourceDetailContent({ id }: { id: string }) {
 }
 
 export default function ResourceDetailPage() {
+	const origins = useClientOrigins();
 	const params = useParams();
 	const [queryClient] = useState(() => getOrCreateQueryClient());
 	const stack = useMemo(
-		() => getCmsBrowserClientStack(queryClient),
-		[queryClient],
+		() => getCmsBrowserClientStack(queryClient, origins),
+		[origins.apiOrigin, origins.siteOrigin, queryClient],
 	);
 
 	const id = params.id as string;

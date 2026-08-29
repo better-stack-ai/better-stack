@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import type { CMSTypes } from "@/lib/cms-schemas";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { getCmsBrowserClientStack } from "@/lib/stack-client";
+import { useClientOrigins } from "@/lib/client-origins";
 
 export const Route = createFileRoute("/directory/$id")({
 	component: ResourceDetailPage,
@@ -136,11 +137,12 @@ function ResourceDetailContent({ id }: { id: string }) {
 }
 
 function ResourceDetailPage() {
+	const origins = useClientOrigins();
 	const context = Route.useRouteContext();
 	const { id } = useParams({ from: "/directory/$id" });
 	const stack = useMemo(
-		() => getCmsBrowserClientStack(context.queryClient),
-		[context.queryClient],
+		() => getCmsBrowserClientStack(context.queryClient, origins),
+		[context.queryClient, origins.apiOrigin, origins.siteOrigin],
 	);
 
 	return (

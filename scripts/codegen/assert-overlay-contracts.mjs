@@ -45,6 +45,18 @@ const frameworks = [
 		sitemap: "nextjs/app/sitemap.ts",
 		pageFactory: "createNextPage",
 		layoutFactory: "createNextLayout",
+		originBoundaries: [
+			"nextjs/app/cms-example/layout.tsx",
+			"nextjs/app/directory/layout.tsx",
+			"nextjs/app/public-chat/layout.tsx",
+		],
+		standalonePages: [
+			"nextjs/app/cms-example/page.tsx",
+			"nextjs/app/directory/page.tsx",
+			"nextjs/app/directory/[id]/page.tsx",
+			"nextjs/app/directory/category/[categoryId]/page.tsx",
+		],
+		publicChat: "nextjs/app/public-chat/page.tsx",
 	},
 	{
 		name: "React Router",
@@ -59,6 +71,14 @@ const frameworks = [
 		sitemap: "react-router/app/routes/sitemap.xml.ts",
 		pageFactory: "createReactRouterPage",
 		layoutFactory: "createReactRouterLayout",
+		originBoundaries: ["react-router/app/root.tsx"],
+		standalonePages: [
+			"react-router/app/routes/cms-example.tsx",
+			"react-router/app/routes/directory/index.tsx",
+			"react-router/app/routes/directory/resource.$id.tsx",
+			"react-router/app/routes/directory/category.$categoryId.tsx",
+		],
+		publicChat: "react-router/app/routes/public-chat.tsx",
 	},
 	{
 		name: "TanStack Start",
@@ -73,6 +93,14 @@ const frameworks = [
 		sitemap: "tanstack/src/routes/sitemap[.]xml.ts",
 		pageFactory: "createTanStackPageOptions",
 		layoutFactory: "createTanStackLayout",
+		originBoundaries: ["tanstack/src/routes/__root.tsx"],
+		standalonePages: [
+			"tanstack/src/routes/cms-example.tsx",
+			"tanstack/src/routes/directory/index.tsx",
+			"tanstack/src/routes/directory/$id.tsx",
+			"tanstack/src/routes/directory/category/$categoryId.tsx",
+		],
+		publicChat: "tanstack/src/routes/public-chat.tsx",
 	},
 ];
 
@@ -97,6 +125,11 @@ for (const framework of frameworks) {
 		source(framework.sitemap),
 	]);
 	const label = framework.name;
+	const [originBoundaries, standalonePages, publicChat] = await Promise.all([
+		Promise.all(framework.originBoundaries.map(source)),
+		Promise.all(framework.standalonePages.map(source)),
+		source(framework.publicChat),
+	]);
 
 	requireText(backend, "createBackendStack({", `${label} backend`);
 	requireText(backend, "openApi: openApiBackendPlugin", `${label} backend`);
@@ -221,6 +254,46 @@ for (const framework of frameworks) {
 	requireText(clientLayout, "stack={stack}", `${label} client layout`);
 	requireText(client, "options?.apiOrigin", `${label} explicit API origin`);
 	requireText(client, "options?.siteOrigin", `${label} explicit site origin`);
+	for (const boundary of originBoundaries) {
+		requireText(
+			boundary,
+			"ClientOriginsProvider",
+			`${label} standalone server origin boundary`,
+		);
+		requireText(
+			boundary,
+			label === "TanStack Start"
+				? "getTrustedClientOrigins"
+				: label === "React Router"
+					? "getServerClientOrigins"
+					: "getRequestClientOrigins",
+			`${label} standalone trusted origin resolution`,
+		);
+	}
+	for (const standalonePage of standalonePages) {
+		requireText(
+			standalonePage,
+			"useClientOrigins",
+			`${label} standalone CMS provider origin hydration`,
+		);
+		requireText(
+			standalonePage,
+			"getCmsBrowserClientStack",
+			`${label} standalone CMS stack`,
+		);
+		requireText(
+			standalonePage,
+			", origins)",
+			`${label} standalone CMS hydrated origins`,
+		);
+	}
+	requireText(publicChat, "useClientOrigins", `${label} public chat origins`);
+	requireText(publicChat, "baseURL: siteOrigin", `${label} public chat origin`);
+	rejectText(
+		publicChat,
+		"window.location.origin",
+		`${label} public chat origin`,
+	);
 	if (label !== "Next.js") {
 		requireText(layout, "apiOrigin", `${label} SSR provider API origin`);
 		requireText(layout, "siteOrigin", `${label} SSR provider site origin`);

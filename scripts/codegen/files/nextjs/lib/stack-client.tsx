@@ -20,6 +20,11 @@ export interface AppClientStackRuntime {
 	requestIdentity?: StackIdentity;
 }
 
+export type ResolvedStackClientOrigins = Pick<
+	AppClientStackRuntime,
+	"apiOrigin" | "siteOrigin"
+>;
+
 export interface StackClientOrigins {
 	apiOrigin?: string;
 	siteOrigin?: string;
@@ -199,11 +204,13 @@ export const getStackClient = (
 };
 
 /** Focused browser stack for standalone CMS hook examples. */
-export const getCmsBrowserClientStack = (queryClient: QueryClient) =>
+export const getCmsBrowserClientStack = (
+	queryClient: QueryClient,
+	origins: ResolvedStackClientOrigins,
+) =>
 	createClientStack({
 		...resolveSharedClientRuntime(queryClient, {
-			apiOrigin: getBrowserApiOrigin(getBrowserSiteOrigin()),
-			siteOrigin: getBrowserSiteOrigin(),
+			...origins,
 		}),
 		plugins: { cms: cmsClientPlugin() },
 	});

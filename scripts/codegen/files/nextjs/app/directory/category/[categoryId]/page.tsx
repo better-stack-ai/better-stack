@@ -12,6 +12,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { getOrCreateQueryClient } from "@/lib/query-client";
 import { getCmsBrowserClientStack } from "@/lib/stack-client";
+import { useClientOrigins } from "@/lib/client-origins";
 import type { CMSTypes } from "@/lib/cms-schemas";
 import { ArrowLeft } from "lucide-react";
 
@@ -151,11 +152,12 @@ function CategoryContent({ categoryId }: { categoryId: string }) {
 }
 
 export default function CategoryPage() {
+	const origins = useClientOrigins();
 	const params = useParams();
 	const [queryClient] = useState(() => getOrCreateQueryClient());
 	const stack = useMemo(
-		() => getCmsBrowserClientStack(queryClient),
-		[queryClient],
+		() => getCmsBrowserClientStack(queryClient, origins),
+		[origins.apiOrigin, origins.siteOrigin, queryClient],
 	);
 
 	const categoryId = params.categoryId as string;

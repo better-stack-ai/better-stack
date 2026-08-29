@@ -10,6 +10,7 @@ import { useMemo } from "react";
 import type { CMSTypes } from "@/lib/cms-schemas";
 import { ArrowLeft } from "lucide-react";
 import { getCmsBrowserClientStack } from "@/lib/stack-client";
+import { useClientOrigins } from "@/lib/client-origins";
 
 export const Route = createFileRoute("/directory/category/$categoryId")({
 	component: CategoryPage,
@@ -147,11 +148,12 @@ function CategoryContent({ categoryId }: { categoryId: string }) {
 }
 
 function CategoryPage() {
+	const origins = useClientOrigins();
 	const context = Route.useRouteContext();
 	const { categoryId } = useParams({ from: "/directory/category/$categoryId" });
 	const stack = useMemo(
-		() => getCmsBrowserClientStack(context.queryClient),
-		[context.queryClient],
+		() => getCmsBrowserClientStack(context.queryClient, origins),
+		[context.queryClient, origins.apiOrigin, origins.siteOrigin],
 	);
 
 	return (

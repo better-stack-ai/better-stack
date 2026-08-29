@@ -6,6 +6,7 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import type { CMSTypes } from "@/lib/cms-schemas";
 import { getCmsBrowserClientStack } from "@/lib/stack-client";
+import { useClientOrigins } from "@/lib/client-origins";
 
 export const Route = createFileRoute("/directory/")({
 	component: DirectoryPage,
@@ -158,10 +159,11 @@ function DirectoryContent() {
 }
 
 function DirectoryPage() {
+	const origins = useClientOrigins();
 	const context = Route.useRouteContext();
 	const stack = useMemo(
-		() => getCmsBrowserClientStack(context.queryClient),
-		[context.queryClient],
+		() => getCmsBrowserClientStack(context.queryClient, origins),
+		[context.queryClient, origins.apiOrigin, origins.siteOrigin],
 	);
 
 	return (
