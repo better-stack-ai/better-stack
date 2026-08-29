@@ -1,8 +1,7 @@
 import { createNextPage } from "@btst/stack/next";
 import { headers } from "next/headers";
 import { getOrCreateQueryClient } from "@/lib/query-client";
-import { getStackClient } from "@/lib/stack-client";
-import { hydrationAuth } from "@/lib/authorization.server";
+import { getRequestClientStack } from "@/lib/stack-client.server";
 
 export const dynamic = "force-dynamic";
 
@@ -11,14 +10,7 @@ const page = createNextPage({
 	getStackClient: async (queryClient, pageProps) => {
 		await pageProps.params;
 		const requestHeaders = new Headers(await headers());
-		const initialIdentity = await hydrationAuth.getIdentityFromHeaders({
-			headers: requestHeaders,
-		});
-		return getStackClient(queryClient, {
-			headers: requestHeaders,
-			currentUserId: initialIdentity?.id,
-			identity: initialIdentity ?? undefined,
-		});
+		return getRequestClientStack(queryClient, requestHeaders);
 	},
 });
 

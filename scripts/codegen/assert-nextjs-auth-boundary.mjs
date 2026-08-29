@@ -2,7 +2,12 @@ import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const buildDirectory = resolve(process.argv[2] ?? ".next");
-const serverMarker = "BTST_SERVER_AUTH_RESOLVER_MARKER";
+const serverMarkers = [
+	"BTST_SERVER_AUTH_RESOLVER_MARKER",
+	"BTST_REQUEST_HEADERS_SERVER_MARKER",
+	"BTST_SERVER_STORAGE_ADAPTER_MARKER",
+	"BTST_SERVER_STACK_MODULE_MARKER",
+];
 const clientMarker = "production-boundary-fixture";
 
 async function javascriptFiles(directory) {
@@ -30,14 +35,13 @@ async function contains(files, marker) {
 const serverFiles = await javascriptFiles(resolve(buildDirectory, "server"));
 const clientFiles = await javascriptFiles(resolve(buildDirectory, "static"));
 
-if (!(await contains(serverFiles, serverMarker))) {
-	throw new Error(
-		"Server authorization resolver marker is missing from the server build",
-	);
-}
-
-if (await contains(clientFiles, serverMarker)) {
-	throw new Error("Server authorization resolver leaked into a browser chunk");
+for (const marker of serverMarkers) {
+	if (!(await contains(serverFiles, marker))) {
+		throw new Error(`${marker} is missing from the server build`);
+	}
+	if (await contains(clientFiles, marker)) {
+		throw new Error(`${marker} leaked into a browser chunk`);
+	}
 }
 
 if (!(await contains(clientFiles, clientMarker))) {

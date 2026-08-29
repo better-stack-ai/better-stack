@@ -3,13 +3,7 @@ import { Outlet, useLoaderData } from "react-router";
 import { StackProvider } from "@btst/stack/context";
 import { createReactRouterLayout, reactRouter } from "@btst/stack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client";
-import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
-import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client";
-import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client";
-import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
 import {
 	createMediaUploadConfig,
@@ -21,26 +15,20 @@ import {
 } from "@btst/stack/plugins/media/client/components";
 import { Button } from "../../components/ui/button";
 import { resolveUser, searchUsers } from "../../lib/mock-users";
-import { getStackClient } from "../../lib/stack-client";
+import { getBrowserClientStack } from "../../lib/stack-client";
 import { clientAuth } from "../../lib/authorization.ui";
 import { hydrationAuth } from "../../lib/authorization.server";
 
 const layout = createReactRouterLayout({ auth: hydrationAuth });
 export const loader = layout.loader;
 
-type PluginOverrides = {
-	blog: BlogPluginOverrides;
-	aiChat: AiChatPluginOverrides;
-	cms: CMSPluginOverrides;
-	formBuilder: FormBuilderPluginOverrides;
-	kanban: KanbanPluginOverrides;
-	comments: CommentsPluginOverrides;
-};
-
 export default function Layout() {
 	const { initialIdentity } = useLoaderData<typeof loader>();
 	const queryClient = useQueryClient();
-	const stack = useMemo(() => getStackClient(queryClient), [queryClient]);
+	const stack = useMemo(
+		() => getBrowserClientStack(queryClient, initialIdentity),
+		[queryClient, initialIdentity],
+	);
 	const mediaClientConfig = useMemo(
 		() => createMediaUploadConfig(stack.provider.plugins.media),
 		[stack],
@@ -73,50 +61,47 @@ export default function Layout() {
 			router={reactRouter()}
 			auth={clientAuth}
 			initialIdentity={initialIdentity}
-			overrides={
-				{
-					// Only genuinely plugin-specific overrides remain — the shared
-					// Link/navigate/refresh and API wiring come from the top-level
-					// `router` and `api` props above.
-					blog: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						imageInputField: ImageInputField,
-						// Wire comments into the bottom of each blog post
-						postBottomSlot: (post) => (
-							<CommentThread
-								resourceId={post.slug}
-								resourceType="blog-post"
-								className="mt-8 pt-8 border-t"
-							/>
-						),
+			overrides={{
+				// Only genuinely plugin-specific overrides remain — the shared
+				// router and resolved runtime come from the provider props above.
+				blog: {
+					uploadImage,
+					imagePicker: ImagePicker,
+					imageInputField: ImageInputField,
+					// Wire comments into the bottom of each blog post
+					postBottomSlot: (post) => (
+						<CommentThread
+							resourceId={post.slug}
+							resourceType="blog-post"
+							className="mt-8 pt-8 border-t"
+						/>
+					),
+				},
+				aiChat: {
+					uploadFile: uploadFileForChat,
+				},
+				cms: {
+					uploadImage,
+					imagePicker: ImagePicker,
+					imageInputField: ImageInputField,
+				},
+				kanban: {
+					uploadImage,
+					imagePicker: ImagePicker,
+					resolveUser,
+					searchUsers,
+					// Wire comments into task detail dialogs
+					taskDetailBottomSlot: (task) => (
+						<CommentThread resourceId={task.id} resourceType="kanban-task" />
+					),
+				},
+				comments: {
+					defaultCommentPageSize: 5,
+					resourceLinks: {
+						"blog-post": (slug) => `/pages/blog/${slug}`,
 					},
-					aiChat: {
-						uploadFile: uploadFileForChat,
-					},
-					cms: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						imageInputField: ImageInputField,
-					},
-					kanban: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						resolveUser,
-						searchUsers,
-						// Wire comments into task detail dialogs
-						taskDetailBottomSlot: (task) => (
-							<CommentThread resourceId={task.id} resourceType="kanban-task" />
-						),
-					},
-					comments: {
-						defaultCommentPageSize: 5,
-						resourceLinks: {
-							"blog-post": (slug) => `/pages/blog/${slug}`,
-						},
-					},
-				} satisfies Partial<PluginOverrides> as never
-			}
+				},
+			}}
 		>
 			<Outlet />
 			{/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}

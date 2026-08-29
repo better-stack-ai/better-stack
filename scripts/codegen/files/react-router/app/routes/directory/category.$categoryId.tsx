@@ -4,20 +4,12 @@ import {
 } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
 import { reactRouter } from "@btst/stack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
+import { useMemo } from "react";
 import type { CMSTypes } from "../../lib/cms-schemas";
 import { ArrowLeft } from "lucide-react";
-
-// Get base URL
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? import.meta.env.VITE_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3008";
-
-type PluginOverrides = {
-	cms: CMSPluginOverrides;
-};
+import { getCmsBrowserClientStack } from "../../lib/stack-client";
 
 function CategoryContent({ categoryId }: { categoryId: string }) {
 	const { item: category, isLoading: categoryLoading } = useContentItem<
@@ -154,15 +146,15 @@ function CategoryContent({ categoryId }: { categoryId: string }) {
 
 export default function CategoryPage() {
 	const params = useParams();
-	const baseURL = getBaseURL();
+	const queryClient = useQueryClient();
+	const stack = useMemo(
+		() => getCmsBrowserClientStack(queryClient),
+		[queryClient],
+	);
 	const categoryId = params.categoryId as string;
 
 	return (
-		<StackProvider<PluginOverrides>
-			basePath="/directory"
-			router={reactRouter()}
-			api={{ baseURL, basePath: "/api/data" }}
-		>
+		<StackProvider stack={stack} router={reactRouter()}>
 			<CategoryContent categoryId={categoryId} />
 		</StackProvider>
 	);

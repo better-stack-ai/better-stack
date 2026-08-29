@@ -6,19 +6,9 @@ import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import { getOrCreateQueryClient } from "@/lib/query-client";
+import { getCmsBrowserClientStack } from "@/lib/stack-client";
 import type { CMSTypes } from "@/lib/cms-schemas";
-
-// Get base URL
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3000";
-
-type PluginOverrides = {
-	cms: CMSPluginOverrides;
-};
 
 function DirectoryContent() {
 	const [search, setSearch] = useState("");
@@ -177,15 +167,14 @@ function DirectoryContent() {
 
 export default function DirectoryPage() {
 	const [queryClient] = useState(() => getOrCreateQueryClient());
-	const baseURL = getBaseURL();
+	const stack = useMemo(
+		() => getCmsBrowserClientStack(queryClient),
+		[queryClient],
+	);
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<StackProvider<PluginOverrides>
-				basePath="/directory"
-				router={nextRouter()}
-				api={{ baseURL, basePath: "/api/data" }}
-			>
+			<StackProvider stack={stack} router={nextRouter()}>
 				<DirectoryContent />
 			</StackProvider>
 		</QueryClientProvider>

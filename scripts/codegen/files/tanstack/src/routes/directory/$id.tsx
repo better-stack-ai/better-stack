@@ -3,19 +3,10 @@ import { StackProvider } from "@btst/stack/context";
 import { tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Link, createFileRoute, useParams } from "@tanstack/react-router";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
+import { useMemo } from "react";
 import type { CMSTypes } from "@/lib/cms-schemas";
 import { ArrowLeft, ExternalLink } from "lucide-react";
-
-// Get base URL
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? import.meta.env.VITE_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3007";
-
-type PluginOverrides = {
-	cms: CMSPluginOverrides;
-};
+import { getCmsBrowserClientStack } from "@/lib/stack-client";
 
 export const Route = createFileRoute("/directory/$id")({
 	component: ResourceDetailPage,
@@ -147,15 +138,14 @@ function ResourceDetailContent({ id }: { id: string }) {
 function ResourceDetailPage() {
 	const context = Route.useRouteContext();
 	const { id } = useParams({ from: "/directory/$id" });
-	const baseURL = getBaseURL();
+	const stack = useMemo(
+		() => getCmsBrowserClientStack(context.queryClient),
+		[context.queryClient],
+	);
 
 	return (
 		<QueryClientProvider client={context.queryClient}>
-			<StackProvider<PluginOverrides>
-				basePath="/directory"
-				router={tanstackRouter()}
-				api={{ baseURL, basePath: "/api/data" }}
-			>
+			<StackProvider stack={stack} router={tanstackRouter()}>
 				<ResourceDetailContent id={id} />
 			</StackProvider>
 		</QueryClientProvider>

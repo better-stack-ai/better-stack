@@ -1,5 +1,5 @@
 import { createMemoryAdapter } from "./adapters-build-check";
-import { stack } from "@btst/stack";
+import { createBackendStack } from "@btst/stack";
 import { todosBackendPlugin } from "./plugins/todo/api/backend";
 import {
 	blogBackendPlugin,
@@ -31,11 +31,10 @@ import {
 	CommentSchema,
 	ClientProfileSchema,
 } from "./cms-schemas";
-import {
-	createKanbanTask,
-	findOrCreateKanbanBoard,
-	getKanbanColumnsByBoardId,
-} from "@btst/stack/plugins/kanban/api";
+
+if (typeof window !== "undefined") {
+	throw new Error("BTST_SERVER_STACK_MODULE_MARKER: backend stack in browser");
+}
 
 const stackDocsTool = tool({
 	description:
@@ -170,14 +169,36 @@ const submitIntakeAssessment = tool({
 			},
 		});
 
-		const board = await findOrCreateKanbanBoard(
-			myStack.adapter,
-			"advisor-review-queue",
-			"Advisor Review Queue",
-			["New Intakes", "Under Review", "Escalated"],
-		);
+		const kanban = myStack.trusted.kanban;
+		const matchingBoards = await kanban.listBoards({
+			slug: "advisor-review-queue",
+			limit: 1,
+		});
+		let board = matchingBoards.items[0];
+		if (!board) {
+			try {
+				board = await kanban.createBoard({
+					name: "Advisor Review Queue",
+					slug: "advisor-review-queue",
+				});
+			} catch (error) {
+				const existing = await kanban.listBoards({
+					slug: "advisor-review-queue",
+					limit: 1,
+				});
+				board = existing.items[0];
+				if (!board) throw error;
+			}
+		}
 
-		const columns = await getKanbanColumnsByBoardId(myStack.adapter, board.id);
+		const columns =
+			board.columns.length > 0
+				? board.columns
+				: await Promise.all(
+						["New Intakes", "Under Review", "Escalated"].map((title, order) =>
+							kanban.createColumn({ boardId: board.id, title, order }),
+						),
+					);
 		const targetColumn = params.amlFlag
 			? (columns.find((c: { title: string }) => c.title === "Escalated") ??
 				columns[columns.length - 1])
@@ -188,7 +209,7 @@ const submitIntakeAssessment = tool({
 			throw new Error("[WealthReview] No columns found on review board");
 		}
 
-		await createKanbanTask(myStack.adapter, {
+		await kanban.createTask({
 			title: `${params.clientName}${params.amlFlag ? " — ⚠️ ESCALATED" : " — Ready for Review"}`,
 			columnId: targetColumn.id,
 			priority: params.amlFlag ? "URGENT" : "MEDIUM",
@@ -208,7 +229,7 @@ const submitIntakeAssessment = tool({
 });
 
 function createStack() {
-	const s = stack({
+	const s = createBackendStack({
 		basePath: "/api/data",
 		plugins: {
 			todos: todosBackendPlugin(),
@@ -335,11 +356,11 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 			}),
 			formBuilder: formBuilderBackendPlugin({
 				hooks: {
-					onAfterCreateForm: async (form, context) => {
+					onAfterCreateForm: async (form) => {
 						console.log("Form created:", form.name, form.slug);
 						revalidatePath("/pages/ssg-forms", "page");
 					},
-					onAfterUpdateForm: async (form, context) => {
+					onAfterUpdateForm: async (form) => {
 						console.log("Form updated:", form.name);
 						revalidatePath("/pages/ssg-forms", "page");
 					},
@@ -361,12 +382,12 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 					return { name: `User ${authorId}` };
 				},
 				hooks: {
-					onBeforeListComments: async (query, ctx) => {
+					onBeforeListComments: async (query) => {
 						if (query.status && query.status !== "approved") {
 							console.log("onBeforeListComments: reading moderation queue");
 						}
 					},
-					onBeforeCreateComment: async (input, ctx) => {
+					onBeforeCreateComment: async (input) => {
 						console.log(
 							"onBeforeCreateComment: new comment on",
 							input.resourceType,
@@ -381,10 +402,10 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 							comment.status,
 						);
 					},
-					onBeforeUpdateComment: async (commentId, update, ctx) => {
+					onBeforeUpdateComment: async (commentId) => {
 						console.log("onBeforeUpdateComment: comment", commentId);
 					},
-					onBeforeToggleCommentReaction: async (commentId, authorId, ctx) => {
+					onBeforeToggleCommentReaction: async (commentId, authorId) => {
 						console.log(
 							"onBeforeToggleCommentReaction: user",
 							authorId,
@@ -392,7 +413,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 							commentId,
 						);
 					},
-					onBeforeModerateComment: async (commentId, status, ctx) => {
+					onBeforeModerateComment: async (commentId, status) => {
 						console.log(
 							"onBeforeModerateComment: comment",
 							commentId,
@@ -403,7 +424,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 					onAfterApproveComment: async (comment, ctx) => {
 						console.log("Comment approved:", comment.id);
 					},
-					onBeforeDeleteComment: async (commentId, ctx) => {
+					onBeforeDeleteComment: async (commentId) => {
 						console.log("onBeforeDeleteComment: comment", commentId);
 					},
 					onAfterDeleteComment: async (commentId, ctx) => {
@@ -413,13 +434,13 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 			}),
 			kanban: kanbanBackendPlugin({
 				hooks: {
-					onBeforeListBoards: async (filter, context) => {
+					onBeforeListBoards: async (filter) => {
 						console.log("onBeforeListBoards hook called", filter);
 					},
 					onBeforeCreateBoard: async (data, context) => {
 						console.log("onBeforeCreateBoard hook called", data.name);
 					},
-					onAfterCreateBoard: async (board, context) => {
+					onAfterCreateBoard: async (board) => {
 						console.log("Board created:", board.id, board.name);
 						revalidatePath("/pages/ssg-kanban", "page");
 					},

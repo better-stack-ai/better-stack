@@ -1,4 +1,4 @@
-import { createStackClient } from "@btst/stack/client";
+import { createClientStack } from "@btst/stack/client";
 import { todosClientPlugin } from "@/lib/plugins/todo/client/client";
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client";
 import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client";
@@ -9,38 +9,46 @@ import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client";
 import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client";
 import { commentsClientPlugin } from "@btst/stack/plugins/comments/client";
 import { mediaClientPlugin } from "@btst/stack/plugins/media/client";
-import { QueryClient } from "@tanstack/react-query";
+import type { StackIdentity } from "@btst/stack/context";
+import type { QueryClient } from "@tanstack/react-query";
 
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3000";
+export interface AppClientStackRuntime {
+	baseURL: string;
+	headers?: Headers;
+	identity?: StackIdentity;
+}
 
-export const getStackClient = (
+const getBrowserBaseURL = () =>
+	process.env.NEXT_PUBLIC_BASE_URL ||
+	(typeof window === "undefined"
+		? "http://localhost:3000"
+		: window.location.origin);
+
+function resolveSharedClientRuntime(
 	queryClient: QueryClient,
-	options?: {
-		headers?: Headers;
-		currentUserId?: string;
-		identity?: { readonly id: string; readonly [key: string]: unknown };
-	},
-) => {
-	const baseURL = getBaseURL();
-	return createStackClient({
+	{ baseURL, headers }: AppClientStackRuntime,
+) {
+	return {
 		api: {
 			baseURL,
 			basePath: "/api/data",
-			...(options?.headers ? { headers: options.headers } : {}),
+			...(headers ? { headers } : {}),
 		},
 		site: { baseURL, basePath: "/pages" },
 		queryClient,
+	};
+}
+
+/** One canonical plugin/runtime composition shared by SSR and browser stacks. */
+export const createAppClientStack = (
+	queryClient: QueryClient,
+	runtime: AppClientStackRuntime,
+) => {
+	const { baseURL, identity } = runtime;
+	return createClientStack({
+		...resolveSharedClientRuntime(queryClient, runtime),
 		plugins: {
-			todos: todosClientPlugin({
-				queryClient: queryClient,
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-			}),
+			todos: todosClientPlugin(),
 			blog: blogClientPlugin({
 				seo: {
 					siteName: "BTST Blog",
@@ -87,7 +95,7 @@ export const getStackClient = (
 				},
 			}),
 			aiChat: aiChatClientPlugin({
-				identityPartition: options?.identity,
+				identityPartition: identity,
 				mode: "authenticated",
 				seo: {
 					siteName: "BTST Chat",
@@ -129,7 +137,7 @@ export const getStackClient = (
 				description: "Documentation for all client routes in this application",
 			}),
 			kanban: kanbanClientPlugin({
-				identityPartition: options?.identity,
+				identityPartition: identity,
 				seo: {
 					siteName: "BTST Kanban",
 					description: "Manage your projects with kanban boards",
@@ -147,18 +155,37 @@ export const getStackClient = (
 				},
 			}),
 			comments: commentsClientPlugin({
-				hooks: options?.currentUserId
+				hooks: identity?.id
 					? {
 							beforeLoadUserComments: (context) => {
-								context.currentUserId = options.currentUserId;
+								context.currentUserId = identity.id;
 							},
 						}
 					: undefined,
 			}),
 			media: mediaClientPlugin({
 				uploadMode: "direct",
-				identityPartition: options?.identity,
+				identityPartition: identity,
 			}),
 		},
 	});
 };
+
+/** Browser-safe stack: public origin only, never request headers. */
+export const getBrowserClientStack = (
+	queryClient: QueryClient,
+	identity?: StackIdentity | null,
+) =>
+	createAppClientStack(queryClient, {
+		baseURL: getBrowserBaseURL(),
+		...(identity ? { identity } : {}),
+	});
+
+/** Focused browser stack for standalone CMS hook examples. */
+export const getCmsBrowserClientStack = (queryClient: QueryClient) =>
+	createClientStack({
+		...resolveSharedClientRuntime(queryClient, {
+			baseURL: getBrowserBaseURL(),
+		}),
+		plugins: { cms: cmsClientPlugin() },
+	});

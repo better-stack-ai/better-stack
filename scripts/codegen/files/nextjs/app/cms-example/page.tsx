@@ -7,18 +7,12 @@ import {
 import { StackProvider } from "@btst/stack/context";
 import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import { getOrCreateQueryClient } from "@/lib/query-client";
+import { getCmsBrowserClientStack } from "@/lib/stack-client";
 // Import the CMS type map for type-safe hooks
 import type { CMSTypes } from "@/lib/cms-schemas";
-
-// Get base URL - works on both server and client
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3000";
 
 // Mock file upload function
 async function mockUploadFile(file: File): Promise<string> {
@@ -27,10 +21,6 @@ async function mockUploadFile(file: File): Promise<string> {
 	}
 	return "https://example-files.online-convert.com/document/txt/example.txt";
 }
-
-type PluginOverrides = {
-	cms: CMSPluginOverrides;
-};
 
 const PAGE_SIZE = 3; // Small page size to test pagination
 
@@ -211,14 +201,16 @@ function CMSExampleContent() {
 
 export default function CMSExamplePage() {
 	const [queryClient] = useState(() => getOrCreateQueryClient());
-	const baseURL = getBaseURL();
+	const stack = useMemo(
+		() => getCmsBrowserClientStack(queryClient),
+		[queryClient],
+	);
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<StackProvider<PluginOverrides>
-				basePath="/cms-example"
+			<StackProvider
+				stack={stack}
 				router={nextRouter()}
-				api={{ baseURL, basePath: "/api/data" }}
 				overrides={{
 					cms: {
 						uploadImage: mockUploadFile,

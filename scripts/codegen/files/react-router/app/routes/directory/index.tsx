@@ -1,20 +1,11 @@
 import { useContent } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
 import { reactRouter } from "@btst/stack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { useState, useMemo } from "react";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import type { CMSTypes } from "../../lib/cms-schemas";
-
-// Get base URL
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? import.meta.env.VITE_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3008";
-
-type PluginOverrides = {
-	cms: CMSPluginOverrides;
-};
+import { getCmsBrowserClientStack } from "../../lib/stack-client";
 
 function DirectoryContent() {
 	const [search, setSearch] = useState("");
@@ -171,14 +162,14 @@ function DirectoryContent() {
 }
 
 export default function DirectoryPage() {
-	const baseURL = getBaseURL();
+	const queryClient = useQueryClient();
+	const stack = useMemo(
+		() => getCmsBrowserClientStack(queryClient),
+		[queryClient],
+	);
 
 	return (
-		<StackProvider<PluginOverrides>
-			basePath="/directory"
-			router={reactRouter()}
-			api={{ baseURL, basePath: "/api/data" }}
-		>
+		<StackProvider stack={stack} router={reactRouter()}>
 			<DirectoryContent />
 		</StackProvider>
 	);

@@ -4,7 +4,12 @@ import { resolve } from "node:path";
 const clientDirectory = resolve(process.argv[2]);
 const serverDirectory = resolve(process.argv[3]);
 const framework = process.argv[4] ?? "Vite";
-const serverMarker = "BTST_SERVER_AUTH_RESOLVER_MARKER";
+const serverMarkers = [
+	"BTST_SERVER_AUTH_RESOLVER_MARKER",
+	"BTST_REQUEST_HEADERS_SERVER_MARKER",
+	"BTST_SERVER_STORAGE_ADAPTER_MARKER",
+	"BTST_SERVER_STACK_MODULE_MARKER",
+];
 const clientMarker = "production-boundary-fixture";
 
 async function javascriptFiles(directory) {
@@ -30,15 +35,13 @@ async function contains(files, marker) {
 const clientFiles = await javascriptFiles(clientDirectory);
 const serverFiles = await javascriptFiles(serverDirectory);
 
-if (!(await contains(serverFiles, serverMarker))) {
-	throw new Error(
-		`${framework} server authorization resolver marker is missing`,
-	);
-}
-if (await contains(clientFiles, serverMarker)) {
-	throw new Error(
-		`${framework} server authorization resolver leaked into a browser chunk`,
-	);
+for (const marker of serverMarkers) {
+	if (!(await contains(serverFiles, marker))) {
+		throw new Error(`${framework} server build is missing ${marker}`);
+	}
+	if (await contains(clientFiles, marker)) {
+		throw new Error(`${framework} browser build contains ${marker}`);
+	}
 }
 if (!(await contains(clientFiles, clientMarker))) {
 	throw new Error(`${framework} client authorization fixture is missing`);

@@ -4,18 +4,8 @@ import { tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import type { CMSTypes } from "@/lib/cms-schemas";
-
-// Get base URL
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? import.meta.env.VITE_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3007";
-
-type PluginOverrides = {
-	cms: CMSPluginOverrides;
-};
+import { getCmsBrowserClientStack } from "@/lib/stack-client";
 
 export const Route = createFileRoute("/directory/")({
 	component: DirectoryPage,
@@ -169,15 +159,14 @@ function DirectoryContent() {
 
 function DirectoryPage() {
 	const context = Route.useRouteContext();
-	const baseURL = getBaseURL();
+	const stack = useMemo(
+		() => getCmsBrowserClientStack(context.queryClient),
+		[context.queryClient],
+	);
 
 	return (
 		<QueryClientProvider client={context.queryClient}>
-			<StackProvider<PluginOverrides>
-				basePath="/directory"
-				router={tanstackRouter()}
-				api={{ baseURL, basePath: "/api/data" }}
-			>
+			<StackProvider stack={stack} router={tanstackRouter()}>
 				<DirectoryContent />
 			</StackProvider>
 		</QueryClientProvider>

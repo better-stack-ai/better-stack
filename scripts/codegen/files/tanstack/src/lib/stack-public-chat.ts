@@ -1,5 +1,5 @@
 import { createMemoryAdapter } from "./adapters-build-check";
-import { stack } from "@btst/stack";
+import { createBackendStack } from "@btst/stack";
 import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api";
 import { openai } from "@ai-sdk/openai";
 
@@ -34,7 +34,7 @@ function checkRateLimit(ip: string): boolean {
 	return true;
 }
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
 	basePath: "/api/public-chat",
 	plugins: {
 		aiChat: aiChatBackendPlugin({
