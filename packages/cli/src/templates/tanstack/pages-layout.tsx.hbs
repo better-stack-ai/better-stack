@@ -5,6 +5,7 @@ import { tanstackRouter } from "@btst/stack/tanstack"
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 {{/if}}
 import { QueryClientProvider } from "@tanstack/react-query"
+import { useMemo } from "react"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient } from "{{alias}}lib/stack-client"
 
@@ -14,7 +15,10 @@ export const Route = createFileRoute("/pages")({
 
 function BtstPagesLayout() {
 	const queryClient = getOrCreateQueryClient()
-	const stack = getStackClient(queryClient)
+	const browserStack = useMemo(
+		() => getStackClient(queryClient),
+		[queryClient],
+	)
 {{#if hasAiChat}}
 	const hasApiKey = !!import.meta.env.VITE_HAS_OPENAI_KEY
 	const location = useLocation()
@@ -23,13 +27,13 @@ function BtstPagesLayout() {
 	return (
 		<QueryClientProvider client={queryClient}>
 			<StackProvider
-				stack={stack}
+				stack={browserStack}
 				router={tanstackRouter()}
 {{#if pagesLayoutOverrides}}
 				overrides={
 					{
 {{{pagesLayoutOverrides}}}
-					}{{#if hasLegacyClientPlugins}} as never{{/if}}
+					}
 				}
 {{/if}}
 			>

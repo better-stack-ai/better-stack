@@ -175,11 +175,17 @@ test -f "lib/query-client.ts"
 test -f "app/api/data/[[...all]]/route.ts"
 test -f "app/pages/[[...all]]/page.tsx"
 test -f "app/pages/layout.tsx"
-node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("import { stack } from \"@btst/stack\"")?0:1)'
-node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("mediaBackendPlugin({ storageAdapter: undefined as any })")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("import { createBackendStack } from \"@btst/stack/api\"")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("mediaBackendPlugin({ storageAdapter: localAdapter() })")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.tsx","utf8");process.exit(s.includes("createClientStack")&&s.includes("getStackClientForRequest")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");process.exit(s.includes("@btst/stack/plugins/ui-builder/css")?0:1)'
 node -e 'const fs=require("fs"),path=require("path");const roots=["app","lib","package.json"];const retired=["@btst","better-auth-ui"].join("/");const read=(p)=>fs.statSync(p).isDirectory()?fs.readdirSync(p).flatMap((n)=>read(path.join(p,n))):[fs.readFileSync(p,"utf8")];process.exit(roots.flatMap(read).some((s)=>s.includes(retired))?1:0)'
 success "Generation + patch checks passed"
+
+step "Adding third-party public extension fixture"
+mkdir -p lib/fixtures
+cp "$PACKAGE_DIR/scripts/fixtures/third-party-plugin.tsx" lib/fixtures/third-party-plugin.tsx
+success "Third-party fixture uses public plugin definitions and inferred overrides"
 
 step "Idempotency check (second pass)"
 write_project_hash "$TEST_DIR/init-before.hash"

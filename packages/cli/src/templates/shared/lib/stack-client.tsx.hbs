@@ -1,15 +1,20 @@
-import { createStackClient } from "@btst/stack/client"
-import { QueryClient } from "@tanstack/react-query"
+import { createClientStack } from "@btst/stack/client"
+import type { QueryClient } from "@tanstack/react-query"
 {{#if clientImports}}
 {{{clientImports}}}
 {{/if}}
 
-export function getStackClient(
+interface RequestStackClientOptions {
+	headers: HeadersInit
+	origin?: string
+}
+
+function createAppClientStack(
 	queryClient: QueryClient,
-	options?: { headers?: Headers; origin?: string },
+	options?: RequestStackClientOptions,
 ) {
 	const baseURL = getBaseURL(options?.origin)
-	return createStackClient({
+	return createClientStack({
 		api: {
 			baseURL,
 			basePath: "/api/data",
@@ -25,6 +30,19 @@ export function getStackClient(
 {{/if}}
 		},
 	})
+}
+
+/** Creates the header-free stack used by browser providers and static pages. */
+export function getStackClient(queryClient: QueryClient) {
+	return createAppClientStack(queryClient)
+}
+
+/** Creates a fresh server stack for one request. Never serialize this result. */
+export function getStackClientForRequest(
+	queryClient: QueryClient,
+	options: RequestStackClientOptions,
+) {
+	return createAppClientStack(queryClient, options)
 }
 
 function getBaseURL(serverOrigin?: string) {

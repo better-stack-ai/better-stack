@@ -1,9 +1,14 @@
 import { createReactRouterPage } from "@btst/stack/react-router"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
-import { getStackClient } from "{{alias}}lib/stack-client"
+import { getStackClient, getStackClientForRequest } from "{{alias}}lib/stack-client"
 
 const page = createReactRouterPage({ getStackClient, getQueryClient: getOrCreateQueryClient })
-export const loader = page.loader
+export const loader = page.createLoader((queryClient, { request }) =>
+	getStackClientForRequest(queryClient, {
+		headers: request.headers,
+		origin: new URL(request.url).origin,
+	}),
+)
 export const meta = page.meta
 export const ErrorBoundary = page.ErrorBoundary
 export default page.Component

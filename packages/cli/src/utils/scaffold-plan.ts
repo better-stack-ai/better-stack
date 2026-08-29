@@ -17,18 +17,6 @@ interface BuildScaffoldPlanInput {
 	cssFile: string;
 }
 
-const CANONICAL_CLIENT_PLUGIN_KEYS = new Set<PluginKey>([
-	"blog",
-	"ai-chat",
-	"cms",
-	"ui-builder",
-	"comments",
-	"form-builder",
-	"kanban",
-	"media",
-	"route-docs",
-]);
-
 function getFrameworkPaths(framework: Framework, cssFile: string) {
 	if (framework === "nextjs") {
 		const prefix = cssFile.startsWith("src/") ? "src/" : "";
@@ -111,10 +99,6 @@ function buildPluginTemplateContext(
 			Boolean(m.clientImportPath) &&
 			Boolean(m.clientSymbol),
 	);
-	const hasLegacyClientPlugins = clientMetas.some(
-		(m) => !CANONICAL_CLIENT_PLUGIN_KEYS.has(m.key),
-	);
-
 	const backendImportLines = backendMetas
 		.map((m) => `import { ${m.backendSymbol} } from "${m.backendImportPath}"`)
 		.join("\n");
@@ -132,20 +116,22 @@ function buildPluginTemplateContext(
 			backendImportLines,
 			hasAiChat ? `import { openai } from "@ai-sdk/openai"` : "",
 			hasCms ? `import { z } from "zod"` : "",
+			hasMedia
+				? `import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local"`
+				: "",
 		]
 			.filter(Boolean)
 			.join("\n"),
 		clientImports: clientMetas
 			.map((m) => `import { ${m.clientSymbol} } from "${m.clientImportPath}"`)
 			.join("\n"),
-		hasLegacyClientPlugins,
 		backendEntries: metas
 			.map((m) => {
 				if (!m.backendSymbol) {
 					return "";
 				}
 				if (m.key === "ai-chat") {
-					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), access: "public" as const }),`;
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), access: "public" }),`;
 				}
 				if (m.key === "cms") {
 					const articleType = `{
@@ -168,7 +154,7 @@ function buildPluginTemplateContext(
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ allowPosting: false }),`;
 				}
 				if (m.key === "media") {
-					return `\t\t${m.configKey}: ${m.backendSymbol}({ storageAdapter: undefined as any }),`;
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ storageAdapter: localAdapter() }),`;
 				}
 				if (m.key === "ui-builder") {
 					return "";
@@ -180,19 +166,9 @@ function buildPluginTemplateContext(
 		clientEntries: clientMetas
 			.map((m) => {
 				if (m.key === "ai-chat") {
-					return `\t\t\t${m.configKey}: ${m.clientSymbol}({ mode: "public" as const }),`;
+					return `\t\t\t${m.configKey}: ${m.clientSymbol}({ mode: "public" }),`;
 				}
-				if (CANONICAL_CLIENT_PLUGIN_KEYS.has(m.key)) {
-					return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
-				}
-				const siteBase = "/pages";
-				return `\t\t\t${m.configKey}: ${m.clientSymbol}({
-\t\t\t\tapiBaseURL: baseURL,
-\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\tsiteBaseURL: baseURL,
-\t\t\t\tsiteBasePath: "${siteBase}",
-\t\t\t\tqueryClient,
-\t\t\t}),`;
+				return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
 			})
 			.join("\n"),
 		pagesLayoutOverrides: clientMetas
@@ -205,14 +181,14 @@ function buildPluginTemplateContext(
 					return "";
 				}
 				if (m.key === "blog") {
-					return `\t\t\t\t\t"${m.key}": {
+					return `\t\t\t\t\t${m.configKey}: {
 \t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in ${layoutFile}")
 \t\t\t\t\t\t},
 \t\t\t\t\t},`;
 				}
 				if (m.key === "kanban") {
-					return `\t\t\t\t\t"${m.key}": {
+					return `\t\t\t\t\t${m.configKey}: {
 \t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement kanban.uploadImage override in ${layoutFile}")
 \t\t\t\t\t\t},
@@ -326,7 +302,6 @@ export async function buildScaffoldPlan(
 
 	const sharedContext = {
 		alias: input.alias,
-		providerApiLiteral: '{{ baseURL, basePath: "/api/data" }}',
 		browserSiteURLExpression: getBrowserSiteURLExpression(input.framework),
 		publicSiteURLVar: getPublicSiteURLVar(input.framework),
 		useGlobalSingleton:

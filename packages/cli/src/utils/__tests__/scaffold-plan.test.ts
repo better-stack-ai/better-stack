@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFile } from "node:fs/promises";
 import { buildScaffoldPlan } from "../scaffold-plan";
 import { PLUGINS } from "../constants";
 
@@ -147,7 +148,13 @@ describe("scaffold plan", () => {
 		const stackFile = plan.files.find((f) => f.path === "lib/stack.ts");
 		expect(stackFile?.content).toContain("blogBackendPlugin()");
 		expect(stackFile?.content).toContain(
-			"type AppStack = ReturnType<typeof createStack>",
+			"type AppStack = ReturnType<typeof createAppStack>",
+		);
+		expect(stackFile?.content).toContain(
+			'import { createBackendStack } from "@btst/stack/api"',
+		);
+		expect(stackFile?.content).not.toContain(
+			'import { stack } from "@btst/stack"',
 		);
 		expect(stackFile?.content).not.toContain(
 			"__btst_stack__?: ReturnType<typeof stack>",
@@ -156,11 +163,16 @@ describe("scaffold plan", () => {
 			(f) => f.path === "lib/stack-client.tsx",
 		);
 		expect(stackClientFile?.content).toContain("blogClientPlugin");
-		expect(stackClientFile?.content).toContain(
-			"const baseURL = getBaseURL(options?.origin)",
-		);
+		expect(stackClientFile?.content).toContain("createClientStack({");
+		expect(stackClientFile?.content).not.toContain("createStackClient");
 		expect(stackClientFile?.content).toContain(
 			"...(options?.headers ? { headers: options.headers } : {})",
+		);
+		expect(stackClientFile?.content).toContain(
+			"export function getStackClient(queryClient: QueryClient)",
+		);
+		expect(stackClientFile?.content).toContain(
+			"export function getStackClientForRequest(",
 		);
 		expect(stackClientFile?.content).toContain(
 			'site: { baseURL, basePath: "/pages" }',
@@ -177,7 +189,7 @@ describe("scaffold plan", () => {
 			'import { nextRouter } from "@btst/stack/next"',
 		);
 		expect(pagesLayoutFile?.content).toContain("router={nextRouter()}");
-		expect(pagesLayoutFile?.content).toContain("stack={stack}");
+		expect(pagesLayoutFile?.content).toContain("stack={browserStack}");
 		expect(pagesLayoutFile?.content).not.toContain("navigate: (path");
 		expect(pagesLayoutFile?.content).not.toContain("Link: (");
 		expect(pagesLayoutFile?.content).not.toContain("apiBaseURL:");
@@ -187,9 +199,8 @@ describe("scaffold plan", () => {
 		const pagesRouteFile = plan.files.find(
 			(f) => f.path === "app/pages/[[...all]]/page.tsx",
 		);
-		expect(pagesRouteFile?.content).toContain(
-			"getStackClient: (queryClient) => getStackClient(queryClient)",
-		);
+		expect(pagesRouteFile?.content).toContain("getStackClientForRequest");
+		expect(pagesRouteFile?.content).toContain("new Headers(await headers())");
 	});
 
 	it("resolves src-prefixed Next.js pages layout path", async () => {
@@ -236,7 +247,10 @@ describe("scaffold plan", () => {
 			);
 			expect(pagesLayoutFile?.content).toBeDefined();
 			expect(pagesLayoutFile?.content).toContain("StackProvider");
-			expect(pagesLayoutFile?.content).toContain("stack={stack}");
+			expect(pagesLayoutFile?.content).toContain("stack={browserStack}");
+			expect(pagesLayoutFile?.content).not.toContain(
+				"getStackClientForRequest",
+			);
 			const routerFactory =
 				framework === "nextjs"
 					? "nextRouter()"
@@ -285,6 +299,111 @@ describe("scaffold plan", () => {
 			expect(pagesLayoutFile?.content).not.toContain("as never");
 		},
 	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"keeps request headers in request-scoped route stacks for %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["blog"],
+				alias: "@/",
+				cssFile:
+					framework === "nextjs" ? "app/globals.css" : "src/styles/app.css",
+			});
+			const pageRoute = plan.files.find(
+				(file) =>
+					file.path.endsWith("app/pages/[[...all]]/page.tsx") ||
+					file.path.endsWith("routes/pages/$.tsx"),
+			);
+			const layout = plan.files.find((file) =>
+				file.content.includes("<StackProvider"),
+			);
+
+			expect(pageRoute?.content).toContain("getStackClientForRequest");
+			expect(pageRoute?.content).toContain("headers:");
+			expect(layout?.content).toContain("getStackClient(queryClient)");
+			expect(layout?.content).not.toContain("getStackClientForRequest");
+			expect(layout?.content).not.toContain("request.headers");
+
+			if (framework === "nextjs") {
+				expect(pageRoute?.content).toContain('from "next/headers"');
+				expect(pageRoute?.content).toContain("new Headers(await headers())");
+			} else if (framework === "react-router") {
+				expect(pageRoute?.content).toContain("page.createLoader");
+				expect(pageRoute?.content).toContain("request.headers");
+				expect(pageRoute?.content).toContain("new URL(request.url).origin");
+			} else {
+				expect(pageRoute?.content).toContain("createIsomorphicFn");
+				expect(pageRoute?.content).toContain("getRequest()");
+				expect(pageRoute?.content).toContain(": getStackClient(queryClient)");
+			}
+		},
+	);
+
+	it("preserves backend-only and client-only plugin registrations", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["open-api", "route-docs"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const backend = plan.files.find((file) => file.path === "lib/stack.ts");
+		const client = plan.files.find(
+			(file) => file.path === "lib/stack-client.tsx",
+		);
+
+		expect(backend?.content).toContain("openApi: openApiBackendPlugin()");
+		expect(backend?.content).not.toContain("routeDocs:");
+		expect(client?.content).toContain("routeDocs: routeDocsClientPlugin()");
+		expect(client?.content).not.toContain("openApi:");
+	});
+
+	it("keeps generated static work on explicit trusted and raw surfaces", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "prisma",
+			plugins: ["blog", "cms", "form-builder", "kanban"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const staticPages = plan.files.filter((file) =>
+			file.path.includes("/ssg-"),
+		);
+		const staticSource = staticPages.map((file) => file.content).join("\n");
+
+		expect(staticPages.length).toBeGreaterThan(0);
+		expect(staticSource).toContain("myStack.trusted.blog.listPosts");
+		expect(staticSource).toContain("myStack.trusted.cms.listContentTypes");
+		expect(staticSource).toContain("myStack.raw.blog.prefetchForRoute");
+		expect(staticSource).toContain("myStack.raw.cms.prefetchForRoute");
+		expect(staticSource).toContain("myStack.raw.formBuilder.prefetchForRoute");
+		expect(staticSource).toContain("myStack.raw.kanban.prefetchForRoute");
+		expect(staticSource).not.toContain("myStack.api.");
+	});
+
+	it("ships a compile fixture that uses only public extension definitions", async () => {
+		const source = await readFile(
+			new URL(
+				"../../../scripts/fixtures/third-party-plugin.tsx",
+				import.meta.url,
+			),
+			"utf8",
+		);
+
+		expect(source).toContain('from "@btst/stack/plugins/api"');
+		expect(source).toContain('from "@btst/stack/plugins/client"');
+		expect(source).toContain("defineBackendPlugin({");
+		expect(source).toContain("defineClientPlugin<ThirdPartyProbeOverrides>()");
+		expect(source).toContain("createBackendStack({");
+		expect(source).toContain("createClientStack({");
+		expect(source).toContain(
+			'overrides={{ thirdPartyProbe: { label: "Third-party probe" } }}',
+		);
+		expect(source).not.toContain("/src/");
+		expect(source).not.toContain("StackProvider<");
+	});
 
 	it("does not register ui-builder as a backend plugin entry", async () => {
 		const plan = await buildScaffoldPlan({
@@ -364,7 +483,7 @@ describe("scaffold plan", () => {
 			file.path.endsWith("stack-client.tsx"),
 		);
 		expect(stackClientFile?.content).toContain(
-			'aiChat: aiChatClientPlugin({ mode: "public" as const }),',
+			'aiChat: aiChatClientPlugin({ mode: "public" }),',
 		);
 		expect(stackClientFile?.content).toContain('basePath: "/api/data"');
 		expect(stackClientFile?.content).toContain('basePath: "/pages"');
@@ -398,7 +517,7 @@ describe("scaffold plan", () => {
 
 		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
 		expect(stackFile?.content).toContain(
-			'aiChat: aiChatBackendPlugin({ model: openai("gpt-4o-mini"), access: "public" as const }),',
+			'aiChat: aiChatBackendPlugin({ model: openai("gpt-4o-mini"), access: "public" }),',
 		);
 		expect(stackFile?.content).toContain(
 			'import { openai } from "@ai-sdk/openai"',
@@ -462,7 +581,7 @@ describe("scaffold plan", () => {
 		);
 	});
 
-	it("renders media backend plugin with compile-safe placeholder config", async () => {
+	it("renders Media with the local storage adapter instead of an unsafe placeholder", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
 			adapter: "memory",
@@ -473,8 +592,12 @@ describe("scaffold plan", () => {
 
 		const stackFile = plan.files.find((file) => file.path.endsWith("stack.ts"));
 		expect(stackFile?.content).toContain(
-			"media: mediaBackendPlugin({ storageAdapter: undefined as any }),",
+			"media: mediaBackendPlugin({ storageAdapter: localAdapter() }),",
 		);
+		expect(stackFile?.content).toContain(
+			'import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local"',
+		);
+		expect(stackFile?.content).not.toContain("undefined as any");
 	});
 
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
@@ -632,7 +755,7 @@ describe("scaffold plan", () => {
 			'import { reactRouter } from "@btst/stack/react-router"',
 		);
 		expect(layoutFile?.content).toContain("router={reactRouter()}");
-		expect(layoutFile?.content).toContain("stack={stack}");
+		expect(layoutFile?.content).toContain("stack={browserStack}");
 		expect(layoutFile?.content).not.toContain("navigate: (path");
 		expect(layoutFile?.content).not.toContain("RouterLink");
 		expect(layoutFile?.content).not.toContain("router.push");
@@ -675,7 +798,7 @@ describe("scaffold plan", () => {
 			'import { tanstackRouter } from "@btst/stack/tanstack"',
 		);
 		expect(layoutFile?.content).toContain("router={tanstackRouter()}");
-		expect(layoutFile?.content).toContain("stack={stack}");
+		expect(layoutFile?.content).toContain("stack={browserStack}");
 		expect(layoutFile?.content).not.toContain("navigate: (path");
 		expect(layoutFile?.content).not.toContain("RouterLink");
 		expect(layoutFile?.content).toContain('createFileRoute("/pages")');
@@ -751,9 +874,9 @@ describe("scaffold plan", () => {
 			expect(providerFiles.length).toBeGreaterThan(0);
 			for (const file of providerFiles) {
 				expect(file.content, file.path).toContain(`router={${routerFactory}}`);
-				expect(file.content, file.path).toMatch(
-					/stack=\{stack\}|api=\{\{ baseURL, basePath: "\/api\/data" \}\}/,
-				);
+				expect(file.content, file.path).toContain("stack={browserStack}");
+				expect(file.content, file.path).not.toContain("StackProvider<");
+				expect(file.content, file.path).not.toContain("as never");
 				expect(file.content, file.path).not.toContain("apiBaseURL: baseURL");
 				expect(file.content, file.path).not.toContain(
 					'apiBasePath: "/api/data"',
@@ -809,7 +932,8 @@ describe("scaffold plan", () => {
 		const paths = plan.files.map((f) => f.path);
 		expect(paths).toContain("app/sitemap.ts");
 		const sitemap = plan.files.find((f) => f.path === "app/sitemap.ts");
-		expect(sitemap?.content).toContain("lib.generateSitemap()");
+		expect(sitemap?.content).toContain("stack.generateSitemap()");
+		expect(sitemap?.content).toContain("getStackClientForRequest");
 		expect(sitemap?.content).toContain("MetadataRoute.Sitemap");
 	});
 
@@ -1034,11 +1158,9 @@ describe("scaffold plan", () => {
 		expect(paths).toContain("app/public-chat/page.tsx");
 		const page = plan.files.find((f) => f.path === "app/public-chat/page.tsx");
 		expect(page?.content).toContain("ChatLayout");
-		expect(page?.content).toContain(
-			'aiChat: aiChatClientPlugin({ mode: "public" }),',
-		);
-		expect(page?.content).toContain('site: { baseURL, basePath: "/" },');
-		expect(page?.content).toContain("<StackProvider stack={stack}");
+		expect(page?.content).toContain("getStackClient(queryClient)");
+		expect(page?.content).toContain("stack={browserStack}");
+		expect(page?.content).not.toContain("createClientStack");
 		expect(page?.content).not.toContain('<ChatLayout mode="public"');
 		expect(page?.content).not.toContain("overrides=");
 		expect(page?.content).not.toContain('"ai-chat":');
@@ -1058,10 +1180,9 @@ describe("scaffold plan", () => {
 			(f) => f.path === "app/routes/public-chat.tsx",
 		);
 		expect(route?.content).toContain("ChatLayout");
-		expect(route?.content).toContain(
-			'aiChat: aiChatClientPlugin({ mode: "public" }),',
-		);
-		expect(route?.content).toContain('site: { baseURL, basePath: "/" },');
+		expect(route?.content).toContain("getStackClient(queryClient)");
+		expect(route?.content).toContain("stack={browserStack}");
+		expect(route?.content).not.toContain("createClientStack");
 		expect(route?.content).not.toContain('<ChatLayout mode="public"');
 	});
 
@@ -1080,10 +1201,9 @@ describe("scaffold plan", () => {
 		);
 		expect(route?.content).toContain("createFileRoute");
 		expect(route?.content).toContain("ChatLayout");
-		expect(route?.content).toContain(
-			'aiChat: aiChatClientPlugin({ mode: "public" }),',
-		);
-		expect(route?.content).toContain('site: { baseURL, basePath: "/" },');
+		expect(route?.content).toContain("getStackClient(queryClient)");
+		expect(route?.content).toContain("stack={browserStack}");
+		expect(route?.content).not.toContain("createClientStack");
 		expect(route?.content).not.toContain('<ChatLayout mode="public"');
 	});
 
@@ -1157,10 +1277,8 @@ describe("scaffold plan", () => {
 		expect(client?.content).toContain("PageRenderer");
 		expect(client?.content).not.toContain("defaultComponentRegistry");
 		expect(client?.content).not.toContain("componentRegistry=");
-		expect(client?.content).toContain(
-			"const stack = getStackClient(queryClient)",
-		);
-		expect(client?.content).toContain("stack={stack}");
+		expect(client?.content).toContain("getStackClient(queryClient)");
+		expect(client?.content).toContain("stack={browserStack}");
 		expect(client?.content).not.toContain("StackProvider<");
 		expect(client?.content).not.toContain('"ui-builder":');
 	});
@@ -1175,7 +1293,7 @@ describe("scaffold plan", () => {
 		});
 		expect(plan.files.map((f) => f.path)).toContain("app/routes/preview.tsx");
 		const preview = plan.files.find((f) => f.path === "app/routes/preview.tsx");
-		expect(preview?.content).toContain("stack={stack}");
+		expect(preview?.content).toContain("stack={browserStack}");
 		expect(preview?.content).not.toContain("defaultComponentRegistry");
 		expect(preview?.content).not.toContain("componentRegistry=");
 		expect(preview?.content).not.toContain("StackProvider<");
@@ -1196,7 +1314,7 @@ describe("scaffold plan", () => {
 		const preview = plan.files.find(
 			(f) => f.path === "src/routes/preview.$slug.tsx",
 		);
-		expect(preview?.content).toContain("stack={stack}");
+		expect(preview?.content).toContain("stack={browserStack}");
 		expect(preview?.content).not.toContain("defaultComponentRegistry");
 		expect(preview?.content).not.toContain("componentRegistry=");
 		expect(preview?.content).not.toContain("StackProvider<");
@@ -1219,7 +1337,7 @@ describe("scaffold plan", () => {
 			});
 			const preview = plan.files.find((file) => file.path === previewPath);
 
-			expect(preview?.content).toContain('"kanban": {');
+			expect(preview?.content).toContain("kanban: {");
 			expect(preview?.content).toContain("resolveUser: async () => null");
 			expect(preview?.content).toContain("searchUsers: async () => []");
 			expect(preview?.content).not.toContain("StackProvider<");

@@ -1,4 +1,4 @@
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 {{{adapterImport}}}
 {{#if backendImports}}
 {{{backendImports}}}
@@ -10,8 +10,8 @@ import { stack } from "@btst/stack"
 // Next.js evaluates lib/stack.ts in multiple bundle contexts (API routes + page bundle)
 // that share the same process. Pin to globalThis so both contexts reference the same
 // in-memory store.
-function createStack() {
-	const s = stack({
+function createAppStack() {
+	const appStack = createBackendStack({
 		basePath: "/api/data",
 		plugins: {
 {{#if backendEntries}}
@@ -23,15 +23,15 @@ function createStack() {
 		{{{adapterStackLine}}}
 	})
 
-	return s
+	return appStack
 }
 
-type AppStack = ReturnType<typeof createStack>
+type AppStack = ReturnType<typeof createAppStack>
 const globalForStack = globalThis as typeof globalThis & { __btst_stack__?: AppStack }
 
-export const myStack = globalForStack.__btst_stack__ ??= createStack()
+export const myStack = globalForStack.__btst_stack__ ??= createAppStack()
 {{else}}
-export const myStack = stack({
+export const myStack = createBackendStack({
 	basePath: "/api/data",
 	plugins: {
 {{#if backendEntries}}
