@@ -336,6 +336,104 @@ describe("AI Chat resolved client runtime", () => {
 		);
 	});
 
+	it("sanitizes a list backend failure when the after hook throws a connection error", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			response({ message: "private list failure" }, 500),
+		);
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		const afterError = new Error("fetch failed");
+		const onErrorLoad = vi.fn();
+		const stack = createClientStack({
+			api: appApi,
+			site: appSite,
+			queryClient,
+			plugins: {
+				aiChat: aiChatClientPlugin({
+					hooks: {
+						afterLoadConversations: () => {
+							throw afterError;
+						},
+						onErrorLoad,
+					},
+				}),
+			},
+		});
+
+		await expect(
+			stack.router.getRoute("/chat")?.loader?.(),
+		).resolves.toBeUndefined();
+
+		const query = createAiChatQueryKeys(
+			createApiClient<AiChatApiRouter>(appApi),
+		).conversations.list("anonymous");
+		expect(queryClient.getQueryState(query.queryKey)?.error).toMatchObject({
+			message: SSR_LOADER_ERROR_MESSAGE,
+		});
+		expect(warn).toHaveBeenCalledOnce();
+		expect(onErrorLoad).toHaveBeenCalledOnce();
+		expect(onErrorLoad).toHaveBeenCalledWith(
+			afterError,
+			expect.objectContaining({ path: "/chat", isSSR: true }),
+		);
+	});
+
+	it("sanitizes every detail-loader backend failure when the after hook throws a connection error", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			response({ message: "private conversation failure" }, 500),
+		);
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		const afterError = new Error("fetch failed");
+		const onErrorLoad = vi.fn();
+		const stack = createClientStack({
+			api: appApi,
+			site: appSite,
+			queryClient,
+			plugins: {
+				aiChat: aiChatClientPlugin({
+					hooks: {
+						afterLoadConversation: () => {
+							throw afterError;
+						},
+						onErrorLoad,
+					},
+				}),
+			},
+		});
+
+		await expect(
+			stack.router.getRoute("/chat/conv-1")?.loader?.(),
+		).resolves.toBeUndefined();
+
+		const queries = createAiChatQueryKeys(
+			createApiClient<AiChatApiRouter>(appApi),
+		);
+		const queryKeys = [
+			queries.conversations.detail("conv-1", "anonymous").queryKey,
+			queries.conversations.list("anonymous").queryKey,
+		];
+		for (const queryKey of queryKeys) {
+			expect(queryClient.getQueryState(queryKey)?.error).toMatchObject({
+				message: SSR_LOADER_ERROR_MESSAGE,
+			});
+		}
+		expect(warn).toHaveBeenCalledOnce();
+		expect(onErrorLoad).toHaveBeenCalledOnce();
+		expect(onErrorLoad).toHaveBeenCalledWith(
+			afterError,
+			expect.objectContaining({
+				path: "/chat/conv-1",
+				params: { id: "conv-1" },
+				isSSR: true,
+			}),
+		);
+	});
+
 	it("sanitizes each backend failure when a detail loader also has a connection failure", async () => {
 		vi.spyOn(console, "warn").mockImplementation(() => undefined);
 		vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

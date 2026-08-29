@@ -194,6 +194,26 @@ async function seedSanitizedLoaderErrors(
 	);
 }
 
+function getLoaderQueryFailures(
+	queryClient: QueryClient,
+	queryKeys: readonly QueryKey[],
+) {
+	const failedQueries = queryKeys.flatMap((queryKey) => {
+		const error = queryClient.getQueryState(queryKey)?.error;
+		return error == null ? [] : [{ queryKey, error }];
+	});
+	return {
+		hasFailure: failedQueries.length > 0,
+		firstError: failedQueries[0]?.error,
+		hasConnectionFailure: failedQueries.some(({ error }) =>
+			isConnectionError(error),
+		),
+		backendQueryKeys: failedQueries
+			.filter(({ error }) => !isConnectionError(error))
+			.map(({ queryKey }) => queryKey),
+	};
+}
+
 // Loader for chat home page (list conversations)
 function createConversationsLoader(config: ResolvedAiChatClientConfig) {
 	return async () => {
@@ -240,26 +260,40 @@ function createConversationsLoader(config: ResolvedAiChatClientConfig) {
 				}
 
 				// Check for errors
-				const queryState = queryClient.getQueryState(listQuery.queryKey);
-				if (queryState?.error) {
-					if (isConnectionError(queryState.error)) {
+				const failures = getLoaderQueryFailures(queryClient, [
+					listQuery.queryKey,
+				]);
+				if (failures.hasFailure) {
+					if (failures.hasConnectionFailure) {
 						console.warn(
 							"[btst/ai-chat] route.loader() failed — no server running at build time. " +
 								"AI Chat conversation history does not support SSG.",
 						);
-					} else {
-						await seedSanitizedLoaderErrors(queryClient, [listQuery.queryKey]);
 					}
-					await reportError(queryState.error);
+					if (failures.backendQueryKeys.length > 0) {
+						await seedSanitizedLoaderErrors(
+							queryClient,
+							failures.backendQueryKeys,
+						);
+					}
+					await reportError(failures.firstError);
 				}
 			} catch (error) {
-				if (isConnectionError(error)) {
+				const failures = getLoaderQueryFailures(queryClient, [
+					listQuery.queryKey,
+				]);
+				const caughtConnectionFailure = isConnectionError(error);
+				if (caughtConnectionFailure || failures.hasConnectionFailure) {
 					console.warn(
 						"[btst/ai-chat] route.loader() failed — no server running at build time. " +
 							"AI Chat conversation history does not support SSG.",
 					);
-				} else {
-					await seedSanitizedLoaderErrors(queryClient, [listQuery.queryKey]);
+				}
+				const queryKeysToSanitize = caughtConnectionFailure
+					? failures.backendQueryKeys
+					: [listQuery.queryKey];
+				if (queryKeysToSanitize.length > 0) {
+					await seedSanitizedLoaderErrors(queryClient, queryKeysToSanitize);
 				}
 				await reportError(error);
 			}
@@ -320,50 +354,44 @@ function createConversationLoader(
 				}
 
 				// Check for errors
-				const queryStates = [
+				const loaderQueryKeys = [
 					conversationQuery.queryKey,
 					listQuery.queryKey,
-				].map((queryKey) => ({
-					queryKey,
-					error: queryClient.getQueryState(queryKey)?.error,
-				}));
-				const failedQueries = queryStates.filter(
-					(entry): entry is { queryKey: QueryKey; error: Error } =>
-						entry.error != null,
-				);
-				const queryError = failedQueries[0]?.error;
-				if (queryError) {
-					const connectionFailures = failedQueries.filter(({ error }) =>
-						isConnectionError(error),
-					);
-					const backendFailures = failedQueries.filter(
-						({ error }) => !isConnectionError(error),
-					);
-					if (connectionFailures.length > 0) {
+				];
+				const failures = getLoaderQueryFailures(queryClient, loaderQueryKeys);
+				if (failures.hasFailure) {
+					if (failures.hasConnectionFailure) {
 						console.warn(
 							"[btst/ai-chat] route.loader() failed — no server running at build time. " +
 								"AI Chat conversations do not support SSG.",
 						);
 					}
-					if (backendFailures.length > 0) {
+					if (failures.backendQueryKeys.length > 0) {
 						await seedSanitizedLoaderErrors(
 							queryClient,
-							backendFailures.map(({ queryKey }) => queryKey),
+							failures.backendQueryKeys,
 						);
 					}
-					await reportError(queryError);
+					await reportError(failures.firstError);
 				}
 			} catch (error) {
-				if (isConnectionError(error)) {
+				const loaderQueryKeys = [
+					conversationQuery.queryKey,
+					listQuery.queryKey,
+				];
+				const failures = getLoaderQueryFailures(queryClient, loaderQueryKeys);
+				const caughtConnectionFailure = isConnectionError(error);
+				if (caughtConnectionFailure || failures.hasConnectionFailure) {
 					console.warn(
 						"[btst/ai-chat] route.loader() failed — no server running at build time. " +
 							"AI Chat conversations do not support SSG.",
 					);
-				} else {
-					await seedSanitizedLoaderErrors(queryClient, [
-						conversationQuery.queryKey,
-						listQuery.queryKey,
-					]);
+				}
+				const queryKeysToSanitize = caughtConnectionFailure
+					? failures.backendQueryKeys
+					: loaderQueryKeys;
+				if (queryKeysToSanitize.length > 0) {
+					await seedSanitizedLoaderErrors(queryClient, queryKeysToSanitize);
 				}
 				await reportError(error);
 			}
