@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useListState } from "../client/hooks/use-list-state";
 import { StackProvider } from "../context";
+import { createEmptyTestClientStack } from "./client-stack-test-utils";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -54,7 +55,7 @@ describe("useListState", () => {
 		}
 		await act(async () => {
 			root.render(
-				<StackProvider basePath="/pages" router={router}>
+				<StackProvider stack={createEmptyTestClientStack()} router={router}>
 					<Probe />
 				</StackProvider>,
 			);
@@ -167,7 +168,7 @@ describe("useListState", () => {
 
 		await act(async () => {
 			root.render(
-				<StackProvider basePath="/pages" router={router}>
+				<StackProvider stack={createEmptyTestClientStack()} router={router}>
 					<ProbeA />
 					<ProbeB />
 				</StackProvider>,
@@ -206,7 +207,7 @@ describe("useListState", () => {
 
 		await act(async () => {
 			root.render(
-				<StackProvider basePath="/pages" router={router}>
+				<StackProvider stack={createEmptyTestClientStack()} router={router}>
 					<ProbeA />
 					<ProbeB />
 				</StackProvider>,
@@ -235,7 +236,7 @@ describe("useListState", () => {
 		}
 		await act(async () => {
 			root.render(
-				<StackProvider basePath="/pages" router={router}>
+				<StackProvider stack={createEmptyTestClientStack()} router={router}>
 					<Probe />
 				</StackProvider>,
 			);
@@ -273,7 +274,7 @@ describe("useListState", () => {
 		// StackProvider without getSearchParams/setSearchParams on the router.
 		await act(async () => {
 			root.render(
-				<StackProvider basePath="/pages" router={{}}>
+				<StackProvider stack={createEmptyTestClientStack()} router={{}}>
 					<Probe />
 				</StackProvider>,
 			);
@@ -307,7 +308,7 @@ describe("useListState", () => {
 		}
 		await act(async () => {
 			root.render(
-				<StackProvider basePath="/pages" router={router}>
+				<StackProvider stack={createEmptyTestClientStack()} router={router}>
 					<Probe />
 				</StackProvider>,
 			);

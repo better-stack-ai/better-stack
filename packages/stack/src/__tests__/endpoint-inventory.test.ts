@@ -2,7 +2,7 @@ import { createMemoryAdapter } from "@btst/adapter-memory";
 import type { DatabaseDefinition } from "@btst/db";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { stack } from "../api";
+import { createBackendStack } from "../api";
 import {
 	defineAuthorization,
 	definePermissions,
@@ -134,7 +134,7 @@ function readOperation(options?: {
 describe("composed endpoint inventory", () => {
 	it("requires every route to be classified when server authorization is configured", () => {
 		const routeOnlyPlugin = defineBackendPlugin({
-			name: "feature",
+			id: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			routes: () => ({
 				read: createEndpoint("/records", { method: "GET" }, async () => ({
@@ -144,7 +144,7 @@ describe("composed endpoint inventory", () => {
 		});
 
 		expect(() =>
-			stack({
+			createBackendStack({
 				basePath: "/api",
 				plugins: { feature: routeOnlyPlugin },
 				adapter: memoryAdapter,
@@ -157,7 +157,7 @@ describe("composed endpoint inventory", () => {
 			rules: ({ inventory }) => [inventory.record.read.allow()],
 		});
 		expect(() =>
-			stack({
+			createBackendStack({
 				basePath: "/api",
 				plugins: { feature: routeOnlyPlugin },
 				adapter: memoryAdapter,
@@ -179,7 +179,7 @@ describe("composed endpoint inventory", () => {
 			}),
 			delete: async () => undefined,
 		};
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: {
 				blog: blogBackendPlugin(),
@@ -236,7 +236,7 @@ describe("composed endpoint inventory", () => {
 
 	it("rejects an undeclared endpoint with its plugin, route, method, and path", () => {
 		const plugin = defineBackendPlugin({
-			name: "feature",
+			id: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			operations: () => ({ read: readOperation() }),
 			routes: () => ({
@@ -249,19 +249,19 @@ describe("composed endpoint inventory", () => {
 		});
 
 		expect(() =>
-			stack({
+			createBackendStack({
 				basePath: "/api",
-				plugins: { registeredFeature: plugin },
+				plugins: { feature: plugin },
 				adapter: memoryAdapter,
 			}),
 		).toThrowError(
-			'[btst/endpoint-inventory] Plugin "registeredFeature" route "undeclared" (POST /records) has no same-key operation or infrastructure declaration.',
+			'[btst/endpoint-inventory] Plugin "feature" route "undeclared" (POST /records) has no same-key operation or infrastructure declaration.',
 		);
 	});
 
 	it("validates routes when an explicitly declared operation catalog is empty", () => {
 		const plugin = defineBackendPlugin({
-			name: "feature",
+			id: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			operations: () => ({}),
 			routes: () => ({
@@ -272,7 +272,7 @@ describe("composed endpoint inventory", () => {
 		});
 
 		expect(() =>
-			stack({
+			createBackendStack({
 				basePath: "/api",
 				plugins: { feature: plugin },
 				adapter: memoryAdapter,
@@ -284,7 +284,7 @@ describe("composed endpoint inventory", () => {
 
 	it("rejects endpoints missing their exact operation transport binding", async () => {
 		const plugin = defineBackendPlugin({
-			name: "feature",
+			id: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			operations: () => ({ read: readOperation() }),
 			routes: () => ({
@@ -295,7 +295,7 @@ describe("composed endpoint inventory", () => {
 		});
 
 		expect(() =>
-			stack({
+			createBackendStack({
 				basePath: "/api",
 				plugins: { feature: plugin },
 				adapter: memoryAdapter,
@@ -305,7 +305,7 @@ describe("composed endpoint inventory", () => {
 		);
 
 		const mismatched = defineBackendPlugin({
-			name: "feature",
+			id: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			operations: () => ({
 				read: readOperation(),
@@ -321,7 +321,7 @@ describe("composed endpoint inventory", () => {
 			}),
 		});
 		expect(() =>
-			stack({
+			createBackendStack({
 				basePath: "/api",
 				plugins: { feature: mismatched },
 				adapter: memoryAdapter,
@@ -331,7 +331,7 @@ describe("composed endpoint inventory", () => {
 		);
 
 		const protectedPlugin = defineBackendPlugin({
-			name: "feature",
+			id: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			operations: () => ({ read: readOperation() }),
 			routes: (_adapter, _context, operations) => ({
@@ -347,7 +347,7 @@ describe("composed endpoint inventory", () => {
 			permissions: [featurePermissions] as const,
 			rules: () => [],
 		});
-		const protectedBackend = stack({
+		const protectedBackend = createBackendStack({
 			basePath: "/api",
 			plugins: { feature: protectedPlugin },
 			adapter: memoryAdapter,
@@ -365,7 +365,7 @@ describe("composed endpoint inventory", () => {
 	it("preserves exact operation execution through createEndpoint.create", async () => {
 		const endpoint = createEndpoint.create();
 		const plugin = defineBackendPlugin({
-			name: "feature",
+			id: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			operations: () => ({ read: readOperation() }),
 			routes: (_adapter, _context, operations) => ({
@@ -376,7 +376,7 @@ describe("composed endpoint inventory", () => {
 				),
 			}),
 		});
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: { feature: plugin },
 			adapter: memoryAdapter,
@@ -389,7 +389,7 @@ describe("composed endpoint inventory", () => {
 		expect(await response.text()).toBe("1");
 
 		const undeclaredPlugin = defineBackendPlugin({
-			name: "feature",
+			id: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			operations: () => ({ read: readOperation() }),
 			routes: () => ({
@@ -401,7 +401,7 @@ describe("composed endpoint inventory", () => {
 			}),
 		});
 		expect(() =>
-			stack({
+			createBackendStack({
 				basePath: "/api",
 				plugins: { feature: undeclaredPlugin },
 				adapter: memoryAdapter,
@@ -418,7 +418,7 @@ describe("composed endpoint inventory", () => {
 		});
 		const factValidationFailure = z.string().safeParse(1).error;
 		const plugin = defineBackendPlugin({
-			name: "feature",
+			id: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			operations: () => ({
 				validationFailure: defineOperation({
@@ -472,7 +472,7 @@ describe("composed endpoint inventory", () => {
 				),
 			}),
 		});
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: { feature: plugin },
 			adapter: memoryAdapter,
@@ -534,7 +534,7 @@ describe("composed endpoint inventory", () => {
 
 	it("rejects stale and ambiguous infrastructure allowlist entries", () => {
 		const stale = defineBackendPlugin({
-			name: "docs",
+			id: "docs",
 			dbPlugin: createDbPlugin("docs", {}),
 			infrastructureRoutes: {
 				schema: {
@@ -551,7 +551,7 @@ describe("composed endpoint inventory", () => {
 			}),
 		});
 		expect(() =>
-			stack({
+			createBackendStack({
 				basePath: "/api",
 				plugins: { docs: stale },
 				adapter: memoryAdapter,
@@ -561,7 +561,7 @@ describe("composed endpoint inventory", () => {
 		);
 
 		const ambiguous = defineBackendPlugin({
-			name: "feature",
+			id: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			operations: () => ({ read: readOperation() }),
 			infrastructureRoutes: {
@@ -579,7 +579,7 @@ describe("composed endpoint inventory", () => {
 			}),
 		});
 		expect(() =>
-			stack({
+			createBackendStack({
 				basePath: "/api",
 				plugins: { feature: ambiguous },
 				adapter: memoryAdapter,
@@ -591,7 +591,7 @@ describe("composed endpoint inventory", () => {
 
 	it("rejects stale or unknown route-to-operation mappings", () => {
 		const unknown = defineBackendPlugin({
-			name: "feature",
+			id: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			operations: () => ({ read: readOperation() }),
 			operationRouteMap: { fetch: "missing" },
@@ -602,7 +602,7 @@ describe("composed endpoint inventory", () => {
 			}),
 		});
 		expect(() =>
-			stack({
+			createBackendStack({
 				basePath: "/api",
 				plugins: { feature: unknown },
 				adapter: memoryAdapter,
@@ -612,7 +612,7 @@ describe("composed endpoint inventory", () => {
 		);
 
 		const stale = defineBackendPlugin({
-			name: "feature",
+			id: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			operations: () => ({ read: readOperation() }),
 			operationRouteMap: { renamed: "read" },
@@ -623,7 +623,7 @@ describe("composed endpoint inventory", () => {
 			}),
 		});
 		expect(() =>
-			stack({
+			createBackendStack({
 				basePath: "/api",
 				plugins: { feature: stale },
 				adapter: memoryAdapter,
@@ -636,7 +636,7 @@ describe("composed endpoint inventory", () => {
 	it("keeps route-less trusted operations out of the HTTP inventory", async () => {
 		const hiddenExecute = vi.fn(() => "hidden");
 		const plugin = defineBackendPlugin({
-			name: "feature",
+			id: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			operations: () => ({
 				read: readOperation(),
@@ -650,7 +650,7 @@ describe("composed endpoint inventory", () => {
 				),
 			}),
 		});
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: { feature: plugin },
 			adapter: memoryAdapter,
@@ -671,12 +671,12 @@ describe("composed endpoint inventory", () => {
 describe("operation access semantics", () => {
 	it("preserves omitted-auth compatibility and denies a protected missing rule", async () => {
 		const plugin = defineBackendPlugin({
-			name: "feature",
+			id: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			operations: () => ({ read: readOperation() }),
 			routes: () => ({}),
 		});
-		const withoutAuth = stack({
+		const withoutAuth = createBackendStack({
 			basePath: "/api",
 			plugins: { feature: plugin },
 			adapter: memoryAdapter,
@@ -694,7 +694,7 @@ describe("operation access semantics", () => {
 			permissions: [featurePermissions] as const,
 			rules: () => [],
 		});
-		const withAuth = stack({
+		const withAuth = createBackendStack({
 			basePath: "/api",
 			plugins: { feature: plugin },
 			adapter: memoryAdapter,
@@ -711,7 +711,7 @@ describe("operation access semantics", () => {
 				}),
 		).rejects.toMatchObject({ name: "AuthorizationError", statusCode: 401 });
 
-		const identified = stack({
+		const identified = createBackendStack({
 			basePath: "/api",
 			plugins: { feature: plugin },
 			adapter: memoryAdapter,
@@ -733,7 +733,7 @@ describe("operation access semantics", () => {
 		});
 		const factFailure = new Error("trusted fact load failed");
 		const plugin = defineBackendPlugin({
-			name: "feature",
+			id: "feature",
 			dbPlugin: createDbPlugin("feature", {}),
 			operations: () => ({
 				publicRead: readOperation({ access: "public" }),
@@ -751,7 +751,7 @@ describe("operation access semantics", () => {
 			permissions: [featurePermissions] as const,
 			rules: ({ inventory }) => [inventory.record.read.allow()],
 		});
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: { feature: plugin },
 			adapter: memoryAdapter,

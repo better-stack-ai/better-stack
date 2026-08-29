@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stack } from "../api";
+import { createBackendStack } from "../api";
 import { defineBackendPlugin } from "../plugins/api";
 import { createDbPlugin } from "@btst/db";
 import { createMemoryAdapter } from "@btst/adapter-memory";
@@ -14,14 +14,14 @@ const testAdapter = (db: DatabaseDefinition): Adapter =>
  * A minimal plugin with no `raw` factory.
  */
 const noRawPlugin = defineBackendPlugin({
-	name: "no-raw",
+	id: "noRaw",
 	dbPlugin: createDbPlugin("no-raw", {}),
 	routes: () => ({}),
 });
 
 describe("stack.raw surface", () => {
 	it("exposes adapter on the returned backend", () => {
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: { blog: blogBackendPlugin() },
 			adapter: testAdapter,
@@ -34,7 +34,7 @@ describe("stack.raw surface", () => {
 	});
 
 	it("keeps stack.raw narrow for SSG prefetch helpers", () => {
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: { blog: blogBackendPlugin() },
 			adapter: testAdapter,
@@ -46,7 +46,7 @@ describe("stack.raw surface", () => {
 	});
 
 	it("exposes the Kanban raw namespace", () => {
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: { kanban: kanbanBackendPlugin() },
 			adapter: testAdapter,
@@ -57,7 +57,7 @@ describe("stack.raw surface", () => {
 	});
 
 	it("omits plugins without a raw factory", () => {
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: { noRaw: noRawPlugin },
 			adapter: testAdapter,
@@ -67,7 +67,7 @@ describe("stack.raw surface", () => {
 	});
 
 	it("uses trusted operations for explicitly trusted business calls", async () => {
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: { blog: blogBackendPlugin() },
 			adapter: testAdapter,
@@ -94,7 +94,7 @@ describe("stack.raw surface", () => {
 	});
 
 	it("does not retain ambiguous server aliases", () => {
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: { blog: blogBackendPlugin() },
 			adapter: testAdapter,
@@ -108,7 +108,7 @@ describe("stack.raw surface", () => {
 	});
 
 	it("combines multiple plugins in a single stack call", () => {
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: {
 				blog: blogBackendPlugin(),

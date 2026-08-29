@@ -61,15 +61,6 @@ interface StackContextValue<TPluginOverrides extends Record<string, any>> {
 
 const StackContext = createContext<StackContextValue<any> | null>(null);
 
-/**
- * The `overrides` prop shape for `StackProvider`.
- * Plugin blocks are optional; fields inside each block retain the plugin's
- * declared requirements.
- */
-export type StackProviderOverrides<
-	TPluginOverrides extends Record<string, any>,
-> = Partial<TPluginOverrides>;
-
 type StackProviderServices = {
 	children?: ReactNode;
 	router?: StackRouterConfig;
@@ -102,27 +93,11 @@ type CanonicalStackProviderProps<TStack extends ResolvedClientStack<any, any>> =
 	StackProviderServices & {
 		/** Resolved browser client stack; supplies API/site/plugin runtime once. */
 		stack: TStack;
-		/** Runtime paths come from `stack`. */
-		basePath?: never;
-		/** Runtime API configuration comes from `stack`. */
+		/** API configuration belongs to createClientStack(). */
 		api?: never;
+		/** Site paths belong to createClientStack(). */
+		basePath?: never;
 	} & CanonicalStackProviderOverrideProps<TStack>;
-
-type CanonicalStackProviderImplementationProps = StackProviderServices & {
-	stack: ResolvedClientStack<any, any>;
-	overrides?: Record<string, any>;
-	basePath?: never;
-	api?: never;
-};
-
-type LegacyStackProviderProps<TPluginOverrides extends Record<string, any>> =
-	StackProviderServices & {
-		/** @deprecated Pass the resolved `stack` instead. Removed by #225. */
-		stack?: never;
-		overrides?: StackProviderOverrides<TPluginOverrides>;
-		basePath: string;
-		api?: StackApiConfig;
-	};
 
 /** Removes keys whose value is `undefined` so they don't clobber lower layers in spreads. */
 function stripUndefined<T extends Record<string, any>>(obj: T): Partial<T> {
@@ -218,41 +193,27 @@ function RouterBridge({
  * ```
  */
 export function StackProvider<
-	TPluginOverrides extends Record<string, any> = Record<string, any>,
->(props: LegacyStackProviderProps<TPluginOverrides>): ReactElement;
-export function StackProvider<
 	const TStack extends ResolvedClientStack<any, any>,
->(props: CanonicalStackProviderProps<TStack>): ReactElement;
-export function StackProvider({
+>({
 	children,
 	overrides,
-	basePath,
 	stack,
 	router,
-	api,
 	auth,
 	initialIdentity,
 	notify,
 	i18n,
-}:
-	| LegacyStackProviderProps<Record<string, any>>
-	| CanonicalStackProviderImplementationProps): ReactElement {
-	const projection = stack?.provider;
-	const resolvedBasePath = projection?.site.basePath ?? basePath;
-	if (resolvedBasePath === undefined) {
-		throw new Error(
-			"StackProvider requires a resolved client stack or a legacy basePath.",
-		);
-	}
+}: CanonicalStackProviderProps<TStack>): ReactElement {
+	const projection = stack.provider;
 	const staticRouter = resolveStaticRouter(router);
 	const value: Omit<StackContextValue<any>, "router"> = {
 		overrides: overrides ?? {},
-		basePath: resolvedBasePath,
-		api: projection?.api ?? api,
-		site: projection?.site,
-		plugins: projection?.plugins,
-		queryClient: projection?.queryClient,
-		clientStackContext: stack?.context,
+		basePath: projection.site.basePath,
+		api: projection.api,
+		site: projection.site,
+		plugins: projection.plugins,
+		queryClient: projection.queryClient,
+		clientStackContext: stack.context,
 		resolvedStack: stack,
 		auth,
 	};

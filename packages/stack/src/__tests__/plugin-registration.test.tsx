@@ -154,14 +154,13 @@ describe("canonical plugin registration IDs", () => {
 		]);
 	});
 
-	it("uses a canonical ID instead of a conflicting legacy name in client diagnostics", () => {
-		let contextPluginName: string | undefined;
+	it("uses the canonical ID in client context and route diagnostics", () => {
+		let contextPluginId: string | undefined;
 		const canonicalDefinition = defineClientPlugin({
 			id: "canonical",
-			name: "legacy-name",
 			resolve: () => ({
 				routes: (context) => {
-					contextPluginName = context?.plugins.canonical?.name;
+					contextPluginId = context?.plugins.canonical?.id;
 					return {
 						canonical: createRoute("/canonical", () => ({
 							PageComponent: () => null,
@@ -171,22 +170,12 @@ describe("canonical plugin registration IDs", () => {
 			}),
 		});
 
-		createClientStack(runtimeConfig({ canonical: canonicalDefinition }));
+		const stack = createClientStack(
+			runtimeConfig({ canonical: canonicalDefinition }),
+		);
 
-		expect(contextPluginName).toBe("canonical");
-		const schema = generateRouteDocsSchema({
-			plugins: {
-				canonical: defineClientPlugin({
-					id: "canonical",
-					name: "legacy-name",
-					routes: () => ({
-						canonical: createRoute("/canonical", () => ({
-							PageComponent: () => null,
-						})),
-					}),
-				}),
-			},
-		});
+		expect(contextPluginId).toBe("canonical");
+		const schema = generateRouteDocsSchema(stack.context);
 		expect(schema.plugins).toMatchObject([
 			{ key: "canonical", name: "canonical" },
 		]);

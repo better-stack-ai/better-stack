@@ -104,7 +104,7 @@ function UpdateControl({ post }) {
   );
 }
 
-<StackProvider auth={clientAuth} /* router, api, overrides */>
+<StackProvider stack={clientStack} auth={clientAuth} /* router, overrides */>
   {children}
 </StackProvider>;
 ```

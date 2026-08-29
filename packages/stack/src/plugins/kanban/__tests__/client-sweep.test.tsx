@@ -27,6 +27,8 @@ import type {
 	SerializedColumn,
 	SerializedTask,
 } from "../types";
+import { createTestClientStack } from "../../../__tests__/client-stack-test-utils";
+import { kanbanClientPlugin } from "../client/plugin";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -165,7 +167,7 @@ async function render(
 	await act(async () => {
 		root.render(
 			<StackProvider
-				basePath="/pages"
+				stack={createKanbanStack()}
 				auth={options.auth}
 				initialIdentity={options.initialIdentity}
 				i18n={options.i18n}
@@ -180,6 +182,10 @@ async function render(
 			</StackProvider>,
 		);
 	});
+}
+
+function createKanbanStack() {
+	return createTestClientStack({ kanban: kanbanClientPlugin() });
 }
 
 async function waitFor(check: () => boolean, timeout = 3000) {

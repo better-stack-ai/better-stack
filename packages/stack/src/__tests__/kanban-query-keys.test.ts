@@ -4,7 +4,7 @@
  */
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
-import { createStackClient } from "../client";
+import { createClientStack } from "../client";
 import {
 	getBoardSummaries,
 	serializeBoardSummary,
@@ -105,7 +105,7 @@ describe("Kanban authenticated SSR hydration", () => {
 				headers: { "content-type": "application/json" },
 			}),
 		);
-		const stack = createStackClient({
+		const stack = createClientStack({
 			api: {
 				baseURL: "http://test.local",
 				basePath: "/api/data",
@@ -157,7 +157,7 @@ describe("Kanban authenticated SSR hydration", () => {
 		);
 
 		const stackClient = (identityPartition?: typeof identity) =>
-			createStackClient({
+			createClientStack({
 				api: { baseURL: "http://test.local", basePath: "/api/data" },
 				site: { baseURL: "http://test.local", basePath: "/pages" },
 				queryClient,
@@ -187,7 +187,7 @@ describe("Kanban anonymous sitemap", () => {
 	afterEach(() => vi.restoreAllMocks());
 
 	function createClient() {
-		return createStackClient({
+		return createClientStack({
 			api: { baseURL: "http://test.local", basePath: "/api/data" },
 			site: { baseURL: "http://test.local", basePath: "/pages" },
 			queryClient: new QueryClient(),

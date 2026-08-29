@@ -618,11 +618,11 @@ All built-in Kanban component copy is routed through the `i18n` provider on `Sta
 
 ```tsx
 <StackProvider
+  stack={clientStack}
   i18n={{
     translate: (key, defaultValue, params) =>
       i18next.t(key, { defaultValue, ...params }),
   }}
-  // ...
 />
 ```
 

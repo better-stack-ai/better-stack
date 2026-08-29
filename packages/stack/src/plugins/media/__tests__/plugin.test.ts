@@ -1,7 +1,7 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { createMemoryAdapter } from "@btst/adapter-memory";
 import type { DBAdapter as Adapter, DatabaseDefinition } from "@btst/db";
-import { stack } from "../../../api";
+import { createBackendStack } from "../../../api";
 import { mediaBackendPlugin, type MediaBackendConfig } from "../api/plugin";
 import { localAdapter } from "../api/adapters/local";
 import type {
@@ -27,7 +27,7 @@ function createBackend(
 ) {
 	const { adapterFactory = testAdapter, storageAdapter, ...overrides } = config;
 
-	return stack({
+	return createBackendStack({
 		basePath: "/api",
 		plugins: {
 			media: mediaBackendPlugin({

@@ -22,6 +22,8 @@ import { CommentCount } from "../client/components/comment-count";
 import { CommentThread } from "../client/components/comment-thread";
 import type { SerializedComment } from "../types";
 import { commentsPermissions } from "../permissions";
+import { createTestClientStack } from "../../../__tests__/client-stack-test-utils";
+import { commentsClientPlugin } from "../client/plugin";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -142,6 +144,10 @@ async function render(ui: React.ReactElement) {
 	});
 }
 
+function createCommentsStack() {
+	return createTestClientStack({ comments: commentsClientPlugin() });
+}
+
 function texts(): string {
 	return document.body.textContent ?? "";
 }
@@ -234,7 +240,7 @@ describe("ModerationPage row actions (PermissionAccess)", () => {
 	) {
 		return render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCommentsStack()}
 				router={router}
 				notify={notify}
 				overrides={{ comments: commentsOverrides }}
@@ -311,7 +317,7 @@ describe("Comments route descriptors", () => {
 		await expect(
 			render(
 				<StackProvider
-					basePath="/pages"
+					stack={createCommentsStack()}
 					router={createMockRouter()}
 					overrides={{ comments: commentsOverrides }}
 					auth={clientAuth({ id: "viewer-1", role: "user" })}
@@ -344,7 +350,7 @@ describe("Comments route descriptors", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCommentsStack()}
 				router={createMockRouter("tab=spam")}
 				overrides={{ comments: commentsOverrides }}
 				auth={auth}
@@ -362,11 +368,7 @@ describe("Comments route descriptors", () => {
 describe("CommentCount permission descriptors", () => {
 	it("renders an explicitly public approved count for an anonymous identity", async () => {
 		await render(
-			<StackProvider
-				basePath="/pages"
-				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
-				auth={clientAuth(null)}
-			>
+			<StackProvider stack={createCommentsStack()} auth={clientAuth(null)}>
 				<CommentCount resourceId="post-1" resourceType="post" />
 			</StackProvider>,
 		);
@@ -384,8 +386,7 @@ describe("CommentCount permission descriptors", () => {
 	it("does not fetch a moderation count when the local rule denies it", async () => {
 		await render(
 			<StackProvider
-				basePath="/pages"
-				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				stack={createCommentsStack()}
 				auth={clientAuth({ id: "viewer-1", role: "user" })}
 			>
 				<CommentCount
@@ -416,7 +417,7 @@ describe("ModerationPage tab/page state (useListState)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCommentsStack()}
 				router={router}
 				overrides={{ comments: commentsOverrides }}
 			>
@@ -453,7 +454,7 @@ describe("ModerationPage tab/page state (useListState)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCommentsStack()}
 				router={router}
 				overrides={{ comments: commentsOverrides }}
 			>
@@ -511,7 +512,7 @@ describe("ModerationPage tab/page state (useListState)", () => {
 		const router = createMockRouter();
 		const page = () => (
 			<StackProvider
-				basePath="/pages"
+				stack={createCommentsStack()}
 				router={router}
 				overrides={{ comments: commentsOverrides }}
 			>
@@ -551,7 +552,7 @@ describe("ModerationPage tab/page state (useListState)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCommentsStack()}
 				router={router}
 				overrides={{ comments: commentsOverrides }}
 			>
@@ -571,7 +572,7 @@ describe("ModerationPage tab/page state (useListState)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCommentsStack()}
 				router={router}
 				overrides={{ comments: commentsOverrides }}
 			>
@@ -589,7 +590,7 @@ describe("ModerationPage tab/page state (useListState)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCommentsStack()}
 				router={router}
 				overrides={{ comments: commentsOverrides }}
 			>
@@ -631,11 +632,10 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 	) {
 		return render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCommentsStack()}
 				router={router}
 				notify={notify}
 				auth={auth}
-				api={{ baseURL: "http://test.local", basePath: "/api/data" }}
 				overrides={{ comments: commentsOverrides }}
 			>
 				<UserCommentsPage />
@@ -732,8 +732,7 @@ describe("CommentThread provider wiring", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
-				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				stack={createCommentsStack()}
 				auth={clientAuth({ id: "owner-1", role: "user" })}
 			>
 				<CommentThread resourceId="post-1" resourceType="post" />
@@ -772,8 +771,7 @@ describe("CommentThread provider wiring", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
-				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				stack={createCommentsStack()}
 				auth={clientAuth({ id: "provider-user", role: "user" })}
 				notify={notify}
 			>
@@ -797,7 +795,7 @@ describe("CommentThread provider wiring", () => {
 	it("uses the provider identity for authenticated thread rendering", async () => {
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCommentsStack()}
 				auth={clientAuth({ id: "provider-user", role: "user" })}
 			>
 				<CommentThread resourceId="post-1" resourceType="blog-post" />
@@ -821,8 +819,7 @@ describe("CommentThread provider wiring", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
-				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				stack={createCommentsStack()}
 				auth={clientAuth(() => identity)}
 			>
 				<CommentThread resourceId="post-1" resourceType="blog-post" />
@@ -845,8 +842,7 @@ describe("CommentThread provider wiring", () => {
 	it("uses the top-level auth login path when unauthenticated", async () => {
 		await render(
 			<StackProvider
-				basePath="/pages"
-				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				stack={createCommentsStack()}
 				auth={clientAuth(null, {
 					loginPath: "/sign-in",
 				})}
@@ -866,8 +862,7 @@ describe("CommentThread provider wiring", () => {
 	it("prefers the per-thread login href when unauthenticated", async () => {
 		await render(
 			<StackProvider
-				basePath="/pages"
-				api={{ baseURL: "http://provider.local", basePath: "/api/stack" }}
+				stack={createCommentsStack()}
 				auth={clientAuth(null, {
 					loginPath: "/sign-in",
 				})}
@@ -893,7 +888,7 @@ describe("CommentForm inline field errors (StackError)", () => {
 	function renderForm(onSubmit: (body: string) => Promise<void>) {
 		return render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCommentsStack()}
 				router={createMockRouter()}
 				overrides={{ comments: commentsOverrides }}
 			>
@@ -939,7 +934,7 @@ describe("comments i18n precedence (useTranslate + localization prop)", () => {
 	it("renders the English default without providers", async () => {
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCommentsStack()}
 				router={createMockRouter()}
 				overrides={{ comments: commentsOverrides }}
 			>
@@ -960,7 +955,7 @@ describe("comments i18n precedence (useTranslate + localization prop)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCommentsStack()}
 				router={createMockRouter()}
 				overrides={{ comments: commentsOverrides }}
 				i18n={i18n}
@@ -979,7 +974,7 @@ describe("comments i18n precedence (useTranslate + localization prop)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createCommentsStack()}
 				router={createMockRouter()}
 				overrides={{ comments: commentsOverrides }}
 				i18n={{ translate }}

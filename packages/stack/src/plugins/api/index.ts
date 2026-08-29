@@ -18,16 +18,7 @@ type IdentifiedBackendPlugin<
 	TRoutes extends Record<string, Endpoint>,
 	TRaw extends Record<string, (...args: any[]) => any>,
 	TOperations extends import("./operation").OperationRecord,
-> = BackendPlugin<TRoutes, TRaw, TOperations, TId> & { readonly id: TId };
-
-type LegacyBackendPlugin<
-	TRoutes extends Record<string, Endpoint>,
-	TRaw extends Record<string, (...args: any[]) => any>,
-	TOperations extends import("./operation").OperationRecord,
-> = BackendPlugin<TRoutes, TRaw, TOperations> & {
-	name: string;
-	readonly id?: never;
-};
+> = BackendPlugin<TRoutes, TRaw, TOperations, TId>;
 
 export type {
 	BackendPlugin,
@@ -97,23 +88,6 @@ export function defineBackendPlugin<
 	TOperations extends import("./operation").OperationRecord = never,
 >(
 	plugin: IdentifiedBackendPlugin<TId, TRoutes, TRaw, TOperations>,
-): IdentifiedBackendPlugin<TId, TRoutes, TRaw, TOperations>;
-export function defineBackendPlugin<
-	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
-	TRaw extends Record<string, (...args: any[]) => any> = never,
-	TOperations extends import("./operation").OperationRecord = never,
->(
-	plugin: LegacyBackendPlugin<TRoutes, TRaw, TOperations>,
-): LegacyBackendPlugin<TRoutes, TRaw, TOperations>;
-export function defineBackendPlugin<
-	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
-	TRaw extends Record<string, (...args: any[]) => any> = never,
-	TOperations extends import("./operation").OperationRecord = never,
->(
-	plugin: BackendPlugin<TRoutes, TRaw, TOperations>,
-): BackendPlugin<TRoutes, TRaw, TOperations>;
-export function defineBackendPlugin(
-	plugin: BackendPlugin<any, any, any>,
-): BackendPlugin<any, any, any> {
+): IdentifiedBackendPlugin<TId, TRoutes, TRaw, TOperations> {
 	return plugin;
 }

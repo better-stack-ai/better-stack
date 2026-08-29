@@ -186,9 +186,7 @@ export interface BackendPlugin<
 	TId extends string = string,
 > {
 	/** Canonical stable programmatic identifier. */
-	readonly id?: TId;
-	/** @deprecated Use `id`. Retained only while first-party plugins migrate. */
-	name?: string;
+	readonly id: TId;
 
 	/**
 	 * Create API endpoints for this plugin
@@ -250,9 +248,7 @@ export interface ClientPlugin<
 	TId extends string = string,
 > {
 	/** Canonical stable programmatic identifier. */
-	readonly id?: TId;
-	/** @deprecated Use `id`. Retained only while first-party plugins migrate. */
-	name?: string;
+	readonly id: TId;
 
 	/**
 	 * Define routes (pages) for this plugin
@@ -283,9 +279,7 @@ export interface ClientPluginDefinition<
 	TApiRuntimeFrom extends string = never,
 > {
 	/** Canonical stable programmatic identifier. */
-	readonly id?: TId;
-	/** @deprecated Use `id`. Retained only while first-party plugins migrate. */
-	name?: string;
+	readonly id: TId;
 	/**
 	 * Optional programmatic ID whose effective API transport this definition
 	 * consumes. The dependent plugin may still resolve its own site endpoint.
@@ -300,10 +294,10 @@ export interface ClientPluginDefinition<
 	/** Expand plugin-specific options against one resolved stack runtime. */
 	resolve: (
 		runtime: ResolvedClientPluginRuntime<TId>,
-	) => Omit<ClientPlugin<TOverrides, TRoutes, TId>, "id" | "name">;
+	) => Omit<ClientPlugin<TOverrides, TRoutes, TId>, "id">;
 }
 
-/** Canonical definitions plus the temporary already-resolved plugin seam. */
+/** Runtime-independent client plugin registration resolved by the client stack. */
 export type ClientPluginRegistration<
 	TOverrides = Record<string, never>,
 	TRoutes extends Record<string, Route> = Record<string, Route>,
@@ -312,15 +306,13 @@ export type ClientPluginRegistration<
 		Record<string, unknown>
 	>,
 	TApiRuntimeFrom extends string = never,
-> =
-	| ClientPlugin<TOverrides, TRoutes, TId>
-	| ClientPluginDefinition<
-			TOverrides,
-			TRoutes,
-			TId,
-			TProviderConfig,
-			TApiRuntimeFrom
-	  >;
+> = ClientPluginDefinition<
+	TOverrides,
+	TRoutes,
+	TId,
+	TProviderConfig,
+	TApiRuntimeFrom
+>;
 
 /**
  * Utility type that maps each plugin key to the return type of its `raw` factory.
@@ -353,7 +345,7 @@ type _OperationsOf<T> = T extends BackendPlugin<
 	? TOperations
 	: never;
 
-/** Bound operation APIs, keyed by their registered backend plugin names. */
+/** Bound operation APIs, keyed by their registered backend plugin IDs. */
 export type PluginOperations<
 	TPlugins extends Record<string, BackendPlugin<any, any, any>>,
 > = {
@@ -441,19 +433,6 @@ export interface BackendStackConfig<
 	auth?: TAuth;
 }
 
-/**
- * @deprecated Use `BackendStackConfig`. This alias is removed by #225.
- */
-export type BackendLibConfig<
-	TPlugins extends Record<string, BackendPlugin<any, any, any>> = Record<
-		string,
-		BackendPlugin<any, any, any>
-	>,
-	TAuth extends ServerAuth<AnyAuthorization> | undefined =
-		| ServerAuth<AnyAuthorization>
-		| undefined,
-> = BackendStackConfig<TPlugins, TAuth>;
-
 type AnyClientPluginRegistration = ClientPluginRegistration<
 	any,
 	any,
@@ -461,9 +440,8 @@ type AnyClientPluginRegistration = ClientPluginRegistration<
 	any,
 	any
 >;
-type LegacyClientPluginMap = Record<string, ClientPlugin<any, any>>;
 
-/** @internal Extract a required canonical plugin ID, excluding legacy optional IDs. */
+/** @internal Extract a plugin's required canonical ID. */
 type _DeclaredPluginId<TPlugin> = TPlugin extends {
 	readonly id: infer TId extends string;
 }
@@ -492,7 +470,7 @@ type _ClientApiRuntimeSource<TPlugin> = TPlugin extends {
 export type MatchingPluginRegistrations<
 	TPlugins extends Record<string, unknown>,
 > = {
-	[K in keyof TPlugins]: [_DeclaredPluginId<TPlugins[K]>] extends [never]
+	[K in keyof TPlugins]: string extends _DeclaredPluginId<TPlugins[K]>
 		? TPlugins[K]
 		: K extends _DeclaredPluginId<TPlugins[K]>
 			? _DeclaredPluginId<TPlugins[K]> extends K
@@ -528,64 +506,23 @@ export interface ResolvedClientStackConfig<
 	site: ClientLocation;
 	/** The one React Query client used by loaders, hydration, and browser hooks. */
 	queryClient: QueryClient;
-	/** Runtime-independent and temporary already-resolved plugin registrations. */
+	/** Runtime-independent plugin registrations. */
 	plugins: TPlugins & MatchingPluginRegistrations<TPlugins>;
-	/** Explicit endpoint replacements keyed by a registered plugin name. */
+	/** Explicit endpoint replacements keyed by a registered plugin ID. */
 	endpoints?: ClientPluginEndpointOverrides<TPlugins>;
-	/** Shared origins live under `api` or `site`, never an ambiguous top level. */
-	baseURL?: never;
-	/** Shared paths live under `api` or `site`, never an ambiguous top level. */
-	basePath?: never;
 }
 
-/**
- * Temporary compatibility shape for already-resolved first-party plugins.
- * Canonical consumers configure `api`, `site`, and `queryClient` instead.
- */
-export interface LegacyClientStackConfig<
-	TPlugins extends LegacyClientPluginMap = LegacyClientPluginMap,
-> {
-	/** Temporary already-resolved plugin registrations. */
-	plugins: TPlugins;
-	/** Temporary route-introspection base path retained during plugin migration. */
-	basePath?: string;
-	/** Removed ambiguous top-level origin. */
-	baseURL?: never;
-	/** Canonical runtime configuration is unavailable on the legacy branch. */
-	api?: never;
-	/** Canonical runtime configuration is unavailable on the legacy branch. */
-	site?: never;
-	/** Canonical runtime configuration is unavailable on the legacy branch. */
-	queryClient?: never;
-	/** Endpoint replacements require the canonical resolved runtime. */
-	endpoints?: never;
-}
-
-/** Configuration for creating either a canonical or compatibility client stack. */
+/** Canonical configuration for a resolved client stack. */
 export type ClientStackConfig<
-	TPlugins extends Record<
+	TPlugins extends Record<string, AnyClientPluginRegistration> = Record<
 		string,
 		AnyClientPluginRegistration
-	> = LegacyClientPluginMap,
-> =
-	| ResolvedClientStackConfig<TPlugins>
-	| (TPlugins extends LegacyClientPluginMap
-			? LegacyClientStackConfig<TPlugins>
-			: never);
-
-/**
- * @deprecated Use `ClientStackConfig`. This alias is removed by #225.
- */
-export type ClientLibConfig<
-	TPlugins extends Record<
-		string,
-		AnyClientPluginRegistration
-	> = LegacyClientPluginMap,
-> = ClientStackConfig<TPlugins>;
+	>,
+> = ResolvedClientStackConfig<TPlugins>;
 
 /**
  * Utility type to extract override types from plugins
- * Maps plugin names to their override types
+ * Maps plugin IDs to their override types
  */
 declare const requiredClientPluginOverrides: unique symbol;
 
@@ -691,7 +628,7 @@ export type PluginRoutes<
 > = MergeAllPluginRoutes<TPlugins>;
 
 /**
- * Prefix all backend plugin route keys with the plugin name
+ * Prefix all backend plugin route keys with the canonical plugin ID
  * Example: { messages: { list: Endpoint } } => { messages_list: Endpoint }
  */
 export type PrefixedPluginRoutes<
@@ -742,32 +679,17 @@ export interface BackendStack<
 }
 
 /**
- * @deprecated Use `BackendStack`. This alias is removed by #225.
- */
-export type BackendLib<
-	TRoutes extends Record<string, Endpoint> = Record<string, Endpoint>,
-	TRaw extends Record<string, Record<string, (...args: any[]) => any>> = Record<
-		string,
-		Record<string, (...args: any[]) => any>
-	>,
-	TOperations extends Record<
-		string,
-		Record<string, (...args: any[]) => any>
-	> = Record<string, Record<string, (...args: any[]) => any>>,
-> = BackendStack<TRoutes, TRaw, TOperations>;
-
-/**
  * Helper type to extract routes from a client plugin
  */
-export type ExtractPluginRoutes<T> = T extends ClientPlugin<
+export type ExtractPluginRoutes<T> = T extends ClientPluginDefinition<
 	any,
 	infer TRoutes,
+	any,
+	any,
 	any
 >
 	? TRoutes
-	: T extends ClientPluginDefinition<any, infer TRoutes, any, any, any>
-		? TRoutes
-		: never;
+	: never;
 
 /**
  * Helper type to merge all routes from all plugins into a single record
@@ -850,13 +772,6 @@ export interface ResolvedClientStack<
 /** Registered plugin definitions carried by a resolved client stack type. */
 export type RegisteredClientPlugins<TStack> =
 	TStack extends ResolvedClientStack<any, infer TPlugins> ? TPlugins : never;
-
-/**
- * @deprecated Use `ClientStack`. This alias is removed by #225.
- */
-export type ClientLib<
-	TRoutes extends Record<string, Route> = Record<string, Route>,
-> = ClientStack<TRoutes>;
 
 /**
  * Minimal sitemap entry shape aligned with Next.js MetadataRoute.Sitemap

@@ -4,7 +4,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { stack } from "../../../api";
+import { createBackendStack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
 import {
 	createServerAuth,
@@ -234,7 +234,7 @@ function makeBackend(
 		tenantId?: string;
 	} = {},
 ) {
-	return stack({
+	return createBackendStack({
 		basePath: "/api",
 		plugins: {
 			media: mediaBackendPlugin({

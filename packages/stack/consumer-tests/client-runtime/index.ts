@@ -116,6 +116,24 @@ observations[0]?.id satisfies string | undefined;
 clientStack.provider.api.headers;
 
 createClientStack({
+	// @ts-expect-error Shared origins must be qualified under api or site.
+	baseURL: "https://ignored.example.com",
+	api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+	site: { baseURL: "https://app.example.com", basePath: "/pages" },
+	queryClient,
+	plugins: { consumerProbe: probeClientPlugin() },
+});
+
+createClientStack({
+	// @ts-expect-error Shared paths must be qualified under api or site.
+	basePath: "/ignored",
+	api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+	site: { baseURL: "https://app.example.com", basePath: "/pages" },
+	queryClient,
+	plugins: { consumerProbe: probeClientPlugin() },
+});
+
+createClientStack({
 	api: { baseURL: "https://app.example.com", basePath: "/api/data" },
 	site: { baseURL: "https://app.example.com", basePath: "/pages" },
 	queryClient,

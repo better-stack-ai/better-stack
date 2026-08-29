@@ -17,6 +17,7 @@ import {
 } from "../authorization/remote";
 import { StackProvider, useIdentity } from "../context";
 import { createIdentityTestAuth } from "./auth-test-utils";
+import { createEmptyTestClientStack } from "./client-stack-test-utils";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -74,7 +75,7 @@ describe("createClientAuth", () => {
 		}
 
 		await render(
-			<StackProvider basePath="/pages" auth={clientAuth}>
+			<StackProvider stack={createEmptyTestClientStack()} auth={clientAuth}>
 				<Probe />
 			</StackProvider>,
 		);
@@ -102,7 +103,7 @@ describe("createClientAuth", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createEmptyTestClientStack()}
 				auth={clientAuth}
 				initialIdentity={{ id: "server-admin", role: "admin" }}
 			>
@@ -136,7 +137,11 @@ describe("createClientAuth", () => {
 		}
 
 		await render(
-			<StackProvider basePath="/pages" auth={clientAuth} initialIdentity={null}>
+			<StackProvider
+				stack={createEmptyTestClientStack()}
+				auth={clientAuth}
+				initialIdentity={null}
+			>
 				<Probe />
 			</StackProvider>,
 		);
@@ -168,7 +173,7 @@ describe("createClientAuth", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createEmptyTestClientStack()}
 				auth={clientAuth}
 				initialIdentity={{ id: "server-admin", role: "admin" }}
 			>
@@ -182,7 +187,11 @@ describe("createClientAuth", () => {
 		expect(canState).toEqual({ can: true, isPending: false });
 
 		await render(
-			<StackProvider basePath="/pages" auth={clientAuth} initialIdentity={null}>
+			<StackProvider
+				stack={createEmptyTestClientStack()}
+				auth={clientAuth}
+				initialIdentity={null}
+			>
 				<Probe />
 			</StackProvider>,
 		);
@@ -192,7 +201,7 @@ describe("createClientAuth", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createEmptyTestClientStack()}
 				auth={clientAuth}
 				initialIdentity={{ id: "account-user", role: "user" }}
 			>
@@ -233,7 +242,7 @@ describe("createClientAuth", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createEmptyTestClientStack()}
 				auth={firstProvider}
 				initialIdentity={initialIdentity}
 			>
@@ -244,7 +253,7 @@ describe("createClientAuth", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createEmptyTestClientStack()}
 				auth={secondProvider}
 				initialIdentity={initialIdentity}
 			>
@@ -286,7 +295,7 @@ describe("createClientAuth", () => {
 		}
 
 		await render(
-			<StackProvider basePath="/pages" auth={firstProvider}>
+			<StackProvider stack={createEmptyTestClientStack()} auth={firstProvider}>
 				<Probe />
 			</StackProvider>,
 		);
@@ -295,7 +304,7 @@ describe("createClientAuth", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createEmptyTestClientStack()}
 				auth={secondProvider}
 				initialIdentity={{ id: "serialized-user" }}
 			>
@@ -344,7 +353,7 @@ describe("createClientAuth", () => {
 		}
 
 		await render(
-			<StackProvider basePath="/pages" auth={provider}>
+			<StackProvider stack={createEmptyTestClientStack()} auth={provider}>
 				<Probe />
 			</StackProvider>,
 		);
@@ -391,7 +400,7 @@ describe("createClientAuth", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createEmptyTestClientStack()}
 				auth={firstProvider}
 				initialIdentity={firstSnapshot}
 			>
@@ -405,7 +414,7 @@ describe("createClientAuth", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createEmptyTestClientStack()}
 				auth={secondProvider}
 				initialIdentity={secondSnapshot}
 			>
@@ -414,7 +423,7 @@ describe("createClientAuth", () => {
 		);
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createEmptyTestClientStack()}
 				auth={firstProvider}
 				initialIdentity={firstSnapshot}
 			>
@@ -447,7 +456,7 @@ describe("createClientAuth", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createEmptyTestClientStack()}
 				auth={clientAuth}
 				initialIdentity={{ id: "server-user", role: "owner" } as never}
 			>
@@ -475,7 +484,7 @@ describe("createClientAuth", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createEmptyTestClientStack()}
 				auth={clientAuth}
 				initialIdentity={{ id: "server-user", role: "admin" }}
 			>
@@ -516,7 +525,7 @@ describe("createClientAuth", () => {
 		}
 
 		await render(
-			<StackProvider basePath="/pages" auth={clientAuth}>
+			<StackProvider stack={createEmptyTestClientStack()} auth={clientAuth}>
 				<Probe />
 			</StackProvider>,
 		);
@@ -562,7 +571,7 @@ describe("createClientAuth", () => {
 		}
 		function App({ postId, unrelated }: { postId: string; unrelated: number }) {
 			return (
-				<StackProvider basePath="/pages" auth={clientAuth}>
+				<StackProvider stack={createEmptyTestClientStack()} auth={clientAuth}>
 					<span>{unrelated}</span>
 					<Probe postId={postId} />
 				</StackProvider>
@@ -608,7 +617,7 @@ describe("createClientAuth", () => {
 		}
 
 		await render(
-			<StackProvider basePath="/pages" auth={clientAuth}>
+			<StackProvider stack={createEmptyTestClientStack()} auth={clientAuth}>
 				<Probe />
 			</StackProvider>,
 		);
@@ -648,7 +657,7 @@ describe("createClientAuth", () => {
 		}
 
 		await render(
-			<StackProvider basePath="/pages" auth={clientAuth}>
+			<StackProvider stack={createEmptyTestClientStack()} auth={clientAuth}>
 				<Probe />
 			</StackProvider>,
 		);
@@ -682,7 +691,7 @@ describe("createClientAuth", () => {
 		}
 
 		await render(
-			<StackProvider basePath="/pages" auth={clientAuth}>
+			<StackProvider stack={createEmptyTestClientStack()} auth={clientAuth}>
 				<Probe />
 			</StackProvider>,
 		);
@@ -713,7 +722,7 @@ describe("createClientAuth", () => {
 		}
 
 		await render(
-			<StackProvider basePath="/pages" auth={clientAuth}>
+			<StackProvider stack={createEmptyTestClientStack()} auth={clientAuth}>
 				<Probe />
 			</StackProvider>,
 		);
@@ -748,7 +757,7 @@ describe("createClientAuth", () => {
 		}
 
 		await render(
-			<StackProvider basePath="/pages" auth={clientAuth}>
+			<StackProvider stack={createEmptyTestClientStack()} auth={clientAuth}>
 				<Probe />
 			</StackProvider>,
 		);

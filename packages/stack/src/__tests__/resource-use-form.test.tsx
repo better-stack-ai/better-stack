@@ -7,6 +7,7 @@ import { StackProvider } from "../context";
 import type { ResourcesDeclaration } from "../plugins/client";
 import { createResource } from "../plugins/client/hooks";
 import type { ResourceFormResult } from "../plugins/client/hooks";
+import { createEmptyTestClientStack } from "./client-stack-test-utils";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -106,8 +107,7 @@ describe("resource useForm", () => {
 		await act(async () => {
 			root.render(
 				<StackProvider
-					basePath="/pages"
-					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
+					stack={createEmptyTestClientStack(queryClient)}
 					router={{ navigate, refresh }}
 					notify={{ success: notifySuccess, error: notifyError }}
 				>

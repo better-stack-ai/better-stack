@@ -27,10 +27,7 @@ import {
 	type ComposedEndpointInventoryEntry,
 } from "../plugins/api/endpoint-inventory";
 import { serializeValidationIssues } from "../plugins/api/create-endpoint";
-import {
-	resolvePluginProgrammaticId,
-	resolvePluginRegistrationIds,
-} from "../plugin-registration";
+import { resolvePluginRegistrationIds } from "../plugin-registration";
 
 export { toNodeHandler } from "better-call/node";
 
@@ -197,7 +194,7 @@ export function createBackendStack<
 		endpointInventory.push(
 			...composeEndpointInventory(
 				pluginKey,
-				resolvePluginProgrammaticId(plugin, registrationIds[pluginKey]!),
+				registrationIds[pluginKey]!,
 				pluginRoutes,
 				pluginOperations[pluginKey] ?? Object.create(null),
 				plugin.operations !== undefined || runtimeAuth !== undefined,
@@ -206,7 +203,7 @@ export function createBackendStack<
 			),
 		);
 
-		// Prefix route keys with plugin name to avoid collisions
+		// Prefix route keys with the canonical plugin ID to avoid collisions
 		for (const [routeKey, endpoint] of Object.entries(pluginRoutes)) {
 			const compositeKey = `${pluginKey}_${routeKey}` as keyof TRoutes;
 			(allRoutes as any)[compositeKey] = endpoint;
@@ -281,17 +278,10 @@ export function createBackendStack<
 	};
 }
 
-/**
- * @deprecated Use `createBackendStack`. This alias is removed by #225.
- */
-export const stack: typeof createBackendStack = createBackendStack;
-
 export type {
 	BackendPlugin,
 	BackendStackConfig,
 	BackendStack,
-	BackendLibConfig,
-	BackendLib,
 	PluginRaw,
 	PluginOperations,
 	StackContext,

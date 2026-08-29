@@ -269,7 +269,7 @@ export function ChatInterface({
 	);
 	const {
 		api,
-		basePath: legacyBasePath,
+		basePath: stackBasePath,
 		plugins,
 		queryClient: stackQueryClient,
 	} = useStack();
@@ -281,7 +281,7 @@ export function ChatInterface({
 	const resolvedApiPath = resolveAiChatApiUrl(apiBaseURL, apiBasePath);
 	const mode = resolveAiChatMode(plugins?.aiChat?.config);
 	const siteBaseURL = plugins?.aiChat?.site.baseURL;
-	const siteBasePath = plugins?.aiChat?.site.basePath ?? legacyBasePath;
+	const siteBasePath = plugins?.aiChat?.site.basePath ?? stackBasePath;
 	const isPublicMode = mode === "public";
 
 	// Read page AI context registered by the current page

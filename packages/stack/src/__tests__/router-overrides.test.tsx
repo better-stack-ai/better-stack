@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import type { ComponentType } from "react";
+import { QueryClient } from "@tanstack/react-query";
+import { createClientStack } from "../client";
 import { StackProvider, usePluginOverrides, useStack } from "../context";
 import type { StackApiConfig, StackRouterConfig } from "../context";
+import { defineClientPlugin } from "../plugins/client";
 
 function resolveProvider({
 	pluginName,
@@ -12,7 +15,7 @@ function resolveProvider({
 	defaultValues,
 }: {
 	pluginName: string;
-	overrides?: Record<string, any>;
+	overrides?: { blog?: Record<string, any> };
 	router?: StackRouterConfig;
 	api?: StackApiConfig;
 	defaultValues?: Record<string, any>;
@@ -26,14 +29,23 @@ function resolveProvider({
 		};
 		return null;
 	}
+	const stack = createClientStack({
+		api: {
+			baseURL: api?.baseURL ?? "https://example.com",
+			basePath: api?.basePath ?? "/api/data",
+		},
+		site: { baseURL: "https://example.com", basePath: "/pages" },
+		queryClient: new QueryClient(),
+		plugins: {
+			blog: defineClientPlugin<Record<string, any>>()({
+				id: "blog",
+				resolve: () => ({ routes: () => ({}) }),
+			}),
+		},
+	});
 
 	renderToString(
-		<StackProvider
-			basePath="/pages"
-			overrides={overrides}
-			router={router}
-			api={api}
-		>
+		<StackProvider stack={stack} overrides={overrides} router={router}>
 			<Probe />
 		</StackProvider>,
 	);
@@ -78,7 +90,7 @@ describe("top-level router/api context", () => {
 			navigate,
 			refresh,
 		});
-		expect(resolved.stack.api).toBe(api);
+		expect(resolved.stack.api).toEqual(api);
 		expect(resolved.overrides).toEqual({});
 	});
 

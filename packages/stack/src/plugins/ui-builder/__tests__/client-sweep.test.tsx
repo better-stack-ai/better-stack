@@ -16,7 +16,7 @@ import {
 	type StackI18nProvider,
 } from "@btst/stack/context";
 import { createApiClient } from "@btst/stack/plugins/client";
-import { stack } from "../../../api";
+import { createBackendStack } from "../../../api";
 import { cmsBackendPlugin, type CMSApiRouter } from "../../cms/api";
 import { cmsPermissions } from "../../cms/permissions";
 import { createCMSQueryKeys } from "../../cms/query-keys";
@@ -31,6 +31,11 @@ import { PageListPage as PageListRoutePage } from "../client/components/pages/pa
 import { createUIBuilderQueryKeys } from "../query-keys";
 import { UI_BUILDER_CONTENT_TYPE, UI_BUILDER_TYPE_SLUG } from "../schemas";
 import type { SerializedUIBuilderPage } from "../types";
+import { createTestClientStack } from "../../../__tests__/client-stack-test-utils";
+
+function createUIBuilderStack() {
+	return createTestClientStack({ uiBuilder: uiBuilderClientPlugin() });
+}
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -218,8 +223,7 @@ async function renderPage(
 	await act(async () => {
 		root.render(
 			<StackProvider
-				basePath="/pages"
-				api={{ baseURL: "http://test.local", basePath: "/api/data" }}
+				stack={createUIBuilderStack()}
 				router={createMockRouter()}
 				overrides={{
 					uiBuilder: { ...overrides(), localization: options.localization },
@@ -485,7 +489,7 @@ describe("UI Builder registered component registry", () => {
 
 describe("UI Builder public page authorization", () => {
 	it("serves a real anonymous CMS page with the shared public rules", async () => {
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: {
 				cms: cmsBackendPlugin({ contentTypes: [UI_BUILDER_CONTENT_TYPE] }),
@@ -546,7 +550,7 @@ describe("UI Builder public page authorization", () => {
 	it("renders anonymous SSR and SSG output from an explicitly public CMS read", () => {
 		const ssr = renderToString(
 			<StackProvider
-				basePath="/pages"
+				stack={createUIBuilderStack()}
 				auth={publicPageAuth()}
 				initialIdentity={null}
 				overrides={{ uiBuilder: overrides() }}
@@ -556,7 +560,7 @@ describe("UI Builder public page authorization", () => {
 		);
 		const ssg = renderToStaticMarkup(
 			<StackProvider
-				basePath="/pages"
+				stack={createUIBuilderStack()}
 				auth={publicPageAuth()}
 				initialIdentity={null}
 				overrides={{ uiBuilder: overrides() }}

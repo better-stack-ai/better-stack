@@ -23,6 +23,8 @@ import type { SerializedPost } from "../types";
 import { blogPermissions } from "../permissions";
 import { z } from "zod";
 import { createIdentityTestAuth } from "../../../__tests__/auth-test-utils";
+import { createTestClientStack } from "../../../__tests__/client-stack-test-utils";
+import { blogClientPlugin } from "../client/plugin";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -119,6 +121,14 @@ async function render(ui: React.ReactElement) {
 	});
 }
 
+function createBlogStack() {
+	return createTestClientStack({ blog: blogClientPlugin() });
+}
+
+function blogOverrides() {
+	return { uploadImage: async () => "" };
+}
+
 function texts(): string {
 	return container.textContent ?? "";
 }
@@ -164,7 +174,7 @@ describe("FeaturedImageField notifications (useNotify)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createBlogStack()}
 				notify={notify}
 				overrides={{ blog: { uploadImage } }}
 			>
@@ -186,7 +196,7 @@ describe("FeaturedImageField notifications (useNotify)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createBlogStack()}
 				notify={notify}
 				overrides={{ blog: { uploadImage } }}
 			>
@@ -207,7 +217,7 @@ describe("FeaturedImageField notifications (useNotify)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createBlogStack()}
 				notify={notify}
 				overrides={{ blog: { uploadImage } }}
 			>
@@ -235,9 +245,9 @@ describe("Blog route authorization errors", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createBlogStack()}
 				router={{ navigate }}
-				overrides={{ blog: {} }}
+				overrides={{ blog: blogOverrides() }}
 				auth={createIdentityTestAuth(() => null, { loginPath: "/login" })}
 				initialIdentity={null}
 			>
@@ -264,9 +274,9 @@ describe("Blog route authorization errors", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createBlogStack()}
 				router={{ navigate }}
-				overrides={{ blog: {} }}
+				overrides={{ blog: blogOverrides() }}
 				auth={createIdentityTestAuth(
 					() => ({ id: "stale-user", role: "user" }),
 					{ loginPath: "/login" },
@@ -298,9 +308,9 @@ describe("Blog route authorization errors", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createBlogStack()}
 				router={{ navigate }}
-				overrides={{ blog: {} }}
+				overrides={{ blog: blogOverrides() }}
 				auth={createIdentityTestAuth(() => new Promise<null>(() => {}), {
 					loginPath: "/login",
 				})}
@@ -336,8 +346,8 @@ describe("EditPostForm operation descriptor controls", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
-				overrides={{ blog: {} }}
+				stack={createBlogStack()}
+				overrides={{ blog: blogOverrides() }}
 				auth={auth}
 				initialIdentity={{ id: "user-1", role: "user" }}
 			>
@@ -351,7 +361,10 @@ describe("EditPostForm operation descriptor controls", () => {
 
 	it("shows the delete button without an auth provider", async () => {
 		await render(
-			<StackProvider basePath="/pages" overrides={{ blog: {} }}>
+			<StackProvider
+				stack={createBlogStack()}
+				overrides={{ blog: blogOverrides() }}
+			>
 				<EditPostForm
 					postSlug="hello-world"
 					onClose={() => {}}
@@ -378,8 +391,8 @@ describe("EditPostForm operation descriptor controls", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
-				overrides={{ blog: {} }}
+				stack={createBlogStack()}
+				overrides={{ blog: blogOverrides() }}
 				auth={auth}
 				initialIdentity={{ id: "user-1", role: "user" }}
 			>
@@ -416,7 +429,11 @@ describe("SearchInput list state (useListState)", () => {
 		const router = createMockRouter("q=hello");
 
 		await render(
-			<StackProvider basePath="/pages" router={router} overrides={{ blog: {} }}>
+			<StackProvider
+				stack={createBlogStack()}
+				router={router}
+				overrides={{ blog: blogOverrides() }}
+			>
 				<SearchInput />
 			</StackProvider>,
 		);
@@ -432,7 +449,11 @@ describe("SearchInput list state (useListState)", () => {
 		const router = createMockRouter();
 
 		await render(
-			<StackProvider basePath="/pages" router={router} overrides={{ blog: {} }}>
+			<StackProvider
+				stack={createBlogStack()}
+				router={router}
+				overrides={{ blog: blogOverrides() }}
+			>
 				<SearchInput />
 			</StackProvider>,
 		);
@@ -478,7 +499,11 @@ describe("SearchInput list state (useListState)", () => {
 		const router = createMockRouter("q=hello");
 
 		await render(
-			<StackProvider basePath="/pages" router={router} overrides={{ blog: {} }}>
+			<StackProvider
+				stack={createBlogStack()}
+				router={router}
+				overrides={{ blog: blogOverrides() }}
+			>
 				<SearchInput />
 			</StackProvider>,
 		);
@@ -509,7 +534,10 @@ describe("SearchInput list state (useListState)", () => {
 describe("blog i18n precedence (useTranslate + overrides.localization)", () => {
 	it("renders the English default without providers", async () => {
 		await render(
-			<StackProvider basePath="/pages" overrides={{ blog: {} }}>
+			<StackProvider
+				stack={createBlogStack()}
+				overrides={{ blog: blogOverrides() }}
+			>
 				<PostsList posts={[]} />
 			</StackProvider>,
 		);
@@ -524,7 +552,11 @@ describe("blog i18n precedence (useTranslate + overrides.localization)", () => {
 		};
 
 		await render(
-			<StackProvider basePath="/pages" overrides={{ blog: {} }} i18n={i18n}>
+			<StackProvider
+				stack={createBlogStack()}
+				overrides={{ blog: blogOverrides() }}
+				i18n={i18n}
+			>
 				<PostsList posts={[]} />
 			</StackProvider>,
 		);
@@ -539,9 +571,12 @@ describe("blog i18n precedence (useTranslate + overrides.localization)", () => {
 
 		await render(
 			<StackProvider
-				basePath="/pages"
+				stack={createBlogStack()}
 				overrides={{
-					blog: { localization: { BLOG_LIST_EMPTY: "Custom empty state" } },
+					blog: {
+						...blogOverrides(),
+						localization: { BLOG_LIST_EMPTY: "Custom empty state" },
+					},
 				}}
 				i18n={{ translate }}
 			>

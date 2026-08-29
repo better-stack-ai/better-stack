@@ -22,6 +22,7 @@ import { aiChatClientPlugin } from "../client/plugin";
 import type { SerializedConversation } from "../types";
 import { aiChatPermissions } from "../permissions";
 import { aiChatIdentityKey } from "../query-keys";
+import { createTestClientStack } from "../../../__tests__/client-stack-test-utils";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 (globalThis as any).ResizeObserver ??= class {
@@ -153,6 +154,10 @@ const conversation: SerializedConversation = {
 let container: HTMLDivElement;
 let root: Root;
 let queryClient: QueryClient;
+
+function createAiChatTestStack() {
+	return createTestClientStack({ aiChat: aiChatClientPlugin() }, queryClient);
+}
 let deleteConversation: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
@@ -1761,7 +1766,7 @@ describe("AI Chat route lifecycle", () => {
 		await act(async () => {
 			root.render(
 				<StackProvider
-					basePath="/pages"
+					stack={createAiChatTestStack()}
 					router={router()}
 					overrides={{
 						aiChat: {

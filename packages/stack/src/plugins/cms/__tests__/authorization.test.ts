@@ -3,7 +3,7 @@ import { defineDb, type DatabaseDefinition } from "@btst/db";
 import { zodToFormSchema } from "@workspace/ui/lib/schema-converter";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { stack } from "../../../api";
+import { createBackendStack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
 import {
 	createServerAuth,
@@ -146,7 +146,7 @@ function makeBackend(options?: {
 	auth?: ServerAuth<any>;
 	hooks?: CMSBackendHooks;
 }) {
-	return stack({
+	return createBackendStack({
 		basePath: "/api",
 		plugins: {
 			cms: cmsBackendPlugin({

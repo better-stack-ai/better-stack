@@ -8,6 +8,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { FormRenderer } from "../client/components/forms/form-renderer";
 import { formBuilderPermissions } from "../permissions";
+import { createTestClientStack } from "../../../__tests__/client-stack-test-utils";
+import { formBuilderClientPlugin } from "../client/plugin";
+
+function createFormBuilderStack() {
+	return createTestClientStack({ formBuilder: formBuilderClientPlugin() });
+}
 
 (
 	globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -92,7 +98,7 @@ describe("FormRenderer authorization", () => {
 		await act(async () => {
 			root.render(
 				<StackProvider
-					basePath="/pages"
+					stack={createFormBuilderStack()}
 					overrides={{ formBuilder: {} }}
 					auth={auth}
 					initialIdentity={null}
@@ -141,7 +147,7 @@ describe("FormRenderer authorization", () => {
 		await act(async () => {
 			root.render(
 				<StackProvider
-					basePath="/pages"
+					stack={createFormBuilderStack()}
 					overrides={{ formBuilder: {} }}
 					auth={missingRuleAuth}
 					initialIdentity={null}

@@ -54,10 +54,10 @@ export function PageListPage() {
 	const notify = useNotify();
 	const { localization } =
 		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
-	const { router, plugins, basePath: legacyBasePath } = useStack();
+	const { router, plugins, basePath: stackBasePath } = useStack();
 	const navigate = router?.navigate;
 	const basePath =
-		plugins?.[UI_BUILDER_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
+		plugins?.[UI_BUILDER_PLUGIN_ID]?.site.basePath ?? stackBasePath;
 	const { pages, total, hasMore, isLoadingMore, loadMore } =
 		useSuspenseUIBuilderPages();
 	const deleteMutation = useDeleteUIBuilderPage();

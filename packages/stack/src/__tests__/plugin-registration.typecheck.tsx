@@ -1,10 +1,5 @@
 import type { DatabaseDefinition, DBAdapter } from "@btst/db";
 import { QueryClient } from "@tanstack/react-query";
-import type {
-	BackendPlugin,
-	ClientPlugin,
-	ClientPluginDefinition,
-} from "../types";
 import { createBackendStack } from "../api";
 import { createClientStack } from "../client";
 import { StackProvider } from "../context";
@@ -19,25 +14,6 @@ interface ConsumerOverrides {
 	label: string;
 	format?: "short" | "long";
 }
-
-const broadLegacyClient: ClientPlugin<ConsumerOverrides> = {
-	name: "broad-client",
-	routes: () => ({}),
-};
-defineClientPlugin(broadLegacyClient);
-
-const broadLegacyDefinition: ClientPluginDefinition<ConsumerOverrides> = {
-	name: "broad-definition",
-	resolve: () => ({ routes: () => ({}) }),
-};
-defineClientPlugin(broadLegacyDefinition);
-
-const broadLegacyBackend: BackendPlugin = {
-	name: "broad-backend",
-	dbPlugin: createDbPlugin("broad-backend-db", {}),
-	routes: () => ({}),
-};
-defineBackendPlugin(broadLegacyBackend);
 
 function consumerClientPlugin() {
 	return defineClientPlugin<ConsumerOverrides>()({
@@ -101,21 +77,21 @@ const routeOnlyStack = createClientStack({
 // @ts-expect-error No-override stacks do not accept activation-style empty blocks.
 <StackProvider stack={routeOnlyStack} overrides={{ routeOnly: {} }} />;
 
-// @ts-expect-error Override values are inferred from the registered definition.
 <StackProvider
 	stack={clientStack}
 	overrides={{
 		consumerProbe: {
 			label: "Probe",
+			// @ts-expect-error Override values are inferred from the registered definition.
 			format: "wide",
 		},
 	}}
 />;
 
-// @ts-expect-error Plugins without configurable fields are absent from overrides.
 <StackProvider
 	stack={clientStack}
 	overrides={{
+		// @ts-expect-error Plugins without configurable fields are absent from overrides.
 		routeOnly: {},
 	}}
 />;

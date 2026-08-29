@@ -210,6 +210,13 @@ export function resolveClientRuntime<TPlugins extends AnyPluginMap>(
 	config: ResolvedClientStackConfig<TPlugins>,
 	registrationIds: Readonly<Record<string, string>>,
 ): ResolvedClientRuntime<TPlugins> {
+	for (const removedField of ["baseURL", "basePath"] as const) {
+		if (Object.hasOwn(config, removedField)) {
+			throw new Error(
+				`[btst/client] Top-level ${removedField} was removed. Configure it under api or site.`,
+			);
+		}
+	}
 	const apiConfig = ownValue(config, "api");
 	const siteConfig = ownValue(config, "site");
 	const queryClient = ownValue(config, "queryClient") as

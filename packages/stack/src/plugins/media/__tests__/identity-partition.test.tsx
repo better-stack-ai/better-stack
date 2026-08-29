@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StackProvider, useIdentity } from "@btst/stack/context";
 import { createIdentityTestAuth } from "../../../__tests__/auth-test-utils";
+import { createTestClientStack } from "../../../__tests__/client-stack-test-utils";
 import { MEDIA_QUERY_KEYS } from "../api/query-key-defs";
 import {
 	useAssets,
@@ -13,11 +14,21 @@ import {
 	useUploadAsset,
 } from "../client/hooks/use-media";
 import { mediaResources } from "../query-keys";
+import { mediaClientPlugin } from "../client/plugin";
 
 const MEDIA_ENDPOINT = {
 	baseURL: "http://test.local",
 	basePath: "/api",
 };
+
+function createMediaStack(
+	queryClient: QueryClient,
+	api: typeof MEDIA_ENDPOINT = MEDIA_ENDPOINT,
+) {
+	return createTestClientStack({ media: mediaClientPlugin() }, queryClient, {
+		api,
+	});
+}
 
 (
 	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -92,11 +103,10 @@ describe("Media protected query identity partition", () => {
 			await act(async () => {
 				root.render(
 					<StackProvider
-						basePath="/pages"
-						api={{ baseURL: "http://test.local", basePath: "/api" }}
+						stack={createMediaStack(queryClient)}
 						auth={auth}
 						initialIdentity={initialIdentity}
-						overrides={{ media: { queryClient } }}
+						overrides={{ media: {} }}
 					>
 						<QueryClientProvider client={queryClient}>
 							<Probe />
@@ -154,11 +164,10 @@ describe("Media protected query identity partition", () => {
 		await act(async () => {
 			root.render(
 				<StackProvider
-					basePath="/pages"
-					api={{ baseURL: "http://test.local", basePath: "/api" }}
+					stack={createMediaStack(queryClient)}
 					auth={auth}
 					initialIdentity={{ id: "user-a" }}
-					overrides={{ media: { queryClient } }}
+					overrides={{ media: {} }}
 				>
 					<QueryClientProvider client={queryClient}>
 						<Probe />
@@ -214,11 +223,10 @@ describe("Media protected query identity partition", () => {
 			await act(async () => {
 				root.render(
 					<StackProvider
-						basePath="/pages"
-						api={{ baseURL: "http://test.local", basePath: "/api" }}
+						stack={createMediaStack(queryClient)}
 						auth={auth}
 						initialIdentity={initialIdentity}
-						overrides={{ media: { queryClient, imageCompression: false } }}
+						overrides={{ media: { imageCompression: false } }}
 					>
 						<QueryClientProvider client={queryClient}>
 							<Probe />
@@ -283,11 +291,10 @@ describe("Media protected query identity partition", () => {
 			await act(async () => {
 				root.render(
 					<StackProvider
-						basePath="/pages"
-						api={{ baseURL: "http://test.local", basePath: "/api" }}
+						stack={createMediaStack(queryClient)}
 						auth={auth}
 						initialIdentity={initialIdentity}
-						overrides={{ media: { queryClient } }}
+						overrides={{ media: {} }}
 					>
 						<QueryClientProvider client={queryClient}>
 							<Probe showList={showList} />
@@ -354,11 +361,10 @@ describe("Media protected query identity partition", () => {
 			await act(async () => {
 				root.render(
 					<StackProvider
-						basePath="/pages"
-						api={{ baseURL: "http://test.local", basePath: "/api" }}
+						stack={createMediaStack(queryClient)}
 						auth={auth}
 						initialIdentity={initialIdentity}
-						overrides={{ media: { queryClient } }}
+						overrides={{ media: {} }}
 					>
 						<QueryClientProvider client={queryClient}>
 							<Probe />
@@ -442,11 +448,10 @@ describe("Media protected query identity partition", () => {
 			await act(async () => {
 				root.render(
 					<StackProvider
-						basePath="/pages"
-						api={endpoint}
+						stack={createMediaStack(queryClient, endpoint)}
 						auth={auth}
 						initialIdentity={identity}
-						overrides={{ media: { queryClient } }}
+						overrides={{ media: {} }}
 					>
 						<QueryClientProvider client={queryClient}>
 							<Probe />
@@ -513,11 +518,10 @@ describe("Media protected query identity partition", () => {
 
 		const tree = (initialIdentity: { id: string }) => (
 			<StackProvider
-				basePath="/pages"
-				api={{ baseURL: "http://test.local", basePath: "/api" }}
+				stack={createMediaStack(queryClient)}
 				auth={auth}
 				initialIdentity={initialIdentity}
-				overrides={{ media: { queryClient } }}
+				overrides={{ media: {} }}
 			>
 				<QueryClientProvider client={queryClient}>
 					<Suspense fallback={null}>
@@ -590,11 +594,10 @@ describe("Media protected query identity partition", () => {
 
 		const tree = (identity: { id: string }, completeDeletion: boolean) => (
 			<StackProvider
-				basePath="/pages"
-				api={{ baseURL: "http://test.local", basePath: "/api" }}
+				stack={createMediaStack(queryClient)}
 				auth={auth}
 				initialIdentity={identity}
-				overrides={{ media: { queryClient } }}
+				overrides={{ media: {} }}
 			>
 				<QueryClientProvider client={queryClient}>
 					<Probe key={identity.id} completeDeletion={completeDeletion} />
@@ -670,11 +673,10 @@ describe("Media protected query identity partition", () => {
 			await act(async () => {
 				root.render(
 					<StackProvider
-						basePath="/pages"
-						api={{ baseURL: "http://test.local", basePath: "/api" }}
+						stack={createMediaStack(queryClient)}
 						auth={auth}
 						initialIdentity={{ id: "user-a" }}
-						overrides={{ media: { queryClient } }}
+						overrides={{ media: {} }}
 					>
 						<QueryClientProvider client={queryClient}>
 							<Probe showList={showList} />

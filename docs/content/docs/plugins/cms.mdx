@@ -751,9 +751,10 @@ const auth = createClientAuth({
 })
 
 <StackProvider
+  stack={stack}
   auth={auth}
   initialIdentity={initialIdentity}
-  // router, api, overrides, ...
+  // router, overrides, ...
 >
   {children}
 </StackProvider>

@@ -53,10 +53,10 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 	const notify = useNotify();
 	const overrides = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 	const { localization } = overrides;
-	const { router, plugins, basePath: legacyBasePath } = useStack();
+	const { router, plugins, basePath: stackBasePath } = useStack();
 	const navigate = router?.navigate;
 	const Link = router?.Link;
-	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
+	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? stackBasePath;
 
 	// Call route lifecycle hooks for telemetry and application behavior.
 	useRouteLifecycle({

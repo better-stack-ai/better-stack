@@ -71,10 +71,10 @@ export function ChatSidebar({
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
 	>("aiChat", {});
-	const { basePath: legacyBasePath, plugins, router } = useStack();
+	const { basePath: stackBasePath, plugins, router } = useStack();
 	const navigate = router?.navigate;
 	const siteBaseURL = plugins?.aiChat?.site.baseURL;
-	const siteBasePath = plugins?.aiChat?.site.basePath ?? legacyBasePath;
+	const siteBasePath = plugins?.aiChat?.site.basePath ?? stackBasePath;
 	const notify = useNotify();
 	const tr = useAiChatTranslation(customLocalization);
 	const { conversations, isLoading } = useConversations();

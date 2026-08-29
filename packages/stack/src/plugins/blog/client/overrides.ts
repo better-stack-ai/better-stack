@@ -93,7 +93,7 @@ export interface BlogPluginOverrides {
 	/**
 	 * Localization object for the blog plugin
 	 */
-	localization?: BlogLocalization;
+	localization?: Partial<BlogLocalization>;
 	/**
 	 * Whether to show the attribution
 	 */

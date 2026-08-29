@@ -3,30 +3,17 @@ import {
 	type DatabaseDefinition,
 	type DBAdapter,
 } from "@btst/db";
+import { QueryClient } from "@tanstack/react-query";
 import { createRoute } from "@btst/yar";
 import { z } from "zod";
-import {
-	createBackendStack,
-	stack,
-	type BackendLib,
-	type BackendLibConfig,
-	type BackendStack,
-	type BackendStackConfig,
-} from "../api";
+import { createBackendStack, type BackendStackConfig } from "../api";
 import {
 	defineAuthorization,
 	definePermissions,
 	permission,
 } from "../authorization";
 import { createServerAuth } from "../authorization/server";
-import {
-	createClientStack,
-	createStackClient,
-	type ClientLib,
-	type ClientLibConfig,
-	type ClientStack,
-	type ClientStackConfig,
-} from "../client";
+import { createClientStack, type ClientStackConfig } from "../client";
 import {
 	createEndpoint,
 	defineBackendPlugin,
@@ -60,7 +47,7 @@ const read = defineOperation({
 	execute: ({ input }) => ({ id: input.id }),
 });
 const backendPlugin = defineBackendPlugin({
-	name: "constructorProbe",
+	id: "constructorProbe",
 	dbPlugin: createDbPlugin("constructorProbe", {}),
 	operations: () => ({ read }),
 	routes: (_adapter, _context, operations) => ({
@@ -81,28 +68,12 @@ const backendConfig = {
 	typeof serverAuth
 >;
 
-const canonicalBackend = createBackendStack(backendConfig);
-const temporaryBackend = stack(backendConfig);
-type _BackendFactoriesMatch = Expect<
-	Equal<typeof createBackendStack, typeof stack>
+const backend = createBackendStack(backendConfig);
+type _BackendRouteKeys = Expect<
+	Equal<keyof typeof backend.router.endpoints, "constructorProbe_read">
 >;
-type _BackendInferenceMatches = Expect<
-	Equal<typeof canonicalBackend, typeof temporaryBackend>
->;
-type _CanonicalBackendRouteKeys = Expect<
-	Equal<keyof typeof canonicalBackend.router.endpoints, "constructorProbe_read">
->;
-type _TemporaryBackendRouteKeys = Expect<
-	Equal<keyof typeof temporaryBackend.router.endpoints, "constructorProbe_read">
->;
-const canonicalBackendConfig: BackendStackConfig = backendConfig;
-const legacyBackendConfig: BackendLibConfig = canonicalBackendConfig;
-const canonicalBackendResult: BackendStack = canonicalBackend;
-const legacyBackendResult: BackendLib = canonicalBackendResult;
-void legacyBackendConfig;
-void legacyBackendResult;
-canonicalBackend.trusted.constructorProbe.read({ id: "record-1" });
-canonicalBackend
+backend.trusted.constructorProbe.read({ id: "record-1" });
+backend
 	.forRequest(new Request("https://example.com/api"))
 	.operations.constructorProbe.read({ id: "record-1" });
 
@@ -122,39 +93,23 @@ createBackendStack({
 	// @ts-expect-error canonical constructor rejects incompatible authorization catalogs
 	auth: incompatibleAuth,
 });
-stack({
-	...backendConfig,
-	// @ts-expect-error temporary alias preserves authorization compatibility inference
-	auth: incompatibleAuth,
-});
 
 const clientPlugin = defineClientPlugin({
-	name: "constructorProbe",
-	routes: () => ({
-		read: createRoute("/constructor-probe/:id", ({ params }) => ({
-			PageComponent: () => null,
-			loader: async () => ({ recordId: params.id }),
-		})),
+	id: "constructorProbe",
+	resolve: () => ({
+		routes: () => ({
+			read: createRoute("/constructor-probe/:id", ({ params }) => ({
+				PageComponent: () => null,
+				loader: async () => ({ recordId: params.id }),
+			})),
+		}),
 	}),
 });
 const clientConfig = {
+	api: { baseURL: "https://example.com", basePath: "/api" },
+	site: { baseURL: "https://example.com", basePath: "/pages" },
+	queryClient: new QueryClient(),
 	plugins: { constructorProbe: clientPlugin },
 } satisfies ClientStackConfig<{ constructorProbe: typeof clientPlugin }>;
-const canonicalClient = createClientStack(clientConfig);
-const temporaryClient = createStackClient(clientConfig);
-type _ClientFactoriesMatch = Expect<
-	Equal<typeof createClientStack, typeof createStackClient>
->;
-type _ClientInferenceMatches = Expect<
-	Equal<typeof canonicalClient, typeof temporaryClient>
->;
-const canonicalClientConfig: ClientStackConfig = clientConfig;
-const legacyClientConfig: ClientLibConfig = canonicalClientConfig;
-const canonicalClientResult: ClientStack<
-	ReturnType<typeof clientPlugin.routes>
-> = canonicalClient;
-const legacyClientResult: ClientLib<ReturnType<typeof clientPlugin.routes>> =
-	canonicalClientResult;
-void legacyClientConfig;
-void legacyClientResult;
-canonicalClient.router.getRoute("/constructor-probe/record-1")?.loader?.();
+const client = createClientStack(clientConfig);
+client.router.getRoute("/constructor-probe/record-1")?.loader?.();

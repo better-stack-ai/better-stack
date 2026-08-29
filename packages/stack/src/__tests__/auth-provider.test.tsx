@@ -8,6 +8,7 @@ import { createClientAuth, type ClientAuth } from "../authorization/client";
 import { ComposedRoute } from "../client/components";
 import { StackProvider } from "../context";
 import { blogPermissions } from "../plugins/blog/permissions";
+import { createEmptyTestClientStack } from "./client-stack-test-utils";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -59,7 +60,11 @@ function Providers({
 	children: React.ReactNode;
 }) {
 	return (
-		<StackProvider basePath="/pages" auth={clientAuth} router={router}>
+		<StackProvider
+			stack={createEmptyTestClientStack()}
+			auth={clientAuth}
+			router={router}
+		>
 			{children}
 		</StackProvider>
 	);

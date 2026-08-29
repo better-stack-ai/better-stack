@@ -54,7 +54,7 @@ export interface FormBuilderPluginOverrides {
 	/**
 	 * Localization object for the Form Builder plugin
 	 */
-	localization?: FormBuilderLocalization;
+	localization?: Partial<FormBuilderLocalization>;
 
 	/**
 	 * Whether to show the attribution

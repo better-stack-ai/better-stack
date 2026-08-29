@@ -89,7 +89,7 @@ function useNextStackRouter(): StackRouter {
  * ```tsx
  * import { nextRouter } from "@btst/stack/next";
  *
- * <StackProvider basePath="/pages" router={nextRouter()} api={{ baseURL, basePath: "/api/data" }}>
+ * <StackProvider stack={clientStack} router={nextRouter()}>
  * ```
  */
 export function nextRouter(): StackRouterConfig {

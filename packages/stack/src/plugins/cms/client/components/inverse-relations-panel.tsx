@@ -62,10 +62,10 @@ export function InverseRelationsPanel({
 	const t = useTranslate();
 	const { localization } =
 		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
-	const { router, plugins, basePath: legacyBasePath } = useStack();
+	const { router, plugins, basePath: stackBasePath } = useStack();
 	const navigate = router?.navigate;
 	const Link = router?.Link;
-	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
+	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? stackBasePath;
 
 	// Fetch inverse relations metadata
 	const { inverseRelations, isLoading } = useInverseRelations(

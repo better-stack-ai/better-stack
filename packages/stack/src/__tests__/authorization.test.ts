@@ -18,7 +18,7 @@ import {
 	defineOperation,
 	definePassthroughOperation,
 } from "../plugins/api";
-import { stack } from "../api";
+import { createBackendStack } from "../api";
 
 const blogPermissions = definePermissions("blog", {
 	post: {
@@ -443,12 +443,12 @@ describe("schema-backed authorization", () => {
 		expect(operation.access).toBe("authorized");
 		expect(operation.resultMode).toBe("immutable");
 		const navigationPlugin = defineBackendPlugin({
-			name: "navigation",
+			id: "navigation",
 			dbPlugin: createDbPlugin("navigation", {}),
 			operations: () => ({ visit: operation }),
 			routes: () => ({}),
 		});
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: { navigation: navigationPlugin },
 			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
@@ -490,12 +490,12 @@ describe("schema-backed authorization", () => {
 			},
 		});
 		const plugin = defineBackendPlugin({
-			name: "publicStream",
+			id: "publicStream",
 			dbPlugin: createDbPlugin("publicStream", {}),
 			operations: () => ({ start: operation }),
 			routes: () => ({}),
 		});
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: { publicStream: plugin },
 			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
@@ -559,12 +559,12 @@ describe("schema-backed authorization", () => {
 			execute: ({ input }) => input.target.id,
 		});
 		const guardedPlugin = defineBackendPlugin({
-			name: "guarded",
+			id: "guarded",
 			dbPlugin: createDbPlugin("guarded", {}),
 			operations: () => ({ update: guardedOperation }),
 			routes: () => ({}),
 		});
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: { guarded: guardedPlugin },
 			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),
@@ -611,12 +611,12 @@ describe("schema-backed authorization", () => {
 			},
 		});
 		const compoundPlugin = defineBackendPlugin({
-			name: "compound",
+			id: "compound",
 			dbPlugin: createDbPlugin("compound", {}),
 			operations: () => ({ create: compoundOperation }),
 			routes: () => ({}),
 		});
-		const backend = stack({
+		const backend = createBackendStack({
 			basePath: "/api",
 			plugins: { compound: compoundPlugin },
 			adapter: (db: DatabaseDefinition) => createMemoryAdapter(db)({}),

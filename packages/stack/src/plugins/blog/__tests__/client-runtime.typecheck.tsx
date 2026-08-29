@@ -33,10 +33,14 @@ const stack = createClientStack({
 	}}
 />;
 
-// @ts-expect-error Blog override values are inferred from registration.
 StackProvider({
 	stack,
-	overrides: { blog: { uploadImage: "not-a-function" } },
+	overrides: {
+		blog: {
+			// @ts-expect-error Blog override values are inferred from registration.
+			uploadImage: "not-a-function",
+		},
+	},
 });
 
 // @ts-expect-error Unregistered provider override keys are rejected.

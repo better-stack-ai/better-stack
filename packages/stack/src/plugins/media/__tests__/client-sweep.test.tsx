@@ -17,6 +17,8 @@ import { LibraryPageComponent } from "../client/components/pages/library-page";
 import { MediaPicker } from "../client/components/media-picker";
 import { UrlTab } from "../client/components/media-picker/url-tab";
 import type { SerializedAsset, SerializedFolder } from "../types";
+import { createTestClientStack } from "../../../__tests__/client-stack-test-utils";
+import { mediaClientPlugin } from "../client/plugin";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 (globalThis as any).ResizeObserver ??= class {
@@ -128,9 +130,11 @@ function createMockRouter(initial = "") {
 	};
 }
 
-const mediaOverrides = () => ({
-	queryClient,
-});
+const mediaOverrides = () => ({});
+
+function createMediaStack(queryClient: QueryClient) {
+	return createTestClientStack({ media: mediaClientPlugin() }, queryClient);
+}
 
 async function renderLibrary(
 	options: {
@@ -144,8 +148,7 @@ async function renderLibrary(
 	await act(async () => {
 		root.render(
 			<StackProvider
-				basePath="/pages"
-				api={{ baseURL: "http://test.local", basePath: "/api/data" }}
+				stack={createMediaStack(queryClient)}
 				router={router}
 				overrides={{ media: mediaOverrides() }}
 				auth={options.auth}
@@ -206,7 +209,7 @@ describe("Media library route permission", () => {
 			await act(async () => {
 				root.render(
 					<StackProvider
-						basePath="/pages"
+						stack={createMediaStack(queryClient)}
 						router={createMockRouter()}
 						overrides={{ media: mediaOverrides() }}
 						auth={auth}
@@ -233,7 +236,7 @@ describe("Media library route permission", () => {
 		await act(async () => {
 			root.render(
 				<StackProvider
-					basePath="/pages"
+					stack={createMediaStack(queryClient)}
 					router={createMockRouter()}
 					overrides={{ media: mediaOverrides() }}
 					auth={auth}
@@ -452,8 +455,7 @@ describe("Media forms and i18n", () => {
 		await act(async () => {
 			root.render(
 				<StackProvider
-					basePath="/pages"
-					api={{ baseURL: "http://test.local", basePath: "/api/data" }}
+					stack={createMediaStack(queryClient)}
 					router={createMockRouter()}
 					overrides={{ media: mediaOverrides() }}
 					auth={auth}
@@ -511,7 +513,7 @@ describe("Media forms and i18n", () => {
 		await act(async () => {
 			root.render(
 				<StackProvider
-					basePath="/pages"
+					stack={createMediaStack(queryClient)}
 					router={createMockRouter()}
 					overrides={{ media: mediaOverrides() }}
 				>
