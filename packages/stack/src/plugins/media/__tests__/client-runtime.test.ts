@@ -445,4 +445,56 @@ describe("Media and Route Docs resolved client runtime", () => {
 			queryClient.getQueriesData({ queryKey: ROUTE_DOCS_QUERY_KEY }),
 		).toHaveLength(1);
 	});
+
+	it("isolates otherwise identical Route Docs stacks by sitemap output", async () => {
+		const queryClient = new QueryClient();
+		const createStack = (sitemapURL: string) =>
+			createClientStack({
+				api: { baseURL: "https://api.example.com", basePath: "/api" },
+				site: { baseURL: "https://site.example.com", basePath: "/" },
+				queryClient,
+				plugins: {
+					probe: defineClientPlugin({
+						id: "probe",
+						resolve: () => ({
+							routes: () => ({
+								probe: defineRoute("/probe", { page: () => null }, undefined, {
+									title: "Same probe",
+								}),
+							}),
+							sitemap: async () => [{ url: sitemapURL }],
+						}),
+					}),
+					routeDocs: routeDocsClientPlugin(),
+				},
+			});
+		const stackA = createStack("https://site.example.com/probe-a");
+		const stackB = createStack("https://site.example.com/probe-b");
+		const getPageQueryKey = (stack: typeof stackA) => {
+			const route = stack.context.plugins.routeDocs!.routes(stack.context)
+				.docs as {
+				def?: { page?: () => { props: { queryKey: readonly unknown[] } } };
+			};
+			return route.def?.page?.().props.queryKey;
+		};
+
+		await stackA.router.getRoute("/route-docs")?.loader?.();
+		const keyA = getPageQueryKey(stackA);
+		await stackB.router.getRoute("/route-docs")?.loader?.();
+		const keyB = getPageQueryKey(stackB);
+		if (!keyA || !keyB) throw new Error("Route Docs key was not created");
+
+		expect(keyB).not.toEqual(keyA);
+		expect(
+			queryClient.getQueryData<RouteDocsSchema>(keyA)?.allSitemapEntries[0]
+				?.url,
+		).toBe("https://site.example.com/probe-a");
+		expect(
+			queryClient.getQueryData<RouteDocsSchema>(keyB)?.allSitemapEntries[0]
+				?.url,
+		).toBe("https://site.example.com/probe-b");
+		expect(
+			queryClient.getQueriesData({ queryKey: ROUTE_DOCS_QUERY_KEY }),
+		).toHaveLength(2);
+	});
 });

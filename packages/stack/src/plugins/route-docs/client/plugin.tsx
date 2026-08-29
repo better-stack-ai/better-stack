@@ -33,6 +33,7 @@ const DocsPageSkeleton = lazy(() =>
 
 /** Query-key prefix for Route Docs schema caches. */
 export const ROUTE_DOCS_QUERY_KEY = ["route-docs", "schema"] as const;
+const ROUTE_DOCS_KEY_RESOLUTION = ["route-docs", "schema-key"] as const;
 
 export interface RegisteredRoute {
 	/** The route path pattern (for example, `/blog/:slug`). */
@@ -83,7 +84,9 @@ interface ResolvedRouteDocsClientConfig extends RouteDocsClientConfig {
 	siteBasePath: string;
 }
 
-function createRouteDocsQueryKey(
+const resolvedSchemaKeysByContext = new WeakMap<ClientStackContext, string>();
+
+function createRouteDocsBaseFingerprint(
 	config: ResolvedRouteDocsClientConfig,
 	context: ClientStackContext | null,
 ) {
@@ -102,20 +105,41 @@ function createRouteDocsQueryKey(
 				}))
 				.sort((left, right) => left.key.localeCompare(right.key))
 		: [];
-	return [
-		...ROUTE_DOCS_QUERY_KEY,
-		hashKey([
-			{
-				basePath: context?.basePath ?? null,
-				apiBaseURL: config.apiBaseURL,
-				apiBasePath: config.apiBasePath,
-				siteBaseURL: config.siteBaseURL,
-				siteBasePath: config.siteBasePath,
-				registrations,
-				schemaInputs,
-			},
-		]),
-	] as const;
+	return hashKey([
+		{
+			basePath: context?.basePath ?? null,
+			apiBaseURL: config.apiBaseURL,
+			apiBasePath: config.apiBasePath,
+			siteBaseURL: config.siteBaseURL,
+			siteBasePath: config.siteBasePath,
+			registrations,
+			schemaInputs,
+		},
+	]);
+}
+
+function createSchemaQueryKey(fingerprint: string) {
+	return [...ROUTE_DOCS_QUERY_KEY, fingerprint] as const;
+}
+
+function createSchemaKeyResolutionQueryKey(baseFingerprint: string) {
+	return [...ROUTE_DOCS_KEY_RESOLUTION, baseFingerprint] as const;
+}
+
+function resolveRouteDocsQueryKey(
+	config: ResolvedRouteDocsClientConfig,
+	context: ClientStackContext | null,
+) {
+	const baseFingerprint = createRouteDocsBaseFingerprint(config, context);
+	// The loader records the sitemap-complete key under this deterministic alias.
+	// Its dehydrated query data lets an equivalent reconstructed page find it.
+	const resolvedFingerprint = context
+		? (resolvedSchemaKeysByContext.get(context) ??
+			config.queryClient.getQueryData<string>(
+				createSchemaKeyResolutionQueryKey(baseFingerprint),
+			))
+		: undefined;
+	return createSchemaQueryKey(resolvedFingerprint ?? baseFingerprint);
 }
 
 function resolveRouteDocsClientConfig(
@@ -172,7 +196,6 @@ function DocsErrorComponent() {
 function createRouteDocsLoader(
 	config: ResolvedRouteDocsClientConfig,
 	context: ClientStackContext | null,
-	queryKey: ReturnType<typeof createRouteDocsQueryKey>,
 ) {
 	return async () => {
 		if (typeof window !== "undefined" || !context) return;
@@ -180,9 +203,20 @@ function createRouteDocsLoader(
 		try {
 			const sitemapEntries = await fetchAllSitemapEntries(context);
 			const schema = generateRouteDocsSchema(context, sitemapEntries);
+			const baseFingerprint = createRouteDocsBaseFingerprint(config, context);
+			const resolvedFingerprint = hashKey([
+				{ baseFingerprint, sitemapEntries },
+			]);
+			const queryKey = createSchemaQueryKey(resolvedFingerprint);
+			resolvedSchemaKeysByContext.set(context, resolvedFingerprint);
+			config.queryClient.setQueryData(
+				createSchemaKeyResolutionQueryKey(baseFingerprint),
+				resolvedFingerprint,
+			);
 			config.queryClient.setQueryData<RouteDocsSchema>(queryKey, schema);
 		} catch (error) {
 			console.warn("Failed to load route docs schema:", error);
+			const queryKey = resolveRouteDocsQueryKey(config, context);
 			config.queryClient.setQueryData<RouteDocsSchema>(
 				queryKey,
 				createEmptySchema(),
@@ -195,7 +229,6 @@ function createResolvedRouteDocsPlugin(config: ResolvedRouteDocsClientConfig) {
 	return {
 		routes: (context?: ClientStackContext) => {
 			const resolvedContext = context ?? null;
-			const queryKey = createRouteDocsQueryKey(config, resolvedContext);
 			return {
 				docs: defineRoute("/route-docs", {
 					page: () => (
@@ -204,12 +237,12 @@ function createResolvedRouteDocsPlugin(config: ResolvedRouteDocsClientConfig) {
 							description={config.description}
 							siteBaseURL={config.siteBaseURL}
 							siteBasePath={config.siteBasePath}
-							queryKey={queryKey}
+							queryKey={resolveRouteDocsQueryKey(config, resolvedContext)}
 						/>
 					),
 					loading: DocsPageSkeleton,
 					error: DocsErrorComponent,
-					loader: createRouteDocsLoader(config, resolvedContext, queryKey),
+					loader: createRouteDocsLoader(config, resolvedContext),
 					meta: createDocsMeta(config),
 				}),
 			};
