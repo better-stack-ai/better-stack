@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const textExtensions = new Set([
@@ -206,6 +207,16 @@ function markdownFenceContentStart(source, index) {
 		: source.indexOf("\n", openingFence.index) + 1;
 }
 
+function opensControlStatement(source, openIndex) {
+	const prefix = source.slice(0, openIndex);
+	const match = prefix.match(/([A-Za-z_$][\w$]*)\s*$/);
+	if (!match) return false;
+	if (!/^(?:catch|for|if|switch|while|with)$/.test(match[1])) return false;
+	let cursor = prefix.length - match[0].length - 1;
+	while (/\s/.test(source[cursor] ?? "")) cursor -= 1;
+	return source[cursor] !== ".";
+}
+
 function canStartRegexLiteral(
 	source,
 	index,
@@ -322,18 +333,18 @@ function scanLexicalState(source, index) {
 			cursor += 1;
 		} else if (
 			char === "/" &&
-			canStartRegexLiteral(source, cursor, controlStatementClosures)
+			canStartRegexLiteral(
+				source,
+				cursor,
+				controlStatementClosures,
+				templateFrame?.expressionDepth !== undefined,
+			)
 		) {
 			regex = true;
 			regexCharacterClass = false;
 			escaped = false;
 		} else if (char === "(") {
-			const keyword = source
-				.slice(0, cursor)
-				.match(/(?:^|\W)([A-Za-z_$][\w$]*)\s*$/)?.[1];
-			parenthesisFrames.push(
-				/^(?:catch|for|if|switch|while|with)$/.test(keyword ?? ""),
-			);
+			parenthesisFrames.push(opensControlStatement(source, cursor));
 		} else if (char === ")") {
 			if (parenthesisFrames.pop()) controlStatementClosures.add(cursor);
 		} else if (char === "{") {
@@ -445,11 +456,7 @@ function hasExecutableIdentifierReference(source, start, end, identifier) {
 	for (const match of source.slice(start, end).matchAll(pattern)) {
 		const index = start + (match.index ?? 0);
 		const state = scanLexicalState(source, index);
-		if (
-			!state.lineComment &&
-			!state.blockComment &&
-			(!state.quote || state.quote === "/" || state.quote === "`")
-		) {
+		if (!state.lineComment && !state.blockComment && !state.quote) {
 			return true;
 		}
 	}
@@ -535,12 +542,7 @@ function readTopLevelObject(source, openIndex) {
 			continue;
 		}
 		if (char === "(") {
-			const keyword = source
-				.slice(0, index)
-				.match(/(?:^|\W)([A-Za-z_$][\w$]*)\s*$/)?.[1];
-			parenthesisFrames.push(
-				/^(?:catch|for|if|switch|while|with)$/.test(keyword ?? ""),
-			);
+			parenthesisFrames.push(opensControlStatement(source, index));
 			if (depth <= 1 && roundDepth === 0 && squareDepth === 0) topLevel += char;
 			else topLevel += " ";
 			roundDepth += 1;
@@ -733,6 +735,112 @@ function factoryLocalNames(source, file, factory) {
 		}
 	}
 	return names;
+}
+
+let typeScriptScopeCache;
+
+function aliasScopeBounds(source, alias) {
+	if (alias.fenceStart !== undefined) {
+		const closingFence = source.indexOf("\n```", alias.fenceStart);
+		return {
+			end: closingFence < 0 ? source.length : closingFence,
+			start: alias.fenceStart,
+		};
+	}
+	if (alias.registryStart !== undefined) {
+		const start = source.indexOf("\n", alias.registryStart) + 1;
+		const nextSource = source.indexOf("\n}\n{\n", start);
+		return {
+			end:
+				nextSource >= 0
+					? nextSource
+					: source.endsWith("\n}")
+						? source.length - 2
+						: source.length,
+			start,
+		};
+	}
+	return { end: source.length, start: 0 };
+}
+
+function typeScriptScope(source, alias) {
+	const { end, start } = aliasScopeBounds(source, alias);
+	if (
+		typeScriptScopeCache?.source === source &&
+		typeScriptScopeCache.start === start &&
+		typeScriptScopeCache.end === end
+	) {
+		return typeScriptScopeCache;
+	}
+	const text = source.slice(start, end);
+	const fileName = "/canonical-dx-guard.tsx";
+	const options = {
+		jsx: ts.JsxEmit.Preserve,
+		module: ts.ModuleKind.ESNext,
+		noLib: true,
+		noResolve: true,
+		target: ts.ScriptTarget.Latest,
+	};
+	const sourceFile = ts.createSourceFile(
+		fileName,
+		text,
+		options.target,
+		true,
+		ts.ScriptKind.TSX,
+	);
+	const host = {
+		fileExists: (candidate) => candidate === fileName,
+		getCanonicalFileName: (candidate) => candidate,
+		getCurrentDirectory: () => "/",
+		getDefaultLibFileName: () => "",
+		getDirectories: () => [],
+		getNewLine: () => "\n",
+		getSourceFile: (candidate) =>
+			candidate === fileName ? sourceFile : undefined,
+		readFile: (candidate) => (candidate === fileName ? text : undefined),
+		useCaseSensitiveFileNames: () => true,
+		writeFile: () => {},
+	};
+	const program = ts.createProgram([fileName], options, host);
+	typeScriptScopeCache = {
+		checker: program.getTypeChecker(),
+		end,
+		source,
+		sourceFile,
+		start,
+	};
+	return typeScriptScopeCache;
+}
+
+function identifierAt(sourceFile, index, name) {
+	let identifier;
+	function visit(node) {
+		if (
+			ts.isIdentifier(node) &&
+			node.text === name &&
+			node.getStart(sourceFile) === index
+		) {
+			identifier = node;
+			return;
+		}
+		ts.forEachChild(node, visit);
+	}
+	visit(sourceFile);
+	return identifier;
+}
+
+function isImportedAliasShadowed(source, alias, callIndex) {
+	const scope = typeScriptScope(source, alias);
+	const identifier = identifierAt(
+		scope.sourceFile,
+		callIndex - scope.start,
+		alias.name,
+	);
+	const declarations = identifier
+		? scope.checker.getSymbolAtLocation(identifier)?.declarations
+		: undefined;
+	if (!declarations || declarations.length === 0) return false;
+	return declarations.some((declaration) => !ts.isImportSpecifier(declaration));
 }
 
 function resolveIdentifierBinding(source, file, identifier, callIndex) {
@@ -1024,6 +1132,12 @@ function checkFactoryCalls(
 					? scanLexicalState(source, callIndex)
 					: scanLexicalState(source.slice(fenceStart), callIndex - fenceStart);
 			if (callState.lineComment || callState.blockComment) {
+				continue;
+			}
+			if (
+				localFactory.name !== factory &&
+				isImportedAliasShadowed(source, localFactory, callIndex)
+			) {
 				continue;
 			}
 			let cursor = skipLexicalTrivia(source, callIndex + match[0].length);
