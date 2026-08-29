@@ -681,7 +681,7 @@ export const todosBackendPlugin = () => defineBackendPlugin({
 The consumer creates a dedicated static page outside `[[...all]]/` that calls `prefetchForRoute` instead of `route.loader()`:
 
 ```tsx
-// app/pages/todos/page.tsx
+// app/(static)/pages/todos/page.tsx
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
 import { notFound } from "next/navigation"
 import { getOrCreateQueryClient } from "@/lib/query-client"
@@ -718,7 +718,12 @@ export default async function TodosPage() {
 ```
 
 <Callout type="info">
-The shared `StackProvider` layout must live at `app/pages/layout.tsx` (not inside `[[...all]]/layout.tsx`) so it applies to both the catch-all routes and these specific SSG pages.
+Keep request-aware routes under `app/(request)/pages` and SSG/ISR routes under
+`app/(static)/pages`; both groups still publish `/pages/*` URLs. Put the shared
+client `StackProvider` shell in `app/pages/client-layout.tsx`. The request group
+layout resolves trusted request origins, while the static group layout calls
+the header-free `getServerClientOrigins()` so reading headers cannot make SSG
+routes dynamic.
 </Callout>
 
 #### 5. ISR cache invalidation

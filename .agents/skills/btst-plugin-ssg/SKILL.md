@@ -27,7 +27,8 @@ description: Patterns for adding SSG (static site generation) support to BTST pl
 - **`useInfiniteQuery` lists** require `{ pages: [...], pageParams: [...] }` shape in `setQueryData`. Flat arrays break hydration.
 - **Share key builders** via `api/query-key-defs.ts` — never hardcode key shapes in two places.
 - **One-time init steps** (e.g. CMS `ensureSynced`) — call once at the top of `prefetchForRoute`; it's idempotent and safe for concurrent SSG.
-- Place shared `StackProvider` layout at `app/pages/layout.tsx` (not inside `[[...all]]/`) so it applies to both SSG pages and the catch-all.
+- In Next.js, keep request-aware routes under `app/(request)/pages` and SSG/ISR routes under `app/(static)/pages`. Both groups still publish `/pages/*` URLs.
+- Put the reusable client `StackProvider` shell in `app/pages/client-layout.tsx`. Wrap it from a request layout that resolves origins from trusted request headers and a header-free static layout so SSG does not become dynamic.
 
 ## Plugins with SSG support
 

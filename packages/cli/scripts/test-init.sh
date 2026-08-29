@@ -192,7 +192,35 @@ mkdir -p lib/fixtures
 cp "$PACKAGE_DIR/scripts/fixtures/third-party-plugin.tsx" lib/fixtures/third-party-plugin.tsx
 success "Third-party fixture uses public plugin definitions and inferred overrides"
 
-step "Idempotency check (second pass)"
+step "Migrating the previous Next.js scaffold on rerun"
+mkdir -p "app/pages/[[...all]]"
+mv "app/(request)/pages/[[...all]]/page.tsx" "app/pages/[[...all]]/page.tsx"
+cp "app/(request)/pages/layout.tsx" "app/pages/layout.tsx"
+rm "app/(request)/pages/layout.tsx"
+mv "app/(static)/pages/ssg-blog" "app/pages/ssg-blog"
+mv "app/(static)/pages/ssg-cms" "app/pages/ssg-cms"
+mv "app/(static)/pages/ssg-kanban" "app/pages/ssg-kanban"
+rm "app/(static)/pages/layout.tsx"
+
+npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins "$MEMORY_PLUGIN_LIST" --skip-install > "$TEST_DIR/init-migration.log" 2>&1
+
+test ! -e "app/pages/[[...all]]/page.tsx"
+test ! -e "app/pages/layout.tsx"
+test ! -e "app/pages/ssg-blog/page.tsx"
+test ! -e "app/pages/ssg-blog/[slug]/page.tsx"
+test ! -e "app/pages/ssg-cms/[typeSlug]/page.tsx"
+test ! -e "app/pages/ssg-kanban/page.tsx"
+test -f "app/(request)/pages/[[...all]]/page.tsx"
+test -f "app/(request)/pages/layout.tsx"
+test -f "app/(static)/pages/layout.tsx"
+test -f "app/(static)/pages/ssg-blog/page.tsx"
+test -f "app/(static)/pages/ssg-blog/[slug]/page.tsx"
+test -f "app/(static)/pages/ssg-cms/[typeSlug]/page.tsx"
+test -f "app/(static)/pages/ssg-kanban/page.tsx"
+grep -q "Legacy Next.js files removed: 6" "$TEST_DIR/init-migration.log"
+success "Previous scaffold migrated without duplicate /pages routes"
+
+step "Idempotency check after migration"
 write_project_hash "$TEST_DIR/init-before.hash"
 
 npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins "$MEMORY_PLUGIN_LIST" --skip-install > "$TEST_DIR/init-second.log" 2>&1

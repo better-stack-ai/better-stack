@@ -91,7 +91,7 @@ raw: (adapter) => ({
 Static page that bypasses `route.loader()` and seeds the cache directly:
 
 ```tsx
-// app/pages/my-plugin/page.tsx
+// app/(static)/pages/my-plugin/page.tsx
 import { notFound } from "next/navigation"
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query"
 import type { Metadata } from "next"
@@ -129,6 +129,11 @@ export default async function Page() {
   )
 }
 ```
+
+Keep the request catch-all in `app/(request)/pages/[[...all]]/page.tsx` and
+static pages such as this one in `app/(static)/pages`. Both route groups retain
+the `/pages/*` URL. Each group layout should wrap the shared client provider in
+`app/pages/client-layout.tsx`; only the request layout may read request headers.
 
 ---
 

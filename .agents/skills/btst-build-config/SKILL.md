@@ -67,7 +67,9 @@ point, update ALL three generated projects:
 **Next.js** (`codegen-projects/nextjs/`)
 - `lib/stack.ts` — backend plugin registration
 - `lib/stack-client.tsx` — client plugin registration
-- `app/pages/layout.tsx` — override configuration
+- `app/pages/client-layout.tsx` — shared client provider and overrides
+- `app/(request)/pages/layout.tsx` — trusted request-origin hydration
+- `app/(static)/pages/layout.tsx` — header-free SSG/ISR provider wrapper
 - `app/globals.css` — `@import "@btst/stack/plugins/{name}/css";`
 
 **React Router** (`codegen-projects/react-router/`)
