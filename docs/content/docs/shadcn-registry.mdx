@@ -149,14 +149,13 @@ blogClientPlugin({
 ```tsx title="lib/stack-client.tsx"
 import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
 import { ChatPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-page"
-import { ChatConversationPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-conversation-page"
 
 aiChatClientPlugin({
   pageComponents: {
     chat: ChatPageComponent, // chat home page
     // conversation page (authenticated mode)
     chatConversation: ({ params }) => (
-      <ChatConversationPageComponent conversationId={params.id} />
+      <ChatPageComponent conversationId={params.id} />
     ),
   },
 })

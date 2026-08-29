@@ -1353,14 +1353,13 @@ After installing, wire your custom components into the plugin via the `pageCompo
 import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
 // Import your ejected (and customized) page components
 import { ChatPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-page"
-import { ChatConversationPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-conversation-page"
 
 aiChatClientPlugin({
   pageComponents: {
     chat: ChatPageComponent, // replaces the chat home page
     // Param routes receive the route context ({ params }) as props
     chatConversation: ({ params }) => (
-      <ChatConversationPageComponent conversationId={params.id} />
+      <ChatPageComponent conversationId={params.id} />
     ),
   },
 })
