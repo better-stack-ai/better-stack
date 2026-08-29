@@ -241,13 +241,14 @@ async function renderResolvedPage(
 	components?: NonNullable<
 		Parameters<typeof uiBuilderClientPlugin>[0]
 	>["components"],
+	siteBasePath = "/builder",
 ) {
 	const clientStack = createClientStack({
 		api: { baseURL: "http://test.local", basePath: "/api/data" },
 		site: { baseURL: "http://test.local", basePath: "/pages" },
 		queryClient,
 		plugins: { uiBuilder: uiBuilderClientPlugin({ components }) },
-		endpoints: { uiBuilder: { site: { basePath: "/builder" } } },
+		endpoints: { uiBuilder: { site: { basePath: siteBasePath } } },
 	});
 	await act(async () => {
 		root.render(
@@ -374,6 +375,41 @@ describe("UI Builder page permissions", () => {
 });
 
 describe("UI Builder resolved site navigation", () => {
+	it("keeps root list links, navigation, and create redirects origin-relative", async () => {
+		const router = await renderResolvedPage(
+			<PageListPage />,
+			createMockRouter(),
+			undefined,
+			"/",
+		);
+
+		expect(container.querySelector('a[href="/ui-builder/new"]')).toBeTruthy();
+		const actionsTrigger =
+			container.querySelector<HTMLButtonElement>("tbody button")!;
+		await act(async () => {
+			actionsTrigger.dispatchEvent(
+				new MouseEvent("pointerdown", { bubbles: true, button: 0 }),
+			);
+		});
+		const editItem = Array.from(
+			document.querySelectorAll<HTMLElement>("[role=menuitem]"),
+		).find((item) => item.textContent?.includes("Edit"));
+		await act(async () => editItem?.click());
+		expect(router.navigate).toHaveBeenCalledWith("/ui-builder/page-1/edit");
+
+		await renderResolvedPage(
+			<PageBuilderPage />,
+			createMockRouter(),
+			undefined,
+			"/",
+		);
+		expect(container.querySelector('a[href="/ui-builder"]')).toBeTruthy();
+		const formOptions = hooks.useUIBuilderPageForm.mock.calls.at(-1)?.[0];
+		expect(formOptions.redirect(page, "create")).toBe(
+			"/ui-builder/page-1/edit",
+		);
+	});
+
 	it("uses endpoints.uiBuilder.site for list links and navigation", async () => {
 		const router = await renderResolvedPage(<PageListPage />);
 

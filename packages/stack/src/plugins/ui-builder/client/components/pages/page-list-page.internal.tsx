@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+	joinBasePath,
 	PermissionAccess,
 	useNotify,
 	usePluginOverrides,
@@ -122,7 +123,7 @@ export function PageListPage() {
 			})}
 		>
 			<Button asChild>
-				<LinkComponent href={`${basePath}/ui-builder/new`}>
+				<LinkComponent href={joinBasePath(basePath, "/ui-builder/new")}>
 					<Plus data-icon="inline-start" />
 					{localization?.pageList?.createButton ??
 						t(
@@ -251,7 +252,10 @@ export function PageListPage() {
 															<DropdownMenuItem
 																onClick={() =>
 																	navigate?.(
-																		`${basePath}/ui-builder/${page.id}/edit`,
+																		joinBasePath(
+																			basePath,
+																			`/ui-builder/${page.id}/edit`,
+																		),
 																	)
 																}
 															>

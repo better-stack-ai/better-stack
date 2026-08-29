@@ -16,6 +16,7 @@ import {
 	CardTitle,
 } from "@workspace/ui/components/card";
 import {
+	joinBasePath,
 	PermissionAccess,
 	usePluginOverrides,
 	useStack,
@@ -221,7 +222,10 @@ function InverseRelationSection({
 	const handleAddNew = () => {
 		// Navigate to create page with query param to pre-fill the relation.
 		// ContentEditorPage reads prefill_* query params and passes them to ContentForm as initialData.
-		const createUrl = `${basePath}/cms/${relation.sourceType}/new?prefill_${relation.fieldName}=${itemId}`;
+		const createUrl = joinBasePath(
+			basePath,
+			`/cms/${relation.sourceType}/new?prefill_${relation.fieldName}=${itemId}`,
+		);
 		void navigate?.(createUrl);
 	};
 
@@ -271,7 +275,10 @@ function InverseRelationSection({
 						<ul className="space-y-2">
 							{items.map((item: SerializedContentItemWithType) => {
 								const displayValue = getDisplayValue(item);
-								const editUrl = `${basePath}/cms/${relation.sourceType}/${item.id}`;
+								const editUrl = joinBasePath(
+									basePath,
+									`/cms/${relation.sourceType}/${item.id}`,
+								);
 								return (
 									<li
 										key={item.id}

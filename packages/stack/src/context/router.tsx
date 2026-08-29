@@ -1,5 +1,12 @@
 import type { ComponentType } from "react";
 
+/** Join a resolved site base path to an application route without `//`. */
+export function joinBasePath(basePath: string, path: string): string {
+	const normalizedBasePath = basePath.replace(/\/+$/, "");
+	const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+	return `${normalizedBasePath}${normalizedPath}`;
+}
+
 /**
  * Framework routing primitives shared by all plugins.
  *

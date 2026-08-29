@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import {
+	joinBasePath,
 	PermissionAccess,
 	useNotify,
 	usePluginOverrides,
@@ -346,7 +347,9 @@ function PageBuilderPageContent({
 				? duplicateSlugMessage
 				: saveErrorMessage,
 		redirect: (page, action) =>
-			action === "create" ? `${basePath}/ui-builder/${page.id}/edit` : false,
+			action === "create"
+				? joinBasePath(basePath, `/ui-builder/${page.id}/edit`)
+				: false,
 	});
 
 	// Auto-generate slug from first page name
@@ -510,7 +513,7 @@ function PageBuilderPageContent({
 	const navLeftChildren = (
 		<div className="flex items-center gap-2 md:gap-4">
 			<Button variant="ghost" size="icon" asChild className="shrink-0">
-				<LinkComponent href={`${basePath}/ui-builder`}>
+				<LinkComponent href={joinBasePath(basePath, "/ui-builder")}>
 					<ArrowLeft className="h-4 w-4" />
 				</LinkComponent>
 			</Button>

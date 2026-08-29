@@ -8,6 +8,7 @@ import {
 	CardTitle,
 } from "@workspace/ui/components/card";
 import {
+	joinBasePath,
 	usePluginOverrides,
 	useStack,
 	useTranslate,
@@ -104,7 +105,9 @@ export function DashboardPage() {
 						<Card
 							key={ct.id}
 							className="hover:border-primary/50 transition-colors cursor-pointer"
-							onClick={() => void navigate?.(`${basePath}/cms/${ct.slug}`)}
+							onClick={() =>
+								void navigate?.(joinBasePath(basePath, `/cms/${ct.slug}`))
+							}
 						>
 							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 								<CardTitle className="text-lg font-medium">{ct.name}</CardTitle>

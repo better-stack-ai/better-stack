@@ -379,6 +379,41 @@ describe("ContentListPage row actions (CanAccess)", () => {
 });
 
 describe("CMS resolved site navigation", () => {
+	it("keeps root CMS navigation and links origin-relative", async () => {
+		const router = createMockRouter();
+		const clientStack = createClientStack({
+			api: { baseURL: "http://test.local", basePath: "/api/data" },
+			site: { baseURL: "http://test.local", basePath: "/pages" },
+			queryClient: new QueryClient(),
+			plugins: { cms: cmsClientPlugin() },
+			endpoints: { cms: { site: { basePath: "/" } } },
+		});
+
+		await render(
+			<StackProvider stack={clientStack} router={router}>
+				<DashboardPage />
+			</StackProvider>,
+		);
+		const contentTypeCard = Array.from(
+			container.querySelectorAll<HTMLElement>("[data-slot=card]"),
+		).find((card) => card.textContent?.includes(contentType.name));
+		await act(async () => contentTypeCard?.click());
+		expect(router.navigate).toHaveBeenCalledWith("/cms/post");
+
+		router.navigate.mockClear();
+		await render(
+			<StackProvider stack={clientStack} router={router}>
+				<ContentListPage typeSlug="post" />
+			</StackProvider>,
+		);
+		expect(container.querySelector('a[href="/cms/post/i1"]')).toBeTruthy();
+		const newItemButton = Array.from(
+			container.querySelectorAll<HTMLButtonElement>("button"),
+		).find((button) => button.textContent?.includes("New Item"));
+		await act(async () => newItemButton?.click());
+		expect(router.navigate).toHaveBeenCalledWith("/cms/post/new");
+	});
+
 	it("falls back to the legacy provider base path", async () => {
 		const router = createMockRouter();
 		await render(

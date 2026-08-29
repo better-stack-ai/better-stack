@@ -2,6 +2,7 @@
 
 import { Button } from "@workspace/ui/components/button";
 import {
+	joinBasePath,
 	usePluginOverrides,
 	useStack,
 	useTranslate,
@@ -33,7 +34,7 @@ export function NotFoundPage() {
 					)}
 			</p>
 			<Button asChild>
-				<LinkComponent href={`${basePath}/cms`}>
+				<LinkComponent href={joinBasePath(basePath, "/cms")}>
 					{localization?.CMS_404_BACK ?? t("cms.common.404Back", "Back to CMS")}
 				</LinkComponent>
 			</Button>

@@ -13,6 +13,7 @@ import {
 	TableRow,
 } from "@workspace/ui/components/table";
 import {
+	joinBasePath,
 	PermissionAccess,
 	useNotify,
 	usePluginOverrides,
@@ -173,7 +174,7 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 						<Button
 							variant="ghost"
 							size="icon"
-							onClick={() => void navigate?.(`${basePath}/cms`)}
+							onClick={() => void navigate?.(joinBasePath(basePath, "/cms"))}
 						>
 							<ArrowLeft className="h-4 w-4" />
 						</Button>
@@ -194,7 +195,9 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 						})}
 					>
 						<Button
-							onClick={() => void navigate?.(`${basePath}/cms/${typeSlug}/new`)}
+							onClick={() =>
+								void navigate?.(joinBasePath(basePath, `/cms/${typeSlug}/new`))
+							}
 						>
 							<Plus className="h-4 w-4 mr-2" />
 							{localization?.CMS_BUTTON_NEW_ITEM ??
@@ -256,7 +259,9 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 								>
 									<Button
 										onClick={() =>
-											void navigate?.(`${basePath}/cms/${typeSlug}/new`)
+											void navigate?.(
+												joinBasePath(basePath, `/cms/${typeSlug}/new`),
+											)
 										}
 									>
 										<Plus className="h-4 w-4 mr-2" />
@@ -349,7 +354,7 @@ function ContentTable({
 						<TableRow key={item.id}>
 							<TableCell className="font-medium">
 								<LinkComponent
-									href={`${basePath}/cms/${typeSlug}/${item.id}`}
+									href={joinBasePath(basePath, `/cms/${typeSlug}/${item.id}`)}
 									className="hover:underline"
 								>
 									{item.slug}
@@ -371,7 +376,7 @@ function ContentTable({
 											size="icon"
 											onClick={() =>
 												void navigate?.(
-													`${basePath}/cms/${typeSlug}/${item.id}`,
+													joinBasePath(basePath, `/cms/${typeSlug}/${item.id}`),
 												)
 											}
 										>

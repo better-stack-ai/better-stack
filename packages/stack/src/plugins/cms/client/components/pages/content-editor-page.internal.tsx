@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import {
+	joinBasePath,
 	usePluginOverrides,
 	useStack,
 	useTranslate,
@@ -195,7 +196,7 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 			data: { slug: values.slug, data: values.data },
 		}),
 		onSuccess: () => {
-			void navigate?.(`${basePath}/cms/${typeSlug}`);
+			void navigate?.(joinBasePath(basePath, `/cms/${typeSlug}`));
 		},
 	});
 
@@ -276,7 +277,9 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 					<Button
 						variant="ghost"
 						size="icon"
-						onClick={() => void navigate?.(`${basePath}/cms/${typeSlug}`)}
+						onClick={() =>
+							void navigate?.(joinBasePath(basePath, `/cms/${typeSlug}`))
+						}
 					>
 						<ArrowLeft className="h-4 w-4" />
 					</Button>
@@ -299,7 +302,9 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 					initialSlug={item?.slug}
 					isEditing={isEditing}
 					onSubmit={handleSubmit}
-					onCancel={() => void navigate?.(`${basePath}/cms/${typeSlug}`)}
+					onCancel={() =>
+						void navigate?.(joinBasePath(basePath, `/cms/${typeSlug}`))
+					}
 					fieldErrors={resourceForm.fieldErrors}
 					errorMessage={
 						hasFieldErrors ? undefined : resourceForm.error?.message
