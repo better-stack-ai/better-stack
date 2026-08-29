@@ -375,4 +375,21 @@ for (const framework of frameworks) {
 	}
 }
 
+for (const framework of ["nextjs", "react-router", "tanstack"]) {
+	const syncScript = await readFile(
+		resolve(scriptDirectory, `update-files-${framework}.sh`),
+		"utf8",
+	);
+	requireText(
+		syncScript,
+		"find . -type f -print | LC_ALL=C sort",
+		`${framework} reverse-sync overlay manifest`,
+	);
+	requireText(
+		syncScript,
+		'FILES+=("${file#./}")',
+		`${framework} reverse-sync overlay collection`,
+	);
+}
+
 console.log("Canonical codegen overlay contracts verified");
