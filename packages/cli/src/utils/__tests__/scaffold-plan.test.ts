@@ -430,6 +430,13 @@ describe("scaffold plan", () => {
 		expect(stackFile?.content).toContain(
 			"comments: commentsBackendPlugin({ allowPosting: false }),",
 		);
+
+		const stackClientFile = plan.files.find((file) =>
+			file.path.endsWith("stack-client.tsx"),
+		);
+		expect(stackClientFile?.content).toContain(
+			"comments: commentsClientPlugin(),",
+		);
 	});
 
 	it("renders media backend plugin with compile-safe placeholder config", async () => {

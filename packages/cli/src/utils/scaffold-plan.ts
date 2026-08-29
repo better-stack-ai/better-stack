@@ -163,7 +163,7 @@ function buildPluginTemplateContext(
 			.join("\n"),
 		clientEntries: clientMetas
 			.map((m) => {
-				if (["blog", "cms", "ui-builder"].includes(m.key)) {
+				if (["blog", "cms", "ui-builder", "comments"].includes(m.key)) {
 					return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
 				}
 				if (m.key === "route-docs") {
