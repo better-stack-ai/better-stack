@@ -8,17 +8,22 @@ import {
 import { normalizePath } from "@btst/stack/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
-import type { ComponentType } from "react";
+import { lazy, type ComponentType } from "react";
 import type { MediaApiRouter } from "../api/plugin";
 import type { MediaIdentityPartition } from "../api/query-key-defs";
 import { createMediaQueryKeys } from "../query-keys";
-import { LibraryPageComponent } from "./components/pages/library-page";
 import { MEDIA_PLUGIN_ID } from "./constants";
 import type {
 	MediaPluginOverrides,
 	MediaProviderConfig,
 	MediaUploadMode,
 } from "./overrides";
+
+const LibraryPageComponent = lazy(() =>
+	import("./components/pages/library-page").then((module) => ({
+		default: module.LibraryPageComponent,
+	})),
+);
 
 export interface MediaLoaderContext {
 	path: string;

@@ -11,6 +11,15 @@ import {
 } from "../../route-docs/client";
 import type { RouteDocsSchema } from "../../route-docs/generator";
 
+const { mediaPageModuleLoaded } = vi.hoisted(() => ({
+	mediaPageModuleLoaded: { value: false },
+}));
+
+vi.mock("../client/components/pages/library-page", () => {
+	mediaPageModuleLoaded.value = true;
+	return { LibraryPageComponent: () => null };
+});
+
 function jsonResponse(value: unknown, status = 200) {
 	return new Response(JSON.stringify(value), {
 		status,
@@ -37,6 +46,17 @@ afterEach(() => {
 });
 
 describe("Media and Route Docs resolved client runtime", () => {
+	it("keeps the Media plugin definition server-import safe", () => {
+		expect(mediaPageModuleLoaded.value).toBe(false);
+		createClientStack({
+			api: { baseURL: "https://api.example.com", basePath: "/api" },
+			site: { baseURL: "https://app.example.com", basePath: "/" },
+			queryClient: new QueryClient(),
+			plugins: { media: mediaClientPlugin() },
+		});
+		expect(mediaPageModuleLoaded.value).toBe(false);
+	});
+
 	it("uses literal IDs and projects only browser-safe Media factory state", () => {
 		const queryClient = new QueryClient();
 		const stack = createClientStack({
