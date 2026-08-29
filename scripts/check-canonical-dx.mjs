@@ -40,25 +40,44 @@ const guardExclusions = new Map([
 	],
 ]);
 
-const backendFactories = [
-	"aiChatBackendPlugin",
-	"blogBackendPlugin",
-	"cmsBackendPlugin",
-	"commentsBackendPlugin",
-	"formBuilderBackendPlugin",
-	"kanbanBackendPlugin",
-	"mediaBackendPlugin",
-	"openApiBackendPlugin",
+const backendPlugins = [
+	{
+		factory: "aiChatBackendPlugin",
+		lifecycleSlug: "ai-chat",
+		hookType: "AiChatBackendHooks",
+	},
+	{
+		factory: "blogBackendPlugin",
+		lifecycleSlug: "blog",
+		hookType: "BlogBackendHooks",
+	},
+	{
+		factory: "cmsBackendPlugin",
+		lifecycleSlug: "cms",
+		hookType: "CMSBackendHooks",
+	},
+	{
+		factory: "commentsBackendPlugin",
+		lifecycleSlug: "comments",
+		hookType: "CommentsBackendHooks",
+	},
+	{
+		factory: "formBuilderBackendPlugin",
+		lifecycleSlug: "form-builder",
+		hookType: "FormBuilderBackendHooks",
+	},
+	{
+		factory: "kanbanBackendPlugin",
+		lifecycleSlug: "kanban",
+		hookType: "KanbanBackendHooks",
+	},
+	{
+		factory: "mediaBackendPlugin",
+		lifecycleSlug: "media",
+		hookType: "MediaBackendHooks",
+	},
+	{ factory: "openApiBackendPlugin" },
 ];
-const backendHookTypes = new Map([
-	["aiChatBackendPlugin", "AiChatBackendHooks"],
-	["blogBackendPlugin", "BlogBackendHooks"],
-	["cmsBackendPlugin", "CMSBackendHooks"],
-	["commentsBackendPlugin", "CommentsBackendHooks"],
-	["formBuilderBackendPlugin", "FormBuilderBackendHooks"],
-	["kanbanBackendPlugin", "KanbanBackendHooks"],
-	["mediaBackendPlugin", "MediaBackendHooks"],
-]);
 const clientFactories = [
 	"aiChatClientPlugin",
 	"blogClientPlugin",
@@ -287,7 +306,7 @@ function checkFactoryCalls(
 			failures.push({
 				file,
 				line: lineAt(source, match.index ?? 0),
-				label: `${kind} factory example must use one inline options object`,
+				label: `${kind} factory must receive one options object, not positional hooks`,
 				match: factory,
 			});
 			continue;
@@ -390,22 +409,14 @@ function checkTypedHookObjects(
 }
 
 function lifecycleInventory() {
-	const inventories = [
-		["ai-chat", "aiChatBackendPlugin"],
-		["blog", "blogBackendPlugin"],
-		["cms", "cmsBackendPlugin"],
-		["comments", "commentsBackendPlugin"],
-		["form-builder", "formBuilderBackendPlugin"],
-		["kanban", "kanbanBackendPlugin"],
-		["media", "mediaBackendPlugin"],
-	];
 	const names = new Set();
 	const namesByFactory = new Map();
-	for (const [plugin, factory] of inventories) {
+	for (const { lifecycleSlug, factory } of backendPlugins) {
+		if (!lifecycleSlug) continue;
 		const source = readFileSync(
 			join(
 				root,
-				`packages/stack/src/plugins/${plugin}/api/lifecycle-migrations.ts`,
+				`packages/stack/src/plugins/${lifecycleSlug}/api/lifecycle-migrations.ts`,
 			),
 			"utf8",
 		);
@@ -413,7 +424,7 @@ function lifecycleInventory() {
 			/Object\.freeze\(\{([\s\S]*?)\}\s+as const\)/,
 		)?.[1];
 		if (!object)
-			throw new Error(`Unable to read ${plugin} lifecycle inventory`);
+			throw new Error(`Unable to read ${lifecycleSlug} lifecycle inventory`);
 		const pluginNames = [...object.matchAll(/^\s*([A-Za-z0-9]+):/gm)].map(
 			(match) => match[1],
 		);
@@ -521,7 +532,7 @@ for (const absolute of allFiles) {
 		),
 	);
 
-	for (const factory of backendFactories) {
+	for (const { factory, hookType } of backendPlugins) {
 		const contextualNames = contextualNamesByFactory.get(factory) ?? [];
 		checkFactoryCalls(
 			failures,
@@ -531,7 +542,6 @@ for (const absolute of allFiles) {
 			"backend",
 			contextualNames,
 		);
-		const hookType = backendHookTypes.get(factory);
 		if (hookType) {
 			checkTypedHookObjects(
 				failures,
