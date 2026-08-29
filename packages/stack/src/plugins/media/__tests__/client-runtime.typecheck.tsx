@@ -9,6 +9,7 @@ import {
 import {
 	routeDocsClientPlugin,
 	type RouteDocsClientConfig,
+	useRegisteredRoutes,
 } from "../../route-docs/client";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,15 @@ const stack = createClientStack({
 });
 
 <StackProvider stack={stack} />;
+stack.context satisfies import("../../../types").ClientStackContext;
+
+function RouteIntrospectionProbe() {
+	useRegisteredRoutes();
+	useRegisteredRoutes(stack);
+	useRegisteredRoutes(stack.context);
+	return null;
+}
+void RouteIntrospectionProbe;
 <StackProvider
 	stack={stack}
 	overrides={{ media: { imageCompression: false } }}

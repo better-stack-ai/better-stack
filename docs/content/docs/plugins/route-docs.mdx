@@ -78,6 +78,17 @@ is required:
 </StackProvider>
 ```
 
+Inside `StackProvider`, `useRegisteredRoutes()` is automatically bound to that
+stack, so multiple stacks cannot leak route definitions into one another. Pass
+the resolved stack explicitly when the hook is rendered outside the provider:
+
+```tsx
+import { useRegisteredRoutes } from "@btst/stack/plugins/route-docs/client"
+
+const routes = useRegisteredRoutes()
+const explicitRoutes = useRegisteredRoutes(stack)
+```
+
 ## Accessing the Documentation
 
 Once configured, navigate to your route docs page:

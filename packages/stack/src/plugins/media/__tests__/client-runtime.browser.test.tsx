@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { defineRoute } from "@btst/yar";
 import { act, Suspense } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "../../../client";
 import { StackProvider } from "@btst/stack/context";
+import { defineClientPlugin } from "../../client";
 import { useAssets, useRegisterAsset, useUploadAsset } from "../client/hooks";
 import {
 	createMediaUploadConfig,
@@ -14,6 +16,7 @@ import {
 import {
 	ROUTE_DOCS_QUERY_KEY,
 	routeDocsClientPlugin,
+	useRegisteredRoutes,
 } from "../../route-docs/client";
 import type { RouteDocsSchema } from "../../route-docs/generator";
 
@@ -367,5 +370,61 @@ describe("Media and Route Docs browser runtime", () => {
 			"_blank",
 			"noopener,noreferrer",
 		);
+	});
+
+	it("binds route introspection to the enclosing or explicitly supplied stack", async () => {
+		const createStack = (path: string) =>
+			createClientStack({
+				api: { baseURL: "https://api.example.com", basePath: "/api" },
+				site: { baseURL: "https://app.example.com", basePath: "/" },
+				queryClient: new QueryClient(),
+				plugins: {
+					probe: defineClientPlugin({
+						id: "probe",
+						resolve: () => ({
+							routes: () => ({
+								probe: defineRoute(path, { page: () => null }),
+							}),
+							sitemap: () => [],
+						}),
+					}),
+					routeDocs: routeDocsClientPlugin(),
+				},
+			});
+		const stackA = createStack("/probe-a");
+		const stackB = createStack("/probe-b");
+		const routes: Record<string, ReturnType<typeof useRegisteredRoutes>> = {};
+		function Probe({
+			name,
+			source,
+		}: {
+			name: string;
+			source?: Parameters<typeof useRegisteredRoutes>[0];
+		}) {
+			routes[name] = useRegisteredRoutes(source);
+			return null;
+		}
+
+		await act(async () => {
+			root.render(
+				<>
+					<StackProvider stack={stackA}>
+						<Probe name="providerA" />
+					</StackProvider>
+					<StackProvider stack={stackB}>
+						<Probe name="providerB" />
+					</StackProvider>
+					<Probe name="explicitA" source={stackA} />
+				</>,
+			);
+		});
+
+		expect(routes.providerA).toEqual([
+			{ path: "/probe-a", plugin: "probe", key: "probe" },
+		]);
+		expect(routes.providerB).toEqual([
+			{ path: "/probe-b", plugin: "probe", key: "probe" },
+		]);
+		expect(routes.explicitA).toEqual(routes.providerA);
 	});
 });

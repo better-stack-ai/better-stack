@@ -801,6 +801,8 @@ type UnionToIntersection<U> = (
 export interface ClientStack<
 	TRoutes extends Record<string, Route> = Record<string, Route>,
 > {
+	/** Resolved plugin definitions for intentional client-side introspection. */
+	context: ClientStackContext;
 	router: ReturnType<typeof createRouter<TRoutes, {}>>;
 	generateSitemap: () => Promise<Sitemap>;
 }

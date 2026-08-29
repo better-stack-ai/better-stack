@@ -500,6 +500,8 @@ describe("scaffold plan", () => {
 			expect(stackClientFile?.content).not.toContain("apiBaseURL:");
 			expect(stackClientFile?.content).not.toContain("siteBasePath:");
 			expect(pagesLayoutFile?.content).not.toContain("as never");
+			expect(pagesLayoutFile?.content).not.toContain('"media": {');
+			expect(pagesLayoutFile?.content).not.toContain("queryClient,");
 		},
 	);
 

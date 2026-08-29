@@ -193,17 +193,12 @@ function buildPluginTemplateContext(
 			.join("\n"),
 		pagesLayoutOverrides: clientMetas
 			.map((m) => {
-				if (m.key === "route-docs") {
+				if (m.key === "route-docs" || m.key === "media") {
 					return "";
 				}
 				const layoutFile = getPagesLayoutFilePath(framework);
 				if (m.key === "comments") {
 					return "";
-				}
-				if (m.key === "media") {
-					return `\t\t\t\t\t"${m.key}": {
-\t\t\t\t\t\tqueryClient,
-\t\t\t\t\t},`;
 				}
 				if (m.key === "blog") {
 					return `\t\t\t\t\t"${m.key}": {
