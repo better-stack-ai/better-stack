@@ -356,23 +356,34 @@ subtree:
 ```tsx title="app/routes/pages/_layout.tsx"
 import { StackProvider } from "@btst/stack/context";
 import { createReactRouterLayout } from "@btst/stack/react-router";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { Outlet, useLoaderData } from "react-router";
 import { clientAuth } from "~/lib/authorization.ui";
 import { serverAuth } from "~/lib/authorization.server";
+import { getOrCreateQueryClient } from "~/lib/query-client";
+import { getStackClient } from "~/lib/stack-client";
 
 const layout = createReactRouterLayout({ auth: serverAuth });
 export const loader = layout.loader;
 
 export default function BtstPagesLayout() {
-  const { initialIdentity } = useLoaderData<typeof loader>();
+  const { initialIdentity, requestOrigin } = useLoaderData<typeof loader>();
+  const queryClient = getOrCreateQueryClient();
+  const stack = useMemo(
+    () => getStackClient(queryClient, { origin: requestOrigin }),
+    [queryClient, requestOrigin],
+  );
   return (
-    <StackProvider
-      basePath="/pages"
-      auth={clientAuth}
-      initialIdentity={initialIdentity}
-    >
-      <Outlet />
-    </StackProvider>
+    <QueryClientProvider client={queryClient}>
+      <StackProvider
+        stack={stack}
+        auth={clientAuth}
+        initialIdentity={initialIdentity}
+      >
+        <Outlet />
+      </StackProvider>
+    </QueryClientProvider>
   );
 }
 ```
@@ -390,19 +401,28 @@ import { resolveTanStackInitialIdentity } from "@btst/stack/tanstack/server";
 import { serverAuth } from "./authorization.server";
 
 export const getInitialIdentity = createServerFn({ method: "GET" }).handler(
-  () => resolveTanStackInitialIdentity({
-    auth: serverAuth,
-    request: getRequest(),
-  }),
+  async () => {
+    const request = getRequest();
+    return {
+      ...(await resolveTanStackInitialIdentity({
+        auth: serverAuth,
+        request,
+      })),
+      requestOrigin: new URL(request.url).origin,
+    };
+  },
 );
 ```
 
 ```tsx title="src/routes/pages/route.tsx"
 import { StackProvider } from "@btst/stack/context";
 import { createTanStackLayout } from "@btst/stack/tanstack";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Outlet, createFileRoute } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { clientAuth } from "../../lib/authorization.ui";
 import { getInitialIdentity } from "../../lib/authorization.identity";
+import { getStackClient } from "../../lib/stack-client";
 
 const layout = createTanStackLayout({ getInitialIdentity });
 
@@ -412,21 +432,29 @@ export const Route = createFileRoute("/pages")({
 });
 
 function BtstPagesLayout() {
-  const { initialIdentity } = Route.useLoaderData();
+  const { queryClient } = Route.useRouteContext();
+  const { initialIdentity, requestOrigin } = Route.useLoaderData();
+  const stack = useMemo(
+    () => getStackClient(queryClient, { origin: requestOrigin }),
+    [queryClient, requestOrigin],
+  );
   return (
-    <StackProvider
-      basePath="/pages"
-      auth={clientAuth}
-      initialIdentity={initialIdentity}
-    >
-      <Outlet />
-    </StackProvider>
+    <QueryClientProvider client={queryClient}>
+      <StackProvider
+        stack={stack}
+        auth={clientAuth}
+        initialIdentity={initialIdentity}
+      >
+        <Outlet />
+      </StackProvider>
+    </QueryClientProvider>
   );
 }
 ```
 
-This is identity hydration only. BTST does not cache authorization results or
-require framework middleware.
+Only the validated identity and browser-safe request origin cross the server
+boundary. Request headers and the resolved server stack stay server-only. BTST
+does not cache authorization results or require framework middleware.
 
 ## Operation lifecycle ordering
 

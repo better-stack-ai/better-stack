@@ -595,8 +595,8 @@ In order to use BTST, your application must meet the following requirements:
 
       <Tab value="react-router">
         ```tsx title="app/routes/pages/_layout.tsx"
-        import { useState } from "react"
-        import { Outlet } from "react-router"
+        import { useMemo, useState } from "react"
+        import { Outlet, useLoaderData, type LoaderFunctionArgs } from "react-router"
         import { QueryClientProvider } from "@tanstack/react-query"
         import { StackProvider } from "@btst/stack/context"
         import { reactRouter } from "@btst/stack/react-router"
@@ -604,9 +604,17 @@ In order to use BTST, your application must meet the following requirements:
         import { getStackClient } from "~/lib/stack-client"
         import { uploadImage } from "~/lib/uploads"
 
+        export function loader({ request }: LoaderFunctionArgs) {
+          return { requestOrigin: new URL(request.url).origin }
+        }
+
         export default function PagesLayout() {
           const [queryClient] = useState(() => getOrCreateQueryClient())
-          const clientStack = getStackClient(queryClient)
+          const { requestOrigin } = useLoaderData<typeof loader>()
+          const clientStack = useMemo(
+            () => getStackClient(queryClient, { origin: requestOrigin }),
+            [queryClient, requestOrigin],
+          )
 
           return (
             <QueryClientProvider client={queryClient}>
@@ -626,19 +634,31 @@ In order to use BTST, your application must meet the following requirements:
       <Tab value="tanstack">
         ```tsx title="src/routes/pages/route.tsx"
         import { createFileRoute, Outlet } from "@tanstack/react-router"
+        import { createIsomorphicFn } from "@tanstack/react-start"
+        import { getRequest } from "@tanstack/react-start/server"
         import { QueryClientProvider } from "@tanstack/react-query"
         import { StackProvider } from "@btst/stack/context"
         import { tanstackRouter } from "@btst/stack/tanstack"
+        import { useMemo } from "react"
         import { getStackClient } from "@/lib/stack-client"
         import { uploadImage } from "@/lib/uploads"
 
+        const getRequestOrigin = createIsomorphicFn()
+          .server(() => new URL(getRequest().url).origin)
+          .client(() => window.location.origin)
+
         export const Route = createFileRoute("/pages")({
+          loader: async () => ({ requestOrigin: await getRequestOrigin() }),
           component: PagesLayout,
         })
 
         function PagesLayout() {
           const { queryClient } = Route.useRouteContext()
-          const clientStack = getStackClient(queryClient)
+          const { requestOrigin } = Route.useLoaderData()
+          const clientStack = useMemo(
+            () => getStackClient(queryClient, { origin: requestOrigin }),
+            [queryClient, requestOrigin],
+          )
 
           return (
             <QueryClientProvider client={queryClient}>
@@ -658,7 +678,10 @@ In order to use BTST, your application must meet the following requirements:
 
     Add `auth`, `notify`, or `i18n` beside `stack` and `router` when your
     application needs them. See the [auth provider guide](/auth). Never copy
-    framework routing, API paths, or identity props into a plugin override.
+    framework routing, API paths, or identity props into a plugin override. On
+    Vite SSR, serialize only the request origin into the parent loader so the
+    server provider and hydrated browser stack resolve the same endpoint; keep
+    request headers and server stack instances out of loader data.
   </Step>
 
   <Step>
