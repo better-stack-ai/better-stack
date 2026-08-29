@@ -39,6 +39,7 @@ describe("Kanban resolved client runtime", () => {
 		});
 
 		await stack.router.getRoute("/kanban")?.loader?.();
+		await stack.generateSitemap();
 
 		expect(stack.router.getRoute("/kanban")?.meta?.()).toEqual(
 			expect.arrayContaining([
@@ -52,6 +53,11 @@ describe("Kanban resolved client runtime", () => {
 		);
 		expect(requests[0]?.headers.get("cookie")).toBe("session=server");
 		expect(requests[0]?.headers.get("x-request")).toBe("request-value");
+		expect(requests[1]?.url).toMatch(
+			/^https:\/\/app\.example\.com\/api\/boards\/boards\?/,
+		);
+		expect(requests[1]?.headers.get("cookie")).toBeNull();
+		expect(requests[1]?.headers.get("x-request")).toBeNull();
 	});
 
 	it("isolates sensitive request headers across a Kanban origin override", async () => {

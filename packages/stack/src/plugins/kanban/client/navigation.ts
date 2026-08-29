@@ -6,17 +6,17 @@ import { KANBAN_PLUGIN_ID } from "./constants";
 
 /** Resolve Kanban page links from the registered plugin site endpoint. */
 export function useKanbanSiteLocation() {
-	const { basePath, plugins, router } = useStack();
+	const { basePath, plugins, router, site: stackSite } = useStack();
 	const site = plugins?.[KANBAN_PLUGIN_ID]?.site;
 	const siteBasePath = site?.basePath ?? basePath;
+	const crossOrigin =
+		Boolean(site?.baseURL) &&
+		Boolean(stackSite?.baseURL) &&
+		site?.baseURL !== stackSite?.baseURL;
 
 	const resolve = (...segments: string[]) => {
 		const path = normalizePath([siteBasePath, ...segments].join("/"));
 		const href = site?.baseURL ? `${site.baseURL}${path}` : path;
-		const crossOrigin =
-			typeof window !== "undefined" &&
-			Boolean(site?.baseURL) &&
-			new URL(href).origin !== window.location.origin;
 		return { path, href: crossOrigin ? href : path, crossOrigin };
 	};
 
@@ -26,8 +26,16 @@ export function useKanbanSiteLocation() {
 			window.location.assign(location.href);
 			return;
 		}
+		if (!router?.navigate && typeof window !== "undefined") {
+			window.location.assign(location.href);
+			return;
+		}
 		return router?.navigate?.(location.path);
 	};
 
-	return { Link: router?.Link ?? "a", navigate, resolve };
+	return {
+		Link: crossOrigin ? "a" : (router?.Link ?? "a"),
+		navigate,
+		resolve,
+	};
 }

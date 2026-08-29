@@ -2,12 +2,14 @@
 import { QueryClient } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "../../../client";
 import { StackProvider } from "@btst/stack/context";
 import { kanbanClientPlugin } from "../client";
 import { BoardsListPage } from "../client/components/pages/boards-list-page.internal";
 import { useBoardMutations, useBoards } from "../client/hooks";
+import { useKanbanSiteLocation } from "../client/navigation";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -199,4 +201,58 @@ describe("Kanban browser runtime", () => {
 			expect(container.querySelector("a")?.getAttribute("href")).toBe(href);
 		},
 	);
+
+	it("keeps cross-origin Kanban links stable during SSR and hydration", async () => {
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient: new QueryClient(),
+			plugins: { kanban: kanbanClientPlugin() },
+			endpoints: {
+				kanban: {
+					site: {
+						baseURL: "https://boards.example.net",
+						basePath: "/workspace",
+					},
+				},
+			},
+		});
+		function LinkProbe() {
+			const { resolve } = useKanbanSiteLocation();
+			return <a href={resolve("kanban", "board-1").href}>Board</a>;
+		}
+
+		const browserWindow = globalThis.window;
+		let serverHTML: string;
+		Object.defineProperty(globalThis, "window", {
+			configurable: true,
+			value: undefined,
+		});
+		try {
+			serverHTML = renderToString(
+				<StackProvider stack={stack}>
+					<LinkProbe />
+				</StackProvider>,
+			);
+		} finally {
+			Object.defineProperty(globalThis, "window", {
+				configurable: true,
+				value: browserWindow,
+			});
+		}
+
+		expect(serverHTML).toContain(
+			'href="https://boards.example.net/workspace/kanban/board-1"',
+		);
+		await act(async () => {
+			root.render(
+				<StackProvider stack={stack}>
+					<LinkProbe />
+				</StackProvider>,
+			);
+		});
+		expect(container.querySelector("a")?.getAttribute("href")).toBe(
+			"https://boards.example.net/workspace/kanban/board-1",
+		);
+	});
 });

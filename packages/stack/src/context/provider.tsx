@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type {
+	ClientLocation,
 	ClientProviderPluginRuntime,
 	InferredPluginOverrides,
 	RegisteredClientPlugins,
@@ -42,6 +43,8 @@ interface StackContextValue<TPluginOverrides extends Record<string, any>> {
 	 * Top-level API config applied to all plugins.
 	 */
 	api?: StackApiConfig;
+	/** Resolved top-level site location used to compare plugin site origins. */
+	site?: ClientLocation;
 	/** Effective browser-safe runtime for each registered client plugin. */
 	plugins?: Record<string, ClientProviderPluginRuntime>;
 	/** The query client owned by the resolved client stack. */
@@ -226,6 +229,7 @@ export function StackProvider({
 		overrides: overrides ?? {},
 		basePath: resolvedBasePath,
 		api: projection?.api ?? api,
+		site: projection?.site,
 		plugins: projection?.plugins,
 		queryClient: projection?.queryClient,
 		auth,

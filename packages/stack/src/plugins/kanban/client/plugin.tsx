@@ -497,7 +497,10 @@ function createResolvedKanbanPlugin(config: ResolvedKanbanClientConfig) {
 			)}`.replace(/\/$/, "");
 			const indexUrl = `${origin}/kanban`;
 
-			const client = createKanbanApiClient(config);
+			const client = createApiClient<KanbanApiRouter>({
+				baseURL: config.apiBaseURL,
+				basePath: config.apiBasePath,
+			});
 
 			try {
 				const res = await client("/boards", {
