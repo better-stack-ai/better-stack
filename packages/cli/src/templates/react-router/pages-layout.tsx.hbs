@@ -5,15 +5,20 @@ import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 {{/if}}
 import { QueryClientProvider } from "@tanstack/react-query"
 import { useMemo } from "react"
-import { Outlet{{#if hasAiChat}}, useLocation{{/if}} } from "react-router"
+import { Outlet{{#if hasAiChat}}, useLocation{{/if}}, useLoaderData, type LoaderFunctionArgs } from "react-router"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient } from "{{alias}}lib/stack-client"
 
+export function loader({ request }: LoaderFunctionArgs) {
+	return { requestOrigin: new URL(request.url).origin }
+}
+
 export default function BtstPagesLayout() {
 	const queryClient = getOrCreateQueryClient()
+	const { requestOrigin } = useLoaderData<typeof loader>()
 	const browserStack = useMemo(
-		() => getStackClient(queryClient),
-		[queryClient],
+		() => getStackClient(queryClient, { origin: requestOrigin }),
+		[queryClient, requestOrigin],
 	)
 {{#if hasAiChat}}
 	const hasApiKey = !!import.meta.env.VITE_HAS_OPENAI_KEY

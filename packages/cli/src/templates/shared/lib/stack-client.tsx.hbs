@@ -4,14 +4,17 @@ import type { QueryClient } from "@tanstack/react-query"
 {{{clientImports}}}
 {{/if}}
 
-interface RequestStackClientOptions {
-	headers: HeadersInit
+interface StackClientOptions {
 	origin?: string
+}
+
+interface RequestStackClientOptions extends StackClientOptions {
+	headers: HeadersInit
 }
 
 function createAppClientStack(
 	queryClient: QueryClient,
-	options?: RequestStackClientOptions,
+	options?: StackClientOptions & { headers?: HeadersInit },
 ) {
 	const baseURL = getBaseURL(options?.origin)
 	return createClientStack({
@@ -33,8 +36,11 @@ function createAppClientStack(
 }
 
 /** Creates the header-free stack used by browser providers and static pages. */
-export function getStackClient(queryClient: QueryClient) {
-	return createAppClientStack(queryClient)
+export function getStackClient(
+	queryClient: QueryClient,
+	options?: StackClientOptions,
+) {
+	return createAppClientStack(queryClient, options)
 }
 
 /** Creates a fresh server stack for one request. Never serialize this result. */

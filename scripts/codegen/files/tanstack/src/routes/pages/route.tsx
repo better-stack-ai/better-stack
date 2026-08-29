@@ -32,10 +32,10 @@ export const Route = createFileRoute("/pages")({
 
 function Layout() {
 	const routeContext = Route.useRouteContext();
-	const { initialIdentity } = Route.useLoaderData();
+	const { initialIdentity, requestOrigin } = Route.useLoaderData();
 	const stack = useMemo(
-		() => getStackClient(routeContext.queryClient),
-		[routeContext.queryClient],
+		() => getStackClient(routeContext.queryClient, { origin: requestOrigin }),
+		[requestOrigin, routeContext.queryClient],
 	);
 	const mediaClientConfig = useMemo(
 		() => createMediaUploadConfig(stack.provider.plugins.media),

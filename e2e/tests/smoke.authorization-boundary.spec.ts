@@ -5,8 +5,20 @@ test("the layout hydrates identity before browser authorization renders", async 
 	page,
 }) => {
 	await setMockAuthCookie(page.context(), "olliethedev");
+	const serverResponse = await page.request.get(
+		"/pages/authorization-boundary",
+	);
+	expect(serverResponse.ok()).toBe(true);
+	const requestOrigin = new URL(serverResponse.url()).origin;
+	expect(await serverResponse.text()).toContain(
+		`data-testid="stack-runtime-origin">${requestOrigin}`,
+	);
+
 	await page.goto("/pages/authorization-boundary");
 
+	await expect(page.getByTestId("stack-runtime-origin")).toHaveText(
+		new URL(page.url()).origin,
+	);
 	await expect(page.getByTestId("hydrated-identity")).toHaveText("olliethedev");
 	await expect(page.getByText("Allowed", { exact: true })).toBeVisible();
 	await expect(page.getByText("Denied", { exact: true })).not.toBeVisible();

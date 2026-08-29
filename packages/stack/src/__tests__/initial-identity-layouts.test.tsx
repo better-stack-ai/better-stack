@@ -96,6 +96,7 @@ describe("framework identity layout helpers", () => {
 			layout.loader({ request, params: {}, context: undefined }),
 		).resolves.toEqual({
 			initialIdentity: { id: "router-user", role: "admin" },
+			requestOrigin: "http://test.local",
 		});
 		expect(getIdentity).toHaveBeenCalledWith(request);
 	});
@@ -128,8 +129,8 @@ describe("framework identity layout helpers", () => {
 		const request = new Request("http://test.local/pages", {
 			headers: { "x-user-id": "tanstack-user" },
 		});
-		const getInitialIdentity = vi.fn(() =>
-			resolveTanStackInitialIdentity({
+		const getInitialIdentity = vi.fn(async () => ({
+			...(await resolveTanStackInitialIdentity({
 				auth: {
 					contract: identityContract,
 					getIdentity: (currentRequest: Request) => ({
@@ -138,12 +139,14 @@ describe("framework identity layout helpers", () => {
 					}),
 				},
 				request,
-			}),
-		);
+			})),
+			requestOrigin: new URL(request.url).origin,
+		}));
 		const layout = createTanStackLayout({ getInitialIdentity });
 
 		await expect(layout.loader()).resolves.toEqual({
 			initialIdentity: { id: "tanstack-user", role: "admin" },
+			requestOrigin: "http://test.local",
 		});
 		expect(getInitialIdentity).toHaveBeenCalledOnce();
 	});

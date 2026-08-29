@@ -34,8 +34,10 @@ export function createReactRouterLayout<
 	) {
 		return {
 			initialIdentity: await resolveInitialIdentity(options.auth, args.request),
+			requestOrigin: new URL(args.request.url).origin,
 		} satisfies {
 			initialIdentity: AuthorizationContractIdentity<TContract> | null;
+			requestOrigin: string;
 		};
 	}
 

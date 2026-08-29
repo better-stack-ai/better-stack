@@ -23,9 +23,12 @@ const layout = createReactRouterLayout({ auth: hydrationAuth });
 export const loader = layout.loader;
 
 export default function Layout() {
-	const { initialIdentity } = useLoaderData<typeof loader>();
+	const { initialIdentity, requestOrigin } = useLoaderData<typeof loader>();
 	const queryClient = useQueryClient();
-	const stack = useMemo(() => getStackClient(queryClient), [queryClient]);
+	const stack = useMemo(
+		() => getStackClient(queryClient, { origin: requestOrigin }),
+		[queryClient, requestOrigin],
+	);
 	const mediaClientConfig = useMemo(
 		() => createMediaUploadConfig(stack.provider.plugins.media),
 		[stack],

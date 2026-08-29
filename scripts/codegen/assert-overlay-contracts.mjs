@@ -162,6 +162,15 @@ for (const framework of frameworks) {
 	requireText(layout, framework.layoutFactory, `${label} identity layout`);
 	requireText(clientLayout, "initialIdentity", `${label} client layout`);
 	requireText(clientLayout, "stack={stack}", `${label} client layout`);
+	if (label !== "Next.js") {
+		requireText(client, "options?.origin", `${label} SSR provider origin`);
+		requireText(layout, "requestOrigin", `${label} SSR provider origin`);
+		requireText(
+			layout,
+			"origin: requestOrigin",
+			`${label} SSR provider origin`,
+		);
+	}
 	requireText(
 		sitemap,
 		"stack-client.server",

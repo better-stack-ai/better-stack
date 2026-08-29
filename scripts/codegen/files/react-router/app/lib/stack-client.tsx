@@ -22,8 +22,12 @@ export interface AppClientStackRuntime {
 const getBrowserBaseURL = () =>
 	import.meta.env.VITE_BASE_URL ||
 	(typeof window === "undefined"
-		? "http://localhost:3008"
+		? "http://localhost:3000"
 		: window.location.origin);
+
+interface StackClientOptions {
+	origin?: string;
+}
 
 function resolveSharedClientRuntime(
 	queryClient: QueryClient,
@@ -130,9 +134,12 @@ export const createAppClientStack = (
 };
 
 /** Browser-safe stack: public origin only, never request headers. */
-export const getStackClient = (queryClient: QueryClient) =>
+export const getStackClient = (
+	queryClient: QueryClient,
+	options?: StackClientOptions,
+) =>
 	createAppClientStack(queryClient, {
-		baseURL: getBrowserBaseURL(),
+		baseURL: options?.origin ?? getBrowserBaseURL(),
 	});
 
 /** Focused browser stack for standalone CMS hook examples. */

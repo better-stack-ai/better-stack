@@ -4,7 +4,10 @@ import type { MaybePromise } from "../shared/types";
 
 /** Validated server envelope accepted by the isomorphic parent loader. */
 export type TanStackInitialIdentitySnapshot<TIdentity extends StackIdentity> =
-	InitialIdentitySnapshot<TIdentity>;
+	InitialIdentitySnapshot<TIdentity> & {
+		/** Browser-safe request origin serialized alongside the identity snapshot. */
+		readonly requestOrigin?: string;
+	};
 
 /** Options for the request-aware TanStack Start identity layout factory. */
 export interface CreateTanStackLayoutOptions<TIdentity extends StackIdentity> {

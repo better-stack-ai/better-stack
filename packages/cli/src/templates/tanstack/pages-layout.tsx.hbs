@@ -5,19 +5,27 @@ import { tanstackRouter } from "@btst/stack/tanstack"
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 {{/if}}
 import { QueryClientProvider } from "@tanstack/react-query"
+import { createIsomorphicFn } from "@tanstack/react-start"
+import { getRequest } from "@tanstack/react-start/server"
 import { useMemo } from "react"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient } from "{{alias}}lib/stack-client"
 
+const getRequestOrigin = createIsomorphicFn()
+	.server(() => new URL(getRequest().url).origin)
+	.client(() => window.location.origin)
+
 export const Route = createFileRoute("/pages")({
+	loader: async () => ({ requestOrigin: await getRequestOrigin() }),
 	component: BtstPagesLayout,
 })
 
 function BtstPagesLayout() {
 	const queryClient = getOrCreateQueryClient()
+	const { requestOrigin } = Route.useLoaderData()
 	const browserStack = useMemo(
-		() => getStackClient(queryClient),
-		[queryClient],
+		() => getStackClient(queryClient, { origin: requestOrigin }),
+		[queryClient, requestOrigin],
 	)
 {{#if hasAiChat}}
 	const hasApiKey = !!import.meta.env.VITE_HAS_OPENAI_KEY
