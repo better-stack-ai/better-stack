@@ -15,7 +15,7 @@ function AuthorizationBoundaryPage() {
 
 	return (
 		<>
-			<p data-testid="stack-runtime-origin">{api.baseURL}</p>
+			<p data-testid="stack-runtime-origin">{api?.baseURL}</p>
 			<p data-testid="hydrated-identity">
 				{isPending ? "pending" : (identity?.id ?? "anonymous")}
 			</p>
