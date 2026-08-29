@@ -143,19 +143,32 @@ const submitIntakeAssessment = tool({
 			}
 		}
 
-		const columns =
-			board.columns.length > 0
-				? board.columns
-				: await Promise.all(
-						["New Intakes", "Under Review", "Escalated"].map((title, order) =>
-							kanban.createColumn({ boardId: board.id, title, order }),
-						),
-					);
-		const targetColumn = params.amlFlag
-			? (columns.find((c: { title: string }) => c.title === "Escalated") ??
-				columns[columns.length - 1])
-			: (columns.find((c: { title: string }) => c.title === "New Intakes") ??
-				columns[0]);
+		const requiredColumnTitles = [
+			"New Intakes",
+			"Under Review",
+			"Escalated",
+		] as const;
+		const nextColumnOrder =
+			board.columns.reduce(
+				(maxOrder, column) => Math.max(maxOrder, column.order),
+				-1,
+			) + 1;
+		const createdColumns = await Promise.all(
+			requiredColumnTitles
+				.filter(
+					(title) => !board.columns.some((column) => column.title === title),
+				)
+				.map((title, index) =>
+					kanban.createColumn({
+						boardId: board.id,
+						title,
+						order: nextColumnOrder + index,
+					}),
+				),
+		);
+		const columns = [...board.columns, ...createdColumns];
+		const targetTitle = params.amlFlag ? "Escalated" : "New Intakes";
+		const targetColumn = columns.find((column) => column.title === targetTitle);
 
 		if (!targetColumn) {
 			throw new Error("[WealthReview] No columns found on review board");

@@ -102,6 +102,26 @@ for (const framework of frameworks) {
 	requireText(backend, "openApi: openApiBackendPlugin", `${label} backend`);
 	requireText(backend, ".trusted.cms", `${label} trusted CMS tool`);
 	requireText(backend, ".trusted.kanban", `${label} trusted Kanban tool`);
+	requireText(
+		backend,
+		"const requiredColumnTitles =",
+		`${label} WealthReview columns`,
+	);
+	requireText(
+		backend,
+		"!board.columns.some((column) => column.title === title)",
+		`${label} WealthReview column reconciliation`,
+	);
+	requireText(
+		backend,
+		'const targetTitle = params.amlFlag ? "Escalated" : "New Intakes"',
+		`${label} WealthReview routing`,
+	);
+	rejectText(
+		backend,
+		"board.columns.length > 0",
+		`${label} WealthReview column reconciliation`,
+	);
 	rejectText(backend, "routeDocs:", `${label} backend`);
 	rejectText(backend, "uiBuilder:", `${label} backend`);
 	for (const rawKanbanHelper of [
