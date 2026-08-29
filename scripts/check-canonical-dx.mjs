@@ -45,49 +45,59 @@ const backendPlugins = [
 		factory: "aiChatBackendPlugin",
 		lifecycleSlug: "ai-chat",
 		hookType: "AiChatBackendHooks",
+		configType: "AiChatBackendConfig",
 	},
 	{
 		factory: "blogBackendPlugin",
 		lifecycleSlug: "blog",
 		hookType: "BlogBackendHooks",
+		configType: "BlogBackendOptions",
 	},
 	{
 		factory: "cmsBackendPlugin",
 		lifecycleSlug: "cms",
 		hookType: "CMSBackendHooks",
+		configType: "CMSBackendConfig",
 	},
 	{
 		factory: "commentsBackendPlugin",
 		lifecycleSlug: "comments",
 		hookType: "CommentsBackendHooks",
+		configType: "CommentsBackendOptions",
 	},
 	{
 		factory: "formBuilderBackendPlugin",
 		lifecycleSlug: "form-builder",
 		hookType: "FormBuilderBackendHooks",
+		configType: "FormBuilderBackendConfig",
 	},
 	{
 		factory: "kanbanBackendPlugin",
 		lifecycleSlug: "kanban",
 		hookType: "KanbanBackendHooks",
+		configType: "KanbanBackendOptions",
 	},
 	{
 		factory: "mediaBackendPlugin",
 		lifecycleSlug: "media",
 		hookType: "MediaBackendHooks",
+		configType: "MediaBackendConfig",
 	},
-	{ factory: "openApiBackendPlugin" },
+	{ factory: "openApiBackendPlugin", configType: "OpenAPIOptions" },
 ];
-const clientFactories = [
-	"aiChatClientPlugin",
-	"blogClientPlugin",
-	"cmsClientPlugin",
-	"commentsClientPlugin",
-	"formBuilderClientPlugin",
-	"kanbanClientPlugin",
-	"mediaClientPlugin",
-	"routeDocsClientPlugin",
-	"uiBuilderClientPlugin",
+const clientPlugins = [
+	{ factory: "aiChatClientPlugin", configType: "AiChatClientConfig" },
+	{ factory: "blogClientPlugin", configType: "BlogClientConfig" },
+	{ factory: "cmsClientPlugin", configType: "CMSClientConfig" },
+	{ factory: "commentsClientPlugin", configType: "CommentsClientConfig" },
+	{
+		factory: "formBuilderClientPlugin",
+		configType: "FormBuilderClientConfig",
+	},
+	{ factory: "kanbanClientPlugin", configType: "KanbanClientConfig" },
+	{ factory: "mediaClientPlugin", configType: "MediaClientConfig" },
+	{ factory: "routeDocsClientPlugin", configType: "RouteDocsClientConfig" },
+	{ factory: "uiBuilderClientPlugin", configType: "UIBuilderClientConfig" },
 ];
 const pluginIds = [
 	"aiChat",
@@ -177,6 +187,18 @@ function isInsideMarkdownInlineCode(source, index) {
 	return (prefix.match(/(?<!`)`(?!`)/g)?.length ?? 0) % 2 === 1;
 }
 
+function isInsideCommentProse(source, index) {
+	return /(?:\/\/|\/\*|\*)[^*\n]{0,200}$/.test(
+		source.slice(Math.max(0, index - 200), index),
+	);
+}
+
+function hasCanonicalConfigType(source, identifier, configType) {
+	return new RegExp(
+		`\\b${escapeRegExp(identifier)}\\s*:\\s*(?:Readonly\\s*<\\s*)?${escapeRegExp(configType)}\\s*>?`,
+	).test(source);
+}
+
 function recordMatches(failures, file, source, label, pattern) {
 	for (const match of source.matchAll(pattern)) {
 		failures.push({
@@ -229,7 +251,7 @@ function readTopLevelObject(source, openIndex) {
 
 		if (lineComment) {
 			if (char === "\n") lineComment = false;
-			if (depth <= 1) topLevel += char;
+			if (depth <= 1) topLevel += char === "\n" ? "\n" : " ";
 			continue;
 		}
 		if (blockComment) {
@@ -308,9 +330,19 @@ function inspectFactoryObject(
 	openIndex,
 	reportIndex,
 ) {
+	if (/\.\.\.\s*[A-Za-z_$]/.test(object.topLevel)) {
+		failures.push({
+			file,
+			line: lineAt(source, reportIndex),
+			label: `${kind} factory options contain an unverifiable spread`,
+			match: factory,
+		});
+	}
 	if (
 		kind === "backend" &&
-		/\bon(?:Before|After|Error)[A-Z][A-Za-z0-9]*\s*:/.test(object.topLevel)
+		/(?:^|[,{])\s*(?:on(?:Before|After)[A-Z][A-Za-z0-9]*|onError(?:[A-Z][A-Za-z0-9]*)?)\b(?=\s*(?:\??:|\(|,|}))/.test(
+			object.topLevel,
+		)
 	) {
 		failures.push({
 			file,
@@ -373,6 +405,7 @@ function checkFactoryCalls(
 	source,
 	factory,
 	kind,
+	configType,
 	contextualLifecycleNames = [],
 ) {
 	const callPattern = new RegExp(`\\b${factory}[ \\t\\n]*\\(`, "g");
@@ -388,7 +421,22 @@ function checkFactoryCalls(
 					/^[A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*(?:\s*\([^()\n]*\))?\s*(?=[,)])/,
 				)?.[0]
 				.trim();
-			if (!expression) continue;
+			if (!expression) {
+				if (
+					/\.mdx?$/.test(file) &&
+					isInsideMarkdownInlineCode(source, callIndex)
+				) {
+					continue;
+				}
+				if (isInsideCommentProse(source, callIndex)) continue;
+				failures.push({
+					file,
+					line: lineAt(source, callIndex),
+					label: `${kind} factory options expression cannot be parsed`,
+					match: factory,
+				});
+				continue;
+			}
 			const identifier = /^[A-Za-z_$][\w$]*$/.test(expression)
 				? expression
 				: undefined;
@@ -399,6 +447,12 @@ function checkFactoryCalls(
 				if (
 					/\.mdx?$/.test(file) &&
 					isInsideMarkdownInlineCode(source, callIndex)
+				) {
+					continue;
+				}
+				if (
+					identifier &&
+					hasCanonicalConfigType(source, identifier, configType)
 				) {
 					continue;
 				}
@@ -426,7 +480,15 @@ function checkFactoryCalls(
 			continue;
 		}
 		const object = readTopLevelObject(source, cursor);
-		if (!object) continue;
+		if (!object) {
+			failures.push({
+				file,
+				line: lineAt(source, callIndex),
+				label: `${kind} factory options object cannot be parsed`,
+				match: factory,
+			});
+			continue;
+		}
 		inspectFactoryObject(
 			failures,
 			file,
@@ -595,7 +657,7 @@ for (const absolute of allFiles) {
 		),
 	);
 
-	for (const { factory, hookType } of backendPlugins) {
+	for (const { factory, hookType, configType } of backendPlugins) {
 		const contextualNames = contextualNamesByFactory.get(factory) ?? [];
 		checkFactoryCalls(
 			failures,
@@ -603,6 +665,7 @@ for (const absolute of allFiles) {
 			source,
 			factory,
 			"backend",
+			configType,
 			contextualNames,
 		);
 		if (hookType) {
@@ -616,8 +679,8 @@ for (const absolute of allFiles) {
 			);
 		}
 	}
-	for (const factory of clientFactories) {
-		checkFactoryCalls(failures, file, source, factory, "client");
+	for (const { factory, configType } of clientPlugins) {
+		checkFactoryCalls(failures, file, source, factory, "client", configType);
 	}
 	for (const name of removedLifecycleNames) {
 		recordMatches(
