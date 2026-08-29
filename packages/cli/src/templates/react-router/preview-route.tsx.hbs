@@ -24,6 +24,13 @@ export default function PreviewPage() {
 			<StackProvider
 				stack={stack}
 				router={reactRouter()}
+{{#if pagesLayoutOverrides}}
+				overrides={
+					{
+{{{pagesLayoutOverrides}}}
+					}{{#if hasLegacyClientPlugins}} as never{{/if}}
+				}
+{{/if}}
 			>
 				<div className="min-h-screen">
 					<PageRenderer

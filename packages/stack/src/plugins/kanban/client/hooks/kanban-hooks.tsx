@@ -17,6 +17,7 @@ import type {
 	SerializedTask,
 } from "../../types";
 import { kanban } from "./kanban-resource";
+import { KANBAN_PLUGIN_ID } from "../constants";
 
 function useIdentityPartition() {
 	const { identity, isPending, error } = useIdentity();
@@ -197,9 +198,26 @@ export function useTaskMutations() {
 
 // ============ User Resolution Hooks ============
 
+function useKanbanUserCallbacks() {
+	const overrides = usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
+
+	if (
+		typeof overrides.resolveUser !== "function" ||
+		typeof overrides.searchUsers !== "function"
+	) {
+		throw new Error(
+			'[btst/kanban] Missing required StackProvider overrides for "kanban". ' +
+				"Configure overrides={{ kanban: { resolveUser, searchUsers } }} when " +
+				"kanbanClientPlugin() is registered.",
+		);
+	}
+
+	return overrides;
+}
+
 /** Resolve a user from the consumer-provided callback. */
 export function useResolveUser(userId: string | undefined | null) {
-	const { resolveUser } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { resolveUser } = useKanbanUserCallbacks();
 	const identityPartition = useIdentityPartition();
 
 	return useQuery<KanbanUser | null>({
@@ -216,7 +234,7 @@ export function useResolveUser(userId: string | undefined | null) {
 
 /** Search for assignable users through the consumer-provided callback. */
 export function useSearchUsers(query: string, boardId?: string) {
-	const { searchUsers } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { searchUsers } = useKanbanUserCallbacks();
 	const identityPartition = useIdentityPartition();
 
 	return useQuery<KanbanUser[]>({

@@ -1,5 +1,6 @@
 export * from "./provider";
 export * from "./router";
+export { usePluginSiteNavigation } from "./site-navigation";
 export {
 	PermissionAccess,
 	PermissionCheck,

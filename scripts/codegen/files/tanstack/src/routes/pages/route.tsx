@@ -38,7 +38,7 @@ type PluginOverrides = {
 	blog: BlogPluginOverrides;
 	aiChat: AiChatPluginOverrides;
 	cms: CMSPluginOverrides;
-	"form-builder": FormBuilderPluginOverrides;
+	formBuilder: FormBuilderPluginOverrides;
 	kanban: KanbanPluginOverrides;
 	comments: CommentsPluginOverrides;
 	media: MediaPluginOverrides;

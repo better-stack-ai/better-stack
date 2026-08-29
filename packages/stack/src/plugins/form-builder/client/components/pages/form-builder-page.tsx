@@ -11,6 +11,7 @@ import { DefaultError } from "../shared/default-error";
 import { FormBuilderSkeleton } from "../loading/form-builder-skeleton";
 import { NotFoundPage } from "./404-page";
 import { formBuilderPermissions } from "../../../permissions";
+import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
 import { useSuspenseFormForUpdate } from "../../hooks";
 
 const FormBuilderPage = lazy(() =>
@@ -24,8 +25,9 @@ export interface FormBuilderPageProps {
 }
 
 export function FormBuilderPageComponent({ id }: FormBuilderPageProps) {
-	const { onRouteError } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
+	const { onRouteError } = usePluginOverrides<FormBuilderPluginOverrides>(
+		FORM_BUILDER_PLUGIN_ID,
+	);
 
 	const isNew = !id;
 	const path = isNew ? "/forms/new" : `/forms/${id}/edit`;

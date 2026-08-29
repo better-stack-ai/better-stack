@@ -8,6 +8,7 @@ import { DefaultError } from "../shared/default-error";
 import { FormListSkeleton } from "../loading/form-list-skeleton";
 import { NotFoundPage } from "./404-page";
 import { formBuilderPermissions } from "../../../permissions";
+import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
 
 const FormListPage = lazy(() =>
 	import("./form-list-page.internal").then((m) => ({
@@ -16,8 +17,9 @@ const FormListPage = lazy(() =>
 );
 
 export function FormListPageComponent() {
-	const { onRouteError } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
+	const { onRouteError } = usePluginOverrides<FormBuilderPluginOverrides>(
+		FORM_BUILDER_PLUGIN_ID,
+	);
 
 	return (
 		<ComposedRoute

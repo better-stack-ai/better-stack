@@ -3,20 +3,17 @@
 import { Button } from "@workspace/ui/components/button";
 import {
 	usePluginOverrides,
-	useStack,
+	usePluginSiteNavigation,
 	useTranslate,
 } from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
+import { KANBAN_PLUGIN_ID } from "../../constants";
 
 export function NotFoundPage() {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
-	const { router } = useStack();
-	const navigate =
-		router?.navigate ||
-		((path: string) => {
-			window.location.href = path;
-		});
+	const { localization } =
+		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
+	const { navigate } = usePluginSiteNavigation(KANBAN_PLUGIN_ID);
 
 	return (
 		<div
@@ -34,7 +31,7 @@ export function NotFoundPage() {
 						"The page you're looking for doesn't exist.",
 					)}
 			</p>
-			<Button onClick={() => navigate("/pages/kanban")}>
+			<Button onClick={() => navigate("kanban")}>
 				{localization?.backToBoards ??
 					t("kanban.common.backToBoards", "Back to Boards")}
 			</Button>

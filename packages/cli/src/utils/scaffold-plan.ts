@@ -23,6 +23,8 @@ const CANONICAL_CLIENT_PLUGIN_KEYS = new Set<PluginKey>([
 	"cms",
 	"ui-builder",
 	"comments",
+	"form-builder",
+	"kanban",
 ]);
 
 function getFrameworkPaths(framework: Framework, cssFile: string) {

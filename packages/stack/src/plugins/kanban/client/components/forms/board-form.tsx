@@ -9,6 +9,7 @@ import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import { useBoardForm } from "../../hooks/kanban-hooks";
 import type { KanbanPluginOverrides } from "../../overrides";
 import type { SerializedBoard } from "../../../types";
+import { KANBAN_PLUGIN_ID } from "../../constants";
 
 interface BoardFormProps {
 	board?: SerializedBoard;
@@ -27,7 +28,8 @@ function firstError(error: string | string[] | undefined): string | undefined {
 
 export function BoardForm({ board, onClose, onSuccess }: BoardFormProps) {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { localization } =
+		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
 	const isEditing = !!board;
 
 	const [name, setName] = useState(board?.name || "");

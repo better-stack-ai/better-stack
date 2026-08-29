@@ -17,6 +17,7 @@ import {
 } from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
 import { kanbanPermissions } from "../../../permissions";
+import { KANBAN_PLUGIN_ID } from "../../constants";
 
 interface TaskCardProps {
 	boardId: string;
@@ -36,7 +37,8 @@ function TaskCardComponent({
 	onClick,
 }: TaskCardProps) {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { localization } =
+		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
 	const priorityConfig = getPriorityConfig(task.priority);
 	const { data: assignee } = useResolveUser(task.assigneeId);
 	const priorityLabels = {

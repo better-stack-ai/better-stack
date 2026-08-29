@@ -26,6 +26,13 @@ export default function PreviewPageClient({ slug }: PreviewPageClientProps) {
 			<StackProvider
 				stack={stack}
 				router={nextRouter()}
+{{#if pagesLayoutOverrides}}
+				overrides={
+					{
+{{{pagesLayoutOverrides}}}
+					}{{#if hasLegacyClientPlugins}} as never{{/if}}
+				}
+{{/if}}
 			>
 				<div className="min-h-screen">
 					<PageRenderer

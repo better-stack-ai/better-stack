@@ -140,22 +140,27 @@ describe("client plugin SSR loaders", () => {
 		const queryClient = new QueryClient();
 		const expectedError = new Error("form list blocked");
 
-		const plugin = formBuilderClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				beforeLoadFormList: () => {
-					throw expectedError;
-				},
+			plugins: {
+				formBuilder: formBuilderClientPlugin({
+					hooks: {
+						beforeLoadFormList: () => {
+							throw expectedError;
+						},
+					},
+				}),
 			},
 		});
 
-		const route = plugin.routes().formList();
-		await route.loader?.();
+		const route = stack.router.getRoute("/forms");
+		await route?.loader?.();
 
 		const client = createApiClient<FormBuilderApiRouter>({
 			baseURL: API_BASE_URL,

@@ -148,11 +148,21 @@ import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
 import { QueryClient } from "@tanstack/react-query"
 import { contentTypes } from "./cms-schemas"
 
-const getBaseURL = () => 
-  process.env.BASE_URL || "http://localhost:3000"
+function getBaseURL(serverOrigin?: string) {
+  if (typeof window !== "undefined") return window.location.origin
+  return (
+    serverOrigin ||
+    process.env.BTST_SITE_URL ||
+    process.env.BASE_URL ||
+    "http://localhost:3000"
+  )
+}
 
-export const getStackClient = (queryClient: QueryClient, options?: { headers?: Headers }) => {
-  const baseURL = getBaseURL()
+export const getStackClient = (
+  queryClient: QueryClient,
+  options?: { headers?: Headers; origin?: string },
+) => {
+  const baseURL = getBaseURL(options?.origin)
   return createClientStack({
     api: {
       baseURL,

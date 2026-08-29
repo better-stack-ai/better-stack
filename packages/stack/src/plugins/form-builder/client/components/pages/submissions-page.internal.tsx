@@ -5,8 +5,7 @@ import {
 	useNotify,
 	PermissionAccess,
 	usePluginOverrides,
-	useBasePath,
-	useStack,
+	usePluginSiteNavigation,
 	useTranslate,
 	useIdentity,
 } from "@btst/stack/context";
@@ -48,6 +47,7 @@ import { PageWrapper } from "../shared/page-wrapper";
 import { EmptyState } from "../shared/empty-state";
 import { Pagination } from "../shared/pagination";
 import { formBuilderPermissions } from "../../../permissions";
+import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
 
 export interface SubmissionsPageProps {
 	formId: string;
@@ -56,11 +56,13 @@ export interface SubmissionsPageProps {
 export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 	const t = useTranslate();
 	const notify = useNotify();
-	const { localization } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const { router } = useStack();
-	const basePath = useBasePath();
+	const { localization } = usePluginOverrides<FormBuilderPluginOverrides>(
+		FORM_BUILDER_PLUGIN_ID,
+	);
 	const { identity } = useIdentity();
+	const { Link: LinkComponent, resolve } = usePluginSiteNavigation(
+		FORM_BUILDER_PLUGIN_ID,
+	);
 
 	const { form, submissions, total, hasMore, isLoadingMore, loadMore } =
 		useSuspenseSubmissions(formId);
@@ -80,8 +82,6 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 	useEffect(() => {
 		setViewSubmissionId(null);
 	}, [identity]);
-
-	const LinkComponent = router?.Link ?? "a";
 
 	const handleDelete = async () => {
 		if (!deleteId) return;
@@ -110,7 +110,7 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 			<div className="w-full max-w-5xl space-y-6">
 				<div className="flex items-center gap-4">
 					<Button variant="ghost" size="icon" asChild>
-						<LinkComponent href={`${basePath}/forms`}>
+						<LinkComponent href={resolve("forms").href}>
 							<ArrowLeft className="h-4 w-4" />
 						</LinkComponent>
 					</Button>

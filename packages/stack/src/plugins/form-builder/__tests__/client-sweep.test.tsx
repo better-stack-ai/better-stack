@@ -249,7 +249,7 @@ describe("maintained route authorization gates", () => {
 				<StackProvider
 					basePath="/pages"
 					router={createMockRouter()}
-					overrides={{ "form-builder": formBuilderOverrides }}
+					overrides={{ formBuilder: formBuilderOverrides }}
 					auth={deniedRouteAuth}
 					initialIdentity={{ id: "viewer-1", role: "user" }}
 				>
@@ -289,7 +289,7 @@ describe("maintained route authorization gates", () => {
 			<StackProvider
 				basePath="/pages"
 				router={createMockRouter()}
-				overrides={{ "form-builder": formBuilderOverrides }}
+				overrides={{ formBuilder: formBuilderOverrides }}
 				auth={auth}
 				initialIdentity={{ id: "viewer-1", role: "user" }}
 			>
@@ -332,7 +332,7 @@ describe("maintained route authorization gates", () => {
 			<StackProvider
 				basePath="/pages"
 				router={createMockRouter()}
-				overrides={{ "form-builder": formBuilderOverrides }}
+				overrides={{ formBuilder: formBuilderOverrides }}
 				auth={auth}
 				initialIdentity={{ id: "viewer-1", role: "user" }}
 			>
@@ -348,7 +348,7 @@ describe("maintained route authorization gates", () => {
 			<StackProvider
 				basePath="/pages"
 				router={createMockRouter()}
-				overrides={{ "form-builder": formBuilderOverrides }}
+				overrides={{ formBuilder: formBuilderOverrides }}
 				auth={auth}
 				initialIdentity={{ id: "viewer-1", role: "user" }}
 			>
@@ -369,7 +369,7 @@ describe("FormListPage New Form button (CanAccess)", () => {
 			<StackProvider
 				basePath="/pages"
 				router={router}
-				overrides={{ "form-builder": formBuilderOverrides }}
+				overrides={{ formBuilder: formBuilderOverrides }}
 				auth={auth}
 			>
 				<FormListPage />
@@ -405,7 +405,7 @@ describe("FormListPage New Form button (CanAccess)", () => {
 			<StackProvider
 				basePath="/pages"
 				router={createMockRouter()}
-				overrides={{ "form-builder": formBuilderOverrides }}
+				overrides={{ formBuilder: formBuilderOverrides }}
 				auth={auth}
 				initialIdentity={{ id: "viewer-1", role: "user" }}
 			>
@@ -427,7 +427,7 @@ describe("FormListPage search (useListState)", () => {
 			<StackProvider
 				basePath="/pages"
 				router={router}
-				overrides={{ "form-builder": formBuilderOverrides }}
+				overrides={{ formBuilder: formBuilderOverrides }}
 			>
 				<FormListPage />
 			</StackProvider>,
@@ -451,7 +451,7 @@ describe("FormListPage search (useListState)", () => {
 			<StackProvider
 				basePath="/pages"
 				router={router}
-				overrides={{ "form-builder": formBuilderOverrides }}
+				overrides={{ formBuilder: formBuilderOverrides }}
 			>
 				<FormListPage />
 			</StackProvider>,
@@ -489,7 +489,7 @@ describe("FormListPage search (useListState)", () => {
 			<StackProvider
 				basePath="/pages"
 				router={router}
-				overrides={{ "form-builder": formBuilderOverrides }}
+				overrides={{ formBuilder: formBuilderOverrides }}
 			>
 				<FormListPage />
 			</StackProvider>,
@@ -535,7 +535,7 @@ describe("SubmissionsPage row actions (CanAccess + useNotify)", () => {
 				basePath="/pages"
 				router={createMockRouter()}
 				notify={notify}
-				overrides={{ "form-builder": formBuilderOverrides }}
+				overrides={{ formBuilder: formBuilderOverrides }}
 				auth={auth}
 			>
 				<SubmissionsPage formId="f1" />
@@ -567,7 +567,7 @@ describe("SubmissionsPage row actions (CanAccess + useNotify)", () => {
 			<StackProvider
 				basePath="/pages"
 				router={createMockRouter()}
-				overrides={{ "form-builder": formBuilderOverrides }}
+				overrides={{ formBuilder: formBuilderOverrides }}
 				auth={auth}
 				initialIdentity={{ id: "viewer-1", role: "user" }}
 			>
@@ -635,7 +635,7 @@ describe("SubmissionsPage row actions (CanAccess + useNotify)", () => {
 			<StackProvider
 				basePath="/pages"
 				router={createMockRouter()}
-				overrides={{ "form-builder": formBuilderOverrides }}
+				overrides={{ formBuilder: formBuilderOverrides }}
 				auth={auth}
 				initialIdentity={currentIdentity}
 			>
@@ -708,7 +708,7 @@ describe("FormBuilderPage editor (resource useForm)", () => {
 				basePath="/pages"
 				router={createMockRouter()}
 				notify={notify}
-				overrides={{ "form-builder": formBuilderOverrides }}
+				overrides={{ formBuilder: formBuilderOverrides }}
 			>
 				<FormBuilderPage />
 			</StackProvider>,
@@ -794,7 +794,7 @@ describe("form-builder i18n precedence (useTranslate + overrides.localization)",
 			<StackProvider
 				basePath="/pages"
 				router={createMockRouter()}
-				overrides={{ "form-builder": formBuilderOverrides }}
+				overrides={{ formBuilder: formBuilderOverrides }}
 			>
 				<FormListPage />
 			</StackProvider>,
@@ -815,7 +815,7 @@ describe("form-builder i18n precedence (useTranslate + overrides.localization)",
 			<StackProvider
 				basePath="/pages"
 				router={createMockRouter()}
-				overrides={{ "form-builder": formBuilderOverrides }}
+				overrides={{ formBuilder: formBuilderOverrides }}
 				i18n={i18n}
 			>
 				<FormListPage />
@@ -835,7 +835,7 @@ describe("form-builder i18n precedence (useTranslate + overrides.localization)",
 				basePath="/pages"
 				router={createMockRouter()}
 				overrides={{
-					"form-builder": {
+					formBuilder: {
 						...formBuilderOverrides,
 						localization: { FORM_BUILDER_LIST_EMPTY: "Custom empty state" },
 					},

@@ -37,7 +37,7 @@ import {
 	PermissionAccess,
 	useNotify,
 	usePluginOverrides,
-	useStack,
+	usePluginSiteNavigation,
 	useTranslate,
 } from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
@@ -50,6 +50,7 @@ import { EmptyState } from "../shared/empty-state";
 import type { SerializedTask, SerializedColumn } from "../../../types";
 import { kanbanPermissions } from "../../../permissions";
 import { PermissionAccessAny } from "../shared/permission-access-any";
+import { KANBAN_PLUGIN_ID } from "../../constants";
 
 interface BoardPageProps {
 	boardId: string;
@@ -76,14 +77,8 @@ export function BoardPage({ boardId }: BoardPageProps) {
 	}
 
 	const { taskDetailBottomSlot, localization } =
-		usePluginOverrides<KanbanPluginOverrides>("kanban");
-	const { router } = useStack();
-	const navigate =
-		router?.navigate ||
-		((path: string) => {
-			window.location.href = path;
-		});
-	const Link = router?.Link ?? "a";
+		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
+	const { Link, navigate, resolve } = usePluginSiteNavigation(KANBAN_PLUGIN_ID);
 
 	const { deleteBoard, isDeleting } = useBoardMutations();
 	const { deleteColumn, reorderColumns } = useColumnMutations();
@@ -134,13 +129,13 @@ export function BoardPage({ boardId }: BoardPageProps) {
 			closeModal();
 			// Use both navigate and a fallback to ensure navigation works
 			// Some frameworks may have issues with router.push after mutations
-			navigate("/pages/kanban");
+			void navigate("kanban");
 			// Fallback: if navigate doesn't work, use window.location
 			if (typeof window !== "undefined") {
 				setTimeout(() => {
 					// Only redirect if we're still on the same page after 100ms
 					if (window.location.pathname.includes(boardId)) {
-						window.location.href = "/pages/kanban";
+						window.location.assign(resolve("kanban").href);
 					}
 				}, 100);
 			}
@@ -156,6 +151,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 		deleteBoard,
 		boardId,
 		navigate,
+		resolve,
 		closeModal,
 		localization?.deleteBoardError,
 		notify,
@@ -296,7 +292,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 					)
 				}
 				action={
-					<Button onClick={() => navigate("/pages/kanban")}>
+					<Button onClick={() => navigate("kanban")}>
 						<ArrowLeft className="mr-2 h-4 w-4" />
 						{localization?.backToBoards ??
 							t("kanban.common.backToBoards", "Back to Boards")}
@@ -336,7 +332,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 			<div className="w-full flex items-center justify-between mb-8">
 				<div className="flex items-center gap-4">
 					<Link
-						href="/pages/kanban"
+						href={resolve("kanban").href}
 						className="text-muted-foreground hover:text-foreground"
 					>
 						<ArrowLeft className="h-5 w-5" />

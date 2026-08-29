@@ -9,6 +9,7 @@ import {
 } from "@workspace/ui/components/avatar";
 import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { KanbanPluginOverrides, KanbanUser } from "../../overrides";
+import { KANBAN_PLUGIN_ID } from "../../constants";
 
 interface UserAvatarProps {
 	user: KanbanUser | null;
@@ -39,7 +40,8 @@ function UserAvatarComponent({
 	className,
 }: UserAvatarProps) {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { localization } =
+		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
 	// No user - show placeholder icon
 	if (!user) {
 		return (

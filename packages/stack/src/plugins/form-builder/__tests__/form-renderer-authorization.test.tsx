@@ -93,7 +93,7 @@ describe("FormRenderer authorization", () => {
 			root.render(
 				<StackProvider
 					basePath="/pages"
-					overrides={{ "form-builder": {} }}
+					overrides={{ formBuilder: {} }}
 					auth={auth}
 					initialIdentity={null}
 				>
@@ -142,7 +142,7 @@ describe("FormRenderer authorization", () => {
 			root.render(
 				<StackProvider
 					basePath="/pages"
-					overrides={{ "form-builder": {} }}
+					overrides={{ formBuilder: {} }}
 					auth={missingRuleAuth}
 					initialIdentity={null}
 				>

@@ -13,7 +13,7 @@ import { useSuspenseBoards } from "../../hooks/kanban-hooks";
 import {
 	PermissionAccess,
 	usePluginOverrides,
-	useStack,
+	usePluginSiteNavigation,
 	useTranslate,
 } from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
@@ -21,6 +21,7 @@ import { EmptyState } from "../shared/empty-state";
 import { PageWrapper } from "../shared/page-wrapper";
 import { format } from "date-fns";
 import { kanbanPermissions } from "../../../permissions";
+import { KANBAN_PLUGIN_ID } from "../../constants";
 
 export function BoardsListPage() {
 	const t = useTranslate();
@@ -30,17 +31,12 @@ export function BoardsListPage() {
 	if (error && !isFetching) {
 		throw error;
 	}
-	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
-	const { router } = useStack();
-	const Link = router?.Link ?? "a";
-	const navigate =
-		router?.navigate ||
-		((path: string) => {
-			window.location.href = path;
-		});
+	const { localization } =
+		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
+	const { Link, navigate, resolve } = usePluginSiteNavigation(KANBAN_PLUGIN_ID);
 
 	const handleNewBoard = () => {
-		navigate("/pages/kanban/new");
+		void navigate("kanban", "new");
 	};
 
 	return (
@@ -79,7 +75,10 @@ export function BoardsListPage() {
 								exists: true,
 							})}
 						>
-							<Link href={`/pages/kanban/${board.id}`} className="block group">
+							<Link
+								href={resolve("kanban", board.id).href}
+								className="block group"
+							>
 								<Card className="h-full transition-shadow hover:shadow-md cursor-pointer">
 									<CardHeader>
 										<CardTitle className="group-hover:text-primary transition-colors">

@@ -5,8 +5,7 @@ import {
 	useNotify,
 	PermissionAccess,
 	usePluginOverrides,
-	useBasePath,
-	useStack,
+	usePluginSiteNavigation,
 	useTranslate,
 } from "@btst/stack/context";
 import { useListState, type ListStateSchema } from "@btst/stack/client/hooks";
@@ -52,6 +51,7 @@ import { PageWrapper } from "../shared/page-wrapper";
 import { EmptyState } from "../shared/empty-state";
 import { Pagination } from "../shared/pagination";
 import { formBuilderPermissions } from "../../../permissions";
+import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
 
 // URL-synced search state: `?q=...` while typing (history: replace), clean
 // URL when the query is empty (the default is omitted from the URL).
@@ -64,12 +64,12 @@ const SEARCH_DEBOUNCE_MS = 300;
 export function FormListPage() {
 	const t = useTranslate();
 	const notify = useNotify();
-	const { localization } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const { router } = useStack();
-	const navigate = router?.navigate;
-	const Link = router?.Link;
-	const basePath = useBasePath();
+	const { localization } = usePluginOverrides<FormBuilderPluginOverrides>(
+		FORM_BUILDER_PLUGIN_ID,
+	);
+	const { Link, navigate, resolve } = usePluginSiteNavigation(
+		FORM_BUILDER_PLUGIN_ID,
+	);
 
 	const [{ q: search }, setListState] = useListState(
 		"form-builder-forms",
@@ -157,7 +157,7 @@ export function FormListPage() {
 	const newFormButton = (
 		<PermissionAccess permission={formBuilderPermissions.form.create()}>
 			<Button asChild>
-				<LinkComponent href={`${basePath}/forms/new`}>
+				<LinkComponent href={resolve("forms", "new").href}>
 					<Plus className="mr-2 h-4 w-4" />
 					{localization?.FORM_BUILDER_BUTTON_NEW_FORM ??
 						t("formBuilder.common.buttonNewForm", "New Form")}
@@ -296,9 +296,7 @@ export function FormListPage() {
 														>
 															<DropdownMenuItem
 																onClick={() =>
-																	navigate?.(
-																		`${basePath}/forms/${form.id}/edit`,
-																	)
+																	navigate("forms", form.id, "edit")
 																}
 															>
 																<Pencil className="mr-2 h-4 w-4" />
@@ -320,9 +318,7 @@ export function FormListPage() {
 														>
 															<DropdownMenuItem
 																onClick={() =>
-																	navigate?.(
-																		`${basePath}/forms/${form.id}/submissions`,
-																	)
+																	navigate("forms", form.id, "submissions")
 																}
 															>
 																<FileText className="mr-2 h-4 w-4" />

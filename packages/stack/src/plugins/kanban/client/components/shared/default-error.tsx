@@ -4,6 +4,7 @@ import { AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
+import { KANBAN_PLUGIN_ID } from "../../constants";
 
 interface DefaultErrorProps {
 	error?: unknown;
@@ -12,7 +13,8 @@ interface DefaultErrorProps {
 
 export function DefaultError({ error, reset }: DefaultErrorProps) {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { localization } =
+		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
 	return (
 		<div
 			className="flex flex-col items-center justify-center py-12 text-center"
