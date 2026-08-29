@@ -346,7 +346,14 @@ describe("scaffold plan", () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
 			adapter: "prisma",
-			plugins: ["ai-chat", "cms", "ui-builder", "form-builder"],
+			plugins: [
+				"ai-chat",
+				"cms",
+				"comments",
+				"ui-builder",
+				"form-builder",
+				"kanban",
+			],
 			alias: "@/",
 			cssFile: "app/globals.css",
 		});
@@ -369,6 +376,10 @@ describe("scaffold plan", () => {
 		expect(stackClientFile?.content).toContain(
 			"formBuilder: formBuilderClientPlugin(),",
 		);
+		expect(stackClientFile?.content).toContain(
+			"comments: commentsClientPlugin(),",
+		);
+		expect(stackClientFile?.content).toContain("kanban: kanbanClientPlugin(),");
 		expect(stackClientFile?.content).not.toContain('"ai-chat":');
 		expect(stackClientFile?.content).not.toContain('"ui-builder":');
 		expect(stackClientFile?.content).not.toContain('"form-builder":');
