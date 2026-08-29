@@ -13,6 +13,7 @@ import {
 	useTranslate,
 } from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
 import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
@@ -94,7 +95,8 @@ export function CMSFileUpload({
 	// All hooks must be called unconditionally before any early return.
 	const t = useTranslate();
 	const notify = useNotify();
-	const { localization } = usePluginOverrides<CMSPluginOverrides>("cms");
+	const { localization } =
+		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 	const [isUploading, setIsUploading] = useState(false);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(
 		field.value || null,

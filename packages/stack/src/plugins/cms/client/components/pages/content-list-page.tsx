@@ -3,6 +3,7 @@
 import { lazy } from "react";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
 import { ComposedRoute } from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
 import { ListSkeleton } from "../loading";
@@ -22,7 +23,8 @@ interface ContentListPageComponentProps {
 export function ContentListPageComponent({
 	typeSlug,
 }: ContentListPageComponentProps) {
-	const { onRouteError } = usePluginOverrides<CMSPluginOverrides>("cms");
+	const { onRouteError } =
+		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 
 	return (
 		<ComposedRoute

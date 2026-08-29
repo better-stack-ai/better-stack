@@ -807,7 +807,7 @@ export function useToggleTodo() {
 Framework-wide routing is configured once on `StackProvider`. Read it through `useStack()` in plugin components; reserve plugin overrides for plugin-specific customization:
 
 ```typescript
-import { useBasePath, useStack } from "@btst/stack/context"
+import { joinBasePath, useBasePath, useStack } from "@btst/stack/context"
 
 function TodosList() {
   const { router } = useStack()
@@ -815,12 +815,14 @@ function TodosList() {
   const basePath = useBasePath()
   
   return (
-    <Link href={`${basePath}/todos/add`}>
+    <Link href={joinBasePath(basePath, "/todos/add")}>
       Add Todo
     </Link>
   )
 }
 ```
+
+Use `joinBasePath` for links and programmatic navigation. It keeps a root base path (`/`) from producing a protocol-relative URL such as `//todos/add`.
 
 ### ComposedRoute
 

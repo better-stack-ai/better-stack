@@ -38,7 +38,10 @@ export type {
 	ResolvedClientStackConfig,
 } from "../types";
 
-type AnyPluginMap = Record<string, ClientPluginRegistration<any, any, any>>;
+type AnyPluginMap = Record<
+	string,
+	ClientPluginRegistration<any, any, any, any, any>
+>;
 type LegacyPluginMap = Record<string, ClientPlugin<any, any>>;
 
 function hasResolvedRuntime<TPlugins extends AnyPluginMap>(
@@ -124,7 +127,13 @@ export function createClientStack<
 					`[btst/client] Client plugin "${pluginKey}" is a runtime-independent definition. Configure api, site, and queryClient on createClientStack().`,
 				);
 			}
-			const definition = registration as ClientPluginDefinition<any, any>;
+			const definition = registration as ClientPluginDefinition<
+				any,
+				any,
+				any,
+				any,
+				any
+			>;
 			const resolution = definition.resolve(runtime.pluginRuntimes[pluginKey]!);
 			if (!resolution || typeof resolution.routes !== "function") {
 				throw new Error(

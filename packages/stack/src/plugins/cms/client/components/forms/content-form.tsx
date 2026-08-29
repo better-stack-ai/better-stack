@@ -15,6 +15,7 @@ import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
 import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
 import type { SerializedContentType, RelationConfig } from "../../../types";
 import { slugify } from "../../../utils";
 import { CMSFileUpload } from "./file-upload";
@@ -258,7 +259,7 @@ export function ContentForm({
 		imagePicker,
 		imageInputField,
 		fieldComponents,
-	} = usePluginOverrides<CMSPluginOverrides>("cms");
+	} = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 
 	const [slug, setSlug] = useState(initialSlug);
 	const [slugManuallyEdited, setSlugManuallyEdited] = useState(isEditing);

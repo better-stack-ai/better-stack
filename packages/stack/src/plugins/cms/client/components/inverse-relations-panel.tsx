@@ -16,9 +16,9 @@ import {
 	CardTitle,
 } from "@workspace/ui/components/card";
 import {
+	joinBasePath,
 	PermissionAccess,
 	usePluginOverrides,
-	useBasePath,
 	useStack,
 	useTranslate,
 	type TranslateFn,
@@ -30,6 +30,7 @@ import {
 	useInverseRelationItems,
 } from "../hooks";
 import type { CMSPluginOverrides } from "../overrides";
+import { CMS_PLUGIN_ID } from "../constants";
 import type {
 	InverseRelation,
 	SerializedContentItemWithType,
@@ -59,11 +60,12 @@ export function InverseRelationsPanel({
 	itemId,
 }: InverseRelationsPanelProps) {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<CMSPluginOverrides>("cms");
-	const { router } = useStack();
+	const { localization } =
+		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
+	const { router, plugins, basePath: legacyBasePath } = useStack();
 	const navigate = router?.navigate;
 	const Link = router?.Link;
-	const basePath = useBasePath();
+	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
 
 	// Fetch inverse relations metadata
 	const { inverseRelations, isLoading } = useInverseRelations(
@@ -220,7 +222,10 @@ function InverseRelationSection({
 	const handleAddNew = () => {
 		// Navigate to create page with query param to pre-fill the relation.
 		// ContentEditorPage reads prefill_* query params and passes them to ContentForm as initialData.
-		const createUrl = `${basePath}/cms/${relation.sourceType}/new?prefill_${relation.fieldName}=${itemId}`;
+		const createUrl = joinBasePath(
+			basePath,
+			`/cms/${relation.sourceType}/new?prefill_${relation.fieldName}=${itemId}`,
+		);
 		void navigate?.(createUrl);
 	};
 
@@ -270,7 +275,10 @@ function InverseRelationSection({
 						<ul className="space-y-2">
 							{items.map((item: SerializedContentItemWithType) => {
 								const displayValue = getDisplayValue(item);
-								const editUrl = `${basePath}/cms/${relation.sourceType}/${item.id}`;
+								const editUrl = joinBasePath(
+									basePath,
+									`/cms/${relation.sourceType}/${item.id}`,
+								);
 								return (
 									<li
 										key={item.id}

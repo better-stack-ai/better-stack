@@ -2,8 +2,8 @@
 
 import { useState, useCallback } from "react";
 import {
+	joinBasePath,
 	PermissionAccess,
-	useBasePath,
 	useNotify,
 	usePluginOverrides,
 	useStack,
@@ -40,7 +40,11 @@ import {
 	useSuspenseUIBuilderPage,
 	useUIBuilderPageForm,
 } from "../../hooks/ui-builder-hooks";
-import type { UIBuilderPluginOverrides } from "../../overrides";
+import {
+	resolveUIBuilderComponents,
+	type UIBuilderPluginOverrides,
+} from "../../overrides";
+import { UI_BUILDER_PLUGIN_ID } from "../../constants";
 import { uiBuilderLocalization } from "../../localization";
 import { defaultComponentRegistry } from "../../registry";
 import type { SerializedUIBuilderPage } from "../../../types";
@@ -227,15 +231,15 @@ function PageBuilderPageContent({
 }: PageBuilderPageContentProps) {
 	const t = useTranslate();
 	const notify = useNotify();
-	const {
-		componentRegistry: customRegistry,
-		functionRegistry,
-		localization,
-	} = usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
-	const { router } = useStack();
-	const basePath = useBasePath();
+	const { functionRegistry, localization } =
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
+	const { router, plugins, basePath: legacyBasePath } = useStack();
+	const basePath =
+		plugins?.[UI_BUILDER_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
 	const LinkComponent = router?.Link ?? "a";
-	const componentRegistry = customRegistry || defaultComponentRegistry;
+	const componentRegistry =
+		resolveUIBuilderComponents(plugins?.[UI_BUILDER_PLUGIN_ID]?.config) ??
+		defaultComponentRegistry;
 	const localized = (
 		override: string | undefined,
 		key: string,
@@ -343,7 +347,9 @@ function PageBuilderPageContent({
 				? duplicateSlugMessage
 				: saveErrorMessage,
 		redirect: (page, action) =>
-			action === "create" ? `${basePath}/ui-builder/${page.id}/edit` : false,
+			action === "create"
+				? joinBasePath(basePath, `/ui-builder/${page.id}/edit`)
+				: false,
 	});
 
 	// Auto-generate slug from first page name
@@ -507,7 +513,7 @@ function PageBuilderPageContent({
 	const navLeftChildren = (
 		<div className="flex items-center gap-2 md:gap-4">
 			<Button variant="ghost" size="icon" asChild className="shrink-0">
-				<LinkComponent href={`${basePath}/ui-builder`}>
+				<LinkComponent href={joinBasePath(basePath, "/ui-builder")}>
 					<ArrowLeft className="h-4 w-4" />
 				</LinkComponent>
 			</Button>

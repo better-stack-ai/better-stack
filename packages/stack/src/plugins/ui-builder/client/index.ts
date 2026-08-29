@@ -65,4 +65,7 @@ export {
 } from "./localization";
 
 // Re-export types
-export type { UIBuilderPluginOverrides } from "./overrides";
+export type {
+	UIBuilderPluginOverrides,
+	UIBuilderProviderConfig,
+} from "./overrides";

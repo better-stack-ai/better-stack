@@ -9,6 +9,7 @@ import { z } from "zod";
 import { defineAuthorization } from "@btst/stack/authorization";
 import { createClientAuth } from "@btst/stack/authorization/client";
 import { createServerAuth } from "@btst/stack/authorization/server";
+import { createClientStack } from "../../../client";
 import {
 	StackProvider,
 	type StackClientAuth,
@@ -23,6 +24,7 @@ import {
 	PageRenderer,
 	SuspensePageRenderer,
 } from "../client/components/page-renderer";
+import { uiBuilderClientPlugin } from "../client";
 import { PageBuilderPage } from "../client/components/pages/page-builder-page.internal";
 import { PageListPage } from "../client/components/pages/page-list-page.internal";
 import { PageListPage as PageListRoutePage } from "../client/components/pages/page-list-page";
@@ -39,6 +41,10 @@ const hooks = vi.hoisted(() => ({
 	useSuspenseUIBuilderPageBySlug: vi.fn(),
 	useUIBuilderPageForm: vi.fn(),
 }));
+const renderedRegistries = vi.hoisted(() => ({
+	layer: vi.fn(),
+	builder: vi.fn(),
+}));
 
 vi.mock("../client/hooks/ui-builder-hooks", () => hooks);
 vi.mock("@btst/stack/plugins/ai-chat/client/context", () => ({
@@ -48,41 +54,43 @@ vi.mock("@workspace/ui/lib/ui-builder/store/layer-store", () => ({
 	useLayerStore: { getState: vi.fn() },
 }));
 vi.mock("@workspace/ui/components/ui-builder/layer-renderer", () => ({
-	default: ({ page }: { page: { name?: string } }) => (
-		<div data-testid="rendered-public-page">{page.name}</div>
-	),
+	default: (props: { page: { name?: string }; componentRegistry: unknown }) => {
+		renderedRegistries.layer(props.componentRegistry);
+		return <div data-testid="rendered-public-page">{props.page.name}</div>;
+	},
 }));
 vi.mock("@workspace/ui/components/ui-builder", () => ({
-	default: ({
-		navLeftChildren,
-		navRightChildren,
-		onChange,
-	}: {
+	default: (props: {
 		navLeftChildren?: ReactNode;
 		navRightChildren?: ReactNode;
 		onChange?: (layers: unknown[]) => void;
-	}) => (
-		<div data-testid="upstream-ui-builder">
-			{navLeftChildren}
-			{navRightChildren}
-			<button
-				type="button"
-				onClick={() =>
-					onChange?.([
-						{
-							id: "root",
-							type: "div",
-							name: "Home Page",
-							props: {},
-							children: [],
-						},
-					])
-				}
-			>
-				Add layer
-			</button>
-		</div>
-	),
+		componentRegistry: unknown;
+	}) => {
+		renderedRegistries.builder(props.componentRegistry);
+		const { navLeftChildren, navRightChildren, onChange } = props;
+		return (
+			<div data-testid="upstream-ui-builder">
+				{navLeftChildren}
+				{navRightChildren}
+				<button
+					type="button"
+					onClick={() =>
+						onChange?.([
+							{
+								id: "root",
+								type: "div",
+								name: "Home Page",
+								props: {},
+								children: [],
+							},
+						])
+					}
+				>
+					Add layer
+				</button>
+			</div>
+		);
+	},
 }));
 
 const page: SerializedUIBuilderPage = {
@@ -191,10 +199,7 @@ function createMockRouter() {
 }
 
 function overrides() {
-	return {
-		queryClient,
-		componentRegistry: {},
-	};
+	return {};
 }
 
 async function renderPage(
@@ -217,7 +222,7 @@ async function renderPage(
 				api={{ baseURL: "http://test.local", basePath: "/api/data" }}
 				router={createMockRouter()}
 				overrides={{
-					"ui-builder": { ...overrides(), localization: options.localization },
+					uiBuilder: { ...overrides(), localization: options.localization },
 				}}
 				auth={options.auth}
 				initialIdentity={options.initialIdentity}
@@ -228,6 +233,31 @@ async function renderPage(
 			</StackProvider>,
 		);
 	});
+}
+
+async function renderResolvedPage(
+	pageNode: ReactNode,
+	router = createMockRouter(),
+	components?: NonNullable<
+		Parameters<typeof uiBuilderClientPlugin>[0]
+	>["components"],
+	siteBasePath = "/builder",
+) {
+	const clientStack = createClientStack({
+		api: { baseURL: "http://test.local", basePath: "/api/data" },
+		site: { baseURL: "http://test.local", basePath: "/pages" },
+		queryClient,
+		plugins: { uiBuilder: uiBuilderClientPlugin({ components }) },
+		endpoints: { uiBuilder: { site: { basePath: siteBasePath } } },
+	});
+	await act(async () => {
+		root.render(
+			<StackProvider stack={clientStack} router={router}>
+				{pageNode}
+			</StackProvider>,
+		);
+	});
+	return router;
 }
 
 function buttonWithText(text: string) {
@@ -264,6 +294,9 @@ describe("UI Builder page permissions", () => {
 	it("keeps create controls visible without an auth provider", async () => {
 		await renderPage(<PageListPage />);
 		expect(document.body.textContent).toContain("Create Page");
+		expect(
+			container.querySelector('a[href="/pages/ui-builder/new"]'),
+		).toBeTruthy();
 	});
 
 	it("uses the CMS catalog for read, create, update, and delete controls", async () => {
@@ -341,6 +374,115 @@ describe("UI Builder page permissions", () => {
 	});
 });
 
+describe("UI Builder resolved site navigation", () => {
+	it("keeps root list links, navigation, and create redirects origin-relative", async () => {
+		const router = await renderResolvedPage(
+			<PageListPage />,
+			createMockRouter(),
+			undefined,
+			"/",
+		);
+
+		expect(container.querySelector('a[href="/ui-builder/new"]')).toBeTruthy();
+		const actionsTrigger =
+			container.querySelector<HTMLButtonElement>("tbody button")!;
+		await act(async () => {
+			actionsTrigger.dispatchEvent(
+				new MouseEvent("pointerdown", { bubbles: true, button: 0 }),
+			);
+		});
+		const editItem = Array.from(
+			document.querySelectorAll<HTMLElement>("[role=menuitem]"),
+		).find((item) => item.textContent?.includes("Edit"));
+		await act(async () => editItem?.click());
+		expect(router.navigate).toHaveBeenCalledWith("/ui-builder/page-1/edit");
+
+		await renderResolvedPage(
+			<PageBuilderPage />,
+			createMockRouter(),
+			undefined,
+			"/",
+		);
+		expect(container.querySelector('a[href="/ui-builder"]')).toBeTruthy();
+		const formOptions = hooks.useUIBuilderPageForm.mock.calls.at(-1)?.[0];
+		expect(formOptions.redirect(page, "create")).toBe(
+			"/ui-builder/page-1/edit",
+		);
+	});
+
+	it("uses endpoints.uiBuilder.site for list links and navigation", async () => {
+		const router = await renderResolvedPage(<PageListPage />);
+
+		expect(
+			container.querySelector('a[href="/builder/ui-builder/new"]'),
+		).toBeTruthy();
+		const actionsTrigger =
+			container.querySelector<HTMLButtonElement>("tbody button")!;
+		await act(async () => {
+			actionsTrigger.dispatchEvent(
+				new MouseEvent("pointerdown", { bubbles: true, button: 0 }),
+			);
+		});
+		const editItem = Array.from(
+			document.querySelectorAll<HTMLElement>("[role=menuitem]"),
+		).find((item) => item.textContent?.includes("Edit"));
+		await act(async () => editItem?.click());
+
+		expect(router.navigate).toHaveBeenCalledWith(
+			"/builder/ui-builder/page-1/edit",
+		);
+	});
+
+	it("uses endpoints.uiBuilder.site for builder links and create redirects", async () => {
+		await renderResolvedPage(<PageBuilderPage />);
+
+		expect(
+			container.querySelector('a[href="/builder/ui-builder"]'),
+		).toBeTruthy();
+		const formOptions = hooks.useUIBuilderPageForm.mock.calls.at(-1)?.[0];
+		expect(formOptions.redirect(page, "create")).toBe(
+			"/builder/ui-builder/page-1/edit",
+		);
+	});
+});
+
+describe("UI Builder registered component registry", () => {
+	it("uses factory components in both the editor and public renderer", async () => {
+		const components = {
+			FactoryComponent: { schema: z.object({}) },
+		};
+
+		await renderResolvedPage(
+			<PageBuilderPage />,
+			createMockRouter(),
+			components,
+		);
+		expect(renderedRegistries.builder).toHaveBeenLastCalledWith(components);
+
+		await act(async () => root.unmount());
+		root = createRoot(container);
+		await renderResolvedPage(
+			<PageRenderer slug="home" />,
+			createMockRouter(),
+			components,
+		);
+		expect(renderedRegistries.layer).toHaveBeenLastCalledWith(components);
+	});
+
+	it("lets an explicit standalone renderer prop override factory components", async () => {
+		const registered = { Registered: { schema: z.object({}) } };
+		const standalone = { Standalone: { schema: z.object({}) } };
+
+		await renderResolvedPage(
+			<PageRenderer slug="home" componentRegistry={standalone} />,
+			createMockRouter(),
+			registered,
+		);
+
+		expect(renderedRegistries.layer).toHaveBeenLastCalledWith(standalone);
+	});
+});
+
 describe("UI Builder public page authorization", () => {
 	it("serves a real anonymous CMS page with the shared public rules", async () => {
 		const backend = stack({
@@ -407,7 +549,7 @@ describe("UI Builder public page authorization", () => {
 				basePath="/pages"
 				auth={publicPageAuth()}
 				initialIdentity={null}
-				overrides={{ "ui-builder": overrides() }}
+				overrides={{ uiBuilder: overrides() }}
 			>
 				<SuspensePageRenderer slug="home" />
 			</StackProvider>,
@@ -417,7 +559,7 @@ describe("UI Builder public page authorization", () => {
 				basePath="/pages"
 				auth={publicPageAuth()}
 				initialIdentity={null}
-				overrides={{ "ui-builder": overrides() }}
+				overrides={{ uiBuilder: overrides() }}
 			>
 				<SuspensePageRenderer slug="home" />
 			</StackProvider>,

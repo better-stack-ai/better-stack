@@ -112,13 +112,23 @@ export interface ClientProviderApi extends ClientLocation {
 }
 
 /** Provider-safe endpoint view for one registered plugin. */
-export interface ClientProviderPluginRuntime<TId extends string = string> {
+export interface ClientProviderPluginRuntime<
+	TId extends string = string,
+	TConfig extends Readonly<Record<string, unknown>> = Readonly<
+		Record<string, unknown>
+	>,
+> {
 	/** Stable programmatic identifier bound by client-stack registration. */
 	id: TId;
 	/** Provider-safe effective API endpoint for this plugin. */
 	api: ClientProviderApi;
 	/** Effective site location for this plugin. */
 	site: ClientLocation;
+	/**
+	 * Browser-safe plugin factory values exposed to components. Never contains
+	 * request headers, secrets, or server-only objects.
+	 */
+	config?: TConfig;
 }
 
 /**
@@ -267,11 +277,26 @@ export interface ClientPluginDefinition<
 	TOverrides = Record<string, never>,
 	TRoutes extends Record<string, Route> = Record<string, Route>,
 	TId extends string = string,
+	TProviderConfig extends Readonly<Record<string, unknown>> = Readonly<
+		Record<string, unknown>
+	>,
+	TApiRuntimeFrom extends string = never,
 > {
 	/** Canonical stable programmatic identifier. */
 	readonly id?: TId;
 	/** @deprecated Use `id`. Retained only while first-party plugins migrate. */
 	name?: string;
+	/**
+	 * Optional programmatic ID whose effective API transport this definition
+	 * consumes. The dependent plugin may still resolve its own site endpoint.
+	 */
+	readonly apiRuntimeFrom?: TApiRuntimeFrom;
+	/**
+	 * Small, browser-safe subset of factory values needed by components through
+	 * `useStack().plugins[id].config`. Do not include secrets, request headers,
+	 * server-only objects, or shared API/site/query runtime.
+	 */
+	providerConfig?: TProviderConfig;
 	/** Expand plugin-specific options against one resolved stack runtime. */
 	resolve: (
 		runtime: ResolvedClientPluginRuntime<TId>,
@@ -283,9 +308,19 @@ export type ClientPluginRegistration<
 	TOverrides = Record<string, never>,
 	TRoutes extends Record<string, Route> = Record<string, Route>,
 	TId extends string = string,
+	TProviderConfig extends Readonly<Record<string, unknown>> = Readonly<
+		Record<string, unknown>
+	>,
+	TApiRuntimeFrom extends string = never,
 > =
 	| ClientPlugin<TOverrides, TRoutes, TId>
-	| ClientPluginDefinition<TOverrides, TRoutes, TId>;
+	| ClientPluginDefinition<
+			TOverrides,
+			TRoutes,
+			TId,
+			TProviderConfig,
+			TApiRuntimeFrom
+	  >;
 
 /**
  * Utility type that maps each plugin key to the return type of its `raw` factory.
@@ -419,7 +454,13 @@ export type BackendLibConfig<
 		| undefined,
 > = BackendStackConfig<TPlugins, TAuth>;
 
-type AnyClientPluginRegistration = ClientPluginRegistration<any, any, any>;
+type AnyClientPluginRegistration = ClientPluginRegistration<
+	any,
+	any,
+	any,
+	any,
+	any
+>;
 type LegacyClientPluginMap = Record<string, ClientPlugin<any, any>>;
 
 /** @internal Extract a required canonical plugin ID, excluding legacy optional IDs. */
@@ -427,6 +468,24 @@ type _DeclaredPluginId<TPlugin> = TPlugin extends {
 	readonly id: infer TId extends string;
 }
 	? TId
+	: never;
+
+/** @internal Extract browser-safe plugin-specific factory values. */
+type _ClientProviderConfig<TPlugin> = TPlugin extends ClientPluginDefinition<
+	any,
+	any,
+	any,
+	infer TProviderConfig,
+	any
+>
+	? TProviderConfig
+	: Readonly<Record<string, never>>;
+
+/** @internal Extract a plugin definition's API-runtime dependency. */
+type _ClientApiRuntimeSource<TPlugin> = TPlugin extends {
+	readonly apiRuntimeFrom: infer TSource extends string;
+}
+	? TSource
 	: never;
 
 /** Reject a registration key that differs from a plugin's declared canonical ID. */
@@ -445,7 +504,16 @@ export type MatchingPluginRegistrations<
 /** Stack-owned endpoint replacements, limited to registered plugin keys. */
 export type ClientPluginEndpointOverrides<
 	TPlugins extends Record<string, AnyClientPluginRegistration>,
-> = Partial<{ [K in keyof TPlugins]: ClientPluginEndpointOverride }>;
+> = Partial<{
+	[K in keyof TPlugins]: [_ClientApiRuntimeSource<TPlugins[K]>] extends [never]
+		? ClientPluginEndpointOverride
+		: {
+				/** API transport is inherited from the declared source plugin. */
+				api?: never;
+				/** Rendered/public pages may still have a plugin-specific location. */
+				site?: ClientLocationOverride;
+			};
+}>;
 
 /** Canonical shared runtime configured once for the complete client stack. */
 export interface ResolvedClientStackConfig<
@@ -528,7 +596,13 @@ export type InferPluginOverrides<
 		any
 	>
 		? TOverrides
-		: TPlugins[K] extends ClientPluginDefinition<infer TOverrides, any, any>
+		: TPlugins[K] extends ClientPluginDefinition<
+					infer TOverrides,
+					any,
+					any,
+					any,
+					any
+				>
 			? TOverrides
 			: never;
 };
@@ -647,12 +721,15 @@ export type BackendLib<
 /**
  * Helper type to extract routes from a client plugin
  */
-export type ExtractPluginRoutes<T> = T extends ClientPluginRegistration<
+export type ExtractPluginRoutes<T> = T extends ClientPlugin<
 	any,
-	infer TRoutes
+	infer TRoutes,
+	any
 >
 	? TRoutes
-	: never;
+	: T extends ClientPluginDefinition<any, infer TRoutes, any, any, any>
+		? TRoutes
+		: never;
 
 /**
  * Helper type to merge all routes from all plugins into a single record
@@ -710,7 +787,8 @@ export interface ClientProviderProjection<
 		[K in keyof TPlugins]: ClientProviderPluginRuntime<
 			[_DeclaredPluginId<TPlugins[K]>] extends [never]
 				? K & string
-				: _DeclaredPluginId<TPlugins[K]>
+				: _DeclaredPluginId<TPlugins[K]>,
+			_ClientProviderConfig<TPlugins[K]>
 		>;
 	};
 }

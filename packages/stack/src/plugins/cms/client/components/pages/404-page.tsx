@@ -2,18 +2,20 @@
 
 import { Button } from "@workspace/ui/components/button";
 import {
+	joinBasePath,
 	usePluginOverrides,
-	useBasePath,
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
 
 export function NotFoundPage() {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<CMSPluginOverrides>("cms");
-	const { router } = useStack();
-	const basePath = useBasePath();
+	const { localization } =
+		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
+	const { router, plugins, basePath: legacyBasePath } = useStack();
+	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
 
 	const LinkComponent = router?.Link ?? "a";
 
@@ -32,7 +34,7 @@ export function NotFoundPage() {
 					)}
 			</p>
 			<Button asChild>
-				<LinkComponent href={`${basePath}/cms`}>
+				<LinkComponent href={joinBasePath(basePath, "/cms")}>
 					{localization?.CMS_404_BACK ?? t("cms.common.404Back", "Back to CMS")}
 				</LinkComponent>
 			</Button>

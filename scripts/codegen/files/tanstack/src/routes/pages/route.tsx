@@ -22,8 +22,6 @@ import {
 import { Button } from "../../components/ui/button";
 import { resolveUser, searchUsers } from "../../lib/mock-users";
 import { Outlet, createFileRoute } from "@tanstack/react-router";
-import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client";
-import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client";
 import { clientAuth } from "../../lib/authorization.ui";
 import { getInitialIdentity } from "../../lib/authorization.identity";
 import { getStackClient } from "../../lib/stack-client";
@@ -37,7 +35,6 @@ const getBaseURL = () =>
 		: process.env.BASE_URL || "http://localhost:3007";
 
 type PluginOverrides = {
-	"ui-builder": UIBuilderPluginOverrides;
 	blog: BlogPluginOverrides;
 	"ai-chat": AiChatPluginOverrides;
 	cms: CMSPluginOverrides;
@@ -108,9 +105,6 @@ function Layout() {
 						// Only genuinely plugin-specific overrides remain — the shared
 						// Link/navigate/refresh and API wiring come from the top-level
 						// `router` and `api` props above.
-						"ui-builder": {
-							componentRegistry: defaultComponentRegistry,
-						},
 						blog: {
 							uploadImage,
 							imagePicker: ImagePicker,

@@ -43,6 +43,7 @@ Ensure you followed the general [framework installation guide](/installation) fi
 Create your content types as Zod schemas in a shared file. This allows you to use the schemas on both server (for validation) and client (for type-safe hooks). Use `.meta()` to add descriptions and placeholders that appear in the admin UI:
 
 ```ts title="lib/cms-schemas.ts"
+import type { ContentTypeConfig } from "@btst/stack/plugins/cms/api"
 import { z } from "zod";
 
 // ========== Product Schema ==========
@@ -83,6 +84,22 @@ export const TestimonialSchema = z.object({
   }),
 });
 
+// One application-owned declaration can configure both CMS factories.
+export const contentTypes = [
+  {
+    name: "Product",
+    slug: "product",
+    description: "Products for the store",
+    schema: ProductSchema,
+  },
+  {
+    name: "Testimonial",
+    slug: "testimonial",
+    description: "Customer testimonials",
+    schema: TestimonialSchema,
+  },
+] satisfies ContentTypeConfig[];
+
 // ========== Type Exports for Client Hooks ==========
 
 /** Inferred type for Product data */
@@ -108,28 +125,12 @@ Register the CMS backend plugin with your content types:
 ```ts title="lib/stack.ts"
 import { stack } from "@btst/stack"
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
-import { ProductSchema, TestimonialSchema } from "./cms-schemas"
+import { contentTypes } from "./cms-schemas"
 
 const { handler, dbSchema } = stack({
   basePath: "/api/data",
   plugins: {
-    cms: cmsBackendPlugin({
-      contentTypes: [
-        { 
-          name: "Product", 
-          slug: "product", 
-          description: "Products for the store",
-          schema: ProductSchema,
-          // Field types are defined in the schema via .meta({ fieldType: "..." })
-        },
-        { 
-          name: "Testimonial", 
-          slug: "testimonial", 
-          description: "Customer testimonials",
-          schema: TestimonialSchema,
-        },
-      ],
-    })
+    cms: cmsBackendPlugin({ contentTypes })
   },
   adapter: (db) => createMemoryAdapter(db)({})
 })
@@ -142,46 +143,49 @@ export { handler, dbSchema }
 Register the CMS client plugin:
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
 import { QueryClient } from "@tanstack/react-query"
+import { contentTypes } from "./cms-schemas"
 
 const getBaseURL = () => 
   process.env.BASE_URL || "http://localhost:3000"
 
 export const getStackClient = (queryClient: QueryClient, options?: { headers?: Headers }) => {
   const baseURL = getBaseURL()
-  return createStackClient({
+  return createClientStack({
+    api: {
+      baseURL,
+      basePath: "/api/data",
+      ...(options?.headers ? { headers: options.headers } : {}),
+    },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
-      cms: cmsClientPlugin({
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-        queryClient: queryClient,
-        headers: options?.headers,
-      })
+      cms: cmsClientPlugin({ contentTypes })
     }
   })
 }
 ```
 
+The backend HTTP catalog remains authoritative for content data. Passing the
+shared declaration to `cmsClientPlugin()` preserves your application-defined
+content-type order in the admin UI. Omit it when a managed or separately
+deployed backend owns the catalog.
+
 ### 4. Configure the Provider
 
-Configure framework-wide router/API wiring at the top level and keep only CMS-specific values in its override:
+Pass the resolved client stack to the provider. Override inference comes from the
+registered CMS definition, so no manual override map or provider generic is needed:
 
 ```tsx title="app/pages/layout.tsx"
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
 import { nextRouter } from "@btst/stack/next"
 
-type PluginOverrides = {
-  cms: CMSPluginOverrides,
-}
+const stack = getStackClient(queryClient)
 
-<StackProvider<PluginOverrides>
-  basePath="/pages"
+<StackProvider
+  stack={stack}
   router={nextRouter()}
-  api={{ baseURL, basePath: "/api/data" }}
   overrides={{
     cms: {
       uploadImage: async (file) => {
@@ -805,9 +809,11 @@ relation rows. Listing the records for an inverse relation likewise authorizes
 the source collection and target record, and rederives the requested relation
 field from the current content-type schemas.
 
-Loader hooks may still prepare data or redirect for framework-specific UX, but
-they are not an authorization boundary. Use `onRouteRender` and `onRouteError`
-for presentation lifecycle and reporting.
+Loader hooks may still prepare data and report failures, but they are not an
+authorization boundary. `onErrorLoad` is reporting-only: callback errors are
+contained and the loader never rejects, so it cannot perform throwing framework
+redirects. Use `onRouteRender` and `onRouteError` for presentation lifecycle and
+reporting.
 
 ## Custom Field Components
 
@@ -1333,9 +1339,10 @@ export default function DirectoryPage() {
 
 #### CMSClientHooks
 
-Customize framework-side data loading, redirects, analytics, and error
-presentation with lifecycle hooks. The shared CMS operation rules remain the
-authorization boundary:
+Customize framework-side data loading, analytics, and error reporting with
+lifecycle hooks. The shared CMS operation rules remain the authorization
+boundary. `onErrorLoad` is an observer: exceptions from the callback are
+contained and never reject the loader.
 
 <AutoTypeTable path="../packages/stack/src/plugins/cms/client/plugin.tsx" name="CMSClientHooks" />
 
@@ -1343,8 +1350,6 @@ authorization boundary:
 
 ```tsx title="lib/stack-client.tsx"
 cms: cmsClientPlugin({
-  // ... rest of the config
-  headers: options?.headers,
   hooks: {
     beforeLoadDashboard: async (context) => {
       await warmDashboardDependencies(context.headers)
@@ -1355,7 +1360,7 @@ cms: cmsClientPlugin({
     beforeLoadContentEditor: async (typeSlug, id, context) => {
       await recordEditorLoad(typeSlug, id, context.headers)
     },
-    onLoadError(error, context) {
+    onErrorLoad(error, context) {
       reportCMSLoaderError(error, context)
     },
   }
@@ -1452,7 +1457,7 @@ Standalone getters and `createCMSContentItem(adapter, ...)` remain lower-level a
 
 ## Static Site Generation (SSG)
 
-`route.loader()` makes HTTP requests to `apiBaseURL`, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
+`route.loader()` makes HTTP requests to the API resolved by `createClientStack()`, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
 
 ### `prefetchForRoute(routeKey, queryClient, params?)`
 
@@ -1575,9 +1580,6 @@ import { DashboardPageComponent } from "@/components/btst/cms/client/components/
 import { ContentListPageComponent } from "@/components/btst/cms/client/components/pages/content-list-page"
 
 cmsClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
   pageComponents: {
     dashboard: DashboardPageComponent,          // replaces the CMS dashboard page
     // Param routes receive the route context ({ params }) as props

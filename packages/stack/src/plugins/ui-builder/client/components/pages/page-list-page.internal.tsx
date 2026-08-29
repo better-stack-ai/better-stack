@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import {
+	joinBasePath,
 	PermissionAccess,
-	useBasePath,
 	useNotify,
 	usePluginOverrides,
 	useStack,
@@ -43,6 +43,7 @@ import {
 	useDeleteUIBuilderPage,
 } from "../../hooks/ui-builder-hooks";
 import type { UIBuilderPluginOverrides } from "../../overrides";
+import { UI_BUILDER_PLUGIN_ID } from "../../constants";
 import { uiBuilderLocalization } from "../../localization";
 import { PageWrapper } from "../shared/page-wrapper";
 import { EmptyState } from "../shared/empty-state";
@@ -52,10 +53,11 @@ export function PageListPage() {
 	const t = useTranslate();
 	const notify = useNotify();
 	const { localization } =
-		usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
-	const { router } = useStack();
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
+	const { router, plugins, basePath: legacyBasePath } = useStack();
 	const navigate = router?.navigate;
-	const basePath = useBasePath();
+	const basePath =
+		plugins?.[UI_BUILDER_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
 	const { pages, total, hasMore, isLoadingMore, loadMore } =
 		useSuspenseUIBuilderPages();
 	const deleteMutation = useDeleteUIBuilderPage();
@@ -121,7 +123,7 @@ export function PageListPage() {
 			})}
 		>
 			<Button asChild>
-				<LinkComponent href={`${basePath}/ui-builder/new`}>
+				<LinkComponent href={joinBasePath(basePath, "/ui-builder/new")}>
 					<Plus data-icon="inline-start" />
 					{localization?.pageList?.createButton ??
 						t(
@@ -250,7 +252,10 @@ export function PageListPage() {
 															<DropdownMenuItem
 																onClick={() =>
 																	navigate?.(
-																		`${basePath}/ui-builder/${page.id}/edit`,
+																		joinBasePath(
+																			basePath,
+																			`/ui-builder/${page.id}/edit`,
+																		),
 																	)
 																}
 															>

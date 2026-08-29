@@ -2,8 +2,23 @@ import type {
 	ComponentRegistry,
 	FunctionRegistry,
 } from "@workspace/ui/components/ui-builder/types";
-import type { UIBuilderClientHooks } from "../types";
 import type { UIBuilderLocalizationOverrides } from "./localization";
+
+/** Browser-safe UI Builder factory values carried by the client stack. */
+export interface UIBuilderProviderConfig {
+	/** Component definitions registered by `uiBuilderClientPlugin()`. */
+	readonly components?: ComponentRegistry;
+}
+
+/** Resolve the component registry registered with the UI Builder factory. */
+export function resolveUIBuilderComponents(
+	providerConfig: Readonly<Record<string, unknown>> | undefined,
+): ComponentRegistry | undefined {
+	const components = providerConfig?.components;
+	return components && typeof components === "object"
+		? (components as ComponentRegistry)
+		: undefined;
+}
 
 /**
  * Context passed to lifecycle hooks
@@ -27,19 +42,9 @@ export interface RouteContext {
  */
 export interface UIBuilderPluginOverrides {
 	/**
-	 * Optional headers to pass with API requests (e.g., for SSR auth)
-	 */
-	headers?: HeadersInit;
-
-	/**
 	 * Whether to show the attribution
 	 */
 	showAttribution?: boolean;
-
-	/**
-	 * Component registry for the UI Builder
-	 */
-	componentRegistry?: ComponentRegistry;
 
 	/**
 	 * Function registry for resolving bindable event handlers (onClick, onSubmit, etc.)
@@ -49,16 +54,6 @@ export interface UIBuilderPluginOverrides {
 
 	/** Localization overrides for built-in UI Builder plugin pages. */
 	localization?: UIBuilderLocalizationOverrides;
-
-	/**
-	 * Base path for UI Builder admin pages (default: /pages/ui-builder)
-	 */
-	siteBasePath?: string;
-
-	/**
-	 * SSR route lifecycle hooks
-	 */
-	hooks?: UIBuilderClientHooks;
 
 	// Lifecycle Hooks (optional)
 

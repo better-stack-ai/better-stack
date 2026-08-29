@@ -4,12 +4,13 @@ import { useState, useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import {
+	joinBasePath,
 	usePluginOverrides,
-	useBasePath,
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
-import type { CMSPluginOverrides } from "../../overrides";
+import { orderCMSContentTypes, type CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
 import {
 	useSuspenseContentTypes,
 	useContentItem,
@@ -135,11 +136,11 @@ interface ContentEditorPageProps {
 
 export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 	const t = useTranslate();
-	const overrides = usePluginOverrides<CMSPluginOverrides>("cms");
+	const overrides = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 	const { localization } = overrides;
-	const { router } = useStack();
+	const { router, plugins, basePath: legacyBasePath } = useStack();
 	const navigate = router?.navigate;
-	const basePath = useBasePath();
+	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
 
 	// Parse prefill query parameters for pre-populating fields when creating new items
 	// This is used by the inverse relations panel to pre-fill the parent relation
@@ -156,7 +157,11 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 		overrides,
 	});
 
-	const { contentTypes } = useSuspenseContentTypes();
+	const { contentTypes: serverContentTypes } = useSuspenseContentTypes();
+	const contentTypes = orderCMSContentTypes(
+		serverContentTypes,
+		plugins?.[CMS_PLUGIN_ID]?.config,
+	);
 	const contentType = contentTypes.find((ct) => ct.slug === typeSlug);
 
 	const isEditing = !!id;
@@ -191,7 +196,7 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 			data: { slug: values.slug, data: values.data },
 		}),
 		onSuccess: () => {
-			void navigate?.(`${basePath}/cms/${typeSlug}`);
+			void navigate?.(joinBasePath(basePath, `/cms/${typeSlug}`));
 		},
 	});
 
@@ -272,7 +277,9 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 					<Button
 						variant="ghost"
 						size="icon"
-						onClick={() => void navigate?.(`${basePath}/cms/${typeSlug}`)}
+						onClick={() =>
+							void navigate?.(joinBasePath(basePath, `/cms/${typeSlug}`))
+						}
 					>
 						<ArrowLeft className="h-4 w-4" />
 					</Button>
@@ -295,7 +302,9 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 					initialSlug={item?.slug}
 					isEditing={isEditing}
 					onSubmit={handleSubmit}
-					onCancel={() => void navigate?.(`${basePath}/cms/${typeSlug}`)}
+					onCancel={() =>
+						void navigate?.(joinBasePath(basePath, `/cms/${typeSlug}`))
+					}
 					fieldErrors={resourceForm.fieldErrors}
 					errorMessage={
 						hasFieldErrors ? undefined : resourceForm.error?.message

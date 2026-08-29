@@ -4,10 +4,7 @@ import { blogClientPlugin } from "@btst/stack/plugins/blog/client";
 import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client";
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client";
 import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client";
-import {
-	uiBuilderClientPlugin,
-	defaultComponentRegistry,
-} from "@btst/stack/plugins/ui-builder/client";
+import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client";
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client";
 import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client";
 import { commentsClientPlugin } from "@btst/stack/plugins/comments/client";
@@ -102,14 +99,7 @@ export const getStackClient = (
 				identityPartition: options?.identity,
 				mode: "authenticated",
 			}),
-			cms: cmsClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
-			}),
+			cms: cmsClientPlugin(),
 			"form-builder": formBuilderClientPlugin({
 				apiBaseURL: baseURL,
 				apiBasePath: "/api/data",
@@ -118,15 +108,7 @@ export const getStackClient = (
 				queryClient: queryClient,
 				headers: options?.headers,
 			}),
-			"ui-builder": uiBuilderClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
-				componentRegistry: defaultComponentRegistry,
-			}),
+			uiBuilder: uiBuilderClientPlugin(),
 			routeDocs: routeDocsClientPlugin({
 				queryClient: queryClient,
 				title: "Client Route Documentation",

@@ -11,8 +11,6 @@ import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
 import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client";
-import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client";
-import { defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client";
 import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client";
 import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
@@ -41,7 +39,6 @@ type PluginOverrides = {
 	"ai-chat": AiChatPluginOverrides;
 	cms: CMSPluginOverrides;
 	"form-builder": FormBuilderPluginOverrides;
-	"ui-builder": UIBuilderPluginOverrides;
 	kanban: KanbanPluginOverrides;
 	comments: CommentsPluginOverrides;
 	media: MediaPluginOverrides;
@@ -129,9 +126,6 @@ export function BtstPagesClientLayout({
 							uploadImage,
 							imagePicker: ImagePicker,
 							imageInputField: ImageInputField,
-						},
-						"ui-builder": {
-							componentRegistry: defaultComponentRegistry,
 						},
 						kanban: {
 							uploadImage,

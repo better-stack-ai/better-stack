@@ -13,17 +13,18 @@ import {
 	TableRow,
 } from "@workspace/ui/components/table";
 import {
+	joinBasePath,
 	PermissionAccess,
 	useNotify,
 	usePluginOverrides,
-	useBasePath,
 	useStack,
 	useTranslate,
 	type TranslateFn,
 } from "@btst/stack/context";
 import { cmsPermissions } from "../../../permissions";
 import { useListState, type ListStateSchema } from "@btst/stack/client/hooks";
-import type { CMSPluginOverrides } from "../../overrides";
+import { orderCMSContentTypes, type CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
 import type { SerializedContentItemWithType } from "../../../types";
 import {
 	useContent,
@@ -50,12 +51,12 @@ const SEARCH_DEBOUNCE_MS = 300;
 export function ContentListPage({ typeSlug }: ContentListPageProps) {
 	const t = useTranslate();
 	const notify = useNotify();
-	const overrides = usePluginOverrides<CMSPluginOverrides>("cms");
+	const overrides = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 	const { localization } = overrides;
-	const { router } = useStack();
+	const { router, plugins, basePath: legacyBasePath } = useStack();
 	const navigate = router?.navigate;
 	const Link = router?.Link;
-	const basePath = useBasePath();
+	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
 
 	// Call route lifecycle hooks for telemetry and application behavior.
 	useRouteLifecycle({
@@ -101,7 +102,11 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 
 	const hasSearch = search.trim().length > 0;
 
-	const { contentTypes } = useSuspenseContentTypes();
+	const { contentTypes: serverContentTypes } = useSuspenseContentTypes();
+	const contentTypes = orderCMSContentTypes(
+		serverContentTypes,
+		plugins?.[CMS_PLUGIN_ID]?.config,
+	);
 	const contentType = contentTypes.find((ct) => ct.slug === typeSlug);
 
 	// The default (unsearched) list stays on the suspense hook so SSR/SSG
@@ -169,7 +174,7 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 						<Button
 							variant="ghost"
 							size="icon"
-							onClick={() => void navigate?.(`${basePath}/cms`)}
+							onClick={() => void navigate?.(joinBasePath(basePath, "/cms"))}
 						>
 							<ArrowLeft className="h-4 w-4" />
 						</Button>
@@ -190,7 +195,9 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 						})}
 					>
 						<Button
-							onClick={() => void navigate?.(`${basePath}/cms/${typeSlug}/new`)}
+							onClick={() =>
+								void navigate?.(joinBasePath(basePath, `/cms/${typeSlug}/new`))
+							}
 						>
 							<Plus className="h-4 w-4 mr-2" />
 							{localization?.CMS_BUTTON_NEW_ITEM ??
@@ -252,7 +259,9 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 								>
 									<Button
 										onClick={() =>
-											void navigate?.(`${basePath}/cms/${typeSlug}/new`)
+											void navigate?.(
+												joinBasePath(basePath, `/cms/${typeSlug}/new`),
+											)
 										}
 									>
 										<Plus className="h-4 w-4 mr-2" />
@@ -345,7 +354,7 @@ function ContentTable({
 						<TableRow key={item.id}>
 							<TableCell className="font-medium">
 								<LinkComponent
-									href={`${basePath}/cms/${typeSlug}/${item.id}`}
+									href={joinBasePath(basePath, `/cms/${typeSlug}/${item.id}`)}
 									className="hover:underline"
 								>
 									{item.slug}
@@ -367,7 +376,7 @@ function ContentTable({
 											size="icon"
 											onClick={() =>
 												void navigate?.(
-													`${basePath}/cms/${typeSlug}/${item.id}`,
+													joinBasePath(basePath, `/cms/${typeSlug}/${item.id}`),
 												)
 											}
 										>

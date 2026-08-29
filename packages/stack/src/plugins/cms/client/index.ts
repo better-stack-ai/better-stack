@@ -1,6 +1,11 @@
 export { cmsClientPlugin } from "./plugin";
 export type { CMSClientConfig, CMSClientHooks, LoaderContext } from "./plugin";
-export type { CMSPluginOverrides, RouteContext } from "./overrides";
+export type { ContentTypeConfig } from "../types";
+export type {
+	CMSPluginOverrides,
+	CMSProviderConfig,
+	RouteContext,
+} from "./overrides";
 export type { CMSLocalization } from "./localization";
 
 // Re-export AutoFormInputComponentProps for custom field components

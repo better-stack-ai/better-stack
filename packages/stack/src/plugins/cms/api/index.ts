@@ -37,4 +37,5 @@ export type {
 	CMSOperationLifecycleContext,
 	CMSUpdateOperationContext,
 	CMSUpdateResultContext,
+	ContentTypeConfig,
 } from "../types";

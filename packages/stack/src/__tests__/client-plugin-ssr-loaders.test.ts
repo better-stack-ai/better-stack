@@ -98,22 +98,27 @@ describe("client plugin SSR loaders", () => {
 		const expectedError = new Error("cms list blocked");
 		const typeSlug = "article";
 
-		const plugin = cmsClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				beforeLoadContentList: () => {
-					throw expectedError;
-				},
+			plugins: {
+				cms: cmsClientPlugin({
+					hooks: {
+						beforeLoadContentList: () => {
+							throw expectedError;
+						},
+					},
+				}),
 			},
 		});
 
-		const route = plugin.routes().contentList({ params: { typeSlug } });
-		await route.loader?.();
+		const route = stack.router.getRoute(`/cms/${typeSlug}`);
+		await route?.loader?.();
 
 		const client = createApiClient<CMSApiRouter>({
 			baseURL: API_BASE_URL,
@@ -168,23 +173,27 @@ describe("client plugin SSR loaders", () => {
 		const queryClient = new QueryClient();
 		const expectedError = new Error("ui-builder list blocked");
 
-		const plugin = uiBuilderClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			componentRegistry: {},
-			hooks: {
-				beforeLoadPageList: () => {
-					throw expectedError;
-				},
+			plugins: {
+				uiBuilder: uiBuilderClientPlugin({
+					hooks: {
+						beforeLoadPageList: () => {
+							throw expectedError;
+						},
+					},
+				}),
 			},
 		});
 
-		const route = plugin.routes().pageList();
-		await route.loader?.();
+		const route = stack.router.getRoute("/ui-builder");
+		await route?.loader?.();
 
 		const client = createApiClient<CMSApiRouter>({
 			baseURL: API_BASE_URL,

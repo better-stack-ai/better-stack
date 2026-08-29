@@ -8,12 +8,13 @@ import {
 	CardTitle,
 } from "@workspace/ui/components/card";
 import {
+	joinBasePath,
 	usePluginOverrides,
-	useBasePath,
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
-import type { CMSPluginOverrides } from "../../overrides";
+import { orderCMSContentTypes, type CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
 import { useSuspenseContentTypes } from "../../hooks";
 import { EmptyState } from "../shared/empty-state";
 import { PageWrapper } from "../shared/page-wrapper";
@@ -21,11 +22,11 @@ import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 
 export function DashboardPage() {
 	const t = useTranslate();
-	const overrides = usePluginOverrides<CMSPluginOverrides>("cms");
+	const overrides = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 	const { localization } = overrides;
-	const { router } = useStack();
+	const { router, plugins, basePath: legacyBasePath } = useStack();
 	const navigate = router?.navigate;
-	const basePath = useBasePath();
+	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? legacyBasePath;
 
 	// Call route lifecycle hooks for telemetry and application behavior.
 	useRouteLifecycle({
@@ -36,7 +37,11 @@ export function DashboardPage() {
 		},
 		overrides,
 	});
-	const { contentTypes } = useSuspenseContentTypes();
+	const { contentTypes: serverContentTypes } = useSuspenseContentTypes();
+	const contentTypes = orderCMSContentTypes(
+		serverContentTypes,
+		plugins?.[CMS_PLUGIN_ID]?.config,
+	);
 
 	const title =
 		localization?.CMS_DASHBOARD_TITLE ?? t("cms.dashboard.title", "Content");
@@ -100,7 +105,9 @@ export function DashboardPage() {
 						<Card
 							key={ct.id}
 							className="hover:border-primary/50 transition-colors cursor-pointer"
-							onClick={() => void navigate?.(`${basePath}/cms/${ct.slug}`)}
+							onClick={() =>
+								void navigate?.(joinBasePath(basePath, `/cms/${ct.slug}`))
+							}
 						>
 							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 								<CardTitle className="text-lg font-medium">{ct.name}</CardTitle>

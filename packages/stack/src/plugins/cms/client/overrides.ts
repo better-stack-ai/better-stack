@@ -1,6 +1,51 @@
 import type { ComponentType } from "react";
 import type { CMSLocalization } from "./localization";
 import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
+import type { ContentTypeConfig } from "../types";
+
+/** Browser-safe CMS factory values carried by the resolved client stack. */
+export interface CMSProviderConfig {
+	/** Declared content types, used to preserve application-defined UI order. */
+	readonly contentTypes?: readonly ContentTypeConfig[];
+}
+
+/**
+ * Apply the registered content-type order while keeping HTTP data authoritative.
+ * Types not declared by this client are appended in their server-returned order.
+ */
+export function orderCMSContentTypes<T extends { slug: string }>(
+	contentTypes: readonly T[],
+	providerConfig: Readonly<Record<string, unknown>> | undefined,
+): T[] {
+	const configured = providerConfig?.contentTypes;
+	if (!Array.isArray(configured) || configured.length === 0) {
+		return [...contentTypes];
+	}
+	const positions = new Map<string, number>();
+	for (const [index, value] of configured.entries()) {
+		if (
+			value !== null &&
+			typeof value === "object" &&
+			"slug" in value &&
+			typeof value.slug === "string"
+		) {
+			positions.set(value.slug, index);
+		}
+	}
+	return contentTypes
+		.map((value, index) => ({ value, index }))
+		.sort((left, right) => {
+			const leftPosition = positions.get(left.value.slug);
+			const rightPosition = positions.get(right.value.slug);
+			if (leftPosition === undefined && rightPosition === undefined) {
+				return left.index - right.index;
+			}
+			if (leftPosition === undefined) return 1;
+			if (rightPosition === undefined) return -1;
+			return leftPosition - rightPosition;
+		})
+		.map(({ value }) => value);
+}
 
 /**
  * Props for the overridable CMS image input field component.
@@ -129,11 +174,6 @@ export interface CMSPluginOverrides {
 	 * Whether to show the attribution
 	 */
 	showAttribution?: boolean;
-
-	/**
-	 * Optional headers to pass with API requests (e.g., for SSR auth)
-	 */
-	headers?: HeadersInit;
 
 	// Lifecycle Hooks (optional)
 
