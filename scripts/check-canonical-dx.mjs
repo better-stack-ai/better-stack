@@ -741,9 +741,11 @@ let typeScriptScopeCache;
 
 function aliasScopeBounds(source, alias) {
 	if (alias.fenceStart !== undefined) {
-		const closingFence = source.indexOf("\n```", alias.fenceStart);
+		const fencePattern = /^ {0,3}```[^\n]*$/gm;
+		fencePattern.lastIndex = alias.fenceStart;
+		const closingFence = fencePattern.exec(source);
 		return {
-			end: closingFence < 0 ? source.length : closingFence,
+			end: closingFence?.index ?? source.length,
 			start: alias.fenceStart,
 		};
 	}
