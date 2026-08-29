@@ -276,11 +276,11 @@ function getSiteOrigin(serverOrigin?: string) {
 function getApiOrigin(serverOrigin: string | undefined, siteOrigin: string) {
   if (serverOrigin) return serverOrigin
   if (typeof window !== "undefined") {
-    return process.env.NEXT_PUBLIC_BTST_API_URL || siteOrigin
+    return process.env.NEXT_PUBLIC_API_URL || siteOrigin
   }
   return (
     process.env.BTST_API_URL ||
-    process.env.NEXT_PUBLIC_BTST_API_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
     process.env.BASE_URL ||
     siteOrigin
   )
@@ -299,7 +299,7 @@ function getCrossOriginBlogEndpoint(apiOrigin: string, siteOrigin: string) {
 ```
 
 The CLI emits the equivalent Vite helper with
-`VITE_PUBLIC_SITE_URL`/`VITE_PUBLIC_BTST_API_URL`. The server companion calls
+`VITE_PUBLIC_SITE_URL`/`VITE_PUBLIC_API_URL`. The server companion calls
 `resolveTrustedClientOrigins()` and fails closed in production when it cannot
 resolve a configured site/API origin. `BTST_API_URL` may point to a managed or
 custom backend; the browser receives that same trusted snapshot instead of
@@ -323,7 +323,7 @@ import { createAppClientStack } from "./stack-client"
 function configuredApiOrigin() {
   return (
     process.env.BTST_API_URL ||
-    process.env.NEXT_PUBLIC_BTST_API_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
     process.env.BASE_URL
   )
 }
@@ -352,7 +352,7 @@ export function getServerClientOrigins(requestOrigin?: string) {
     configuredSiteOrigin: configuredSiteOrigin(),
     requestOrigin,
     isProduction: process.env.NODE_ENV === "production",
-    apiLabel: "BTST_API_URL, NEXT_PUBLIC_BTST_API_URL, or BASE_URL",
+    apiLabel: "BTST_API_URL, NEXT_PUBLIC_API_URL, or BASE_URL",
     siteLabel: "BTST_SITE_URL, NEXT_PUBLIC_SITE_URL, or BASE_URL",
   })
 }
