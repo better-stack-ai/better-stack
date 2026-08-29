@@ -196,6 +196,13 @@ for (const framework of frameworks) {
 		"getConfiguredSiteOrigin",
 		`${label} configured site origin`,
 	);
+	requireText(
+		serverClient,
+		label === "Next.js"
+			? "getServerClientOriginsFromHeaders"
+			: "getServerClientOrigins",
+		`${label} standalone provider origin hydration`,
+	);
 	rejectText(
 		serverClient,
 		"baseURL: new URL(request.url).origin",

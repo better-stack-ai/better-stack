@@ -26,8 +26,7 @@ function getConfiguredSiteOrigin() {
 	);
 }
 
-export function getRequestClientOrigins(request: Request) {
-	const requestOrigin = new URL(request.url).origin;
+export function getServerClientOrigins(requestOrigin?: string) {
 	return resolveTrustedClientOrigins({
 		configuredApiOrigin: getConfiguredApiOrigin(),
 		configuredSiteOrigin: getConfiguredSiteOrigin(),
@@ -36,6 +35,10 @@ export function getRequestClientOrigins(request: Request) {
 		apiLabel: "BTST_API_URL, VITE_PUBLIC_API_URL, or BASE_URL",
 		siteLabel: "BTST_SITE_URL, VITE_PUBLIC_SITE_URL, or BASE_URL",
 	});
+}
+
+export function getRequestClientOrigins(request: Request) {
+	return getServerClientOrigins(new URL(request.url).origin);
 }
 
 export async function getRequestClientStack(

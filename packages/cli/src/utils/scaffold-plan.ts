@@ -548,6 +548,14 @@ export async function buildScaffoldPlan(
 				),
 				description: "Public AI chat page",
 			});
+			files.push({
+				path: `${prefix}app/public-chat/client.tsx`,
+				content: await renderTemplate(
+					"nextjs/public-chat-client.tsx.hbs",
+					sharedContext,
+				),
+				description: "Public AI chat client component",
+			});
 		} else if (input.framework === "react-router") {
 			files.push({
 				path: "app/routes/public-chat.tsx",
@@ -579,6 +587,14 @@ export async function buildScaffoldPlan(
 					sharedContext,
 				),
 				description: "Public form demo page",
+			});
+			files.push({
+				path: `${prefix}app/form-demo/[slug]/client.tsx`,
+				content: await renderTemplate(
+					"nextjs/form-demo-client.tsx.hbs",
+					sharedContext,
+				),
+				description: "Public form demo client component",
 			});
 		} else if (input.framework === "react-router") {
 			files.push({

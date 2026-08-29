@@ -25,7 +25,8 @@ export interface CreateTanStackLayoutOptions<
  */
 export function createTanStackLayout<
 	TIdentity extends StackIdentity,
-	TSnapshot extends TanStackInitialIdentitySnapshot<TIdentity>,
+	TSnapshot extends
+		TanStackInitialIdentitySnapshot<TIdentity> = TanStackInitialIdentitySnapshot<TIdentity>,
 >(options: CreateTanStackLayoutOptions<TIdentity, TSnapshot>) {
 	async function loader() {
 		return options.getInitialIdentity();

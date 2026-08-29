@@ -49,6 +49,8 @@ export function getRequestClientOrigins(requestHeaders: Headers) {
 	return getServerClientOrigins(getRequestOrigin(requestHeaders));
 }
 
+export const getServerClientOriginsFromHeaders = getRequestClientOrigins;
+
 /** Creates the request-only stack used by Next.js route loaders and metadata. */
 export async function getRequestClientStack(
 	queryClient: QueryClient,

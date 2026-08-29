@@ -25,6 +25,8 @@ export interface StackClientOrigins {
 	siteOrigin?: string;
 }
 
+export type StackClientOptions = StackClientOrigins;
+
 const getBrowserSiteOrigin = () =>
 	process.env.NEXT_PUBLIC_SITE_URL ||
 	process.env.NEXT_PUBLIC_BASE_URL ||

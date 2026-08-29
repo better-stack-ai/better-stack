@@ -1200,14 +1200,22 @@ describe("scaffold plan", () => {
 		});
 		const paths = plan.files.map((f) => f.path);
 		expect(paths).toContain("app/public-chat/page.tsx");
+		expect(paths).toContain("app/public-chat/client.tsx");
 		const page = plan.files.find((f) => f.path === "app/public-chat/page.tsx");
-		expect(page?.content).toContain("ChatLayout");
-		expect(page?.content).toContain("getStackClient(queryClient)");
-		expect(page?.content).toContain("stack={browserStack}");
-		expect(page?.content).not.toContain("createClientStack");
-		expect(page?.content).not.toContain('<ChatLayout mode="public"');
-		expect(page?.content).not.toContain("overrides=");
-		expect(page?.content).not.toContain('"ai-chat":');
+		const client = plan.files.find(
+			(f) => f.path === "app/public-chat/client.tsx",
+		);
+		expect(page?.content).toContain("getServerClientOriginsFromHeaders");
+		expect(page?.content).toContain("clientOrigins={clientOrigins}");
+		expect(client?.content).toContain("ChatLayout");
+		expect(client?.content).toContain(
+			"getStackClient(queryClient, clientOrigins)",
+		);
+		expect(client?.content).toContain("stack={browserStack}");
+		expect(client?.content).not.toContain("createClientStack");
+		expect(client?.content).not.toContain('<ChatLayout mode="public"');
+		expect(client?.content).not.toContain("overrides=");
+		expect(client?.content).not.toContain('"ai-chat":');
 	});
 
 	it("emits public-chat route for react-router when ai-chat selected", async () => {
@@ -1224,7 +1232,10 @@ describe("scaffold plan", () => {
 			(f) => f.path === "app/routes/public-chat.tsx",
 		);
 		expect(route?.content).toContain("ChatLayout");
-		expect(route?.content).toContain("getStackClient(queryClient)");
+		expect(route?.content).toContain("getServerClientOrigins");
+		expect(route?.content).toContain(
+			"getStackClient(queryClient, { apiOrigin, siteOrigin })",
+		);
 		expect(route?.content).toContain("stack={browserStack}");
 		expect(route?.content).not.toContain("createClientStack");
 		expect(route?.content).not.toContain('<ChatLayout mode="public"');
@@ -1245,7 +1256,10 @@ describe("scaffold plan", () => {
 		);
 		expect(route?.content).toContain("createFileRoute");
 		expect(route?.content).toContain("ChatLayout");
-		expect(route?.content).toContain("getStackClient(queryClient)");
+		expect(route?.content).toContain("getTrustedClientOrigins");
+		expect(route?.content).toContain(
+			"getStackClient(queryClient, { apiOrigin, siteOrigin })",
+		);
 		expect(route?.content).toContain("stack={browserStack}");
 		expect(route?.content).not.toContain("createClientStack");
 		expect(route?.content).not.toContain('<ChatLayout mode="public"');
@@ -1274,10 +1288,19 @@ describe("scaffold plan", () => {
 		});
 		const paths = plan.files.map((f) => f.path);
 		expect(paths).toContain("app/form-demo/[slug]/page.tsx");
+		expect(paths).toContain("app/form-demo/[slug]/client.tsx");
 		const page = plan.files.find(
 			(f) => f.path === "app/form-demo/[slug]/page.tsx",
 		);
-		expect(page?.content).toContain("FormRenderer");
+		const client = plan.files.find(
+			(f) => f.path === "app/form-demo/[slug]/client.tsx",
+		);
+		expect(page?.content).toContain("getServerClientOriginsFromHeaders");
+		expect(page?.content).toContain("clientOrigins={clientOrigins}");
+		expect(client?.content).toContain("FormRenderer");
+		expect(client?.content).toContain(
+			"getStackClient(queryClient, clientOrigins)",
+		);
 	});
 
 	it("emits form-demo route for react-router when form-builder selected", async () => {
@@ -1288,7 +1311,11 @@ describe("scaffold plan", () => {
 			alias: "~/",
 			cssFile: "app/app.css",
 		});
-		expect(plan.files.map((f) => f.path)).toContain("app/routes/form-demo.tsx");
+		const route = plan.files.find((f) => f.path === "app/routes/form-demo.tsx");
+		expect(route?.content).toContain("getServerClientOrigins");
+		expect(route?.content).toContain(
+			"getStackClient(queryClient, { apiOrigin, siteOrigin })",
+		);
 	});
 
 	it("emits form-demo route for tanstack when form-builder selected", async () => {
@@ -1299,8 +1326,12 @@ describe("scaffold plan", () => {
 			alias: "@/",
 			cssFile: "src/styles/globals.css",
 		});
-		expect(plan.files.map((f) => f.path)).toContain(
-			"src/routes/form-demo.$slug.tsx",
+		const route = plan.files.find(
+			(f) => f.path === "src/routes/form-demo.$slug.tsx",
+		);
+		expect(route?.content).toContain("getTrustedClientOrigins");
+		expect(route?.content).toContain(
+			"getStackClient(queryClient, { apiOrigin, siteOrigin })",
 		);
 	});
 
@@ -1318,10 +1349,17 @@ describe("scaffold plan", () => {
 		const client = plan.files.find(
 			(f) => f.path === "app/preview/[slug]/client.tsx",
 		);
+		const page = plan.files.find(
+			(f) => f.path === "app/preview/[slug]/page.tsx",
+		);
+		expect(page?.content).toContain("getServerClientOriginsFromHeaders");
+		expect(page?.content).toContain("clientOrigins={clientOrigins}");
 		expect(client?.content).toContain("PageRenderer");
 		expect(client?.content).not.toContain("defaultComponentRegistry");
 		expect(client?.content).not.toContain("componentRegistry=");
-		expect(client?.content).toContain("getStackClient(queryClient)");
+		expect(client?.content).toContain(
+			"getStackClient(queryClient, clientOrigins)",
+		);
 		expect(client?.content).toContain("stack={browserStack}");
 		expect(client?.content).not.toContain("StackProvider<");
 		expect(client?.content).not.toContain('"ui-builder":');
@@ -1337,6 +1375,10 @@ describe("scaffold plan", () => {
 		});
 		expect(plan.files.map((f) => f.path)).toContain("app/routes/preview.tsx");
 		const preview = plan.files.find((f) => f.path === "app/routes/preview.tsx");
+		expect(preview?.content).toContain("getServerClientOrigins");
+		expect(preview?.content).toContain(
+			"getStackClient(queryClient, { apiOrigin, siteOrigin })",
+		);
 		expect(preview?.content).toContain("stack={browserStack}");
 		expect(preview?.content).not.toContain("defaultComponentRegistry");
 		expect(preview?.content).not.toContain("componentRegistry=");
@@ -1357,6 +1399,10 @@ describe("scaffold plan", () => {
 		);
 		const preview = plan.files.find(
 			(f) => f.path === "src/routes/preview.$slug.tsx",
+		);
+		expect(preview?.content).toContain("getTrustedClientOrigins");
+		expect(preview?.content).toContain(
+			"getStackClient(queryClient, { apiOrigin, siteOrigin })",
 		);
 		expect(preview?.content).toContain("stack={browserStack}");
 		expect(preview?.content).not.toContain("defaultComponentRegistry");

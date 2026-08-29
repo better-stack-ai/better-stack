@@ -152,12 +152,18 @@ describe("framework identity layout helpers", () => {
 			siteOrigin: "http://trusted.test",
 		}));
 		const layout = createTanStackLayout({ getInitialIdentity });
+		const explicitlyTypedLayout = createTanStackLayout<Identity>({
+			getInitialIdentity,
+		});
 
 		await expect(layout.loader()).resolves.toEqual({
 			initialIdentity: { id: "tanstack-user", role: "admin" },
 			siteOrigin: "http://trusted.test",
 		});
-		expect(getInitialIdentity).toHaveBeenCalledOnce();
+		await expect(explicitlyTypedLayout.loader()).resolves.toMatchObject({
+			initialIdentity: { id: "tanstack-user" },
+		});
+		expect(getInitialIdentity).toHaveBeenCalledTimes(2);
 	});
 
 	it("rejects invalid and non-serializable TanStack server identities", async () => {

@@ -6,8 +6,10 @@ import { tanstackRouter } from "@btst/stack/tanstack"
 import { PageRenderer } from "@btst/stack/plugins/ui-builder/client"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient } from "{{alias}}lib/stack-client"
+import { getTrustedClientOrigins } from "{{alias}}lib/stack-client.origins"
 
 export const Route = createFileRoute("/preview/$slug")({
+	loader: async () => getTrustedClientOrigins(),
 	component: PreviewPage,
 })
 
@@ -17,10 +19,11 @@ export const Route = createFileRoute("/preview/$slug")({
  */
 function PreviewPage() {
 	const { slug } = Route.useParams()
+	const { apiOrigin, siteOrigin } = Route.useLoaderData()
 	const [queryClient] = useState(() => getOrCreateQueryClient())
 	const browserStack = useMemo(
-		() => getStackClient(queryClient),
-		[queryClient],
+		() => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+		[apiOrigin, queryClient, siteOrigin],
 	)
 
 	return (

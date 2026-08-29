@@ -5,8 +5,14 @@ import { StackProvider } from "@btst/stack/context"
 import { reactRouter } from "@btst/stack/react-router"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { useMemo } from "react"
+import { useLoaderData, type LoaderFunctionArgs } from "react-router"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient } from "{{alias}}lib/stack-client"
+import { getServerClientOrigins } from "{{alias}}lib/stack-client.server"
+
+export function loader({ request }: LoaderFunctionArgs) {
+	return getServerClientOrigins(new URL(request.url).origin)
+}
 
 /**
  * Public Chat Page — AI chat in public mode (no login required).
@@ -16,9 +22,10 @@ import { getStackClient } from "{{alias}}lib/stack-client"
  */
 export default function PublicChatPage() {
 	const queryClient = getOrCreateQueryClient()
+	const { apiOrigin, siteOrigin } = useLoaderData<typeof loader>()
 	const browserStack = useMemo(
-		() => getStackClient(queryClient),
-		[queryClient],
+		() => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+		[apiOrigin, queryClient, siteOrigin],
 	)
 
 	return (
