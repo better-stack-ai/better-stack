@@ -64,7 +64,7 @@ function getSiteOrigin(serverOrigin?: string) {
 	if (typeof window !== "undefined") {
 		return (
 			{{{browserSiteURLExpression}}} ||
-			{{{legacyBrowserBaseURLExpression}}} ||
+			{{{migrationBrowserBaseURLExpression}}} ||
 			window.location.origin
 		)
 	}
@@ -73,7 +73,7 @@ function getSiteOrigin(serverOrigin?: string) {
 	// can statically replace these at build/transform time.
 	if (process.env.BTST_SITE_URL) return process.env.BTST_SITE_URL
 	if (process.env.{{publicSiteURLVar}}) return process.env.{{publicSiteURLVar}}
-	if (process.env.{{legacyPublicBaseURLVar}}) return process.env.{{legacyPublicBaseURLVar}}
+	if ({{{migrationServerBaseURLExpression}}}) return {{{migrationServerBaseURLExpression}}}
 	if (process.env.BASE_URL) return process.env.BASE_URL
 
 	return "http://localhost:3000"
@@ -84,14 +84,14 @@ function getApiOrigin(serverOrigin: string | undefined, siteOrigin: string) {
 	if (typeof window !== "undefined") {
 		return (
 			{{{browserApiURLExpression}}} ||
-			{{{legacyBrowserBaseURLExpression}}} ||
+			{{{migrationBrowserBaseURLExpression}}} ||
 			siteOrigin
 		)
 	}
 	return (
 		process.env.BTST_API_URL ||
 		{{{browserApiURLExpression}}} ||
-		process.env.{{legacyPublicBaseURLVar}} ||
+		{{{migrationServerBaseURLExpression}}} ||
 		process.env.BASE_URL ||
 		siteOrigin
 	)

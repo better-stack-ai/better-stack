@@ -389,7 +389,7 @@ export function getStackClientForRequest(
 
 Generated Vite helpers use the corresponding `VITE_PUBLIC_*` variables. Never
 serialize request headers or a resolved server stack into a provider.
-`NEXT_PUBLIC_BASE_URL` (or `VITE_PUBLIC_BASE_URL`) remains a narrow
+`NEXT_PUBLIC_BASE_URL` (or `VITE_BASE_URL`) remains a narrow
 migration-compatible same-origin fallback; new deployments should prefer the
 separate site/API variables above.
 

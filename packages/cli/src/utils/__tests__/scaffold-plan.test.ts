@@ -724,10 +724,14 @@ describe("scaffold plan", () => {
 				framework === "nextjs"
 					? "process.env.NEXT_PUBLIC_SITE_URL"
 					: "import.meta.env.VITE_PUBLIC_SITE_URL";
-			const legacyBrowserBaseURLExpression =
+			const migrationBrowserBaseURLExpression =
 				framework === "nextjs"
 					? "process.env.NEXT_PUBLIC_BASE_URL"
-					: "import.meta.env.VITE_PUBLIC_BASE_URL";
+					: "import.meta.env.VITE_BASE_URL";
+			const migrationServerBaseURLExpression =
+				framework === "nextjs"
+					? "process.env.NEXT_PUBLIC_BASE_URL"
+					: "import.meta.env.VITE_BASE_URL";
 			const plan = await buildScaffoldPlan({
 				framework,
 				adapter: "memory",
@@ -738,6 +742,9 @@ describe("scaffold plan", () => {
 			});
 			const stackClientFile = plan.files.find((file) =>
 				file.path.endsWith("stack-client.tsx"),
+			);
+			const stackClientServerFile = plan.files.find((file) =>
+				file.path.endsWith("stack-client.server.ts"),
 			);
 			const pagesLayoutFile = plan.files.find((file) =>
 				file.content.includes("<StackProvider"),
@@ -751,8 +758,17 @@ describe("scaffold plan", () => {
 			expect(stackClientFile?.content).not.toContain("siteBasePath:");
 			expect(stackClientFile?.content).toContain(browserSiteURLExpression);
 			expect(stackClientFile?.content).toContain(
-				legacyBrowserBaseURLExpression,
+				migrationBrowserBaseURLExpression,
 			);
+			expect(stackClientServerFile?.content).toContain(
+				migrationServerBaseURLExpression,
+			);
+			if (framework !== "nextjs") {
+				expect(stackClientFile?.content).not.toContain("VITE_PUBLIC_BASE_URL");
+				expect(stackClientServerFile?.content).not.toContain(
+					"VITE_PUBLIC_BASE_URL",
+				);
+			}
 			expect(stackClientFile?.content).toContain(
 				"const siteOrigin = getSiteOrigin(options?.siteOrigin)",
 			);

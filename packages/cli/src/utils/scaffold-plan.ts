@@ -76,9 +76,9 @@ function getPublicApiURLVar(framework: Framework) {
 	return "VITE_PUBLIC_API_URL";
 }
 
-function getLegacyPublicBaseURLVar(framework: Framework) {
+function getMigrationBaseURLVar(framework: Framework) {
 	if (framework === "nextjs") return "NEXT_PUBLIC_BASE_URL";
-	return "VITE_PUBLIC_BASE_URL";
+	return "VITE_BASE_URL";
 }
 
 function getBrowserSiteURLExpression(framework: Framework) {
@@ -91,9 +91,14 @@ function getBrowserApiURLExpression(framework: Framework) {
 	return "import.meta.env.VITE_PUBLIC_API_URL";
 }
 
-function getLegacyBrowserBaseURLExpression(framework: Framework) {
+function getMigrationBrowserBaseURLExpression(framework: Framework) {
 	if (framework === "nextjs") return "process.env.NEXT_PUBLIC_BASE_URL";
-	return "import.meta.env.VITE_PUBLIC_BASE_URL";
+	return "import.meta.env.VITE_BASE_URL";
+}
+
+function getMigrationServerBaseURLExpression(framework: Framework) {
+	if (framework === "nextjs") return "process.env.NEXT_PUBLIC_BASE_URL";
+	return "import.meta.env.VITE_BASE_URL";
 }
 
 function getPagesLayoutFilePath(framework: Framework): string {
@@ -340,10 +345,13 @@ export async function buildScaffoldPlan(
 		alias: input.alias,
 		browserApiURLExpression: getBrowserApiURLExpression(input.framework),
 		browserSiteURLExpression: getBrowserSiteURLExpression(input.framework),
-		legacyBrowserBaseURLExpression: getLegacyBrowserBaseURLExpression(
+		migrationBrowserBaseURLExpression: getMigrationBrowserBaseURLExpression(
 			input.framework,
 		),
-		legacyPublicBaseURLVar: getLegacyPublicBaseURLVar(input.framework),
+		migrationServerBaseURLExpression: getMigrationServerBaseURLExpression(
+			input.framework,
+		),
+		migrationBaseURLVar: getMigrationBaseURLVar(input.framework),
 		publicApiURLVar: getPublicApiURLVar(input.framework),
 		publicSiteURLVar: getPublicSiteURLVar(input.framework),
 		useGlobalSingleton:
