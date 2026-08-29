@@ -158,8 +158,13 @@ test.describe("AI Chat Plugin - Public Mode", () => {
 		).toHaveCount(2, { timeout: 30000 });
 
 		// Both user messages should be visible
-		await expect(page.getByText("First message")).toBeVisible();
-		await expect(page.getByText("Second message")).toBeVisible();
+		const userMessages = page.locator('[aria-label="Your message"]');
+		await expect(
+			userMessages.getByText("First message", { exact: true }),
+		).toBeVisible();
+		await expect(
+			userMessages.getByText("Second message", { exact: true }),
+		).toBeVisible();
 	});
 });
 
