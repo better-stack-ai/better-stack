@@ -30,8 +30,8 @@ export function BtstPagesClientLayout({
 	// fresh instance to avoid stale client cache overriding hydrated data
 	const [queryClient] = useState(() => getOrCreateQueryClient());
 	const stack = React.useMemo(
-		() => getBrowserClientStack(queryClient, initialIdentity),
-		[queryClient, initialIdentity],
+		() => getBrowserClientStack(queryClient),
+		[queryClient],
 	);
 	const mediaClientConfig = React.useMemo(
 		() => createMediaUploadConfig(stack.provider.plugins.media),

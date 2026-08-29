@@ -29,6 +29,6 @@ export async function getRequestClientStack(
 	return createAppClientStack(queryClient, {
 		baseURL: getRequestBaseURL(requestHeaders),
 		headers: requestHeaders,
-		...(identity ? { identity } : {}),
+		...(identity ? { requestIdentity: identity } : {}),
 	});
 }

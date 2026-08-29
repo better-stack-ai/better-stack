@@ -34,8 +34,8 @@ function Layout() {
 	const routeContext = Route.useRouteContext();
 	const { initialIdentity } = Route.useLoaderData();
 	const stack = useMemo(
-		() => getBrowserClientStack(routeContext.queryClient, initialIdentity),
-		[routeContext.queryClient, initialIdentity],
+		() => getBrowserClientStack(routeContext.queryClient),
+		[routeContext.queryClient],
 	);
 	const mediaClientConfig = useMemo(
 		() => createMediaUploadConfig(stack.provider.plugins.media),

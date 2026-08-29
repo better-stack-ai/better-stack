@@ -105,6 +105,16 @@ for (const framework of frameworks) {
 	requireText(client, "getBrowserClientStack", `${label} client runtime`);
 	requireText(client, "routeDocs: routeDocsClientPlugin", `${label} client`);
 	requireText(client, "uiBuilder: uiBuilderClientPlugin", `${label} client`);
+	requireText(
+		client,
+		"identityPartition: requestIdentity",
+		`${label} protected SSR query partition`,
+	);
+	requireText(
+		client,
+		"context.currentUserId = requestIdentity.id",
+		`${label} Comments SSR query partition`,
+	);
 	rejectText(client, "openApi:", `${label} client`);
 	for (const serverOnly of [
 		"authorization.server",
@@ -119,6 +129,7 @@ for (const framework of frameworks) {
 		client.indexOf("/** Focused browser stack"),
 	);
 	rejectText(browserHelper, "headers", `${label} browser stack helper`);
+	rejectText(browserHelper, "identity", `${label} browser stack helper`);
 
 	requireText(
 		serverClient,
@@ -128,6 +139,11 @@ for (const framework of frameworks) {
 	requireText(serverClient, "createAppClientStack", `${label} request client`);
 	requireText(serverClient, "authorization.server", `${label} request client`);
 	requireText(serverClient, "headers:", `${label} request client`);
+	requireText(
+		serverClient,
+		"requestIdentity:",
+		`${label} request identity partition`,
+	);
 	requireText(todo, 'id: "todos"', `${label} Todo client`);
 	requireText(todo, "resolve: (runtime)", `${label} Todo client`);
 	requireText(page, framework.pageFactory, `${label} page route`);

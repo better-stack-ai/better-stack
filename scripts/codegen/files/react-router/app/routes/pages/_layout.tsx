@@ -26,8 +26,8 @@ export default function Layout() {
 	const { initialIdentity } = useLoaderData<typeof loader>();
 	const queryClient = useQueryClient();
 	const stack = useMemo(
-		() => getBrowserClientStack(queryClient, initialIdentity),
-		[queryClient, initialIdentity],
+		() => getBrowserClientStack(queryClient),
+		[queryClient],
 	);
 	const mediaClientConfig = useMemo(
 		() => createMediaUploadConfig(stack.provider.plugins.media),

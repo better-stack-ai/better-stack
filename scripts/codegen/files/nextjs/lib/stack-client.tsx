@@ -15,7 +15,8 @@ import type { QueryClient } from "@tanstack/react-query";
 export interface AppClientStackRuntime {
 	baseURL: string;
 	headers?: Headers;
-	identity?: StackIdentity;
+	/** Request-only identity used to align protected SSR query keys. */
+	requestIdentity?: StackIdentity;
 }
 
 const getBrowserBaseURL = () =>
@@ -44,7 +45,7 @@ export const createAppClientStack = (
 	queryClient: QueryClient,
 	runtime: AppClientStackRuntime,
 ) => {
-	const { baseURL, identity } = runtime;
+	const { baseURL, requestIdentity } = runtime;
 	return createClientStack({
 		...resolveSharedClientRuntime(queryClient, runtime),
 		plugins: {
@@ -95,7 +96,7 @@ export const createAppClientStack = (
 				},
 			}),
 			aiChat: aiChatClientPlugin({
-				identityPartition: identity,
+				...(requestIdentity ? { identityPartition: requestIdentity } : {}),
 				mode: "authenticated",
 				seo: {
 					siteName: "BTST Chat",
@@ -137,7 +138,7 @@ export const createAppClientStack = (
 				description: "Documentation for all client routes in this application",
 			}),
 			kanban: kanbanClientPlugin({
-				identityPartition: identity,
+				...(requestIdentity ? { identityPartition: requestIdentity } : {}),
 				seo: {
 					siteName: "BTST Kanban",
 					description: "Manage your projects with kanban boards",
@@ -155,30 +156,26 @@ export const createAppClientStack = (
 				},
 			}),
 			comments: commentsClientPlugin({
-				hooks: identity?.id
+				hooks: requestIdentity
 					? {
 							beforeLoadUserComments: (context) => {
-								context.currentUserId = identity.id;
+								context.currentUserId = requestIdentity.id;
 							},
 						}
 					: undefined,
 			}),
 			media: mediaClientPlugin({
 				uploadMode: "direct",
-				identityPartition: identity,
+				...(requestIdentity ? { identityPartition: requestIdentity } : {}),
 			}),
 		},
 	});
 };
 
 /** Browser-safe stack: public origin only, never request headers. */
-export const getBrowserClientStack = (
-	queryClient: QueryClient,
-	identity?: StackIdentity | null,
-) =>
+export const getBrowserClientStack = (queryClient: QueryClient) =>
 	createAppClientStack(queryClient, {
 		baseURL: getBrowserBaseURL(),
-		...(identity ? { identity } : {}),
 	});
 
 /** Focused browser stack for standalone CMS hook examples. */
