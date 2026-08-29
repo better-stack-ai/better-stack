@@ -188,6 +188,28 @@ function lineAt(source, index) {
 	return source.slice(0, index).split("\n").length;
 }
 
+function skipTrivia(source, startIndex) {
+	let index = startIndex;
+	while (index < source.length) {
+		if (/\s/.test(source[index])) {
+			index += 1;
+			continue;
+		}
+		if (source.startsWith("//", index)) {
+			const lineEnd = source.indexOf("\n", index + 2);
+			return lineEnd < 0 ? source.length : skipTrivia(source, lineEnd + 1);
+		}
+		if (source.startsWith("/*", index)) {
+			const commentEnd = source.indexOf("*/", index + 2);
+			return commentEnd < 0
+				? source.length
+				: skipTrivia(source, commentEnd + 2);
+		}
+		break;
+	}
+	return index;
+}
+
 function recordMatches(failures, file, source, label, pattern) {
 	for (const match of source.matchAll(pattern)) {
 		failures.push({
@@ -304,10 +326,11 @@ function checkFactoryCalls(
 	// This guard intentionally checks the direct factory style maintained by this
 	// repository. It is a deterministic migration check, not a JavaScript parser;
 	// TypeScript, Biome, and the docs build validate general source semantics.
-	const callPattern = new RegExp(`\\b${factory}[ \\t\\n]*\\(`, "g");
+	const callPattern = new RegExp(`\\b${factory}\\b`, "g");
 	for (const match of source.matchAll(callPattern)) {
-		let cursor = (match.index ?? 0) + match[0].length;
-		while (/\s/.test(source[cursor] ?? "")) cursor += 1;
+		let cursor = skipTrivia(source, (match.index ?? 0) + match[0].length);
+		if (source[cursor] !== "(") continue;
+		cursor = skipTrivia(source, cursor + 1);
 		if (source[cursor] === ")") continue;
 		if (source[cursor] !== "{") {
 			const expression = source
