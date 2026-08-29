@@ -123,7 +123,9 @@ describe("Media and Route Docs browser runtime", () => {
 		let upload: ReturnType<typeof useUploadAsset>["mutateAsync"] | undefined;
 		let registeredAsset: typeof asset | undefined;
 		let uploadedAsset: typeof asset | undefined;
+		let probeRenderCount = 0;
 		function Probe() {
+			probeRenderCount += 1;
 			assetsQuery = useAssets({ limit: 1 });
 			registerMutation = useRegisterAsset();
 			register = registerMutation.mutateAsync;
@@ -131,18 +133,21 @@ describe("Media and Route Docs browser runtime", () => {
 			return null;
 		}
 
-		await act(async () => {
-			root.render(
-				<QueryClientProvider client={queryClient}>
-					<StackProvider
-						stack={stack}
-						overrides={{ media: { imageCompression: false } }}
-					>
-						<Probe />
-					</StackProvider>
-				</QueryClientProvider>,
-			);
-		});
+		const renderProbe = async () => {
+			await act(async () => {
+				root.render(
+					<QueryClientProvider client={queryClient}>
+						<StackProvider
+							stack={stack}
+							overrides={{ media: { imageCompression: false } }}
+						>
+							<Probe />
+						</StackProvider>
+					</QueryClientProvider>,
+				);
+			});
+		};
+		await renderProbe();
 		await waitFor(() => assetsQuery?.isLoading === false);
 		await act(async () => {
 			registeredAsset = await register?.({
@@ -193,6 +198,11 @@ describe("Media and Route Docs browser runtime", () => {
 		expect(registerMutation?.data?.url).toBe(resolvedURL);
 		expect(callbackAsset?.url).toBe(resolvedURL);
 		expect(settledAsset?.url).toBe(resolvedURL);
+		const mutationData = registerMutation?.data;
+		const renderCount = probeRenderCount;
+		await renderProbe();
+		expect(probeRenderCount).toBeGreaterThan(renderCount);
+		expect(registerMutation?.data).toBe(mutationData);
 		expect(requests.some((request) => request.method === "GET")).toBe(true);
 		expect(
 			requests.filter((request) => request.method === "POST").length,

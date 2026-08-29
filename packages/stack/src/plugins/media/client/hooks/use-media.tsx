@@ -112,6 +112,7 @@ function withCurrentListRefresh<TData, TVariables>(
 	mutation: UseMutationResult<TData, Error, TVariables>,
 	listRefresh: ReturnType<typeof useCurrentMediaListRefresh>,
 	mapResult: (data: TData) => TData = (data) => data,
+	data: TData | undefined = mutation.data,
 ): UseMutationResult<TData, Error, TVariables> {
 	const mutateAsync: typeof mutation.mutateAsync = async (
 		variables,
@@ -141,7 +142,7 @@ function withCurrentListRefresh<TData, TVariables>(
 	};
 	return {
 		...mutation,
-		data: mutation.data === undefined ? undefined : mapResult(mutation.data),
+		data,
 		mutate,
 		mutateAsync,
 	} as UseMutationResult<TData, Error, TVariables>;
@@ -235,8 +236,18 @@ export function useRegisterAsset() {
 	const mutation = media.mediaAssets.create.use();
 	const listRefresh = useCurrentMediaListRefresh("mediaAssets");
 	const apiBaseURL = useMediaApiBaseURL();
-	return withCurrentListRefresh(mutation, listRefresh, (asset) =>
-		resolveMediaAsset(asset, apiBaseURL),
+	const data = useMemo(
+		() =>
+			mutation.data === undefined
+				? undefined
+				: resolveMediaAsset(mutation.data, apiBaseURL),
+		[mutation.data, apiBaseURL],
+	);
+	return withCurrentListRefresh(
+		mutation,
+		listRefresh,
+		(asset) => resolveMediaAsset(asset, apiBaseURL),
+		data,
 	);
 }
 
