@@ -1,7 +1,8 @@
 "use client";
 
+import { normalizePath } from "@btst/stack/client";
 import type { SerializedAsset } from "../types";
-import type { MediaUploadMode } from "./overrides";
+import type { MediaProviderConfig, MediaUploadMode } from "./overrides";
 import { compressImage } from "./utils/image-compression";
 import type { ImageCompressionOptions } from "./utils/image-compression";
 
@@ -14,6 +15,17 @@ export interface MediaUploadClientConfig {
 	imageCompression?: ImageCompressionOptions | false;
 }
 
+/** Browser-safe Media runtime exposed as `stack.provider.plugins.media`. */
+export interface MediaUploadProviderRuntime {
+	readonly api: {
+		readonly baseURL: string;
+		readonly basePath: string;
+		readonly browserHeaders?: HeadersInit;
+		readonly credentials?: RequestCredentials;
+	};
+	readonly config?: MediaProviderConfig;
+}
+
 export interface UploadAssetInput {
 	file: File;
 	folderId?: string;
@@ -24,6 +36,31 @@ const DEFAULT_IMAGE_COMPRESSION = {
 	maxHeight: 2048,
 	quality: 0.85,
 } as const;
+
+/**
+ * Bind imperative uploads to the Media endpoint resolved by `createClientStack`.
+ */
+export function createMediaUploadConfig(
+	runtime: MediaUploadProviderRuntime,
+	overrides: Pick<MediaUploadClientConfig, "imageCompression"> = {},
+): MediaUploadClientConfig {
+	return {
+		apiBaseURL: runtime.api.baseURL,
+		apiBasePath: runtime.api.basePath,
+		headers: runtime.api.browserHeaders,
+		credentials: runtime.api.credentials,
+		uploadMode: runtime.config?.uploadMode ?? "direct",
+		...overrides,
+	};
+}
+
+function createMediaApiURL(
+	apiBaseURL: string,
+	apiBasePath: string,
+	path: string,
+): string {
+	return `${apiBaseURL}${normalizePath([apiBasePath, path].join("/"))}`;
+}
 
 /**
  * Upload an asset using the media plugin's configured storage mode.
@@ -54,7 +91,6 @@ export async function uploadAsset(
 					imageCompression ?? DEFAULT_IMAGE_COMPRESSION,
 				);
 
-	const base = `${apiBaseURL}${apiBasePath}`;
 	const headersObj = new Headers(headers as HeadersInit | undefined);
 
 	if (uploadMode === "direct") {
@@ -62,12 +98,15 @@ export async function uploadAsset(
 		formData.append("file", processedFile);
 		if (folderId) formData.append("folderId", folderId);
 
-		const res = await fetch(`${base}/media/upload`, {
-			method: "POST",
-			headers: headersObj,
-			credentials,
-			body: formData,
-		});
+		const res = await fetch(
+			createMediaApiURL(apiBaseURL, apiBasePath, "/media/upload"),
+			{
+				method: "POST",
+				headers: headersObj,
+				credentials,
+				body: formData,
+			},
+		);
 		if (!res.ok) {
 			const err = await res.json().catch(() => ({ message: res.statusText }));
 			throw new Error(err.message ?? "Upload failed");
@@ -76,20 +115,23 @@ export async function uploadAsset(
 	}
 
 	if (uploadMode === "s3") {
-		const tokenRes = await fetch(`${base}/media/upload/token`, {
-			method: "POST",
-			headers: {
-				...Object.fromEntries(headersObj.entries()),
-				"Content-Type": "application/json",
+		const tokenRes = await fetch(
+			createMediaApiURL(apiBaseURL, apiBasePath, "/media/upload/token"),
+			{
+				method: "POST",
+				headers: {
+					...Object.fromEntries(headersObj.entries()),
+					"Content-Type": "application/json",
+				},
+				credentials,
+				body: JSON.stringify({
+					filename: processedFile.name,
+					mimeType: processedFile.type,
+					size: processedFile.size,
+					folderId,
+				}),
 			},
-			credentials,
-			body: JSON.stringify({
-				filename: processedFile.name,
-				mimeType: processedFile.type,
-				size: processedFile.size,
-				folderId,
-			}),
-		});
+		);
 		if (!tokenRes.ok) {
 			const err = await tokenRes
 				.json()
@@ -115,22 +157,25 @@ export async function uploadAsset(
 		});
 		if (!putRes.ok) throw new Error("Failed to upload to S3");
 
-		const assetRes = await fetch(`${base}/media/assets`, {
-			method: "POST",
-			headers: {
-				...Object.fromEntries(headersObj.entries()),
-				"Content-Type": "application/json",
+		const assetRes = await fetch(
+			createMediaApiURL(apiBaseURL, apiBasePath, "/media/assets"),
+			{
+				method: "POST",
+				headers: {
+					...Object.fromEntries(headersObj.entries()),
+					"Content-Type": "application/json",
+				},
+				credentials,
+				body: JSON.stringify({
+					filename: processedFile.name,
+					originalName: file.name,
+					mimeType: processedFile.type,
+					size: processedFile.size,
+					url: token.payload.publicUrl,
+					folderId,
+				}),
 			},
-			credentials,
-			body: JSON.stringify({
-				filename: processedFile.name,
-				originalName: file.name,
-				mimeType: processedFile.type,
-				size: processedFile.size,
-				url: token.payload.publicUrl,
-				folderId,
-			}),
-		});
+		);
 		if (!assetRes.ok) {
 			const err = await assetRes
 				.json()
@@ -141,7 +186,11 @@ export async function uploadAsset(
 	}
 
 	if (uploadMode === "vercel-blob") {
-		const handleUploadUrl = `${base}/media/upload/vercel-blob`;
+		const handleUploadUrl = createMediaApiURL(
+			apiBaseURL,
+			apiBasePath,
+			"/media/upload/vercel-blob",
+		);
 		const clientPayload = JSON.stringify({
 			mimeType: processedFile.type,
 			size: processedFile.size,
@@ -186,22 +235,25 @@ export async function uploadAsset(
 			token: clientToken,
 		});
 
-		const assetRes = await fetch(`${base}/media/assets`, {
-			method: "POST",
-			headers: {
-				...Object.fromEntries(headersObj.entries()),
-				"Content-Type": "application/json",
+		const assetRes = await fetch(
+			createMediaApiURL(apiBaseURL, apiBasePath, "/media/assets"),
+			{
+				method: "POST",
+				headers: {
+					...Object.fromEntries(headersObj.entries()),
+					"Content-Type": "application/json",
+				},
+				credentials,
+				body: JSON.stringify({
+					filename: processedFile.name,
+					originalName: file.name,
+					mimeType: processedFile.type,
+					size: processedFile.size,
+					url: blob.url,
+					folderId,
+				}),
 			},
-			credentials,
-			body: JSON.stringify({
-				filename: processedFile.name,
-				originalName: file.name,
-				mimeType: processedFile.type,
-				size: processedFile.size,
-				url: blob.url,
-				folderId,
-			}),
-		});
+		);
 		if (!assetRes.ok) {
 			const err = await assetRes
 				.json()

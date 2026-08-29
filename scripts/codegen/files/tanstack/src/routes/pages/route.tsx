@@ -11,7 +11,10 @@ import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builde
 import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client";
 import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
-import { uploadAsset } from "@btst/stack/plugins/media/client";
+import {
+	createMediaUploadConfig,
+	uploadAsset,
+} from "@btst/stack/plugins/media/client";
 import {
 	MediaPicker,
 	ImageInputField,
@@ -22,14 +25,6 @@ import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { clientAuth } from "../../lib/authorization.ui";
 import { getInitialIdentity } from "../../lib/authorization.identity";
 import { getStackClient } from "../../lib/stack-client";
-
-// Get base URL function - works on both server and client
-// On server: uses process.env.BASE_URL
-// On client: uses import.meta.env.VITE_BASE_URL or falls back to window.location.origin
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? import.meta.env.VITE_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3007";
 
 type PluginOverrides = {
 	blog: BlogPluginOverrides;
@@ -53,18 +48,13 @@ export const Route = createFileRoute("/pages")({
 function Layout() {
 	const routeContext = Route.useRouteContext();
 	const { initialIdentity } = Route.useLoaderData();
-	const baseURL = getBaseURL();
 	const stack = useMemo(
 		() => getStackClient(routeContext.queryClient),
 		[routeContext.queryClient],
 	);
 	const mediaClientConfig = useMemo(
-		() => ({
-			apiBaseURL: baseURL,
-			apiBasePath: "/api/data",
-			uploadMode: "direct" as const,
-		}),
-		[baseURL],
+		() => createMediaUploadConfig(stack.provider.plugins.media),
+		[stack],
 	);
 
 	const uploadImage = useCallback(

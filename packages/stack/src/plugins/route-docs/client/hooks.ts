@@ -1,20 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
+import type { ClientStackContext } from "../../../types";
 import { getRegisteredRoutes, type RegisteredRoute } from "./plugin";
 
 /**
- * React hook that returns all registered client route paths.
- * Updates whenever the component mounts (after client hydration).
+ * Returns registered client route paths for the supplied resolved stack context.
  */
-export function useRegisteredRoutes(): RegisteredRoute[] {
-	const [routes, setRoutes] = useState<RegisteredRoute[]>(() =>
-		getRegisteredRoutes(),
-	);
-
-	useEffect(() => {
-		setRoutes(getRegisteredRoutes());
-	}, []);
-
-	return routes;
+export function useRegisteredRoutes(
+	context: ClientStackContext,
+): RegisteredRoute[] {
+	return useMemo(() => getRegisteredRoutes(context), [context]);
 }

@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "../../../client";
 import { StackProvider } from "@btst/stack/context";
 import { useAssets, useRegisterAsset, useUploadAsset } from "../client/hooks";
-import { mediaClientPlugin, uploadAsset } from "../client";
+import {
+	createMediaUploadConfig,
+	mediaClientPlugin,
+	uploadAsset,
+} from "../client";
 import {
 	ROUTE_DOCS_QUERY_KEY,
 	routeDocsClientPlugin,
@@ -183,15 +187,28 @@ describe("Media and Route Docs browser runtime", () => {
 				: jsonResponse(asset);
 		});
 
-		const result = await uploadAsset(
-			{
-				apiBaseURL: "https://media.example.net",
-				apiBasePath: "/btst/media",
-				headers: { "x-public-client": "public-value" },
-				credentials: "include",
-				uploadMode: "vercel-blob",
-				imageCompression: false,
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient: new QueryClient(),
+			plugins: {
+				media: mediaClientPlugin({ uploadMode: "vercel-blob" }),
 			},
+			endpoints: {
+				media: {
+					api: {
+						baseURL: "https://media.example.net",
+						basePath: "/btst/media",
+						browserHeaders: { "x-public-client": "public-value" },
+						credentials: "include",
+					},
+				},
+			},
+		});
+		const result = await uploadAsset(
+			createMediaUploadConfig(stack.provider.plugins.media, {
+				imageCompression: false,
+			}),
 			{
 				file: new File(["runtime"], "runtime.txt", { type: "text/plain" }),
 				folderId: "folder-1",
@@ -223,6 +240,69 @@ describe("Media and Route Docs browser runtime", () => {
 			access: "public",
 			token: "vercel_blob_client_runtime",
 		});
+	});
+
+	it.each([
+		{
+			mode: "direct" as const,
+			expectedBtstUrls: ["https://media.example.net/media/upload"],
+		},
+		{
+			mode: "s3" as const,
+			expectedBtstUrls: [
+				"https://media.example.net/media/upload/token",
+				"https://media.example.net/media/assets",
+			],
+		},
+		{
+			mode: "vercel-blob" as const,
+			expectedBtstUrls: [
+				"https://media.example.net/media/upload/vercel-blob",
+				"https://media.example.net/media/assets",
+			],
+		},
+	])("joins Media $mode uploads to a root API mount", async (testCase) => {
+		const btstUrls: string[] = [];
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+			const url = input instanceof Request ? input.url : String(input);
+			if (url === "https://storage.example.net/presigned") {
+				return new Response(null, { status: 200 });
+			}
+			btstUrls.push(url);
+			if (url.endsWith("/media/upload/token")) {
+				return jsonResponse({
+					type: "presigned-url",
+					payload: {
+						uploadUrl: "https://storage.example.net/presigned",
+						publicUrl: "https://files.example/runtime.txt",
+						key: "runtime.txt",
+						method: "PUT",
+						headers: {},
+					},
+				});
+			}
+			if (url.endsWith("/media/upload/vercel-blob")) {
+				return jsonResponse({ clientToken: "vercel_blob_client_runtime" });
+			}
+			return jsonResponse(asset);
+		});
+
+		await uploadAsset(
+			{
+				apiBaseURL: "https://media.example.net",
+				apiBasePath: "/",
+				uploadMode: testCase.mode,
+				imageCompression: false,
+			},
+			{
+				file: new File(["runtime"], "runtime.txt", { type: "text/plain" }),
+			},
+		);
+
+		expect(btstUrls).toEqual(testCase.expectedBtstUrls);
+		expect(
+			btstUrls.every((url) => !new URL(url).pathname.startsWith("//")),
+		).toBe(true);
 	});
 
 	it("uses Route Docs' resolved cross-origin site for rendered navigation", async () => {
@@ -285,6 +365,7 @@ describe("Media and Route Docs browser runtime", () => {
 		expect(open).toHaveBeenCalledWith(
 			"https://docs.example.net/probe",
 			"_blank",
+			"noopener,noreferrer",
 		);
 	});
 });

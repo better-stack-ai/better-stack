@@ -9,5 +9,9 @@ export type {
 	MediaProviderConfig,
 	MediaUploadMode,
 } from "./overrides";
-export { uploadAsset } from "./upload";
-export type { MediaUploadClientConfig, UploadAssetInput } from "./upload";
+export { createMediaUploadConfig, uploadAsset } from "./upload";
+export type {
+	MediaUploadClientConfig,
+	MediaUploadProviderRuntime,
+	UploadAssetInput,
+} from "./upload";

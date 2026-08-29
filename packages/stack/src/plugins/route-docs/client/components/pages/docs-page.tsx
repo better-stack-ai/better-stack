@@ -48,7 +48,7 @@ import type {
 	RouteParameter,
 	PluginSitemapEntry,
 } from "../../../generator";
-import { ROUTE_DOCS_QUERY_KEY, generateSchema } from "../../plugin";
+import { ROUTE_DOCS_QUERY_KEY } from "../../plugin";
 
 function createSiteUrl(
 	siteBaseURL: string,
@@ -56,6 +56,10 @@ function createSiteUrl(
 	path: string,
 ): string {
 	return `${siteBaseURL}${joinBasePath(siteBasePath, path)}`;
+}
+
+function openInNewTab(url: string): void {
+	window.open(url, "_blank", "noopener,noreferrer");
 }
 
 /**
@@ -260,7 +264,7 @@ function NavigationForm({
 		if (hasUnfilledParams) {
 			return;
 		}
-		window.open(url, "_blank");
+		openInNewTab(url);
 	};
 
 	const allParamsFilled = route.pathParams.every((p) => paramValues[p.name]);
@@ -315,9 +319,8 @@ function NavigationForm({
 						</code>
 						<Button
 							onClick={() =>
-								window.open(
+								openInNewTab(
 									createSiteUrl(siteBaseURL, siteBasePath, route.path),
-									"_blank",
 								)
 							}
 							className="shrink-0"
@@ -432,7 +435,7 @@ function RouteSitemapSection({
 											variant="ghost"
 											size="sm"
 											className="h-7 px-2"
-											onClick={() => window.open(entry.url, "_blank")}
+											onClick={() => openInNewTab(entry.url)}
 										>
 											<ExternalLink className="h-3 w-3" />
 										</Button>
@@ -460,7 +463,7 @@ function RouteSitemapSection({
 									variant="ghost"
 									size="sm"
 									className="h-7 w-7 p-0 shrink-0"
-									onClick={() => window.open(entry.url, "_blank")}
+									onClick={() => openInNewTab(entry.url)}
 								>
 									<ExternalLink className="h-3 w-3" />
 								</Button>
@@ -704,7 +707,7 @@ function RouteCard({
 						variant="ghost"
 						size="sm"
 						className="h-8 w-8 p-0 shrink-0"
-						onClick={() => window.open(staticUrl, "_blank")}
+						onClick={() => openInNewTab(staticUrl)}
 					>
 						<ExternalLink className="h-4 w-4" />
 					</Button>
@@ -831,7 +834,7 @@ function SitemapSection({
 											variant="ghost"
 											size="sm"
 											className="h-7 px-2"
-											onClick={() => window.open(entry.url, "_blank")}
+											onClick={() => openInNewTab(entry.url)}
 										>
 											<ExternalLink className="h-3 w-3" />
 										</Button>
@@ -859,7 +862,7 @@ function SitemapSection({
 									variant="ghost"
 									size="sm"
 									className="h-7 w-7 p-0 shrink-0"
-									onClick={() => window.open(entry.url, "_blank")}
+									onClick={() => openInNewTab(entry.url)}
 								>
 									<ExternalLink className="h-3 w-3" />
 								</Button>
@@ -1045,7 +1048,7 @@ function AllRoutesSection({
 													variant="ghost"
 													size="sm"
 													className="h-7 px-2"
-													onClick={() => window.open(staticUrl, "_blank")}
+													onClick={() => openInNewTab(staticUrl)}
 												>
 													<ExternalLink className="h-3 w-3" />
 												</Button>
@@ -1103,6 +1106,7 @@ export interface DocsPageProps {
 	description?: string;
 	siteBaseURL?: string;
 	siteBasePath?: string;
+	loadSchema: () => Promise<RouteDocsSchema>;
 }
 
 export function DocsPageComponent({
@@ -1110,11 +1114,12 @@ export function DocsPageComponent({
 	description = "Documentation for all client routes in your application",
 	siteBaseURL = "",
 	siteBasePath = "/pages",
+	loadSchema,
 }: DocsPageProps) {
 	// Read schema from React Query (prefetched by loader on server, or generated on client)
 	const { data: schema } = useSuspenseQuery<RouteDocsSchema>({
 		queryKey: ROUTE_DOCS_QUERY_KEY,
-		queryFn: generateSchema,
+		queryFn: loadSchema,
 		staleTime: Infinity, // Don't refetch - schema is static for this session
 	});
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

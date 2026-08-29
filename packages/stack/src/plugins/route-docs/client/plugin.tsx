@@ -31,13 +31,6 @@ const DocsPageSkeleton = lazy(() =>
 /** Query key for the route documentation schema. */
 export const ROUTE_DOCS_QUERY_KEY = ["route-docs", "schema"] as const;
 
-let moduleStoredContext: ClientStackContext | null = null;
-
-/** Returns the client definitions most recently resolved for introspection. */
-export function getStoredContext(): ClientStackContext | null {
-	return moduleStoredContext;
-}
-
 export interface RegisteredRoute {
 	/** The route path pattern (for example, `/blog/:slug`). */
 	path: string;
@@ -48,16 +41,16 @@ export interface RegisteredRoute {
 }
 
 /** Returns all registered routes except Route Docs' own introspection page. */
-export function getRegisteredRoutes(): RegisteredRoute[] {
-	if (!moduleStoredContext) return [];
+export function getRegisteredRoutes(
+	context: ClientStackContext | null,
+): RegisteredRoute[] {
+	if (!context) return [];
 	const result: RegisteredRoute[] = [];
-	for (const [pluginKey, plugin] of Object.entries(
-		moduleStoredContext.plugins,
-	)) {
+	for (const [pluginKey, plugin] of Object.entries(context.plugins)) {
 		const pluginId = resolvePluginProgrammaticId(plugin, pluginKey);
 		if (pluginId === ROUTE_DOCS_PLUGIN_ID) continue;
 		try {
-			const routes = plugin.routes(moduleStoredContext);
+			const routes = plugin.routes(context);
 			for (const [routeKey, route] of Object.entries(routes)) {
 				const path = (route as { path?: unknown }).path;
 				if (typeof path === "string" && path.length > 0) {
@@ -71,22 +64,28 @@ export function getRegisteredRoutes(): RegisteredRoute[] {
 	return result;
 }
 
-/** Generates the route schema from the currently resolved client definitions. */
-export async function generateSchema(): Promise<RouteDocsSchema> {
-	if (!moduleStoredContext) {
-		return {
-			plugins: [],
-			generatedAt: new Date().toISOString(),
-			allSitemapEntries: [],
-		};
+function createEmptySchema(): RouteDocsSchema {
+	return {
+		plugins: [],
+		generatedAt: new Date().toISOString(),
+		allSitemapEntries: [],
+	};
+}
+
+/** Generates the route schema from explicit resolved client definitions. */
+export async function generateSchema(
+	context: ClientStackContext | null,
+): Promise<RouteDocsSchema> {
+	if (!context) {
+		return createEmptySchema();
 	}
 
 	try {
-		const sitemapEntries = await fetchAllSitemapEntries(moduleStoredContext);
-		return generateRouteDocsSchema(moduleStoredContext, sitemapEntries);
+		const sitemapEntries = await fetchAllSitemapEntries(context);
+		return generateRouteDocsSchema(context, sitemapEntries);
 	} catch (error) {
 		console.warn("Failed to generate route docs schema:", error);
-		return generateRouteDocsSchema(moduleStoredContext, []);
+		return generateRouteDocsSchema(context, []);
 	}
 }
 
@@ -153,27 +152,26 @@ function DocsErrorComponent() {
 	);
 }
 
-function createRouteDocsLoader(config: ResolvedRouteDocsClientConfig) {
+function createRouteDocsLoader(
+	config: ResolvedRouteDocsClientConfig,
+	context: ClientStackContext | null,
+) {
 	return async () => {
-		if (typeof window !== "undefined" || !moduleStoredContext) return;
+		if (typeof window !== "undefined" || !context) return;
 
 		try {
-			const sitemapEntries = await fetchAllSitemapEntries(moduleStoredContext);
-			const schema = generateRouteDocsSchema(
-				moduleStoredContext,
-				sitemapEntries,
-			);
+			const sitemapEntries = await fetchAllSitemapEntries(context);
+			const schema = generateRouteDocsSchema(context, sitemapEntries);
 			config.queryClient.setQueryData<RouteDocsSchema>(
 				ROUTE_DOCS_QUERY_KEY,
 				schema,
 			);
 		} catch (error) {
 			console.warn("Failed to load route docs schema:", error);
-			config.queryClient.setQueryData<RouteDocsSchema>(ROUTE_DOCS_QUERY_KEY, {
-				plugins: [],
-				generatedAt: new Date().toISOString(),
-				allSitemapEntries: [],
-			});
+			config.queryClient.setQueryData<RouteDocsSchema>(
+				ROUTE_DOCS_QUERY_KEY,
+				createEmptySchema(),
+			);
 		}
 	};
 }
@@ -181,7 +179,7 @@ function createRouteDocsLoader(config: ResolvedRouteDocsClientConfig) {
 function createResolvedRouteDocsPlugin(config: ResolvedRouteDocsClientConfig) {
 	return {
 		routes: (context?: ClientStackContext) => {
-			moduleStoredContext = context ?? null;
+			const resolvedContext = context ?? null;
 			return {
 				docs: defineRoute("/route-docs", {
 					page: () => (
@@ -190,11 +188,12 @@ function createResolvedRouteDocsPlugin(config: ResolvedRouteDocsClientConfig) {
 							description={config.description}
 							siteBaseURL={config.siteBaseURL}
 							siteBasePath={config.siteBasePath}
+							loadSchema={() => generateSchema(resolvedContext)}
 						/>
 					),
 					loading: DocsPageSkeleton,
 					error: DocsErrorComponent,
-					loader: createRouteDocsLoader(config),
+					loader: createRouteDocsLoader(config, resolvedContext),
 					meta: createDocsMeta(config),
 				}),
 			};

@@ -219,6 +219,7 @@ Your media plugin is now configured and ready to use. Here is a quick reference 
 | --- | --- |
 | `MediaPicker` | Embed the full media browser in your own forms and editors |
 | `ImageInputField` | Drop-in image field with preview, change, and remove actions |
+| `createMediaUploadConfig()` | Binds imperative uploads to the Media runtime resolved by the client stack |
 | `uploadAsset()` | Imperative upload helper for editors and non-React callbacks |
 | `useRegisterAssetForm()` | URL registration lifecycle with inline server field errors |
 | `useCreateFolderForm()` | Folder form lifecycle with notification and invalidation handling |
@@ -227,16 +228,18 @@ Your media plugin is now configured and ready to use. Here is a quick reference 
 
 ### Imperative uploads for editor callbacks
 
-When you need to upload an image outside React hooks, use `uploadAsset()`:
+When you need to upload an image outside React hooks, bind `uploadAsset()` to
+the Media runtime already resolved by your client stack:
 
 ```tsx title="app/pages/layout.tsx"
-import { uploadAsset } from "@btst/stack/plugins/media/client"
+import {
+  createMediaUploadConfig,
+  uploadAsset,
+} from "@btst/stack/plugins/media/client"
 
-const mediaClientConfig = {
-  apiBaseURL: baseURL,
-  apiBasePath: "/api/data",
-  uploadMode: "direct" as const,
-}
+const mediaClientConfig = createMediaUploadConfig(
+  stack.provider.plugins.media,
+)
 
 const uploadImage = async (file: File) => {
   const asset = await uploadAsset(mediaClientConfig, { file })
@@ -244,7 +247,9 @@ const uploadImage = async (file: File) => {
 }
 ```
 
-This is the same pattern used in the example apps to connect Blog, CMS, and Kanban image uploads to the shared Media plugin.
+This preserves Media endpoint overrides, public browser headers, explicit
+credentials, and the configured upload mode. The generated apps use the same
+pattern to connect Blog, CMS, and Kanban image uploads to Media.
 
 ### Embedding the picker in your own UI
 

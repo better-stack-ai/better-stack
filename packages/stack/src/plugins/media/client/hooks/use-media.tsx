@@ -20,7 +20,7 @@ import type { RegisterAssetInput } from "../../query-keys";
 import type { SerializedAsset, SerializedFolder } from "../../types";
 import { MEDIA_PLUGIN_ID } from "../constants";
 import type { MediaPluginOverrides, MediaProviderConfig } from "../overrides";
-import { uploadAsset } from "../upload";
+import { createMediaUploadConfig, uploadAsset } from "../upload";
 import { media } from "./media-resource";
 
 function useIdentityPartition() {
@@ -166,14 +166,18 @@ export function useUploadAsset() {
 			folderId?: string;
 		}): Promise<SerializedAsset> =>
 			uploadAsset(
-				{
-					apiBaseURL: pluginApi?.baseURL ?? "",
-					apiBasePath: pluginApi?.basePath ?? "",
-					headers: pluginRuntime?.api.browserHeaders,
-					credentials: pluginRuntime?.api.credentials,
-					uploadMode: providerConfig?.uploadMode ?? "direct",
-					imageCompression,
-				},
+				createMediaUploadConfig(
+					{
+						api: {
+							baseURL: pluginApi?.baseURL ?? "",
+							basePath: pluginApi?.basePath ?? "",
+							browserHeaders: pluginRuntime?.api.browserHeaders,
+							credentials: pluginRuntime?.api.credentials,
+						},
+						config: providerConfig,
+					},
+					{ imageCompression },
+				),
 				{ file, folderId },
 			),
 		onSuccess: async (_asset, _variables, startedAs) => {
