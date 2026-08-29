@@ -25,6 +25,13 @@ function PreviewPage() {
 			<StackProvider
 				stack={stack}
 				router={tanstackRouter()}
+{{#if pagesLayoutOverrides}}
+				overrides={
+					{
+{{{pagesLayoutOverrides}}}
+					}{{#if hasLegacyClientPlugins}} as never{{/if}}
+				}
+{{/if}}
 			>
 				<div className="min-h-screen">
 					<PageRenderer

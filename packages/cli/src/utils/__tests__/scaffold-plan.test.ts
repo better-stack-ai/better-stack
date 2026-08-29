@@ -1155,6 +1155,29 @@ describe("scaffold plan", () => {
 		expect(preview?.content).not.toContain('"ui-builder":');
 	});
 
+	it.each([
+		["nextjs", "app/preview/[slug]/client.tsx", "app/globals.css"],
+		["react-router", "app/routes/preview.tsx", "app/app.css"],
+		["tanstack", "src/routes/preview.$slug.tsx", "src/styles/globals.css"],
+	] as const)(
+		"emits required Kanban overrides in the %s UI Builder preview",
+		async (framework, previewPath, cssFile) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["cms", "ui-builder", "kanban"],
+				alias: "@/",
+				cssFile,
+			});
+			const preview = plan.files.find((file) => file.path === previewPath);
+
+			expect(preview?.content).toContain('"kanban": {');
+			expect(preview?.content).toContain("resolveUser: async () => null");
+			expect(preview?.content).toContain("searchUsers: async () => []");
+			expect(preview?.content).not.toContain("StackProvider<");
+		},
+	);
+
 	it("returns cssImports for selected plugins", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
