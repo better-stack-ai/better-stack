@@ -14,6 +14,7 @@ import {
 	uploadAsset,
 } from "../client";
 import {
+	ROUTE_DOCS_QUERY_KEY,
 	routeDocsClientPlugin,
 	useRegisteredRoutes,
 } from "../../route-docs/client";
@@ -459,6 +460,65 @@ describe("Media and Route Docs browser runtime", () => {
 		await renderStack(stackB);
 		await waitFor(() => container.textContent?.includes("/probe-b") ?? false);
 		expect(container.textContent).not.toContain("/probe-a");
+	});
+
+	it("isolates client-generated Route Docs schemas by sitemap output", async () => {
+		const queryClient = new QueryClient();
+		const createStack = (sitemapURL: string) =>
+			createClientStack({
+				api: { baseURL: "https://api.example.com", basePath: "/api" },
+				site: { baseURL: "https://app.example.com", basePath: "/" },
+				queryClient,
+				plugins: {
+					probe: defineClientPlugin({
+						id: "probe",
+						resolve: () => ({
+							routes: () => ({
+								probe: defineRoute("/probe", { page: () => null }),
+							}),
+							sitemap: async () => [{ url: sitemapURL }],
+						}),
+					}),
+					routeDocs: routeDocsClientPlugin(),
+				},
+			});
+		const stackA = createStack("https://app.example.com/probe-a");
+		const stackB = createStack("https://app.example.com/probe-b");
+
+		const renderStack = async (stack: typeof stackA) => {
+			const PageComponent = stack.router.getRoute("/route-docs")?.PageComponent;
+			await act(async () => {
+				root.render(
+					<QueryClientProvider client={queryClient}>
+						<StackProvider stack={stack}>
+							<Suspense fallback={<span>loading</span>}>
+								{PageComponent ? <PageComponent /> : null}
+							</Suspense>
+						</StackProvider>
+					</QueryClientProvider>,
+				);
+			});
+		};
+
+		await renderStack(stackA);
+		await waitFor(
+			() =>
+				container.textContent?.includes("https://app.example.com/probe-a") ??
+				false,
+		);
+		await renderStack(stackB);
+		await waitFor(
+			() =>
+				container.textContent?.includes("https://app.example.com/probe-b") ??
+				false,
+		);
+
+		expect(container.textContent).not.toContain(
+			"https://app.example.com/probe-a",
+		);
+		expect(
+			queryClient.getQueriesData({ queryKey: ROUTE_DOCS_QUERY_KEY }),
+		).toHaveLength(2);
 	});
 
 	it("binds route introspection to the enclosing or explicitly supplied stack", async () => {

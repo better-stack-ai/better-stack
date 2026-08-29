@@ -85,6 +85,13 @@ interface ResolvedRouteDocsClientConfig extends RouteDocsClientConfig {
 }
 
 const resolvedSchemaKeysByContext = new WeakMap<ClientStackContext, string>();
+const clientContextKeysByQueryClient = new WeakMap<
+	QueryClient,
+	{
+		nextKey: number;
+		keys: WeakMap<ClientStackContext, number>;
+	}
+>();
 
 function createRouteDocsBaseFingerprint(
 	config: ResolvedRouteDocsClientConfig,
@@ -126,6 +133,23 @@ function createSchemaKeyResolutionQueryKey(baseFingerprint: string) {
 	return [...ROUTE_DOCS_KEY_RESOLUTION, baseFingerprint] as const;
 }
 
+function getClientContextKey(
+	queryClient: QueryClient,
+	context: ClientStackContext,
+) {
+	let state = clientContextKeysByQueryClient.get(queryClient);
+	if (!state) {
+		state = { nextKey: 0, keys: new WeakMap() };
+		clientContextKeysByQueryClient.set(queryClient, state);
+	}
+	let key = state.keys.get(context);
+	if (key === undefined) {
+		key = state.nextKey++;
+		state.keys.set(context, key);
+	}
+	return key;
+}
+
 function resolveRouteDocsQueryKey(
 	config: ResolvedRouteDocsClientConfig,
 	context: ClientStackContext | null,
@@ -139,7 +163,18 @@ function resolveRouteDocsQueryKey(
 				createSchemaKeyResolutionQueryKey(baseFingerprint),
 			))
 		: undefined;
-	return createSchemaQueryKey(resolvedFingerprint ?? baseFingerprint);
+	if (resolvedFingerprint) return createSchemaQueryKey(resolvedFingerprint);
+	if (typeof window !== "undefined" && context) {
+		return createSchemaQueryKey(
+			hashKey([
+				{
+					baseFingerprint,
+					clientContext: getClientContextKey(config.queryClient, context),
+				},
+			]),
+		);
+	}
+	return createSchemaQueryKey(baseFingerprint);
 }
 
 function resolveRouteDocsClientConfig(
