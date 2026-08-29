@@ -40,7 +40,7 @@ import {
 	Navigation,
 } from "lucide-react";
 import { useSuspenseQuery, type QueryKey } from "@tanstack/react-query";
-import { joinBasePath } from "@btst/stack/context";
+import { joinBasePath, useStackOrNull } from "@btst/stack/context";
 import type {
 	RouteDocsSchema,
 	DocumentedPlugin,
@@ -48,6 +48,7 @@ import type {
 	RouteParameter,
 	PluginSitemapEntry,
 } from "../../../generator";
+import { generateSchema } from "../../schema";
 
 function createSiteUrl(
 	siteBaseURL: string,
@@ -1106,7 +1107,6 @@ export interface DocsPageProps {
 	siteBaseURL?: string;
 	siteBasePath?: string;
 	queryKey: QueryKey;
-	loadSchema: () => Promise<RouteDocsSchema>;
 }
 
 export function DocsPageComponent({
@@ -1115,12 +1115,13 @@ export function DocsPageComponent({
 	siteBaseURL = "",
 	siteBasePath = "/pages",
 	queryKey,
-	loadSchema,
 }: DocsPageProps) {
+	const stack = useStackOrNull();
+	const context = stack?.clientStackContext ?? null;
 	// Read schema from React Query (prefetched by loader on server, or generated on client)
 	const { data: schema } = useSuspenseQuery<RouteDocsSchema>({
 		queryKey,
-		queryFn: loadSchema,
+		queryFn: () => generateSchema(context),
 		staleTime: Infinity, // Don't refetch - schema is static for this session
 	});
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

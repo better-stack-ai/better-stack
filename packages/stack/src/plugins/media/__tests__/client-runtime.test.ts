@@ -298,6 +298,25 @@ describe("Media and Route Docs resolved client runtime", () => {
 		});
 	});
 
+	it("keeps Route Docs page props serializable across the Next RSC boundary", () => {
+		const stack = createClientStack({
+			api: { baseURL: "https://api.example.com", basePath: "/api" },
+			site: { baseURL: "https://site.example.com", basePath: "/" },
+			queryClient: new QueryClient(),
+			plugins: { routeDocs: routeDocsClientPlugin() },
+		});
+		const route = stack.context.plugins.routeDocs!.routes(stack.context)
+			.docs as {
+			def?: { page?: () => { props: Record<string, unknown> } };
+		};
+		const props = route.def?.page?.().props;
+
+		expect(props).toBeDefined();
+		expect(props).not.toHaveProperty("loadSchema");
+		expect(Object.values(props ?? {})).not.toContainEqual(expect.any(Function));
+		expect(() => JSON.stringify(props)).not.toThrow();
+	});
+
 	it("isolates Route Docs loader caches for structurally identical stacks", async () => {
 		const createProbe = (label: string) =>
 			defineClientPlugin({

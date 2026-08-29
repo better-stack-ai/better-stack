@@ -15,6 +15,9 @@ import {
 } from "../generator";
 import type { DocsPageProps } from "./components/pages/docs-page";
 import { ROUTE_DOCS_PLUGIN_ID } from "./constants";
+import { createEmptySchema } from "./schema";
+
+export { generateSchema } from "./schema";
 
 const DocsPageComponent = lazy(() =>
 	import("./components/pages/docs-page").then((module) => ({
@@ -62,31 +65,6 @@ export function getRegisteredRoutes(
 		}
 	}
 	return result;
-}
-
-function createEmptySchema(): RouteDocsSchema {
-	return {
-		plugins: [],
-		generatedAt: new Date().toISOString(),
-		allSitemapEntries: [],
-	};
-}
-
-/** Generates the route schema from explicit resolved client definitions. */
-export async function generateSchema(
-	context: ClientStackContext | null,
-): Promise<RouteDocsSchema> {
-	if (!context) {
-		return createEmptySchema();
-	}
-
-	try {
-		const sitemapEntries = await fetchAllSitemapEntries(context);
-		return generateRouteDocsSchema(context, sitemapEntries);
-	} catch (error) {
-		console.warn("Failed to generate route docs schema:", error);
-		return generateRouteDocsSchema(context, []);
-	}
 }
 
 /** Route Docs-specific presentation configuration. */
@@ -243,7 +221,6 @@ function createResolvedRouteDocsPlugin(config: ResolvedRouteDocsClientConfig) {
 							siteBaseURL={config.siteBaseURL}
 							siteBasePath={config.siteBasePath}
 							queryKey={queryKey}
-							loadSchema={() => generateSchema(resolvedContext)}
 						/>
 					),
 					loading: DocsPageSkeleton,
