@@ -35,11 +35,11 @@ Follow these steps to add the Media plugin to your BTST setup.
 Import and register the media backend plugin in your `stack.ts` file:
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { mediaBackendPlugin } from "@btst/stack/plugins/media/api"
 import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local"
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   plugins: {
     media: mediaBackendPlugin({
@@ -416,7 +416,7 @@ const serverAuth = createServerAuth({
   },
 })
 
-export const appStack = stack({
+export const appStack = createBackendStack({
   auth: serverAuth,
   plugins: {
     media: mediaBackendPlugin({
@@ -545,12 +545,12 @@ use the raw migration helpers for an intentional cross-tenant move.
 ### Configuration
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { mediaBackendPlugin } from "@btst/stack/plugins/media/api"
 import { s3Adapter } from "@btst/stack/plugins/media/api/adapters/s3"
 import { getSession } from "@/lib/auth"
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   plugins: {
     media: mediaBackendPlugin({
@@ -582,13 +582,13 @@ an adapter-level concern, so use the retained standalone primitives instead of
 the removed raw business API:
 
 ```ts
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import {
   createFolder,
   getFolderByName,
 } from "@btst/stack/plugins/media/api"
 
-const app = stack({ /* ... */ })
+const app = createBackendStack({ /* ... */ })
 
 async function getOrCreateProfileFolder(profileId: string) {
   const name = `blog-gen-${profileId}`

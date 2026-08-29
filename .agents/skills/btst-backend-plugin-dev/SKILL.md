@@ -25,7 +25,7 @@ src/plugins/{name}/
 - **`api/index.ts`** — re-export everything from getters + mutations for direct server-side import.
 - **`operations.ts`** — define the one maintained business inventory with input validation, exact permission descriptors, authoritative facts, domain execution, and lifecycle hooks.
 - Bind HTTP routes to same-key operations. Use `operationRouteMap` only for real route-name mismatches.
-- The optional `raw` factory is narrow: first-party plugins expose only `prefetchForRoute` for SSG. Do not duplicate business getters or mutations on `stack().raw`.
+- The optional `raw` factory is narrow: first-party plugins expose only `prefetchForRoute` for SSG. Do not duplicate business getters or mutations on `createBackendStack().raw`.
 - Use `myStack.forRequest(request).operations.*` for request work and `myStack.trusted.*` for explicitly trusted jobs.
 
 ## Key patterns
@@ -61,7 +61,9 @@ already support.
 `myStack` is a module-level const. The `execute` closure runs lazily (only on HTTP request), so `myStack` is always initialised by then:
 
 ```typescript
-export const myStack = stack({ ... })
+import { createBackendStack } from "@btst/stack/api"
+
+export const myStack = createBackendStack({ ... })
 
 const myTool = tool({
   execute: async (params) => {
@@ -80,7 +82,7 @@ const myTool = tool({
 - **Wrong adapter type** — use `import type { DBAdapter as Adapter } from "@btst/db"` in getters/mutations/plugin files.
 - **`"GET /path"` string keys** — routes use `createEndpoint()`, not string-keyed method/path objects.
 - **`ctx.json()`** — does not exist; return data directly from route handlers.
-- **Business methods on `stack().raw`** — do not add them. Keep the composed lifecycle explicit through `forRequest(request).operations` or `trusted`, and reserve `raw` for narrow lower-level/SSG helpers.
+- **Business methods on `createBackendStack().raw`** — do not add them. Keep the composed lifecycle explicit through `forRequest(request).operations` or `trusted`, and reserve `raw` for narrow lower-level/SSG helpers.
 - **Authorization in lifecycle hooks** — routine access control belongs in operation descriptors and the one shared rule. Hooks receive already-authorized context.
 - **Write ops in `getters.ts`** — write functions belong in `mutations.ts`, not `getters.ts`.
 

@@ -43,11 +43,11 @@ Follow these steps to add the Blog plugin to your BTST setup.
 Import and register the blog backend plugin in your `stack.ts` file:
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 // ... your adapter imports
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   plugins: {
     blog: blogBackendPlugin()
@@ -419,6 +419,8 @@ platform objects.
 Blog lifecycle names use the action-first `onBefore<Action><Entity>`,
 `onAfter<Action><Entity>`, and `onError<Action><Entity>` grammar.
 
+{/* canonical-dx-guard: migration:start reason="plugin lifecycle migration table" */}
+
 | Removed name | Canonical name |
 | --- | --- |
 | `onBeforeNextPreviousPosts` | `onBeforeGetNextPreviousPosts` |
@@ -432,6 +434,8 @@ Blog lifecycle names use the action-first `onBefore<Action><Entity>`,
 | `onCreatePostError` | `onErrorCreatePost` |
 | `onUpdatePostError` | `onErrorUpdatePost` |
 | `onDeletePostError` | `onErrorDeletePost` |
+
+{/* canonical-dx-guard: migration:end */}
 
 **Example usage:**
 
@@ -453,7 +457,7 @@ const blogHooks: BlogBackendHooks = {
   },
 }
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   plugins: {
     blog: blogBackendPlugin({ hooks: blogHooks })
   },
@@ -661,7 +665,7 @@ request-time application behavior.
 
 ### Authorized operations
 
-When `stack()` receives a one-rule server adapter, use the request-scoped API
+When `createBackendStack()` receives a one-rule server adapter, use the request-scoped API
 for user-facing Blog work. These calls run the same operations as the HTTP
 routes, including input validation, trusted fact derivation, authorization, and
 lifecycle hooks:

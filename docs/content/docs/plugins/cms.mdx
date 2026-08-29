@@ -123,11 +123,11 @@ export type CMSTypes = {
 Register the CMS backend plugin with your content types:
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 import { contentTypes } from "./cms-schemas"
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   plugins: {
     cms: cmsBackendPlugin({ contentTypes })
@@ -571,6 +571,8 @@ CMS lifecycle names use the action-first `onBefore<Action><Entity>`,
 aggregate error phase remains one callback; its `operation` argument identifies
 the failed create, update, delete, list, or get operation.
 
+{/* canonical-dx-guard: migration:start reason="plugin lifecycle migration table" */}
+
 | Removed name | Canonical name |
 | --- | --- |
 | `onBeforeCreate` | `onBeforeCreateContent` |
@@ -580,6 +582,8 @@ the failed create, update, delete, list, or get operation.
 | `onBeforeDelete` | `onBeforeDeleteContent` |
 | `onAfterDelete` | `onAfterDeleteContent` |
 | `onError` | `onErrorExecuteContentOperation` |
+
+{/* canonical-dx-guard: migration:end */}
 
 ## Type Safety
 
@@ -720,7 +724,7 @@ const auth = createServerAuth({
   },
 })
 
-export const myStack = stack({
+export const myStack = createBackendStack({
   basePath: "/api/data",
   plugins: { cms: cmsBackendPlugin({ contentTypes }) },
   adapter: (db) => createMemoryAdapter(db)({}),

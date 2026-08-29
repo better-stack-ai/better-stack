@@ -132,7 +132,7 @@ export function createMyQueryKeys(client: ResourceClient, headers?: HeadersInit)
 ## Programmatic id (client/constants.ts)
 
 ```typescript
-export const MY_PLUGIN_ID = "my-plugin" as const
+export const MY_PLUGIN_ID = "myPlugin" as const
 ```
 
 ## defineClientPlugin shape (client/plugin.tsx)

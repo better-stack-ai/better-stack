@@ -50,7 +50,7 @@ Ensure you followed the general [framework installation guide](/installation) fi
 The UI Builder stores pages as CMS content items. Add the pre-configured content type to your CMS:
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { createServerAuth } from "@btst/stack/authorization/server"
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
 import {
@@ -67,7 +67,7 @@ const auth = createServerAuth({
   },
 })
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   plugins: {
     cms: cmsBackendPlugin({
@@ -227,6 +227,10 @@ uiBuilderClientPlugin({
   },
 })
 ```
+
+UI Builder is intentionally client-only over CMS. The `cmsBackendPlugin`
+supplies its persistence and HTTP contract; there is no UI Builder backend
+plugin to register.
 
 ## Component Registry
 

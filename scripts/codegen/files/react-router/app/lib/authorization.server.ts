@@ -5,8 +5,8 @@ function getMockRequestIdentity(headers: Headers) {
 	const token = (headers.get("cookie") ?? "")
 		.split(";")
 		.map((part) => part.trim())
-		.find((part) => part.startsWith("better-auth.session_token="))
-		?.slice("better-auth.session_token=".length);
+		.find((part) => part.startsWith("btst.example_session="))
+		?.slice("btst.example_session=".length);
 	if (!token?.startsWith("mock-session-")) return null;
 	const id = token.slice("mock-session-".length);
 	return {

@@ -3,30 +3,34 @@
 ## defineBackendPlugin shape (api/plugin.ts)
 
 ```typescript
-export const myBackendPlugin = defineBackendPlugin({
-  name: "my-plugin",
-  dbPlugin: dbSchema,
-  operations: (adapter) => ({
-    createItem: defineOperation({
-      input: CreateItemSchema,
-      permission: itemPermissions.item.create,
-      facts: () => undefined,
-      execute: ({ input }) => createItem(adapter, input),
-    }),
-  }),
-  raw: (adapter) => ({
-    prefetchForRoute: createItemPrefetchForRoute(adapter),
-  }),
-  routes: (_adapter, _context, operations) => ({
-    createItem: createEndpoint(
-      "/items",
-      { method: "POST", body: CreateItemSchema, requireRequest: true },
-      operations.createItem.route((ctx) => ctx.body),
-    ),
-  }),
-})
+/** Configuration accepted by `myBackendPlugin`. */
+export interface MyBackendPluginOptions {
+  /** Lifecycle callbacks composed around plugin operations. */
+  hooks?: MyBackendHooks
+}
 
-export type MyApiRouter = ReturnType<typeof myBackendPlugin.routes>
+export const myBackendPlugin = (options: MyBackendPluginOptions = {}) =>
+  defineBackendPlugin({
+    id: "myPlugin",
+    dbPlugin: dbSchema,
+    operations: (adapter) => createMyOperations(adapter, options.hooks),
+    raw: (adapter) => ({
+      prefetchForRoute: createItemPrefetchForRoute(adapter),
+    }),
+    routes: (_adapter, _context, operations) => {
+      const createItem = createEndpoint(
+        "/items",
+        { method: "POST", body: CreateItemSchema, requireRequest: true },
+        operations.createItem.route((ctx) => ctx.body),
+      )
+      return { createItem } as const
+    },
+  })
+
+/** Inferred router contract imported by the client plugin. */
+export type MyApiRouter = ReturnType<
+  ReturnType<typeof myBackendPlugin>["routes"]
+>
 ```
 
 ## getters.ts
@@ -114,16 +118,16 @@ export { serializeItem } from "./serializers"
 
 Invoke domain hooks from the operation lifecycle after authorization. Hooks can enforce domain invariants, publish side effects, and observe errors; they are not the authorization policy.
 
-## Plugin stack() wiring (in stack.ts)
+## Plugin `createBackendStack()` wiring (in stack.ts)
 
 ```typescript
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { myBackendPlugin } from "./src/plugins/my-plugin/api/plugin"
 
-export const myStack = stack({
+export const myStack = createBackendStack({
   basePath: "/api/data",
   plugins: {
-    myPlugin: myBackendPlugin,
+    myPlugin: myBackendPlugin(),
   },
   adapter: (db) => createDrizzleAdapter(schema, db, {}),
 })

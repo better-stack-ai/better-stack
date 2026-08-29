@@ -7,10 +7,15 @@ Learn how to create custom plugins for BTST. Plugins extend your application wit
 
 ## Overview
 
-A BTST plugin consists of two parts:
+A BTST plugin may expose either or both of these independent parts:
 
 - **Backend Plugin** - Defines database schema and API endpoints
 - **Client Plugin** - Provides routes, React components, and hooks
+
+Do not invent a matching half solely for symmetry. OpenAPI is the reference
+backend-only plugin, Route Docs is client-only, and UI Builder is client-only
+over CMS. Programmatic IDs use camelCase even when package and URL slugs use
+kebab-case.
 
 You can create plugins **inside your project** (like the [Todo example](#in-project-plugin-example)) or as a **standalone package** to publish on npm using the [Plugin Starter repository](https://github.com/better-stack-ai/plugin-starter).
 
@@ -31,7 +36,7 @@ your-plugin/
 │   ├── client.tsx      # Client plugin with routes
 │   ├── hooks.tsx       # React Query hooks
 │   ├── components.tsx  # Page components
-│   └── overrides.ts    # Framework adapter types
+│   └── overrides.ts    # Plugin-specific browser customization
 ├── schema.ts           # Database schema definition
 └── types.ts            # Shared TypeScript types
 ```
@@ -253,7 +258,7 @@ it skips only user authorization.
 Once a plugin declares operations, every composed HTTP route must have a
 same-key operation and use `operations.operationKey.route(ctx => input)` as its
 endpoint handler. The generated handler owns execution of that exact
-request-bound operation and carries a private transport identity; `stack()`
+request-bound operation and carries a private transport identity; `createBackendStack()`
 validates both the inventory and exact binding during composition. It reports
 the plugin key, route key, method, and path for an undeclared or unbound route.
 This keeps a new route from silently bypassing the operation pipeline. Extra
@@ -299,7 +304,7 @@ rationale, or route declared as both operation-backed and infrastructure fails
 composition. Public infrastructure still runs the handler's validation and
 security/domain checks; the declaration does not turn other routes public.
 
-Register the same catalog in the application's server authorization. `stack()`
+Register the same catalog in the application's server authorization. `createBackendStack()`
 rejects catalog mismatches at typecheck time. Call the composed operation—not
 the descriptor—from application code:
 
@@ -398,9 +403,9 @@ export const todosBackendPlugin = () => defineBackendPlugin({
 })
 ```
 
-Use `app.forRequest(request).operations.todos.*` for request-driven server work and `app.trusted.todos.*` for explicitly trusted jobs. Trusted calls skip user authorization but retain validation, fact derivation, domain behavior, and lifecycle hooks. First-party `stack().raw` namespaces are narrow SSG prefetch surfaces only.
+Use `app.forRequest(request).operations.todos.*` for request-driven server work and `app.trusted.todos.*` for explicitly trusted jobs. Trusted calls skip user authorization but retain validation, fact derivation, domain behavior, and lifecycle hooks. First-party backend stack `raw` namespaces are narrow SSG prefetch surfaces only.
 
-Pure getters and mutations may remain exported lower-level adapter primitives for plugin internals and migrations. They do not promise authorization, validation, or lifecycle composition and should not be duplicated onto `stack().raw`.
+Pure getters and mutations may remain exported lower-level adapter primitives for plugin internals and migrations. They do not promise authorization, validation, or lifecycle composition and should not be duplicated onto the backend stack's `raw` surface.
 
 ## Client Plugin
 
@@ -963,7 +968,7 @@ This pattern ensures:
 ### Backend Registration
 
 ```ts
-export const myStack = stack({
+export const myStack = createBackendStack({
   basePath: "/api/data",
   plugins: { todos: todosBackendPlugin(), blog: blogBackendPlugin() },
   adapter: (db) => createMemoryAdapter(db)({}),

@@ -3,7 +3,7 @@ import type { BrowserContext } from "@playwright/test";
 /** Headers for direct requests to the generated apps' request-aware backend. */
 export function mockAuthHeaders(userId = "admin-e2e") {
 	return {
-		cookie: `better-auth.session_token=mock-session-${userId}`,
+		cookie: `btst.example_session=mock-session-${userId}`,
 	};
 }
 
@@ -14,7 +14,7 @@ export async function setMockAuthCookie(
 ) {
 	await context.addCookies([
 		{
-			name: "better-auth.session_token",
+			name: "btst.example_session",
 			value: `mock-session-${userId}`,
 			domain: "localhost",
 			path: "/",

@@ -45,18 +45,18 @@ See the [Installation guide](/installation#install-database-adapter) for detaile
 
 ## Usage
 
-When you configure BTST, the `stack()` function collects all plugin database schemas and merges them into a unified schema. The adapter function receives this merged schema and returns an adapter that translates BTST's database operations to your ORM.
+When you configure BTST, the `createBackendStack()` function collects all plugin database schemas and merges them into a unified schema. The adapter function receives this merged schema and returns an adapter that translates BTST's database operations to your ORM.
 
 <Tabs groupId="adapter-type" items={["prisma", "drizzle", "kysely", "mongodb", "memory"]} persist>
   <Tab value="prisma">
     ```ts title="lib/stack.ts"
-    import { stack } from "@btst/stack"
+    import { createBackendStack } from "@btst/stack/api"
     import { createPrismaAdapter } from "@btst/adapter-prisma"
     import { PrismaClient } from "@prisma/client"
 
     const prisma = new PrismaClient()
 
-    const { handler, dbSchema } = stack({
+    const { handler, dbSchema } = createBackendStack({
       basePath: "/api/data",
       plugins: {
         // Your plugins here
@@ -73,7 +73,7 @@ When you configure BTST, the `stack()` function collects all plugin database sch
 
   <Tab value="drizzle">
     ```ts title="lib/stack.ts"
-    import { stack } from "@btst/stack"
+    import { createBackendStack } from "@btst/stack/api"
     import { createDrizzleAdapter } from "@btst/adapter-drizzle"
     import { drizzle } from "drizzle-orm/postgres-js" // or "drizzle-orm/mysql2", "drizzle-orm/better-sqlite3", etc.
     import postgres from "postgres"
@@ -81,7 +81,7 @@ When you configure BTST, the `stack()` function collects all plugin database sch
     const client = postgres(process.env.DATABASE_URL!)
     const drizzleDb = drizzle(client)
 
-    const { handler, dbSchema } = stack({
+    const { handler, dbSchema } = createBackendStack({
       basePath: "/api/data",
       plugins: {
         // Your plugins here
@@ -95,7 +95,7 @@ When you configure BTST, the `stack()` function collects all plugin database sch
 
   <Tab value="kysely">
     ```ts title="lib/stack.ts"
-    import { stack } from "@btst/stack"
+    import { createBackendStack } from "@btst/stack/api"
     import { createKyselyAdapter } from "@btst/adapter-kysely"
     import { Kysely, PostgresDialect } from "kysely"
     import { Pool } from "pg"
@@ -106,7 +106,7 @@ When you configure BTST, the `stack()` function collects all plugin database sch
       })
     })
 
-    const { handler, dbSchema } = stack({
+    const { handler, dbSchema } = createBackendStack({
       basePath: "/api/data",
       plugins: {
         // Your plugins here
@@ -120,14 +120,14 @@ When you configure BTST, the `stack()` function collects all plugin database sch
 
   <Tab value="mongodb">
     ```ts title="lib/stack.ts"
-    import { stack } from "@btst/stack"
+    import { createBackendStack } from "@btst/stack/api"
     import { createMongodbAdapter } from "@btst/adapter-mongodb"
     import { MongoClient } from "mongodb"
 
     const client = new MongoClient(process.env.MONGODB_URI!)
     const mongoDb = client.db()
 
-    const { handler, dbSchema } = stack({
+    const { handler, dbSchema } = createBackendStack({
       basePath: "/api/data",
       plugins: {
         // Your plugins here
@@ -142,10 +142,10 @@ When you configure BTST, the `stack()` function collects all plugin database sch
   <Tab value="memory">
     ```ts title="lib/stack.ts"
     // IMPORTANT: Memory adapter is used for development and testing only
-    import { stack } from "@btst/stack"
+    import { createBackendStack } from "@btst/stack/api"
     import { createMemoryAdapter } from "@btst/adapter-memory"
 
-    const { handler, dbSchema } = stack({
+    const { handler, dbSchema } = createBackendStack({
       basePath: "/api/data",
       plugins: {
         // Your plugins here
@@ -168,7 +168,7 @@ The `adapter` function receives the merged database schema (`db`) containing all
 
 The adapter pattern follows this flow:
 
-1. `stack()` merges all plugin schemas into a unified `db` object
+1. `createBackendStack()` merges all plugin schemas into a unified `db` object
 2. Your `adapter` function receives this `db` object
 3. The adapter creator function (e.g., `createPrismaAdapter`, `createDrizzleAdapter`) returns an adapter instance
 4. This adapter instance implements the common interface (create, update, findOne, etc.)

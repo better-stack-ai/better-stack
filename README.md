@@ -42,8 +42,10 @@ Enable the features you need and keep building your product.
 | **Route Docs** | Auto-generated client route documentation with interactive navigation |
 | **Comments** | Commenting system with moderation, likes, and nested replies |
 
-Each plugin ships **frontend + backend together**:
-routes, APIs, database models, React components, SSR, and SEO — already wired.
+Full-stack plugins ship separate frontend and backend definitions: routes,
+APIs, database models, React components, SSR, and SEO—already wired. Intentional
+one-sided plugins stay one-sided: OpenAPI is backend-only, Route Docs is
+client-only, and UI Builder is client-only over CMS.
 
 **Want a specific plugin?** [Open an issue](https://github.com/better-stack-ai/better-stack/issues/new) and let us know!
 

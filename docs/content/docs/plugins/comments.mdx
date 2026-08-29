@@ -30,11 +30,11 @@ your `stack.ts` file. The adapter can wrap any session/authentication library;
 Comments has no dependency on it.
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api"
 import { serverAuth } from "./authorization.server"
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   auth: serverAuth,
   plugins: {
@@ -252,7 +252,7 @@ and resource facts their rule authorized, so overlapping changes cannot bypass
 the rule.
 
 Once authorization is installed, a missing Comments rule denies that action.
-Omitting `stack({ auth })` preserves permissive server behavior for applications
+Omitting `createBackendStack({ auth })` preserves permissive server behavior for applications
 that do not configure authorization. Use `createServerAuth()` to enable exact
 descriptor enforcement and default-deny missing rules. Client gates use the
 matching `createClientAuth()` adapter and exact descriptors shown above.
@@ -399,6 +399,8 @@ Comments lifecycle names use the action-first `onBefore<Action><Entity>` and
 `onAfter<Action><Entity>` grammar. Approval remains a distinct moderation event;
 it is not flattened into a generic update callback.
 
+{/* canonical-dx-guard: migration:start reason="plugin lifecycle migration table" */}
+
 | Removed name | Canonical name |
 | --- | --- |
 | `onBeforeList` | `onBeforeListComments` |
@@ -413,6 +415,8 @@ it is not flattened into a generic update callback.
 | `onAfterApprove` | `onAfterApproveComment` |
 | `onBeforeDelete` | `onBeforeDeleteComment` |
 | `onAfterDelete` | `onAfterDeleteComment` |
+
+{/* canonical-dx-guard: migration:end */}
 
 <Callout type="warn">
 All lifecycle hooks receive validated input, server-derived facts, resolved

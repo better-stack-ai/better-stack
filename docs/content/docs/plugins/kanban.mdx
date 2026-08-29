@@ -41,11 +41,11 @@ Follow these steps to add the Kanban plugin to your BTST setup.
 Import and register the kanban backend plugin in your `stack.ts` file:
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
 // ... your adapter imports
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   plugins: {
     kanban: kanbanBackendPlugin()
@@ -59,7 +59,7 @@ export { handler, dbSchema }
 ```
 
 The `kanbanBackendPlugin()` accepts optional lifecycle hooks for domain
-validation and integrations. Configure authorization once on `stack({ auth })`;
+validation and integrations. Configure authorization once on `createBackendStack({ auth })`;
 ordinary role and ownership rules do not belong in hooks.
 
 ### 2. Add Plugin to Client
@@ -400,7 +400,7 @@ export const serverAuth = createServerAuth({
 })
 ```
 
-Pass `serverAuth` to `stack({ auth: serverAuth, ... })`. Create the client
+Pass `serverAuth` to `createBackendStack({ auth: serverAuth, ... })`. Create the client
 binding from the same browser-safe definition. Resolve the request identity and
 trusted client origins in the request layout, then serialize only those plain
 values to the client provider. Request headers and the resolved request stack
@@ -639,9 +639,16 @@ HTTP endpoints, request-scoped calls, and trusted calls all adapt these
 same operations.
 
 ```ts
-import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
+import {
+  kanbanBackendPlugin,
+  type KanbanBackendHooks,
+} from "@btst/stack/plugins/kanban/api"
 
-const app = stack({
+const hooks: KanbanBackendHooks = {
+  // Add canonical lifecycle callbacks here.
+}
+
+const app = createBackendStack({
   auth: serverAuth,
   plugins: {
     kanban: kanbanBackendPlugin({ hooks })

@@ -42,8 +42,8 @@ Common flags:
 - `lib/query-client.ts`
 - API and pages catch-all routes using the framework entry factories
 - Global CSS imports (including plugin CSS)
-- Pages layout with `QueryClientProvider` and one top-level
-  `StackProvider.router` / `StackProvider.api` configuration
+- Pages layout with `QueryClientProvider`, one resolved client stack, and the
+  framework router passed to `StackProvider`
 
 If root layout patching is not safe for your file shape, the command prints manual patch instructions instead of applying a destructive rewrite.
 
