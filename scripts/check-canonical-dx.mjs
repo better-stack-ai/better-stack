@@ -1,7 +1,6 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const textExtensions = new Set([
@@ -79,16 +78,16 @@ const backendPlugins = [
 	},
 	{ factory: "openApiBackendPlugin" },
 ];
-const clientPlugins = [
-	{ factory: "aiChatClientPlugin" },
-	{ factory: "blogClientPlugin" },
-	{ factory: "cmsClientPlugin" },
-	{ factory: "commentsClientPlugin" },
-	{ factory: "formBuilderClientPlugin" },
-	{ factory: "kanbanClientPlugin" },
-	{ factory: "mediaClientPlugin" },
-	{ factory: "routeDocsClientPlugin" },
-	{ factory: "uiBuilderClientPlugin" },
+const clientFactories = [
+	"aiChatClientPlugin",
+	"blogClientPlugin",
+	"cmsClientPlugin",
+	"commentsClientPlugin",
+	"formBuilderClientPlugin",
+	"kanbanClientPlugin",
+	"mediaClientPlugin",
+	"routeDocsClientPlugin",
+	"uiBuilderClientPlugin",
 ];
 const pluginIds = [
 	"aiChat",
@@ -147,10 +146,7 @@ function readGuardSource(absolute, file) {
 			return entry;
 		}),
 	};
-	const isolatedSources = encodedSources
-		.map((encodedSource) => `{\n${encodedSource}\n}`)
-		.join("\n");
-	return `${JSON.stringify(metadata)}\n${isolatedSources}`;
+	return `${JSON.stringify(metadata)}\n${encodedSources.join("\n")}`;
 }
 
 function stripMigrationBlocks(source, file) {
@@ -192,206 +188,6 @@ function lineAt(source, index) {
 	return source.slice(0, index).split("\n").length;
 }
 
-function isInsideMarkdownInlineCode(source, index) {
-	const lineStart = source.lastIndexOf("\n", index - 1) + 1;
-	const prefix = source.slice(lineStart, index);
-	return (prefix.match(/(?<!`)`(?!`)/g)?.length ?? 0) % 2 === 1;
-}
-
-function markdownFences(source) {
-	return source.matchAll(/^ {0,3}```[^\n]*$/gm);
-}
-
-function markdownFenceContentStart(source, index) {
-	const fences = [...markdownFences(source.slice(0, index))];
-	if (fences.length % 2 === 0) return undefined;
-	const openingFence = fences.at(-1);
-	return openingFence?.index === undefined
-		? undefined
-		: source.indexOf("\n", openingFence.index) + 1;
-}
-
-function opensControlStatement(source, openIndex) {
-	const prefix = source.slice(0, openIndex);
-	const match = prefix.match(/([A-Za-z_$][\w$]*)\s*$/);
-	if (!match) return false;
-	if (!/^(?:catch|for|if|switch|while|with)$/.test(match[1])) return false;
-	let cursor = prefix.length - match[0].length - 1;
-	while (/\s/.test(source[cursor] ?? "")) cursor -= 1;
-	return source[cursor] !== ".";
-}
-
-function canStartRegexLiteral(
-	source,
-	index,
-	controlStatementClosures,
-	allowAdjacentLessThan = false,
-) {
-	if (source[index + 1] === "=") return false;
-	let cursor = index - 1;
-	while (/\s/.test(source[cursor] ?? "")) cursor -= 1;
-	if (cursor < 0) return true;
-	if (source[cursor] === ")" && controlStatementClosures.has(cursor)) {
-		return true;
-	}
-	if (
-		(source[cursor] === "+" || source[cursor] === "-") &&
-		source[cursor - 1] === source[cursor]
-	) {
-		return false;
-	}
-	if (source[cursor] === ">" && source[cursor - 1] === "=") {
-		return true;
-	}
-	if (allowAdjacentLessThan && source[cursor] === "<") {
-		if (/^<\/[A-Za-z][\w.:-]*\s*>/.test(source.slice(cursor))) return false;
-		return true;
-	}
-	if (
-		(source[cursor] === "<" || source[cursor] === ">") &&
-		/\s/.test(source.slice(cursor + 1, index))
-	) {
-		return true;
-	}
-	if (/[[({,;:=!?&|+\-*%^~]/.test(source[cursor])) return true;
-	const keyword = source
-		.slice(0, cursor + 1)
-		.match(/(?:^|\W)([A-Za-z_$][\w$]*)$/)?.[1];
-	return /^(?:await|case|delete|in|instanceof|new|return|throw|typeof|void|yield)$/.test(
-		keyword ?? "",
-	);
-}
-
-function scanLexicalState(source, index) {
-	let quote;
-	let escaped = false;
-	let regex = false;
-	let regexCharacterClass = false;
-	let lineComment = false;
-	let blockComment = false;
-	const blocks = [];
-	const templateFrames = [];
-	const parenthesisFrames = [];
-	const controlStatementClosures = new Set();
-	for (let cursor = 0; cursor < index; cursor += 1) {
-		const char = source[cursor];
-		const next = source[cursor + 1];
-		const templateFrame = templateFrames.at(-1);
-		if (
-			!quote &&
-			templateFrame?.expressionDepth === undefined &&
-			templateFrame
-		) {
-			if (escaped) {
-				escaped = false;
-				continue;
-			}
-			if (char === "\\") {
-				escaped = true;
-				continue;
-			}
-			if (char === "`") {
-				templateFrames.pop();
-				continue;
-			}
-			if (char === "$" && next === "{") {
-				templateFrame.expressionDepth = 0;
-				cursor += 1;
-			}
-			continue;
-		}
-		if (regex) {
-			if (escaped) escaped = false;
-			else if (char === "\\") escaped = true;
-			else if (char === "[") regexCharacterClass = true;
-			else if (char === "]") regexCharacterClass = false;
-			else if (char === "/" && !regexCharacterClass) regex = false;
-			continue;
-		}
-		if (lineComment) {
-			if (char === "\n") lineComment = false;
-			continue;
-		}
-		if (blockComment) {
-			if (char === "*" && next === "/") {
-				blockComment = false;
-				cursor += 1;
-			}
-			continue;
-		}
-		if (quote) {
-			if (escaped) escaped = false;
-			else if (char === "\\") escaped = true;
-			else if (char === quote) quote = undefined;
-			continue;
-		}
-		if (char === '"' || char === "'") quote = char;
-		else if (char === "`") {
-			templateFrames.push({ expressionDepth: undefined });
-			escaped = false;
-		} else if (char === "/" && next === "/") {
-			lineComment = true;
-			cursor += 1;
-		} else if (char === "/" && next === "*") {
-			blockComment = true;
-			cursor += 1;
-		} else if (
-			char === "/" &&
-			canStartRegexLiteral(
-				source,
-				cursor,
-				controlStatementClosures,
-				templateFrame?.expressionDepth !== undefined,
-			)
-		) {
-			regex = true;
-			regexCharacterClass = false;
-			escaped = false;
-		} else if (char === "(") {
-			parenthesisFrames.push(opensControlStatement(source, cursor));
-		} else if (char === ")") {
-			if (parenthesisFrames.pop()) controlStatementClosures.add(cursor);
-		} else if (char === "{") {
-			if (templateFrame?.expressionDepth !== undefined) {
-				templateFrame.expressionDepth += 1;
-			}
-			blocks.push(cursor);
-		} else if (char === "}" && templateFrame?.expressionDepth === 0) {
-			templateFrame.expressionDepth = undefined;
-		} else if (char === "}") {
-			if (templateFrame?.expressionDepth !== undefined) {
-				templateFrame.expressionDepth -= 1;
-			}
-			blocks.pop();
-		}
-	}
-	return {
-		blockComment,
-		blocks,
-		lineComment,
-		quote:
-			quote ??
-			(regex ? "/" : undefined) ??
-			(templateFrames.length > 0 &&
-			templateFrames.at(-1)?.expressionDepth === undefined
-				? "`"
-				: undefined),
-	};
-}
-
-function isInsideCommentProse(source, index) {
-	const state = scanLexicalState(source, index);
-	if (state.lineComment || state.blockComment) return true;
-
-	// Registry JSON stores source comments with encoded newlines and tabs.
-	const encodedLineStart = source.lastIndexOf("\\n", index);
-	if (encodedLineStart < 0) return false;
-	const encodedPrefix = source
-		.slice(encodedLineStart + 2, index)
-		.replaceAll("\\t", "\t");
-	return /^\s*(?:\/\/|\*)/.test(encodedPrefix);
-}
-
 function recordMatches(failures, file, source, label, pattern) {
 	for (const match of source.matchAll(pattern)) {
 		failures.push({
@@ -414,7 +210,7 @@ function recordLifecycleProperties(
 ) {
 	for (const name of names) {
 		const propertyPattern = new RegExp(
-			`(?:^|[,{])\\s*(?:async\\s+)?\\*?\\s*(?:${escapeRegExp(name)}\\b|["']${escapeRegExp(name)}["'])(?=\\s*(?:\\??:|\\(|,|\\}))`,
+			`(?:^|[,{])\\s*(?:async\\s+)?\\*?\\s*${escapeRegExp(name)}\\b(?=\\s*(?:\\??:|\\(|,|\\}))`,
 			"gm",
 		);
 		for (const match of objectSource.matchAll(propertyPattern)) {
@@ -430,64 +226,13 @@ function recordLifecycleProperties(
 	}
 }
 
-function hasComputedProperty(objectSource) {
-	return /(?:^|[,{])\s*(?:(?:get|set|async)\s+)?\*?\s*\[[^\]]*\]\s*(?::|\()/m.test(
-		objectSource,
-	);
-}
-
-function skipLexicalTrivia(source, start) {
-	let cursor = start;
-	while (cursor < source.length) {
-		while (/\s/.test(source[cursor] ?? "")) cursor += 1;
-		if (source[cursor] === "/" && source[cursor + 1] === "/") {
-			const lineEnd = source.indexOf("\n", cursor + 2);
-			cursor = lineEnd >= 0 ? lineEnd + 1 : source.length;
-			continue;
-		}
-		if (source[cursor] === "/" && source[cursor + 1] === "*") {
-			const commentEnd = source.indexOf("*/", cursor + 2);
-			cursor = commentEnd >= 0 ? commentEnd + 2 : source.length;
-			continue;
-		}
-		break;
-	}
-	return cursor;
-}
-
-function hasExecutableIdentifierReference(source, start, end, identifier) {
-	const pattern = new RegExp(`\\b${escapeRegExp(identifier)}\\b`, "g");
-	for (const match of source.slice(start, end).matchAll(pattern)) {
-		const index = start + (match.index ?? 0);
-		const state = scanLexicalState(source, index);
-		if (!state.lineComment && !state.blockComment && !state.quote) {
-			return true;
-		}
-	}
-	return false;
-}
-
-function hasExecutableSpread(source) {
-	for (const spread of source.matchAll(/\.\.\./g)) {
-		const state = scanLexicalState(source, spread.index ?? 0);
-		if (!state.lineComment && !state.blockComment && !state.quote) return true;
-	}
-	return false;
-}
-
 function readTopLevelObject(source, openIndex) {
 	let depth = 0;
-	let roundDepth = 0;
-	let squareDepth = 0;
 	let quote;
 	let escaped = false;
-	let regex = false;
-	let regexCharacterClass = false;
 	let lineComment = false;
 	let blockComment = false;
 	let topLevel = "";
-	const parenthesisFrames = [];
-	const controlStatementClosures = new Set();
 
 	for (let index = openIndex; index < source.length; index += 1) {
 		const char = source[index];
@@ -495,782 +240,57 @@ function readTopLevelObject(source, openIndex) {
 
 		if (lineComment) {
 			if (char === "\n") lineComment = false;
-			topLevel += char === "\n" ? "\n" : " ";
+			if (depth <= 1) topLevel += char;
 			continue;
 		}
 		if (blockComment) {
 			if (char === "*" && next === "/") {
 				blockComment = false;
-				topLevel += "  ";
 				index += 1;
-				continue;
 			}
-			topLevel += char === "\n" ? "\n" : " ";
-			continue;
-		}
-		if (regex) {
-			if (escaped) escaped = false;
-			else if (char === "\\") escaped = true;
-			else if (char === "[") regexCharacterClass = true;
-			else if (char === "]") regexCharacterClass = false;
-			else if (char === "/" && !regexCharacterClass) regex = false;
-			topLevel += char === "\n" ? "\n" : " ";
+			if (depth <= 1) topLevel += char === "\n" ? "\n" : " ";
 			continue;
 		}
 		if (quote) {
 			if (escaped) escaped = false;
 			else if (char === "\\") escaped = true;
 			else if (char === quote) quote = undefined;
-			if (depth <= 1 && roundDepth === 0 && squareDepth === 0) topLevel += char;
-			else topLevel += char === "\n" ? "\n" : " ";
+			if (depth <= 1) topLevel += char;
+			else if (char === "\n") topLevel += "\n";
 			continue;
 		}
 		if (char === "/" && next === "/") {
 			lineComment = true;
-			topLevel += "  ";
+			if (depth <= 1) topLevel += "  ";
 			index += 1;
 			continue;
 		}
 		if (char === "/" && next === "*") {
 			blockComment = true;
-			topLevel += "  ";
+			if (depth <= 1) topLevel += "  ";
 			index += 1;
 			continue;
 		}
 		if (char === '"' || char === "'" || char === "`") {
 			quote = char;
-			topLevel +=
-				depth <= 1 && roundDepth === 0 && squareDepth === 0 ? char : " ";
-			continue;
-		}
-		if (
-			char === "/" &&
-			canStartRegexLiteral(source, index, controlStatementClosures, true)
-		) {
-			regex = true;
-			regexCharacterClass = false;
-			escaped = false;
-			topLevel += " ";
-			continue;
-		}
-		if (char === "(") {
-			parenthesisFrames.push(opensControlStatement(source, index));
-			if (depth <= 1 && roundDepth === 0 && squareDepth === 0) topLevel += char;
-			else topLevel += " ";
-			roundDepth += 1;
-			continue;
-		}
-		if (char === ")") {
-			if (parenthesisFrames.pop()) controlStatementClosures.add(index);
-			roundDepth = Math.max(0, roundDepth - 1);
-			if (depth <= 1 && roundDepth === 0 && squareDepth === 0) topLevel += char;
-			else topLevel += " ";
-			continue;
-		}
-		if (char === "[") {
-			if (depth <= 1 && roundDepth === 0 && squareDepth === 0) topLevel += char;
-			else topLevel += " ";
-			squareDepth += 1;
-			continue;
-		}
-		if (char === "]") {
-			squareDepth = Math.max(0, squareDepth - 1);
-			if (depth <= 1 && roundDepth === 0 && squareDepth === 0) topLevel += char;
-			else topLevel += " ";
+			if (depth <= 1) topLevel += char;
 			continue;
 		}
 		if (char === "{") {
 			depth += 1;
-			topLevel +=
-				depth <= 1 && roundDepth === 0 && squareDepth === 0 ? char : " ";
+			topLevel += depth <= 1 ? char : " ";
 			continue;
 		}
 		if (char === "}") {
 			depth -= 1;
-			topLevel +=
-				depth <= 1 && roundDepth === 0 && squareDepth === 0 ? char : " ";
-			if (depth === 0) {
-				const continuation = skipLexicalTrivia(source, index + 1);
-				if (source[continuation] === "/") return undefined;
-				return { end: index, topLevel };
-			}
+			topLevel += depth <= 1 ? char : " ";
+			if (depth === 0) return { end: index, topLevel };
 			continue;
 		}
-		topLevel +=
-			(depth <= 1 && roundDepth === 0 && squareDepth === 0) || char === "\n"
-				? char
-				: " ";
+		topLevel += depth <= 1 || char === "\n" ? char : " ";
 	}
 
 	return undefined;
-}
-
-function readNamedImportDeclaration(source, importIndex) {
-	let cursor = skipLexicalTrivia(source, importIndex + "import".length);
-	if (source[cursor] !== "{") return undefined;
-	const specifiersStart = cursor + 1;
-	let quote;
-	let escaped = false;
-	let lineComment = false;
-	let blockComment = false;
-	for (cursor = specifiersStart; cursor < source.length; cursor += 1) {
-		const char = source[cursor];
-		const next = source[cursor + 1];
-		if (lineComment) {
-			if (char === "\n") lineComment = false;
-			continue;
-		}
-		if (blockComment) {
-			if (char === "*" && next === "/") {
-				blockComment = false;
-				cursor += 1;
-			}
-			continue;
-		}
-		if (quote) {
-			if (escaped) escaped = false;
-			else if (char === "\\") escaped = true;
-			else if (char === quote) quote = undefined;
-			continue;
-		}
-		if (char === "/" && next === "/") {
-			lineComment = true;
-			cursor += 1;
-			continue;
-		}
-		if (char === "/" && next === "*") {
-			blockComment = true;
-			cursor += 1;
-			continue;
-		}
-		if (char === '"' || char === "'") {
-			quote = char;
-			continue;
-		}
-		if (char !== "}") continue;
-
-		const specifiers = source.slice(specifiersStart, cursor);
-		cursor = skipLexicalTrivia(source, cursor + 1);
-		if (!/^from\b/.test(source.slice(cursor))) return undefined;
-		cursor = skipLexicalTrivia(source, cursor + "from".length);
-		const moduleQuote = source[cursor];
-		if (moduleQuote !== '"' && moduleQuote !== "'") return undefined;
-		const moduleStart = cursor + 1;
-		cursor = moduleStart;
-		escaped = false;
-		for (; cursor < source.length; cursor += 1) {
-			if (escaped) escaped = false;
-			else if (source[cursor] === "\\") escaped = true;
-			else if (source[cursor] === moduleQuote) {
-				return {
-					moduleName: source.slice(moduleStart, cursor),
-					specifiers,
-				};
-			}
-		}
-		return undefined;
-	}
-	return undefined;
-}
-
-let namedImportCache;
-
-function registrySourceStart(source, file, index) {
-	if (!file.startsWith("packages/stack/registry/")) return undefined;
-	const boundary = source.lastIndexOf("\n}\n{\n", index);
-	if (boundary >= 0) return boundary + 3;
-	const firstSource = source.indexOf("\n{\n");
-	return firstSource >= 0 && firstSource < index ? firstSource + 1 : undefined;
-}
-
-function namedImportDeclarations(source, file) {
-	if (namedImportCache?.source === source && namedImportCache.file === file) {
-		return namedImportCache.declarations;
-	}
-	const declarations = [];
-	const importPattern = /\bimport\b/g;
-	for (const importMatch of source.matchAll(importPattern)) {
-		const declarationIndex = importMatch.index ?? 0;
-		const declaration = readNamedImportDeclaration(source, declarationIndex);
-		if (!declaration) continue;
-		const fenceStart = /\.mdx?$/.test(file)
-			? markdownFenceContentStart(source, declarationIndex)
-			: undefined;
-		if (/\.mdx?$/.test(file) && fenceStart === undefined) continue;
-		const registryStart = registrySourceStart(source, file, declarationIndex);
-		const lexicalStart = fenceStart ?? registryStart ?? 0;
-		const importState = scanLexicalState(
-			source.slice(lexicalStart),
-			declarationIndex - lexicalStart,
-		);
-		if (
-			importState.lineComment ||
-			importState.blockComment ||
-			importState.quote ||
-			importState.blocks.length !== (registryStart === undefined ? 0 : 1)
-		) {
-			continue;
-		}
-		declarations.push({ ...declaration, fenceStart, registryStart });
-	}
-	namedImportCache = { declarations, file, source };
-	return declarations;
-}
-
-function factoryModuleMatches(moduleName, factory) {
-	const pluginSlug = factory
-		.replace(/(?:Backend|Client)Plugin$/, "")
-		.replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-		.toLowerCase();
-	return (
-		moduleName === "@btst/stack" ||
-		moduleName === "@btst/stack/plugins/api" ||
-		moduleName === `@btst/stack/plugins/${pluginSlug}` ||
-		moduleName.startsWith(`@btst/stack/plugins/${pluginSlug}/`)
-	);
-}
-
-function factoryLocalNames(source, file, factory) {
-	const names = [{ name: factory }];
-	const trivia = String.raw`(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\n]*(?:\n|$))*`;
-	const aliasPattern = new RegExp(
-		`\\b${escapeRegExp(factory)}\\b${trivia}as\\b${trivia}([A-Za-z_$][\\w$]*)\\b`,
-		"g",
-	);
-	for (const importDeclaration of namedImportDeclarations(source, file)) {
-		if (!factoryModuleMatches(importDeclaration.moduleName, factory)) continue;
-		for (const alias of importDeclaration.specifiers.matchAll(aliasPattern)) {
-			names.push({
-				fenceStart: importDeclaration.fenceStart,
-				name: alias[1],
-				registryStart: importDeclaration.registryStart,
-			});
-		}
-	}
-	return names;
-}
-
-let typeScriptScopeCache;
-
-function factorySourceScopes(source, file) {
-	if (/\.mdx?$/.test(file)) {
-		const fences = [...markdownFences(source)];
-		const scopes = [];
-		for (let index = 0; index < fences.length; index += 2) {
-			const opening = fences[index];
-			if (opening?.index === undefined) continue;
-			const fenceStart = source.indexOf("\n", opening.index) + 1;
-			const closing = fences[index + 1];
-			scopes.push({
-				end: closing?.index ?? source.length,
-				fenceStart,
-				language: opening[0].match(/```\s*([A-Za-z0-9-]+)/)?.[1]?.toLowerCase(),
-				start: fenceStart,
-			});
-		}
-		return scopes;
-	}
-	if (/^packages\/stack\/registry\/[^/]+\.json$/.test(file)) {
-		const scopes = [];
-		let registryStart = source.indexOf("\n{\n");
-		registryStart = registryStart < 0 ? -1 : registryStart + 1;
-		while (registryStart >= 0) {
-			const start = source.indexOf("\n", registryStart) + 1;
-			const nextSource = source.indexOf("\n}\n{\n", start);
-			scopes.push({
-				end:
-					nextSource >= 0
-						? nextSource
-						: source.endsWith("\n}")
-							? source.length - 2
-							: source.length,
-				registryStart,
-				start,
-			});
-			if (nextSource < 0) break;
-			registryStart = nextSource + 3;
-		}
-		return scopes;
-	}
-	return [{ end: source.length, start: 0 }];
-}
-
-function factoryScriptKinds(file, sourceScope) {
-	const extension = extname(file);
-	if (/^\.(?:cts|mts|ts)$/.test(extension)) return [ts.ScriptKind.TS];
-	if (extension === ".tsx") return [ts.ScriptKind.TSX];
-	if (/^\.(?:cjs|js|mjs)$/.test(extension)) return [ts.ScriptKind.JS];
-	if (extension === ".jsx") return [ts.ScriptKind.JSX];
-	if (sourceScope.language === "ts" || sourceScope.language === "typescript") {
-		return [ts.ScriptKind.TS];
-	}
-	if (sourceScope.language === "tsx") return [ts.ScriptKind.TSX];
-	if (sourceScope.language === "js" || sourceScope.language === "javascript") {
-		return [ts.ScriptKind.JS];
-	}
-	if (sourceScope.language === "jsx") return [ts.ScriptKind.JSX];
-	return [ts.ScriptKind.TSX, ts.ScriptKind.TS];
-}
-
-function typeScriptSourceScope(source, sourceScope, scriptKind) {
-	if (typeScriptScopeCache?.source !== source) {
-		typeScriptScopeCache = { scopes: new Map(), source };
-	}
-	const cacheKey = `${sourceScope.start}:${sourceScope.end}:${scriptKind}`;
-	const cached = typeScriptScopeCache.scopes.get(cacheKey);
-	if (cached) return cached;
-	const text = source.slice(sourceScope.start, sourceScope.end);
-	const extension =
-		scriptKind === ts.ScriptKind.TS
-			? "ts"
-			: scriptKind === ts.ScriptKind.JS
-				? "js"
-				: scriptKind === ts.ScriptKind.JSX
-					? "jsx"
-					: "tsx";
-	const fileName = `/canonical-dx-guard.${extension}`;
-	const options = {
-		allowJs: true,
-		jsx: ts.JsxEmit.Preserve,
-		module: ts.ModuleKind.ESNext,
-		noLib: true,
-		noResolve: true,
-		target: ts.ScriptTarget.Latest,
-	};
-	const sourceFile = ts.createSourceFile(
-		fileName,
-		text,
-		options.target,
-		true,
-		scriptKind,
-	);
-	const host = {
-		fileExists: (candidate) => candidate === fileName,
-		getCanonicalFileName: (candidate) => candidate,
-		getCurrentDirectory: () => "/",
-		getDefaultLibFileName: () => "",
-		getDirectories: () => [],
-		getNewLine: () => "\n",
-		getSourceFile: (candidate) =>
-			candidate === fileName ? sourceFile : undefined,
-		readFile: (candidate) => (candidate === fileName ? text : undefined),
-		useCaseSensitiveFileNames: () => true,
-		writeFile: () => {},
-	};
-	const program = ts.createProgram([fileName], options, host);
-	const callExpressions = [];
-	function visit(node) {
-		if (ts.isCallExpression(node)) callExpressions.push(node);
-		ts.forEachChild(node, visit);
-	}
-	visit(sourceFile);
-	const parsedScope = {
-		callExpressions,
-		checker: program.getTypeChecker(),
-		parseErrors: sourceFile.parseDiagnostics?.length ?? 0,
-		sourceFile,
-		start: sourceScope.start,
-	};
-	typeScriptScopeCache.scopes.set(cacheKey, parsedScope);
-	return parsedScope;
-}
-
-function unwrapFactoryReference(expression) {
-	let reference = expression;
-	while (true) {
-		if (
-			ts.isParenthesizedExpression(reference) ||
-			ts.isNonNullExpression(reference) ||
-			ts.isAsExpression(reference) ||
-			ts.isTypeAssertionExpression(reference) ||
-			ts.isSatisfiesExpression(reference)
-		) {
-			reference = reference.expression;
-			continue;
-		}
-		if (
-			ts.isBinaryExpression(reference) &&
-			reference.operatorToken.kind === ts.SyntaxKind.CommaToken
-		) {
-			reference = reference.right;
-			continue;
-		}
-		return reference;
-	}
-}
-
-function importModuleName(declaration) {
-	let current = declaration;
-	while (current && !ts.isImportDeclaration(current)) current = current.parent;
-	return current && ts.isStringLiteralLike(current.moduleSpecifier)
-		? current.moduleSpecifier.text
-		: undefined;
-}
-
-function isAllowedFactoryBinding(declarations, factory, importKind) {
-	if (!declarations || declarations.length === 0)
-		return importKind === undefined;
-	return declarations.every((declaration) => {
-		if (importKind === "namespace" && !ts.isNamespaceImport(declaration)) {
-			return false;
-		}
-		if (importKind !== "namespace" && !ts.isImportSpecifier(declaration)) {
-			return false;
-		}
-		const moduleName = importModuleName(declaration);
-		return (
-			moduleName !== undefined && factoryModuleMatches(moduleName, factory)
-		);
-	});
-}
-
-function namespaceFactoryDeclarations(parsedScope, access, factory) {
-	let receiver = unwrapFactoryReference(access.expression);
-	while (
-		ts.isPropertyAccessExpression(receiver) ||
-		ts.isElementAccessExpression(receiver)
-	) {
-		receiver = unwrapFactoryReference(receiver.expression);
-	}
-	if (!ts.isIdentifier(receiver)) return undefined;
-	const declarations =
-		parsedScope.checker.getSymbolAtLocation(receiver)?.declarations;
-	return isAllowedFactoryBinding(declarations, factory, "namespace")
-		? declarations
-		: undefined;
-}
-
-function activeFactoryNames(localFactories, sourceScope) {
-	return new Set(
-		localFactories
-			.filter(
-				(localFactory) =>
-					!Object.hasOwn(localFactory, "fenceStart") ||
-					(localFactory.fenceStart === sourceScope.fenceStart &&
-						localFactory.registryStart === sourceScope.registryStart),
-			)
-			.map((localFactory) => localFactory.name),
-	);
-}
-
-function factoryCallsInScope(
-	source,
-	file,
-	sourceScope,
-	localFactories,
-	factory,
-) {
-	const names = activeFactoryNames(localFactories, sourceScope);
-	const parsedScopes = factoryScriptKinds(file, sourceScope).map((scriptKind) =>
-		typeScriptSourceScope(source, sourceScope, scriptKind),
-	);
-	const fewestParseErrors = Math.min(
-		...parsedScopes.map((parsedScope) => parsedScope.parseErrors),
-	);
-	const calls = new Map();
-	for (const parsedScope of parsedScopes) {
-		if (parsedScope.parseErrors !== fewestParseErrors) continue;
-		for (const call of parsedScope.callExpressions) {
-			const reference = unwrapFactoryReference(call.expression);
-			let declarations;
-			let reportNode;
-			if (ts.isIdentifier(reference) && names.has(reference.text)) {
-				declarations =
-					parsedScope.checker.getSymbolAtLocation(reference)?.declarations;
-				if (!isAllowedFactoryBinding(declarations, factory)) continue;
-				reportNode = reference;
-			} else if (
-				ts.isPropertyAccessExpression(reference) &&
-				reference.name.text === factory
-			) {
-				declarations = namespaceFactoryDeclarations(
-					parsedScope,
-					reference,
-					factory,
-				);
-				if (!declarations) continue;
-				reportNode = reference.name;
-			} else if (
-				ts.isElementAccessExpression(reference) &&
-				ts.isStringLiteralLike(reference.argumentExpression) &&
-				reference.argumentExpression.text === factory
-			) {
-				declarations = namespaceFactoryDeclarations(
-					parsedScope,
-					reference,
-					factory,
-				);
-				if (!declarations) continue;
-				reportNode = reference.argumentExpression;
-			} else {
-				continue;
-			}
-			const openIndex = parsedScope.start + call.arguments.pos - 1;
-			calls.set(openIndex, {
-				openIndex,
-				reportIndex:
-					parsedScope.start + reportNode.getStart(parsedScope.sourceFile),
-			});
-		}
-	}
-	return [...calls.values()].sort(
-		(left, right) => left.openIndex - right.openIndex,
-	);
-}
-
-function resolveIdentifierBinding(source, file, identifier, callIndex) {
-	const candidates = [];
-	const markdownFence = /\.mdx?$/.test(file)
-		? markdownFenceContentStart(source, callIndex)
-		: undefined;
-	const searchStart = markdownFence ?? 0;
-	const scopedSource = source.slice(searchStart);
-	const callBlocks = scanLexicalState(
-		scopedSource,
-		callIndex - searchStart,
-	).blocks;
-	const beforeCall = source.slice(searchStart, callIndex);
-	const variablePattern = new RegExp(
-		`\\b(?:const|let|var)\\s+${escapeRegExp(identifier)}\\b(?:\\s*:\\s*[^=;\\n]+)?\\s*=`,
-		"g",
-	);
-	for (const binding of beforeCall.matchAll(variablePattern)) {
-		const bindingIndex = searchStart + (binding.index ?? 0);
-		const bindingState = scanLexicalState(
-			scopedSource,
-			bindingIndex - searchStart,
-		);
-		if (
-			bindingState.lineComment ||
-			bindingState.blockComment ||
-			bindingState.quote
-		) {
-			continue;
-		}
-		const bindingBlocks = bindingState.blocks;
-		if (
-			bindingBlocks.some(
-				(block, blockIndex) => callBlocks[blockIndex] !== block,
-			)
-		) {
-			continue;
-		}
-		let valueIndex = bindingIndex + binding[0].length;
-		while (/\s/.test(source[valueIndex] ?? "")) valueIndex += 1;
-		const object =
-			source[valueIndex] === "{"
-				? readTopLevelObject(source, valueIndex)
-				: undefined;
-		candidates.push({
-			blockDepth: bindingBlocks.length,
-			index: bindingIndex,
-			object,
-			openIndex: object ? valueIndex : undefined,
-			referencedBeforeCall: object
-				? hasExecutableIdentifierReference(
-						scopedSource,
-						object.end + 1 - searchStart,
-						callIndex - searchStart,
-						identifier,
-					)
-				: false,
-		});
-	}
-
-	const deepestBlock = Math.max(
-		...candidates.map((candidate) => candidate.blockDepth),
-	);
-	const scopedCandidates = candidates
-		.filter((candidate) => candidate.blockDepth === deepestBlock)
-		.sort((left, right) => right.index - left.index);
-	const binding = scopedCandidates[0];
-	if (binding && candidates.length > 1) {
-		binding.referencedBeforeCall = true;
-	}
-	return binding;
-}
-
-function inspectFactoryObject(
-	failures,
-	file,
-	source,
-	factory,
-	kind,
-	contextualLifecycleNames,
-	hookType,
-	object,
-	openIndex,
-	reportIndex,
-	resolutionIndex = reportIndex,
-) {
-	if (hasExecutableSpread(object.topLevel)) {
-		failures.push({
-			file,
-			line: lineAt(source, reportIndex),
-			label: `${kind} factory options contain an unverifiable spread`,
-			match: factory,
-		});
-	}
-	if (hasComputedProperty(object.topLevel)) {
-		failures.push({
-			file,
-			line: lineAt(source, reportIndex),
-			label: `${kind} factory computed option key cannot be verified`,
-			match: factory,
-		});
-	}
-	if (
-		kind === "backend" &&
-		/(?:^|[,{])\s*(?:async\s+)?\*?\s*(?:(?:on(?:Before|After)[A-Z][A-Za-z0-9]*|onError(?:[A-Z][A-Za-z0-9]*)?)\b|["'](?:on(?:Before|After)[A-Z][A-Za-z0-9]*|onError(?:[A-Z][A-Za-z0-9]*)?)["'])(?=\s*(?:\??:|\(|,|}))/.test(
-			object.topLevel,
-		)
-	) {
-		failures.push({
-			file,
-			line: lineAt(source, reportIndex),
-			label: "backend lifecycle callbacks must be nested under hooks",
-			match: factory,
-		});
-	}
-	if (kind === "backend" && contextualLifecycleNames.length > 0) {
-		recordLifecycleProperties(
-			failures,
-			file,
-			source,
-			object.topLevel,
-			openIndex,
-			factory,
-			contextualLifecycleNames,
-		);
-	}
-
-	if (kind === "backend" && hookType) {
-		let hooksReference;
-		const hooksProperty = object.topLevel.match(
-			/(?:^|[,{])\s*(?:hooks|["']hooks["'])\s*:/m,
-		);
-		if (hooksProperty?.index !== undefined) {
-			let hooksValueIndex =
-				openIndex + hooksProperty.index + hooksProperty[0].length;
-			while (/\s/.test(source[hooksValueIndex] ?? "")) hooksValueIndex += 1;
-			if (source[hooksValueIndex] === "{") {
-				const hooksObject = readTopLevelObject(source, hooksValueIndex);
-				if (hooksObject && hasExecutableSpread(hooksObject.topLevel)) {
-					failures.push({
-						file,
-						line: lineAt(source, hooksValueIndex),
-						label: "backend hooks contain an unverifiable spread",
-						match: factory,
-					});
-				}
-				if (hooksObject && hasComputedProperty(hooksObject.topLevel)) {
-					failures.push({
-						file,
-						line: lineAt(source, hooksValueIndex),
-						label: "backend hooks computed key cannot be verified",
-						match: factory,
-					});
-				}
-				if (hooksObject && contextualLifecycleNames.length > 0) {
-					recordLifecycleProperties(
-						failures,
-						file,
-						source,
-						hooksObject.topLevel,
-						hooksValueIndex,
-						factory,
-						contextualLifecycleNames,
-					);
-				}
-			} else if (
-				!/^undefined\s*(?=[,}])/.test(
-					object.topLevel.slice(hooksValueIndex - openIndex),
-				)
-			) {
-				hooksReference = source
-					.slice(hooksValueIndex)
-					.match(/^([A-Za-z_$][\w$]*)\b/)?.[1];
-				if (!hooksReference) {
-					failures.push({
-						file,
-						line: lineAt(source, hooksValueIndex),
-						label: "backend hooks value cannot be verified",
-						match: factory,
-					});
-				}
-			}
-		} else if (/(?:^|[,{])\s*(hooks)\s*(?=[,}])/m.test(object.topLevel)) {
-			hooksReference = "hooks";
-		}
-
-		if (hooksReference) {
-			const binding = resolveIdentifierBinding(
-				source,
-				file,
-				hooksReference,
-				resolutionIndex,
-			);
-			if (
-				binding?.object &&
-				binding.openIndex !== undefined &&
-				!binding.referencedBeforeCall
-			) {
-				if (hasExecutableSpread(binding.object.topLevel)) {
-					failures.push({
-						file,
-						line: lineAt(source, binding.openIndex),
-						label: "backend hooks contain an unverifiable spread",
-						match: factory,
-					});
-				}
-				if (hasComputedProperty(binding.object.topLevel)) {
-					failures.push({
-						file,
-						line: lineAt(source, binding.openIndex),
-						label: "backend hooks computed key cannot be verified",
-						match: factory,
-					});
-				}
-				if (contextualLifecycleNames.length > 0) {
-					recordLifecycleProperties(
-						failures,
-						file,
-						source,
-						binding.object.topLevel,
-						binding.openIndex,
-						factory,
-						contextualLifecycleNames,
-					);
-				}
-			} else {
-				if (
-					/\.mdx?$/.test(file) &&
-					isInsideMarkdownInlineCode(source, reportIndex)
-				) {
-					return;
-				}
-				failures.push({
-					file,
-					line: lineAt(source, reportIndex),
-					label: "backend hooks binding cannot be verified",
-					match: `${factory}(${hooksReference})`,
-				});
-			}
-		}
-	}
-	if (
-		kind === "client" &&
-		/(?:^|[,{])\s*(?:(?:apiBaseURL|apiBasePath|siteBaseURL|siteBasePath|queryClient|headers|credentials)\b|["'](?:apiBaseURL|apiBasePath|siteBaseURL|siteBasePath|queryClient|headers|credentials)["'])(?=\s*(?:\??:|,|}))/.test(
-			object.topLevel,
-		)
-	) {
-		failures.push({
-			file,
-			line: lineAt(source, reportIndex),
-			label: "client plugin duplicates stack-owned runtime",
-			match: factory,
-		});
-	}
 }
 
 function checkFactoryCalls(
@@ -1280,114 +300,102 @@ function checkFactoryCalls(
 	factory,
 	kind,
 	contextualLifecycleNames = [],
-	hookType,
 ) {
-	const localFactories = factoryLocalNames(source, file, factory);
-	for (const sourceScope of factorySourceScopes(source, file)) {
-		for (const call of factoryCallsInScope(
-			source,
-			file,
-			sourceScope,
-			localFactories,
-			factory,
-		)) {
-			const callIndex = call.reportIndex;
-			let cursor = skipLexicalTrivia(source, call.openIndex + 1);
-			if (source[cursor] === ")") continue;
-			if (source[cursor] !== "{") {
-				const expression = source
-					.slice(cursor)
-					.match(
-						/^[A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*(?:\s*\([^()\n]*\))?\s*(?=[,)])/,
-					)?.[0]
-					.trim();
-				if (!expression) {
-					if (
-						/\.mdx?$/.test(file) &&
-						isInsideMarkdownInlineCode(source, callIndex)
-					) {
-						continue;
-					}
-					if (isInsideCommentProse(source, callIndex)) continue;
-					failures.push({
-						file,
-						line: lineAt(source, callIndex),
-						label: `${kind} factory options expression cannot be parsed`,
-						match: factory,
-					});
-					continue;
-				}
-				const identifier = /^[A-Za-z_$][\w$]*$/.test(expression)
-					? expression
-					: undefined;
-				const binding = identifier
-					? resolveIdentifierBinding(source, file, identifier, callIndex)
-					: undefined;
-				if (!binding) {
-					if (
-						/\.mdx?$/.test(file) &&
-						isInsideMarkdownInlineCode(source, callIndex)
-					) {
-						continue;
-					}
-					failures.push({
-						file,
-						line: lineAt(source, callIndex),
-						label: `${kind} factory options expression cannot be verified`,
-						match: `${factory}(${expression})`,
-					});
-					continue;
-				}
-				if (
-					binding.object &&
-					binding.openIndex !== undefined &&
-					!binding.referencedBeforeCall
-				) {
-					inspectFactoryObject(
-						failures,
-						file,
-						source,
-						factory,
-						kind,
-						contextualLifecycleNames,
-						hookType,
-						binding.object,
-						binding.openIndex,
-						binding.openIndex,
-						callIndex,
-					);
-				} else {
-					failures.push({
-						file,
-						line: lineAt(source, callIndex),
-						label: `${kind} factory options binding cannot be verified`,
-						match: `${factory}(${expression})`,
-					});
-				}
+	// This guard intentionally checks the direct factory style maintained by this
+	// repository. It is a deterministic migration check, not a JavaScript parser;
+	// TypeScript, Biome, and the docs build validate general source semantics.
+	const callPattern = new RegExp(`\\b${factory}[ \\t\\n]*\\(`, "g");
+	for (const match of source.matchAll(callPattern)) {
+		let cursor = (match.index ?? 0) + match[0].length;
+		while (/\s/.test(source[cursor] ?? "")) cursor += 1;
+		if (source[cursor] === ")") continue;
+		if (source[cursor] !== "{") {
+			const expression = source
+				.slice(cursor)
+				.match(
+					/^[A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*(?:\s*\([^()\n]*\))?\s*(?=[,)])/,
+				)?.[0]
+				.trim();
+			if (kind === "client" || !expression) continue;
+			if (
+				/^[A-Za-z_$][\w$]*$/.test(expression) &&
+				/(?:options?|config|opts)$/i.test(expression)
+			) {
 				continue;
 			}
-			const object = readTopLevelObject(source, cursor);
-			if (!object) {
-				failures.push({
-					file,
-					line: lineAt(source, callIndex),
-					label: `${kind} factory options object cannot be parsed`,
-					match: factory,
-				});
-				continue;
-			}
-			inspectFactoryObject(
+			failures.push({
+				file,
+				line: lineAt(source, match.index ?? 0),
+				label: `${kind} factory must receive one options object, not positional hooks`,
+				match: factory,
+			});
+			continue;
+		}
+		const object = readTopLevelObject(source, cursor);
+		if (!object) continue;
+		if (
+			kind === "backend" &&
+			/(?:^|[,{])\s*(?:async\s+)?\*?\s*on(?:Before|After|Error)[A-Z][A-Za-z0-9]*\s*(?::|\()/.test(
+				object.topLevel,
+			)
+		) {
+			failures.push({
+				file,
+				line: lineAt(source, match.index ?? 0),
+				label: "backend lifecycle callbacks must be nested under hooks",
+				match: factory,
+			});
+		}
+		if (kind === "backend" && contextualLifecycleNames.length > 0) {
+			const callSource = source.slice(cursor, object.end + 1);
+			recordLifecycleProperties(
 				failures,
 				file,
 				source,
-				factory,
-				kind,
-				contextualLifecycleNames,
-				hookType,
-				object,
+				callSource,
 				cursor,
-				callIndex,
+				factory,
+				contextualLifecycleNames,
 			);
+
+			const hooksReference = object.topLevel
+				.match(/\bhooks\s*:\s*([A-Za-z_$][\w$]*)|\b(hooks)\s*(?=[,}])/)
+				?.slice(1)
+				.find(Boolean);
+			if (hooksReference) {
+				const declarationPattern = new RegExp(
+					`\\b(?:const|let|var)\\s+${escapeRegExp(hooksReference)}(?:\\s*:[^=;]+)?\\s*=\\s*\\{`,
+					"g",
+				);
+				for (const declaration of source.matchAll(declarationPattern)) {
+					const openIndex =
+						(declaration.index ?? 0) + declaration[0].lastIndexOf("{");
+					const hooksObject = readTopLevelObject(source, openIndex);
+					if (!hooksObject) continue;
+					recordLifecycleProperties(
+						failures,
+						file,
+						source,
+						source.slice(openIndex, hooksObject.end + 1),
+						openIndex,
+						factory,
+						contextualLifecycleNames,
+					);
+				}
+			}
+		}
+		if (
+			kind === "client" &&
+			/(?:^|[,{])\s*(?:apiBaseURL|apiBasePath|siteBaseURL|siteBasePath|queryClient|headers|credentials)\s*:/.test(
+				object.topLevel,
+			)
+		) {
+			failures.push({
+				file,
+				line: lineAt(source, match.index ?? 0),
+				label: "client plugin duplicates stack-owned runtime",
+				match: factory,
+			});
 		}
 	}
 }
@@ -1410,19 +418,11 @@ function checkTypedHookObjects(
 			(declaration.index ?? 0) + declaration[0].lastIndexOf("{");
 		const object = readTopLevelObject(source, openIndex);
 		if (!object) continue;
-		if (hasComputedProperty(object.topLevel)) {
-			failures.push({
-				file,
-				line: lineAt(source, openIndex),
-				label: "backend hooks computed key cannot be verified",
-				match: factory,
-			});
-		}
 		recordLifecycleProperties(
 			failures,
 			file,
 			source,
-			object.topLevel,
+			source.slice(openIndex, object.end + 1),
 			openIndex,
 			factory,
 			names,
@@ -1563,7 +563,6 @@ for (const absolute of allFiles) {
 			factory,
 			"backend",
 			contextualNames,
-			hookType,
 		);
 		if (hookType) {
 			checkTypedHookObjects(
@@ -1576,7 +575,7 @@ for (const absolute of allFiles) {
 			);
 		}
 	}
-	for (const { factory } of clientPlugins) {
+	for (const factory of clientFactories) {
 		checkFactoryCalls(failures, file, source, factory, "client");
 	}
 	for (const name of removedLifecycleNames) {
