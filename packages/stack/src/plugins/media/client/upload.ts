@@ -3,6 +3,7 @@
 import { normalizePath } from "@btst/stack/client";
 import type { SerializedAsset } from "../types";
 import type { MediaProviderConfig, MediaUploadMode } from "./overrides";
+import { resolveMediaAsset } from "./asset-url";
 import { compressImage } from "./utils/image-compression";
 import type { ImageCompressionOptions } from "./utils/image-compression";
 
@@ -129,7 +130,7 @@ export async function uploadAsset(
 			const err = await res.json().catch(() => ({ message: res.statusText }));
 			throw new Error(err.message ?? "Upload failed");
 		}
-		return res.json();
+		return resolveMediaAsset((await res.json()) as SerializedAsset, apiBaseURL);
 	}
 
 	if (uploadMode === "s3") {
@@ -200,7 +201,10 @@ export async function uploadAsset(
 				.catch(() => ({ message: assetRes.statusText }));
 			throw new Error(err.message ?? "Failed to register asset");
 		}
-		return assetRes.json();
+		return resolveMediaAsset(
+			(await assetRes.json()) as SerializedAsset,
+			apiBaseURL,
+		);
 	}
 
 	if (uploadMode === "vercel-blob") {
@@ -278,7 +282,10 @@ export async function uploadAsset(
 				.catch(() => ({ message: assetRes.statusText }));
 			throw new Error(err.message ?? "Failed to register asset");
 		}
-		return assetRes.json();
+		return resolveMediaAsset(
+			(await assetRes.json()) as SerializedAsset,
+			apiBaseURL,
+		);
 	}
 
 	throw new Error(`Unknown uploadMode: ${uploadMode}`);

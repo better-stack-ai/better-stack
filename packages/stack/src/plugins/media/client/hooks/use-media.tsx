@@ -6,7 +6,7 @@ import {
 	useQueryClient,
 	type UseMutationResult,
 } from "@tanstack/react-query";
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import type { ResourceFormResult } from "@btst/stack/plugins/client/hooks";
 import {
 	useIdentity,
@@ -21,7 +21,13 @@ import type { SerializedAsset, SerializedFolder } from "../../types";
 import { MEDIA_PLUGIN_ID } from "../constants";
 import type { MediaPluginOverrides, MediaProviderConfig } from "../overrides";
 import { createMediaUploadConfig, uploadAsset } from "../upload";
+import { resolveMediaAsset } from "../asset-url";
 import { media } from "./media-resource";
+
+function useMediaApiBaseURL() {
+	const { api, plugins } = useStack();
+	return plugins?.[MEDIA_PLUGIN_ID]?.api.baseURL ?? api?.baseURL;
+}
 
 function useIdentityPartition() {
 	const { identity, isPending, error } = useIdentity();
@@ -105,6 +111,7 @@ function useCurrentMediaListRefresh(resource: "mediaAssets" | "mediaFolders") {
 function withCurrentListRefresh<TData, TVariables>(
 	mutation: UseMutationResult<TData, Error, TVariables>,
 	listRefresh: ReturnType<typeof useCurrentMediaListRefresh>,
+	mapResult: (data: TData) => TData = (data) => data,
 ): UseMutationResult<TData, Error, TVariables> {
 	const mutateAsync: typeof mutation.mutateAsync = async (
 		variables,
@@ -113,7 +120,7 @@ function withCurrentListRefresh<TData, TVariables>(
 		const startedAs = listRefresh.currentPartition();
 		const result = await mutation.mutateAsync(variables, options);
 		await listRefresh.refreshAfterSuccess(startedAs);
-		return result;
+		return mapResult(result);
 	};
 	const mutate: typeof mutation.mutate = (variables, options) => {
 		// Each invocation owns an awaited promise, so a later mutation cannot
@@ -126,9 +133,29 @@ function withCurrentListRefresh<TData, TVariables>(
 /** Infinite-scroll list of assets, optionally filtered by folder, MIME type, or search. */
 export function useAssets(params: AssetListParams = {}) {
 	const identityPartition = useIdentityPartition();
-	return media.mediaAssets.list.useInfinite([params, identityPartition], {
-		enabled: !isUnresolvedIdentityPartition(identityPartition),
-	});
+	const apiBaseURL = useMediaApiBaseURL();
+	const result = media.mediaAssets.list.useInfinite(
+		[params, identityPartition],
+		{
+			enabled: !isUnresolvedIdentityPartition(identityPartition),
+		},
+	);
+	const data = useMemo(
+		() =>
+			result.data
+				? {
+						...result.data,
+						pages: result.data.pages.map((page) => ({
+							...page,
+							items: page.items.map((asset) =>
+								resolveMediaAsset(asset, apiBaseURL),
+							),
+						})),
+					}
+				: undefined,
+		[result.data, apiBaseURL],
+	);
+	return { ...result, data };
 }
 
 /** Pass `null` for root-level folders and `undefined` for all folders. */
@@ -190,7 +217,10 @@ export function useUploadAsset() {
 export function useRegisterAsset() {
 	const mutation = media.mediaAssets.create.use();
 	const listRefresh = useCurrentMediaListRefresh("mediaAssets");
-	return withCurrentListRefresh(mutation, listRefresh);
+	const apiBaseURL = useMediaApiBaseURL();
+	return withCurrentListRefresh(mutation, listRefresh, (asset) =>
+		resolveMediaAsset(asset, apiBaseURL),
+	);
 }
 
 /** Delete an asset by ID. */
@@ -237,6 +267,7 @@ export function useRegisterAssetForm(
 	options: UseRegisterAssetFormOptions = {},
 ): ResourceFormResult<RegisterAssetFormValues, null, SerializedAsset> {
 	const t = useTranslate();
+	const apiBaseURL = useMediaApiBaseURL();
 	const listRefresh = useCurrentMediaListRefresh("mediaAssets");
 	const form = media.mediaAssets.useForm<
 		RegisterAssetFormValues,
@@ -258,8 +289,9 @@ export function useRegisterAssetForm(
 		...form,
 		submit: async (values) => {
 			const startedAs = listRefresh.currentPartition();
-			const asset = await form.submit(values);
-			if (asset === undefined) return undefined;
+			const submittedAsset = await form.submit(values);
+			if (submittedAsset === undefined) return undefined;
+			const asset = resolveMediaAsset(submittedAsset, apiBaseURL);
 			await listRefresh.refreshAfterSuccess(startedAs);
 			await options.onSuccess?.(asset);
 			return asset;

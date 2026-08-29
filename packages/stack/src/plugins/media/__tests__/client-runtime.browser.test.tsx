@@ -39,6 +39,7 @@ const asset = {
 	url: "https://files.example/runtime.txt",
 	createdAt: "2026-01-01T00:00:00.000Z",
 };
+const relativeAsset = { ...asset, url: "/uploads/runtime.txt" };
 
 function jsonResponse(value: unknown) {
 	return new Response(JSON.stringify(value), {
@@ -92,9 +93,9 @@ describe("Media and Route Docs browser runtime", () => {
 				credentials: request.credentials,
 			});
 			if (request.method === "GET") {
-				return jsonResponse({ items: [asset], total: 1 });
+				return jsonResponse({ items: [relativeAsset], total: 1 });
 			}
-			return jsonResponse(asset);
+			return jsonResponse(relativeAsset);
 		});
 		const queryClient = new QueryClient({
 			defaultOptions: { queries: { retry: false } },
@@ -121,6 +122,8 @@ describe("Media and Route Docs browser runtime", () => {
 			| ReturnType<typeof useRegisterAsset>["mutateAsync"]
 			| undefined;
 		let upload: ReturnType<typeof useUploadAsset>["mutateAsync"] | undefined;
+		let registeredAsset: typeof asset | undefined;
+		let uploadedAsset: typeof asset | undefined;
 		function Probe() {
 			assetsQuery = useAssets({ limit: 1 });
 			register = useRegisterAsset().mutateAsync;
@@ -142,18 +145,24 @@ describe("Media and Route Docs browser runtime", () => {
 		});
 		await waitFor(() => assetsQuery?.isLoading === false);
 		await act(async () => {
-			await register?.({
+			registeredAsset = await register?.({
 				url: asset.url,
 				filename: asset.filename,
 				mimeType: asset.mimeType,
 				size: asset.size,
 			});
-			await upload?.({
+			uploadedAsset = await upload?.({
 				file: new File(["runtime"], "runtime.txt", { type: "text/plain" }),
 			});
 		});
 
-		expect(assetsQuery?.data?.pages[0]?.items[0]?.filename).toBe("runtime.txt");
+		const resolvedURL = "https://media.example.net/uploads/runtime.txt";
+		expect(assetsQuery?.data?.pages[0]?.items[0]).toMatchObject({
+			filename: "runtime.txt",
+			url: resolvedURL,
+		});
+		expect(registeredAsset?.url).toBe(resolvedURL);
+		expect(uploadedAsset?.url).toBe(resolvedURL);
 		expect(requests.some((request) => request.method === "GET")).toBe(true);
 		expect(
 			requests.filter((request) => request.method === "POST").length,
@@ -187,7 +196,7 @@ describe("Media and Route Docs browser runtime", () => {
 			});
 			return request.url.endsWith("/media/upload/vercel-blob")
 				? jsonResponse({ clientToken: "vercel_blob_client_runtime" })
-				: jsonResponse(asset);
+				: jsonResponse(relativeAsset);
 		});
 
 		const stack = createClientStack({
@@ -218,7 +227,10 @@ describe("Media and Route Docs browser runtime", () => {
 			},
 		);
 
-		expect(result).toEqual(asset);
+		expect(result).toEqual({
+			...relativeAsset,
+			url: "https://media.example.net/uploads/runtime.txt",
+		});
 		expect(requests).toHaveLength(2);
 		expect(requests[0]).toMatchObject({
 			url: "https://media.example.net/btst/media/media/upload/vercel-blob",
