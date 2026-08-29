@@ -102,8 +102,9 @@ type DelFn = (url: string, options?: { token?: string }) => Promise<void>;
  * with `handleUpload` exported from `@vercel/blob/client`).
  *
  * Upload flow:
- * 1. Client calls `POST /media/upload/vercel-blob` to obtain a client token.
- * 2. Client uses `@vercel/blob/client`'s `upload()` to upload directly to Vercel.
+ * 1. The client authenticates with the Media endpoint to obtain a scoped token.
+ * 2. The client uses that token with `@vercel/blob/client`'s `put()` to upload
+ *    directly to Vercel Blob.
  * 3. After upload, client calls `POST /media/assets` to save metadata to the DB.
  *
  * @example

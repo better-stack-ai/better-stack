@@ -6,23 +6,41 @@ import type { MediaProviderConfig, MediaUploadMode } from "./overrides";
 import { compressImage } from "./utils/image-compression";
 import type { ImageCompressionOptions } from "./utils/image-compression";
 
+/** Transport and preprocessing options for an imperative Media upload. */
 export interface MediaUploadClientConfig {
+	/** Resolved Media API base URL. */
 	apiBaseURL: string;
+	/** Mount path of the resolved Media API endpoint. */
 	apiBasePath: string;
+	/** Browser-safe headers sent with Media API requests. Never include secrets. */
 	headers?: HeadersInit;
+	/**
+	 * Fetch credentials mode applied only to Media API requests.
+	 * Configure this explicitly when a cross-origin Media endpoint accepts
+	 * browser credentials. It is not forwarded to storage upload URLs and does
+	 * not make server-only headers safe to expose.
+	 */
 	credentials?: RequestCredentials;
+	/** Upload transport matching the backend Media storage adapter. Defaults to `"direct"`. */
 	uploadMode?: MediaUploadMode;
+	/** Client-side image compression options, or `false` to skip compression. */
 	imageCompression?: ImageCompressionOptions | false;
 }
 
 /** Browser-safe Media runtime exposed as `stack.provider.plugins.media`. */
 export interface MediaUploadProviderRuntime {
+	/** Resolved browser transport for the Media API. */
 	readonly api: {
+		/** Resolved Media API base URL. */
 		readonly baseURL: string;
+		/** Media API mount path. */
 		readonly basePath: string;
+		/** Explicitly public headers safe to expose to browser code. */
 		readonly browserHeaders?: HeadersInit;
+		/** Explicit browser Fetch credentials behavior. */
 		readonly credentials?: RequestCredentials;
 	};
+	/** Browser-safe Media factory configuration. */
 	readonly config?: MediaProviderConfig;
 }
 
