@@ -338,7 +338,13 @@ const PLUGINS: PluginConfig[] = [
 		extraNpmDeps: [],
 		extraRegistryDeps: [],
 		pluginRootFiles: [],
-		excludedClientFiles: ["constants.ts", "hooks.ts", "schema.ts"],
+		excludedClientFiles: [
+			"constants.ts",
+			"hooks.ts",
+			"schema.ts",
+			"components/loading/docs-skeleton.tsx",
+			"components/loading/index.tsx",
+		],
 	},
 ];
 

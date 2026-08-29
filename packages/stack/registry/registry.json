@@ -258,7 +258,6 @@
         "scroll-area",
         "separator",
         "sheet",
-        "skeleton",
         "table"
       ],
       "docs": "https://better-stack.ai/docs/plugins/route-docs"

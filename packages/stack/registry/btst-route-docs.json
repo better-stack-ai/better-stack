@@ -16,22 +16,9 @@
     "scroll-area",
     "separator",
     "sheet",
-    "skeleton",
     "table"
   ],
   "files": [
-    {
-      "path": "btst/route-docs/client/components/loading/docs-skeleton.tsx",
-      "type": "registry:component",
-      "content": "\"use client\";\n\nimport { Skeleton } from \"@/components/ui/skeleton\";\nimport { ScrollArea } from \"@/components/ui/scroll-area\";\nimport { Card, CardContent } from \"@/components/ui/card\";\n\nexport function DocsPageSkeleton() {\n\treturn (\n\t\t<div className=\"flex min-h-screen bg-background\">\n\t\t\t{/* Desktop Sidebar skeleton */}\n\t\t\t<aside className=\"hidden md:block w-72 border-r bg-card shrink-0\">\n\t\t\t\t<div className=\"p-4 border-b\">\n\t\t\t\t\t<Skeleton className=\"h-4 w-16\" />\n\t\t\t\t</div>\n\t\t\t\t<ScrollArea className=\"h-[calc(100vh-57px)]\">\n\t\t\t\t\t<div className=\"p-3 space-y-4\">\n\t\t\t\t\t\t{/* Plugin groups */}\n\t\t\t\t\t\t{[1, 2, 3].map((i) => (\n\t\t\t\t\t\t\t<div key={i} className=\"space-y-2\">\n\t\t\t\t\t\t\t\t<Skeleton className=\"h-8 w-full\" />\n\t\t\t\t\t\t\t\t<div className=\"ml-2 space-y-1\">\n\t\t\t\t\t\t\t\t\t{[1, 2, 3].map((j) => (\n\t\t\t\t\t\t\t\t\t\t<Skeleton key={j} className=\"h-7 w-full\" />\n\t\t\t\t\t\t\t\t\t))}\n\t\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t))}\n\t\t\t\t\t</div>\n\t\t\t\t</ScrollArea>\n\t\t\t</aside>\n\n\t\t\t{/* Mobile header skeleton */}\n\t\t\t<div className=\"md:hidden fixed top-0 left-0 right-0 z-40 bg-card border-b\">\n\t\t\t\t<div className=\"flex items-center justify-between p-4\">\n\t\t\t\t\t<Skeleton className=\"h-4 w-24\" />\n\t\t\t\t\t<Skeleton className=\"h-8 w-20\" />\n\t\t\t\t</div>\n\t\t\t</div>\n\n\t\t\t{/* Main content skeleton */}\n\t\t\t<main className=\"flex-1 overflow-auto pt-16 md:pt-0\">\n\t\t\t\t<div className=\"max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6\">\n\t\t\t\t\t{/* Title */}\n\t\t\t\t\t<div className=\"space-y-2\">\n\t\t\t\t\t\t<Skeleton className=\"h-8 sm:h-9 w-48 sm:w-64\" />\n\t\t\t\t\t\t<Skeleton className=\"h-4 sm:h-5 w-72 sm:w-96\" />\n\t\t\t\t\t</div>\n\n\t\t\t\t\t{/* Separator */}\n\t\t\t\t\t<div className=\"h-px bg-border\" />\n\n\t\t\t\t\t{/* Badges */}\n\t\t\t\t\t<div className=\"flex gap-2\">\n\t\t\t\t\t\t<Skeleton className=\"h-6 w-24\" />\n\t\t\t\t\t\t<Skeleton className=\"h-6 w-20\" />\n\t\t\t\t\t</div>\n\n\t\t\t\t\t{/* Routes card */}\n\t\t\t\t\t<Card>\n\t\t\t\t\t\t<div className=\"p-4 sm:p-6\">\n\t\t\t\t\t\t\t<Skeleton className=\"h-6 w-32 mb-4\" />\n\t\t\t\t\t\t</div>\n\t\t\t\t\t\t<CardContent className=\"pt-0 space-y-4\">\n\t\t\t\t\t\t\t{/* Desktop table skeleton */}\n\t\t\t\t\t\t\t<div className=\"hidden md:block space-y-2\">\n\t\t\t\t\t\t\t\t{[1, 2, 3, 4].map((i) => (\n\t\t\t\t\t\t\t\t\t<Skeleton key={i} className=\"h-12 w-full\" />\n\t\t\t\t\t\t\t\t))}\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t\t{/* Mobile cards skeleton */}\n\t\t\t\t\t\t\t<div className=\"md:hidden space-y-3\">\n\t\t\t\t\t\t\t\t{[1, 2, 3].map((i) => (\n\t\t\t\t\t\t\t\t\t<Skeleton key={i} className=\"h-28 w-full rounded-lg\" />\n\t\t\t\t\t\t\t\t))}\n\t\t\t\t\t\t\t</div>\n\t\t\t\t\t\t</CardContent>\n\t\t\t\t\t</Card>\n\t\t\t\t</div>\n\t\t\t</main>\n\t\t</div>\n\t);\n}\n",
-      "target": "src/components/btst/route-docs/client/components/loading/docs-skeleton.tsx"
-    },
-    {
-      "path": "btst/route-docs/client/components/loading/index.tsx",
-      "type": "registry:component",
-      "content": "export { DocsPageSkeleton } from \"./docs-skeleton\";\n",
-      "target": "src/components/btst/route-docs/client/components/loading/index.tsx"
-    },
     {
       "path": "btst/route-docs/client/components/pages/docs-page.tsx",
       "type": "registry:page",

@@ -42,7 +42,9 @@ error()   { echo -e "${RED}✗ $1${NC}"; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
 REGISTRY_DIR="$PACKAGE_DIR/registry"
+REGISTRY_FIXTURES_DIR="$SCRIPT_DIR/fixtures/registry"
 TEST_DIR="/tmp/test-btst-registry-$(date +%s)"
+SERVED_REGISTRY_DIR=""
 SERVER_PORT=8766
 SERVER_PID=""
 TEST_PASSED=false
@@ -50,7 +52,7 @@ TEST_PASSED=false
 # Includes a representative data plugin (blog), client-only plugin (route-docs),
 # and composed client plugin (ui-builder over CMS) in the install/build matrix.
 PLUGIN_NAMES=("ui-builder" "blog" "ai-chat" "cms" "form-builder" "kanban" "comments" "media" "route-docs")
-EXTERNAL_REGISTRY_DEPENDENCY_ALLOWLIST=("ui-builder" "cms" "form-builder" "kanban")
+EXTERNAL_REGISTRY_DEPENDENCY_ALLOWLIST=("form-builder" "kanban")
 
 has_external_registry_dependency() {
     local candidate="$1"
@@ -79,6 +81,11 @@ cleanup() {
         rm -rf "$TEST_DIR"
     elif [ -d "$TEST_DIR" ]; then
         warn "Test directory preserved for debugging: $TEST_DIR"
+    fi
+
+    if [ -n "$SERVED_REGISTRY_DIR" ] && [ -d "$SERVED_REGISTRY_DIR" ]; then
+        echo "Removing served registry directory: $SERVED_REGISTRY_DIR"
+        rm -rf "$SERVED_REGISTRY_DIR"
     fi
 
     echo -e "${GREEN}Cleanup complete.${NC}"
@@ -128,11 +135,86 @@ main() {
     # ------------------------------------------------------------------
     step "3 — Starting HTTP server on port $SERVER_PORT"
     # ------------------------------------------------------------------
+    # Serve pinned snapshots of UI Builder's upstream registry chain so the
+    # required UI Builder-over-CMS install/build compiles the real dependency
+    # files without relying on mutable branches or external network availability.
+    SERVED_REGISTRY_DIR=$(mktemp -d /tmp/btst-served-registry-XXXXXX)
+    cp -R "$REGISTRY_DIR"/. "$SERVED_REGISTRY_DIR"/
+    REGISTRY_FIXTURE_DIR="$REGISTRY_FIXTURES_DIR" SERVED_REGISTRY_DIR="$SERVED_REGISTRY_DIR" SERVER_PORT="$SERVER_PORT" node <<'NODE_EOF'
+const fs = require("node:fs");
+const path = require("node:path");
+
+const fixtureDir = process.env.REGISTRY_FIXTURE_DIR;
+const registryDir = process.env.SERVED_REGISTRY_DIR;
+const port = process.env.SERVER_PORT;
+if (!fixtureDir || !registryDir || !port) {
+  throw new Error("Missing local registry fixture configuration");
+}
+
+const localUrls = {
+  uiBuilder: `http://localhost:${port}/btst-test-ui-builder-dependency.json`,
+  autoForm: `http://localhost:${port}/btst-test-auto-form-dependency.json`,
+  minimalTiptap: `http://localhost:${port}/btst-test-minimal-tiptap-dependency.json`,
+};
+const remoteUrls = {
+  uiBuilder: "https://raw.githubusercontent.com/olliethedev/ui-builder/refs/heads/main/registry/block-registry.json",
+  autoForm: "https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/auto-form.json",
+  minimalTiptap: "https://raw.githubusercontent.com/olliethedev/shadcn-minimal-tiptap/refs/heads/feat/markdown/registry/block-registry.json",
+};
+
+const replaceDependency = (item, remote, local, label) => {
+  item.registryDependencies = item.registryDependencies.map((dependency) =>
+    dependency === remote ? local : dependency,
+  );
+  if (!item.registryDependencies.includes(local)) {
+    throw new Error(`Expected ${label} to depend on ${remote}`);
+  }
+};
+
+for (const [plugin, remote, local] of [
+  ["ui-builder", remoteUrls.uiBuilder, localUrls.uiBuilder],
+  ["cms", remoteUrls.autoForm, localUrls.autoForm],
+]) {
+  const itemPath = path.join(registryDir, `btst-${plugin}.json`);
+  const item = JSON.parse(fs.readFileSync(itemPath, "utf8"));
+  replaceDependency(item, remote, local, plugin);
+  fs.writeFileSync(itemPath, `${JSON.stringify(item, null, 2)}\n`);
+}
+
+const uiBuilderFixture = JSON.parse(
+  fs.readFileSync(path.join(fixtureDir, "ui-builder.json"), "utf8"),
+);
+replaceDependency(
+  uiBuilderFixture,
+  remoteUrls.autoForm,
+  localUrls.autoForm,
+  "UI Builder fixture",
+);
+replaceDependency(
+  uiBuilderFixture,
+  remoteUrls.minimalTiptap,
+  localUrls.minimalTiptap,
+  "UI Builder fixture",
+);
+fs.writeFileSync(
+  path.join(registryDir, "btst-test-ui-builder-dependency.json"),
+  `${JSON.stringify(uiBuilderFixture, null, 2)}\n`,
+);
+fs.copyFileSync(
+  path.join(fixtureDir, "auto-form.json"),
+  path.join(registryDir, "btst-test-auto-form-dependency.json"),
+);
+fs.copyFileSync(
+  path.join(fixtureDir, "minimal-tiptap.json"),
+  path.join(registryDir, "btst-test-minimal-tiptap-dependency.json"),
+);
+NODE_EOF
+
     # Kill any stale server from a previous run
     lsof -ti:"$SERVER_PORT" | xargs kill -9 2>/dev/null || true
     sleep 1
 
-    npx --yes http-server "$REGISTRY_DIR" -p $SERVER_PORT -c-1 --silent &
+    npx --yes http-server "$SERVED_REGISTRY_DIR" -p $SERVER_PORT -c-1 --silent &
     SERVER_PID=$!
 
     # Wait for server to be ready. `npx http-server` can take >15s on a cold cache
@@ -203,6 +285,7 @@ main() {
     # "dependencies" array; these are the always-present baseline deps.
     npm install \
         @tanstack/react-query \
+        @btst/yar \
         react-error-boundary \
         react-hook-form \
         @hookform/resolvers \
@@ -365,6 +448,26 @@ import { ModerationPageComponent } from "@/components/btst/comments/client/compo
 import { PageListPage } from "@/components/btst/ui-builder/client/components/pages/page-list-page";
 import { LibraryPageComponent } from "@/components/btst/media/client/components/pages/library-page";
 import { DocsPageComponent } from "@/components/btst/route-docs/client/components/pages/docs-page";
+import { QueryClient } from "@tanstack/react-query";
+import { createClientStack } from "@btst/stack/client";
+import { cmsClientPlugin } from "@btst/stack/plugins/cms/client";
+import {
+  defaultComponentRegistry,
+  uiBuilderClientPlugin,
+} from "@btst/stack/plugins/ui-builder/client";
+
+const composedStack = createClientStack({
+  api: { baseURL: "https://example.com", basePath: "/api" },
+  site: { baseURL: "https://example.com", basePath: "/pages" },
+  queryClient: new QueryClient(),
+  plugins: {
+    cms: cmsClientPlugin(),
+    uiBuilder: uiBuilderClientPlugin({
+      components: defaultComponentRegistry,
+      pageComponents: { pageList: PageListPage },
+    }),
+  },
+});
 
 // Suppress unused-import warnings while still forcing TS to resolve everything.
 void HomePageComponent;
@@ -376,6 +479,7 @@ void ModerationPageComponent;
 void PageListPage;
 void LibraryPageComponent;
 void DocsPageComponent;
+void composedStack;
 
 export default function SmokeTestPage() {
   return <div data-testid="btst-smoke-test">Registry smoke test — all plugin imports resolved.</div>;
