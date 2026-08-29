@@ -86,17 +86,23 @@ import { createClientStack } from "@btst/stack/client"
 import { mediaClientPlugin } from "@btst/stack/plugins/media/client"
 import { QueryClient } from "@tanstack/react-query"
 
-const getBaseURL = () =>
-  process.env.BASE_URL || "http://localhost:3000"
+const getBaseURL = (serverOrigin?: string) =>
+  typeof window !== "undefined"
+    ? process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+    : serverOrigin ||
+      process.env.BTST_SITE_URL ||
+      process.env.BASE_URL ||
+      "http://localhost:3000"
 
 export const getStackClient = (
   queryClient: QueryClient,
   options?: {
     headers?: Headers
     identity?: { readonly id: string; readonly [key: string]: unknown }
+    origin?: string
   },
 ) => {
-  const baseURL = getBaseURL()
+  const baseURL = getBaseURL(options?.origin)
 
   return createClientStack({
     api: {
@@ -120,6 +126,9 @@ export const getStackClient = (
 optional request identity snapshot used to align protected SSR cache keys with
 the browser's hydrated identity. API/site locations, request headers, and the
 React Query client belong to `createClientStack()` and are inherited by Media.
+Pass the request URL's origin as `options.origin` during SSR when a canonical
+`BTST_SITE_URL` or `BASE_URL` is not configured; browser stacks use the public
+site variable or `window.location.origin`.
 
 <Callout type="info">
 The media client plugin registers the `/media` page route and prefetches the

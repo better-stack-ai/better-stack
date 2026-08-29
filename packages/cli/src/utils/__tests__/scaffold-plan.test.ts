@@ -156,7 +156,9 @@ describe("scaffold plan", () => {
 			(f) => f.path === "lib/stack-client.tsx",
 		);
 		expect(stackClientFile?.content).toContain("blogClientPlugin");
-		expect(stackClientFile?.content).toContain("const baseURL = getBaseURL()");
+		expect(stackClientFile?.content).toContain(
+			"const baseURL = getBaseURL(options?.origin)",
+		);
 		expect(stackClientFile?.content).toContain(
 			"...(options?.headers ? { headers: options.headers } : {})",
 		);
@@ -262,7 +264,7 @@ describe("scaffold plan", () => {
 			);
 			expect(stackClientFile?.content).toBeDefined();
 			expect(stackClientFile?.content).toContain(
-				"const baseURL = getBaseURL()",
+				"const baseURL = getBaseURL(options?.origin)",
 			);
 			expect(stackClientFile?.content).toContain(
 				'if (typeof window !== "undefined")',
@@ -478,6 +480,10 @@ describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"emits plugin-only Media and Route Docs factories for %s",
 		async (framework) => {
+			const browserSiteURLExpression =
+				framework === "nextjs"
+					? "process.env.NEXT_PUBLIC_SITE_URL"
+					: "import.meta.env.VITE_PUBLIC_SITE_URL";
 			const plan = await buildScaffoldPlan({
 				framework,
 				adapter: "memory",
@@ -499,6 +505,18 @@ describe("scaffold plan", () => {
 			);
 			expect(stackClientFile?.content).not.toContain("apiBaseURL:");
 			expect(stackClientFile?.content).not.toContain("siteBasePath:");
+			expect(stackClientFile?.content).toContain(
+				`return ${browserSiteURLExpression} || window.location.origin`,
+			);
+			expect(stackClientFile?.content).toContain(
+				"const baseURL = getBaseURL(options?.origin)",
+			);
+			expect(stackClientFile?.content).toContain(
+				"if (serverOrigin) return serverOrigin",
+			);
+			expect(stackClientFile?.content).toContain(
+				"if (process.env.BTST_SITE_URL) return process.env.BTST_SITE_URL",
+			);
 			expect(pagesLayoutFile?.content).not.toContain("as never");
 			expect(pagesLayoutFile?.content).not.toContain('"media": {');
 			expect(pagesLayoutFile?.content).not.toContain("queryClient,");

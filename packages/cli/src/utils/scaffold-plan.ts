@@ -68,8 +68,12 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 
 function getPublicSiteURLVar(framework: Framework) {
 	if (framework === "nextjs") return "NEXT_PUBLIC_SITE_URL";
-	if (framework === "react-router") return "PUBLIC_SITE_URL";
 	return "VITE_PUBLIC_SITE_URL";
+}
+
+function getBrowserSiteURLExpression(framework: Framework) {
+	if (framework === "nextjs") return "process.env.NEXT_PUBLIC_SITE_URL";
+	return "import.meta.env.VITE_PUBLIC_SITE_URL";
 }
 
 function getPagesLayoutFilePath(framework: Framework): string {
@@ -323,6 +327,7 @@ export async function buildScaffoldPlan(
 	const sharedContext = {
 		alias: input.alias,
 		providerApiLiteral: '{{ baseURL, basePath: "/api/data" }}',
+		browserSiteURLExpression: getBrowserSiteURLExpression(input.framework),
 		publicSiteURLVar: getPublicSiteURLVar(input.framework),
 		useGlobalSingleton:
 			input.framework === "nextjs" && input.adapter === "memory",

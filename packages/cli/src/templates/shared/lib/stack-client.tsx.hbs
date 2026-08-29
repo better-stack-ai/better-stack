@@ -6,9 +6,9 @@ import { QueryClient } from "@tanstack/react-query"
 
 export function getStackClient(
 	queryClient: QueryClient,
-	options?: { headers?: Headers },
+	options?: { headers?: Headers; origin?: string },
 ) {
-	const baseURL = getBaseURL()
+	const baseURL = getBaseURL(options?.origin)
 	return createStackClient({
 		api: {
 			baseURL,
@@ -27,10 +27,11 @@ export function getStackClient(
 	})
 }
 
-function getBaseURL() {
+function getBaseURL(serverOrigin?: string) {
 	if (typeof window !== "undefined") {
-		return window.location.origin
+		return {{{browserSiteURLExpression}}} || window.location.origin
 	}
+	if (serverOrigin) return serverOrigin
 
 	// Use literal process.env.XXX so bundlers (Vite define, Next.js, etc.)
 	// can statically replace these at build/transform time.
