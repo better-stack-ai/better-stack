@@ -464,10 +464,17 @@ In order to use BTST, your application must meet the following requirements:
     import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
     import { QueryClient } from "@tanstack/react-query"
 
-    export const getStackClient = (queryClient: QueryClient) => {
+    interface StackClientOptions {
+      origin?: string
+    }
+
+    export const getStackClient = (
+      queryClient: QueryClient,
+      options?: StackClientOptions,
+    ) => {
       const baseURL =
         typeof window === "undefined"
-          ? process.env.BASE_URL || "http://localhost:3000"
+          ? options?.origin || process.env.BASE_URL || "http://localhost:3000"
           : window.location.origin
 
       return createClientStack({
