@@ -7,7 +7,7 @@ import {
 } from "@btst/stack/plugins/client";
 import { normalizePath } from "@btst/stack/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
-import type { ComponentType } from "react";
+import { lazy, type ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { KanbanApiRouter } from "../api";
 import {
@@ -18,12 +18,25 @@ import type {
 	SerializedBoardSummary,
 	SerializedBoardWithColumns,
 } from "../types";
-import { BoardsListPageComponent } from "./components/pages/boards-list-page";
-import { NewBoardPageComponent } from "./components/pages/new-board-page";
-import { BoardPageComponent } from "./components/pages/board-page";
 import { createSanitizedSSRLoaderError } from "../../utils";
 import { KANBAN_PLUGIN_ID } from "./constants";
 import type { KanbanPluginOverrides } from "./overrides";
+
+const BoardsListPageComponent = lazy(() =>
+	import("./components/pages/boards-list-page").then((module) => ({
+		default: module.BoardsListPageComponent,
+	})),
+);
+const NewBoardPageComponent = lazy(() =>
+	import("./components/pages/new-board-page").then((module) => ({
+		default: module.NewBoardPageComponent,
+	})),
+);
+const BoardPageComponent = lazy(() =>
+	import("./components/pages/board-page").then((module) => ({
+		default: module.BoardPageComponent,
+	})),
+);
 
 /**
  * Context passed to route hooks

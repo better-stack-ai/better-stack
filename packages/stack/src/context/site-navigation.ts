@@ -1,23 +1,28 @@
 "use client";
 
-import { normalizePath } from "@btst/stack/client";
-import { useStack } from "@btst/stack/context";
-import { FORM_BUILDER_PLUGIN_ID } from "./constants";
+import { normalizePath } from "../client/path-utils";
+import { useStack } from "./provider";
 
-/** Resolve Form Builder page links from the registered plugin site endpoint. */
-export function useFormBuilderSiteLocation() {
+/** Resolve one registered plugin's page links and programmatic navigation. */
+export function usePluginSiteNavigation(pluginId: string) {
 	const { basePath, plugins, router, site: stackSite } = useStack();
-	const site = plugins?.[FORM_BUILDER_PLUGIN_ID]?.site;
-	const siteBasePath = site?.basePath ?? basePath;
+	const pluginSite = plugins?.[pluginId]?.site;
+	const siteBasePath = pluginSite?.basePath ?? basePath;
 	const crossOrigin =
-		Boolean(site?.baseURL) &&
+		Boolean(pluginSite?.baseURL) &&
 		Boolean(stackSite?.baseURL) &&
-		site?.baseURL !== stackSite?.baseURL;
+		pluginSite?.baseURL !== stackSite?.baseURL;
 
 	const resolve = (...segments: string[]) => {
 		const path = normalizePath([siteBasePath, ...segments].join("/"));
-		const href = site?.baseURL ? `${site.baseURL}${path}` : path;
-		return { path, href: crossOrigin ? href : path, crossOrigin };
+		const absoluteHref = pluginSite?.baseURL
+			? `${pluginSite.baseURL}${path}`
+			: path;
+		return {
+			path,
+			href: crossOrigin ? absoluteHref : path,
+			crossOrigin,
+		};
 	};
 
 	const navigate = (...segments: string[]) => {

@@ -5,11 +5,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "../../../client";
-import { StackProvider } from "@btst/stack/context";
+import { StackProvider, usePluginSiteNavigation } from "@btst/stack/context";
 import { kanbanClientPlugin } from "../client";
 import { BoardsListPage } from "../client/components/pages/boards-list-page.internal";
 import { useBoardMutations, useBoards } from "../client/hooks";
-import { useKanbanSiteLocation } from "../client/navigation";
+import { KANBAN_PLUGIN_ID } from "../client/constants";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -218,7 +218,7 @@ describe("Kanban browser runtime", () => {
 			},
 		});
 		function LinkProbe() {
-			const { resolve } = useKanbanSiteLocation();
+			const { resolve } = usePluginSiteNavigation(KANBAN_PLUGIN_ID);
 			return <a href={resolve("kanban", "board-1").href}>Board</a>;
 		}
 

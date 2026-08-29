@@ -37,6 +37,7 @@ import {
 	PermissionAccess,
 	useNotify,
 	usePluginOverrides,
+	usePluginSiteNavigation,
 	useTranslate,
 } from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
@@ -50,7 +51,6 @@ import type { SerializedTask, SerializedColumn } from "../../../types";
 import { kanbanPermissions } from "../../../permissions";
 import { PermissionAccessAny } from "../shared/permission-access-any";
 import { KANBAN_PLUGIN_ID } from "../../constants";
-import { useKanbanSiteLocation } from "../../navigation";
 
 interface BoardPageProps {
 	boardId: string;
@@ -78,7 +78,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 
 	const { taskDetailBottomSlot, localization } =
 		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
-	const { Link, navigate, resolve } = useKanbanSiteLocation();
+	const { Link, navigate, resolve } = usePluginSiteNavigation(KANBAN_PLUGIN_ID);
 
 	const { deleteBoard, isDeleting } = useBoardMutations();
 	const { deleteColumn, reorderColumns } = useColumnMutations();
@@ -129,7 +129,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 			closeModal();
 			// Use both navigate and a fallback to ensure navigation works
 			// Some frameworks may have issues with router.push after mutations
-			navigate("kanban");
+			void navigate("kanban");
 			// Fallback: if navigate doesn't work, use window.location
 			if (typeof window !== "undefined") {
 				setTimeout(() => {

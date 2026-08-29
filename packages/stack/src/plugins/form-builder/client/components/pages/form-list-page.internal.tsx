@@ -5,6 +5,7 @@ import {
 	useNotify,
 	PermissionAccess,
 	usePluginOverrides,
+	usePluginSiteNavigation,
 	useTranslate,
 } from "@btst/stack/context";
 import { useListState, type ListStateSchema } from "@btst/stack/client/hooks";
@@ -51,7 +52,6 @@ import { EmptyState } from "../shared/empty-state";
 import { Pagination } from "../shared/pagination";
 import { formBuilderPermissions } from "../../../permissions";
 import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
-import { useFormBuilderSiteLocation } from "../../navigation";
 
 // URL-synced search state: `?q=...` while typing (history: replace), clean
 // URL when the query is empty (the default is omitted from the URL).
@@ -67,7 +67,9 @@ export function FormListPage() {
 	const { localization } = usePluginOverrides<FormBuilderPluginOverrides>(
 		FORM_BUILDER_PLUGIN_ID,
 	);
-	const { Link, navigate, resolve } = useFormBuilderSiteLocation();
+	const { Link, navigate, resolve } = usePluginSiteNavigation(
+		FORM_BUILDER_PLUGIN_ID,
+	);
 
 	const [{ q: search }, setListState] = useListState(
 		"form-builder-forms",

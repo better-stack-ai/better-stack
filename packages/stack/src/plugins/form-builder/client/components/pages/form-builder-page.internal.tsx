@@ -5,6 +5,7 @@ import {
 	useNotify,
 	PermissionAccess,
 	usePluginOverrides,
+	usePluginSiteNavigation,
 	useTranslate,
 } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
@@ -28,7 +29,6 @@ import type { SerializedForm } from "../../../types";
 import { formBuilderPermissions } from "../../../permissions";
 import { NotFoundPage } from "./404-page";
 import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
-import { useFormBuilderSiteLocation } from "../../navigation";
 
 export interface FormBuilderPageProps {
 	id?: string;
@@ -89,7 +89,7 @@ function FormBuilderPageContent({
 		Link: LinkComponent,
 		navigate,
 		resolve,
-	} = useFormBuilderSiteLocation();
+	} = usePluginSiteNavigation(FORM_BUILDER_PLUGIN_ID);
 
 	// Form state
 	const [name, setName] = useState(existingForm?.name || "");

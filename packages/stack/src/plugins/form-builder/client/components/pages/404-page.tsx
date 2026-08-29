@@ -1,17 +1,22 @@
 "use client";
 
 import { Button } from "@workspace/ui/components/button";
-import { usePluginOverrides, useTranslate } from "@btst/stack/context";
+import {
+	usePluginOverrides,
+	usePluginSiteNavigation,
+	useTranslate,
+} from "@btst/stack/context";
 import type { FormBuilderPluginOverrides } from "../../overrides";
 import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
-import { useFormBuilderSiteLocation } from "../../navigation";
 
 export function NotFoundPage() {
 	const t = useTranslate();
 	const { localization } = usePluginOverrides<FormBuilderPluginOverrides>(
 		FORM_BUILDER_PLUGIN_ID,
 	);
-	const { Link: LinkComponent, resolve } = useFormBuilderSiteLocation();
+	const { Link: LinkComponent, resolve } = usePluginSiteNavigation(
+		FORM_BUILDER_PLUGIN_ID,
+	);
 
 	return (
 		<div className="flex flex-col items-center justify-center py-12 px-4 text-center">

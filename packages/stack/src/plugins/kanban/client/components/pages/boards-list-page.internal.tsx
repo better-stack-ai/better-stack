@@ -13,6 +13,7 @@ import { useSuspenseBoards } from "../../hooks/kanban-hooks";
 import {
 	PermissionAccess,
 	usePluginOverrides,
+	usePluginSiteNavigation,
 	useTranslate,
 } from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
@@ -21,7 +22,6 @@ import { PageWrapper } from "../shared/page-wrapper";
 import { format } from "date-fns";
 import { kanbanPermissions } from "../../../permissions";
 import { KANBAN_PLUGIN_ID } from "../../constants";
-import { useKanbanSiteLocation } from "../../navigation";
 
 export function BoardsListPage() {
 	const t = useTranslate();
@@ -33,10 +33,10 @@ export function BoardsListPage() {
 	}
 	const { localization } =
 		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
-	const { Link, navigate, resolve } = useKanbanSiteLocation();
+	const { Link, navigate, resolve } = usePluginSiteNavigation(KANBAN_PLUGIN_ID);
 
 	const handleNewBoard = () => {
-		navigate("kanban", "new");
+		void navigate("kanban", "new");
 	};
 
 	return (

@@ -5,11 +5,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "../../../client";
-import { StackProvider } from "@btst/stack/context";
+import { StackProvider, usePluginSiteNavigation } from "@btst/stack/context";
 import { formBuilderClientPlugin } from "../client";
 import { FormListPage } from "../client/components/pages/form-list-page.internal";
 import { useCreateForm, useForms } from "../client/hooks";
-import { useFormBuilderSiteLocation } from "../client/navigation";
+import { FORM_BUILDER_PLUGIN_ID } from "../client/constants";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -215,7 +215,7 @@ describe("Form Builder browser runtime", () => {
 			},
 		});
 		function LinkProbe() {
-			const { resolve } = useFormBuilderSiteLocation();
+			const { resolve } = usePluginSiteNavigation(FORM_BUILDER_PLUGIN_ID);
 			return <a href={resolve("forms", "new").href}>New form</a>;
 		}
 

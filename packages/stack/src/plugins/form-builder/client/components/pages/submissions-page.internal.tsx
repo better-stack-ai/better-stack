@@ -5,6 +5,7 @@ import {
 	useNotify,
 	PermissionAccess,
 	usePluginOverrides,
+	usePluginSiteNavigation,
 	useTranslate,
 	useIdentity,
 } from "@btst/stack/context";
@@ -47,7 +48,6 @@ import { EmptyState } from "../shared/empty-state";
 import { Pagination } from "../shared/pagination";
 import { formBuilderPermissions } from "../../../permissions";
 import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
-import { useFormBuilderSiteLocation } from "../../navigation";
 
 export interface SubmissionsPageProps {
 	formId: string;
@@ -60,7 +60,9 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 		FORM_BUILDER_PLUGIN_ID,
 	);
 	const { identity } = useIdentity();
-	const { Link: LinkComponent, resolve } = useFormBuilderSiteLocation();
+	const { Link: LinkComponent, resolve } = usePluginSiteNavigation(
+		FORM_BUILDER_PLUGIN_ID,
+	);
 
 	const { form, submissions, total, hasMore, isLoadingMore, loadMore } =
 		useSuspenseSubmissions(formId);

@@ -1,16 +1,19 @@
 "use client";
 
 import { Button } from "@workspace/ui/components/button";
-import { usePluginOverrides, useTranslate } from "@btst/stack/context";
+import {
+	usePluginOverrides,
+	usePluginSiteNavigation,
+	useTranslate,
+} from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
 import { KANBAN_PLUGIN_ID } from "../../constants";
-import { useKanbanSiteLocation } from "../../navigation";
 
 export function NotFoundPage() {
 	const t = useTranslate();
 	const { localization } =
 		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
-	const { navigate } = useKanbanSiteLocation();
+	const { navigate } = usePluginSiteNavigation(KANBAN_PLUGIN_ID);
 
 	return (
 		<div
