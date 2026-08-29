@@ -197,15 +197,93 @@ function isInsideMarkdownInlineCode(source, index) {
 	return (prefix.match(/(?<!`)`(?!`)/g)?.length ?? 0) % 2 === 1;
 }
 
+function markdownFenceContentStart(source, index) {
+	const fences = [...source.slice(0, index).matchAll(/^ {0,3}```[^\n]*$/gm)];
+	if (fences.length % 2 === 0) return undefined;
+	const openingFence = fences.at(-1);
+	return openingFence?.index === undefined
+		? undefined
+		: source.indexOf("\n", openingFence.index) + 1;
+}
+
+function canStartRegexLiteral(source, index, controlStatementClosures) {
+	if (source[index + 1] === "=") return false;
+	let cursor = index - 1;
+	while (/\s/.test(source[cursor] ?? "")) cursor -= 1;
+	if (cursor < 0) return true;
+	if (source[cursor] === ")" && controlStatementClosures.has(cursor)) {
+		return true;
+	}
+	if (
+		(source[cursor] === "+" || source[cursor] === "-") &&
+		source[cursor - 1] === source[cursor]
+	) {
+		return false;
+	}
+	if (source[cursor] === ">" && source[cursor - 1] === "=") {
+		return true;
+	}
+	if (
+		(source[cursor] === "<" || source[cursor] === ">") &&
+		/\s/.test(source.slice(cursor + 1, index))
+	) {
+		return true;
+	}
+	if (/[[({,;:=!?&|+\-*%^~]/.test(source[cursor])) return true;
+	const keyword = source
+		.slice(0, cursor + 1)
+		.match(/(?:^|\W)([A-Za-z_$][\w$]*)$/)?.[1];
+	return /^(?:await|case|delete|in|instanceof|new|return|throw|typeof|void|yield)$/.test(
+		keyword ?? "",
+	);
+}
+
 function scanLexicalState(source, index) {
 	let quote;
 	let escaped = false;
+	let regex = false;
+	let regexCharacterClass = false;
 	let lineComment = false;
 	let blockComment = false;
 	const blocks = [];
+	const templateFrames = [];
+	const parenthesisFrames = [];
+	const controlStatementClosures = new Set();
 	for (let cursor = 0; cursor < index; cursor += 1) {
 		const char = source[cursor];
 		const next = source[cursor + 1];
+		const templateFrame = templateFrames.at(-1);
+		if (
+			!quote &&
+			templateFrame?.expressionDepth === undefined &&
+			templateFrame
+		) {
+			if (escaped) {
+				escaped = false;
+				continue;
+			}
+			if (char === "\\") {
+				escaped = true;
+				continue;
+			}
+			if (char === "`") {
+				templateFrames.pop();
+				continue;
+			}
+			if (char === "$" && next === "{") {
+				templateFrame.expressionDepth = 0;
+				cursor += 1;
+			}
+			continue;
+		}
+		if (regex) {
+			if (escaped) escaped = false;
+			else if (char === "\\") escaped = true;
+			else if (char === "[") regexCharacterClass = true;
+			else if (char === "]") regexCharacterClass = false;
+			else if (char === "/" && !regexCharacterClass) regex = false;
+			continue;
+		}
 		if (lineComment) {
 			if (char === "\n") lineComment = false;
 			continue;
@@ -223,17 +301,58 @@ function scanLexicalState(source, index) {
 			else if (char === quote) quote = undefined;
 			continue;
 		}
-		if (char === '"' || char === "'" || char === "`") quote = char;
-		else if (char === "/" && next === "/") {
+		if (char === '"' || char === "'") quote = char;
+		else if (char === "`") {
+			templateFrames.push({ expressionDepth: undefined });
+			escaped = false;
+		} else if (char === "/" && next === "/") {
 			lineComment = true;
 			cursor += 1;
 		} else if (char === "/" && next === "*") {
 			blockComment = true;
 			cursor += 1;
-		} else if (char === "{") blocks.push(cursor);
-		else if (char === "}") blocks.pop();
+		} else if (
+			char === "/" &&
+			canStartRegexLiteral(source, cursor, controlStatementClosures)
+		) {
+			regex = true;
+			regexCharacterClass = false;
+			escaped = false;
+		} else if (char === "(") {
+			const keyword = source
+				.slice(0, cursor)
+				.match(/(?:^|\W)([A-Za-z_$][\w$]*)\s*$/)?.[1];
+			parenthesisFrames.push(
+				/^(?:catch|for|if|switch|while|with)$/.test(keyword ?? ""),
+			);
+		} else if (char === ")") {
+			if (parenthesisFrames.pop()) controlStatementClosures.add(cursor);
+		} else if (char === "{") {
+			if (templateFrame?.expressionDepth !== undefined) {
+				templateFrame.expressionDepth += 1;
+			}
+			blocks.push(cursor);
+		} else if (char === "}" && templateFrame?.expressionDepth === 0) {
+			templateFrame.expressionDepth = undefined;
+		} else if (char === "}") {
+			if (templateFrame?.expressionDepth !== undefined) {
+				templateFrame.expressionDepth -= 1;
+			}
+			blocks.pop();
+		}
 	}
-	return { blockComment, blocks, lineComment, quote };
+	return {
+		blockComment,
+		blocks,
+		lineComment,
+		quote:
+			quote ??
+			(regex ? "/" : undefined) ??
+			(templateFrames.length > 0 &&
+			templateFrames.at(-1)?.expressionDepth === undefined
+				? "`"
+				: undefined),
+	};
 }
 
 function isInsideCommentProse(source, index) {
@@ -291,6 +410,41 @@ function hasComputedProperty(objectSource) {
 	return /(?:^|[,{])\s*(?:(?:get|set|async)\s+)?\*?\s*\[[^\]]*\]\s*(?::|\()/m.test(
 		objectSource,
 	);
+}
+
+function skipLexicalTrivia(source, start) {
+	let cursor = start;
+	while (cursor < source.length) {
+		while (/\s/.test(source[cursor] ?? "")) cursor += 1;
+		if (source[cursor] === "/" && source[cursor + 1] === "/") {
+			const lineEnd = source.indexOf("\n", cursor + 2);
+			cursor = lineEnd >= 0 ? lineEnd + 1 : source.length;
+			continue;
+		}
+		if (source[cursor] === "/" && source[cursor + 1] === "*") {
+			const commentEnd = source.indexOf("*/", cursor + 2);
+			cursor = commentEnd >= 0 ? commentEnd + 2 : source.length;
+			continue;
+		}
+		break;
+	}
+	return cursor;
+}
+
+function hasExecutableIdentifierReference(source, start, end, identifier) {
+	const pattern = new RegExp(`\\b${escapeRegExp(identifier)}\\b`, "g");
+	for (const match of source.slice(start, end).matchAll(pattern)) {
+		const index = start + (match.index ?? 0);
+		const state = scanLexicalState(source, index);
+		if (
+			!state.lineComment &&
+			!state.blockComment &&
+			(!state.quote || state.quote === "/" || state.quote === "`")
+		) {
+			return true;
+		}
+	}
+	return false;
 }
 
 function readTopLevelObject(source, openIndex) {
@@ -397,10 +551,9 @@ function readTopLevelObject(source, openIndex) {
 function resolveIdentifierBinding(source, file, identifier, callIndex) {
 	const candidates = [];
 	const markdownFence = /\.mdx?$/.test(file)
-		? source.lastIndexOf("```", callIndex)
-		: -1;
-	const searchStart =
-		markdownFence >= 0 ? source.indexOf("\n", markdownFence) + 1 : 0;
+		? markdownFenceContentStart(source, callIndex)
+		: undefined;
+	const searchStart = markdownFence ?? 0;
 	const scopedSource = source.slice(searchStart);
 	const callBlocks = scanLexicalState(
 		scopedSource,
@@ -439,13 +592,32 @@ function resolveIdentifierBinding(source, file, identifier, callIndex) {
 				? readTopLevelObject(source, valueIndex)
 				: undefined;
 		candidates.push({
+			blockDepth: bindingBlocks.length,
 			index: bindingIndex,
 			object,
 			openIndex: object ? valueIndex : undefined,
+			referencedBeforeCall: object
+				? hasExecutableIdentifierReference(
+						scopedSource,
+						object.end + 1 - searchStart,
+						callIndex - searchStart,
+						identifier,
+					)
+				: false,
 		});
 	}
 
-	return candidates.sort((left, right) => right.index - left.index)[0];
+	const deepestBlock = Math.max(
+		...candidates.map((candidate) => candidate.blockDepth),
+	);
+	const scopedCandidates = candidates
+		.filter((candidate) => candidate.blockDepth === deepestBlock)
+		.sort((left, right) => right.index - left.index);
+	const binding = scopedCandidates[0];
+	if (binding && candidates.length > 1) {
+		binding.referencedBeforeCall = true;
+	}
+	return binding;
 }
 
 function inspectFactoryObject(
@@ -459,6 +631,7 @@ function inspectFactoryObject(
 	object,
 	openIndex,
 	reportIndex,
+	resolutionIndex = reportIndex,
 ) {
 	if (/\.\.\./.test(object.topLevel)) {
 		failures.push({
@@ -565,9 +738,13 @@ function inspectFactoryObject(
 				source,
 				file,
 				hooksReference,
-				reportIndex,
+				resolutionIndex,
 			);
-			if (binding?.object && binding.openIndex !== undefined) {
+			if (
+				binding?.object &&
+				binding.openIndex !== undefined &&
+				!binding.referencedBeforeCall
+			) {
 				if (/\.\.\./.test(binding.object.topLevel)) {
 					failures.push({
 						file,
@@ -635,11 +812,22 @@ function checkFactoryCalls(
 	contextualLifecycleNames = [],
 	hookType,
 ) {
-	const callPattern = new RegExp(`\\b${factory}[ \\t\\n]*\\(`, "g");
+	const callPattern = new RegExp(`\\b${factory}\\b`, "g");
 	for (const match of source.matchAll(callPattern)) {
 		const callIndex = match.index ?? 0;
-		let cursor = callIndex + match[0].length;
-		while (/\s/.test(source[cursor] ?? "")) cursor += 1;
+		const fenceStart = /\.mdx?$/.test(file)
+			? markdownFenceContentStart(source, callIndex)
+			: undefined;
+		const callState =
+			fenceStart === undefined
+				? scanLexicalState(source, callIndex)
+				: scanLexicalState(source.slice(fenceStart), callIndex - fenceStart);
+		if (callState.lineComment || callState.blockComment) {
+			continue;
+		}
+		let cursor = skipLexicalTrivia(source, callIndex + match[0].length);
+		if (source[cursor] !== "(") continue;
+		cursor = skipLexicalTrivia(source, cursor + 1);
 		if (source[cursor] === ")") continue;
 		if (source[cursor] !== "{") {
 			const expression = source
@@ -685,7 +873,11 @@ function checkFactoryCalls(
 				});
 				continue;
 			}
-			if (binding.object && binding.openIndex !== undefined) {
+			if (
+				binding.object &&
+				binding.openIndex !== undefined &&
+				!binding.referencedBeforeCall
+			) {
 				inspectFactoryObject(
 					failures,
 					file,
@@ -697,6 +889,7 @@ function checkFactoryCalls(
 					binding.object,
 					binding.openIndex,
 					binding.openIndex,
+					callIndex,
 				);
 			} else {
 				failures.push({

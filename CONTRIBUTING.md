@@ -199,7 +199,7 @@ choices; `resolve(runtime)` binds the shared runtime.
 **Backend hook naming conventions:**
 
 ```typescript
-// Authorization hooks (throw to deny)
+// Pre-execution lifecycle hooks (throw to stop execution after authorization)
 onBeforeCreateItem, onBeforeUpdateItem, onBeforeDeleteItem, onBeforeListItems
 // Lifecycle hooks (called after success)
 onAfterCreateItem, onAfterUpdateItem, onAfterDeleteItem, onAfterListItems
@@ -218,6 +218,7 @@ packages/stack/src/plugins/your-plugin/
 ├── db.ts                       # createDbPlugin(...) — database schema definition
 ├── types.ts                    # Shared TypeScript types (no framework dependencies)
 ├── schemas.ts                  # Zod validation schemas for request bodies
+├── permissions.ts              # Shared authorization descriptor catalog
 ├── query-keys.ts               # React Query key factory (imports from api/query-key-defs.ts)
 ├── client.css                  # Plugin CSS (Tailwind source directives, component styles)
 ├── style.css                   # Full styles including Tailwind @source directives
@@ -225,6 +226,7 @@ packages/stack/src/plugins/your-plugin/
 │   ├── plugin.ts               # defineBackendPlugin, RouteKey type, prefetchForRoute factory
 │   ├── getters.ts              # Pure DB read functions — no hooks, no HTTP context
 │   ├── mutations.ts            # Server-side write functions — no hooks, no HTTP context
+│   ├── operations.ts           # Validation, authorization, lifecycle, and execution
 │   ├── query-key-defs.ts       # Shared query key shapes (prevents SSG/SSR key drift)
 │   ├── serializers.ts          # Convert Date fields → ISO strings before setQueryData
 │   └── index.ts                # Barrel re-export of all public backend surface
@@ -240,7 +242,10 @@ packages/stack/src/plugins/your-plugin/
             └── list-page.internal.tsx  # Actual page content (useSuspenseQuery inside)
 ```
 
-Not every file is required for a minimal plugin. Start with `db.ts`, `types.ts`, `api/plugin.ts`, and `client/plugin.tsx`. Add the rest as the plugin grows.
+Not every file is required for a minimal plugin. A backend plugin starts with
+`db.ts`, `types.ts`, `permissions.ts`, `api/operations.ts`, and `api/plugin.ts`;
+a client half starts with `client/plugin.tsx`. Add the optional query, style,
+and component files as the plugin grows.
 
 ---
 
@@ -252,7 +257,7 @@ Define your data models using `createDbPlugin`. Field types: `string`, `boolean`
 // packages/stack/src/plugins/your-plugin/db.ts
 import { createDbPlugin } from "@btst/stack/plugins/api"
 
-export const mySchema = createDbPlugin("your-plugin", {
+export const mySchema = createDbPlugin("yourPlugin", {
   item: {
     modelName: "item",
     fields: {
@@ -292,18 +297,37 @@ export const createItemSchema = z.object({
 export const updateItemSchema = createItemSchema.partial()
 ```
 
+```typescript
+// packages/stack/src/plugins/your-plugin/permissions.ts
+import { definePermissions, permission } from "@btst/stack/authorization"
+
+export const myPermissions = definePermissions("yourPlugin", {
+  item: {
+    list: permission(),
+    create: permission(),
+    update: permission(),
+    delete: permission(),
+  },
+})
+```
+
 ---
 
 ### 3. Backend plugin
 
-**`api/getters.ts`** — pure DB reads, safe for SSG and scripts. Authorization hooks are **not** called here — callers are responsible for access control.
+**`api/getters.ts`** — pure DB reads, safe for SSG and scripts. Operation
+validation, authorization, and lifecycle hooks are **not** called here; callers
+own those concerns.
 
 ```typescript
 // packages/stack/src/plugins/your-plugin/api/getters.ts
-import type { Adapter } from "@btst/stack/plugins/api"
+import type { DBAdapter as Adapter } from "@btst/db"
 import type { Item } from "../types"
 
-/** Returns all items sorted newest-first. Authorization hooks are NOT called. */
+/**
+ * Returns all items sorted newest-first.
+ * Operation validation, authorization, and lifecycle hooks are NOT called.
+ */
 export async function listItems(adapter: Adapter): Promise<Item[]> {
   return adapter.findMany<Item>({
     model: "item",
@@ -311,7 +335,10 @@ export async function listItems(adapter: Adapter): Promise<Item[]> {
   }) as Promise<Item[]>
 }
 
-/** Returns a single item by ID, or null. Authorization hooks are NOT called. */
+/**
+ * Returns a single item by ID, or null.
+ * Operation validation, authorization, and lifecycle hooks are NOT called.
+ */
 export async function getItemById(adapter: Adapter, id: string): Promise<Item | null> {
   return adapter.findOne<Item>({
     model: "item",
@@ -324,22 +351,155 @@ export async function getItemById(adapter: Adapter, id: string): Promise<Item | 
 
 ```typescript
 // packages/stack/src/plugins/your-plugin/api/mutations.ts
-import type { Adapter } from "@btst/stack/plugins/api"
+import type { DBAdapter as Adapter } from "@btst/db"
 import type { Item } from "../types"
 
-export interface CreateItemInput { title: string }
+export interface CreateItemInput { title: string; published?: boolean }
+export interface UpdateItemInput { title?: string; published?: boolean }
 
 /**
  * Create an item directly in the database.
  *
- * @remarks Authorization hooks are NOT called. The caller is responsible for
- * access-control checks before invoking this function.
+ * @remarks Operation validation, authorization, and lifecycle hooks are NOT
+ * called. The caller owns those concerns.
  */
 export async function createItem(adapter: Adapter, input: CreateItemInput): Promise<Item> {
   return adapter.create<Item>({
     model: "item",
-    data: { ...input, published: false, createdAt: new Date(), updatedAt: new Date() },
+    data: {
+      ...input,
+      published: input.published ?? false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
   })
+}
+
+/**
+ * @remarks Operation validation, authorization, and lifecycle hooks are NOT
+ * called. The caller owns those concerns.
+ */
+export async function updateItem(
+  adapter: Adapter,
+  id: string,
+  input: UpdateItemInput,
+): Promise<Item | null> {
+  return adapter.update<Item>({
+    model: "item",
+    where: [{ field: "id", value: id }],
+    update: { ...input, updatedAt: new Date() },
+  })
+}
+
+/**
+ * @remarks Operation validation, authorization, and lifecycle hooks are NOT
+ * called. The caller owns those concerns.
+ */
+export async function deleteItem(adapter: Adapter, id: string): Promise<void> {
+  await adapter.delete<Item>({
+    model: "item",
+    where: [{ field: "id", value: id }],
+  })
+}
+```
+
+**`api/operations.ts`** — the single validated, authorized operation inventory
+used by HTTP routes, request-scoped server calls, and trusted jobs:
+
+```typescript
+// packages/stack/src/plugins/your-plugin/api/operations.ts
+import type { DBAdapter as Adapter } from "@btst/db"
+import { defineOperation } from "@btst/stack/plugins/api"
+import { z } from "zod"
+import { myPermissions } from "../permissions"
+import { createItemSchema, updateItemSchema } from "../schemas"
+import type { Item } from "../types"
+import { listItems } from "./getters"
+import {
+  createItem,
+  deleteItem,
+  updateItem,
+} from "./mutations"
+
+export interface MyBackendHooks {
+  onBeforeCreateItem?: (data: unknown, ctx: { headers?: Headers }) => Promise<void> | void
+  onAfterCreateItem?: (item: unknown, ctx: { headers?: Headers }) => Promise<void> | void
+  onErrorCreateItem?: (error: Error, ctx: { headers?: Headers }) => Promise<void> | void
+}
+
+const updateOperationSchema = z.object({
+  id: z.string(),
+  data: updateItemSchema,
+})
+const itemIdSchema = z.object({ id: z.string() })
+
+function serializeItem(item: Item) {
+  return {
+    ...item,
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString(),
+  }
+}
+
+const hookContext = (request?: Request) => ({
+  ...(request ? { headers: request.headers } : {}),
+})
+
+export function createMyOperations(
+  adapter: Adapter,
+  hooks?: MyBackendHooks,
+) {
+  const listItemsOperation = defineOperation({
+    input: z.object({}),
+    permission: myPermissions.item.list,
+    facts: () => undefined,
+    execute: async () => (await listItems(adapter)).map(serializeItem),
+  })
+
+  const createItemOperation = defineOperation({
+    input: createItemSchema,
+    permission: myPermissions.item.create,
+    facts: () => undefined,
+    before: async ({ input, request }) => {
+      await hooks?.onBeforeCreateItem?.(input, hookContext(request))
+    },
+    execute: async ({ input }) => serializeItem(await createItem(adapter, input)),
+    after: async ({ result, request }) => {
+      await hooks?.onAfterCreateItem?.(result, hookContext(request))
+    },
+    onError: async ({ error, request }) => {
+      const cause = error instanceof Error ? error : new Error("Create item failed")
+      await hooks?.onErrorCreateItem?.(cause, hookContext(request))
+    },
+  })
+
+  const updateItemOperation = defineOperation({
+    input: updateOperationSchema,
+    permission: myPermissions.item.update,
+    facts: () => undefined,
+    execute: async ({ input }) => {
+      const item = await updateItem(adapter, input.id, input.data)
+      if (!item) throw new Error("Item not found")
+      return serializeItem(item)
+    },
+  })
+
+  const deleteItemOperation = defineOperation({
+    input: itemIdSchema,
+    permission: myPermissions.item.delete,
+    facts: () => undefined,
+    execute: async ({ input }) => {
+      await deleteItem(adapter, input.id)
+      return { success: true } as const
+    },
+  })
+
+  return {
+    listItems: listItemsOperation,
+    createItem: createItemOperation,
+    updateItem: updateItemOperation,
+    deleteItem: deleteItemOperation,
+  } as const
 }
 ```
 
@@ -350,13 +510,7 @@ export async function createItem(adapter: Adapter, input: CreateItemInput): Prom
 import { defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api"
 import { mySchema } from "../db"
 import { createItemSchema, updateItemSchema } from "../schemas"
-import { createMyOperations } from "./operations"
-
-export interface MyBackendHooks {
-  onBeforeCreateItem?: (data: unknown, ctx: { headers: Headers }) => Promise<void> | void
-  onAfterCreateItem?: (item: unknown, ctx: { headers: Headers }) => Promise<void> | void
-  onErrorCreateItem?: (error: Error, ctx: { headers: Headers }) => Promise<void> | void
-}
+import { createMyOperations, type MyBackendHooks } from "./operations"
 
 export interface MyBackendPluginOptions {
   hooks?: MyBackendHooks
@@ -400,8 +554,16 @@ export type MyApiRouter = ReturnType<ReturnType<typeof myBackendPlugin>["routes"
 ```typescript
 // packages/stack/src/plugins/your-plugin/api/index.ts
 export * from "./plugin"
+export { createMyOperations, type MyBackendHooks } from "./operations"
 export { listItems, getItemById } from "./getters"
-export { createItem, type CreateItemInput } from "./mutations"
+export {
+  createItem,
+  deleteItem,
+  updateItem,
+  type CreateItemInput,
+  type UpdateItemInput,
+} from "./mutations"
+export { myPermissions } from "../permissions"
 ```
 
 ---
@@ -817,7 +979,7 @@ npm install @btst/stack
 
 ## Hooks
 
-<AutoTypeTable path="packages/stack/src/plugins/your-plugin/api/plugin.ts" name="MyBackendHooks" />
+<AutoTypeTable path="packages/stack/src/plugins/your-plugin/api/operations.ts" name="MyBackendHooks" />
 ```
 
 Preview locally:
@@ -879,11 +1041,11 @@ Before opening a pull request for a new plugin, verify every item:
 
 **Plugin implementation**
 
-- [ ] Backend plugin: `name`, `dbPlugin`, and `routes` are all present
-- [ ] Client plugin: `name` and `routes` are present
+- [ ] Backend plugin: camelCase `id`, `dbPlugin`, `operations`, and operation-bound `routes` are present
+- [ ] Client plugin: the matching camelCase `id` and `resolve(runtime)` returning `routes` are present
 - [ ] `api/getters.ts` contains only pure DB reads — no HTTP context, no lifecycle hooks
-- [ ] `api/getters.ts` has JSDoc noting "Authorization hooks are NOT called"
-- [ ] `api/mutations.ts` (if present) has JSDoc noting "Authorization hooks are NOT called"
+- [ ] `api/getters.ts` has JSDoc noting operation validation, authorization, and lifecycle hooks are not called
+- [ ] `api/mutations.ts` (if present) has the same JSDoc and says the caller owns those concerns
 - [ ] `api/index.ts` re-exports all public backend surface (getters, mutations, types, router type)
 - [ ] `api/query-key-defs.ts` defines shared key shapes imported by both `query-keys.ts` and `prefetchForRoute`
 - [ ] `api/serializers.ts` converts `Date` fields to ISO strings before `setQueryData`
