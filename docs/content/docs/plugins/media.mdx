@@ -423,11 +423,15 @@ export const clientAuth = createClientAuth({
 })
 
 // Framework layout helpers resolve this once on the server. Pass the same
-// snapshot both to StackProvider and the Media SSR query partition.
+// snapshot to the Media SSR query partition.
 const requestStack = getStackClient(queryClient, {
   headers: requestHeaders,
   identity: initialIdentity ?? undefined,
 })
+await requestStack.router.getRoute("/media")?.loader?.()
+
+// Create a separate, header-free stack for the browser provider.
+const browserStack = getStackClient(queryClient)
 
 <StackProvider
   stack={browserStack}
