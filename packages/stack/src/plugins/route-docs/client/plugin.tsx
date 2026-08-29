@@ -103,6 +103,38 @@ interface ResolvedRouteDocsClientConfig extends RouteDocsClientConfig {
 	siteBasePath: string;
 }
 
+interface RouteDocsContextIdentityRegistry {
+	nextIdentity: number;
+	identities: WeakMap<ClientStackContext, number>;
+}
+
+const contextIdentitiesByQueryClient = new WeakMap<
+	QueryClient,
+	RouteDocsContextIdentityRegistry
+>();
+
+function getContextIdentity(
+	queryClient: QueryClient,
+	context: ClientStackContext,
+): number {
+	let registry = contextIdentitiesByQueryClient.get(queryClient);
+	if (!registry) {
+		registry = {
+			nextIdentity: 0,
+			identities: new WeakMap<ClientStackContext, number>(),
+		};
+		contextIdentitiesByQueryClient.set(queryClient, registry);
+	}
+
+	let identity = registry.identities.get(context);
+	if (identity === undefined) {
+		identity = registry.nextIdentity;
+		registry.nextIdentity += 1;
+		registry.identities.set(context, identity);
+	}
+	return identity;
+}
+
 function createRouteDocsQueryKey(
 	config: ResolvedRouteDocsClientConfig,
 	context: ClientStackContext | null,
@@ -115,6 +147,9 @@ function createRouteDocsQueryKey(
 	return [
 		...ROUTE_DOCS_QUERY_KEY,
 		JSON.stringify({
+			contextIdentity: context
+				? getContextIdentity(config.queryClient, context)
+				: null,
 			basePath: context?.basePath ?? null,
 			siteBaseURL: config.siteBaseURL,
 			siteBasePath: config.siteBasePath,

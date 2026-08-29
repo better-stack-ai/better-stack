@@ -298,33 +298,39 @@ describe("Media and Route Docs resolved client runtime", () => {
 		});
 	});
 
-	it("isolates Route Docs loader caches across resolved stacks", async () => {
-		const createProbe = <const TId extends string>(id: TId) =>
+	it("isolates Route Docs loader caches for structurally identical stacks", async () => {
+		const createProbe = (label: string) =>
 			defineClientPlugin({
-				id,
+				id: "probe",
 				resolve: () => ({
 					routes: () => ({
-						probe: defineRoute(`/${id}`, { page: () => null }),
+						probe: defineRoute("/probe", { page: () => null }, undefined, {
+							title: label,
+						}),
 					}),
-					sitemap: () => [{ url: `https://${id}.example.com/${id}` }],
+					sitemap: () => [
+						{
+							url: `https://stack-${label.endsWith("A") ? "a" : "b"}.example.com/probe`,
+						},
+					],
 				}),
 			});
 		const queryClient = new QueryClient();
 		const stackA = createClientStack({
-			api: { baseURL: "https://api-a.example.com", basePath: "/api" },
-			site: { baseURL: "https://site-a.example.com", basePath: "/" },
+			api: { baseURL: "https://api.example.com", basePath: "/api" },
+			site: { baseURL: "https://site.example.com", basePath: "/" },
 			queryClient,
 			plugins: {
-				probeA: createProbe("probeA"),
+				probe: createProbe("Stack A"),
 				routeDocs: routeDocsClientPlugin(),
 			},
 		});
 		const stackB = createClientStack({
-			api: { baseURL: "https://api-b.example.com", basePath: "/api" },
-			site: { baseURL: "https://site-b.example.com", basePath: "/" },
+			api: { baseURL: "https://api.example.com", basePath: "/api" },
+			site: { baseURL: "https://site.example.com", basePath: "/" },
 			queryClient,
 			plugins: {
-				probeB: createProbe("probeB"),
+				probe: createProbe("Stack B"),
 				routeDocs: routeDocsClientPlugin(),
 			},
 		});
@@ -333,16 +339,38 @@ describe("Media and Route Docs resolved client runtime", () => {
 		expect(
 			queryClient
 				.getQueriesData<RouteDocsSchema>({ queryKey: ROUTE_DOCS_QUERY_KEY })
-				.map(([, schema]) => schema?.plugins.map((plugin) => plugin.key)),
-		).toEqual([["probeA"]]);
+				.map(([, schema]) => ({
+					title: schema?.plugins[0]?.routes[0]?.meta?.title,
+					sitemap: schema?.allSitemapEntries[0]?.url,
+				})),
+		).toEqual([
+			{
+				title: "Stack A",
+				sitemap: "https://stack-a.example.com/probe",
+			},
+		]);
 		expect(queryClient.getQueryData(ROUTE_DOCS_QUERY_KEY)).toBeUndefined();
 
 		await stackB.router.getRoute("/route-docs")?.loader?.();
 		expect(
 			queryClient
 				.getQueriesData<RouteDocsSchema>({ queryKey: ROUTE_DOCS_QUERY_KEY })
-				.map(([, schema]) => schema?.plugins.map((plugin) => plugin.key))
-				.sort(),
-		).toEqual([["probeA"], ["probeB"]]);
+				.map(([, schema]) => ({
+					title: schema?.plugins[0]?.routes[0]?.meta?.title,
+					sitemap: schema?.allSitemapEntries[0]?.url,
+				}))
+				.sort((left, right) =>
+					String(left.title).localeCompare(String(right.title)),
+				),
+		).toEqual([
+			{
+				title: "Stack A",
+				sitemap: "https://stack-a.example.com/probe",
+			},
+			{
+				title: "Stack B",
+				sitemap: "https://stack-b.example.com/probe",
+			},
+		]);
 	});
 });
