@@ -460,9 +460,12 @@ In order to use BTST, your application must meet the following requirements:
     Create a client instance that routes requests to plugin pages, prefetches their data on the server, and renders them with instant hydration on the client:
 
     ```tsx title="lib/stack-client.tsx"
-    import { createClientStack } from "@btst/stack/client"
+    import {
+      createClientStack,
+      type ClientPluginEndpointOverride,
+    } from "@btst/stack/client"
     import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
-    import { QueryClient } from "@tanstack/react-query"
+    import type { QueryClient } from "@tanstack/react-query"
 
     interface StackClientOptions {
       apiOrigin?: string
@@ -483,6 +486,16 @@ In order to use BTST, your application must meet the following requirements:
         options?.apiOrigin ||
         process.env.NEXT_PUBLIC_API_URL ||
         siteOrigin
+      const crossOriginApiEndpoint =
+        apiOrigin === siteOrigin
+          ? undefined
+          : ({
+              api: {
+                baseURL: apiOrigin,
+                basePath: "/api/data",
+                credentials: "include",
+              },
+            } satisfies ClientPluginEndpointOverride)
 
       return createClientStack({
         api: { baseURL: apiOrigin, basePath: "/api/data" },
@@ -490,7 +503,10 @@ In order to use BTST, your application must meet the following requirements:
         queryClient,
         plugins: {
           blog: blogClientPlugin(),
-        }
+        },
+        ...(crossOriginApiEndpoint
+          ? { endpoints: { blog: crossOriginApiEndpoint } }
+          : {}),
       })
     }
     ```
@@ -514,6 +530,10 @@ In order to use BTST, your application must meet the following requirements:
       `resolveTrustedClientOrigins` from `@btst/stack/client/server`, fails
       closed when production configuration is missing, and removes routing and
       hop-by-hop headers before forwarding the remaining request credentials.
+      The browser stack above separately opts each API-owning plugin into
+      `credentials: "include"` only when the trusted API and site origins differ.
+      A managed backend that uses cookies must allow the public site origin and
+      credentialed requests in its CORS policy.
     </Callout>
   </Step>
 
