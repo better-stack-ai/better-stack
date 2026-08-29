@@ -464,6 +464,25 @@ function inspectFactoryObject(
 			match: factory,
 		});
 	}
+	if (kind === "backend") {
+		const hooksProperty = object.topLevel.match(/\bhooks\s*:/);
+		if (hooksProperty?.index !== undefined) {
+			let hooksValueIndex =
+				openIndex + hooksProperty.index + hooksProperty[0].length;
+			while (/\s/.test(source[hooksValueIndex] ?? "")) hooksValueIndex += 1;
+			if (source[hooksValueIndex] === "{") {
+				const hooksObject = readTopLevelObject(source, hooksValueIndex);
+				if (hooksObject && /\.\.\./.test(hooksObject.topLevel)) {
+					failures.push({
+						file,
+						line: lineAt(source, hooksValueIndex),
+						label: "backend hooks contain an unverifiable spread",
+						match: factory,
+					});
+				}
+			}
+		}
+	}
 	if (
 		kind === "backend" &&
 		/(?:^|[,{])\s*(?:on(?:Before|After)[A-Z][A-Za-z0-9]*|onError(?:[A-Z][A-Za-z0-9]*)?)\b(?=\s*(?:\??:|\(|,|}))/.test(
