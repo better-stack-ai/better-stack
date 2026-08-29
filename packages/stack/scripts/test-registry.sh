@@ -50,6 +50,18 @@ TEST_PASSED=false
 # Includes a representative data plugin (blog), client-only plugin (route-docs),
 # and composed client plugin (ui-builder over CMS) in the install/build matrix.
 PLUGIN_NAMES=("ui-builder" "blog" "ai-chat" "cms" "form-builder" "kanban" "comments" "media" "route-docs")
+EXTERNAL_REGISTRY_DEPENDENCY_ALLOWLIST=("ui-builder" "cms" "form-builder" "kanban")
+
+has_external_registry_dependency() {
+    local candidate="$1"
+    local plugin
+    for plugin in "${EXTERNAL_REGISTRY_DEPENDENCY_ALLOWLIST[@]}"; do
+        if [ "$plugin" = "$candidate" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
 
 # ---------------------------------------------------------------------------
 # Cleanup
@@ -241,9 +253,9 @@ console.log('tsconfig.json patched');
     INSTALL_FAILURES=()
 
     # Install all plugin registry items.
-    # If a plugin's registryDependencies reference an external URL that is not
-    # yet publicly accessible (e.g. a private repo), the install will fail.
-    # We treat those as warnings so the rest of the test can proceed.
+    # Only plugins in the explicit external dependency allowlist may warn and
+    # continue when an upstream registry is inaccessible. Every registry item
+    # fully owned by this repository must install successfully.
     for PLUGIN in "${PLUGIN_NAMES[@]}"; do
         echo "Installing btst-${PLUGIN}…"
         if npx --yes shadcn@4.0.5 add \
@@ -251,8 +263,13 @@ console.log('tsconfig.json patched');
             --yes --overwrite 2>&1; then
             success "btst-${PLUGIN} installed"
         else
-            warn "btst-${PLUGIN} install failed (likely an inaccessible external registry dependency). Files from our registry were still written; see debug dir."
-            INSTALL_FAILURES+=("$PLUGIN")
+            if has_external_registry_dependency "$PLUGIN"; then
+                warn "btst-${PLUGIN} install failed because its allowlisted external registry dependency was inaccessible. Files from our registry were still written; see debug dir."
+                INSTALL_FAILURES+=("$PLUGIN")
+            else
+                error "btst-${PLUGIN} install failed; repository-owned registry items are required to install cleanly."
+                exit 1
+            fi
         fi
     done
 
@@ -365,9 +382,9 @@ export default function SmokeTestPage() {
 }
 SMOKE_EOF
 
-    # Registry installs with unavailable external dependencies are explicitly
-    # non-critical above. Do not leave their missing imports in the smoke page;
-    # every registry item that did install is still compiled by the build.
+    # Allowlisted external registry failures are explicitly non-critical above.
+    # Do not leave their missing imports in the smoke page; every repository-owned
+    # item and every external item that did install is still compiled by the build.
     for FAILED_PLUGIN in "${INSTALL_FAILURES[@]}"; do
         case "$FAILED_PLUGIN" in
             ui-builder) FAILED_SYMBOL="PageListPage" ;;
@@ -378,7 +395,6 @@ SMOKE_EOF
             kanban) FAILED_SYMBOL="BoardsListPageComponent" ;;
             comments) FAILED_SYMBOL="ModerationPageComponent" ;;
             media) FAILED_SYMBOL="LibraryPageComponent" ;;
-            route-docs) FAILED_SYMBOL="DocsPageComponent" ;;
             *) continue ;;
         esac
         sed -i "/${FAILED_SYMBOL}/d" src/app/btst-smoke-test/page.tsx
