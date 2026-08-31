@@ -14,7 +14,7 @@
     "lint:fix": "biome check . --fix --unsafe",
     "bump": "bumpp",
     "test": "turbo --filter \"./packages/*\" test",
-    "test:packed-consumers": "node --test scripts/packed-consumer/runner.test.mjs",
+    "test:packed-consumers": "vitest run scripts/packed-consumer/runner.test.mjs",
     "smoke:packed-consumer": "node scripts/packed-consumer-smoke.mjs",
     "e2e:integration": "turbo --filter \"./e2e/*\" e2e:integration",
     "typecheck": "turbo --filter \"./packages/*\" typecheck",

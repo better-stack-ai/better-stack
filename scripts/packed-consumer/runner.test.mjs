@@ -1,45 +1,42 @@
-import assert from "node:assert/strict";
-import { test } from "node:test";
+import { describe, expect, it } from "vitest";
 
 import {
 	AUTH_COHORT,
 	assertAuthCohort,
 	assertHealthyDependencyTree,
+	collectNamedVersions,
 	createConsumerManifest,
 	findMissingDirectPeers,
 	parseArgs,
 } from "./runner.mjs";
 
-test("parses one explicit fixture and package manager", () => {
-	assert.deepEqual(
-		parseArgs(["--fixture", "core", "--package-manager", "pnpm"]),
-		{
+describe("packed consumer runner", () => {
+	it("parses one explicit fixture and package manager", () => {
+		expect(
+			parseArgs(["--fixture", "core", "--package-manager", "pnpm"]),
+		).toEqual({
 			fixture: "core",
 			packageManager: "pnpm",
 			betterAuthUi: undefined,
 			keepTemp: false,
-		},
-	);
-});
+		});
+	});
 
-test("accepts the package-runner argument separator", () => {
-	assert.equal(
-		parseArgs(["--", "--fixture", "core", "--package-manager", "npm"])
-			.packageManager,
-		"npm",
-	);
-});
+	it("accepts the package-runner argument separator", () => {
+		expect(
+			parseArgs(["--", "--fixture", "core", "--package-manager", "npm"])
+				.packageManager,
+		).toBe("npm");
+	});
 
-test("requires an injected Better Auth UI artifact for the auth fixture", () => {
-	assert.throws(
-		() => parseArgs(["--fixture", "auth", "--package-manager", "npm"]),
-		/--better-auth-ui <tarball-or-package-spec>/,
-	);
-});
+	it("requires an injected Better Auth UI artifact for the auth fixture", () => {
+		expect(() =>
+			parseArgs(["--fixture", "auth", "--package-manager", "npm"]),
+		).toThrow(/--better-auth-ui <tarball>/);
+	});
 
-test("rejects missing and invalid dependency-tree entries", () => {
-	assert.throws(
-		() =>
+	it("rejects missing and invalid dependency-tree entries", () => {
+		expect(() =>
 			assertHealthyDependencyTree({
 				name: "consumer",
 				problems: ["missing: better-call@1.3.6"],
@@ -47,53 +44,69 @@ test("rejects missing and invalid dependency-tree entries", () => {
 					"better-call": { version: "2.0.2", invalid: true },
 				},
 			}),
-		/missing: better-call@1\.3\.6.*better-call@2\.0\.2 is invalid/s,
-	);
-});
+		).toThrow(/missing: better-call@1\.3\.6.*better-call@2\.0\.2 is invalid/s);
+	});
 
-test("finds non-optional peers that are not direct consumer dependencies", () => {
-	assert.deepEqual(
-		findMissingDirectPeers(
-			{
-				peerDependencies: {
-					react: ">=18",
-					next: ">=15",
-					"better-call": "1.3.6",
+	it("finds non-optional peers that are not direct consumer dependencies", () => {
+		expect(
+			findMissingDirectPeers(
+				{
+					peerDependencies: {
+						react: ">=18",
+						next: ">=15",
+						"better-call": "1.3.6",
+					},
+					peerDependenciesMeta: { next: { optional: true } },
 				},
-				peerDependenciesMeta: { next: { optional: true } },
-			},
-			{ dependencies: { react: "19.2.7" } },
-		),
-		["better-call@1.3.6"],
-	);
-});
+				{ dependencies: { react: "19.2.7" } },
+			),
+		).toEqual(["better-call@1.3.6"]);
+	});
 
-test("accepts exactly one retained Better Auth dependency universe", () => {
-	const versions = Object.fromEntries(
-		Object.entries(AUTH_COHORT).map(([name, version]) => [name, [version]]),
-	);
+	it("requires the retained cohort while allowing valid duplicate implementations", () => {
+		const versions = Object.fromEntries(
+			Object.entries(AUTH_COHORT).map(([name, version]) => [name, [version]]),
+		);
 
-	assert.doesNotThrow(() => assertAuthCohort(versions));
-	assert.throws(
-		() =>
+		expect(() => assertAuthCohort(versions)).not.toThrow();
+		expect(() =>
 			assertAuthCohort({
 				...versions,
 				"better-call": ["1.3.6", "2.0.2"],
 			}),
-		/better-call: expected only 1\.3\.6; found 1\.3\.6, 2\.0\.2/,
-	);
-});
-
-test("the core consumer directly satisfies the published DB auth peers", () => {
-	const manifest = createConsumerManifest({
-		fixture: "core",
-		stackTarball: "/tmp/stack.tgz",
+		).not.toThrow();
+		expect(() =>
+			assertAuthCohort({ ...versions, "better-call": ["2.0.2"] }),
+		).toThrow(/better-call: expected 1\.3\.6 to be present; found 2\.0\.2/);
 	});
 
-	assert.equal(manifest.dependencies["@better-auth/core"], "1.6.16");
-	assert.equal(manifest.dependencies["@better-auth/utils"], "0.4.1");
-	assert.equal(manifest.dependencies["@better-fetch/fetch"], "1.2.2");
-	assert.equal(manifest.dependencies["better-auth"], "1.6.16");
-	assert.equal(manifest.dependencies["better-call"], "1.3.6");
-	assert.equal(manifest.dependencies["@btst/better-auth-ui"], undefined);
+	it("combines direct and nested package-manager dependency views", () => {
+		const versions = collectNamedVersions(
+			[
+				[{ dependencies: { "better-auth": { version: "1.6.16" } } }],
+				[{ dependencies: { "@btst/db": { version: "2.2.3" } } }],
+			],
+			["better-auth", "@btst/db"],
+		);
+
+		expect(versions).toEqual({
+			"better-auth": ["1.6.16"],
+			"@btst/db": ["2.2.3"],
+		});
+	});
+
+	it("directly satisfies the published DB and Core peer contracts", () => {
+		const manifest = createConsumerManifest({
+			fixture: "core",
+			stackTarball: "/tmp/stack.tgz",
+		});
+
+		expect(manifest.dependencies["@better-auth/core"]).toBe("1.6.16");
+		expect(manifest.dependencies["@better-auth/utils"]).toBe("0.4.1");
+		expect(manifest.dependencies["@better-fetch/fetch"]).toBe("1.2.2");
+		expect(manifest.dependencies["@btst/db"]).toBe("2.2.3");
+		expect(manifest.dependencies["better-auth"]).toBe("1.6.16");
+		expect(manifest.dependencies["better-call"]).toBe("1.3.6");
+		expect(manifest.dependencies["@btst/better-auth-ui"]).toBeUndefined();
+	});
 });

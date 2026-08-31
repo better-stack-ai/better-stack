@@ -19,7 +19,9 @@ const REPOSITORY_ROOT = resolve(SCRIPT_DIR, "../..");
 const FIXTURES_DIR = join(SCRIPT_DIR, "fixtures");
 
 export const AUTH_COHORT = Object.freeze({
+	"@better-auth/api-key": "1.6.16",
 	"@better-auth/core": "1.6.16",
+	"@better-auth/passkey": "1.6.16",
 	"@better-auth/utils": "0.4.1",
 	"@better-fetch/fetch": "1.2.2",
 	"@btst/db": "2.2.3",
@@ -27,11 +29,22 @@ export const AUTH_COHORT = Object.freeze({
 	"better-call": "1.3.6",
 });
 
+function pickVersions(source, names) {
+	return Object.fromEntries(names.map((name) => [name, source[name]]));
+}
+
 const CORE_DEPENDENCIES = Object.freeze({
 	"@ai-sdk/react": "2.0.94",
-	"@better-auth/core": "1.6.16",
-	"@better-auth/utils": "0.4.1",
-	"@better-fetch/fetch": "1.2.2",
+	// Exercise @btst/db's published exact peer contract explicitly. These are
+	// documented peers of @btst/db/Core, not workaround pins for the fixture.
+	...pickVersions(AUTH_COHORT, [
+		"@better-auth/core",
+		"@better-auth/utils",
+		"@better-fetch/fetch",
+		"@btst/db",
+		"better-auth",
+		"better-call",
+	]),
 	"@btst/yar": "1.3.2",
 	"@hookform/resolvers": "5.2.2",
 	"@radix-ui/react-dialog": "1.1.15",
@@ -41,8 +54,6 @@ const CORE_DEPENDENCIES = Object.freeze({
 	"@tailwindcss/typography": "0.5.19",
 	"@tanstack/react-query": "5.90.10",
 	ai: "5.0.94",
-	"better-auth": "1.6.16",
-	"better-call": "1.3.6",
 	"class-variance-authority": "0.7.1",
 	clsx: "2.1.1",
 	cmdk: "1.1.1",
@@ -50,8 +61,8 @@ const CORE_DEPENDENCIES = Object.freeze({
 	"highlight.js": "11.11.1",
 	katex: "0.16.35",
 	"lucide-react": "1.7.0",
-	react: "19.2.7",
-	"react-dom": "19.2.7",
+	react: "19.2.8",
+	"react-dom": "19.2.8",
 	"react-error-boundary": "4.1.2",
 	"react-hook-form": "7.66.1",
 	"react-markdown": "9.1.0",
@@ -67,9 +78,10 @@ const CORE_DEPENDENCIES = Object.freeze({
 });
 
 const AUTH_DEPENDENCIES = Object.freeze({
-	"@better-auth/api-key": "1.6.16",
-	"@better-auth/passkey": "1.6.16",
-	"@better-fetch/fetch": "1.2.2",
+	...pickVersions(AUTH_COHORT, [
+		"@better-auth/api-key",
+		"@better-auth/passkey",
+	]),
 	"@captchafox/react": "1.10.0",
 	"@hookform/resolvers": "5.2.2",
 	"@marsidev/react-turnstile": "1.1.0",
@@ -88,7 +100,6 @@ const AUTH_DEPENDENCIES = Object.freeze({
 	"@radix-ui/react-use-callback-ref": "1.1.1",
 	"@radix-ui/react-use-layout-effect": "1.1.1",
 	"@tanstack/react-query": "5.101.0",
-	"better-auth": "1.6.16",
 	"class-variance-authority": "0.7.1",
 	clsx: "2.1.1",
 	"input-otp": "1.4.2",
@@ -114,7 +125,7 @@ const PACKAGE_MANAGERS = new Set(["npm", "pnpm"]);
 function usage() {
 	return [
 		"Usage: node scripts/packed-consumer-smoke.mjs --fixture <core|auth> --package-manager <npm|pnpm>",
-		"       [--better-auth-ui <tarball-or-package-spec>] [--keep-temp]",
+		"       [--better-auth-ui <tarball>] [--keep-temp]",
 	].join("\n");
 }
 
@@ -161,7 +172,7 @@ export function parseArgs(argv) {
 	}
 	if (options.fixture === "auth" && !options.betterAuthUi) {
 		throw new Error(
-			`The auth fixture requires --better-auth-ui <tarball-or-package-spec>\n${usage()}`,
+			`The auth fixture requires --better-auth-ui <tarball>\n${usage()}`,
 		);
 	}
 
@@ -214,6 +225,10 @@ export function collectNamedVersions(tree, names) {
 
 	function visit(value) {
 		if (!value || typeof value !== "object") return;
+		if (Array.isArray(value)) {
+			for (const item of value) visit(item);
+			return;
+		}
 		for (const [name, dependency] of Object.entries(value.dependencies ?? {})) {
 			if (versions[name] && typeof dependency.version === "string") {
 				versions[name].add(dependency.version);
@@ -232,9 +247,9 @@ export function assertAuthCohort(versions) {
 	const problems = [];
 	for (const [name, expected] of Object.entries(AUTH_COHORT)) {
 		const found = versions[name] ?? [];
-		if (found.length !== 1 || found[0] !== expected) {
+		if (!found.includes(expected)) {
 			problems.push(
-				`${name}: expected only ${expected}; found ${found.join(", ") || "nothing"}`,
+				`${name}: expected ${expected} to be present; found ${found.join(", ") || "nothing"}`,
 			);
 		}
 	}
@@ -298,7 +313,11 @@ async function packStack(tempRoot) {
 }
 
 async function normalizePackageSpec(spec) {
-	if (!spec.endsWith(".tgz")) return spec;
+	if (!spec.endsWith(".tgz")) {
+		throw new Error(
+			`--better-auth-ui must reference a packed .tgz artifact; received ${spec}`,
+		);
+	}
 	const path = isAbsolute(spec) ? spec : resolve(process.cwd(), spec);
 	return realpath(path);
 }
@@ -377,30 +396,29 @@ async function readTree(
 	const [command, args] = treeCommand(packageManager, depth, packageNames);
 	const result = await runCommand(command, args, {
 		cwd: consumerDir,
-		quiet: depth === "Infinity",
+		quiet: true,
 	});
 	return JSON.parse(result.stdout);
 }
 
 async function logFailureTrees(packageManager, consumerDir) {
 	console.error("\n[packed-consumer] dependency diagnostics after failure");
-	for (const manager of [packageManager]) {
-		try {
-			const [command, args] = treeCommand(manager, "Infinity", [
-				"@btst/stack",
-				"@btst/db",
-				...Object.keys(AUTH_COHORT),
-			]);
-			await runCommand(command, args, { cwd: consumerDir });
-		} catch (error) {
-			console.error(error.message);
-		}
+	try {
+		const [command, args] = treeCommand(packageManager, "Infinity", [
+			"@btst/stack",
+			"@btst/db",
+			...Object.keys(AUTH_COHORT),
+		]);
+		await runCommand(command, args, { cwd: consumerDir });
+	} catch (error) {
+		console.error(error.message);
 	}
 }
 
 async function validateDirectPeers(consumerDir, consumerManifest, fixture) {
 	const packageNames = [
 		"@btst/stack",
+		"@btst/db",
 		...(fixture === "auth" ? ["@btst/better-auth-ui"] : []),
 	];
 	for (const packageName of packageNames) {
@@ -450,16 +468,16 @@ async function validateConsumer(options, consumerDir, manifest) {
 			: [compatibilityTree]) {
 			assertHealthyDependencyTree(root);
 		}
-		const versions = collectNamedVersions(
-			compatibilityTree,
-			Object.keys(AUTH_COHORT),
-		);
 		if (options.fixture === "auth") {
+			const versions = collectNamedVersions(
+				[directTree, compatibilityTree],
+				Object.keys(AUTH_COHORT),
+			);
 			console.log(
 				`\n[packed-consumer] resolved auth cohort\n${JSON.stringify(versions, null, 2)}`,
 			);
+			assertAuthCohort(versions);
 		}
-		assertAuthCohort(versions);
 
 		await runCommand(options.packageManager, ["run", "typecheck"], {
 			cwd: consumerDir,
