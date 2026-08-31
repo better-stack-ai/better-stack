@@ -84,7 +84,7 @@ jobs:
       - name: Install and build Better Auth UI
         working-directory: .packed-consumer/better-auth-ui
         run: |
-          corepack pnpm@10.26.2 install --frozen-lockfile
+          corepack pnpm@10.26.2 install --ignore-workspace --frozen-lockfile
           corepack pnpm@10.26.2 build
 
       - name: Pack Better Auth UI
