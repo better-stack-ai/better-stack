@@ -179,7 +179,7 @@ export function createInitCommand() {
 		)
 		.option(
 			"--plugins <plugins>",
-			"Comma-separated plugin keys, or 'all'",
+			"Comma-separated plugin keys (use better-auth-ui for auth + account with an existing Better Auth backend), or 'all'",
 			parsePluginOption,
 		)
 		.option("--skip-install", "Skip dependency install")

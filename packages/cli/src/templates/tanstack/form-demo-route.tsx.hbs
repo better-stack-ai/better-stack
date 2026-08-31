@@ -32,10 +32,10 @@ function FormDemoPage() {
 			<StackProvider
 				stack={browserStack}
 				router={tanstackRouter()}
-{{#if pagesLayoutOverrides}}
+{{#if embeddedOverrides}}
 				overrides={
 					{
-{{{pagesLayoutOverrides}}}
+{{{embeddedOverrides}}}
 					}
 				}
 {{/if}}

@@ -7,6 +7,10 @@ import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 {{/if}}
 import { QueryClientProvider } from "@tanstack/react-query"
 import { useMemo } from "react"
+{{#if hasBetterAuthUi}}
+import { useRouter } from "next/navigation"
+import { createAppAuthClient } from "{{alias}}lib/auth-client"
+{{/if}}
 {{#if hasAiChat}}
 import { usePathname } from "next/navigation"
 {{/if}}
@@ -25,6 +29,13 @@ export function BtstPagesClientLayout({
 		() => getStackClient(queryClient, clientOrigins),
 		[clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
 	)
+{{#if hasBetterAuthUi}}
+	const frameworkRouter = useRouter()
+	const authClient = useMemo(
+		() => createAppAuthClient(clientOrigins.siteOrigin),
+		[clientOrigins.siteOrigin],
+	)
+{{/if}}
 {{#if hasAiChat}}
 	const hasApiKey = typeof process !== "undefined" && !!process.env.NEXT_PUBLIC_HAS_OPENAI_KEY
 	const pathname = usePathname()

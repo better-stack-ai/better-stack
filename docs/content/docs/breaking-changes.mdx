@@ -421,8 +421,8 @@ deployment origins, never a server stack or request headers.
 BTST core is authentication-provider agnostic. Better Auth and Better Auth UI
 are not core dependencies or hidden identity bridges; adapt the provider your
 application already uses through `createClientAuth` and `createServerAuth`.
-The separate Better Auth UI companion migration happens downstream of the
-completed core DX migration.
+Applications that already run Better Auth can separately opt into the migrated
+Better Auth UI companion for auth and account pages.
 
 ---
 
@@ -676,15 +676,19 @@ above. JavaScript applications must update removed keys too; removed callback
 names are not invoked at runtime. Keep hook denials exception-based while
 renaming them.
 
-### 8. Replace the retired provider-specific auth scaffold
+### 8. Replace the v2 provider-specific auth bridge
 
-The v3 CLI no longer offers `better-auth-ui`, installs
-`@btst/better-auth-ui` or Better Auth packages, or generates auth, account,
-and organization routes. BTST authorization is provider-agnostic: keep your
-authentication provider and UI in application code, then adapt its session
-through the generic client and server identity resolvers.
+The v3 CLI no longer generates the old Better Auth-to-BTST authorization
+provider. BTST authorization is provider-agnostic: adapt your application
+session through the generic client and server identity resolvers.
 
-Before:
+The stable-v3 CLI does offer an optional `better-auth-ui` companion scaffold
+for applications that already own a Better Auth server. That selection creates
+only the Better Auth browser client plus auth and account UI routes; it does not
+generate the server, database, schema, migrations, providers, secrets,
+organization plugin, or a BTST identity bridge.
+
+Remove the old bridge:
 
 ```bash
 npx @btst/codegen init --plugins blog,better-auth-ui
@@ -698,7 +702,7 @@ import { createBetterAuthProvider } from "@btst/better-auth-ui"
 </StackProvider>
 ```
 
-After:
+Keep authorization application-owned:
 
 ```ts title="authorization.client.ts"
 export const clientAuth = createClientAuth({
@@ -717,9 +721,9 @@ export const serverAuth = createServerAuth({
 
 Pass `clientAuth` to `StackProvider`, pass `serverAuth` to
 `createBackendStack({ auth: serverAuth })`, and keep
-sign-in, account, and organization routes in your chosen authentication
-framework. Remove the retired plugin from existing `btst init` commands and
-delete its generated imports, overrides, CSS import, and package dependencies.
+authorization independent from the optional Better Auth UI routes. See
+[Better Auth UI Companion](/plugins/better-auth-ui) for the supported scaffold
+and exact dependency cohort.
 
 ### Migration checklist
 
@@ -735,7 +739,9 @@ delete its generated imports, overrides, CSS import, and package dependencies.
 - Change backend hook denials from boolean returns to thrown errors.
 - Replace every retired Form Builder, Kanban, and Media lifecycle spelling
   using the RC3 mapping tables.
-- Replace the provider-specific auth scaffold with application-owned identity resolvers and routes.
+- Keep the Better Auth backend and identity resolvers application-owned. When
+  selected, use the optional companion scaffold for browser auth/account routes
+  and connect it to that existing backend.
 - Run your framework build, TypeScript checks, and tests.
 
 ---

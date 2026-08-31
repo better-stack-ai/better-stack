@@ -13,7 +13,7 @@ ROOT_DIR="$(cd "$PACKAGE_DIR/../.." && pwd)"
 TEST_DIR="/tmp/test-btst-init-$(date +%s)"
 TEST_PASSED=false
 SHADCN_VERSION="4.0.5"
-MEMORY_PLUGIN_LIST="blog,ai-chat,cms,ui-builder,kanban,comments,media,route-docs,open-api"
+MEMORY_PLUGIN_LIST="blog,ai-chat,cms,ui-builder,kanban,comments,media,route-docs,open-api,better-auth-ui"
 
 cleanup() {
 	if [ "$TEST_PASSED" = true ]; then
@@ -129,17 +129,6 @@ if [ "$(cat "$TEST_DIR/init-memory-before.hash")" != "$(cat "$TEST_DIR/init-memo
 fi
 success "Memory + Form Builder failed before scaffolding"
 
-step "Rejecting the retired provider-specific authentication plugin"
-if npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins better-auth-ui --skip-install > "$TEST_DIR/init-retired-auth.log" 2>&1; then
-	error "Expected the retired authentication plugin selection to fail"
-	exit 1
-fi
-if ! grep -q "Unknown plugin(s): better-auth-ui" "$TEST_DIR/init-retired-auth.log"; then
-	error "Expected retired authentication plugin guidance was not printed"
-	exit 1
-fi
-success "Retired authentication plugin cannot be selected"
-
 step "Running compatible memory btst init (first pass)"
 npx @btst/codegen init --yes --framework nextjs --adapter memory --plugins "$MEMORY_PLUGIN_LIST" --skip-install 2>&1 | tee "$TEST_DIR/init-first.log"
 if ! node -e 'const fs=require("fs");const s=fs.readFileSync(process.argv[1],"utf8");process.exit(s.includes("Running @btst/codegen init")?0:1)' "$TEST_DIR/init-first.log"; then
@@ -171,6 +160,7 @@ success "Ran @btst/cli@2.2.4 without adding it to the consumer graph"
 step "Asserting generated files and patches"
 test -f "lib/stack.ts"
 test -f "lib/stack-client.tsx"
+test -f "lib/auth-client.ts"
 test -f "lib/stack-client.server.ts"
 test -f "lib/query-client.ts"
 test -f "app/api/data/[[...all]]/route.ts"
@@ -181,10 +171,13 @@ test -f "app/pages/client-layout.tsx"
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("import { createBackendStack } from \"@btst/stack/api\"")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack.ts","utf8");process.exit(s.includes("mediaBackendPlugin({ storageAdapter: localAdapter() })")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.tsx","utf8");process.exit(s.includes("createClientStack")&&s.includes("NEXT_PUBLIC_BASE_URL")&&!s.includes("getStackClientForRequest")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.tsx","utf8");process.exit(s.includes("auth: authClientPlugin()")&&s.includes("account: accountClientPlugin()")&&!s.includes("organizationClientPlugin")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("lib/auth-client.ts","utf8");process.exit(s.includes("createAuthClient")&&s.includes("/api/auth")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.server.ts","utf8");process.exit(s.includes("getStackClientForRequest")&&s.includes("resolveTrustedClientOrigins")&&s.includes("filterCredentialForwardingHeaders")&&s.includes("NEXT_PUBLIC_BASE_URL")?0:1)'
 node -e 'const fs=require("fs");const request=fs.readFileSync("app/(request)/pages/layout.tsx","utf8"),staticLayout=fs.readFileSync("app/(static)/pages/layout.tsx","utf8"),client=fs.readFileSync("app/pages/client-layout.tsx","utf8");process.exit(request.includes("getServerClientOriginsFromHeaders(await headers())")&&staticLayout.includes("getServerClientOrigins()")&&!staticLayout.includes("next/headers")&&client.includes("getStackClient(queryClient, clientOrigins)")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");process.exit(s.includes("@btst/stack/plugins/ui-builder/css")?0:1)'
-node -e 'const fs=require("fs"),path=require("path");const roots=["app","lib","package.json"];const retired=["@btst","better-auth-ui"].join("/");const read=(p)=>fs.statSync(p).isDirectory()?fs.readdirSync(p).flatMap((n)=>read(path.join(p,n))):[fs.readFileSync(p,"utf8")];process.exit(roots.flatMap(read).some((s)=>s.includes(retired))?1:0)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("app/pages/client-layout.tsx","utf8");process.exit(s.includes("authClient")&&s.includes("frameworkRouter.refresh()")&&s.includes("account: true")&&!s.includes("organization:")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");process.exit(s.includes("@btst/better-auth-ui/css")?0:1)'
 success "Generation + patch checks passed"
 
 step "Adding third-party public extension fixture"

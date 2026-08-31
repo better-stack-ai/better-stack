@@ -12,7 +12,8 @@ export type PluginKey =
 	| "comments"
 	| "media"
 	| "route-docs"
-	| "open-api";
+	| "open-api"
+	| "better-auth-ui";
 
 export type PackageManager = "pnpm" | "npm" | "yarn";
 

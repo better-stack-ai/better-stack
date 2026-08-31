@@ -5,7 +5,10 @@ import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 {{/if}}
 import { QueryClientProvider } from "@tanstack/react-query"
 import { useMemo } from "react"
-import { Outlet{{#if hasAiChat}}, useLocation{{/if}}, useLoaderData, type LoaderFunctionArgs } from "react-router"
+import { Outlet{{#if hasAiChat}}, useLocation{{/if}}, useLoaderData{{#if hasBetterAuthUi}}, useRevalidator{{/if}}, type LoaderFunctionArgs } from "react-router"
+{{#if hasBetterAuthUi}}
+import { createAppAuthClient } from "{{alias}}lib/auth-client"
+{{/if}}
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient } from "{{alias}}lib/stack-client"
 import { getServerClientOrigins } from "{{alias}}lib/stack-client.server"
@@ -21,6 +24,13 @@ export default function BtstPagesLayout() {
 		() => getStackClient(queryClient, { apiOrigin, siteOrigin }),
 		[apiOrigin, queryClient, siteOrigin],
 	)
+{{#if hasBetterAuthUi}}
+	const revalidator = useRevalidator()
+	const authClient = useMemo(
+		() => createAppAuthClient(siteOrigin),
+		[siteOrigin],
+	)
+{{/if}}
 {{#if hasAiChat}}
 	const hasApiKey = !!import.meta.env.VITE_HAS_OPENAI_KEY
 	const location = useLocation()

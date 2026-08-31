@@ -34,10 +34,10 @@ export default function FormDemoPage() {
 			<StackProvider
 				stack={browserStack}
 				router={reactRouter()}
-{{#if pagesLayoutOverrides}}
+{{#if embeddedOverrides}}
 				overrides={
 					{
-{{{pagesLayoutOverrides}}}
+{{{embeddedOverrides}}}
 					}
 				}
 {{/if}}

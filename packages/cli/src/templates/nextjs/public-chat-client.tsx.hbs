@@ -24,10 +24,10 @@ export default function PublicChatPageClient({
 			<StackProvider
 				stack={browserStack}
 				router={nextRouter()}
-{{#if pagesLayoutOverrides}}
+{{#if embeddedOverrides}}
 				overrides={
 					{
-{{{pagesLayoutOverrides}}}
+{{{embeddedOverrides}}}
 					}
 				}
 {{/if}}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import { buildScaffoldPlan } from "../scaffold-plan";
-import { PLUGINS } from "../constants";
+import { PLUGINS, PLUGIN_ROUTES } from "../constants";
 
 describe("scaffold plan", () => {
 	it.each(["memory", "mongodb"] as const)(
@@ -67,6 +67,21 @@ describe("scaffold plan", () => {
 				framework: "nextjs",
 				adapter,
 				plugins: ["ai-chat"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const stackFile = plan.files.find((file) => file.path === "lib/stack.ts");
+			expect(stackFile?.content).toContain("transaction: true");
+		},
+	);
+
+	it.each(["prisma", "drizzle", "kysely"] as const)(
+		"enables isolated transactions for Kanban in the %s scaffold",
+		async (adapter) => {
+			const plan = await buildScaffoldPlan({
+				framework: "nextjs",
+				adapter,
+				plugins: ["kanban"],
 				alias: "@/",
 				cssFile: "app/globals.css",
 			});
@@ -425,6 +440,10 @@ describe("scaffold plan", () => {
 				expect(pageRoute?.content).toContain("new URL(request.url).origin");
 			} else {
 				expect(pageRoute?.content).toContain("createIsomorphicFn");
+				expect(pageRoute?.content).toContain("createServerOnlyFn");
+				expect(pageRoute?.content).toContain(
+					"getRequestStackClient(queryClient, requestContext)",
+				);
 				expect(pageRoute?.content).toContain("getRequest()");
 				expect(pageRoute?.content).toContain(
 					"getStackClient(queryClient, await getTrustedClientOrigins())",
@@ -520,6 +539,18 @@ describe("scaffold plan", () => {
 		);
 		expect(source).not.toContain("/src/");
 		expect(source).not.toContain("StackProvider<");
+	});
+
+	it("runs the three-framework Better Auth UI packed fixtures in CI", async () => {
+		const workflow = await readFile(
+			new URL("../../../../../.github/workflows/init.yml", import.meta.url),
+			"utf8",
+		);
+
+		expect(workflow).toContain("better-auth-ui-fixtures:");
+		expect(workflow).toContain(
+			"pnpm --filter @btst/codegen test:better-auth-ui-fixtures",
+		);
 	});
 
 	it("does not register ui-builder as a backend plugin entry", async () => {
@@ -944,13 +975,142 @@ describe("scaffold plan", () => {
 		expect(layoutFile?.content).not.toContain("router.replace");
 	});
 
-	it("excludes provider-specific authentication integrations from generated projects", () => {
-		const allKeys = PLUGINS.map((p) => p.key);
-		expect(allKeys).not.toContain(["better", "auth", "ui"].join("-"));
-		expect(JSON.stringify(PLUGINS)).not.toContain(
-			["@btst", "better-auth-ui"].join("/"),
-		);
-	});
+	it.each([
+		{
+			framework: "nextjs" as const,
+			authRefresh: "frameworkRouter.refresh()",
+			authClientPath: "lib/auth-client.ts",
+		},
+		{
+			framework: "react-router" as const,
+			authRefresh: "revalidator.revalidate()",
+			authClientPath: "app/lib/auth-client.ts",
+		},
+		{
+			framework: "tanstack" as const,
+			authRefresh: "frameworkRouter.invalidate()",
+			authClientPath: "src/lib/auth-client.ts",
+		},
+	])(
+		"generates the minimal Better Auth UI bridge for $framework",
+		async ({ framework, authRefresh, authClientPath }) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "drizzle",
+				plugins: ["better-auth-ui"],
+				alias: framework === "react-router" ? "~/" : "@/",
+				cssFile:
+					framework === "nextjs"
+						? "app/globals.css"
+						: framework === "react-router"
+							? "app/app.css"
+							: "src/styles.css",
+			});
+
+			const stack = plan.files.find((file) =>
+				file.path.endsWith("lib/stack.ts"),
+			);
+			const client = plan.files.find((file) =>
+				file.path.endsWith("lib/stack-client.tsx"),
+			);
+			const authClient = plan.files.find(
+				(file) => file.path === authClientPath,
+			);
+			const provider = plan.files.find((file) =>
+				file.content.includes("<StackProvider"),
+			);
+
+			expect(PLUGINS.map((plugin) => plugin.key)).toContain("better-auth-ui");
+			expect(PLUGIN_ROUTES["better-auth-ui"]).toEqual(
+				expect.arrayContaining([
+					"/pages/auth/sign-in",
+					"/pages/account/settings",
+					"/pages/account/security",
+				]),
+			);
+			expect(stack?.content).not.toContain("better-auth");
+			expect(stack?.content).not.toContain("transaction: true");
+			expect(client?.content).toContain(
+				'import { accountClientPlugin, authClientPlugin } from "@btst/better-auth-ui/client"',
+			);
+			expect(client?.content).toContain("auth: authClientPlugin(),");
+			expect(client?.content).toContain("account: accountClientPlugin(),");
+			expect(client?.content).not.toContain("organizationClientPlugin");
+			expect(authClient?.content).toContain(
+				'import { createAuthClient } from "better-auth/react"',
+			);
+			expect(authClient?.content).toContain('basePath: "/api/auth"');
+			expect(provider?.content).toContain("authClient");
+			expect(provider?.content).toContain(authRefresh);
+			expect(provider?.content).toContain(
+				'redirectTo: "/pages/account/settings"',
+			);
+			expect(provider?.content).toContain("account: {");
+			expect(provider?.content).not.toContain("organization:");
+			expect(provider?.content).not.toContain("apiKey:");
+			expect(provider?.content).not.toContain("passkey:");
+			expect(plan.cssImports).toContain("@btst/better-auth-ui/css");
+			expect(plan.extraPackageVersions).toMatchObject({
+				"@btst/better-auth-ui": "2.0.0-rc.4",
+				"better-auth": "1.6.16",
+			});
+		},
+	);
+
+	it.each([
+		{
+			framework: "nextjs" as const,
+			primaryProviderPath: "app/pages/client-layout.tsx",
+			cssFile: "app/globals.css",
+		},
+		{
+			framework: "react-router" as const,
+			primaryProviderPath: "app/routes/pages/_layout.tsx",
+			cssFile: "app/app.css",
+		},
+		{
+			framework: "tanstack" as const,
+			primaryProviderPath: "src/routes/pages/route.tsx",
+			cssFile: "src/styles/globals.css",
+		},
+	])(
+		"keeps Better Auth UI state out of embedded $framework providers",
+		async ({ framework, primaryProviderPath, cssFile }) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "drizzle",
+				plugins: [
+					"better-auth-ui",
+					"ai-chat",
+					"cms",
+					"ui-builder",
+					"form-builder",
+					"kanban",
+				],
+				alias: framework === "react-router" ? "~/" : "@/",
+				cssFile,
+			});
+
+			const primaryProvider = plan.files.find(
+				(file) => file.path === primaryProviderPath,
+			);
+			const embeddedProviders = plan.files.filter(
+				(file) =>
+					file.path !== primaryProviderPath &&
+					file.content.includes("<StackProvider"),
+			);
+
+			expect(primaryProvider?.content).toContain("authClient");
+			expect(embeddedProviders).toHaveLength(3);
+			for (const provider of embeddedProviders) {
+				expect(provider.content).toContain("kanban: {");
+				expect(provider.content).not.toContain("authClient");
+				expect(provider.content).not.toContain("frameworkRouter.refresh");
+				expect(provider.content).not.toContain("frameworkRouter.invalidate");
+				expect(provider.content).not.toContain("revalidator.revalidate");
+			}
+		},
+	);
 
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"uses entry factories and shared provider wiring in every %s scaffold",

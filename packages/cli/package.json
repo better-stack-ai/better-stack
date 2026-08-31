@@ -69,7 +69,8 @@
     "legacy-next-hashes:generate": "node scripts/generate-legacy-next-render-hashes.mjs",
     "typecheck": "tsc --project tsconfig.json",
     "test": "vitest run",
-    "test:init": "bash scripts/test-init.sh"
+    "test:init": "bash scripts/test-init.sh",
+    "test:better-auth-ui-fixtures": "node scripts/test-better-auth-ui-fixtures.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",

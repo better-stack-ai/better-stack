@@ -1,0 +1,13 @@
+import { createAuthClient } from "better-auth/react"
+
+/**
+ * Creates the browser client for your existing Better Auth handler.
+ * The CLI does not generate or configure that server. Change `basePath` only
+ * when the application-owned Better Auth endpoint uses a non-default path.
+ */
+export function createAppAuthClient(baseURL?: string) {
+	return createAuthClient({
+		...(baseURL ? { baseURL } : {}),
+		basePath: "/api/auth",
+	})
+}

@@ -29,10 +29,10 @@ export default function FormDemoPageClient({
 			<StackProvider
 				stack={browserStack}
 				router={nextRouter()}
-{{#if pagesLayoutOverrides}}
+{{#if embeddedOverrides}}
 				overrides={
 					{
-{{{pagesLayoutOverrides}}}
+{{{embeddedOverrides}}}
 					}
 				}
 {{/if}}
