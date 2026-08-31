@@ -29,6 +29,8 @@ export const AUTH_COHORT = Object.freeze({
 	"better-call": "1.3.6",
 });
 
+const DUPLICATE_TOLERANT_AUTH_PACKAGES = new Set(["better-call"]);
+
 function pickVersions(source, names) {
 	return Object.fromEntries(names.map((name) => [name, source[name]]));
 }
@@ -235,9 +237,13 @@ export function assertAuthCohort(versions) {
 	const problems = [];
 	for (const [name, expected] of Object.entries(AUTH_COHORT)) {
 		const found = versions[name] ?? [];
-		if (!found.includes(expected)) {
+		const acceptsDuplicates = DUPLICATE_TOLERANT_AUTH_PACKAGES.has(name);
+		if (
+			!found.includes(expected) ||
+			(!acceptsDuplicates && (found.length !== 1 || found[0] !== expected))
+		) {
 			problems.push(
-				`${name}: expected ${expected} to be present; found ${found.join(", ") || "nothing"}`,
+				`${name}: expected ${acceptsDuplicates ? `${expected} to be present` : `only ${expected}`}; found ${found.join(", ") || "nothing"}`,
 			);
 		}
 	}

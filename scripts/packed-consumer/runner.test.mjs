@@ -78,6 +78,12 @@ describe("packed consumer runner", () => {
 		expect(() =>
 			assertAuthCohort({ ...versions, "better-call": ["2.0.2"] }),
 		).toThrow(/better-call: expected 1\.3\.6 to be present; found 2\.0\.2/);
+		expect(() =>
+			assertAuthCohort({
+				...versions,
+				"better-auth": ["1.6.16", "1.7.2"],
+			}),
+		).toThrow(/better-auth: expected only 1\.6\.16; found 1\.6\.16, 1\.7\.2/);
 	});
 
 	it("combines direct and nested package-manager dependency views", () => {
