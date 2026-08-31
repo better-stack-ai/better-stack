@@ -163,10 +163,10 @@ rm .npmrc
 npm install --save-exact @btst/adapter-memory@2.2.3 next-themes $PLUGIN_EXTRA_PACKAGES $STACK_PEERS
 success "Installed aligned runtime deps with strict peer resolution"
 
-BTST_CLI_VERSION=$(npx --yes @btst/cli@2.2.3 --version)
-test "$BTST_CLI_VERSION" = "2.2.3"
+BTST_CLI_VERSION=$(npx --yes @btst/cli@2.2.4 --version)
+test "$BTST_CLI_VERSION" = "2.2.4"
 test ! -e node_modules/@btst/cli
-success "Ran @btst/cli@2.2.3 without adding it to the consumer graph"
+success "Ran @btst/cli@2.2.4 without adding it to the consumer graph"
 
 step "Asserting generated files and patches"
 test -f "lib/stack.ts"

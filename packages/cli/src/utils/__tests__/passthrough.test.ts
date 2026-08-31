@@ -12,7 +12,7 @@ describe("runCliPassthrough", () => {
 		execa.mockResolvedValue({});
 	});
 
-	it("runs the aligned Better DB CLI outside the consumer dependency graph", async () => {
+	it("runs the consumer-aware Better DB CLI from the project cwd", async () => {
 		await expect(
 			runCliPassthrough({
 				cwd: "/tmp/example",
@@ -23,7 +23,7 @@ describe("runCliPassthrough", () => {
 
 		expect(execa).toHaveBeenCalledWith(
 			"npx",
-			["--yes", "@btst/cli@2.2.3", "generate", "--orm=drizzle"],
+			["--yes", "@btst/cli@2.2.4", "generate", "--orm=drizzle"],
 			{ cwd: "/tmp/example", stdio: "inherit" },
 		);
 	});
