@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet{{#if hasAiChat}}, useLocation{{/if}} } from "@tanstack/react-router"
+import { createFileRoute, Outlet{{#if hasAiChat}}, useLocation{{/if}}{{#if hasBetterAuthUi}}, useRouter{{/if}} } from "@tanstack/react-router"
 import { StackProvider } from "@btst/stack/context"
 import { tanstackRouter } from "@btst/stack/tanstack"
 {{#if hasAiChat}}
@@ -6,6 +6,9 @@ import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 {{/if}}
 import { QueryClientProvider } from "@tanstack/react-query"
 import { useMemo } from "react"
+{{#if hasBetterAuthUi}}
+import { createAppAuthClient } from "{{alias}}lib/auth-client"
+{{/if}}
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient } from "{{alias}}lib/stack-client"
 import { getTrustedClientOrigins } from "{{alias}}lib/stack-client.origins"
@@ -22,6 +25,13 @@ function BtstPagesLayout() {
 		() => getStackClient(queryClient, { apiOrigin, siteOrigin }),
 		[apiOrigin, queryClient, siteOrigin],
 	)
+{{#if hasBetterAuthUi}}
+	const frameworkRouter = useRouter()
+	const authClient = useMemo(
+		() => createAppAuthClient(siteOrigin),
+		[siteOrigin],
+	)
+{{/if}}
 {{#if hasAiChat}}
 	const hasApiKey = !!import.meta.env.VITE_HAS_OPENAI_KEY
 	const location = useLocation()

@@ -173,6 +173,36 @@ export const PLUGINS: readonly PluginMeta[] = [
 		backendSymbol: "openApiBackendPlugin",
 		configKey: "openApi",
 	},
+	{
+		key: "better-auth-ui",
+		label:
+			"Better Auth UI (auth + account; requires an existing Better Auth endpoint)",
+		cssImport: "@btst/better-auth-ui/css",
+		configKey: "auth",
+		extraPackages: [
+			"@btst/better-auth-ui",
+			"better-auth",
+			"@better-auth/core",
+			"@better-auth/utils",
+			"@better-fetch/fetch",
+			"better-call",
+			// RC4 exposes API-key/passkey types from its synthetic full AuthClient,
+			// so these remain required declaration peers even when their runtime
+			// features are not configured by the generated auth+account scaffold.
+			"@better-auth/api-key",
+			"@better-auth/passkey",
+		],
+		extraInstallSpecs: [
+			"@btst/better-auth-ui@2.0.0-rc.4",
+			"better-auth@1.6.16",
+			"@better-auth/core@1.6.16",
+			"@better-auth/utils@0.4.1",
+			"@better-fetch/fetch@1.2.2",
+			"better-call@1.3.6",
+			"@better-auth/api-key@1.6.16",
+			"@better-auth/passkey@1.6.16",
+		],
+	},
 ];
 
 export const DEFAULT_PLUGIN_SELECTION: PluginKey[] = [];
@@ -216,4 +246,23 @@ export const PLUGIN_ROUTES: Record<PluginKey, string[]> = {
 	"route-docs": ["/pages/route-docs"],
 	/** open-api registers an API route, not a page route */
 	"open-api": ["/api/data/reference"],
+	"better-auth-ui": [
+		"/pages/auth/sign-in",
+		"/pages/auth/sign-up",
+		"/pages/auth/forgot-password",
+		"/pages/auth/reset-password",
+		"/pages/auth/magic-link",
+		"/pages/auth/email-otp",
+		"/pages/auth/two-factor",
+		"/pages/auth/recover-account",
+		"/pages/auth/callback",
+		"/pages/auth/sign-out",
+		"/pages/auth/accept-invitation",
+		"/pages/auth/email-verification",
+		"/pages/account/settings",
+		"/pages/account/security",
+		"/pages/account/api-keys",
+		"/pages/account/organizations",
+		"/pages/account/teams",
+	],
 };

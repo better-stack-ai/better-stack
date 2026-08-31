@@ -23,6 +23,7 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 		return {
 			stackPath: `${prefix}lib/stack.ts`,
 			stackClientPath: `${prefix}lib/stack-client.tsx`,
+			authClientPath: `${prefix}lib/auth-client.ts`,
 			stackClientServerPath: `${prefix}lib/stack-client.server.ts`,
 			stackClientOriginsPath: undefined,
 			queryClientPath: `${prefix}lib/query-client.ts`,
@@ -39,6 +40,7 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 		return {
 			stackPath: "app/lib/stack.ts",
 			stackClientPath: "app/lib/stack-client.tsx",
+			authClientPath: "app/lib/auth-client.ts",
 			stackClientServerPath: "app/lib/stack-client.server.ts",
 			stackClientOriginsPath: undefined,
 			queryClientPath: "app/lib/query-client.ts",
@@ -54,6 +56,7 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 	return {
 		stackPath: "src/lib/stack.ts",
 		stackClientPath: "src/lib/stack-client.tsx",
+		authClientPath: "src/lib/auth-client.ts",
 		stackClientServerPath: "src/lib/stack-client.server.ts",
 		stackClientOriginsPath: "src/lib/stack-client.origins.ts",
 		queryClientPath: "src/lib/query-client.ts",
@@ -121,6 +124,7 @@ function buildPluginTemplateContext(
 	const hasFormBuilder = selectedPlugins.includes("form-builder");
 	const hasBlog = selectedPlugins.includes("blog");
 	const hasKanban = selectedPlugins.includes("kanban");
+	const hasBetterAuthUi = selectedPlugins.includes("better-auth-ui");
 	const hasSitemap = hasBlog || hasCms || hasKanban;
 
 	const backendMetas = metas.filter(
@@ -138,6 +142,29 @@ function buildPluginTemplateContext(
 	);
 	const backendImportLines = backendMetas
 		.map((m) => `import { ${m.backendSymbol} } from "${m.backendImportPath}"`)
+		.join("\n");
+	const embeddedOverrides = clientMetas
+		.map((m) => {
+			const layoutFile = getPagesLayoutFilePath(framework);
+			if (m.key === "blog") {
+				return `\t\t\t\t\t${m.configKey}: {
+\t\t\t\t\t\tuploadImage: async () => {
+\t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in ${layoutFile}")
+\t\t\t\t\t\t},
+\t\t\t\t\t},`;
+			}
+			if (m.key === "kanban") {
+				return `\t\t\t\t\t${m.configKey}: {
+\t\t\t\t\t\tuploadImage: async () => {
+\t\t\t\t\t\t\tthrow new Error("TODO: implement kanban.uploadImage override in ${layoutFile}")
+\t\t\t\t\t\t},
+\t\t\t\t\t\tresolveUser: async () => null,
+\t\t\t\t\t\tsearchUsers: async () => [],
+\t\t\t\t\t},`;
+			}
+			return "";
+		})
+		.filter(Boolean)
 		.join("\n");
 
 	return {
@@ -159,8 +186,15 @@ function buildPluginTemplateContext(
 		]
 			.filter(Boolean)
 			.join("\n"),
-		clientImports: clientMetas
-			.map((m) => `import { ${m.clientSymbol} } from "${m.clientImportPath}"`)
+		clientImports: [
+			hasBetterAuthUi
+				? 'import { accountClientPlugin, authClientPlugin } from "@btst/better-auth-ui/client"'
+				: "",
+			clientMetas
+				.map((m) => `import { ${m.clientSymbol} } from "${m.clientImportPath}"`)
+				.join("\n"),
+		]
+			.filter(Boolean)
 			.join("\n"),
 		backendEntries: metas
 			.map((m) => {
@@ -200,48 +234,48 @@ function buildPluginTemplateContext(
 			})
 			.filter(Boolean)
 			.join("\n"),
-		clientEntries: clientMetas
-			.map((m) => {
-				if (m.key === "ai-chat") {
-					return `\t\t\t${m.configKey}: ${m.clientSymbol}({ mode: "public" }),`;
-				}
-				return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
-			})
+		clientEntries: [
+			hasBetterAuthUi
+				? "\t\t\tauth: authClientPlugin(),\n\t\t\taccount: accountClientPlugin(),"
+				: "",
+			clientMetas
+				.map((m) => {
+					if (m.key === "ai-chat") {
+						return `\t\t\t${m.configKey}: ${m.clientSymbol}({ mode: "public" }),`;
+					}
+					return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
+				})
+				.join("\n"),
+		]
+			.filter(Boolean)
 			.join("\n"),
 		clientApiEndpointEntries: clientMetas
 			.filter((m) => m.backendSymbol && m.key !== "ui-builder")
 			.map((m) => `\t\t\t\t${m.configKey}: crossOriginApiEndpoint,`)
 			.join("\n"),
-		pagesLayoutOverrides: clientMetas
-			.map((m) => {
-				if (m.key === "route-docs" || m.key === "media") {
-					return "";
-				}
-				const layoutFile = getPagesLayoutFilePath(framework);
-				if (m.key === "comments") {
-					return "";
-				}
-				if (m.key === "blog") {
-					return `\t\t\t\t\t${m.configKey}: {
-\t\t\t\t\t\tuploadImage: async () => {
-\t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in ${layoutFile}")
-\t\t\t\t\t\t},
-\t\t\t\t\t},`;
-				}
-				if (m.key === "kanban") {
-					return `\t\t\t\t\t${m.configKey}: {
-\t\t\t\t\t\tuploadImage: async () => {
-\t\t\t\t\t\t\tthrow new Error("TODO: implement kanban.uploadImage override in ${layoutFile}")
-\t\t\t\t\t\t},
-\t\t\t\t\t\tresolveUser: async () => null,
-\t\t\t\t\t\tsearchUsers: async () => [],
-\t\t\t\t\t},`;
-				}
-				if (m.key === "ai-chat") return "";
-				return "";
-			})
+		pagesLayoutOverrides: [
+			hasBetterAuthUi
+				? `\t\t\t\t\tauth: {
+\t\t\t\t\t\tauthClient,
+\t\t\t\t\t\tredirectTo: "/pages/account/settings",
+\t\t\t\t\t\tonSessionChange: () => ${
+						framework === "nextjs"
+							? "frameworkRouter.refresh()"
+							: framework === "react-router"
+								? "revalidator.revalidate()"
+								: "frameworkRouter.invalidate()"
+					},
+\t\t\t\t\t},
+\t\t\t\t\taccount: {
+\t\t\t\t\t\taccount: true,
+\t\t\t\t\t},`
+				: "",
+			embeddedOverrides,
+		]
 			.filter(Boolean)
 			.join("\n"),
+		embeddedOverrides,
+		hasBetterAuthUi,
 	};
 }
 
@@ -257,7 +291,9 @@ function buildAdapterTemplateContext(
 	const hasFormBuilder = selectedPlugins.includes("form-builder");
 	const hasMedia = selectedPlugins.includes("media");
 	const hasAiChat = selectedPlugins.includes("ai-chat");
-	const needsIsolatedTransactions = hasFormBuilder || hasMedia || hasAiChat;
+	const hasKanban = selectedPlugins.includes("kanban");
+	const needsIsolatedTransactions =
+		hasFormBuilder || hasMedia || hasAiChat || hasKanban;
 
 	if (
 		(hasFormBuilder && (adapter === "memory" || adapter === "mongodb")) ||
@@ -388,6 +424,18 @@ export async function buildScaffoldPlan(
 			),
 			description: "BTST client stack configuration",
 		},
+		...(pluginContext.hasBetterAuthUi
+			? [
+					{
+						path: frameworkPaths.authClientPath,
+						content: await renderTemplate(
+							"shared/lib/auth-client.ts.hbs",
+							sharedContext,
+						),
+						description: "Better Auth browser client for an existing endpoint",
+					},
+				]
+			: []),
 		{
 			path: frameworkPaths.stackClientServerPath,
 			content: await renderTemplate(

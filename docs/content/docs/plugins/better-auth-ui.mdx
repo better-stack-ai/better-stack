@@ -1,0 +1,174 @@
+---
+title: Better Auth UI Companion
+description: Add optional auth and account pages to an application that already runs Better Auth.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+
+[`@btst/better-auth-ui`](https://github.com/better-stack-ai/better-auth-ui)
+is the separately maintained Better Auth UI companion for BTST v3. It adds
+resolved auth and account routes while Better Auth UI continues to read its own
+session and native permissions from your Better Auth client.
+
+<Callout type="warn">
+  This integration assumes your application already owns a Better Auth server
+  endpoint. It does not generate a Better Auth backend, database adapter,
+  schema, migrations, authentication providers, secrets, or deployment
+  configuration.
+</Callout>
+
+## Generate the minimal integration
+
+Select the companion explicitly; it is never part of the default scaffold.
+
+```bash
+npx @btst/codegen init --plugins better-auth-ui
+```
+
+The generated result:
+
+- registers only `authClientPlugin()` and `accountClientPlugin()`;
+- creates one browser client for the existing `/api/auth` endpoint;
+- mounts routes under the resolved BTST site path (`/pages/auth/*` and
+  `/pages/account/*` by default);
+- configures API, site, and QueryClient runtime only once in
+  `createClientStack()`; and
+- refreshes the framework explicitly after a Better Auth session change.
+
+Organization, API-key, passkey, multi-session, and other Better Auth extensions
+are not enabled by the generated code. Add one only after the matching Better
+Auth server and client plugin are configured in your application.
+
+<Callout type="info">
+  RC4 publishes API-key and passkey as required declaration peers because its
+  synthetic full `AuthClient` type exposes their surfaces. The CLI therefore
+  installs their aligned 1.6.16 packages to keep strict dependency trees clean,
+  but it does not import, register, or enable either runtime feature. Activation
+  remains an explicit application choice and requires the matching Better Auth
+  server/client plugins.
+</Callout>
+
+## Supported release cohort
+
+The corrected companion candidate is `@btst/better-auth-ui@2.0.0-rc.4`. Its
+stable-v3 compatibility contract retains these exact versions:
+
+| Package | Version |
+| --- | --- |
+| `better-auth`, `@better-auth/core` | `1.6.16` |
+| `@better-auth/api-key`, `@better-auth/passkey` | `1.6.16` |
+| `@better-auth/utils` | `0.4.1` |
+| `@better-fetch/fetch` | `1.2.2` |
+| `better-call` | `1.3.6` |
+| `@btst/db` and BTST database adapters | `2.2.3` |
+
+Do not combine this companion release with a Better Auth 1.7 dependency graph.
+The CLI installs the corrected auth cohort without changing the retained
+`@btst/db@2.2.3` or adapter versions.
+
+For a manual installation, add the companion and exact auth cohort alongside
+your existing BTST dependencies:
+
+```bash
+pnpm add @btst/better-auth-ui@2.0.0-rc.4 \
+  better-auth@1.6.16 @better-auth/core@1.6.16 \
+  @better-auth/api-key@1.6.16 @better-auth/passkey@1.6.16 \
+  @better-auth/utils@0.4.1 @better-fetch/fetch@1.2.2 better-call@1.3.6
+```
+
+The package declares its component-library peers. Resolve any peer warning
+against the companion's published manifest. These optional data-adapter
+subpaths add their own peers; do not install or import them unless you select
+that integration:
+
+| Optional subpath | Additional peers |
+| --- | --- |
+| `@btst/better-auth-ui/tanstack` | `@daveyplate/better-auth-tanstack@^1.3.6` |
+| `@btst/better-auth-ui/instantdb` | `@instantdb/react@>=0.18.0` |
+| `@btst/better-auth-ui/triplit` | `@triplit/client@>=1.0.0`, `@triplit/react@>=1.0.0` |
+
+## Browser client and resolved routes
+
+The CLI generates the following application-owned seam:
+
+```ts title="lib/auth-client.ts"
+import { createAuthClient } from "better-auth/react"
+
+export function createAppAuthClient(baseURL?: string) {
+  return createAuthClient({
+    ...(baseURL ? { baseURL } : {}),
+    basePath: "/api/auth",
+  })
+}
+```
+
+Change `basePath` only when your existing Better Auth handler uses a different
+path. The companion route bases are not configured here: they derive from the
+site runtime passed once to `createClientStack()`.
+
+```tsx title="lib/stack-client.tsx"
+import { accountClientPlugin, authClientPlugin } from "@btst/better-auth-ui/client"
+import { createClientStack } from "@btst/stack/client"
+
+return createClientStack({
+  api: { baseURL: apiOrigin, basePath: "/api/data" },
+  site: { baseURL: siteOrigin, basePath: "/pages" },
+  queryClient,
+  plugins: {
+    auth: authClientPlugin(),
+    account: accountClientPlugin(),
+  },
+})
+```
+
+## Provider overrides
+
+The resolved stack infers both override keys. Configure the Better Auth client
+once under `auth`; account-specific settings remain under `account`.
+
+```tsx
+<StackProvider
+  stack={browserStack}
+  router={frameworkRouter}
+  overrides={{
+    auth: {
+      authClient,
+      redirectTo: "/pages/account/settings",
+      onSessionChange: refreshThroughTheFramework,
+    },
+    account: {
+      account: true,
+      // Avatar customization belongs here:
+      // avatar: { upload, delete: deleteAvatar, size: 128 },
+    },
+  }}
+>
+  {children}
+</StackProvider>
+```
+
+Use the framework-native synchronization generated for your target:
+
+<Tabs groupId="framework" items={["Next.js", "React Router", "TanStack Start"]}>
+  <Tab value="Next.js">
+    ```ts
+    onSessionChange: () => router.refresh()
+    ```
+  </Tab>
+  <Tab value="React Router">
+    ```ts
+    onSessionChange: () => revalidator.revalidate()
+    ```
+  </Tab>
+  <Tab value="TanStack Start">
+    ```ts
+    onSessionChange: () => router.invalidate()
+    ```
+  </Tab>
+</Tabs>
+
+The bridge performs no hidden BTST identity refetch. If business plugins use
+BTST authorization, map the Better Auth session separately with BTST's generic
+`createClientAuth` and `createServerAuth` contracts and keep server
+authorization authoritative.

@@ -32,7 +32,7 @@ Common flags:
 |------|-------------|
 | `--framework` | `nextjs`, `react-router`, or `tanstack` |
 | `--adapter` | `memory`, `prisma`, `drizzle`, `kysely`, or `mongodb` |
-| `--plugins` | Comma-separated plugin keys: `blog`, `ai-chat`, `cms`, `form-builder`, `ui-builder`, `kanban`, `comments`, `media`, `route-docs`, `open-api` (or `all`) |
+| `--plugins` | Comma-separated plugin keys: `blog`, `ai-chat`, `cms`, `form-builder`, `ui-builder`, `kanban`, `comments`, `media`, `route-docs`, `open-api`, `better-auth-ui` (or `all`) |
 | `--cwd` | Target directory |
 | `--skip-install` | Skip package installation step |
 | `--yes` | Non-interactive defaults (useful in CI) |
@@ -54,6 +54,12 @@ Generated plugin config entries in `lib/stack.ts` and `lib/stack-client.tsx` use
 Generated v3 layouts never repeat framework router, API, or identity wiring in
 plugin overrides. Replace only the plugin-specific TODO values (for example an
 upload function or user resolver).
+
+`better-auth-ui` is an optional companion selection. It generates the auth and
+account client plugins, a browser client for an existing `/api/auth` endpoint,
+and the framework-native session refresh callback. It never generates a Better
+Auth server, database schema, migrations, providers, secrets, or BTST identity
+adapter. See [Better Auth UI Companion](/plugins/better-auth-ui).
 
 ## Generate and Migrate via Codegen
 

@@ -33,10 +33,10 @@ export default function PreviewPage() {
 			<StackProvider
 				stack={browserStack}
 				router={reactRouter()}
-{{#if pagesLayoutOverrides}}
+{{#if embeddedOverrides}}
 				overrides={
 					{
-{{{pagesLayoutOverrides}}}
+{{{embeddedOverrides}}}
 					}
 				}
 {{/if}}

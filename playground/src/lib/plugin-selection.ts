@@ -7,6 +7,8 @@ export const PLAYGROUND_UNSUPPORTED_PLUGINS: Partial<
 > = {
 	"form-builder":
 		"Requires a database adapter with isolated transactions, which the browser playground does not provide.",
+	"better-auth-ui":
+		"Requires an existing application-owned Better Auth endpoint, which the browser playground does not provide.",
 };
 
 /**

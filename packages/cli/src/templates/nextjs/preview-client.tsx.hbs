@@ -33,10 +33,10 @@ export default function PreviewPageClient({
 			<StackProvider
 				stack={browserStack}
 				router={nextRouter()}
-{{#if pagesLayoutOverrides}}
+{{#if embeddedOverrides}}
 				overrides={
 					{
-{{{pagesLayoutOverrides}}}
+{{{embeddedOverrides}}}
 					}
 				}
 {{/if}}
