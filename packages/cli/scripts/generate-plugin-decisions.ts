@@ -6,7 +6,9 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { PLUGIN_DECISIONS } from "../src/utils/plugin-decision";
 
-const manifestPath = resolve(import.meta.dirname, "../plugin-decisions.json");
+const manifestPath =
+	process.env.BTST_PLUGIN_DECISIONS_MANIFEST_PATH ??
+	resolve(import.meta.dirname, "../plugin-decisions.json");
 const biomeCli = createRequire(import.meta.url).resolve(
 	"@biomejs/biome/bin/biome",
 );
@@ -31,7 +33,7 @@ if (shouldCheck === shouldWrite) {
 }
 
 if (shouldCheck) {
-	let current: string;
+	let current: string | undefined;
 	try {
 		current = await readFile(manifestPath, "utf8");
 	} catch {
@@ -39,10 +41,9 @@ if (shouldCheck) {
 			"Plugin decision manifest is missing. Run `pnpm plugin-decisions:generate`.",
 		);
 		process.exitCode = 1;
-		current = "";
 	}
 
-	if (current && current !== output) {
+	if (current !== undefined && current !== output) {
 		console.error(
 			"Plugin decision manifest drifted. Run `pnpm plugin-decisions:generate` and review the JSON change.",
 		);
