@@ -7,10 +7,165 @@ import { Steps, Step } from "fumadocs-ui/components/steps";
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
 
+Use the generated path for the shortest supported integration into an existing
+application. Use the manual reference when you need to control every route,
+adapter, provider, and deployment seam.
 
-## AI Agent Skills
+Want to evaluate the result without changing an app? Open the
+[live Blog](https://www.better-stack.ai/p/blog). The live demo uses `/p/blog`;
+the generated application below uses its own `/pages/blog` route.
 
-If you're using an AI coding agent (Cursor, Claude Code, VS Code, OpenAI Codex etc.) you can install the BTST integration skill so your agent understands the plugin system, adapter setup, and wiring patterns out of the box:
+## Quickstart: add Blog to Next.js
+
+This path adds the released Blog feature to an **existing Next.js App Router
+application**. It uses the memory adapter for a local evaluation, so it does not
+require a database migration and does not represent a production persistence
+choice.
+
+### Quickstart prerequisites
+
+- Node.js 22 and an existing Next.js App Router application
+- shadcn/ui initialized with CSS variables and Tailwind configured
+- a clean commit or working tree you can review after the generator patches it
+- the shadcn Button, dropdown menu, and Sonner components, with `<Toaster />`
+  rendered in the root layout
+
+Install the UI prerequisites first:
+
+```bash
+npx shadcn@latest add button dropdown-menu sonner
+```
+
+Render the generated Sonner component once in your root layout. Keep your
+existing providers and layout markup in place:
+
+```tsx title="app/layout.tsx"
+import { Toaster } from "@/components/ui/sonner"
+
+// Inside the existing <body>:
+{children}
+<Toaster />
+```
+
+The generated runtime uses React Query. Codegen installs
+`@tanstack/react-query`, `@btst/stack`, and the selected adapter; the manual path
+below lists them explicitly.
+
+### 1. Initialize Blog
+
+Run this command from the existing application root:
+
+```bash
+npx @btst/codegen@0.2.0 init \
+  --framework nextjs \
+  --adapter memory \
+  --plugins blog
+```
+
+Review conflict prompts before allowing generated files to replace application
+files. The command registers the Blog backend and client plugin, mounts the API
+and page catch-all routes, adds the required CSS, and wires the shared provider.
+
+### 2. Configure the local origin
+
+Add the trusted local origins to `.env.local`:
+
+```dotenv
+BTST_SITE_URL=http://localhost:3000
+BTST_API_URL=http://localhost:3000
+```
+
+Use the deployed application origin for both values in a same-origin
+production deployment. The generated server integration fails closed during a
+production build when it cannot resolve a trusted site or API origin.
+
+### 3. Start the app and verify the feature
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000/pages/blog](http://localhost:3000/pages/blog). The
+Blog page should render successfully; it can be empty until you create content.
+That visible route—not the presence of generated files—is the quickstart success
+condition.
+
+The generated Blog override leaves image upload as an explicit application TODO.
+The listing route works without it, but editor image uploads do not. The memory
+adapter also resets when the process restarts.
+
+Before deploying, replace the memory adapter with the appropriate persistent
+adapter, complete plugin-specific TODOs, and verify a production build:
+
+```bash
+BTST_SITE_URL=http://localhost:3000 \
+BTST_API_URL=http://localhost:3000 \
+npm run build
+```
+
+## Generated setup or manual setup?
+
+Use [`@btst/codegen init`](/cli#init-codegen) when the application follows a
+supported framework shape and you want BTST to write the standard integration.
+Use the [manual installation](#manual-installation) when the application has
+custom routing, provider composition, deployment boundaries, or file-layout
+constraints. The detailed manual material remains the source of truth for those
+seams.
+
+## Compatibility and prerequisites
+
+### Maintained framework paths
+
+The released v3 integration and codegen paths are maintained and tested for:
+
+| Framework | Integration |
+| --- | --- |
+| Next.js 15+ App Router | Route handlers, request-aware pages, static pages, metadata, and sitemap factories |
+| React Router v7 | Framework routes, SSR loaders, navigation, metadata, and sitemap response helpers |
+| TanStack Start | File routes, SSR loaders, navigation, metadata, and sitemap response helpers |
+
+Other React frameworks may be possible through custom adapters, but they are
+not part of the maintained/tested matrix above. Remix is not a separate v3
+support claim.
+
+### Adapter choices
+
+| Adapter | Intended use and important limits |
+| --- | --- |
+| Prisma, Drizzle, Kysely | Versioned persistent adapter choices. Enable native isolated transactions for AI Chat, Form Builder, Kanban, or Media. |
+| MongoDB | Versioned adapter with plugin-specific limits; generated Form Builder and Media configurations reject it. |
+| Memory | Local, single-process evaluation and tests only; not a production persistence or isolation substitute. |
+
+See [Database Adapters](/databases/adapters) for provider configuration,
+transactions, generation, and migrations.
+
+### Shared UI and runtime requirements
+
+- shadcn/ui with CSS variables, plus the UI components used by the selected
+  plugin
+- Tailwind CSS and the selected plugin CSS imports
+- Sonner with `<Toaster />` rendered in the application layout
+- `@tanstack/react-query` and one `QueryClientProvider`
+
+### Plugin-specific exceptions
+
+| Capability | Requirement |
+| --- | --- |
+| Blog | Image uploads remain an application-provided override. |
+| AI Chat | Requires an AI SDK model provider and its credentials; persistent writes require an isolating adapter. |
+| UI Builder | Requires CMS; codegen adds CMS when UI Builder is selected. |
+| Form Builder | Requires an isolating Prisma, Drizzle, or Kysely configuration for persistent use. |
+| Media | Requires a storage adapter; persistent writes require isolation, and MongoDB is not accepted by the generated configuration. |
+| Better Auth UI | Requires an existing Better Auth server endpoint and its aligned dependency cohort; it does not generate an auth backend. |
+
+Read the selected plugin page before installation for its exact package,
+service, storage, auth, and override requirements.
+
+## AI coding agent assistance (optional)
+
+After you understand the product and normal installation path, you can install
+the BTST integration skill so a coding agent understands the plugin system,
+adapter setup, and wiring patterns:
 
 ```bash
 npx skills@latest add better-stack-ai/better-stack/.agents/skills/btst-integration
@@ -20,7 +175,13 @@ Or manually copy the [`SKILL.md`](https://github.com/better-stack-ai/better-stac
 
 ---
 
-## Prerequisites
+## Manual installation
+
+The steps below preserve the complete framework and adapter integration
+reference. Use them when generated setup is not appropriate or when you need to
+audit each layer explicitly.
+
+### Prerequisites
 
 In order to use BTST, your application must meet the following requirements:
 
@@ -1010,39 +1171,25 @@ In order to use BTST, your application must meet the following requirements:
   </Step>
 
   <Step>
-    ### 🎉 That's it!
+    ### Verify the integration
 
-    Your setup is complete! Here's what you've configured:
+    The shared runtime is ready when the application has:
 
-    - ✅ Backend API handler that processes all plugin requests
-    - ✅ Database adapter that connects plugins to your database
-    - ✅ Client-side router with SSR support
-    - ✅ React Query integration for data fetching
-    - ✅ API, site, and QueryClient configured once on the resolved client stack
-    - ✅ Framework router and optional auth services configured once on the provider
+    - a mounted backend API handler and selected database adapter;
+    - a resolved client stack, QueryClient, framework router, and provider;
+    - the selected plugin registered on every side it actually provides;
+    - plugin CSS and required UI components; and
+    - trusted site and API origins for production rendering.
 
-    **Next steps:**
+    Run the application build, then open a route registered by the selected
+    plugin. For Blog, `/pages/blog` is the visible success condition.
 
-    1. **Add plugins** to both backend and client configurations:
-       - Backend: `plugins: { blog: blogBackendPlugin() }`
-       - Client: `plugins: { blog: blogClientPlugin() }`
-    
-    2. **Visit your pages** at `/pages/*` to see plugin routes in action
+    Continue with the [released plugin catalog](/plugins), or compare complete
+    generated setups in the playground:
 
-    **Available plugins:**
-    - `@btst/stack/plugins/blog` - Full-featured blog with markdown editor, SEO, and RSS. Learn more about the blog plugin [here](/plugins/blog).
-    - More plugins coming soon!
-
-    Each plugin provides everything you need: routes, API endpoints, database schemas, React components, and hooks - all working together seamlessly.
-
-    ## Example Projects
-
-    See complete working examples for each framework:
-    - **[Next.js App Router](https://www.better-stack.ai/playground?plugins=blog,ai-chat,comments&framework=nextjs&view=preview)** - Full Next.js App Router setup with blog and todo plugins
-    - **[React Router](https://www.better-stack.ai/playground?plugins=blog,ai-chat,comments&framework=react-router&view=preview)** - React Router v7 setup with SSR support
-    - **[TanStack Start](https://www.better-stack.ai/playground?plugins=blog,ai-chat,comments&framework=tanstack&view=preview)** - TanStack Router setup with file-based routing
-
-    Each example includes complete configuration, plugin setup, and demonstrates framework-specific patterns.
+    - [Next.js App Router](https://www.better-stack.ai/playground?plugins=blog,ai-chat,comments&framework=nextjs&view=preview)
+    - [React Router v7](https://www.better-stack.ai/playground?plugins=blog,ai-chat,comments&framework=react-router&view=preview)
+    - [TanStack Start](https://www.better-stack.ai/playground?plugins=blog,ai-chat,comments&framework=tanstack&view=preview)
 
   </Step>
 </Steps>

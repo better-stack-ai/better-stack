@@ -1,62 +1,108 @@
 ---
 title: Introduction
-description: Add complete full-stack features to your React app in minutes, not weeks
+description: Add complete features to the React app you already own.
 full: true
 ---
 
 import { Card, Cards } from "fumadocs-ui/components/card";
-import { Rocket, BookOpenCheck, Server, Layers, Router, Zap, Terminal } from "lucide-react";
+import { BookOpenCheck, Layers, Rocket, Server, Zap } from "lucide-react";
 
-## 👋 Welcome to BTST
+## Add complete features to the React app you already own
 
-**@btst - BTST** is a composable full-stack plugin system for modern React frameworks.
+BTST is an open-source TypeScript system for installing full-stack features
+into existing React applications. It is built for React/TypeScript developers
+and small product teams that need a substantial recurring feature without
+replacing the application they already have.
 
-Instead of building routes, APIs, databases, SSR, and forms from scratch, BTST gives you **complete full-stack features as plugins** that work with any modern React framework.
-
-### Key Features
-
-- **🔄 Framework Agnostic** - Works with Next.js, React Router, TanStack Router, Remix
-- **📦 Full-Stack** - Routes, APIs, database schemas, components, hooks, SSR, metatags, sitemaps
-- **🎯 Composable** - Mix and match features like LEGO blocks
-- **🚀 Zero Boilerplate** - Configure and it works
-
-### Available Plugins
-
-**Blog** - Content management, editor, drafts, publishing, tags, SEO and more
-
-More plugins coming soon (AI assistant, scheduling, feedback, newsletters, comments). 
-Or build your own plugins for any horizontal feature.
+A full-stack plugin can bring the routes, APIs, database schema, hooks,
+SSR-aware pages, and customizable UI that its feature needs. Start with one
+plugin and add more only when they are useful.
 
 <Cards>
   <Card
-    title="Installation"
-    href="/installation"
+    title="Install your first feature"
+    href="/installation#quickstart-add-blog-to-nextjs"
     icon={<Zap size={20} />}
-    description="Install and configure."
+    description="Add Blog to an existing Next.js app and open the working route."
   />
   <Card
-    title="Plugins"
+    title="Understand how BTST works"
+    href="/how-it-works"
+    icon={<Server size={20} />}
+    description="See where packages, plugins, data, routes, and owned UI fit."
+  />
+  <Card
+    title="View the live Blog"
+    href="https://www.better-stack.ai/p/blog"
+    icon={<Rocket size={20} />}
+    description="See a released BTST feature without changing an application."
+  />
+  <Card
+    title="Explore released plugins"
     href="/plugins"
     icon={<Layers size={20} />}
-    description="Available plugins and features."
-  />
-  <Card
-    title="CLI"
-    href="/cli"
-    icon={<Terminal size={20} />}
-    description="Generate database schemas and migrations."
-  />
-  <Card
-    title="Plugin Development"
-    href="/plugins/development"
-    icon={<BookOpenCheck size={20} />}
-    description="Build your own plugins."
+    description="Compare the capabilities you can install today."
   />
 </Cards>
 
----
+## Where BTST fits
 
-## LLMs.txt
+BTST is more complete than a UI kit, more incremental than a starter
+application, and more ownable than a hosted feature service. It is not a new
+application foundation or a required hosted control plane: plugins run inside
+your stack, with your database and deployment.
 
-BTST provides an LLMs.txt file that helps AI models understand how to use the library. You can find it at [/docs/llms.txt](/llms.txt).
+**You own the whole application.** Your application, data, deployment, and
+ejected UI stay yours. Packaged runtime and data behavior remains upgradeable
+through `@btst/*` dependencies, and the open-source code can be inspected,
+forked, or replaced.
 
+## Released capabilities
+
+Different plugins have different boundaries. Full-stack plugins register both
+backend and client behavior; one-sided plugins intentionally provide only the
+side they need. Companions connect BTST to a system the application already
+runs.
+
+| Capability | Topology | What it adds |
+| --- | --- | --- |
+| [Blog](/plugins/blog) | Full-stack | Publishing workflow, routes, API, data model, editor, SEO, and RSS |
+| [AI Chat](/plugins/ai-chat) | Full-stack | Streaming conversations, model integration, history, routes, and UI |
+| [CMS](/plugins/cms) | Full-stack | Typed content models, APIs, generated forms, and editorial UI |
+| [Form Builder](/plugins/form-builder) | Full-stack | Form authoring, validation, rendering, and submissions |
+| [UI Builder](/plugins/ui-builder) | Client-only · requires CMS | Visual page authoring and public rendering over CMS content |
+| [Kanban](/plugins/kanban) | Full-stack | Boards, columns, tasks, assignment, and drag-and-drop UI |
+| [Comments](/plugins/comments) | Full-stack | Threads, replies, reactions, moderation, and embeddable UI |
+| [Media](/plugins/media) | Full-stack | Media storage, library routes, uploads, folders, and picker UI |
+| [OpenAPI](/plugins/open-api) | Backend-only | Generated OpenAPI document and interactive API reference endpoint |
+| [Route Docs](/plugins/route-docs) | Client-only | Generated route reference and navigation UI |
+| [Better Auth UI](/plugins/better-auth-ui) | Companion · requires Better Auth | Auth and account pages for an existing Better Auth backend |
+
+These are installable, released capabilities. The catalog does not mix future
+ideas into the available inventory. See
+[compatibility and prerequisites](/installation#compatibility-and-prerequisites)
+before choosing an adapter or a plugin with an external dependency.
+
+## Choose the level of guidance you need
+
+- **Generated setup** is the shortest supported path for an existing Next.js
+  App Router, React Router v7, or TanStack Start application.
+- **Manual installation** keeps every integration decision visible for teams
+  with custom project structure, routing, runtime, or deployment requirements.
+- **Plugin development** is for building a reusable capability rather than
+  installing one of the released plugins.
+
+<Cards>
+  <Card
+    title="Manual installation"
+    href="/installation#manual-installation"
+    icon={<BookOpenCheck size={20} />}
+    description="Work through each package, adapter, route, provider, and deployment seam."
+  />
+  <Card
+    title="Build a plugin"
+    href="/plugins/development"
+    icon={<BookOpenCheck size={20} />}
+    description="Create a reusable backend, client, or full-stack capability."
+  />
+</Cards>
