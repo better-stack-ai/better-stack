@@ -25,8 +25,16 @@ describe("published plugin decision manifest", () => {
 		expect(manifest).toEqual({ schemaVersion: 1, plugins: PLUGIN_DECISIONS });
 		expect(Object.keys(manifest.plugins)).toEqual([
 			"blog",
+			"ai-chat",
+			"cms",
 			"form-builder",
+			"ui-builder",
+			"kanban",
+			"comments",
+			"media",
+			"route-docs",
 			"open-api",
+			"better-auth-ui",
 		]);
 		await expect(
 			execFileAsync(process.execPath, [tsxCli, generatorPath, "--check"]),

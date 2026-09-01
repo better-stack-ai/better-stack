@@ -33,6 +33,31 @@
     "name": "Plugin evaluation",
     "slug": "plugin-evaluation"
   },
+  "cms": {
+    "typeSlug": "product",
+    "records": [
+      {
+        "slug": "btst-release-evidence",
+        "data": {
+          "name": "Release evidence kit",
+          "description": "A typed content record managed through the generated CMS surface.",
+          "price": 49,
+          "featured": true,
+          "category": "Electronics"
+        }
+      },
+      {
+        "slug": "btst-plugin-catalog",
+        "data": {
+          "name": "Plugin catalog",
+          "description": "A second record that proves the generated list is backed by stored content.",
+          "price": 29,
+          "featured": false,
+          "category": "Electronics"
+        }
+      }
+    ]
+  },
   "comments": [
     {
       "resourceId": "shipping-plugin-catalog",
@@ -41,6 +66,31 @@
       "status": "approved"
     }
   ],
+  "kanban": {
+    "name": "BTST Release Board",
+    "slug": "btst-release-board",
+    "description": "A generated board backed by the registered Kanban plugin.",
+    "tasks": [
+      {
+        "title": "Verify plugin boundaries",
+        "description": "Confirm what BTST supplies and what the application owns.",
+        "priority": "HIGH",
+        "column": 0
+      },
+      {
+        "title": "Review generated routes",
+        "description": "Inspect the generated product surfaces before release.",
+        "priority": "MEDIUM",
+        "column": 1
+      },
+      {
+        "title": "Capture release evidence",
+        "description": "Keep the checked-in proof tied to the current implementation.",
+        "priority": "LOW",
+        "column": 2
+      }
+    ]
+  },
   "media": {
     "libraryPath": "/pages/media",
     "fixture": "../fixtures/test-image.png",

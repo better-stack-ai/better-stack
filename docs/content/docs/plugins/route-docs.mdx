@@ -5,26 +5,9 @@ description: Auto-generated client route documentation with interactive navigati
 
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
-import Image from "next/image";
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 
-import routeDocsDemo from "../../../assets/route-docs-demo.png";
-
-<div className="my-2">
-  <a href={routeDocsDemo.src} target="_blank" rel="noopener noreferrer">
-    <Image src={routeDocsDemo} alt="Route Docs Plugin Demo - Interactive route documentation" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
-  </a>
-</div>
-
-The Route Docs plugin automatically generates documentation for all your client-side routes. It provides an interactive reference page that displays route paths, parameters, sitemap entries, and navigation tools.
-
-## Features
-
-- **Automatic Route Discovery** - Traverses all registered client plugins and extracts route metadata
-- **Interactive Navigation** - Click any route to scroll to its details, or use the sidebar
-- **Parameter Documentation** - Shows path and query parameters with types and descriptions
-- **Sitemap Integration** - Displays sitemap entries for each route
-- **Live Route Testing** - Fill in parameters and navigate directly to routes
-- **Responsive Design** - Mobile-friendly with collapsible sidebar
+<PluginEvaluatorHeader pluginKey="route-docs" />
 
 ## Installation
 

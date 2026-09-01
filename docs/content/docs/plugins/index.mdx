@@ -4,7 +4,7 @@ description: Available plugins and features for BTST
 ---
 
 import { Card, Cards } from "fumadocs-ui/components/card";
-import { Database, Hammer, Bot, Route, Layout, Columns3, MessageSquare, ImageIcon, ShieldCheck } from "lucide-react";
+import { Hammer } from "lucide-react";
 import { PluginCatalogCard } from "@/components/plugin-evaluator";
 
 
@@ -30,55 +30,20 @@ workflow-heavy feature, and an intentionally one-sided plugin.
 
 ## More released plugins
 
+<div className="not-prose my-6 grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
+  <PluginCatalogCard pluginKey="ai-chat" />
+  <PluginCatalogCard pluginKey="cms" />
+  <PluginCatalogCard pluginKey="ui-builder" />
+  <PluginCatalogCard pluginKey="kanban" />
+  <PluginCatalogCard pluginKey="comments" />
+  <PluginCatalogCard pluginKey="media" />
+  <PluginCatalogCard pluginKey="route-docs" />
+  <PluginCatalogCard pluginKey="better-auth-ui" />
+</div>
+
+## Build a plugin
+
 <Cards>
-  <Card
-    title="AI Chat Plugin"
-    href="/plugins/ai-chat"
-    icon={<Bot size={20} />}
-    description="AI-powered chat with conversation history, streaming, and customizable models."
-  />
-  <Card
-    title="CMS Plugin"
-    href="/plugins/cms"
-    icon={<Database size={20} />}
-    description="Headless CMS with custom content types, Zod schemas, and auto-generated forms."
-  />
-  <Card
-    title="UI Builder Plugin"
-    href="/plugins/ui-builder"
-    icon={<Layout size={20} />}
-    description="Visual drag-and-drop page builder with component registry and public rendering."
-  />
-  <Card
-    title="Kanban Plugin"
-    href="/plugins/kanban"
-    icon={<Columns3 size={20} />}
-    description="Project management with boards, columns, tasks, drag-and-drop, and priority levels."
-  />
-  <Card
-    title="Comments Plugin"
-    href="/plugins/comments"
-    icon={<MessageSquare size={20} />}
-    description="Threaded comments with moderation, likes, replies, and embeddable comment threads."
-  />
-  <Card
-    title="Media Plugin"
-    href="/plugins/media"
-    icon={<ImageIcon size={20} />}
-    description="Media library with uploads, folders, picker UI, URL registration, and reusable image inputs."
-  />
-  <Card
-    title="Route Docs Plugin"
-    href="/plugins/route-docs"
-    icon={<Route size={20} />}
-    description="Auto-generated client route documentation with interactive navigation."
-  />
-  <Card
-    title="Better Auth UI Companion"
-    href="/plugins/better-auth-ui"
-    icon={<ShieldCheck size={20} />}
-    description="Optional auth and account routes for applications that already run Better Auth."
-  />
   <Card
     title="Building Plugins"
     href="/plugins/development"
@@ -102,7 +67,7 @@ Consumers that cannot wait for a package release can read the checked-in
 during their build or content-validation step. Pin the raw URL to a commit when
 reproducibility matters. The same artifact is published as
 `@btst/codegen/plugin-decisions.json`; check `schemaVersion` before consuming its
-three `plugins` records. Do not fetch it from the browser at runtime.
+eleven released `plugins` records. Do not fetch it from the browser at runtime.
 
 After changing `PLUGIN_DECISIONS`, regenerate and verify the artifact from the
 repository root:
