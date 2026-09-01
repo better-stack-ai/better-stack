@@ -7,25 +7,15 @@ import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
 import Image from "next/image";
 
-import blogDemo from "../../../assets/blog-demo.png";
-import blogDemo1 from "../../../assets/blog-demo-1.png";
-import blogDemo2 from "../../../assets/blog-demo-2.png";
-import blogDemo3 from "../../../assets/blog-demo-3.png";
+import blogProof from "../../../assets/product-proof/blog-proof.webp";
 
-<div className="grid grid-cols-1 lg:grid-cols-2 gap-2 my-2">
-  <a href={blogDemo.src} target="_blank" rel="noopener noreferrer">
-    <Image src={blogDemo} alt="Blog Plugin Demo - Home" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
-  </a>
-  <a href={blogDemo1.src} target="_blank" rel="noopener noreferrer">
-    <Image src={blogDemo1} alt="Blog Plugin Demo - Post" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
-  </a>
-  <a href={blogDemo2.src} target="_blank" rel="noopener noreferrer">
-    <Image src={blogDemo2} alt="Blog Plugin Demo - Editor" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
-  </a>
-  <a href={blogDemo3.src} target="_blank" rel="noopener noreferrer">
-    <Image src={blogDemo3} alt="Blog Plugin Demo - Drafts" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+<div className="my-4">
+  <a href={blogProof.src} target="_blank" rel="noopener noreferrer">
+    <Image src={blogProof} alt="Real BTST Blog page with three published product-update posts in the generated Next.js application." className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
   </a>
 </div>
+
+Blog is the canonical full-stack proof: routes, backend behavior, client UI, and a visible published result arrive as one plugin.
 
 [View interactive demo →](https://www.better-stack.ai/playground?plugins=blog&view=preview)
 

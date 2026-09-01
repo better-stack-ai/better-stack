@@ -10,6 +10,10 @@ A full-stack plugin can bring the routes, APIs, database schema, hooks, SSR-awar
 
 **You own the whole application.** Your app, data, deployment, and ejected UI stay yours. BTST runs inside your stack as an open-source dependency you can inspect, fork, or replace—never as a required hosted control plane.
 
+![BTST promise above a focused view of the real Blog route from the generated application.](docs/assets/product-proof/readme-hero.webp)
+
+<sub>Real output from the repository's generated Next.js application.</sub>
+
 [![npm](https://img.shields.io/npm/v/@btst/stack.svg)](https://www.npmjs.com/package/@btst/stack)
 [![MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 

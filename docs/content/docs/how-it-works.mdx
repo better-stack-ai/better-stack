@@ -5,7 +5,13 @@ description: Understand the architecture and key concepts behind BTST.
 
 Here's a high-level overview of how BTST works:
 
-![Architecture Overview](../../assets/architecture.png)
+![Diagram separating the application and operating boundaries a team owns from the BTST runtimes and plugins running inside it.](../../assets/product-proof/ownership-diagram.svg)
+
+BTST composes client and backend plugins inside your application. Your app shell, ejected views, database, deployment, and external services remain yours.
+
+![The current Blog backend and client registrations point to the real published Blog route they produce.](../../assets/product-proof/code-to-result.webp)
+
+Register Blog with the backend and client stacks, then inspect the resulting route at `/pages/blog`.
 
 ## Server Side
 

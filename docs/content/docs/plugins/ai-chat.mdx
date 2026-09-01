@@ -7,17 +7,15 @@ import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
 import Image from "next/image";
 
-import chatDemo from "../../../assets/chat-demo.png";
-import chatDemo1 from "../../../assets/chat-demo-1.png";
+import aiChatProof from "../../../assets/product-proof/ai-chat-proof.webp";
 
-<div className="grid grid-cols-1 lg:grid-cols-2 gap-2 my-2">
-  <a href={chatDemo.src} target="_blank" rel="noopener noreferrer">
-    <Image src={chatDemo} alt="AI Chat Plugin Demo" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
-  </a>
-  <a href={chatDemo1.src} target="_blank" rel="noopener noreferrer">
-    <Image src={chatDemo1} alt="AI Chat Plugin Demo - Conversation" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
+<div className="my-4">
+  <a href={aiChatProof.src} target="_blank" rel="noopener noreferrer">
+    <Image src={aiChatProof} alt="Real authenticated BTST AI Chat shell with an empty conversation-history sidebar, attachment control, and a product-context prompt ready to send." className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
   </a>
 </div>
+
+This capture proves the shipped chat shell and prompt boundary. It deliberately does not fabricate a model response.
 
 [View interactive demo →](https://www.better-stack.ai/playground?plugins=ai-chat&view=preview)
 

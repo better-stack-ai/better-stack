@@ -91,7 +91,6 @@ export const createAppClientStack = (
 				seo: {
 					siteName: "BTST Blog",
 					author: "BTST Team",
-					twitterHandle: "@olliethedev",
 					locale: "en_US",
 					defaultImage: `${siteOrigin}/og-image.png`,
 				},

@@ -1,0 +1,122 @@
+{
+  "identity": "admin-product-proof",
+  "posts": [
+    {
+      "title": "The architecture stays yours",
+      "content": "# Keep your boundaries\n\nBTST composes with your database, framework, and deployment.",
+      "excerpt": "What BTST adds—and which operating boundaries remain under your control.",
+      "slug": "architecture-stays-yours",
+      "published": true,
+      "publishedAt": "2026-08-06T12:00:00.000Z",
+      "image": ""
+    },
+    {
+      "title": "A safer release workflow",
+      "content": "# Release evidence\n\nPreview the exact routes your team owns before publishing.",
+      "excerpt": "A repeatable path from plugin setup to a reviewable product screen.",
+      "slug": "safer-release-workflow",
+      "published": true,
+      "publishedAt": "2026-08-12T12:00:00.000Z",
+      "image": ""
+    },
+    {
+      "title": "Shipping the plugin catalog",
+      "content": "# One surface, six capabilities\n\nThe team connected content, forms, comments, media, route docs, and OpenAPI without moving the application.",
+      "excerpt": "How the team added product capabilities while keeping the app, data, and deployment.",
+      "slug": "shipping-plugin-catalog",
+      "published": true,
+      "publishedAt": "2026-08-18T12:00:00.000Z",
+      "image": ""
+    }
+  ],
+  "form": {
+    "name": "Plugin evaluation",
+    "slug": "plugin-evaluation"
+  },
+  "comments": [
+    {
+      "resourceId": "shipping-plugin-catalog",
+      "resourceType": "blog-post",
+      "body": "The request context keeps this release discussion attached to the published route.",
+      "status": "approved"
+    }
+  ],
+  "media": {
+    "libraryPath": "/pages/media",
+    "fixture": "../fixtures/test-image.png",
+    "uploadName": "btst-product-proof-media.png",
+    "mimeType": "image/png",
+    "alt": "BTST release evidence fixture",
+    "expectedControl": "Search files…",
+    "description": "A checked-in image uploaded into the registered Media plugin and asserted visible in its generated library route.",
+    "provenance": "seeded-through-registered-media-upload-route"
+  },
+  "openApi": {
+    "referencePath": "/api/data/reference",
+    "expectedTitle": "BTST Codegen API",
+    "provenance": "generated-from-registered-backend-stack"
+  },
+  "routeDocs": {
+    "pagePath": "/pages/route-docs",
+    "expectedTitle": "Client Route Documentation",
+    "provenance": "generated-from-registered-client-stack"
+  },
+  "uiBuilder": {
+    "slug": "release-evidence",
+    "layers": [
+      {
+        "id": "root",
+        "type": "div",
+        "name": "Release page",
+        "props": {
+          "className": "p-8 space-y-5"
+        },
+        "children": [
+          {
+            "id": "eyebrow",
+            "type": "span",
+            "name": "Status",
+            "props": {},
+            "children": "Release evidence"
+          },
+          {
+            "id": "title",
+            "type": "h1",
+            "name": "Title",
+            "props": {
+              "className": "text-3xl font-bold"
+            },
+            "children": "Every capability, still inside your app"
+          },
+          {
+            "id": "body",
+            "type": "p",
+            "name": "Summary",
+            "props": {
+              "className": "text-lg text-muted-foreground"
+            },
+            "children": "Blog, forms, comments, media, route docs, and OpenAPI share one runtime and one request context."
+          },
+          {
+            "id": "cta",
+            "type": "Button",
+            "name": "Action",
+            "props": {
+              "variant": "default"
+            },
+            "children": [
+              {
+                "id": "cta-label",
+                "type": "span",
+                "name": "Action label",
+                "props": {},
+                "children": "Review release"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "chatPrompt": "How do Blog and Comments share the same request context?"
+}
