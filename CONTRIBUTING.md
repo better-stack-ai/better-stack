@@ -2,6 +2,10 @@
 
 Thank you for your interest in contributing. This guide covers all contribution types — from quick doc fixes to full new plugins.
 
+Public-facing documentation and product copy must follow the
+[BTST message and claims contract](./docs/positioning.md). It defines the
+canonical name, plugin taxonomy, evidence requirements, and evaluator CTAs.
+
 ---
 
 ## Table of contents
