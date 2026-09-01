@@ -26,33 +26,30 @@ paths.
 
 ### 0. Pin the verified cohort and a rollback point
 
-The final stable package versions will be set in a separate release-preparation
-commit before the release job validates and publishes them. Until stable v3 is
-published, use this exact focused RC4 cohort:
+Use this exact stable v3 cohort:
 
 | Role | Exact version |
 | --- | --- |
-| Core | `@btst/stack@3.0.0-rc.4` |
-| Scaffold and command wrapper | `@btst/codegen@0.2.0-rc.4` |
-| Optional Better Auth UI companion | `@btst/better-auth-ui@2.0.0-rc.4` |
+| Core | `@btst/stack@3.0.0` |
+| Scaffold and command wrapper | `@btst/codegen@0.2.0` |
+| Optional Better Auth UI companion | `@btst/better-auth-ui@2.0.0` |
 | Better DB and the selected BTST adapter | `2.2.3` |
-| Database CLI for generation/migration | `@btst/cli@2.2.4`, delegated by Codegen RC4 from the consumer project directory |
+| Database CLI for generation/migration | `@btst/cli@2.2.4`, delegated by Codegen 0.2.0 from the consumer project directory |
 | Better Auth and Core | `better-auth@1.6.16`, `@better-auth/core@1.6.16` |
 | Better Auth utilities and transport | `@better-auth/utils@0.4.1`, `@better-fetch/fetch@1.2.2`, `better-call@1.3.6` |
 | API-key and passkey declarations, when the companion is installed | `@better-auth/api-key@1.6.16`, `@better-auth/passkey@1.6.16` |
 
-When stable v3 is published, replace only the three release-candidate entries
-with their exact published stable versions. Retain the Better Auth `1.6.16`
-and Better DB/adapter `2.2.3` cohorts unless a later migration guide explicitly
-changes them. Do not move this release to Better Auth `1.7.x`, and do not use a
-floating `latest`, `next`, caret, or workspace range in a production migration.
+Retain the Better Auth `1.6.16` and Better DB/adapter `2.2.3` cohorts unless a
+later migration guide explicitly changes them. Do not move this release to
+Better Auth `1.7.x`, and do not use a floating `latest`, `next`, caret, or
+workspace range in a production migration.
 
 For example, a Drizzle application without the optional auth companion can pin
-the current candidate with:
+the stable cohort with:
 
 ```bash
-pnpm add --save-exact @btst/stack@3.0.0-rc.4 @btst/adapter-drizzle@2.2.3
-pnpm add --save-dev --save-exact @btst/codegen@0.2.0-rc.4
+pnpm add --save-exact @btst/stack@3.0.0 @btst/adapter-drizzle@2.2.3
+pnpm add --save-dev --save-exact @btst/codegen@0.2.0
 pnpm install --frozen-lockfile
 ```
 
@@ -392,7 +389,7 @@ that looks correct can still be bound to the wrong endpoint or identity cache.
 ### 7. Regenerate or merge the framework scaffold
 
 `@btst/codegen` owns application scaffolding. The focused
-`@btst/codegen@0.2.0-rc.4` candidate delegates `generate` and `migrate` to
+`@btst/codegen@0.2.0` delegates `generate` and `migrate` to
 `@btst/cli@2.2.4` from the consumer project directory. That behavior loads the
 application's TypeScript/JavaScript aliases and standard Next.js environment
 files, resolves its Prisma or Drizzle adapter and ORM peers, and ignores only a
@@ -402,9 +399,9 @@ Use the scaffold as a reference diff for an existing application rather than
 blindly overwriting owned files:
 
 ```bash
-npx @btst/codegen@0.2.0-rc.4 init --framework=nextjs --adapter=drizzle \
+npx @btst/codegen@0.2.0 init --framework=nextjs --adapter=drizzle \
   --plugins=blog,comments --cwd=. --skip-install
-npx @btst/codegen@0.2.0-rc.4 generate \
+npx @btst/codegen@0.2.0 generate \
   --orm=drizzle --config=lib/stack.ts --output=src/db/schema.ts
 ```
 
@@ -422,26 +419,26 @@ server auth factory. Map the session into `createClientAuth` and
 `createServerAuth` yourself when business plugins should authorize the same
 person. Role and tenant fields remain application-owned.
 
-Auth plus account is the minimal runtime integration. Pin the candidate cohort
+Auth plus account is the minimal runtime integration. Pin the stable cohort
 exactly when it is selected:
 
 ```bash
-pnpm add --save-exact @btst/better-auth-ui@2.0.0-rc.4 \
+pnpm add --save-exact @btst/better-auth-ui@2.0.0 \
   better-auth@1.6.16 @better-auth/core@1.6.16 \
   @better-auth/api-key@1.6.16 @better-auth/passkey@1.6.16 \
   @better-auth/utils@0.4.1 @better-fetch/fetch@1.2.2 better-call@1.3.6
 ```
 
-`@btst/codegen@0.2.0-rc.4` includes the explicit `better-auth-ui` scaffold
+`@btst/codegen@0.2.0` includes the explicit `better-auth-ui` scaffold
 selection and generates the minimal auth-and-account path described in the
 focused guide. It does not generate or replace the application's Better Auth
 backend, database, schema, providers, secrets, or optional runtime plugins.
 
-API-key and passkey are required declaration peers in the RC4 package because
-its complete `AuthClient` type exposes those surfaces. Installing them satisfies
-the strict type/dependency graph; it does not enable either feature. Enable
-organization, API-key, passkey, or multi-session only when the matching Better
-Auth server and browser plugins are configured. Optional `tanstack`,
+API-key and passkey are required declaration peers in the stable package
+because its complete `AuthClient` type exposes those surfaces. Installing them
+satisfies the strict type/dependency graph; it does not enable either feature.
+Enable organization, API-key, passkey, or multi-session only when the matching
+Better Auth server and browser plugins are configured. Optional `tanstack`,
 `instantdb`, and `triplit` companion subpaths have additional peers; the base
 auth/account integration does not require those adapter peers.
 
@@ -498,8 +495,8 @@ repository root before publishing:
 ```bash
 pnpm test:packed-consumers
 BTST_ARTIFACT_DIR="$(mktemp -d)"
-npm pack @btst/better-auth-ui@2.0.0-rc.4 --pack-destination "$BTST_ARTIFACT_DIR"
-BTST_AUTH_UI_TARBALL="$BTST_ARTIFACT_DIR/btst-better-auth-ui-2.0.0-rc.4.tgz"
+npm pack @btst/better-auth-ui@2.0.0 --pack-destination "$BTST_ARTIFACT_DIR"
+BTST_AUTH_UI_TARBALL="$BTST_ARTIFACT_DIR/btst-better-auth-ui-2.0.0.tgz"
 pnpm smoke:packed-consumer -- --fixture core --package-manager npm
 pnpm smoke:packed-consumer -- --fixture core --package-manager pnpm
 pnpm smoke:packed-consumer -- --fixture auth --package-manager npm \

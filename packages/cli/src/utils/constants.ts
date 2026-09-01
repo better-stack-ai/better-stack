@@ -186,14 +186,14 @@ export const PLUGINS: readonly PluginMeta[] = [
 			"@better-auth/utils",
 			"@better-fetch/fetch",
 			"better-call",
-			// RC4 exposes API-key/passkey types from its synthetic full AuthClient,
+			// Stable 2.0.0 exposes API-key/passkey types from its synthetic full AuthClient,
 			// so these remain required declaration peers even when their runtime
 			// features are not configured by the generated auth+account scaffold.
 			"@better-auth/api-key",
 			"@better-auth/passkey",
 		],
 		extraInstallSpecs: [
-			"@btst/better-auth-ui@2.0.0-rc.4",
+			"@btst/better-auth-ui@2.0.0",
 			"better-auth@1.6.16",
 			"@better-auth/core@1.6.16",
 			"@better-auth/utils@0.4.1",
