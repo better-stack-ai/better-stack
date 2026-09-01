@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title description">
+  <title id="title">BTST ownership boundaries</title>
+  <desc id="description">A React application keeps its app shell and ejected view code. A framework adapter connects it to the BTST client and backend runtimes. Those runtimes compose client, backend, and one-sided plugins while the team keeps its database, deployment, and external services.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0 0L10 5L0 10Z" fill="#2563EB"/>
+    </marker>
+  </defs>
+  <rect width="1600" height="900" fill="#F7F7F5"/>
+  <rect x="0" width="10" height="900" fill="#2563EB"/>
+  <text x="76" y="92" fill="#2563EB" font-family="Geist Mono, ui-monospace, monospace" font-size="18" font-weight="700" letter-spacing="2">OWNERSHIP MAP</text>
+  <text x="76" y="157" fill="#0B0D0E" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="48" font-weight="750">BTST runs inside the application you operate.</text>
+  <text x="76" y="202" fill="#5E6670" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="23">The blue boundary is BTST. Every graphite boundary stays under your control.</text>
+
+  <rect x="60" y="265" width="410" height="525" rx="28" fill="#FFFFFF" stroke="#A8AFB7" stroke-width="2"/>
+  <text x="92" y="315" fill="#5E6670" font-family="Geist Mono, ui-monospace, monospace" font-size="15" font-weight="700" letter-spacing="1.5">YOUR APPLICATION</text>
+  <rect x="92" y="352" width="346" height="130" rx="18" fill="#191B1F"/>
+  <text x="120" y="397" fill="#FFFFFF" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="25" font-weight="700">React app shell</text>
+  <text x="120" y="430" fill="#B8C0C8" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="17">Navigation · auth · product UI</text>
+  <rect x="92" y="511" width="346" height="130" rx="18" fill="#FFFFFF" stroke="#A8AFB7" stroke-width="2"/>
+  <text x="120" y="556" fill="#191B1F" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="25" font-weight="700">Ejected view code</text>
+  <text x="120" y="589" fill="#5E6670" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="17">Edit, fork, or replace locally</text>
+  <rect x="92" y="670" width="346" height="82" rx="18" fill="#EEF3FF" stroke="#2563EB" stroke-width="2"/>
+  <text x="120" y="706" fill="#123E9C" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="21" font-weight="700">Framework adapter</text>
+  <text x="120" y="730" fill="#3F5F9D" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="15">Next.js · React Router · TanStack</text>
+
+  <rect x="525" y="265" width="555" height="525" rx="28" fill="#F0F5FF" stroke="#2563EB" stroke-width="3"/>
+  <text x="560" y="315" fill="#2563EB" font-family="Geist Mono, ui-monospace, monospace" font-size="15" font-weight="700" letter-spacing="1.5">BTST PACKAGES IN YOUR PROCESS</text>
+  <rect x="560" y="352" width="485" height="106" rx="18" fill="#191B1F"/>
+  <text x="590" y="396" fill="#FFFFFF" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="26" font-weight="700">Client runtime</text>
+  <text x="590" y="428" fill="#B8C0C8" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="17">Routes · loaders · hooks · SSR-aware pages</text>
+  <rect x="560" y="482" width="235" height="120" rx="18" fill="#FFFFFF" stroke="#8DAEF4" stroke-width="2"/>
+  <text x="590" y="524" fill="#191B1F" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="22" font-weight="700">Client plugins</text>
+  <text x="590" y="555" fill="#5E6670" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="16">Blog UI · Forms UI</text>
+  <text x="590" y="580" fill="#5E6670" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="16">Route Docs · UI Builder</text>
+  <rect x="810" y="482" width="235" height="120" rx="18" fill="#FFFFFF" stroke="#8DAEF4" stroke-width="2"/>
+  <text x="840" y="524" fill="#191B1F" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="22" font-weight="700">Backend plugins</text>
+  <text x="840" y="555" fill="#5E6670" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="16">Schemas · handlers</text>
+  <text x="840" y="580" fill="#5E6670" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="16">OpenAPI · lifecycle hooks</text>
+  <rect x="560" y="626" width="485" height="126" rx="18" fill="#191B1F"/>
+  <text x="590" y="671" fill="#FFFFFF" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="26" font-weight="700">Backend runtime</text>
+  <text x="590" y="703" fill="#B8C0C8" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="17">Request context · authorization · data access</text>
+  <text x="590" y="730" fill="#94A0AC" font-family="Geist Mono, ui-monospace, monospace" font-size="14">ONE-SIDED PLUGINS STAY ONE-SIDED</text>
+
+  <rect x="1135" y="265" width="405" height="525" rx="28" fill="#FFFFFF" stroke="#A8AFB7" stroke-width="2"/>
+  <text x="1168" y="315" fill="#5E6670" font-family="Geist Mono, ui-monospace, monospace" font-size="15" font-weight="700" letter-spacing="1.5">YOUR OPERATING BOUNDARIES</text>
+  <rect x="1168" y="352" width="339" height="100" rx="18" fill="#191B1F"/>
+  <text x="1198" y="397" fill="#FFFFFF" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="24" font-weight="700">Database</text>
+  <text x="1198" y="427" fill="#B8C0C8" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="16">Choose and operate the adapter</text>
+  <rect x="1168" y="478" width="339" height="100" rx="18" fill="#191B1F"/>
+  <text x="1198" y="523" fill="#FFFFFF" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="24" font-weight="700">Deployment</text>
+  <text x="1198" y="553" fill="#B8C0C8" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="16">Host the application where you choose</text>
+  <rect x="1168" y="604" width="339" height="100" rx="18" fill="#191B1F"/>
+  <text x="1198" y="649" fill="#FFFFFF" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="24" font-weight="700">External services</text>
+  <text x="1198" y="679" fill="#B8C0C8" font-family="Geist Sans, Geist, Arial, sans-serif" font-size="16">Models · storage · email · analytics</text>
+
+  <path d="M470 418H525" stroke="#2563EB" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M470 711H525" stroke="#2563EB" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M1080 401H1135" stroke="#2563EB" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M1080 528H1135" stroke="#2563EB" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M1080 654H1135" stroke="#2563EB" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="76" y="850" fill="#5E6670" font-family="Geist Mono, ui-monospace, monospace" font-size="15">GRAPHITE = YOU OPERATE IT</text>
+  <circle cx="350" cy="845" r="7" fill="#2563EB"/>
+  <text x="370" y="850" fill="#5E6670" font-family="Geist Mono, ui-monospace, monospace" font-size="15">COBALT = BTST COMPOSES HERE</text>
+</svg>

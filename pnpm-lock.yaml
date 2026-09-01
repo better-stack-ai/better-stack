@@ -292,6 +292,9 @@ importers:
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
+      sharp:
+        specifier: 0.34.5
+        version: 0.34.5
       tsx:
         specifier: ^4.20.3
         version: 4.21.0

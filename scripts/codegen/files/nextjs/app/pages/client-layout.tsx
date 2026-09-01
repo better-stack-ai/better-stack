@@ -88,11 +88,11 @@ export function BtstPagesClientLayout({
 					aiChat: {
 						uploadFile: uploadFileForChat,
 						chatSuggestions: [
-							"Hi, I'm Sarah, 34. I'm getting married next year and I just inherited $50,000 from my grandmother. I have no debt and about $30k in savings. I'm wondering if my current moderate-risk portfolio still makes sense.",
-							"Hi, I run a small import business and want to invest $200,000. The money came from overseas sales across multiple countries over the past few months. I'd like to move it into Canadian equities right away.",
-							"What information do I need to provide for a financial review?",
-							"I'm approaching retirement in the next few years — what should I be thinking about?",
-							"How is my risk tolerance assessed?",
+							"How do Blog and Comments share the same request context?",
+							"Which BTST plugins include both backend and client registrations?",
+							"What stays under my control after I install a plugin?",
+							"Show me the routes added by Form Builder.",
+							"How can I customize an ejected view?",
 						],
 					},
 					cms: {

@@ -14,6 +14,7 @@
   "devDependencies": {
     "@playwright/test": "^1.48.2",
     "dotenv": "^16.4.5",
+    "sharp": "0.34.5",
     "tsx": "^4.20.3"
   }
 }

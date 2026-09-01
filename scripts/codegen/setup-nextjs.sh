@@ -34,6 +34,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DEST="$ROOT_DIR/codegen-projects/nextjs"
 CLI_BIN="$ROOT_DIR/packages/cli/dist/index.cjs"
+SHADCN_VERSION="${SHADCN_VERSION:-4.19.1}"
 
 # ── Prerequisites ────────────────────────────────────────────────────────────
 
@@ -56,7 +57,7 @@ fi
 step "Scaffolding Next.js project with shadcn init -t next"
 mkdir -p "$ROOT_DIR/codegen-projects"
 cd "$ROOT_DIR/codegen-projects"
-pnpm dlx shadcn@latest init -t next --no-monorepo --base radix --preset nova --name nextjs --yes
+pnpm dlx "shadcn@$SHADCN_VERSION" init -t next --no-monorepo --base radix --preset nova --name nextjs --yes
 success "shadcn scaffold complete → $DEST"
 
 # ── Step 2: Remove .git and lock file ────────────────────────────────────────
@@ -95,7 +96,7 @@ success "Temporary Prisma artifacts removed"
 
 step "Adding shadcn UI components (checkbox, label, skeleton, input, sonner, dropdown-menu, separator)"
 cd "$DEST"
-pnpm dlx shadcn@latest add checkbox label skeleton input sonner dropdown-menu separator empty field item --yes --overwrite
+pnpm dlx "shadcn@$SHADCN_VERSION" add checkbox label skeleton input sonner dropdown-menu separator empty field item --yes --overwrite
 success "shadcn components added"
 
 # Request-aware hydration and SSG/ISR use distinct generated layouts. The E2E
