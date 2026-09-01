@@ -1,9 +1,9 @@
 {
-    "headers": [
-      {
-        "source": "/(.*)",
-        "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
-      }
-    ]
-  }
-  
+  "buildCommand": "pnpm build:vercel",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+    }
+  ]
+}
