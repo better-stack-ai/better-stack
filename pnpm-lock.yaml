@@ -207,6 +207,9 @@ importers:
 
   docs:
     dependencies:
+      '@btst/codegen':
+        specifier: workspace:*
+        version: link:../packages/cli
       '@btst/stack':
         specifier: workspace:*
         version: link:../packages/stack

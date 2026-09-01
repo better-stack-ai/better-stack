@@ -12,5 +12,5 @@ export type {
 	FileWritePlanItem,
 	ScaffoldPlan,
 } from "./types";
-export type { PluginMeta, AdapterMeta } from "./utils/constants";
+export type * from "./plugin-meta";
 export type { SeedRouteFile } from "./utils/seed-plan";
