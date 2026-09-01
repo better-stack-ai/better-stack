@@ -27,17 +27,16 @@ paths.
 ### 0. Pin the verified cohort and a rollback point
 
 The final stable package versions will be set in a separate release-preparation
-commit before the release job validates and publishes them. This documentation
-change does not invent those unpublished versions. Until the next core
-candidate is published, use this exact public cohort:
+commit before the release job validates and publishes them. Until stable v3 is
+published, use this exact focused RC4 cohort:
 
 | Role | Exact version |
 | --- | --- |
-| Core | `@btst/stack@3.0.0-rc.3` |
-| Scaffold and command wrapper | `@btst/codegen@0.2.0-rc.3` |
+| Core | `@btst/stack@3.0.0-rc.4` |
+| Scaffold and command wrapper | `@btst/codegen@0.2.0-rc.4` |
 | Optional Better Auth UI companion | `@btst/better-auth-ui@2.0.0-rc.4` |
 | Better DB and the selected BTST adapter | `2.2.3` |
-| Database CLI for generation/migration | `@btst/cli@2.2.4` directly; public Codegen RC3 still delegates to `2.2.3` |
+| Database CLI for generation/migration | `@btst/cli@2.2.4`, delegated by Codegen RC4 from the consumer project directory |
 | Better Auth and Core | `better-auth@1.6.16`, `@better-auth/core@1.6.16` |
 | Better Auth utilities and transport | `@better-auth/utils@0.4.1`, `@better-fetch/fetch@1.2.2`, `better-call@1.3.6` |
 | API-key and passkey declarations, when the companion is installed | `@better-auth/api-key@1.6.16`, `@better-auth/passkey@1.6.16` |
@@ -52,8 +51,8 @@ For example, a Drizzle application without the optional auth companion can pin
 the current candidate with:
 
 ```bash
-pnpm add --save-exact @btst/stack@3.0.0-rc.3 @btst/adapter-drizzle@2.2.3
-pnpm add --save-dev --save-exact @btst/codegen@0.2.0-rc.3
+pnpm add --save-exact @btst/stack@3.0.0-rc.4 @btst/adapter-drizzle@2.2.3
+pnpm add --save-dev --save-exact @btst/codegen@0.2.0-rc.4
 pnpm install --frozen-lockfile
 ```
 
@@ -392,26 +391,20 @@ that looks correct can still be bound to the wrong endpoint or identity cache.
 
 ### 7. Regenerate or merge the framework scaffold
 
-`@btst/codegen` owns application scaffolding. The published
-`@btst/codegen@0.2.0-rc.3` artifact still delegates `generate` and `migrate` to
-`@btst/cli@2.2.3`; do not claim the immutable RC3 artifact has the post-RC3
-fix. For the current public candidate, run `@btst/cli@2.2.4` directly and in
-isolation instead of installing it into the application graph.
-
-The forthcoming Codegen RC4 (versioned by the separate release-preparation
-change) and stable release will delegate to `2.2.4` from the consumer project
-directory. That behavior loads the application's
-TypeScript/JavaScript aliases and standard Next.js environment files, resolves
-its Prisma or Drizzle adapter and ORM peers, and ignores only a bare
-`import "server-only"` marker while evaluating the server config.
+`@btst/codegen` owns application scaffolding. The focused
+`@btst/codegen@0.2.0-rc.4` candidate delegates `generate` and `migrate` to
+`@btst/cli@2.2.4` from the consumer project directory. That behavior loads the
+application's TypeScript/JavaScript aliases and standard Next.js environment
+files, resolves its Prisma or Drizzle adapter and ORM peers, and ignores only a
+bare `import "server-only"` marker while evaluating the server config.
 
 Use the scaffold as a reference diff for an existing application rather than
 blindly overwriting owned files:
 
 ```bash
-npx @btst/codegen@0.2.0-rc.3 init --framework=nextjs --adapter=drizzle \
+npx @btst/codegen@0.2.0-rc.4 init --framework=nextjs --adapter=drizzle \
   --plugins=blog,comments --cwd=. --skip-install
-npx --yes @btst/cli@2.2.4 generate \
+npx @btst/codegen@0.2.0-rc.4 generate \
   --orm=drizzle --config=lib/stack.ts --output=src/db/schema.ts
 ```
 
@@ -439,10 +432,10 @@ pnpm add --save-exact @btst/better-auth-ui@2.0.0-rc.4 \
   @better-auth/utils@0.4.1 @better-fetch/fetch@1.2.2 better-call@1.3.6
 ```
 
-Public `@btst/codegen@0.2.0-rc.3` predates the `better-auth-ui` scaffold
-selection. Configure the companion manually for that immutable candidate; the
-forthcoming RC4 and stable Codegen artifacts contain the generated
-auth-and-account path described in the focused guide.
+`@btst/codegen@0.2.0-rc.4` includes the explicit `better-auth-ui` scaffold
+selection and generates the minimal auth-and-account path described in the
+focused guide. It does not generate or replace the application's Better Auth
+backend, database, schema, providers, secrets, or optional runtime plugins.
 
 API-key and passkey are required declaration peers in the RC4 package because
 its complete `AuthClient` type exposes those surfaces. Installing them satisfies
