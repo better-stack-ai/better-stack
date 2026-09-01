@@ -44,7 +44,7 @@ export async function installInitDependencies(input: {
 	});
 
 	const packages = [
-		"@btst/stack@next",
+		"@btst/stack@3.0.0",
 		"@btst/yar@1.3.2",
 		"@tanstack/react-query@5.100.14",
 		adapterMeta.installSpec ?? adapterMeta.packageName,

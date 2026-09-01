@@ -41,7 +41,8 @@ are not enabled by the generated code. Add one only after the matching Better
 Auth server and client plugin are configured in your application.
 
 <Callout type="info">
-  RC4 publishes API-key and passkey as required declaration peers because its
+  The stable package publishes API-key and passkey as required declaration
+  peers because its
   synthetic full `AuthClient` type exposes their surfaces. The CLI therefore
   installs their aligned 1.6.16 packages to keep strict dependency trees clean,
   but it does not import, register, or enable either runtime feature. Activation
@@ -51,7 +52,7 @@ Auth server and client plugin are configured in your application.
 
 ## Supported release cohort
 
-The corrected companion candidate is `@btst/better-auth-ui@2.0.0-rc.4`. Its
+The stable companion release is `@btst/better-auth-ui@2.0.0`. Its
 stable-v3 compatibility contract retains these exact versions:
 
 | Package | Version |
@@ -71,7 +72,7 @@ For a manual installation, add the companion and exact auth cohort alongside
 your existing BTST dependencies:
 
 ```bash
-pnpm add @btst/better-auth-ui@2.0.0-rc.4 \
+pnpm add @btst/better-auth-ui@2.0.0 \
   better-auth@1.6.16 @better-auth/core@1.6.16 \
   @better-auth/api-key@1.6.16 @better-auth/passkey@1.6.16 \
   @better-auth/utils@0.4.1 @better-fetch/fetch@1.2.2 better-call@1.3.6

@@ -225,7 +225,7 @@ aligned Better DB CLI in isolation, so its dependencies and `btst` binary do
 not enter your application graph:
 
 ```bash
-npx @btst/codegen@next generate --orm drizzle --config lib/stack.ts --output db/schema.ts
+npx @btst/codegen@0.2.0 generate --orm drizzle --config lib/stack.ts --output db/schema.ts
 ```
 
 Supports Prisma, Drizzle, MongoDB and Kysely SQL dialects.
