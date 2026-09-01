@@ -1,13 +1,14 @@
 {
     "title": "BTST",
-    "description": "A composable full-stack plugin system for modern React frameworks.",
+    "description": "Add complete features to the React app you already own.",
     "icon": "Building",
     "root": true,
     "pages": [
       "---[Hammer]Getting Started---",
       "index",
-      "installation",
-      "breaking-changes",
+      "[Install your first feature](/installation#quickstart-add-blog-to-nextjs)",
+      "[Compatibility & prerequisites](/installation#compatibility-and-prerequisites)",
+      "[Manual installation](/installation#manual-installation)",
       "how-it-works",
       "---[Layers]Plugins---",
       "plugins/index",
@@ -25,13 +26,14 @@
       "plugins/development",
       "---[Database]Databases---",
       "databases/adapters",
-      "---[BookOpenCheck]Concepts---",
+      "---[BookOpenCheck]Guides & Reference---",
       "auth",
       "i18n",
       "cli",
       "api-reference",
       "standalone-components",
       "shadcn-registry",
+      "breaking-changes",
       "---[Play]Playground---",
       "[Try the Playground](https://www.better-stack.ai/playground)"
     ]
