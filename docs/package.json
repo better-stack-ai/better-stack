@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
+    "build:vercel": "next build",
     "dev": "next dev",
     "start": "next start",
     "postinstall": "fumadocs-mdx"
