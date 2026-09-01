@@ -1,14 +1,19 @@
-# @btst/stack — BTST
+# BTST
 
 <div align="center">
 
-**Installable full-stack features for React apps**  
-Framework-agnostic. Database-flexible. No lock-in.
+## Add complete features to the React app you already own.
+
+BTST is an open-source TypeScript system for installing full-stack features into existing React applications. It is built for React/TypeScript developers and small product teams adding a substantial feature to an app they already have.
+
+A full-stack plugin can bring the routes, APIs, database schema, hooks, SSR-aware pages, and customizable UI that its feature needs. Start with one plugin and add more only when they are useful.
+
+**You own the whole application.** Your app, data, deployment, and ejected UI stay yours. BTST runs inside your stack as an open-source dependency you can inspect, fork, or replace—never as a required hosted control plane.
 
 [![npm](https://img.shields.io/npm/v/@btst/stack.svg)](https://www.npmjs.com/package/@btst/stack)
 [![MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[Docs](https://www.better-stack.ai/docs) · [Examples](./examples) · [Issues](https://github.com/better-stack-ai/better-stack/issues)
+[Quickstart with Blog](https://www.better-stack.ai/docs/cli#init-codegen) · [View live result](https://www.better-stack.ai/p/blog) · [Read the docs](https://www.better-stack.ai/docs)
 
 </div>
 
@@ -16,36 +21,37 @@ Framework-agnostic. Database-flexible. No lock-in.
 
 ## What is BTST?
 
-BTST lets you **install production-ready app features as npm packages**.
-
-Instead of spending weeks building the same things again and again  
-(routes, APIs, database schemas, SSR, SEO, forms…):
+BTST delivers complete features through npm packages. It is more complete than
+a UI kit, more incremental than a starter application, and more ownable than a
+hosted feature service.
 
 ```bash
-npm install @btst/stack
-````
+npx @btst/codegen@0.2.0 init --plugins blog
+```
 
-Enable the features you need and keep building your product.
+The initializer adds BTST to an existing Next.js App Router, React Router v7,
+or TanStack Start application. You can also follow the detailed
+[manual installation guide](https://www.better-stack.ai/docs/installation).
 
 ### Available plugins
 
-| Plugin | Description |
-|--------|-------------|
-| **Blog** | Content management, editor, drafts, publishing, SEO, RSS feeds |
-| **AI Chat** | AI-powered chat with conversation history, streaming, and customizable models |
-| **CMS** | Headless CMS with custom content types, Zod schemas, and auto-generated forms |
-| **Form Builder** | Dynamic form builder with drag-and-drop editor, submissions, and validation |
-| **UI Builder** | Visual drag-and-drop page builder with component registry and public rendering |
-| **Kanban** | Project management with boards, columns, tasks, drag-and-drop, and priority levels |
-| **Media** | Media library with uploads, folders, picker UI, URL registration, and reusable image inputs |
-| **OpenAPI** | Auto-generated API documentation with interactive Scalar UI |
-| **Route Docs** | Auto-generated client route documentation with interactive navigation |
-| **Comments** | Commenting system with moderation, likes, and nested replies |
+| Plugin | Topology | Description |
+|--------|----------|-------------|
+| **Blog** | Full-stack | Content management, editor, drafts, publishing, SEO, RSS feeds |
+| **AI Chat** | Full-stack | AI-powered chat with conversation history, streaming, and customizable models |
+| **CMS** | Full-stack | Headless CMS with custom content types, Zod schemas, and auto-generated forms |
+| **Form Builder** | Full-stack | Dynamic form builder with drag-and-drop editor, submissions, and validation |
+| **UI Builder** | Client-only · requires CMS | Visual drag-and-drop page builder with component registry and public rendering |
+| **Kanban** | Full-stack | Project management with boards, columns, tasks, drag-and-drop, and priority levels |
+| **Media** | Full-stack | Media library with uploads, folders, picker UI, URL registration, and reusable image inputs |
+| **OpenAPI** | Backend-only | Auto-generated API documentation with interactive Scalar UI |
+| **Route Docs** | Client-only | Auto-generated client route documentation with interactive navigation |
+| **Comments** | Full-stack | Commenting system with moderation, likes, and nested replies |
+| **Better Auth UI** | Companion · requires Better Auth | Auth and account UI for an existing Better Auth backend |
 
-Full-stack plugins ship separate frontend and backend definitions: routes,
-APIs, database models, React components, SSR, and SEO—already wired. Intentional
-one-sided plugins stay one-sided: OpenAPI is backend-only, Route Docs is
-client-only, and UI Builder is client-only over CMS.
+Full-stack plugins ship separate frontend and backend definitions. Intentional
+one-sided plugins stay one-sided, dependent plugins name what they require, and
+companions connect BTST to a system the application already runs.
 
 **Want a specific plugin?** [Open an issue](https://github.com/better-stack-ai/better-stack/issues/new) and let us know!
 
@@ -53,13 +59,13 @@ client-only, and UI Builder is client-only over CMS.
 
 ## Why use it?
 
-* **Installable features** – real product features, not just UI
-* **Framework-agnostic** – Next.js, React Router, TanStack Router, Remix
-* **Database-flexible** – Prisma, Drizzle, Kysely, MongoDB
-* **Zero boilerplate** – no manual route or API wiring
+* **Installable features** – routes, APIs, data models, pages, and UI where the plugin supplies them
+* **Framework-flexible** – maintained v3 integration paths for Next.js App Router, React Router v7, and TanStack Start
+* **Database adapters** – versioned adapters for Prisma, Drizzle, Kysely, and MongoDB
+* **Incremental adoption** – install one feature without replacing your application foundation
 * **Type-safe** – end-to-end TypeScript
 
-You keep your codebase, database, and deployment.
+Your application, database, and deployment remain under your control.
 
 ---
 
@@ -228,7 +234,10 @@ not enter your application graph:
 npx @btst/codegen@0.2.0 generate --orm drizzle --config lib/stack.ts --output db/schema.ts
 ```
 
-Supports Prisma, Drizzle, MongoDB and Kysely SQL dialects.
+Versioned adapter packages are available for Prisma, Drizzle, MongoDB, and
+Kysely SQL dialects. Follow the
+[installation guide](https://www.better-stack.ai/docs/installation) for their
+current versions and setup requirements.
 
 ---
 
@@ -281,6 +290,7 @@ Full documentation, guides, and plugin development:
 
 Bug reports, plugin PRs, and documentation improvements are welcome.
 See **[CONTRIBUTING.md](./CONTRIBUTING.md)** for the plugin development guide, testing instructions, and submission checklist.
+Public-facing copy should follow the **[BTST message and claims contract](./docs/positioning.md)**.
 
 ---
 
