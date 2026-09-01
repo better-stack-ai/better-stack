@@ -5,17 +5,9 @@ description: Threaded comments with moderation, likes, replies, and embeddable C
 
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 
-The Comments plugin adds threaded commenting to any resource in your application — blog posts, Kanban tasks, CMS content, or your own custom pages. Comments are displayed with the embeddable `CommentThread` component and managed via a built-in moderation dashboard.
-
-**Key Features:**
-- **Threaded replies** — Top-level comments and nested replies
-- **Like system** — One like per user, optimistic UI updates, denormalized counter
-- **Edit support** — Authors can edit their own comments; an "edited" timestamp is shown
-- **Moderation dashboard** — Tabbed view (Pending / Approved / Spam) with bulk actions
-- **Server-side user resolution** — `resolveUser` hook to embed author name and avatar in API responses
-- **Optimistic updates** — New comments appear instantly with a "Pending approval" badge when `autoApprove: false`
-- **Scroll-into-view lazy loading** — `CommentThread` is mounted only when it scrolls into the viewport
+<PluginEvaluatorHeader pluginKey="comments" />
 
 ## Installation
 

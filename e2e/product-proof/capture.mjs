@@ -71,6 +71,31 @@ async function roundedScreenshot(input, width, height) {
 		.toBuffer();
 }
 
+async function combineScreenshots(left, right) {
+	const [leftPanel, rightPanel] = await Promise.all(
+		[left, right].map((input) =>
+			sharp(input)
+				.resize(1120, 340, { fit: "cover", position: "top" })
+				.png()
+				.toBuffer(),
+		),
+	);
+	return sharp({
+		create: {
+			width: 1120,
+			height: 700,
+			channels: 4,
+			background: palette.ink,
+		},
+	})
+		.composite([
+			{ input: leftPanel, left: 0, top: 0 },
+			{ input: rightPanel, left: 0, top: 360 },
+		])
+		.png()
+		.toBuffer();
+}
+
 async function writeWebP(file, base, composites, quality = 72) {
 	await sharp(base)
 		.composite(composites)
@@ -292,6 +317,78 @@ async function seedComments(request) {
 	}
 }
 
+async function seedCms(request) {
+	const path = `/api/data/content/${seed.cms.typeSlug}`;
+	const response = await jsonRequest(
+		request,
+		"GET",
+		`${path}?limit=100&offset=0`,
+	);
+	const current = await response.json();
+	for (const item of current.items ?? []) {
+		if (seed.cms.records.some((record) => record.slug === item.slug)) {
+			await jsonRequest(request, "DELETE", `${path}/${item.id}`);
+		}
+	}
+	for (const record of seed.cms.records) {
+		await jsonRequest(request, "POST", path, record);
+	}
+	const persistedResponse = await jsonRequest(
+		request,
+		"GET",
+		`${path}?limit=100&offset=0`,
+	);
+	const persisted = await persistedResponse.json();
+	for (const record of seed.cms.records) {
+		const matches = (persisted.items ?? []).filter(
+			(item) =>
+				item.slug === record.slug && item.parsedData?.name === record.data.name,
+		);
+		if (matches.length !== 1) {
+			throw new Error(
+				`CMS fixture expected one persisted ${record.slug} record`,
+			);
+		}
+	}
+}
+
+async function seedKanban(request) {
+	const currentResponse = await jsonRequest(
+		request,
+		"GET",
+		`/api/data/boards?${new URLSearchParams({ slug: seed.kanban.slug, limit: "100" })}`,
+	);
+	const current = await currentResponse.json();
+	for (const board of current.items ?? []) {
+		await jsonRequest(request, "DELETE", `/api/data/boards/${board.id}`);
+	}
+	const createdResponse = await jsonRequest(
+		request,
+		"POST",
+		"/api/data/boards",
+		{
+			name: seed.kanban.name,
+			slug: seed.kanban.slug,
+			description: seed.kanban.description,
+		},
+	);
+	const board = await createdResponse.json();
+	if (!Array.isArray(board.columns) || board.columns.length < 3) {
+		throw new Error(
+			"Kanban fixture requires the three generated board columns",
+		);
+	}
+	for (const task of seed.kanban.tasks) {
+		await jsonRequest(request, "POST", "/api/data/tasks", {
+			title: task.title,
+			description: task.description,
+			priority: task.priority,
+			columnId: board.columns[task.column].id,
+		});
+	}
+	return board;
+}
+
 async function cleanupMedia(request) {
 	const params = new URLSearchParams({
 		query: seed.media.uploadName,
@@ -499,6 +596,8 @@ async function main() {
 	try {
 		await seedBlog(context.request);
 		await seedComments(context.request);
+		await seedCms(context.request);
+		const kanbanBoard = await seedKanban(context.request);
 		await visit(page, "/pages/blog");
 		await page.getByRole("heading", { name: "Blog Posts" }).waitFor();
 		const blog = await screenshot(page, "blog.png");
@@ -518,10 +617,27 @@ async function main() {
 			.dragTo(page.getByTestId("form-builder-canvas"));
 		const form = await screenshot(page, "form-builder.png");
 
+		await visit(page, "/pages/cms");
+		await page.getByTestId("cms-dashboard-page").waitFor();
+		const cmsDashboard = await screenshot(page, "cms-dashboard.png");
+		await visit(page, `/pages/cms/${seed.cms.typeSlug}`);
+		await page.getByText(seed.cms.records[0].slug, { exact: true }).waitFor();
+		const cmsRecords = await screenshot(page, "cms-records.png");
+		const cms = await combineScreenshots(cmsDashboard, cmsRecords);
+
 		const uiBuilderPage = await seedUiBuilder(context.request);
 		await visit(page, `/pages/ui-builder/${uiBuilderPage.id}/edit`);
 		await page.getByRole("heading", { name: "Component Properties" }).waitFor();
 		const uiBuilder = await screenshot(page, "ui-builder.png");
+
+		await visit(page, `/pages/kanban/${kanbanBoard.id}`);
+		await page.getByText(seed.kanban.name, { exact: true }).waitFor();
+		const kanban = await screenshot(page, "kanban.png");
+
+		await visit(page, "/pages/comments/moderation");
+		await page.getByTestId("tab-approved").click();
+		await page.getByText(seed.comments[0].body, { exact: true }).waitFor();
+		const comments = await screenshot(page, "comments.png");
 
 		await seedMedia(context.request);
 		await visit(page, seed.media.libraryPath);
@@ -538,12 +654,14 @@ async function main() {
 				`Media library expected one visible ${seed.media.uploadName} card`,
 			);
 		}
+		const media = await screenshot(page, "media.png");
 
 		await visit(page, seed.routeDocs.pagePath);
 		await page
 			.getByText(seed.routeDocs.expectedTitle, { exact: false })
 			.first()
 			.waitFor();
+		const routeDocs = await screenshot(page, "route-docs.png");
 
 		await visit(page, seed.openApi.referencePath);
 		await page
@@ -584,6 +702,17 @@ async function main() {
 			result: "Editable form + live preview",
 			label: "FORM BUILDER / AUTHENTIC GENERATED APP",
 		});
+		await proofFrame("cms-proof.webp", cms, {
+			eyebrow: "Schema-to-operations proof",
+			title: ["Define content.", "Give editors", "a workflow."],
+			body: [
+				"The dashboard reflects types",
+				"defined in code; the list shows",
+				"records stored by the same app.",
+			],
+			result: "Content model + managed records",
+			label: "CMS / TWO AUTHENTIC WORKFLOW STATES",
+		});
 		await proofFrame("ui-builder-proof.webp", uiBuilder, {
 			eyebrow: "Complex UI proof",
 			title: ["Compose pages.", "Keep the code."],
@@ -594,6 +723,50 @@ async function main() {
 			],
 			result: "Published page composition",
 			label: "UI BUILDER / AUTHENTIC GENERATED APP",
+		});
+		await proofFrame("kanban-proof.webp", kanban, {
+			eyebrow: "Workflow state proof",
+			title: ["Move work", "through", "your app."],
+			body: [
+				"The generated board holds",
+				"columns, priorities, and tasks",
+				"in the adopter's database.",
+			],
+			result: "Board + columns + task state",
+			label: "KANBAN / AUTHENTIC GENERATED APP",
+		});
+		await proofFrame("comments-proof.webp", comments, {
+			eyebrow: "Moderation proof",
+			title: ["Discussion", "stays with", "the resource."],
+			body: [
+				"A seeded resource comment",
+				"appears in the shipped",
+				"moderation workflow.",
+			],
+			result: "Resource context + moderation",
+			label: "COMMENTS / AUTHENTIC GENERATED APP",
+		});
+		await proofFrame("media-proof.webp", media, {
+			eyebrow: "Storage-to-library proof",
+			title: ["Upload once.", "Reuse the asset."],
+			body: [
+				"A checked-in fixture moves",
+				"through the real upload API",
+				"into the generated library.",
+			],
+			result: "Uploaded file + stored metadata",
+			label: "MEDIA / AUTHENTIC GENERATED APP",
+		});
+		await proofFrame("route-docs-proof.webp", routeDocs, {
+			eyebrow: "Registered-route proof",
+			title: ["See routes", "your stack", "composed."],
+			body: [
+				"The reference is generated",
+				"from actual client plugins,",
+				"parameters, and sitemaps.",
+			],
+			result: "Route + plugin + parameter context",
+			label: "ROUTE DOCS / AUTHENTIC GENERATED APP",
 		});
 		await proofFrame("openapi-proof.webp", openapi, {
 			eyebrow: "One-sided plugin proof",

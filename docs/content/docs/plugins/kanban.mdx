@@ -5,28 +5,9 @@ description: Project management with boards, columns, tasks, drag-and-drop, and 
 
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
-import Image from "next/image";
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 
-import kanbanDemo from "../../../assets/kanban-demo.png";
-
-<div className="grid grid-cols-1 gap-2 my-2">
-  <a href={kanbanDemo.src} target="_blank" rel="noopener noreferrer">
-    <Image src={kanbanDemo} alt="Kanban Plugin Demo - Board View" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
-  </a>
-</div>
-
-## Overview
-
-The Kanban plugin provides a full-featured project management system with:
-- **Boards** - Organize different projects or workflows
-- **Columns** - Define workflow stages (e.g., To Do, In Progress, Done)
-- **Tasks** - Track individual work items with priorities
-- **Assignees** - Assign users to tasks with avatar display
-- **Drag-and-Drop** - Reorder tasks and columns with smooth animations
-- **Priority Levels** - LOW, MEDIUM, HIGH, URGENT with visual badges
-- **Organization Support** - Optional scoping by user or organization
-
-[View interactive demo →](https://www.better-stack.ai/playground?plugins=kanban&view=preview)
+<PluginEvaluatorHeader pluginKey="kanban" />
 
 ## Installation
 

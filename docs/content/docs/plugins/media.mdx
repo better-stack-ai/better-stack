@@ -5,22 +5,9 @@ description: Media library, uploads, folders, picker UI, and reusable image inpu
 
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
-import Image from "next/image";
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 
-import mediaDemo1 from "../../../assets/media-demo-1.png";
-
-<div className="my-2">
-  <a href={mediaDemo1.src} target="_blank" rel="noopener noreferrer">
-    <Image
-      src={mediaDemo1}
-      alt="Media Plugin Demo - Media library picker"
-      className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer"
-      placeholder="blur"
-    />
-  </a>
-</div>
-
-The Media plugin gives you a built-in media library with folders, uploads, URL-based asset registration, and reusable picker components that can be embedded anywhere in your app. It works well as a standalone `/media` library route and as shared infrastructure for other plugins such as Blog, CMS, and Kanban.
+<PluginEvaluatorHeader pluginKey="media" />
 
 ## Installation
 

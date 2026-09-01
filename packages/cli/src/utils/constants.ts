@@ -94,6 +94,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientSymbol: "aiChatClientPlugin",
 		configKey: "aiChat",
 		extraPackages: ["@ai-sdk/openai", "ai"],
+		decision: PLUGIN_DECISIONS["ai-chat"],
 	},
 	{
 		key: "cms",
@@ -105,6 +106,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientSymbol: "cmsClientPlugin",
 		configKey: "cms",
 		hasSeedData: true,
+		decision: PLUGIN_DECISIONS.cms,
 	},
 	{
 		key: "form-builder",
@@ -128,6 +130,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientSymbol: "uiBuilderClientPlugin",
 		configKey: "uiBuilder",
 		hasSeedData: true,
+		decision: PLUGIN_DECISIONS["ui-builder"],
 	},
 	{
 		key: "kanban",
@@ -139,6 +142,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientSymbol: "kanbanClientPlugin",
 		configKey: "kanban",
 		hasSeedData: true,
+		decision: PLUGIN_DECISIONS.kanban,
 	},
 	{
 		key: "comments",
@@ -149,6 +153,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/comments/client",
 		clientSymbol: "commentsClientPlugin",
 		configKey: "comments",
+		decision: PLUGIN_DECISIONS.comments,
 	},
 	{
 		key: "media",
@@ -162,6 +167,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		// Without it installed, Next.js/webpack fails to resolve the dynamic import
 		// even though the code path is never reached when using other storage adapters.
 		extraPackages: ["@vercel/blob"],
+		decision: PLUGIN_DECISIONS.media,
 	},
 	{
 		key: "route-docs",
@@ -170,6 +176,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientImportPath: "@btst/stack/plugins/route-docs/client",
 		clientSymbol: "routeDocsClientPlugin",
 		configKey: "routeDocs",
+		decision: PLUGIN_DECISIONS["route-docs"],
 	},
 	{
 		key: "open-api",
@@ -208,6 +215,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 			"@better-auth/api-key@1.6.16",
 			"@better-auth/passkey@1.6.16",
 		],
+		decision: PLUGIN_DECISIONS["better-auth-ui"],
 	},
 ];
 

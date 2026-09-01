@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "assetRevision": 3,
+  "assetRevision": 4,
   "kitMaxBytes": 1800000,
   "forbiddenText": [
     "Better Stack",
@@ -121,6 +121,61 @@
       "maxBytes": 220000,
       "alt": "Real authenticated BTST AI Chat shell with an empty conversation-history sidebar, attachment control, and a product-context prompt ready to send.",
       "caption": "The capture proves the shipped chat shell and prompt boundary; it deliberately does not fabricate a model response.",
+      "source": "../../../e2e/product-proof/capture.mjs",
+      "decorative": false
+    },
+    {
+      "file": "cms-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 260000,
+      "alt": "Two real BTST CMS states showing code-defined content types in the dashboard and stored Product records in the generated application.",
+      "caption": "CMS turns application-defined Zod content types into an operator dashboard and stored records; public rendering remains an application-owned workflow.",
+      "source": "../../../e2e/product-proof/capture.mjs",
+      "decorative": false
+    },
+    {
+      "file": "kanban-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 250000,
+      "alt": "Real BTST Kanban board with To Do, In Progress, and Done columns containing prioritized tasks.",
+      "caption": "The shipped Kanban workflow stores boards, columns, task order, priorities, and assignees in the adopter's database.",
+      "source": "../../../e2e/product-proof/capture.mjs",
+      "decorative": false
+    },
+    {
+      "file": "comments-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 240000,
+      "alt": "Real BTST Comments moderation page showing an approved discussion attached to the shipping-plugin-catalog Blog resource.",
+      "caption": "A resource-bound comment passes through the real Comments API and appears in the supplied moderation workflow.",
+      "source": "../../../e2e/product-proof/capture.mjs",
+      "decorative": false
+    },
+    {
+      "file": "media-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 240000,
+      "alt": "Real BTST Media library showing the checked-in product-proof image after upload, metadata registration, and search.",
+      "caption": "The proof fixture moves through the registered Media upload route into the searchable library, ready for picker and image-field reuse.",
+      "source": "../../../e2e/product-proof/capture.mjs",
+      "decorative": false
+    },
+    {
+      "file": "route-docs-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 250000,
+      "alt": "Real BTST Route Docs page generated from the client stack, with registered plugin routes, paths, and parameter context.",
+      "caption": "Route Docs derives its reference from the application's registered client plugins rather than a separate hand-maintained route inventory.",
       "source": "../../../e2e/product-proof/capture.mjs",
       "decorative": false
     },

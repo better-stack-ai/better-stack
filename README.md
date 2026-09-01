@@ -113,7 +113,7 @@ function createAppClientStack(queryClient: QueryClient, origin: string) {
 
 ![The current Blog backend and client registrations point to the real published Blog route they produce.](docs/assets/product-proof/code-to-result.webp)
 
-Blog adds publishing routes, API operations, its data model, hooks, SSR-aware pages, editor UI, SEO metadata, RSS, and sitemap entries. Other plugins have different boundaries: one-sided and companion plugins are labeled instead of being forced into a full-stack claim.
+Blog adds publishing routes, API operations, its data model, hooks, SSR-aware pages, editor UI, published-page metadata, and sitemap entries. Other plugins have different boundaries: one-sided and companion plugins are labeled instead of being forced into a full-stack claim.
 
 ## Released capabilities
 
@@ -121,7 +121,7 @@ Every capability below is installable from the released CLI. Follow its document
 
 | Capability | Topology | Outcome |
 | --- | --- | --- |
-| [Blog](https://www.better-stack.ai/docs/plugins/blog) | Full-stack | Publishing workflow, routes, API, data model, editor, SEO, and RSS |
+| [Blog](https://www.better-stack.ai/docs/plugins/blog) | Full-stack | Publishing workflow, routes, API, data model, editor, metadata, and sitemap entries |
 | [AI Chat](https://www.better-stack.ai/docs/plugins/ai-chat) | Full-stack | Streaming conversations, model integration, history, routes, and chat UI |
 | [CMS](https://www.better-stack.ai/docs/plugins/cms) | Full-stack | Typed content models, APIs, generated forms, and editorial UI |
 | [Form Builder](https://www.better-stack.ai/docs/plugins/form-builder) | Full-stack | Form authoring, validation, rendering, and submissions |

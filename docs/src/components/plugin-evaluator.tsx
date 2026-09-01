@@ -2,17 +2,30 @@ import { ArrowRight, ExternalLink } from "lucide-react";
 import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import aiChatProof from "../../assets/product-proof/ai-chat-proof.webp";
 import blogProof from "../../assets/product-proof/blog-proof.webp";
+import cmsProof from "../../assets/product-proof/cms-proof.webp";
+import commentsProof from "../../assets/product-proof/comments-proof.webp";
 import formBuilderProof from "../../assets/product-proof/form-builder-proof.webp";
-import productProofManifest from "../../assets/product-proof/manifest.json";
+import kanbanProof from "../../assets/product-proof/kanban-proof.webp";
+import mediaProof from "../../assets/product-proof/media-proof.webp";
 import openApiProof from "../../assets/product-proof/openapi-proof.webp";
+import productProofManifest from "../../assets/product-proof/manifest.json";
+import routeDocsProof from "../../assets/product-proof/route-docs-proof.webp";
+import uiBuilderProof from "../../assets/product-proof/ui-builder-proof.webp";
 import { PLUGINS } from "@btst/codegen/meta";
 
-type RepresentativePluginKey = "blog" | "form-builder" | "open-api";
+type EvaluatorPluginKey = (typeof PLUGINS)[number]["key"];
 type PluginDecisionMeta = NonNullable<
 	(typeof PLUGINS)[number]["decision"]
 >;
-type DecisionActionTarget = "demo" | "docs" | "installation" | "workflow";
+type DecisionActionTarget =
+	| "demo"
+	| "docs"
+	| "installation"
+	| "setup"
+	| "source"
+	| "workflow";
 
 interface WorkflowStepCopy {
 	label: string;
@@ -29,7 +42,8 @@ interface ResolvedDecisionAction extends DecisionActionCopy {
 	external: boolean;
 }
 
-interface RepresentativeCopy {
+interface EvaluatorCopy {
+	catalogTitle?: string;
 	outcome: string;
 	audience: string;
 	ownership: string;
@@ -38,7 +52,7 @@ interface RepresentativeCopy {
 	actions: readonly [DecisionActionCopy, DecisionActionCopy];
 }
 
-const representativeCopy = {
+const evaluatorCopy = {
 	blog: {
 		outcome:
 			"Publish and manage a content section inside the React application you already run.",
@@ -70,6 +84,74 @@ const representativeCopy = {
 		actions: [
 			{ label: "View live Blog", target: "demo" },
 			{ label: "Install Blog", target: "installation" },
+		],
+	},
+	"ai-chat": {
+		outcome:
+			"Add a streaming conversation surface while choosing the model, access policy, and operating limits yourself.",
+		audience:
+			"React teams that already know which AI SDK model provider they want and need chat history, tools, and product UI inside their app.",
+		ownership:
+			"You select and pay the model provider. Authenticated history stays in your database, and ejected chat pages become editable application code while streaming and data behavior remain packaged.",
+		workflow: [
+			{
+				label: "Choose a model",
+				detail:
+					"Pass an AI SDK model and keep its credentials in your server environment.",
+			},
+			{
+				label: "Set access",
+				detail:
+					"Use authenticated persistence with typed rules or choose explicit stateless public mode.",
+			},
+			{
+				label: "Stream",
+				detail:
+					"Run prompts, tools, and optional attachments through the supplied chat route.",
+			},
+			{
+				label: "Keep context",
+				detail:
+					"Store identity-scoped conversations in your database when authenticated mode is enabled.",
+			},
+		],
+		catalogAction: { label: "Explore AI Chat", target: "docs" },
+		actions: [
+			{ label: "View chat shell", target: "demo" },
+			{ label: "Install AI Chat", target: "installation" },
+		],
+	},
+	cms: {
+		outcome:
+			"Define structured content in TypeScript and give operators generated forms for managing it.",
+		audience:
+			"Teams that want developers to own content models while editors manage records through an in-app admin interface.",
+		ownership:
+			"Content models live in your code and records stay in your database. You own public rendering and uploads; the packaged admin pages can be overridden or ejected.",
+		workflow: [
+			{
+				label: "Model",
+				detail: "Define each content type as a shared Zod schema in your app.",
+			},
+			{
+				label: "Generate forms",
+				detail:
+					"Turn schema fields and metadata into validated operator-facing forms.",
+			},
+			{
+				label: "Manage",
+				detail: "Create and edit typed content records through the admin routes.",
+			},
+			{
+				label: "Render",
+				detail:
+					"Load records with packaged hooks and present them on application-owned routes.",
+			},
+		],
+		catalogAction: { label: "Explore CMS", target: "docs" },
+		actions: [
+			{ label: "View CMS workflow", target: "demo" },
+			{ label: "Install CMS", target: "installation" },
 		],
 	},
 	"form-builder": {
@@ -105,6 +187,176 @@ const representativeCopy = {
 			{ label: "Install Form Builder", target: "installation" },
 		],
 	},
+	"ui-builder": {
+		catalogTitle: "UI Builder",
+		outcome:
+			"Let operators compose pages visually, store the layout through CMS, and render it on routes you own.",
+		audience:
+			"Teams that already use the BTST CMS plugin and want a constrained visual editor over application-approved components.",
+		ownership:
+			"The CMS-backed page record stays in your database. You choose the component registry and public route; editor views can be ejected while CMS data behavior remains packaged.",
+		workflow: [
+			{
+				label: "Add CMS",
+				detail:
+					"Use the required CMS plugin; the CLI adds it automatically when selected.",
+			},
+			{
+				label: "Register components",
+				detail:
+					"Define the components and blocks an operator is allowed to place.",
+			},
+			{
+				label: "Compose",
+				detail: "Arrange layers, variables, and properties in the visual editor.",
+			},
+			{
+				label: "Render",
+				detail:
+					"Load the CMS record and mount PageRenderer on an application-owned public route.",
+			},
+		],
+		catalogAction: { label: "Explore UI Builder", target: "docs" },
+		actions: [
+			{ label: "View builder workflow", target: "demo" },
+			{ label: "Install UI Builder", target: "installation" },
+		],
+	},
+	kanban: {
+		outcome:
+			"Add boards, columns, tasks, priorities, and drag-and-drop workflows inside your product.",
+		audience:
+			"Product teams that need an application-native work board and want to connect it to their own users and authorization rules.",
+		ownership:
+			"Boards and tasks stay in your database. Your app supplies identity and workflow policy; packaged Kanban pages can be customized or ejected.",
+		workflow: [
+			{
+				label: "Create boards",
+				detail: "Use supplied routes and APIs to create a board and its columns.",
+			},
+			{
+				label: "Add work",
+				detail: "Create prioritized tasks and connect assignees through your user resolver.",
+			},
+			{
+				label: "Move",
+				detail:
+					"Reorder columns and drag tasks through isolated database transactions.",
+			},
+			{
+				label: "Enforce policy",
+				detail:
+					"Apply app-owned authorization rules and domain hooks to every operation.",
+			},
+		],
+		catalogAction: { label: "Explore Kanban", target: "docs" },
+		actions: [
+			{ label: "View Kanban board", target: "demo" },
+			{ label: "Install Kanban", target: "installation" },
+		],
+	},
+	comments: {
+		outcome:
+			"Attach threaded discussion and moderation to a resource your application already owns.",
+		audience:
+			"Teams that need comments on posts, tasks, content records, or a custom resource without adopting a hosted discussion service.",
+		ownership:
+			"Comments and reactions stay in your database. You define resource identity, access rules, and author resolution; the moderation page can be ejected.",
+		workflow: [
+			{
+				label: "Name the resource",
+				detail:
+					"Mount CommentThread with the resource type and identifier owned by your app.",
+			},
+			{
+				label: "Resolve identity",
+				detail:
+					"Connect request identity, typed authorization rules, and optional author profiles.",
+			},
+			{
+				label: "Discuss",
+				detail: "Create replies and reactions through the supplied typed APIs and UI.",
+			},
+			{
+				label: "Moderate",
+				detail:
+					"Review pending, approved, and spam comments on the built-in route.",
+			},
+		],
+		catalogAction: { label: "Explore Comments", target: "docs" },
+		actions: [
+			{ label: "Understand the workflow", target: "workflow" },
+			{ label: "Install Comments", target: "installation" },
+		],
+	},
+	media: {
+		outcome:
+			"Upload, organize, register, and reuse media through a library that runs with your storage.",
+		audience:
+			"Teams that need a shared media layer for product features while keeping files, metadata, and storage credentials under their control.",
+		ownership:
+			"Asset metadata stays in your database and files stay in the storage you configure. You own limits, access policy, and embedding; the library view can be ejected.",
+		workflow: [
+			{
+				label: "Choose storage",
+				detail:
+					"Configure local, S3-compatible, or Vercel Blob storage in your backend.",
+			},
+			{
+				label: "Upload or register",
+				detail:
+					"Send a file through the matching protocol or register an allowed asset URL.",
+			},
+			{
+				label: "Organize",
+				detail: "Search assets, maintain folders, and edit metadata in the library.",
+			},
+			{
+				label: "Reuse",
+				detail:
+					"Embed MediaPicker or ImageInputField wherever your application needs an asset.",
+			},
+		],
+		catalogAction: { label: "Explore Media", target: "docs" },
+		actions: [
+			{ label: "Understand the workflow", target: "workflow" },
+			{ label: "Install Media", target: "installation" },
+		],
+	},
+	"route-docs": {
+		outcome:
+			"Generate an explorable reference for the client routes already registered in your BTST stack.",
+		audience:
+			"Teams that want route paths, parameters, sitemap entries, and navigation context visible inside a development or protected application surface.",
+		ownership:
+			"The reference is derived from your registered client stack and served by your app. You control which routes exist, who can see the page, and whether to eject its UI.",
+		workflow: [
+			{
+				label: "Register routes",
+				detail: "Compose the client plugins whose route definitions should appear.",
+			},
+			{
+				label: "Inspect",
+				detail:
+					"Read route paths, typed parameters, metadata, and sitemap declarations.",
+			},
+			{
+				label: "Generate",
+				detail:
+					"Render the route inventory with its owning plugin and dynamic context.",
+			},
+			{
+				label: "Navigate",
+				detail:
+					"Supply concrete parameters and open a resolved route in your application.",
+			},
+		],
+		catalogAction: { label: "Explore Route Docs", target: "docs" },
+		actions: [
+			{ label: "Understand the output", target: "workflow" },
+			{ label: "Install Route Docs", target: "installation" },
+		],
+	},
 	"open-api": {
 		outcome:
 			"Expose an OpenAPI 3.1 contract for registered BTST routes and, when useful, an interactive API reference.",
@@ -137,30 +389,73 @@ const representativeCopy = {
 			{ label: "Install OpenAPI", target: "installation" },
 		],
 	},
-} as const satisfies Record<RepresentativePluginKey, RepresentativeCopy>;
+	"better-auth-ui": {
+		catalogTitle: "Better Auth UI",
+		outcome:
+			"Add auth and account routes to a BTST client stack that already has a Better Auth backend.",
+		audience:
+			"Teams already operating Better Auth that want its auth and account UI composed into the maintained BTST framework paths.",
+		ownership:
+			"Your application keeps the Better Auth server, database, providers, secrets, sessions, and deployment. The companion supplies client routes and UI; it does not create or host authentication.",
+		workflow: [
+			{
+				label: "Operate Better Auth",
+				detail:
+					"Keep the existing server endpoint, schema, providers, secrets, and browser client.",
+			},
+			{
+				label: "Add the companion",
+				detail: "Register auth and account client plugins in the BTST client stack.",
+			},
+			{
+				label: "Mount routes",
+				detail:
+					"Serve sign-in, recovery, account, security, and settings views under your site path.",
+			},
+			{
+				label: "Refresh sessions",
+				detail:
+					"Use the generated framework-native refresh seam after session changes.",
+			},
+		],
+		catalogAction: { label: "Explore Better Auth UI", target: "docs" },
+		actions: [
+			{ label: "View companion source", target: "source" },
+			{ label: "Install the companion", target: "setup" },
+		],
+	},
+} as const satisfies Record<EvaluatorPluginKey, EvaluatorCopy>;
 
-const representativeAssets = {
+const evaluatorAssets: Partial<
+	Record<EvaluatorPluginKey, { file: string; image: StaticImageData }>
+> = {
 	blog: { file: "blog-proof.webp", image: blogProof },
+	"ai-chat": { file: "ai-chat-proof.webp", image: aiChatProof },
+	cms: { file: "cms-proof.webp", image: cmsProof },
 	"form-builder": {
 		file: "form-builder-proof.webp",
 		image: formBuilderProof,
 	},
+	"ui-builder": { file: "ui-builder-proof.webp", image: uiBuilderProof },
+	kanban: { file: "kanban-proof.webp", image: kanbanProof },
+	comments: { file: "comments-proof.webp", image: commentsProof },
+	media: { file: "media-proof.webp", image: mediaProof },
+	"route-docs": { file: "route-docs-proof.webp", image: routeDocsProof },
 	"open-api": { file: "openapi-proof.webp", image: openApiProof },
-} as const satisfies Record<
-	RepresentativePluginKey,
-	{ file: string; image: StaticImageData }
->;
+};
 
-function getRepresentativePlugin(key: RepresentativePluginKey) {
+function getEvaluatorPlugin(key: EvaluatorPluginKey) {
 	const plugin = PLUGINS.find((candidate) => candidate.key === key);
 	if (!plugin?.decision) {
 		throw new Error(`Missing evaluator metadata for ${key}`);
 	}
-	return { plugin, decision: plugin.decision, copy: representativeCopy[key] };
+	const copy: EvaluatorCopy = evaluatorCopy[key];
+	return { plugin, decision: plugin.decision, copy };
 }
 
-function getProofAsset(key: RepresentativePluginKey) {
-	const asset = representativeAssets[key];
+function getProofAsset(key: EvaluatorPluginKey) {
+	const asset = evaluatorAssets[key];
+	if (!asset) return null;
 	const copy = productProofManifest.assets.find(
 		(candidate) => candidate.file === asset.file,
 	);
@@ -289,7 +584,7 @@ function WorkflowStrip({
 }
 
 function resolveAction(
-	key: RepresentativePluginKey,
+	key: EvaluatorPluginKey,
 	decision: PluginDecisionMeta,
 	action: DecisionActionCopy,
 ): ResolvedDecisionAction {
@@ -303,6 +598,14 @@ function resolveAction(
 			return { ...action, href: decision.docsPath, external: false };
 		case "installation":
 			return { ...action, href: "#installation", external: false };
+		case "setup":
+			return {
+				...action,
+				href: "#generate-the-minimal-integration",
+				external: false,
+			};
+		case "source":
+			return { ...action, href: decision.sourcePath, external: true };
 		case "workflow":
 			return { ...action, href: `#${key}-workflow`, external: false };
 	}
@@ -311,9 +614,9 @@ function resolveAction(
 export function PluginEvaluatorHeader({
 	pluginKey,
 }: {
-	pluginKey: RepresentativePluginKey;
+	pluginKey: EvaluatorPluginKey;
 }) {
-	const { decision, copy } = getRepresentativePlugin(pluginKey);
+	const { decision, copy } = getEvaluatorPlugin(pluginKey);
 	const proof = getProofAsset(pluginKey);
 	const actions = copy.actions.map((action) =>
 		resolveAction(pluginKey, decision, action),
@@ -324,7 +627,13 @@ export function PluginEvaluatorHeader({
 			aria-labelledby={`${pluginKey}-evaluator-title`}
 			className="not-prose my-8 overflow-hidden rounded-2xl border border-fd-border bg-fd-background shadow-sm"
 		>
-			<div className="grid lg:grid-cols-[minmax(0,1.05fr)_minmax(19rem,0.95fr)]">
+			<div
+				className={
+					proof
+						? "grid lg:grid-cols-[minmax(0,1.05fr)_minmax(19rem,0.95fr)]"
+						: "grid"
+				}
+			>
 				<div className="flex flex-col justify-center p-5 sm:p-7 lg:p-8">
 					<TopologyBadges decision={decision} />
 					<p className="mb-0 mt-6 font-mono text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-fd-muted-foreground">
@@ -340,7 +649,7 @@ export function PluginEvaluatorHeader({
 						{copy.outcome}
 					</h2>
 					<div className="mt-6 flex flex-col gap-3 sm:flex-row">
-					{actions.map((action, index) => (
+						{actions.map((action, index) => (
 							<DecisionLink
 								key={action.href}
 								action={action}
@@ -361,19 +670,21 @@ export function PluginEvaluatorHeader({
 					</div>
 				</div>
 
-				<figure className="m-0 border-t border-fd-border bg-fd-muted/35 p-4 lg:border-l lg:border-t-0">
-					<Image
-						src={proof.image}
-						alt={proof.alt}
-						className="h-auto w-full rounded-xl border border-fd-border bg-fd-background shadow-sm"
-						placeholder="blur"
-						priority
-						sizes="(max-width: 1024px) 100vw, 42vw"
-					/>
-					<figcaption className="px-1 pb-1 pt-3 text-xs leading-5 text-fd-muted-foreground">
-						{proof.caption}
-					</figcaption>
-				</figure>
+				{proof ? (
+					<figure className="m-0 border-t border-fd-border bg-fd-muted/35 p-4 lg:border-l lg:border-t-0">
+						<Image
+							src={proof.image}
+							alt={proof.alt}
+							className="h-auto w-full rounded-xl border border-fd-border bg-fd-background shadow-sm"
+							placeholder="blur"
+							priority
+							sizes="(max-width: 1024px) 100vw, 42vw"
+						/>
+						<figcaption className="px-1 pb-1 pt-3 text-xs leading-5 text-fd-muted-foreground">
+							{proof.caption}
+						</figcaption>
+					</figure>
+				) : null}
 			</div>
 
 			<div className="grid sm:grid-cols-2">
@@ -404,10 +715,7 @@ export function PluginEvaluatorHeader({
 				</FactBlock>
 			</div>
 
-			<WorkflowStrip
-				id={`${pluginKey}-workflow`}
-				steps={copy.workflow}
-			/>
+			<WorkflowStrip id={`${pluginKey}-workflow`} steps={copy.workflow} />
 		</section>
 	);
 }
@@ -415,9 +723,9 @@ export function PluginEvaluatorHeader({
 export function PluginCatalogCard({
 	pluginKey,
 }: {
-	pluginKey: RepresentativePluginKey;
+	pluginKey: EvaluatorPluginKey;
 }) {
-	const { plugin, decision, copy } = getRepresentativePlugin(pluginKey);
+	const { plugin, decision, copy } = getEvaluatorPlugin(pluginKey);
 	const proof = getProofAsset(pluginKey);
 	const catalogAction = resolveAction(
 		pluginKey,
@@ -427,13 +735,15 @@ export function PluginCatalogCard({
 
 	return (
 		<article className="overflow-hidden rounded-2xl border border-fd-border bg-fd-background shadow-sm">
-			<Image
-				src={proof.image}
-				alt={proof.alt}
-				className="h-auto w-full border-b border-fd-border bg-fd-muted"
-				placeholder="blur"
-				sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-			/>
+			{proof ? (
+				<Image
+					src={proof.image}
+					alt={proof.alt}
+					className="h-auto w-full border-b border-fd-border bg-fd-muted"
+					placeholder="blur"
+					sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+				/>
+			) : null}
 			<div className="p-5">
 				<TopologyBadges decision={decision} />
 				<h3 className="mb-0 mt-4 text-xl font-semibold tracking-tight">
@@ -441,7 +751,7 @@ export function PluginCatalogCard({
 						href={decision.docsPath}
 						className="rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-fd-primary"
 					>
-						{plugin.label}
+						{copy.catalogTitle ?? plugin.label}
 					</Link>
 				</h3>
 				<p className="mb-0 mt-2 text-sm leading-6 text-fd-muted-foreground">
